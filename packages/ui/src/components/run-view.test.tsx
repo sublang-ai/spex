@@ -2433,13 +2433,13 @@ describe("run-view-194: a lane at work says so without opening a card", () => {
     vi.setSystemTime(5 + 12_000);
     try {
       renderRun(TOOL_FATES.slice(0, 5));
-      const card = screen.getByText("Bash").closest("details")!;
+      const card = screen.getAllByText("Bash").map((el) => el.closest("details")).find(Boolean)!;
       expect(card.open).toBe(false);
       expect(card.dataset.running).toBe("true");
       expect(within(card).getByTestId("tool-running-5").textContent).toMatch(/running · 12s$/);
       expect(within(card).queryByTestId(/^tool-status-/)).toBeNull();
       const foot = screen.getByTestId("player-working-line");
-      expect(foot.textContent).toBe("runningBash · 12srm -rf build");
+      expect(foot.textContent).toBe("running: Bash · 12s, rm -rf build");
       act(() => {
         vi.advanceTimersByTime(1_000);
       });
@@ -2451,11 +2451,37 @@ describe("run-view-194: a lane at work says so without opening a card", () => {
 
   test("an ended card stops running, and the foot reads the player thinking", () => {
     renderRun(TOOL_FATES.slice(0, 6));
-    const card = screen.getByText("Bash").closest("details")!;
+    const card = screen.getAllByText("Bash").map((el) => el.closest("details")).find(Boolean)!;
     expect(card.dataset.running).toBeUndefined();
     expect(within(card).queryByTestId("tool-running-5")).toBeNull();
     expect(within(card).getByTestId(/^tool-status-/).textContent).toBe("✗failed");
-    expect(screen.getByTestId("player-working-line").textContent).toBe("runningThinking…");
+    expect(screen.getByTestId("player-working-line").textContent).toBe("running: Thinking…");
+  });
+
+  test("a long tool name gives way in the foot, keeping its span and subject", () => {
+    const name = "mcp__playwright__browser_take_screenshot_of_the_whole_page";
+    renderRun([
+      ...TOOL_FATES.slice(0, 4),
+      {
+        seq: 5,
+        record: {
+          type: "player_event",
+          turnId: 1,
+          timestamp: 5,
+          playerId: "dev.coder",
+          event: {
+            type: "tool_use",
+            payload: { toolName: name, toolUseId: "tu9", input: "rm -rf build" },
+          },
+        },
+      },
+    ] as unknown as typeof FULL_RUN);
+    const foot = screen.getByTestId("player-working-line");
+    const tool = within(foot).getByTitle(name);
+    expect(tool.className).toMatch(/\btruncate\b/);
+    expect(tool.className).toContain("max-w-[50%]");
+    expect(within(foot).getByText(/^· \S/).className).toContain("shrink-0");
+    expect(within(foot).getByTitle("rm -rf build").className).toContain("flex-1");
   });
 
   test("a finished call leaves no running card and no foot", () => {

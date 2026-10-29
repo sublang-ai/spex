@@ -700,11 +700,6 @@ msgstr "{title} — {note}"
 msgid "{title} — {note} — {more}"
 msgstr "{title} — {note} — {more}"
 
-#. the lane's foot: the tool the player is running and how long it has run
-#: src/components/PlayerPane.tsx
-msgid "{tool} · {span}"
-msgstr "{tool} · {span}"
-
 #: src/lib/time.ts
 msgid "{weeks}w ago"
 msgstr "{weeks} 周前"

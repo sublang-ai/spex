@@ -462,13 +462,11 @@ function WorkingLine({
   const last = view.segments[view.segments.length - 1];
   const open = last !== undefined && openSeq !== undefined && last.seq > openSeq ? last : undefined;
   let doing: string;
+  let span: string | undefined;
   let subject: string | undefined;
   if (open && pendingTool(open, openSeq) && open.kind === "tool") {
-    doing = i18n._({
-      id: "{tool} · {span}",
-      values: { tool: toolLabel(open.toolName), span: duration(Math.max(0, now - open.at)) },
-      comment: "the lane's foot: the tool the player is running and how long it has run",
-    });
+    doing = toolLabel(open.toolName);
+    span = duration(Math.max(0, now - open.at));
     subject = toolSubject(open.input);
   } else if (open?.kind === "text" && open.streaming) {
     doing = i18n._({
@@ -487,9 +485,17 @@ function WorkingLine({
       className="flex min-w-0 items-center gap-1.5 border-t border-emerald-200 bg-emerald-50/70 px-3 py-1 text-xs text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300"
     >
       <RunningMark running />
-      <span className="shrink-0 font-mono">{doing}</span>
+      {/* Read aloud as one line: the mark's word, then each part apart. */}
+      <span className="sr-only">: </span>
+      {/* A long tool name, such as an MCP tool's, gives way before the span
+          and keeps half the line for the subject; its title holds it whole. */}
+      <span title={doing} className="min-w-0 max-w-[50%] truncate font-mono">
+        {doing}
+      </span>
+      {span ? <span className="shrink-0 whitespace-pre font-mono">{` · ${span}`}</span> : null}
       {subject ? (
         <span title={subject} className="min-w-0 flex-1 truncate font-mono text-neutral-500 dark:text-neutral-400">
+          <span className="sr-only">, </span>
           {subject}
         </span>
       ) : null}
