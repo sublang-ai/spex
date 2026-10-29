@@ -10,6 +10,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `spex package init <org>/<name>` makes `spex-packages/<name>/` from
+  `--skill` folders and/or a `--spec` file, with a format 2 manifest, a
+  README and the project's LICENSE, and prints the next steps in the app
+  and the CLI. It needs no server; `--move` moves the skill folders
+  instead of copying them, and every refusal writes nothing.
+- Attached commands find the running Spex app — desktop or server shell —
+  through the `local/endpoint.json` file it keeps in `SPEX_HOME` or
+  `~/.spex`. `--server` and `SPEX_SERVER_URL` still win; without either
+  and without a running app, the command says the app must be running.
+
 ## [4.1.0] - 2026-10-27
 
 ### Added

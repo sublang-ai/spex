@@ -726,6 +726,10 @@ export async function startServer(
   const port = (server.address() as AddressInfo).port;
   const scheme = tls ? "https" : "http";
   const url = `${scheme}://${formatHost(options.host)}:${port}/?token=${encodeURIComponent(options.token)}`;
+  // On a loopback host the home's endpoint file names this URL, so the
+  // CLI finds the running app; any other host's bind writes none
+  // (core-service-143, DR-163).
+  if (isLoopback(options.host)) service.announceEndpoint(url);
   return { service, server, url, port, close: stopper(server, service) };
 }
 
