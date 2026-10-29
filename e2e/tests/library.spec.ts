@@ -140,20 +140,37 @@ test("playbook-library-41: both sides listed, a built-in enabled in the project,
 
   // The switch stands between the project's side and your own group's
   // (playbook-library-1): the project's first, its environment named
-  // by its spex repository.
-  const sides = page.getByRole("group", { name: "Spex repository shown" });
+  // by the project and never by its spex repository (DR-159), the ways
+  // to add a spec package beneath its list and above the playbooks
+  // (playbook-library-92).
+  const sides = page.getByRole("group", { name: "Playbooks of" });
   await expect(sides.getByTestId("side-project")).toHaveText("demo-project");
   await expect(sides.getByTestId("side-own")).toHaveText("Your own group");
   await expect(sides.getByTestId("side-project")).toHaveAttribute("aria-pressed", "true");
   const environment = page.getByTestId("environment-section");
-  await expect(environment).toContainText(app.projectId!);
+  await expect(environment.getByRole("heading")).toHaveText("Environment of demo-project");
+  await expect(environment).not.toContainText(app.projectId!);
+  await expect(environment).not.toContainText("-spex");
   await expect(environment.getByTestId(`env-package-${BUILTINS}`)).toBeVisible();
+  const precedes = (first: string, second: string) =>
+    page.evaluate(
+      ([a, b]) => {
+        const one = document.querySelector(`[data-testid="${a}"]`);
+        const two = document.querySelector(`[data-testid^="${b}"]`);
+        return Boolean(one && two && one.compareDocumentPosition(two) & Node.DOCUMENT_POSITION_FOLLOWING);
+      },
+      [first, second] as const,
+    );
+  await expect(page.getByTestId("add-from-registry")).toBeVisible();
+  expect(await precedes("environment-packages", "add-packages")).toBe(true);
+  expect(await precedes("add-packages", "playbook-card-")).toBe(true);
 
   // Your own group's side: every enabled playbook with its command,
   // intent, spec package and role bindings (playbook-library-1,
   // playbook-library-29).
   await showSide(page, "own");
-  await expect(environment).toContainText(app.ownKey);
+  await expect(environment.getByRole("heading")).toHaveText("Environment of your own group");
+  await expect(environment).not.toContainText(app.ownKey);
   const enabled = page.getByTestId("playbooks-enabled");
   const code = enabled.getByTestId("playbook-card-code");
   const review = enabled.getByTestId("playbook-card-review");
