@@ -223,7 +223,7 @@ test("the core signs in by the device flow and runs Git's helper on the shell's 
   }
 });
 
-test("on a loopback host the home's endpoint file names the access URL while the shell serves (core-service-143)", async () => {
+test("on a loopback host the home's endpoint file names the access URL while the shell serves (server-shell-27, SERVER-SHELL-28)", async () => {
   const options = tempOptions();
   const file = join(options.dataDir, "local", "endpoint.json");
   const running = await startServer(options);
@@ -850,7 +850,7 @@ test("startup refusals: public plaintext, lone TLS half, empty token (SERVER-SHE
     const page = await fetch(`http://127.0.0.1:${running.port}/`);
     assert.equal(page.status, 200);
     // A bind to any host but loopback leaves no endpoint file for the
-    // CLI (core-service-143).
+    // CLI (server-shell-27, SERVER-SHELL-28).
     assert.equal(
       existsSync(join(publicOptions.dataDir, "local", "endpoint.json")),
       false,

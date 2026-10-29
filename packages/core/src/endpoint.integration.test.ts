@@ -6,7 +6,7 @@
 // rejections of CORE-24 — token always required, browser origins
 // admitted only when local or naming the host the request addressed —
 // and the home's endpoint file the CLI finds the app by
-// (core-service-143, DR-163).
+// (core-service-144 over core-service-143, DR-163).
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
