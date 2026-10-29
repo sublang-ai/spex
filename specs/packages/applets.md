@@ -33,14 +33,14 @@ When an applet's tab is shown, the workspace shall send `applet.open` for it [[a
 
 #### applets-3
 
-When a client sends `applet.open { repository, id, project }` — the spex repository whose environment installs the applet, the applet's id, and the spex repository of the project whose tab shows it — the core shall mint, or reuse, the capability of that applet and project and reply `{ path }`, `/applets/<capability>/` on its own endpoint [[core-service-1](core-service.md#core-service-1)] ([DR-161](../decisions/161-an-applet-is-a-page-the-ide-serves.md)):
+When a client sends `applet.open { repository, applet, project }` — the spex repository whose environment installs the applet, the applet's id, and the spex repository of the project whose tab shows it — the core shall mint, or reuse, the capability of that applet and project and reply `{ path }`, `/applets/<capability>/` on its own endpoint [[core-service-1](core-service.md#core-service-1)] ([DR-161](../decisions/161-an-applet-is-a-page-the-ide-serves.md)):
 
 - the capability is 256 random bits encoded as base64url without padding, minted once per applet and project, kept in memory until the core stops and persisted nowhere, so the same ask returns the same path;
 - `not_found` where the repository, the applet or the project is not known, or the project pairs no working folder on this device [[storage-6](storage.md#storage-6)]; `invalid_request` where the applet's files are not present on this device [[environments-14](environments.md#environments-14)].
 
 #### applets-4
 
-When the core's endpoint receives a `GET` or `HEAD` request under `/applets/<capability>/`, the core shall answer, with `Cache-Control: no-store`, `X-Content-Type-Options: nosniff` and the content type the extension maps to as the server shell maps it [[server-shell-4](server-shell.md#server-shell-4)] ([DR-161](../decisions/161-an-applet-is-a-page-the-ide-serves.md)):
+When the core's endpoint receives a `GET` or `HEAD` request under `/applets/<capability>/`, the core shall answer, with `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`, `Access-Control-Allow-Origin: *` — the sandboxed page's opaque origin reading its own paths across origins — and the content type the extension maps to as the server shell maps it [[server-shell-4](server-shell.md#server-shell-4)] ([DR-161](../decisions/161-an-applet-is-a-page-the-ide-serves.md)):
 
 | Path under the capability | Served |
 | --- | --- |
@@ -69,7 +69,7 @@ The UI page's content security policy shall allow `frame-src 'self' http://127.0
 When an integration suite starts a real core on a scratch home with a project whose environment installs, from the core's stand-in registry, a release holding an applet and requests by path a folder of the working folder holding an applet of another id, and your own group's environment installs the first release too, it shall assert:
 
 - `applet.open` for the project's applet answers a path `/applets/<capability>/` whose capability is 43 base64url characters, the same path on a second ask, another path for your own group's applet of the same id, and `not_found` for an unknown applet, an unknown repository and a project pairing no working folder, and `invalid_request` for the path source's applet once its folder is removed [[applets-3](#applets-3)];
-- `GET` of `/`, `index.html`, a script beside it, `~/README.md` and `~/` — a listing naming the README and a folder, no link — each answer `200` with their bytes, content types, `no-store` and `nosniff` [[applets-4](#applets-4)], the policy naming the request's own scheme and `Host` [[applets-5](#applets-5)], and `HEAD` the same headers without a body [[applets-4](#applets-4)];
+- `GET` of `/`, `index.html`, a script beside it, `~/README.md` and `~/` — a listing naming the README and a folder, no link — each answer `200` with their bytes, content types, `no-store`, `nosniff` and `Access-Control-Allow-Origin: *` [[applets-4](#applets-4)], the policy naming the request's own scheme and `Host` [[applets-5](#applets-5)], and `HEAD` the same headers without a body [[applets-4](#applets-4)];
 - `../index.html`, a percent-encoded `..`, a link in the working folder leading outside it, `~/.git/HEAD`, a folder's path without its slash, an unknown capability, a WebSocket handshake under the path and a `POST` are refused as the table says, each with an empty body, and a request presenting the endpoint's token gains nothing [[applets-4](#applets-4)];
 - the path source's applet serves the working folder's bytes, an edit to its entry read on the next request [[applets-4](#applets-4)];
 - once `environment.remove` and its install took the first release away, its capability answers `404` [[applets-4](#applets-4)].

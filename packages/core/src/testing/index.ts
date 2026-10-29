@@ -15,6 +15,8 @@ export * from "./standin-host.js";
 // meets no rules conflict of the fixture's making.
 export { prepareStorageGitFiles } from "../storage-git.js";
 export * from "./standin-registry.js";
+// A release holding an applet, published to the stand-in (DR-161).
+export * from "./applet-release.js";
 export * from "./git-http-host.js";
 // Each enabled playbook's module, supplied to Playbook's launcher at
 // launch beside a Spex config naming no `from` (DR-105).

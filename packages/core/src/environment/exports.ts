@@ -93,7 +93,7 @@ export interface ExportReport {
 
 /** Where a spec package's files stand: its installed folder, or a path
  * source's folder where its path resolves (environments-8). */
-function packageRoot(name: string, resolution: Resolution, packagesDir: string, pathRoot: string | null): string | null {
+export function packageRoot(name: string, resolution: Resolution, packagesDir: string, pathRoot: string | null): string | null {
   const source = resolution.source;
   if (isPathSource(source)) return pathRoot === null ? null : join(pathRoot, ...source.path.split("/"));
   return join(packagesDir, ...name.split("/"));

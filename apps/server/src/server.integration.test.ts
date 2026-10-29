@@ -271,6 +271,20 @@ test("one port serves the bundle and the core endpoint (SERVER-SHELL-9)", async 
     assert.equal(posted.status, 405);
     assert.equal((await posted.arrayBuffer()).byteLength, 0);
 
+    // A request under `/applets/` is the attached core's (SERVER-SHELL-4,
+    // applets-4): an unknown capability answers the core's empty 404,
+    // with its headers, and a POST there the core's 405 — never the
+    // bundle's.
+    const applet = await fetch(`${base}/applets/${"A".repeat(43)}/?token=secret`);
+    assert.equal(applet.status, 404);
+    assert.equal(applet.headers.get("cache-control"), "no-store");
+    assert.equal(applet.headers.get("x-content-type-options"), "nosniff");
+    assert.equal((await applet.arrayBuffer()).byteLength, 0);
+    const appletPost = await fetch(`${base}/applets/${"A".repeat(43)}/`, { method: "POST" });
+    assert.equal(appletPost.status, 405);
+    assert.equal(appletPost.headers.get("allow"), "GET, HEAD");
+    assert.equal((await appletPost.arrayBuffer()).byteLength, 0);
+
     const hello = await wsHello(`${base.replace("http", "ws")}/?token=secret`, base);
     assert.equal(hello.type, "hello");
   } finally {

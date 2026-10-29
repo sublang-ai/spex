@@ -165,6 +165,7 @@ Where the server shell runs on a loopback port with a temporary config and store
 - requested-path and real-path classification retain HTML index semantics [[server-shell-4](#server-shell-4)] through post-retarget content coding [[server-shell-16](#server-shell-16)], while a non-HTML index target retains its mapped content type and exact bytes [[server-shell-4](#server-shell-4)] under its type-selected coding [[server-shell-16](#server-shell-16)];
 - unreadable index, identity, and cold encoded representations each yield an empty 500 response and one standard-error diagnostic naming the resolved path and failure cause, after which successful HTTP and WebSocket requests prove that the failure stayed local [[server-shell-4](#server-shell-4)];
 - a temporary bundle fixture covers every content-type table row and the fallback with byte-identical identity bodies, and a successful HEAD response sends no body with any advertised length matching GET [[server-shell-4](#server-shell-4)];
+- a request under `/applets/` reaches the attached core: an unknown capability answers the core's empty `404` with `Cache-Control: no-store` and `X-Content-Type-Options: nosniff`, and a `POST` there the core's `405` [[server-shell-4](#server-shell-4)];
 - a WebSocket handshake presenting the access URL's token from the page's own origin reaches the core's hello, on the same port that served the page [[server-shell-1](#server-shell-1)].
 
 #### server-shell-10
