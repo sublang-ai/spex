@@ -93,10 +93,11 @@ Local evidence is retained under the release operator's temporary evidence direc
 | `lint.log` | `9e8ac44b9c492ef7c57d8c031f601cd6f2a3bc2d5b560e3c5c6055f1bfaa6639` |
 | `pack.json` | `2f0115d096acb38286df741319961de0f7bcc2833ec754bd8810b804c58889b9` |
 
-## Publication gates still pending
+## Publication
 
-- Merge the reviewed preparation change and verify successful CI for the exact resulting `main` commit [[release-15](../../specs/packages/release.md#release-15)], every job of its full matrix included, since the base's macOS Electron download failure can recur there.
-- Tag that commit `cli-v4.2.0` and verify the OIDC publication workflow.
-- Verify a fresh public npm consumer and record the published source and package identities.
+- The preparation change merged as pull request #282 into main `c9fe099ab570b6fb114854ae7119e81c7ca22d6e`; that commit's full-matrix CI, [run 40907730031](https://github.com/sublang-ai/spex/actions/runs/40907730031), concluded success with all nine jobs green [[release-15](../../specs/packages/release.md#release-15)].
+- The annotated tag `cli-v4.2.0` (object `dbd9ca2beb4d9412d2277d21441e0d89be9c2ff5`) names that commit and its CI run; the Release workflow, [run 40920284169](https://github.com/sublang-ai/spex/actions/runs/40920284169), passed `require-ci-green` and `release` and created the [GitHub release](https://github.com/sublang-ai/spex/releases/tag/cli-v4.2.0).
+- The registry lists `@sublang/spex@4.2.0` as `latest`, published by the workflow's own build: SHA-1 `bca26b0b6e2811e3f982ec78aec6af860c7dc47f`, integrity `sha512-P7qNNCxW5EVCRxExM15lifemhs0baVP56Hczo+Z5AUxWFOvQEzfiYjOlWqiJ6PAseSdUxXj2TQGs01PfpB/fRw==`; these differ from the locally packed candidate's identities above because the tarball is packed by the workflow on its runner, the file list and version being the same.
+- A fresh public consumer on an empty npm cache ran `npx -y -p @sublang/spex@4.2.0 spex --help`, which lists `package init`, and `spex package init acme/hello --skill .claude/skills/hello` in a scratch Git folder, which wrote `spex-packages/hello/` with its manifest, README and skill and printed the next steps.
 
-This record does not claim publication, an app release, or an independent review of the candidate.
+This record does not claim an app release or an independent review of the candidate.
