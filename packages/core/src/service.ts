@@ -865,14 +865,14 @@ export class CoreService {
     });
     // Each request reads the applet's folder and the project's working
     // folder as they stand (applets-4): a package removed, or a folder
-    // unpaired, serves nothing.
+    // unpaired, serves nothing; the home is never read through `~/`.
     this.applets = new AppletServer((ask) => {
       let applet;
       try { applet = this.environments.applet(ask.repository, ask.applet); } catch { return null; }
       const workingFolder = this.environments.workingFolder(ask.project);
       if (!applet?.present || applet.dir === null || workingFolder === null) return null;
       return { applet: applet.dir, workingFolder };
-    });
+    }, store.dir);
     // A working folder unpaired from its project keeps nothing the
     // exports wrote there (environments-8).
     this.store.onProjectRemoving = (key, folder) => this.environments.removeExportsFor(key, folder);

@@ -49,7 +49,7 @@ When the core's endpoint receives a `GET` or `HEAD` request under `/applets/<cap
 | `~/<path>` | that regular file of the project's working folder, read-only |
 | `~/<folder>/` | the folder's entries as JSON `{ entries: [{ name, kind, size, modified }] }`, `kind` being `file` or `folder`, `modified` Unix milliseconds, links and special files left out |
 
-- an unknown capability, a path escaping either root lexically or through a link, a `.git` entry at any depth, a path naming no regular file or folder, and a WebSocket handshake are refused `404`, any other method `405`, each with an empty body;
+- an unknown capability, a path escaping either root lexically or through a link, a `.git` entry at any depth, a path under `~/` leading lexically or through a link into the home [[storage-1](storage.md#storage-1)] from a working folder outside it — a home folder registered as a project opens no window on the home — a path naming no regular file or folder, and a WebSocket handshake are refused `404`, any other method `405`, each with an empty body;
 - the endpoint's token admits nothing under the path and is never part of it.
 
 #### applets-5
@@ -72,6 +72,7 @@ When an integration suite starts a real core on a scratch home with a project wh
 - `GET` of `/`, `index.html`, a script beside it, `~/README.md` and `~/` — a listing naming the README and a folder, no link — each answer `200` with their bytes, content types, `no-store`, `nosniff` and `Access-Control-Allow-Origin: *` [[applets-4](#applets-4)], the policy naming the request's own scheme and `Host` [[applets-5](#applets-5)], and `HEAD` the same headers without a body [[applets-4](#applets-4)];
 - `../index.html`, a percent-encoded `..`, a link in the working folder leading outside it, `~/.git/HEAD`, a folder's path without its slash, an unknown capability, a WebSocket handshake under the path and a `POST` are refused as the table says, each with an empty body, and a request presenting the endpoint's token gains nothing [[applets-4](#applets-4)];
 - the path source's applet serves the working folder's bytes, an edit to its entry read on the next request [[applets-4](#applets-4)];
+- a second project whose working folder holds the home — the suite's scratch root — shown your own group's applet reads a file of its own through `~/` and is refused `404` for the home's `home.yaml`, the home's folder spelled in another case, the home's listing, and a file and a listing reached through a link leading into the home [[applets-4](#applets-4)];
 - once `environment.remove` and its install took the first release away, its capability answers `404` [[applets-4](#applets-4)].
 
 #### applets-8

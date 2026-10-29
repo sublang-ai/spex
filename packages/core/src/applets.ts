@@ -5,11 +5,12 @@
 // 256 random bits, minted once per applet and project and kept in
 // memory alone — names the path an applet is served under, and the
 // core answers `GET` and `HEAD` there from two read-only roots: the
-// applet's folder, and the project's working folder under `~/`. Each
-// request reads its roots afresh, so an edit shows at once and an
-// applet whose package left answers 404. Every answer carries the
-// policy confining the page to its capability's own paths; the
-// endpoint's token admits nothing here.
+// applet's folder, and the project's working folder under `~/` — the
+// home refused where that folder holds it. Each request reads its roots
+// afresh, so an edit shows at once and an applet whose package left
+// answers 404. Every answer carries the policy confining the page's
+// requests to its capability's own origin; the endpoint's token admits
+// nothing here.
 
 import { randomBytes } from "node:crypto";
 import { lstatSync, readdirSync, readFileSync, realpathSync, statSync, type Stats } from "node:fs";
@@ -92,6 +93,12 @@ function within(root: string, path: string): boolean {
   return path === root || path.startsWith(root.endsWith(sep) ? root : root + sep);
 }
 
+/** A path's real path in the case the volume spells it: a volume that
+ * ignores case reads `STATE` as `state`, as it reads `.GIT` as `.git`. */
+function realPath(path: string): string {
+  return realpathSync.native(path);
+}
+
 /** A `.git` entry at any depth, in any case (applets-4): a folder that
  * ignores case reads `.GIT` as `.git`. */
 function namesGit(path: string): boolean {
@@ -103,7 +110,28 @@ export class AppletServer {
   private readonly minted = new Map<string, string>();
   private readonly asks = new Map<string, AppletAsk>();
 
-  constructor(private readonly rootsOf: (ask: AppletAsk) => AppletRoots | null) {}
+  /**
+   * @param rootsOf the two folders a capability reads, as they stand
+   * @param home the Spex home, which the `~/` window never reaches from
+   * a working folder outside it (applets-4); null where none is served
+   */
+  constructor(
+    private readonly rootsOf: (ask: AppletAsk) => AppletRoots | null,
+    private readonly home: string | null = null,
+  ) {}
+
+  /** Whether `path`, reached under `~/` from the working folder `root`,
+   * leads into the home (applets-4): a working folder holding the home
+   * — a home folder registered as a project — opens no window on it,
+   * while one inside the home reads itself as any other. */
+  private leadsHome(root: string, path: string, real: boolean): boolean {
+    if (this.home === null) return false;
+    let home = resolve(this.home);
+    if (real) {
+      try { home = realPath(home); } catch { return false; }
+    }
+    return !within(home, root) && within(home, path);
+  }
 
   /** The path of an applet's capability for one project (applets-3):
    * minted on the first ask, the same on every later one. */
@@ -164,6 +192,7 @@ export class AppletServer {
     let root: string;
     let inner: string;
     let listing = false;
+    let window = false;
     if (wanted === "") {
       root = roots.applet;
       inner = "index.html";
@@ -174,6 +203,7 @@ export class AppletServer {
       root = roots.workingFolder;
       inner = wanted.slice(2);
       listing = inner === "" || inner.endsWith("/");
+      window = true;
     } else {
       root = roots.applet;
       inner = wanted;
@@ -184,18 +214,20 @@ export class AppletServer {
     const lexicalRoot = resolve(root);
     const target = resolve(lexicalRoot, inner);
     if (!within(lexicalRoot, target)) { refuse(404); return true; }
+    if (window && this.leadsHome(lexicalRoot, target, false)) { refuse(404); return true; }
     let real: string;
     let realRoot: string;
     let stat: Stats;
     try {
-      realRoot = realpathSync(lexicalRoot);
-      real = realpathSync(target);
+      realRoot = realPath(lexicalRoot);
+      real = realPath(target);
       stat = statSync(real);
     } catch {
       refuse(404);
       return true;
     }
     if (!within(realRoot, real) || namesGit(relative(realRoot, real))) { refuse(404); return true; }
+    if (window && this.leadsHome(realRoot, real, true)) { refuse(404); return true; }
     let body: Buffer;
     let type: string;
     try {

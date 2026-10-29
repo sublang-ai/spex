@@ -7,7 +7,8 @@
 // holding an applet of another id, with your own group's environment
 // installing the first release too. `applet.open` answers each
 // capability path, and real HTTP requests to the core's own endpoint
-// read what the table of applets-4 serves and refuse the rest.
+// read what the table of applets-4 serves and refuse the rest, the
+// home among it where a working folder holds it.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -284,6 +285,22 @@ test("applets-7: applet.open answers each capability, the core's endpoint serves
     assert.equal(answer.status, 404, `${at} answers nothing`);
     assert.equal(answer.body.length, 0);
   }
+
+  // A working folder holding the home opens no window on it
+  // (applets-4): the scratch root, which holds this core's home at
+  // `state/`, is a project too, your own group's applet shown for it.
+  symlinkSync(join(dir, "state"), join(dir, "home-link"));
+  const { id: outerKey } = await client.expectOk("project.register", { path: gitFolder(dir) });
+  const outerPath = (await client.expectOk("applet.open", { repository: own, applet: APPLET_ID, project: outerKey })).path;
+  assert.match(outerPath, CAPABILITY_PATH);
+  assert.ok(readFileSync(join(dir, "state", "home.yaml")).length > 0, "the home's home.yaml stands");
+  await served(`${outerPath}~/project/README.md`, readme, "application/octet-stream");
+  await refused(`${outerPath}~/state/home.yaml`, 404);
+  // A volume that ignores case reads `STATE` as `state`.
+  await refused(`${outerPath}~/STATE/home.yaml`, 404);
+  await refused(`${outerPath}~/state/`, 404);
+  await refused(`${outerPath}~/home-link/home.yaml`, 404);
+  await refused(`${outerPath}~/home-link/`, 404);
 
   // The path source's applet serves the working folder's bytes, an
   // edit read on the next request (applets-4).
