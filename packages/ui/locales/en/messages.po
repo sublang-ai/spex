@@ -405,10 +405,10 @@ msgstr "{id} is already a playbook of {package}"
 msgid "{id} not found"
 msgstr "{id} not found"
 
-#. a call's tokens in and out; tok is short for tokens
+#. a call's tokens in and out; token stays as it is
 #: src/components/PlayerPane.tsx
-msgid "{input}→{output} tok"
-msgstr "{input}→{output} tok"
+msgid "{input}→{output} token"
+msgstr "{input}→{output} token"
 
 #: src/components/DeliveryCard.tsx
 msgid "{kind} {ref}"
@@ -699,6 +699,11 @@ msgstr "{title} — {note}"
 #: src/App.tsx
 msgid "{title} — {note} — {more}"
 msgstr "{title} — {note} — {more}"
+
+#. the lane's foot: the tool the player is running and how long it has run
+#: src/components/PlayerPane.tsx
+msgid "{tool} · {span}"
+msgstr "{tool} · {span}"
 
 #: src/lib/time.ts
 msgid "{weeks}w ago"
@@ -1863,6 +1868,11 @@ msgstr "Choose folder…"
 #: src/components/SpaceSync.tsx
 msgid "Choose for {count, plural, one {# conflict} other {# conflicts}}"
 msgstr "Choose for {count, plural, one {# conflict} other {# conflicts}}"
+
+#. a step: the analyst chooses which workflows the request takes
+#: src/lib/step-words.ts
+msgid "Choose the approach"
+msgstr "Choose the approach"
 
 #: src/components/DraftConversation.tsx
 msgid "Choose which agent answers"
@@ -5107,11 +5117,6 @@ msgstr "Placing…"
 msgid "plan the development path for a request: direct implementation, or a durable decision first, delivered through a pull request when the request names a GitHub issue or asks for one"
 msgstr "plan the development path for a request: direct implementation, or a durable decision first, delivered through a pull request when the request names a GitHub issue or asks for one"
 
-#. a step: the analyst chooses which workflows the request takes
-#: src/lib/step-words.ts
-msgid "Choose the approach"
-msgstr "Choose the approach"
-
 #. a spec package's artifact kind: a playbook
 #: src/lib/environments.ts
 msgid "playbook"
@@ -5983,6 +5988,11 @@ msgstr "running"
 #: src/components/PlayerPane.tsx
 msgid "Running"
 msgstr "Running"
+
+#. a tool call still at work and how long it has run
+#: src/components/PlayerPane.tsx
+msgid "running · {span}"
+msgstr "running · {span}"
 
 #: src/components/ParkedRun.tsx
 msgid "Running the workflow's control"
@@ -7159,6 +7169,11 @@ msgstr "these sessions"
 msgid "Thinking"
 msgstr "Thinking"
 
+#. the lane's foot: the player is between steps, its model at work
+#: src/components/PlayerPane.tsx
+msgid "Thinking…"
+msgstr "Thinking…"
+
 #: src/lib/useBrowserTools.ts
 msgid "This agent cannot ask for tool approval in this conversation."
 msgstr "This agent cannot ask for tool approval in this conversation."
@@ -7734,6 +7749,11 @@ msgstr "Writable paths (comma-separated)"
 #: src/components/CaptainHome.tsx
 msgid "Write clear specs. Build with playbooks."
 msgstr "Write clear specs. Build with playbooks."
+
+#. the lane's foot: the player is writing its reply
+#: src/components/PlayerPane.tsx
+msgid "Writing a reply"
+msgstr "Writing a reply"
 
 #. the source is being written to disk
 #: src/components/DraftSourceTab.tsx

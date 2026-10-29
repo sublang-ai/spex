@@ -50,6 +50,8 @@ Amends [DR-075](075-a-failure-says-what-and-what-now.md) in its wording alone: a
 - A step a player runs wears that player's mark and name on the card; a running one wears the mark as its running mark.
 - A step not called yet wears the player the configuration recorded with its run's context binds, never a binding made since.
 - A run standing in a parallel state shows each active step running with its own call, the leaves read from the state value: the runtime's active ids also list the parallel state and its regions.
+- A lane at work says so where the reader looks, its tool calls folded: a tool call still awaiting its result wears the running mark and its ticking span on a tinted row, and the lane's foot names what the player is doing now — the tool and its subject, or thinking, or writing its reply.
+- A call's usage reads in tokens, "120→30 token", not the abbreviation "tok".
 
 ### One status vocabulary
 

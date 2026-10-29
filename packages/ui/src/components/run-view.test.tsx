@@ -350,7 +350,7 @@ describe("RUN-19: pane structure from the fixture stream", () => {
     // a provider-reported cost, and no pane shows a currency sign or
     // an estimate mark (run-view-6, DR-044).
     const coder = screen.getByTestId("player-pane-dev.coder").textContent ?? "";
-    expect(coder).toContain("120→30 tok");
+    expect(coder).toContain("120→30 token");
     expect(coder).not.toMatch(/[$≈]/);
     expect(document.body.textContent).not.toMatch(/[$≈]/);
   });
@@ -624,9 +624,9 @@ describe("run-view-143/144: cumulative active time stays with its agent", () => 
 
     // Per-call tokens remain on the result line exactly once; the
     // cumulative header adds no second usage metric or money.
-    expect(screen.getAllByText("120→30 tok")).toHaveLength(1);
+    expect(screen.getAllByText("120→30 token")).toHaveLength(1);
     const coderHeader = screen.getByTestId("player-pane-dev.coder").querySelector("header")!;
-    expect(coderHeader.textContent).not.toContain("tok");
+    expect(coderHeader.textContent).not.toContain("token");
     expect(document.body.textContent).not.toMatch(/[$≈]/);
 
     fireEvent.click(within(screen.getByTestId("player-pane-dev.coder"))
@@ -810,7 +810,7 @@ describe("run-view-143/144: cumulative active time stays with its agent", () => 
       finish(1_700_000_000_023);
       expect(screen.getByTestId("agent-active-dev.coder").textContent)
         .toBe("active · 2s");
-      expect(screen.getAllByText("120→30 tok")).toHaveLength(1);
+      expect(screen.getAllByText("120→30 token")).toHaveLength(1);
 
       // Finish first: restore the prior resting value until a later
       // summary replaces it; no terminal duration is accumulated.
@@ -820,7 +820,7 @@ describe("run-view-143/144: cumulative active time stays with its agent", () => 
       finish(1_700_000_000_026);
       expect(screen.getByTestId("agent-active-dev.coder").textContent)
         .toBe("active · 2s");
-      expect(screen.getAllByText("40→10 tok")).toHaveLength(1);
+      expect(screen.getAllByText("40→10 token")).toHaveLength(1);
       summary({ "dev.coder": 3_000 });
       expect(screen.getByTestId("agent-active-dev.coder").textContent)
         .toBe("active · 3s");
@@ -2424,6 +2424,45 @@ describe("run-view-50: color is never the only channel in a player pane", () => 
     renderRun(TURN_ONE);
     const edit = screen.getByText("Edit").closest("summary")!;
     expect(within(edit).getByTestId(/^tool-status-/).textContent).toBe("✓ok");
+  });
+});
+
+describe("run-view-194: a lane at work says so without opening a card", () => {
+  test("a tool card awaiting its result runs, and the lane's foot names it", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(5 + 12_000);
+    try {
+      renderRun(TOOL_FATES.slice(0, 5));
+      const card = screen.getByText("Bash").closest("details")!;
+      expect(card.open).toBe(false);
+      expect(card.dataset.running).toBe("true");
+      expect(within(card).getByTestId("tool-running-5").textContent).toMatch(/running · 12s$/);
+      expect(within(card).queryByTestId(/^tool-status-/)).toBeNull();
+      const foot = screen.getByTestId("player-working-line");
+      expect(foot.textContent).toBe("runningBash · 12srm -rf build");
+      act(() => {
+        vi.advanceTimersByTime(1_000);
+      });
+      expect(within(card).getByTestId("tool-running-5").textContent).toMatch(/running · 13s$/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("an ended card stops running, and the foot reads the player thinking", () => {
+    renderRun(TOOL_FATES.slice(0, 6));
+    const card = screen.getByText("Bash").closest("details")!;
+    expect(card.dataset.running).toBeUndefined();
+    expect(within(card).queryByTestId("tool-running-5")).toBeNull();
+    expect(within(card).getByTestId(/^tool-status-/).textContent).toBe("✗failed");
+    expect(screen.getByTestId("player-working-line").textContent).toBe("runningThinking…");
+  });
+
+  test("a finished call leaves no running card and no foot", () => {
+    renderRun(TURN_ONE);
+    expect(screen.queryByTestId("player-working-line")).toBeNull();
+    expect(screen.queryByTestId(/^tool-running-/)).toBeNull();
+    expect(screen.getAllByText("120→30 token")).toHaveLength(1);
   });
 });
 

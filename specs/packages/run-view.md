@@ -87,7 +87,8 @@ When the session record stream delivers a tool-use event for a visible player, t
 - a subject is presented as one line — outer whitespace trimmed, inner whitespace runs collapsed to single spaces, elided where the card's width ends — so the collapsed card carries what the call acts on and never its payload;
 - a command a runner wrapped as `<shell> -lc <command>` — a login-shell wrapper with its quoting — presents the inner command as it was typed, and a runner's wire name for its shell tool reads "shell" with the wire name in the label's tooltip, so the coder's rows read as commands whichever agent runs them;
 - the expanded body prints each string-valued field — a command, a patch, an old and new string, a file's content, the result's text — verbatim under the field's name, and only a value that is not a string as JSON, every line wrapping inside the card so it never widens the pane;
-- a delivered result's span uses the run view's duration vocabulary [[run-view-145](#run-view-145)] ([DR-010](../decisions/010-interface-craft.md) §2).
+- a delivered result's span uses the run view's duration vocabulary [[run-view-145](#run-view-145)] ([DR-010](../decisions/010-interface-craft.md) §2);
+- while the lane's call is open, a card with no result yet reads at work, collapsed or not: the running mark stands where the ending's mark will, followed by "running · ⟨elapsed⟩" since the tool's use, ticking in the duration vocabulary [[run-view-145](#run-view-145)], on a tinted row, and the card takes its ending's mark once its result arrives ([DR-159](../decisions/159-the-captain-dispatches-in-plain-sight.md)).
 
 #### run-view-83
 
@@ -106,7 +107,7 @@ When a player call completes, that player's pane shall report the call's usage o
 
 | The call reported | The pane shows |
 | --- | --- |
-| tokens | the call's token totals, taken as given because they are inclusive of cached reads |
+| tokens | the call's token totals as "⟨in⟩→⟨out⟩ token", taken as given because they are inclusive of cached reads ([DR-159](../decisions/159-the-captain-dispatches-in-plain-sight.md)) |
 | a cost, with or without tokens | nothing for it — no amount in any currency, whatever its provenance |
 | neither | no usage line — an unreported figure is silence, never a zero nobody measured |
 
@@ -213,7 +214,8 @@ The run view shall show one player pane for each player of the session's bound r
 - a pane still lying beyond the grid's edge is said, not cut: the grid fades whichever edge hides one, and retires that edge's fade once nothing lies beyond it ([DR-041](../decisions/041-chrome-that-fits.md));
 - while no pane stands — before the session's first call, or for a roster with no players — the Captain column stands alone at the Captain home's reading width with no divider, a division with nothing on its far side reading as a pane that failed to load, and the first pane's arrival restores the divider at the split's setting;
 - the pane's header names the lane and the role its latest call served [[run-view-79](#run-view-79)] — "coder · dev.coder" — with the lane's agent chip beside it, which is also the control that tunes that agent for this session [[run-view-139](#run-view-139)] [[run-view-138](#run-view-138)] and owns the header's slack: a reading longer than the pane can hold ends in an ellipsis with its whole in its tooltip, so the header and the transcript never widen past the pane ([DR-041](../decisions/041-chrome-that-fits.md));
-- while the lane's call is open, the header carries "⟨role⟩ running · ⟨elapsed⟩" beside the running mark — the span since the call's prompt, ticking each second in the duration vocabulary [[run-view-145](#run-view-145)] — so a minutes-long call never reads as a hang ([DR-010](../decisions/010-interface-craft.md) §5); as the pane narrows, the live reading remains after the resting active-time phrase has yielded [[run-view-143](#run-view-143)], then yields before the lane identity and header controls at the pane floor ([DR-041](../decisions/041-chrome-that-fits.md)).
+- while the lane's call is open, the header carries "⟨role⟩ running · ⟨elapsed⟩" beside the running mark — the span since the call's prompt, ticking each second in the duration vocabulary [[run-view-145](#run-view-145)] — so a minutes-long call never reads as a hang ([DR-010](../decisions/010-interface-craft.md) §5); as the pane narrows, the live reading remains after the resting active-time phrase has yielded [[run-view-143](#run-view-143)], then yields before the lane identity and header controls at the pane floor ([DR-041](../decisions/041-chrome-that-fits.md));
+- while the lane's call is open, the pane's foot holds one line below the transcript, wherever the reader has scrolled, with the running mark and what the player is doing now, read from the open call's latest entry — a tool card at work gives "⟨tool⟩ · ⟨elapsed⟩" and its subject, a reply streaming gives "Writing a reply", and anything else "Thinking…" — and the line leaves when the call closes ([DR-159](../decisions/159-the-captain-dispatches-in-plain-sight.md)).
 
 #### run-view-116
 
@@ -1319,6 +1321,15 @@ Where the run view renders a player grid whose panes are wider than its box, the
 #### run-view-53
 
 While a fixture turn is active, the test suite shall assert the Captain thread shows the working indicator — the Captain thinking while no player runs, and a running player's role with the ticking span since its prompt, the same span in that player's pane header [[run-view-37](#run-view-37)] [[run-view-7](#run-view-7)] — queued entries render in full with the sends-when-this-turn-ends caption [[run-view-38](#run-view-38)] inside a frame kept at its end that the composer's own box holds its place beside [[run-view-106](#run-view-106)], the composer renders a store-provided draft — disabled while the turn runs, editable once it settles, reporting edits to the store [[run-view-39](#run-view-39)] [[run-view-8](#run-view-8)] — and activating Abort disables it with an "Aborting…" label [[run-view-40](#run-view-40)].
+
+#### run-view-194
+
+While a fixture turn's player call is open with a tool use whose result has not arrived, when the stream is replayed into the run view, the test suite shall assert that the lane reads at work with its tool cards folded:
+
+- the card with no result stays collapsed, wears the running mark and reads "running · 12s" twelve seconds after its use, ticking to "running · 13s" a second later, with no ending mark [[run-view-4](#run-view-4)];
+- the pane's foot reads the tool, its span and its subject, "Bash · 12s" beside `rm -rf build` [[run-view-7](#run-view-7)];
+- once the result arrives the card takes its ending's mark and leaves its running reading, and the foot reads "Thinking…" [[run-view-4](#run-view-4)] [[run-view-7](#run-view-7)];
+- a finished call leaves no card running and no foot, and its usage reads "120→30 token" [[run-view-7](#run-view-7)] [[run-view-6](#run-view-6)].
 
 #### run-view-54
 

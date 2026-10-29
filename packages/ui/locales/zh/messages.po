@@ -405,10 +405,10 @@ msgstr "{id} 已是 {package} 中的规程"
 msgid "{id} not found"
 msgstr "未找到 {id}"
 
-#. a call's tokens in and out; tok is short for tokens
+#. a call's tokens in and out; token stays as it is
 #: src/components/PlayerPane.tsx
-msgid "{input}→{output} tok"
-msgstr "{input}→{output} tok"
+msgid "{input}→{output} token"
+msgstr "{input}→{output} token"
 
 #: src/components/DeliveryCard.tsx
 msgid "{kind} {ref}"
@@ -699,6 +699,11 @@ msgstr "{title} — {note}"
 #: src/App.tsx
 msgid "{title} — {note} — {more}"
 msgstr "{title} — {note} — {more}"
+
+#. the lane's foot: the tool the player is running and how long it has run
+#: src/components/PlayerPane.tsx
+msgid "{tool} · {span}"
+msgstr "{tool} · {span}"
 
 #: src/lib/time.ts
 msgid "{weeks}w ago"
@@ -1863,6 +1868,11 @@ msgstr "选择文件夹…"
 #: src/components/SpaceSync.tsx
 msgid "Choose for {count, plural, one {# conflict} other {# conflicts}}"
 msgstr "为 {count, plural, other {# 处冲突}}选择"
+
+#. a step: the analyst chooses which workflows the request takes
+#: src/lib/step-words.ts
+msgid "Choose the approach"
+msgstr "判断怎么做"
 
 #: src/components/DraftConversation.tsx
 msgid "Choose which agent answers"
@@ -5107,11 +5117,6 @@ msgstr "放置中…"
 msgid "plan the development path for a request: direct implementation, or a durable decision first, delivered through a pull request when the request names a GitHub issue or asks for one"
 msgstr "为请求规划开发路径：直接实现，或先形成持久的决策；当请求指明 GitHub Issue 或要求 PR 时，经由 PR 交付"
 
-#. a step: the analyst chooses which workflows the request takes
-#: src/lib/step-words.ts
-msgid "Choose the approach"
-msgstr "判断怎么做"
-
 #. a spec package's artifact kind: a playbook
 #: src/lib/environments.ts
 msgid "playbook"
@@ -5983,6 +5988,11 @@ msgstr "运行中"
 #: src/components/PlayerPane.tsx
 msgid "Running"
 msgstr "运行中"
+
+#. a tool call still at work and how long it has run
+#: src/components/PlayerPane.tsx
+msgid "running · {span}"
+msgstr "运行中 · {span}"
 
 #: src/components/ParkedRun.tsx
 msgid "Running the workflow's control"
@@ -7159,6 +7169,11 @@ msgstr "这些会话"
 msgid "Thinking"
 msgstr "思考过程"
 
+#. the lane's foot: the player is between steps, its model at work
+#: src/components/PlayerPane.tsx
+msgid "Thinking…"
+msgstr "思考中…"
+
 #: src/lib/useBrowserTools.ts
 msgid "This agent cannot ask for tool approval in this conversation."
 msgstr "此智能体无法在本对话中请求工具审批。"
@@ -7734,6 +7749,11 @@ msgstr "可写路径（逗号分隔）"
 #: src/components/CaptainHome.tsx
 msgid "Write clear specs. Build with playbooks."
 msgstr "写清规约，按规程开发。"
+
+#. the lane's foot: the player is writing its reply
+#: src/components/PlayerPane.tsx
+msgid "Writing a reply"
+msgstr "正在写回复"
 
 #. the source is being written to disk
 #: src/components/DraftSourceTab.tsx
