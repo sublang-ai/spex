@@ -25,7 +25,7 @@ When a package command runs, the CLI shall act on the environment whose root is 
 
 #### cli-2
 
-When `spex add <org>/<pkg>[@<requirement>]` or `spex add <org>/<pkg> --path <folder>` runs, the CLI shall write the request into `spex.yaml` [[environments-15](environments.md#environments-15)] — a registry request at the requirement given, else a caret requirement at the newest version the registry lists that is no prerelease and is neither yanked nor suppressed, or a path request at `<folder>` relative to the root — then resolve, install and export [[environments-5](environments.md#environments-5)] [[environments-7](environments.md#environments-7)] [[environments-8](environments.md#environments-8)], and print each spec package the lock gained or moved with its version and where its exports went:
+When `spex add <org>/<pkg>[@<requirement>]` or `spex add <org>/<pkg> --path <folder>` runs, the CLI shall write the request into `spex.yaml` [[environments-15](environments.md#environments-15)], made naming the home's default instance as `space` where the root holds none [[environments-2](environments.md#environments-2)] — a registry request at the requirement given, else a caret requirement at the newest version the registry lists that is no prerelease and is neither yanked nor suppressed, or a path request at `<folder>` relative to the root — then resolve, install and export [[environments-5](environments.md#environments-5)] [[environments-7](environments.md#environments-7)] [[environments-8](environments.md#environments-8)], and print each spec package the lock gained or moved with its version and where its exports went:
 
 - a name that is not `<org>/<pkg>`, a malformed requirement, a requirement and a path together, a path leading out of the root, and a spec package the registry does not list each refuse the command before any write, naming the rule.
 
@@ -38,7 +38,8 @@ When `spex remove <org>/<pkg>` or its alias `spex rm` runs, the CLI shall drop t
 When `spex install` or its alias `spex i` runs, the CLI shall install the lock [[environments-7](environments.md#environments-7)] and export [[environments-8](environments.md#environments-8)], resolving first [[environments-5](environments.md#environments-5)] where the lock is missing or stale, and print each spec package installed with its version, each export written and what the export left out:
 
 - a root holding no `spex.yaml` is refused naming the folder and `spex add`;
-- a lock installing as it stands resolves nothing and rewrites no file.
+- a lock installing as it stands resolves nothing and rewrites no file;
+- the app's built-in spec package that no seed and no registry serves is left out as not installed and named as the app's, the rest installed [[environments-7](environments.md#environments-7)].
 
 #### cli-5
 
@@ -72,7 +73,7 @@ When `spex new <org>/<pkg>` runs with `--skill <folder>` once or more and/or `--
 
 #### cli-9
 
-When `spex publish [<org>/<pkg>] [--dry-run]` runs, the CLI shall publish the package's folder — the folder of the environment's path request for that name where it has one, else `spex-packages/<org>/<pkg>/` under the root, and with no name the one package folder under `spex-packages/` — to the environment's registry as the account signed in at its instance [[environments-10](environments.md#environments-10)], printing the destination as the instance's name and `<org>/<pkg>@<version>`, with a dry run listing the declared files and uploading nothing, and a publish printing the URL the registry answers:
+When `spex publish [<org>/<pkg>] [--dry-run]` runs, the CLI shall publish the package's folder — the folder of the environment's path request for that name where it has one, else `spex-packages/<org>/<pkg>/` under the root, and with no name the one package folder under `spex-packages/` — to the environment's registry as the account signed in at its instance [[environments-10](environments.md#environments-10)], printing the destination as the instance's name and `<org>/<pkg>@<version>`, with a dry run listing the declared files and uploading nothing, and a publish printing the package's page at the instance, `<origin>/<org>/<pkg>`:
 
 - refused before any upload, naming the rule: no folder found; a folder whose `meta.yaml` names another package; a folder that is no release; a manifest without `description` or `license`; no name given while `spex-packages/` holds no package or several, those listed; the device not signed in at the environment's instance, naming `spex login`.
 
@@ -119,17 +120,18 @@ The published `@sublang/spex` package shall export the package-manager library �
 
 When the packed CLI, installed into a scratch prefix from `npm pack`, runs with a scratch home against the library's stand-in registry in a scratch Git working folder, with no core running, the integration suite shall assert:
 
-- `spex new acme/hello --skill .claude/skills/hello --spec specs/hello.md` writes `spex-packages/acme/hello/` with its manifest, README, LICENSE, skill and spec, a path request in `spex.yaml`, the lock, `.spex/packages/acme/hello/` absent for a path source and the skill exported into `.claude/skills/hello/` and `.agents/skills/hello/`, and ends naming the folder and the two publish commands; `--move` leaves the original skill folder as Spex's export; each refusal of the list writes nothing [[cli-8](#cli-8)];
+- `spex new acme/hello --skill .claude/skills/greet --spec specs/hello.md` writes `spex-packages/acme/hello/` with its manifest, README, LICENSE, skill and spec, a path request in `spex.yaml` made with `space` naming the default instance, the lock, `.spex/packages/acme/hello/` absent for a path source and the skill exported into `.agents/skills/greet/` while `.claude/skills/greet/`, the reader's own folder, is left out and reported so, and ends naming the folder and the two publish commands; `--move` leaves the original skill folder as Spex's export in both agent folders; each refusal of the list writes nothing [[cli-8](#cli-8)];
 - `spex add demo/tool@^1.0.0` and `spex add demo/other` from the stand-in registry write the requirement given and `^` at the newest listed non-prerelease version, resolve, install under `.spex/packages/` and export, with `.spex/.gitignore` ignoring everything, and each refusal of the list writes nothing [[cli-2](#cli-2)];
 - `spex list` names the instance, both requests, each package's version and source and installed state, each exported skill and nothing left out [[cli-6](#cli-6)]; `spex search tool` lists the registry's match with its versions newest first [[cli-7](#cli-7)];
 - a second scratch folder holding the committed `spex.yaml` and `spex.lock` alone, `spex install` there resolves nothing and yields byte-identical `.spex/packages/` and exports, and a second `spex install` rewrites nothing; with `spex.yaml` alone, it resolves first; with neither, it is refused naming `spex add` [[cli-4](#cli-4)];
+- a lock recording the app's built-in spec package at a checksum no registry serves installs the rest, names the built-in as the app's, and `spex list` reads it not installed [[cli-4](#cli-4)] [[cli-6](#cli-6)];
 - once the registry publishes `demo/tool` 1.1.0, `spex update` moves the lock and prints both versions, and prints that nothing moved when run again [[cli-5](#cli-5)];
 - `spex remove demo/other` drops the request, the files and the export and prints the loss, a name not requested refused [[cli-3](#cli-3)];
 - the environment root is found from a subfolder of the working folder, and from a working folder without `spex.yaml` at its Git top level [[cli-1](#cli-1)].
 
 #### cli-16
 
-When the packed CLI runs `publish` against the stand-in registry answering for the instance the folder's `spex.yaml` names as `space`, the integration suite shall assert that `--dry-run` prints the instance's name, `acme/hello@0.1.0` and the declared files and uploads nothing, that a publish lands the release there and prints the URL answered, that with no name and one package under `spex-packages/` the same package publishes, and that no folder, another package's manifest, a missing license, two packages with no name and a device signed out there are each refused with nothing uploaded [[cli-9](#cli-9)].
+When the packed CLI runs `publish` against the stand-in registry answering for the instance the folder's `spex.yaml` names as `space`, the integration suite shall assert that `--dry-run` prints the instance's name, `acme/hello@0.1.0` and the declared files and uploads nothing, that a publish lands the release there and prints the package's page at the instance, that with no name and one package under `spex-packages/` the same package publishes, and that no folder, another package's manifest, a missing license, two packages with no name and a device signed out there are each refused with nothing uploaded [[cli-9](#cli-9)].
 
 #### cli-17
 

@@ -52,8 +52,8 @@ export const EXPORTS_MANIFEST = ".spex-exports.json";
  * or the engine links a compile provisions (playbook-library-12). */
 export type ExcludeBlock = "exports" | "engine links";
 
-const excludeBegin = (block: ExcludeBlock): string => `# >>> spex ${block} (managed by Spex; do not edit)`;
-const excludeEnd = (block: ExcludeBlock): string => `# <<< spex ${block}`;
+const excludeBegin = (block: string): string => `# >>> spex ${block} (managed by Spex; do not edit)`;
+const excludeEnd = (block: string): string => `# <<< spex ${block}`;
 
 export interface ExportOptions {
   /** The environment's root (environments-26): its `.spex/` holds the
@@ -326,33 +326,58 @@ function mirror(skillsDir: string, names: string[], folder: string, named: strin
   } finally {
     rmSync(staging, { recursive: true, force: true });
   }
-  writeFileSync(join(dir, EXPORTS_MANIFEST), `${JSON.stringify({ format: 1, skills: written.sort() }, null, 2)}\n`);
+  const manifest = join(dir, EXPORTS_MANIFEST);
+  const text = `${JSON.stringify({ format: 1, skills: written.sort() }, null, 2)}\n`;
+  let current: string | null = null;
+  try { current = readFileSync(manifest, "utf8"); } catch { current = null; }
+  if (current !== text) writeFileSync(manifest, text);
   return written;
 }
 
-/** The `info/exclude` file of a working folder's Git, where it has one. */
+/** The `info/exclude` file of the Git work tree a working folder lies
+ * in, where it lies in one, with the folder's path below the work
+ * tree's top, `/`-separated, empty at the top itself. */
+export function gitExclude(workingFolder: string): { file: string; prefix: string } | null {
+  const segments: string[] = [];
+  for (let dir = resolve(workingFolder); ; dir = dirname(dir)) {
+    const dotGit = join(dir, ".git");
+    let stat;
+    try { stat = statSync(dotGit); } catch { stat = undefined; }
+    if (stat) {
+      const prefix = segments.reverse().join("/");
+      if (stat.isDirectory()) return { file: join(dotGit, "info", "exclude"), prefix };
+      const match = /^gitdir:\s*(.+)$/m.exec(readFileSync(dotGit, "utf8"));
+      if (!match) return null;
+      const gitDir = resolve(dir, match[1]!.trim());
+      const commonFile = join(gitDir, "commondir");
+      const common = existsSync(commonFile) ? resolve(gitDir, readFileSync(commonFile, "utf8").trim()) : gitDir;
+      return { file: join(common, "info", "exclude"), prefix };
+    }
+    if (dirname(dir) === dir) return null;
+    segments.push(basename(dir));
+  }
+}
+
+/** The `info/exclude` file of a working folder's Git, where it lies in
+ * a work tree. */
 export function gitExcludeFile(workingFolder: string): string | null {
-  const dotGit = join(workingFolder, ".git");
-  let stat;
-  try { stat = statSync(dotGit); } catch { return null; }
-  if (stat.isDirectory()) return join(dotGit, "info", "exclude");
-  const match = /^gitdir:\s*(.+)$/m.exec(readFileSync(dotGit, "utf8"));
-  if (!match) return null;
-  const gitDir = resolve(workingFolder, match[1]!.trim());
-  const commonFile = join(gitDir, "commondir");
-  const common = existsSync(commonFile) ? resolve(gitDir, readFileSync(commonFile, "utf8").trim()) : gitDir;
-  return join(common, "info", "exclude");
+  return gitExclude(workingFolder)?.file ?? null;
 }
 
 /** Replace a managed block of a working folder's `info/exclude`, under
  * the version read: the file changed meanwhile is refused as a conflict,
  * never overwritten (DR-111). The file is the folder's, so its mode is
- * kept; one made new is 0644. */
+ * kept; one made new is 0644. A folder below its work tree's top keeps
+ * a block of its own, its anchored entries placed under its path, so
+ * two such folders of one work tree never replace each other's. */
 export function writeExcludeBlock(workingFolder: string, entries: string[], block: ExcludeBlock = "exports"): void {
-  const file = gitExcludeFile(workingFolder);
-  if (!file) return;
-  const begin = excludeBegin(block);
-  const end = excludeEnd(block);
+  const found = gitExclude(workingFolder);
+  if (!found) return;
+  const { file, prefix } = found;
+  const label = prefix === "" ? block : `${block} /${prefix}/`;
+  const begin = excludeBegin(label);
+  const end = excludeEnd(label);
+  const placed = prefix === "" ? entries : entries.map((entry) => (entry.startsWith("/") ? `/${prefix}${entry}` : entry));
   const read = readVersioned(file);
   const text = read.bytes === null ? "" : read.bytes.toString("utf8");
   const lines = text.split("\n");
@@ -364,7 +389,7 @@ export function writeExcludeBlock(workingFolder: string, entries: string[], bloc
     if (!inside) kept.push(line);
   }
   while (kept.length > 0 && kept[kept.length - 1] === "") kept.pop();
-  const managed = entries.length > 0 ? [begin, ...entries, end] : [];
+  const managed = placed.length > 0 ? [begin, ...placed, end] : [];
   const out = [...kept, ...managed].join("\n");
   const next = out.length > 0 ? `${out}\n` : "";
   if (next === text) return;
@@ -404,59 +429,77 @@ function userFolder(userHome: string, folder: string): string {
 
 /** Export an installed environment (environments-8). */
 export async function exportEnvironment(options: ExportOptions): Promise<ExportReport> {
-  const { root: envRoot, lock, workingFolder, userHome } = options;
+  const { root: envRoot, lock, workingFolder } = options;
   const packagesDir = installedDir(envRoot);
   const pathRoot = options.pathRoot === undefined ? workingFolder : options.pathRoot;
   const report: ExportReport = { skills: [], folders: [], removed: [], skipped: [], missing: [] };
   const playbookSkills = new Set<string>();
   ensureSpexDir(envRoot);
-  const skillsDir = generatedSkillsDir(envRoot);
+  // The skills are generated whole into a folder beside `.spex/skills/`
+  // and swapped in only where they differ, so an export that changes
+  // nothing rewrites no file (cli-4).
+  const finalSkillsDir = generatedSkillsDir(envRoot);
+  const skillsDir = join(dirname(finalSkillsDir), `.skills-${randomUUID()}`);
   rmSync(skillsDir, { recursive: true, force: true });
   mkdirSync(skillsDir, { recursive: true });
-
-  for (const name of Object.keys(lock.packages).sort()) {
-    const resolution = lock.packages[name]!;
-    const root = packageRoot(name, resolution, packagesDir, pathRoot);
-    const manifest = root === null ? null : readManifestAt(root);
-    if (root === null || manifest === null) {
-      if (Object.keys(resolution.exports).length > 0) report.missing.push(name);
-      continue;
+  try {
+    for (const name of Object.keys(lock.packages).sort()) {
+      const resolution = lock.packages[name]!;
+      const root = packageRoot(name, resolution, packagesDir, pathRoot);
+      const manifest = root === null ? null : readManifestAt(root);
+      if (root === null || manifest === null) {
+        if (Object.keys(resolution.exports).length > 0) report.missing.push(name);
+        continue;
+      }
+      const version = resolutionVersion(resolution) ?? manifest.version;
+      for (const exported of Object.keys(resolution.exports).sort()) {
+        const id = resolution.exports[exported]!;
+        const artifact = manifest.artifacts[id];
+        const language = resolution.artifacts[id]?.language;
+        if (!artifact || !language) continue;
+        const target = join(skillsDir, exported);
+        if (artifact.kind === "skill") {
+          const folder = join(root, "skills", language, id);
+          if (!existsSync(folder)) { if (!report.missing.includes(name)) report.missing.push(name); continue; }
+          copyTree(folder, target);
+          if (exported !== id) {
+            const skill = join(target, "SKILL.md");
+            writeFileSync(skill, rewriteSkillName(readFileSync(skill, "utf8"), exported));
+          }
+        } else if (artifact.kind === "playbook") {
+          // No skill runs a playbook whose folder is not here.
+          if (!existsSync(join(root, "playbooks", language, id))) { if (!report.missing.includes(name)) report.missing.push(name); continue; }
+          mkdirSync(target, { recursive: true });
+          writeFileSync(join(target, "SKILL.md"), playbookSkill({ name: exported, id, packageName: name, version }));
+          playbookSkills.add(exported);
+        } else if (artifact.kind === "spec") {
+          // The spec file in its chosen language, byte for byte, beside a
+          // SKILL.md saying what spec package it is (DR-115).
+          const file = join(root, "specs", language, `${id}.md`);
+          if (!existsSync(file)) { if (!report.missing.includes(name)) report.missing.push(name); continue; }
+          mkdirSync(target, { recursive: true });
+          copyFileSync(file, join(target, `${id}.md`));
+          chmodSync(join(target, `${id}.md`), 0o644);
+          writeFileSync(join(target, "SKILL.md"), specSkill({ name: exported, packageName: name, version, description: manifest.description, file: `${id}.md` }));
+        } else continue;
+        report.skills.push(exported);
+      }
     }
-    const version = resolutionVersion(resolution) ?? manifest.version;
-    for (const exported of Object.keys(resolution.exports).sort()) {
-      const id = resolution.exports[exported]!;
-      const artifact = manifest.artifacts[id];
-      const language = resolution.artifacts[id]?.language;
-      if (!artifact || !language) continue;
-      const target = join(skillsDir, exported);
-      if (artifact.kind === "skill") {
-        const folder = join(root, "skills", language, id);
-        if (!existsSync(folder)) { if (!report.missing.includes(name)) report.missing.push(name); continue; }
-        copyTree(folder, target);
-        if (exported !== id) {
-          const skill = join(target, "SKILL.md");
-          writeFileSync(skill, rewriteSkillName(readFileSync(skill, "utf8"), exported));
-        }
-      } else if (artifact.kind === "playbook") {
-        // No skill runs a playbook whose folder is not here.
-        if (!existsSync(join(root, "playbooks", language, id))) { if (!report.missing.includes(name)) report.missing.push(name); continue; }
-        mkdirSync(target, { recursive: true });
-        writeFileSync(join(target, "SKILL.md"), playbookSkill({ name: exported, id, packageName: name, version }));
-        playbookSkills.add(exported);
-      } else if (artifact.kind === "spec") {
-        // The spec file in its chosen language, byte for byte, beside a
-        // SKILL.md saying what spec package it is (DR-115).
-        const file = join(root, "specs", language, `${id}.md`);
-        if (!existsSync(file)) { if (!report.missing.includes(name)) report.missing.push(name); continue; }
-        mkdirSync(target, { recursive: true });
-        copyFileSync(file, join(target, `${id}.md`));
-        chmodSync(join(target, `${id}.md`), 0o644);
-        writeFileSync(join(target, "SKILL.md"), specSkill({ name: exported, packageName: name, version, description: manifest.description, file: `${id}.md` }));
-      } else continue;
-      report.skills.push(exported);
-    }
+    report.skills.sort();
+  } catch (error) {
+    rmSync(skillsDir, { recursive: true, force: true });
+    throw error;
   }
-  report.skills.sort();
+  if (sameTree(skillsDir, finalSkillsDir)) rmSync(skillsDir, { recursive: true, force: true });
+  else {
+    rmSync(finalSkillsDir, { recursive: true, force: true });
+    renameSync(skillsDir, finalSkillsDir);
+  }
+  return mirrorExports(options, finalSkillsDir, report, playbookSkills);
+}
+
+function mirrorExports(options: ExportOptions, skillsDir: string, report: ExportReport, playbookSkills: Set<string>): ExportReport {
+  const { workingFolder, userHome } = options;
 
   // Every project-level folder the table names, whatever agents this
   // device has; a user-level folder only for an agent it has
