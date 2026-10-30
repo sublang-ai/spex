@@ -16,9 +16,11 @@
   "scripts": {
     "start": "node scripts/start-desktop.mjs",
     "start:server": "node scripts/start-server.mjs",
-    "build": "npm run build --workspaces --if-present",
+    "build": "npm run check:dependencies && npm run build --workspaces --if-present",
+    "check:dependencies": "node scripts/dependency-closure.mjs",
     "test": "npm run test:scripts && npm test --workspaces --if-present",
-    "test:scripts": "node --test scripts/desktop-runner.test.mjs scripts/source-launch.integration.test.mjs scripts/live-output.test.mjs scripts/release-notes.test.mjs scripts/smoke.test.mjs scripts/inspection-browser-cache.test.mjs scripts/inspection-evidence.test.mjs scripts/ci-workflow.test.mjs scripts/team-server-local.test.mjs",
+    "test:scripts": "node --test scripts/desktop-runner.test.mjs scripts/source-launch.integration.test.mjs scripts/live-output.test.mjs scripts/release-notes.test.mjs scripts/smoke.test.mjs scripts/inspection-browser-cache.test.mjs scripts/inspection-evidence.test.mjs scripts/ci-workflow.test.mjs scripts/team-server-local.test.mjs scripts/dependency-closure.test.mjs scripts/dependency-closure.integration.test.mjs",
+    "test:dependencies": "node --test scripts/dependency-closure.test.mjs scripts/dependency-closure.integration.test.mjs",
     "test:integration": "npm run test:integration --workspaces --if-present",
     "e2e": "npm run journeys -w e2e",
     "regression": "npm run journeys:live -w e2e",

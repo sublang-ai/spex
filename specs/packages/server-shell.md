@@ -130,7 +130,7 @@ Where `npm ci` has installed the repository dependencies, when a contributor inv
 
 #### server-shell-7
 
-The server shell shall declare the `claude`, `codex`, and `opencode` agent SDKs at the unconstrained range — extending the app-supply duty of [DR-024](../decisions/024-app-supplied-agent-runtimes.md) to this shell — and the playbook compiler `@sublang/slc` at a caret on its CLI contract ([DR-081](../decisions/081-the-app-supplies-the-compiler.md)) as its `apps/server` package's own dependencies, and shall start the core with its own Node as the compile runtime and the module directories above its own module [[playbook-library-83](playbook-library.md#playbook-library-83)], and with the checkout's own scaffold CLI `@sublang/spex` found there, on that Node, as the scaffold command [[projects-31](projects.md#projects-31)] ([DR-096](../decisions/096-the-app-supplies-the-scaffold.md)), so SDK-backed adapters, the compiler and the scaffold CLI resolve when its embedded core loads or runs them:
+The server shell shall declare the `claude`, `codex`, and `opencode` agent SDKs at the unconstrained range (extending the app-supply duty of [DR-024](../decisions/024-app-supplied-agent-runtimes.md) to this shell), the playbook compiler `@sublang/slc` at a caret on its CLI contract ([DR-081](../decisions/081-the-app-supplies-the-compiler.md)), and its host engine `@sublang/playbook` at a range compatible with the core and compiler ([DR-167](../decisions/167-the-compiler-shares-the-apps-engine.md)) as its `apps/server` package's own dependencies, and shall start the core with its own Node as the compile runtime and the module directories above its own module [[playbook-library-83](playbook-library.md#playbook-library-83)], and with the checkout's own scaffold CLI `@sublang/spex` found there, on that Node, as the scaffold command [[projects-31](projects.md#projects-31)] ([DR-096](../decisions/096-the-app-supplies-the-scaffold.md)), so SDK-backed adapters, the compiler and the scaffold CLI resolve when its embedded core loads or runs them:
 
 - the shell also ships the built-in spec package the core seeds at start [[environments-11](environments.md#environments-11)], staged from the `@sublang/playbook` it depends on at build time ([DR-104](../decisions/104-spec-package-format-and-client-environments.md)).
 
@@ -246,7 +246,7 @@ Where the server shell serves mutable fixture assets, when the integration suite
 
 #### server-shell-22
 
-When the server's test suite reads the package manifest and resolves the compiler over the module directories above the server's own module, the test suite shall assert that the three SDKs and the compiler are declared, that the compiler resolved is the app's own copy, and that a project created with the scaffold option over the started server's socket runs the checkout's own `packages/cli` entry on the server's Node as the scaffold command [[server-shell-7](#server-shell-7)].
+When the server's test suite reads the package manifest and resolves the compiler over the module directories above the server's own module, the test suite shall assert that the three SDKs, the compiler and its host Playbook are declared, that the compiler resolved is the app's own copy, and that a project created with the scaffold option over the started server's socket runs the checkout's own `packages/cli` entry on the server's Node as the scaffold command [[server-shell-7](#server-shell-7)].
 
 ### Browser Journey Coverage
 
