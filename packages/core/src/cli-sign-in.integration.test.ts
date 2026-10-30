@@ -11,7 +11,7 @@
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -259,6 +259,20 @@ test("cli-17, cli-18: login, whoami and logout at two stand-in instances, with n
   assert.equal(interrupted.stderr, "spex login: interrupted; nothing recorded\n");
   assert.equal(bytesOr(homeFile()), homeHeld, "an interrupted login records nothing");
   assert.deepEqual(Object.keys(readCredentials().hosts), [first.url]);
+
+  // A forced login whose home file stops reading while it waits records
+  // nothing: the home as it stood, the former token kept (cli-10).
+  const homeStood = bytesOr(homeFile())!;
+  const pairStood = readCredentials().hosts[first.url];
+  const unrecorded = spex(["login", "--force"]);
+  const unrecordedCode = await printedCode(unrecorded, first);
+  writeFileSync(homeFile(), "format: 99\n");
+  first.script.approveDevice(unrecordedCode);
+  const unrecordedDone = await unrecorded.done;
+  writeFileSync(homeFile(), homeStood);
+  assert.equal(unrecordedDone.code, 1);
+  assert.match(unrecordedDone.stderr, /^spex login: not signed in: .*home\.yaml.*; nothing recorded\n$/);
+  assert.deepEqual(readCredentials().hosts[first.url], pairStood, "the former token is kept");
 
   // No access or refresh secret anywhere in any output (cli-13).
   const all = printed.join("\n");

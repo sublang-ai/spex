@@ -28,8 +28,8 @@ function signInCause(error: unknown, name: string): string {
   }
 }
 
-/** A store holding one pair in memory alone: the pair a forced sign-in
- * replaced, revoked through it and never written anywhere. */
+/** A store holding one pair in memory alone, for a device revoked
+ * through it without writing anything anywhere. */
 function heldOnly(pair: StoredCredential): CredentialStore {
   let held: StoredCredential | null = pair;
   return {
@@ -126,9 +126,12 @@ export const login: Command = async (args, interrupt) => {
         return displayName === null ? next : withDisplayName(next, origin, displayName) ?? next;
       });
     } catch (error) {
-      // Nothing recorded, so no token is kept: the device just signed in
-      // is signed out again.
-      await client.signOut().catch(() => undefined);
+      // Nothing recorded, so the pair the sign-in replaced is put back
+      // and the device just signed in is revoked from memory alone.
+      const issued = await credentials.read().catch(() => null);
+      if (issued && credentials.replace(issued, held)) {
+        await clientOf(origin, heldOnly(issued)).signOut().catch(() => undefined);
+      }
       throw new Refusal(`not signed in: ${(error as Error).message}; nothing recorded`);
     }
     // A forced sign-in replaced the device's former token: that device
