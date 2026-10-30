@@ -25,7 +25,7 @@ import {
   type Request,
 } from "../lib/environment/index.js";
 import { VersionConflictError } from "../lib/files.js";
-import { Environment, registryCause, shown } from "./environment.js";
+import { actualPath, Environment, registryCause, shown } from "./environment.js";
 import { gainedLines, leftOutLines, settle } from "./settle.js";
 import { parsed, Refusal, type Command } from "./run.js";
 
@@ -75,11 +75,13 @@ export const add: Command = async (args) => {
   let request: Request;
   if (values.path !== undefined) {
     // The folder as given from here, recorded relative to the root.
-    const inside = relative(env.root, resolve(values.path));
+    // The two compare as text where spelled alike, else as the file
+    // system spells them, so a short name and its long one are one.
+    const out = (path: string): boolean => path === "" || isAbsolute(path) || path === ".." || path.startsWith(`..${sep}`);
+    let inside = relative(env.root, resolve(values.path));
+    if (out(inside)) inside = relative(actualPath(env.root), actualPath(resolve(values.path)));
+    if (out(inside)) throw new Refusal(`--path ${values.path} leads out of ${env.root}`);
     const path = inside.split(sep).join("/");
-    if (inside === "" || isAbsolute(inside) || inside === ".." || inside.startsWith(`..${sep}`)) {
-      throw new Refusal(`--path ${values.path} leads out of ${env.root}`);
-    }
     request = { path };
   } else {
     if (requirement !== undefined) {

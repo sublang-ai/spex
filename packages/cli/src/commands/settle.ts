@@ -12,15 +12,17 @@
 // file changed meanwhile (DR-111).
 
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 
 import {
   AGENT_FOLDERS,
   EXPORTS_MANIFEST,
   exportEnvironment,
+  GitSourceError,
   install,
   InstallError,
   installedPackages,
+  isGitRequest,
   isGitSource,
   isPathSource,
   isRegistrySource,
@@ -38,6 +40,7 @@ import {
   type InstallReport,
   type Lock,
   type Manifest,
+  type Requests,
   type Resolution,
 } from "../lib/environment/index.js";
 import { fileVersion, sha256, VersionConflictError, type FileVersion } from "../lib/files.js";
@@ -77,12 +80,62 @@ export function staleReasons(root: string, lock: Lock, requestsText: string | nu
   return staleness.stale ? staleness.reasons : null;
 }
 
-function refusalOf(error: unknown): Refusal {
+// -- Git locators as a reader is shown them (environments-29, DR-120) ---------
+
+/** Whether a Git locator is a folder of this device: a path, or a file
+ * URL. */
+function localGit(repo: string): boolean {
+  return isAbsolute(repo) || /^file:/i.test(repo)
+    || (!/^[a-z][a-z0-9+.-]*:\/\//i.test(repo) && !/^[^/\\]+:/.test(repo));
+}
+
+/** A Git locator as a reader reads it: a local path or file URL as
+ * given; a network remote unnamed, since the command line reads no
+ * instance's Git origin and so never tells an instance's repository from
+ * another's, and never names the Git host behind an instance. */
+export function gitShown(repo: string): string {
+  return localGit(repo) ? repo : "a Git remote";
+}
+
+/** Every Git locator the environment's files name, longest first, with
+ * the spec packages fetched from it. */
+export type GitLocators = [repo: string, names: string[]][];
+
+export function gitLocators(requests: Requests | null, lock: Lock | null): GitLocators {
+  const out = new Map<string, Set<string>>();
+  const add = (repo: string, name: string): void => { out.set(repo, (out.get(repo) ?? new Set()).add(name)); };
+  for (const [name, request] of Object.entries(requests?.packages ?? {})) if (isGitRequest(request)) add(request.git, name);
+  for (const [name, resolution] of Object.entries(lock?.packages ?? {})) if (isGitSource(resolution.source)) add(resolution.source.git, name);
+  return [...out.entries()].map(([repo, names]): [string, string[]] => [repo, [...names].sort()]).sort(([a], [b]) => b.length - a.length);
+}
+
+/** A text with every network Git locator of the environment unnamed. */
+export function unnamedText(text: string, locators: GitLocators): string {
+  return locators.reduce((out, [repo]) => (localGit(repo) ? out : out.split(repo).join(gitShown(repo))), text);
+}
+
+/** A Git fetch's failure as a reader reads it: Git's own words for a
+ * local repository; for a network remote, what it answered and no raw
+ * output, which may name the host behind an instance. */
+function gitFailure(error: GitSourceError, locators: GitLocators): string {
+  if (localGit(error.repo)) return error.message;
+  const status = /returned error: (\d{3})|RPC failed; HTTP (\d{3})|HTTP (\d{3})/i.exec(error.run?.stderr ?? "");
+  const answer = status ? ` (HTTP ${status[1] ?? status[2] ?? status[3]})` : "";
+  const names = locators.find(([repo]) => repo === error.repo)?.[1] ?? [];
+  return `${names.length > 0 ? `${names.join(", ")}: ` : ""}${gitShown(error.repo)} answered with an error${answer}; check that this device's Git can read it, then retry`;
+}
+
+function refusalOf(error: unknown, locators: GitLocators = []): Refusal {
   if (error instanceof Refusal) return error;
-  if (error instanceof VersionConflictError || error instanceof InstallError || error instanceof ResolveError || error instanceof RegistryError) {
-    return new Refusal(registryCause(error));
+  if (error instanceof GitSourceError) return new Refusal(gitFailure(error, locators));
+  if (error instanceof InstallError && error.cause instanceof GitSourceError) {
+    const prefix = error.message.startsWith("installing failed; the last files stay: ") ? "installing failed; the last files stay: " : "";
+    return new Refusal(`${prefix}${gitFailure(error.cause, locators)}`);
   }
-  return new Refusal(error instanceof Error ? error.message : String(error));
+  if (error instanceof VersionConflictError || error instanceof InstallError || error instanceof ResolveError || error instanceof RegistryError) {
+    return new Refusal(unnamedText(registryCause(error), locators));
+  }
+  return new Refusal(unnamedText(error instanceof Error ? error.message : String(error), locators));
 }
 
 /** Settle the environment; null where it holds neither file. */
@@ -95,6 +148,7 @@ export async function settle(env: Environment, mode: SettleMode): Promise<Settle
   // else the default instance's (environments-2, environments-5).
   const instance = env.instanceOf(read?.requests ?? null);
   const registry = env.registryAt(instance);
+  const locators = gitLocators(read?.requests ?? null, locked?.lock ?? null);
 
   let lock = locked?.lock ?? null;
   let lockVersion: FileVersion = locked?.version ?? null;
@@ -112,11 +166,11 @@ export async function settle(env: Environment, mode: SettleMode): Promise<Settle
         ...(locked ? { previous: locked.lock } : {}),
       });
     } catch (error) {
-      throw refusalOf(error);
+      throw refusalOf(error, locators);
     }
     if (!result.ok) {
       const conflicts = result.conflicts.map((conflict) => `${conflict.name} (${conflict.requirements.map((entry) => `${entry.by}: ${entry.requirement}`).join(", ")})`);
-      throw new Refusal(`no set of versions meets every requirement: ${conflicts.join(", ")}`);
+      throw new Refusal(unnamedText(`no set of versions meets every requirement: ${conflicts.join(", ")}`, locators));
     }
     // The lock is written only while `spex.yaml` stands as resolved and
     // the lock as read, both checked at the instant of the write; a lock
@@ -144,15 +198,18 @@ export async function settle(env: Environment, mode: SettleMode): Promise<Settle
       cache: env.cache,
       registry,
       registries: (source) => env.installRegistries(instance, source),
+      // The built-in spec package from this device's seed, by its files'
+      // digests (environments-7).
+      seed: env.seed(),
       git: env.git,
       pathRoot: root,
       requestsText: read?.text ?? null,
     });
   } catch (error) {
-    throw refusalOf(error);
+    throw refusalOf(error, locators);
   }
   // A stale lock installs and exports nothing (environments-7).
-  if (report.stale) throw new Refusal(`spex.lock no longer matches: ${report.stale.join("; ")}; spex update resolves it again`);
+  if (report.stale) throw new Refusal(unnamedText(`spex.lock no longer matches: ${report.stale.join("; ")}; spex update resolves it again`, locators));
   // Exports derive from the installed tree and its lock: written only
   // while both still stand as this install left them (environments-8).
   let exported: ExportReport;
@@ -190,7 +247,7 @@ export function sourceLabel(resolution: Resolution): string {
   if (isRegistrySource(source)) {
     try { return hostOf(source.registry); } catch { return source.registry; }
   }
-  if (isGitSource(source)) return `git ${source.git.replace(/\/\/[^/@]*@/, "//")} at ${source.commit.slice(0, 12)}${source.path ? ` (${source.path})` : ""}`;
+  if (isGitSource(source)) return `git ${gitShown(source.git)} at ${source.commit.slice(0, 12)}${source.path ? ` (${source.path})` : ""}`;
   return `path ${source.path}`;
 }
 
@@ -225,8 +282,15 @@ export function exportsOf(root: string, resolution: Resolution): Map<string, str
 }
 
 /** Each change from one lock to the next: a package gained, moved from
- * one version to another, or lost. */
-export interface LockChange { name: string; from: string | null; to: string | null }
+ * one version to another, moved to another source at one version, or
+ * lost. */
+export interface LockChange {
+  name: string;
+  from: string | null;
+  to: string | null;
+  /** The sources before and after, where the source changed. */
+  source?: { from: string; to: string };
+}
 
 export function lockChanges(root: string, before: Lock | null, after: Lock): LockChange[] {
   const out: LockChange[] = [];
@@ -236,9 +300,26 @@ export function lockChanges(root: string, before: Lock | null, after: Lock): Loc
     const now = after.packages[name];
     const from = was ? versionOf(root, name, was) : null;
     const to = now ? versionOf(root, name, now) : null;
-    if (from !== to || (was && now && JSON.stringify(was.source) !== JSON.stringify(now.source))) out.push({ name, from, to });
+    const moved = was !== undefined && now !== undefined && sourceKind(was) !== sourceKind(now);
+    if (from !== to || moved) out.push({ name, from, to, ...(moved ? { source: { from: sourceLabel(was!), to: sourceLabel(now!) } } : {}) });
   }
   return out;
+}
+
+/** A resolution's source with no version: where its files come from. */
+function sourceKind(resolution: Resolution): string {
+  const source = resolution.source;
+  if (isRegistrySource(source)) return `registry ${source.registry}`;
+  if (isGitSource(source)) return `git ${source.git} ${source.commit} ${source.path ?? ""}`;
+  return `path ${source.path}`;
+}
+
+/** A change as a reader reads it. */
+export function changeLine(change: LockChange): string {
+  if (change.from === null) return `Added ${change.name} ${change.to}`;
+  if (change.to === null) return `Removed ${change.name} ${change.from}`;
+  const version = change.from === change.to ? change.to : `${change.from} -> ${change.to}`;
+  return change.source ? `Moved ${change.name} ${version} from ${change.source.from} to ${change.source.to}` : `Moved ${change.name} ${version}`;
 }
 
 /** The lines naming each package gained or moved with where its exports
@@ -246,8 +327,8 @@ export function lockChanges(root: string, before: Lock | null, after: Lock): Loc
 export function gainedLines(root: string, settled: Settled): string[] {
   const lines: string[] = [];
   for (const change of lockChanges(root, settled.before, settled.lock)) {
-    if (change.to === null) { lines.push(`Removed ${change.name} ${change.from}`); continue; }
-    lines.push(change.from === null || change.from === change.to ? `Added ${change.name} ${change.to}` : `Moved ${change.name} ${change.from} -> ${change.to}`);
+    lines.push(changeLine(change));
+    if (change.to === null) continue;
     for (const [skill, folders] of exportsOf(root, settled.lock.packages[change.name]!)) {
       lines.push(`  ${skill}: ${folders.length > 0 ? folders.join(", ") : "exported nowhere"}`);
     }

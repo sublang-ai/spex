@@ -19,7 +19,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 
-import { publishRelease, readPublishableRelease, RegistryClient } from "./lib/environment/index.js";
+import { ContentStore, publishRelease, readPublishableRelease, RegistryClient, seedBuiltinPackage } from "./lib/environment/index.js";
 import { fileCredentialStore } from "./lib/git-host.js";
 import { makeRelease, startStandinRegistry, type ReleaseFixture, type StandinRegistry } from "./testing/index.js";
 
@@ -56,7 +56,12 @@ function spex(cwd: string, ...args: string[]): Promise<Ran> {
 }
 
 function spexAt(home: string, cwd: string, ...args: string[]): Promise<Ran> {
-  const env: NodeJS.ProcessEnv = { ...process.env, SPEX_HOME: home };
+  return spexWith({}, home, cwd, ...args);
+}
+
+/** The packed CLI with variables of its environment set beside the home. */
+function spexWith(vars: NodeJS.ProcessEnv, home: string, cwd: string, ...args: string[]): Promise<Ran> {
+  const env: NodeJS.ProcessEnv = { ...process.env, ...vars, SPEX_HOME: home };
   delete env.SPEX_SERVER_URL;
   delete env.SPEX_HOST_URL;
   const proc = spawn(process.execPath, [CLI, ...args], { cwd, env, stdio: ["ignore", "pipe", "pipe"] });
@@ -153,6 +158,9 @@ before(async () => {
   // The newest listed release that is no prerelease and not yanked is
   // 1.2.0.
   registry.script.yank("demo/other", "1.3.0");
+  // A suppressed release is passed over too: 1.2.1 is never picked.
+  await publish("demo/other", "1.2.1", { other: skill }, skillFiles("other", "1.2.1"), { "demo/base": "^1.0.0" });
+  registry.script.suppress("demo/other", "1.2.1");
 
   // The home names the stand-in as its default instance (storage-2).
   mkdirSync(HOME, { recursive: true });
@@ -186,7 +194,7 @@ test("cli-15: add writes the request, resolves, installs under .spex/ and export
   for (const folder of [".claude", ".agents"]) assert.match(readFileSync(join(WORK, folder, "skills", "tool", "SKILL.md"), "utf8"), /name: tool/, `[cli-2] exported into ${folder}/skills`);
 
   const other = await ok(WORK, "add", "demo/other");
-  assert.equal(readYaml(join(WORK, "spex.yaml")).packages["demo/other"].version, "^1.2.0", "[cli-2] a caret at the newest listed release, no prerelease, none yanked");
+  assert.equal(readYaml(join(WORK, "spex.yaml")).packages["demo/other"].version, "^1.2.0", "[cli-2] a caret at the newest listed release, no prerelease, none yanked or suppressed");
   assert.match(other, /^Added demo\/other 1\.2\.0$/m);
   assert.match(other, /^Added demo\/base 1\.0\.0$/m, "[cli-2] what the lock gained beside it");
   const lock = readYaml(join(WORK, "spex.lock"));
@@ -205,13 +213,18 @@ test("cli-15: add writes the request, resolves, installs under .spex/ and export
     ["a path leading out of the root", ["add", "demo/tool", "--path", "../elsewhere"], /leads out of/],
     ["a spec package the registry does not list", ["add", "demo/missing"], /lists no spec package demo\/missing/],
   ];
-  for (const [label, args, cause] of refusals) {
-    const before = snapshot(WORK);
-    const ran = await spex(WORK, ...args);
-    assert.equal(ran.code, 1, `${label}: ${ran.stdout}${ran.stderr}`);
-    assert.match(ran.stderr, cause, `[cli-2] ${label} is refused naming the rule`);
-    assert.deepEqual(snapshot(WORK), before, `[cli-2] ${label} writes nothing`);
+  // Each refusal, where spex.yaml stands and where none does yet.
+  const fresh = workingFolder(join(SCRATCH, "fresh"));
+  for (const at of [WORK, fresh]) {
+    for (const [label, args, cause] of refusals) {
+      const before = snapshot(at);
+      const ran = await spex(at, ...args);
+      assert.equal(ran.code, 1, `${label}: ${ran.stdout}${ran.stderr}`);
+      assert.match(ran.stderr, cause, `[cli-2] ${label} is refused naming the rule`);
+      assert.deepEqual(snapshot(at), before, `[cli-2] ${label} writes nothing`);
+    }
   }
+  assert.deepEqual(snapshot(fresh), {}, "[cli-2] no spex.yaml made by a refusal");
 });
 
 test("cli-15: list names the instance, the requests, the lock, the exports and nothing left out; search lists newest first", async () => {
@@ -315,6 +328,117 @@ test("cli-15: the root is found from a subfolder, and at the Git top level of a 
   assert.ok(existsSync(join(fifth, ".spex", "packages", "demo", "tool")));
   // The home holds nothing but what the commands wrote.
   assert.deepEqual(readdirSync(HOME).sort(), ["cache", "home.yaml", "store"], "[cli-1] no clone, lease or record of the home");
+
+  // A spex.yaml below the Git top level is the nearest, and its exports
+  // are kept out of the work tree's Git all the same.
+  const mono = workingFolder(join(SCRATCH, "mono"));
+  const app = join(mono, "packages", "app");
+  mkdirSync(join(app, "src"), { recursive: true });
+  writeFileSync(join(app, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages: {}\n`);
+  await ok(join(app, "src"), "add", "demo/tool@^1.0.0");
+  assert.ok((await ok(join(app, "src"), "list")).includes(`Root: ${app}\n`), "[cli-1] the nearest spex.yaml, below the Git top level");
+  assert.equal(existsSync(join(mono, "spex.yaml")), false);
+  assert.ok(existsSync(join(app, ".claude", "skills", "tool", "SKILL.md")));
+  const monoStatus = execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: mono, encoding: "utf8" });
+  assert.deepEqual(monoStatus.trim().split("\n").sort(), ["?? packages/app/spex.lock", "?? packages/app/spex.yaml"], "[cli-1] Git sees spex.yaml and spex.lock alone");
+
+  // Outside any Git work tree and below no spex.yaml, the current folder.
+  const loose = join(SCRATCH, "loose", "here");
+  mkdirSync(loose, { recursive: true });
+  await ok(loose, "add", "demo/tool@^1.0.0");
+  assert.ok(existsSync(join(loose, "spex.yaml")), "[cli-1] else the current folder");
+  assert.equal(existsSync(join(SCRATCH, "loose", "spex.yaml")), false);
+
+  // Never the home's own folders, nor the user's home folder, whose
+  // agent folders are the user-level ones.
+  const home = join(SCRATCH, "refusing-home");
+  mkdirSync(home, { recursive: true });
+  copyFileSync(join(HOME, "home.yaml"), join(home, "home.yaml"));
+  const clone = workingFolder(join(home, "workspace", "tester", "tester-spex"));
+  writeFileSync(join(clone, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages: {}\n`);
+  const user = join(SCRATCH, "user");
+  mkdirSync(join(user, ".claude", "skills", "mine"), { recursive: true });
+  writeFileSync(join(user, ".claude", "skills", "mine", "SKILL.md"), "---\nname: mine\ndescription: Mine\n---\n");
+  const userVars = { HOME: user, USERPROFILE: user };
+  for (const [label, vars, at, cause] of [
+    ["a clone of the home", {}, join(clone, "sub"), /lies in the Spex home/],
+    ["the home itself", {}, home, /lies in the Spex home/],
+    ["the user's home folder", userVars, user, /is your home folder/],
+  ] as [string, NodeJS.ProcessEnv, string, RegExp][]) {
+    mkdirSync(at, { recursive: true });
+    const before = { home: snapshot(home), user: snapshot(user) };
+    const ran = await spexWith(vars, home, at, "add", "demo/tool@^1.0.0");
+    assert.equal(ran.code, 1, `${label}: ${ran.stdout}${ran.stderr}`);
+    assert.match(ran.stderr, cause, `[cli-1] ${label} is no root`);
+    assert.deepEqual({ home: snapshot(home), user: snapshot(user) }, before, `[cli-1] ${label}: nothing written`);
+  }
+  // A seat's project below the home's projects/ is a working folder.
+  const seat = workingFolder(join(home, "projects", `@${host.replace(":", "_")}`, "tester", "app"));
+  await ok(seat, "add", "demo/tool@^1.0.0");
+  assert.ok(existsSync(join(seat, "spex.lock")), "[cli-1] a seat's project is a root");
+});
+
+test("cli-15: a Git source is shown with no network remote named, and the lock's other changes are named", async () => {
+  // A network remote is never printed, as a request, a source or Git's
+  // failure: it may lie under an instance's Git origin (DR-120).
+  const dir = workingFolder(join(SCRATCH, "git-source"));
+  const remote = "http://127.0.0.1:1/acme/kit-spex.git";
+  writeFileSync(join(dir, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages:\n  acme/kit:\n    git: ${remote}\n    rev: main\n`);
+  const listed = await ok(dir, "list");
+  assert.match(listed, /^ {2}acme\/kit {2}git a Git remote at main$/m, "[cli-6] the Git request, its remote unnamed");
+  const failed = await spex(dir, "install");
+  assert.equal(failed.code, 1);
+  assert.match(failed.stderr, /^spex install: acme\/kit: a Git remote answered with an error; check that this device's Git can read it, then retry$/m, `[cli-13] the failure named: ${failed.stderr}`);
+  for (const text of [listed, failed.stdout, failed.stderr]) assert.ok(!text.includes("127.0.0.1:1") && !text.includes("kit-spex"), `[cli-13] no remote named: ${text}`);
+
+  // A registry package moved to a path source at the same version is a
+  // move of its source, not a package gained.
+  const moved = workingFolder(join(SCRATCH, "source-move"));
+  await ok(moved, "add", "demo/tool@~1.0.0");
+  await makeRelease(join(moved, "vendor", "tool"), manifestOf("demo/tool", "1.0.0", { tool: skill }), skillFiles("tool", "1.0.0"));
+  const changed = await ok(moved, "add", "demo/tool", "--path", "vendor/tool");
+  assert.match(changed, new RegExp(`^Moved demo/tool 1\\.0\\.0 from ${host.replace(/\./g, "\\.")} to path vendor/tool$`, "m"), `[cli-2] the source moved: ${changed}`);
+  assert.doesNotMatch(changed, /^Added /m);
+  // Its folder's dependencies change at one version: no version moved.
+  const meta = join(moved, "vendor", "tool", "meta.yaml");
+  writeFileSync(meta, stringifyYaml(manifestOf("demo/tool", "1.0.0", { tool: skill }, { "demo/base": "^1.0.0" })));
+  const updated = await ok(moved, "update");
+  assert.match(updated, /^Added demo\/base 1\.0\.0$/m);
+  assert.doesNotMatch(updated, /^Moved demo\/tool/m, "[cli-5] only a version moved is a move");
+});
+
+test("cli-15: list says the lock is missing or stale, and what the export left out", async () => {
+  const dir = workingFolder(join(SCRATCH, "list-states"));
+  writeFileSync(join(dir, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages:\n  demo/tool:\n    version: ^1.0.0\n`);
+  assert.match(await ok(dir, "list"), /^Lock: missing; spex install resolves it$/m, "[cli-6] the lock missing");
+  mkdirSync(join(dir, ".claude", "skills", "tool"), { recursive: true });
+  writeFileSync(join(dir, ".claude", "skills", "tool", "SKILL.md"), "---\nname: tool\ndescription: Mine\n---\n");
+  await ok(dir, "install");
+  const listed = await ok(dir, "list");
+  assert.match(listed, /^Left out:\n {2}tool from \.claude\/skills: a folder of yours stands there$/m, "[cli-6] what the export left out");
+  writeFileSync(join(dir, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages:\n  demo/tool:\n    version: ^1.0.0\n  demo/base:\n    version: ^1.0.0\n`);
+  assert.match(await ok(dir, "list"), /^Lock: stale \(.*\); spex install resolves it again$/m, "[cli-6] the lock stale");
+});
+
+test("cli-15: the built-in spec package a lock holds installs from this device's seed", async () => {
+  // The home's store and cache hold the app's seed of sublang/playbooks;
+  // no registry serves it (environments-7, environments-11).
+  const home = join(SCRATCH, "seeded-home");
+  mkdirSync(home, { recursive: true });
+  copyFileSync(join(HOME, "home.yaml"), join(home, "home.yaml"));
+  const staged = join(SCRATCH, "builtins", "18.1.0");
+  await makeRelease(staged, manifestOf("sublang/playbooks", "18.1.0", { review: skill }), skillFiles("review", "18.1.0"));
+  await seedBuiltinPackage(new ContentStore(home), join(home, "cache"), { name: "sublang/playbooks", version: "18.1.0", dir: staged });
+  const dir = workingFolder(join(SCRATCH, "paired"));
+  writeFileSync(join(dir, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages:\n  sublang/playbooks:\n    version: ^18.1.0\n`);
+  const added = await okAt(home, dir, "add", "demo/tool@^1.0.0");
+  assert.match(added, /^Added sublang\/playbooks 18\.1\.0$/m, "[cli-2] resolved from the seed");
+  assert.match(added, /^Added demo\/tool 1\.\d\.\d$/m);
+  const second = workingFolder(join(SCRATCH, "paired-clone"));
+  copyFileSync(join(dir, "spex.yaml"), join(second, "spex.yaml"));
+  copyFileSync(join(dir, "spex.lock"), join(second, "spex.lock"));
+  assert.match(await okAt(home, second, "install"), /^Installed sublang\/playbooks 18\.1\.0$/m, "[cli-4] installed from the seed");
+  assert.deepEqual(snapshot(join(second, ".spex", "packages")), snapshot(join(dir, ".spex", "packages")));
 });
 
 const APACHE = "\n                                 Apache License\n                           Version 2.0, January 2004\n";
@@ -407,6 +531,17 @@ test("cli-15: new makes spex-packages/<org>/<pkg>/, requests it by path and expo
   assert.equal(notes.manifest.license, "MIT");
   assert.deepEqual(notes.manifest.artifacts, { greet: { kind: "skill", language: "zh-Hans", requires: [] } });
   assert.equal(existsSync(join(bare, "spex-packages", "acme", "notes", "LICENSE")), false);
+  // No LICENSE and no --license: Apache-2.0; --language places the spec;
+  // no staging folder stays beside the package.
+  const plain = project(null);
+  await ok(plain, "new", "acme/hello", "--spec", "specs/hello.md", "--language", "zh-Hans");
+  const placed = await readPublishableRelease(join(plain, "spex-packages", "acme", "hello"));
+  assert.equal(placed.manifest.license, "Apache-2.0", "[cli-8] Apache-2.0 where the root holds no LICENSE");
+  assert.ok(placed.files.some((file) => file.path === "specs/zh-Hans/hello.md"), "[cli-8] the spec at specs/<language>/<pkg>.md");
+  assert.deepEqual(readdirSync(join(plain, "spex-packages", "acme")), ["hello"], "[cli-8] no staging folder left");
+  if (process.platform !== "win32") {
+    assert.equal(lstatSync(join(moved, "spex-packages", "acme", "greeting", "skills", "en", "greet", "scripts", "wave.sh")).mode & 0o100, 0o100, "[cli-8] a moved script stays executable");
+  }
 });
 
 test("cli-15: new refuses each rule before writing anything", async () => {
@@ -421,6 +556,8 @@ test("cli-15: new refuses each rule before writing anything", async () => {
   skillAt("twin", "---\nname: greet\ndescription: Twin\n---\n");
   skillAt("undescribed", "---\nname: undescribed\n---\n");
   skillAt("hello", "---\nname: hello\ndescription: Same id as the spec\n---\n");
+  skillAt("marked", "\uFEFF---\nname: marked\ndescription: Marked\n---\n");
+  skillAt("colon", "---\nname: colon\ndescription: Greets: whoever asks\n---\n");
   writeFileSync(join(dir, "specs/other.md"), "# other\n\n## Intent\n\nOther.\n");
   writeFileSync(join(dir, "specs/plain.md"), "# plain\n\nNo intent heading.\n");
   const links = process.platform !== "win32";
@@ -438,7 +575,10 @@ test("cli-15: new refuses each rule before writing anything", async () => {
     ["a name of one part", ["hello", "--skill", ...skill], /<org>\/<pkg>/],
     ["a name part past 64 characters", [`acme/${"a".repeat(65)}`, "--skill", ...skill], /at most 64 characters/],
     ["no artifact", ["acme/hello"], /at least one artifact/],
+    ["a skill folder that is not there", ["acme/hello", "--skill", ".claude/skills/absent"], /is no folder holding a SKILL\.md/],
     ["a skill folder without SKILL.md", ["acme/hello", "--skill", ".claude/skills/empty"], /no SKILL\.md/],
+    ["a SKILL.md behind a byte order mark", ["acme/hello", "--skill", ".claude/skills/marked"], /byte order mark/],
+    ["a SKILL.md frontmatter that is no YAML", ["acme/hello", "--skill", ".claude/skills/colon"], /holds ": " unquoted/],
     ["a SKILL.md name that is no Agent Skills name", ["acme/hello", "--skill", ".claude/skills/spaced"], /Agent Skills name/],
     ["two skills of one id", ["acme/hello", "--skill", ...skill, "--skill", ".claude/skills/twin"], /Two skills declare the id greet/],
     ["a skill of the spec's id", ["acme/hello", "--skill", ".claude/skills/hello", "--spec", "specs/hello.md"], /spec's id hello/],
