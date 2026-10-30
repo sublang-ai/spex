@@ -105,6 +105,7 @@ import {
 import { shippedBuiltinPackage } from "./builtins.js";
 import { installEngine } from "./compile.js";
 import { i18n } from "./i18n.js";
+import { migrateEnvironments, type MigratedRepository } from "./migrate-environment.js";
 import { gitEnvironment } from "./storage-git.js";
 import { canonicalOrigin } from "@sublang/spex/instance";
 import type { PlaybookModules } from "./config.js";
@@ -707,8 +708,10 @@ export class EnvironmentManager {
     return { shipped, locked: source.version };
   }
 
-  /** At start: seed the built-in spec package, request it in your own
-   * group's environment where it lacks it, then resolve where no lock stands,
+  /** At start: seed the built-in spec package, move every project's
+   * environment its clone still holds into its working folder
+   * (storage-24), request the built-in spec package in your own group's
+   * environment where it lacks it, then resolve where no lock stands,
    * install and export every environment, and collect the store. A
    * project's working folder holding no `spex.yaml` holds no
    * environment: its request is written at pairing alone
@@ -718,6 +721,7 @@ export class EnvironmentManager {
       try { await seedBuiltinPackage(this.contentStore, this.cacheDir, this.options.builtin); }
       catch (error) { console.error(`spex: the built-in spec package was not seeded: ${error instanceof Error ? error.message : String(error)}`); }
     }
+    this.migrate(null);
     for (const repository of this.store.listRepositories()) {
       const root = this.rootOf(repository.key);
       let wrote = false;
@@ -731,17 +735,37 @@ export class EnvironmentManager {
     this.collect();
   }
 
-  /** Remove store entries no lock on this device selects
-   * (environments-7): each environment's at its root. */
+  /** The environment migration (storage-24) over every spex repository
+   * on this device, or over one project's at its pairing: its moves are
+   * installed and exported by the settle that follows. */
+  private migrate(key: string | null): void {
+    const own = this.store.home.own();
+    const repositories: MigratedRepository[] = [];
+    for (const repository of this.store.listRepositories()) {
+      if (key !== null && repository.key !== key) continue;
+      const isOwn = repository.key === own;
+      let instance: string | null = null;
+      try { instance = this.options.placedAt(repository.key); } catch { instance = null; }
+      repositories.push({ key: repository.key, clone: repository.dir, own: isOwn, folder: isOwn ? null : this.workingFolder(repository.key), instance });
+    }
+    try { migrateEnvironments(this.store.dir, repositories); }
+    catch (error) { console.error(`spex: the environment migration stopped: ${error instanceof Error ? error.message : String(error)}`); }
+  }
+
+  /** Remove store entries no lock on this device selects (environments-7):
+   * each environment's at its root, and the lock a project's clone still
+   * holds until its working folder is paired here (storage-24). */
   collect(): void {
     const locks: Lock[] = [];
     for (const repository of this.store.listRepositories()) {
       const root = this.rootOf(repository.key);
-      if (root === null) continue;
-      try {
-        const lock = readLockSync(join(root, "spex.lock"));
-        if (lock) locks.push(lock);
-      } catch { /* an unreadable lock keeps nothing it might select: skip collecting */ return; }
+      const files = new Set([...(root !== null ? [join(root, "spex.lock")] : []), join(repository.dir, "spex.lock")]);
+      for (const file of files) {
+        try {
+          const lock = readLockSync(file);
+          if (lock) locks.push(lock);
+        } catch { /* an unreadable lock keeps nothing it might select: skip collecting */ return; }
+      }
     }
     // The seeded built-in releases serve installs offline: kept whole.
     const keep = lockStoreKeys(locks);
@@ -1246,14 +1270,16 @@ export class EnvironmentManager {
   }
 
   /** A working folder was paired with a clone this device holds
-   * (environments-31, storage-6): a folder holding neither file is
-   * written the new environment requesting the built-in spec
+   * (environments-31, storage-6): the environment the clone still holds
+   * moves into the folder (storage-24); a folder then holding neither
+   * file is written the new environment requesting the built-in spec
    * package, locked at its environment's registry (environments-11),
    * while one holding its own is installed from it, nothing but `.spex/`
    * written (environments-26); its environment is then exported into the
    * folder as an install does (environments-7), its state broadcast. */
   paired(key: string): Promise<void> {
     if (!this.store.repository(key)) return Promise.resolve();
+    this.migrate(key);
     const root = this.rootOf(key);
     if (root === null) return Promise.resolve();
     let wrote = false;
