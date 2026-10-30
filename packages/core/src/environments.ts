@@ -522,11 +522,10 @@ export class EnvironmentManager {
 
   /** The `space` an environment's built-in request names where the core
    * writes it (environments-11): the instance its spex repository is
-   * placed at where that is not the home's default; null otherwise. */
+   * placed at wherever it has one, the home's default included; null for
+   * one local only, which names none. */
   private spaceOf(placed: string | null): string | null {
-    if (placed === null) return null;
-    const origin = canonicalOrigin(placed);
-    return origin === this.defaultOrigin() ? null : origin;
+    return placed === null ? null : canonicalOrigin(placed);
   }
 
   /** The registry answering under an instance's origin: one client per
@@ -683,8 +682,8 @@ export class EnvironmentManager {
   /** Request the built-in spec package where the environment at `root`
    * lacks it, with the lock where that is all it requests, locked at the
    * registry of the instance the spex repository is placed at, else the
-   * default instance's, and naming that instance as `space` where it is
-   * not the default (environments-11, environments-2). */
+   * default instance's, and naming that instance as `space` wherever it
+   * has one (environments-11, environments-2). */
   prepare(root: string, key: string): boolean {
     if (!this.options.builtin) return false;
     const placed = this.options.placedAt(key);
@@ -1301,7 +1300,7 @@ export class EnvironmentManager {
     if (!this.store.repository(key) || root === null || !this.options.builtin) return Promise.resolve();
     let wrote = false;
     // The instance placed at becomes the environment's, named as `space`
-    // where it is not the default (environments-11).
+    // (environments-11).
     const placed = this.options.placedAt(key);
     try { wrote = rehomeBuiltinLock(root, this.options.builtin, placed ?? this.defaultOrigin(), this.spaceOf(placed)); }
     catch (error) { console.error(`spex: ${key} keeps its built-in spec package's lock: ${error instanceof Error ? error.message : String(error)}`); }

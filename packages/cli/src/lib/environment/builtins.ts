@@ -342,8 +342,8 @@ function builtinResolution(pkg: BuiltinPackage, registryUrl: string): Lock["pack
  * group's clone, or a project's working folder at its pairing.
  * `spex.yaml` requests the built-in spec package where it does not —
  * with `space` naming the environment's instance where one is given, the
- * caller giving it where that is not the home's default instance — and,
- * where that is all it requests and no lock stands,
+ * caller giving the instance its spex repository is placed at wherever
+ * it has one — and, where that is all it requests and no lock stands,
  * its lock, so the first commit holding either holds both. Returns
  * whether `spex.yaml` was written.
  */
@@ -371,11 +371,12 @@ export function prepareBuiltinEnvironment(root: string, pkg: BuiltinPackage, reg
  * Move an environment's built-in lock to `registryUrl` where it is
  * still the one a pairing prepared (environments-11, DR-127): `spex.yaml`
  * requesting the built-in spec package alone, and `spex.lock` exactly
- * the built-in lock at the registry it records, another than
- * `registryUrl`. A lock holding anything else — another release, another
- * package, a resolution of the reader's — is left as it is. Where
- * `space` is given — the instance placed at is not the home's default —
- * `spex.yaml` names it first, and the lock follows its bytes (DR-165).
+ * the built-in lock at the registry it records — another than
+ * `registryUrl`, or that one while `spex.yaml` does not name `space`.
+ * A lock holding anything else — another release, another package, a
+ * resolution of the reader's — is left as it is. Where `space` is given
+ * — the instance placed at — `spex.yaml` names it first, and the lock
+ * follows its bytes (DR-165).
  * Written under the versions read, a file changed meanwhile left
  * standing (DR-111). Returns whether it wrote.
  */
@@ -396,10 +397,14 @@ export function rehomeBuiltinLock(root: string, pkg: BuiltinPackage, registryUrl
     return false;
   }
   const source = lock.packages[BUILTIN_PACKAGE_NAME]?.source;
-  if (Object.keys(lock.packages).length !== 1 || !source || !isRegistrySource(source) || source.registry === target) return false;
+  if (Object.keys(lock.packages).length !== 1 || !source || !isRegistrySource(source)) return false;
+  // Nothing to move where the lock records the target already and
+  // `spex.yaml` names the instance placed at, or none is given.
+  const naming = space !== null && parseRequests(text).space !== space;
+  if (source.registry === target && !naming) return false;
   if (current !== serializeLock(builtinLock(pkg, source.registry, text))) return false;
   let next = text;
-  if (space !== null && parseRequests(text).space !== space) {
+  if (naming) {
     const doc = parseDocument(text);
     setSpaceIn(doc, space);
     next = doc.toString({ lineWidth: 0 });
