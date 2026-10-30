@@ -445,6 +445,42 @@ test("environments-9, environments-7, playbook-library-46: an installed playbook
   assert.ok(existsSync(join(links, "@sublang", "playbook")), "with every engine link");
 });
 
+test("environments-9, environments-7, playbook-library-46: installed playbook folders whose engine links were removed — as the command line installs them — are prepared again at a configuration load and at environment.playbooks", { timeout: 120_000 }, async (t) => {
+  const dir = scratchDir("spex-env-prepare-load-");
+  const core = await startCore(dir, { hostUrl: UNREACHABLE });
+  t.after(() => core.stop());
+  const own = `${OWN}/${OWN}-spex`;
+  const working = gitFolder(join(dir, "project"));
+  const project = await core.client.expectOk("project.register", { path: working });
+  await settledProject(core.client, project.id);
+  const linksOf = (root: string): string => join(root, ".spex", "packages", "sublang", "playbooks", "playbooks", "en", "code", "node_modules");
+  const ownLinks = linksOf(clonePath(core.dataDir, own));
+  const projectLinks = linksOf(working);
+  for (const links of [ownLinks, projectLinks]) assert.ok(lstatSync(join(links, "xstate")).isSymbolicLink(), "the app's install prepared the folder");
+
+  // A configuration load hands the launcher your own group's module
+  // locations: it prepares that environment's playbooks first
+  // (environments-9, playbook-library-46).
+  rmSync(ownLinks, { recursive: true, force: true });
+  await core.service.reloadConfig();
+  assert.ok(lstatSync(join(ownLinks, "xstate")).isSymbolicLink(), "[environments-9] the configuration load prepared your own group's playbook again");
+  assert.ok(existsSync(join(ownLinks, "@sublang", "playbook")), "with every engine link");
+  const config = await core.client.expectOk("config.get", {});
+  assert.equal(config.status, "valid", JSON.stringify(config));
+
+  // environment.playbooks reads each listed playbook's module on the
+  // app's engine: the project's and your own group's are prepared
+  // before the reply (environments-7, playbook-library-46).
+  rmSync(projectLinks, { recursive: true, force: true });
+  rmSync(ownLinks, { recursive: true, force: true });
+  const listed = await core.client.expectOk("environment.playbooks", { projectId: project.id });
+  assert.ok(listed.own.some((entry) => entry.id === "code") && listed.project?.some((entry) => entry.id === "code"), JSON.stringify(listed));
+  for (const links of [projectLinks, ownLinks]) {
+    assert.ok(lstatSync(join(links, "xstate")).isSymbolicLink(), `[playbook-library-46] ${links} prepared again`);
+    assert.ok(existsSync(join(links, "@sublang", "playbook")), "with every engine link");
+  }
+});
+
 test("environments-7, environments-26, environments-21: environment.get finding a lock other than the one installed — a Git checkout in the working folder changing the lock — installs that lock, and the next read finds it installed", { timeout: 180_000 }, async (t) => {
   const registry = await startStandinRegistry({ dir: scratchDir("spex-env-use-registry-") });
   t.after(() => registry.close());
