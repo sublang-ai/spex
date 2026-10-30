@@ -24,7 +24,7 @@ import { speak } from "./i18n.js";
 import type { ProjectInfo } from "./protocol.js";
 import { applyStorageSelection, EMPTY_TREE, planStorageMerge, prepareStorageGitFiles, reserveStorageHome, selectStorageMerge as selectStorageMergeWith, StorageDestinationRefused, StorageWriteRefused, validateStorageSnapshot, validateStorageTree, type StorageChoice } from "./storage-git.js";
 import { scratchDir } from "./testing/scratch.js";
-import { StorageFormatError } from "./files.js";
+import { StorageFormatError } from "@sublang/spex/files";
 
 /** One fixed machine identity for the in-process writers and the
  * command alike (storage-26): the command reads it from its own state

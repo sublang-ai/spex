@@ -34,14 +34,14 @@ import {
   type ProjectFile, type StorageDiagnostic,
 } from "./app-storage.js";
 import { occupied } from "./clone-moves.js";
-import { readJsonFile, StorageFormatError, VersionConflictError, writeApplicationFile } from "./files.js";
+import { readJsonFile, StorageFormatError, VersionConflictError, writeApplicationFile } from "@sublang/spex/files";
 import { defaultOwnName, Home, repositoryNameFor, splitKey, WORKSPACE_DEPTH } from "./home.js";
 import { filedIn, formerPlacementPrefKey, PLACEMENT_PREF_KINDS, placementPrefKey, readPlacementFiles, readPlacements, type PlacementPrefKind } from "./placements.js";
 import { folderRemote, needsGroupsMigration, migrateFormerHome } from "./migrate-home.js";
 import { needsBoundedSessionImport, stageBoundedHomeSessions, finishBoundedHomeSessions } from "./migrate-bounded-sessions.js";
 import { deferredMoves, migrateInstances, needsInstancesMigration, settleDeferred, type DeferredMove } from "./migrate-instances.js";
 import { gitEnvironment, initializeClone } from "./storage-git.js";
-import { instanceFolder, isInstanceFolder } from "./instance.js";
+import { instanceFolder, isInstanceFolder } from "@sublang/spex/instance";
 import { SEED_PREF, seedConfig, type SeedRecord } from "./config.js";
 import { createRequire } from "node:module";
 import { i18n } from "./i18n.js";

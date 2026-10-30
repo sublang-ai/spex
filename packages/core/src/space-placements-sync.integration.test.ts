@@ -24,7 +24,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { canonicalOrigin } from "./instance.js";
+import { canonicalOrigin } from "@sublang/spex/instance";
 import { GitError, SpaceGit } from "./space-git.js";
 import type { GroupsState, RepositoryState, SpaceConflict, SpaceUnit } from "./protocol.js";
 import type { SpaceStepEvent } from "./space.js";

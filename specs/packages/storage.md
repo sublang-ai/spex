@@ -38,7 +38,7 @@ The store shall persist core-owned data in Spex home using these locations:
 | `<clone>/sessions/<id>.json`, `<clone>/sessions/<id>.replay.json`, `<clone>/sessions/<id>.chunks/`, legacy `<clone>/sessions/<id>.records.jsonl`, optional `<clone>/sessions/<id>.assets/` | a Playbook session bundle, read and validated through its hydrated API [[1]] ([DR-144](../decisions/144-bounded-session-storage.md)) | Tracked, one unit |
 | `<clone>/authoring/<id>.json`, `<clone>/authoring/<id>.records.jsonl`, optional `<clone>/authoring/<id>.assets/` | an authoring session [[storage-23](#storage-23)] | Tracked, one unit |
 | `<clone>/<folder>/` holding `meta.yaml`, below the root and outside every other path of this table | a spec package's folder, such as one your own group's environment requests by path [[environments-32](environments.md#environments-32)] ([DR-125](../decisions/125-your-own-groups-path-sources-live-in-its-clone.md)) | Tracked, one unit |
-| `<clone>/packages/`, `<clone>/skills/` | installed spec packages and exported skills [[environments-8](environments.md#environments-8)] | Ignored |
+| `<clone>/.spex/` | the installed files, generated skills and install record of a group's own environment [[environments-7](environments.md#environments-7)] [[environments-8](environments.md#environments-8)] | Ignored |
 | `<clone>/sessions/<id>.hints.json`, session leases, staging and atomic-write temporary files | provider hints and writer coordination [[1]] | Ignored |
 | `<clone>/local/`, `<clone>/.spex-uploads/`, `<clone>/.spex-apply.json` | Playbook's own migration receipts, which may hold provider tokens; upload staging; the sync repair marker | Ignored |
 | `home.yaml` | this device, the origin the home was created with, each instance it has signed in to with its account, your own group's folder name, and each working folder with its spex repository [[storage-2](#storage-2)] | — |
@@ -47,7 +47,6 @@ The store shall persist core-owned data in Spex home using these locations:
 | `local/credentials.yaml` | each instance's app token [[storage-19](#storage-19)] | — |
 | `local/code-credentials.yaml` | on a seat, the code-host tokens and agent credentials the member placed [[storage-44](#storage-44)] | — |
 | `local/seats.yaml` | the seats this desktop opened on team servers [[storage-45](#storage-45)] | — |
-| `local/endpoint.json` | the access URL, with its token, and the process id of the core serving this home at a loopback endpoint, owner-only [[core-service-143](core-service.md#core-service-143)] ([DR-163](../decisions/163-the-cli-finds-the-running-app.md)) | — |
 | `local/migrations/` | migration receipts and retained inputs [[storage-9](#storage-9)] [[storage-30](#storage-30)] | — |
 | `local/former-home.git`, `local/forge-cache.json` | the former home's Git history kept aside [[storage-9](#storage-9)]; the rebuildable forge cache | — |
 | `.lease/`, `.lease.stage.<token>/`, `.lease.retired/<token>/` | the root lease held by the one process serving this home [[storage-14](#storage-14)], its staging and its permanent retirement records [[storage-26](#storage-26)] | — |

@@ -18,11 +18,13 @@
 // must hold only what its clone's sync carries, checked before anything
 // is installed or linked (environments-32); a stale lock installs
 // nothing new.
-// No code runs: what an install adds to the release files is each
-// playbook artifact folder's engine links — a path source's in the
-// working folder too — and, for a registry module bundled carrying its
-// own engine, the module bundled again from the wrapper shipped beside
-// it, so every playbook runs on the app's engine (playbook-library-46).
+// No code runs: what an install adds to the release files is the host's
+// engine preparation where the host supplies an engine — the app's core
+// gives each playbook artifact folder its engine links, a path source's
+// in the working folder too, and bundles again a registry module bundled
+// carrying its own engine, so every playbook runs on the app's engine
+// (playbook-library-46). With no engine, as from the command line,
+// nothing is prepared and nothing is linked (DR-165).
 
 import { randomUUID } from "node:crypto";
 import {
@@ -41,7 +43,6 @@ import {
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 
-import { ENGINE_LINKS_EXCLUDE, prepareArtifactEngine, provisionEngineLinks } from "../compile.js";
 import { seedServes } from "./builtins.js";
 import { fileVersion, VersionConflictError, type FileVersion } from "../files.js";
 import { instanceFolder, parseOrigin } from "../instance.js";
@@ -54,6 +55,22 @@ import { readVersionResource, RegistryError, type RegistrySource, type VersionRe
 import { isVersion } from "./semver.js";
 import { DigestError, type ContentStore } from "./store.js";
 import { gunzip, readTar } from "./tar.js";
+
+/** Where a working folder's Git is told to ignore every playbook
+ * artifact folder's engine links (playbook-library-12): a release-layout
+ * `playbooks/<language>/<id>/` folder anywhere in it. */
+export const ENGINE_LINKS_EXCLUDE = "**/playbooks/*/*/node_modules/";
+
+/** A host's engine (DR-165): how an installed playbook artifact's folder
+ * is prepared to run on it. */
+export interface InstallEngine {
+  /** Prepare an installed playbook artifact's folder, its id given:
+   * why a module was kept as it is, or null. */
+  prepare(folder: string, id: string): Promise<string | null>;
+  /** Give a path source's playbook folder the engine links, its files
+   * left as they are. */
+  link(folder: string): void;
+}
 
 export interface InstallOptions {
   cloneDir: string;
@@ -86,8 +103,8 @@ export interface InstallOptions {
   confined?: boolean;
   /** `spex.yaml`'s text; read from the clone when omitted. */
   requestsText?: string | null;
-  /** Where the engine links point (the app's node_modules). */
-  modulePaths?: string[];
+  /** The host's engine; with none, nothing is prepared or linked. */
+  engine?: InstallEngine;
   /** Test seam: runs after every file is fetched and staged, before
    * the new tree replaces the old. */
   beforeReplace?: () => void | Promise<void>;
@@ -421,13 +438,14 @@ function playbookFolders(root: string, resolution: Resolution): { id: string; fo
  * they are; each is named at `named`'s spelling of its folder. A tree
  * standing installed already is `tolerant`: a folder it cannot prepare
  * is logged and left, since the install itself places nothing. */
-async function prepareInstalled(target: string, names: readonly string[], lock: Lock, modulePaths: string[] | undefined, named: (folder: string) => string, tolerant = false): Promise<InstallReport["engineKept"]> {
+async function prepareInstalled(target: string, names: readonly string[], lock: Lock, engine: InstallEngine | undefined, named: (folder: string) => string, tolerant = false): Promise<InstallReport["engineKept"]> {
   const kept: InstallReport["engineKept"] = [];
+  if (engine === undefined) return kept;
   for (const name of names) {
     for (const { id, folder } of playbookFolders(join(target, ...name.split("/")), lock.packages[name]!)) {
       let reason: string | null;
       try {
-        reason = await prepareArtifactEngine(folder, id, modulePaths);
+        reason = await engine.prepare(folder, id);
       } catch (error) {
         if (!tolerant) throw error;
         console.error(`spex: ${named(folder)} was not prepared for the app's engine: ${String(error)}`);
@@ -471,9 +489,9 @@ function excludeEngineLinks(pathRoot: string | null, folders: readonly string[],
 /** A path source's playbook folders get the engine links a compile
  * provisions, their files left as they are; a folder that takes no link
  * is logged, never failing the install. */
-function linkPathSources(folders: readonly string[], modulePaths: string[] | undefined): void {
+function linkPathSources(folders: readonly string[], engine: InstallEngine): void {
   for (const folder of folders) {
-    try { provisionEngineLinks(folder, modulePaths); }
+    try { engine.link(folder); }
     catch (error) { console.error(`spex: ${folder} takes no engine links: ${String(error)}`); }
   }
 }
@@ -510,19 +528,20 @@ export async function install(options: InstallOptions): Promise<InstallReport> {
   }
 
   const confined = options.confined === true;
-  const playbooks = pathSourcePlaybooks(lock, pathRoot);
+  const { engine } = options;
+  const playbooks = engine === undefined ? [] : pathSourcePlaybooks(lock, pathRoot);
   // The exclude first, so the check reads the engine links standing
   // from an earlier install as Git ignores them.
   excludeEngineLinks(pathRoot, playbooks, confined);
   if (confined && pathRoot !== null) await assertConfined(lock, pathRoot);
-  linkPathSources(playbooks, options.modulePaths);
+  if (engine !== undefined) linkPathSources(playbooks, engine);
   const target = join(cloneDir, "packages");
   const record = installRecord(lock);
   if (treeMatches(target, lock, record)) {
     // Installed already, by this app or an earlier one: each playbook is
     // prepared in place, where an earlier app left a module carrying the
     // engine it was bundled with.
-    const engineKept = await prepareInstalled(target, names, lock, options.modulePaths, (folder) => folder, true);
+    const engineKept = await prepareInstalled(target, names, lock, engine, (folder) => folder, true);
     return { installed: [], missingPaths, unchanged: true, engineKept };
   }
 
@@ -549,7 +568,7 @@ export async function install(options: InstallOptions): Promise<InstallReport> {
         linkOrCopy(store.pathOf(file.sha256, file.executable), to, file.executable);
       }
     }
-    engineKept = await prepareInstalled(staging, names, lock, options.modulePaths, (folder) => join(target, relative(staging, folder)));
+    engineKept = await prepareInstalled(staging, names, lock, engine, (folder) => join(target, relative(staging, folder)));
     writeFileSync(join(staging, INSTALL_RECORD), JSON.stringify(record));
     await options.beforeReplace?.();
     // Checked at the instant before the swap, nothing awaited between.

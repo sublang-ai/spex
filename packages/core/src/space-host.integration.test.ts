@@ -23,7 +23,7 @@ import { homedir, hostname } from "node:os";
 import { basename, join } from "node:path";
 import { resolveMachineIdentity } from "@sublang/playbook/machine-identity";
 import { createSessionStore } from "@sublang/playbook/session-store";
-import { CredentialChanged, HostError, GitHostClient, fileCredentialStore, type CredentialStore, type HostAccount, type StoredCredential } from "./git-host.js";
+import { CredentialChanged, HostError, GitHostClient, fileCredentialStore, type CredentialStore, type HostAccount, type StoredCredential } from "@sublang/spex/git-host";
 import { Home, orderRemotes, remoteOrderOf } from "./home.js";
 import { seedHistorySession } from "./testing/demo.js";
 import { holdingFetch, samePair, settled } from "./testing/holding-fetch.js";

@@ -25,7 +25,8 @@ import { CoreError } from "./session.js";
 import type { Store } from "./store.js";
 import { defaultSpawner, ENGINE_LINKS_EXCLUDE, type LineSpawner } from "./compile.js";
 import { createModuleLoader, starterText, templatePath } from "./config.js";
-import { builtinPackage, INSTALL_RECORD, parseLock, publishRelease, readRelease, RegistryClient, requestsDigest, serializeLock, sha256Hex, type BuiltinPackage, type Lock, type RegistrySourceLock } from "./environment/index.js";
+import { INSTALL_RECORD, parseLock, publishRelease, readRelease, RegistryClient, requestsDigest, serializeLock, sha256Hex, type BuiltinPackage, type Lock, type RegistrySourceLock } from "@sublang/spex/environment";
+import { builtinPackage } from "./builtins.js";
 import type { Command, CommandResults, EnvironmentState, ServerMessage } from "./protocol.js";
 import { authoringScript } from "./testing/authoring.js";
 import { fakeAdapterImports, type FakeScript } from "./testing/fake-adapter.js";
@@ -33,7 +34,7 @@ import { createScriptedCaptain } from "./testing/scripted-captain.js";
 import { scratchDir } from "./testing/scratch.js";
 import { createSpaceHarness, instanceOf, ownClone, rowsOf } from "./testing/space-harness.js";
 import { STANDIN_STORAGE } from "./testing/standin-host.js";
-import { makeRelease, startStandinRegistry } from "./testing/standin-registry.js";
+import { makeRelease, startStandinRegistry } from "@sublang/spex/testing";
 import { stubSlcSource } from "./testing/stub-slc.js";
 import { holdingFetch } from "./testing/holding-fetch.js";
 
@@ -1104,7 +1105,7 @@ test("environments-25: every environment command replies and refuses as its tabl
     format: 2, org: "acme", name: "lint", version: "1.2.0", description: "Lint skills", license: "Apache-2.0",
     artifacts: { tidy: { kind: "skill", language: "en" } },
   }, { "skills/en/tidy/SKILL.md": skill("tidy") }).then(async (releaseDir) => {
-    const { publishRelease, RegistryClient } = await import("./environment/index.js");
+    const { publishRelease, RegistryClient } = await import("@sublang/spex/environment");
     await publishRelease(new RegistryClient({ url: registry.url }), releaseDir);
   });
 
@@ -1202,7 +1203,7 @@ test("environments-25: every environment command replies and refuses as its tabl
   execFileSync("git", ["clone", "-q", "-b", "spex", bare, peer]);
   const peerRequests = `${readFileSync(join(peer, "spex.yaml"), "utf8").trimEnd()}\n  acme/lint:\n    version: ^1.0.0\n`;
   writeFileSync(join(peer, "spex.yaml"), peerRequests);
-  const { builtinRegistrySource, compositeRegistry, ContentStore, gitSource, parseRequests, RegistryClient, resolve, writeLock } = await import("./environment/index.js");
+  const { builtinRegistrySource, compositeRegistry, ContentStore, gitSource, parseRequests, RegistryClient, resolve, writeLock } = await import("@sublang/spex/environment");
   const peerHome = scratchDir("spex-env-peer-home-");
   const peerStore = new ContentStore(peerHome);
   const resolved = await resolve({

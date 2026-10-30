@@ -8,7 +8,7 @@
 
 import assert from "node:assert/strict";
 
-import { GitHostClient, fileCredentialStore, type HostAccount } from "../git-host.js";
+import { GitHostClient, fileCredentialStore, type HostAccount } from "@sublang/spex/git-host";
 import type { StandinHost } from "./standin-host.js";
 
 /** A client of one stand-in instance, its token kept in `home`. */

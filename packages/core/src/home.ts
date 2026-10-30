@@ -1,83 +1,37 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The home file (storage-2, DR-103, DR-127): this device, the origin it
-// was created with, every instance it has signed in to with its account,
-// your own group's folder name, and each working folder paired with its
-// spex repository's key — the clone's path under `workspace/`.
+// The home (storage-2, DR-103, DR-127): its file — this device, the
+// origin it was created with, every instance it has signed in to with
+// its account, your own group's folder name — read and changed through
+// the library's home file (DR-165), and each working folder paired with
+// its spex repository's key — the clone's path under `workspace/` —
+// which the app alone records and checks here.
 
-import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
-import { userInfo } from "node:os";
 import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import { closed, isLocalPath, isObject, isRecordedPath, need, StorageFormatError, writeApplicationBytes } from "@sublang/spex/files";
 import {
-  closed, isLocalPath, isObject, isRecordedPath, isText, isUuid, knownFormat, need,
-  StorageFormatError, writeApplicationBytes,
-} from "./files.js";
+  accountAt, CLIENT_ID, defaultInstanceOf, defaultOwnName, HOME_FILE, instanceAt, instanceByFolder, instanceOfKey,
+  InstanceRefused, invalidHome, isGroupName, kebab, newHomeFile, notAnOrigin, parseHomeFile as parseHomeEntries, parseHomeText,
+  withDisplayName, withoutInstance, withSignIn, withSignOut,
+  type HomeAccount, type HomeFile, type HomeFolder, type HomeInstance,
+} from "@sublang/spex/home-file";
+import { hostUrlFor, instanceSegmentOf } from "@sublang/spex/instance";
 import { i18n } from "./i18n.js";
-import { canonicalOrigin, hostUrlFor, instanceFolder, instanceSegmentOf, OriginRefused } from "./instance.js";
 import { REPOSITORY_KEY_PATTERN } from "./protocol.js";
 
 export { hostUrlFor };
+export {
+  CLIENT_ID, defaultOwnName, HOME_FILE, InstanceRefused, invalidHome, isGroupName, kebab, notAnOrigin,
+  type HomeAccount, type HomeFile, type HomeFolder, type HomeInstance,
+};
 
-export const HOME_FILE = "home.yaml";
 export const WORKSPACE = "workspace";
 /** The most segments a key the walks of `workspace/` find may hold: the
  * nine a key held before DR-127, and the instance's folder before them. */
 export const WORKSPACE_DEPTH = 10;
-/** The public OAuth client id every Spex uses at the Git host (storage-2). */
-export const CLIENT_ID = "spex";
-const GROUP_NAME = /^[a-z0-9][a-z0-9-]*$/;
-
-export interface HomeAccount { id: string; login: string; displayName: string | null }
-/** An instance the home has signed in to (DR-127), by its canonical
- * origin: its client, the account it signed in as, whether it was
- * signed out since, and its display name as last read. */
-export interface HomeInstance { origin: string; clientId: typeof CLIENT_ID; account?: HomeAccount; signedOut?: boolean; displayName?: string }
-export interface HomeFolder { path: string; repository: string; aliases?: string[] }
-export interface HomeFile {
-  format: 2;
-  device: string;
-  /** The origin the home was created with: the default instance while
-   * no instance is listed. */
-  origin: string;
-  /** Every instance the home has signed in to; the first is the
-   * default instance. */
-  instances: HomeInstance[];
-  own: string;
-  folders: HomeFolder[];
-}
-
-/** Why an instance operation was refused (DR-127):
- * - `another-account`: a sign-in to a listed instance as another account;
- * - `signed-in`: Forget of an instance still signed in.
- * The message is the core's own; the reader's words are composed where
- * the core speaks. */
-export class InstanceRefused extends Error {
-  constructor(readonly reason: "another-account" | "signed-in", readonly origin: string) {
-    super(reason === "another-account" ? `${origin} is signed in as another account` : `${origin} is signed in`);
-    this.name = "InstanceRefused";
-  }
-}
-
-/** Lowercase kebab-case: runs of anything else become one hyphen. */
-export function kebab(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-}
-
-/** This device's user name as a group folder name (storage-2). */
-export function defaultOwnName(env: NodeJS.ProcessEnv = process.env): string {
-  let name = "";
-  try { name = userInfo().username; } catch { name = env.USER ?? env.USERNAME ?? ""; }
-  return kebab(name) || "me";
-}
-
-/** Whether a name may stand as a group folder under `workspace/`. */
-export function isGroupName(value: string): boolean {
-  return GROUP_NAME.test(value);
-}
-
 /** A spex repository's name for a folder or group name: `<name>-spex`. */
 export function repositoryNameFor(name: string): string {
   return `${kebab(name) || "project"}-spex`;
@@ -145,66 +99,12 @@ export function orderRemotes<T>(items: readonly T[], nameOf: (item: T) => string
   return [...items].map((item, index) => ({ item, index })).sort((a, b) => rank(a.item) - rank(b.item) || a.index - b.index).map(({ item }) => item);
 }
 
-export const invalidHome = (): string =>
-  i18n._({ id: "invalid home file", comment: "Storage diagnostic: home.yaml's own fields are malformed" });
-
-/** A URL shown in a diagnostic: any user info it carries, which may hold
- * a secret, stands as `…`. */
-function shownUrl(url: string): string {
-  return url.replace(/^([a-z][a-z0-9+.-]*:\/\/)[^/?#]*@/i, "$1…@");
-}
-
-/** The reason a URL stands as no instance's canonical origin (DR-127). */
-export function notAnOrigin(url: string): string {
-  return i18n._({ id: "{url} is not an instance's origin",
-    comment: "Storage diagnostic: a host URL is not an instance's origin written canonically — http or https (http on localhost or 127.x alone), a lowercase host of DNS labels (letters, digits and inner hyphens) joined by single dots, and a port from 1 to 65535 other than the scheme's default, nothing else; the URL is shown with any user info as …",
-    values: { url: shownUrl(url) } });
-}
-
-/** Whether a value is an instance's origin as it is recorded: canonical. */
-function isOrigin(value: unknown): value is string {
-  if (!isText(value)) return false;
-  try { return canonicalOrigin(value) === value; } catch { return false; }
-}
-
-/** `home.yaml`'s format, refused unless it is this Spex's: format 1 says
- * the instances migration has not run (storage-1). */
-function homeFormat(value: Record<string, unknown>, file: string): void {
-  need(value.format !== 1, file, i18n._({ id: "format 1: the instances migration has not run; preserved unchanged",
-    comment: "Storage diagnostic: home.yaml is still in the layout before a home recorded several instances, which the one-time instances migration rewrites; the file is left as it is" }));
-  knownFormat(value, file, 2);
-}
-
-function parseAccount(value: unknown, file: string): void {
-  closed(value, ["id", "login", "displayName"], [], file);
-  need(isText(value.id) && isText(value.login) && (value.displayName === null || typeof value.displayName === "string"), file, invalidHome());
-}
-
-export function parseHomeFile(value: unknown, file: string): HomeFile {
-  need(isObject(value), file, invalidHome());
-  homeFormat(value, file);
-  closed(value, ["format", "device", "origin", "instances", "own", "folders"], [], file);
-  need(isUuid(value.device) && typeof value.own === "string" && GROUP_NAME.test(value.own) &&
-    Array.isArray(value.instances) && Array.isArray(value.folders) && isText(value.origin), file, invalidHome());
-  need(isOrigin(value.origin), file, notAnOrigin(value.origin));
-  const folders = new Map<string, string>();
-  for (const instance of value.instances) {
-    closed(instance, ["origin", "clientId", "account"], ["signedOut", "displayName"], file);
-    need(isText(instance.origin) && instance.clientId === CLIENT_ID &&
-      (instance.signedOut === undefined || typeof instance.signedOut === "boolean") &&
-      (instance.displayName === undefined || typeof instance.displayName === "string"), file, invalidHome());
-    need(isOrigin(instance.origin), file, notAnOrigin(instance.origin));
-    parseAccount(instance.account, file);
-    // One entry per origin, and no two origins at one folder (DR-127).
-    const folder = instanceFolder(instance.origin);
-    const first = folders.get(folder);
-    need(first === undefined, file, i18n._({ id: "instances {first} and {second} share the folder {folder}",
-      comment: "Storage diagnostic: two instances home.yaml lists, or one listed twice, would hold their spex repositories in one folder under workspace/",
-      values: { first: first ?? "", second: instance.origin, folder } }));
-    folders.set(folder, instance.origin);
-  }
+/** The pairings `home.yaml` records (storage-6): each a normalized
+ * folder path with its recorded aliases and a spex repository's key, no
+ * folder and no spex repository paired twice. */
+function checkPairs(folders: readonly unknown[], file: string): void {
   const paths = new Set<string>(); const keys = new Set<string>();
-  for (const folder of value.folders) {
+  for (const folder of folders) {
     closed(folder, ["path", "repository"], ["aliases"], file);
     need(isLocalPath(folder.path) && isRepositoryKey(folder.repository) &&
       (folder.aliases === undefined || Array.isArray(folder.aliases) && folder.aliases.every(isRecordedPath) && new Set(folder.aliases).size === folder.aliases.length),
@@ -218,7 +118,12 @@ export function parseHomeFile(value: unknown, file: string): HomeFile {
       comment: "Storage diagnostic: one spex repository appears in two pairs", values: { key: folder.repository } }));
     keys.add(folder.repository);
   }
-  return value as unknown as HomeFile;
+}
+
+/** `home.yaml`'s value checked whole: the library's checks of its
+ * fields and instances, then the pairings. */
+export function parseHomeFile(value: unknown, file: string): HomeFile {
+  return parseHomeEntries(value, file, checkPairs);
 }
 
 /** The home: its file, its workspace and the pairs of this device. */
@@ -243,10 +148,7 @@ export class Home {
   }
 
   private static parse(text: string, file: string): HomeFile {
-    let value: unknown;
-    try { value = parseYaml(text); }
-    catch (error) { throw new StorageFormatError(file, (error as Error).message); }
-    return parseHomeFile(value, file);
+    return parseHomeText(text, file, checkPairs);
   }
 
   /** Read `home.yaml` again where its bytes changed since this home last
@@ -278,21 +180,7 @@ export class Home {
    * to, and this device's user name as your own group. A URL the
    * environment names that is no instance's origin is refused. */
   static create(root: string, options: { own?: string; env?: NodeJS.ProcessEnv; device?: string } = {}): Home {
-    const own = options.own ?? defaultOwnName(options.env);
-    let origin: string;
-    try { origin = hostUrlFor(options.env); }
-    catch (error) {
-      if (!(error instanceof OriginRefused)) throw error;
-      throw new StorageFormatError(Home.file(root), notAnOrigin((options.env ?? process.env).SPEX_HOST_URL?.trim() ?? ""));
-    }
-    return new Home(resolve(root), {
-      format: 2,
-      device: options.device ?? randomUUID(),
-      origin,
-      instances: [],
-      own,
-      folders: [],
-    });
+    return new Home(resolve(root), newHomeFile(Home.file(root), options));
   }
 
   get file(): HomeFile { return structuredClone(this.data); }
@@ -355,7 +243,7 @@ export class Home {
     if (oldKey === this.own()) {
       // Your own group's folder lies outside every instance's (DR-127).
       const { instance, group, name } = splitKey(newKey);
-      if (instance === null && `${group}-spex` === name && GROUP_NAME.test(group)) this.data = { ...this.data, own: group };
+      if (instance === null && `${group}-spex` === name && isGroupName(group)) this.data = { ...this.data, own: group };
     }
   }
 
@@ -373,38 +261,25 @@ export class Home {
     this.data = next;
   }
 
-  // -- instances (DR-127) ----------------------------------------------------
+  // -- instances (DR-127): the library's entries -----------------------------
 
   /** Every instance the home has signed in to, the default first. */
   instances(): HomeInstance[] { return structuredClone(this.data.instances); }
 
   /** The default instance: the first listed, else the origin the home
    * was created with. */
-  defaultInstance(): HomeInstance {
-    const first = this.data.instances[0];
-    return first ? structuredClone(first) : { origin: this.data.origin, clientId: CLIENT_ID };
-  }
+  defaultInstance(): HomeInstance { return defaultInstanceOf(this.data); }
 
   /** The listed instance at an origin, in any spelling of it. */
-  instance(origin: string): HomeInstance | undefined {
-    const index = this.indexOf(origin);
-    return index < 0 ? undefined : structuredClone(this.data.instances[index]);
-  }
+  instance(origin: string): HomeInstance | undefined { return instanceAt(this.data, origin); }
 
   /** The instance whose folder under `workspace/` is `folder`: a listed
    * one, else the origin the home was created with. */
-  instanceByFolder(folder: string): HomeInstance | undefined {
-    const listed = this.data.instances.find((entry) => instanceFolder(entry.origin) === folder);
-    if (listed) return structuredClone(listed);
-    return instanceFolder(this.data.origin) === folder ? { origin: this.data.origin, clientId: CLIENT_ID } : undefined;
-  }
+  instanceByFolder(folder: string): HomeInstance | undefined { return instanceByFolder(this.data, folder); }
 
   /** The instance whose folder a key lies in; none for a key outside
    * every instance's folder. */
-  instanceOfKey(key: string): HomeInstance | undefined {
-    const folder = instanceSegmentOf(key);
-    return folder === null ? undefined : this.instanceByFolder(folder);
-  }
+  instanceOfKey(key: string): HomeInstance | undefined { return instanceOfKey(this.data, key); }
 
   /** The account a sign-in read (storage-2): the instance listed where
    * it is not, after those that are — an origin that is none, or whose
@@ -416,75 +291,37 @@ export class Home {
   signIn(first: string | HomeAccount, second?: HomeAccount): void {
     const named = typeof first === "string" ? first : this.defaultInstance().origin;
     const account = typeof first === "string" ? second as HomeAccount : first;
-    const origin = this.originOf(named);
-    const index = this.indexOf(origin);
-    const prior = index < 0 ? undefined : this.data.instances[index];
-    if (prior?.account && prior.account.id !== account.id) throw new InstanceRefused("another-account", origin);
-    const entry: HomeInstance = {
-      origin, clientId: CLIENT_ID,
-      account: { id: account.id, login: account.login, displayName: account.displayName },
-      ...(prior?.displayName !== undefined ? { displayName: prior.displayName } : {}),
-    };
-    const instances = index < 0 ? [...this.data.instances, entry] : this.data.instances.map((item, at) => at === index ? entry : item);
-    this.take({ ...this.data, instances });
+    this.take(withSignIn(this.data, named, account, Home.file(this.root)));
   }
 
   /** The credential is gone while the account is kept (git-host-4,
    * git-host-10): the instance reads signed out until its next sign-in.
    * The default instance's where no origin is named. */
   signOut(origin?: string): void {
-    const index = this.indexOf(origin ?? this.defaultInstance().origin);
-    if (index < 0 || !this.data.instances[index].account) return;
-    this.data = { ...this.data, instances: this.data.instances.map((item, at) => at === index ? { ...item, signedOut: true } : item) };
+    this.data = withSignOut(this.data, origin);
   }
 
   /** Forget an instance signed out, or never signed in: its entry goes;
    * one signed in is refused. True where an entry went. */
   forget(origin: string): boolean {
-    const index = this.indexOf(origin);
-    if (index < 0) return false;
-    const entry = this.data.instances[index];
-    if (entry.account && entry.signedOut !== true) throw new InstanceRefused("signed-in", entry.origin);
-    this.data = { ...this.data, instances: this.data.instances.filter((_, at) => at !== index) };
+    const next = withoutInstance(this.data, origin);
+    if (next === null) return false;
+    this.data = next;
     return true;
   }
 
   /** The instance's display name as last read; false where it is not
    * listed. */
   setDisplayName(origin: string, displayName: string | null): boolean {
-    const index = this.indexOf(origin);
-    if (index < 0) return false;
-    const { displayName: _, ...rest } = this.data.instances[index];
-    const entry: HomeInstance = displayName === null ? rest : { ...rest, displayName };
-    this.data = { ...this.data, instances: this.data.instances.map((item, at) => at === index ? entry : item) };
+    const next = withDisplayName(this.data, origin, displayName);
+    if (next === null) return false;
+    this.data = next;
     return true;
   }
 
   /** The account at an instance while it is signed in there; the
    * default instance where no origin is named. */
-  account(origin?: string): HomeAccount | null {
-    const index = this.indexOf(origin ?? this.defaultInstance().origin);
-    const entry = index < 0 ? undefined : this.data.instances[index];
-    return entry?.account && entry.signedOut !== true ? structuredClone(entry.account) : null;
-  }
-
-  /** The canonical origin a caller names, or the refusal of one that is
-   * none as a storage diagnostic of this file. */
-  private originOf(origin: string): string {
-    try { return canonicalOrigin(origin); }
-    catch (error) {
-      if (!(error instanceof OriginRefused)) throw error;
-      throw new StorageFormatError(Home.file(this.root), notAnOrigin(origin));
-    }
-  }
-
-  /** The listed entry at an origin in any spelling; -1 where none, or
-   * where the value is no origin. */
-  private indexOf(origin: string): number {
-    let canonical: string;
-    try { canonical = canonicalOrigin(origin); } catch { return -1; }
-    return this.data.instances.findIndex((entry) => entry.origin === canonical);
-  }
+  account(origin?: string): HomeAccount | null { return accountAt(this.data, origin); }
 
   /** Validate a whole next file, then take it. */
   private take(next: HomeFile): void {
@@ -508,7 +345,7 @@ export function recordedOwnName(root: string): string | undefined {
   let value: unknown;
   try { value = parseYaml(readFileSync(Home.file(root), "utf8")); } catch { return undefined; }
   if (!isObject(value) || (value.format !== 1 && value.format !== 2)) return undefined;
-  return typeof value.own === "string" && GROUP_NAME.test(value.own) ? value.own : undefined;
+  return typeof value.own === "string" && isGroupName(value.own) ? value.own : undefined;
 }
 
 /** A folder's spex repository name, its last segment. */

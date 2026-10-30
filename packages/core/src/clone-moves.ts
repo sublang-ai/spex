@@ -11,7 +11,7 @@
 import { existsSync, lstatSync, readdirSync, readFileSync, rmdirSync, statSync } from "node:fs";
 import { hostname } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import { UUID } from "./files.js";
+import { UUID } from "@sublang/spex/files";
 import { classifyOwnerMachine, probeProcess } from "./root-lease.js";
 
 /** Remove the folders a move left empty, up to the workspace itself. */

@@ -8,9 +8,9 @@
 // reports whether the page could reach its parent or its storage. The
 // stand-in registry takes it through the real publish path.
 
-import { publishRelease } from "../environment/archive.js";
-import { RegistryClient } from "../environment/registry.js";
-import { makeRelease, type ReleaseFixture } from "./standin-registry.js";
+import { publishRelease } from "@sublang/spex/environment";
+import { RegistryClient } from "@sublang/spex/environment";
+import { makeRelease, type ReleaseFixture } from "@sublang/spex/testing";
 
 export const APPLET_ORG = "acme";
 export const APPLET_PACKAGE_NAME = "report-kit";

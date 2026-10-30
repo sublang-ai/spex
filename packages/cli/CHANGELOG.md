@@ -10,6 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The package-manager library ships in the package as its own modules:
+  `@sublang/spex/environment`, `files`, `instance`, `git-host`,
+  `home-file` and `words`, with the stand-in registry as
+  `@sublang/spex/testing`.
+
+### Changed
+
+- **Breaking:** the package declares an `exports` map. Beside the
+  library's modules it exports the scaffold's files by path, as
+  `@sublang/spex/scaffold/<path>`, and `package.json`; any other deep
+  import, such as `@sublang/spex/dist/cli.js`, no longer resolves.
+
 ## [4.2.0] - 2026-10-29
 
 ### Added

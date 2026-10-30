@@ -18,7 +18,7 @@ msgstr ""
 #. Separates names listed in one message
 #. Separates names listed in one message
 #: src/config.ts
-#: src/files.ts
+#: src/i18n.ts
 #: src/service.ts
 msgid ", "
 msgstr ", "
@@ -45,7 +45,7 @@ msgid "; missing {roles}"
 msgstr "; missing {roles}"
 
 #. Clause naming the fields a record may also carry
-#: src/files.ts
+#: src/i18n.ts
 msgid "; optional {fields}"
 msgstr "; optional {fields}"
 
@@ -136,8 +136,8 @@ msgstr "{entry} is not allowed in a project's settings, which name only the play
 
 #. Refusal: a file changed between the core's read and its write; the reader retries
 #. Refusal: a file changed between the core's read and its write; the reader retries
-#: src/files.ts
 #: src/home.ts
+#: src/i18n.ts
 msgid "{file} changed meanwhile; retry"
 msgstr "{file} changed meanwhile; retry"
 
@@ -152,7 +152,7 @@ msgstr "{file} changed on disk since it was read"
 #. A storage fault as one line: the file, then the reason — itself a message
 #. A storage fault as one line: the file, then the reason — itself a message
 #: src/config.ts
-#: src/files.ts
+#: src/i18n.ts
 #: src/service.ts
 msgid "{file}: {reason}"
 msgstr "{file}: {reason}"
@@ -711,7 +711,7 @@ msgid "{target} is not empty; the example seeds only a new or empty directory"
 msgstr "{target} is not empty; the example seeds only a new or empty directory"
 
 #. Storage diagnostic: a host URL is not an instance's origin written canonically — http or https (http on localhost or 127.x alone), a lowercase host of DNS labels (letters, digits and inner hyphens) joined by single dots, and a port from 1 to 65535 other than the scheme's default, nothing else; the URL is shown with any user info as …
-#: src/home.ts
+#: src/i18n.ts
 msgid "{url} is not an instance's origin"
 msgstr "{url} is not an instance's origin"
 
@@ -1310,7 +1310,7 @@ msgstr "environment packages installed"
 #: src/app-storage.ts
 #: src/code-credentials.ts
 #: src/drafts.ts
-#: src/files.ts
+#: src/i18n.ts
 msgid "expected an object"
 msgstr "expected an object"
 
@@ -1325,7 +1325,7 @@ msgid "expected fields {required}; optional {optional}"
 msgstr "expected fields {required}; optional {optional}"
 
 #. Storage diagnostic; the field names are the file format's own, and the optional clause is itself a message
-#: src/files.ts
+#: src/i18n.ts
 msgid "expected fields {required}{optional}"
 msgstr "expected fields {required}{optional}"
 
@@ -1347,7 +1347,7 @@ msgid "folder {path} is paired twice"
 msgstr "folder {path} is paired twice"
 
 #. Storage diagnostic: home.yaml is still in the layout before a home recorded several instances, which the one-time instances migration rewrites; the file is left as it is
-#: src/home.ts
+#: src/i18n.ts
 msgid "format 1: the instances migration has not run; preserved unchanged"
 msgstr "format 1: the instances migration has not run; preserved unchanged"
 
@@ -1477,7 +1477,7 @@ msgid "Installing stopped; the last files stay: {cause}"
 msgstr "Installing stopped; the last files stay: {cause}"
 
 #. Storage diagnostic: two instances home.yaml lists, or one listed twice, would hold their spex repositories in one folder under workspace/
-#: src/home.ts
+#: src/i18n.ts
 msgid "instances {first} and {second} share the folder {folder}"
 msgstr "instances {first} and {second} share the folder {folder}"
 
@@ -1547,7 +1547,7 @@ msgid "invalid failure count"
 msgstr "invalid failure count"
 
 #. Storage diagnostic: home.yaml's own fields are malformed
-#: src/home.ts
+#: src/i18n.ts
 msgid "invalid home file"
 msgstr "invalid home file"
 
@@ -3109,14 +3109,14 @@ msgid "unsupported act/version"
 msgstr "unsupported act/version"
 
 #. Storage diagnostic: the file names a layout version this Spex does not read; the file is left as it is
-#: src/files.ts
+#: src/i18n.ts
 msgid "unsupported format {format}; preserved unchanged"
 msgstr "unsupported format {format}; preserved unchanged"
 
 #. Storage diagnostic: a credentials file names a layout version that is no number, which is not repeated; the file is left as it is
 #. Storage diagnostic: a credentials file names a layout version that is no number, which is not repeated; the file is left as it is
 #: src/code-credentials.ts
-#: src/git-host.ts
+#: src/i18n.ts
 msgid "unsupported format; preserved unchanged"
 msgstr "unsupported format; preserved unchanged"
 

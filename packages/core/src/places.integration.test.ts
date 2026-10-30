@@ -45,7 +45,7 @@ import { dirname } from "node:path";
 import { inspect } from "node:util";
 import { WebSocket } from "ws";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
-import { credentialsPath } from "./git-host.js";
+import { credentialsPath } from "@sublang/spex/git-host";
 import { PROTOCOL_VERSION, type SeatState, type ServerMessage } from "./protocol.js";
 import { seatsPath } from "./seats.js";
 import { createSpaceHarness, instanceOf } from "./testing/space-harness.js";

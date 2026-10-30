@@ -38,13 +38,13 @@ import {
   type Lock,
   type RegistrySourceLock,
   type Resolution,
-} from "./environment/index.js";
+} from "@sublang/spex/environment";
 import type { EnvironmentState, GroupsState, RepositoryState } from "./protocol.js";
-import { credentialsPath, fileCredentialStore, GitHostClient, type StoredCredential } from "./git-host.js";
+import { credentialsPath, fileCredentialStore, GitHostClient, type StoredCredential } from "@sublang/spex/git-host";
 import { holdingFetch } from "./testing/holding-fetch.js";
 import { clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, ownClone, rowsOf, remoteNamesOf } from "./testing/space-harness.js";
 import type { StandinHost } from "./testing/standin-host.js";
-import { makeRelease, startStandinRegistry, type StandinRegistry, type StandinRegistryRequest } from "./testing/standin-registry.js";
+import { makeRelease, startStandinRegistry, type StandinRegistry, type StandinRegistryRequest } from "@sublang/spex/testing";
 
 const fixture = createSpaceHarness();
 const { scratch, git, gitFolder, addFolder, sleep, startHome, startHost, signIn, signOut, forget } = fixture;

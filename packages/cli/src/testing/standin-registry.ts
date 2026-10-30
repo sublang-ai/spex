@@ -22,9 +22,9 @@ import type { AddressInfo } from "node:net";
 import { dirname, join } from "node:path";
 import { stringify } from "yaml";
 
-import { unpackRelease } from "../environment/archive.js";
-import { artifactLanguages, publishIssues, sha256Hex, type Issue, type Manifest, type ReleaseFile } from "../environment/format.js";
-import { compareVersions, isVersion } from "../environment/semver.js";
+import { unpackRelease } from "../lib/environment/archive.js";
+import { artifactLanguages, publishIssues, sha256Hex, type Issue, type Manifest, type ReleaseFile } from "../lib/environment/format.js";
+import { compareVersions, isVersion } from "../lib/environment/semver.js";
 
 export type ReleaseFixture =
   | string

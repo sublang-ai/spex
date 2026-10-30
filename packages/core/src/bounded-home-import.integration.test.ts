@@ -14,7 +14,7 @@ import { Store } from "./store.js";
 import { Home } from "./home.js";
 import { finishBoundedHomeSessions, stageBoundedHomeSessions } from "./migrate-bounded-sessions.js";
 import { reserveStorageHome } from "./storage-git.js";
-import { sha256 } from "./files.js";
+import { sha256 } from "@sublang/spex/files";
 import { seedHistorySession } from "./testing/demo.js";
 import { scratchDir } from "./testing/scratch.js";
 

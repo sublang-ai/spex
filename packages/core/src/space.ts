@@ -19,15 +19,15 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "nod
 import { type StorageDiagnostic } from "./app-storage.js";
 import { heldSessionLease, occupied, pruneEmptyFolders } from "./clone-moves.js";
 import { canonicalHost } from "./code-credentials.js";
-import { readJsonFile, StorageFormatError, UUID, writeApplicationFile } from "./files.js";
+import { portable, readJsonFile, StorageFormatError, UUID, writeApplicationFile } from "@sublang/spex/files";
 import { withGitCredential, type GitCredentialHandle } from "./git-credential.js";
 import {
   anotherAccountError, CredentialChanged, HostError, SignInBusyError, type BrowserSignIn, type DeviceSignIn, type GitHostClient, type HostAccount, type HostGroup,
   type HostMember, type HostRepository, type MembersTarget,
-} from "./git-host.js";
+} from "@sublang/spex/git-host";
 import { InstanceRefused, kebab, REMOTE_URL_KEYS, remoteNamesIn, remoteOrderOf, splitKey, type HomeAccount } from "./home.js";
 import { i18n } from "./i18n.js";
-import { canonicalOrigin, instanceFolder, instanceSegmentOf, isInstanceFolder, OriginRefused, parseOrigin, type OriginRefusal } from "./instance.js";
+import { canonicalOrigin, instanceFolder, instanceSegmentOf, isInstanceFolder, OriginRefused, parseOrigin, type OriginRefusal } from "@sublang/spex/instance";
 import { isDeferredClone } from "./migrate-instances.js";
 import { deletePlacementFile, filedIn, keyPlacement, LEGACY_CREATED_KEY, LEGACY_ID_KEY, moveLegacyIds, PATH_PLACEMENT, PLACEMENT_CONFIG_KEYS, PLACEMENTS_DIR, placementCreatedKey, placementFileEverHeld, placementFilePath, placementIdKey, placementsIn, readPlacementFiles, readPlacements, writePlacementFile, type HistoryRun, type Placement, type PlacementFile, type PlacementPrefKind } from "./placements.js";
 import type {
@@ -69,7 +69,6 @@ import {
   EMPTY_TREE,
   NOT_PACKAGES,
   planStorageUnits,
-  portable,
   prepareStorageGitFiles,
   readStorageTree,
   resolveStorageChoices,

@@ -23,8 +23,8 @@ import { join } from "node:path";
 import { createSessionStore } from "@sublang/playbook/session-store";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 
-import { StorageFormatError, sha256 } from "./files.js";
-import { fileCredentialStore } from "./git-host.js";
+import { StorageFormatError, sha256 } from "@sublang/spex/files";
+import { fileCredentialStore } from "@sublang/spex/git-host";
 import { Home, orderRemotes, remoteOrderOf } from "./home.js";
 import { migrateInstances, needsInstancesMigration } from "./migrate-instances.js";
 import { initializeClone } from "./storage-git.js";

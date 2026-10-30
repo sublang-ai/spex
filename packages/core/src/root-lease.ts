@@ -22,7 +22,7 @@ import {
 import { hostname as systemHostname } from "node:os";
 import { join } from "node:path";
 import { isMachineIdentity } from "@sublang/playbook/machine-identity";
-import { UUID } from "./files.js";
+import { UUID } from "@sublang/spex/files";
 import { i18n } from "./i18n.js";
 
 export interface RootLeaseOwner {

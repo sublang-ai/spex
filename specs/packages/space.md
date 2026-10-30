@@ -733,7 +733,7 @@ Where the core runs as a seat [[core-service-125](core-service.md#core-service-1
 
 #### space-108
 
-When `space.signin.start` requests `reportCompletion: true`, the core shall report that attempt's terminal outcome to its initiating connection as `space.signin.completed` with the start request's `id` and instance, independently of aggregate Space state ([DR-157](../decisions/157-a-cli-attached-to-the-local-core.md)):
+When `space.signin.start` requests `reportCompletion: true`, the core shall report that attempt's terminal outcome to its initiating connection as `space.signin.completed` with the start request's `id` and instance, independently of aggregate Space state:
 
 - The ordinary start reply precedes completion, including an immediately settling attempt [[git-host-3](git-host.md#git-host-3)].
 - Success is `{ ok: true, account: { id, login, displayName } }` only after token acceptance and the home account update [[git-host-2](git-host.md#git-host-2)]; it claims no later catalog/setup or Sync outcome.

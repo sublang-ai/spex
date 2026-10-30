@@ -26,8 +26,8 @@ import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { writeApplicationBytes } from "./files.js";
-import { i18n } from "./i18n.js";
 import { canonicalOrigin } from "./instance.js";
+import { words } from "./words.js";
 
 export { DEFAULT_HOST_URL, hostUrlFor } from "./instance.js";
 
@@ -348,7 +348,7 @@ export function fileCredentialStore(homeDir: string, hostUrl: string): Credentia
     }
     if (!isRecord(doc)) throw new Error(`${file} holds no credentials map; it is left as it is`);
     if (typeof doc.format !== "number") {
-      throw new Error(`${file}: ${i18n._({ id: "unsupported format; preserved unchanged", comment: "Storage diagnostic: a credentials file names a layout version that is no number, which is not repeated; the file is left as it is" })}`);
+      throw new Error(`${file}: ${words().unsupportedUnnamedFormat()}`);
     }
     if (doc.format !== 1) {
       throw new Error(`${file} has format ${JSON.stringify(doc.format ?? null)}, which this version of Spex does not read; it is left as it is`);

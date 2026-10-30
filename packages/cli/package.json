@@ -21,6 +21,38 @@
   "bin": {
     "spex": "dist/cli.js"
   },
+  "exports": {
+    "./environment": {
+      "types": "./dist/lib/environment/index.d.ts",
+      "default": "./dist/lib/environment/index.js"
+    },
+    "./files": {
+      "types": "./dist/lib/files.d.ts",
+      "default": "./dist/lib/files.js"
+    },
+    "./instance": {
+      "types": "./dist/lib/instance.d.ts",
+      "default": "./dist/lib/instance.js"
+    },
+    "./git-host": {
+      "types": "./dist/lib/git-host.d.ts",
+      "default": "./dist/lib/git-host.js"
+    },
+    "./home-file": {
+      "types": "./dist/lib/home-file.d.ts",
+      "default": "./dist/lib/home-file.js"
+    },
+    "./words": {
+      "types": "./dist/lib/words.d.ts",
+      "default": "./dist/lib/words.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "default": "./dist/testing/index.js"
+    },
+    "./scaffold/*": "./scaffold/*",
+    "./package.json": "./package.json"
+  },
   "files": [
     "dist/**/*.js",
     "!dist/**/*.test.js",
@@ -46,6 +78,7 @@
     "github-slugger": "^2.0.0",
     "remark-gfm": "^4.0.1",
     "remark-parse": "^11.0.0",
-    "unified": "^11.0.5"
+    "unified": "^11.0.5",
+    "yaml": "^2.8.0"
   }
 }

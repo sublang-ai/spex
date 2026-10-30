@@ -3,26 +3,24 @@
 
 // The primitives every Spex-owned file shares (storage-14): closed
 // encodings checked field by field, atomic same-directory replacement —
-// plain, or under the version the writer read (DR-111) — and the one
-// storage fault a reader reports.
+// plain, or under the version the writer read (DR-111) — the one
+// storage fault a reader reports, and which of a clone's paths may leave
+// the device. Their words are the host's (words.ts).
 
 import { createHash, randomUUID } from "node:crypto";
 import { closeSync, fchmodSync, fsyncSync, lstatSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, posix, resolve, win32 } from "node:path";
-import { i18n } from "./i18n.js";
-import { UUID_PATTERN } from "./protocol.js";
+import { words } from "./words.js";
 
 /** A canonical lowercase UUID. */
-export const UUID = UUID_PATTERN;
+export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /** A list a language punctuates its own way (core-service-111). */
-export const listed = (names: readonly string[]): string =>
-  names.join(i18n._({ id: ", ", comment: "Separates names listed in one message" }));
+export const listed = (names: readonly string[]): string => names.join(words().listSeparator());
 
 export class StorageFormatError extends Error {
   constructor(readonly file: string, readonly reason: string) {
-    super(i18n._({ id: "{file}: {reason}", comment: "A storage fault as one line: the file, then the reason — itself a message",
-      values: { file, reason } }));
+    super(words().storageFault(file, reason));
     this.name = "StorageFormatError";
   }
 }
@@ -57,22 +55,16 @@ export function need(condition: unknown, file: string, reason: string): asserts 
 
 /** A closed object: the required fields present, nothing undeclared. */
 export function closed(value: unknown, required: string[], optional: string[], file: string): asserts value is Record<string, unknown> {
-  need(isObject(value), file, i18n._({ id: "expected an object", comment: "Storage diagnostic: a record in the file is not an object" }));
+  need(isObject(value), file, words().expectedObject());
   need(required.every((key) => Object.hasOwn(value, key)) && Object.keys(value).every((key) => required.includes(key) || optional.includes(key)), file,
-    i18n._({ id: "expected fields {required}{optional}",
-      comment: "Storage diagnostic; the field names are the file format's own, and the optional clause is itself a message",
-      values: { required: listed(required), optional: optional.length
-        ? i18n._({ id: "; optional {fields}", comment: "Clause naming the fields a record may also carry", values: { fields: listed(optional) } })
-        : "" } }));
+    words().expectedFields(listed(required), optional.length ? words().optionalFields(listed(optional)) : ""));
 }
 
 /** A reader refuses a layout version it does not know (storage-1): one
  * format, or any of a list a reader reads. */
 export function knownFormat(value: Record<string, unknown>, file: string, format: number | readonly number[] = 1): void {
   const formats: readonly unknown[] = typeof format === "number" ? [format] : format;
-  need(formats.includes(value.format), file, i18n._({ id: "unsupported format {format}; preserved unchanged",
-    comment: "Storage diagnostic: the file names a layout version this Spex does not read; the file is left as it is",
-    values: { format: String(value.format) } }));
+  need(formats.includes(value.format), file, words().unsupportedFormat(String(value.format)));
 }
 
 export function readJsonFile(file: string): unknown {
@@ -106,8 +98,7 @@ export type FileVersion = string | null;
  * caller reads again and retries (DR-111). */
 export class VersionConflictError extends Error {
   constructor(readonly file: string) {
-    super(i18n._({ id: "{file} changed meanwhile; retry", comment: "Refusal: a file changed between the core's read and its write; the reader retries",
-      values: { file } }));
+    super(words().changedMeanwhile(file));
     this.name = "VersionConflictError";
   }
 }
@@ -151,3 +142,9 @@ export function writeVersionedBytes(file: string, bytes: Buffer | string, expect
     const dir = openSync(dirname(file), "r"); try { fsyncSync(dir); } finally { closeSync(dir); }
   }
 }
+
+/** Whether a path of a clone may leave the device: not one of the
+ * catalog's ignored families (storage-1, storage-17). */
+export const portable = (file: string): boolean =>
+  !/^(packages\/|skills\/|local\/|\.spex-uploads\/|\.spex-apply\.json$|\.lock)/.test(file) &&
+  !/\.(hints|spex)\.json$|(?<!^spex)\.lock(?:\.|\/|$)|\.tmp$|\.bak(?:\.|$)|\.backup(?:\.|$)/.test(file);

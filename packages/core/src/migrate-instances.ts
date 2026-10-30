@@ -20,12 +20,12 @@ import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { heldSessionLease, occupied, pruneEmptyFolders } from "./clone-moves.js";
 import {
   closed, isObject, isText, need, readJsonFile, sha256, StorageFormatError, writeApplicationBytes, writeApplicationFile,
-} from "./files.js";
+} from "@sublang/spex/files";
 import {
   CLIENT_ID, Home, HOME_FILE, invalidHome, isRepositoryKey, notAnOrigin, parseHomeFile, WORKSPACE, WORKSPACE_DEPTH, type HomeAccount, type HomeFile,
 } from "./home.js";
 import { i18n } from "./i18n.js";
-import { canonicalOrigin, instanceFolder, instanceSegmentOf, isInstanceFolder, OriginRefused } from "./instance.js";
+import { canonicalOrigin, instanceFolder, instanceSegmentOf, isInstanceFolder, OriginRefused } from "@sublang/spex/instance";
 import { type ConfigRun, LEGACY_ID_KEY, moveLegacyIds } from "./placements.js";
 import { gitEnvironment } from "./storage-git.js";
 

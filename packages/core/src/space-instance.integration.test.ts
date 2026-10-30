@@ -25,9 +25,9 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSy
 import { dirname, join } from "node:path";
 import { createSessionStore } from "@sublang/playbook/session-store";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
-import { GitHostClient, HostError, credentialsPath, fileCredentialStore, type StoredCredential } from "./git-host.js";
+import { GitHostClient, HostError, credentialsPath, fileCredentialStore, type StoredCredential } from "@sublang/spex/git-host";
 import { Home } from "./home.js";
-import { canonicalOrigin } from "./instance.js";
+import { canonicalOrigin } from "@sublang/spex/instance";
 import { needsInstancesMigration } from "./migrate-instances.js";
 import { encodePlacementFile, PLACEMENTS_DIR } from "./placements.js";
 import { bareOf, clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, OWN, OWN_KEY, ownClone, placementOf, prefsOf, remoteNamesOf, repositoryOf, rowsOf, stringsOf } from "./testing/space-harness.js";

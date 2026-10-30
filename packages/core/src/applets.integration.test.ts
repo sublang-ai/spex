@@ -25,7 +25,7 @@ import { APPLET_ENTRY, APPLET_ID, APPLET_PACKAGE, APPLET_SCRIPT, publishAppletRe
 import { fakeAdapterImports } from "./testing/fake-adapter.js";
 import { createScriptedCaptain } from "./testing/scripted-captain.js";
 import { scratchDir } from "./testing/scratch.js";
-import { makeRelease, startStandinRegistry } from "./testing/standin-registry.js";
+import { makeRelease, startStandinRegistry } from "@sublang/spex/testing";
 
 const OWN = "tester";
 
