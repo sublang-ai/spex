@@ -2320,6 +2320,11 @@ test("instance package sources keep transport locators out of state and broadcas
   const signed = home.client.mark();
   await harness.signIn(home, host);
   await home.client.waitRepository(signed, own, (row) => row.sync.phase === "done", 60_000);
+  // Your own group's environment names its Space, as the environment
+  // migration names it at the next start (storage-24), so the restart
+  // below finds nothing to move.
+  const ownYaml = join(clonePath(home.dataDir, own), "spex.yaml");
+  if (!/^space: /m.test(readFileSync(ownYaml, "utf8"))) writeFileSync(ownYaml, readFileSync(ownYaml, "utf8").replace(/^packages:/m, `space: ${host.url}\npackages:`));
   const mark = home.client.mark();
   await home.client.expectOk("environment.request", { repository: own, name: "acme/toolbox", request: { kind: "git", git: remote, rev: "main", path: "pkg" } });
   let state: EnvironmentState;
