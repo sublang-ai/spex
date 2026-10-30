@@ -58,7 +58,9 @@ export function parsed<T extends NonNullable<ParseArgsConfig["options"]>>(name: 
     throw new Refusal(`${(error as Error).message}; see spex --help`);
   }
   const { positionals } = result;
-  if (positionals.length < words.min || positionals.length > words.max) throw new Refusal(`usage: spex ${name} ${words.usage}`);
+  if (positionals.length < words.min || positionals.length > words.max) {
+    throw new Refusal(words.usage === "" ? "it takes no arguments; see spex --help" : `usage: spex ${name} ${words.usage}`);
+  }
   return { values: result.values, positionals };
 }
 
