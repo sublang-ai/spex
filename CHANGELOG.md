@@ -37,8 +37,8 @@ and `npm start` (desktop) or `npm run start:server` (server).
   and publication. Package commands report their own completion and
   publication destination; a disconnected client reports uncertainty
   without replaying the operation. Existing UI commands remain unchanged
-  ([DR-157](specs/decisions/157-a-cli-attached-to-the-local-core.md)).
-- The CLI finds the running app by itself ([DR-163](specs/decisions/163-the-cli-finds-the-running-app.md)).
+  ([DR-157](https://github.com/sublang-ai/spex/blob/5cabfbc857960f1ceefddb4968656f8fc9792152/specs/decisions/157-a-cli-attached-to-the-local-core.md)).
+- The CLI finds the running app by itself ([DR-163](https://github.com/sublang-ai/spex/blob/5cabfbc857960f1ceefddb4968656f8fc9792152/specs/decisions/163-the-cli-finds-the-running-app.md)).
   While the core serves its home on a loopback address — the desktop's
   own listener, or the server shell bound to a loopback host — it keeps
   `local/endpoint.json` there, owner-only, with the access URL and the
@@ -46,7 +46,7 @@ and `npm start` (desktop) or `npm run start:server` (server).
   write none. The CLI reads it when given no `--server` or
   `SPEX_SERVER_URL`, so a desktop user runs the CLI beside the app.
 - `spex package init` makes a package folder from what you already have
-  ([DR-162](specs/decisions/162-a-package-folder-from-what-you-already-have.md)).
+  ([DR-162](https://github.com/sublang-ai/spex/blob/5cabfbc857960f1ceefddb4968656f8fc9792152/specs/decisions/162-a-package-folder-from-what-you-already-have.md)).
   Given a skill folder, such as one under `.claude/skills/`, or a spec
   file, it writes `spex-packages/<name>/` with its manifest, README and
   the project's license, offline, and names the next steps: Playbooks →

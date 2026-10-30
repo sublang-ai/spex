@@ -5,7 +5,8 @@
 
 ## Status
 
-In progress (2026-10-29).
+All local integration and installed live release gates pass (2026-10-29).
+Publication is pending exact-main CI and the app release workflow.
 
 ## Intent
 
@@ -28,4 +29,8 @@ slc 0.20.0 is published from `acaee3fae6cf902c33961d006d7cff139b3c7007`, with it
 npm generated the app lock: slc advances from 0.19.1 to 0.20.0 and its nested Playbook 17.11.1 disappears; all 836 other installed-package version, resolution and integrity fingerprints remain unchanged.
 The dependency suite passes all 19 cases: 16 isolated refusal/acceptance fixtures, the real installed closure, and bundled artifact execution through both shells.
 A clean registry `npm ci`, `npm run check:dependencies` and `npm run prepush` pass; spec lint has zero errors and its pre-existing `core-service-41` advisory.
-Exact-main CI and the installed smoke with its live stage remain pending.
+The combined candidate includes the package-manager library refactor from main and passes the same clean install, pre-push and 19 dependency checks.
+Its installed smoke passes fresh installation, both shells, packed CLI journeys, real coder dispatch and output, abort, cleanup and Node ABI restoration; no provider waiver is used.
+The ordinary Electron cache contains the official archive verified against the package's pinned checksum after the first download exceeded its budget; the source, assertions and fresh npm cache are unchanged.
+The [release preparation record](../../docs/releases/0.9.0-beta.19-preparation.md) preserves the attempts and evidence hashes.
+Exact-main CI and publication remain pending.
