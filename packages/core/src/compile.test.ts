@@ -296,26 +296,28 @@ test("an environment-set stall budget is left alone", async () => {
   assert.equal(slcCalls[0].env?.SLC_STALL_TIMEOUT, "900");
 });
 
-test("an entry with no derived roles is refused with recompile guidance", async () => {
-  // Entries compiled before slc 0.2 can declare zero roles when the
-  // gears rendered Players as a heading (fixed upstream in slc 0.2).
+test("an entry with no derived roles compiles with an empty role list", async () => {
+  // A roleless playbook is legal: the Captain runs every step (DR-032).
   const dir = scratchDir("spex-compile-");
   const stubPath = join(dir, "stub-slc.cjs");
   writeFileSync(stubPath, stubSlcSource("[]"));
 
-  await assert.rejects(
-    compilePlaybook({
-      playbookId: "demo",
-      source: { text: "# Demo\n\nA zero-role workflow.\n" },
-      roles: ["helper"],
-      command: "demo",
-      intent: "demo workflow for tests",
-      libraryDir: join(dir, "library"),
-      env: { SPEX_SLC: `${process.execPath} ${stubPath}` },
-      spawner: testSpawner(),
-    }),
-    /declares no player roles; recompile with slc >= 0\.2/,
-  );
+  const progress: string[] = [];
+  const result = await compilePlaybook({
+    playbookId: "demo",
+    source: { text: "# Demo\n\nA zero-role workflow.\n" },
+    roles: [],
+    command: "demo",
+    intent: "demo workflow for tests",
+    libraryDir: join(dir, "library"),
+    env: { SPEX_SLC: `${process.execPath} ${stubPath}` },
+    spawner: testSpawner(),
+    onProgress: (line) => progress.push(line),
+  });
+
+  assert.deepEqual(result.roles, []);
+  assert.ok(progress.includes("derived roles: "));
+  assert.equal(progress.at(-1), "compile complete");
 });
 
 test("toolchain guidance: old node refuses with instructions", async () => {

@@ -468,7 +468,7 @@ When the compile flow packages a compiled playbook, the registry generator shall
 
 #### playbook-library-15
 
-When a playbook is about to be enabled in a config, the registry validator shall apply the same fail-closed rules the playbook loader applies at load ([DR-004](../decisions/004-config-and-persistence.md)) — including: the `playbooks` key equals the manifest id; the module the environment exports imports successfully; no duplicate id or command among the playbooks of the composed config; no reserved captain role among role names; every required role resolved; at least one visible role; every agent resolving a supported adapter — and shall reject a violating enabling naming the violated rule, leaving the config file unmodified.
+When a playbook is about to be enabled in a config, the registry validator shall apply the same fail-closed rules the playbook loader applies at load ([DR-004](../decisions/004-config-and-persistence.md)) — including: the `playbooks` key equals the manifest id; the module the environment exports imports successfully; no duplicate id or command among the playbooks of the composed config; no reserved captain role among role names; every required role resolved; every agent resolving a supported adapter — and shall reject a violating enabling naming the violated rule, leaving the config file unmodified.
 
 ### Config Writes
 

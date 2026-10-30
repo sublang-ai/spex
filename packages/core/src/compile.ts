@@ -1200,14 +1200,8 @@ async function compileAdmitted(
   // Packaging has no selected runtime configuration: a valid entry may
   // require source-owned options with no default (playbook-library-14).
   // Enabling and runtime admission validate the actual configured slice.
+  // A roleless entry is legal: the Captain runs every step (DR-032).
   const roles = [...entry.requiredRoleIds];
-  if (roles.length === 0) {
-    // Entries compiled before slc 0.2 can carry no roles when the
-    // gears rendered Players as a heading (fixed upstream).
-    throw new Error(
-      "the compiled entry declares no player roles; recompile with slc >= 0.2 (its gears Players parsing fix)",
-    );
-  }
   const seen = new Set<string>();
   for (const role of roles) {
     // A role is a config key a user binds to a player, so it must be
