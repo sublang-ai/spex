@@ -653,17 +653,18 @@ test("environments-34, environments-10, environments-17, environments-5: a publi
   // Whether a registry holds a release, asked of it directly.
   const holds = async (registry: StandinRegistry, name: string): Promise<boolean> => (await fetch(`${registry.url}/api/v1/packages/${name}/1.0.0`)).ok;
   // A spec package under development in an environment's path root, as
-  // an authoring session keeps it (environments-10): its path there.
-  const underDevelopment = async (key: string, name: string, folder: string): Promise<string> => {
+  // an authoring session keeps it, at spex-packages/<org>/<pkg>/
+  // (environments-10): its name, by which it publishes.
+  const underDevelopment = async (key: string, name: string): Promise<string> => {
     const root = (await home.client.expectOk("environment.get", { repository: key })).pathRoot;
     assert.ok(root, `${key} has a path root on this device`);
-    const path = `${folder}/${name.split("/")[1]}`;
-    await release(name, "1.0.0", join(root, ...path.split("/")));
-    return path;
+    await release(name, "1.0.0", join(root, "spex-packages", ...name.split("/")));
+    return name;
   };
-  // Publish it and wait for the publish to end: the environment's state.
-  const publish = async (key: string, path: string, name: string): Promise<EnvironmentState> => {
-    assert.deepEqual(await home.client.expectOk("environment.publish", { repository: key, path }), { accepted: true });
+  // Publish it by name and wait for the publish to end: the
+  // environment's state.
+  const publish = async (key: string, name: string): Promise<EnvironmentState> => {
+    assert.deepEqual(await home.client.expectOk("environment.publish", { repository: key, name }), { accepted: true });
     return environmentOf(home, key, (state) => state.published?.name === name || state.error !== null);
   };
 
@@ -673,7 +674,7 @@ test("environments-34, environments-10, environments-17, environments-5: a publi
   // (environments-10, environments-17).
   let one = R1.script.received.length;
   let two = R2.script.received.length;
-  let state = await publish(south, await underDevelopment(south, "acme/south-pub", "spex-packages"), "acme/south-pub");
+  let state = await publish(south, await underDevelopment(south, "acme/south-pub"));
   assert.equal(state.error, null);
   assert.deepEqual(state.published, { name: "acme/south-pub", version: "1.0.0", url: `${second.url}/acme/south-pub` });
   assert.deepEqual(uploads(R2, two), [["/api/v1/packages/acme/south-pub/1.0.0", second.url, LOGIN, true]]);
@@ -685,7 +686,7 @@ test("environments-34, environments-10, environments-17, environments-5: a publi
   // account (environments-10).
   one = R1.script.received.length;
   two = R2.script.received.length;
-  state = await publish(local, await underDevelopment(local, "acme/local-pub", "spex-packages"), "acme/local-pub");
+  state = await publish(local, await underDevelopment(local, "acme/local-pub"));
   assert.equal(state.error, null);
   assert.deepEqual(state.published, { name: "acme/local-pub", version: "1.0.0", url: `${first.url}/acme/local-pub` });
   assert.deepEqual(uploads(R1, one), [["/api/v1/packages/acme/local-pub/1.0.0", first.url, LOGIN, true]]);
@@ -697,10 +698,10 @@ test("environments-34, environments-10, environments-17, environments-5: a publi
   // name, though the default instance stays signed in; nothing reaches
   // either registry (environments-10, environments-17).
   await signOut(home, second);
-  const later = await underDevelopment(south, "acme/south-later", "spex-packages");
+  const later = await underDevelopment(south, "acme/south-later");
   one = R1.script.received.length;
   two = R2.script.received.length;
-  await home.client.expectError("environment.publish", { repository: south, path: later }, "invalid_request", new RegExp(`^Sign in to publish at ${SECOND}$`));
+  await home.client.expectError("environment.publish", { repository: south, name: later }, "invalid_request", new RegExp(`^Sign in to publish at ${SECOND}$`));
   assert.deepEqual([R1.script.received.length, R2.script.received.length], [one, two], "no registry is asked");
   assert.deepEqual([await holds(R2, "acme/south-later"), await holds(R1, "acme/south-later")], [false, false]);
 
@@ -748,7 +749,7 @@ test("environments-34, environments-10, environments-17, environments-5: a publi
   // (environments-10).
   one = R1.script.received.length;
   two = R2.script.received.length;
-  state = await publish(HOST_OWN, await underDevelopment(HOST_OWN, "acme/own-pub", "mine"), "acme/own-pub");
+  state = await publish(HOST_OWN, await underDevelopment(HOST_OWN, "acme/own-pub"));
   assert.equal(state.error, null);
   assert.deepEqual(state.published, { name: "acme/own-pub", version: "1.0.0", url: `${second.url}/acme/own-pub` });
   assert.deepEqual(uploads(R2, two), [["/api/v1/packages/acme/own-pub/1.0.0", second.url, LOGIN, true]]);

@@ -29,7 +29,7 @@ import { seedHistorySession } from "./testing/demo.js";
 import { holdingFetch, samePair, settled } from "./testing/holding-fetch.js";
 import { bareOf, clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, OWN, OWN_KEY, ownClone, placementOf, prefsOf, repositoryOf, rowsOf } from "./testing/space-harness.js";
 import { STANDIN_STORAGE, type StandinHost } from "./testing/standin-host.js";
-import type { GroupsState, RepositoryState, ServerMessage } from "./protocol.js";
+import { PROTOCOL_VERSION, type GroupsState, type RepositoryState, type ServerMessage } from "./protocol.js";
 
 const fixture = createSpaceHarness();
 const { scratch, git, gitFolder, bareRepo, addFolder, sleep, startHome, startHost, signIn, runTurn, holdingGit, turnRecords } = fixture;
@@ -2986,7 +2986,7 @@ test("space-110: reported sign-in owns its completion and matched cancellation",
   const home = await startHome("reported-signin", { host, extra: { signIn: "browser" } });
   t.after(() => home.stop());
   const hello = home.client.messages.find((message) => message.type === "hello");
-  assert.ok(hello?.type === "hello" && hello.protocolVersion === 29 && hello.attachedCliVersion === 1);
+  assert.ok(hello?.type === "hello" && hello.protocolVersion === PROTOCOL_VERSION && hello.attachedCliVersion === 1);
   const begin = async (target: typeof home) => {
     const from = target.client.mark();
     const start = await target.client.expectOk("space.signin.start", { url: host.url, reportCompletion: true });

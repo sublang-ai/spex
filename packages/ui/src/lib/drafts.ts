@@ -61,9 +61,11 @@ export function packageOrgRuleText(): string {
 }
 
 /** The spec package folder under development, in the working folder
- * (playbook-library-70). */
+ * (playbook-library-70): as the core names it, else
+ * `spex-packages/<org>/<id>` by its package's name where that is known
+ * (environments-10). */
 export function draftPackagePath(draft: DraftInfo): string {
-  return draft.packagePath ?? `spex-packages/${draft.id}`;
+  return draft.packagePath ?? `spex-packages/${draft.package ?? draft.id}`;
 }
 
 /** The playbook artifact's `<id>.md`, in the working folder

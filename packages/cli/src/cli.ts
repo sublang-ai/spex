@@ -19,8 +19,9 @@ Commands:
   package init <org>/<name> [--skill <folder>]... [--spec <file>]
                [--language <tag>] [--description <text>] [--license <id>]
                [--move]
-                                     Make spex-packages/<name>/ from skill
-                                     folders and/or a spec file; no server
+                                     Make spex-packages/<org>/<name>/ from
+                                     skill folders and/or a spec file; no
+                                     server
 
 Agent names: claude, codex, gemini, kimi, opencode, or all
 

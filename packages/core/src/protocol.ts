@@ -13,7 +13,7 @@ import type { AgentCapabilities, ApprovalDecision, ApprovalRequest, BrowserSetup
 import type { SessionRecord as RuntimeRecord } from "@sublang/playbook/session-assets";
 import { LANGUAGES, type Language } from "./language.js";
 
-export const PROTOCOL_VERSION = 29;
+export const PROTOCOL_VERSION = 30;
 export const ATTACHED_CLI_VERSION = 1;
 
 /** The compile pipeline's phases and their human names, shared so the
@@ -1187,7 +1187,7 @@ export const commandSchema = z.discriminatedUnion("type", [
      * roster — the Playbooks surface may mint one in place. */
     newPlayers: z.record(playerIdSchema, agentBlockSchema).optional(),
     /** The project whose working folder holds the spec package under
-     * development, `spex-packages/<id>/` (environments-10): a compile
+     * development, `spex-packages/<org>/<id>/` (environments-10): a compile
      * always writes inside one, so it is always named. */
     projectId: repositoryKeySchema,
     /** The spex repository to enable in — the project's, the default,
@@ -1299,10 +1299,13 @@ export const commandSchema = z.discriminatedUnion("type", [
   /** A search names the environment it adds to: the registry of
    * `repository`'s environment answers it (environments-17, DR-127). */
   z.object({ type: z.literal("environment.search"), id, repository: repositoryKeySchema, query: z.string().max(200) }).strict(),
-  /** `dryRun` runs the checks and replies the inline summary — name,
-   * version and the files it would upload — uploading nothing
+  /** `name` names the spec package under development, `<org>/<pkg>`,
+   * whose folder — the environment's request by path for it, else
+   * `spex-packages/<org>/<pkg>/` — the core publishes (environments-10,
+   * DR-165); `dryRun` runs the checks and replies the inline summary —
+   * name, version and the files it would upload — uploading nothing
    * (playbook-library-93). */
-  z.object({ type: z.literal("environment.publish"), id, repository: repositoryKeySchema, path: z.string().min(1), dryRun: z.boolean().optional(), wait: z.boolean().optional() }).strict(),
+  z.object({ type: z.literal("environment.publish"), id, repository: repositoryKeySchema, name: z.string().min(1), dryRun: z.boolean().optional(), wait: z.boolean().optional() }).strict(),
   z.object({ type: z.literal("environment.playbooks"), id, projectId: repositoryKeySchema.optional() }).strict(),
   // Applets (applets-3, DR-161): the path the core serves an installed
   // applet under for one project — `repository` the spex repository
@@ -1769,7 +1772,7 @@ export interface DraftInfo {
   /** The spec package under development's name, `<org>/<id>`
    * (playbook-library-52). */
   package?: string;
-  /** Its folder in the working folder, e.g. `spex-packages/<id>`
+  /** Its folder in the working folder, e.g. `spex-packages/<org>/<id>`
    * (playbook-library-70). */
   packagePath?: string;
   /** The playbook artifact's `<id>.md`, relative to the working folder

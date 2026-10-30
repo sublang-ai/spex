@@ -264,6 +264,7 @@ msgid "{id} is already an authoring session of another project; pick another id"
 msgstr "{id} 已是另一个项目的编写会话；请换一个 id"
 
 #. Refusal: publishing reads a folder inside the repository's working folder
+#. Refusal: the environment's installed files stand in the repository's working folder, which this device does not hold
 #: src/environments.ts
 msgid "{key} has no working folder on this device"
 msgstr "{key} 在本设备上没有工作文件夹"
@@ -312,6 +313,11 @@ msgstr "{project} 中的 {name} 正在别处使用"
 #: src/space.ts
 msgid "{name} is kept under {host}; pick a group there"
 msgstr "{name} 位于 {host} 之下；请在那里选择一个群组"
+
+#. Refusal: a publish names its spec package as org/pkg, both lowercase kebab-case; {name} is what it named
+#: src/environments.ts
+msgid "{name} is not an org/pkg name"
+msgstr "{name} 不是 org/pkg 形式的名称"
 
 #. Refusal: removing a spec package this environment does not request
 #: src/environments.ts
@@ -388,6 +394,11 @@ msgstr "{path} 含有 {file}，克隆的 Git 规则会忽略该文件，因此�
 #: src/environments.ts
 msgid "{path} holds {file}, which the clone's sync refuses to share"
 msgstr "{path} 含有 {file}，克隆的同步拒绝共享该文件"
+
+#. Refusal: the folder a publish of {name} reads holds another spec package, {held}, by its meta.yaml
+#: src/environments.ts
+msgid "{path} holds {held}, not {name}"
+msgstr "{path} 中是 {held}，不是 {name}"
 
 #. Refusal: a request by path in your own group's environment names a folder under Spex's own paths, such as sessions/ or skills/
 #: src/environments.ts
@@ -1842,6 +1853,11 @@ msgstr "{path} 处没有文件"
 #: src/space.ts
 msgid "no folder at {path}"
 msgstr "{path} 处没有文件夹"
+
+#. Refusal: a publish names a spec package with no folder; {path} is where its folder would stand, its request's path or spex-packages/<org>/<pkg>
+#: src/environments.ts
+msgid "No folder holds {name}: {path} is not there"
+msgstr "没有文件夹存放 {name}：{path} 不存在"
 
 #. Forge guidance where the project has no origin remote; the command stays as it is
 #: src/forge.ts

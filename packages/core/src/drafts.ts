@@ -7,7 +7,7 @@
 // version read, beside `authoring/<id>.records.jsonl`, appended, and
 // `authoring/<id>.assets/` — written under the Spex home lease the
 // store holds; its spec package under development stands in the
-// project's working folder at `spex-packages/<id>/`, the source at
+// project's working folder at `spex-packages/<org>/<id>/`, the source at
 // `playbooks/<language>/<id>/<id>.md` in the session's language
 // (environments-10). No provider token
 // enters any file. Nothing here is a picture of the files: every
@@ -88,8 +88,48 @@ export interface StoredDraft {
 }
 
 /** Where an authoring session's spec package sits in its working
- * folder (environments-10, playbook-library-70). */
-export const draftPackagePath = (id: string): string => `spex-packages/${id}`;
+ * folder (environments-10, playbook-library-70): its org a folder, as
+ * npm's scopes are, so two orgs' packages of one id stand apart. */
+export const draftPackagePath = (org: string, id: string): string => `spex-packages/${org}/${id}`;
+
+/** Where a spec package under development stood before the org became a
+ * folder (DR-165): kept so a folder or a session made then keeps
+ * working. */
+export const formerDraftPackagePath = (id: string): string => `spex-packages/${id}`;
+
+/** Whether a path names the folder of a spec package under development
+ * of this id (environments-10): `spex-packages/<org>/<id>`, or the former
+ * `spex-packages/<id>`. */
+export function isDraftPackagePath(path: string, id: string): boolean {
+  const parts = path.split("/");
+  return parts[0] === "spex-packages" && parts[parts.length - 1] === id && (parts.length === 2 || parts.length === 3);
+}
+
+/** The folder a new session of `id` with org `org` takes in a working
+ * folder (playbook-library-51, playbook-library-70):
+ * `spex-packages/<org>/<id>/`, or — so a folder made before the org
+ * became a folder keeps working — the former `spex-packages/<id>/` where
+ * that holds a manifest and the new path holds none. */
+export function packageFolderFor(workingFolder: string, org: string, id: string): string {
+  const current = draftPackagePath(org, id);
+  const former = formerDraftPackagePath(id);
+  const holds = (path: string): boolean => existsSync(join(workingFolder, ...path.split("/"), "meta.yaml"));
+  return !holds(current) && holds(former) ? former : current;
+}
+
+/** The folder of a spec package under development of this id already
+ * standing in a working folder — `spex-packages/<org>/<id>/` holding a
+ * manifest, in org order, else the former `spex-packages/<id>/` — or
+ * null where none stands. */
+export function existingPackageFolder(workingFolder: string, id: string): string | null {
+  const base = join(workingFolder, "spex-packages");
+  let orgs: string[] = [];
+  try { orgs = readdirSync(base, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort(); } catch { orgs = []; }
+  for (const org of orgs) {
+    if (existsSync(join(base, org, id, "meta.yaml"))) return draftPackagePath(org, id);
+  }
+  return existsSync(join(base, id, "meta.yaml")) ? formerDraftPackagePath(id) : null;
+}
 
 /** A session file's `package` and `language`, read without validating
  * the rest: a damaged file still names where its package and source
@@ -101,7 +141,7 @@ function readPackagePlace(file: string, id: string): { package: string; language
   } catch { /* the defaults below */ }
   const path = value?.package;
   return {
-    package: typeof path === "string" && path.length > 0 && !path.startsWith("/") && !path.split("/").includes("..") ? path : draftPackagePath(id),
+    package: typeof path === "string" && path.length > 0 && !path.startsWith("/") && !path.split("/").includes("..") ? path : formerDraftPackagePath(id),
     language: isLanguageTag(value?.language) ? value.language : DEFAULT_AUTHORING_LANGUAGE,
   };
 }
@@ -509,7 +549,7 @@ export class DraftStore {
    * the session file names it now. */
   packagePath(id: string): string {
     const location = this.locate(id);
-    return location ? readPackagePlace(join(location.authoringDir, `${id}.json`), id).package : draftPackagePath(id);
+    return location ? readPackagePlace(join(location.authoringDir, `${id}.json`), id).package : formerDraftPackagePath(id);
   }
 
   /** The playbook artifact's language (storage-23), as the session file
@@ -658,7 +698,10 @@ export class DraftStore {
         comment: "Refusal: an authoring transcript with no session file holds the id a new playbook asked for",
       }));
     }
-    const packagePath = draftPackagePath(id);
+    // A stored session keeps the `package` it recorded; a new one takes
+    // `spex-packages/<org>/<id>/`, a folder brought in there by Git
+    // becoming its package (playbook-library-51).
+    const packagePath = packageFolderFor(location.workingFolder, fields.org, id);
     const dir = join(location.workingFolder, ...packagePath.split("/"));
     const language = authoringLanguage(location.workingFolder, dir, id, homeLanguage);
     mkdirSync(join(dir, "playbooks", language, id), { recursive: true });

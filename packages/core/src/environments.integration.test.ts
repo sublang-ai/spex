@@ -545,7 +545,9 @@ test("environments-24: a playbook authored in a project compiles, is requested b
   const ORG = "workshop";
   const created = await core.client.expectOk("draft.create", { projectId: project.id, draftId: "triage", org: ORG, license: "Apache-2.0" });
   assert.equal(created.package, `${ORG}/triage`);
-  const folder = join(working, "spex-packages", "triage");
+  // At spex-packages/<org>/<id>/ (environments-10).
+  assert.equal(created.packagePath, `spex-packages/${ORG}/triage`);
+  const folder = join(working, "spex-packages", ORG, "triage");
   const instance = created.instance!;
   await core.client.expectOk("draft.send", { projectId: project.id, draftId: "triage", instance, text: "I want a playbook that triages new issues." });
   const latest = () => core.client.messages.filter((m) => m.type === "draft.state" && m.draft.id === "triage").map((m) => (m as { draft: CommandResults["draft.create"] }).draft).at(-1);
@@ -589,14 +591,27 @@ test("environments-24: a playbook authored in a project compiles, is requested b
   writeFileSync(metaFile, stringifyYaml(unlicensed));
   registry.script.clearRequests();
   for (const dryRun of [true, false]) {
-    await core.client.expectError("environment.publish", { repository: project.id, path: "spex-packages/triage", ...(dryRun ? { dryRun } : {}) },
-      "invalid_request", /spex-packages\/triage cannot be published: meta\.yaml: missing required field "license"/);
+    await core.client.expectError("environment.publish", { repository: project.id, name: `${ORG}/triage`, ...(dryRun ? { dryRun } : {}) },
+      "invalid_request", new RegExp(`spex-packages/${ORG}/triage cannot be published: meta\\.yaml: missing required field "license"`));
   }
   assert.deepEqual(registry.script.requests.filter((request) => request.startsWith("PUT ")), [], "nothing was uploaded");
   writeFileSync(metaFile, metaText);
+  // A publish by a name whose folder's manifest names another spec
+  // package is refused naming both, as is a name with no folder
+  // (environments-10).
+  const impostor = join(working, "spex-packages", ORG, "impostor");
+  cpSync(folder, impostor, { recursive: true });
+  for (const dryRun of [true, false]) {
+    await core.client.expectError("environment.publish", { repository: project.id, name: `${ORG}/impostor`, ...(dryRun ? { dryRun } : {}) },
+      "invalid_request", new RegExp(`^spex-packages/${ORG}/impostor holds ${ORG}/triage, not ${ORG}/impostor$`));
+  }
+  rmSync(impostor, { recursive: true, force: true });
+  await core.client.expectError("environment.publish", { repository: project.id, name: `${ORG}/absent`, dryRun: true },
+    "invalid_request", new RegExp(`^No folder holds ${ORG}/absent: spex-packages/${ORG}/absent is not there$`));
+  assert.deepEqual(registry.script.requests.filter((request) => request.startsWith("PUT ")), [], "nothing was uploaded");
 
   // The dry run names what would go, then the upload.
-  const preview = await core.client.expectOk("environment.publish", { repository: project.id, path: "spex-packages/triage", dryRun: true });
+  const preview = await core.client.expectOk("environment.publish", { repository: project.id, name: `${ORG}/triage`, dryRun: true });
   const declared = (await readRelease(folder)).files;
   assert.equal(preview.preview?.instance.origin, registry.url);
   assert.ok(preview.preview?.instance.name);
@@ -605,7 +620,7 @@ test("environments-24: a playbook authored in a project compiles, is requested b
   assert.deepEqual(preview.preview?.files.filter(ownedByCompiler), [], "the compiler's own files never upload");
   assert.ok(preview.preview?.files.includes("playbooks/en/triage/triage.registry.mjs"), "the compiled module uploads");
   const from = core.client.mark();
-  assert.deepEqual(await core.client.expectOk("environment.publish", { repository: project.id, path: "spex-packages/triage" }), { accepted: true });
+  assert.deepEqual(await core.client.expectOk("environment.publish", { repository: project.id, name: `${ORG}/triage` }), { accepted: true });
   const published = await core.client.environment(project.id, from, (state) => state.busy === null && (state.published !== null && state.published !== undefined || state.error !== null));
   assert.equal(published.error, null);
   assert.deepEqual(published.published, { name: `${ORG}/triage`, version: "0.1.0", url: `${registry.url}/${ORG}/triage` });
@@ -883,8 +898,9 @@ test("environments-33 through real cores: a skill your own group requests by a p
   await a.client.expectOk("environment.install", { repository: ownKey });
   await until(() => readFileSync(join(userA, ".agents", "skills", "notes", "SKILL.md"), "utf8") === skill("Write it down, then read it back."), 60_000, "the edit exported");
   assert.equal(readFileSync(join(userA, ".claude", "skills", "notes", "SKILL.md"), "utf8"), skill("Write it down, then read it back."));
-  // Publishing reads the same folder by the same path.
-  const preview = await a.client.expectOk("environment.publish", { repository: ownKey, path: "mine/notes", dryRun: true });
+  // Publishing by its name reads the same folder, its request's path
+  // (environments-10).
+  const preview = await a.client.expectOk("environment.publish", { repository: ownKey, name: `${OWN}/notes`, dryRun: true });
   assert.deepEqual(preview.preview, { instance: { origin: "https://spex.sublang.ai", name: "spex.sublang.ai" }, name: `${OWN}/notes`, version: "0.1.0", files: ["meta.yaml", "skills/en/notes/SKILL.md"] });
 
   // A file added later that the sync would drop fails the next install
@@ -1248,9 +1264,13 @@ test("environments-25: every environment command replies and refuses as its tabl
   // environment.publish: not signed in at the instance it publishes to
   // — the home's recorded origin, no instance listed yet, named by its
   // host name — and not a release (environments-17).
-  await client.expectError("environment.publish", { repository: key, path: "spex-packages/none" }, "invalid_request",
+  // The folder of a name with no request is spex-packages/<org>/<pkg>/.
+  mkdirSync(join(working, "spex-packages", "acme", "none"), { recursive: true });
+  await client.expectError("environment.publish", { repository: key, name: "acme/none" }, "invalid_request",
     new RegExp(`^Sign in to publish at ${new URL(registry.url).hostname.replace(/\./g, "\\.")}$`));
-  await client.expectError("environment.publish", { repository: key, path: "spex-packages/none", dryRun: true }, "invalid_request", /not a spec package release/);
+  await client.expectError("environment.publish", { repository: key, name: "acme/none", dryRun: true }, "invalid_request", /not a spec package release/);
+  await client.expectError("environment.publish", { repository: key, name: "acme/absent", dryRun: true }, "invalid_request", /^No folder holds acme\/absent/);
+  await client.expectError("environment.publish", { repository: key, name: "none", dryRun: true }, "invalid_request", /^none is not an org\/pkg name$/);
 
   // The playbooks both environments export, with where each is enabled.
   const listed = await client.expectOk("environment.playbooks", { projectId: key });
@@ -1986,7 +2006,7 @@ test("playbook-library-98: an enabling refused after some of its writes names th
   assert.match(failure.message, /ENOTDIR/);
   assert.doesNotMatch(failure.message, /playbook triage written/);
   // What was written stands; the other writer's file is not overwritten.
-  assert.match(afterFailure!.requests, /\/triage:\n\s+path: spex-packages\/triage\n/);
+  assert.match(afterFailure!.requests, new RegExp(`/triage:\\n\\s+path: spex-packages/${OWN}/triage\\n`));
   assert.match(afterFailure!.lock, /\/triage:/);
   assert.match(afterFailure!.own, /dev\.triager:\n\s+adapter: claude/);
   assert.equal(afterFailure!.foreign, foreign);
@@ -2015,8 +2035,8 @@ test("playbook-library-110: an authoring session whose spec package lies in your
   const created = await client.expectOk("draft.create", { projectId: ownKey, draftId: "triage", org: OWN, license: "Apache-2.0" });
   const { instance } = created;
   assert.ok(instance, "the session's recorded instance");
-  assert.equal(created.packagePath, "spex-packages/triage");
-  assert.ok(existsSync(join(clone, "spex-packages", "triage", "meta.yaml")), "the spec package folder lies in the clone");
+  assert.equal(created.packagePath, `spex-packages/${OWN}/triage`);
+  assert.ok(existsSync(join(clone, "spex-packages", OWN, "triage", "meta.yaml")), "the spec package folder lies in the clone");
   await client.expectOk("draft.send", { projectId: ownKey, draftId: "triage", instance, text: "I want a playbook that triages new issues." });
   const latest = () => client.messages.filter((m) => m.type === "draft.state" && m.draft.id === "triage").map((m) => (m as { draft: CommandResults["draft.create"] }).draft).at(-1);
   await until(() => latest()?.activity === "idle" && latest()?.proposal !== undefined, 120_000, "the compiled proposal");
@@ -2026,9 +2046,9 @@ test("playbook-library-110: an authoring session whose spec package lies in your
   await client.expectOk("draft.register", { projectId: ownKey, draftId: "triage", instance, repository: ownKey,
     command: "triage", intent: "Label new issues", bindings: { Triager: "dev.triager", Verifier: "dev.coder" }, newPlayers: { "dev.triager": { adapter: "claude" } } });
   const requests = parseYaml(readFileSync(join(clone, "spex.yaml"), "utf8")) as { packages: Record<string, unknown> };
-  assert.deepEqual(requests.packages[`${OWN}/triage`], { path: "spex-packages/triage" }, "[playbook-library-7] requested by its path in your own group's clone");
+  assert.deepEqual(requests.packages[`${OWN}/triage`], { path: `spex-packages/${OWN}/triage` }, "[playbook-library-7] requested by its path in your own group's clone");
   const lock = parseYaml(readFileSync(join(clone, "spex.lock"), "utf8")) as Lock;
-  assert.equal((lock.packages[`${OWN}/triage`]?.source as { path?: string } | undefined)?.path, "spex-packages/triage", "[playbook-library-7] resolved there");
+  assert.equal((lock.packages[`${OWN}/triage`]?.source as { path?: string } | undefined)?.path, `spex-packages/${OWN}/triage`, "[playbook-library-7] resolved there");
   const own = parseYaml(readFileSync(core.configPath, "utf8")) as { playbooks: Record<string, unknown> };
   // Keyed by the roles the stub compile derived.
   assert.deepEqual(own.playbooks.triage, { roles: { triager: "dev.triager", verifier: "dev.coder" } }, "[playbook-library-7] enabled in your own group's config");
@@ -2258,16 +2278,17 @@ test("environments-37: publication waits return their own receipt and disconnect
   t.after(() => core.stop());
   const working = gitFolder(join(dir, "project"));
   const { id: key } = await core.client.expectOk("project.register", { path: working });
-  const folder = join(working, "tools", "receipt");
+  // Published by name from spex-packages/<org>/<pkg>/ (environments-10).
+  const folder = join(working, "spex-packages", "acme", "receipt");
   const manifest = { format: 2, org: "acme", name: "receipt", version: "1.0.0", description: "A receipt", license: "Apache-2.0", artifacts: { receipt: { kind: "skill", language: "en" } } };
   await makeRelease(folder, manifest, { "skills/en/receipt/SKILL.md": "---\nname: receipt\ndescription: A receipt\n---\nRead the fixture.\n" });
-  const preview = await core.client.expectOk("environment.publish", { repository: key, path: "tools/receipt", dryRun: true });
+  const preview = await core.client.expectOk("environment.publish", { repository: key, name: "acme/receipt", dryRun: true });
   assert.equal(preview.preview?.instance.origin, registry.url);
   assert.ok(preview.preview?.instance.name);
   assert.equal(registry.script.requests.filter((request) => request.startsWith("PUT ")).length, 0);
-  const published = await core.client.expectOk("environment.publish", { repository: key, path: "tools/receipt", wait: true });
+  const published = await core.client.expectOk("environment.publish", { repository: key, name: "acme/receipt", wait: true });
   assert.deepEqual(published, { completed: true, published: { instance: preview.preview?.instance, name: "acme/receipt", version: "1.0.0", url: `${registry.url}/acme/receipt` } });
-  await core.client.expectError("environment.publish", { repository: key, path: "tools/receipt", wait: true }, "invalid_request");
+  await core.client.expectError("environment.publish", { repository: key, name: "acme/receipt", wait: true }, "invalid_request");
   const state = await core.client.expectOk("environment.get", { repository: key });
   assert.equal(state.published?.version, "1.0.0", "a previous publication does not turn the failed wait into success");
   writeFileSync(join(folder, "meta.yaml"), stringifyYaml({ ...manifest, version: "2.0.0" }));
@@ -2276,7 +2297,7 @@ test("environments-37: publication waits return their own receipt and disconnect
   const gate = held.hold((path, status) => path.endsWith("/acme/receipt/2.0.0") && status === 201);
   t.after(gate.release);
   const mark = core.client.mark();
-  detached.sendRaw(JSON.stringify({ type: "environment.publish", id: "detached-publish", repository: key, path: "tools/receipt", wait: true }));
+  detached.sendRaw(JSON.stringify({ type: "environment.publish", id: "detached-publish", repository: key, name: "acme/receipt", wait: true }));
   await gate.reached;
   detached.close();
   gate.release();
@@ -2296,14 +2317,14 @@ test("environments-36: shutdown closes write and upload admission after awaited 
   const working = gitFolder(join(dir, "project"));
   const { id: key } = await core.client.expectOk("project.register", { path: working });
   const release = skillRelease("acme", "late");
-  await makeRelease(join(working, "tools", "late"), release.manifest, release.files);
+  await makeRelease(join(working, "spex-packages", "acme", "late"), release.manifest, release.files);
   const requestsPath = join(clonePath(core.dataDir, key), "spex.yaml");
   const before = readFileSync(requestsPath);
   const manager = managerOf(core);
   // Both real operations yield in read-only preflight before write/run
   // admission. Stop wins that boundary without replacing an implementation.
   const request = manager.request(key, "acme/late", { version: "1.0.0" }, true);
-  const publish = manager.publish(key, "tools/late", false, true);
+  const publish = manager.publish(key, "acme/late", false, true);
   const rejected = Promise.all([
     assert.rejects(request, refusedWith("aborted")),
     assert.rejects(publish, refusedWith("aborted")),

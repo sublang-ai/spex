@@ -79,8 +79,11 @@ test("playbook-library-77: a new playbook is authored, compiled, and enabled thr
   //    the rule, `triage` opened as the workspace
   //    (playbook-library-51/52/54).
   await expect(page.getByTestId("drafts-section")).toHaveCount(0);
-  const org = app.projectId!.split("/")[0]!;
-  await expect(page.getByTestId("new-playbook-org")).toHaveValue(org);
+  await expect(page.getByTestId("new-playbook-org")).toHaveValue(app.projectId!.split("/")[0]!);
+  // The org names the package and its folder, spex-packages/acme/triage
+  // (environments-10, playbook-library-51).
+  const org = "acme";
+  await page.getByTestId("new-playbook-org").fill(org);
   await expect(page.getByTestId("new-playbook-license")).toHaveValue("Apache-2.0");
   const idField = page.getByTestId("new-playbook-id");
   await idField.fill("Triage");
@@ -397,11 +400,11 @@ test("playbook-library-77: a new playbook is authored, compiled, and enabled thr
   await expect(card).toContainText("/triage");
   await expect(card.getByTestId("playbook-enabled-triage")).toHaveText("Enabled in the project");
   await expect(card.getByTestId("playbook-from-triage")).toHaveText(new RegExp(`^from\\s*${org}/triage 0\\.1\\.0\\s*· path$`));
-  await expect(card.getByTestId("enabled-commit")).toHaveText("Commit spex-packages/triage with your code");
+  await expect(card.getByTestId("enabled-commit")).toHaveText("Commit spex-packages/acme/triage with your code");
   await expect(workspace).toHaveCount(0);
   await expect(page.getByTestId("draft-row-triage").getByTestId("draft-chip")).toContainText("Enabled");
   const requested = page.getByTestId("environment-section").getByTestId(`env-package-${org}/triage`);
-  await expect(requested.getByTestId(`env-source-${org}/triage`)).toHaveText("path spex-packages/triage");
+  await expect(requested.getByTestId(`env-source-${org}/triage`)).toHaveText("path spex-packages/acme/triage");
   await expect.poll(() => app.readProjectConfig()).toContain("triage:");
   expect(app.readConfig()).toContain("dev.triager:");
   expect((await app.core.command("draft.list", {})).map((draft) => draft.id)).toEqual(["triage"]);
@@ -425,8 +428,10 @@ test("playbook-library-77: a new playbook is authored, compiled, and enabled thr
   await draftRow.getByTestId("draft-delete-secaudit").click();
   await draftRow.getByRole("button", { name: "Delete", exact: true }).click();
   await expect(draftRow).toHaveCount(0);
-  await expect(page.getByTestId("deleted-note")).toContainText("its spec package folder stays at spex-packages/secaudit");
-  expect(existsSync(join(app.projectDir, "spex-packages", "secaudit", "meta.yaml"))).toBe(true);
+  // Under the org the field stood at again, the project's default.
+  const defaultOrg = app.projectId!.split("/")[0]!;
+  await expect(page.getByTestId("deleted-note")).toContainText(`its spec package folder stays at spex-packages/${defaultOrg}/secaudit`);
+  expect(existsSync(join(app.projectDir, "spex-packages", defaultOrg, "secaudit", "meta.yaml"))).toBe(true);
   expect((await app.core.command("draft.list", {})).map((draft) => draft.id)).toEqual(["triage"]);
 
   // ── The example's Prefill opens the demo's draft in the Source tab's

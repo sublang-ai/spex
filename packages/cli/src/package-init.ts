@@ -29,8 +29,8 @@ export const PACKAGE_INIT_USAGE = `Usage: spex package init <org>/<name> [--skil
                          [--language <tag>] [--description <text>]
                          [--license <id>] [--move]
 
-Make spex-packages/<name>/ in the current directory from skill folders
-and/or a spec file, with no server:
+Make spex-packages/<org>/<name>/ in the current directory from skill
+folders and/or a spec file, with no server:
   --skill <folder>      An Agent Skills folder holding SKILL.md; repeatable
   --spec <file>         The spec file, named <name>.md
   --language <tag>      The artifacts' language (default en)
@@ -296,12 +296,12 @@ function manifestText(options: InitOptions, description: string, license: string
   return `${lines.join("\n")}\n`;
 }
 
-/** Whether the folder `outer` holds `spex-packages/<name>/` of the
- * working folder `cwd`, compared by real paths; a folder that cannot be
- * read holds nothing. */
-function holdsDestination(outer: string, cwd: string, name: string): boolean {
+/** Whether the folder `outer` holds `spex-packages/<org>/<name>/` of
+ * the working folder `cwd`, compared by real paths; a folder that cannot
+ * be read holds nothing. */
+function holdsDestination(outer: string, cwd: string, org: string, name: string): boolean {
   let path: string;
-  try { path = relative(realpathSync(outer), join(realpathSync(cwd), "spex-packages", name)); }
+  try { path = relative(realpathSync(outer), join(realpathSync(cwd), "spex-packages", org, name)); }
   catch { return false; }
   return path === "" || (path !== ".." && !path.startsWith(`..${sep}`) && !isAbsolute(path));
 }
@@ -320,15 +320,20 @@ export function packageInit(args: string[], cwd = process.cwd()): number {
     const pkg = `${org}/${name}`;
     if (options.skills.length === 0 && options.spec === undefined) refuse("Name at least one artifact: --skill <folder> or --spec <file>.");
 
-    const parent = join(cwd, "spex-packages");
+    // The org is a folder, as npm's scopes are, so two orgs' packages of
+    // one name stand apart (environments-10, DR-165).
+    const packages = join(cwd, "spex-packages");
+    const parent = join(packages, org);
     const destination = join(parent, name);
+    const packagesStat = lstatOrNull(packages);
+    if (packagesStat && !packagesStat.isDirectory()) refuse("spex-packages in the current directory is not a folder.");
     const parentStat = lstatOrNull(parent);
-    if (parentStat && !parentStat.isDirectory()) refuse("spex-packages in the current directory is not a folder.");
-    if (lstatOrNull(destination)) refuse(`spex-packages/${name}/ already exists; nothing was written.`);
+    if (parentStat && !parentStat.isDirectory()) refuse(`spex-packages/${org} in the current directory is not a folder.`);
+    if (lstatOrNull(destination)) refuse(`spex-packages/${org}/${name}/ already exists; nothing was written.`);
 
     const skills: SkillSource[] = [];
     for (const argument of options.skills) {
-      if (options.move && holdsDestination(resolve(cwd, argument), cwd, name)) refuse(`--move cannot move ${argument}: it holds spex-packages/${name}/.`);
+      if (options.move && holdsDestination(resolve(cwd, argument), cwd, org, name)) refuse(`--move cannot move ${argument}: it holds spex-packages/${org}/${name}/.`);
       const skill = readSkill(argument, cwd);
       if (skills.some((other) => other.id === skill.id)) refuse(`Two skills declare the id ${skill.id}; each skill needs its own name.`);
       if (options.spec !== undefined && skill.id === name) refuse(`The skill ${skill.id} has the spec's id ${name}; a package names each artifact once, so rename the skill or the package.`);
@@ -358,6 +363,7 @@ export function packageInit(args: string[], cwd = process.cwd()): number {
     // Everything is written into a staging folder beside the
     // destination, renamed into place whole; only then are moved skill
     // folders removed.
+    const madePackages = !packagesStat;
     const madeParent = !parentStat;
     mkdirSync(parent, { recursive: true });
     // Made as any folder is, not owner-only as a temporary one.
@@ -381,6 +387,7 @@ export function packageInit(args: string[], cwd = process.cwd()): number {
     } catch (error) {
       rmSync(staging, { recursive: true, force: true });
       if (madeParent) { try { rmdirSync(parent); } catch { /* holds something else now */ } }
+      if (madePackages) { try { rmdirSync(packages); } catch { /* holds something else now */ } }
       throw error;
     }
     // Each moved skill now stands in the package: its former folder goes.
@@ -392,7 +399,7 @@ export function packageInit(args: string[], cwd = process.cwd()): number {
       }
     }
 
-    const folder = `spex-packages/${name}`;
+    const folder = `spex-packages/${org}/${name}`;
     const made = [
       ...skills.map((skill) => `skill ${skill.id}`),
       ...(options.spec !== undefined ? [`spec ${name}`] : []),

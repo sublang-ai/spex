@@ -264,6 +264,7 @@ msgid "{id} is already an authoring session of another project; pick another id"
 msgstr "{id} is already an authoring session of another project; pick another id"
 
 #. Refusal: publishing reads a folder inside the repository's working folder
+#. Refusal: the environment's installed files stand in the repository's working folder, which this device does not hold
 #: src/environments.ts
 msgid "{key} has no working folder on this device"
 msgstr "{key} has no working folder on this device"
@@ -312,6 +313,11 @@ msgstr "{name} is in use elsewhere in {project}"
 #: src/space.ts
 msgid "{name} is kept under {host}; pick a group there"
 msgstr "{name} is kept under {host}; pick a group there"
+
+#. Refusal: a publish names its spec package as org/pkg, both lowercase kebab-case; {name} is what it named
+#: src/environments.ts
+msgid "{name} is not an org/pkg name"
+msgstr "{name} is not an org/pkg name"
 
 #. Refusal: removing a spec package this environment does not request
 #: src/environments.ts
@@ -388,6 +394,11 @@ msgstr "{path} holds {file}, which the clone's Git rules ignore, so it would not
 #: src/environments.ts
 msgid "{path} holds {file}, which the clone's sync refuses to share"
 msgstr "{path} holds {file}, which the clone's sync refuses to share"
+
+#. Refusal: the folder a publish of {name} reads holds another spec package, {held}, by its meta.yaml
+#: src/environments.ts
+msgid "{path} holds {held}, not {name}"
+msgstr "{path} holds {held}, not {name}"
 
 #. Refusal: a request by path in your own group's environment names a folder under Spex's own paths, such as sessions/ or skills/
 #: src/environments.ts
@@ -1842,6 +1853,11 @@ msgstr "no file at {path}"
 #: src/space.ts
 msgid "no folder at {path}"
 msgstr "no folder at {path}"
+
+#. Refusal: a publish names a spec package with no folder; {path} is where its folder would stand, its request's path or spex-packages/<org>/<pkg>
+#: src/environments.ts
+msgid "No folder holds {name}: {path} is not there"
+msgstr "No folder holds {name}: {path} is not there"
 
 #. Forge guidance where the project has no origin remote; the command stays as it is
 #: src/forge.ts

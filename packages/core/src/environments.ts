@@ -50,6 +50,7 @@ import {
   installedPackages,
   isGitSource,
   isInsidePath,
+  isPackageName,
   isPathRequest,
   isPathSource,
   isRegistryRequest,
@@ -1237,14 +1238,21 @@ export class EnvironmentManager {
 
   // -- publishing (environments-10) ------------------------------------------
 
-  /** `environment.publish`: the folder, at a path relative to the
-   * environment's path root (environments-2), read and checked as a
-   * release and the sign-in at its target confirmed before the reply;
-   * the upload runs after it. The target is the registry of the
-   * environment's instance, else the default instance's, uploaded to as
-   * that instance's account (environments-10, environments-17,
-   * DR-127). */
-  async publish(key: string, path: string, dryRun = false, strict = false): Promise<{ done: Promise<PublishedPackage | undefined>; preview: PublishPreview }> {
+  /** The folder a publish of `name` reads (environments-10): the
+   * folder of the environment's request by path for that name where it
+   * has one, else `spex-packages/<org>/<pkg>/` under the path root. */
+  publishFolder(key: string, name: string): string {
+    return this.pathRequests(key).get(name) ?? `spex-packages/${name}`;
+  }
+
+  /** `environment.publish` by name (environments-10): its folder — the
+   * environment's request by path for that name, else
+   * `spex-packages/<org>/<pkg>/` — read and checked as a release of that
+   * name and the sign-in at its target confirmed before the reply; the
+   * upload runs after it. The target is the registry of the
+   * environment's instance, uploaded to as that instance's account
+   * (environments-10, environments-17, DR-127, DR-165). */
+  async publish(key: string, name: string, dryRun = false, strict = false): Promise<{ done: Promise<PublishedPackage | undefined>; preview: PublishPreview }> {
     if (strict && this.stopped) throw stoppingError();
     this.cloneDir(key);
     const root = this.pathRoot(key);
@@ -1255,12 +1263,27 @@ export class EnvironmentManager {
         values: { key },
       }));
     }
+    if (!isPackageName(name)) {
+      throw new CoreError("invalid_request", i18n._({
+        id: "{name} is not an org/pkg name",
+        comment: "Refusal: a publish names its spec package as org/pkg, both lowercase kebab-case; {name} is what it named",
+        values: { name },
+      }));
+    }
+    const path = this.publishFolder(key, name);
     const folder = resolvePath(root, path);
     const inside = relative(resolvePath(root), folder);
     if (inside === "" || inside.startsWith("..") || isAbsolute(inside) || inside.split(sep).includes("..")) throw this.outside(path, this.isOwn(key));
     // Signed in at the target means holding a token its host has not
     // refused; a host that cannot be reached now fails the upload,
     // reported with its cause, rather than reading as signed out.
+    if (!isDirectory(folder)) {
+      throw new CoreError("invalid_request", i18n._({
+        id: "No folder holds {name}: {path} is not there",
+        comment: "Refusal: a publish names a spec package with no folder; {path} is where its folder would stand, its request's path or spex-packages/<org>/<pkg>",
+        values: { name, path },
+      }));
+    }
     const target = this.registryAt(this.registryOriginOf(key));
     if (!dryRun && (await this.tokenAt(target.origin).catch(() => "")) === null) {
       throw new CoreError("invalid_request", i18n._({
@@ -1284,6 +1307,16 @@ export class EnvironmentManager {
         }));
       }
       throw new CoreError("invalid_request", error instanceof Error ? error.message : String(error));
+    }
+    // The folder holds the package the publish names, or it is refused
+    // naming both (environments-10).
+    const held = `${manifest.org}/${manifest.name}`;
+    if (held !== name) {
+      throw new CoreError("invalid_request", i18n._({
+        id: "{path} holds {held}, not {name}",
+        comment: "Refusal: the folder a publish of {name} reads holds another spec package, {held}, by its meta.yaml",
+        values: { path, held, name },
+      }));
     }
     // The registry refuses a release lacking a field it requires; the
     // core says so first, naming it, the preview included

@@ -438,7 +438,7 @@ export function DraftRegisterTab({
             : i18n._({ id: "Enable", comment: "enable this playbook in this config" })}
         </button>
       </div>
-      <PublishControl repository={draft.projectId} path={draftPackagePath(draft)} target={publishTargetOf(space, draft.projectId)} onNavigate={onNavigate} />
+      <PublishControl repository={draft.projectId} name={draft.package ?? draft.id} path={draftPackagePath(draft)} target={publishTargetOf(space, draft.projectId)} onNavigate={onNavigate} />
     </div>
   );
 }

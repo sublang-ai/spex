@@ -184,6 +184,9 @@ function draftInfo(overrides: Partial<DraftInfo> = {}): DraftInfo {
     id: "triage",
     instance: INSTANCE,
     projectId: PROJECT_ID,
+    // The spec package under development, at spex-packages/acme/triage
+    // (environments-10).
+    package: "acme/triage",
     createdAt: now - 10 * HOUR,
     touchedAt: now - 9 * HOUR,
     firstLine: "# Triage",
@@ -653,16 +656,16 @@ describe("playbook-library-105: New playbook's Org and License, and the commit l
     activateLanguage(language);
     try {
       lists = playbookLists([
-        available({ id: "triage", package: "me/triage", version: "0.1.0", source: "path", repository: PROJECT_ID, roles: ["Triager"], enabled: ["project"] }),
+        available({ id: "triage", package: "acme/triage", version: "0.1.0", source: "path", repository: PROJECT_ID, roles: ["Triager"], enabled: ["project"] }),
       ]);
-      seed({ drafts: { triage: draftInfo({ state: "enabled", packagePath: "spex-packages/triage" }) }, revealPlaybook: "triage" });
+      seed({ drafts: { triage: draftInfo({ state: "enabled", packagePath: "spex-packages/acme/triage" }) }, revealPlaybook: "triage" });
       render(<LibrarySurface />);
       const card = await screen.findByTestId("playbook-card-triage");
       const line = await within(card).findByTestId("enabled-commit");
       expect(line.textContent).toBe(
-        language === "zh" ? "把 spex-packages/triage 和代码一起提交" : "Commit spex-packages/triage with your code",
+        language === "zh" ? "把 spex-packages/acme/triage 和代码一起提交" : "Commit spex-packages/acme/triage with your code",
       );
-      expect(line.querySelector("code")?.textContent).toBe("spex-packages/triage");
+      expect(line.querySelector("code")?.textContent).toBe("spex-packages/acme/triage");
       await vi.waitFor(() => expect(screen.getByTestId("playbook-card-triage").className).not.toContain("ring-2"), { timeout: 4000 });
       expect(within(screen.getByTestId("playbook-card-triage")).getByTestId("enabled-commit").textContent).toBe(line.textContent);
     } finally {
@@ -689,7 +692,7 @@ describe("playbook-library-63: Delete behind the inline confirm", () => {
     );
     await vi.waitFor(() => expect(screen.queryByTestId("draft-row-triage")).toBeNull());
     // The folder stays, and the surface says where.
-    const note = "Deleted triage; its spec package folder stays at spex-packages/triage";
+    const note = "Deleted triage; its spec package folder stays at spex-packages/acme/triage";
     expect((await screen.findByTestId("deleted-note")).textContent).toBe(note);
     expect(screen.getByTestId("library-live").textContent).toBe(note);
   });
@@ -719,13 +722,13 @@ describe("playbook-library-63: Delete behind the inline confirm", () => {
 
 describe("playbook-library-52: the workspace replaces the list", () => {
   test("the header carries the way back, the id with its spec package, and the chip; returning ends nothing", async () => {
-    renderWorkspace(draftInfo({ package: "me/triage" }), { view: foldView(THREAD) });
+    renderWorkspace(draftInfo({ package: "acme/triage" }), { view: foldView(THREAD) });
     expect(screen.queryByTestId("playbook-card-code")).toBeNull();
     const header = screen.getByTestId("authoring-workspace").querySelector("header")!;
     expect(screen.getByTestId("workspace-back").textContent).toContain("Playbooks");
     expect(header.textContent).toContain("triage");
-    expect(within(header).getByTestId("workspace-package").textContent).toBe("me/triage");
-    expect(within(header).getByTestId("workspace-package").title).toBe("spex-packages/triage");
+    expect(within(header).getByTestId("workspace-package").textContent).toBe("acme/triage");
+    expect(within(header).getByTestId("workspace-package").title).toBe("spex-packages/acme/triage");
     expect(within(header).getByTestId("draft-chip").textContent).toBe("Draft");
     // Both forms of the divider stand: the rule beside the panes and
     // the grip between them once they stack (DR-030, DR-041 §9).
@@ -834,7 +837,7 @@ describe("playbook-library-57/59/60: the right pane by the draft's state", () =>
 
   test("playbook-library-101: a compile the core refuses because another job writes the folder shows that refusal, Compile staying enabled", async () => {
     commandMock.mockImplementation(async (type: string) => {
-      if (type === "draft.compile") throw Object.assign(new Error("a compile is writing /work/spex-packages/triage/playbooks/en/triage; retry once it ends"), { code: "busy" });
+      if (type === "draft.compile") throw Object.assign(new Error("a compile is writing /work/spex-packages/acme/triage/playbooks/en/triage; retry once it ends"), { code: "busy" });
       if (type === "draft.list") return Object.values(useAppStore.getState().drafts);
       if (type === "compile.check") return { node: { ok: true, version: "v23.6.0", command: "node" }, slc: { ok: true, command: ["npx"] } };
       return null;
@@ -1263,7 +1266,7 @@ describe("playbook-library-55: the agent picker", () => {
 describe("playbook-library-56: the Source tab", () => {
   test("renders the markdown captioned with its path in the working folder and who changed it and when; Edit saves under the token", async () => {
     renderWorkspace(draftInfo());
-    expect(screen.getByTestId("source-path").textContent).toBe("spex-packages/triage/playbooks/en/triage/triage.md");
+    expect(screen.getByTestId("source-path").textContent).toBe("spex-packages/acme/triage/playbooks/en/triage/triage.md");
     expect(screen.getByTestId("source-caption").textContent).toBe("Updated 3m ago by the agent");
     expect(within(screen.getByTestId("source-markdown")).getByText("label").tagName).toBe("STRONG");
     fireEvent.click(screen.getByTestId("source-edit"));
@@ -1536,7 +1539,7 @@ describe("playbook-library-61: the Enable tab", () => {
       available({
         id: "triage",
         intent: "Triage a new issue",
-        package: "me/triage",
+        package: "acme/triage",
         version: "0.1.0",
         source: "path",
         repository: PROJECT_ID,
@@ -1551,11 +1554,11 @@ describe("playbook-library-61: the Enable tab", () => {
     await vi.waitFor(() => expect(screen.getByTestId("playbook-card-triage")).toBeTruthy());
     const card = screen.getByTestId("playbook-card-triage");
     expect(card.className).toContain("ring-2");
-    expect(within(card).getByTestId("playbook-from-triage").textContent).toBe("fromme/triage 0.1.0· path");
+    expect(within(card).getByTestId("playbook-from-triage").textContent).toBe("fromacme/triage 0.1.0· path");
     // [playbook-library-10] sessions started before must restart.
     expect(screen.getByTestId("enabled-note").textContent).toContain("restarted to use it");
     // [playbook-library-61] and the package folder is committed with the code.
-    expect(screen.getByTestId("enabled-commit").textContent).toBe("Commit spex-packages/triage with your code");
+    expect(screen.getByTestId("enabled-commit").textContent).toBe("Commit spex-packages/acme/triage with your code");
     expect(screen.getByTestId("library-live").textContent).toBe("Enabled /triage");
     // The session stays, to be worked on further and published; its
     // chip reads Enabled once the core says so.
@@ -1634,7 +1637,7 @@ describe("playbook-library-61: the Enable tab", () => {
 
 describe("playbook-library-93: Publish beneath the Enable form", () => {
   const PREVIEW = {
-    name: "me/triage",
+    name: "acme/triage",
     version: "0.1.0",
     files: ["meta.yaml", "playbooks/en/triage/triage.md", "playbooks/en/triage/triage.playbook/triage.fsm.ts"],
   };
@@ -1662,10 +1665,10 @@ describe("playbook-library-93: Publish beneath the Enable form", () => {
     fireEvent.click(within(publish).getByTestId("publish-button"));
     // The checks run first and upload nothing.
     await vi.waitFor(() =>
-      expect(commandMock).toHaveBeenCalledWith("environment.publish", { repository: PROJECT_ID, path: "spex-packages/triage", dryRun: true }),
+      expect(commandMock).toHaveBeenCalledWith("environment.publish", { repository: PROJECT_ID, name: "acme/triage", dryRun: true }),
     );
     const summary = await screen.findByTestId("publish-summary");
-    expect(summary.textContent).toContain("me/triage 0.1.0");
+    expect(summary.textContent).toContain("acme/triage 0.1.0");
     expect(summary.textContent).toContain("3 files upload:");
     expect([...within(summary).getByTestId("publish-files").querySelectorAll("li")].map((item) => item.textContent)).toEqual(PREVIEW.files);
 
@@ -1675,7 +1678,7 @@ describe("playbook-library-93: Publish beneath the Enable form", () => {
     fireEvent.click(screen.getByTestId("publish-button"));
     fireEvent.click(await screen.findByTestId("publish-confirm"));
     await vi.waitFor(() =>
-      expect(commandMock).toHaveBeenCalledWith("environment.publish", { repository: PROJECT_ID, path: "spex-packages/triage" }),
+      expect(commandMock).toHaveBeenCalledWith("environment.publish", { repository: PROJECT_ID, name: "acme/triage" }),
     );
     expect(commandMock.mock.calls.filter(([type, params]) => type === "environment.publish" && !params.dryRun)).toHaveLength(1);
 
@@ -1688,11 +1691,11 @@ describe("playbook-library-93: Publish beneath the Enable form", () => {
       deliverServerMessageForTests({
         type: "environment.state",
         repository: PROJECT_ID,
-        state: { ...CURRENT, published: { name: "me/triage", version: "0.1.0", url: "https://spex.example/me/triage/0.1.0" } },
+        state: { ...CURRENT, published: { name: "acme/triage", version: "0.1.0", url: "https://spex.example/acme/triage/0.1.0" } },
       });
     });
-    expect(screen.getByTestId("publish-done").textContent).toContain("Published me/triage 0.1.0");
-    expect(screen.getByTestId("publish-link").getAttribute("href")).toBe("https://spex.example/me/triage/0.1.0");
+    expect(screen.getByTestId("publish-done").textContent).toContain("Published acme/triage 0.1.0");
+    expect(screen.getByTestId("publish-link").getAttribute("href")).toBe("https://spex.example/acme/triage/0.1.0");
   });
 
   test("a refusal from the checks or the registry shows its issues in place", async () => {
@@ -1719,10 +1722,10 @@ describe("playbook-library-93: Publish beneath the Enable form", () => {
       deliverServerMessageForTests({
         type: "environment.state",
         repository: PROJECT_ID,
-        state: { ...CURRENT, error: "the registry refused me/triage 0.1.0: that version exists" },
+        state: { ...CURRENT, error: "the registry refused acme/triage 0.1.0: that version exists" },
       });
     });
-    expect(screen.getByTestId("publish-error").textContent).toBe("the registry refused me/triage 0.1.0: that version exists");
+    expect(screen.getByTestId("publish-error").textContent).toBe("the registry refused acme/triage 0.1.0: that version exists");
   });
 });
 

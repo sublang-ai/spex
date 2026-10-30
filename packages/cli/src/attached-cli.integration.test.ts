@@ -70,6 +70,9 @@ function standard(message: any, socket: any) {
 
 before(() => {
   mkdirSync(PROJECT); mkdirSync(NO_APP_HOME);
+  // The package folder `package publish packages/demo` names.
+  mkdirSync(join(PROJECT, "packages", "demo"), { recursive: true });
+  writeFileSync(join(PROJECT, "packages", "demo", "meta.yaml"), "format: 2\norg: fixture\nname: demo\nversion: 1.0.0\ndescription: Fixture\nlicense: Apache-2.0\nartifacts:\n  demo:\n    kind: skill\n    language: en\n");
   const packed = JSON.parse(npm(["pack", "--json", "--pack-destination", SCRATCH], ROOT))[0];
   assert(packed.files.some((f: any) => f.path === "dist/generated-protocol.js"));
   assert(!packed.files.some((f: any) => /(?:\.test\.|src\/|scripts\/)/.test(f.path)));
@@ -192,6 +195,8 @@ describe("attached packed CLI", () => {
       assert.deepEqual(requests.map((m) => m.request), [{ kind: "registry", version: "^1.0.0" }, { kind: "path", path: "packages/demo" }]);
       assert(commands.filter((m) => ["environment.request", "environment.remove", "environment.install", "environment.resolve"].includes(m.type)).every((m) => m.wait === true));
       const publication = commands.filter((m) => m.type === "environment.publish");
+      // Published by the name the folder's manifest gives (environments-10).
+      assert.deepEqual(publication.map((m) => m.name), ["fixture/demo", "fixture/demo"]); assert(publication.every((m) => m.path === undefined));
       assert.equal(publication.length, 2); assert.equal(publication[0].dryRun, true); assert.equal(publication[0].wait, undefined); assert.equal(publication[1].wait, true); assert.equal(publication[1].dryRun, undefined);
     } finally { await server.stop(); }
   });

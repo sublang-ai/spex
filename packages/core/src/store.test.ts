@@ -1262,7 +1262,7 @@ test("storage-23: authoring session encodings are written and read back exactly"
   const draft = drafts.create("triage", 1000, location, { org: "local", license: "MIT" }, "en");
   // The spec package under development stands in the working folder
   // with its manifest (environments-10, playbook-library-70).
-  const packageDir = join(workingFolder, "spex-packages", "triage");
+  const packageDir = join(workingFolder, "spex-packages", "local", "triage");
   assert.equal(drafts.draftDir("triage"), packageDir);
   assert.equal(drafts.sourcePath("triage"), join(packageDir, "playbooks", "en", "triage", "triage.md"));
   assert.match(readFileSync(join(packageDir, "meta.yaml"), "utf8"), /^format: 2\norg: local\nname: triage\nversion: 0\.1\.0\n/);
@@ -1271,7 +1271,7 @@ test("storage-23: authoring session encodings are written and read back exactly"
   // Creation mints the session's instance, a fresh UUID each time.
   assert.match(draft.instance, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   // The session's language is recorded with it (storage-23).
-  assert.deepEqual(JSON.parse(readFileSync(drafts.recordFile("triage"), "utf8")), { format: 1, id: "triage", instance: draft.instance, createdAt: 1000, touchedAt: 1000, package: "spex-packages/triage", language: "en", queued: [], failures: 0 });
+  assert.deepEqual(JSON.parse(readFileSync(drafts.recordFile("triage"), "utf8")), { format: 1, id: "triage", instance: draft.instance, createdAt: 1000, touchedAt: 1000, package: "spex-packages/local/triage", language: "en", queued: [], failures: 0 });
   const full: StoredDraft = {
     ...draft, touchedAt: 2000, queued: [{text: "next"}, {text: "after"}], failures: 2,
     compile: { at: 1500, by: "agent", outcome: "failed", phase: "gears2fsm", output: "✗ gears2fsm failed at x (2s)", questions: [{ id: "q1", question: "?", reason: "r", evidence: "e", choices: ["a", "b"] }], relay: "stopped", roles: ["Coder"], sourceSha256: "ab".repeat(32) },
@@ -1301,7 +1301,8 @@ test("storage-23: authoring session encodings are written and read back exactly"
   // A file without `language` reads as `en`, and its next write adds none.
   assert.equal(drafts.read("triage").language, undefined);
   assert.equal(drafts.language("triage"), "en");
-  assert.equal(drafts.sourcePath("triage"), join(packageDir, "playbooks", "en", "triage", "triage.md"));
+  // It keeps the package path it recorded (playbook-library-70).
+  assert.equal(drafts.sourcePath("triage"), join(workingFolder, "spex-packages", "triage", "playbooks", "en", "triage", "triage.md"));
   assert.match(derived, /^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   assert.equal(new DraftStore(() => [{ key: "elsewhere/proj-spex", authoringDir: otherDir, workingFolder: null }]).read("triage").instance, derived);
   const old = drafts.load("triage");

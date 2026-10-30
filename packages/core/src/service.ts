@@ -111,7 +111,7 @@ import { migrateManagedLibraryConfig } from "./config-migrate.js";
 import { resolveArtifacts } from "./artifacts.js";
 import { builtinPackage, loadBuiltinCatalog } from "./builtins.js";
 import { AuthorManager } from "./authoring.js";
-import { authoringLanguage, authoringManifest, DraftStore, draftPackagePath, newPackageDefaults } from "./drafts.js";
+import { authoringLanguage, authoringManifest, DraftStore, existingPackageFolder, isDraftPackagePath, newPackageDefaults, packageFolderFor } from "./drafts.js";
 import { EnvironmentManager, toRequest } from "./environments.js";
 import {
   INSTALL_RECORD,
@@ -1142,7 +1142,7 @@ export class CoreService {
 
   /** Playbook ids a new authoring session of a project may not take:
    * every playbook the project's or your own group's environment
-   * exports, but the one a folder `spex-packages/<id>/` left by a
+   * exports, but the one a folder `spex-packages/<org>/<id>/` left by a
    * deleted session exports, which the new session takes over
    * (playbook-library-51). */
   private reservedPlaybookIds(projectId: string): string[] {
@@ -1150,7 +1150,7 @@ export class CoreService {
     for (const key of new Set([projectId, this.store.home.own()])) {
       for (const resolution of Object.values(this.environments.lockOf(key)?.packages ?? {})) {
         for (const [exported, artifact] of Object.entries(resolution.exports)) {
-          const own = isPathSource(resolution.source) && key === projectId && resolution.source.path === draftPackagePath(artifact);
+          const own = isPathSource(resolution.source) && key === projectId && isDraftPackagePath(resolution.source.path, artifact);
           if (!own) { ids.add(exported); ids.add(artifact); }
         }
       }
@@ -3314,16 +3314,20 @@ export class CoreService {
         handles.add(controller);
         this.standaloneCompiles.set(command.playbookId, handles);
         try {
-          const packagePath = draftPackagePath(command.playbookId);
+          // The folder of this id standing already, else a new one under
+          // the project's default org, `spex-packages/<org>/<id>/`
+          // (environments-10); no one is asked here: the project's
+          // defaults stand, with no license where none is derived
+          // (playbook-library-69).
+          const standing = existingPackageFolder(project.path, command.playbookId);
+          const defaults = standing === null ? newPackageDefaults(project.id, project.path, await this.environments.publishableOrgs(project.id)) : null;
+          const packagePath = standing ?? packageFolderFor(project.path, defaults!.org, command.playbookId);
           const packageDir = join(project.path, ...packagePath.split("/"));
           // The language its manifest already names, else the project's
           // authoring language, else the home's (playbook-library-70).
           const language = authoringLanguage(project.path, packageDir, command.playbookId, this.homeLanguage());
           mkdirSync(join(packageDir, "playbooks", language), { recursive: true });
-          if (!existsSync(join(packageDir, "meta.yaml"))) {
-            // No one is asked here: the project's defaults stand, with
-            // no license where none is derived (playbook-library-69).
-            const defaults = newPackageDefaults(project.id, project.path, await this.environments.publishableOrgs(project.id));
+          if (defaults !== null && !existsSync(join(packageDir, "meta.yaml"))) {
             const fields = { org: defaults.org, ...(defaults.license !== null ? { license: defaults.license } : {}) };
             // A manifest made while the registry was asked stands.
             try {
@@ -3987,7 +3991,7 @@ export class CoreService {
       case "environment.publish": {
         // A dry run replies the inline summary and uploads nothing
         // (playbook-library-93); the upload reports through state.
-        const { done, preview } = await this.environments.publish(command.repository, command.path, command.dryRun === true, command.wait === true);
+        const { done, preview } = await this.environments.publish(command.repository, command.name, command.dryRun === true, command.wait === true);
         if (command.wait && !command.dryRun) {
           const published = await done;
           if (!published) throw new CoreError("internal", "Publication completed without a receipt");

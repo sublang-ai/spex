@@ -23,13 +23,13 @@ test("playbook-library-117: install a private known package with explicit requir
   const refusedName = `${refusedOrg}/unreadable`;
   const skill = "---\nname: note-reader\ndescription: Read a supplied note\n---\nRead the note without changes.\n";
   async function release(namespace: string, pkg: string, version: string) {
-    const path = `spex-packages/${namespace}-${pkg}`;
+    const path = `spex-packages/${namespace}/${pkg}`;
     const artifact = pkg === "notes" ? "note-reader" : "unreadable-reader";
     await makeRelease(join(app.projectDir, path), {
       format: 2, org: namespace, name: pkg, version, description: "Notes package", license: "MIT",
       artifacts: { [artifact]: { kind: "skill", language: "en" } },
     }, { [`skills/en/${artifact}/SKILL.md`]: skill.replaceAll("note-reader", artifact) });
-    await app.core.command("environment.publish", { repository: project.key, path });
+    await app.core.command("environment.publish", { repository: project.key, name: `${namespace}/${pkg}` });
     await expect.poll(async () => {
       const state = await app.core.command("environment.get", { repository: project.key });
       return state.busy === null ? `${state.published?.name}@${state.published?.version}` : "busy";
@@ -38,12 +38,12 @@ test("playbook-library-117: install a private known package with explicit requir
   for (const version of ["1.2.3", "1.2.4", "1.3.0"]) await release(org, "notes", version);
   await release(refusedOrg, "unreadable", "1.2.3");
   // A distinct exported name avoids an unrelated export-name collision.
-  const publicPath = "spex-packages/public-notes";
+  const publicPath = "spex-packages/public/notes";
   await makeRelease(join(app.projectDir, publicPath), {
     format: 2, org: "public", name: "notes", version: "1.0.0", description: "Public notes", license: "MIT",
     artifacts: { "public-reader": { kind: "skill", language: "en" } },
   }, { "skills/en/public-reader/SKILL.md": skill.replaceAll("note-reader", "public-reader") });
-  await app.core.command("environment.publish", { repository: project.key, path: publicPath });
+  await app.core.command("environment.publish", { repository: project.key, name: "public/notes" });
   await expect.poll(async () => (await app.core.command("environment.get", { repository: project.key })).published?.name).toBe("public/notes");
   registry.script.setPrivate(org, [instance.url]);
   registry.script.setPrivate(refusedOrg, []);

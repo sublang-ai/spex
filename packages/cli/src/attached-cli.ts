@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-import { resolve, isAbsolute, win32 } from "node:path";
+import { readFileSync } from "node:fs";
+import { join, resolve, isAbsolute, win32 } from "node:path";
 import { APP_GUIDANCE, AttachedClient, CliFailure, selectEndpoint } from "./attached-client.js";
+import { parseManifestText } from "./lib/environment/index.js";
 
 type Flags = Record<string, string | boolean>;
 type Invocation = { group: string; action: string; positional: string[]; flags: Flags; timeoutMs: number };
@@ -31,6 +33,17 @@ Packages: --project <registered-folder>, otherwise the exact current directory.
 Publishing is explicit; --dry-run checks without uploading.`;
 
 function usageError(message: string): never { throw new CliFailure(1, message); }
+
+/** The `<org>/<pkg>` a package folder's `meta.yaml` names, or the
+ * command refused before anything is sent. */
+function packageNameAt(folder: string): string {
+  let text: string;
+  try { text = readFileSync(join(folder, "meta.yaml"), "utf8"); }
+  catch { usageError("The package folder holds no meta.yaml."); }
+  const { manifest, issues } = parseManifestText(text);
+  if (!manifest) usageError(`The package folder's meta.yaml does not read: ${issues.map((issue) => issue.message).join("; ")}`);
+  return `${manifest.org}/${manifest.name}`;
+}
 function relativeFolder(value: string): string {
   if (!value || /[\x00-\x1f\x7f]/.test(value) || isAbsolute(value) || win32.isAbsolute(value) || value.split(/[\\/]/).includes(".."))
     usageError("Package folder must be a relative folder inside the selected project.");
@@ -158,7 +171,10 @@ export async function runAttached(args: string[], env = process.env): Promise<nu
         if (result.error) print(`Last environment error: ${result.error}`);
       } else if (action === "publish") {
         const dryRun = flags["dry-run"] === true;
-        const result = await client.command("environment.publish", { repository, path: positional[0], ...(dryRun ? { dryRun: true } : { wait: true }) });
+        // The core publishes by name (environments-10): the name the
+        // folder's manifest gives, its folder the request's path.
+        const name = packageNameAt(join(project.path, positional[0]!));
+        const result = await client.command("environment.publish", { repository, name, ...(dryRun ? { dryRun: true } : { wait: true }) });
         const receipt = dryRun ? result?.preview : result?.published;
         if ((dryRun ? result?.accepted !== true : result?.completed !== true) || !object(receipt?.instance) || typeof receipt.name !== "string" || typeof receipt.version !== "string" || typeof receipt.instance.origin !== "string") malformed();
         if (dryRun ? !Array.isArray(receipt.files) || receipt.files.some((f: any) => typeof f !== "string" && (!object(f) || typeof f.path !== "string")) : typeof receipt.url !== "string") malformed();
