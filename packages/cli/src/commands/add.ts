@@ -26,7 +26,7 @@ import {
 } from "../lib/environment/index.js";
 import { VersionConflictError } from "../lib/files.js";
 import { actualPath, Environment, registryCause, shown } from "./environment.js";
-import { gainedLines, leftOutLines, settle } from "./settle.js";
+import { gainedLines, leftOutLines, leftToAppLines, settle } from "./settle.js";
 import { parsed, Refusal, type Command } from "./run.js";
 
 /** Write one request into the environment's `spex.yaml` (environments-15):
@@ -57,7 +57,7 @@ export async function settleAndTell(env: Environment): Promise<void> {
   if (settled === null) return;
   const lines = gainedLines(env.root, settled);
   for (const name of settled.install.missingPaths) lines.push(`Missing ${name}: its folder is not at its path here`);
-  lines.push(...leftOutLines(settled.exported));
+  lines.push(...leftToAppLines(env.root, settled), ...leftOutLines(settled.exported));
   console.log(lines.length > 0 ? lines.join("\n") : "Nothing moved.");
 }
 

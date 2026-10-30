@@ -11,16 +11,7 @@
 import { existsSync, lstatSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import {
-  installedDir,
-  installedPackages,
-  isGitRequest,
-  isPathRequest,
-  packageRoot,
-  parseManifestText,
-  type Lock,
-  type Request,
-} from "../lib/environment/index.js";
+import { BUILTIN_PACKAGE_NAME, installedDir, installedPackages, isGitRequest, isPathRequest, packageRoot, parseManifestText, type Lock, type Request } from "../lib/environment/index.js";
 import { Environment } from "./environment.js";
 import { exportedIn, exportsOf, gitLocators, gitShown, installedState, projectFolders, sourceLabel, staleReasons, unnamedText, versionOf } from "./settle.js";
 import { parsed, type Command } from "./run.js";
@@ -53,7 +44,8 @@ function leftOut(env: Environment, lock: Lock, installed: Set<string>): string[]
     const state = installedState(env.root, lock, name, installed);
     const root = packageRoot(name, resolution, installedDir(env.root), env.root);
     if (state === "missing" || state === "not installed" || root === null || !existsSync(join(root, "meta.yaml"))) {
-      lines.push(`  ${name}: its files are not here`);
+      // The app's built-in is the app's to install (environments-7, cli-4).
+      lines.push(name === BUILTIN_PACKAGE_NAME ? `  ${name}: left to the app, which installs its built-in package at its next use` : `  ${name}: its files are not here`);
       continue;
     }
     const manifest = parseManifestText(readFileSync(join(root, "meta.yaml"), "utf8")).manifest;

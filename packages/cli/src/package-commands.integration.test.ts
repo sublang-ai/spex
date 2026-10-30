@@ -12,14 +12,14 @@
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { chmodSync, copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 
-import { ContentStore, publishRelease, readPublishableRelease, RegistryClient, seedBuiltinPackage } from "./lib/environment/index.js";
+import { ContentStore, parseLock, publishRelease, readPublishableRelease, RegistryClient, requestsDigest, seedBuiltinPackage, serializeLock, type RegistrySourceLock, type Resolution } from "./lib/environment/index.js";
 import { fileCredentialStore } from "./lib/git-host.js";
 import { makeRelease, startStandinRegistry, type ReleaseFixture, type StandinRegistry } from "./testing/index.js";
 
@@ -439,6 +439,67 @@ test("cli-15: the built-in spec package a lock holds installs from this device's
   copyFileSync(join(dir, "spex.lock"), join(second, "spex.lock"));
   assert.match(await okAt(home, second, "install"), /^Installed sublang\/playbooks 18\.1\.0$/m, "[cli-4] installed from the seed");
   assert.deepEqual(snapshot(join(second, ".spex", "packages")), snapshot(join(dir, ".spex", "packages")));
+});
+
+test("cli-15: a lock recording the app's built-in at a checksum no registry serves installs the rest and names the built-in as the app's", async () => {
+  // A real resolution of demo/tool, made in a folder of its own.
+  const made = workingFolder(join(SCRATCH, "app-made"));
+  await ok(made, "add", "demo/tool@^1.0.0");
+  const tool = parseLock(readFileSync(join(made, "spex.lock"), "utf8")).packages["demo/tool"]!;
+  const toolVersion = (tool.source as RegistrySourceLock).version.replace(/\./g, "\\.");
+  // The files as the app wrote them on a device of its own: the lock
+  // records sublang/playbooks resolved from that device's seed, at the
+  // checksum of the archive it packed there, which no registry serves;
+  // this home holds no seed (environments-7, environments-11).
+  const digest = (text: string): string => createHash("sha256").update(text).digest("hex");
+  const locked = (name: string, version: string, id: string, paths: string[]): Resolution => ({
+    source: { registry: registry.url, version, checksum: digest(`the archive of ${name} ${version} packed elsewhere`) },
+    requiredBy: [],
+    artifacts: { [id]: { language: "en", fallback: false } },
+    files: ["meta.yaml", ...paths].map((path) => ({ path, sha256: digest(`${name} ${path}`), executable: false })),
+    exports: { [id]: id },
+  });
+  const builtin = locked("sublang/playbooks", "18.1.0", "review", ["playbooks/en/review/review.md", "playbooks/en/review/review.playbook/review.registry.js"]);
+  // spex.yaml requesting each at a caret of its locked version, and the
+  // lock of it.
+  const write = (dir: string, packages: Record<string, Resolution>): string => {
+    const requests = Object.keys(packages).sort().map((name) => `  ${name}:\n    version: ^${(packages[name]!.source as RegistrySourceLock).version}\n`);
+    const text = `format: 1\nspace: ${registry.url}\npackages:\n${requests.join("")}`;
+    writeFileSync(join(dir, "spex.yaml"), text);
+    writeFileSync(join(dir, "spex.lock"), serializeLock({ format: 1, requests: requestsDigest(text), packages }));
+    return readFileSync(join(dir, "spex.lock"), "utf8");
+  };
+  const dir = workingFolder(join(SCRATCH, "app-written"));
+  const lockBytes = write(dir, { "demo/tool": tool, "sublang/playbooks": builtin });
+
+  const installed = await ok(dir, "install");
+  assert.match(installed, /^Left to the app: sublang\/playbooks 18\.1\.0, its built-in package, installed by the app at its next use$/m, "[cli-4] the built-in named as the app's");
+  assert.match(installed, new RegExp(`^Installed demo/tool ${toolVersion}$`, "m"), "[cli-4] the rest installed");
+  assert.doesNotMatch(installed, /^Left out /m, "[cli-4] the exports cover the installed packages alone");
+  assert.equal(readFileSync(join(dir, "spex.lock"), "utf8"), lockBytes, "[cli-4] the lock as written");
+  assert.ok(existsSync(join(dir, ".spex", "packages", "demo", "tool", "skills", "en", "tool", "SKILL.md")), "[cli-4] demo/tool under .spex/packages/");
+  assert.equal(existsSync(join(dir, ".spex", "packages", "sublang")), false, "[cli-4] the built-in left out");
+  for (const folder of [".claude", ".agents"]) assert.ok(existsSync(join(dir, folder, "skills", "tool", "SKILL.md")), `[cli-4] demo/tool exported into ${folder}/skills`);
+
+  const listed = await ok(dir, "list");
+  const row = (name: string, version: string, state: string): RegExp => new RegExp(`^  ${name.replace("/", "\\/")} +${version} +${host.replace(/\./g, "\\.")} +requested +${state}$`, "m");
+  assert.match(listed, row("sublang/playbooks", "18\\.1\\.0", "not installed"), "[cli-6] the built-in read not installed");
+  assert.match(listed, row("demo/tool", toolVersion, "installed"), "[cli-6] the rest installed");
+
+  // Again, it installs as it stands: the built-in named, nothing rewritten.
+  const before = stamps(dir);
+  assert.match(await ok(dir, "install"), /^Left to the app: sublang\/playbooks 18\.1\.0, /m, "[cli-4] named again");
+  assert.deepEqual(stamps(dir), before, "[cli-4] a second install rewrites no file");
+
+  // Any other spec package nothing serves fails the install naming it,
+  // installing nothing (environments-7).
+  const failing = workingFolder(join(SCRATCH, "app-written-gone"));
+  const gone = locked("demo/gone", "1.0.0", "gone", ["skills/en/gone/SKILL.md"]);
+  write(failing, { "demo/gone": gone, "demo/tool": tool, "sublang/playbooks": builtin });
+  const refused = await spex(failing, "install");
+  assert.equal(refused.code, 1, `${refused.stdout}${refused.stderr}`);
+  assert.match(refused.stderr, /^spex install: demo\/gone 1\.0\.0: no registry serves it at the locked checksum/m, "[cli-4] the ordinary package nothing serves named");
+  assert.equal(existsSync(join(failing, ".spex", "packages")), false, "[cli-4] nothing installed");
 });
 
 const APACHE = "\n                                 Apache License\n                           Version 2.0, January 2004\n";

@@ -6,7 +6,7 @@
 // with both versions, or that nothing moved.
 
 import { Environment } from "./environment.js";
-import { changeLine, leftOutLines, lockChanges, settle } from "./settle.js";
+import { changeLine, leftOutLines, leftToAppLines, lockChanges, settle } from "./settle.js";
 import { parsed, Refusal, type Command } from "./run.js";
 
 export const update: Command = async (args) => {
@@ -21,6 +21,6 @@ export const update: Command = async (args) => {
     .filter((change) => change.from !== change.to)
     .map((change) => changeLine({ name: change.name, from: change.from, to: change.to }));
   if (lines.length === 0) lines.push("Nothing moved.");
-  lines.push(...leftOutLines(settled.exported));
+  lines.push(...leftToAppLines(env.root, settled), ...leftOutLines(settled.exported));
   console.log(lines.join("\n"));
 };
