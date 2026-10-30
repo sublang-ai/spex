@@ -23,6 +23,9 @@ const CORE = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const CLI_PACKAGE = resolve(CORE, "../cli");
 const SCRATCH = realpathSync(mkdtempSync(join(tmpdir(), "spex-cli-sign-in-")));
 const HOME = join(SCRATCH, "home");
+/** A second fresh home, its first login at an instance other than the
+ * origin it is created with. */
+const OTHER_HOME = join(SCRATCH, "other-home");
 const WORK = join(SCRATCH, "work");
 const BOB = { id: "1002", login: "bob", displayName: "Bob" };
 
@@ -49,8 +52,8 @@ interface Run {
 
 /** The packed CLI on the scratch home, the first instance its default
  * where the home names none yet. */
-function spex(args: string[]): Run {
-  const env: NodeJS.ProcessEnv = { ...process.env, SPEX_HOME: HOME, SPEX_HOST_URL: first.url };
+function spex(args: string[], home = HOME): Run {
+  const env: NodeJS.ProcessEnv = { ...process.env, SPEX_HOME: home, SPEX_HOST_URL: first.url };
   delete env.SPEX_SERVER_URL;
   const proc = spawn(process.execPath, [CLI, ...args], { cwd: WORK, env, stdio: ["ignore", "pipe", "pipe"] });
   let stdout = "";
@@ -95,9 +98,9 @@ async function printedCode(run: Run, host: StandinHost): Promise<string> {
   return code;
 }
 
-const homeFile = (): string => join(HOME, "home.yaml");
+const homeFile = (home = HOME): string => join(home, "home.yaml");
 const credentialsFile = (): string => join(HOME, "local", "credentials.yaml");
-const readHome = (): any => parseYaml(readFileSync(homeFile(), "utf8"));
+const readHome = (home = HOME): any => parseYaml(readFileSync(homeFile(home), "utf8"));
 /** Every request both instances took so far. */
 const hostRequests = (): number => first.script.requests.length + second.script.requests.length;
 const readCredentials = (): any => existsSync(credentialsFile()) ? parseYaml(readFileSync(credentialsFile(), "utf8")) : null;
@@ -148,7 +151,9 @@ test("cli-17, cli-18: login, whoami and logout at two stand-in instances, with n
   // printed, the instance recorded as the default with its account once
   // the stand-in confirms, its token kept owner-only (cli-10).
   const signingIn = spex(["login"]);
-  first.script.approveDevice(await printedCode(signingIn, first));
+  const firstCode = await printedCode(signingIn, first);
+  assert.equal(existsSync(HOME), false, "nothing is written while the code is pending");
+  first.script.approveDevice(firstCode);
   const signedIn = await signingIn.done;
   assert.equal(signedIn.code, 0, signedIn.stderr);
   assert.match(signedIn.stdout, /Signed in at First as ada\. First is this device's default Space\.\n$/);
@@ -280,9 +285,26 @@ test("cli-17, cli-18: login, whoami and logout at two stand-in instances, with n
   assert.match(unrecordedDone.stderr, /^spex login: not signed in: .*home\.yaml.*; nothing recorded\n$/);
   assert.deepEqual(readCredentials().hosts[first.url], pairStood, "the former token is kept");
 
-  // No access or refresh secret anywhere in any output (cli-13).
+  // On another fresh home, made with the first instance's origin, the
+  // first login at the second makes the second the default (cli-10).
+  const otherIn = spex(["login", "--space", second.url], OTHER_HOME);
+  second.script.approveDevice(await printedCode(otherIn, second));
+  const otherDone = await otherIn.done;
+  assert.equal(otherDone.code, 0, otherDone.stderr);
+  assert.match(otherDone.stdout, /Signed in at Second as bob\. Second is this device's default Space\.\n$/);
+  const other = readHome(OTHER_HOME);
+  assert.equal(other.origin, first.url);
+  assert.deepEqual(other.instances.map((entry: any) => entry.origin), [second.url]);
+  const otherWho = await spex(["whoami"], OTHER_HOME).done;
+  assert.match(otherWho.stdout, /^127\.0\.0\.1:\d+ +Second +bob +\(default\)\n$/);
+
+  // No access or refresh secret, nor any device code, anywhere in any
+  // output (cli-13).
   const all = printed.join("\n");
   assert.doesNotMatch(all, /spex[ar]_/, "no secret printed");
   const stored = readCredentials().hosts[first.url];
   for (const secret of [stored.access, stored.refresh, former.access, former.refresh]) assert.ok(!all.includes(secret));
+  const deviceCodes = [...first.script.deviceCodes(), ...second.script.deviceCodes()];
+  assert.ok(deviceCodes.length >= 5, "every login's device code is known");
+  for (const code of deviceCodes) assert.ok(!all.includes(code), "no device code printed");
 });
