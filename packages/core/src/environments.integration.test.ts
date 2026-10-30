@@ -441,6 +441,44 @@ test("environments-9, environments-7, playbook-library-46: an installed playbook
   assert.ok(existsSync(join(links, "@sublang", "playbook")), "with every engine link");
 });
 
+test("environments-7, environments-26: environment.get finding a lock other than the one installed — a tree of another lock standing, as a Git checkout leaves it — installs that lock, and the next read finds it installed", { timeout: 180_000 }, async (t) => {
+  const registry = await startStandinRegistry({ dir: scratchDir("spex-env-use-registry-") });
+  t.after(() => registry.close());
+  for (const name of ["kit", "tool"]) {
+    await publishRelease(new RegistryClient({ url: registry.url }), await makeRelease(join(scratchDir(`spex-env-use-${name}-`), name), {
+      format: 2, org: "acme", name, version: "1.0.0", description: name, license: "Apache-2.0",
+      artifacts: { [name]: { kind: "skill", language: "en" } },
+    }, { [`skills/en/${name}/SKILL.md`]: `---\nname: ${name}\ndescription: ${name}\n---\n\n${name}.\n` }));
+  }
+  const dir = scratchDir("spex-env-use-");
+  const core = await startCore(dir, { hostUrl: registry.url });
+  t.after(() => core.stop());
+  const working = gitFolder(join(dir, "project"));
+  const project = await core.client.expectOk("project.register", { path: working });
+  const clone = clonePath(core.dataDir, project.id);
+  await settledProject(core.client, project.id);
+  const installed = (state: EnvironmentState, name: string): boolean => state.packages.some((pkg) => pkg.name === name && pkg.installed);
+  for (const name of ["acme/kit", "acme/tool"]) {
+    await core.client.expectOk("environment.request", { repository: project.id, name, request: { kind: "registry", version: "^1.0.0" }, wait: true });
+  }
+  // The lock of both, then the tree of kit alone installed beside it.
+  const both = { requests: readFileSync(join(clone, "spex.yaml")), lock: readFileSync(join(clone, "spex.lock")) };
+  await core.client.expectOk("environment.remove", { repository: project.id, name: "acme/tool", wait: true });
+  assert.ok(!existsSync(join(working, ".spex", "packages", "acme", "tool")), "the tree installed is kit's alone");
+  // A checkout brings the lock of both back by hand; no command is sent
+  // but the read.
+  writeFileSync(join(clone, "spex.yaml"), both.requests);
+  writeFileSync(join(clone, "spex.lock"), both.lock);
+  const mark = core.client.mark();
+  const read = await core.client.expectOk("environment.get", { repository: project.id });
+  assert.ok(!installed(read, "acme/tool") || read.busy !== null, "the read finds tool not installed yet");
+  const after = await core.client.environment(project.id, mark, (state) => state.busy === null && installed(state, "acme/tool"));
+  assert.ok(installed(after, "acme/kit") && installed(after, "acme/tool"), "[environments-7] the read installed the lock it found");
+  assert.ok(existsSync(join(working, ".spex", "packages", "acme", "tool", "skills", "en", "tool", "SKILL.md")), "tool's files stand under .spex/packages/");
+  assert.ok(existsSync(join(working, ".claude", "skills", "tool", "SKILL.md")), "and are exported");
+  assert.deepEqual(readFileSync(join(clone, "spex.lock")), both.lock, "installing from the lock resolves nothing");
+});
+
 test("environments-22 through a real core: retained files of another lock are not imported before a successful same-process resolve", { timeout: 120_000 }, async (t) => {
   const dir = scratchDir("spex-env-retained-module-");
   // Install the shipped release without loading its registries yet.

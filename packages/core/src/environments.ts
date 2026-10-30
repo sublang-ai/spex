@@ -200,8 +200,9 @@ interface CloneState {
   conflicts: { requests: FileVersion; conflicts: Conflict[] } | null;
   error: string | null;
   published?: { name: string; version: string; url: string };
-  /** The version of `spex.lock` the last use's read installed from
-   * (environments-26), so a read retries only once the lock changed. */
+  /** The version of `spex.lock` the last install, by any operation,
+   * was attempted from (environments-26), so a use's read installs only
+   * a lock other than it and retries no failure until the lock changed. */
   usedLock?: FileVersion;
   /** What the last export left out, with the working folder it exported
    * into: listed only while that folder is the one paired
@@ -887,6 +888,10 @@ export class EnvironmentManager {
       lock = result.lock;
     }
     if (lock === null) return;
+    // This version of the lock is the one an install was last attempted
+    // from: a use's read installs only a lock other than it
+    // (environments-26), so a failing install is not retried by a read.
+    state.usedLock = lockVersion;
     step("installing");
     let obsolete: VersionConflictError | null = null;
     try {
@@ -1167,22 +1172,24 @@ export class EnvironmentManager {
     return this.settle(key, "install", strict);
   }
 
-  /** A use's read (environments-26): `environment.get` finding a lock
-   * and no installed tree under the root's `.spex/` — a home of the
-   * former layout, a working folder this device never installed into —
-   * installs it from the lock (environments-7), once per version of the
-   * lock read, so a failing install is not retried by every read; it
-   * reports through state. A tree standing at another lock is left to
-   * the operations that install it. */
+  /** A use's read (environments-26, environments-7): `environment.get`
+   * finding a lock other than the one installed under the root's
+   * `.spex/` — none installed yet, as in a home of the former layout or
+   * a working folder this device never installed into, or a tree of
+   * another lock, as a hand edit or a Git checkout leaves — installs it
+   * from the lock, resolving first where no lock stands (environments-5),
+   * unless an install was already attempted from that version of the
+   * lock, so a failing install is not retried by every read; it reports
+   * through state. A stale lock installs nothing (environments-7). */
   use(key: string): void {
     const dir = this.store.repository(key)?.dir;
-    const root = this.rootOf(key);
-    if (!dir || root === null || existsSync(installedDir(root))) return;
+    if (!dir || this.rootOf(key) === null) return;
     if (this.clones.get(key)?.running.size || !this.needsSettle(key)) return;
     const state = this.cloneState(key);
     const version = fileVersion(join(dir, "spex.lock"));
     if (state.usedLock === version) return;
-    state.usedLock = version;
+    // With no lock, a read resolves once until a lock stands.
+    if (version === null) state.usedLock = null;
     void this.settle(key, "auto", false).catch(() => {});
   }
 
