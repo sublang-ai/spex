@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `@sublang/spex/environment`, `files`, `instance`, `git-host`,
   `home-file` and `words`, with the stand-in registry as
   `@sublang/spex/testing`.
+- `spex login`, `spex logout` and `spex whoami` sign this device in at
+  a Space by the device flow from the command line, sign it out, and
+  say who is signed in where, `--space <origin>` naming the Space, with
+  no running app.
 
 ### Changed
 
