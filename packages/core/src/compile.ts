@@ -44,7 +44,8 @@ function bundleNodePaths(): string[] {
 import { RUNTIME_ABI } from "@sublang/playbook/xstate-runtime";
 
 import { ARTIFACT_SCHEMAS, freshFileUrl, isValidRegistryEntry, REGISTRY_CONTRACT } from "./config.js";
-import { readVersioned, VersionConflictError, writeVersionedBytes } from "./files.js";
+import { ENGINE_LINKS_EXCLUDE, type InstallEngine } from "@sublang/spex/environment";
+import { readVersioned, VersionConflictError, writeVersionedBytes } from "@sublang/spex/files";
 import { i18n } from "./i18n.js";
 
 /** The packages a compile resolves from the playbook's own directory:
@@ -88,9 +89,9 @@ export function provisionEngineLinks(dir: string, modulePaths: string[] = bundle
 }
 
 /** Where a working folder's Git is told to ignore every playbook
- * artifact folder's engine links (playbook-library-12): a release-layout
- * `playbooks/<language>/<id>/` folder anywhere in it. */
-export const ENGINE_LINKS_EXCLUDE = "**/playbooks/*/*/node_modules/";
+ * artifact folder's engine links (playbook-library-12), the library's
+ * one pattern. */
+export { ENGINE_LINKS_EXCLUDE };
 
 /** The engine a registry module imports rather than carries
  * (playbook-library-14): each engine package and its subpaths. */
@@ -163,6 +164,17 @@ export async function prepareArtifactEngine(folder: string, id: string, modulePa
     return `replacing it failed: ${(error as Error).message}`;
   }
   return null;
+}
+
+/** The app's engine as an install prepares for it (playbook-library-46,
+ * DR-165): each installed playbook artifact's folder prepared, and a
+ * path source's folders given the engine links, which point into
+ * `modulePaths` — the app's own node_modules where omitted. */
+export function installEngine(modulePaths?: string[]): InstallEngine {
+  return {
+    prepare: (folder, id) => prepareArtifactEngine(folder, id, modulePaths),
+    link: (folder) => { provisionEngineLinks(folder, modulePaths); },
+  };
 }
 
 export const MIN_NODE_MAJOR = 23;

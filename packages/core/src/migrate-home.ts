@@ -17,7 +17,7 @@ import {
   foldFormerIntentActs, parseFormerBindings, parseFormerIntentLog, parseFormerPrefs, parseFormerRegistry, parsePrefs,
   parseProjectFile, writeIntentFile, type FormerIntent, type IntentFile,
 } from "./app-storage.js";
-import { isObject, need, readJsonFile, sha256, StorageFormatError, UUID, writeApplicationBytes, writeApplicationFile } from "./files.js";
+import { isObject, need, readJsonFile, sha256, StorageFormatError, UUID, writeApplicationBytes, writeApplicationFile } from "@sublang/spex/files";
 import { Home, repositoryNameFor } from "./home.js";
 import { i18n } from "./i18n.js";
 import { commitClone, gitEnvironment, initializeClone, validateStorageTree } from "./storage-git.js";

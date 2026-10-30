@@ -18,8 +18,8 @@
 import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
-import { knownFormat, writeApplicationBytes } from "./files.js";
-import { canonicalOrigin } from "./instance.js";
+import { knownFormat, writeApplicationBytes } from "@sublang/spex/files";
+import { canonicalOrigin } from "@sublang/spex/instance";
 
 /** One seat as its file holds it (storage-45): its server's name and
  * group, the endpoint and the bearer the server's admission answered, and

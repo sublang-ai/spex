@@ -28,7 +28,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, join, relative, resolve as resolvePath, sep } from "node:path";
 
-import { fileVersion, readVersioned, sha256, VersionConflictError, type FileVersion } from "./files.js";
+import { fileVersion, readVersioned, sha256, VersionConflictError, type FileVersion } from "@sublang/spex/files";
 import {
   AGENT_FOLDERS,
   BUILTIN_PACKAGE_NAME,
@@ -94,9 +94,11 @@ import {
   type RegistrySourceLock,
   type Request,
   type Requests,
-} from "./environment/index.js";
+} from "@sublang/spex/environment";
+import { shippedBuiltinPackage } from "./builtins.js";
+import { installEngine } from "./compile.js";
 import { i18n } from "./i18n.js";
-import { canonicalOrigin } from "./instance.js";
+import { canonicalOrigin } from "@sublang/spex/instance";
 import type { PlaybookModules } from "./config.js";
 import type { EnvironmentPackage, EnvironmentRequest, EnvironmentRequestSummary, EnvironmentState, PublishedPackage, PublishPreview } from "./protocol.js";
 import { CoreError } from "./session.js";
@@ -468,7 +470,7 @@ export class EnvironmentManager {
   /** The built-in spec package as a registry source, made once: it reads
    * and packs the shipped release once, not on every resolve. */
   private builtinSource(): RegistrySource {
-    this.builtinRegistry ??= builtinRegistrySource({ store: this.contentStore, cacheDir: this.cacheDir, shipped: this.options.builtin });
+    this.builtinRegistry ??= builtinRegistrySource({ store: this.contentStore, cacheDir: this.cacheDir, shipped: this.options.builtin === undefined ? shippedBuiltinPackage() : this.options.builtin });
     return this.builtinRegistry;
   }
 
@@ -783,7 +785,7 @@ export class EnvironmentManager {
         pathRoot,
         confined: this.isOwn(key),
         requestsText: read?.text ?? null,
-        ...(this.options.modulePaths ? { modulePaths: this.options.modulePaths } : {}),
+        engine: installEngine(this.options.modulePaths),
       });
       if (progress && report.installed.length > 0) progress.installed = true;
       // A module kept carrying the engine it was bundled with runs on

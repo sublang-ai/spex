@@ -50,9 +50,9 @@
 import { request } from "node:https";
 import { getCACertificates, rootCertificates, type TLSSocket } from "node:tls";
 import { WebSocket, type RawData } from "ws";
-import { BROWSER_SIGN_IN_TIMEOUT_MS, CredentialChanged, HostError, type GitHostClient, type HostServer, type HostTicket } from "./git-host.js";
+import { BROWSER_SIGN_IN_TIMEOUT_MS, CredentialChanged, HostError, type GitHostClient, type HostServer, type HostTicket } from "@sublang/spex/git-host";
 import { i18n } from "./i18n.js";
-import { canonicalOrigin } from "./instance.js";
+import { canonicalOrigin } from "@sublang/spex/instance";
 import { PROTOCOL_VERSION, type SeatRelayState, type SeatSignIn, type SeatState, type ServerInfo, type ServerListing } from "./protocol.js";
 import { fileSeatStore, placeOf, splitPlace, type SeatEntry, type SeatStore } from "./seats.js";
 import { CoreError } from "./session.js";

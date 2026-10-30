@@ -15,7 +15,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 
-import type { CredentialArgs } from "../environment/git-source.js";
+import type { CredentialArgs } from "@sublang/spex/environment";
 
 export interface GitHttpHost {
   url: string;

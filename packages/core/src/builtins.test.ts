@@ -7,10 +7,10 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { stringify } from "yaml";
 
-import { loadBuiltinCatalog } from "./builtins.js";
+import { builtinPackage, loadBuiltinCatalog } from "./builtins.js";
+import { installEngine } from "./compile.js";
 import type { LoadModule } from "./config.js";
 import {
-  builtinPackage,
   builtinRegistrySource,
   compositeRegistry,
   ContentStore,
@@ -22,7 +22,7 @@ import {
   resolve,
   seedBuiltinPackage,
   type ModuleLocation,
-} from "./environment/index.js";
+} from "@sublang/spex/environment";
 import { scratchDir } from "./testing/scratch.js";
 
 /** The built-in spec package seeded, resolved offline and installed in
@@ -42,7 +42,7 @@ async function installedBuiltins(): Promise<Map<string, ModuleLocation>> {
   assert.ok(result.ok);
   if (!result.ok) throw new Error("unreachable");
   // No lock stands on disk: the install expects none (DR-111).
-  await install({ cloneDir: clone, lock: result.lock, lockVersion: null, store, cache, registry, git: gitSource(cache), pathRoot: null, requestsText: text });
+  await install({ cloneDir: clone, lock: result.lock, lockVersion: null, store, cache, registry, git: gitSource(cache), pathRoot: null, requestsText: text, engine: installEngine() });
   return moduleLocations(result.lock, clone, null);
 }
 

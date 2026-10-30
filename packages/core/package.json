@@ -39,6 +39,7 @@
     "@lingui/core": "^6.7.0",
     "@sublang/cligent": "^0.36.1",
     "@sublang/playbook": "^18.1.0",
+    "@sublang/spex": "*",
     "better-sqlite3": "^12.11.1",
     "ws": "^8.18.0",
     "yaml": "^2.8.0",

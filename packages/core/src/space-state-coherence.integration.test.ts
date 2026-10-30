@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { canonicalOrigin } from "./instance.js";
+import { canonicalOrigin } from "@sublang/spex/instance";
 import type { StandinHost } from "./testing/standin-host.js";
 import { bareOf, clonePath, createSpaceHarness, hostFolder, hostKey, placementOf, repositoryOf } from "./testing/space-harness.js";
 

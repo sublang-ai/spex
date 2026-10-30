@@ -18,7 +18,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { credentialsPath } from "./git-host.js";
+import { credentialsPath } from "@sublang/spex/git-host";
 import { Home } from "./home.js";
 import { seatsPath } from "./seats.js";
 import { clonePath, createSpaceHarness, hostKey, instanceOf, OWN_KEY } from "./testing/space-harness.js";

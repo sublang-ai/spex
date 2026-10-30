@@ -8,7 +8,7 @@
 // (CORE-13), and record channels filtered by visibility at this
 // boundary (CORE-8/14).
 
-import { canonicalOrigin } from "./instance.js";
+import { canonicalOrigin } from "@sublang/spex/instance";
 import { AppletServer, isAppletPath } from "./applets.js";
 import { ApprovalBroker } from "./approvals.js";
 import {
@@ -85,7 +85,7 @@ import { StartedProcesses, StopBound } from "./process-tree.js";
 import { readStoredLanguage, Store, type SpexRepository } from "./store.js";
 import { UPLOAD_STAGING } from "./storage-git.js";
 import { foldDiagnostics, StorageFormatError, type RepairChecked, type StorageDiagnostic } from "./app-storage.js";
-import { fileVersion, listed, readVersioned, UUID, VersionConflictError, writeApplicationBytes } from "./files.js";
+import { fileVersion, listed, readVersioned, UUID, VersionConflictError, writeApplicationBytes } from "@sublang/spex/files";
 import { prepareStorageGitFiles } from "./storage-git.js";
 import {
   GitHubForgeAdapter,
@@ -109,12 +109,11 @@ import {
 } from "./config-edit.js";
 import { migrateManagedLibraryConfig } from "./config-migrate.js";
 import { resolveArtifacts } from "./artifacts.js";
-import { loadBuiltinCatalog } from "./builtins.js";
+import { builtinPackage, loadBuiltinCatalog } from "./builtins.js";
 import { AuthorManager } from "./authoring.js";
 import { authoringLanguage, authoringManifest, DraftStore, draftPackagePath, newPackageDefaults } from "./drafts.js";
 import { EnvironmentManager, toRequest } from "./environments.js";
 import {
-  builtinPackage,
   INSTALL_RECORD,
   isGitSource,
   isPathSource,
@@ -125,7 +124,7 @@ import {
   readManifest,
   writeExcludeBlock,
   type BuiltinPackage,
-} from "./environment/index.js";
+} from "@sublang/spex/environment";
 import { splitKey } from "./home.js";
 import type { AssignedRuntime, CommandResults, IntentInfo, InvalidPlaybookEntry, PlaybookAvailability, ProjectInfo, PublishPreview, RoleBindingSummary } from "./protocol.js";
 import {
@@ -145,7 +144,7 @@ import { canonicalHost, codeCredentialsPath, codeCredentialStore, isAdapterName,
 import { AGENT_CREDENTIAL_FORMS, SeatEnvironment, seatAdapterImports, seatCredentialHalf, type SeatCredentialSources } from "./seat-credentials.js";
 import { SpaceManager, type SpaceHost, type SpaceStepEvent } from "./space.js";
 import { Places } from "./places.js";
-import { GitHostClient, SEAT_ID_MAX, fileCredentialStore } from "./git-host.js";
+import { GitHostClient, SEAT_ID_MAX, fileCredentialStore } from "@sublang/spex/git-host";
 import { relayHostError } from "./space-groups.js";
 import { currentRuntime, withGitCredential } from "./git-credential.js";
 import { configureSeatGit } from "./seat-git.js";

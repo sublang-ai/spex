@@ -13,10 +13,10 @@
 
 import { lstatSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { writeApplicationBytes } from "./files.js";
+import { writeApplicationBytes } from "@sublang/spex/files";
 import { i18n } from "./i18n.js";
 import { orderRemotes, remoteOrderOf } from "./home.js";
-import { instanceFolder, isInstanceFolder, parseOrigin } from "./instance.js";
+import { instanceFolder, isInstanceFolder, parseOrigin } from "@sublang/spex/instance";
 
 /** The remote the reader names: the clone's one path placement, which
  * records no id (storage-34, space-5). */

@@ -5,7 +5,7 @@
 // turn record carries the control label but not whether it was a recovery
 // or an ending, so the core keeps that fact in the same durable stream.
 
-import { isText, isUuid } from "./files.js";
+import { isText, isUuid } from "@sublang/spex/files";
 import { i18n } from "./i18n.js";
 import { RESTORED_TOPIC, RESTORING_TOPIC, type AssignedRuntime, type FailureCause, type RestoredPosition, type RestoredRun, type TmuxPlayRecord } from "./protocol.js";
 

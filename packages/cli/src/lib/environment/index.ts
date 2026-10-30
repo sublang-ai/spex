@@ -21,8 +21,7 @@ export * from "./archive.js";
 export * from "./tar.js";
 export {
   builtinLock,
-  builtinPackage,
-  builtinsRoot,
+  stagedBuiltinPackage,
   prepareBuiltinEnvironment,
   rehomeBuiltinLock,
   builtinRegistrySource,

@@ -38,7 +38,7 @@ import type {
 } from "@sublang/spex-core";
 import { ARTIFACT_SCHEMAS, suppliedCompiler, templatePath } from "@sublang/spex-core";
 import { defaultRunCommand } from "../../packages/core/dist/forge.js";
-import { canonicalOrigin, instanceFolder, instanceSegmentOf } from "../../packages/core/dist/instance.js";
+import { canonicalOrigin, instanceFolder, instanceSegmentOf } from "@sublang/spex/instance";
 import {
   DEMO_CONFIG,
   authoringScript,

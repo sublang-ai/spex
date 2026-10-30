@@ -9,7 +9,7 @@ import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync,
 import { dirname, join } from "node:path";
 import { createSessionStore } from "@sublang/playbook/session-store";
 import { Home, isRepositoryKey } from "./home.js";
-import { isObject, readJsonFile, sha256, StorageFormatError, UUID, writeApplicationBytes, writeApplicationFile } from "./files.js";
+import { isObject, readJsonFile, sha256, StorageFormatError, UUID, writeApplicationBytes, writeApplicationFile } from "@sublang/spex/files";
 
 interface InputFile { path: string; sha256: string }
 interface ImportedSession { id: string; cwd: string; files: InputFile[]; retained: boolean; staged: boolean; repository?: string; complete: boolean }

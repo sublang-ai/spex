@@ -29,7 +29,7 @@ import { AUTHORING_SOURCE, authoringScript } from "./testing/authoring.js";
 import { STUB_SLC_RELEASE_FILE, stubSlcBlockingSource, stubSlcScriptedSource, stubSlcSource } from "./testing/stub-slc.js";
 import { DraftChangedError, DraftStore, legacyInstance } from "./drafts.js";
 import { Home } from "./home.js";
-import { instanceFolder } from "./instance.js";
+import { instanceFolder } from "@sublang/spex/instance";
 import type { ApplicationMedia } from "./media.js";
 import type {
   Command,
@@ -43,7 +43,7 @@ import type {
 } from "./protocol.js";
 import { scratchDir } from "./testing/scratch.js";
 import { rowsOf } from "./testing/space-harness.js";
-import { startStandinRegistry, type StandinRegistry } from "./testing/standin-registry.js";
+import { startStandinRegistry, type StandinRegistry } from "@sublang/spex/testing";
 
 // ---------------------------------------------------------------------------
 // Harness
