@@ -316,6 +316,13 @@ test("environments-34, environments-5, environments-12, environments-3, environm
   await environmentOf(home, rebound, (candidate) => installedFrom(candidate, BUILTIN_PACKAGE_NAME, second.url));
   assert.equal(registryOf(lockOf(home, rebound), BUILTIN_PACKAGE_NAME), second.url);
   assert.equal(spaceOf(home, rebound), second.url, "[environments-11] the pairing names the second as space");
+  // One joined at the first, the default instance, with its working
+  // folder paired names no space, locked at the first's origin
+  // (environments-11, environments-2).
+  const atFirst = await joinAt(home, first, "acme/at-first-spex", gitFolder("at-first"));
+  await environmentOf(home, atFirst, (candidate) => installedFrom(candidate, BUILTIN_PACKAGE_NAME, first.url));
+  assert.equal(registryOf(lockOf(home, atFirst), BUILTIN_PACKAGE_NAME), first.url);
+  assert.equal(spaceOf(home, atFirst), undefined, "[environments-11] a pairing at the default instance names no space");
 
   // A `space` that is no instance origin is refused naming it
   // (environments-2), the files kept as they stand.
@@ -835,6 +842,7 @@ test("environments-34, environments-11, storage-31: with the first, the default 
   // remote names, the second's, not the default instance's
   // (environments-11).
   assert.ok(parseRequests(readFileSync(join(ownClone(again.dataDir), "spex.yaml"), "utf8")).packages[BUILTIN_PACKAGE_NAME], "the built-in is requested");
+  assert.equal(spaceOf(again, HOST_OWN), second.url, "[environments-11] with space naming the second, not the default");
   assert.equal(registryOf(lockOf(again, HOST_OWN), BUILTIN_PACKAGE_NAME), second.url);
   await environmentOf(again, HOST_OWN, (candidate) => installedFrom(candidate, BUILTIN_PACKAGE_NAME, second.url));
 });

@@ -160,6 +160,12 @@ test("projects-21: removal deletes the clone behind a second confirm naming its 
   assert.deepEqual(refused.error.details, { units: 2 });
   assert.ok(existsSync(clone), "nothing is deleted before the second confirm");
 
+  // The environment's installed tree as the removal finds it: it stays
+  // with the folder byte for byte (environments-26).
+  const inSpex = ([path]: [string, string]): boolean => path === ".spex" || path.startsWith(`.spex${sep}`);
+  const spexBefore = new Map([...snapshot(folder)].filter(inSpex));
+  assert.ok(spexBefore.size > 1, "the installed tree stands under .spex/");
+
   // The second confirm removes it, announcing the session's removal.
   await client.ok("project.remove", { projectId: project.id, confirm: true });
   await client.until((m) => m.type === "session.removed" && m.sessionId === session.id);
@@ -179,7 +185,8 @@ test("projects-21: removal deletes the clone behind a second confirm naming its 
     // (environments-26); every other file and the Git state are as they
     // were.
     assert.equal(readFileSync(join(folder, ".spex", ".gitignore"), "utf8"), "*\n", "the environment's .spex/ stays");
-    const after = new Map([...snapshot(folder)].filter(([path]) => path !== ".spex" && !path.startsWith(`.spex${sep}`)));
+    assert.deepEqual(new Map([...snapshot(folder)].filter(inSpex)), spexBefore, "the installed tree stays as it was");
+    const after = new Map([...snapshot(folder)].filter((entry) => !inSpex(entry)));
     assert.deepEqual(after, before, "the working folder's files and Git state are as they were");
 
     // A project whose spex repository has reached the host goes on the

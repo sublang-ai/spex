@@ -994,7 +994,7 @@ test("environments-33 through real cores: a skill your own group requests by a p
   const refusals: [string, RegExp][] = [
     [".", /is not a folder below your own group's clone's root/],
     ["../elsewhere", /is not a relative folder inside the working folder or your own group's clone/],
-    ...["config", "sessions", "intents", "authoring", "placements", "packages", "skills", "local", ".git", ".spex-uploads", "spex.yaml", "spex.lock", "project.json", ".gitignore", ".gitattributes", ".spex-apply.json", ".lockfoo"]
+    ...["config", "sessions", "intents", "authoring", "placements", ".spex", "packages", "skills", "local", ".git", ".spex-uploads", "spex.yaml", "spex.lock", "project.json", ".gitignore", ".gitattributes", ".spex-apply.json", ".lockfoo"]
       .map((first): [string, RegExp] => [`${first}/notes`, kept]),
     // Compared without case after compatibility normalization.
     ["Sessions/notes", kept],
@@ -1674,12 +1674,15 @@ test("environments-25: a request is admitted while another's resolution is held,
     // A clone whose lock and installed files go, asked to resolve,
     // resolves from its files as they stand and installs (environments-5).
     rmSync(lockPath);
-    rmSync(join(clone, "packages"), { recursive: true, force: true });
+    const installedTree = join(project.path, ".spex", "packages");
+    assert.ok(existsSync(installedTree), "the installed files stand under the working folder's .spex/");
+    rmSync(installedTree, { recursive: true, force: true });
     mark = client.mark();
     await client.expectOk("environment.resolve", { repository: key });
     const resettled = await client.environment(key, mark, (state) => state.busy === null && state.packages.some((pkg) => pkg.name === "acme/lint" && pkg.installed));
     assert.ok(existsSync(lockPath), "the lock is resolved again");
     assert.ok(["acme/slow", "acme/lint"].every((name) => resettled.packages.some((pkg) => pkg.name === name && pkg.installed)));
+    assert.ok(["slow", "lint"].every((name) => existsSync(join(installedTree, "acme", name, "meta.yaml"))), "and installed again under .spex/packages/");
     assert.equal(resettled.error, null);
 
     // Once the core stops, strict environment work is refused before any write.
@@ -1705,7 +1708,7 @@ test("environments-21 through a real core: an install whose lock or requests cha
   const skillMd = (body: string): string => `---\nname: tidy\ndescription: The tidy skill\n---\n\n${body}\n`;
   // Each later release holds a subset of the first's file names.
   await kit("1.0.0", { "skills/en/tidy/SKILL.md": skillMd("one"), "skills/en/tidy/notes.txt": "notes\n" });
-  for (const [version, body] of [["1.1.0", "two"], ["1.2.0", "three"], ["1.3.0", "four"], ["1.4.0", "five"], ["1.5.0", "six"]] as const) await kit(version, { "skills/en/tidy/SKILL.md": skillMd(body) });
+  for (const [version, body] of [["1.1.0", "two"], ["1.2.0", "three"], ["1.3.0", "four"], ["1.4.0", "five"], ["1.5.0", "six"], ["1.6.0", "seven"]] as const) await kit(version, { "skills/en/tidy/SKILL.md": skillMd(body) });
   const held = heldFetch();
   const dir = scratchDir("spex-env-held-");
   const core = await startCore(dir, { hostUrl: registry.url, extra: { registryFetch: held.fetch } });
@@ -1883,6 +1886,42 @@ test("environments-21 through a real core: an install whose lock or requests cha
     mark = client.mark();
     await client.expectOk("environment.remove", { repository: key, name: "acme/local" });
     await client.environment(key, mark, (current) => current.busy === null && current.error === null && !current.packages.some((pkg) => pkg.name === "acme/local"));
+
+    // A working folder — the project's root (environments-26) — removed
+    // while the download is held is never made again, no staged tree
+    // outliving the install; then a command on a project with no working
+    // folder here is refused not_found before any write (environments-7,
+    // environments-15).
+    let folderDone = undefined as Promise<void> | undefined;
+    const requestOnce = manager.request;
+    manager.request = async (...args) => {
+      const admitted = await requestOnce.apply(manager, args);
+      folderDone = admitted.done;
+      return admitted;
+    };
+    try {
+      held.arm(download("1.6.0"));
+      await client.expectOk("environment.request", { repository: key, name: "acme/kit", request: { kind: "registry", version: "1.6.0" } });
+    } finally {
+      manager.request = requestOnce;
+    }
+    assert.ok(folderDone, "the request's operation was admitted");
+    await until(held.reached, 30_000, "the held download of 1.6.0");
+    rmSync(root, { recursive: true, force: true });
+    held.release();
+    await folderDone;
+    assert.equal(existsSync(root), false, "the install made no working folder at the root's address");
+    assert.deepEqual(existsSync(join(core.dataDir, "cache", "staging")) ? readdirSync(join(core.dataDir, "cache", "staging")) : [], [], "no staged tree outlives the install");
+    const noFolder = /has no working folder on this device/;
+    const yamlBefore = readFileSync(join(clone, "spex.yaml"));
+    await client.expectError("environment.request", { repository: key, name: "acme/kit", request: { kind: "registry", version: "1.0.0" } }, "not_found", noFolder);
+    await client.expectError("environment.remove", { repository: key, name: "acme/kit" }, "not_found", noFolder);
+    await client.expectError("environment.resolve", { repository: key, wait: true }, "not_found", noFolder);
+    await client.expectError("environment.install", { repository: key, wait: true }, "not_found", noFolder);
+    await assert.rejects(manager.installNow(key, false, { lockWritten: false, installed: false }), refusedWith("not_found"));
+    assert.deepEqual(readFileSync(join(clone, "spex.yaml")), yamlBefore, "nothing was written");
+    assert.equal(existsSync(root), false, "and no folder made");
+    gitFolder(root);
 
     // A clone removed while the download is held is never made again,
     // by the install or its exports. The request's own operation is
