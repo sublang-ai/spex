@@ -318,12 +318,12 @@ test("environments-34, environments-5, environments-12, environments-3, environm
   assert.equal(registryOf(lockOf(home, rebound), BUILTIN_PACKAGE_NAME), second.url);
   assert.equal(spaceOf(home, rebound), second.url, "[environments-11] the pairing names the second as space");
   // One joined at the first, the default instance, with its working
-  // folder paired names no space, locked at the first's origin
-  // (environments-11, environments-2).
+  // folder paired names the first as space too, locked at the first's
+  // origin (environments-11, environments-2).
   const atFirst = await joinAt(home, first, "acme/at-first-spex", gitFolder("at-first"));
   await environmentOf(home, atFirst, (candidate) => installedFrom(candidate, BUILTIN_PACKAGE_NAME, first.url));
   assert.equal(registryOf(lockOf(home, atFirst), BUILTIN_PACKAGE_NAME), first.url);
-  assert.equal(spaceOf(home, atFirst), undefined, "[environments-11] a pairing at the default instance names no space");
+  assert.equal(spaceOf(home, atFirst), first.url, "[environments-11] a pairing at the default instance names it as space");
 
   // A `space` that is no instance origin is refused naming it
   // (environments-2), the files kept as they stand.

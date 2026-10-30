@@ -118,7 +118,7 @@ export interface StoreOptions {
   /** Write the environment at `root` requesting the built-in spec
    * package, locked at `registryOrigin`, the environment's registry
    * (storage-6, environments-11, DR-127), and naming `space` as the
-   * environment's instance where that is not the home's default
+   * environment's instance wherever the spex repository is placed at one
    * (environments-2, DR-165): your own group's clone at every open,
    * before its first commit, and a new project's working folder at its
    * registration where it holds neither file (environments-26). The
@@ -689,9 +689,10 @@ export class Store {
       const placed = instanceOfClone(this.homeFile, this.deferred, key, () => this.remoteNameOf(dir, key));
       const defaultOrigin = canonicalOrigin(this.homeFile.defaultInstance().origin);
       const registryOrigin = placed ?? defaultOrigin;
-      // A clone placed at another instance than the default names it as
-      // its environment's instance (environments-11).
-      const space = placed !== null && canonicalOrigin(placed) !== defaultOrigin ? canonicalOrigin(placed) : null;
+      // A clone placed at an instance names it as its environment's
+      // instance, the default one included; one local only names none
+      // (environments-11).
+      const space = placed !== null ? canonicalOrigin(placed) : null;
       this.options.prepareRepository?.(root, key, registryOrigin, space);
       return true;
     }
