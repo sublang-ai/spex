@@ -22,12 +22,12 @@ import {
   type Request,
 } from "../lib/environment/index.js";
 import { Environment } from "./environment.js";
-import { exportedIn, exportsOf, installedState, projectFolders, sourceLabel, staleReasons, versionOf } from "./settle.js";
+import { exportedIn, exportsOf, gitLocators, gitShown, installedState, projectFolders, sourceLabel, staleReasons, unnamedText, versionOf } from "./settle.js";
 import { parsed, type Command } from "./run.js";
 
 function requestLabel(request: Request): string {
   if (isPathRequest(request)) return `path ${request.path}`;
-  if (isGitRequest(request)) return `git ${request.git.replace(/\/\/[^/@]*@/, "//")} at ${request.rev}${request.path ? ` (${request.path})` : ""}`;
+  if (isGitRequest(request)) return `git ${gitShown(request.git)} at ${request.rev}${request.path ? ` (${request.path})` : ""}`;
   return request.version;
 }
 
@@ -116,6 +116,6 @@ export const list: Command = async (args) => {
   const out = leftOut(env, lock, installed);
   lines.push(out.length > 0 ? "Left out:" : "Left out: nothing", ...out);
   const stale = staleReasons(env.root, lock, read?.text ?? null);
-  if (stale !== null) lines.push(`Lock: stale (${stale.join("; ")}); spex install resolves it again`);
+  if (stale !== null) lines.push(unnamedText(`Lock: stale (${stale.join("; ")}); spex install resolves it again`, gitLocators(read?.requests ?? null, lock)));
   console.log(lines.join("\n"));
 };

@@ -6,7 +6,7 @@
 // with both versions, or that nothing moved.
 
 import { Environment } from "./environment.js";
-import { leftOutLines, lockChanges, settle } from "./settle.js";
+import { changeLine, leftOutLines, lockChanges, settle } from "./settle.js";
 import { parsed, Refusal, type Command } from "./run.js";
 
 export const update: Command = async (args) => {
@@ -15,10 +15,11 @@ export const update: Command = async (args) => {
   if (env.readRequests() === null) throw new Refusal(`${env.root} holds no spex.yaml; spex add <org>/<pkg> makes one`);
   const settled = await settle(env, "resolve");
   if (settled === null) return;
-  const lines = lockChanges(env.root, settled.before, settled.lock).map((change) =>
-    change.from === null ? `Added ${change.name} ${change.to}`
-      : change.to === null ? `Removed ${change.name} ${change.from}`
-        : `Moved ${change.name} ${change.from} -> ${change.to}`);
+  // Each version moved, both named; a source changed at one version is
+  // no move of version (cli-5).
+  const lines = lockChanges(env.root, settled.before, settled.lock)
+    .filter((change) => change.from !== change.to)
+    .map((change) => changeLine({ name: change.name, from: change.from, to: change.to }));
   if (lines.length === 0) lines.push("Nothing moved.");
   lines.push(...leftOutLines(settled.exported));
   console.log(lines.join("\n"));

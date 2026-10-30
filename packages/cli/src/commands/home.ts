@@ -94,10 +94,10 @@ export function credentialsOf(dir: string, origin: string): CredentialStore {
 }
 
 /** The client of one instance, signing in as this device (git-host-3). */
-export function clientOf(origin: string, credentials: CredentialStore): GitHostClient {
+export function clientOf(origin: string, credentials: CredentialStore, onSignedOut?: () => void): GitHostClient {
   let device = "this device";
   try { device = hostname() || device; } catch { /* the label's fallback */ }
-  return new GitHostClient({ url: origin, label: `spex on ${device}`, credentials });
+  return new GitHostClient({ url: origin, label: `spex on ${device}`, credentials, ...(onSignedOut ? { onSignedOut } : {}) });
 }
 
 /** A host's answer in the CLI's words (git-host-11): what the instance

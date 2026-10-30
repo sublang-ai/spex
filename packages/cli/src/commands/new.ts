@@ -28,7 +28,7 @@ import { randomBytes } from "node:crypto";
 import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { settleAndTell, writeRequest } from "./add.js";
-import { Environment } from "./environment.js";
+import { actualPath, Environment } from "./environment.js";
 import { exportedIn, projectFolders } from "./settle.js";
 import { Refusal, type Command } from "./run.js";
 
@@ -292,7 +292,7 @@ function manifestText(options: InitOptions, description: string, license: string
  * nothing. */
 function holdsDestination(outer: string, root: string, org: string, name: string): boolean {
   let path: string;
-  try { path = relative(realpathSync(outer), join(realpathSync(root), "spex-packages", org, name)); }
+  try { path = relative(realpathSync.native(outer), join(realpathSync.native(root), "spex-packages", org, name)); }
   catch { return false; }
   return path === "" || (path !== ".." && !path.startsWith(`..${sep}`) && !isAbsolute(path));
 }
@@ -411,7 +411,7 @@ export const newPackage: Command = async (args) => {
   if (options.move) {
     for (const skill of skills) {
       for (const { folder: agentFolder } of projectFolders()) {
-        if (resolve(root, ...agentFolder.split("/"), skill.id) === skill.folder && exportedIn(root, agentFolder).includes(skill.id)) {
+        if (actualPath(resolve(root, ...agentFolder.split("/"), skill.id)) === actualPath(skill.folder) && exportedIn(root, agentFolder).includes(skill.id)) {
           console.log(`The skill ${skill.id} moved from ${agentFolder}/${skill.id}/ now stands there as Spex's export.`);
         }
       }
