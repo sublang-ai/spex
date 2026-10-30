@@ -12,8 +12,10 @@ const { execFileSync } = require("child_process");
 const pattern = process.argv[2] || "\\.test\\.js$";
 const regex = new RegExp(pattern);
 
-const files = readdirSync(join(__dirname, "..", "dist"))
+// Recurses into dist/, so the library's tests under dist/lib/ run too.
+const files = readdirSync(join(__dirname, "..", "dist"), { recursive: true })
   .filter((f) => regex.test(f))
+  .sort()
   .map((f) => join("dist", f));
 
 if (files.length === 0) {

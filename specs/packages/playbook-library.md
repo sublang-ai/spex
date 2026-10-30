@@ -32,7 +32,7 @@ While a spex repository's side of the Playbooks surface is shown, the surface sh
 | Control | Act |
 | --- | --- |
 | Add from registry | a search field over the registry of that side's environment, each result with its versions, Add requesting the chosen version at a caret [[environments-15](environments.md#environments-15)], and Add by name for a known package [[playbook-library-115](#playbook-library-115)] |
-| Add from folder, Add from Git | a request by path inside the environment's path root its state names [[environments-14](environments.md#environments-14)], offered while it names one, or by repository and rev, through the same command |
+| Add from folder, Add from Git | a request by path inside the environment's path root its state names [[environments-14](environments.md#environments-14)], offered while it names one, the field prefilled `spex-packages/<org>/<pkg>` as a package under development lies [[environments-10](environments.md#environments-10)], or by repository and rev, through the same command |
 | Resolve again | `environment.resolve`, offered while the lock is stale or a conflict stands |
 | Update | `environment.resolve`, offered on the built-in release line |
 | Install | `environment.install`, offered while files are missing |
@@ -158,7 +158,7 @@ When the user activates "New playbook" — at the Authoring section's foot, or f
 - "Org" and "License" stand filled with the project's defaults [[playbook-library-103](#playbook-library-103)], read as the field is shown for that project, and the person edits both freely — a default arriving after the person typed, or read again on a reconnect, fills only a field the person has not edited since the project was chosen;
 - an org outside the manifest's name rule — lowercase kebab-case of at most 64 characters [[environments-1](environments.md#environments-1)] — is refused in place naming the rule, and nothing is created; "New playbook" stays disabled while the id, the org or the license is empty;
 - an id naming an existing authoring session opens that session;
-- an existing spec package folder at `spex-packages/<id>/` in the working folder with no authoring session becomes the new session's package, so a folder brought in by Git can be worked on.
+- an existing spec package folder at `spex-packages/<org>/<id>/` in the working folder with no authoring session, `<org>` the org the creation names, becomes the new session's package, so a folder brought in by Git can be worked on.
 
 #### playbook-library-52
 
@@ -283,7 +283,7 @@ When the Boss activates an authoring session row's Delete, the Playbooks surface
 
 #### playbook-library-93
 
-While an authoring session's last compile succeeded and the home is signed in to the instance a publish from its project goes to — the project's instance, or the home's default instance where the project has none [[environments-10](environments.md#environments-10)] — the Enable tab shall offer "Publish" beneath the form, which publishes the spec package under development to that instance's registry as that instance's account [[environments-10](environments.md#environments-10)] after showing, inline, the actual destination instance origin, the package's name, version and the files it will upload with Publish and Cancel ([DR-104](../decisions/104-spec-package-format-and-client-environments.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
+While an authoring session's last compile succeeded and the home is signed in to the instance a publish from its project goes to — the environment's instance [[environments-2](environments.md#environments-2)] — the Enable tab shall offer "Publish" beneath the form, which publishes the spec package under development, named `<org>/<pkg>` [[environments-10](environments.md#environments-10)], to that instance's registry as that instance's account after showing, inline, the actual destination instance origin, the package's name, version and the files it will upload with Publish and Cancel ([DR-104](../decisions/104-spec-package-format-and-client-environments.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
 
 - a refusal from the core's checks or the registry shows its issues in place; success reads the published version with a link to its page at the registry;
 - a retained receipt from a previous publish does not establish success of a later attempt, and a later settled refusal remains visible even when its text repeats an earlier refusal ([DR-151](../decisions/151-publish-local-spec-packages.md));
@@ -291,7 +291,7 @@ While an authoring session's last compile succeeded and the home is signed in to
 
 #### playbook-library-113
 
-While an environment's current requests include a direct path source and the environment has a path root on this device [[environments-14](environments.md#environments-14)], the Playbooks surface shall offer Publish for that package's current request folder, using the environment's publish target and release checks [[environments-10](environments.md#environments-10)] and the preview, confirmation, sign-in guidance and outcome display of the authoring control [[playbook-library-93](#playbook-library-93)], without requiring an authoring session or compilation ([DR-151](../decisions/151-publish-local-spec-packages.md)):
+While an environment's current requests include a direct path source and the environment has a path root on this device [[environments-14](environments.md#environments-14)], the Playbooks surface shall offer Publish for that package, by its name, so the core publishes its current request folder [[environments-10](environments.md#environments-10)] under the environment's publish target and release checks and the preview, confirmation, sign-in guidance and outcome display of the authoring control [[playbook-library-93](#playbook-library-93)], without requiring an authoring session or compilation ([DR-151](../decisions/151-publish-local-spec-packages.md)):
 
 - registry, Git and built-in requests offer no publication of their installed copies;
 - the folder is the current request's path, not a path inferred from its displayed source or its older lock;
@@ -589,7 +589,7 @@ When an authoring session is created, opened, written, recorded, listed, or dele
 
 | Case | Behavior |
 | --- | --- |
-| create | make `<working folder>/spex-packages/<id>/` with, where the folder holds none, `meta.yaml` — `format: 2`, `org` and `license` as the creation names them [[playbook-library-51](#playbook-library-51)], `name` `<id>`, version `0.1.0`, `description` "The `<id>` playbook", and one `playbook` artifact `<id>` in the session's language — and `authoring/<id>.json` in the clone with a fresh instance; the session's language is the one the `meta.yaml` of a folder brought in [[playbook-library-51](#playbook-library-51)] already gives the playbook, else the project's authoring language where the working folder's `specs/meta.md` declares one by its marker line [[meta-27](../meta.md#meta-27)], else the home's interface language [[core-service-108](core-service.md#core-service-108)], recorded in the session file [[storage-23](storage.md#storage-23)], and the playbook's folder, its source file and the compile's folder [[playbook-library-12](#playbook-library-12)] follow it; refuse an id a playbook of either environment or an authoring session of any project holds, and, leaving it in place, a transcript of that id standing in the clone without its session file |
+| create | make `<working folder>/spex-packages/<org>/<id>/` [[environments-10](environments.md#environments-10)], `<org>` as the creation names it, with, where the folder holds none, `meta.yaml` — `format: 2`, `org` and `license` as the creation names them [[playbook-library-51](#playbook-library-51)], `name` `<id>`, version `0.1.0`, `description` "The `<id>` playbook", and one `playbook` artifact `<id>` in the session's language — and `authoring/<id>.json` in the clone with a fresh instance; the session's language is the one the `meta.yaml` of a folder brought in [[playbook-library-51](#playbook-library-51)] already gives the playbook, else the project's authoring language where the working folder's `specs/meta.md` declares one by its marker line [[meta-27](../meta.md#meta-27)], else the home's interface language [[core-service-108](core-service.md#core-service-108)], recorded in the session file [[storage-23](storage.md#storage-23)], and the playbook's folder, its source file and the compile's folder [[playbook-library-12](#playbook-library-12)] follow it; refuse an id a playbook of either environment or an authoring session of any project holds, and, leaving it in place, a transcript of that id standing in the clone without its session file |
 | open | serve the state, the source with its version token, and the stored records after a given sequence, then stream new ones |
 | write source | replace `<id>.md` atomically under the token, whatever runs beside it |
 | write | replace the session file only where, at the instant before the rename, it still holds the bytes read and records the instance the writer names; else refuse, changed meanwhile, writing nothing |
@@ -608,7 +608,7 @@ When a client sends `draft.defaults` for a project, the authoring store shall re
 
 | Field | Default |
 | --- | --- |
-| `org` | where the registry of the project's instance, or of the home's default instance [[storage-2](storage.md#storage-2)] where the project has none, lists orgs that instance's account may publish to [[environments-27](environments.md#environments-27)], the one whose path is the project's group — its spex repository key without any instance folder leading it [[storage-1](storage.md#storage-1)] and without the last segment — or an ancestor of it, else the first listed; where it lists none, the home is not signed in to that instance, or the registry gives no answer, the first `/`-separated segment of that key past any instance folder — `slbeta1` for `@spex.sublang.ai/slbeta1/workshop/graph-crate-spex` |
+| `org` | where the registry of the project's environment's instance [[environments-2](environments.md#environments-2)] lists orgs that instance's account may publish to [[environments-27](environments.md#environments-27)], the one whose path is the project's group — its spex repository key without any instance folder leading it [[storage-1](storage.md#storage-1)] and without the last segment — or an ancestor of it, else the first listed; where it lists none, the home is not signed in to that instance, or the registry gives no answer, the first `/`-separated segment of that key past any instance folder — `slbeta1` for `@spex.sublang.ai/slbeta1/workshop/graph-crate-spex` |
 | `license` | `Apache-2.0` where the working folder's `LICENSE`, past a byte order mark and leading whitespace, begins with "Apache License"; `MIT` where it begins with "MIT License"; else none |
 
 #### playbook-library-71
@@ -645,7 +645,7 @@ Where the core runs with the scripted fake adapter and a stub `slc`, when an aut
 
 #### playbook-library-110
 
-Where the core runs with the scripted fake adapter and a stub `slc`, and your own group's spex repository is paired with its own clone as its working folder, so an authoring session created in it keeps its spec package folder at `spex-packages/<id>` inside the clone, when that session compiles its playbook and `draft.register` names your own group, the test suite shall assert that the enabling is accepted: your own group's `spex.yaml` requests the spec package by that path, its lock resolves it there, and your own group's config holds the playbook's entry keyed by the derived roles [[playbook-library-7](#playbook-library-7)].
+Where the core runs with the scripted fake adapter and a stub `slc`, and your own group's spex repository is paired with its own clone as its working folder, so an authoring session created in it keeps its spec package folder at `spex-packages/<org>/<id>` inside the clone, when that session compiles its playbook and `draft.register` names your own group, the test suite shall assert that the enabling is accepted: your own group's `spex.yaml` requests the spec package by that path, its lock resolves it there, and your own group's config holds the playbook's entry keyed by the derived roles [[playbook-library-7](#playbook-library-7)].
 
 #### playbook-library-18
 
@@ -813,7 +813,7 @@ Where the Playbooks surface renders over a project through a client whose `draft
 - "Org" and "License" read the defaults replied for the project, and a reply with no license leaves "License" empty, "New playbook" and the example's prefill standing disabled until it is filled [[playbook-library-51](#playbook-library-51)] [[playbook-library-35](#playbook-library-35)];
 - an org of `Acme`, `acme_co`, `-acme` or 65 characters is refused in place naming the rule with nothing created, and Enter with an edited org and license creates the session with them [[playbook-library-51](#playbook-library-51)];
 - the example's prefill creates its session with the field's org and license [[playbook-library-35](#playbook-library-35)];
-- the enabled card's success line reads "Commit spex-packages/triage with your code" in English and "把 spex-packages/triage 和代码一起提交" in Chinese, the folder set as code, and still stands once the card's highlight is gone [[playbook-library-61](#playbook-library-61)].
+- the enabled card's success line reads "Commit spex-packages/acme/triage with your code" in English and "把 spex-packages/acme/triage 和代码一起提交" in Chinese, the folder set as code, and still stands once the card's highlight is gone [[playbook-library-61](#playbook-library-61)].
 
 #### playbook-library-111
 
@@ -911,7 +911,7 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 - a failing stub leaves a red phase with its output open, a "sent to the agent" system line, and the compiled tabs still disabled, then a second compile turns the chip "Compiled" with Gears rows and the Machine state list [[playbook-library-58](#playbook-library-58)] [[playbook-library-60](#playbook-library-60)];
 - a message sent during the compile queues with "Send next" and dispatches afterwards [[playbook-library-54](#playbook-library-54)];
 - Edit, Save, and a forced conflict behave as specified, and Paste's "Use as source" writes the file [[playbook-library-56](#playbook-library-56)];
-- the Enable tab opens prefilled from the proposal and Enable lists `/triage` as enabled with the chip reading "Enabled", the card's success line reading "Commit spex-packages/triage with your code", and the package requested by path on the project's side [[playbook-library-61](#playbook-library-61)] [[playbook-library-92](#playbook-library-92)];
+- the Enable tab opens prefilled from the proposal and Enable lists `/triage` as enabled with the chip reading "Enabled", the card's success line reading "Commit spex-packages/acme/triage with your code", and the package requested by path on the project's side [[playbook-library-61](#playbook-library-61)] [[playbook-library-92](#playbook-library-92)];
 - the agent picker offers "Captain" and each roster player, and a switch survives a reload with its system line [[playbook-library-55](#playbook-library-55)];
 - a reload restores the transcript, the source, and the compiled tabs [[playbook-library-62](#playbook-library-62)];
 - a session seeded with a compile still marked running when the shell booted opens with the chip "Interrupted", the band's interrupted line, Compile enabled, and no relay line in the thread [[playbook-library-59](#playbook-library-59)];

@@ -11,15 +11,23 @@
 // begins with. This module composes no reader-facing prose: a refusal
 // carries its reason, which the core phrases where it speaks.
 
-import { INSTANCE_FOLDER_PATTERN } from "./protocol.js";
-
 /** The instance a new home records unless `SPEX_HOST_URL` names another
  * (git-host-1). */
 export const DEFAULT_HOST_URL = "https://spex.sublang.ai";
 
-/** An instance's folder under `workspace/`, defined beside the key whose
- * first segment it may be. */
-export { INSTANCE_FOLDER_PATTERN };
+/** A DNS label in lowercase: letters, digits and `-`, neither first nor
+ * last a hyphen. */
+const HOST_LABEL = "[a-z0-9](?:[a-z0-9-]*[a-z0-9])?";
+/** A port from 1 to 65535, written without a leading zero. */
+const PORT = "(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])";
+
+/** An instance's folder under `workspace/` (DR-127): `@`, its host in
+ * lowercase — labels joined by single dots, none leading or trailing —
+ * and `_<port>` where its origin names a port or its scheme is `http`:
+ * `@spex.sublang.ai`, `@127.0.0.1_4100`. The core's protocol spells the
+ * same pattern for the keys it carries; a test of the core holds the two
+ * equal. */
+export const INSTANCE_FOLDER_PATTERN = new RegExp(`^@${HOST_LABEL}(?:\\.${HOST_LABEL})*(?:_${PORT})?$`);
 
 const LOOPBACK_V4 = /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;
 

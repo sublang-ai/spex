@@ -8,11 +8,28 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { stripLeadingComments } from "./artifacts.js";
 import { isValidRegistryEntry, type LoadModule } from "./config.js";
-import type { ModuleLocation } from "./environment/index.js";
+import { stagedBuiltinPackage, type BuiltinPackage, type ModuleLocation } from "@sublang/spex/environment";
 import type { BuiltinPlaybookInfo } from "./protocol.js";
+
+/** Where the core's build stages the built-in spec package, the app's
+ * seed (environments-11, DR-165). */
+export function builtinsRoot(): string {
+  return join(dirname(fileURLToPath(import.meta.url)), "..", "assets", "builtins");
+}
+
+/** The staged built-in spec package: the highest version staged. */
+export function builtinPackage(root: string = builtinsRoot()): BuiltinPackage {
+  return stagedBuiltinPackage(root);
+}
+
+/** The staged built-in spec package, or null where none is staged. */
+export function shippedBuiltinPackage(): BuiltinPackage | null {
+  try { return builtinPackage(); } catch { return null; }
+}
 
 /** The source text beside an installed playbook's module: `<id>.md` in
  * the artifact's folder, the module one or two levels below it. */

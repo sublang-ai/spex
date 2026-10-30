@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-import type { StoredCredential } from "../git-host.js";
+import type { StoredCredential } from "@sublang/spex/git-host";
 
 /**
  * A fetch whose answers matching a hold are kept from the client until

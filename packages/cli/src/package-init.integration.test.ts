@@ -94,7 +94,7 @@ before(async () => {
   const prefix = join(SCRATCH, "prefix");
   npm(["install", "--global", "--prefix", prefix, "--ignore-scripts", "--no-audit", "--no-fund", join(SCRATCH, packed.filename)], SCRATCH);
   CLI = join(prefix, process.platform === "win32" ? "node_modules" : "lib/node_modules", "@sublang/spex/dist/cli.js");
-  ({ readPublishableRelease } = await import(pathToFileURL(join(CORE, "dist/environment/index.js")).href));
+  ({ readPublishableRelease } = await import(pathToFileURL(join(ROOT, "dist/lib/environment/index.js")).href));
   const wss = new WebSocketServer({ host: "127.0.0.1", port: 0 });
   await once(wss, "listening");
   let connections = 0;

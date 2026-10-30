@@ -34,7 +34,7 @@ import { ArtifactFolderBusy, compilePlaybook, compilerAgentOf, type CompileResul
 import { subagentTuningOf, type ComposedConfig, type ResolvedAgent } from "./config.js";
 import { parseDirectives, type MalformedBlock } from "./directives.js";
 import { DEFAULT_AUTHORING_LANGUAGE, DraftChangedError, DraftStore, legacyInstance, type NewPackageFields, type StoredDraft, type StoredDraftCompile } from "./drafts.js";
-import { parseManifestText } from "./environment/format.js";
+import { parseManifestText } from "@sublang/spex/environment";
 import { i18n } from "./i18n.js";
 import type { ApplicationMedia, AssetPlace } from "./media.js";
 import type {

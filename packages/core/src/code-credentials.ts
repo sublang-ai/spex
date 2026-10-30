@@ -18,7 +18,7 @@
 import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
-import { closed, isObject, knownFormat, need, StorageFormatError, writeApplicationBytes } from "./files.js";
+import { closed, isObject, knownFormat, need, StorageFormatError, writeApplicationBytes } from "@sublang/spex/files";
 import { i18n } from "./i18n.js";
 import { adapterNameSchema, type AdapterName, type CredentialList } from "./protocol.js";
 import { AGENT_CREDENTIAL_FORMS } from "./seat-credentials.js";

@@ -46,7 +46,7 @@ import { KNOWN_PLAYER_ADAPTERS } from "@sublang/cligent/tmux-play";
 import { SUPPORTED_ARTIFACT_SCHEMAS } from "@sublang/playbook/xstate-runtime";
 import { seedConfigText } from "@sublang/playbook/seed-config";
 import { migrateConfigFileIfRetired } from "./config-migrate.js";
-import { readVersioned, sha256, VersionConflictError, writeVersionedBytes, type FileVersion } from "./files.js";
+import { readVersioned, sha256, VersionConflictError, writeVersionedBytes, type FileVersion } from "@sublang/spex/files";
 import { defaultOwnName, recordedOwnName } from "./home.js";
 import { i18n } from "./i18n.js";
 import { canonicalWritablePath } from "./permission-paths.js";

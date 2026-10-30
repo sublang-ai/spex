@@ -12,6 +12,8 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 - [DR-011](011-project-workspace.md) in the project's tabs: an installed applet stands as a tab of the project's workspace beside Start, Specs and Overview.
 - [DR-033](033-remote-gui-serving.md) and [DR-097](097-media-and-browser-tools-across-hosts.md) in the core's endpoint: beside its WebSocket, the endpoint answers HTTP reads under one capability path per open applet; every other content transfer stays as it is.
 
+Amended by [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) in where an installed applet stands: installed under the environment's `.spex/`.
+
 ## Context
 
 - DR-104 made `applets/<id>/` an artifact kind — "a browser-server application in its native layout; nothing more about applets is decided here". The core accepts and installs the files, the Playbooks surface lists the kind, the registry stores it, and nothing opens one.

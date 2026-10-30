@@ -12,8 +12,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 
-import { builtinPackage } from "../environment/builtins.js";
-import { playbookModuleCandidates } from "../environment/exports.js";
+import { builtinPackage } from "../builtins.js";
+import { playbookModuleCandidates } from "@sublang/spex/environment";
 
 /** Playbook id to the absolute path of its registry module, for every
  * playbook the config at `configPath` enables. */
