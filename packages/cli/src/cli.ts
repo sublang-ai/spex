@@ -6,14 +6,29 @@ import { lint } from "./lint.js";
 import { scaffold } from "./scaffold.js";
 import { ATTACHED_USAGE, runAttached } from "./attached-cli.js";
 import { packageInit } from "./package-init.js";
+import { add } from "./commands/add.js";
+import { install } from "./commands/install.js";
+import { list } from "./commands/list.js";
 import { login } from "./commands/login.js";
 import { logout } from "./commands/logout.js";
+import { remove } from "./commands/remove.js";
+import { search } from "./commands/search.js";
+import { update } from "./commands/update.js";
 import { whoami } from "./commands/whoami.js";
 import { runCommand, type Command } from "./commands/run.js";
 
 const USAGE = `Usage: spex <command> [options]
 
-Commands:
+Commands, on the environment of this folder (its spex.yaml, else its
+Git work tree's top level, else this folder):
+  add <org>/<pkg>[@<requirement>]                                  Request a spec package from the registry and install it
+  add <org>/<pkg> --path <folder>                                  Request the spec package in a folder and install it
+  remove <org>/<pkg>, rm                                           Drop a request and install what remains
+  install, i                                                       Install the lock, resolving it where missing or stale
+  update                                                           Resolve again from spex.yaml and install
+  list, ls                                                         Show the requests, the lock, the exports
+  search <query>                                                   Search the environment's registry
+
   scaffold [--update] [--lang <code>] [--agents <names>] [<path>]   Create the specs structure; --update refreshes its templates
   lint [<path>]                                                    Check the specs tree's structure, item IDs and citations
   login [--space <origin>] [--force]                               Sign this device in at a Space by the device flow
@@ -33,7 +48,10 @@ ${ATTACHED_USAGE}`;
 
 /** The commands run with the shared runner (cli-13): exit 0 on success,
  * 1 with the cause on standard error, 130 on an interrupt. */
-const COMMANDS: Record<string, Command> = { login, logout, whoami };
+const COMMANDS: Record<string, Command> = {
+  add, remove, rm: remove, install, i: install, update, list, ls: list, search,
+  login, logout, whoami,
+};
 
 /** The commands keeping their own contracts and exits. */
 const OWN: Record<string, (args: string[]) => void> = { scaffold, lint };
