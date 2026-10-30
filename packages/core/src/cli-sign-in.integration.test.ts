@@ -132,11 +132,11 @@ test("cli-17, cli-18: login, whoami and logout at two stand-in instances, with n
   assert.equal(help.code, 0);
   for (const command of ["login", "logout", "whoami"]) assert.match(help.stdout, new RegExp(`^  ${command} \\[--space <origin>\\]`, "m"));
 
-  // A fresh home lists no instance: whoami prints none and writes
-  // nothing (cli-12).
+  // A fresh home lists no instance: whoami says none is signed in and
+  // where login goes, and writes nothing (cli-12).
   const fresh = await spex(["whoami"]).done;
   assert.equal(fresh.code, 0, fresh.stderr);
-  assert.equal(fresh.stdout, "");
+  assert.match(fresh.stdout, /^No Space signed in on this device; spex login signs in at 127\.0\.0\.1:\d+\.$/m);
   assert.equal(existsSync(HOME), false, "whoami writes no home");
 
   // A refused origin exits 1 with the cause on standard error, nothing

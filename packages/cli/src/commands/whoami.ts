@@ -4,8 +4,9 @@
 // `spex whoami [--space <origin>]` (cli-12): each instance the home
 // lists, or the one named, as its origin's host with its display name
 // where the home holds one, the login signed in there or that it is
-// signed out, and the default marked — read from `home.yaml` alone,
-// asking no instance and printing no secret.
+// signed out, and the default marked — or, listing none, that none is
+// signed in — read from `home.yaml` alone, asking no instance and
+// printing no secret.
 
 import { instanceAt, type HomeInstance } from "../lib/home-file.js";
 import { defaultInstance, homeDir, hostOf, namedInstance, readHome, signedIn } from "./home.js";
@@ -18,8 +19,11 @@ export const whoami: Command = async (args) => {
   const shown: HomeInstance[] = values.space !== undefined
     ? [namedInstance(home, values.space)]
     : home?.instances ?? [];
-  if (shown.length === 0) return;
   const defaultOrigin = defaultInstance(home).origin;
+  if (shown.length === 0) {
+    console.log(`No Space signed in on this device; spex login signs in at ${hostOf(defaultOrigin)}.`);
+    return;
+  }
   const rows = shown.map((entry) => [
     hostOf(entry.origin),
     entry.displayName ?? "",

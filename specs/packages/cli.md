@@ -83,8 +83,8 @@ When `spex publish [<org>/<pkg>] [--dry-run]` runs, the CLI shall publish the pa
 When `spex login [--space <origin>]` runs, the CLI shall sign this device in at the instance named, else the home's default instance [[storage-2](storage.md#storage-2)], by the device flow, printing the verification URL and the code to enter there and waiting until the instance confirms or the code expires [[git-host-3](git-host.md#git-host-3)], then record the instance in `home.yaml` with its account — the first instance recorded becoming the default — and keep its app token in the credential store [[storage-19](storage.md#storage-19)] ([DR-165](../decisions/165-one-package-manager-hosted-by-the-cli-and-the-app.md)):
 
 - an origin that is no instance origin [[storage-2](storage.md#storage-2)], and a home file that will not read, each refuse the command before anything is written;
-- a device already signed in there is told so and signed in again only with `--force`;
-- an expired or denied code fails naming it, nothing recorded.
+- a device already signed in there is told so and signed in again only with `--force`, the token it replaces revoked once the new one is recorded;
+- an expired or denied code, and a sign-in whose record fails, each fail naming it with nothing recorded, the token held before kept.
 
 #### cli-11
 
@@ -92,7 +92,7 @@ When `spex logout [--space <origin>]` runs, the CLI shall revoke this device at 
 
 #### cli-12
 
-When `spex whoami [--space <origin>]` runs, the CLI shall print each instance the home lists, or the one named, as its origin's host with its display name where the home read one, the login signed in there or that it is signed out, the default marked, and no secret.
+When `spex whoami [--space <origin>]` runs, the CLI shall print each instance the home lists, or the one named, as its origin's host with its display name where the home read one, the login signed in there or that it is signed out, the default marked, and no secret, and where the home lists none and none is named, that no Space is signed in and `spex login` signs in at the default instance [[storage-2](storage.md#storage-2)].
 
 ### Outcomes
 
@@ -133,7 +133,7 @@ When the packed CLI runs `publish` against the stand-in registry answering for t
 
 #### cli-17
 
-When the packed CLI runs `login`, `whoami` and `logout` against two instances of the core's stand-in host, the integration suite shall assert: `login` prints the verification URL and code, records the first instance in `home.yaml` as the default with its account once the stand-in confirms, and keeps the token in `local/credentials.yaml` owner-only [[cli-10](#cli-10)]; `login --space` at the second records it after the first, not as the default, a second `login` at a signed-in instance reports it and `--force` signs in again, and a denied code records nothing [[cli-10](#cli-10)]; `whoami` names both with the default marked and no secret [[cli-12](#cli-12)]; `logout --space` at the second revokes the device there and marks it signed out, and an instance not listed is refused [[cli-11](#cli-11)].
+When the packed CLI runs `login`, `whoami` and `logout` against two instances of the core's stand-in host, the integration suite shall assert: `login` prints the verification URL and code, records the first instance in `home.yaml` as the default with its account once the stand-in confirms, and keeps the token in `local/credentials.yaml` owner-only [[cli-10](#cli-10)]; `login --space` at the second records it after the first, not as the default, a second `login` at a signed-in instance reports it and `--force` signs in again, the instance listing the device once, and a denied code records nothing [[cli-10](#cli-10)]; `whoami` names both with the default marked and no secret, and on a fresh home that no Space is signed in [[cli-12](#cli-12)]; `logout --space` at the second revokes the device there and marks it signed out, and an instance not listed is refused [[cli-11](#cli-11)].
 
 #### cli-18
 
