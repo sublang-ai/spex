@@ -1610,7 +1610,9 @@ test("projects-18: real scaffolding uses the requested language or the core's la
       });
       assert.match(readFileSync(join(path, "specs", "meta.md"), "utf8"),
         new RegExp(`Authoring language: ${requested ?? "zh"}`));
-      assert.equal(execFileSync("git", ["status", "--porcelain"], { cwd: path, encoding: "utf8" }).trim(), "");
+      // Every generated file committed; the environment pairing wrote at
+      // the root is the reader's to commit (environments-26).
+      assert.equal(execFileSync("git", ["status", "--porcelain"], { cwd: path, encoding: "utf8" }).trim(), "?? spex.lock\n?? spex.yaml");
     }
   } finally {
     client.close();
@@ -1857,7 +1859,10 @@ test("PROJ: work-tree validation, create flow, forge states, removal", async () 
     projectId: created.id,
   });
   assert.ok(status.branch.length > 0);
-  assert.equal(status.dirty, false);
+  // The generated files are committed; the environment the pairing
+  // wrote at the root waits for the reader's commit (environments-26).
+  assert.equal(status.dirty, true);
+  assert.equal(execFileSync("git", ["status", "--porcelain"], { cwd: created.path, encoding: "utf8" }).trim(), "?? spex.lock\n?? spex.yaml");
   const licensing = readFileSync(
     join(created.path, "specs", "packages", "licensing.md"),
     "utf-8",
@@ -4178,7 +4183,9 @@ test("core-service-77: continuation observations guard project inputs and preser
     if (context && id === session.id) await afterValidation?.();
     return result;
   }};
-  const lock = join(repository.dir, "spex.lock");
+  // The project's lock stands at its working folder's root
+  // (environments-26).
+  const lock = join(harness.projectDir, "spex.lock");
   const lockBytes = readFileSync(lock);
   let edits = 0;
   const editLock = (): void => {writeFileSync(lock, Buffer.concat([lockBytes, Buffer.from(`\n# concurrent edit ${++edits}\n`)]));};
@@ -4890,7 +4897,7 @@ test("playbook-library-32: compile.run binds derived roles however the form case
   // project's default org (playbook-library-69); its config entry
   // binds each derived role by its own id, and names no module.
   const clone = clonePath(harness.dataDir, project.id);
-  assert.match(readFileSync(join(clone, "spex.yaml"), "utf8"), new RegExp(`${org}/pair:\\n\\s+path: spex-packages/${org}/pair\\n`));
+  assert.match(readFileSync(join(harness.projectDir, "spex.yaml"), "utf8"), new RegExp(`${org}/pair:\\n\\s+path: spex-packages/${org}/pair\\n`));
   const config = readFileSync(join(clone, "config", "playbook.config.yaml"), "utf8");
   const start = config.indexOf("  pair:\n");
   assert.ok(start >= 0, "the pair entry is written");

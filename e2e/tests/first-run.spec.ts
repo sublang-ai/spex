@@ -244,10 +244,12 @@ test("projects-28: the palette adds, refuses, switches, and the Overview removes
   await expect(overview.getByText(/no github origin remote/i).first()).toBeVisible();
   await expect(page.getByText(/\bforge\b/i)).toHaveCount(0);
 
-  // Removal confirms with Remove and Keep; the clone holds records that
-  // never reached the host, so a second confirm names their count; then
-  // the project leaves the sidebar, its clone is deleted, and the
-  // working folder stays (projects-9).
+  // Removal confirms with Remove and Keep; the clone holds a record that
+  // never reached the host — an intent queued here, its environment
+  // standing in the working folder (environments-26) — so a second
+  // confirm names their count; then the project leaves the sidebar, its
+  // clone is deleted, and the working folder stays (projects-9).
+  await app.core.command("intent.queue", { projectId: key, text: "Keep the demo tidy" });
   await overview.getByRole("button", { name: "Remove project" }).click();
   await expect(overview).toContainText("Remove from Spex? The repo stays on disk.");
   await expect(overview.getByRole("button", { name: "Keep", exact: true })).toBeVisible();
