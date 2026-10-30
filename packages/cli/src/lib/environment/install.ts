@@ -671,6 +671,10 @@ export async function prepareEnvironment(options: PrepareOptions): Promise<Insta
   const kept = await prepareInstalled(installedDir(root), names, lock, engine, (folder) => folder, true);
   const playbooks = pathSourcePlaybooks(lock, pathRoot);
   try {
+    // Your own group's path sources are confined as an install confines
+    // them (environments-32): one refused takes no link, nothing linked
+    // outside what the clone syncs.
+    if (options.confined === true && pathRoot !== null) await assertConfined(lock, pathRoot);
     excludeEngineLinks(pathRoot, playbooks, options.confined === true);
     linkPathSources(playbooks, engine);
   } catch (error) {
