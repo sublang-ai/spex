@@ -26,7 +26,9 @@ function collect(dir) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) out.push(...collect(path));
-    else if (regex.test(entry.name)) out.push(relative(root, path));
+    // Only test modules: a filter naming a file also matches its
+    // declarations and source map, which are no tests.
+    else if (entry.name.endsWith(".test.js") && regex.test(entry.name)) out.push(relative(root, path));
   }
   return out;
 }
