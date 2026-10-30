@@ -257,17 +257,18 @@ While source writers are stopped, before admitting writers, when the home holds 
 
 ### storage-24
 
-When the core, serving a home under the root lease [[storage-26](#storage-26)], finds a project's clone holding `spex.yaml` or `spex.lock` — it looks at its start and at each pairing of a working folder [[storage-6](#storage-6)] — the environment migration shall move that project's environment into its working folder once and leave a receipt under `local/migrations/` with `kind: 'environment'`, as the groups migration does [[storage-9](#storage-9)] ([DR-113](../decisions/113-a-projects-environment-lives-in-its-working-folder.md)):
+When the core, serving a home under the root lease [[storage-26](#storage-26)], finds a project's clone holding `spex.yaml` or `spex.lock` — it looks at its start and at each pairing of a working folder [[storage-6](#storage-6)] — the environment migration shall move that project's environment into its working folder once and leave a receipt under `local/migrations/` with `kind: 'environment'`, as the groups migration does [[storage-9](#storage-9)] ([DR-113](../decisions/113-a-projects-environment-lives-in-its-working-folder.md), [DR-165](../decisions/165-one-package-manager-hosted-by-the-cli-and-the-app.md)):
 
 | The working folder | Outcome |
 | --- | --- |
-| holds neither file | the clone's `spex.yaml` and `spex.lock` are moved to the folder's root |
-| holds either file | the folder's files stand and the clone's are deleted |
+| holds neither file | the clone's `spex.yaml` and `spex.lock` are moved to the folder's root, and the clone's `packages/` with its install record and `skills/` under the folder's `.spex/` where that record matches the lock, else deleted and the lock installed from the store [[environments-7](environments.md#environments-7)] |
+| holds either file | the folder's files stand and the clone's files and trees are deleted, the folder's lock installed where it is not [[environments-7](environments.md#environments-7)] |
 | is missing on this device | the clone's files stay until the folder is paired, when the move runs for that project |
 
 - the deletion from the clone is a local change the next sync of that spex repository carries [[space-7](space.md#space-7)];
-- a group's own spex repository, holding no `project.json`, keeps its files [[storage-1](#storage-1)];
-- the installed files under `packages/` and `skills/` are not touched, and the moved files are installed and exported from where they now stand [[environments-7](environments.md#environments-7)].
+- a `spex.yaml` moved or standing without `space` gains `space` naming the instance of the clone's placement where it has one, so an environment placed before `space` existed keeps resolving there [[environments-11](environments.md#environments-11)] [[environments-2](environments.md#environments-2)];
+- a group's own spex repository, holding no `project.json`, keeps its two files [[storage-1](#storage-1)], its `spex.yaml` gaining `space` naming the instance its own repository's remote names where it lacks one, and its `packages/` and `skills/` moving under its clone's `.spex/` by the same rule;
+- the moved files are installed and exported from where they now stand [[environments-7](environments.md#environments-7)].
 
 ### storage-30
 
@@ -428,7 +429,7 @@ When an integration suite migrates a former-layout home of two projects and one 
 
 ### storage-25
 
-When an integration suite starts the core on a home whose project clones hold `spex.yaml` and `spex.lock` — one project's working folder holding none, one holding its own `spex.yaml`, and one missing on this device — then pairs the third folder and syncs the first project with the stand-in host, it shall verify that the first folder's root holds the clone's two files and its clone none, that the second folder's files are unchanged and its clone's deleted, that the third clone keeps its files until its folder is paired and moves them then, that a receipt of kind `environment` stands and a restart repeats nothing, that the installed files are untouched, and that the sync pushes the deletion [[storage-24](#storage-24)].
+When an integration suite starts the core on a home whose project clones hold `spex.yaml` and `spex.lock` — one project's working folder holding none, one holding its own `spex.yaml`, and one missing on this device — then pairs the third folder and syncs the first project with the stand-in host, it shall verify that the first folder's root holds the clone's two files with `space` naming the clone's placement's instance, its installed tree with its record under `.spex/` moved without a fetch, and its clone none of them, that the second folder's files are unchanged but for `space` and its clone's files and trees deleted, that the third clone keeps its files until its folder is paired and moves them then, that a clone whose record does not match its lock installs from the store, that your own group's clone keeps its two files with `space` naming its remote's instance and its trees under its `.spex/`, that a receipt of kind `environment` stands and a restart repeats nothing, and that the sync pushes the deletion [[storage-24](#storage-24)].
 
 ### storage-32
 

@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// `spex package init` (attached-cli-12, DR-162): a spec package folder
-// made from a skill folder or a spec file already at hand, in the
-// release layout the core reads, with no server and no Spex storage.
-// Every rule is checked before anything is written; a refusal writes
-// nothing.
+// `spex new <org>/<pkg>` (cli-8, environments-10, DR-165): a spec
+// package folder made at `spex-packages/<org>/<pkg>/` under the
+// environment's root from skill folders and a spec file already at hand,
+// in the release layout the library reads, then requested by path and
+// installed as `spex add --path` does, so its skills reach the folder's
+// agents at once. Every rule is checked before anything is written; a
+// refusal writes nothing.
 
 import {
   chmodSync,
@@ -25,24 +27,13 @@ import {
 import { randomBytes } from "node:crypto";
 import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 
-export const PACKAGE_INIT_USAGE = `Usage: spex package init <org>/<name> [--skill <folder>]... [--spec <file>]
-                         [--language <tag>] [--description <text>]
-                         [--license <id>] [--move]
-
-Make spex-packages/<org>/<name>/ in the current directory from skill
-folders and/or a spec file, with no server:
-  --skill <folder>      An Agent Skills folder holding SKILL.md; repeatable
-  --spec <file>         The spec file, named <name>.md
-  --language <tag>      The artifacts' language (default en)
-  --description <text>  Default: the first skill's description, else the
-                        first paragraph under the spec's Intent heading
-  --license <id>        Default: read from ./LICENSE, else Apache-2.0
-  --move                Move the skill folders instead of copying them`;
-
-class InitRefusal extends Error {}
+import { settleAndTell, writeRequest } from "./add.js";
+import { actualPath, Environment } from "./environment.js";
+import { exportedIn, projectFolders } from "./settle.js";
+import { Refusal, type Command } from "./run.js";
 
 function refuse(message: string): never {
-  throw new InitRefusal(message);
+  throw new Refusal(message);
 }
 
 /** A lowercase kebab-case name of at most 64 characters: an org, a
@@ -97,7 +88,7 @@ function parseInit(args: string[]): InitOptions {
       move = true;
       continue;
     }
-    if (!key || !VALUED.has(key)) refuse(`Unknown option ${arg.split("=")[0]}. Use spex package init --help.`);
+    if (!key || !VALUED.has(key)) refuse(`Unknown option ${arg.split("=")[0]}. See spex --help.`);
     const inline = match![2];
     const value = inline ?? args[++i];
     if (value === undefined || value === "" || (inline === undefined && value.startsWith("-"))) refuse(`--${key} requires a value.`);
@@ -105,10 +96,10 @@ function parseInit(args: string[]): InitOptions {
     if (Object.hasOwn(single, key)) refuse(`Option --${key} was repeated.`);
     single[key] = value;
   }
-  if (words.length !== 1) refuse("package init takes exactly one <org>/<name> argument. Use spex package init --help.");
+  if (words.length !== 1) refuse("spex new takes exactly one <org>/<pkg> argument. See spex --help.");
   const parts = words[0]!.split("/");
   if (parts.length !== 2 || !isName(parts[0]!) || !isName(parts[1]!))
-    refuse("The package name must be <org>/<name>, each part lowercase letters, digits and single hyphens, at most 64 characters.");
+    refuse("The package name must be <org>/<pkg>, each part lowercase letters, digits and single hyphens, at most 64 characters.");
   const language = single.language ?? "en";
   if (!LANGTAG.test(language) || language.length > 64) refuse(`--language ${JSON.stringify(language)} is not a BCP 47 language tag such as en or zh-Hans.`);
   if (single.description !== undefined && CONTROL.test(single.description.replace(/[\n\t]/g, " "))) refuse("--description must not hold control characters.");
@@ -214,7 +205,7 @@ export function intentParagraph(text: string): string | undefined {
 
 // -- the license ---------------------------------------------------------
 
-/** The license a project's root LICENSE names (attached-cli-12). */
+/** The license a root's LICENSE names (cli-8). */
 export function detectLicense(text: string | undefined): string {
   const head = (text ?? "").replace(/^﻿/, "").trimStart();
   if (head.startsWith("Apache License")) return "Apache-2.0";
@@ -297,11 +288,11 @@ function manifestText(options: InitOptions, description: string, license: string
 }
 
 /** Whether the folder `outer` holds `spex-packages/<org>/<name>/` of
- * the working folder `cwd`, compared by real paths; a folder that cannot
- * be read holds nothing. */
-function holdsDestination(outer: string, cwd: string, org: string, name: string): boolean {
+ * the root, compared by real paths; a folder that cannot be read holds
+ * nothing. */
+function holdsDestination(outer: string, root: string, org: string, name: string): boolean {
   let path: string;
-  try { path = relative(realpathSync(outer), join(realpathSync(cwd), "spex-packages", org, name)); }
+  try { path = relative(realpathSync.native(outer), join(realpathSync.native(root), "spex-packages", org, name)); }
   catch { return false; }
   return path === "" || (path !== ".." && !path.startsWith(`..${sep}`) && !isAbsolute(path));
 }
@@ -311,119 +302,125 @@ function copyFile(from: string, to: string): void {
   chmodSync(to, statSync(from).mode & 0o777);
 }
 
-/** Make the package folder (attached-cli-12); the exit code. */
-export function packageInit(args: string[], cwd = process.cwd()): number {
-  if (args.includes("--help") || args.includes("-h")) { process.stdout.write(`${PACKAGE_INIT_USAGE}\n`); return 0; }
-  try {
-    const options = parseInit(args);
-    const { org, name, language } = options;
-    const pkg = `${org}/${name}`;
-    if (options.skills.length === 0 && options.spec === undefined) refuse("Name at least one artifact: --skill <folder> or --spec <file>.");
+/** `spex new` (cli-8): make the folder, request it by path, install. */
+export const newPackage: Command = async (args) => {
+  const cwd = process.cwd();
+  const options = parseInit(args);
+  const { org, name, language } = options;
+  const pkg = `${org}/${name}`;
+  if (options.skills.length === 0 && options.spec === undefined) refuse("Name at least one artifact: --skill <folder> or --spec <file>.");
 
-    // The org is a folder, as npm's scopes are, so two orgs' packages of
-    // one name stand apart (environments-10, DR-165).
-    const packages = join(cwd, "spex-packages");
-    const parent = join(packages, org);
-    const destination = join(parent, name);
-    const packagesStat = lstatOrNull(packages);
-    if (packagesStat && !packagesStat.isDirectory()) refuse("spex-packages in the current directory is not a folder.");
-    const parentStat = lstatOrNull(parent);
-    if (parentStat && !parentStat.isDirectory()) refuse(`spex-packages/${org} in the current directory is not a folder.`);
-    if (lstatOrNull(destination)) refuse(`spex-packages/${org}/${name}/ already exists; nothing was written.`);
+  // The environment it is requested in: its spex.yaml must read before
+  // anything is written (environments-2).
+  const env = new Environment(cwd);
+  const root = env.root;
+  const read = env.readRequests();
 
-    const skills: SkillSource[] = [];
-    for (const argument of options.skills) {
-      if (options.move && holdsDestination(resolve(cwd, argument), cwd, org, name)) refuse(`--move cannot move ${argument}: it holds spex-packages/${org}/${name}/.`);
-      const skill = readSkill(argument, cwd);
-      if (skills.some((other) => other.id === skill.id)) refuse(`Two skills declare the id ${skill.id}; each skill needs its own name.`);
-      if (options.spec !== undefined && skill.id === name) refuse(`The skill ${skill.id} has the spec's id ${name}; a package names each artifact once, so rename the skill or the package.`);
-      skills.push(skill);
-    }
+  // The org is a folder, as npm's scopes are, so two orgs' packages of
+  // one name stand apart (environments-10, DR-165).
+  const packages = join(root, "spex-packages");
+  const parent = join(packages, org);
+  const destination = join(parent, name);
+  const packagesStat = lstatOrNull(packages);
+  if (packagesStat && !packagesStat.isDirectory()) refuse(`spex-packages in ${root} is not a folder.`);
+  const parentStat = lstatOrNull(parent);
+  if (parentStat && !parentStat.isDirectory()) refuse(`spex-packages/${org} in ${root} is not a folder.`);
+  if (lstatOrNull(destination)) refuse(`spex-packages/${org}/${name}/ already exists in ${root}; nothing was written.`);
 
-    let specText: Buffer | undefined;
-    if (options.spec !== undefined) {
-      const file = resolve(cwd, options.spec);
-      let stat: Stats | null = null;
-      try { stat = statSync(file); } catch { stat = null; }
-      if (!stat?.isFile()) refuse(`--spec ${options.spec} is no file.`);
-      if (basename(file) !== `${name}.md`) refuse(`The spec file must be named ${name}.md, since its items are ${name}-<N>; rename it or the package.`);
-      specText = readFileSync(file);
-    }
-
-    const description = options.description
-      ?? skills[0]?.description
-      ?? (specText ? intentParagraph(specText.toString("utf8")) : undefined);
-    if (!description) refuse("No description was found in the first skill's SKILL.md or under the spec's Intent heading; pass --description <text>.");
-
-    const licenseFile = join(cwd, "LICENSE");
-    let licenseText: Buffer | undefined;
-    try { if (statSync(licenseFile).isFile()) licenseText = readFileSync(licenseFile); } catch { licenseText = undefined; }
-    const license = options.license ?? detectLicense(licenseText?.toString("utf8"));
-
-    // Everything is written into a staging folder beside the
-    // destination, renamed into place whole; only then are moved skill
-    // folders removed.
-    const madePackages = !packagesStat;
-    const madeParent = !parentStat;
-    mkdirSync(parent, { recursive: true });
-    // Made as any folder is, not owner-only as a temporary one.
-    const staging = join(parent, `.${name}.init-${randomBytes(6).toString("hex")}`);
-    mkdirSync(staging);
-    try {
-      writeFileSync(join(staging, "meta.yaml"), manifestText(options, description, license, skills));
-      writeFileSync(join(staging, "README.md"), `# ${pkg}\n\n${description}\n`);
-      if (licenseText) writeFileSync(join(staging, "LICENSE"), licenseText);
-      for (const skill of skills) {
-        const into = join(staging, "skills", language, skill.id);
-        mkdirSync(into, { recursive: true });
-        for (const dir of skill.dirs) mkdirSync(join(into, ...dir.split("/")), { recursive: true });
-        for (const file of skill.files) copyFile(join(skill.folder, ...file.split("/")), join(into, ...file.split("/")));
-      }
-      if (specText) {
-        mkdirSync(join(staging, "specs", language), { recursive: true });
-        writeFileSync(join(staging, "specs", language, `${name}.md`), specText);
-      }
-      renameSync(staging, destination);
-    } catch (error) {
-      rmSync(staging, { recursive: true, force: true });
-      if (madeParent) { try { rmdirSync(parent); } catch { /* holds something else now */ } }
-      if (madePackages) { try { rmdirSync(packages); } catch { /* holds something else now */ } }
-      throw error;
-    }
-    // Each moved skill now stands in the package: its former folder goes.
-    const left: string[] = [];
-    if (options.move) {
-      for (const [index, skill] of skills.entries()) {
-        try { rmSync(skill.folder, { recursive: true, force: true }); }
-        catch (error) { left.push(`${options.skills[index]} (${(error as NodeJS.ErrnoException).code ?? "not removed"})`); }
-      }
-    }
-
-    const folder = `spex-packages/${org}/${name}`;
-    const made = [
-      ...skills.map((skill) => `skill ${skill.id}`),
-      ...(options.spec !== undefined ? [`spec ${name}`] : []),
-    ].join(", ");
-    process.stdout.write([
-      `Made ${folder}/ for ${pkg} (${made}${options.move && skills.length ? `; ${skills.length === 1 ? "the skill folder was" : "the skill folders were"} moved into it` : ""}).`,
-      "",
-      "Next, in the Spex app: Playbooks → Add from folder with",
-      `  ${pkg} and ${folder}, then Publish on its row.`,
-      "Or with the CLI, from this folder while the Spex app runs:",
-      `  spex package add ${pkg} --path ${folder}`,
-      `  spex package publish ${folder} --dry-run`,
-      "  (then publish again without --dry-run)",
-      "",
-    ].join("\n"));
-    if (left.length) {
-      process.stderr.write(`The package holds a copy, but these skill folders could not be removed; remove them yourself: ${left.join(", ")}\n`);
-      return 1;
-    }
-    return 0;
-  } catch (error) {
-    if (error instanceof InitRefusal) { process.stderr.write(`${error.message}\n`); return 1; }
-    const code = (error as NodeJS.ErrnoException).code;
-    process.stderr.write(`package init failed${code ? ` (${code})` : ""}: ${error instanceof Error ? error.message : String(error)}\n`);
-    return 1;
+  const skills: SkillSource[] = [];
+  for (const argument of options.skills) {
+    if (options.move && holdsDestination(resolve(cwd, argument), root, org, name)) refuse(`--move cannot move ${argument}: it holds spex-packages/${org}/${name}/.`);
+    const skill = readSkill(argument, cwd);
+    if (skills.some((other) => other.id === skill.id)) refuse(`Two skills declare the id ${skill.id}; each skill needs its own name.`);
+    if (options.spec !== undefined && skill.id === name) refuse(`The skill ${skill.id} has the spec's id ${name}; a package names each artifact once, so rename the skill or the package.`);
+    skills.push(skill);
   }
-}
+
+  let specText: Buffer | undefined;
+  if (options.spec !== undefined) {
+    const file = resolve(cwd, options.spec);
+    let stat: Stats | null = null;
+    try { stat = statSync(file); } catch { stat = null; }
+    if (!stat?.isFile()) refuse(`--spec ${options.spec} is no file.`);
+    if (basename(file) !== `${name}.md`) refuse(`The spec file must be named ${name}.md, since its items are ${name}-<N>; rename it or the package.`);
+    specText = readFileSync(file);
+  }
+
+  const description = options.description
+    ?? skills[0]?.description
+    ?? (specText ? intentParagraph(specText.toString("utf8")) : undefined);
+  if (!description) refuse("No description was found in the first skill's SKILL.md or under the spec's Intent heading; pass --description <text>.");
+
+  const licenseFile = join(root, "LICENSE");
+  let licenseText: Buffer | undefined;
+  try { if (statSync(licenseFile).isFile()) licenseText = readFileSync(licenseFile); } catch { licenseText = undefined; }
+  const license = options.license ?? detectLicense(licenseText?.toString("utf8"));
+
+  // Everything is written into a staging folder beside the destination,
+  // renamed into place whole; only then are moved skill folders removed.
+  const madePackages = !packagesStat;
+  const madeParent = !parentStat;
+  mkdirSync(parent, { recursive: true });
+  // Made as any folder is, not owner-only as a temporary one.
+  const staging = join(parent, `.${name}.init-${randomBytes(6).toString("hex")}`);
+  mkdirSync(staging);
+  try {
+    writeFileSync(join(staging, "meta.yaml"), manifestText(options, description, license, skills));
+    writeFileSync(join(staging, "README.md"), `# ${pkg}\n\n${description}\n`);
+    if (licenseText) writeFileSync(join(staging, "LICENSE"), licenseText);
+    for (const skill of skills) {
+      const into = join(staging, "skills", language, skill.id);
+      mkdirSync(into, { recursive: true });
+      for (const dir of skill.dirs) mkdirSync(join(into, ...dir.split("/")), { recursive: true });
+      for (const file of skill.files) copyFile(join(skill.folder, ...file.split("/")), join(into, ...file.split("/")));
+    }
+    if (specText) {
+      mkdirSync(join(staging, "specs", language), { recursive: true });
+      writeFileSync(join(staging, "specs", language, `${name}.md`), specText);
+    }
+    renameSync(staging, destination);
+  } catch (error) {
+    rmSync(staging, { recursive: true, force: true });
+    if (madeParent) { try { rmdirSync(parent); } catch { /* holds something else now */ } }
+    if (madePackages) { try { rmdirSync(packages); } catch { /* holds something else now */ } }
+    throw error;
+  }
+  // Each moved skill now stands in the package: its former folder goes.
+  const left: string[] = [];
+  if (options.move) {
+    for (const [index, skill] of skills.entries()) {
+      try { rmSync(skill.folder, { recursive: true, force: true }); }
+      catch (error) { left.push(`${options.skills[index]} (${(error as NodeJS.ErrnoException).code ?? "not removed"})`); }
+    }
+  }
+
+  const folder = `spex-packages/${org}/${name}`;
+  const made = [
+    ...skills.map((skill) => `skill ${skill.id}`),
+    ...(options.spec !== undefined ? [`spec ${name}`] : []),
+  ].join(", ");
+  console.log(`Made ${folder}/ for ${pkg} (${made}).`);
+  if (left.length) process.stderr.write(`The package holds a copy, but these skill folders could not be removed; remove them yourself: ${left.join(", ")}\n`);
+
+  // Requested by path and installed as `spex add --path` does (cli-2).
+  await writeRequest(env, pkg, { path: folder }, read === null);
+  await settleAndTell(env);
+
+  // A skill moved from an agent folder of the root stands there again,
+  // now as Spex's export.
+  if (options.move) {
+    for (const skill of skills) {
+      for (const { folder: agentFolder } of projectFolders()) {
+        if (actualPath(resolve(root, ...agentFolder.split("/"), skill.id)) === actualPath(skill.folder) && exportedIn(root, agentFolder).includes(skill.id)) {
+          console.log(`The skill ${skill.id} moved from ${agentFolder}/${skill.id}/ now stands there as Spex's export.`);
+        }
+      }
+    }
+  }
+  console.log([
+    `Next: edit ${folder}/, then`,
+    `  spex publish ${pkg} --dry-run`,
+    `  spex publish ${pkg}`,
+  ].join("\n"));
+  if (left.length) throw new Refusal("some moved skill folders still stand; remove them yourself");
+};
