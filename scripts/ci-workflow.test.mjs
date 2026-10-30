@@ -14,9 +14,12 @@ const laneWorkflow = parse(readFileSync(join(root, ".github/workflows/hub-lane.y
 
 /** The jobs a pull request's run holds (release-34): the required checks (release-29). */
 const PULL_REQUEST_CHECKS = [
-  "test (ubuntu-latest, 22)", "test (ubuntu-latest, 24)", "test (windows-latest, 22)", "test (macos-latest, 22)",
+  "changes",
+  "test (ubuntu-latest, 22)", "test (ubuntu-latest, 24)", "test (windows-latest, 22)",
   "journeys (ubuntu-latest)", "desktop-browser (ubuntu-latest)",
 ];
+/** The suites run only where the classifier succeeded and found more than documentation (release-34). */
+const SUITE_CONDITION = "needs.changes.result == 'success' && needs.changes.outputs.docs-only != 'true'";
 
 test("release-33: one run per pull-request head, cancelled by its next push and never for main (release-30)", () => {
   assert.equal(workflow.concurrency.group, "ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}");
@@ -34,7 +37,7 @@ test("release-33: a pull request runs the reduced matrix, main and the nightly t
   };
   const test = workflow.jobs.test;
   const exclude = byEvent(test.strategy.matrix.exclude);
-  assert.deepEqual(exclude.pullRequest, [{ os: "windows-latest", "node-version": 24 }, { os: "macos-latest", "node-version": 24 }]);
+  assert.deepEqual(exclude.pullRequest, [{ os: "windows-latest", "node-version": 24 }, { os: "macos-latest", "node-version": 22 }, { os: "macos-latest", "node-version": 24 }]);
   assert.deepEqual(exclude.other, [{ os: "windows-latest", "node-version": 24 }]);
   for (const name of ["journeys", "desktop-browser"]) {
     const os = byEvent(workflow.jobs[name].strategy.matrix.os);
@@ -48,8 +51,26 @@ test("release-33: a pull request runs the reduced matrix, main and the nightly t
     if (excluded.has(`${os}:${node}`)) continue;
     onPullRequest.push(`test (${os}, ${node})`);
   }
-  onPullRequest.push("journeys (ubuntu-latest)", "desktop-browser (ubuntu-latest)");
+  onPullRequest.push("changes", "journeys (ubuntu-latest)", "desktop-browser (ubuntu-latest)");
   assert.deepEqual(PULL_REQUEST_CHECKS.slice().sort(), onPullRequest.sort());
+});
+
+test("release-33: documentation alone keeps the spec gates and skips the suites behind a required classifier (release-34)", () => {
+  const changes = workflow.jobs.changes;
+  assert.equal(changes["runs-on"], "ubuntu-latest");
+  assert.equal(changes.outputs["docs-only"], "${{ steps.classify.outputs.docs-only }}");
+  const classify = changes.steps.find((step) => step.id === "classify");
+  assert.ok(classify, "a classify step");
+  assert.match(classify.run, /git diff --name-only "origin\/\$\{\{ github\.base_ref \}\}\.\.\.HEAD"/, "the pull request's own changes");
+  assert.match(classify.run, /docs\/\*\|specs\/\*\|\*\.md\)/, "documentation is docs/, specs/ and Markdown");
+  assert.match(classify.run, /github\.event_name \}\}" = "pull_request"/, "a push and the nightly never count as documentation alone");
+  const gates = changes.steps.find((step) => step.name === "Documentation alone keeps the spec gates");
+  assert.ok(gates && gates.if === "steps.classify.outputs.docs-only == 'true'", "the gates run for documentation alone");
+  for (const command of ["npm test -w packages/cli", "node packages/cli/dist/cli.js lint"]) assert.ok(gates.run.includes(command), command);
+  for (const name of ["test", "journeys", "desktop-browser"]) {
+    assert.equal(workflow.jobs[name].needs, "changes", `${name} waits for the classifier`);
+    assert.equal(workflow.jobs[name].if, SUITE_CONDITION, `${name} runs past the classifier alone`);
+  }
 });
 
 test("release-33: the hub lane runs nightly, on a push to main touching the hub, on a pull request changing its workflow and on request, as root, keeping its output (release-36)", () => {

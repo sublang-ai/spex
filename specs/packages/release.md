@@ -195,7 +195,10 @@ When a push reaches a pull request's branch, the CI workflow shall cancel the ru
 
 #### release-34
 
-When the CI workflow runs for a pull request, it shall run the `test` jobs on Linux and Windows and one macOS smoke `test` job, with `journeys` and `desktop-browser` on Linux alone, and when it runs for a push to `main` or on its nightly schedule, every job of the full matrix ([DR-145](../decisions/145-merge-on-green.md)).
+When the CI workflow runs for a pull request, it shall first classify the pull request's changed paths in a `changes` job that is itself a required check, then run the `test` jobs on Linux and Windows with `journeys` and `desktop-browser` on Linux, each only where the classifier succeeded and found more than documentation, and when it runs for a push to `main` or on its nightly schedule, every job of the full matrix with macOS ([DR-145](../decisions/145-merge-on-green.md), [DR-166](../decisions/166-pull-requests-run-without-macos.md)):
+
+- documentation alone is a pull request whose every changed path lies under `docs/` or `specs/` or is a Markdown file; the classifier then runs the CLI package's tests and `spex lint` itself, and the suites report skipped, which the merge rule takes as green [[release-29](#release-29)];
+- a push to `main` and the nightly schedule never count as documentation alone.
 
 #### release-36
 
