@@ -253,6 +253,8 @@ export interface StandinScript {
   denyDevice(userCode: string): void;
   /** The user codes of device sign-ins still pending and unexpired. */
   pendingDevices(): string[];
+  /** Every device code this instance minted, a secret no output names. */
+  deviceCodes(): string[];
   /** Expire every device's access secret now. */
   expireAccess(): void;
   /** Revoke every device. */
@@ -1113,6 +1115,7 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
     approveDevice: (code) => decideDevice(code, "approved"),
     denyDevice: (code) => decideDevice(code, "denied"),
     pendingDevices: () => [...deviceCodes.values()].filter((d) => d.status === "pending" && d.expiresAt > Date.now()).map((d) => d.userCode),
+    deviceCodes: () => [...deviceCodes.keys()],
     expireAccess: () => {
       for (const device of devices.values()) device.accessExpiresAt = Date.now() - 1;
     },
