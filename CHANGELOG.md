@@ -372,6 +372,12 @@ and `npm start` (desktop) or `npm run start:server` (server).
   heading names the project — "Environment of demo" — or "Environment of
   your own group", and no longer shows a `<name>-spex` key
   ([DR-159](specs/decisions/159-projects-in-groups-opened-where-you-work.md)).
+
+- The compiler and app share Playbook 18.1.0 through slc 0.20.0's required
+  peer dependency. Both shells supply the engine, and dependency checks
+  reject duplicate or stale Playbook, Cligent and xstate installations
+  before build and release ([DR-167](specs/decisions/167-the-compiler-shares-the-apps-engine.md)).
+
 - A first-run config takes the agents Playbook seeds for this machine's
   sign-ins ([DR-154](specs/decisions/154-the-seed-follows-playbooks-rule.md)):
   with only Codex signed in, the Captain and every player run Codex; with

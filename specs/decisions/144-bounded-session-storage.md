@@ -10,6 +10,7 @@ Amends [DR-045](045-unified-session-storage.md) and [DR-103](103-the-home-and-it
 Amends [DR-111](111-the-core-coordinates-as-git-does.md) in a session unit's members and publication order: every chunk belongs to its session, dependencies precede their descriptor and root, and a chunk added since Save refuses that unit's replacement.
 Amends [DR-131](131-playbook-17-11-1-adoption.md) in the Playbook floor and built-in release, and permits its compiler-only nested Playbook dependency; the remaining dependency and SDK identities stay preserved.
 Amended by [DR-153](153-playbook-18-0-1-cligent-0-36-1-slc-0-19-1-adoption.md) in the Playbook floor, compiler dependency and built-in release alone; its bounded-storage decisions stand.
+Amended by [DR-167](167-the-compiler-shares-the-apps-engine.md), which withdraws the compiler-only nested Playbook exception and requires a verified shared engine; the bounded-storage decisions stand.
 
 ## Context
 

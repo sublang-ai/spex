@@ -15,7 +15,7 @@ import { moduleDirectoriesAbove, suppliedCompiler, suppliedScaffold } from "@sub
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-test("the server declares the compiler beside the agent SDKs, and resolves it (server-shell-7)", () => {
+test("the server declares the compiler and its host engine beside the agent SDKs, and resolves it (server-shell-7)", () => {
   const manifest = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8")) as {
     dependencies: Record<string, string>;
   };
@@ -24,6 +24,7 @@ test("the server declares the compiler beside the agent SDKs, and resolves it (s
     "@openai/codex-sdk",
     "@opencode-ai/sdk",
     "@sublang/slc",
+    "@sublang/playbook",
   ]) {
     assert.ok(manifest.dependencies[name], `${name} declared`);
   }
