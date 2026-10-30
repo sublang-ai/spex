@@ -115,13 +115,14 @@ export interface StoreOptions {
   relocateConfig?: (configPath: string) => void;
   /** Internal: Store.open runs the migration the constructor defers. */
   deferMigration?: boolean;
-  /** Fill a clone the store makes, before its first commit: your own
-   * group's at every open and a new project's at registration — where
-   * the environment requests the built-in spec package, locked at
-   * `registryOrigin`, the environment's registry (storage-6,
-   * environments-11, DR-127), and naming `space` as the environment's
-   * instance where that is not the home's default (environments-2,
-   * DR-165). The migration calls it for each clone it makes. */
+  /** Write the environment at `root` requesting the built-in spec
+   * package, locked at `registryOrigin`, the environment's registry
+   * (storage-6, environments-11, DR-127), and naming `space` as the
+   * environment's instance where that is not the home's default
+   * (environments-2, DR-165): your own group's clone at every open,
+   * before its first commit, and a new project's working folder at its
+   * registration where it holds neither file (environments-26). The
+   * migration calls it for each environment it makes. */
   prepareRepository?: (dir: string, key: string, registryOrigin: string, space: string | null) => void;
 }
 
@@ -677,12 +678,13 @@ export class Store {
     this.initializeRepository(dir, generatedBootstrap);
   }
 
-  /** The caller's filling of a clone, at the registry of its instance —
+  /** The caller's writing of an environment at `root` — the clone, or a
+   * project's working folder — at the registry of the clone's instance —
    * read from its key, a deferred move or the remote its Git names now,
    * so your own group's is the one its remote names (storage-31) — else
    * the default instance's (environments-5, environments-11); its
-   * failure leaves the clone as it is, reported, never failing the open. */
-  private prepareRepository(dir: string, key: string): boolean {
+   * failure leaves the folder as it is, reported, never failing the open. */
+  private prepareRepository(dir: string, key: string, root = dir): boolean {
     try {
       const placed = instanceOfClone(this.homeFile, this.deferred, key, () => this.remoteNameOf(dir, key));
       const defaultOrigin = canonicalOrigin(this.homeFile.defaultInstance().origin);
@@ -690,7 +692,7 @@ export class Store {
       // A clone placed at another instance than the default names it as
       // its environment's instance (environments-11).
       const space = placed !== null && canonicalOrigin(placed) !== defaultOrigin ? canonicalOrigin(placed) : null;
-      this.options.prepareRepository?.(dir, key, registryOrigin, space);
+      this.options.prepareRepository?.(root, key, registryOrigin, space);
       return true;
     }
     catch (error) { console.error(`spex: ${key} was not prepared: ${error instanceof Error ? error.message : String(error)}`); return false; }
@@ -1572,7 +1574,10 @@ export class Store {
     const dir = this.homeFile.clonePath(key);
     mkdirSync(dir, { recursive: true, mode: 0o700 });
     writeApplicationFile(join(dir, "project.json"), { format: 1, name: name || basename(normalized), remote: folderRemote(normalized, this.env) });
-    this.prepareRepository(dir, key);
+    // The environment lives with the code (environments-26): written at
+    // the working folder's root where it holds neither file, a folder
+    // holding one being installed from it, never in the clone (storage-6).
+    if (!existsSync(join(normalized, "spex.yaml")) && !existsSync(join(normalized, "spex.lock"))) this.prepareRepository(dir, key, normalized);
     this.initializeRepository(dir);
     this.homeFile.pair(normalized, key);
     this.saveHome();

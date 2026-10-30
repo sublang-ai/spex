@@ -286,7 +286,9 @@ describe("attached packed CLI", () => {
       assert.equal(registry.script.requests.filter((r: string) => r.startsWith("PUT ")).length, 1);
       await run(["package", "add", "fixture/demo", "--version", "1.0.0"]);
       const search = await run(["package", "search", "demo"]); assert.match(search.stdout, /fixture\/demo/);
-      const lockPath = join(state, "workspace", "fixture", "project-spex", "spex.lock");
+      // The project's lock stands at its working folder's root
+      // (environments-26).
+      const lockPath = join(folder, "spex.lock");
       const lockBefore = readFileSync(lockPath, "utf8");
       await run(["package", "install"]); assert.equal(readFileSync(lockPath, "utf8"), lockBefore, "install preserves the selected lock");
       await run(["package", "resolve"]);

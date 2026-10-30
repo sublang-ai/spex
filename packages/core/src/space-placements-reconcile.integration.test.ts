@@ -580,12 +580,13 @@ test("space-101, space-98, space-15, space-31, storage-38, space-7, space-29: fo
   assert.equal(git(firstBare, "rev-parse", "spex"), atFirst, "nothing at the first changed");
 
   // The third, the last, left: every record unit it or the clone holds —
-  // the environment, notes.md and peer.md — reached no remaining
+  // notes.md and peer.md, the environment standing in the working
+  // folder (environments-26) — reached no remaining
   // placement, which stops it; sent confirmed, it is dropped and the clone
   // moves under your own group's folder, local only, its records kept
   // (space-98, storage-38).
   const every = await home.client.settle("space.leave", { repository: movedKey, instance: third.url }, 30_000);
-  assert.deepEqual(every.sync, { phase: "stopped", op: "leave", step: "check", cause: "unreceived", message: "3 records have reached no other placement", guidance: "Confirm to remove it anyway.", retry: true, count: 3 });
+  assert.deepEqual(every.sync, { phase: "stopped", op: "leave", step: "check", cause: "unreceived", message: "2 records have reached no other placement", guidance: "Confirm to remove it anyway.", retry: true, count: 2 });
   assert.deepEqual(remoteNamesOf(movedClone), [thirdFolder]);
   const localKey = `${LOGIN}/atlas-spex`;
   const localClone = clonePath(home.dataDir, localKey);

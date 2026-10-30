@@ -2104,7 +2104,7 @@ msgstr "Collapse the sidebar"
 msgid "Collapse the sidebar ({keys})"
 msgstr "Collapse the sidebar ({keys})"
 
-#. after enabling an authored playbook: {folder} is its spec package's folder in the working folder, e.g. spex-packages/triage
+#. after enabling an authored playbook: {folder} is its spec package's folder in the working folder, e.g. spex-packages/acme/triage
 #: src/components/LibrarySurface.tsx
 msgid "Commit {folder} with your code"
 msgstr "Commit {folder} with your code"
@@ -4542,6 +4542,11 @@ msgstr "Not checked yet"
 #: src/components/SpecGraph.tsx
 msgid "not cited by other packages"
 msgstr "not cited by other packages"
+
+#. a project's spex.yaml and spex.lock are not both in its code's HEAD, so its environment is this device's alone
+#: src/components/EnvironmentSection.tsx
+msgid "Not committed with the code"
+msgstr "Not committed with the code"
 
 #: src/lib/client.ts
 msgid "not connected"

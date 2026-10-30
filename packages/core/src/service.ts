@@ -1208,13 +1208,12 @@ export class CoreService {
   private modulesRead(projectId: string | null, inputs: ConfigInputs): PlaybookModules {
     const keys = [...new Set([...(projectId === null ? [] : [projectId]), this.store.home.own()])];
     for (const key of keys) {
-      const dir = this.store.repository(key)?.dir;
-      if (dir) {
-        inputs.set(join(dir, "spex.lock"), inputVersion(join(dir, "spex.lock")));
-        // What is installed stands under the environment's root's
-        // `.spex/` (environments-26); none is installed without a root.
+      if (this.store.repository(key)) {
+        // The environment's files and what is installed stand at its root
+        // and under its `.spex/` (environments-26); none without a root.
         const root = this.environments.rootOf(key);
         if (root === null) continue;
+        inputs.set(join(root, "spex.lock"), inputVersion(join(root, "spex.lock")));
         const installed = join(installedDir(root), INSTALL_RECORD);
         inputs.set(installed, inputVersion(installed));
         for (const [name, resolution] of Object.entries(this.environments.lockOf(key)?.packages ?? {})) {
@@ -2784,7 +2783,13 @@ export class CoreService {
         }
         // The folder pairs with a local spex repository in your own group
         // until a group is picked (storage-6).
+        const pairedAlready = this.store.home.keyForFolder(resolve(path)) !== undefined;
         const registered = this.store.registerProject(path, basename(path), Date.now());
+        // A folder newly paired: its environment — the one it holds, or
+        // the one the store just wrote at its root — installs and exports
+        // there (storage-6, environments-26, environments-31); one paired
+        // already selects its pair and changes nothing.
+        if (!pairedAlready) void this.environments.paired(registered.id).catch(() => {});
         this.afterRepositoriesChanged();
         await this.syncForeignSessions();
         // A folder paired with a group's own spex repository brings that
@@ -2880,6 +2885,7 @@ export class CoreService {
           );
         }
         const created = this.store.registerProject(path, basename(path), Date.now());
+        void this.environments.paired(created.id).catch(() => {});
         this.afterRepositoriesChanged();
         this.announceGroups();
         return created;

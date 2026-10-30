@@ -401,11 +401,19 @@ export async function migrateFormerHome(root: string, options: { env?: NodeJS.Pr
   Home.load(root);
   parsePrefs(readJsonFile(join(root, "local", "prefs.json")), join(root, "local", "prefs.json"));
   const keys = [...new Set([...Object.values(plan!), home.own()])];
-  // Each clone's environment requests the built-in spec package before
-  // its first history is written, locked at the default instance's
-  // registry, as no clone lies at an instance yet (storage-9,
+  // Your own group's environment requests the built-in spec package
+  // before its first history is written, and each project's working
+  // folder holding neither environment file gets its own at its root,
+  // never in the clone (environments-26), locked at the default
+  // instance's registry, as no clone lies at an instance yet (storage-9,
   // environments-11).
-  for (const key of keys) options.prepareRepository?.(home.clonePath(key), key, home.defaultInstance().origin, null);
+  for (const key of keys) {
+    if (key === home.own()) { options.prepareRepository?.(home.clonePath(key), key, home.defaultInstance().origin, null); continue; }
+    const folder = home.folderOf(key)?.path;
+    if (!folder || !existsSync(folder) || !statSync(folder).isDirectory()) continue;
+    if (existsSync(join(folder, "spex.yaml")) || existsSync(join(folder, "spex.lock"))) continue;
+    options.prepareRepository?.(folder, key, home.defaultInstance().origin, null);
+  }
   for (const key of keys) {
     await validateStorageTree(home.clonePath(key), { own: key === home.own(), ...(options.libraryDir ? { libraryDir: options.libraryDir } : {}) });
   }
