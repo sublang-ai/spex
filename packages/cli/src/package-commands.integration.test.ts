@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The package commands of the packed CLI (cli-15, cli-16): `@sublang/spex`,
+// The package commands of the packed CLI (cli-15, cli-16, cli-18):
+// `@sublang/spex`,
 // packed with `npm pack` and installed into a scratch prefix, runs as a
 // child process on a scratch home whose `home.yaml` names the library's
 // stand-in registry as the default instance, in scratch Git working
@@ -323,6 +324,8 @@ const APACHE = "\n                                 Apache License\n             
 const GREET_MD = '---\nname: greet\ndescription: "Greets: whoever asks"\n---\n\n# Greet\n\nSay hello.\n';
 const SPEC_MD = "<!-- SPDX-License-Identifier: Apache-2.0 -->\n\n# hello: Hello\n\n## Intent\n\nThis package states the greeting.\nIt has two lines.\n\nA second paragraph.\n\n## External Behavior\n\n### hello-1\n\nThe greeter shall greet.\n\n## Verification\n\n### hello-2\n\nWhen run, the suite shall assert it greets [[hello-1](#hello-1)].\n";
 let projects = 0;
+/** The folder cli-16 published acme/hello from. */
+let publishedFrom = "";
 
 /** A scratch Git working folder holding a LICENSE, a skill folder under
  * `.claude/skills/` with a nested executable script, and a spec file. A
@@ -486,7 +489,7 @@ test("cli-16: publish by name to the Space spex.yaml names, a dry run uploading 
   registry.script.clearRequests();
   const uploads = (): string[] => registry.script.requests.filter((request) => request.startsWith("PUT "));
 
-  const dir = project();
+  const dir = publishedFrom = project();
   writeFileSync(join(dir, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages: {}\n`);
   await okAt(PUBLISHER, dir, "new", "acme/hello", "--skill", ".claude/skills/greet", "--spec", "specs/hello.md");
 
@@ -530,5 +533,72 @@ test("cli-16: publish by name to the Space spex.yaml names, a dry run uploading 
     assert.equal(ran.code, 1, `${label}: ${ran.stdout}${ran.stderr}`);
     assert.match(ran.stderr, cause, `[cli-9] ${label}`);
     assert.equal(uploads().length, before, `[cli-9] ${label} uploads nothing`);
+  }
+});
+
+test("cli-18: exit 0, 1 and 130 with the cause on standard error, no token printed, an interrupted install leaving the last files and lock", async () => {
+  // A refusal: 1, its cause on standard error naming the command.
+  const unknown = await spex(WORK, "install", "--bogus");
+  assert.equal(unknown.code, 1, "[cli-13] a refusal exits 1");
+  assert.match(unknown.stderr, /^spex install: Unknown option '--bogus'.*; see spex --help\n$/, "[cli-13] the cause on standard error");
+  assert.equal(unknown.stdout, "");
+  // A failure the registry answers, signed in: 1, its words, no token.
+  const again = await spexAt(PUBLISHER, publishedFrom, "publish", "acme/hello");
+  assert.equal(again.code, 1, again.stdout + again.stderr);
+  assert.match(again.stderr, /^spex publish: not published at Stand-in Space: acme\/hello: the registry refused it/m, "[cli-13] the registry's refusal named");
+
+  // An environment installed at demo/tool 1.1.0.
+  const dir = workingFolder(join(SCRATCH, "interrupted"));
+  writeFileSync(join(dir, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages:\n  demo/tool:\n    version: ^1.0.0\n`);
+  assert.match(await ok(dir, "install"), /^Installed demo\/tool 1\.1\.0$/m, "[cli-13] success exits 0");
+  // A newer lock arrives with the code, resolved on another device whose
+  // store holds its files, so this home fetches them.
+  await publish("demo/tool", "1.2.0", { tool: skill }, skillFiles("tool", "1.2.0"));
+  const device = join(SCRATCH, "other-device");
+  mkdirSync(device);
+  copyFileSync(join(HOME, "home.yaml"), join(device, "home.yaml"));
+  const elsewhere = workingFolder(join(SCRATCH, "elsewhere"));
+  copyFileSync(join(dir, "spex.yaml"), join(elsewhere, "spex.yaml"));
+  await okAt(device, elsewhere, "install");
+  copyFileSync(join(elsewhere, "spex.lock"), join(dir, "spex.lock"));
+  const lockBytes = readFileSync(join(dir, "spex.lock"), "utf8");
+  assert.match(lockBytes, /version: 1\.2\.0/);
+  const installed = snapshot(join(dir, ".spex", "packages"));
+  const exported = snapshot(join(dir, ".claude", "skills"));
+
+  // The install is interrupted while its download is held.
+  const hold = registry.script.holdDownload();
+  const env: NodeJS.ProcessEnv = { ...process.env, SPEX_HOME: HOME };
+  delete env.SPEX_HOST_URL;
+  const proc = spawn(process.execPath, [CLI, "install"], { cwd: dir, env, stdio: ["ignore", "pipe", "pipe"] });
+  let stdout = "";
+  let stderr = "";
+  proc.stdout.on("data", (data) => { stdout += String(data); });
+  proc.stderr.on("data", (data) => { stderr += String(data); });
+  const closed = new Promise<number | null>((resolveClose) => proc.on("close", resolveClose));
+  try {
+    assert.match(await hold.reached, /^\/(?:api\/v1\/packages\/)?demo\/tool\/1\.2\.0\//, "the download is held");
+    proc.kill("SIGINT");
+    const code = await closed;
+    printed.push(stdout, stderr);
+    // Windows ends a child on any kill without a signal for it to meet.
+    if (process.platform !== "win32") {
+      assert.equal(code, 130, `[cli-13] an interrupt exits 130: ${stdout}${stderr}`);
+      assert.equal(stderr, "spex install: interrupted\n", "[cli-13] the interrupt said on standard error");
+    }
+  } finally {
+    hold.release();
+  }
+  assert.equal(readFileSync(join(dir, "spex.lock"), "utf8"), lockBytes, "[cli-13] the lock stands");
+  assert.deepEqual(snapshot(join(dir, ".spex", "packages")), installed, "[cli-13] the last installed files stand");
+  assert.deepEqual(snapshot(join(dir, ".claude", "skills")), exported, "[cli-13] the last exports stand");
+  // Run again, the install completes.
+  assert.match(await ok(dir, "install"), /^Installed demo\/tool 1\.2\.0$/m);
+
+  // No token, nor its refresh secret, in anything any run printed.
+  assert.ok(printed.length > 0);
+  for (const text of printed) {
+    assert.ok(!text.includes(TOKEN), "[cli-13] no app token printed");
+    assert.ok(!text.includes(`refresh-${TOKEN}`), "[cli-13] no refresh secret printed");
   }
 });
