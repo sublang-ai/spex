@@ -7,6 +7,7 @@
 
 Accepted (2026-10-25), under the owner's fresh-user publishing and installation goal.
 Extends [DR-104](104-spec-package-format-and-client-environments.md) in the publishing surface for packages without an authoring session.
+Amended by [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) in where a package is published from: by its name, from `spex-packages/<org>/<name>/`.
 
 ## Context
 

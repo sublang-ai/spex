@@ -24,6 +24,7 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 - [DR-015](015-reference-content.md), [DR-037](037-playbook-12-adoption.md) and [DR-059](059-issue-delivery-through-dev.md): the built-in playbooks come from a spec package the app ships, not from Playbook's registry modules and starter.
 
 Amended by [DR-127](127-a-home-signed-in-to-several-instances.md) in requests from the registry, in Git sources and in publishing: a resolution asks the registry of the environment's instance, the home's default instance where the environment has none; an install fetches from the environment's instance or from the registry its lock records, whichever serves the locked checksum; a Git source at a signed-in instance's Git origin uses that instance's broker; a publish goes to the project's instance, or the default instance, as that instance's account.
+Amended by [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) in where an environment stands, in its instance, in the agent table, in publishing and in its hosts: an environment is complete in its folder, its installed files, generated skills and install record under its root's `.spex/`; its `spex.yaml` may name its Space as `space`; the agent table is the library's own data; a package is published by its name; and the package manager is one library that the CLI and the app both host.
 
 ## Context
 

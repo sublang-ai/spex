@@ -24,14 +24,7 @@ When started on a native platform other than macOS or Linux, the core service sh
 
 Where the core service is started by a host shell, when startup completes, the core service shall accept WebSocket connections on its endpoint — a loopback-only socket the service binds itself by default, or a shell-supplied HTTP server the service attaches to, leaving binding and transport security to that shell ([DR-033](../decisions/033-remote-gui-serving.md)) — at the path `/`, and on the relay paths of its open seats [[core-service-129](#core-service-129)], answer HTTP reads under `/applets/` for its open applets [[applets-4](applets.md#applets-4)] ([DR-161](../decisions/161-an-applet-is-a-page-the-ide-serves.md)), refusing any other path, and report the endpoint address to the host:
 
-- When a client connects, the core service sends a hello message carrying the protocol version and `attachedCliVersion: 1` before any other message, so clients can detect a protocol mismatch and attached-CLI support before issuing commands; the optional marker is additive under protocol 28 and changes no ordinary command behavior ([DR-157](../decisions/157-a-cli-attached-to-the-local-core.md)).
-
-#### core-service-143
-
-While the core service serves a home at a loopback endpoint — the socket it binds itself, or a shell-supplied server bound to a loopback host [[core-service-1](#core-service-1)] — it shall keep `local/endpoint.json` under the home [[storage-1](storage.md#storage-1)], owner-only, holding `{ format: 1, url, pid }` — the access URL with the endpoint's token, and this process's id — written once the endpoint listens and removed when the service stops, so the CLI finds the running app [[attached-cli-1](attached-cli.md#attached-cli-1)] ([DR-163](../decisions/163-the-cli-finds-the-running-app.md)):
-
-- the URL of a shell-supplied server is the one its shell announces once the server listens; a seat [[core-service-125](#core-service-125)], and a shell-supplied server bound to any other host, whose shell announces none, write no file;
-- a file left by a process that died is replaced by the next start.
+- When a client connects, the core service sends a hello message carrying the protocol version alone before any other message, so clients can detect a protocol mismatch before issuing commands.
 
 #### core-service-24
 
@@ -1210,10 +1203,6 @@ Where the core service attaches to a test-supplied HTTP server [[core-service-1]
 - a token-bearing handshake from a foreign web origin is rejected;
 - a token-bearing handshake with no Origin, and one from a `file://` origin, each succeed.
 
-#### core-service-144
-
-Where the core service binds its own loopback socket over a home whose `local/endpoint.json` a dead process left, and where it attaches to a test-supplied HTTP server, the integration suite shall assert the endpoint file of [[core-service-143](#core-service-143)]: the bound socket's file replaces the stale one, holding `{ format: 1, url, pid }` with this process's id, owner-only, its URL answering the handshake; the attached core writes none until the suite announces a URL, then that URL's file; and each file is gone once the service stops.
-
 ### Readiness Dedup Coverage
 
 #### core-service-28
@@ -1319,7 +1308,7 @@ Where a stand-in instance answers the servers routes and a stand-in hub admits a
 
 #### core-service-141
 
-When a protocol integration client connects to the real core, the suite shall assert hello carries protocol 28 and `attachedCliVersion: 1` before other messages and ordinary commands retain their existing replies [[core-service-1](#core-service-1)].
+When a protocol integration client connects to the real core, the suite shall assert the hello carries protocol 28 alone before any other message [[core-service-1](#core-service-1)].
 
 ## References
 

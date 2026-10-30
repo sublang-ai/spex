@@ -8,7 +8,6 @@
 Question presentation and active-turn input are amended by [DR-085](085-boss-talks-through-captain.md).
 
 Accepted.
-§5 is amended by [DR-157](157-a-cli-attached-to-the-local-core.md) for attached CLI waits and observation-only interruption; ordinary UI behavior remains unchanged.
 The conversation-first principle begins after project registration under [DR-135](135-a-welcome-page-before-the-first-project.md).
 §8's interaction hue is amended by [DR-013](013-sublang-brand.md): brand purple replaces indigo.
 A ninth principle, chrome that fits, is added by [DR-041](041-chrome-that-fits.md).
