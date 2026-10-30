@@ -10,7 +10,11 @@
 // its release at the locked version and checksum (DR-127); the built-in
 // spec package is served first from this device's seed where its files
 // carry the lock's digests, whatever archive checksum the lock records
-// (environments-11). The new tree
+// (environments-11). Where no seed and no registry serves the built-in,
+// a host shipping no seed, as the command line, may leave it out as not
+// installed, absent from the tree and its record, for the app's next use
+// to install from its seed, while the rest installs; any other spec
+// package nothing serves fails the install naming it. The new tree
 // is complete before it replaces the old one; a failure leaves the last
 // files in place. The swap happens only while the lock it installs still
 // stands on disk at the version read and still matches `spex.yaml` and
@@ -101,6 +105,11 @@ export interface InstallOptions {
    * locked version with each locked file at the lock's digest, whatever
    * archive checksum the lock records (environments-7). */
   seed?: RegistrySource;
+  /** Where no seed and no registry serves the built-in spec package's
+   * locked release (environments-7): `fail`, the default, fails the
+   * install naming it; `leave` leaves it out as not installed, for the
+   * app's next use to install from its seed, and installs the rest. */
+  builtinUnserved?: "fail" | "leave";
   git: GitSource;
   gitCredential?: (repo: string) => Promise<GitCredential | undefined>;
   /** The folder a path source's path is relative to (environments-2):
@@ -131,6 +140,10 @@ export interface InstallReport {
   /** Registry modules left carrying the engine they were bundled with,
    * each with why (playbook-library-46). */
   engineKept: { module: string; reason: string }[];
+  /** The built-in spec package, where this install left it out as not
+   * installed, no seed and no registry serving it (environments-7);
+   * absent where nothing was left out. */
+  left?: string[];
 }
 
 export class InstallError extends Error {
@@ -181,6 +194,12 @@ function recordEntry(resolution: Resolution): unknown {
       .map((file) => ({ path: file.path, sha256: file.sha256, executable: file.executable })),
     artifacts: Object.fromEntries(Object.entries(resolution.artifacts).map(([id, artifact]) => [id, { language: artifact.language, fallback: artifact.fallback }])),
   });
+}
+
+/** A lock without the spec packages named: what an install leaving them
+ * out places and records. */
+function lockWithout(lock: Lock, names: readonly string[]): Lock {
+  return { ...lock, packages: Object.fromEntries(Object.entries(lock.packages).filter(([name]) => !names.includes(name))) };
 }
 
 function installRecord(lock: Lock): Record<string, unknown> {
@@ -320,8 +339,10 @@ function putVerified(store: ContentStore, name: string, file: LockedFile, bytes:
   }
 }
 
-/** Fetch every selected file the store lacks, verified by digest. */
-async function fetchMissing(options: InstallOptions, name: string, resolution: Resolution): Promise<void> {
+/** Fetch every selected file the store lacks, verified by digest: false
+ * where the install leaves the built-in spec package out, no seed and
+ * no registry serving it (environments-7). */
+async function fetchMissing(options: InstallOptions, name: string, resolution: Resolution): Promise<boolean> {
   const { store } = options;
   const missing: LockedFile[] = [];
   for (const file of resolution.files) {
@@ -333,26 +354,28 @@ async function fetchMissing(options: InstallOptions, name: string, resolution: R
     }
     missing.push(file);
   }
-  if (missing.length === 0) return;
+  if (missing.length === 0) return true;
   const source = resolution.source;
   if (isRegistrySource(source)) {
     // The built-in from this device's seed, by its files' digests: the
     // archive each device packs differs, its files do not.
-    if (name === BUILTIN_PACKAGE_NAME && options.seed && await fetchSeeded(options.seed, store, name, source, resolution)) return;
+    if (name === BUILTIN_PACKAGE_NAME && options.seed && await fetchSeeded(options.seed, store, name, source, resolution)) return true;
     // The first registry serving the release at the locked checksum
     // serves what is still missing; any other answer moves on.
     const reasons: string[] = [];
     for (const registry of options.registries ? options.registries(source) : [options.registry]) {
       const left = missing.filter((file) => !store.has(file.sha256, file.executable));
-      if (left.length === 0) return;
+      if (left.length === 0) return true;
       try {
-        if (await fetchFrom(options, registry, name, source, resolution, left)) return;
+        if (await fetchFrom(options, registry, name, source, resolution, left)) return true;
         reasons.push(`${registry.url} holds it at another checksum`);
       } catch (error) {
         if (!(error instanceof RegistryError)) throw error;
         reasons.push(`${registry.url}: ${error.message}`);
       }
     }
+    // The built-in nothing serves is the app's to install from its seed.
+    if (name === BUILTIN_PACKAGE_NAME && options.builtinUnserved === "leave") return false;
     throw new InstallError(name, `${name} ${source.version}: no registry serves it at the locked checksum${reasons.length > 0 ? `: ${reasons.join("; ")}` : ""}`);
   }
   if (isGitSource(source)) {
@@ -367,6 +390,7 @@ async function fetchMissing(options: InstallOptions, name: string, resolution: R
       putVerified(store, name, file, readFileSync(absolute));
     }
   }
+  return true;
 }
 
 /** Serve the built-in spec package's missing files from this device's
@@ -551,7 +575,7 @@ export async function install(options: InstallOptions): Promise<InstallReport> {
   if (confined && pathRoot !== null) await assertConfined(lock, pathRoot);
   if (engine !== undefined) linkPathSources(playbooks, engine);
   const target = installedDir(root);
-  const record = installRecord(lock);
+  let record = installRecord(lock);
   if (treeMatches(target, lock, record)) {
     // Installed already, by this app or an earlier one: each playbook is
     // prepared in place, where an earlier app left a module carrying the
@@ -560,12 +584,25 @@ export async function install(options: InstallOptions): Promise<InstallReport> {
     return { installed: [], missingPaths, unchanged: true, engineKept };
   }
 
+  const left: string[] = [];
   for (const name of names) {
     try {
-      await fetchMissing(options, name, lock.packages[name]!);
+      if (!(await fetchMissing(options, name, lock.packages[name]!))) left.push(name);
     } catch (error) {
       if (error instanceof InstallError) throw error;
       throw new InstallError(name, `${name}: ${(error as Error).message}`, error);
+    }
+  }
+  // The built-in left out stands neither in the tree nor in its record,
+  // so every host reads it not installed; a tree holding the rest as the
+  // lock locks it already is installed as it stands (environments-7).
+  const placed = left.length === 0 ? names : names.filter((name) => !left.includes(name));
+  if (left.length > 0) {
+    const kept = lockWithout(lock, left);
+    record = installRecord(kept);
+    if (treeMatches(target, kept, record)) {
+      const engineKept = await prepareInstalled(target, placed, lock, engine, (folder) => folder, true);
+      return { installed: [], missingPaths, unchanged: true, engineKept, left };
     }
   }
 
@@ -574,7 +611,7 @@ export async function install(options: InstallOptions): Promise<InstallReport> {
   let engineKept: InstallReport["engineKept"];
   try {
     mkdirSync(staging, { recursive: true });
-    for (const name of names) {
+    for (const name of placed) {
       const resolution = lock.packages[name]!;
       const root = join(staging, ...name.split("/"));
       for (const file of resolution.files) {
@@ -583,7 +620,7 @@ export async function install(options: InstallOptions): Promise<InstallReport> {
         linkOrCopy(store.pathOf(file.sha256, file.executable), to, file.executable);
       }
     }
-    engineKept = await prepareInstalled(staging, names, lock, engine, (folder) => join(target, relative(staging, folder)));
+    engineKept = await prepareInstalled(staging, placed, lock, engine, (folder) => join(target, relative(staging, folder)));
     writeFileSync(join(staging, INSTALL_RECORD), JSON.stringify(record));
     await options.beforeReplace?.();
     // Checked at the instant before the swap, nothing awaited between.
@@ -595,7 +632,7 @@ export async function install(options: InstallOptions): Promise<InstallReport> {
     if (error instanceof InstallError || error instanceof VersionConflictError) throw error;
     throw new InstallError(undefined, `installing failed; the last files stay: ${(error as Error).message}`, error);
   }
-  return { installed: names, missingPaths, unchanged: false, engineKept };
+  return { installed: placed, missingPaths, unchanged: false, engineKept, ...(left.length > 0 ? { left } : {}) };
 }
 
 /** Swap a complete staged tree in for the installed one. */

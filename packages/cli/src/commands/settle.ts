@@ -5,11 +5,12 @@
 // environments-5, environments-7, environments-8): read `spex.yaml` and
 // `spex.lock` at the root; resolve where asked, or where the lock is
 // missing or stale; write the lock under the version read; install under
-// `<root>/.spex/` with no engine (cli-14); export into the root with the
-// library's agent table. It follows the order and the version checks of
-// the app's settle, without its state, announcements or catalog: every
-// write is a versioned write, refused in the library's words where its
-// file changed meanwhile (DR-111).
+// `<root>/.spex/` with no engine (cli-14), the app's built-in spec
+// package that no seed and no registry serves left to the app; export
+// into the root with the library's agent table. It follows the order
+// and the version checks of the app's settle, without its state,
+// announcements or catalog: every write is a versioned write, refused in
+// the library's words where its file changed meanwhile (DR-111).
 
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
@@ -199,8 +200,11 @@ export async function settle(env: Environment, mode: SettleMode): Promise<Settle
       registry,
       registries: (source) => env.installRegistries(instance, source),
       // The built-in spec package from this device's seed, by its files'
-      // digests (environments-7).
+      // digests; where no seed and no registry serves it, left out as not
+      // installed for the app's next use to install, the rest installed
+      // (environments-7).
       seed: env.seed(),
+      builtinUnserved: "leave",
       git: env.git,
       pathRoot: root,
       requestsText: read?.text ?? null,
@@ -211,15 +215,18 @@ export async function settle(env: Environment, mode: SettleMode): Promise<Settle
   // A stale lock installs and exports nothing (environments-7).
   if (report.stale) throw new Refusal(unnamedText(`spex.lock no longer matches: ${report.stale.join("; ")}; spex update resolves it again`, locators));
   // Exports derive from the installed tree and its lock: written only
-  // while both still stand as this install left them (environments-8).
+  // while both still stand as this install left them, and cover the
+  // spec packages installed alone (environments-8).
   let exported: ExportReport;
   try {
     if (fileVersion(lockFile) !== lockVersion) throw new VersionConflictError(lockFile);
     const installed = installedPackages(root, lock);
-    if (!Object.entries(lock.packages).every(([name, resolution]) => isPathSource(resolution.source) || installed.has(name))) {
+    const left = new Set(report.left ?? []);
+    if (!Object.entries(lock.packages).every(([name, resolution]) => isPathSource(resolution.source) || left.has(name) || installed.has(name))) {
       throw new VersionConflictError(installedDir(root));
     }
-    exported = await exportEnvironment({ root, lock, workingFolder: root, pathRoot: root, userHome: null, agents: [] });
+    const exportedLock = left.size === 0 ? lock : { ...lock, packages: Object.fromEntries(Object.entries(lock.packages).filter(([name]) => !left.has(name))) };
+    exported = await exportEnvironment({ root, lock: exportedLock, workingFolder: root, pathRoot: root, userHome: null, agents: [] });
   } catch (error) {
     throw refusalOf(error);
   }
@@ -334,6 +341,17 @@ export function gainedLines(root: string, settled: Settled): string[] {
     }
   }
   return lines;
+}
+
+/** The line naming the app's built-in spec package an install left to
+ * the app, no seed and no registry serving it (cli-4). */
+export function leftToAppLine(name: string, version: string): string {
+  return `Left to the app: ${name} ${version}, its built-in package, installed by the app at its next use`;
+}
+
+/** The lines naming each spec package an install left to the app. */
+export function leftToAppLines(root: string, settled: Settled): string[] {
+  return (settled.install.left ?? []).map((name) => leftToAppLine(name, versionOf(root, name, settled.lock.packages[name]!)));
 }
 
 /** The lines naming what an export left out (environments-8). */

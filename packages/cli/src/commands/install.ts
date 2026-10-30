@@ -5,11 +5,12 @@
 // and export, resolving first where the lock is missing or stale, and
 // print each spec package installed with its version, each export
 // written and what the export left out. A lock installing as it stands
-// resolves nothing and rewrites no file.
+// resolves nothing and rewrites no file. The app's built-in spec package
+// that no seed and no registry serves is named as left to the app.
 
 import { isPathSource } from "../lib/environment/index.js";
 import { Environment } from "./environment.js";
-import { exportsOf, leftOutLines, settle, versionOf } from "./settle.js";
+import { exportsOf, leftOutLines, leftToAppLine, settle, versionOf } from "./settle.js";
 import { parsed, Refusal, type Command } from "./run.js";
 
 export const install: Command = async (args) => {
@@ -27,6 +28,8 @@ export const install: Command = async (args) => {
     const version = versionOf(env.root, name, resolution);
     if (isPathSource(resolution.source)) {
       lines.push(report.missingPaths.includes(name) ? `Missing ${name} ${version}: no folder at ${resolution.source.path}` : `In place ${name} ${version} at ${resolution.source.path}`);
+    } else if (report.left?.includes(name)) {
+      lines.push(leftToAppLine(name, version));
     } else {
       lines.push(report.installed.includes(name) ? `Installed ${name} ${version}` : `Up to date ${name} ${version}`);
     }

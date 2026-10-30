@@ -44,6 +44,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `spex publish [<org>/<pkg>] [--dry-run]` publishes a package by name
   from `spex-packages/<org>/<pkg>/`, or the folder its path request
   names, to the environment's Space.
+- `spex install` leaves the app's built-in package, `sublang/playbooks`,
+  to the app where nothing serves it, installing the rest.
 
 ### Removed
 
