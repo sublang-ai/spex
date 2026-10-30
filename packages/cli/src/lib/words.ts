@@ -60,7 +60,8 @@ export function words(): LibraryWords {
   return current;
 }
 
-/** Install a host's phrasing; a phrase it leaves out reads in English. */
-export function phraseLibrary(phrasing: Partial<LibraryWords>): void {
-  current = { ...ENGLISH, ...phrasing };
+/** Install a host's phrasing, every phrase named: a host never leaves
+ * one to read in English unnoticed. */
+export function phraseLibrary(phrasing: LibraryWords): void {
+  current = { ...phrasing };
 }
