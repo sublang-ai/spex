@@ -5,8 +5,9 @@
 
 ## Status
 
-All local integration and installed live release gates pass (2026-10-29).
-Publication is pending exact-main CI and the app release workflow.
+The dependency fix is delivered: slc 0.20.0 is published and the Spex change is merged (2026-10-29).
+The owner clarified that app publication is not required; no app tag or release is created for this work.
+The follow-up CI prerequisite correction and release evidence are pushed in PR 290 and await its checks.
 
 ## Intent
 
@@ -16,12 +17,12 @@ Adopt the compiler's published Playbook peer contract and make app dependency di
 
 - [x] Record and enforce the shared-engine installation contract.
 - [x] Adopt published slc 0.20.0 with existing runtime and SDK resolutions preserved.
-- [ ] Verify and publish app 0.9.0-beta.19.
+- [x] Verify the app integration and installed live acceptance.
 
 ## Tasks
 
 1. Adopt the compiler release, add the dependency gate and its integration coverage, and prepare the app beta.
-2. Record the installed release smoke and publish the verified beta.
+2. Record the installed smoke and delivery; keep the prepared beta version available for a future app release.
 
 ## Verification
 
@@ -33,4 +34,5 @@ The combined candidate includes the package-manager library refactor from main a
 Its installed smoke passes fresh installation, both shells, packed CLI journeys, real coder dispatch and output, abort, cleanup and Node ABI restoration; no provider waiver is used.
 The ordinary Electron cache contains the official archive verified against the package's pinned checksum after the first download exceeded its budget; the source, assertions and fresh npm cache are unchanged.
 The [release preparation record](../../docs/releases/0.9.0-beta.19-preparation.md) preserves the attempts and evidence hashes.
-Exact-main CI and publication remain pending.
+PR 288 passes its required CI and is merged as `9bbec6e85ccda6a69928ed54231262a467aaa52d`.
+App publication is outside the completed scope; any future app tag still requires the normal exact-commit CI and release workflow.
