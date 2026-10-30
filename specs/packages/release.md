@@ -90,7 +90,7 @@ Where the repo hosts multiple release channels ([DR-002](../decisions/002-deskto
 
 The released package's `package.json` shall keep the published tarball to runtime files and gate publishing on a green build:
 
-- the `files` field excludes test files and build artifacts not required at runtime from the published tarball;
+- the `files` field excludes test files and build artifacts not required at runtime from the published tarball, keeping every module its `exports` field names;
 - the `prepublishOnly` script builds and runs tests before publishing.
 
 #### release-13

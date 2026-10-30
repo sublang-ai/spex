@@ -110,6 +110,7 @@ When a package command ends, the CLI shall exit `0` only on its success, `1` on 
 The published `@sublang/spex` package shall export the package-manager library — the format, requests and lock, resolution, the store and installs, exports, the registry client and stand-in registry, publishing, the sign-in client with its credential store and the home's instance entries — as its own modules, which the core imports from the workspace, so one implementation serves the command line and the app ([DR-165](../decisions/165-one-package-manager-hosted-by-the-cli-and-the-app.md)):
 
 - the library depends on no agent SDK and on no Cligent, Playbook or compiler package;
+- beside the library, its exports keep the scaffold's files resolvable by name, as `@sublang/spex/scaffold/<path>`;
 - the CLI prepares no playbook artifact to run on an engine, which the app does at its installs and uses [[environments-7](environments.md#environments-7)].
 
 ## Verification
@@ -140,4 +141,4 @@ When the packed CLI's commands end in success, refusal and interrupt, the integr
 
 #### cli-19
 
-When the package-build integration inspects the packed `@sublang/spex`, it shall assert that its dependencies name no agent SDK, no Cligent, no Playbook and no compiler package, that the core's sources import the library from the workspace package and hold no copy of its modules, and that the CLI's install of a playbook artifact leaves its folder without engine links [[cli-14](#cli-14)].
+When the package-build integration inspects the packed `@sublang/spex`, it shall assert that its dependencies name no agent SDK, no Cligent, no Playbook and no compiler package, that the scaffold's `specs/meta.md` and `i18n/zh/specs/meta.md` resolve by name from the installed package, that the core's sources import the library from the workspace package and hold no copy of its modules, and that the CLI's install of a playbook artifact leaves its folder without engine links [[cli-14](#cli-14)].

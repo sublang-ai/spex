@@ -92,7 +92,8 @@ Both hosts read an environment from its files at each use, so what one wrote the
 ## Consequences
 
 - The environment module, the versioned-file and origin helpers, the registry client, the sign-in client with its credential store and the home's instance entries move from the core into `packages/cli` and are exported from `@sublang/spex`; the core depends on the workspace package and keeps its orchestration, progress, broadcasts and words.
-- The stand-in registry moves with the library for the CLI's own tests; the stand-in host stays in the core and serves the CLI's sign-in tests through the core's testing export.
+- The stand-in registry moves with the library for the CLI's own tests and ships as its `testing` export for the core's tests and the browser journeys; the stand-in host stays in the core and serves the CLI's sign-in tests through the core's testing export.
+- `@sublang/spex` declares its exports: the library's modules, `testing`, the scaffold's files by path and `package.json`; any other deep import, such as `dist/`, stops resolving.
 - `specs/packages/cli.md` is new; `attached-cli.md` is removed; `environments.md`, `playbook-library.md`, `storage.md`, `core-service.md` and `server-shell.md` lose the attached client, the endpoint file and the clone-relative installed tree.
 - Existing homes migrate by use: the app's next install of an environment writes `.spex/` at its root and removes the former `<clone>/packages/` and `<clone>/skills/`.
 - The authoring session's folder, the IDE's Add-from-folder placeholder and the browser journeys follow `spex-packages/<org>/<pkg>/`.

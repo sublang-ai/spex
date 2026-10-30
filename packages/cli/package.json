@@ -50,6 +50,7 @@
       "types": "./dist/testing/index.d.ts",
       "default": "./dist/testing/index.js"
     },
+    "./scaffold/*": "./scaffold/*",
     "./package.json": "./package.json"
   },
   "files": [
