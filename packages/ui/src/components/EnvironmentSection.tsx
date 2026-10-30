@@ -230,7 +230,7 @@ function PackageRow({
         </ul>
       ) : null}
       {request?.kind === "path" && state.pathRoot !== null ? (
-        <PublishControl repository={repository} path={request.path} target={target} onNavigate={onNavigate} />
+        <PublishControl repository={repository} name={name} path={request.path} target={target} onNavigate={onNavigate} />
       ) : null}
       {error ? (
         <p role="alert" data-testid={`env-package-error-${name}`} className={ERROR}>
@@ -256,7 +256,7 @@ export function EnvironmentSection({
   const store = usePlaceStore();
   const state = store((current) => current.environments[repository]);
   const space = store((current) => current.space);
-  const target = publishTargetOf(space, repository);
+  const target = publishTargetOf(space, state);
   const loadError = store((current) => current.environmentErrors[repository]);
   const resolve = store((current) => current.resolveEnvironment);
   const install = store((current) => current.installEnvironment);
@@ -838,7 +838,7 @@ function FolderRequest({
           </Field>
           <Field label={i18n._("Folder inside {folder}", { folder })}>
             <span className="flex min-w-0 gap-1">
-              <input data-testid="folder-request-path" value={path} onChange={(event) => setPath(event.target.value)} placeholder="spex-packages/triage" spellCheck={false} className={`${INPUT} flex-1 font-mono`} />
+              <input data-testid="folder-request-path" value={path} onChange={(event) => setPath(event.target.value)} placeholder="spex-packages/acme/triage" spellCheck={false} className={`${INPUT} flex-1 font-mono`} />
               {pickDirectory ? (
                 <button
                   type="button"

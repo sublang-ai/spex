@@ -16,6 +16,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -1210,8 +1211,13 @@ async function arrangeApp(
     },
     draftDir(id) {
       // The playbook artifact of the spec package under development in
-      // the project's working folder (environments-10).
-      return join(projectDir, "spex-packages", id, "playbooks", "en", id);
+      // the project's working folder, `spex-packages/<org>/<id>/`
+      // (environments-10): the org folder holding it, else the
+      // project's default org, its key's first segment.
+      const base = join(projectDir, "spex-packages");
+      const orgs = existsSync(base) ? readdirSync(base).filter((org) => existsSync(join(base, org, id))).sort() : [];
+      const org = orgs[0] ?? app.projectId?.split("/")[0] ?? E2E_OWN;
+      return join(base, org, id, "playbooks", "en", id);
     },
     holdPlayer(playerId) {
       if (playerHolds.has(playerId)) throw new Error(`${playerId} is already held`);

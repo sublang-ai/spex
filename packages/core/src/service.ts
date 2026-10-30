@@ -63,7 +63,6 @@ import {
   parseCommand,
   PACKAGE_LICENSE_PATTERN,
   PROTOCOL_VERSION,
-  ATTACHED_CLI_VERSION,
   type AdapterName,
   type Channel,
   type Command,
@@ -111,10 +110,11 @@ import { migrateManagedLibraryConfig } from "./config-migrate.js";
 import { resolveArtifacts } from "./artifacts.js";
 import { builtinPackage, loadBuiltinCatalog } from "./builtins.js";
 import { AuthorManager } from "./authoring.js";
-import { authoringLanguage, authoringManifest, DraftStore, draftPackagePath, newPackageDefaults } from "./drafts.js";
+import { authoringLanguage, authoringManifest, DraftStore, isDraftPackagePath, newPackageDefaults, packageFolderFor } from "./drafts.js";
 import { EnvironmentManager, toRequest } from "./environments.js";
 import {
   INSTALL_RECORD,
+  installedDir,
   isGitSource,
   isPathSource,
   isKebabName,
@@ -134,7 +134,7 @@ import {
   resolveSpecPath,
   writeSpecFile,
 } from "./specs.js";
-import { ArtifactFolderBusy, checkToolchain, compilePlaybook, compilerAgentOf, ENGINE_LINKS_EXCLUDE, type CompileResult, type LineSpawner, type ToolchainRuntime } from "./compile.js";
+import { ArtifactFolderBusy, canonicalFolder, checkToolchain, compilePlaybook, compilerAgentOf, ENGINE_LINKS_EXCLUDE, type CompileResult, type LineSpawner, type ToolchainRuntime } from "./compile.js";
 import { browserAgent } from "./browser.js";
 import { ApplicationMedia } from "./media.js";
 import { MediaTransferError } from "./media-transfers.js";
@@ -711,7 +711,6 @@ export class CoreService {
   private stopping = false;
   /** The endpoint file this process wrote under the home
    * (core-service-143), removed at stop; unset while none stands. */
-  private endpointFile?: string;
   /** Tracked so shutdown cannot race an automatic continuation opening. */
   private readonly advancing = new Set<Promise<void>>();
   /** A settled lane whose one automatic handoff is being decided. */
@@ -834,7 +833,7 @@ export class CoreService {
       // keeps current, asked only where the home is signed in there
       // (environments-12, git-host-4, DR-127), an instance that cannot
       // be reached, or asks to wait, read as it answered (git-host-11).
-      instanceOf: (key) => this.space.instanceOriginOf(key),
+      placedAt: (key) => this.space.instanceOriginOf(key),
       tokenFor: async (origin) => {
         try {
           return await this.space.accessSecretFor(origin);
@@ -1141,7 +1140,7 @@ export class CoreService {
 
   /** Playbook ids a new authoring session of a project may not take:
    * every playbook the project's or your own group's environment
-   * exports, but the one a folder `spex-packages/<id>/` left by a
+   * exports, but the one a folder `spex-packages/<org>/<id>/` left by a
    * deleted session exports, which the new session takes over
    * (playbook-library-51). */
   private reservedPlaybookIds(projectId: string): string[] {
@@ -1149,7 +1148,7 @@ export class CoreService {
     for (const key of new Set([projectId, this.store.home.own()])) {
       for (const resolution of Object.values(this.environments.lockOf(key)?.packages ?? {})) {
         for (const [exported, artifact] of Object.entries(resolution.exports)) {
-          const own = isPathSource(resolution.source) && key === projectId && resolution.source.path === draftPackagePath(artifact);
+          const own = isPathSource(resolution.source) && key === projectId && isDraftPackagePath(resolution.source.path, artifact);
           if (!own) { ids.add(exported); ids.add(artifact); }
         }
       }
@@ -1212,12 +1211,16 @@ export class CoreService {
       const dir = this.store.repository(key)?.dir;
       if (dir) {
         inputs.set(join(dir, "spex.lock"), inputVersion(join(dir, "spex.lock")));
-        const installed = join(dir, "packages", INSTALL_RECORD);
+        // What is installed stands under the environment's root's
+        // `.spex/` (environments-26); none is installed without a root.
+        const root = this.environments.rootOf(key);
+        if (root === null) continue;
+        const installed = join(installedDir(root), INSTALL_RECORD);
         inputs.set(installed, inputVersion(installed));
         for (const [name, resolution] of Object.entries(this.environments.lockOf(key)?.packages ?? {})) {
           if (isPathSource(resolution.source)) continue;
           for (const file of resolution.files) {
-            const path = join(dir, "packages", ...name.split("/"), ...file.path.split("/"));
+            const path = join(installedDir(root), ...name.split("/"), ...file.path.split("/"));
             if (!inputs.has(path)) inputs.set(path, existsSync(path));
           }
         }
@@ -1502,7 +1505,7 @@ export class CoreService {
         ...(options.home !== undefined ? { home: options.home } : {}),
         ...(options.dataDir ? { libraryDir: options.libraryDir ?? join(options.dataDir, "playbooks") } : {}),
         ...(relocateConfig ? { relocateConfig } : {}),
-        ...(builtin ? { prepareRepository: (dir: string, _key: string, registryOrigin: string) => { prepareBuiltinEnvironment(dir, builtin, registryOrigin); } } : {}),
+        ...(builtin ? { prepareRepository: (dir: string, _key: string, registryOrigin: string, space: string | null) => { prepareBuiltinEnvironment(dir, builtin, registryOrigin, space); } } : {}),
       });
     } catch (error) { seat?.environment.restore(); throw error; }
     let service: CoreService;
@@ -1836,8 +1839,6 @@ export class CoreService {
 
   async stop(): Promise<void> {
     this.stopping = true;
-    // No CLI finds an endpoint that is going away (core-service-143).
-    this.withdrawEndpoint();
     this.sessions.beginShutdown();
     // The stop is bounded (core-service-39, DR-134): every active turn
     // is aborted as admission closes; once those turns have settled, or
@@ -2082,6 +2083,9 @@ export class CoreService {
       if (!inputs.has(this.configPath)) inputs.set(this.configPath, inputVersion(this.configPath));
       throw cause(error);
     }
+    // The session's playbooks run on the app's engine, whichever host
+    // installed them (environments-9, playbook-library-46).
+    await this.environments.prepareForUse(projectId);
     try {
       return await composeConfig(ownTop, this.options.loadModule, this.configPath, {
         modules: this.modulesRead(projectId, inputs),
@@ -2315,6 +2319,9 @@ export class CoreService {
       nextState = { status: "missing", path: this.configPath };
       nextComposed = undefined;
     } else {
+      // Your own group's playbooks run on the app's engine, whichever
+      // host installed them (environments-9, playbook-library-46).
+      await this.environments.prepareForUse(null);
       try {
         const loaded = await loadConfig(this.configPath, this.options.loadModule, {
           modules: this.modulesRead(null, inputs),
@@ -2420,41 +2427,6 @@ export class CoreService {
     return this.authToken;
   }
 
-  /**
-   * Keep the loopback access URL this home is served at in
-   * `local/endpoint.json`, owner-only, as `{format: 1, url, pid}`, so the
-   * CLI finds the running app (core-service-143, DR-163). The core calls
-   * it for the socket it binds itself; a shell serving the core on a
-   * loopback host calls it with its access URL once it listens, and one
-   * bound to any other host never does. A seat writes none. A file a
-   * process that died left is replaced; the stop removes this one.
-   */
-  announceEndpoint(url: string): void {
-    if (this.options.seat || this.stopping) return;
-    const dir = join(this.store.dir, "local");
-    const file = join(dir, "endpoint.json");
-    try {
-      mkdirSync(dir, { recursive: true, mode: 0o700 });
-      writeApplicationBytes(file, `${JSON.stringify({ format: 1, url, pid: process.pid })}\n`);
-      this.endpointFile = file;
-    } catch (error) {
-      // The app serves without it; only the CLI's discovery is lost.
-      console.error(`spex: the endpoint file ${file} was not written: ${(error as NodeJS.ErrnoException).code ?? String(error)}`);
-    }
-  }
-
-  /** Remove the endpoint file this process wrote, if it still stands. */
-  private withdrawEndpoint(): void {
-    const file = this.endpointFile;
-    if (!file) return;
-    this.endpointFile = undefined;
-    try {
-      rmSync(file, { force: true });
-    } catch (error) {
-      console.error(`spex: the endpoint file ${file} was not removed: ${(error as NodeJS.ErrnoException).code ?? String(error)}`);
-    }
-  }
-
   /** The origins of every instance the home lists and of the one a
    * running sign-in names: those whose sign-in pages a shell may open in
    * the system browser (app-shell-37, app-shell-20). */
@@ -2532,7 +2504,6 @@ export class CoreService {
       this.send(socket, {
         type: "hello",
         protocolVersion: PROTOCOL_VERSION,
-        attachedCliVersion: ATTACHED_CLI_VERSION,
         coreVersion: CORE_VERSION,
       });
       this.send(socket, {type: "approval.state", state: this.approvals.snapshot()});
@@ -2547,9 +2518,6 @@ export class CoreService {
         resolveListen();
       });
     });
-    // Its own loopback socket listens: the CLI finds it there
-    // (core-service-143).
-    this.announceEndpoint(`ws://127.0.0.1:${this.port()}/?token=${encodeURIComponent(this.authToken)}`);
   }
 
   /** Answer an HTTP request under `/applets/` on the endpoint
@@ -3303,16 +3271,25 @@ export class CoreService {
         handles.add(controller);
         this.standaloneCompiles.set(command.playbookId, handles);
         try {
-          const packagePath = draftPackagePath(command.playbookId);
+          // The folder of the authoring session of this id where it lies
+          // in this working folder, however the folder is spelled, so
+          // the two are one job (playbook-library-99); else the one a
+          // session would take under the project's default org,
+          // `spex-packages/<org>/<id>/` (playbook-library-69,
+          // playbook-library-70, environments-10) — never another org's
+          // package of that name; no one is asked here: the project's
+          // defaults stand, with no license where none is derived.
+          const defaults = newPackageDefaults(project.id, project.path, await this.environments.publishableOrgs(project.id));
+          const sessionFolder = this.drafts.workingFolder(command.playbookId);
+          const packagePath = sessionFolder !== null && canonicalFolder(sessionFolder) === canonicalFolder(project.path)
+            ? this.drafts.packagePath(command.playbookId)
+            : packageFolderFor(project.path, defaults.org, command.playbookId);
           const packageDir = join(project.path, ...packagePath.split("/"));
           // The language its manifest already names, else the project's
           // authoring language, else the home's (playbook-library-70).
           const language = authoringLanguage(project.path, packageDir, command.playbookId, this.homeLanguage());
           mkdirSync(join(packageDir, "playbooks", language), { recursive: true });
           if (!existsSync(join(packageDir, "meta.yaml"))) {
-            // No one is asked here: the project's defaults stand, with
-            // no license where none is derived (playbook-library-69).
-            const defaults = newPackageDefaults(project.id, project.path, await this.environments.publishableOrgs(project.id));
             const fields = { org: defaults.org, ...(defaults.license !== null ? { license: defaults.license } : {}) };
             // A manifest made while the registry was asked stands.
             try {
@@ -3943,6 +3920,9 @@ export class CoreService {
       }
       // Environments (environments-14, environments-15, environments-17).
       case "environment.get":
+        // A use's read (environments-26): a lock other than the one
+        // installed is installed, reported through state.
+        this.environments.use(command.repository);
         return this.environments.state(command.repository);
       case "environment.request": {
         const { done } = await this.environments.request(command.repository, command.name, toRequest(command.request), command.wait === true);
@@ -3973,7 +3953,7 @@ export class CoreService {
       case "environment.publish": {
         // A dry run replies the inline summary and uploads nothing
         // (playbook-library-93); the upload reports through state.
-        const { done, preview } = await this.environments.publish(command.repository, command.path, command.dryRun === true, command.wait === true);
+        const { done, preview } = await this.environments.publish(command.repository, command.name, command.dryRun === true, command.wait === true);
         if (command.wait && !command.dryRun) {
           const published = await done;
           if (!published) throw new CoreError("internal", "Publication completed without a receipt");
@@ -4038,6 +4018,9 @@ export class CoreService {
     const own = this.store.home.own();
     const projectRepository = projectId !== undefined && projectId !== own ? this.store.repository(projectId) : undefined;
     if (projectId !== undefined && projectId !== own && !projectRepository) throw noProject(projectId);
+    // Each listed playbook's module is read on the app's engine
+    // (environments-9, playbook-library-46).
+    await this.environments.prepareForUse(projectRepository ? projectId! : null);
     const topOf = (path: string | undefined): Record<string, unknown> | null => {
       if (!path || !existsSync(path)) return null;
       try {

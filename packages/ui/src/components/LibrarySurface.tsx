@@ -400,7 +400,7 @@ function commitPhrase(folder: string): ReactNode {
   const slot = "\u0000";
   const phrase = i18n._({
     id: "Commit {folder} with your code",
-    comment: "after enabling an authored playbook: {folder} is its spec package's folder in the working folder, e.g. spex-packages/triage",
+    comment: "after enabling an authored playbook: {folder} is its spec package's folder in the working folder, e.g. spex-packages/acme/triage",
     values: { folder: slot },
   });
   const [before = "", after = ""] = phrase.split(slot);
@@ -1455,7 +1455,7 @@ export function LibrarySurface({
       revealed={revealed === entry.id}
       enabledFolder={
         enabledNote === entry.id
-          ? drafts[entry.id] ? draftPackagePath(drafts[entry.id]!) : `spex-packages/${entry.id}`
+          ? drafts[entry.id] ? draftPackagePath(drafts[entry.id]!) : `spex-packages/${entry.package}`
           : undefined
       }
       hints={hintsFor(entry)}

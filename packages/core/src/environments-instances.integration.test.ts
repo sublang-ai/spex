@@ -145,6 +145,11 @@ function lockByHand(home: Home, key: string, name: string, version: string, reso
   writeFileSync(join(clone, "spex.lock"), serializeLock({ ...lock, requests: requestsDigest(text), packages: { ...lock.packages, [name]: resolution } }));
 }
 
+/** The `space` a clone's `spex.yaml` names (environments-2). */
+function spaceOf(home: Home, key: string): string | undefined {
+  return parseRequests(readFileSync(join(clonePath(home.dataDir, key), "spex.yaml"), "utf8")).space;
+}
+
 /** Pick a project into your namespace at an instance (space-58), its
  * clone moved under that instance's folder (storage-35): its key. */
 async function pickAt(home: Home, local: string, host: StandinHost, name: string): Promise<string> {
@@ -197,7 +202,13 @@ async function twoInstances(t: TestContext, name: string, registryFetch?: typeof
   const south = await pickAt(home, added, second, "south");
   await environmentOf(home, south, (state) => installedFrom(state, BUILTIN_PACKAGE_NAME, second.url));
   assert.equal(registryOf(lockOf(home, south), BUILTIN_PACKAGE_NAME), second.url);
+  // The pick names the second, not the default, as its environment's
+  // instance (environments-11, environments-2).
+  assert.equal(spaceOf(home, south), second.url);
+  assert.equal((await home.client.expectOk("environment.get", { repository: south })).instance, second.url, "the state names the environment's instance");
   const { key: local } = await addFolder(home, gitFolder("local"));
+  assert.equal(spaceOf(home, local), undefined, "a local-only project names no space");
+  assert.equal((await home.client.expectOk("environment.get", { repository: local })).instance, first.url, "one naming none is the default instance's");
   assert.equal(rowOf(await home.client.expectOk("space.get", {}), local).instance, null, "a project with no instance");
   await environmentOf(home, local, (state) => installedFrom(state, BUILTIN_PACKAGE_NAME, first.url));
   return { R1, R2, first, second, home, south, local };
@@ -298,11 +309,38 @@ test("environments-34, environments-5, environments-12, environments-3, environm
   const joined = await joinAt(home, second, "acme/joined-spex", gitFolder("joined"));
   await environmentOf(home, joined, (candidate) => installedFrom(candidate, BUILTIN_PACKAGE_NAME, second.url));
   assert.equal(registryOf(lockOf(home, joined), BUILTIN_PACKAGE_NAME), second.url);
+  assert.equal(spaceOf(home, joined), second.url, "[environments-11] the pairing names the second as space");
   const rebound = await joinAt(home, second, "acme/rebound-spex");
   assert.equal(existsSync(join(clonePath(home.dataDir, rebound), "spex.yaml")), false, "a bare join requests nothing");
   await home.client.expectOk("project.rebind", { projectId: rebound, path: gitFolder("rebound") });
   await environmentOf(home, rebound, (candidate) => installedFrom(candidate, BUILTIN_PACKAGE_NAME, second.url));
   assert.equal(registryOf(lockOf(home, rebound), BUILTIN_PACKAGE_NAME), second.url);
+  assert.equal(spaceOf(home, rebound), second.url, "[environments-11] the pairing names the second as space");
+  // One joined at the first, the default instance, with its working
+  // folder paired names no space, locked at the first's origin
+  // (environments-11, environments-2).
+  const atFirst = await joinAt(home, first, "acme/at-first-spex", gitFolder("at-first"));
+  await environmentOf(home, atFirst, (candidate) => installedFrom(candidate, BUILTIN_PACKAGE_NAME, first.url));
+  assert.equal(registryOf(lockOf(home, atFirst), BUILTIN_PACKAGE_NAME), first.url);
+  assert.equal(spaceOf(home, atFirst), undefined, "[environments-11] a pairing at the default instance names no space");
+
+  // A `space` that is no instance origin is refused naming it
+  // (environments-2), the files kept as they stand.
+  const localYaml = join(clonePath(home.dataDir, local), "spex.yaml");
+  const localText = readFileSync(localYaml, "utf8");
+  writeFileSync(localYaml, localText.replace("format: 1\n", "format: 1\nspace: http://example.com\n"));
+  await home.client.expectOk("environment.resolve", { repository: local });
+  state = await environmentOf(home, local, (candidate) => candidate.error !== null);
+  assert.match(state.error ?? "", /space "http:\/\/example\.com" is not an instance origin/);
+  // Its environment then names no instance: a search and a publish are
+  // refused with that reason, never sent to the default instance's
+  // registry (environments-2, environments-10, environments-17).
+  assert.equal(state.instance, null, "a spex.yaml that does not read names no instance");
+  const asked = R1.script.requests.length;
+  await home.client.expectError("environment.search", { repository: local, query: "search" }, "invalid_request", /^spex\.yaml does not read: space "http:\/\/example\.com" is not an instance origin/);
+  await home.client.expectError("environment.publish", { repository: local, name: "acme/none", dryRun: true }, "invalid_request", /^spex\.yaml does not read: space "http:\/\/example\.com" is not an instance origin/);
+  assert.equal(R1.script.requests.length, asked, "the default instance's registry is asked nothing");
+  writeFileSync(localYaml, localText);
 
   // A second home signed in to the third alone, which the first's
   // registry also answers, whose local-only project holds the lock the
@@ -322,29 +360,33 @@ test("environments-34, environments-5, environments-12, environments-3, environm
   await assert.rejects(new RegistryClient({ url: first.url }).version("vault/secrets", "1.0.0"), (error: unknown) => error instanceof RegistryError && error.kind === "not_found",
     "the first's registry refuses the private release without a token");
 
-  // Signed out of the third, nothing serves it: the first's registry is
-  // asked with no token, the third not at all, and the install fails
-  // naming the spec package, the last files staying (environments-7,
-  // environments-12).
+  // Signed out of the third, nothing serves it: the registry of the
+  // environment's instance — the home's default, the third, whose
+  // `spex.yaml` names no space (environments-2) — is asked with no
+  // token, then the first's, the lock's, with none, and the install
+  // fails naming the spec package, the last files staying
+  // (environments-7, environments-12).
   await signOut(other, third);
   one = R1.script.received.length;
   await other.client.expectOk("environment.install", { repository: copy });
   state = await environmentOf(other, copy, (candidate) => candidate.error !== null);
   assert.match(state.error ?? "", /vault\/secrets/);
   assert.equal(state.packages.find((pkg) => pkg.name === "vault/secrets")?.installed, false);
-  assert.deepEqual(receivedFor(R1, one, "vault/secrets"), [["/api/v1/packages/vault/secrets/1.0.0", first.url, null, false]]);
+  assert.deepEqual(receivedFor(R1, one, "vault/secrets"), [
+    ["/api/v1/packages/vault/secrets/1.0.0", third.url, null, false],
+    ["/api/v1/packages/vault/secrets/1.0.0", first.url, null, false],
+  ]);
 
-  // Signed in to the third again, it installs through the third with the
-  // third's token, after the first's registry refused it without one;
-  // the lock still records the first's origin (environments-7,
-  // environments-12).
+  // Signed in to the third again, it installs through the third, the
+  // environment's instance, with the third's token, the first's
+  // registry asked nothing directly; the lock still records the first's
+  // origin (environments-7, environments-12).
   await signIn(other, third);
   one = R1.script.received.length;
   await other.client.expectOk("environment.install", { repository: copy });
   state = await environmentOf(other, copy, (candidate) => installedFrom(candidate, "vault/secrets", first.url) || candidate.error !== null);
   assert.equal(state.error, null);
   assert.deepEqual(receivedFor(R1, one, "vault/secrets"), [
-    ["/api/v1/packages/vault/secrets/1.0.0", first.url, null, false],
     ["/api/v1/packages/vault/secrets/1.0.0", third.url, GRACE.login, true],
     ["/api/v1/packages/vault/secrets/1.0.0/download", third.url, GRACE.login, true],
   ]);
@@ -481,14 +523,15 @@ test("environments-34, environments-13, environments-29: a Git source at the sha
   assert.equal(detailOf(state), `${SECOND} ${commit.slice(0, 12)} pkg`);
   assert.ok(!JSON.stringify(state).includes(second.gitOrigin), "no Git origin in the state");
 
-  // Its files gone from the clone and the store, and its fetched
+  // Its files gone from its root's .spex/ and the store, and its fetched
   // repository from the cache, an install fetches the locked commit with
   // the credential the second brokers (environments-13).
   const files = lockOf(home, south).packages[NAME]!.files;
   const stored = files.map((file) => join(home.dataDir, "store", ...(file.executable ? ["x"] : []), file.sha256));
   assert.ok(stored.length > 0 && stored.every((file) => existsSync(file)), "the store holds its files");
   for (const file of stored) rmSync(file);
-  rmSync(join(clonePath(home.dataDir, south), "packages", ...NAME.split("/")), { recursive: true });
+  const southRoot = (await home.client.expectOk("environment.get", { repository: south })).pathRoot!;
+  rmSync(join(southRoot, ".spex", "packages", ...NAME.split("/")), { recursive: true });
   rmSync(join(home.dataDir, "cache", "git"), { recursive: true, force: true });
   from = transports.length;
   await home.client.expectOk("environment.install", { repository: south });
@@ -627,17 +670,18 @@ test("environments-34, environments-10, environments-17, environments-5: a publi
   // Whether a registry holds a release, asked of it directly.
   const holds = async (registry: StandinRegistry, name: string): Promise<boolean> => (await fetch(`${registry.url}/api/v1/packages/${name}/1.0.0`)).ok;
   // A spec package under development in an environment's path root, as
-  // an authoring session keeps it (environments-10): its path there.
-  const underDevelopment = async (key: string, name: string, folder: string): Promise<string> => {
+  // an authoring session keeps it, at spex-packages/<org>/<pkg>/
+  // (environments-10): its name, by which it publishes.
+  const underDevelopment = async (key: string, name: string): Promise<string> => {
     const root = (await home.client.expectOk("environment.get", { repository: key })).pathRoot;
     assert.ok(root, `${key} has a path root on this device`);
-    const path = `${folder}/${name.split("/")[1]}`;
-    await release(name, "1.0.0", join(root, ...path.split("/")));
-    return path;
+    await release(name, "1.0.0", join(root, "spex-packages", ...name.split("/")));
+    return name;
   };
-  // Publish it and wait for the publish to end: the environment's state.
-  const publish = async (key: string, path: string, name: string): Promise<EnvironmentState> => {
-    assert.deepEqual(await home.client.expectOk("environment.publish", { repository: key, path }), { accepted: true });
+  // Publish it by name and wait for the publish to end: the
+  // environment's state.
+  const publish = async (key: string, name: string): Promise<EnvironmentState> => {
+    assert.deepEqual(await home.client.expectOk("environment.publish", { repository: key, name }), { accepted: true });
     return environmentOf(home, key, (state) => state.published?.name === name || state.error !== null);
   };
 
@@ -647,7 +691,7 @@ test("environments-34, environments-10, environments-17, environments-5: a publi
   // (environments-10, environments-17).
   let one = R1.script.received.length;
   let two = R2.script.received.length;
-  let state = await publish(south, await underDevelopment(south, "acme/south-pub", "spex-packages"), "acme/south-pub");
+  let state = await publish(south, await underDevelopment(south, "acme/south-pub"));
   assert.equal(state.error, null);
   assert.deepEqual(state.published, { name: "acme/south-pub", version: "1.0.0", url: `${second.url}/acme/south-pub` });
   assert.deepEqual(uploads(R2, two), [["/api/v1/packages/acme/south-pub/1.0.0", second.url, LOGIN, true]]);
@@ -659,7 +703,7 @@ test("environments-34, environments-10, environments-17, environments-5: a publi
   // account (environments-10).
   one = R1.script.received.length;
   two = R2.script.received.length;
-  state = await publish(local, await underDevelopment(local, "acme/local-pub", "spex-packages"), "acme/local-pub");
+  state = await publish(local, await underDevelopment(local, "acme/local-pub"));
   assert.equal(state.error, null);
   assert.deepEqual(state.published, { name: "acme/local-pub", version: "1.0.0", url: `${first.url}/acme/local-pub` });
   assert.deepEqual(uploads(R1, one), [["/api/v1/packages/acme/local-pub/1.0.0", first.url, LOGIN, true]]);
@@ -671,10 +715,10 @@ test("environments-34, environments-10, environments-17, environments-5: a publi
   // name, though the default instance stays signed in; nothing reaches
   // either registry (environments-10, environments-17).
   await signOut(home, second);
-  const later = await underDevelopment(south, "acme/south-later", "spex-packages");
+  const later = await underDevelopment(south, "acme/south-later");
   one = R1.script.received.length;
   two = R2.script.received.length;
-  await home.client.expectError("environment.publish", { repository: south, path: later }, "invalid_request", new RegExp(`^Sign in to publish at ${SECOND}$`));
+  await home.client.expectError("environment.publish", { repository: south, name: later }, "invalid_request", new RegExp(`^Sign in to publish at ${SECOND}$`));
   assert.deepEqual([R1.script.received.length, R2.script.received.length], [one, two], "no registry is asked");
   assert.deepEqual([await holds(R2, "acme/south-later"), await holds(R1, "acme/south-later")], [false, false]);
 
@@ -722,7 +766,7 @@ test("environments-34, environments-10, environments-17, environments-5: a publi
   // (environments-10).
   one = R1.script.received.length;
   two = R2.script.received.length;
-  state = await publish(HOST_OWN, await underDevelopment(HOST_OWN, "acme/own-pub", "mine"), "acme/own-pub");
+  state = await publish(HOST_OWN, await underDevelopment(HOST_OWN, "acme/own-pub"));
   assert.equal(state.error, null);
   assert.deepEqual(state.published, { name: "acme/own-pub", version: "1.0.0", url: `${second.url}/acme/own-pub` });
   assert.deepEqual(uploads(R2, two), [["/api/v1/packages/acme/own-pub/1.0.0", second.url, LOGIN, true]]);
@@ -798,6 +842,7 @@ test("environments-34, environments-11, storage-31: with the first, the default 
   // remote names, the second's, not the default instance's
   // (environments-11).
   assert.ok(parseRequests(readFileSync(join(ownClone(again.dataDir), "spex.yaml"), "utf8")).packages[BUILTIN_PACKAGE_NAME], "the built-in is requested");
+  assert.equal(spaceOf(again, HOST_OWN), second.url, "[environments-11] with space naming the second, not the default");
   assert.equal(registryOf(lockOf(again, HOST_OWN), BUILTIN_PACKAGE_NAME), second.url);
   await environmentOf(again, HOST_OWN, (candidate) => installedFrom(candidate, BUILTIN_PACKAGE_NAME, second.url));
 });

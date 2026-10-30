@@ -5,7 +5,7 @@
 // environments-30, DR-104, DR-115, DR-124). Each selected skill is
 // copied — its `name` rewritten where aliased — and one skill is
 // generated per selected playbook, and one per selected spec holding the
-// spec file, into `<clone>/skills/<name>/`; those are mirrored into the
+// spec file, into `<root>/.spex/skills/<name>/`; those are mirrored into the
 // folder where each agent Spex drives reads project-level skills in the
 // working folder, kept out of Git there by its `.git/info/exclude`, and,
 // for your own group, into the user-level folders of the agents this
@@ -38,6 +38,7 @@ import { parseDocument, stringify as stringifyYaml } from "yaml";
 
 import { readVersioned, writeVersionedBytes } from "../files.js";
 import { AGENT_FOLDERS } from "./agent-folders.js";
+import { ensureSpexDir, installedDir, skillsDir as generatedSkillsDir } from "./layout.js";
 import { parseManifestText, type Manifest } from "./format.js";
 import { isPathSource, resolutionVersion, type Lock, type Resolution } from "./lock.js";
 
@@ -55,10 +56,12 @@ const excludeBegin = (block: ExcludeBlock): string => `# >>> spex ${block} (mana
 const excludeEnd = (block: ExcludeBlock): string => `# <<< spex ${block}`;
 
 export interface ExportOptions {
-  cloneDir: string;
+  /** The environment's root (environments-26): its `.spex/` holds the
+   * installed files and receives the generated skills. */
+  root: string;
   lock: Lock;
   /** The working folder exported to; null exports nowhere but the
-   * clone and the user's home. */
+   * root's `.spex/` and the user's home. */
   workingFolder: string | null;
   /** The folder a path source's path is relative to (environments-2):
    * your own group's clone; the working folder where omitted. */
@@ -68,15 +71,13 @@ export interface ExportOptions {
   /** The agents this device has: only their user-level folders are
    * written, while every project-level folder is (environments-16). */
   agents: string[];
-  /** `<clone>/packages`. */
-  packagesDir: string;
   /** The rename a mirror swaps a changed skill in with; the file
    * system's, unless a test injects a failure (environments-30). */
   rename?: (from: string, to: string) => void;
 }
 
 export interface ExportReport {
-  /** Every exported skill name, as it stands in `<clone>/skills/`. */
+  /** Every exported skill name, as it stands in `<root>/.spex/skills/`. */
   skills: string[];
   /** Each agent folder written, with the agents that read it. */
   folders: { agents: string[]; level: "project" | "user"; dir: string }[];
@@ -403,11 +404,13 @@ function userFolder(userHome: string, folder: string): string {
 
 /** Export an installed environment (environments-8). */
 export async function exportEnvironment(options: ExportOptions): Promise<ExportReport> {
-  const { cloneDir, lock, workingFolder, userHome, packagesDir } = options;
+  const { root: envRoot, lock, workingFolder, userHome } = options;
+  const packagesDir = installedDir(envRoot);
   const pathRoot = options.pathRoot === undefined ? workingFolder : options.pathRoot;
   const report: ExportReport = { skills: [], folders: [], removed: [], skipped: [], missing: [] };
   const playbookSkills = new Set<string>();
-  const skillsDir = join(cloneDir, "skills");
+  ensureSpexDir(envRoot);
+  const skillsDir = generatedSkillsDir(envRoot);
   rmSync(skillsDir, { recursive: true, force: true });
   mkdirSync(skillsDir, { recursive: true });
 
@@ -529,12 +532,12 @@ export function playbookModuleCandidates(folder: string, id: string): string[] {
 }
 
 /** Each exported playbook's module location (environments-9): the
- * installed artifact under `packages/`, or a path source's where its
- * path resolves, `pathRoot` being the folder its path is relative to.
- * Keyed by the exported name. */
-export function moduleLocations(lock: Lock, cloneDir: string, pathRoot: string | null): Map<string, ModuleLocation> {
+ * installed artifact under the root's `.spex/packages/`, or a path
+ * source's where its path resolves, `pathRoot` being the folder its path
+ * is relative to. Keyed by the exported name. */
+export function moduleLocations(lock: Lock, root: string, pathRoot: string | null): Map<string, ModuleLocation> {
   const out = new Map<string, ModuleLocation>();
-  const packagesDir = join(cloneDir, "packages");
+  const packagesDir = installedDir(root);
   for (const name of Object.keys(lock.packages).sort()) {
     const resolution = lock.packages[name]!;
     const root = packageRoot(name, resolution, packagesDir, pathRoot);

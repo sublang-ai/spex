@@ -190,7 +190,7 @@ test("playbook-library-114: a local spec-and-skill package publishes without a p
   const project = await pickGroup(app, { host: second, namespace: true });
   const id = "notes-tools";
   const name = `${HOST_LOGIN}/${id}`;
-  const path = `spex-packages/${id}`;
+  const path = `spex-packages/${HOST_LOGIN}/${id}`;
   const folder = join(app.projectDir, path);
   const spec = `# notes-tools: Notes\n\n## Intent\nDescribe one local note.\n\n## External Behavior\n### notes-tools-1\nThe page shall retain one note.\n\n## Verification\n### notes-tools-2\nWhen a browser reloads the page, the system test shall verify note retention [[notes-tools-1](#notes-tools-1)].\n`;
   const skill = "---\nname: notes-summary\ndescription: Summarize the notes contract\n---\nRead the notes contract and summarize it without changes.\n";
@@ -218,7 +218,7 @@ test("playbook-library-114: a local spec-and-skill package publishes without a p
   // A request changed while the preview is open cannot confirm its old folder.
   await publish.getByTestId("publish-button").click();
   await expect(publish.getByTestId("publish-summary")).toBeVisible();
-  const replacement = `spex-packages/${id}-copy`;
+  const replacement = `spex-packages/${HOST_LOGIN}/${id}-copy`;
   cpSync(folder, join(app.projectDir, replacement), { recursive: true });
   await app.core.command("environment.request", { repository: project.key, name, request: { kind: "path", path: replacement } });
   await expect(row.getByTestId(`env-source-${name}`)).toHaveText(`path ${replacement}`);

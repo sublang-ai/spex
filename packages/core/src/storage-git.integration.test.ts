@@ -955,6 +955,7 @@ test("storage-17: a clone's Git rules exclude hints, leases, staging, installed 
     for (const file of [
       `sessions/${sessionId}.hints.json`, `sessions/.${sessionId}.lock/owner.json`, `sessions/.${sessionId}.lock.retired.x/owner.json`,
       ".lock/owner.json", ".spex-apply.json", ".spex-uploads/x/y.png", "packages/demo/spex.yaml", "skills/demo/SKILL.md",
+      ".spex/packages/acme/kit/meta.yaml", ".spex/skills/kit/SKILL.md", ".spex/.spex-install.json",
       "config/playbook.config.yaml.bak.2", "sessions/value.json.x.tmp", `sessions/${sessionId}.spex.json`,
     ]) {
       assert.equal(git(clone, "check-ignore", "--no-index", file), file);

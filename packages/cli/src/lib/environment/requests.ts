@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Requests: a spex repository's `spex.yaml` (environments-2, DR-104).
-// Exactly `{format: 1, language?, packages}`, each package named
+// Requests: an environment's `spex.yaml` (environments-2, DR-104,
+// DR-165). Exactly `{format: 1, language?, space?, packages}` — `space`
+// the origin of the environment's instance — each package named
 // `<org>/<pkg>` and requested from one source — a registry version
 // requirement, a path inside the working folder, or a Git repository at
 // a revision — with an optional `select` and `alias`. Edits go through
@@ -15,6 +16,8 @@ import { isAbsolute, posix } from "node:path";
 import { Document, isMap, isSeq, parseDocument } from "yaml";
 
 import { readVersioned, writeVersionedBytes } from "../files.js";
+import { defaultInstanceOf, type HomeFile } from "../home-file.js";
+import { canonicalOrigin, OriginRefused } from "../instance.js";
 import { isLanguageTag, isPackageName, isSkillName, sha256Hex, type Issue } from "./format.js";
 import { isRequirement } from "./semver.js";
 
@@ -36,6 +39,9 @@ export type Request = RegistryRequest | PathRequest | GitRequest;
 export interface Requests {
   format: 1;
   language?: string;
+  /** The origin of the environment's instance, as `spex.yaml` names it
+   * (environments-2). */
+  space?: string;
   packages: Record<string, Request>;
 }
 
@@ -153,12 +159,16 @@ export function parseRequestsValue(raw: unknown): Requests {
   if (!isPlainObject(raw)) throw new RequestsError([{ rule: "requests", message: "spex.yaml is not a mapping" }]);
   if (raw.format !== 1) throw new RequestsError([{ rule: "format", message: `format ${JSON.stringify(raw.format ?? null)} is not the known format 1` }]);
   for (const key of Object.keys(raw)) {
-    if (key !== "format" && key !== "language" && key !== "packages" && !key.startsWith("x-")) {
+    if (key !== "format" && key !== "language" && key !== "space" && key !== "packages" && !key.startsWith("x-")) {
       issues.push({ rule: "field", message: `unknown field "${key}"` });
     }
   }
   if (raw.language !== undefined && !isLanguageTag(raw.language)) {
     issues.push({ rule: "language", message: `language ${JSON.stringify(raw.language)} is not a BCP 47 tag` });
+  }
+  if (raw.space !== undefined) {
+    const refusal = spaceRefusal(raw.space);
+    if (refusal !== null) issues.push({ rule: "space", message: refusal });
   }
   const packages: Record<string, Request> = {};
   const rawPackages = raw.packages ?? {};
@@ -172,7 +182,39 @@ export function parseRequestsValue(raw: unknown): Requests {
     }
   }
   if (issues.length > 0) throw new RequestsError(issues);
-  return { format: 1, ...(typeof raw.language === "string" ? { language: raw.language } : {}), packages };
+  return {
+    format: 1,
+    ...(typeof raw.language === "string" ? { language: raw.language } : {}),
+    ...(typeof raw.space === "string" ? { space: raw.space } : {}),
+    packages,
+  };
+}
+
+/** Why a `space` value is no instance origin by the home file's rule
+ * (storage-2), naming it; null where it is one. A value carrying a user
+ * is named by that reason alone, never repeated, as it may hold a
+ * secret. */
+function spaceRefusal(value: unknown): string | null {
+  if (typeof value !== "string") return `space ${JSON.stringify(value)} is not an instance origin`;
+  try {
+    canonicalOrigin(value);
+    return null;
+  } catch (error) {
+    if (!(error instanceof OriginRefused)) throw error;
+    const named = error.reason === "user" ? "space" : `space ${JSON.stringify(value)}`;
+    return `${named} is not an instance origin: ${error.message.replace(/^origin refused: /, "")}`;
+  }
+}
+
+/** The origin of an environment's instance (environments-2, DR-165): the
+ * `space` its `spex.yaml` names, else the home's default instance —
+ * the first it lists, or the origin it was created with while it lists
+ * none (storage-2) — canonical. The registry, the credential brokered
+ * for Git sources, the orgs a person may publish to and the publish
+ * destination all follow it. */
+export function environmentInstance(requests: Pick<Requests, "space"> | null, home: Pick<HomeFile, "origin" | "instances">): string {
+  const space = requests?.space;
+  return canonicalOrigin(space ?? defaultInstanceOf(home as HomeFile).origin);
 }
 
 /** Parse `spex.yaml` text, or throw. */
@@ -214,7 +256,36 @@ function requestValue(request: Request): Record<string, unknown> {
 function requestsValue(requests: Requests): Record<string, unknown> {
   const packages: Record<string, unknown> = {};
   for (const [name, request] of Object.entries(requests.packages)) packages[name] = requestValue(request);
-  return { format: 1, ...(requests.language !== undefined ? { language: requests.language } : {}), packages };
+  return {
+    format: 1,
+    ...(requests.language !== undefined ? { language: requests.language } : {}),
+    ...(requests.space !== undefined ? { space: requests.space } : {}),
+    packages,
+  };
+}
+
+/** Name the environment's instance in a `spex.yaml` document
+ * (environments-2): `space` set to `origin`, a new key placed before
+ * `packages` so the file reads format, language, space, packages; null
+ * removes it. Comments and the order of every other key stay. */
+export function setSpaceIn(doc: Document, origin: string | null): void {
+  if (origin === null) {
+    if (doc.has("space")) doc.delete("space");
+    return;
+  }
+  if (doc.has("space")) {
+    doc.set("space", origin);
+    return;
+  }
+  const map = doc.contents;
+  if (!isMap(map)) {
+    doc.set("space", origin);
+    return;
+  }
+  const pair = doc.createPair("space", origin);
+  const at = map.items.findIndex((item) => ((item.key as { value?: unknown })?.value ?? item.key) === "packages");
+  if (at < 0) map.items.push(pair);
+  else map.items.splice(at, 0, pair);
 }
 
 function sameValue(a: unknown, b: unknown): boolean {

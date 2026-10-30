@@ -565,6 +565,10 @@ test("space-39: local changes of every unit kind list in order, incoming units a
   // The explorer.
   mkdirSync(join(clone, "packages", "builtin"), { recursive: true });
   writeFileSync(join(clone, "packages", "builtin", "spex.yaml"), "format: 1\n");
+  // The installed tree of a group's own environment, a manifest inside
+  // it no spec package folder (environments-26, storage-1).
+  mkdirSync(join(clone, ".spex", "packages", "acme", "kit"), { recursive: true });
+  writeFileSync(join(clone, ".spex", "packages", "acme", "kit", "meta.yaml"), "format: 2\n");
   mkdirSync(join(clone, "intents", `${intent.id}.assets`), { recursive: true });
   symlinkSync(home.projectDir, join(clone, "link"));
   writeFileSync(join(clone, "sessions", `${sessionId}.hints.json`), "{}");
@@ -584,6 +588,8 @@ test("space-39: local changes of every unit kind list in order, incoming units a
   assert.equal(entry("authoring").family, "authoring sessions");
   assert.equal(entry("packages").family, "installed spec packages");
   assert.equal(entry("packages").sync, "local", "installed spec packages stay here");
+  assert.equal(entry(".spex").family, "installed spec packages");
+  assert.equal(entry(".spex").sync, "local", "the installed tree under .spex/ stays here");
   assert.equal(entry("config").family, "Settings");
   assert.equal(entry("spex.yaml").family, "spec package requests");
   assert.equal(entry("spex.yaml").sync, "pending");

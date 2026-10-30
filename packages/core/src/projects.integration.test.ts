@@ -11,8 +11,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { join, relative, sep } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { WebSocket } from "ws";
 
@@ -86,7 +86,8 @@ function snapshot(dir: string): Map<string, string> {
     for (const entry of readdirSync(current, { withFileTypes: true })) {
       if (entry.name === "maintenance.lock") continue;
       const full = join(current, entry.name);
-      if (entry.isDirectory()) walk(full);
+      if (entry.isSymbolicLink()) out.set(relative(dir, full), `link:${readlinkSync(full)}`);
+      else if (entry.isDirectory()) walk(full);
       else {
         try {
           out.set(relative(dir, full), `${statSync(full).mode}:${readFileSync(full).toString("base64")}`);
@@ -159,6 +160,12 @@ test("projects-21: removal deletes the clone behind a second confirm naming its 
   assert.deepEqual(refused.error.details, { units: 2 });
   assert.ok(existsSync(clone), "nothing is deleted before the second confirm");
 
+  // The environment's installed tree as the removal finds it: it stays
+  // with the folder byte for byte (environments-26).
+  const inSpex = ([path]: [string, string]): boolean => path === ".spex" || path.startsWith(`.spex${sep}`);
+  const spexBefore = new Map([...snapshot(folder)].filter(inSpex));
+  assert.ok(spexBefore.size > 1, "the installed tree stands under .spex/");
+
   // The second confirm removes it, announcing the session's removal.
   await client.ok("project.remove", { projectId: project.id, confirm: true });
   await client.until((m) => m.type === "session.removed" && m.sessionId === session.id);
@@ -174,7 +181,13 @@ test("projects-21: removal deletes the clone behind a second confirm naming its 
     const file = parseYaml(readFileSync(join(dataDir, "home.yaml"), "utf8")) as { folders: unknown[] };
     assert.deepEqual(file.folders, [], "no pair for it remains");
     assert.ok(!existsSync(clone));
-    assert.deepEqual(snapshot(folder), before, "the working folder's files and Git state are as they were");
+    // The environment's installed tree stays with the folder, its own
+    // (environments-26); every other file and the Git state are as they
+    // were.
+    assert.equal(readFileSync(join(folder, ".spex", ".gitignore"), "utf8"), "*\n", "the environment's .spex/ stays");
+    assert.deepEqual(new Map([...snapshot(folder)].filter(inSpex)), spexBefore, "the installed tree stays as it was");
+    const after = new Map([...snapshot(folder)].filter((entry) => !inSpex(entry)));
+    assert.deepEqual(after, before, "the working folder's files and Git state are as they were");
 
     // A project whose spex repository has reached the host goes on the
     // first confirm alone.

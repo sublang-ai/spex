@@ -146,5 +146,5 @@ export function writeVersionedBytes(file: string, bytes: Buffer | string, expect
 /** Whether a path of a clone may leave the device: not one of the
  * catalog's ignored families (storage-1, storage-17). */
 export const portable = (file: string): boolean =>
-  !/^(packages\/|skills\/|local\/|\.spex-uploads\/|\.spex-apply\.json$|\.lock)/.test(file) &&
+  !/^(\.spex\/|packages\/|skills\/|local\/|\.spex-uploads\/|\.spex-apply\.json$|\.lock)/.test(file) &&
   !/\.(hints|spex)\.json$|(?<!^spex)\.lock(?:\.|\/|$)|\.tmp$|\.bak(?:\.|$)|\.backup(?:\.|$)/.test(file);

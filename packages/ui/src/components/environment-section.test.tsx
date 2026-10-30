@@ -628,7 +628,8 @@ describe("playbook-library-113: publish a directly requested local package", () 
     const summary = await row().findByTestId("publish-summary");
     expect(summary.textContent).toContain(`${NAME} 1.2.3`);
     expect(within(summary).getByTestId("publish-files").textContent).toContain("skills/en/tidy/SKILL.md");
-    expect(commandMock).toHaveBeenCalledWith("environment.publish", { repository: PROJECT_ID, path: PATH, dryRun: true });
+    // By name: the core reads the current request's folder (environments-10).
+    expect(commandMock).toHaveBeenCalledWith("environment.publish", { repository: PROJECT_ID, name: NAME, dryRun: true });
     fireEvent.click(within(summary).getByTestId("publish-cancel"));
     expect(row().queryByTestId("publish-summary")).toBeNull();
     expect(commandMock.mock.calls.some(([type, params]) => type === "environment.publish" && !params.dryRun)).toBe(false);

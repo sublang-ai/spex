@@ -13,6 +13,7 @@ export * from "./registry.js";
 export * from "./git-source.js";
 export * from "./resolve.js";
 export * from "./store.js";
+export * from "./layout.js";
 export * from "./install.js";
 export * from "./exports.js";
 export * from "./own-paths.js";
