@@ -481,14 +481,15 @@ test("environments-34, environments-13, environments-29: a Git source at the sha
   assert.equal(detailOf(state), `${SECOND} ${commit.slice(0, 12)} pkg`);
   assert.ok(!JSON.stringify(state).includes(second.gitOrigin), "no Git origin in the state");
 
-  // Its files gone from the clone and the store, and its fetched
+  // Its files gone from its root's .spex/ and the store, and its fetched
   // repository from the cache, an install fetches the locked commit with
   // the credential the second brokers (environments-13).
   const files = lockOf(home, south).packages[NAME]!.files;
   const stored = files.map((file) => join(home.dataDir, "store", ...(file.executable ? ["x"] : []), file.sha256));
   assert.ok(stored.length > 0 && stored.every((file) => existsSync(file)), "the store holds its files");
   for (const file of stored) rmSync(file);
-  rmSync(join(clonePath(home.dataDir, south), "packages", ...NAME.split("/")), { recursive: true });
+  const southRoot = (await home.client.expectOk("environment.get", { repository: south })).pathRoot!;
+  rmSync(join(southRoot, ".spex", "packages", ...NAME.split("/")), { recursive: true });
   rmSync(join(home.dataDir, "cache", "git"), { recursive: true, force: true });
   from = transports.length;
   await home.client.expectOk("environment.install", { repository: south });

@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Environments in the service (environments-8..17, DR-104): one per
-// spex repository on this device — your own group's and every
+// Environments in the service (environments-8..17, DR-104, DR-165): one
+// per spex repository on this device — your own group's and every
 // project's — read from its files: requests, lock, staleness and what
-// is installed, beside the last operation's report. Operations start at
+// is installed under its root's `.spex/` — your own group's clone, a
+// project's working folder, none for a project whose working folder this
+// device does not hold — beside the last operation's report. Operations start at
 // once and run side by side, each write versioned on the file it writes
 // and each install checked against the lock and requests at its swap,
 // so one overtaken meanwhile publishes nothing (DR-111); they report
@@ -25,7 +27,7 @@
 // home is signed in to (environments-5, environments-7, environments-12,
 // DR-127).
 
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, statSync } from "node:fs";
 import { isAbsolute, join, relative, resolve as resolvePath, sep } from "node:path";
 
 import { fileVersion, readVersioned, sha256, VersionConflictError, type FileVersion } from "@sublang/spex/files";
@@ -43,6 +45,7 @@ import {
   ResolveError,
   isGitRequest,
   install,
+  installedDir,
   installedPackages,
   isGitSource,
   isInsidePath,
@@ -62,6 +65,7 @@ import {
   parseRequests,
   placeOf,
   prepareBuiltinEnvironment,
+  prepareEnvironment,
   publishIssues,
   publishRelease,
   readRelease,
@@ -190,6 +194,9 @@ interface CloneState {
   conflicts: { requests: FileVersion; conflicts: Conflict[] } | null;
   error: string | null;
   published?: { name: string; version: string; url: string };
+  /** The version of `spex.lock` the last use's read installed from
+   * (environments-26), so a read retries only once the lock changed. */
+  usedLock?: FileVersion;
   /** What the last export left out, with the working folder it exported
    * into: listed only while that folder is the one paired
    * (environments-14), and standing until the next export, whatever
@@ -550,6 +557,50 @@ export class EnvironmentManager {
     return this.workingFolder(key);
   }
 
+  /** The environment's root on this device (environments-26), whose
+   * `.spex/` holds what is installed: your own group's clone, else the
+   * paired working folder while it stands; null where this device holds
+   * none. A project's `spex.yaml` and `spex.lock` stay in its clone until
+   * its environment moves into the working folder (DR-113). */
+  rootOf(key: string): string | null {
+    const root = this.pathRoot(key);
+    return root !== null && isDirectory(root) ? root : null;
+  }
+
+  /** The refusal of a command on an environment with no root here
+   * (environments-15). */
+  private noRoot(key: string): CoreError {
+    return new CoreError("not_found", i18n._({
+      id: "{key} has no working folder on this device",
+      comment: "Refusal: the environment's installed files stand in the repository's working folder, which this device does not hold",
+      values: { key },
+    }));
+  }
+
+  /** A command's environment: its clone, refused `not_found` where the
+   * key names none on this device, and its root, refused the same way
+   * where this device holds none (environments-15). */
+  private environmentOf(key: string): { dir: string; root: string } {
+    const dir = this.cloneDir(key);
+    const root = this.rootOf(key);
+    if (root === null) throw this.noRoot(key);
+    return { dir, root };
+  }
+
+  /** The former installed trees of a clone (DR-165): `packages/` and
+   * `skills/`, which an install under the root's `.spex/` replaces and
+   * removes as garbage collection once `.spex/` stands, its failure
+   * reported and never failing the install (environments-7). */
+  private removeFormerTrees(dir: string, root: string): void {
+    if (!existsSync(installedDir(root))) return;
+    for (const name of ["packages", "skills"]) {
+      const former = join(dir, name);
+      if (!existsSync(former)) continue;
+      try { rmSync(former, { recursive: true, force: true }); }
+      catch (error) { console.error(`spex: installed files stand; the former tree ${former} could not be removed: ${error instanceof Error ? error.message : String(error)}`); }
+    }
+  }
+
   // -- the built-in spec package (environments-11) ---------------------------
 
   /** Request the built-in spec package where a clone lacks it, with the
@@ -697,6 +748,13 @@ export class EnvironmentManager {
       if (strict) throw this.unavailable(key);
       return;
     }
+    // No root here, nothing installs: a strict caller is refused
+    // (environments-15, environments-26).
+    const root = this.rootOf(key);
+    if (root === null) {
+      if (strict) throw this.noRoot(key);
+      return;
+    }
     const state = this.cloneState(key);
     const envGit = this.gitOf(key);
     const pathRoot = this.pathRoot(key);
@@ -772,7 +830,8 @@ export class EnvironmentManager {
     let obsolete: VersionConflictError | null = null;
     try {
       const report = await install({
-        cloneDir: dir,
+        root,
+        filesDir: dir,
         lock,
         lockVersion,
         store: this.contentStore,
@@ -811,9 +870,10 @@ export class EnvironmentManager {
       // while both still stand as this install left them, so no export
       // mixes two locks (environments-8).
       if (fileVersion(lockPath) !== lockVersion) throw new VersionConflictError(lockPath);
-      if (!this.installedWhole(dir, lock)) throw new VersionConflictError(join(dir, "packages"));
+      if (!this.installedWhole(root, lock)) throw new VersionConflictError(installedDir(root));
       const exportedTo = this.workingFolder(key);
-      const exported = await this.exportNow(dir, key, lock, exportedTo);
+      const exported = await this.exportNow(root, key, lock, exportedTo);
+      this.removeFormerTrees(dir, root);
       state.unexported = exported.skipped.length > 0 || exported.missing.length > 0
         ? { folder: exportedTo, skipped: exported.skipped, missing: exported.missing }
         : null;
@@ -835,23 +895,24 @@ export class EnvironmentManager {
     if (obsolete) this.overtaken(obsolete, strict);
   }
 
-  /** Every registry and Git source of a lock installed as it locks it. */
-  private installedWhole(dir: string, lock: Lock): boolean {
-    const installed = installedPackages(dir, lock);
+  /** Every registry and Git source of a lock installed as it locks it
+   * under the root's `.spex/`. */
+  private installedWhole(root: string, lock: Lock): boolean {
+    const installed = installedPackages(root, lock);
     return Object.entries(lock.packages).every(([name, resolution]) => isPathSource(resolution.source) || installed.has(name));
   }
 
-  /** Export the installed environment into its working folder and, for
-   * your own group, your agents' home folders (environments-8). */
-  private exportNow(dir: string, key: string, lock: Lock, workingFolder: string | null): Promise<ExportReport> {
+  /** Export the installed environment into its root's `.spex/skills/`,
+   * its working folder and, for your own group, your agents' home folders
+   * (environments-8). */
+  private exportNow(root: string, key: string, lock: Lock, workingFolder: string | null): Promise<ExportReport> {
     return exportEnvironment({
-      cloneDir: dir,
+      root,
       lock,
       workingFolder,
       pathRoot: this.pathRoot(key),
       userHome: this.isOwn(key) ? this.options.userHome : null,
       agents: this.agents(),
-      packagesDir: join(dir, "packages"),
     });
   }
 
@@ -932,7 +993,7 @@ export class EnvironmentManager {
    * returned promise settles once installed; the reply does not wait. */
   async request(key: string, name: string, request: Request, strict = false): Promise<{ done: Promise<void> }> {
     if (strict && this.stopped) throw stoppingError();
-    const dir = this.cloneDir(key);
+    const { dir } = this.environmentOf(key);
     await this.refuseRequest(key, name, request);
     await this.writeRequest(key, dir, name, request);
     this.announce(key);
@@ -942,7 +1003,7 @@ export class EnvironmentManager {
   /** `environment.remove` (environments-15). */
   async remove(key: string, name: string, strict = false): Promise<{ done: Promise<void> }> {
     if (strict && this.stopped) throw stoppingError();
-    const dir = this.cloneDir(key);
+    const { dir } = this.environmentOf(key);
     const current = readRequestsAt(join(dir, "spex.yaml"));
     if (!current?.requests.packages[name]) {
       throw new CoreError("invalid_request", i18n._({
@@ -961,7 +1022,7 @@ export class EnvironmentManager {
    * `spex.yaml` was written. */
   async ensureRequested(key: string, name: string, request: Request): Promise<boolean> {
     if (this.stopped) throw stoppingError();
-    const dir = this.cloneDir(key);
+    const { dir } = this.environmentOf(key);
     await this.refuseRequest(key, name, request);
     let current: Request | undefined;
     try { current = readRequestsAt(join(dir, "spex.yaml"))?.requests.packages[name]; }
@@ -1003,14 +1064,15 @@ export class EnvironmentManager {
    * requests with no lock, or a current lock not installed as it locks. */
   private needsSettle(key: string): boolean {
     const dir = this.store.repository(key)?.dir;
-    if (!dir) return false;
+    const root = this.rootOf(key);
+    if (!dir || root === null) return false;
     try {
       const read = readRequestsAt(join(dir, "spex.yaml"));
       if (read === null) return false;
       const lock = readLockSync(join(dir, "spex.lock"));
       if (lock === null) return true;
       if (stalePhrases(lock, read.text, this.pathRoot(key))) return false;
-      return !this.installedWhole(dir, lock);
+      return !this.installedWhole(root, lock);
     } catch {
       return false;
     }
@@ -1034,14 +1096,54 @@ export class EnvironmentManager {
 
   /** `environment.resolve` (environments-5). */
   resolveLater(key: string, strict = false): Promise<void> {
-    this.cloneDir(key);
+    this.environmentOf(key);
     return this.settle(key, "resolve", strict);
   }
 
   /** `environment.install` (environments-7). */
   installLater(key: string, strict = false): Promise<void> {
-    this.cloneDir(key);
+    this.environmentOf(key);
     return this.settle(key, "install", strict);
+  }
+
+  /** A use's read (environments-26): `environment.get` finding a lock
+   * and no installed tree under the root's `.spex/` — a home of the
+   * former layout, a working folder this device never installed into —
+   * installs it from the lock (environments-7), once per version of the
+   * lock read, so a failing install is not retried by every read; it
+   * reports through state. A tree standing at another lock is left to
+   * the operations that install it. */
+  use(key: string): void {
+    const dir = this.store.repository(key)?.dir;
+    const root = this.rootOf(key);
+    if (!dir || root === null || existsSync(installedDir(root))) return;
+    if (this.clones.get(key)?.running.size || !this.needsSettle(key)) return;
+    const state = this.cloneState(key);
+    const version = fileVersion(join(dir, "spex.lock"));
+    if (state.usedLock === version) return;
+    state.usedLock = version;
+    void this.settle(key, "auto", false).catch(() => {});
+  }
+
+  /** Prepare the playbook artifact folders of the environments a session
+   * or a configuration load reads — the project's and your own group's —
+   * to run on the app's engine before their module locations reach the
+   * launcher (environments-7, environments-9, playbook-library-46), so a
+   * playbook another host installed runs. It fails nothing. */
+  async prepareForUse(projectKey: string | null): Promise<void> {
+    const own = this.store.home.own();
+    const keys = [...new Set([...(projectKey !== null ? [projectKey] : []), own])];
+    for (const key of keys) {
+      const root = this.rootOf(key);
+      const lock = this.lockOf(key);
+      if (root === null || lock === null) continue;
+      try {
+        const kept = await prepareEnvironment({ root, lock, pathRoot: this.pathRoot(key), confined: this.isOwn(key), engine: installEngine(this.options.modulePaths) });
+        for (const entry of kept) console.error(`spex: ${entry.module} keeps the playbook engine it was bundled with: ${entry.reason}`);
+      } catch (error) {
+        console.error(`spex: the playbooks of ${key} were not prepared for the app's engine: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
   }
 
   /** A sync applied a lock (environments-8, environments-17): install
@@ -1213,23 +1315,24 @@ export class EnvironmentManager {
    * DR-161): the first spec package of its lock, by name, that selects
    * an applet of that id — the one artifact kind a lock records with no
    * language (environments-3) — with its version and its folder on this
-   * device: the installed copy under the clone's `packages/`, or a path
+   * device: the installed copy under the root's `.spex/packages/`, or a path
    * source's folder where its path resolves (environments-2); `present`
    * where that folder stands, installed as the lock locks it
    * (environments-14). Undefined where the lock selects no such applet;
    * an unknown repository is refused `not_found`. */
   applet(key: string, id: string): InstalledApplet | undefined {
-    const dir = this.cloneDir(key);
+    this.cloneDir(key);
     const lock = this.lockOf(key);
     if (!lock) return undefined;
     const pathRoot = this.pathRoot(key);
+    const envRoot = this.rootOf(key);
     for (const name of Object.keys(lock.packages).sort()) {
       const resolution = lock.packages[name]!;
       if (resolution.artifacts[id]?.language !== null) continue;
-      const root = packageRoot(name, resolution, join(dir, "packages"), pathRoot);
+      const root = isPathSource(resolution.source) || envRoot !== null ? packageRoot(name, resolution, installedDir(envRoot ?? ""), pathRoot) : null;
       const folder = root === null ? null : join(root, "applets", id);
       const standing = folder !== null && isDirectory(folder);
-      const present = standing && (isPathSource(resolution.source) || installedPackages(dir, lock).has(name));
+      const present = standing && (isPathSource(resolution.source) || (envRoot !== null && installedPackages(envRoot, lock).has(name)));
       let version = resolutionVersion(resolution) ?? null;
       if (version === null && root !== null && existsSync(join(root, "meta.yaml"))) {
         try { version = parseManifestText(readFileSync(join(root, "meta.yaml"), "utf8")).manifest?.version ?? null; } catch { version = null; }
@@ -1241,11 +1344,11 @@ export class EnvironmentManager {
 
   /** Each playbook a clone's environment exports, by exported name. */
   locations(key: string): Map<string, ModuleLocation> {
-    const dir = this.store.repository(key)?.dir;
+    const root = this.rootOf(key);
     const lock = this.lockOf(key);
-    if (!dir || !lock) return new Map();
-    const locations = moduleLocations(lock, dir, this.pathRoot(key));
-    const installed = installedPackages(dir, lock);
+    if (root === null || !lock) return new Map();
+    const locations = moduleLocations(lock, root, this.pathRoot(key));
+    const installed = installedPackages(root, lock);
     for (const location of locations.values()) {
       if (!isPathSource(lock.packages[location.package]!.source) && !installed.has(location.package)) location.present = false;
     }
@@ -1313,7 +1416,8 @@ export class EnvironmentManager {
     let lock: Lock | null = null;
     try { lock = readLockSync(join(dir, "spex.lock")); }
     catch (cause) { error = failurePhrase("install", cause); }
-    const installedNames = lock ? installedPackages(dir, lock) : new Set<string>();
+    const envRoot = this.rootOf(key);
+    const installedNames = lock && envRoot !== null ? installedPackages(envRoot, lock) : new Set<string>();
     const conflicts = clone.conflicts !== null && clone.conflicts.requests === requestsVersion ? clone.conflicts.conflicts : null;
     const packages: EnvironmentPackage[] = [];
     for (const name of Object.keys(lock?.packages ?? {}).sort()) {
@@ -1322,7 +1426,7 @@ export class EnvironmentManager {
       const pathSource = isPathSource(source);
       const root = pathSource
         ? (pathRoot === null ? null : join(pathRoot, ...source.path.split("/")))
-        : join(dir, "packages", ...name.split("/"));
+        : envRoot === null ? null : join(installedDir(envRoot), ...name.split("/"));
       let manifest: Manifest | null = null;
       if (root !== null && existsSync(join(root, "meta.yaml"))) {
         try { manifest = parseManifestText(readFileSync(join(root, "meta.yaml"), "utf8")).manifest; } catch { manifest = null; }

@@ -115,6 +115,7 @@ import { authoringLanguage, authoringManifest, DraftStore, draftPackagePath, new
 import { EnvironmentManager, toRequest } from "./environments.js";
 import {
   INSTALL_RECORD,
+  installedDir,
   isGitSource,
   isPathSource,
   isKebabName,
@@ -1212,12 +1213,16 @@ export class CoreService {
       const dir = this.store.repository(key)?.dir;
       if (dir) {
         inputs.set(join(dir, "spex.lock"), inputVersion(join(dir, "spex.lock")));
-        const installed = join(dir, "packages", INSTALL_RECORD);
+        // What is installed stands under the environment's root's
+        // `.spex/` (environments-26); none is installed without a root.
+        const root = this.environments.rootOf(key);
+        if (root === null) continue;
+        const installed = join(installedDir(root), INSTALL_RECORD);
         inputs.set(installed, inputVersion(installed));
         for (const [name, resolution] of Object.entries(this.environments.lockOf(key)?.packages ?? {})) {
           if (isPathSource(resolution.source)) continue;
           for (const file of resolution.files) {
-            const path = join(dir, "packages", ...name.split("/"), ...file.path.split("/"));
+            const path = join(installedDir(root), ...name.split("/"), ...file.path.split("/"));
             if (!inputs.has(path)) inputs.set(path, existsSync(path));
           }
         }
@@ -2082,6 +2087,9 @@ export class CoreService {
       if (!inputs.has(this.configPath)) inputs.set(this.configPath, inputVersion(this.configPath));
       throw cause(error);
     }
+    // The session's playbooks run on the app's engine, whichever host
+    // installed them (environments-9, playbook-library-46).
+    await this.environments.prepareForUse(projectId);
     try {
       return await composeConfig(ownTop, this.options.loadModule, this.configPath, {
         modules: this.modulesRead(projectId, inputs),
@@ -2315,6 +2323,9 @@ export class CoreService {
       nextState = { status: "missing", path: this.configPath };
       nextComposed = undefined;
     } else {
+      // Your own group's playbooks run on the app's engine, whichever
+      // host installed them (environments-9, playbook-library-46).
+      await this.environments.prepareForUse(null);
       try {
         const loaded = await loadConfig(this.configPath, this.options.loadModule, {
           modules: this.modulesRead(null, inputs),
@@ -3943,6 +3954,9 @@ export class CoreService {
       }
       // Environments (environments-14, environments-15, environments-17).
       case "environment.get":
+        // A use's read (environments-26): a lock other than the one
+        // installed is installed, reported through state.
+        this.environments.use(command.repository);
         return this.environments.state(command.repository);
       case "environment.request": {
         const { done } = await this.environments.request(command.repository, command.name, toRequest(command.request), command.wait === true);
@@ -4038,6 +4052,9 @@ export class CoreService {
     const own = this.store.home.own();
     const projectRepository = projectId !== undefined && projectId !== own ? this.store.repository(projectId) : undefined;
     if (projectId !== undefined && projectId !== own && !projectRepository) throw noProject(projectId);
+    // Each listed playbook's module is read on the app's engine
+    // (environments-9, playbook-library-46).
+    await this.environments.prepareForUse(projectRepository ? projectId! : null);
     const topOf = (path: string | undefined): Record<string, unknown> | null => {
       if (!path || !existsSync(path)) return null;
       try {

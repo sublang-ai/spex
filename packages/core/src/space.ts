@@ -961,7 +961,7 @@ export function spaceFamily(rel: string, isDirectory: boolean): string {
   }
   if (rel === "spex.yaml") return "spec package requests";
   if (rel === "spex.lock") return "spec package lock";
-  if (parts[0] === "packages") return "installed spec packages";
+  if (parts[0] === ".spex" || parts[0] === "packages") return "installed spec packages";
   if (parts[0] === "skills") return "exported skills";
   if (parts[0] === UPLOAD_STAGING) return "upload staging";
   if (rel === "config" || rel === "config/playbook.config.yaml") return "Settings";

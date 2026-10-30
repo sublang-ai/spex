@@ -10,7 +10,7 @@
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 
@@ -76,34 +76,32 @@ function filesUnder(dir: string): Record<string, string> {
 }
 
 interface Environment {
-  clone: string;
   workingFolder: string;
   base: Omit<Parameters<typeof install>[0], "lockVersion" | "engine">;
 }
 
 /** An install expecting `spex.lock` at the version it stands at now. */
 const installAsOnDisk = (env: Environment, engine?: InstallEngine): ReturnType<typeof install> =>
-  install({ ...env.base, ...(engine ? { engine } : {}), lockVersion: fileVersion(join(env.clone, "spex.lock")) });
+  install({ ...env.base, ...(engine ? { engine } : {}), lockVersion: fileVersion(join(env.workingFolder, "spex.lock")) });
 
-/** A home and a Git working folder whose environment requests `acme/ship-kit`
- * from the stand-in and `acme/local-kit` by path, resolved and locked. */
+/** A home and a Git working folder whose environment, at its root,
+ * requests `acme/ship-kit` from the stand-in and `acme/local-kit` by
+ * path, resolved and locked. */
 async function environment(): Promise<Environment> {
   const home = scratch("spex-cli-home-");
-  const clone = join(home, "workspace", "acme", "ship-spex");
   const workingFolder = scratch("spex-cli-wf-");
   execFileSync("git", ["init", "--quiet", workingFolder]);
   await makeRelease(join(workingFolder, "tools", "local"), manifestOf("acme/local-kit", "0.1.0", { walk: { kind: "playbook", language: "en" } }), playbookFiles("walk"));
   const text = `format: 1\npackages:\n  acme/ship-kit: {"version":"^1.0.0"}\n  acme/local-kit: {"path":"tools/local"}\n`;
-  mkdirSync(clone, { recursive: true });
-  writeFileSync(join(clone, "spex.yaml"), text);
+  writeFileSync(join(workingFolder, "spex.yaml"), text);
   const cache = join(home, "cache");
   const git = gitSource(cache);
   const result = await resolve({ requests: parseRequests(text), requestsText: text, registry: client, pathRoot: workingFolder, git });
   if (!result.ok) assert.fail(`resolution failed: ${JSON.stringify(result.conflicts)}`);
-  await writeLock(join(clone, "spex.lock"), result.lock);
+  await writeLock(join(workingFolder, "spex.lock"), result.lock);
   return {
-    clone, workingFolder,
-    base: { cloneDir: clone, lock: result.lock, store: new ContentStore(home), cache, registry: client, git, pathRoot: workingFolder },
+    workingFolder,
+    base: { root: workingFolder, lock: result.lock, store: new ContentStore(home), cache, registry: client, git, pathRoot: workingFolder },
   };
 }
 
@@ -118,7 +116,8 @@ test("cli-14: an install with no engine places the release's files and prepares 
   assert.deepEqual(report.installed, ["acme/ship-kit"]);
   assert.deepEqual(report.engineKept, []);
 
-  const installed = join(env.clone, "packages", "acme", "ship-kit");
+  const installed = join(env.workingFolder, ".spex", "packages", "acme", "ship-kit");
+  assert.equal(readFileSync(join(env.workingFolder, ".spex", ".gitignore"), "utf8"), "*\n", "[environments-26] .spex/ ignores everything in it");
   const ship = join(installed, "playbooks", "en", "ship");
   assert.deepEqual(filesUnder(ship), Object.fromEntries(Object.entries(playbookFiles("ship")).map(([path, text]) => [path.slice("playbooks/en/ship/".length), text])),
     "the installed playbook folder holds the release's files alone");

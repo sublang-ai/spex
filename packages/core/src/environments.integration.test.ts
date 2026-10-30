@@ -275,7 +275,7 @@ test("environments-23: a fresh home with no registry reachable seeds the built-i
   const ids = ["branch", "code", "decide", "dev", "inspect", "pr", "review"];
   assert.deepEqual(Object.keys(manifest.structuralProjection.catalog).sort(), ids);
   for (const id of ids) {
-    assert.ok(manifest.structuralProjection.catalog[id]!.from.startsWith(pathToFileURL(join(projectClone, "packages", "sublang", "playbooks", "playbooks", "en", id)).href), id);
+    assert.ok(manifest.structuralProjection.catalog[id]!.from.startsWith(pathToFileURL(join(dir, "project", ".spex", "packages", "sublang", "playbooks", "playbooks", "en", id)).href), id);
   }
   // The built-ins' skills are exported where claude reads them.
   assert.ok(existsSync(join(dir, "project", ".claude", "skills", "code", "SKILL.md")));
@@ -369,6 +369,78 @@ test("environments-23, environments-7, environments-11: a lock records the archi
   assert.equal(state.packages.find((pkg) => pkg.name === "sublang/playbooks")?.installed, false);
 });
 
+test("environments-7, environments-21, environments-26: a home of the former layout, its installed files under the clones' packages/ and skills/, migrates by use: a start installs each environment under its root's .spex/ from the store and the former trees go", { timeout: 180_000 }, async (t) => {
+  const registry = await startStandinRegistry({ dir: scratchDir("spex-env-former-registry-") });
+  t.after(() => registry.close());
+  await publishRelease(new RegistryClient({ url: registry.url }), await makeRelease(join(scratchDir("spex-env-former-release-"), "kit"), {
+    format: 2, org: "acme", name: "kit", version: "1.0.0", description: "Kit", license: "Apache-2.0",
+    artifacts: { tidy: { kind: "skill", language: "en" } },
+  }, { "skills/en/tidy/SKILL.md": "---\nname: tidy\ndescription: Tidy up\n---\n\nTidy up.\n" }));
+  const dir = scratchDir("spex-env-former-");
+  let core = await startCore(dir, { hostUrl: registry.url });
+  t.after(() => core.stop());
+  const own = `${OWN}/${OWN}-spex`;
+  const ownClone = clonePath(core.dataDir, own);
+  const working = gitFolder(join(dir, "project"));
+  const project = await core.client.expectOk("project.register", { path: working });
+  const projectClone = clonePath(core.dataDir, project.id);
+  await settledProject(core.client, project.id);
+  const mark = core.client.mark();
+  await core.client.expectOk("environment.request", { repository: project.id, name: "acme/kit", request: { kind: "registry", version: "^1.0.0" } });
+  await core.client.environment(project.id, mark, (state) => state.busy === null && state.packages.some((pkg) => pkg.name === "acme/kit" && pkg.installed));
+  await core.stop();
+
+  // The former layout: each clone holds its environment's installed
+  // files at packages/ and its generated skills at skills/, and no root
+  // holds .spex/.
+  const former = (clone: string, root: string): void => {
+    renameSync(join(root, ".spex", "packages"), join(clone, "packages"));
+    renameSync(join(root, ".spex", "skills"), join(clone, "skills"));
+    rmSync(join(root, ".spex"), { recursive: true, force: true });
+  };
+  former(projectClone, working);
+  former(ownClone, ownClone);
+  const installed = readFileSync(join(projectClone, "packages", "acme", "kit", "skills", "en", "tidy", "SKILL.md"), "utf8");
+  const locks = [projectClone, ownClone].map((clone) => readFileSync(join(clone, "spex.lock")));
+  registry.script.clearRequests();
+
+  // The next start is a use: each environment installs from its lock
+  // into its root's .spex/, from the store, and the former trees go.
+  core = await startCore(dir, { hostUrl: registry.url });
+  for (const [key, clone, root] of [[project.id, projectClone, working], [own, ownClone, ownClone]] as const) {
+    await until(() => !existsSync(join(clone, "packages")) && !existsSync(join(clone, "skills")), 60_000, `${key}'s former trees removed`);
+    const state = await core.client.expectOk("environment.get", { repository: key });
+    assert.ok(state.packages.length > 0 && state.packages.every((pkg) => pkg.installed), `${key} reads installed: ${JSON.stringify(state.packages)}`);
+    assert.equal(readFileSync(join(root, ".spex", ".gitignore"), "utf8"), "*\n", "[environments-26] .spex/ ignores everything in it");
+    assert.ok(existsSync(join(root, ".spex", "packages", "sublang", "playbooks", "meta.yaml")), `${key}: the built-in stands under .spex/packages/`);
+  }
+  assert.equal(readFileSync(join(working, ".spex", "packages", "acme", "kit", "skills", "en", "tidy", "SKILL.md"), "utf8"), installed);
+  assert.ok(existsSync(join(working, ".spex", "skills", "tidy", "SKILL.md")), "the generated skills stand under .spex/skills/");
+  assert.ok(existsSync(join(working, ".claude", "skills", "tidy", "SKILL.md")), "and are exported into the working folder");
+  assert.deepEqual([projectClone, ownClone].map((clone) => readFileSync(join(clone, "spex.lock"))), locks, "no lock moved");
+  // Nothing the store held was fetched again.
+  assert.deepEqual(registry.script.requests.filter((request) => request.startsWith("GET ")), [], "no fetch of what the store held");
+  // Git sees nothing of .spex/ in the working folder.
+  assert.equal(execFileSync("git", ["-C", working, "status", "--porcelain", "--untracked-files=all", "--", ".spex"], { encoding: "utf8" }), "");
+});
+
+test("environments-9, environments-7, playbook-library-46: an installed playbook folder whose engine links were removed — as the command line installs one — is prepared again at a session start", { timeout: 120_000 }, async (t) => {
+  const dir = scratchDir("spex-env-prepare-use-");
+  const core = await startCore(dir, { hostUrl: UNREACHABLE });
+  t.after(() => core.stop());
+  const working = gitFolder(join(dir, "project"));
+  const project = await core.client.expectOk("project.register", { path: working });
+  await settledProject(core.client, project.id);
+  const links = join(working, ".spex", "packages", "sublang", "playbooks", "playbooks", "en", "code", "node_modules");
+  assert.ok(lstatSync(join(links, "xstate")).isSymbolicLink(), "the app's install prepared the folder");
+  rmSync(links, { recursive: true, force: true });
+  const session = await core.client.expectOk("session.create", { projectId: project.id });
+  await core.client.expectOk("turn.submit", { sessionId: session.id, text: "Hello" });
+  await core.client.waitFor((m) => m.type === "session.state" && m.session.id === session.id && m.session.turns === 1 && m.session.turnActive === false, 60_000);
+  assert.ok(lstatSync(join(links, "xstate")).isSymbolicLink(), "the session's use prepared it again");
+  assert.ok(existsSync(join(links, "@sublang", "playbook")), "with every engine link");
+});
+
 test("environments-22 through a real core: retained files of another lock are not imported before a successful same-process resolve", { timeout: 120_000 }, async (t) => {
   const dir = scratchDir("spex-env-retained-module-");
   // Install the shipped release without loading its registries yet.
@@ -393,7 +465,7 @@ test("environments-22 through a real core: retained files of another lock are no
   previous.files[0]!.sha256 = "0".repeat(64);
   writeFileSync(lockPath, stringifyYaml(lock));
   for (const id of ["code", "review"]) {
-    const link = join(clone, "packages", "sublang", "playbooks", "playbooks", "en", id, "node_modules", "xstate");
+    const link = join(clone, ".spex", "packages", "sublang", "playbooks", "playbooks", "en", id, "node_modules", "xstate");
     rmSync(link, { recursive: true, force: true });
     symlinkSync(join(dir, "retired-engine", "xstate"), link, process.platform === "win32" ? "junction" : "dir");
   }
@@ -421,14 +493,14 @@ test("environments-22 through a real core: retained files of another lock are no
   // Install-record changes matter even when config, lock and entry bytes
   // stay unchanged, with watchers disabled. Restoring the exact record
   // makes the already installed package available again.
-  const recordPath = join(clone, "packages", INSTALL_RECORD);
+  const recordPath = join(clone, ".spex", "packages", INSTALL_RECORD);
   const record = readFileSync(recordPath);
   rmSync(recordPath);
   assert.equal((await core.client.expectOk("config.get", {})).status, "invalid");
   writeFileSync(recordPath, record);
   assert.equal((await core.client.expectOk("config.get", {})).status, "valid");
 
-  const machinePath = join(clone, "packages", "sublang", "playbooks", "playbooks", "en", "code", "code.playbook", "code.fsm.js");
+  const machinePath = join(clone, ".spex", "packages", "sublang", "playbooks", "playbooks", "en", "code", "code.playbook", "code.fsm.js");
   const machine = readFileSync(machinePath);
   rmSync(machinePath);
   assert.equal((await core.client.expectOk("config.get", {})).status, "invalid", "a missing selected non-entry file invalidates cached availability");
@@ -717,17 +789,16 @@ test("environments-22 through a real core: a project rebound to a second working
   assert.ok(exclude().includes("/.agents/skills/lint/"));
 
   // Rebound to a third working folder while the registry spec package's
-  // installed files are gone: the pairing's read installs them
-  // (environments-7) and the export follows into the folder with no
-  // environment command sent (environments-31); the state names the
-  // path source this folder lacks (environments-14).
-  const clone = clonePath(core.dataDir, key);
-  rmSync(join(clone, "packages", "acme", "kit"), { recursive: true, force: true });
+  // installed files are gone — they stand under each working folder's
+  // own `.spex/`, and the third holds none: the pairing's read installs
+  // them there (environments-7, environments-26) and the export follows
+  // into the folder with no environment command sent (environments-31);
+  // the state names the path source this folder lacks (environments-14).
   const third = gitFolder(join(dir, "third"));
   mark = client.mark();
   await client.expectOk("project.rebind", { projectId: key, path: third });
   const reinstalled = await client.environment(key, mark, (state) => state.busy === null && holds(state, "acme/kit") && state.unexported !== undefined);
-  assert.ok(existsSync(join(clone, "packages", "acme", "kit", "skills", "en", "lint", "SKILL.md")), "the pairing installed the files again");
+  assert.ok(existsSync(join(third, ".spex", "packages", "acme", "kit", "skills", "en", "lint", "SKILL.md")), "the pairing installed the files again");
   for (const name of ["fmt", "lint"]) {
     for (const folder of [".claude/skills", ".agents/skills"]) assert.ok(existsSync(join(third, folder, name, "SKILL.md")), `third ${folder}/${name}`);
   }
@@ -980,7 +1051,7 @@ test("environments-33: a nonignored unreadable subtree refuses request, resoluti
   await client.environment(key, from, (state) => state.busy === null && state.error === null && state.packages.some((pkg) => pkg.name === name && pkg.installed));
   const requested = readFileSync(requestsFile);
   const locked = readFileSync(lockFile);
-  const exported = join(clone, "skills", "notes", "SKILL.md");
+  const exported = join(clone, ".spex", "skills", "notes", "SKILL.md");
   const exportedBefore = readFileSync(exported);
 
   // A request already locked must be checked again by both operations,
@@ -1586,8 +1657,11 @@ test("environments-21 through a real core: an install whose lock or requests cha
     const project = await client.expectOk("project.register", { path: gitFolder(join(dir, "project")) });
     const key = project.id;
     const clone = clonePath(core.dataDir, key);
+    // The environment's root, whose `.spex/` holds what is installed
+    // (environments-26).
+    const root = join(dir, "project");
     await settledProject(client, key);
-    const installedVersion = (): string => (parseYaml(readFileSync(join(clone, "packages", "acme", "kit", "meta.yaml"), "utf8")) as { version: string }).version;
+    const installedVersion = (): string => (parseYaml(readFileSync(join(root, ".spex", "packages", "acme", "kit", "meta.yaml"), "utf8")) as { version: string }).version;
     const download = (version: string) => (path: string): boolean =>
       path === `/api/v1/packages/acme/kit/${version}/download` || path.startsWith(`/acme/kit/${version}/`);
     const kitOf = (state: EnvironmentState) => state.packages.find((pkg) => pkg.name === "acme/kit");
@@ -1639,7 +1713,7 @@ test("environments-21 through a real core: an install whose lock or requests cha
     held.release();
     state = await client.environment(key, mark, (current) => current.busy === null);
     assert.equal(installedVersion(), "1.0.0");
-    assert.equal(existsSync(join(clone, "packages", "acme", "kit", "skills", "en", "tidy", "SKILL.md")), true);
+    assert.equal(existsSync(join(root, ".spex", "packages", "acme", "kit", "skills", "en", "tidy", "SKILL.md")), true);
     assert.deepEqual([kitOf(state)?.version, kitOf(state)?.installed], ["1.2.0", false]);
     assert.deepEqual(state.stale, ["Requests changed; resolve again to install"]);
     assert.equal(state.error, null, "the overtaken install records no failure; the state reads stale");
@@ -1660,7 +1734,7 @@ test("environments-21 through a real core: an install whose lock or requests cha
     // removed, after its swap and before its exports — the progress
     // setter runs at that instant — is refused as changed meanwhile, the
     // exports standing as they were; the swapped-in files stay.
-    const exports = [exported, join(clone, "skills", "tidy", "SKILL.md")];
+    const exports = [exported, join(root, ".spex", "skills", "tidy", "SKILL.md")];
     const exportsNow = (): [Buffer, number][] => exports.map((file) => [readFileSync(file), statSync(file).ino]);
     const exportsBefore = exportsNow();
     const afterSwap = (change: () => void): { lockWritten: boolean; installed: boolean } => {
@@ -1680,7 +1754,7 @@ test("environments-21 through a real core: an install whose lock or requests cha
     assert.deepEqual(exportsNow(), exportsBefore, "the exports stand, byte for byte on the same inodes");
     assert.equal(installedVersion(), "1.1.0", "the swapped-in files stay");
     await manager.ensureRequested(key, "acme/kit", { version: "1.2.0" });
-    const recordRemoved = afterSwap(() => rmSync(join(clone, "packages", ".spex-install.json")));
+    const recordRemoved = afterSwap(() => rmSync(join(root, ".spex", "packages", ".spex-install.json")));
     await assert.rejects(manager.installNow(key, true, recordRemoved), (error: unknown) =>
       refusedWith("conflict")(error) && /packages changed meanwhile; retry$/.test((error as Error).message));
     assert.deepEqual([recordRemoved.lockWritten, recordRemoved.installed], [true, true]);
@@ -2025,7 +2099,7 @@ test("instance package sources keep transport locators out of state and broadcas
   assert.equal((parseYaml(requests.toString()) as { packages: Record<string, { git?: string }> }).packages["acme/toolbox"]?.git, remote);
   const lock = parseYaml(locked.toString()) as Lock;
   assert.deepEqual(lock.packages["acme/toolbox"]?.source, { git: remote, commit: harness.git(work, "rev-parse", "HEAD"), path: "pkg" });
-  assert.deepEqual(readFileSync(join(clone, "packages/acme/toolbox/skills/en/toolbox-skill/SKILL.md")), Buffer.from(release.files["skills/en/toolbox-skill/SKILL.md"]!));
+  assert.deepEqual(readFileSync(join(clone, ".spex/packages/acme/toolbox/skills/en/toolbox-skill/SKILL.md")), Buffer.from(release.files["skills/en/toolbox-skill/SKILL.md"]!));
   // HTTP users are input bytes, never part of a summary; normalization
   // affects presentation alone, including an instance URL with a user.
   for (const [uri, label] of [

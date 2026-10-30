@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Installing a locked environment (environments-7, DR-104): the lock's
-// selected files, verified by digest into the store, are linked under
-// `<clone>/packages/<org>/<pkg>/` at their release paths. A registry
+// Installing a locked environment (environments-7, DR-104, DR-165): the
+// lock's selected files, verified by digest into the store, are linked
+// under `<root>/.spex/packages/<org>/<pkg>/` at their release paths, the
+// environment's root holding `.spex/` with a `.gitignore` of `*`, so Git
+// ignores the installed tree (environments-26). A registry
 // package is fetched from the first of the registries asked that serves
 // its release at the locked version and checksum (DR-127); the built-in
 // spec package is served first from this device's seed where its files
@@ -55,6 +57,7 @@ import { readVersionResource, RegistryError, type RegistrySource, type VersionRe
 import { isVersion } from "./semver.js";
 import { DigestError, type ContentStore } from "./store.js";
 import { gunzip, readTar } from "./tar.js";
+import { ensureSpexDir, installedDir } from "./layout.js";
 
 /** Where a working folder's Git is told to ignore every playbook
  * artifact folder's engine links (playbook-library-12): a release-layout
@@ -73,11 +76,17 @@ export interface InstallEngine {
 }
 
 export interface InstallOptions {
-  cloneDir: string;
+  /** The environment's root (environments-26): its `.spex/` holds the
+   * installed files. */
+  root: string;
+  /** Where `spex.yaml` and `spex.lock` stand: the root where omitted. The
+   * app's projects keep them in their spex repository's clone until
+   * their environment moves into the working folder (DR-113). */
+  filesDir?: string;
   lock: Lock;
-  /** The version of `<clone>/spex.lock` this lock was read as or written
-   * as — null where none stands: a lock on disk at any other version by
-   * the swap refuses it (DR-111). */
+  /** The version of `spex.lock` this lock was read as or written as —
+   * null where none stands: a lock on disk at any other version by the
+   * swap refuses it (DR-111). */
   lockVersion: FileVersion;
   store: ContentStore;
   /** The home's `cache/` folder. */
@@ -101,7 +110,7 @@ export interface InstallOptions {
   /** Whether `pathRoot` is your own group's clone, whose path sources
    * hold only what its sync carries (environments-32). */
   confined?: boolean;
-  /** `spex.yaml`'s text; read from the clone when omitted. */
+  /** `spex.yaml`'s text; read from `filesDir` when omitted. */
   requestsText?: string | null;
   /** The host's engine; with none, nothing is prepared or linked. */
   engine?: InstallEngine;
@@ -133,6 +142,7 @@ export class InstallError extends Error {
 
 /** The installed tree's record of what it holds, beside the packages. */
 export const INSTALL_RECORD = ".spex-install.json";
+
 
 function readPathManifest(dir: string): Manifest | null {
   const file = join(dir, "meta.yaml");
@@ -203,10 +213,11 @@ function treeMatches(target: string, lock: Lock, record: Record<string, unknown>
 }
 
 /** The registry and Git sources of a lock whose files stand installed
- * in the clone as the lock locks them: recorded by the install that
- * placed them, the same source, files and artifacts, every file there. */
-export function installedPackages(cloneDir: string, lock: Lock): Set<string> {
-  const target = join(cloneDir, "packages");
+ * under the root's `.spex/` as the lock locks them: recorded by the
+ * install that placed them, the same source, files and artifacts, every
+ * file there. */
+export function installedPackages(root: string, lock: Lock): Set<string> {
+  const target = installedDir(root);
   const record = readInstallRecord(target);
   const out = new Set<string>();
   if (!record) return out;
@@ -217,15 +228,18 @@ export function installedPackages(cloneDir: string, lock: Lock): Set<string> {
   return out;
 }
 
-/** Refuse a swap the files changed under (DR-111): the clone gone, its
- * lock no longer at the version installed, or the lock no longer
- * matching `spex.yaml` or a path source's manifest. */
+/** Refuse a swap the files changed under (DR-111): the root or the
+ * folder of its files gone, its lock no longer at the version installed,
+ * or the lock no longer matching `spex.yaml` or a path source's
+ * manifest. */
 function assertCurrent(options: InstallOptions): void {
-  const { cloneDir, lock, pathRoot } = options;
-  const lockFile = join(cloneDir, "spex.lock");
-  if (!existsSync(cloneDir)) throw new VersionConflictError(cloneDir);
+  const { root, lock, pathRoot } = options;
+  const filesDir = options.filesDir ?? root;
+  const lockFile = join(filesDir, "spex.lock");
+  if (!existsSync(root)) throw new VersionConflictError(root);
+  if (!existsSync(filesDir)) throw new VersionConflictError(filesDir);
   if (fileVersion(lockFile) !== options.lockVersion) throw new VersionConflictError(lockFile);
-  const requestsFile = join(cloneDir, "spex.yaml");
+  const requestsFile = join(filesDir, "spex.yaml");
   const requestsText = existsSync(requestsFile) ? readFileSync(requestsFile, "utf8") : null;
   let stale = false;
   try {
@@ -513,11 +527,12 @@ async function assertConfined(lock: Lock, pathRoot: string): Promise<void> {
 
 /** Install a lock's selected files (environments-7). */
 export async function install(options: InstallOptions): Promise<InstallReport> {
-  const { cloneDir, lock, store, pathRoot } = options;
+  const { root, lock, store, pathRoot } = options;
+  const filesDir = options.filesDir ?? root;
   const missingPaths = missingPathSources(lock, pathRoot);
   const requestsText = options.requestsText !== undefined
     ? options.requestsText
-    : existsSync(join(cloneDir, "spex.yaml")) ? readFileSync(join(cloneDir, "spex.yaml"), "utf8") : null;
+    : existsSync(join(filesDir, "spex.yaml")) ? readFileSync(join(filesDir, "spex.yaml"), "utf8") : null;
   const staleness = lockStaleness(lock, requestsText, (path) => (pathRoot === null ? null : readPathManifest(join(pathRoot, ...path.split("/")))));
   if (staleness.stale) return { installed: [], missingPaths, stale: staleness.reasons, unchanged: true, engineKept: [] };
 
@@ -535,7 +550,7 @@ export async function install(options: InstallOptions): Promise<InstallReport> {
   excludeEngineLinks(pathRoot, playbooks, confined);
   if (confined && pathRoot !== null) await assertConfined(lock, pathRoot);
   if (engine !== undefined) linkPathSources(playbooks, engine);
-  const target = join(cloneDir, "packages");
+  const target = installedDir(root);
   const record = installRecord(lock);
   if (treeMatches(target, lock, record)) {
     // Installed already, by this app or an earlier one: each playbook is
@@ -573,6 +588,7 @@ export async function install(options: InstallOptions): Promise<InstallReport> {
     await options.beforeReplace?.();
     // Checked at the instant before the swap, nothing awaited between.
     assertCurrent(options);
+    ensureSpexDir(root);
     replaceTree(staging, target, join(options.cache, "trash", id));
   } catch (error) {
     rmSync(staging, { recursive: true, force: true });
@@ -622,7 +638,43 @@ function replaceTree(staging: string, target: string, trash: string): void {
   }
 }
 
-/** Remove every installed file of a clone (an environment emptied). */
-export function removeInstalled(cloneDir: string): void {
-  rmSync(join(cloneDir, "packages"), { recursive: true, force: true });
+/** Remove every installed file of an environment (one emptied). */
+export function removeInstalled(root: string): void {
+  rmSync(installedDir(root), { recursive: true, force: true });
+}
+
+export interface PrepareOptions {
+  root: string;
+  lock: Lock;
+  /** The folder a path source's path is relative to (environments-2). */
+  pathRoot: string | null;
+  /** Whether `pathRoot` is your own group's clone (environments-32). */
+  confined?: boolean;
+  engine: InstallEngine;
+}
+
+/**
+ * Prepare an environment's playbook artifact folders to run on the
+ * host's engine at a use that hands the launcher module locations
+ * (environments-7, environments-9, playbook-library-46): each installed
+ * as the lock locks it, and each path source's where its path resolves,
+ * so a playbook another host installed — the command line prepares
+ * none — runs. Nothing here fails the use: a folder that cannot be
+ * prepared is logged and left; a path source's links are made only once
+ * its Git lists them, your own group's clone otherwise taking none.
+ * Returns the registry modules kept carrying their own engine.
+ */
+export async function prepareEnvironment(options: PrepareOptions): Promise<InstallReport["engineKept"]> {
+  const { root, lock, pathRoot, engine } = options;
+  const installed = installedPackages(root, lock);
+  const names = Object.keys(lock.packages).sort().filter((name) => installed.has(name));
+  const kept = await prepareInstalled(installedDir(root), names, lock, engine, (folder) => folder, true);
+  const playbooks = pathSourcePlaybooks(lock, pathRoot);
+  try {
+    excludeEngineLinks(pathRoot, playbooks, options.confined === true);
+    linkPathSources(playbooks, engine);
+  } catch (error) {
+    console.error(`spex: ${String((error as Error).message ?? error)}`);
+  }
+  return kept;
 }
