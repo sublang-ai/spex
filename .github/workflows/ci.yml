@@ -69,7 +69,9 @@ jobs:
         if: steps.classify.outputs.docs-only == 'true'
         run: |
           npm ci
-          npm run build -w packages/cli
+          # The CLI's attached integration test exercises the real core.
+          # The core build also builds its CLI dependency first.
+          npm run build -w packages/core
           npm test -w packages/cli
           node packages/cli/dist/cli.js lint
 

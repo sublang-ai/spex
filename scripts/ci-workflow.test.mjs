@@ -66,7 +66,13 @@ test("release-33: documentation alone keeps the spec gates and skips the suites 
   assert.match(classify.run, /github\.event_name \}\}" = "pull_request"/, "a push and the nightly never count as documentation alone");
   const gates = changes.steps.find((step) => step.name === "Documentation alone keeps the spec gates");
   assert.ok(gates && gates.if === "steps.classify.outputs.docs-only == 'true'", "the gates run for documentation alone");
-  for (const command of ["npm test -w packages/cli", "node packages/cli/dist/cli.js lint"]) assert.ok(gates.run.includes(command), command);
+  const gateCommands = gates.run.split(/\r?\n/).map((line) => line.trim());
+  let previous = -1;
+  for (const command of ["npm ci", "npm run build -w packages/core", "npm test -w packages/cli", "node packages/cli/dist/cli.js lint"]) {
+    const index = gateCommands.indexOf(command);
+    assert.ok(index > previous, `${command} follows its prerequisites`);
+    previous = index;
+  }
   for (const name of ["test", "journeys", "desktop-browser"]) {
     assert.equal(workflow.jobs[name].needs, "changes", `${name} waits for the classifier`);
     assert.equal(workflow.jobs[name].if, SUITE_CONDITION, `${name} runs past the classifier alone`);
