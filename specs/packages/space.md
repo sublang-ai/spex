@@ -968,13 +968,13 @@ The core shall build each `space.tree` level by reading one directory of the clo
 | `.lock*`, `sessions/.<uuid>.lock*`, `.spex-apply.json` | lease; sync repair marker |
 | `intents/<uuid>.json`, `intents/<uuid>.assets/` | intent; intent attachments |
 | `authoring/<uuid>.json` / `.records.jsonl` / `.assets/` | authoring session; its records; its attachments |
-| `spex.yaml`, `spex.lock`, `packages/`, `skills/` | spec package requests; spec package lock; installed spec packages; exported skills |
+| `spex.yaml`, `spex.lock`, `.spex/` | spec package requests; spec package lock; installed spec packages with their exported skills |
 | `config/playbook.config.yaml`; `*.bak*`, `*.backup*` | Settings; config backup |
 | `project.json` | code remote |
 | `placements/<folder>.yaml` | placement |
 | `.gitignore`, `.gitattributes` | sync rules |
 | `*.tmp` | temporary write |
-| a folder outside `config/`, `sessions/`, `intents/`, `authoring/`, `placements/`, `packages/`, `skills/`, `local/` and `.spex-uploads/` holding `meta.yaml`, the outermost where two nest, and every path under it no row above names | spec package |
+| a folder outside `config/`, `sessions/`, `intents/`, `authoring/`, `placements/`, `.spex/`, `local/` and `.spex-uploads/` holding `meta.yaml`, the outermost where two nest, and every path under it no row above names | spec package |
 | other | Not a Spex file |
 
 - a path in an ignored family of the catalog is marked ignored whatever Git reports [[storage-1](storage.md#storage-1)];
@@ -1050,7 +1050,7 @@ When an integration suite writes local changes of every unit kind into a clone, 
 
 - the local list carries a titled session as new, an intent by its title, an authoring session, "Settings changed" with a diff, "Code remote changed" and "Sync rules updated", in the kinds' order, and in a clone holding `spex.yaml` with `spex.lock` "Spec packages changed" with a diff in its place [[space-7](#space-7)] [[space-34](#space-34)]; a spec package's folder reads as one row of its own, labelled with the folder ending `/`, its every file among its paths [[space-7](#space-7)] [[space-33](#space-33)];
 - after a peer pushes, `space.fetch` lists the incoming units the same way with conflicts marked and ahead and behind counted, a host without `spex` reads empty, and `space.diff` returns a patch for Settings on each side and refuses a session and an intent unit [[space-8](#space-8)] [[space-10](#space-10)];
-- `space.tree` maps every catalog path to its family and sharing mark with session and intent owners, reads an empty directory of a tracked kind as not yet shared, reports `.git` closed, `packages/` as staying here, a spec package's folder and a file under it as spec package and a stray file as not a Spex file, and neither follows nor lists through a planted symlink; `space.read` pretty-prints JSON, returns YAML, Markdown and JSONL text, cuts a long log on a line, withholds a hints file, and refuses `../` [[space-23](#space-23)] [[space-24](#space-24)] [[space-35](#space-35)].
+- `space.tree` maps every catalog path to its family and sharing mark with session and intent owners, reads an empty directory of a tracked kind as not yet shared, reports `.git` closed, `.spex/` as staying here, a spec package's folder and a file under it as spec package and a stray file as not a Spex file, and neither follows nor lists through a planted symlink; `space.read` pretty-prints JSON, returns YAML, Markdown and JSONL text, cuts a long log on a line, withholds a hints file, and refuses `../` [[space-23](#space-23)] [[space-24](#space-24)] [[space-35](#space-35)].
 
 #### space-51
 
