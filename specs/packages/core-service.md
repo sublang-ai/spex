@@ -24,7 +24,7 @@ When started on a native platform other than macOS or Linux, the core service sh
 
 Where the core service is started by a host shell, when startup completes, the core service shall accept WebSocket connections on its endpoint — a loopback-only socket the service binds itself by default, or a shell-supplied HTTP server the service attaches to, leaving binding and transport security to that shell ([DR-033](../decisions/033-remote-gui-serving.md)) — at the path `/`, and on the relay paths of its open seats [[core-service-129](#core-service-129)], answer HTTP reads under `/applets/` for its open applets [[applets-4](applets.md#applets-4)] ([DR-161](../decisions/161-an-applet-is-a-page-the-ide-serves.md)), refusing any other path, and report the endpoint address to the host:
 
-- When a client connects, the core service sends a hello message carrying the protocol version alone before any other message, so clients can detect a protocol mismatch before issuing commands.
+- When a client connects, the core service sends a hello message naming the protocol version, and no client, before any other message, so clients can detect a protocol mismatch before issuing commands.
 
 #### core-service-24
 
@@ -1308,7 +1308,7 @@ Where a stand-in instance answers the servers routes and a stand-in hub admits a
 
 #### core-service-141
 
-When a protocol integration client connects to the real core, the suite shall assert the hello carries protocol 28 alone before any other message [[core-service-1](#core-service-1)].
+When a protocol integration client connects to the real core, the suite shall assert the hello names the current protocol version and no client before any other message [[core-service-1](#core-service-1)].
 
 ## References
 

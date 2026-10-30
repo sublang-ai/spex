@@ -24,6 +24,11 @@ function sameReceipt(before: Receipt, after: NonNullable<Receipt>): boolean {
 
 interface PublishProps {
   repository: string;
+  /** The spec package published, `<org>/<pkg>`, by which the core finds
+   * its folder (environments-10). */
+  name: string;
+  /** Its folder as the reader sees it: a change discards an open
+   * preview (playbook-library-113). */
   path: string;
   target: PublishTarget | undefined;
   onNavigate?: (surface: "Settings" | "Space") => void;
@@ -32,7 +37,7 @@ interface PublishProps {
 export function PublishControl(props: PublishProps) {
   // Remount synchronously when the upload destination changes, so an old
   // preview can never confirm against the new folder or account target.
-  const key = JSON.stringify([props.repository, props.path, props.target?.origin,
+  const key = JSON.stringify([props.repository, props.name, props.path, props.target?.origin,
     props.target?.signedIn, props.target?.name]);
   return <PublishAttempt key={key} {...props} />;
 }
@@ -46,6 +51,7 @@ export function PublishControl(props: PublishProps) {
  * nothing stands until the Groups state says which instance that is. */
 function PublishAttempt({
   repository,
+  name,
   path,
   target,
   onNavigate,
@@ -107,7 +113,7 @@ function PublishAttempt({
     setError(undefined);
     setSent(undefined);
     try {
-      setPreview(await previewPublish(repository, path));
+      setPreview(await previewPublish(repository, name));
     } catch (cause) {
       setError((cause as Error).message);
     } finally {
@@ -121,7 +127,7 @@ function PublishAttempt({
     setError(undefined);
     try {
       setSent({ name: preview.name, version: preview.version, previous: environment?.published });
-      await publish(repository, path);
+      await publish(repository, name);
       setPreview(undefined);
     } catch (cause) {
       setSent(undefined);

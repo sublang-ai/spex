@@ -1404,7 +1404,9 @@ test("CORE-27: a second compile.run for the same playbook and project is refused
   const second = await client.command("compile.run", { ...COMPILE_INPUT, projectId });
   assert.ok(!second.ok && second.error.code === "busy", JSON.stringify(second));
   assert.match(second.error.message, /^a compile is writing /);
-  assert.ok(second.error.message.includes(join("spex-packages", "demo", "playbooks", "en", "demo")), second.error.message);
+  // At spex-packages/<org>/<id>/, the project's default org its key's
+  // first segment (environments-10, playbook-library-69).
+  assert.ok(second.error.message.includes(join("spex-packages", projectId.split("/")[0]!, "demo", "playbooks", "en", "demo")), second.error.message);
   await sleep(50);
   assert.equal(working(), 1, "the refused compile spawned nothing");
 
@@ -4852,6 +4854,12 @@ test("playbook-library-32: compile.run binds derived roles however the form case
   await client.open();
   const project = await client.expectOk("project.register", { path: harness.projectDir });
 
+  // Another org's spec package of the same id, brought in by Git, is
+  // not the compile's: two orgs' packages of one name stand apart
+  // (environments-10, playbook-library-69).
+  const otherOrg = join(harness.projectDir, "spex-packages", "aaa", "pair");
+  mkdirSync(otherOrg, { recursive: true });
+  writeFileSync(join(otherOrg, "meta.yaml"), "format: 2\norg: aaa\nname: pair\nversion: 1.0.0\nartifacts: {}\n");
   // The form keys one binding as the role reads and one lowercased;
   // both must land on the derived ids. The compile writes the spec
   // package under development in the project's working folder and
@@ -4872,14 +4880,17 @@ test("playbook-library-32: compile.run binds derived roles however the form case
   assert.equal(slcEnvs[0]?.SLC_AGENT, "claude-code");
   assert.equal(slcEnvs[0]?.SLC_MODEL, "claude-test");
   assert.equal(slcEnvs[0]?.SLC_EFFORT, undefined);
-  const artifactDir = join(harness.projectDir, "spex-packages", "pair", "playbooks", "en", "pair");
+  // At spex-packages/<org>/<id>/, the project's default org
+  // (environments-10).
+  const org = project.id.split("/")[0]!;
+  const artifactDir = join(harness.projectDir, "spex-packages", org, "pair", "playbooks", "en", "pair");
   assert.ok(existsSync(join(artifactDir, "pair.registry.mjs")), "the module stands in the playbook artifact's folder");
+  assert.deepEqual(readdirSync(otherOrg), ["meta.yaml"], "the other org's package of that id is untouched");
   // The project's environment requests it by path, named under the
   // project's default org (playbook-library-69); its config entry
   // binds each derived role by its own id, and names no module.
   const clone = clonePath(harness.dataDir, project.id);
-  const org = project.id.split("/")[0]!;
-  assert.match(readFileSync(join(clone, "spex.yaml"), "utf8"), new RegExp(`${org}/pair:\\n\\s+path: spex-packages/pair\\n`));
+  assert.match(readFileSync(join(clone, "spex.yaml"), "utf8"), new RegExp(`${org}/pair:\\n\\s+path: spex-packages/${org}/pair\\n`));
   const config = readFileSync(join(clone, "config", "playbook.config.yaml"), "utf8");
   const start = config.indexOf("  pair:\n");
   assert.ok(start >= 0, "the pair entry is written");

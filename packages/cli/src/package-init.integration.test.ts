@@ -39,8 +39,8 @@ function npm(args: string[], cwd: string): string {
   return result.stdout;
 }
 
-/** The packed CLI in a working folder, with a running server and the
- * home's endpoint file both naming the fixture server it must not reach. */
+/** The packed CLI in a working folder, with `SPEX_SERVER_URL` naming
+ * the fixture server it must not reach. */
 function init(cwd: string, args: string[]): Promise<{ code: number | null; stdout: string; stderr: string }> {
   const proc = spawn(process.execPath, [CLI, "package", "init", ...args], {
     cwd, env: { ...process.env, SPEX_SERVER_URL: server.url, SPEX_HOME: HOME }, stdio: ["ignore", "pipe", "pipe"],
@@ -101,8 +101,7 @@ before(async () => {
   wss.on("connection", () => { connections++; });
   const url = `http://127.0.0.1:${wss.address().port}/?token=${TOKEN}`;
   server = { url, connections: () => connections, stop: () => new Promise<void>((done) => wss.close(() => done())) };
-  mkdirSync(join(HOME, "local"), { recursive: true });
-  writeFileSync(join(HOME, "local/endpoint.json"), JSON.stringify({ format: 1, url, pid: process.pid }), { mode: 0o600 });
+  mkdirSync(HOME, { recursive: true });
 });
 after(async () => {
   await server?.stop();
@@ -117,7 +116,7 @@ describe("spex package init", () => {
     const dir = project();
     const result = await init(dir, ["acme/demo-pack", "--skill", ".claude/skills/release-notes", "--spec", "specs/packages/demo-pack.md"]);
     assert.equal(result.code, 0, result.stderr);
-    const folder = join(dir, "spex-packages/demo-pack");
+    const folder = join(dir, "spex-packages/acme/demo-pack");
     const release = await readPublishableRelease(folder);
     assert.deepEqual(release.manifest, {
       format: 2, org: "acme", name: "demo-pack", version: "0.1.0",
@@ -144,11 +143,12 @@ describe("spex package init", () => {
     // A plain run copies: the skill's own folder stands.
     assert.equal(readFileSync(join(dir, ".claude/skills/release-notes/SKILL.md"), "utf8"), SKILL_MD);
     // The next steps name the folder, the IDE path and the two commands.
-    assert.match(result.stdout, /spex-packages\/demo-pack\//);
-    assert.match(result.stdout, /Playbooks → Add from folder with\s+acme\/demo-pack and spex-packages\/demo-pack, then Publish on its row/);
-    assert(result.stdout.includes("spex package add acme/demo-pack --path spex-packages/demo-pack"));
-    assert(result.stdout.includes("spex package publish spex-packages/demo-pack --dry-run"));
-    assert.deepEqual(readdirSync(join(dir, "spex-packages")), ["demo-pack"], "no staging folder is left");
+    assert.match(result.stdout, /spex-packages\/acme\/demo-pack\//);
+    assert.match(result.stdout, /Playbooks → Add from folder with\s+acme\/demo-pack and spex-packages\/acme\/demo-pack, then Publish on its row/);
+    assert(result.stdout.includes("spex package add acme/demo-pack --path spex-packages/acme/demo-pack"));
+    assert(result.stdout.includes("spex package publish spex-packages/acme/demo-pack --dry-run"));
+    assert.deepEqual(readdirSync(join(dir, "spex-packages")), ["acme"], "the org is a folder");
+    assert.deepEqual(readdirSync(join(dir, "spex-packages/acme")), ["demo-pack"], "no staging folder is left");
     assert.deepEqual(homeBefore(), home, "no Spex storage is touched");
   });
 
@@ -156,7 +156,7 @@ describe("spex package init", () => {
     const mit = project("﻿\n  MIT License\n\nCopyright (c) 2026\n");
     const spec = await init(mit, ["acme/demo-pack", "--spec", "specs/packages/demo-pack.md"]);
     assert.equal(spec.code, 0, spec.stderr);
-    const release = await readPublishableRelease(join(mit, "spex-packages/demo-pack"));
+    const release = await readPublishableRelease(join(mit, "spex-packages/acme/demo-pack"));
     assert.equal(release.manifest.description, "This package states the demo's behavior. It has two lines.");
     assert.equal(release.manifest.license, "MIT");
     assert.deepEqual(Object.keys(release.manifest.artifacts), ["demo-pack"]);
@@ -164,9 +164,9 @@ describe("spex package init", () => {
     const bare = project(null);
     const skill = await init(bare, ["acme/notes", "--skill", ".claude/skills/release-notes"]);
     assert.equal(skill.code, 0, skill.stderr);
-    const unlicensed = await readPublishableRelease(join(bare, "spex-packages/notes"));
+    const unlicensed = await readPublishableRelease(join(bare, "spex-packages/acme/notes"));
     assert.equal(unlicensed.manifest.license, "Apache-2.0", "Apache-2.0 without a LICENSE");
-    assert.equal(existsSync(join(bare, "spex-packages/notes/LICENSE")), false);
+    assert.equal(existsSync(join(bare, "spex-packages/acme/notes/LICENSE")), false);
   });
 
   it("lets --description, --license and --language override the defaults", async () => {
@@ -176,7 +176,7 @@ describe("spex package init", () => {
       "--description", 'Notes "quoted" #1: done', "--license", "MIT", "--language", "zh-Hans",
     ]);
     assert.equal(result.code, 0, result.stderr);
-    const release = await readPublishableRelease(join(dir, "spex-packages/demo-pack"));
+    const release = await readPublishableRelease(join(dir, "spex-packages/acme/demo-pack"));
     assert.equal(release.manifest.description, 'Notes "quoted" #1: done');
     assert.equal(release.manifest.license, "MIT");
     assert.deepEqual(release.manifest.artifacts, {
@@ -192,11 +192,11 @@ describe("spex package init", () => {
     const result = await init(dir, ["acme/notes", "--skill", ".claude/skills/release-notes", "--move"]);
     assert.equal(result.code, 0, result.stderr);
     assert.equal(existsSync(join(dir, ".claude/skills/release-notes")), false, "the original folder is gone");
-    const release = await readPublishableRelease(join(dir, "spex-packages/notes"));
+    const release = await readPublishableRelease(join(dir, "spex-packages/acme/notes"));
     assert.deepEqual(release.files.map((f) => f.path), [
       "LICENSE", "README.md", "meta.yaml", "skills/en/release-notes/SKILL.md", "skills/en/release-notes/scripts/collect.sh",
     ]);
-    if (process.platform !== "win32") assert.equal(statSync(join(dir, "spex-packages/notes/skills/en/release-notes/scripts/collect.sh")).mode & 0o111, 0o111);
+    if (process.platform !== "win32") assert.equal(statSync(join(dir, "spex-packages/acme/notes/skills/en/release-notes/scripts/collect.sh")).mode & 0o111, 0o111);
   });
 
   it("refuses each rule before writing anything", async () => {
@@ -245,7 +245,7 @@ describe("spex package init", () => {
       ["a skill of the spec's id", ["acme/demo-pack", "--skill", ".claude/skills/demo-pack", "--spec", "specs/packages/demo-pack.md"], /spec's id demo-pack/],
       ["a spec of another basename", ["acme/demo-pack", "--spec", "specs/packages/other.md"], /must be named demo-pack\.md/],
       ["no description from any source", ["acme/plain", "--skill", ".claude/skills/undescribed", "--spec", "specs/packages/plain.md"], /--description/],
-      ["a moved skill folder holding the destination", ["acme/demo-pack", "--skill", ".", "--move"], /cannot move \.: it holds spex-packages\/demo-pack\//],
+      ["a moved skill folder holding the destination", ["acme/demo-pack", "--skill", ".", "--move"], /cannot move \.: it holds spex-packages\/acme\/demo-pack\//],
       ...(links ? [
         ["a skill folder holding a link", ["acme/demo-pack", "--skill", ".claude/skills/linked"], /holds a link at other\.md/],
         ["a skill folder holding a special file", ["acme/demo-pack", "--skill", ".claude/skills/piped"], /holds a special file at pipe/],
@@ -261,12 +261,12 @@ describe("spex package init", () => {
       assert.equal(existsSync(join(dir, "spex-packages")), false, `${label} makes no spex-packages/`);
     }
     // An existing destination is refused and left as it was.
-    mkdirSync(join(dir, "spex-packages/demo-pack"), { recursive: true });
-    writeFileSync(join(dir, "spex-packages/demo-pack/keep.txt"), "mine\n");
+    mkdirSync(join(dir, "spex-packages/acme/demo-pack"), { recursive: true });
+    writeFileSync(join(dir, "spex-packages/acme/demo-pack/keep.txt"), "mine\n");
     const before = snapshot(dir);
     const existing = await init(dir, ["acme/demo-pack", "--skill", ...skill, "--move"]);
     assert.equal(existing.code, 1);
-    assert.match(existing.stderr, /spex-packages\/demo-pack\/ already exists/);
+    assert.match(existing.stderr, /spex-packages\/acme\/demo-pack\/ already exists/);
     assert.deepEqual(snapshot(dir), before, "an existing destination is left as it was");
   });
 

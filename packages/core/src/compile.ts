@@ -582,7 +582,7 @@ function artifactFolder(libraryDir: string, id: string): string {
 /** A folder's path with every link resolved — through its nearest
  * existing ancestor where it is not made yet — so two spellings of one
  * destination are one key. */
-function canonicalFolder(folder: string): string {
+export function canonicalFolder(folder: string): string {
   let existing = resolve(folder);
   const rest: string[] = [];
   while (!existsSync(existing) && dirname(existing) !== existing) {

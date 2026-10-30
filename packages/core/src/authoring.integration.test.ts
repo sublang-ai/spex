@@ -369,7 +369,7 @@ test("playbook-library-72: a draft is authored, compiled, proposed, and register
   const configBefore = readFileSync(configPath, "utf8");
   // The spec package under development stands in the project's working
   // folder, the source in its playbook artifact (environments-10).
-  const draftDir = join(harness.dir, "project", "spex-packages", "triage");
+  const draftDir = join(harness.dir, "project", "spex-packages", "acme", "triage");
   const artifactDir = join(draftDir, "playbooks", "en", "triage");
 
   // The channel exists once the draft does (core-service-96).
@@ -382,8 +382,8 @@ test("playbook-library-72: a draft is authored, compiled, proposed, and register
   assert.equal(created.projectId, projectId);
   assert.equal(created.enabled, false);
   assert.equal(created.package, "acme/triage");
-  assert.equal(created.packagePath, "spex-packages/triage");
-  assert.equal(created.sourcePath, "spex-packages/triage/playbooks/en/triage/triage.md");
+  assert.equal(created.packagePath, "spex-packages/acme/triage");
+  assert.equal(created.sourcePath, "spex-packages/acme/triage/playbooks/en/triage/triage.md");
   assert.ok(existsSync(draftDir), "the spec package folder is made");
   // playbook-library-70: its manifest names the org and license given
   // and one playbook in en, 0.1.0.
@@ -398,7 +398,7 @@ test("playbook-library-72: a draft is authored, compiled, proposed, and register
   assert.equal(record.format, 1);
   assert.equal(record.language, "en");
   assert.equal(record.id, "triage");
-  assert.equal(record.package, "spex-packages/triage");
+  assert.equal(record.package, "spex-packages/acme/triage");
   assert.deepEqual(record.queued, []);
   assert.equal(record.failures, 0);
   // An id a configured playbook, a built-in, or a draft holds is refused.
@@ -527,10 +527,10 @@ test("playbook-library-72: a draft is authored, compiled, proposed, and register
   });
   assert.equal(state.status, "valid");
   const requests = parseYaml(readFileSync(join(clone, "spex.yaml"), "utf8")) as { packages: Record<string, unknown> };
-  assert.deepEqual(requests.packages["acme/triage"], { path: "spex-packages/triage" });
+  assert.deepEqual(requests.packages["acme/triage"], { path: "spex-packages/acme/triage" });
   const lock = parseYaml(readFileSync(join(clone, "spex.lock"), "utf8")) as { packages: Record<string, { exports: Record<string, string>; source: Record<string, unknown> }> };
   assert.deepEqual(lock.packages["acme/triage"]?.exports, { triage: "triage" });
-  assert.equal(lock.packages["acme/triage"]?.source.path, "spex-packages/triage");
+  assert.equal(lock.packages["acme/triage"]?.source.path, "spex-packages/acme/triage");
   const own = parseYaml(readFileSync(configPath, "utf8")) as { players: Record<string, unknown>; playbooks: Record<string, unknown> };
   assert.deepEqual(own.players["dev.triager"], { adapter: "claude" }, "the new player joins your own roster");
   assert.equal(own.playbooks.triage, undefined, "your own group's config is not the one enabling it");
@@ -653,7 +653,7 @@ test("playbook-library-73: failures relay to the agent, stop at three, and a Bos
 
   // runs: relay, relay, Boss, relay with questions, prefaced Boss, success.
   assert.equal(stats.runs.length, 6);
-  assertAuthoringPermissions(stats.runs, join(harness.dir, "project", "spex-packages", "triage"));
+  assertAuthoringPermissions(stats.runs, join(harness.dir, "project", "spex-packages", "acme", "triage"));
   assert.match(stats.runs[2].prompt, /Boss: Ask me what you need/);
   assert.match(stats.runs[2].prompt, /Since your last reply: .*a compile failed at text2gears/);
   const questions = stats.runs[3].prompt;
@@ -717,7 +717,7 @@ test("playbook-library-74: messages queue behind a turn or compile; every other 
   assert.ok(!client.turnStarts("matrix").includes("second"), "the queue waits for the compile");
   const second = await client.expectError("draft.compile", { projectId, draftId: "matrix" }, "busy");
   assert.match(second.message, /^a compile is writing /);
-  assert.ok(second.message.includes(join("spex-packages", "matrix", "playbooks", "en", "matrix")), second.message);
+  assert.ok(second.message.includes(join("spex-packages", "acme", "matrix", "playbooks", "en", "matrix")), second.message);
   await sleep(100);
   assert.equal(blocking(), 1, "the refused compile ran no compiler");
   assert.deepEqual(await client.expectOk("draft.send", { projectId, draftId: "matrix", text: "third" }), { accepted: true, queued: true });
@@ -778,7 +778,7 @@ test("playbook-library-75: a restart replays the draft, reseeds the conversation
   await idle(client, 3);
   const runs = first.stats.runs;
   assert.equal(runs.length, 4);
-  assertAuthoringPermissions(runs, join(dir, "project", "spex-packages", "persist"));
+  assertAuthoringPermissions(runs, join(dir, "project", "spex-packages", "acme", "persist"));
   assert.equal(runs[0].resume, undefined, "the first turn has no resume");
   assert.match(runs[0].prompt, /You are helping the Boss/);
   assert.match(runs[1].resume ?? "", /^fake-resume-/, "the second turn passed the first's token");
@@ -849,7 +849,7 @@ test("playbook-library-75: a restart replays the draft, reseeds the conversation
   await client2.expectOk("draft.send", { projectId, draftId: "persist", text: "switch" });
   await idle(client2, 2);
   const onReviewer = second.stats.runs[1];
-  assertAuthoringPermissions(second.stats.runs, join(dir, "project", "spex-packages", "persist"));
+  assertAuthoringPermissions(second.stats.runs, join(dir, "project", "spex-packages", "acme", "persist"));
   assert.equal(onReviewer.resume, undefined, "a switched agent starts fresh");
   assert.equal(onReviewer.model, "codex-test");
   assert.match(onReviewer.prompt, /Conversation so far:/);
@@ -894,7 +894,7 @@ test("playbook-library-75: a restart replays the draft, reseeds the conversation
   assert.equal(await client3.expectOk("draft.delete", { projectId, draftId: "persist" }), null);
   await client3.waitFor((m) => m.type === "draft.removed" && m.draftId === "persist" && m.projectId === projectId);
   for (const path of Object.values(files)) assert.ok(!existsSync(path), `${path} is gone`);
-  assert.ok(existsSync(join(dir, "project", "spex-packages", "persist", "playbooks", "en", "persist", "persist.md")), "the spec package folder stays");
+  assert.ok(existsSync(join(dir, "project", "spex-packages", "acme", "persist", "playbooks", "en", "persist", "persist.md")), "the spec package folder stays");
   assert.equal(JSON.parse(readFileSync(prefsFile, "utf8")).prefs[playerPref], undefined);
   assert.deepEqual(await client3.expectOk("draft.list", {}), []);
   await client3.expectError("draft.open", { projectId, draftId: "persist" }, "not_found");
@@ -1070,7 +1070,7 @@ test("playbook-library-106: an unreadable block is relayed to the agent at once,
   assert.equal(count(SENT), 1);
   assert.deepEqual(client.turnStarts("triage"), ["Spex: the compile succeeded — asking for a registration proposal", RELAY_TURN]);
   assert.equal(client.latest("triage")?.proposal?.command, "promote");
-  assertAuthoringPermissions(stats.runs, join(harness.dir, "project", "spex-packages", "triage"));
+  assertAuthoringPermissions(stats.runs, join(harness.dir, "project", "spex-packages", "acme", "triage"));
 
   // A readable register block beside an unreadable one answers it.
   await client.expectOk("draft.send", { projectId, draftId: "triage", text: "both" });
@@ -1146,8 +1146,8 @@ test("playbook-library-102: a session takes its folder's, its project's, else th
   const plainId = await pairedProject(harness.service.port(), plain);
   // A spec package folder brought in by Git, its playbook in Chinese.
   const keptManifest = "format: 2\norg: acme\nname: kept\nversion: 0.2.0\nartifacts:\n  kept:\n    kind: playbook\n    language: zh\n";
-  mkdirSync(join(plain, "spex-packages", "kept", "playbooks", "zh", "kept"), { recursive: true });
-  writeFileSync(join(plain, "spex-packages", "kept", "meta.yaml"), keptManifest);
+  mkdirSync(join(plain, "spex-packages", "acme", "kept", "playbooks", "zh", "kept"), { recursive: true });
+  writeFileSync(join(plain, "spex-packages", "acme", "kept", "meta.yaml"), keptManifest);
 
   /** Create a session, send it one message, and read where it stands
    * and what its first prompt said. */
@@ -1156,7 +1156,7 @@ test("playbook-library-102: a session takes its folder's, its project's, else th
     await client.expectOk("draft.send", { projectId: project, draftId: id, text: `Draft ${id}` });
     const first = () => stats.runs.find((run) => run.prompt.includes(`Boss: Draft ${id}`));
     await until(() => first() !== undefined && client.latest(id)?.activity === "idle", 60_000, `the first turn of ${id}`);
-    const packageDir = join(folder, "spex-packages", id);
+    const packageDir = join(folder, "spex-packages", "acme", id);
     return {
       created,
       prompt: first()!.prompt,
@@ -1166,11 +1166,11 @@ test("playbook-library-102: a session takes its folder's, its project's, else th
     };
   };
   const expectLanguage = (session: Awaited<ReturnType<typeof author>>, id: string, language: string, name: string) => {
-    assert.equal(session.created.sourcePath, `spex-packages/${id}/playbooks/${language}/${id}/${id}.md`, `${id}: the source path`);
+    assert.equal(session.created.sourcePath, `spex-packages/acme/${id}/playbooks/${language}/${id}/${id}.md`, `${id}: the source path`);
     assert.ok(existsSync(join(session.packageDir, "playbooks", language, id)), `${id}: the playbook folder`);
     assert.equal((parseYaml(session.manifest) as { artifacts: Record<string, { language?: string }> }).artifacts[id]?.language, language, `${id}: the manifest's language`);
     assert.equal(session.record.language, language, `${id}: the session file's language`);
-    assert.ok(session.prompt.includes(join("spex-packages", id, "playbooks", language, id, `${id}.md`)), `${id}: the prompt's source path`);
+    assert.ok(session.prompt.includes(join("spex-packages", "acme", id, "playbooks", language, id, `${id}.md`)), `${id}: the prompt's source path`);
     assert.ok(session.prompt.includes(`Write the playbook in ${name} (\`${language}\`)`), `${id}: the prompt names ${name}`);
     // A role name is one word in every language (playbook-library-65).
     assert.ok(session.prompt.includes('Each role name is one word: slc reads only the first word after "Captain shall prompt" and refuses a role name with a space, so write a two-word role as one CamelCase word, e.g. `RiskOfficer`, `ClientAdvocate`.'), `${id}: the one-word role rule`);
@@ -1209,7 +1209,7 @@ test("playbook-library-102: a session takes its folder's, its project's, else th
   // A session keeps the folder it was created in when the home's
   // language changes.
   const listed = await client.expectOk("draft.list", {});
-  assert.equal(listed.find((draft) => draft.id === "relabel")?.sourcePath, "spex-packages/relabel/playbooks/zh/relabel/relabel.md");
+  assert.equal(listed.find((draft) => draft.id === "relabel")?.sourcePath, "spex-packages/acme/relabel/playbooks/zh/relabel/relabel.md");
 
   // A folder brought in keeps its manifest's language, the file untouched.
   const kept = await author(plainId, plain, "kept");
@@ -1323,7 +1323,7 @@ test("playbook-library-104: New playbook's defaults come from the orgs the regis
   // package named under that org (playbook-library-70).
   const created = await client.expectOk("draft.create", { projectId, draftId: "intake", org: "workshop", license: "BSD-3-Clause" });
   assert.equal(created.package, "workshop/intake");
-  const meta = parseYaml(readFileSync(join(folder, "spex-packages", "intake", "meta.yaml"), "utf8")) as Record<string, unknown>;
+  const meta = parseYaml(readFileSync(join(folder, "spex-packages", "workshop", "intake", "meta.yaml"), "utf8")) as Record<string, unknown>;
   assert.deepEqual([meta.org, meta.name, meta.license, meta.description], ["workshop", "intake", "BSD-3-Clause", "The intake playbook"]);
 
   // The one-shot compile asks no one: the project's defaults stand —
@@ -1332,16 +1332,18 @@ test("playbook-library-104: New playbook's defaults come from the orgs the regis
   const oneShot = (id: string, playbookId: string) => client.command("compile.run", {
     projectId: id, playbookId, sourceText: "# Solo\n\nRoles:\n\n- Helper\n", roles: ["Helper"], command: playbookId, intent: "a solo workflow", bindings: { Helper: "dev.coder" },
   });
-  const manifestOf = (working: string, playbookId: string): Record<string, unknown> =>
-    parseYaml(readFileSync(join(working, "spex-packages", playbookId, "meta.yaml"), "utf8")) as Record<string, unknown>;
+  // At spex-packages/<org>/<id>/, the org the project's default
+  // (environments-10).
+  const manifestOf = (working: string, org: string, playbookId: string): Record<string, unknown> =>
+    parseYaml(readFileSync(join(working, "spex-packages", org, playbookId, "meta.yaml"), "utf8")) as Record<string, unknown>;
   let before = [orgsAsked(first), orgsAsked(second)];
   await oneShot(projectId, "bare");
-  const bare = manifestOf(folder, "bare");
+  const bare = manifestOf(folder, "acme-work", "bare");
   assert.deepEqual([bare.org, "license" in bare], ["acme-work", false]);
   assert.deepEqual([orgsAsked(first) - before[0]!, orgsAsked(second) - before[1]!], [1, 0], "the local-only project's compile asks the first's registry alone");
   before = [orgsAsked(first), orgsAsked(second)];
   await oneShot(atSecond, "paired");
-  const paired = manifestOf(join(dir, "graph-second"), "paired");
+  const paired = manifestOf(join(dir, "graph-second"), "team-two", "paired");
   assert.deepEqual([paired.org, "license" in paired], ["team-two", false]);
   assert.deepEqual([orgsAsked(first) - before[0]!, orgsAsked(second) - before[1]!], [0, 1], "the second's project's compile asks the second's registry alone");
 
@@ -1353,7 +1355,7 @@ test("playbook-library-104: New playbook's defaults come from the orgs the regis
   assert.deepEqual(await orgsOf(), ["tester", "acme", "team-two"], "signed out of the first");
   writeFileSync(license, cases[0]![0]!);
   await oneShot(projectId, "licensed");
-  const licensed = manifestOf(folder, "licensed");
+  const licensed = manifestOf(folder, org, "licensed");
   assert.deepEqual([licensed.org, licensed.license], [org, "Apache-2.0"]);
 
   // Signed out of both, no registry is asked.
@@ -1400,7 +1402,7 @@ test("core-service-97: draft commands refuse by code, stream on the draft channe
   // rule or an empty license, nothing made (core-service-96).
   await a.expectError("draft.create", { projectId, draftId: "iso", org: "Acme", license: "MIT" }, "invalid_request");
   await a.expectError("draft.create", { projectId, draftId: "iso", org: "acme", license: "" }, "invalid_request");
-  assert.ok(!existsSync(join(harness.dir, "project", "spex-packages", "iso")), "no spec package folder is made");
+  assert.ok(!existsSync(join(harness.dir, "project", "spex-packages", "acme", "iso")), "no spec package folder is made");
   assert.ok(!existsSync(authoringFiles(clone, "iso").record), "no session file is made");
 
   await a.expectOk("draft.create", { projectId, draftId: "iso", ...NEW_PACKAGE });
@@ -1649,7 +1651,10 @@ test("playbook-library-100: one compile or packaging job writes a playbook artif
   const client = new Client(harness.service.port());
   await client.open();
   const other = (await client.expectOk("project.register", { path: workingFolder(join(dir, "other")) })).id;
-  const artifactDir = (id: string, folder = "project") => join(dir, folder, "spex-packages", id, "playbooks", "en", id);
+  // The session's package under its org, acme; the other project's
+  // one-shot compile under that project's default org, its key's first
+  // segment (environments-10, playbook-library-69).
+  const artifactDir = (id: string, folder = "project") => join(dir, folder, "spex-packages", folder === "project" ? "acme" : other.split("/")[0]!, id, "playbooks", "en", id);
   const release = (id: string, folder = "project") => writeFileSync(join(artifactDir(id, folder), STUB_SLC_RELEASE_FILE), "");
   let writer: number | undefined;
   // However the test ends, every hold is released before the stop.
@@ -1696,7 +1701,7 @@ test("playbook-library-100: one compile or packaging job writes a playbook artif
   assert.equal(client.latest("solo")?.activity, "turn", "the refusal comes while the turn runs");
   const refused = (await client.expectError("draft.compile", { projectId, draftId: "solo" }, "busy")).message;
   assert.match(refused, /^a compile is writing /);
-  assert.ok(refused.includes(join("spex-packages", "solo", "playbooks", "en", "solo")), refused);
+  assert.ok(refused.includes(join("spex-packages", "acme", "solo", "playbooks", "en", "solo")), refused);
   // A one-shot compile of the id in the session's working folder too,
   // and through the project at the link to that folder.
   assert.match((await client.expectError("compile.run", { ...ONE_SHOT, projectId }, "busy")).message, /a compile is writing/);
@@ -1810,7 +1815,7 @@ test("playbook-library-100: a canceled compile holds its folder until its compil
   const harness = await startHarness({ script: { fallback: { deltas: ["Noted."], result: "Noted." } }, slc: STUBBORN_SLC });
   const { dir, projectId } = harness;
   const client = new Client(harness.service.port());
-  const folder = join(dir, "project", "spex-packages", "late", "playbooks", "en", "late");
+  const folder = join(dir, "project", "spex-packages", "acme", "late", "playbooks", "en", "late");
   const exit = () => { if (existsSync(folder)) writeFileSync(join(folder, ".stub-exit"), ""); };
   try {
     await client.open();
@@ -1870,7 +1875,7 @@ test("playbook-library-100: a compile whose project was rebound as it started wr
     for (const [at, id, to] of [["config", "moved", "rebound"], ["probe", "probed", "rebound-again"]] as const) {
       await client.expectOk("draft.create", { projectId, draftId: id, ...NEW_PACKAGE });
       await client.expectOk("draft.source.write", { projectId, draftId: id, content: `# ${id}\n\nRoles:\n\n- Helper\n` });
-      const folder = join(paired, "spex-packages", id, "playbooks", "en", id);
+      const folder = join(paired, "spex-packages", "acme", id, "playbooks", "en", id);
       const before = readdirSync(folder).sort();
       const source = readFileSync(join(folder, `${id}.md`), "utf8");
       const record = authoringFiles(clone, id).record;
@@ -1889,7 +1894,7 @@ test("playbook-library-100: a compile whose project was rebound as it started wr
       assert.match(reply.error.message, new RegExp(`${id} changed meanwhile; retry`));
       assert.deepEqual(readdirSync(folder).sort(), before, `${at}: the folder paired at its start is unchanged`);
       assert.equal(readFileSync(join(folder, `${id}.md`), "utf8"), source);
-      assert.ok(!existsSync(join(rebound, "spex-packages", id, "playbooks", "en", id)), `${at}: nor is the folder paired now made`);
+      assert.ok(!existsSync(join(rebound, "spex-packages", "acme", id, "playbooks", "en", id)), `${at}: nor is the folder paired now made`);
       assert.equal(harness.slcCalls.length, 0, `${at}: no compiler ran`);
       if (at === "probe") {
         // Refused before its start writes a marker.
@@ -1940,7 +1945,7 @@ test("playbook-library-100: a compile whose probe returns after a rebind and a n
     const content = "# race\n\nRoles:\n\n- Helper\n";
     await client.expectOk("draft.create", { projectId, draftId: "race", ...NEW_PACKAGE });
     await client.expectOk("draft.source.write", { projectId, draftId: "race", content });
-    const oldFolder = join(dir, "project", "spex-packages", "race", "playbooks", "en", "race");
+    const oldFolder = join(dir, "project", "spex-packages", "acme", "race", "playbooks", "en", "race");
     const oldListing = readdirSync(oldFolder).sort();
     const oldSource = readFileSync(join(oldFolder, "race.md"), "utf8");
     const record = authoringFiles(clone, "race").record;
@@ -1950,7 +1955,7 @@ test("playbook-library-100: a compile whose probe returns after a rebind and a n
     const raced = workingFolder(join(dir, "raced"));
     await client.expectOk("project.rebind", { projectId, path: raced });
     await client.expectOk("draft.source.write", { projectId, draftId: "race", content });
-    heldCompiler = join(raced, "spex-packages", "race", "playbooks", "en", "race");
+    heldCompiler = join(raced, "spex-packages", "acme", "race", "playbooks", "en", "race");
     const newer = client.command("draft.compile", { projectId, draftId: "race" });
     await until(() => harness.slcCalls.length === 1 && client.progress("race").some((line) => line.startsWith("→ normalize")), 20_000, "the newer compile's compiler held");
     const newerMarker = marker();
@@ -2018,7 +2023,7 @@ test("playbook-library-100: a compile canceled while its toolchain or config is 
       await client.expectOk("draft.source.write", { projectId, draftId: id, content: `# ${id}\n\nRoles:\n\n- Helper\n` });
       const record = authoringFiles(clone, id).record;
       const marker = () => (JSON.parse(readFileSync(record, "utf8")) as { compile?: { at: number; outcome: string } }).compile;
-      const folder = join(dir, "project", "spex-packages", id, "playbooks", "en", id);
+      const folder = join(dir, "project", "spex-packages", "acme", id, "playbooks", "en", id);
       const recordBefore = readFileSync(record, "utf8");
       const listing = readdirSync(folder).sort();
       const source = readFileSync(join(folder, `${id}.md`), "utf8");
@@ -2083,12 +2088,12 @@ test("playbook-library-96: the authoring store reads its files at use and writes
   const { dir, projectId, clone, dataDir } = harness;
   const client = new Client(harness.service.port());
   await client.open();
-  const artifactDir = (id: string) => join(dir, "project", "spex-packages", id, "playbooks", "en", id);
+  const artifactDir = (id: string) => join(dir, "project", "spex-packages", "acme", id, "playbooks", "en", id);
   const held = (id: string) => client.waitFor((m) => m.type === "compile.progress" && m.playbookId === id && m.line.startsWith("→ normalize"), 20_000);
   const release = (id: string) => writeFileSync(join(artifactDir(id), STUB_SLC_RELEASE_FILE), "");
   // However the test ends, every hold is released before the stop.
   t.after(async () => {
-    const root = join(dir, "project", "spex-packages");
+    const root = join(dir, "project", "spex-packages", "acme");
     if (existsSync(root)) for (const id of readdirSync(root)) if (existsSync(artifactDir(id))) release(id);
     client.close();
     await harness.service.stop();
@@ -2464,11 +2469,11 @@ test("playbook-library-96: work goes on beside work, settling only what is its o
   const { dir, projectId, clone } = harness;
   const client = new Client(harness.service.port());
   await client.open();
-  const artifactDir = (id: string) => join(dir, "project", "spex-packages", id, "playbooks", "en", id);
+  const artifactDir = (id: string) => join(dir, "project", "spex-packages", "acme", id, "playbooks", "en", id);
   const release = (id: string) => writeFileSync(join(artifactDir(id), STUB_SLC_RELEASE_FILE), "");
   // However the test ends, every hold is released before the stop.
   t.after(async () => {
-    const root = join(dir, "project", "spex-packages");
+    const root = join(dir, "project", "spex-packages", "acme");
     if (existsSync(root)) for (const id of readdirSync(root)) if (existsSync(artifactDir(id))) release(id);
     client.close();
     await harness.service.stop();

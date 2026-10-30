@@ -53,7 +53,7 @@ const NO_PACKAGES: ReadonlySet<string> = new Set();
 
 /** The record, settings and placement paths, and the folders the
  * catalog ignores, no spec package folder lies in (storage-11). */
-export const NOT_PACKAGES = /^(?:config|sessions|intents|authoring|placements|packages|skills|local|\.spex-uploads)\//;
+export const NOT_PACKAGES = /^(?:config|sessions|intents|authoring|placements|\.spex|packages|skills|local|\.spex-uploads)\//;
 
 /** The folders below a clone's root, outside its record and settings
  * paths and the folders the catalog ignores, that hold a spec package's
@@ -745,7 +745,10 @@ export function prepareStorageGitFiles(dir: string, unsupportedPaths: string[] =
     // session's original bytes beside the store it migrates into: never
     // portable, since a legacy manifest may hold a provider token
     // (storage-9, storage-17, storage-18).
-    "/packages/", "/skills/", "/local/", `/${UPLOAD_STAGING}/`, `/${APPLY_MARKER}`, "/.lock*",
+    // `.spex/` holds a group's own environment's installed files and
+    // generated skills (environments-26), and the former `packages/` and
+    // `skills/` stay ignored until an install removes them (DR-165).
+    "/.spex/", "/packages/", "/skills/", "/local/", `/${UPLOAD_STAGING}/`, `/${APPLY_MARKER}`, "/.lock*",
     "*.hints.json", "*.spex.json", "*.lock", "*.lock.*", "*.tmp", "*.bak", "*.bak.*", "*.backup", "*.backup.*",
     "!/spex.lock",
   ];

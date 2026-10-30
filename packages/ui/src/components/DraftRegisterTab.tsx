@@ -13,7 +13,7 @@
 // the spec package under development after an inline summary of what
 // it would upload (playbook-library-93).
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   AgentBlockInput,
   AgentSummary,
@@ -194,6 +194,15 @@ export function DraftRegisterTab({
   const gearRef = useRef<HTMLButtonElement>(null);
   const project = store((state) => state.projects.find((entry) => entry.id === draft.projectId));
   const space = store((state) => state.space);
+  // A publish goes to the project's environment's instance, as the core
+  // reads it from its `spex.yaml` (playbook-library-93, environments-2):
+  // its state is read where none is held yet.
+  const environment = store((state) => state.environments[draft.projectId]);
+  const loadEnvironment = store((state) => state.loadEnvironment);
+  const environmentHeld = environment !== undefined;
+  useEffect(() => {
+    if (connected && !environmentHeld) void loadEnvironment(draft.projectId).catch(() => {});
+  }, [connected, environmentHeld, draft.projectId, loadEnvironment]);
   const ownListed = store((state) => state.playbookLists?.own);
   const ownKey = ownRepositoryKey(space, ownListed);
   const readinessByAdapter = new Map(readiness.map((entry) => [entry.adapter as string, entry]));
@@ -438,7 +447,7 @@ export function DraftRegisterTab({
             : i18n._({ id: "Enable", comment: "enable this playbook in this config" })}
         </button>
       </div>
-      <PublishControl repository={draft.projectId} path={draftPackagePath(draft)} target={publishTargetOf(space, draft.projectId)} onNavigate={onNavigate} />
+      <PublishControl repository={draft.projectId} name={draft.package ?? draft.id} path={draftPackagePath(draft)} target={publishTargetOf(space, environment)} onNavigate={onNavigate} />
     </div>
   );
 }

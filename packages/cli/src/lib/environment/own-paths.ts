@@ -31,10 +31,11 @@ export type OwnPathIssue =
 
 /** The first segments of the paths Spex keeps in a clone (storage-1):
  * its records, its settings, its placement files (DR-128), its
- * installed and exported files, its device-local files and its root
+ * installed and exported files under `.spex/` (DR-165) and the former
+ * `packages/` and `skills/`, its device-local files and its root
  * files. */
 const SPEX_PATHS = new Set([
-  "config", "sessions", "intents", "authoring", "placements", "packages", "skills", "local", ".git", ".spex-uploads",
+  "config", "sessions", "intents", "authoring", "placements", ".spex", "packages", "skills", "local", ".git", ".spex-uploads",
   "spex.yaml", "spex.lock", "project.json", ".gitignore", ".gitattributes", ".spex-apply.json",
 ]);
 

@@ -498,8 +498,10 @@ export interface AppState extends AttachmentState {
    * a result is added to. */
   searchRegistry(repository: string, query: string): Promise<RegistryResult[]>;
   /** The inline summary Publish shows before it uploads anything. */
-  previewPublish(repository: string, path: string): Promise<PublishPreview>;
-  publishSpecPackage(repository: string, path: string): Promise<void>;
+  /** Publish by name (environments-10): the core reads the package's
+   * folder, its request's path or `spex-packages/<org>/<pkg>/`. */
+  previewPublish(repository: string, name: string): Promise<PublishPreview>;
+  publishSpecPackage(repository: string, name: string): Promise<void>;
 
   listDrafts(): Promise<void>;
   /** What New playbook fills its Org and License with for a project
@@ -3249,10 +3251,10 @@ function placeState(
       return packages;
     },
 
-    async previewPublish(repository: string, path: string): Promise<PublishPreview> {
+    async previewPublish(repository: string, name: string): Promise<PublishPreview> {
       const reply = await getClient().command("environment.publish", {
         repository,
-        path,
+        name,
         dryRun: true,
       });
       if (!reply.preview) {
@@ -3261,8 +3263,8 @@ function placeState(
       return reply.preview;
     },
 
-    async publishSpecPackage(repository: string, path: string): Promise<void> {
-      await getClient().command("environment.publish", { repository, path });
+    async publishSpecPackage(repository: string, name: string): Promise<void> {
+      await getClient().command("environment.publish", { repository, name });
     },
 
     async runCompile(input): Promise<void> {

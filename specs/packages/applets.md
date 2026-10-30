@@ -46,7 +46,7 @@ When the core's endpoint receives a `GET` or `HEAD` request under `/applets/<cap
 | Path under the capability | Served |
 | --- | --- |
 | `/`, `index.html` | the applet's entry |
-| `<path>` | that regular file of the applet's folder — the installed copy under the clone's `packages/` [[environments-7](environments.md#environments-7)], or a path source's folder where its path resolves [[environments-2](environments.md#environments-2)] |
+| `<path>` | that regular file of the applet's folder — the installed copy under the root's `.spex/packages/` [[environments-7](environments.md#environments-7)], or a path source's folder where its path resolves [[environments-2](environments.md#environments-2)] |
 | `~/<path>` | that regular file of the project's working folder, read-only |
 | `~/<folder>/` | the folder's entries as JSON `{ entries: [{ name, kind, size, modified }] }`, `kind` being `file` or `folder`, `modified` Unix milliseconds, links and special files left out |
 
