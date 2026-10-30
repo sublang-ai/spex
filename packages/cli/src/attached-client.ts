@@ -2,10 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
-import { PROTOCOL_VERSION, ATTACHED_CLI_VERSION } from "./generated-protocol.js";
+import { PROTOCOL_VERSION } from "./generated-protocol.js";
 
 export class CliFailure extends Error {
   constructor(readonly exitCode: number, message: string) { super(message); }
@@ -13,35 +10,17 @@ export class CliFailure extends Error {
 type Message = Record<string, any>;
 type Pending = { resolve: (value: any) => void; reject: (error: Error) => void };
 
-/** What a failure to find or reach the running app tells the reader. */
-export const APP_GUIDANCE = "The Spex app must be running on this computer: start it, then run this again. To use another server, pass --server <access-url> or set SPEX_SERVER_URL.";
 const EXPLICIT_GUIDANCE = "Use --server <loopback access-url> or SPEX_SERVER_URL from a running Spex server.";
 
 /** The access URL an invocation connects to: `--server`, else
- * `SPEX_SERVER_URL`, else the URL the running app keeps in the home's
- * `local/endpoint.json` (attached-cli-1, DR-163). Each is held to the
- * same loopback rule before any socket opens; the file's URL is never
- * repeated in a failure. */
-export function selectEndpoint(server: string | undefined, env: NodeJS.ProcessEnv): { url: string; token: string; fromApp: boolean } {
-  if (server !== undefined) return { ...accessEndpoint(server), fromApp: false };
+ * `SPEX_SERVER_URL`, each held to the loopback rule before any socket
+ * opens. No running app announces itself (DR-165): with neither, the
+ * command is refused naming both. */
+export function selectEndpoint(server: string | undefined, env: NodeJS.ProcessEnv): { url: string; token: string } {
+  if (server !== undefined) return accessEndpoint(server);
   const named = env.SPEX_SERVER_URL;
-  if (named !== undefined && named !== "") return { ...accessEndpoint(named), fromApp: false };
-  return { ...appEndpoint(env), fromApp: true };
-}
-
-/** The running app's endpoint file under the home `SPEX_HOME` names,
- * else `~/.spex`, read as `{format: 1, url, pid}` (core-service-143). */
-function appEndpoint(env: NodeJS.ProcessEnv): { url: string; token: string } {
-  const home = env.SPEX_HOME?.trim() ? env.SPEX_HOME : join(homedir(), ".spex");
-  let doc: unknown;
-  try { doc = JSON.parse(readFileSync(join(home, "local", "endpoint.json"), "utf8")); }
-  catch { throw new CliFailure(1, `No running Spex app was found. ${APP_GUIDANCE}`); }
-  const file = doc as Record<string, unknown> | null;
-  if (!file || typeof file !== "object" || Array.isArray(file) || file.format !== 1 || typeof file.url !== "string" ||
-      typeof file.pid !== "number" || !Number.isSafeInteger(file.pid) || file.pid <= 0)
-    throw new CliFailure(1, `The running Spex app's endpoint file is not one this CLI reads. ${APP_GUIDANCE}`);
-  try { return accessEndpoint(file.url); }
-  catch { throw new CliFailure(1, `The running Spex app's endpoint file names no loopback access URL, so it was not used. ${APP_GUIDANCE}`); }
+  if (named !== undefined && named !== "") return accessEndpoint(named);
+  throw new CliFailure(1, `No server is named. ${EXPLICIT_GUIDANCE}`);
 }
 
 /** Validate before opening a socket; WHATWG normalization must not admit
@@ -76,8 +55,7 @@ export class AttachedClient {
   signInId?: string;
 
   /** `unreachable` replaces the failure of a connection that never
-   * opened: for the running app's own endpoint, that the app must be
-   * running (attached-cli-1). */
+   * opened. */
   constructor(private readonly endpoint: string, private readonly timeoutMs: number, private readonly unreachable?: string) {}
 
   async connect(): Promise<void> {
@@ -111,7 +89,8 @@ export class AttachedClient {
       if (!message || typeof message !== "object" || Array.isArray(message)) throw new Error();
     } catch { this.fail(this.observationFailure("Invalid server message")); return; }
     if (this.ready) {
-      if (message.type !== "hello" || message.protocolVersion !== PROTOCOL_VERSION || message.attachedCliVersion !== ATTACHED_CLI_VERSION) {
+      // The hello carries the protocol version alone (core-service-1).
+      if (message.type !== "hello" || message.protocolVersion !== PROTOCOL_VERSION) {
         this.fail(new CliFailure(1, "Incompatible server. Update the CLI and running Spex server together; no command was sent.")); return;
       }
       const ready = this.ready; this.ready = undefined; ready.resolve(undefined); return;

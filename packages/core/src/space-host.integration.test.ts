@@ -2986,7 +2986,8 @@ test("space-110: reported sign-in owns its completion and matched cancellation",
   const home = await startHome("reported-signin", { host, extra: { signIn: "browser" } });
   t.after(() => home.stop());
   const hello = home.client.messages.find((message) => message.type === "hello");
-  assert.ok(hello?.type === "hello" && hello.protocolVersion === PROTOCOL_VERSION && hello.attachedCliVersion === 1);
+  // The hello carries the protocol version alone, no client marker (core-service-1).
+  assert.ok(hello?.type === "hello" && hello.protocolVersion === PROTOCOL_VERSION && !Object.hasOwn(hello, "attachedCliVersion"));
   const begin = async (target: typeof home) => {
     const from = target.client.mark();
     const start = await target.client.expectOk("space.signin.start", { url: host.url, reportCompletion: true });

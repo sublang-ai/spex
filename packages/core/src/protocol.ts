@@ -14,7 +14,6 @@ import type { SessionRecord as RuntimeRecord } from "@sublang/playbook/session-a
 import { LANGUAGES, type Language } from "./language.js";
 
 export const PROTOCOL_VERSION = 30;
-export const ATTACHED_CLI_VERSION = 1;
 
 /** The compile pipeline's phases and their human names, shared so the
  * core's thread lines and the UI's band name a phase alike. */
@@ -2362,7 +2361,6 @@ export interface HelloMessage {
   type: "hello";
   protocolVersion: number;
   coreVersion: string;
-  attachedCliVersion?: typeof ATTACHED_CLI_VERSION;
 }
 
 export type ReplyMessage =

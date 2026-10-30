@@ -3,7 +3,7 @@
 
 import { readFileSync } from "node:fs";
 import { join, resolve, isAbsolute, win32 } from "node:path";
-import { APP_GUIDANCE, AttachedClient, CliFailure, selectEndpoint } from "./attached-client.js";
+import { AttachedClient, CliFailure, selectEndpoint } from "./attached-client.js";
 import { parseManifestText } from "./lib/environment/index.js";
 
 type Flags = Record<string, string | boolean>;
@@ -11,7 +11,7 @@ type Invocation = { group: string; action: string; positional: string[]; flags: 
 const NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const VALUES = new Set(["server", "timeout", "project", "instance", "version", "path"]);
 
-export const ATTACHED_USAGE = `Attached commands (need the running Spex app, or a server named below):
+export const ATTACHED_USAGE = `Attached commands (need a running Spex server, named below):
   auth login --instance <origin>    Sign in through the browser/device instructions
   auth status                      Show instance sign-in standing
   project list                     List registered projects
@@ -25,9 +25,8 @@ export const ATTACHED_USAGE = `Attached commands (need the running Spex app, or 
   package resolve                  Resolve requests and install
   package publish <relative-folder> [--dry-run]
 
-Connection: the running Spex app (desktop or server shell) is found through
-  local/endpoint.json in SPEX_HOME or ~/.spex; --server <access-url> or
-  SPEX_SERVER_URL names another server instead (literal loopback only).
+Connection: --server <access-url> or SPEX_SERVER_URL names the running
+  Spex server (literal loopback only).
 Observation: --timeout <positive seconds> (default 600); no reconnect or replay.
 Packages: --project <registered-folder>, otherwise the exact current directory.
 Publishing is explicit; --dry-run checks without uploading.`;
@@ -128,7 +127,7 @@ export async function runAttached(args: string[], env = process.env): Promise<nu
     const { group, action, positional, flags } = invocation;
     const access = selectEndpoint(typeof flags.server === "string" ? flags.server : undefined, env);
     token = access.token; endpoint = access.url;
-    client = new AttachedClient(access.url, invocation.timeoutMs, access.fromApp ? `Could not reach the Spex app at the endpoint it recorded. ${APP_GUIDANCE}` : undefined);
+    client = new AttachedClient(access.url, invocation.timeoutMs);
     process.on("SIGINT", interrupt);
     await client.connect();
     if (group === "project") {

@@ -39,8 +39,8 @@ function npm(args: string[], cwd: string): string {
   return result.stdout;
 }
 
-/** The packed CLI in a working folder, with a running server and the
- * home's endpoint file both naming the fixture server it must not reach. */
+/** The packed CLI in a working folder, with `SPEX_SERVER_URL` naming
+ * the fixture server it must not reach. */
 function init(cwd: string, args: string[]): Promise<{ code: number | null; stdout: string; stderr: string }> {
   const proc = spawn(process.execPath, [CLI, "package", "init", ...args], {
     cwd, env: { ...process.env, SPEX_SERVER_URL: server.url, SPEX_HOME: HOME }, stdio: ["ignore", "pipe", "pipe"],
@@ -101,8 +101,7 @@ before(async () => {
   wss.on("connection", () => { connections++; });
   const url = `http://127.0.0.1:${wss.address().port}/?token=${TOKEN}`;
   server = { url, connections: () => connections, stop: () => new Promise<void>((done) => wss.close(() => done())) };
-  mkdirSync(join(HOME, "local"), { recursive: true });
-  writeFileSync(join(HOME, "local/endpoint.json"), JSON.stringify({ format: 1, url, pid: process.pid }), { mode: 0o600 });
+  mkdirSync(HOME, { recursive: true });
 });
 after(async () => {
   await server?.stop();

@@ -7,7 +7,7 @@ import { resolve } from 'node:path';
 
 export function protocolConstants(source) {
   const values = {};
-  for (const name of ['PROTOCOL_VERSION', 'ATTACHED_CLI_VERSION']) {
+  for (const name of ['PROTOCOL_VERSION']) {
     const declarations = [...source.matchAll(new RegExp(`^\\s*export\\s+const\\s+${name}\\b[^\\n]*`, 'gm'))];
     if (declarations.length !== 1) throw new Error(`Expected one canonical ${name} declaration`);
     const match = new RegExp(`^\\s*export\\s+const\\s+${name}\\s*=\\s*([1-9][0-9]*)\\s*;\\s*$`).exec(declarations[0][0]);

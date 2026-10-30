@@ -63,7 +63,6 @@ import {
   parseCommand,
   PACKAGE_LICENSE_PATTERN,
   PROTOCOL_VERSION,
-  ATTACHED_CLI_VERSION,
   type AdapterName,
   type Channel,
   type Command,
@@ -712,7 +711,6 @@ export class CoreService {
   private stopping = false;
   /** The endpoint file this process wrote under the home
    * (core-service-143), removed at stop; unset while none stands. */
-  private endpointFile?: string;
   /** Tracked so shutdown cannot race an automatic continuation opening. */
   private readonly advancing = new Set<Promise<void>>();
   /** A settled lane whose one automatic handoff is being decided. */
@@ -1841,8 +1839,6 @@ export class CoreService {
 
   async stop(): Promise<void> {
     this.stopping = true;
-    // No CLI finds an endpoint that is going away (core-service-143).
-    this.withdrawEndpoint();
     this.sessions.beginShutdown();
     // The stop is bounded (core-service-39, DR-134): every active turn
     // is aborted as admission closes; once those turns have settled, or
@@ -2431,41 +2427,6 @@ export class CoreService {
     return this.authToken;
   }
 
-  /**
-   * Keep the loopback access URL this home is served at in
-   * `local/endpoint.json`, owner-only, as `{format: 1, url, pid}`, so the
-   * CLI finds the running app (core-service-143, DR-163). The core calls
-   * it for the socket it binds itself; a shell serving the core on a
-   * loopback host calls it with its access URL once it listens, and one
-   * bound to any other host never does. A seat writes none. A file a
-   * process that died left is replaced; the stop removes this one.
-   */
-  announceEndpoint(url: string): void {
-    if (this.options.seat || this.stopping) return;
-    const dir = join(this.store.dir, "local");
-    const file = join(dir, "endpoint.json");
-    try {
-      mkdirSync(dir, { recursive: true, mode: 0o700 });
-      writeApplicationBytes(file, `${JSON.stringify({ format: 1, url, pid: process.pid })}\n`);
-      this.endpointFile = file;
-    } catch (error) {
-      // The app serves without it; only the CLI's discovery is lost.
-      console.error(`spex: the endpoint file ${file} was not written: ${(error as NodeJS.ErrnoException).code ?? String(error)}`);
-    }
-  }
-
-  /** Remove the endpoint file this process wrote, if it still stands. */
-  private withdrawEndpoint(): void {
-    const file = this.endpointFile;
-    if (!file) return;
-    this.endpointFile = undefined;
-    try {
-      rmSync(file, { force: true });
-    } catch (error) {
-      console.error(`spex: the endpoint file ${file} was not removed: ${(error as NodeJS.ErrnoException).code ?? String(error)}`);
-    }
-  }
-
   /** The origins of every instance the home lists and of the one a
    * running sign-in names: those whose sign-in pages a shell may open in
    * the system browser (app-shell-37, app-shell-20). */
@@ -2543,7 +2504,6 @@ export class CoreService {
       this.send(socket, {
         type: "hello",
         protocolVersion: PROTOCOL_VERSION,
-        attachedCliVersion: ATTACHED_CLI_VERSION,
         coreVersion: CORE_VERSION,
       });
       this.send(socket, {type: "approval.state", state: this.approvals.snapshot()});
@@ -2558,9 +2518,6 @@ export class CoreService {
         resolveListen();
       });
     });
-    // Its own loopback socket listens: the CLI finds it there
-    // (core-service-143).
-    this.announceEndpoint(`ws://127.0.0.1:${this.port()}/?token=${encodeURIComponent(this.authToken)}`);
   }
 
   /** Answer an HTTP request under `/applets/` on the endpoint

@@ -11,8 +11,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
 import { once } from "node:events";
 import { randomUUID } from "node:crypto";
-import { createServer as createNetServer, type AddressInfo } from "node:net";
-import { PROTOCOL_VERSION, ATTACHED_CLI_VERSION } from "./generated-protocol.js";
+import { PROTOCOL_VERSION } from "./generated-protocol.js";
 
 const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const CORE = resolve(ROOT, "../core");
@@ -20,8 +19,7 @@ const CORE = resolve(ROOT, "../core");
 const { WebSocketServer } = createRequire(join(CORE, "package.json"))("ws");
 const SCRATCH = realpathSync(mkdtempSync(join(tmpdir(), "spex-attached-cli-")));
 const PROJECT = join(SCRATCH, "project");
-// A home without the running app's endpoint file: no case here reaches
-// the reader's own app by accident (attached-cli-1).
+// A scratch home: no case here reads the reader's own.
 const NO_APP_HOME = join(SCRATCH, "no-app-home");
 const TOKEN = "fixture-private-access-capability";
 let CLI: string;
@@ -47,7 +45,7 @@ function child(args: string[], env: Record<string, string | undefined> = {}) {
   });
   return { proc, done };
 }
-async function fixture(handler: (message: any, socket: any) => void, hello: any = { type: "hello", protocolVersion: PROTOCOL_VERSION, attachedCliVersion: ATTACHED_CLI_VERSION }) {
+async function fixture(handler: (message: any, socket: any) => void, hello: any = { type: "hello", protocolVersion: PROTOCOL_VERSION }) {
   const server = new WebSocketServer({ host: "127.0.0.1", port: 0, verifyClient: (info: any) => new URL(info.req.url, "http://localhost").searchParams.get("token") === TOKEN });
   await once(server, "listening");
   let connections = 0;
@@ -90,10 +88,10 @@ describe("attached packed CLI", () => {
   it("stages only unique literal canonical constants and help needs no server", async () => {
     const stage = await import(pathToFileURL(join(ROOT, "scripts/stage-protocol.mjs")).href);
     const canonical = readFileSync(join(CORE, "src/protocol.ts"), "utf8");
-    assert.deepEqual(stage.protocolConstants(canonical), { PROTOCOL_VERSION, ATTACHED_CLI_VERSION });
-    const valid = "export const PROTOCOL_VERSION = 28;\nexport const ATTACHED_CLI_VERSION = 1;\n";
+    assert.deepEqual(stage.protocolConstants(canonical), { PROTOCOL_VERSION });
+    const valid = "export const PROTOCOL_VERSION = 28;\n";
     assert.throws(() => stage.protocolConstants(""));
-    assert.throws(() => stage.protocolConstants(valid + "export const ATTACHED_CLI_VERSION = 2;\n"));
+    assert.throws(() => stage.protocolConstants(valid + "export const PROTOCOL_VERSION = 29;\n"));
     assert.throws(() => stage.protocolConstants(valid.replace("= 28;", "= 27 + 1;")));
     const result = await child(["--help"]).done;
     assert.equal(result.code, 0); assert.match(result.stdout, /package add.*--path/); assert.match(result.stdout, /--timeout/);
@@ -124,8 +122,8 @@ describe("attached packed CLI", () => {
     } finally { await server.stop(); }
   });
 
-  it("refuses old hello and authentication failure without sending commands", async () => {
-    for (const hello of [{ type: "hello", protocolVersion: PROTOCOL_VERSION }, { type: "hello", protocolVersion: PROTOCOL_VERSION + 1, attachedCliVersion: 1 }]) {
+  it("refuses another protocol's hello and authentication failure without sending commands", async () => {
+    for (const hello of [{ type: "hello", protocolVersion: PROTOCOL_VERSION - 1 }, { type: "hello", protocolVersion: PROTOCOL_VERSION + 1 }]) {
       let sent = 0; const server = await fixture(() => { sent++; }, hello);
       try { const result = await child(["project", "list", "--server", server.url]).done; assert.equal(result.code, 1); assert.equal(sent, 0); }
       finally { await server.stop(); }
@@ -133,49 +131,6 @@ describe("attached packed CLI", () => {
     const server = await fixture(standard);
     try { const result = await child(["project", "list", "--server", server.url.replace(TOKEN, "wrong")]).done; assert.equal(result.code, 1); assert(!result.stderr.includes("wrong")); }
     finally { await server.stop(); }
-  });
-
-  it("finds the running app through the home's endpoint file unless a URL is named", async () => {
-    const app = await fixture(standard);
-    const named = await fixture(standard);
-    const home = (content: string | null): string => {
-      const dir = mkdtempSync(join(SCRATCH, "home-"));
-      if (content !== null) { mkdirSync(join(dir, "local")); writeFileSync(join(dir, "local/endpoint.json"), content, { mode: 0o600 }); }
-      return dir;
-    };
-    const file = (url: string) => JSON.stringify({ format: 1, url, pid: process.pid });
-    const probe = createNetServer().listen(0, "127.0.0.1");
-    await once(probe, "listening");
-    const closed = `ws://127.0.0.1:${(probe.address() as AddressInfo).port}/?token=${TOKEN}`;
-    await new Promise<void>((done) => probe.close(() => done()));
-    const quiet = (result: { stdout: string; stderr: string }) => {
-      for (const output of [result.stdout, result.stderr]) { assert(!output.includes(TOKEN)); assert(!output.includes("127.0.0.1:")); }
-    };
-    try {
-      // The server shell's http form and the desktop's ws form alike.
-      for (const url of [app.url, app.url.replace("http:", "ws:")]) {
-        const found = await child(["project", "list"], { SPEX_HOME: home(file(url)) }).done;
-        assert.equal(found.code, 0, found.stderr); assert.match(found.stdout, /Fixture/); quiet(found);
-      }
-      assert.equal(app.connections(), 2);
-      // An explicit URL wins over the file: --server, then SPEX_SERVER_URL.
-      const appHome = home(file(app.url));
-      for (const run of [child(["project", "list", "--server", named.url], { SPEX_HOME: appHome }), child(["project", "list"], { SPEX_HOME: appHome, SPEX_SERVER_URL: named.url })]) {
-        const result = await run.done; assert.equal(result.code, 0, result.stderr);
-      }
-      assert.equal(named.connections(), 2); assert.equal(app.connections(), 2);
-      // A foreign address in the file is refused before any connection.
-      const foreign = await child(["project", "list"], { SPEX_HOME: home(file(app.url.replace("127.0.0.1", "example.com"))) }).done;
-      assert.equal(foreign.code, 1); assert.match(foreign.stderr, /no loopback access URL/); quiet(foreign);
-      // Absent, unreadable as JSON, of another shape, or naming a closed
-      // port: each names that the app must be running.
-      for (const content of [null, "not json", JSON.stringify({ format: 2, url: app.url, pid: process.pid }), JSON.stringify({ format: 1, url: app.url }), file(closed)]) {
-        const result = await child(["project", "list"], { SPEX_HOME: home(content) }).done;
-        assert.equal(result.code, 1, String(content)); assert.match(result.stderr, /Spex app must be running on this computer/, String(content));
-        assert.match(result.stderr, /--server <access-url> or set SPEX_SERVER_URL/); quiet(result);
-      }
-      assert.equal(app.connections(), 2, "no refused file reaches a server");
-    } finally { await app.stop(); await named.stop(); }
   });
 
   it("maps project and package commands and waits for each request's terminal receipt", async () => {
