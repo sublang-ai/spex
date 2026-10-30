@@ -619,6 +619,10 @@ When the conversation runner observes a `tool_result` event or the turn ends, it
 
 ### Compile Coverage
 
+#### playbook-library-118
+
+Where the app's published dependencies are installed, when the integration suite provisions and bundles a TypeScript artifact through the real core for each shell, the suite shall assert that the artifact resolves Playbook and xstate to the same physical installations as the core and compiler through the provisioned engine links [[playbook-library-12](#playbook-library-12)], that the bundled module imports those engines with their module identities preserved [[playbook-library-14](#playbook-library-14)], and that its machine executes successfully.
+
 #### playbook-library-17
 
 Where a stub `slc` executable that emits a valid compiled playbook output is named as the configured compiler [[playbook-library-11](#playbook-library-11)], when the compile flow is driven end to end — source provided [[playbook-library-5](#playbook-library-5)], role names entered, the Enable form submitted [[playbook-library-7](#playbook-library-7)] — the test suite shall assert that the stub ran as an external process in the playbook artifact's folder of the spec package in the working folder [[playbook-library-12](#playbook-library-12)], that a registry manifest was emitted beside it whose entry passes the fail-closed registry validation [[playbook-library-15](#playbook-library-15)], that the project's `spex.yaml` gained a path request for the package and its lock exports the playbook [[playbook-library-7](#playbook-library-7)], that the project's config gained a `playbooks.<id>` entry with no `from` whose role bindings are keyed by the entry's derived role ids however the submission cased them [[playbook-library-32](#playbook-library-32)] [[playbook-library-14](#playbook-library-14)], that the surface lists the new playbook [[playbook-library-10](#playbook-library-10)], and that the stub ran with the Captain's block as `SLC_AGENT` and `SLC_MODEL` [[playbook-library-42](#playbook-library-42)].

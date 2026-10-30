@@ -221,7 +221,28 @@ A suite shall be deterministic by construction ([DR-145](../decisions/145-merge-
 
 When the developer/agent runs `npm run test:linux`, optionally naming a workspace and the test command's arguments, the repository shall run that workspace's tests in a Linux container holding the CI runners' Node and Git versions over a copy of the working tree, so a difference between the developer's platform and the CI platform shows before a push ([DR-145](../decisions/145-merge-on-green.md)).
 
+### Shared Runtime Dependencies
+
+#### release-37
+
+When a root build, continuous integration or pre-push validation checks the app installation, the dependency gate shall reject it unless its lock and installed tree satisfy the shared-runtime contract ([DR-167](../decisions/167-the-compiler-shares-the-apps-engine.md)):
+
+- the lock and physical tree each hold exactly one installed package for each of `@sublang/playbook`, `@sublang/cligent` and `xstate`, with installed versions and dependency declarations matching the lock;
+- the compiler declares Playbook as a required peer satisfied by that installed engine, and npm's dependency validation accepts the declared ranges under strict peer checking;
+- resolving the shared packages from each shell, the core, the compiler and Playbook reaches the same respective physical installations;
+- violations name the package and conflicting locations or declarations and exit unsuccessfully, including duplicates whose versions and ABI declarations agree.
+
 ## Verification
+
+### Shared Runtime Dependency Coverage
+
+#### release-38
+
+When the dependency integration suite checks the installed app and isolated installation fixtures, the suite shall verify the gate's acceptance and refusal cases [[release-37](#release-37)]:
+
+- the clean locked application passes from both shells, the core and compiler;
+- a duplicate shared package, a stale installed version or declaration, a missing or incompatible Playbook peer, and a compiler resolving another engine each fail;
+- duplicates with the same version and ABI still fail.
 
 ### Release Checks
 

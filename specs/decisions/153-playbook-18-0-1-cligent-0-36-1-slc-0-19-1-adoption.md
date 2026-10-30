@@ -9,6 +9,7 @@ Accepted (2026-10-25) on the owner's direction to consume the verified public pa
 Amends [DR-130](130-playbook-17-11-0-cligent-0-36-0-slc-0-19-0-adoption.md) in the Cligent and slc floors and lock resolutions alone; its native-skill decisions stand.
 Amends [DR-144](144-bounded-session-storage.md) in the Playbook floor, compiler dependency and built-in release alone; its bounded-storage and shared dependency constraints stand.
 Amended by [DR-154](154-the-seed-follows-playbooks-rule.md) in the Playbook floor and built-in release alone.
+Amended by [DR-167](167-the-compiler-shares-the-apps-engine.md) in the slc floor and compiler dependency: slc's required Playbook peer shares the app's engine, and an automated gate forbids the former nested copy.
 
 ## Context
 
