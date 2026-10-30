@@ -110,7 +110,7 @@ import { migrateManagedLibraryConfig } from "./config-migrate.js";
 import { resolveArtifacts } from "./artifacts.js";
 import { builtinPackage, loadBuiltinCatalog } from "./builtins.js";
 import { AuthorManager } from "./authoring.js";
-import { authoringLanguage, authoringManifest, DraftStore, existingPackageFolder, isDraftPackagePath, newPackageDefaults, packageFolderFor } from "./drafts.js";
+import { authoringLanguage, authoringManifest, DraftStore, isDraftPackagePath, newPackageDefaults, packageFolderFor } from "./drafts.js";
 import { EnvironmentManager, toRequest } from "./environments.js";
 import {
   INSTALL_RECORD,
@@ -134,7 +134,7 @@ import {
   resolveSpecPath,
   writeSpecFile,
 } from "./specs.js";
-import { ArtifactFolderBusy, checkToolchain, compilePlaybook, compilerAgentOf, ENGINE_LINKS_EXCLUDE, type CompileResult, type LineSpawner, type ToolchainRuntime } from "./compile.js";
+import { ArtifactFolderBusy, canonicalFolder, checkToolchain, compilePlaybook, compilerAgentOf, ENGINE_LINKS_EXCLUDE, type CompileResult, type LineSpawner, type ToolchainRuntime } from "./compile.js";
 import { browserAgent } from "./browser.js";
 import { ApplicationMedia } from "./media.js";
 import { MediaTransferError } from "./media-transfers.js";
@@ -3271,20 +3271,25 @@ export class CoreService {
         handles.add(controller);
         this.standaloneCompiles.set(command.playbookId, handles);
         try {
-          // The folder of this id standing already, else a new one under
-          // the project's default org, `spex-packages/<org>/<id>/`
-          // (environments-10); no one is asked here: the project's
-          // defaults stand, with no license where none is derived
-          // (playbook-library-69).
-          const standing = existingPackageFolder(project.path, command.playbookId);
-          const defaults = standing === null ? newPackageDefaults(project.id, project.path, await this.environments.publishableOrgs(project.id)) : null;
-          const packagePath = standing ?? packageFolderFor(project.path, defaults!.org, command.playbookId);
+          // The folder of the authoring session of this id where it lies
+          // in this working folder, however the folder is spelled, so
+          // the two are one job (playbook-library-99); else the one a
+          // session would take under the project's default org,
+          // `spex-packages/<org>/<id>/` (playbook-library-69,
+          // playbook-library-70, environments-10) — never another org's
+          // package of that name; no one is asked here: the project's
+          // defaults stand, with no license where none is derived.
+          const defaults = newPackageDefaults(project.id, project.path, await this.environments.publishableOrgs(project.id));
+          const sessionFolder = this.drafts.workingFolder(command.playbookId);
+          const packagePath = sessionFolder !== null && canonicalFolder(sessionFolder) === canonicalFolder(project.path)
+            ? this.drafts.packagePath(command.playbookId)
+            : packageFolderFor(project.path, defaults.org, command.playbookId);
           const packageDir = join(project.path, ...packagePath.split("/"));
           // The language its manifest already names, else the project's
           // authoring language, else the home's (playbook-library-70).
           const language = authoringLanguage(project.path, packageDir, command.playbookId, this.homeLanguage());
           mkdirSync(join(packageDir, "playbooks", language), { recursive: true });
-          if (defaults !== null && !existsSync(join(packageDir, "meta.yaml"))) {
+          if (!existsSync(join(packageDir, "meta.yaml"))) {
             const fields = { org: defaults.org, ...(defaults.license !== null ? { license: defaults.license } : {}) };
             // A manifest made while the registry was asked stands.
             try {

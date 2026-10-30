@@ -4854,6 +4854,12 @@ test("playbook-library-32: compile.run binds derived roles however the form case
   await client.open();
   const project = await client.expectOk("project.register", { path: harness.projectDir });
 
+  // Another org's spec package of the same id, brought in by Git, is
+  // not the compile's: two orgs' packages of one name stand apart
+  // (environments-10, playbook-library-69).
+  const otherOrg = join(harness.projectDir, "spex-packages", "aaa", "pair");
+  mkdirSync(otherOrg, { recursive: true });
+  writeFileSync(join(otherOrg, "meta.yaml"), "format: 2\norg: aaa\nname: pair\nversion: 1.0.0\nartifacts: {}\n");
   // The form keys one binding as the role reads and one lowercased;
   // both must land on the derived ids. The compile writes the spec
   // package under development in the project's working folder and
@@ -4879,6 +4885,7 @@ test("playbook-library-32: compile.run binds derived roles however the form case
   const org = project.id.split("/")[0]!;
   const artifactDir = join(harness.projectDir, "spex-packages", org, "pair", "playbooks", "en", "pair");
   assert.ok(existsSync(join(artifactDir, "pair.registry.mjs")), "the module stands in the playbook artifact's folder");
+  assert.deepEqual(readdirSync(otherOrg), ["meta.yaml"], "the other org's package of that id is untouched");
   // The project's environment requests it by path, named under the
   // project's default org (playbook-library-69); its config entry
   // binds each derived role by its own id, and names no module.

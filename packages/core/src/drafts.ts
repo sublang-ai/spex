@@ -117,20 +117,6 @@ export function packageFolderFor(workingFolder: string, org: string, id: string)
   return !holds(current) && holds(former) ? former : current;
 }
 
-/** The folder of a spec package under development of this id already
- * standing in a working folder — `spex-packages/<org>/<id>/` holding a
- * manifest, in org order, else the former `spex-packages/<id>/` — or
- * null where none stands. */
-export function existingPackageFolder(workingFolder: string, id: string): string | null {
-  const base = join(workingFolder, "spex-packages");
-  let orgs: string[] = [];
-  try { orgs = readdirSync(base, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort(); } catch { orgs = []; }
-  for (const org of orgs) {
-    if (existsSync(join(base, org, id, "meta.yaml"))) return draftPackagePath(org, id);
-  }
-  return existsSync(join(base, id, "meta.yaml")) ? formerDraftPackagePath(id) : null;
-}
-
 /** A session file's `package` and `language`, read without validating
  * the rest: a damaged file still names where its package and source
  * are, else the defaults. */
