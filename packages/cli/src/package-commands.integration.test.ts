@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The package commands of the packed CLI (cli-15): `@sublang/spex`,
+// The package commands of the packed CLI (cli-15, cli-16): `@sublang/spex`,
 // packed with `npm pack` and installed into a scratch prefix, runs as a
 // child process on a scratch home whose `home.yaml` names the library's
 // stand-in registry as the default instance, in scratch Git working
@@ -12,19 +12,24 @@ import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 
-import { publishRelease, RegistryClient } from "./lib/environment/index.js";
+import { publishRelease, readPublishableRelease, RegistryClient } from "./lib/environment/index.js";
+import { fileCredentialStore } from "./lib/git-host.js";
 import { makeRelease, startStandinRegistry, type ReleaseFixture, type StandinRegistry } from "./testing/index.js";
 
 const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const SCRATCH = realpathSync(mkdtempSync(join(tmpdir(), "spex-package-commands-")));
 const HOME = join(SCRATCH, "home");
+/** A home signed in at the stand-in, which is not its default instance. */
+const PUBLISHER = join(SCRATCH, "publisher");
 const WORK = join(SCRATCH, "work");
+/** The app token the stand-in accepts for the org `acme`. */
+const TOKEN = `spex-at-${randomUUID()}`;
 
 let CLI = "";
 let registry: StandinRegistry;
@@ -44,9 +49,13 @@ function npm(args: string[], cwd: string): string {
 
 interface Ran { code: number | null; stdout: string; stderr: string }
 
-/** The packed CLI in `cwd` on the scratch home. */
+/** The packed CLI in `cwd` on the scratch home, or the one named. */
 function spex(cwd: string, ...args: string[]): Promise<Ran> {
-  const env: NodeJS.ProcessEnv = { ...process.env, SPEX_HOME: HOME };
+  return spexAt(HOME, cwd, ...args);
+}
+
+function spexAt(home: string, cwd: string, ...args: string[]): Promise<Ran> {
+  const env: NodeJS.ProcessEnv = { ...process.env, SPEX_HOME: home };
   delete env.SPEX_SERVER_URL;
   delete env.SPEX_HOST_URL;
   const proc = spawn(process.execPath, [CLI, ...args], { cwd, env, stdio: ["ignore", "pipe", "pipe"] });
@@ -65,7 +74,11 @@ function spex(cwd: string, ...args: string[]): Promise<Ran> {
 
 /** A run that succeeded, with what it printed. */
 async function ok(cwd: string, ...args: string[]): Promise<string> {
-  const ran = await spex(cwd, ...args);
+  return okAt(HOME, cwd, ...args);
+}
+
+async function okAt(home: string, cwd: string, ...args: string[]): Promise<string> {
+  const ran = await spexAt(home, cwd, ...args);
   assert.equal(ran.code, 0, `spex ${args.join(" ")}: ${ran.stdout}${ran.stderr}`);
   return ran.stdout;
 }
@@ -304,4 +317,218 @@ test("cli-15: the root is found from a subfolder, and at the Git top level of a 
   assert.ok(existsSync(join(fifth, ".spex", "packages", "demo", "tool")));
   // The home holds nothing but what the commands wrote.
   assert.deepEqual(readdirSync(HOME).sort(), ["cache", "home.yaml", "store"], "[cli-1] no clone, lease or record of the home");
+});
+
+const APACHE = "\n                                 Apache License\n                           Version 2.0, January 2004\n";
+const GREET_MD = '---\nname: greet\ndescription: "Greets: whoever asks"\n---\n\n# Greet\n\nSay hello.\n';
+const SPEC_MD = "<!-- SPDX-License-Identifier: Apache-2.0 -->\n\n# hello: Hello\n\n## Intent\n\nThis package states the greeting.\nIt has two lines.\n\nA second paragraph.\n\n## External Behavior\n\n### hello-1\n\nThe greeter shall greet.\n\n## Verification\n\n### hello-2\n\nWhen run, the suite shall assert it greets [[hello-1](#hello-1)].\n";
+let projects = 0;
+
+/** A scratch Git working folder holding a LICENSE, a skill folder under
+ * `.claude/skills/` with a nested executable script, and a spec file. A
+ * release names each artifact once, so the skill beside the spec
+ * `hello` is `greet`. */
+function project(license: string | null = APACHE): string {
+  const dir = workingFolder(join(SCRATCH, `project-${++projects}`));
+  mkdirSync(join(dir, ".claude/skills/greet/scripts"), { recursive: true });
+  mkdirSync(join(dir, "specs"), { recursive: true });
+  if (license !== null) writeFileSync(join(dir, "LICENSE"), license);
+  writeFileSync(join(dir, ".claude/skills/greet/SKILL.md"), GREET_MD);
+  writeFileSync(join(dir, ".claude/skills/greet/scripts/wave.sh"), "#!/bin/sh\necho hello\n");
+  chmodSync(join(dir, ".claude/skills/greet/scripts/wave.sh"), 0o755);
+  writeFileSync(join(dir, "specs/hello.md"), SPEC_MD);
+  return dir;
+}
+
+/** The skills Spex's export lists in an agent folder. */
+const exportsIn = (dir: string, folder: string): string[] => {
+  const file = join(dir, ...folder.split("/"), ".spex-exports.json");
+  return existsSync(file) ? JSON.parse(readFileSync(file, "utf8")).skills : [];
+};
+
+test("cli-15: new makes spex-packages/<org>/<pkg>/, requests it by path and exports it; --move leaves the skill as Spex's export", async () => {
+  const dir = project();
+  const made = await ok(dir, "new", "acme/hello", "--skill", ".claude/skills/greet", "--spec", "specs/hello.md");
+  const folder = join(dir, "spex-packages", "acme", "hello");
+  const release = await readPublishableRelease(folder);
+  assert.deepEqual(release.manifest, {
+    format: 2, org: "acme", name: "hello", version: "0.1.0",
+    // The first skill's description; the license read from the Apache
+    // LICENSE past its leading whitespace.
+    description: "Greets: whoever asks", license: "Apache-2.0", dependencies: {},
+    artifacts: { greet: { kind: "skill", language: "en", requires: [] }, hello: { kind: "spec", language: "en", requires: [] } },
+  }, "[cli-8] the manifest");
+  assert.deepEqual(release.files.map((file) => file.path), [
+    "LICENSE", "README.md", "meta.yaml", "skills/en/greet/SKILL.md", "skills/en/greet/scripts/wave.sh", "specs/en/hello.md",
+  ], "[cli-8] manifest, README, LICENSE, skill and spec");
+  if (process.platform !== "win32") assert.equal(release.files.find((file) => file.path.endsWith("wave.sh"))?.executable, true, "[cli-8] the script stays executable");
+  assert.equal(readFileSync(join(folder, "README.md"), "utf8"), "# acme/hello\n\nGreets: whoever asks\n");
+  assert.equal(readFileSync(join(folder, "LICENSE"), "utf8"), APACHE);
+  assert.equal(readFileSync(join(folder, "specs", "en", "hello.md"), "utf8"), SPEC_MD);
+  // Requested by path in a spex.yaml made naming the default instance,
+  // locked, and installed in place: nothing copied under .spex/packages/.
+  assert.deepEqual(readYaml(join(dir, "spex.yaml")), { format: 1, space: registry.url, packages: { "acme/hello": { path: "spex-packages/acme/hello" } } }, "[cli-8] the path request");
+  const lock = readYaml(join(dir, "spex.lock"));
+  assert.deepEqual(lock.packages["acme/hello"].source, { path: "spex-packages/acme/hello", version: "0.1.0", dependencies: {}, requires: {} });
+  assert.equal(existsSync(join(dir, ".spex", "packages", "acme", "hello")), false, "[cli-8] a path source copies nothing");
+  // The skill reaches the agents at once: .agents/skills/ by Spex's
+  // export; .claude/skills/greet/ is the reader's own folder, copied
+  // from, which the export keeps out of and says so.
+  assert.equal(readFileSync(join(dir, ".agents", "skills", "greet", "SKILL.md"), "utf8"), GREET_MD, "[cli-8] exported into .agents/skills/greet/");
+  assert.ok(exportsIn(dir, ".agents/skills").includes("greet"));
+  assert.equal(readFileSync(join(dir, ".claude", "skills", "greet", "SKILL.md"), "utf8"), GREET_MD, "[cli-8] .claude/skills/greet/ holds the skill");
+  assert.ok(!exportsIn(dir, ".claude/skills").includes("greet"));
+  assert.match(made, /^Left out greet from \.claude\/skills: a folder of yours stands there$/m);
+  assert.ok(existsSync(join(dir, ".claude", "skills", "acme-hello", "hello.md")), "[cli-8] the spec exported as acme-hello");
+  // It ends naming the folder and the two publish commands.
+  assert.match(made, /^Made spex-packages\/acme\/hello\/ for acme\/hello \(skill greet, spec hello\)\.$/m, "[cli-8] the folder");
+  assert.match(made, /^Next: edit spex-packages\/acme\/hello\/, then\n {2}spex publish acme\/hello --dry-run\n {2}spex publish acme\/hello$/m, "[cli-8] the next steps");
+
+  // --move: the original folder now stands as Spex's export.
+  const moved = project();
+  const movedOut = await ok(moved, "new", "acme/greeting", "--skill", ".claude/skills/greet", "--move");
+  assert.ok(exportsIn(moved, ".claude/skills").includes("greet"), "[cli-8] .claude/skills/greet/ is Spex's export now");
+  assert.equal(readFileSync(join(moved, ".claude", "skills", "greet", "SKILL.md"), "utf8"), GREET_MD);
+  assert.ok(existsSync(join(moved, "spex-packages", "acme", "greeting", "skills", "en", "greet", "scripts", "wave.sh")));
+  assert.match(movedOut, /^The skill greet moved from \.claude\/skills\/greet\/ now stands there as Spex's export\.$/m, "[cli-8] the moved-skill note");
+  assert.doesNotMatch(movedOut, /^Left out/m);
+
+  // A spec alone: the description from its Intent; MIT past a byte
+  // order mark; no LICENSE where the root has none.
+  const mit = project("﻿\n  MIT License\n\nCopyright (c) 2026\n");
+  await ok(mit, "new", "acme/hello", "--spec", "specs/hello.md");
+  const spec = (await readPublishableRelease(join(mit, "spex-packages", "acme", "hello"))).manifest;
+  assert.equal(spec.description, "This package states the greeting. It has two lines.");
+  assert.equal(spec.license, "MIT");
+  const bare = project(null);
+  await ok(bare, "new", "acme/notes", "--skill", ".claude/skills/greet", "--description", 'Notes "quoted" #1: done', "--license", "MIT", "--language", "zh-Hans");
+  const notes = await readPublishableRelease(join(bare, "spex-packages", "acme", "notes"));
+  assert.equal(notes.manifest.description, 'Notes "quoted" #1: done');
+  assert.equal(notes.manifest.license, "MIT");
+  assert.deepEqual(notes.manifest.artifacts, { greet: { kind: "skill", language: "zh-Hans", requires: [] } });
+  assert.equal(existsSync(join(bare, "spex-packages", "acme", "notes", "LICENSE")), false);
+});
+
+test("cli-15: new refuses each rule before writing anything", async () => {
+  const dir = project();
+  const skillAt = (name: string, text: string): void => {
+    mkdirSync(join(dir, ".claude/skills", name), { recursive: true });
+    writeFileSync(join(dir, ".claude/skills", name, "SKILL.md"), text);
+  };
+  mkdirSync(join(dir, ".claude/skills/empty"));
+  writeFileSync(join(dir, ".claude/skills/empty/README.md"), "No skill here.\n");
+  skillAt("spaced", "---\nname: Release Notes\ndescription: Spaced\n---\n");
+  skillAt("twin", "---\nname: greet\ndescription: Twin\n---\n");
+  skillAt("undescribed", "---\nname: undescribed\n---\n");
+  skillAt("hello", "---\nname: hello\ndescription: Same id as the spec\n---\n");
+  writeFileSync(join(dir, "specs/other.md"), "# other\n\n## Intent\n\nOther.\n");
+  writeFileSync(join(dir, "specs/plain.md"), "# plain\n\nNo intent heading.\n");
+  const links = process.platform !== "win32";
+  if (links) {
+    skillAt("linked", "---\nname: linked\ndescription: Linked\n---\n");
+    symlinkSync("../greet/SKILL.md", join(dir, ".claude/skills/linked/other.md"));
+    skillAt("piped", "---\nname: piped\ndescription: Piped\n---\n");
+    execFileSync("mkfifo", [join(dir, ".claude/skills/piped/pipe")]);
+  }
+  // A skill at the root holds the destination itself.
+  writeFileSync(join(dir, "SKILL.md"), "---\nname: rooted\ndescription: Rooted\n---\n");
+  const skill = [".claude/skills/greet"];
+  const cases: [string, string[], RegExp][] = [
+    ["a name of capitals", ["acme/Hello", "--skill", ...skill], /<org>\/<pkg>.*lowercase/],
+    ["a name of one part", ["hello", "--skill", ...skill], /<org>\/<pkg>/],
+    ["a name part past 64 characters", [`acme/${"a".repeat(65)}`, "--skill", ...skill], /at most 64 characters/],
+    ["no artifact", ["acme/hello"], /at least one artifact/],
+    ["a skill folder without SKILL.md", ["acme/hello", "--skill", ".claude/skills/empty"], /no SKILL\.md/],
+    ["a SKILL.md name that is no Agent Skills name", ["acme/hello", "--skill", ".claude/skills/spaced"], /Agent Skills name/],
+    ["two skills of one id", ["acme/hello", "--skill", ...skill, "--skill", ".claude/skills/twin"], /Two skills declare the id greet/],
+    ["a skill of the spec's id", ["acme/hello", "--skill", ".claude/skills/hello", "--spec", "specs/hello.md"], /spec's id hello/],
+    ["a spec of another basename", ["acme/hello", "--spec", "specs/other.md"], /must be named hello\.md/],
+    ["no description from any source", ["acme/plain", "--skill", ".claude/skills/undescribed", "--spec", "specs/plain.md"], /--description/],
+    ["a moved skill folder holding the destination", ["acme/hello", "--skill", ".", "--move"], /cannot move \.: it holds spex-packages\/acme\/hello\//],
+    ...(links ? [
+      ["a skill folder holding a link", ["acme/hello", "--skill", ".claude/skills/linked"], /holds a link at other\.md/],
+      ["a skill folder holding a special file", ["acme/hello", "--skill", ".claude/skills/piped"], /holds a special file at pipe/],
+    ] as [string, string[], RegExp][] : []),
+  ];
+  for (const [label, args, cause] of cases) {
+    const before = snapshot(dir);
+    const ran = await spex(dir, "new", ...args);
+    assert.equal(ran.code, 1, `${label}: ${ran.stdout}${ran.stderr}`);
+    assert.match(ran.stderr, cause, `[cli-8] ${label}`);
+    assert.equal(ran.stdout, "", label);
+    assert.deepEqual(snapshot(dir), before, `[cli-8] ${label} writes nothing`);
+    assert.equal(existsSync(join(dir, "spex-packages")), false, `${label} makes no spex-packages/`);
+  }
+  // An existing destination is refused and left as it was.
+  mkdirSync(join(dir, "spex-packages/acme/hello"), { recursive: true });
+  writeFileSync(join(dir, "spex-packages/acme/hello/keep.txt"), "mine\n");
+  const before = snapshot(dir);
+  const existing = await spex(dir, "new", "acme/hello", "--skill", ...skill, "--move");
+  assert.equal(existing.code, 1);
+  assert.match(existing.stderr, /spex-packages\/acme\/hello\/ already exists/, "[cli-8] an existing folder");
+  assert.deepEqual(snapshot(dir), before, "[cli-8] an existing destination is left as it was");
+});
+
+test("cli-16: publish by name to the Space spex.yaml names, a dry run uploading nothing, each refusal before any upload", async () => {
+  // The publisher's home lists another instance first, its default, and
+  // is signed in at the stand-in, which spex.yaml names as its space.
+  const elsewhere = "http://127.0.0.1:9";
+  mkdirSync(PUBLISHER, { recursive: true });
+  writeFileSync(join(PUBLISHER, "home.yaml"), stringifyYaml({
+    format: 2, device: randomUUID(), origin: elsewhere, own: "pat", folders: [],
+    instances: [
+      { origin: elsewhere, clientId: "spex", account: { id: "7", login: "pat", displayName: "Pat" } },
+      { origin: registry.url, clientId: "spex", account: { id: "7", login: "pat", displayName: "Pat" }, displayName: "Stand-in Space" },
+    ],
+  }));
+  assert.ok(fileCredentialStore(PUBLISHER, registry.url).replace(null, { access: TOKEN, accessExpiresAt: Date.now() + 86_400_000, refresh: `refresh-${TOKEN}` }));
+  registry.script.setPrivate("acme", [TOKEN]);
+  registry.script.clearRequests();
+  const uploads = (): string[] => registry.script.requests.filter((request) => request.startsWith("PUT "));
+
+  const dir = project();
+  writeFileSync(join(dir, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages: {}\n`);
+  await okAt(PUBLISHER, dir, "new", "acme/hello", "--skill", ".claude/skills/greet", "--spec", "specs/hello.md");
+
+  const dry = await okAt(PUBLISHER, dir, "publish", "acme/hello", "--dry-run");
+  assert.equal(dry, [
+    "Destination: Stand-in Space, acme/hello@0.1.0",
+    "Files (dry run, nothing uploaded):",
+    "  LICENSE", "  README.md", "  meta.yaml", "  skills/en/greet/SKILL.md", "  skills/en/greet/scripts/wave.sh", "  specs/en/hello.md",
+    "",
+  ].join("\n"), "[cli-9] the instance's name, the package and its files");
+  assert.deepEqual(uploads(), [], "[cli-9] a dry run uploads nothing");
+
+  const published = await okAt(PUBLISHER, dir, "publish", "acme/hello");
+  assert.equal(published, `Destination: Stand-in Space, acme/hello@0.1.0\nPublished: ${registry.url}/acme/hello\n`, "[cli-9] the URL answered");
+  assert.deepEqual(uploads(), ["PUT /api/v1/packages/acme/hello/0.1.0"]);
+  const reader = new RegistryClient({ url: registry.url, token: async () => TOKEN });
+  assert.deepEqual((await reader.index("acme/hello")).versions.map((entry) => entry.version), ["0.1.0"], "[cli-9] the release landed there");
+
+  // With no name and one package under spex-packages/, that package.
+  const meta = join(dir, "spex-packages", "acme", "hello", "meta.yaml");
+  writeFileSync(meta, readFileSync(meta, "utf8").replace('version: "0.1.0"', 'version: "0.2.0"'));
+  assert.match(await okAt(PUBLISHER, dir, "publish"), /^Destination: Stand-in Space, acme\/hello@0\.2\.0$/m, "[cli-9] the one package");
+  assert.equal(uploads().length, 2);
+
+  // Each refusal, before any upload.
+  cpSync(join(dir, "spex-packages", "acme", "hello"), join(dir, "spex-packages", "acme", "other"), { recursive: true });
+  await makeRelease(join(dir, "spex-packages", "acme", "bare"), { format: 2, org: "acme", name: "bare", version: "0.1.0", description: "Bare", artifacts: { greet: skill } }, { "skills/en/greet/SKILL.md": GREET_MD });
+  mkdirSync(join(dir, "spex-packages", "acme", "broken"));
+  writeFileSync(join(dir, "spex-packages", "acme", "broken", "meta.yaml"), "format: 1\n");
+  const refusals: [string, string, string[], RegExp][] = [
+    ["no folder", PUBLISHER, ["publish", "acme/nothing"], /no folder holds acme\/nothing: spex-packages\/acme\/nothing is not there/],
+    ["another package's manifest", PUBLISHER, ["publish", "acme/other"], /spex-packages\/acme\/other holds acme\/hello, not acme\/other/],
+    ["a folder that is no release", PUBLISHER, ["publish", "acme/broken"], /spex-packages\/acme\/broken is not a spec package release/],
+    ["a missing license", PUBLISHER, ["publish", "acme/bare"], /spex-packages\/acme\/bare cannot be published: meta\.yaml: missing required field "license"/],
+    ["several packages and no name", PUBLISHER, ["publish"], /spex-packages\/ holds 4 packages: acme\/bare, acme\/broken, acme\/hello, acme\/other; name one/],
+    ["a device signed out there", HOME, ["publish", "acme/hello"], new RegExp(`not signed in at ${host.replace(/\./g, "\\.")}; spex login signs in to publish there`)],
+  ];
+  for (const [label, home, args, cause] of refusals) {
+    const before = uploads().length;
+    const ran = await spexAt(home, dir, ...args);
+    assert.equal(ran.code, 1, `${label}: ${ran.stdout}${ran.stderr}`);
+    assert.match(ran.stderr, cause, `[cli-9] ${label}`);
+    assert.equal(uploads().length, before, `[cli-9] ${label} uploads nothing`);
+  }
 });
