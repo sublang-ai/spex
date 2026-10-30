@@ -20,6 +20,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a Space by the device flow from the command line, sign it out, and
   say who is signed in where, `--space <origin>` naming the Space, with
   no running app.
+- The command line is the package manager, needing no running app, on
+  the environment of the current folder — the nearest folder holding
+  `spex.yaml`, else the Git work tree's top level — at the Space its
+  `space` names, else the home's default:
+  - `spex add <org>/<pkg>[@<requirement>]` and `spex add <org>/<pkg>
+    --path <folder>` record a request and install it;
+  - `spex remove` (`rm`) drops a request and installs what remains;
+  - `spex install` (`i`) installs the lock under `.spex/`, resolving it
+    first where it is missing or stale;
+  - `spex update` resolves again from `spex.yaml` and installs;
+  - `spex list` (`ls`) shows the requests, the lock and the exports, and
+    `spex search <query>` searches the registry;
+  - `spex new <org>/<pkg>` makes `spex-packages/<org>/<pkg>/` from skill
+    folders and a spec file, requests it by path and installs it.
 
 ### Changed
 
@@ -27,6 +41,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   library's modules it exports the scaffold's files by path, as
   `@sublang/spex/scaffold/<path>`, and `package.json`; any other deep
   import, such as `@sublang/spex/dist/cli.js`, no longer resolves.
+- `spex publish [<org>/<pkg>] [--dry-run]` publishes a package by name
+  from `spex-packages/<org>/<pkg>/`, or the folder its path request
+  names, to the environment's Space.
+
+### Removed
+
+- **Breaking:** the attached `auth`, `project` and `package` commands,
+  with `--server` and `SPEX_SERVER_URL`; the command line no longer
+  connects to a running app.
+- **Breaking:** `spex package init`, now `spex new`.
 
 ## [4.2.0] - 2026-10-29
 
