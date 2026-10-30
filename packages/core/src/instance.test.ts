@@ -10,16 +10,18 @@ import assert from "node:assert/strict";
 
 import {
   canonicalOrigin,
+  INSTANCE_FOLDER_PATTERN,
   instanceFolder,
   instanceSegmentOf,
   isInstanceFolder,
   OriginRefused,
   parseOrigin,
   type OriginRefusal,
-} from "./instance.js";
+} from "@sublang/spex/instance";
 import { splitKey } from "./home.js";
-import type { HostRepository } from "./git-host.js";
-import { REPOSITORY_KEY_PATTERN } from "./protocol.js";
+import type { HostRepository } from "@sublang/spex/git-host";
+import { UUID } from "@sublang/spex/files";
+import { INSTANCE_FOLDER_PATTERN as PROTOCOL_INSTANCE_FOLDER, REPOSITORY_KEY_PATTERN, UUID_PATTERN } from "./protocol.js";
 import { hostKey } from "./space-groups.js";
 
 // input, canonical origin, folder
@@ -131,6 +133,11 @@ test("instance folders: only `@<host>` with an optional `_<port>` stands as one,
   ]) {
     assert.ok(!isInstanceFolder(folder), folder);
   }
+});
+
+test("instance folders: the library spells the folder and the UUID as the core's protocol carries them", () => {
+  assert.equal(INSTANCE_FOLDER_PATTERN.source, PROTOCOL_INSTANCE_FOLDER.source);
+  assert.equal(UUID.source, UUID_PATTERN.source);
 });
 
 test("instance folders: a key's instance segment is its first segment where that is an instance's folder", () => {

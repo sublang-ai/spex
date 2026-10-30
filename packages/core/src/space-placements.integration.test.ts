@@ -42,7 +42,7 @@ import { orderRemotes, remoteOrderOf } from "./home.js";
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { canonicalOrigin } from "./instance.js";
+import { canonicalOrigin } from "@sublang/spex/instance";
 import { encodePlacementFile, PLACEMENTS_DIR } from "./placements.js";
 import type { Command, GroupsState, SpaceUnit } from "./protocol.js";
 import type { SpaceStepEvent } from "./space.js";

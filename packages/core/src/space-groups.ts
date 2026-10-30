@@ -23,7 +23,7 @@ import {
   type HostRepository,
   type HostRole,
   type SignInCause,
-} from "./git-host.js";
+} from "@sublang/spex/git-host";
 import { i18n } from "./i18n.js";
 import { INSTANCE_FOLDER_PATTERN, REPOSITORY_KEY_PATTERN } from "./protocol.js";
 import { hostRefused, noLongerShared, signInAgain } from "./space-git.js";

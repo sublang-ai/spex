@@ -30,7 +30,7 @@ import {
   validateProjectConfig,
   type LoadModule,
 } from "./config.js";
-import { sha256 } from "./files.js";
+import { sha256 } from "@sublang/spex/files";
 import { defaultOwnName, Home } from "./home.js";
 import { executionConfig } from "./session.js";
 import { speak } from "./i18n.js";

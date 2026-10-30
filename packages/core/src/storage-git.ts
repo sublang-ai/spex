@@ -14,7 +14,7 @@ import { dirname, join, resolve } from "node:path";
 import { parseDocument } from "yaml";
 import { resolveMachineIdentity } from "@sublang/playbook/machine-identity";
 import { parseIntentFile, parsePrefs, parseProjectFile, type IntentFile, type StorageDiagnostic } from "./app-storage.js";
-import { assertPlainDirectory, readJsonFile, StorageFormatError, UUID, writeApplicationFile } from "./files.js";
+import { assertPlainDirectory, portable, readJsonFile, StorageFormatError, UUID, writeApplicationFile } from "@sublang/spex/files";
 import { Home } from "./home.js";
 import { i18n } from "./i18n.js";
 import { readPlacementFiles } from "./placements.js";
@@ -47,11 +47,6 @@ const git = (dir: string, args: string[], env?: NodeJS.ProcessEnv, input?: strin
   execFileSync("git", ["-C", dir, ...args], { maxBuffer: 256 * 1024 * 1024, stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"], ...(env ? { env } : {}), ...(input === undefined ? {} : { input }) });
 const revision = (dir: string, ref: string): string => git(dir, ["rev-parse", "--verify", `${ref}^{commit}`]).toString().trim();
 
-/** Whether a path of a clone may leave the device: not one of the
- * catalog's ignored families (storage-1, storage-17). */
-export const portable = (file: string): boolean =>
-  !/^(packages\/|skills\/|local\/|\.spex-uploads\/|\.spex-apply\.json$|\.lock)/.test(file) &&
-  !/\.(hints|spex)\.json$|(?<!^spex)\.lock(?:\.|\/|$)|\.tmp$|\.bak(?:\.|$)|\.backup(?:\.|$)/.test(file);
 
 /** No spec package folder: what a caller naming none passes. */
 const NO_PACKAGES: ReadonlySet<string> = new Set();

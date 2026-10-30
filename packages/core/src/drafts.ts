@@ -34,11 +34,11 @@ import { basename, dirname, join } from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 
 import { knownFormat, StorageFormatError, type StorageDiagnostic } from "./app-storage.js";
-import { isLanguageTag } from "./environment/format.js";
-import type { RegistryOrg } from "./environment/registry.js";
+import { isLanguageTag } from "@sublang/spex/environment";
+import type { RegistryOrg } from "@sublang/spex/environment";
 import { mediaAttachmentsSchema, UUID_PATTERN, type MessageContent } from "./protocol.js";
 import { i18n } from "./i18n.js";
-import { instanceSegmentOf } from "./instance.js";
+import { instanceSegmentOf } from "@sublang/spex/instance";
 import { sanitizeRecord } from "./stream-fold.js";
 import type {
   ClarificationQuestion,

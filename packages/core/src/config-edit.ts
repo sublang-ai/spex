@@ -14,7 +14,7 @@ import { dirname } from "node:path";
 import { parseDocument, YAMLMap, isMap, isScalar } from "yaml";
 
 import { composeConfig, validateProjectConfig, type LoadModule, type PlaybookModules } from "./config.js";
-import { readVersioned, VersionConflictError, writeVersionedBytes, type FileVersion } from "./files.js";
+import { readVersioned, VersionConflictError, writeVersionedBytes, type FileVersion } from "@sublang/spex/files";
 import { i18n } from "./i18n.js";
 
 export interface AgentBlock {

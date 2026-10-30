@@ -11,7 +11,6 @@
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { mkdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { Document, isMap, parseDocument } from "yaml";
 
 import { readVersioned, VersionConflictError, writeApplicationBytes, writeVersionedBytes } from "../files.js";
@@ -45,13 +44,9 @@ export interface BuiltinRelease {
   size: number;
 }
 
-/** Where the build stages the built-in spec package. */
-export function builtinsRoot(): string {
-  return join(dirname(fileURLToPath(import.meta.url)), "..", "..", "assets", "builtins");
-}
-
-/** The staged built-in spec package: the highest version staged. */
-export function builtinPackage(root: string = builtinsRoot()): BuiltinPackage {
+/** The built-in spec package staged under `root`, where the app's build
+ * stages it: the highest version staged. */
+export function stagedBuiltinPackage(root: string): BuiltinPackage {
   const versions = existsSync(root) ? readdirSync(root).filter((name) => isVersion(name) && existsSync(join(root, name, "meta.yaml"))) : [];
   if (versions.length === 0) throw new Error(`no built-in spec package is staged under ${root}: run the core's build`);
   const version = versions.sort(compareVersions).at(-1)!;
@@ -64,7 +59,7 @@ function recordFile(cacheDir: string, version: string): string {
 
 /** Seed a built-in release into the store and record its index
  * (environments-11). Idempotent; an older seeded release stays. */
-export async function seedBuiltinPackage(store: ContentStore, cacheDir: string, pkg: BuiltinPackage = builtinPackage()): Promise<BuiltinRelease> {
+export async function seedBuiltinPackage(store: ContentStore, cacheDir: string, pkg: BuiltinPackage): Promise<BuiltinRelease> {
   // Seeded already, its files whole in the store: nothing to do.
   const seeded = readRecord(recordFile(cacheDir, pkg.version));
   if (seeded && seeded.files.every((file) => store.has(file.sha256, file.executable))) return seeded;
@@ -116,7 +111,8 @@ export interface BuiltinSourceOptions {
   cacheDir: string;
   /** The registry the lock names for the built-in spec package. */
   url?: string;
-  /** The staged release this app ships, served even before seeding. */
+  /** The staged release this app ships, served even before seeding;
+   * none where omitted. */
   shipped?: BuiltinPackage | null;
 }
 
@@ -129,7 +125,7 @@ export function builtinRegistrySource(options: BuiltinSourceOptions): RegistrySo
   let shippedCache: { pkg: BuiltinPackage; release: Promise<BuiltinRelease> } | undefined;
 
   function shippedRelease(): Promise<BuiltinRelease> | undefined {
-    const pkg = options.shipped === undefined ? safeBuiltinPackage() : options.shipped;
+    const pkg = options.shipped ?? null;
     if (!pkg) return undefined;
     if (shippedCache?.pkg.dir !== pkg.dir) shippedCache = { pkg, release: shippedRecord(pkg) };
     return shippedCache.release;
@@ -174,7 +170,7 @@ export function builtinRegistrySource(options: BuiltinSourceOptions): RegistrySo
     const file = release.files.find((item) => item.path === path);
     if (!file) throw new RegistryError("not_found", BUILTIN_PACKAGE_NAME, `${BUILTIN_PACKAGE_NAME} ${release.version} has no file ${path}`);
     if (store.has(file.sha256, file.executable)) return new Uint8Array(await readFile(store.pathOf(file.sha256, file.executable)));
-    const shipped = options.shipped === undefined ? safeBuiltinPackage() : options.shipped;
+    const shipped = options.shipped ?? null;
     if (shipped && shipped.version === release.version) return new Uint8Array(await readFile(join(shipped.dir, ...path.split("/"))));
     throw new RegistryError("not_found", BUILTIN_PACKAGE_NAME, `${BUILTIN_PACKAGE_NAME} ${release.version}: ${path} is not in the store`);
   }
@@ -264,10 +260,6 @@ export async function seedServes(seed: RegistrySource, version: string, files: r
   }
   const digests = new Map((resource.files ?? []).map((file) => [file.path, file.sha256]));
   return files.every((file) => digests.get(file.path) === file.sha256);
-}
-
-function safeBuiltinPackage(): BuiltinPackage | null {
-  try { return builtinPackage(); } catch { return null; }
 }
 
 /** A release folder's files, read synchronously as `readRelease` lists

@@ -13,7 +13,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { GIT_CREDENTIAL_FILE_ENV } from "./git-credential.js";
-import { canonicalOrigin } from "./instance.js";
+import { canonicalOrigin } from "@sublang/spex/instance";
 import { encodePlacementFile, PLACEMENTS_DIR } from "./placements.js";
 import { SpaceGit, type GitRunOptions } from "./space-git.js";
 import { startGitHttpHost } from "./testing/git-http-host.js";

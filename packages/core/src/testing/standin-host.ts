@@ -39,7 +39,7 @@ import type { AddressInfo } from "node:net";
 import { dirname, join } from "node:path";
 import { performance } from "node:perf_hooks";
 
-import { RELAY_HEADERS } from "./standin-registry.js";
+import { RELAY_HEADERS } from "@sublang/spex/testing";
 
 export interface StandinPerson { id: string; login: string; displayName: string | null }
 

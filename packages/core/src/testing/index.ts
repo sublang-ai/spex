@@ -14,7 +14,8 @@ export * from "./standin-host.js";
 // home (space-36): the same rules the core writes, so a joining home
 // meets no rules conflict of the fixture's making.
 export { prepareStorageGitFiles } from "../storage-git.js";
-export * from "./standin-registry.js";
+// The stand-in registry ships with the package-manager library (DR-165).
+export * from "@sublang/spex/testing";
 // A release holding an applet, published to the stand-in (DR-161).
 export * from "./applet-release.js";
 export * from "./git-http-host.js";

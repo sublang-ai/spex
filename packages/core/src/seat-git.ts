@@ -24,7 +24,7 @@
 import { execFile } from "node:child_process";
 import { mkdirSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { writeApplicationBytes } from "./files.js";
+import { writeApplicationBytes } from "@sublang/spex/files";
 import { memberHelperCommand } from "./git-credential.js";
 
 /** The include file the core owns under the seat account's home. */

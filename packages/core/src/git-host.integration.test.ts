@@ -30,9 +30,9 @@ import {
   type HostErrorKind,
   type SignInCause,
   type StoredCredential,
-} from "./git-host.js";
+} from "@sublang/spex/git-host";
 import { GIT_CREDENTIAL_FILE_ENV, currentRuntime, withGitCredential } from "./git-credential.js";
-import { OriginRefused } from "./instance.js";
+import { OriginRefused } from "@sublang/spex/instance";
 import { holdingFetch, samePair, settled } from "./testing/holding-fetch.js";
 import { browserSignIn, instanceClient } from "./testing/host-sign-in.js";
 import { readHostView, relayHostError } from "./space-groups.js";

@@ -11,6 +11,7 @@ Amends [DR-124](124-skills-reach-every-agent.md) in where the agent table's fold
 
 Amended by [DR-131](131-playbook-17-11-1-adoption.md) in the Playbook floor, lock resolution and built-in spec package version alone; every other decision stands.
 Amended by [DR-153](153-playbook-18-0-1-cligent-0-36-1-slc-0-19-1-adoption.md) in the Cligent and slc floors and lock resolutions alone; its native-skill decisions stand.
+Amended by [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) in the agent table: it is kept as the library's own data, checked against Cligent's native-skill support by a test.
 
 ## Context
 

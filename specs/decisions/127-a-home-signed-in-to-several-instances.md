@@ -18,6 +18,7 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 - [DR-106](106-groups-after-a-restart-and-a-host-sign-out.md) in the read at a signed-in start: once per signed-in instance, each standing or failing on its own.
 - [DR-104](104-spec-package-format-and-client-environments.md) in requests from the registry, in Git sources and in publishing: a resolution asks the registry of the environment's instance, the home's default instance where the environment has none; an install fetches from the environment's instance or from the registry its lock records, whichever serves the locked checksum; a Git source at a signed-in instance's Git origin uses that instance's broker; a publish goes to the project's instance, or the default instance, as that instance's account.
 Amended by [DR-132](132-team-servers.md) in your own group's creation or join at the first sign-in: not on a seat.
+Amended by [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) in an environment's instance: the one its `spex.yaml` names as `space`, else the home's default instance.
 
 ## Context
 

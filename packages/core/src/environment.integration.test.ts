@@ -20,14 +20,13 @@ import { getNativeSkillSupport } from "@sublang/cligent";
 import { KNOWN_PLAYER_ADAPTERS } from "@sublang/cligent/tmux-play";
 import { parse as parseYaml } from "yaml";
 
-import { compilePlaybook, defaultSpawner, ENGINE_LINKS_EXCLUDE, moduleDirectoriesAbove, type LineSpawner } from "./compile.js";
+import { compilePlaybook, defaultSpawner, ENGINE_LINKS_EXCLUDE, installEngine, moduleDirectoriesAbove, type LineSpawner } from "./compile.js";
 import { createModuleLoader, isValidRegistryEntry, type RegistryEntryLike } from "./config.js";
-import { fileVersion } from "./files.js";
-import { instanceFolder } from "./instance.js";
+import { fileVersion } from "@sublang/spex/files";
+import { instanceFolder } from "@sublang/spex/instance";
 import {
   artifactLanguages,
   builtinLock,
-  builtinPackage,
   builtinRegistrySource,
   compositeRegistry,
   ContentStore,
@@ -68,14 +67,15 @@ import {
   type RegistrySourceLock,
   type ResolveResult,
   type RunGit,
-} from "./environment/index.js";
-import { AGENT_FOLDERS } from "./environment/agent-folders.js";
+} from "@sublang/spex/environment";
+import { builtinPackage } from "./builtins.js";
+import { AGENT_FOLDERS } from "@sublang/spex/environment";
 import { startGitHttpHost, testCredentialArgs } from "./testing/git-http-host.js";
 import { APP_ENGINE_URL, APP_XSTATE_URL, importsOf, LINKED_ID, recordingResolutions, writeLinkedFixture } from "./testing/linked-artifact.js";
 import { scratchDir } from "./testing/scratch.js";
 import { browserSignIn, instanceClient } from "./testing/host-sign-in.js";
 import { startStandinHost, type StandinHost } from "./testing/standin-host.js";
-import { makeRelease, RELAY_HEADERS, startStandinRegistry, type ReleaseFixture, type StandinRegistry } from "./testing/standin-registry.js";
+import { makeRelease, RELAY_HEADERS, startStandinRegistry, type ReleaseFixture, type StandinRegistry } from "@sublang/spex/testing";
 import { stubSlcScriptedSource } from "./testing/stub-slc.js";
 
 const machineIdentity = "machine-id:v1:00000000-0000-4000-8000-0000000000aa";
@@ -169,7 +169,7 @@ async function resolveText(clone: string, text: string, options: { through?: Reg
 /** An install expecting `spex.lock` at the version it stands at on disk
  * now — none where none stands (DR-111). */
 function installAsOnDisk(options: Omit<InstallOptions, "lockVersion">): ReturnType<typeof install> {
-  return install({ ...options, lockVersion: fileVersion(join(options.cloneDir, "spex.lock")) });
+  return install({ engine: installEngine(), ...options, lockVersion: fileVersion(join(options.cloneDir, "spex.lock")) });
 }
 
 function locked(result: ResolveResult): Lock {

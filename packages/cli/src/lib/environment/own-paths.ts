@@ -12,7 +12,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, lstatSync, readdirSync } from "node:fs";
 import { join, posix } from "node:path";
 
-import { portable } from "../storage-git.js";
+import { portable } from "../files.js";
 import { isInsidePath } from "./requests.js";
 
 /** Why a folder of your own group's clone cannot be a path source; an

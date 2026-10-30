@@ -18,7 +18,7 @@ msgstr ""
 #. Separates names listed in one message
 #. Separates names listed in one message
 #: src/config.ts
-#: src/files.ts
+#: src/i18n.ts
 #: src/service.ts
 msgid ", "
 msgstr "、"
@@ -45,7 +45,7 @@ msgid "; missing {roles}"
 msgstr "；缺少角色 {roles}"
 
 #. Clause naming the fields a record may also carry
-#: src/files.ts
+#: src/i18n.ts
 msgid "; optional {fields}"
 msgstr "；可选字段 {fields}"
 
@@ -136,8 +136,8 @@ msgstr "项目的设置中不允许 {entry}：项目设置只列出所启用的�
 
 #. Refusal: a file changed between the core's read and its write; the reader retries
 #. Refusal: a file changed between the core's read and its write; the reader retries
-#: src/files.ts
 #: src/home.ts
+#: src/i18n.ts
 msgid "{file} changed meanwhile; retry"
 msgstr "{file} 在此期间已更改；请重试"
 
@@ -152,7 +152,7 @@ msgstr "{file} 在读取之后已在磁盘上更改"
 #. A storage fault as one line: the file, then the reason — itself a message
 #. A storage fault as one line: the file, then the reason — itself a message
 #: src/config.ts
-#: src/files.ts
+#: src/i18n.ts
 #: src/service.ts
 msgid "{file}: {reason}"
 msgstr "{file}：{reason}"
@@ -711,7 +711,7 @@ msgid "{target} is not empty; the example seeds only a new or empty directory"
 msgstr "{target} 不是空目录；示例只能填充新建或空的目录"
 
 #. Storage diagnostic: a host URL is not an instance's origin written canonically — http or https (http on localhost or 127.x alone), a lowercase host of DNS labels (letters, digits and inner hyphens) joined by single dots, and a port from 1 to 65535 other than the scheme's default, nothing else; the URL is shown with any user info as …
-#: src/home.ts
+#: src/i18n.ts
 msgid "{url} is not an instance's origin"
 msgstr "{url} 不是实例的源地址"
 
@@ -1310,7 +1310,7 @@ msgstr "环境中的规约包已安装"
 #: src/app-storage.ts
 #: src/code-credentials.ts
 #: src/drafts.ts
-#: src/files.ts
+#: src/i18n.ts
 msgid "expected an object"
 msgstr "应为对象"
 
@@ -1325,7 +1325,7 @@ msgid "expected fields {required}; optional {optional}"
 msgstr "应包含字段 {required}；可选字段 {optional}"
 
 #. Storage diagnostic; the field names are the file format's own, and the optional clause is itself a message
-#: src/files.ts
+#: src/i18n.ts
 msgid "expected fields {required}{optional}"
 msgstr "应包含字段 {required}{optional}"
 
@@ -1347,7 +1347,7 @@ msgid "folder {path} is paired twice"
 msgstr "文件夹 {path} 被配对了两次"
 
 #. Storage diagnostic: home.yaml is still in the layout before a home recorded several instances, which the one-time instances migration rewrites; the file is left as it is
-#: src/home.ts
+#: src/i18n.ts
 msgid "format 1: the instances migration has not run; preserved unchanged"
 msgstr "格式 1：实例迁移尚未运行；已原样保留"
 
@@ -1477,7 +1477,7 @@ msgid "Installing stopped; the last files stay: {cause}"
 msgstr "安装已停止，上次安装的文件保持不变：{cause}"
 
 #. Storage diagnostic: two instances home.yaml lists, or one listed twice, would hold their spex repositories in one folder under workspace/
-#: src/home.ts
+#: src/i18n.ts
 msgid "instances {first} and {second} share the folder {folder}"
 msgstr "实例 {first} 与 {second} 共用文件夹 {folder}"
 
@@ -1547,7 +1547,7 @@ msgid "invalid failure count"
 msgstr "失败次数无效"
 
 #. Storage diagnostic: home.yaml's own fields are malformed
-#: src/home.ts
+#: src/i18n.ts
 msgid "invalid home file"
 msgstr "主目录文件无效"
 
@@ -3109,14 +3109,14 @@ msgid "unsupported act/version"
 msgstr "不支持的动作类型或版本"
 
 #. Storage diagnostic: the file names a layout version this Spex does not read; the file is left as it is
-#: src/files.ts
+#: src/i18n.ts
 msgid "unsupported format {format}; preserved unchanged"
 msgstr "不支持的格式 {format}；已原样保留"
 
 #. Storage diagnostic: a credentials file names a layout version that is no number, which is not repeated; the file is left as it is
 #. Storage diagnostic: a credentials file names a layout version that is no number, which is not repeated; the file is left as it is
 #: src/code-credentials.ts
-#: src/git-host.ts
+#: src/i18n.ts
 msgid "unsupported format; preserved unchanged"
 msgstr "不支持的格式；已原样保留"
 

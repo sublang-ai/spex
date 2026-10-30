@@ -13,7 +13,7 @@ import { join } from "node:path";
 import {
   closed, isLocalPath, isObject, isRecordedPath, isText, isTimestamp, isUuid, knownFormat, need,
   assertPlainDirectory, readJsonFile, sha256, StorageFormatError, writeApplicationBytes, writeApplicationFile, writeVersionedBytes, UUID,
-} from "./files.js";
+} from "@sublang/spex/files";
 import { i18n } from "./i18n.js";
 import { mediaAttachmentsSchema, type AssignedRuntime, type DiagnosticRepair, type IntentAuthor, type IntentInfo, type IntentSource, type MediaAsset, type RepairChecked } from "./protocol.js";
 
