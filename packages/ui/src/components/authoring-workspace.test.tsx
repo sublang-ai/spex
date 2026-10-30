@@ -329,7 +329,12 @@ function tab(name: string): HTMLButtonElement {
   return screen.getByRole("tab", { name }) as HTMLButtonElement;
 }
 
+/** The instance the scripted core reports for an environment
+ * (environments-2): absent, the home's default instance is meant. */
+let environmentInstance: string | undefined;
+
 beforeEach(() => {
+  environmentInstance = undefined;
   useAppStore.setState({
     loadAgentOptions: async (adapter) => ({
       adapter,
@@ -349,7 +354,8 @@ beforeEach(() => {
       case "environment.playbooks":
         return lists;
       case "environment.get":
-        return { repository: String(params?.repository), language: null, requests: {}, packages: [], stale: null, conflicts: null, busy: null, error: null };
+        return { repository: String(params?.repository), language: null, requests: {}, packages: [], stale: null, conflicts: null, busy: null, error: null,
+          ...(environmentInstance !== undefined ? { instance: environmentInstance } : {}) };
       case "playbook.artifacts":
         return { source: null, gears: null, fsm: null, stateIds: null, machine: null, missing: [] };
       case "config.edit":
@@ -1647,6 +1653,8 @@ describe("playbook-library-93: Publish beneath the Enable form", () => {
     renderWorkspace(draft, { view: foldView(THREAD) });
     await vi.waitFor(() => expect(tab("Enable").disabled).toBe(false));
     fireEvent.click(tab("Enable"));
+    // The control stands once the environment's instance is read.
+    await screen.findByTestId("publish");
   }
 
   test("shows the inline summary, publishes as the account, and reads the published version with its page", async () => {
@@ -1759,32 +1767,48 @@ describe("playbook-library-111: what stands beneath the Enable form by the proje
       instances: "One and Two, both signed in",
       space: groups("two", [{ origin: ONE, name: "One", signedIn: true }, { origin: TWO, name: "Two", signedIn: true }]),
       beneath: "Publish",
+      // The environment's instance as the core reads it from spex.yaml:
+      // its space, else the home's default (environments-2).
+      instance: TWO,
     },
     {
       project: "at Two",
       instances: "One signed in, Two signed out",
       space: groups("two", [{ origin: ONE, name: "One", signedIn: true }, { origin: TWO, name: "Two", signedIn: false }]),
       beneath: "Sign in to publish at Two",
+      // The environment's instance as the core reads it from spex.yaml:
+      // its space, else the home's default (environments-2).
+      instance: TWO,
     },
     {
       project: "local-only",
       instances: "One signed in, Two signed out",
       space: groups("local", [{ origin: ONE, name: "One", signedIn: true }, { origin: TWO, name: "Two", signedIn: false }]),
       beneath: "Publish",
+      // The environment's instance as the core reads it from spex.yaml:
+      // its space, else the home's default (environments-2).
+      instance: ONE,
     },
     {
       project: "local-only",
       instances: "One signed out, Two signed in",
       space: groups("local", [{ origin: ONE, name: "One", signedIn: false }, { origin: TWO, name: "Two", signedIn: true }]),
       beneath: "Sign in to publish at One",
+      // The environment's instance as the core reads it from spex.yaml:
+      // its space, else the home's default (environments-2).
+      instance: ONE,
     },
     {
       project: "local-only",
       instances: "none, the home created with https://spex.pub",
       space: groups("local", [], "https://spex.pub"),
       beneath: "Sign in to publish at spex.pub",
+      // The environment's instance as the core reads it from spex.yaml:
+      // its space, else the home's default (environments-2).
+      instance: "https://spex.pub",
     },
-  ])("the session's project $project, the home's instances $instances: $beneath", async ({ space, beneath }) => {
+  ])("the session's project $project, the home's instances $instances: $beneath", async ({ space, beneath, instance }) => {
+    environmentInstance = instance;
     const onNavigate = vi.fn();
     seed({
       space,
@@ -1796,7 +1820,7 @@ describe("playbook-library-111: what stands beneath the Enable form by the proje
     render(<LibrarySurface onNavigate={onNavigate} />);
     await vi.waitFor(() => expect(tab("Enable").disabled).toBe(false));
     fireEvent.click(tab("Enable"));
-    const publish = screen.getByTestId("publish");
+    const publish = await screen.findByTestId("publish");
     // Beneath the form.
     expect(
       screen.getByTestId("register-submit").compareDocumentPosition(publish) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -1812,6 +1836,25 @@ describe("playbook-library-111: what stands beneath the Enable form by the proje
     expect(signIn.textContent).toBe(beneath);
     fireEvent.click(signIn);
     expect(onNavigate).toHaveBeenCalledWith("Space");
+  });
+
+  test("the target is the environment's instance, not the repository's placement (playbook-library-93)", async () => {
+    // Placed at Two, its spex.yaml naming no space, so the environment is
+    // the default instance's, One's, where the home is signed in.
+    environmentInstance = ONE;
+    seed({
+      space: groups("two", [{ origin: ONE, name: "One", signedIn: true }, { origin: TWO, name: "Two", signedIn: false }]),
+      drafts: { triage: COMPILED },
+      openDraftId: "triage",
+      draftViews: { triage: foldView(THREAD) },
+      draftSources: { triage: SOURCE },
+    });
+    render(<LibrarySurface />);
+    await vi.waitFor(() => expect(tab("Enable").disabled).toBe(false));
+    fireEvent.click(tab("Enable"));
+    const publish = await screen.findByTestId("publish");
+    expect(within(publish).getByTestId("publish-button").textContent).toBe("Publish");
+    expect(within(publish).queryByTestId("publish-signin")).toBeNull();
   });
 });
 

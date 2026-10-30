@@ -351,6 +351,12 @@ export interface EnvironmentState {
    * (environments-2): the paired working folder, or your own group's
    * clone; null where none is paired. */
   pathRoot: string | null;
+  /** The origin of the environment's instance (environments-2): the
+   * `space` its `spex.yaml` names, else the home's default instance —
+   * where its registry is asked and a publish from it goes
+   * (environments-10, playbook-library-93); null where `spex.yaml` does
+   * not read, so no instance is named. */
+  instance?: string | null;
   /** The built-in spec package this app ships, where the lock selects an
    * older release and the requirement `spex.yaml` requests it at admits
    * the shipped one; absent otherwise. The lock stays until the reader

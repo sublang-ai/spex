@@ -1467,11 +1467,13 @@ export class EnvironmentManager {
     let requestsText: string | null = null;
     let requestsVersion: FileVersion | undefined;
     let error = clone.error;
+    let instance: string | null = null;
     try {
       const read = readRequestsAt(join(dir, "spex.yaml"));
       requests = read?.requests ?? null;
       requestsText = read?.text ?? null;
       requestsVersion = read?.version ?? null;
+      instance = this.instanceOfRequests(requests);
     } catch (cause) {
       error = failurePhrase("resolve", cause);
     }
@@ -1552,6 +1554,7 @@ export class EnvironmentManager {
       error,
       published: clone.published ? { ...clone.published } : null,
       pathRoot,
+      instance,
       ...(builtinUpdate ? { builtinUpdate } : {}),
       ...(unexported ? { unexported } : {}),
     };

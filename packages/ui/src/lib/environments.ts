@@ -15,11 +15,10 @@ import type {
   GroupsState,
   PlaybookAvailability,
   ProjectInfo,
-  RepositoryState,
 } from "@sublang/spex-core/protocol";
 
 import { i18n } from "../i18n.js";
-import { allRepositories, hostNameOf, instanceName, instanceOf } from "./instances.js";
+import { hostNameOf, instanceName, instanceOf } from "./instances.js";
 
 /** A spec package's name, `<org>/<pkg>` in lowercase kebab-case
  * (DR-104), as `environment.request` takes it. */
@@ -48,15 +47,6 @@ export function ownRepositoryKey(
   return space?.own?.repositories?.find((entry) => entry.own)?.key ?? own?.[0]?.repository;
 }
 
-/** One spex repository as Space last read it. */
-export function repositoryOf(
-  space: GroupsState | undefined,
-  key: string | undefined,
-): RepositoryState | undefined {
-  if (!key || !space) return undefined;
-  return allRepositories(space).find((entry) => entry.key === key);
-}
-
 /** The instance a publish from a spex repository goes to
  * (playbook-library-93, environments-10, DR-127): whether the home is
  * signed in there, and the name "Sign in to publish at <name>" gives it,
@@ -68,13 +58,14 @@ export interface PublishTarget {
   name: string;
 }
 
-/** The publish target of the spex repository at `key` as the Groups
- * state reads it, so a sign-in or sign-out anywhere re-reads it: its
- * instance, or the home's default instance where it has none; none
- * until that state is held. */
-export function publishTargetOf(space: GroupsState | undefined, key: string): PublishTarget | undefined {
-  if (!space) return undefined;
-  const origin = repositoryOf(space, key)?.instance ?? space.defaultInstance;
+/** The publish target of an environment: its instance as the core
+ * reads it from `spex.yaml` — the `space` it names, else the home's
+ * default instance (environments-2) — signed in and named as the Groups
+ * state reads it, so a sign-in or sign-out anywhere re-reads it; none
+ * until both are held, or where `spex.yaml` does not read. */
+export function publishTargetOf(space: GroupsState | undefined, environment: EnvironmentState | undefined): PublishTarget | undefined {
+  if (!space || !environment || environment.instance === null) return undefined;
+  const origin = environment.instance ?? space.defaultInstance;
   const entry = instanceOf(space, origin);
   return { origin, signedIn: entry?.signedIn ?? false, name: entry ? instanceName(entry) : hostNameOf(origin) };
 }

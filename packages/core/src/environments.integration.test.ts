@@ -1207,7 +1207,7 @@ test("environments-25: every environment command replies and refuses as its tabl
   // environment.get carries every field the surface lists (environments-14).
   await client.expectError("environment.get", { repository: "nobody/none-spex" }, "not_found");
   const initial = await client.expectOk("environment.get", { repository: key });
-  assert.deepEqual(Object.keys(initial).sort(), ["busy", "conflicts", "error", "language", "packages", "pathRoot", "published", "repository", "requests", "stale"]);
+  assert.deepEqual(Object.keys(initial).sort(), ["busy", "conflicts", "error", "instance", "language", "packages", "pathRoot", "published", "repository", "requests", "stale"]);
   assert.equal(initial.pathRoot, project.path, "a project's paths are relative to its working folder (environments-2)");
   assert.deepEqual(Object.keys(initial.packages[0]!).sort(), ["artifacts", "direct", "exports", "installed", "missingPath", "name", "requiredBy", "source", "version"]);
   assert.deepEqual(initial.requests["sublang/playbooks"], { kind: "registry", version: `^${builtinPackage().version}` });

@@ -205,8 +205,10 @@ async function twoInstances(t: TestContext, name: string, registryFetch?: typeof
   // The pick names the second, not the default, as its environment's
   // instance (environments-11, environments-2).
   assert.equal(spaceOf(home, south), second.url);
+  assert.equal((await home.client.expectOk("environment.get", { repository: south })).instance, second.url, "the state names the environment's instance");
   const { key: local } = await addFolder(home, gitFolder("local"));
   assert.equal(spaceOf(home, local), undefined, "a local-only project names no space");
+  assert.equal((await home.client.expectOk("environment.get", { repository: local })).instance, first.url, "one naming none is the default instance's");
   assert.equal(rowOf(await home.client.expectOk("space.get", {}), local).instance, null, "a project with no instance");
   await environmentOf(home, local, (state) => installedFrom(state, BUILTIN_PACKAGE_NAME, first.url));
   return { R1, R2, first, second, home, south, local };
