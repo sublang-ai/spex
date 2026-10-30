@@ -12,28 +12,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The command line is the package manager for spec packages, with no
+  running app and no project registered anywhere. Each package command
+  acts on the environment of the current folder: the nearest folder
+  holding `spex.yaml`, else the Git work tree's top level, else the
+  current folder. `spex.yaml` and `spex.lock` stand at that root, for
+  you to commit with the code; the installed files, generated skills
+  and install record stand under `.spex/`, which holds its own
+  `.gitignore`. Skills are exported to `.claude/skills/` and
+  `.agents/skills/`.
+  - `spex add <org>/<pkg>[@<requirement>]` and `spex add <org>/<pkg>
+    --path <folder>` record a request and install it; without a
+    requirement, a caret at the newest release;
+  - `spex remove` (`rm`) drops a request and installs what remains;
+  - `spex install` (`i`) installs the lock, resolving it first where it
+    is missing or stale, and leaves the app's built-in package,
+    `sublang/playbooks`, to the app where neither the app's copy in the
+    home nor a registry serves it;
+  - `spex update` resolves again from `spex.yaml` and installs;
+  - `spex list` (`ls`) shows the Space, the requests, the lock and the
+    exports, and `spex search <query>` searches the registry.
+- `spex.yaml` may name its Space as `space: <origin>`; without it, the
+  environment uses the home's default Space. `spex add` and `spex new`
+  write it, naming the default Space, when they make the file.
+- `spex new <org>/<pkg>` makes `spex-packages/<org>/<pkg>/` from
+  `--skill` folders and a `--spec` file, requests it by path and
+  installs it, so its skills reach the folder's agents at once.
+  `spex publish [<org>/<pkg>] [--dry-run]` publishes a package by name,
+  from the folder `spex.yaml` requests it by, else
+  `spex-packages/<org>/<pkg>/`, and with no name the one package there,
+  to the environment's Space as the account signed in at it.
+- `spex login`, `spex logout` and `spex whoami` sign this device in at
+  a Space by the device flow, sign it out, and say who is signed in
+  where, `--space <origin>` naming the Space. The first Space signed in
+  to becomes the default; each token is kept in the home's
+  `local/credentials.yaml`, readable by you alone, and never printed.
+- Every package command exits `0` on success, `1` on a refusal or
+  failure with its cause on standard error, and `130` on an interrupt.
 - The package-manager library ships in the package as its own modules:
   `@sublang/spex/environment`, `files`, `instance`, `git-host`,
   `home-file` and `words`, with the stand-in registry as
-  `@sublang/spex/testing`.
-- `spex login`, `spex logout` and `spex whoami` sign this device in at
-  a Space by the device flow from the command line, sign it out, and
-  say who is signed in where, `--space <origin>` naming the Space, with
-  no running app.
-- The command line is the package manager, needing no running app, on
-  the environment of the current folder — the nearest folder holding
-  `spex.yaml`, else the Git work tree's top level — at the Space its
-  `space` names, else the home's default:
-  - `spex add <org>/<pkg>[@<requirement>]` and `spex add <org>/<pkg>
-    --path <folder>` record a request and install it;
-  - `spex remove` (`rm`) drops a request and installs what remains;
-  - `spex install` (`i`) installs the lock under `.spex/`, resolving it
-    first where it is missing or stale;
-  - `spex update` resolves again from `spex.yaml` and installs;
-  - `spex list` (`ls`) shows the requests, the lock and the exports, and
-    `spex search <query>` searches the registry;
-  - `spex new <org>/<pkg>` makes `spex-packages/<org>/<pkg>/` from skill
-    folders and a spec file, requests it by path and installs it.
+  `@sublang/spex/testing`. The Spex app runs the same library.
 
 ### Changed
 
@@ -41,17 +60,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   library's modules it exports the scaffold's files by path, as
   `@sublang/spex/scaffold/<path>`, and `package.json`; any other deep
   import, such as `@sublang/spex/dist/cli.js`, no longer resolves.
-- `spex publish [<org>/<pkg>] [--dry-run]` publishes a package by name
-  from `spex-packages/<org>/<pkg>/`, or the folder its path request
-  names, to the environment's Space.
-- `spex install` leaves the app's built-in package, `sublang/playbooks`,
-  to the app where nothing serves it, installing the rest.
+- A package you develop lives at `spex-packages/<org>/<pkg>/`, the org
+  a folder, where `spex package init` wrote `spex-packages/<name>/`.
 
 ### Removed
 
 - **Breaking:** the attached `auth`, `project` and `package` commands,
-  with `--server` and `SPEX_SERVER_URL`; the command line no longer
-  connects to a running app.
+  with `--server`, `SPEX_SERVER_URL`, `--project` and `--timeout`; the
+  command line no longer connects to a running app, and exit code `2`
+  is gone.
 - **Breaking:** `spex package init`, now `spex new`.
 
 ## [4.2.0] - 2026-10-29

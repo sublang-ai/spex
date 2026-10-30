@@ -32,26 +32,19 @@ and `npm start` (desktop) or `npm run start:server` (server).
   and its tab leaves with its package. A project open on a team server
   shows no applet tab for now.
 
-- The package CLI can attach to an explicitly selected local Spex server
-  for project registration, Space sign-in, package search, installation
-  and publication. Package commands report their own completion and
-  publication destination; a disconnected client reports uncertainty
-  without replaying the operation. Existing UI commands remain unchanged
-  ([DR-157](specs/decisions/157-a-cli-attached-to-the-local-core.md)).
-- The CLI finds the running app by itself ([DR-163](specs/decisions/163-the-cli-finds-the-running-app.md)).
-  While the core serves its home on a loopback address — the desktop's
-  own listener, or the server shell bound to a loopback host — it keeps
-  `local/endpoint.json` there, owner-only, with the access URL and the
-  process id, and removes it when it stops; a seat and a public bind
-  write none. The CLI reads it when given no `--server` or
-  `SPEX_SERVER_URL`, so a desktop user runs the CLI beside the app.
-- `spex package init` makes a package folder from what you already have
-  ([DR-162](specs/decisions/162-a-package-folder-from-what-you-already-have.md)).
-  Given a skill folder, such as one under `.claude/skills/`, or a spec
-  file, it writes `spex-packages/<name>/` with its manifest, README and
-  the project's license, offline, and names the next steps: Playbooks →
-  Add from folder then Publish, or `spex package add --path` and
-  `spex package publish --dry-run`.
+- An environment command sent with `wait: true` replies once its own
+  operation settles: a publish with its actual destination, name,
+  version and page, a refusal with its error. A client that disconnects
+  ends the delivery alone; the core neither replays nor cancels the
+  work. Every other reply is unchanged.
+- `spex.yaml` may name the Space its environment resolves at, as
+  `space: <origin>` ([DR-165](specs/decisions/165-one-package-manager-hosted-by-the-cli-and-the-app.md)).
+  The registry, the orgs you may publish to and the publish destination
+  follow it; without it, the environment uses your default Space. Where
+  a project's Space is not your default one, the app names it in the
+  `spex.yaml` it makes for the project, and a `spex.yaml` moved out of a
+  project's clone gains the Space of the clone's placement, so the
+  environment resolves at the same Space on every device.
 
 - Players read by name ([DR-155](specs/decisions/155-players-named-delegated-and-recovered.md)).
   A player reads as the last segment of its id — `dev.reviewer` as
@@ -99,7 +92,7 @@ and `npm start` (desktop) or `npm run start:server` (server).
   edited freely, an org outside the manifest's name rule is refused in
   place naming the rule, and "New playbook" waits while either is
   empty. After an authoring session's enabling, the card keeps "Commit
-  spex-packages/<id> with your code" until the surface is left.
+  spex-packages/<org>/<id> with your code" until the surface is left.
 - Undo a misplacement in Spex ([DR-120](specs/decisions/120-the-instance-is-the-space.md)).
   Where the instance says you may, a group's heading carries Rename,
   which opens its name and path in place, and, while nothing stands in
@@ -365,6 +358,26 @@ and `npm start` (desktop) or `npm run start:server` (server).
   ([DR-148](specs/decisions/148-a-lapsed-seat-is-stopped-by-a-sweep.md)).
 
 ### Changed
+
+- A project's environment lives in its working folder ([DR-165](specs/decisions/165-one-package-manager-hosted-by-the-cli-and-the-app.md)).
+  `spex.yaml` and `spex.lock` stand at the folder's root, for you to
+  commit with the code, and the installed files, generated skills and
+  install record under its `.spex/`, whose own `.gitignore` keeps Git
+  out of it. A group's own environment keeps its two files in its clone,
+  with its installed files under the clone's `.spex/`. At its next start,
+  and when it pairs a folder, the app moves a project's `spex.yaml` and
+  `spex.lock` out of its records clone into the working folder once,
+  where the folder holds neither; a folder holding its own keeps them.
+  The installed files move under `.spex/` or are installed again, and
+  the clone's former `packages/` and `skills/` go. The environment needs
+  no registration: the `spex` CLI reads and writes the same files.
+- A spec package you develop lives at `spex-packages/<org>/<pkg>/`, the
+  org a folder, so two orgs' packages of one name stand apart; a new
+  playbook's authoring session makes its folder there ([DR-165](specs/decisions/165-one-package-manager-hosted-by-the-cli-and-the-app.md)).
+  **Publish** on the Enable tab and on an environment's path row
+  publishes the package by its name: the folder its path request names,
+  else `spex-packages/<org>/<pkg>/`. `environment.publish` takes `name`
+  in place of `path`.
 
 - On Playbooks, **Add from registry**, **Add from folder** and **Add from
   Git** stand directly beneath the environment's list of spec packages,
@@ -828,6 +841,14 @@ and `npm start` (desktop) or `npm run start:server` (server).
 - Skills and specs your environments install reach every agent Spex drives ([DR-124](specs/decisions/124-skills-reach-every-agent.md)): beside Claude Code's `.claude/skills`, each working folder's `.agents/skills` holds them for Codex, Gemini CLI, Kimi Code and OpenCode, kept out of Git like the other, and your own group's go to `~/.agents/skills` where one of those agents is installed. A playbook's generated skill stays in Claude Code's folders. A re-export leaves an unchanged skill as it stands and swaps a changed one in whole, and generated and aliased names are written as YAML strings.
 - A working folder paired with a project whose environment is already installed gets its skills, specs and playbooks at once, not at the next start, sync or environment command. The Playbooks surface lists what the last export left out under "Not exported": a skill kept out of an agent folder that already holds a folder of yours by that name, named with that folder, and a spec package whose files are not on this device; "Export again" exports once you have moved your folder or brought the files.
 - Your own group's environment requests a spec package by a path in its clone ([DR-125](specs/decisions/125-your-own-groups-path-sources-live-in-its-clone.md)): keep an unpublished skill, spec or playbook of your own in a folder of your own group's spex repository, request it by that path, and edit it in place; the sync carries the folder, as one unit, to every device, where it exports to your agents. A path under Spex's own folders, however it is cased, one the sync rules drop, one reached through a link, and a folder in or holding a Git repository of its own, or holding a link or a file the sync would drop or refuse to share, are refused before anything is written, and again at each resolution and install, so a file added later fails the next install on the device holding it, the last exports standing; a release holding a `uv.lock`, `Cargo.lock` or `*.tmp`, which the sync rules drop anywhere, cannot live there. Explore reads such a folder as a spec package. "Add from folder" on your own group's side asks for a folder inside its clone, and `environment.get` names that folder as `pathRoot`. A request your own group made by a path in a paired working folder reads as missing until its folder moves into the clone. A project's and another group's paths stay relative to the working folder.
+
+### Removed
+
+- The core no longer keeps `local/endpoint.json` in the home, and its
+  hello names the protocol version alone, without the attached CLI's
+  marker ([DR-165](specs/decisions/165-one-package-manager-hosted-by-the-cli-and-the-app.md)).
+  The `spex` CLI 5.0 needs no running app; the attached commands of CLI
+  4.1 and 4.2 no longer connect to this app.
 
 ### Fixed
 
