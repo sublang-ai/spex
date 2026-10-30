@@ -385,7 +385,7 @@ export class EnvironmentManager {
    * asking for it from the requests given, else from `spex.yaml`. */
   private gitOf(key: string, requests?: Requests | null): EnvironmentGit {
     let own: string | undefined;
-    const instance = (): string => (own === undefined ? (own = requests !== undefined ? this.instanceOfRequests(requests) : this.registryOriginOf(key)) : own);
+    const instance = (): string => (own === undefined ? (own = requests !== undefined ? this.instanceOfRequests(requests) : this.labelInstanceOf(key)) : own);
     return {
       instance,
       credential: (repo) => this.options.gitCredential(repo, instance()),
@@ -441,7 +441,11 @@ export class EnvironmentManager {
    * playbook-library-103, DR-127); null while the home is not signed in
    * there, the registry not asked, and where it gives no answer. */
   async publishableOrgs(key: string): Promise<RegistryOrg[] | null> {
-    const { origin, remote } = this.registryAt(this.registryOriginOf(key));
+    // A `spex.yaml` that does not read names no instance: no registry is
+    // asked, the default instance's least of all (environments-2).
+    let instance: string;
+    try { instance = this.instanceOf(key); } catch { return null; }
+    const { origin, remote } = this.registryAt(instance);
     if (this.store.home.account(origin) === null) return null;
     return remote.orgs();
   }
@@ -458,14 +462,41 @@ export class EnvironmentManager {
     return environmentInstance(requests, { origin: this.store.home.defaultInstance().origin, instances: this.store.home.instances() });
   }
 
-  /** The registry of a spex repository's environment (environments-5):
-   * its instance's, read from `spex.yaml` as it stands — the default
-   * instance's where it names none or does not read. */
-  private registryOriginOf(key: string): string {
+  /** The instance a spex repository's environment shows its Git
+   * sources' labels by (environments-29), read from `spex.yaml` as it
+   * stands — the default instance where it names none or does not read,
+   * for presentation alone: no registry, credential or publish follows
+   * it. */
+  private labelInstanceOf(key: string): string {
     const dir = this.store.repository(key)?.dir;
     let requests: Requests | null = null;
     try { requests = dir ? readRequestsAt(join(dir, "spex.yaml"))?.requests ?? null : null; } catch { requests = null; }
     return this.instanceOfRequests(requests);
+  }
+
+  /** The requests of a spex repository's environment as `spex.yaml`
+   * stands, null where absent; one that does not read — a `space` that
+   * is no instance origin among its reasons (environments-2) — refuses
+   * the command asking, never read as naming no instance. */
+  private requestsOf(key: string): Requests | null {
+    const dir = this.cloneDir(key);
+    try { return readRequestsAt(join(dir, "spex.yaml"))?.requests ?? null; }
+    catch (error) {
+      const cause = error instanceof RequestsError ? listed(error.issues.map((issue) => issue.message)) : error instanceof Error ? error.message : String(error);
+      throw new CoreError("invalid_request", i18n._({
+        id: "spex.yaml does not read: {cause}",
+        comment: "Refusal: a search or publish needs the environment's instance, and its spex.yaml does not read; {cause} is the library's own words, such as a space that is no instance origin",
+        values: { cause },
+      }));
+    }
+  }
+
+  /** The instance of a spex repository's environment (environments-2,
+   * DR-165) — its registry, the orgs its account may publish to and its
+   * publish destination: the `space` its `spex.yaml` names, else the
+   * home's default instance; refused where `spex.yaml` does not read. */
+  private instanceOf(key: string): string {
+    return this.instanceOfRequests(this.requestsOf(key));
   }
 
   /** The `space` an environment's built-in request names where the core
@@ -1241,8 +1272,9 @@ export class EnvironmentManager {
   /** The folder a publish of `name` reads (environments-10): the
    * folder of the environment's request by path for that name where it
    * has one, else `spex-packages/<org>/<pkg>/` under the path root. */
-  publishFolder(key: string, name: string): string {
-    return this.pathRequests(key).get(name) ?? `spex-packages/${name}`;
+  private publishFolder(requests: Requests | null, name: string): string {
+    const request = requests?.packages[name];
+    return request !== undefined && isPathRequest(request) ? request.path : `spex-packages/${name}`;
   }
 
   /** `environment.publish` by name (environments-10): its folder — the
@@ -1270,7 +1302,11 @@ export class EnvironmentManager {
         values: { name },
       }));
     }
-    const path = this.publishFolder(key, name);
+    // The environment's requests name the folder and the instance, read
+    // once; a `spex.yaml` that does not read refuses the publish
+    // (environments-2, environments-10).
+    const requests = this.requestsOf(key);
+    const path = this.publishFolder(requests, name);
     const folder = resolvePath(root, path);
     const inside = relative(resolvePath(root), folder);
     if (inside === "" || inside.startsWith("..") || isAbsolute(inside) || inside.split(sep).includes("..")) throw this.outside(path, this.isOwn(key));
@@ -1284,7 +1320,7 @@ export class EnvironmentManager {
         values: { name, path },
       }));
     }
-    const target = this.registryAt(this.registryOriginOf(key));
+    const target = this.registryAt(this.instanceOfRequests(requests));
     if (!dryRun && (await this.tokenAt(target.origin).catch(() => "")) === null) {
       throw new CoreError("invalid_request", i18n._({
         id: "Sign in to publish at {name}",
@@ -1358,9 +1394,9 @@ export class EnvironmentManager {
    * there (environments-17, environments-5, environments-12); a key
    * naming no clone on this device is refused first. */
   async search(key: string, query: string): Promise<{ name: string; description: string | null; versions: string[] }[]> {
-    this.cloneDir(key);
+    const instance = this.instanceOf(key);
     try {
-      const results = await this.registryAt(this.registryOriginOf(key)).source.search(query);
+      const results = await this.registryAt(instance).source.search(query);
       return results.map((result) => ({ name: result.name, description: result.description || null, versions: result.versions }));
     } catch (error) {
       throw new CoreError("invalid_request", error instanceof Error ? error.message : String(error));

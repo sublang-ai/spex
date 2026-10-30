@@ -2569,6 +2569,11 @@ msgstr "Spex: the compile succeeded — asking for a registration proposal"
 msgid "spex.lock resolved"
 msgstr "spex.lock resolved"
 
+#. Refusal: a search or publish needs the environment's instance, and its spex.yaml does not read; {cause} is the library's own words, such as a space that is no instance origin
+#: src/environments.ts
+msgid "spex.yaml does not read: {cause}"
+msgstr "spex.yaml does not read: {cause}"
+
 #. Startup refusal the shell shows in a dialog; the paths, the identity and the decision's id stay as they are
 #: src/root-lease.ts
 msgid "state root {dir} is held by another machine (identity {identity}) at {lock}; stop that writer before removing the lock (DR-108)"
