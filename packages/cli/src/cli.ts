@@ -61,7 +61,11 @@ async function main(): Promise<void> {
 
   const run = Object.hasOwn(COMMANDS, command) ? COMMANDS[command] : undefined;
   if (run) {
-    process.exitCode = await runCommand(command, run, args.slice(1));
+    const code = await runCommand(command, run, args.slice(1));
+    // An interrupted command ends now, once its words are out, whatever
+    // request it left pending (cli-13).
+    if (code === 130) process.stdout.write("", () => process.stderr.write("", () => process.exit(code)));
+    else process.exitCode = code;
     return;
   }
   const own = Object.hasOwn(OWN, command) ? OWN[command] : undefined;

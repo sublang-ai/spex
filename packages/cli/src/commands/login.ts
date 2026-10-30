@@ -85,16 +85,27 @@ export const login: Command = async (args, interrupt) => {
 
   let flow: DeviceSignIn | undefined;
   let stopped = false;
+  // An interrupt ends the wait for the flow's start at once: no token
+  // is stored before the flow ends, and a start answered late is
+  // cancelled.
+  let stop!: () => void;
+  const stopping = new Promise<never>((_, reject) => { stop = () => reject(new Error("stopped")); });
+  stopping.catch(() => undefined);
   const release = interrupt.hold(() => {
     stopped = true;
     flow?.cancel();
+    stop();
   });
   let account: HostAccount;
   try {
+    const starting = client.startDeviceSignIn({ admit });
     try {
-      flow = await client.startDeviceSignIn({ admit });
+      flow = await Promise.race([starting, stopping]);
     } catch (error) {
-      if (stopped) throw new Interrupted("interrupted; nothing recorded");
+      if (stopped) {
+        starting.then((late) => late.cancel(), () => undefined);
+        throw new Interrupted("interrupted; nothing recorded");
+      }
       throw new Refusal(signInCause(error, name));
     }
     if (stopped) {
@@ -115,10 +126,13 @@ export const login: Command = async (args, interrupt) => {
     release();
   }
 
-  // The token is stored; an interrupt now waits for the record.
-  const deferred = interrupt.hold(() => undefined);
+  // The token is stored; an interrupt now stops the wait for the
+  // display name, and the record is made before the command ends.
+  let skipName!: () => void;
+  const nameSkipped = new Promise<null>((resolve) => { skipName = () => resolve(null); });
+  const deferred = interrupt.hold(() => skipName());
   try {
-    const displayName = await described;
+    const displayName = await Promise.race([described, nameSkipped]);
     let recorded;
     try {
       recorded = updateHomeFile(dir, (current) => {
@@ -140,6 +154,7 @@ export const login: Command = async (args, interrupt) => {
     const shown = displayName ?? name;
     const isDefault = recorded.instances[0]?.origin === origin;
     console.log(`Signed in at ${shown} as ${account.login}.${isDefault ? ` ${shown} is this device's default Space.` : ""}`);
+    if (interrupt.requested) throw new Interrupted(`interrupted once signed in at ${shown} as ${account.login}`);
   } finally {
     deferred();
   }
