@@ -400,6 +400,16 @@ async function assertSurfaceMatrix(
       // at the ten parked questions again.
       settle: async () => {
         await expect(abort).toHaveCount(0, { timeout: 20_000 });
+        // The page drops the abort control on the run's last record; the
+        // core settles the turn after it, and only then can its finish
+        // raise the review entry the shown session's viewing clears.
+        await expect
+          .poll(async () => (await app.core.command("session.list", {}))
+            .filter((session) => session.projectId === projectId)
+            .every((session) => !session.live && !session.turnActive), {
+            timeout: 20_000,
+          })
+          .toBe(true);
         await expect
           .poll(async () => (await app.core.command("ledger.get", {})).badge, {
             timeout: 15_000,
