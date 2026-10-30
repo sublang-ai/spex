@@ -1,6 +1,6 @@
 {
   "name": "spex-server",
-  "version": "0.9.0-beta.18",
+  "version": "0.9.0-beta.19",
   "private": true,
   "description": "Spex server shell: the GUI served to a remote browser from one port",
   "type": "module",
@@ -23,7 +23,8 @@
     "@anthropic-ai/claude-agent-sdk": "*",
     "@openai/codex-sdk": "*",
     "@opencode-ai/sdk": "*",
-    "@sublang/slc": "^0.19.1",
+    "@sublang/playbook": "^18.1.0",
+    "@sublang/slc": "^0.20.0",
     "@sublang/spex-core": "*"
   },
   "devDependencies": {

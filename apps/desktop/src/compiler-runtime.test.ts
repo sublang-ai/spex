@@ -38,7 +38,7 @@ const electron =
     ? undefined
     : (createRequire(import.meta.url)("electron") as string);
 
-test("the desktop declares the compiler beside the agent SDKs (app-shell-33)", () => {
+test("the desktop declares the compiler and its host engine beside the agent SDKs (app-shell-33)", () => {
   const manifest = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8")) as {
     dependencies: Record<string, string>;
   };
@@ -47,6 +47,7 @@ test("the desktop declares the compiler beside the agent SDKs (app-shell-33)", (
     "@openai/codex-sdk",
     "@opencode-ai/sdk",
     "@sublang/slc",
+    "@sublang/playbook",
   ]) {
     assert.ok(manifest.dependencies[name], `${name} declared`);
   }
