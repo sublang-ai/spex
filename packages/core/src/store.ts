@@ -41,7 +41,7 @@ import { folderRemote, needsGroupsMigration, migrateFormerHome } from "./migrate
 import { needsBoundedSessionImport, stageBoundedHomeSessions, finishBoundedHomeSessions } from "./migrate-bounded-sessions.js";
 import { deferredMoves, migrateInstances, needsInstancesMigration, settleDeferred, type DeferredMove } from "./migrate-instances.js";
 import { gitEnvironment, initializeClone } from "./storage-git.js";
-import { instanceFolder, isInstanceFolder } from "@sublang/spex/instance";
+import { canonicalOrigin, instanceFolder, isInstanceFolder } from "@sublang/spex/instance";
 import { SEED_PREF, seedConfig, type SeedRecord } from "./config.js";
 import { createRequire } from "node:module";
 import { i18n } from "./i18n.js";
@@ -119,9 +119,10 @@ export interface StoreOptions {
    * group's at every open and a new project's at registration — where
    * the environment requests the built-in spec package, locked at
    * `registryOrigin`, the environment's registry (storage-6,
-   * environments-11, DR-127). The migration calls it for each clone it
-   * makes. */
-  prepareRepository?: (dir: string, key: string, registryOrigin: string) => void;
+   * environments-11, DR-127), and naming `space` as the environment's
+   * instance where that is not the home's default (environments-2,
+   * DR-165). The migration calls it for each clone it makes. */
+  prepareRepository?: (dir: string, key: string, registryOrigin: string, space: string | null) => void;
 }
 
 /** One spex repository's clone and the files it holds (storage-1). */
@@ -683,8 +684,13 @@ export class Store {
    * failure leaves the clone as it is, reported, never failing the open. */
   private prepareRepository(dir: string, key: string): boolean {
     try {
-      const registryOrigin = instanceOfClone(this.homeFile, this.deferred, key, () => this.remoteNameOf(dir, key)) ?? this.homeFile.defaultInstance().origin;
-      this.options.prepareRepository?.(dir, key, registryOrigin);
+      const placed = instanceOfClone(this.homeFile, this.deferred, key, () => this.remoteNameOf(dir, key));
+      const defaultOrigin = canonicalOrigin(this.homeFile.defaultInstance().origin);
+      const registryOrigin = placed ?? defaultOrigin;
+      // A clone placed at another instance than the default names it as
+      // its environment's instance (environments-11).
+      const space = placed !== null && canonicalOrigin(placed) !== defaultOrigin ? canonicalOrigin(placed) : null;
+      this.options.prepareRepository?.(dir, key, registryOrigin, space);
       return true;
     }
     catch (error) { console.error(`spex: ${key} was not prepared: ${error instanceof Error ? error.message : String(error)}`); return false; }

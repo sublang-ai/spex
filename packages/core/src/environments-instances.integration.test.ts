@@ -145,6 +145,11 @@ function lockByHand(home: Home, key: string, name: string, version: string, reso
   writeFileSync(join(clone, "spex.lock"), serializeLock({ ...lock, requests: requestsDigest(text), packages: { ...lock.packages, [name]: resolution } }));
 }
 
+/** The `space` a clone's `spex.yaml` names (environments-2). */
+function spaceOf(home: Home, key: string): string | undefined {
+  return parseRequests(readFileSync(join(clonePath(home.dataDir, key), "spex.yaml"), "utf8")).space;
+}
+
 /** Pick a project into your namespace at an instance (space-58), its
  * clone moved under that instance's folder (storage-35): its key. */
 async function pickAt(home: Home, local: string, host: StandinHost, name: string): Promise<string> {
@@ -197,7 +202,11 @@ async function twoInstances(t: TestContext, name: string, registryFetch?: typeof
   const south = await pickAt(home, added, second, "south");
   await environmentOf(home, south, (state) => installedFrom(state, BUILTIN_PACKAGE_NAME, second.url));
   assert.equal(registryOf(lockOf(home, south), BUILTIN_PACKAGE_NAME), second.url);
+  // The pick names the second, not the default, as its environment's
+  // instance (environments-11, environments-2).
+  assert.equal(spaceOf(home, south), second.url);
   const { key: local } = await addFolder(home, gitFolder("local"));
+  assert.equal(spaceOf(home, local), undefined, "a local-only project names no space");
   assert.equal(rowOf(await home.client.expectOk("space.get", {}), local).instance, null, "a project with no instance");
   await environmentOf(home, local, (state) => installedFrom(state, BUILTIN_PACKAGE_NAME, first.url));
   return { R1, R2, first, second, home, south, local };
@@ -298,11 +307,23 @@ test("environments-34, environments-5, environments-12, environments-3, environm
   const joined = await joinAt(home, second, "acme/joined-spex", gitFolder("joined"));
   await environmentOf(home, joined, (candidate) => installedFrom(candidate, BUILTIN_PACKAGE_NAME, second.url));
   assert.equal(registryOf(lockOf(home, joined), BUILTIN_PACKAGE_NAME), second.url);
+  assert.equal(spaceOf(home, joined), second.url, "[environments-11] the pairing names the second as space");
   const rebound = await joinAt(home, second, "acme/rebound-spex");
   assert.equal(existsSync(join(clonePath(home.dataDir, rebound), "spex.yaml")), false, "a bare join requests nothing");
   await home.client.expectOk("project.rebind", { projectId: rebound, path: gitFolder("rebound") });
   await environmentOf(home, rebound, (candidate) => installedFrom(candidate, BUILTIN_PACKAGE_NAME, second.url));
   assert.equal(registryOf(lockOf(home, rebound), BUILTIN_PACKAGE_NAME), second.url);
+  assert.equal(spaceOf(home, rebound), second.url, "[environments-11] the pairing names the second as space");
+
+  // A `space` that is no instance origin is refused naming it
+  // (environments-2), the files kept as they stand.
+  const localYaml = join(clonePath(home.dataDir, local), "spex.yaml");
+  const localText = readFileSync(localYaml, "utf8");
+  writeFileSync(localYaml, localText.replace("format: 1\n", "format: 1\nspace: http://example.com\n"));
+  await home.client.expectOk("environment.resolve", { repository: local });
+  state = await environmentOf(home, local, (candidate) => candidate.error !== null);
+  assert.match(state.error ?? "", /space "http:\/\/example\.com" is not an instance origin/);
+  writeFileSync(localYaml, localText);
 
   // A second home signed in to the third alone, which the first's
   // registry also answers, whose local-only project holds the lock the
@@ -322,29 +343,33 @@ test("environments-34, environments-5, environments-12, environments-3, environm
   await assert.rejects(new RegistryClient({ url: first.url }).version("vault/secrets", "1.0.0"), (error: unknown) => error instanceof RegistryError && error.kind === "not_found",
     "the first's registry refuses the private release without a token");
 
-  // Signed out of the third, nothing serves it: the first's registry is
-  // asked with no token, the third not at all, and the install fails
-  // naming the spec package, the last files staying (environments-7,
-  // environments-12).
+  // Signed out of the third, nothing serves it: the registry of the
+  // environment's instance — the home's default, the third, whose
+  // `spex.yaml` names no space (environments-2) — is asked with no
+  // token, then the first's, the lock's, with none, and the install
+  // fails naming the spec package, the last files staying
+  // (environments-7, environments-12).
   await signOut(other, third);
   one = R1.script.received.length;
   await other.client.expectOk("environment.install", { repository: copy });
   state = await environmentOf(other, copy, (candidate) => candidate.error !== null);
   assert.match(state.error ?? "", /vault\/secrets/);
   assert.equal(state.packages.find((pkg) => pkg.name === "vault/secrets")?.installed, false);
-  assert.deepEqual(receivedFor(R1, one, "vault/secrets"), [["/api/v1/packages/vault/secrets/1.0.0", first.url, null, false]]);
+  assert.deepEqual(receivedFor(R1, one, "vault/secrets"), [
+    ["/api/v1/packages/vault/secrets/1.0.0", third.url, null, false],
+    ["/api/v1/packages/vault/secrets/1.0.0", first.url, null, false],
+  ]);
 
-  // Signed in to the third again, it installs through the third with the
-  // third's token, after the first's registry refused it without one;
-  // the lock still records the first's origin (environments-7,
-  // environments-12).
+  // Signed in to the third again, it installs through the third, the
+  // environment's instance, with the third's token, the first's
+  // registry asked nothing directly; the lock still records the first's
+  // origin (environments-7, environments-12).
   await signIn(other, third);
   one = R1.script.received.length;
   await other.client.expectOk("environment.install", { repository: copy });
   state = await environmentOf(other, copy, (candidate) => installedFrom(candidate, "vault/secrets", first.url) || candidate.error !== null);
   assert.equal(state.error, null);
   assert.deepEqual(receivedFor(R1, one, "vault/secrets"), [
-    ["/api/v1/packages/vault/secrets/1.0.0", first.url, null, false],
     ["/api/v1/packages/vault/secrets/1.0.0", third.url, GRACE.login, true],
     ["/api/v1/packages/vault/secrets/1.0.0/download", third.url, GRACE.login, true],
   ]);

@@ -38,6 +38,7 @@ import {
   compareVersions,
   compositeRegistry,
   ContentStore,
+  environmentInstance,
   exportEnvironment,
   FormatError,
   gitSource,
@@ -135,10 +136,14 @@ export interface EnvironmentManagerOptions {
   builtin: BuiltinPackage | null;
   /** The registry's fetch, for tests. */
   fetch?: typeof fetch;
-  /** The origin of a spex repository's instance (storage-31): its
-   * environment's instance, your own group's the one its own
-   * repository's remote names; null for one local only (DR-127). */
-  instanceOf: (key: string) => string | null;
+  /** The origin of the instance a spex repository is placed at
+   * (storage-31): a project's by its key or remote, your own group's the
+   * one its own repository's remote names; null for one local only
+   * (DR-127). Read only to name it as `space` where the core writes an
+   * environment's built-in request (environments-11); the environment's
+   * instance itself is the `space` its `spex.yaml` names, else the home's
+   * default instance (environments-2, DR-165). */
+  placedAt: (key: string) => string | null;
   /** The device's current access secret at a listed instance, kept
    * current by that instance's client (git-host-4); null where it holds
    * none. Asked only of an instance the home is signed in to
@@ -217,8 +222,8 @@ type SettleMode = "auto" | "resolve" | "install";
 /** An environment's Git sources as the core fetches and shows them
  * (environments-13, environments-29), by the environment's instance. */
 interface EnvironmentGit {
-  /** The environment's instance (storage-31), read at its first use. */
-  instance: () => string | null;
+  /** The environment's instance (environments-2), read at its first use. */
+  instance: () => string;
   credential: (repo: string) => Promise<GitCredential | undefined>;
   label: (repo: string) => string;
   failure: (repo: string, run: GitRun) => string;
@@ -376,10 +381,10 @@ export class EnvironmentManager {
    * each fetched with the credential an instance the home is signed in
    * to brokers at its Git origin, and read as an instance's name, the
    * environment's own instance preferred — read at the first source
-   * asking for it, so an environment with none reads no instance. */
-  private gitOf(key: string): EnvironmentGit {
-    let own: string | null | undefined;
-    const instance = (): string | null => (own === undefined ? (own = this.options.instanceOf(key)) : own);
+   * asking for it from the requests given, else from `spex.yaml`. */
+  private gitOf(key: string, requests?: Requests | null): EnvironmentGit {
+    let own: string | undefined;
+    const instance = (): string => (own === undefined ? (own = requests !== undefined ? this.instanceOfRequests(requests) : this.registryOriginOf(key)) : own);
     return {
       instance,
       credential: (repo) => this.options.gitCredential(repo, instance()),
@@ -446,10 +451,29 @@ export class EnvironmentManager {
     return canonicalOrigin(this.store.home.defaultInstance().origin);
   }
 
+  /** The instance of an environment of these requests (environments-2,
+   * DR-165): the `space` they name, else the home's default instance. */
+  private instanceOfRequests(requests: Requests | null): string {
+    return environmentInstance(requests, { origin: this.store.home.defaultInstance().origin, instances: this.store.home.instances() });
+  }
+
   /** The registry of a spex repository's environment (environments-5):
-   * its instance's, else the default instance's. */
+   * its instance's, read from `spex.yaml` as it stands — the default
+   * instance's where it names none or does not read. */
   private registryOriginOf(key: string): string {
-    return this.options.instanceOf(key) ?? this.defaultOrigin();
+    const dir = this.store.repository(key)?.dir;
+    let requests: Requests | null = null;
+    try { requests = dir ? readRequestsAt(join(dir, "spex.yaml"))?.requests ?? null : null; } catch { requests = null; }
+    return this.instanceOfRequests(requests);
+  }
+
+  /** The `space` an environment's built-in request names where the core
+   * writes it (environments-11): the instance its spex repository is
+   * placed at where that is not the home's default; null otherwise. */
+  private spaceOf(placed: string | null): string | null {
+    if (placed === null) return null;
+    const origin = canonicalOrigin(placed);
+    return origin === this.defaultOrigin() ? null : origin;
   }
 
   /** The registry answering under an instance's origin: one client per
@@ -496,7 +520,7 @@ export class EnvironmentManager {
    * to, in the home's order, each asked once. A recorded registry that
    * names no instance's origin is never asked; it stands in the list to
    * be named where no other serves. */
-  private installRegistries(instance: string | null, source: RegistrySourceLock): RegistrySource[] {
+  private installRegistries(instance: string, source: RegistrySourceLock): RegistrySource[] {
     const home = this.store.home;
     const out: RegistrySource[] = [];
     const asked = new Set<string>();
@@ -505,7 +529,7 @@ export class EnvironmentManager {
       asked.add(origin);
       out.push(this.registryAt(origin).source);
     };
-    if (instance !== null) add(canonicalOrigin(instance));
+    add(canonicalOrigin(instance));
     let recorded: string | null;
     try { recorded = canonicalOrigin(source.registry); } catch { recorded = null; }
     if (recorded !== null) add(recorded);
@@ -604,11 +628,14 @@ export class EnvironmentManager {
   // -- the built-in spec package (environments-11) ---------------------------
 
   /** Request the built-in spec package where a clone lacks it, with the
-   * lock where that is all it requests, locked at the environment's
-   * registry (environments-11). */
+   * lock where that is all it requests, locked at the registry of the
+   * instance the spex repository is placed at, else the default
+   * instance's, and naming that instance as `space` where it is not the
+   * default (environments-11, environments-2). */
   prepare(dir: string, key: string): boolean {
     if (!this.options.builtin) return false;
-    return prepareBuiltinEnvironment(dir, this.options.builtin, this.registryOriginOf(key));
+    const placed = this.options.placedAt(key);
+    return prepareBuiltinEnvironment(dir, this.options.builtin, placed ?? this.defaultOrigin(), this.spaceOf(placed));
   }
 
   /** The release this app ships beside the one a lock selects, where the
@@ -756,7 +783,7 @@ export class EnvironmentManager {
       return;
     }
     const state = this.cloneState(key);
-    const envGit = this.gitOf(key);
+    let envGit = this.gitOf(key);
     const pathRoot = this.pathRoot(key);
     const requestsPath = join(dir, "spex.yaml");
     const lockPath = join(dir, "spex.lock");
@@ -779,10 +806,12 @@ export class EnvironmentManager {
     }
     let lock = locked?.lock ?? null;
     let lockVersion: FileVersion = locked?.version ?? null;
-    // The environment's registry, at its instance or the default
-    // instance's (environments-5, DR-127).
+    // The environment's registry, at the instance its `spex.yaml` names,
+    // else the default instance's (environments-2, environments-5,
+    // DR-165), read from the requests this operation read.
+    envGit = this.gitOf(key, read?.requests ?? null);
     const instance = envGit.instance();
-    const registry = this.registryAt(instance ?? this.defaultOrigin()).source;
+    const registry = this.registryAt(instance).source;
     const needsResolve = mode === "resolve" || (mode === "auto" && lock === null && read !== null);
     if (needsResolve && read !== null) {
       step("resolving");
@@ -1180,7 +1209,10 @@ export class EnvironmentManager {
     const dir = this.store.repository(key)?.dir;
     if (!dir || !this.options.builtin) return Promise.resolve();
     let wrote = false;
-    try { wrote = rehomeBuiltinLock(dir, this.options.builtin, this.registryOriginOf(key)); }
+    // The instance placed at becomes the environment's, named as `space`
+    // where it is not the default (environments-11).
+    const placed = this.options.placedAt(key);
+    try { wrote = rehomeBuiltinLock(dir, this.options.builtin, placed ?? this.defaultOrigin(), this.spaceOf(placed)); }
     catch (error) { console.error(`spex: ${key} keeps its built-in spec package's lock: ${error instanceof Error ? error.message : String(error)}`); }
     return wrote ? this.settle(key, "auto", false) : Promise.resolve();
   }
@@ -1397,9 +1429,6 @@ export class EnvironmentManager {
   state(key: string): EnvironmentState {
     const dir = this.cloneDir(key);
     const clone = this.cloneState(key);
-    // A Git source's labels name an instance, the environment's own
-    // preferred, read only where one is shown (environments-29).
-    const envGit = this.gitOf(key);
     const pathRoot = this.pathRoot(key);
     let requests: Requests | null = null;
     let requestsText: string | null = null;
@@ -1413,6 +1442,9 @@ export class EnvironmentManager {
     } catch (cause) {
       error = failurePhrase("resolve", cause);
     }
+    // A Git source's labels name an instance, the environment's own
+    // preferred, read only where one is shown (environments-29).
+    const envGit = this.gitOf(key, requests);
     let lock: Lock | null = null;
     try { lock = readLockSync(join(dir, "spex.lock")); }
     catch (cause) { error = failurePhrase("install", cause); }

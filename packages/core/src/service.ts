@@ -835,7 +835,7 @@ export class CoreService {
       // keeps current, asked only where the home is signed in there
       // (environments-12, git-host-4, DR-127), an instance that cannot
       // be reached, or asks to wait, read as it answered (git-host-11).
-      instanceOf: (key) => this.space.instanceOriginOf(key),
+      placedAt: (key) => this.space.instanceOriginOf(key),
       tokenFor: async (origin) => {
         try {
           return await this.space.accessSecretFor(origin);
@@ -1507,7 +1507,7 @@ export class CoreService {
         ...(options.home !== undefined ? { home: options.home } : {}),
         ...(options.dataDir ? { libraryDir: options.libraryDir ?? join(options.dataDir, "playbooks") } : {}),
         ...(relocateConfig ? { relocateConfig } : {}),
-        ...(builtin ? { prepareRepository: (dir: string, _key: string, registryOrigin: string) => { prepareBuiltinEnvironment(dir, builtin, registryOrigin); } } : {}),
+        ...(builtin ? { prepareRepository: (dir: string, _key: string, registryOrigin: string, space: string | null) => { prepareBuiltinEnvironment(dir, builtin, registryOrigin, space); } } : {}),
       });
     } catch (error) { seat?.environment.restore(); throw error; }
     let service: CoreService;
