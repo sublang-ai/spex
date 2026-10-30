@@ -252,12 +252,9 @@ test("cli-15: install from the committed files alone resolves nothing and instal
   const again = await ok(second, "install");
   assert.match(again, /^Up to date demo\/tool 1\.0\.0$/m, "[cli-4] installed already");
   const after = stamps(second);
-  for (const path of Object.keys(before.files)) {
-    // The library regenerates `.spex/skills/` and each agent folder's
-    // export manifest at every export, with the same bytes.
-    if (path.startsWith(".spex/skills/") || path.endsWith("/.spex-exports.json")) assert.equal(after[path]?.split(":")[0], before.files[path]!.split(":")[0], `${path} keeps its bytes`);
-    else assert.equal(after[path], before.files[path], `[cli-4] ${path} is not rewritten`);
-  }
+  // Every file, the generated skills and the export manifests included,
+  // keeps its bytes, its modification time and its inode.
+  for (const path of Object.keys(before.files)) assert.equal(after[path], before.files[path], `[cli-4] ${path} is not rewritten`);
   assert.deepEqual(Object.keys(after).sort(), Object.keys(before.files).sort(), "[cli-4] no file made or removed");
 
   // With spex.yaml alone, the lock is resolved first.
