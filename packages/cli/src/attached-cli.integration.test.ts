@@ -61,7 +61,7 @@ function standard(message: any, socket: any) {
   if (message.type === "project.list") reply(socket, message, [project]);
   else if (message.type === "project.register") reply(socket, message, { ...project, path: message.path });
   else if (message.type === "environment.search") reply(socket, message, { packages: [{ name: "fixture/demo", versions: ["1.0.0"], description: "Fixture" }] });
-  else if (message.type === "environment.get") reply(socket, message, { requests: { "fixture/demo": { kind: "registry", version: "^1.0.0" } }, packages: [{ name: "fixture/demo", version: "1.0.0", installed: true }] });
+  else if (message.type === "environment.get") reply(socket, message, { requests: { "fixture/demo": { kind: "path", path: "packages/demo" } }, packages: [{ name: "fixture/demo", version: "1.0.0", installed: true }] });
   else if (message.type === "environment.publish") reply(socket, message, message.dryRun ? { accepted: true, preview } : { completed: true, published: { ...preview, url: "https://space.example/fixture/demo/1.0.0" } });
   else reply(socket, message, { completed: true });
 }
@@ -272,6 +272,14 @@ describe("attached packed CLI", () => {
       await run(["package", "add", "fixture/demo", "--path", "packages/demo"]);
       const dry = await run(["package", "publish", "packages/demo", "--dry-run"]);
       assert.match(dry.stdout, /Would publish fixture\/demo@1.0.0/); assert(dry.stdout.includes(registry.url)); assert.match(dry.stdout, /meta.yaml/);
+      assert.equal(registry.script.requests.filter((r: string) => r.startsWith("PUT ")).length, 0);
+      // A folder other than the one the core publishes for that name — the
+      // environment's request by path, else spex-packages/<org>/<pkg> — is
+      // refused before anything is sent (environments-10).
+      const copy = join(folder, "release/demo"); mkdirSync(copy, { recursive: true });
+      writeFileSync(join(copy, "meta.yaml"), readFileSync(join(packageDir, "meta.yaml")));
+      const other = await child(["package", "publish", "release/demo", "--project", folder, "--server", url]).done;
+      assert.equal(other.code, 1); assert.match(other.stderr, /fixture\/demo is published from packages\/demo, not release\/demo/);
       assert.equal(registry.script.requests.filter((r: string) => r.startsWith("PUT ")).length, 0);
       const published = await run(["package", "publish", "packages/demo"]);
       assert.match(published.stdout, /Published fixture\/demo@1.0.0/);

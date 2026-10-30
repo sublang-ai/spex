@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 import { readFileSync } from "node:fs";
-import { join, resolve, isAbsolute, win32 } from "node:path";
+import { join, relative, resolve, isAbsolute, sep, win32 } from "node:path";
 import { AttachedClient, CliFailure, selectEndpoint } from "./attached-client.js";
 import { parseManifestText } from "./lib/environment/index.js";
 
@@ -173,6 +173,17 @@ export async function runAttached(args: string[], env = process.env): Promise<nu
         // The core publishes by name (environments-10): the name the
         // folder's manifest gives, its folder the request's path.
         const name = packageNameAt(join(project.path, positional[0]!));
+        // The core publishes the folder of the environment's request by
+        // path for that name, else `spex-packages/<org>/<pkg>/`
+        // (environments-10): a folder named here that is not that one is
+        // refused before anything is sent, so the upload is the folder named.
+        const environment = await client.command("environment.get", { repository });
+        if (!object(environment?.requests)) malformed();
+        const request = (environment.requests as Record<string, any>)[name];
+        const expected = (request?.kind === "path" && typeof request.path === "string" ? request.path : `spex-packages/${name}`).replace(/\/+$/u, "");
+        const named = relative(project.path, resolve(project.path, positional[0]!)).split(sep).join("/");
+        const normal = (path: string): string => relative(project.path, resolve(project.path, path)).split(sep).join("/");
+        if (normal(expected) !== named) usageError(`${name} is published from ${normal(expected)}, not ${named}. Move the package there, or request it by that path, then publish again.`);
         const result = await client.command("environment.publish", { repository, name, ...(dryRun ? { dryRun: true } : { wait: true }) });
         const receipt = dryRun ? result?.preview : result?.published;
         if ((dryRun ? result?.accepted !== true : result?.completed !== true) || !object(receipt?.instance) || typeof receipt.name !== "string" || typeof receipt.version !== "string" || typeof receipt.instance.origin !== "string") malformed();
