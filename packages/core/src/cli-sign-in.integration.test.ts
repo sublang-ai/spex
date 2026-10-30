@@ -98,6 +98,8 @@ async function printedCode(run: Run, host: StandinHost): Promise<string> {
 const homeFile = (): string => join(HOME, "home.yaml");
 const credentialsFile = (): string => join(HOME, "local", "credentials.yaml");
 const readHome = (): any => parseYaml(readFileSync(homeFile(), "utf8"));
+/** Every request both instances took so far. */
+const hostRequests = (): number => first.script.requests.length + second.script.requests.length;
 const readCredentials = (): any => existsSync(credentialsFile()) ? parseYaml(readFileSync(credentialsFile(), "utf8")) : null;
 const bytesOr = (file: string): string | null => existsSync(file) ? readFileSync(file, "utf8") : null;
 
@@ -127,11 +129,11 @@ test("cli-17, cli-18: login, whoami and logout at two stand-in instances, with n
   assert.equal(help.code, 0);
   for (const command of ["login", "logout", "whoami"]) assert.match(help.stdout, new RegExp(`^  ${command} \\[--space <origin>\\]`, "m"));
 
-  // A fresh home: whoami names its default instance, signed out, and
-  // writes nothing (cli-12).
+  // A fresh home lists no instance: whoami prints none and writes
+  // nothing (cli-12).
   const fresh = await spex(["whoami"]).done;
   assert.equal(fresh.code, 0, fresh.stderr);
-  assert.match(fresh.stdout, /^127\.0\.0\.1:\d+ +signed out +\(default\)$/m);
+  assert.equal(fresh.stdout, "");
   assert.equal(existsSync(HOME), false, "whoami writes no home");
 
   // A refused origin exits 1 with the cause on standard error, nothing
@@ -209,7 +211,9 @@ test("cli-17, cli-18: login, whoami and logout at two stand-in instances, with n
   assert.equal(first.script.liveDevices(), 1, "the former device is revoked");
   assert.equal(readHome().instances[0].origin, first.url, "the default stays");
 
-  // whoami names both, the default marked, no secret (cli-12).
+  // whoami names both, the default marked, no secret, asking no
+  // instance (cli-12).
+  const asked = hostRequests();
   const both = await spex(["whoami"]).done;
   assert.equal(both.code, 0, both.stderr);
   const lines = both.stdout.trimEnd().split("\n");
@@ -220,6 +224,11 @@ test("cli-17, cli-18: login, whoami and logout at two stand-in instances, with n
   const one = await spex(["whoami", "--space", second.url]).done;
   assert.equal(one.code, 0, one.stderr);
   assert.match(one.stdout, /^127\.0\.0\.1:\d+ +Second +bob\n$/);
+  // One the home does not list is printed signed out.
+  const unlistedWho = await spex(["whoami", "--space", "http://127.0.0.1:9"]).done;
+  assert.equal(unlistedWho.code, 0, unlistedWho.stderr);
+  assert.equal(unlistedWho.stdout, "127.0.0.1:9  signed out\n");
+  assert.equal(hostRequests(), asked, "whoami asks no instance");
 
   // logout --space at the second revokes the device there and marks the
   // instance signed out, keeping its entry and the first's (cli-11).
@@ -240,13 +249,10 @@ test("cli-17, cli-18: login, whoami and logout at two stand-in instances, with n
   assert.equal(outAgain.stdout, "Already signed out at Second.\n");
 
   // An instance the home does not list is refused, naming spex whoami
-  // (cli-11); whoami refuses one too (cli-12).
+  // (cli-11).
   const unlisted = await spex(["logout", "--space", "http://127.0.0.1:9"]).done;
   assert.equal(unlisted.code, 1);
   assert.equal(unlisted.stderr, "spex logout: 127.0.0.1:9 is not among this device's Spaces; spex whoami lists them\n");
-  const unlistedWho = await spex(["whoami", "--space", "http://127.0.0.1:9"]).done;
-  assert.equal(unlistedWho.code, 1);
-  assert.match(unlistedWho.stderr, /^spex whoami: 127\.0\.0\.1:9 is not among this device's Spaces/);
 
   // An interrupt while a login waits on a pending code exits 130 with
   // the cause on standard error, nothing recorded (cli-13, cli-18).

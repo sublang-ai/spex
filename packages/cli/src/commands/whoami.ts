@@ -7,29 +7,23 @@
 // signed out, and the default marked — read from `home.yaml` alone,
 // asking no instance and printing no secret.
 
-import { defaultInstanceOf, instanceAt, type HomeInstance } from "../lib/home-file.js";
-import { defaultInstance, homeDir, hostOf, readHome, signedIn, spaceOption } from "./home.js";
-import { options, Refusal, type Command } from "./run.js";
+import { instanceAt, type HomeInstance } from "../lib/home-file.js";
+import { defaultInstance, homeDir, hostOf, namedInstance, readHome, signedIn } from "./home.js";
+import { options, type Command } from "./run.js";
 
 export const whoami: Command = async (args) => {
   const values = options("whoami", args, { space: { type: "string" } });
   const home = readHome(homeDir());
-  const fallback = defaultInstance(home);
-  const defaultOrigin = home ? defaultInstanceOf(home).origin : fallback.origin;
-  // A home listing none still has its default instance, signed out.
-  let shown: HomeInstance[] = home && home.instances.length > 0 ? home.instances : [fallback];
-  if (values.space !== undefined) {
-    const origin = spaceOption(values.space);
-    const entry = home ? instanceAt(home, origin) : undefined;
-    if (!entry && origin !== defaultOrigin) {
-      throw new Refusal(`${hostOf(origin)} is not among this device's Spaces; spex login --space ${origin} signs in there`);
-    }
-    shown = [entry ?? fallback];
-  }
+  // The one named, signed out where the home does not list it.
+  const shown: HomeInstance[] = values.space !== undefined
+    ? [namedInstance(home, values.space)]
+    : home?.instances ?? [];
+  if (shown.length === 0) return;
+  const defaultOrigin = defaultInstance(home).origin;
   const rows = shown.map((entry) => [
     hostOf(entry.origin),
     entry.displayName ?? "",
-    signedIn(entry) ? entry.account?.login ?? "" : "signed out",
+    signedIn(home ? instanceAt(home, entry.origin) : undefined) ? entry.account?.login ?? "" : "signed out",
     entry.origin === defaultOrigin ? "(default)" : "",
   ]);
   // Columns aligned; one no row fills is left out.
