@@ -40,6 +40,7 @@ export async function writeRequest(env: Environment, name: string, request: Requ
         setSpaceIn(doc, env.defaultOrigin());
         doc.setIn(["packages", name], doc.createNode(request));
       });
+      console.log(`Made ${shown(env.root, env.requestsFile)} at ${env.root}, its Space ${env.nameOf(env.defaultOrigin())}.`);
     } else {
       await setRequest(env.requestsFile, name, request);
     }
@@ -110,6 +111,5 @@ export const add: Command = async (args) => {
   const issues = requestIssues(name, request);
   if (issues.length > 0) throw new Refusal(issues.map((issue) => issue.message).join("; "));
   await writeRequest(env, name, request, read === null);
-  if (read === null) console.log(`Made ${shown(env.root, env.requestsFile)} at ${env.root}, its Space ${env.nameOf(env.defaultOrigin())}.`);
   await settleAndTell(env);
 };

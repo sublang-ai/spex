@@ -5,11 +5,12 @@
 import { lint } from "./lint.js";
 import { scaffold } from "./scaffold.js";
 import { ATTACHED_USAGE, runAttached } from "./attached-cli.js";
-import { packageInit } from "./package-init.js";
 import { add } from "./commands/add.js";
 import { install } from "./commands/install.js";
 import { list } from "./commands/list.js";
 import { login } from "./commands/login.js";
+import { newPackage } from "./commands/new.js";
+import { publish } from "./commands/publish.js";
 import { logout } from "./commands/logout.js";
 import { remove } from "./commands/remove.js";
 import { search } from "./commands/search.js";
@@ -28,6 +29,9 @@ Git work tree's top level, else this folder):
   update                                                           Resolve again from spex.yaml and install
   list, ls                                                         Show the requests, the lock, the exports
   search <query>                                                   Search the environment's registry
+  new <org>/<pkg> [--skill <folder>]... [--spec <file>]            Make spex-packages/<org>/<pkg>/, request it by path, install it
+      [--language <tag>] [--description <text>] [--license <id>] [--move]
+  publish [<org>/<pkg>] [--dry-run]                                Publish that package's folder to the environment's Space
 
   scaffold [--update] [--lang <code>] [--agents <names>] [<path>]   Create the specs structure; --update refreshes its templates
   lint [<path>]                                                    Check the specs tree's structure, item IDs and citations
@@ -39,17 +43,12 @@ Agent names: claude, codex, gemini, kimi, opencode, or all
 A Space is named by its origin, e.g. https://spex.sublang.ai; the default is
 the first one signed in to. The home is SPEX_HOME, else ~/.spex.
 
-Package init (made from files at hand, no server):
-  package init <org>/<name> [--skill <folder>]... [--spec <file>]
-               [--language <tag>] [--description <text>] [--license <id>]
-               [--move]
-
 ${ATTACHED_USAGE}`;
 
 /** The commands run with the shared runner (cli-13): exit 0 on success,
  * 1 with the cause on standard error, 130 on an interrupt. */
 const COMMANDS: Record<string, Command> = {
-  add, remove, rm: remove, install, i: install, update, list, ls: list, search,
+  add, remove, rm: remove, install, i: install, update, list, ls: list, search, new: newPackage, publish,
   login, logout, whoami,
 };
 
@@ -63,13 +62,6 @@ async function main(): Promise<void> {
   if (!command || command === "--help" || command === "-h") {
     console.log(USAGE);
     process.exit(0);
-  }
-
-  // Made from files at hand, before any attached routing: it never
-  // opens a connection (attached-cli-12).
-  if (command === "package" && args[1] === "init") {
-    process.exitCode = packageInit(args.slice(2));
-    return;
   }
 
   if (["auth", "project", "package", "--server", "--timeout"].includes(command) || command.startsWith("--server=") || command.startsWith("--timeout=")) {
