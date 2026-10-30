@@ -8,6 +8,7 @@
 Accepted (2026-10-23) on the owner's direction to make merging timely while several people land work on `main` at once.
 Extends [DR-086](086-tests-in-tiers.md) in the CI check tier: the check is the gate every merge into `main` passes through, run once per pull-request head.
 Extended by [DR-149](149-the-privileged-lane-runs-on-ci.md): the hub's privileged lane runs beside the checks on CI and is no required check.
+Amended by [DR-166](166-pull-requests-run-without-macos.md) in the pull request's matrix: no macOS job on a pull request, and documentation alone runs the spec gates and not the suites.
 
 ## Context
 

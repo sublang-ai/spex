@@ -24,7 +24,58 @@ env:
   ELECTRON_SKIP_BINARY_DOWNLOAD: 1
 
 jobs:
+  # What a pull request changed (release-34, DR-166): documentation
+  # alone -- docs/, specs/ and Markdown -- keeps the spec gates here,
+  # the CLI's own tests and the spec lint, and the suites below are
+  # skipped and report skipped; any other change runs them. A push to
+  # main and the nightly run run everything. This job is a required
+  # check, so a failure here blocks the merge rather than skipping the
+  # suites past it.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      docs-only: ${{ steps.classify.outputs.docs-only }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: classify
+        shell: bash
+        run: |
+          docs_only=false
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            changed="$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")"
+            if [ -n "$changed" ]; then
+              docs_only=true
+              while IFS= read -r file; do
+                case "$file" in
+                  docs/*|specs/*|*.md) ;;
+                  *) docs_only=false ;;
+                esac
+              done <<< "$changed"
+            fi
+          fi
+          echo "docs-only=$docs_only" >> "$GITHUB_OUTPUT"
+          echo "docs-only=$docs_only"
+
+      - uses: actions/setup-node@v4
+        if: steps.classify.outputs.docs-only == 'true'
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Documentation alone keeps the spec gates
+        if: steps.classify.outputs.docs-only == 'true'
+        run: |
+          npm ci
+          npm run build -w packages/cli
+          npm test -w packages/cli
+          node packages/cli/dist/cli.js lint
+
   test:
+    needs: changes
+    if: needs.changes.result == 'success' && needs.changes.outputs.docs-only != 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -34,10 +85,11 @@ jobs:
         node-version: [22, 24]
         # Windows keeps the single Node whose better-sqlite3 win32 prebuild
         # the lockfile is known to resolve: a source build there trips
-        # node-gyp's VS detection. A pull request also keeps one macOS
-        # smoke job, Node 22; main and the nightly run take the full
-        # matrix (release-34, DR-145).
-        exclude: ${{ github.event_name == 'pull_request' && fromJSON('[{"os":"windows-latest","node-version":24},{"os":"macos-latest","node-version":24}]') || fromJSON('[{"os":"windows-latest","node-version":24}]') }}
+        # node-gyp's VS detection. A pull request runs Linux and Windows
+        # alone -- the macOS test job took an hour, twice the Linux one;
+        # main and the nightly run take the full matrix (release-34,
+        # DR-145, DR-166).
+        exclude: ${{ github.event_name == 'pull_request' && fromJSON('[{"os":"windows-latest","node-version":24},{"os":"macos-latest","node-version":22},{"os":"macos-latest","node-version":24}]') || fromJSON('[{"os":"windows-latest","node-version":24}]') }}
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -76,6 +128,8 @@ jobs:
   # the desktop's platform — the fit journeys measure real fonts, which
   # differ between the two (DR-086).
   journeys:
+    needs: changes
+    if: needs.changes.result == 'success' && needs.changes.outputs.docs-only != 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -141,6 +195,8 @@ jobs:
           retention-days: 7
 
   desktop-browser:
+    needs: changes
+    if: needs.changes.result == 'success' && needs.changes.outputs.docs-only != 'true'
     strategy:
       fail-fast: false
       matrix:

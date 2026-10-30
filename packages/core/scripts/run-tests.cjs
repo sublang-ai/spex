@@ -16,7 +16,10 @@ const regex = new RegExp(pattern);
 const root = join(__dirname, "..");
 // Real-core cases also spawn Git; bound file workers to limit
 // subprocess contention, keeping Node's default on 1/2-CPU hosts.
-const concurrency = Math.min(2, Math.max(1, availableParallelism() - 1));
+// Three files at once at most: the suites use scratch homes and free
+// ports, the CI runners have four cores, and a fourth file slowed
+// the whole run on a loaded runner more than it saved (DR-166).
+const concurrency = Math.min(3, Math.max(1, availableParallelism() - 1));
 
 function collect(dir) {
   const out = [];
