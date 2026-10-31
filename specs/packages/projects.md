@@ -76,13 +76,13 @@ When the core clones a project's code from the remote its `project.json` names [
 
 #### projects-4
 
-While a project is the workspace's current project, the Overview tab shall show the project's ledger group — History, Now, Up next, and Sources exactly as the Dashboard draws it for that project [[dashboard-26](dashboard.md#dashboard-26)], with no project filter — under a repository header carrying the fields below ([DR-038](../decisions/038-history-is-done-work.md)):
+While a project is the workspace's current project, the Overview tab shall show the project's ledger group — History, Now, Up next, and Sources exactly as the Dashboard draws it for that project [[dashboard-26](dashboard.md#dashboard-26)], with no project filter — under a repository header carrying the fields below ([DR-038](../decisions/038-history-is-done-work.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)):
 
 | Field | Content |
 | --- | --- |
 | name | the project name |
 | path | the absolute repository path |
-| records | the spex repository's name with its group, and its state [[space-61](space.md#space-61)] |
+| records | "Records · ⟨group⟩ · ⟨standing⟩": the group holding the project's records — "Personal" for the person's own, left out while they are in none — and their standing [[space-61](space.md#space-61)], naming no spex repository |
 | branch | the current branch name, or a detached-HEAD indicator |
 | dirty | an indicator shown while the work tree has uncommitted changes, and hidden while it is clean |
 | ahead/behind | commit counts relative to the upstream branch, hidden while no upstream is configured |
@@ -106,14 +106,14 @@ Where a project is bound to a GitHub repository, while the gh CLI is installed a
 
 #### projects-7
 
-Where a project has no GitHub binding, or the gh CLI is not installed or not authenticated, the forge panel shall show setup guidance naming the specific unmet condition instead of issue and pull-request lists:
+Where a project has no GitHub binding, or the gh CLI is not installed or not authenticated, the forge panel shall show setup guidance naming the specific unmet condition instead of issue and pull-request lists ([DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)):
 
 | Unmet condition | Guidance |
 | --- | --- |
 | no `origin` remote | "No GitHub origin remote. Add one (git remote add origin …) to see issues and PRs." |
-| an unbound `origin` remote under the reported Git origin [[git-host-5](git-host.md#git-host-5)] of the project's instance — its spex repository's [[storage-31](storage.md#storage-31)], or the home's default instance [[storage-2](storage.md#storage-2)] where it has none | "Issues and PRs come from GitHub; this project's code is on this instance." |
-| any other unbound `origin` remote while the home's default instance or an instance it lists has not reported its Git origin [[git-host-5](git-host.md#git-host-5)], or under another instance's reported Git origin | "Issues and PRs come from GitHub; this project's code is on a remote." |
-| any other `origin` remote not on GitHub | "Issues and PRs come from GitHub; this project's origin is at ⟨host⟩.", ⟨host⟩ being the remote's host name in its URL or scp-like form, or a local remote as written, and never a credential its URL carries |
+| an unbound `origin` remote under the reported Git origin [[git-host-5](git-host.md#git-host-5)] of the project's instance — its spex repository's [[storage-31](storage.md#storage-31)], or the home's default instance [[storage-2](storage.md#storage-2)] where it has none | "Issues and PRs come from GitHub · Code: ⟨Space⟩", ⟨Space⟩ being that instance's display name |
+| any other unbound `origin` remote while the home's default instance or an instance it lists has not reported its Git origin [[git-host-5](git-host.md#git-host-5)], or under another instance's reported Git origin | "Issues and PRs come from GitHub" |
+| any other `origin` remote not on GitHub | "Issues and PRs come from GitHub · Code: ⟨host⟩", ⟨host⟩ being the remote's host name in its URL or scp-like form, or a local remote as written, and never a credential its URL carries |
 | gh not installed | names that gh is not installed |
 | gh not authenticated | names that gh is not authenticated |
 
@@ -129,9 +129,9 @@ When the user picks a project from the palette or opens one of its sessions from
 
 #### projects-9
 
-When the user confirms removal in the Overview tab, the workspace shall forget the working folder, delete its spex repository's clone and clear it from the sidebar, leaving the working folder, its files — its `spex.yaml` and `spex.lock` among them, the code's own [[environments-26](environments.md#environments-26)] — and its git state on disk unmodified apart from the exported skills Spex removes with their exclude entries [[environments-8](environments.md#environments-8)], and nothing at any instance changed ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
+When the user confirms removal in the Overview tab, the workspace shall forget the working folder, delete its spex repository's clone and clear it from the sidebar, leaving the working folder, its files — its `spex.yaml` and `spex.lock` among them, the code's own [[environments-26](environments.md#environments-26)] — and its git state on disk unmodified apart from the exported skills Spex removes with their exclude entries [[environments-8](environments.md#environments-8)], and nothing at any instance changed ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)):
 
-- While anything in the clone has reached no placement — a local-only spex repository, or a unit no placement's `spex` holds, as the clone last fetched or pushed it or at their last shared commit [[space-12](space.md#space-12)] — the confirm says what would be lost and asks a second confirmation naming the count.
+- While anything in the clone has reached no placement — a local-only spex repository, or a unit no placement's `spex` holds, as the clone last fetched or pushed it or at their last shared commit [[space-12](space.md#space-12)] — a second confirmation reads "⟨count⟩ records never reached a Space. Remove anyway?", counting those units.
 
 - While a session of the project has a turn in flight, the Overview tab disables removal, stating that the running turn must finish or be aborted first ([DR-051](../decisions/051-runtime-held-for-a-turn.md)).
 - Removal confirms inline with Remove and Keep ([DR-010](../decisions/010-interface-craft.md) §4); Keep returns focus to the Remove control, and a completed removal moves focus to the sidebar's Dashboard entry — never to the page body.
@@ -313,11 +313,11 @@ Where a real core on a scratch home is signed in to two stand-in instances over 
 
 #### projects-21
 
-Where a fixture repository is registered with a local-only spex repository holding one session, when the project is removed — the first confirm answered, the second naming the units that never reached a host, the session among them — and the core service is restarted, the test suite shall assert that no project card or pair for it remains, the clone is gone [[projects-10](#projects-10)], and the repository directory's files, its `spex.yaml` and `spex.lock` at its root among them, and git state are identical to their state before removal [[projects-9](#projects-9)]; and that a project whose clone has reached the stand-in host is removed on the first confirm alone.
+Where a fixture repository is registered with a local-only spex repository holding one session, when the project is removed — the first confirm answered, the second counting the session among the records that never reached a Space — and the core service is restarted, the test suite shall assert that no project card or pair for it remains, the clone is gone [[projects-10](#projects-10)], and the repository directory's files, its `spex.yaml` and `spex.lock` at its root among them, and git state are identical to their state before removal [[projects-9](#projects-9)]; and that a project whose clone has reached the stand-in host is removed on the first confirm alone.
 
 #### projects-40
 
-Where a fixture repository is registered with a spex repository placed at two stand-in instances, when the project is removed once with every unit held by one placement or the other and once with a unit neither holds, the test suite shall assert that the first is removed on the first confirm alone and that the second asks the second confirmation naming that one unit [[projects-9](#projects-9)].
+Where a fixture repository is registered with a spex repository placed at two stand-in instances, when the project is removed once with every unit held by one placement or the other and once with a unit neither holds, the test suite shall assert that the first is removed on the first confirm alone and that the second asks the second confirmation, which reads that 1 record never reached a Space [[projects-9](#projects-9)].
 
 #### projects-33
 
@@ -351,8 +351,8 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 - creating with scaffolding from a Chinese browser against an English core produces a Chinese spec tree and authoring-language declaration through the real bundled scaffold [[projects-3](#projects-3)] [[projects-31](#projects-31)];
 - confirming a path that is no git work tree shows the guidance and registers nothing [[projects-1](#projects-1)];
 - confirming an existing repository's path adds it and makes it current, its root holding `spex.yaml` and `spex.lock` afterwards, and confirming the same path again switches to it without a duplicate [[projects-1](#projects-1)] [[projects-2](#projects-2)];
-- the Overview tab shows the repository's branch and, for a project with no `origin` remote, the setup guidance naming that condition in GitHub terms [[projects-4](#projects-4)] [[projects-7](#projects-7)] [[projects-25](#projects-25)];
-- confirming removal in the Overview forgets the project, clears it from the sidebar, and leaves the directory in place [[projects-9](#projects-9)];
+- the Overview tab shows the repository's branch, a records line reading "Records" with its standing and no `-spex` name [[projects-4](#projects-4)], and, for a project with no `origin` remote, the setup guidance naming that condition in GitHub terms [[projects-4](#projects-4)] [[projects-7](#projects-7)] [[projects-25](#projects-25)];
+- confirming removal in the Overview, its second confirmation reading "⟨count⟩ records never reached a Space. Remove anyway?", forgets the project, clears it from the sidebar, and leaves the directory in place [[projects-9](#projects-9)];
 - in a 400-pixel-tall window, a path the palette refuses shows its message inside the window, the palette's own box ending inside it [[projects-30](#projects-30)].
 
 ## References

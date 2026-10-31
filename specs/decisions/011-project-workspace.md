@@ -17,6 +17,7 @@ The project bar, the Captain home's session list, and the live-sessions-only tab
 The Dashboard content row is amended by [DR-035](035-intent-ledger.md) — the intent ledger replaced running sessions, work lists, and usage; the taxonomy row below is rewritten.
 The Repo tab is amended by [DR-038](038-history-is-done-work.md) — it becomes the project's Overview, the ledger group under the repository header.
 Amended by [DR-057](057-space-surface.md): the Workspace nav entry and sidebar section read Projects, and the taxonomy gains the Space surface.
+Amended by [DR-172](172-surfaces-a-fresh-user-reads.md) in the rail and the workspace's tabs.
 
 ## Context
 

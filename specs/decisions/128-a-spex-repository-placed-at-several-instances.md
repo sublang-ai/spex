@@ -18,6 +18,7 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 - [DR-125](125-your-own-groups-path-sources-live-in-its-clone.md) in Spex's own paths: `placements/` joins them.
 Amended by [DR-132](132-team-servers.md) in placing your own group at every instance: not on a seat.
 Amended by [DR-159](159-projects-in-groups-opened-where-you-work.md) in its presentation alone: a placement's line, "Place at…", "Leave…" and Attach move behind one overflow control per row, their meanings standing.
+Amended by [DR-172](172-surfaces-a-fresh-user-reads.md) in the acts offered.
 
 ## Context
 

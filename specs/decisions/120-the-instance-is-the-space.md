@@ -18,6 +18,7 @@ Amended by [DR-128](128-a-spex-repository-placed-at-several-instances.md) in its
 Amended by [DR-159](159-projects-in-groups-opened-where-you-work.md) in the groups list's headings: your namespace heads nothing while it lists only your own group's repository; another account's login heads "Shared by @<login>"; the servers of a space stand under their group.
 
 Amended by [DR-171](171-personal-names-are-space-logins.md) in member presentation: a member is labelled by Space login alone.
+Amended by [DR-172](172-surfaces-a-fresh-user-reads.md) in the headings, the rows and the acts offered.
 
 ## Context
 

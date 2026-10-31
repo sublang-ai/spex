@@ -10,6 +10,7 @@ Extends [DR-104](104-spec-package-format-and-client-environments.md) in the publ
 Amended by [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) in where a package is published from: by its name, from `spex-packages/<org>/<name>/`.
 
 Amended by [DR-168](168-independent-package-registry.md) for independent registry selection, account authority and credentials; Space collaboration and server admission remain unchanged.
+Amended by [DR-172](172-surfaces-a-fresh-user-reads.md) in where Publish stands.
 
 ## Context
 

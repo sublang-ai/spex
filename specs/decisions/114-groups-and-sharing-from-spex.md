@@ -12,6 +12,7 @@ Amended by [DR-118](118-the-host-page-a-first-group-is-made-on.md) in "where the
 Amended by [DR-120](120-the-instance-is-the-space.md) in its amendment of [DR-064](064-honest-remote-failure.md) and in "Everything else stays on the Git host … reached through the "Open at <host>" link a members panel keeps": no door to the host's pages stands anywhere; renaming a group, deleting an empty group and moving a spex repository to another group are done in Spex; roles, visibility, archive and group transfer are not offered; where membership decides, a failure names Share, or a member who may share, in Spex.
 Amended by [DR-127](127-a-home-signed-in-to-several-instances.md) in "New group" at the head of the groups list: at the head of each instance's groups, a root group made at that instance.
 Amended by [DR-128](128-a-spex-repository-placed-at-several-instances.md) in a spex repository's Members, Share and removing a member: each acts on one placement at its instance.
+Amended by [DR-172](172-surfaces-a-fresh-user-reads.md) in the headings, the rows and the acts offered.
 
 ## Context
 
