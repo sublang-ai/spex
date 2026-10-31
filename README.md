@@ -182,12 +182,12 @@ terminal, with no app running.
 **Optional project-record sharing.** Sign in on **Space** when you want
 to sync records with a group. The default is [Spex Space](https://spex.sublang.ai) unless
 `SPEX_HOST_URL` names another when the home is first created. The desktop
-opens the instance's sign-in page in your browser; the server shell links
-to the browser approval page. Spex then puts your own group's spex repository on
-the host, and a project's once you pick a group for it; the host's
-members of each spex repository see its records. Git receives the host's
-credential through Spex's own credential helper, run on the app's own
-runtime, never through a remote URL, and the device's token stays in
+opens the Space's sign-in page in your browser; the server shell links
+to the browser approval page. Spex then syncs your Personal records to
+the Space, and a project's records once you add it to a group; a
+group's members see its records. Git gets the Space's credential
+through Spex's own credential helper, run on the app's own runtime,
+never through a remote URL, and this computer's sign-in stays in
 `local/credentials.yaml`, readable by you alone
 ([git-host](specs/packages/git-host.md),
 [DR-103](specs/decisions/103-the-home-and-its-groups.md)).
@@ -197,7 +197,7 @@ App releases on [GitHub Releases](https://github.com/sublang-ai/spex/releases)
 the commands above. The clone commands above follow current `main`;
 release tags keep their tagged behavior. In particular,
 `app-v0.9.0-beta.16` predates the current Space address default, so check
-the instance address before signing in. Existing homes keep their saved
+the Space's address before signing in. Existing homes keep their saved
 addresses.
 
 To use Spex from another machine, run the server shell instead. It serves

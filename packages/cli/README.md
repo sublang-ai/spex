@@ -61,7 +61,7 @@ open the address it prints and enter the code it shows. `spex new`
 starts `spex-packages/my-org/my-skill/` from the skill, adds it to
 `spex.yaml` and installs it. `--move` moves the skill into the package,
 and Spex places it back in `.claude/skills/` for your agent. The dry run
-shows the registry, the version and the files, and uploads nothing.
+shows the registry, the version and the files, and publishes nothing.
 Publishing needs an org that is yours at that registry.
 
 ## spex.yaml and spex.lock
@@ -163,15 +163,15 @@ installed version.
 | Command | What it does |
 | --- | --- |
 | `spex login [--registry <url> \| --space <url>]` | Sign in with a code in your browser |
-| `spex logout` | Sign out at this folder's registry, or at the one given |
-| `spex whoami` | Who you are signed in as at the registry and at each Space |
+| `spex logout [--registry <url> \| --space <url>]` | Sign out |
+| `spex whoami [--registry <url> \| --space <url>]` | Who you are signed in as, and where |
 
 ### Specs
 
 | Command | What it does |
 | --- | --- |
-| `spex scaffold` | Create `specs/` with its templates, and point your agents at it |
-| `spex lint` | Check `specs/` for structure, item IDs and citations |
+| `spex scaffold [<path> \| --update]` | Start `specs/` and point your agents at it |
+| `spex lint [<path>]` | Check `specs/` for structure, IDs and citations |
 
 [Scaffolding specs](#scaffolding-specs) and [Linting](#linting) describe
 them in full.
@@ -182,8 +182,9 @@ them in full.
   that is no prerelease, as `^<version>`; `@<version>` adds the one you
   write. `--path` adds a folder in this project instead, read in place.
   A malformed name or version, a version and `--path` together, a folder
-  outside this project, and a package the registry does not list to you
-  are each refused before anything is written.
+  outside this project or holding no `meta.yaml` of that package, and a
+  package the registry does not list to you are each refused before
+  anything is written.
 - `spex remove` drops a package you added, with what only it needed,
   and refuses one `spex.yaml` does not list. The built-in playbooks
   cannot be removed: "sublang/playbooks comes with Spex".
@@ -192,8 +193,11 @@ them in full.
 - `spex list` heads with the folder and the registry, then lists what
   is **Added** to `spex.yaml`, what is **Installed** with its version
   and source — from the registry, from a folder, from Git or built in —
-  and the **Skills for agents** with the folders each is placed in. In a
-  folder with no packages, it says so and names `spex add`.
+  and the **Skills for agents** with the folders each is placed in. A
+  last line says what to do: `Not installed yet — spex install` after a
+  clone, or what changed with `spex update` once `spex.yaml` or a folder
+  package changed. In a folder with no packages, it says so and names
+  `spex add`.
 
 ### `spex new`
 
@@ -211,7 +215,8 @@ them in full.
   "MIT License", else `Apache-2.0`. The folder's `LICENSE` is copied in.
 - `--move` moves the skill folders instead of copying them. A skill moved
   out of `.claude/skills/` comes back there, placed by Spex. Without
-  `--move`, your own folder stays, and Spex leaves it alone.
+  `--move`, your own folder stays and Spex leaves it alone; the skill's
+  line reads `not .claude/skills (yours is there)`.
 - Every rule is checked before anything is written. A refusal writes
   nothing.
 
@@ -227,9 +232,9 @@ them in full.
   `https://spex.sublang.ai/account/orgs`. A Space group gives you no
   org.
 - `meta.yaml` needs a `description` and a `license`.
-- `--dry-run` prints the registry, `<org>/<pkg>@<version>` and the
-  files, and uploads nothing. A publish prints the package's page at the
-  registry.
+- `--dry-run` prints `Publishing <org>/<pkg>@<version> to <registry>`
+  and the files, and publishes nothing. A publish prints the same first
+  line, then the package's page at the registry.
 - A release never changes. Raise `version` in `meta.yaml` before you
   publish again.
 
@@ -304,7 +309,7 @@ spex.lock is from a newer Spex — update Spex
 ```
 
 An interrupted install leaves the last installed files and `spex.lock`
-in place. An interrupted publish cannot take back an upload the registry
+in place. An interrupted publish cannot take back a release the registry
 already accepted.
 
 ## Limits

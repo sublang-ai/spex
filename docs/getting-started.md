@@ -195,7 +195,7 @@ npx @sublang/spex publish my-org/my-skill
 ```
 
 The dry run shows the registry, the name, the version and the files, and
-uploads nothing. The publish prints the package's page at the registry.
+publishes nothing. The publish prints the package's page at the registry.
 
 Or publish from the IDE. A folder `spex new` made is already on the
 **Packages** tab. For one you made another way, choose **Add… → Folder**
@@ -203,7 +203,7 @@ and pick `spex-packages/<org>/<name>`; Spex reads its name and version
 from its `meta.yaml`. Open the package row's overflow and choose
 **Publish**, which reads **Sign in to publish** while you are signed out.
 Review "Publish ⟨org⟩/⟨name⟩ ⟨version⟩ to Spex Space", the files it will
-upload and the account, then confirm **Publish**. No playbook, compile or
+publish and the account, then confirm **Publish**. No playbook, compile or
 API token is needed.
 
 ### Publish a playbook
@@ -225,7 +225,7 @@ API token is needed.
    package** opens its row on the **Packages** tab.
 
 Only what `meta.yaml` declares is published; your project and its
-`specs/` directory are not uploaded. Keep the package folder with your
+`specs/` directory are not. Keep the package folder with your
 code. Another project finds a public release through **Add…** on its
 **Packages** tab, then enables its playbooks or uses its skills. The
 [HTTP publishing guide](https://spex.sublang.ai/llms.txt) serves
