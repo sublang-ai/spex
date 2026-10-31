@@ -369,11 +369,25 @@ and `npm start` (desktop) or `npm run start:server` (server).
   `spex.lock` and the ignored `.spex/` installation. A project's root is
   its working folder; your own group's is its records clone. The CLI and
   app read the same files at each use, and the app prepares installed
-  playbooks for its engine. The app migrates former clone-relative
-  installs on the next installation. The CLI's attached `auth`, `project`
+  playbooks for its engine. The CLI's attached `auth`, `project`
   and `package` commands, `--server`, `SPEX_SERVER_URL` and endpoint
   discovery are removed in CLI 5.0.0; `spex new` replaces
   `spex package init` ([DR-165](specs/decisions/165-one-package-manager-hosted-by-the-cli-and-the-app.md)).
+- An environment command sent with `wait: true` replies once its own
+  operation settles: a publish with its actual destination, name,
+  version and page, a refusal with its error. A client that disconnects
+  ends the delivery alone; the core neither replays nor cancels the
+  work. Every other reply is unchanged.
+- A project's complete environment lives in its working folder:
+  `spex.yaml`, `spex.lock` and the ignored `.spex/` installation. The IDE
+  and standalone CLI use those same files. Existing environments move
+  out of project-record clones at startup or pairing while preserving
+  working-folder files, registry selection and locked sources. Interrupted
+  moves resume from a recorded plan without losing package pins; a changed
+  file stays untouched and its environment's package operations wait for
+  recovery. `space` binds collaboration
+  independently of `registry`; old manifests without `registry` retain
+  their former package destination until explicitly migrated.
 - On Playbooks, **Add from registry**, **Add from folder** and **Add from
   Git** stand directly beneath the environment's list of spec packages,
   above the playbooks, instead of at the page's foot. The environment's
@@ -840,6 +854,14 @@ and `npm start` (desktop) or `npm run start:server` (server).
 - Skills and specs your environments install reach every agent Spex drives ([DR-124](specs/decisions/124-skills-reach-every-agent.md)): beside Claude Code's `.claude/skills`, each working folder's `.agents/skills` holds them for Codex, Gemini CLI, Kimi Code and OpenCode, kept out of Git like the other, and your own group's go to `~/.agents/skills` where one of those agents is installed. A playbook's generated skill stays in Claude Code's folders. A re-export leaves an unchanged skill as it stands and swaps a changed one in whole, and generated and aliased names are written as YAML strings.
 - A working folder paired with a project whose environment is already installed gets its skills, specs and playbooks at once, not at the next start, sync or environment command. The Playbooks surface lists what the last export left out under "Not exported": a skill kept out of an agent folder that already holds a folder of yours by that name, named with that folder, and a spec package whose files are not on this device; "Export again" exports once you have moved your folder or brought the files.
 - Your own group's environment requests a spec package by a path in its clone ([DR-125](specs/decisions/125-your-own-groups-path-sources-live-in-its-clone.md)): keep an unpublished skill, spec or playbook of your own in a folder of your own group's spex repository, request it by that path, and edit it in place; the sync carries the folder, as one unit, to every device, where it exports to your agents. A path under Spex's own folders, however it is cased, one the sync rules drop, one reached through a link, and a folder in or holding a Git repository of its own, or holding a link or a file the sync would drop or refuse to share, are refused before anything is written, and again at each resolution and install, so a file added later fails the next install on the device holding it, the last exports standing; a release holding a `uv.lock`, `Cargo.lock` or `*.tmp`, which the sync rules drop anywhere, cannot live there. Explore reads such a folder as a spec package. "Add from folder" on your own group's side asks for a folder inside its clone, and `environment.get` names that folder as `pathRoot`. A request your own group made by a path in a paired working folder reads as missing until its folder moves into the clone. A project's and another group's paths stay relative to the working folder.
+
+### Removed
+
+- The core no longer keeps `local/endpoint.json` in the home, and its
+  hello names the protocol version alone, without the attached CLI's
+  marker ([DR-165](specs/decisions/165-one-package-manager-hosted-by-the-cli-and-the-app.md)).
+  The `spex` CLI 5.0 needs no running app; the attached commands of CLI
+  4.1 and 4.2 no longer connect to this app.
 
 ### Fixed
 

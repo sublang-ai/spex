@@ -2,13 +2,13 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { readFileSync, mkdirSync, writeFileSync, rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { fileCredentialStore, GitHostClient } from "@sublang/spex/git-host";
-import { PUBLIC_REGISTRY_ORIGIN, publishRelease, RegistryClient, parseLock, requestsDigest } from "@sublang/spex/environment";
+import { PUBLIC_REGISTRY_ORIGIN, publishRelease, RegistryClient, parseLock, parseRequests, requestsDigest } from "@sublang/spex/environment";
 import { makeRelease, startStandinRegistry } from "@sublang/spex/testing";
 import { holdingFetch, samePair } from "./testing/holding-fetch.js";
-import { createSpaceHarness, instanceOf, ownClone, clonePath } from "./testing/space-harness.js";
+import { createSpaceHarness, instanceOf, ownClone, environmentRoot, clonePath, hostKey, rowsOf } from "./testing/space-harness.js";
 
 const harness = createSpaceHarness();
 test.after(() => harness.dispose());
@@ -161,6 +161,39 @@ packages: {} # Preserve the package map comment.
   assert.deepEqual(readFileSync(join(folder, "spex.lock")), lock);
 });
 
+test("core-service-144/environments-26: project registry selection edits its working root alone and refuses a project with no root", { timeout: 90_000 }, async (t) => {
+  const host = await harness.startHost();host.script.deviceInterval = 0;
+  const home = await harness.startHome("registry-project-root", { host, project: false });t.after(() => home.stop());
+  await harness.signIn(home, host);
+  const folder = harness.gitFolder("registry-project-root");
+  const project = await harness.addFolder(home, folder);
+  const root = environmentRoot(home.dataDir, project.key);
+  assert.equal(root, folder);
+  const lock = readFileSync(join(root, "spex.lock"));
+  const before = parseRequests(readFileSync(join(root, "spex.yaml"), "utf8"));
+  const chosen = "https://packages.example";
+  const state = await home.client.expectOk("environment.registry.set", { repository: project.key, origin: chosen });
+  assert.deepEqual(state.registry, { origin: chosen, legacy: false });
+  assert.equal(state.pathRoot, folder);
+  const requests = parseRequests(readFileSync(join(root, "spex.yaml"), "utf8"));
+  assert.equal(requests.registry, chosen);
+  assert.equal(requests.space, before.space);
+  assert.deepEqual(readFileSync(join(root, "spex.lock")), lock, "selecting a registry leaves the exact working-root lock unchanged");
+  for (const file of ["spex.yaml", "spex.lock"]) assert.equal(existsSync(join(project.clone, file)), false, `${file} is absent from the records clone`);
+
+  const bare = host.script.addRepository({ group: "acme", name: "unpaired-registry-spex" });
+  const key = hostKey(host, "acme/unpaired-registry-spex");
+  let mark = home.client.mark();
+  await home.client.expectOk("space.refresh", {});
+  await home.client.waitSpace(mark, (value) => rowsOf(value).some((row) => row.key === key), 30_000);
+  mark = home.client.mark();
+  await home.client.expectOk("space.join", { instance: host.url, hostId: bare.id });
+  await home.client.waitRepository(mark, key, (row) => row.state === "reachable" && row.sync.phase === "idle" && row.folder === null, 30_000);
+  const refused = await home.client.command("environment.registry.set", { repository: key, origin: chosen });
+  assert.equal(refused.ok, false);if (!refused.ok) assert.equal(refused.error.code, "not_found");
+  for (const file of ["spex.yaml", "spex.lock"]) assert.equal(existsSync(join(clonePath(home.dataDir, key), file)), false, `refused selection creates no ${file} in the bare clone`);
+});
+
 
 test("core-service-144: cancellation during a registry device start leaves no grant and does not cancel the next sign-in", { timeout: 60_000 }, async (t) => {
   const host = await harness.startHost({ displayName: "Registry" });host.script.deviceInterval = 0;
@@ -190,22 +223,24 @@ test("space-118: placement changes only the Space binding and a current lock dig
     const folder = harness.gitFolder(name);
     const project = await harness.addFolder(home, folder);
     await home.client.expectOk("environment.resolve", { repository: project.key, wait: true });
-    const lockPath = join(project.clone, "spex.lock");
+    const root = environmentRoot(home.dataDir, project.key);
+    const lockPath = join(root, "spex.lock");
     const pins = parseLock(readFileSync(lockPath, "utf8")).packages;
     if (condition === "stale") writeFileSync(lockPath, readFileSync(lockPath, "utf8").replace(/^requests: .+$/m, `requests: ${"f".repeat(64)}`));
     if (condition === "malformed") writeFileSync(lockPath, "format: 99\n");
     const lockedText = readFileSync(lockPath, "utf8");
-    const requested = readFileSync(join(project.clone, "spex.yaml"), "utf8");
+    const requested = readFileSync(join(root, "spex.yaml"), "utf8");
     assert.match(requested, /^registry: https:\/\/spex.sublang.ai$/m);
     const from = home.client.messages.length;
     await home.client.expectOk("space.pick", { repository: project.key, choice: { kind: "create", instance: second.url, groupId: "2002", name } });
     const message = await home.client.waitFor((entry) => home.client.messages.indexOf(entry) >= from && entry.type === "environment.state" && entry.state.pathRoot === folder && entry.state.instance === second.url);
     assert.equal(message.type, "environment.state");if (message.type !== "environment.state") throw new Error("Expected the placed environment");
     assert.deepEqual(message.state.registry, { origin: PUBLIC_REGISTRY_ORIGIN, legacy: false });
-    const placedClone = clonePath(home.dataDir, message.state.repository);
-    const nextRequests = readFileSync(join(placedClone, "spex.yaml"), "utf8");
+    const placedRoot = environmentRoot(home.dataDir, message.state.repository);
+    assert.equal(placedRoot, root, "placement leaves the environment in its working folder");
+    const nextRequests = readFileSync(join(placedRoot, "spex.yaml"), "utf8");
     assert.match(nextRequests, new RegExp(`^space: ${second.url.replaceAll(".", "\\.")}$`, "m"));
-    const nextLockedText = readFileSync(join(placedClone, "spex.lock"), "utf8");
+    const nextLockedText = readFileSync(join(placedRoot, "spex.lock"), "utf8");
     if (condition === "malformed") { assert.equal(nextLockedText, lockedText); assert.ok(message.state.error); continue; }
     const locked = parseLock(lockedText);
     const nextLock = parseLock(nextLockedText);

@@ -3308,3 +3308,8 @@ msgstr "你自己的群组的环境只能按路径请求其克隆内的规约包
 #: src/space-git.ts
 msgid "Your saved commits remain on this device. Address the content limit, then Retry."
 msgstr "已保存的提交仍保留在此设备上。请先解决内容大小限制问题，然后重试。"
+
+#. Package operation refused while its manifest and lock migration needs recovery
+#: src/environments.ts
+msgid "Environment migration is incomplete; restore the original or planned files and restart to recover."
+msgstr "环境迁移尚未完成；请恢复原始或计划的文件，然后重新启动以恢复迁移。"

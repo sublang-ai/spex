@@ -44,7 +44,7 @@ import {
 import type { EnvironmentState, GroupsState, RepositoryState } from "./protocol.js";
 import { credentialsPath, fileCredentialStore, GitHostClient, type StoredCredential } from "@sublang/spex/git-host";
 import { holdingFetch } from "./testing/holding-fetch.js";
-import { clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, ownClone, rowsOf, remoteNamesOf } from "./testing/space-harness.js";
+import { clonePath, createSpaceHarness, environmentRoot, hostFolder, hostKey, instanceOf, ownClone, rowsOf, remoteNamesOf } from "./testing/space-harness.js";
 import type { StandinHost } from "./testing/standin-host.js";
 import { makeRelease, startStandinRegistry, type StandinRegistry, type StandinRegistryRequest } from "@sublang/spex/testing";
 
@@ -70,15 +70,16 @@ async function addFolder(home: Home, path: string) {
   const added = await fixture.addFolder(home, path);
   // Restore a pre-migration project snapshot after allocating its real key.
   // Precreating its directory would make registration allocate another key.
-  const yaml = join(added.clone, "spex.yaml");
+  const root = environmentRoot(home.dataDir, added.key);
+  const yaml = join(root, "spex.yaml");
   const doc = parseDocument(readFileSync(yaml, "utf8"));
   doc.delete("registry");
   const text = doc.toString({ lineWidth: 0 });
-  const lock = parseLock(readFileSync(join(added.clone, "spex.lock"), "utf8"));
+  const lock = parseLock(readFileSync(join(root, "spex.lock"), "utf8"));
   const builtin = lock.packages[BUILTIN_PACKAGE_NAME]!;
   const origin = (await home.client.expectOk("space.get", {})).defaultInstance!;
   writeFileSync(yaml, text);
-  writeFileSync(join(added.clone, "spex.lock"), serializeLock({ ...lock, requests: requestsDigest(text), packages: {
+  writeFileSync(join(root, "spex.lock"), serializeLock({ ...lock, requests: requestsDigest(text), packages: {
     ...lock.packages, [BUILTIN_PACKAGE_NAME]: { ...builtin, source: { ...(builtin.source as RegistrySourceLock), registry: origin } },
   } }));
   return added;
@@ -141,9 +142,10 @@ function rowOf(state: GroupsState, key: string): RepositoryState {
   return row;
 }
 
-/** A clone's `spex.lock` as written. */
+/** An environment's `spex.lock` as written at its root
+ * (environments-26). */
 function lockOf(home: Home, key: string): Lock {
-  return parseLock(readFileSync(join(clonePath(home.dataDir, key), "spex.lock"), "utf8"));
+  return parseLock(readFileSync(join(environmentRoot(home.dataDir, key), "spex.lock"), "utf8"));
 }
 
 /** The registry a lock records for a spec package (environments-3). */
@@ -176,7 +178,7 @@ async function resolvedAt(registry: RegistryClient, name: string, version: strin
  * resolution as another home locked it: `spex.yaml` and `spex.lock`
  * written together, so the lock stands current (environments-3). */
 function lockByHand(home: Home, key: string, name: string, version: string, resolution: Resolution): void {
-  const clone = clonePath(home.dataDir, key);
+  const clone = environmentRoot(home.dataDir, key);
   const doc = parseDocument(readFileSync(join(clone, "spex.yaml"), "utf8"));
   doc.setIn(["packages", name], doc.createNode({ version }));
   const text = doc.toString({ lineWidth: 0 });
@@ -187,7 +189,7 @@ function lockByHand(home: Home, key: string, name: string, version: string, reso
 
 /** The `space` a clone's `spex.yaml` names (environments-2). */
 function spaceOf(home: Home, key: string): string | undefined {
-  return parseRequests(readFileSync(join(clonePath(home.dataDir, key), "spex.yaml"), "utf8")).space;
+  return parseRequests(readFileSync(join(environmentRoot(home.dataDir, key), "spex.yaml"), "utf8")).space;
 }
 
 /** Pick a project into your namespace at an instance (space-58), its
@@ -308,7 +310,7 @@ test("environments-34, environments-5, environments-12, environments-3, environm
   // asked, the first's not (environments-5).
   const southLock = lockOf(home, south);
   const kitLocked = southLock.packages["team/kit"]!;
-  writeFileSync(join(clonePath(home.dataDir, south), "spex.lock"), serializeLock({
+  writeFileSync(join(environmentRoot(home.dataDir, south), "spex.lock"), serializeLock({
     ...southLock, packages: { ...southLock.packages, "team/kit": { ...kitLocked, source: { ...(kitLocked.source as RegistrySourceLock), registry: first.url } } },
   }));
   one = R1.script.received.length;
@@ -366,7 +368,7 @@ test("environments-34, environments-5, environments-12, environments-3, environm
 
   // A `space` that is no instance origin is refused naming it
   // (environments-2), the files kept as they stand.
-  const localYaml = join(clonePath(home.dataDir, local), "spex.yaml");
+  const localYaml = join(environmentRoot(home.dataDir, local), "spex.yaml");
   const localText = readFileSync(localYaml, "utf8");
   writeFileSync(localYaml, localText.replace("format: 1\n", "format: 1\nspace: http://example.com\n"));
   await home.client.expectOk("environment.resolve", { repository: local });
@@ -394,7 +396,7 @@ test("environments-34, environments-5, environments-12, environments-3, environm
   const { key: copy } = await addFolder(other, gitFolder("copy"));
   await environmentOf(other, copy, (candidate) => installedFrom(candidate, BUILTIN_PACKAGE_NAME, third.url));
   for (const file of ["spex.yaml", "spex.lock"]) {
-    writeFileSync(join(clonePath(other.dataDir, copy), file), readFileSync(join(clonePath(home.dataDir, local), file)));
+    writeFileSync(join(environmentRoot(other.dataDir, copy), file), readFileSync(join(environmentRoot(home.dataDir, local), file)));
   }
   assert.equal(registryOf(lockOf(other, copy), "vault/secrets"), first.url);
   await assert.rejects(new RegistryClient({ url: first.url }).version("vault/secrets", "1.0.0"), (error: unknown) => error instanceof RegistryError && error.kind === "not_found",

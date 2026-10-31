@@ -76,13 +76,15 @@ test("space-37: a working folder added pairs with a local-only spex repository w
   assert.equal(row.folder, home.projectDir);
   assert.equal(row.code, null, "the folder has no remote of its own");
   assert.equal(row.sync.phase, "idle");
-  // Its clone begins on `spex` with one commit of the managed rules,
-  // project.json, and its environment requesting the built-in spec
-  // package, under the fallback identity (space-32, storage-17,
-  // storage-6).
+  // Its clone begins on `spex` with one commit of the managed rules and
+  // project.json, under the fallback identity, its environment
+  // requesting the built-in spec package at the working folder's root,
+  // never in the clone (space-32, storage-17, storage-6,
+  // environments-26).
   assert.equal(git(clone, "symbolic-ref", "--short", "HEAD"), "spex");
   assert.equal(git(clone, "rev-list", "--count", "HEAD"), "1");
-  assert.deepEqual(git(clone, "ls-files").split("\n"), [".gitattributes", ".gitignore", "project.json", "spex.lock", "spex.yaml"]);
+  assert.deepEqual(git(clone, "ls-files").split("\n"), [".gitattributes", ".gitignore", "project.json"]);
+  assert.ok(existsSync(join(home.projectDir, "spex.yaml")) && existsSync(join(home.projectDir, "spex.lock")), "the environment stands in the working folder");
   assert.deepEqual(JSON.parse(readFileSync(join(clone, "project.json"), "utf8")), { format: 1, name: basename(home.projectDir), remote: null });
   assert.match(readFileSync(join(clone, ".gitignore"), "utf8"), /# BEGIN Spex managed storage rules/);
   assert.equal(git(clone, "log", "-1", "--format=%cn <%ce>"), `Spex <spex@${hostname()}>`);

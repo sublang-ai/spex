@@ -268,7 +268,11 @@ When the core, serving a home under the root lease [[storage-26](#storage-26)], 
 - the deletion from the clone is a local change the next sync of that spex repository carries [[space-7](space.md#space-7)];
 - a `spex.yaml` moved or standing without `space` gains `space` naming the instance of the clone's placement where it has one, so an environment placed before `space` existed keeps resolving there [[environments-11](environments.md#environments-11)] [[environments-2](environments.md#environments-2)];
 - a group's own spex repository, holding no `project.json`, keeps its two files [[storage-1](#storage-1)], its `spex.yaml` gaining `space` naming the instance its own repository's remote names where it lacks one, and its `packages/` and `skills/` moving under its clone's `.spex/` by the same rule;
-- the moved files are installed and exported from where they now stand [[environments-7](environments.md#environments-7)].
+- the moved files are installed and exported from where they now stand [[environments-7](environments.md#environments-7)];
+- before changing either destination file, persist a per-repository pending plan with the source versions, both destination files' original and planned versions and retained planned bytes; resume only where every destination is still original or planned, verifying both planned files before retiring unchanged sources, including a retirement interrupted after source removal;
+- a divergent destination or source remains untouched, the original source files not yet retired retained, and the receipt incomplete; until that repository recovers, its package operations and automatic preparation, resolution, installation and export make no changes, while other repositories remain usable;
+- an unsupported or damaged journal refuses package writes across the home because its affected repositories cannot be trusted, with original files unchanged; an unreadable shared journal may refuse opening the home before package management starts;
+- the plan preserves an explicit registry, locked origins, versions, checksums and file digests, advancing a lock's request digest only where it matched the manifest before the migration [[environments-38](environments.md#environments-38)].
 
 ### storage-30
 
@@ -439,7 +443,12 @@ When an integration suite migrates a former-layout home of two projects and one 
 
 ### storage-25
 
-When an integration suite starts the core on a home whose project clones hold `spex.yaml` and `spex.lock` — one project's working folder holding none, one holding its own `spex.yaml`, and one missing on this device — then pairs the third folder and syncs the first project with the stand-in host, it shall verify that the first folder's root holds the clone's two files with `space` naming the clone's placement's instance, its installed tree with its record under `.spex/` moved without a fetch, and its clone none of them, that the second folder's files are unchanged but for `space` and its clone's files and trees deleted, that the third clone keeps its files until its folder is paired and moves them then, that a clone whose record does not match its lock installs from the store, that your own group's clone keeps its two files with `space` naming its remote's instance and its trees under its `.spex/`, that a receipt of kind `environment` stands and a restart repeats nothing, and that the sync pushes the deletion [[storage-24](#storage-24)].
+When a real-core integration suite migrates environments, including child processes killed after the first destination write and during source retirement, it shall verify these cases:
+
+- a project's empty working folder receives its clone's two files with `space` naming the placement, its matching installed trees move without fetching, and its clone keeps none of them; a folder holding either file keeps its own pair, while a missing folder's clone keeps its environment until pairing [[storage-24](#storage-24)];
+- a tree whose install record does not match installs from the store, your own group's pair remains in its clone with its remote's instance named, one receipt stands, a restart repeats nothing and the next sync carries the clone's deletion [[storage-24](#storage-24)];
+- interrupted moved, own-group and preexisting-folder pairs resume with their explicit registry, package origins, versions, checksums and file digests unchanged, fresh locks still fresh and originally stale locks still stale, including retirement after one or both source files were removed [[storage-24](#storage-24)];
+- a divergent partial destination remains byte-identical with the remaining source retained and receipt incomplete, that repository's package mutations are refused without automatic file changes, another repository remains usable, restoring planned bytes allows recovery, and unreadable, unsupported or damaged journal metadata refuses package writes or home startup without bootstrapping an incomplete own-group pair [[storage-24](#storage-24)].
 
 ### storage-32
 

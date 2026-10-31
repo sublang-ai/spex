@@ -20,7 +20,19 @@ The channel's [changelog](../../packages/cli/CHANGELOG.md) has the dated 5.0.0 s
 New manifests explicitly select the public registry, while legacy manifests preserve their former source and locks preserve exact origin, version and checksums.
 Private installation and publishing require the registry grant on the machine performing them, including a server seat.
 
-## Completed gates
+## Latest integration status
+
+Incoming main `d1c3ba497` adds the app's working-folder environment runtime and the expanded standalone CLI guide.
+The integration adds journaled recovery across partial writes and source retirement, and preserves registry selection from the working root independently of Space placement.
+Local CLI tests pass 165/165, focused UI tests pass 166/166, and three bounded Chromium journeys pass.
+The focused Core run passed 51 of 53 cases; the two corrected fixture cases then passed their focused rerun, completing all 53 cases.
+The final pre-push build, catalogs, type checks and spec lint pass.
+The fresh integrated installed smoke, full CI and publication remain pending.
+
+Earlier references to a final candidate at `5bf0b6f2`, `2b8dabc7` or the `c68c5e8a` help revision describe historical evidence, not proof of this new migration runtime.
+The scaffold/lint/prompt/legacy-fixture inputs remain byte-identical to `e580f996`, and the previous packed and merged-built CLI print byte-identical migration prompts; this preserves the spec-migration evidence without claiming coverage of project-environment migration.
+
+## Historical completed gates
 
 The package-manager implementation was verified on `0a58d44d02b5eee5469fab40a8d4c1b12f4e165b`.
 Its CLI, scaffold, migration driver, legacy fixture, root package manifest and lock are byte-identical through candidate `2b8dabc7f779b29f865dfbb87c9a31897b25a228`.

@@ -364,6 +364,13 @@ export interface EnvironmentState {
   instance?: string | null;
   /** Package destination; legacy manifests preserve their previous routing. */
   registry?: { origin: string; legacy: boolean };
+  /** For a project, whether its `spex.yaml` and `spex.lock` are both in
+   * the code's `HEAD` in its working folder, false while either is not —
+   * untracked, added but uncommitted, or no repository or commit at all —
+   * so the environment is this device's alone; null for your own
+   * group's, which syncs with its clone (environments-14,
+   * environments-26). */
+  committed?: boolean | null;
   /** The built-in spec package this app ships, where the lock selects an
    * older release and the requirement `spex.yaml` requests it at admits
    * the shipped one; absent otherwise. The lock stays until the reader

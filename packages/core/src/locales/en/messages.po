@@ -3308,3 +3308,8 @@ msgstr "your own group's environment can request this spec package by path only 
 #: src/space-git.ts
 msgid "Your saved commits remain on this device. Address the content limit, then Retry."
 msgstr "Your saved commits remain on this device. Address the content limit, then Retry."
+
+#. Package operation refused while its manifest and lock migration needs recovery
+#: src/environments.ts
+msgid "Environment migration is incomplete; restore the original or planned files and restart to recover."
+msgstr "Environment migration is incomplete; restore the original or planned files and restart to recover."

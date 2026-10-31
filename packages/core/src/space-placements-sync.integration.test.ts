@@ -1018,13 +1018,13 @@ test("space-98, space-12: a Leave not confirmed counts the units a remaining pla
   assert.equal(git(clone, "rev-parse", "--verify", `refs/remotes/${placed.folder}/spex`), atSecond, "the stale tracking ref stands");
 
   // The Leave of the first counts every record unit it or the clone
-  // holds — the environment and notes.md, the managed rules, project.json
-  // and the placement files being none — the second holding none
-  // (space-98).
+  // holds — notes.md, the managed rules, project.json and the placement
+  // files being none, the environment standing in the working folder
+  // (environments-26) — the second holding none (space-98).
   let mark = home.client.mark();
   assert.deepEqual(await home.client.expectOk("space.leave", { repository: key, instance: first.url }), { accepted: true });
   const stopped = await home.client.waitRepository(mark, key, (row) => row.sync.phase === "stopped", 30_000);
-  assert.deepEqual(stopped.sync, { phase: "stopped", op: "leave", step: "check", cause: "unreceived", message: "2 records have reached no other placement", guidance: "Confirm to remove it anyway.", retry: true, count: 2 });
+  assert.deepEqual(stopped.sync, { phase: "stopped", op: "leave", step: "check", cause: "unreceived", message: "1 record has reached no other placement", guidance: "Confirm to remove it anyway.", retry: true, count: 1 });
   assert.deepEqual(stopped.placements.map((line) => [line.instance, line.attached]), [[canonicalOrigin(first.url), true], [canonicalOrigin(second.url), true]]);
   assert.deepEqual(remoteNamesOf(clone), [firstFolder, placed.folder]);
   assert.ok(existsSync(join(clone, firstFile)), "its file kept");

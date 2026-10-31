@@ -34,7 +34,7 @@
 
 import AxeBuilder from "@axe-core/playwright";
 import type { Locator, Page } from "@playwright/test";
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { STANDIN_STORAGE, seedDemoProject } from "@sublang/spex-core/testing";
 
@@ -2012,7 +2012,9 @@ test.describe("three instances", () => {
     await expect(lastConfirm).toContainText(`Remove from ${THIRD_HOST_NAME}? Nothing at ${THIRD_HOST_NAME} changes; these records stop syncing there.`);
     await lastConfirm.getByRole("button", { name: "Remove" }).click();
     await expect(lastConfirm).toHaveAttribute("data-stage", "unreceived", { timeout: 30_000 });
-    await expect(lastConfirm).toContainText(new RegExp(`[1-9]\\d* units have reached no other instance yet\\. Remove from ${THIRD_HOST_NAME} anyway\\?`));
+    // The project's environment stands in its working folder, not among
+    // the clone's units (environments-26): one unit or more.
+    await expect(lastConfirm).toContainText(new RegExp(`(?:1 unit has|[1-9]\\d* units have) reached no other instance yet\\. Remove from ${THIRD_HOST_NAME} anyway\\?`));
     await lastConfirm.getByRole("button", { name: "Remove" }).click();
     const local = list.getByTestId("space-own").getByTestId(`space-row-${LOCAL_KEY}`);
     await expect(local).toHaveAttribute("data-state", "local-only", { timeout: 30_000 });
@@ -2546,6 +2548,12 @@ async function arrangeChoices(app: App): Promise<void> {
     await app.core.command("intent.queue", { projectId, text });
   }
   await app.core.command("draft.create", { projectId, draftId: "triage", org: "acme", license: "Apache-2.0" });
+  // The clone still holding the project's environment, as one the
+  // environment migration has not reached does (storage-24), its
+  // requests changed on this device.
+  for (const file of ["spex.yaml", "spex.lock"]) {
+    if (existsSync(join(app.projectDir, file))) copyFileSync(join(app.projectDir, file), join(clone, file));
+  }
   appendFileSync(join(clone, "spex.yaml"), "# requested for the team\n");
   const code = JSON.parse(readFileSync(join(clone, "project.json"), "utf8")) as Record<string, unknown>;
   writeFileSync(join(clone, "project.json"), `${JSON.stringify({ ...code, remote: "git@example.com:acme/demo-project.git" }, null, 2)}\n`);

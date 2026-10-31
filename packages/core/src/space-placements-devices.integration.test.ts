@@ -28,7 +28,7 @@ import { encodePlacementFile, PLACEMENTS_DIR } from "./placements.js";
 import type { GroupsState, RepositoryState } from "./protocol.js";
 import type { SpaceStepEvent } from "./space.js";
 import type { StandinHost } from "./testing/standin-host.js";
-import { bareOf, clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, placementOf, repositoryOf, rowsOf, syncRecordsOf, remoteNamesOf } from "./testing/space-harness.js";
+import { bareOf, clonePath, createSpaceHarness, environmentRoot, hostFolder, hostKey, instanceOf, placementOf, repositoryOf, rowsOf, syncRecordsOf, remoteNamesOf } from "./testing/space-harness.js";
 
 const fixture = createSpaceHarness();
 const { scratch, git, gitFolder, addFolder, peerClone, peerPush, runTurn, sleep, startHome, startHost, signIn, signOut } = fixture;
@@ -370,11 +370,12 @@ test("space-93, space-99, space-90, space-87, space-29, space-61, space-62, spac
   assert.ok(existsSync(clonePath(three.dataDir, movedKey)) && !existsSync(threeClone), "the clone moved under the first's new group");
 });
 
-/** A clone's `spex.lock`, as written, the registry it records for the
- * built-in spec package (environments-11). */
+/** An environment's `spex.lock` at its root (environments-26), as
+ * written, the registry it records for the built-in spec package
+ * (environments-11). */
 function builtinRegistryOf(home: Device, key: string): string | null {
   try {
-    const lock = parseLock(readFileSync(join(clonePath(home.dataDir, key), "spex.lock"), "utf8"));
+    const lock = parseLock(readFileSync(join(environmentRoot(home.dataDir, key), "spex.lock"), "utf8"));
     const source = lock.packages[BUILTIN_PACKAGE_NAME]?.source as RegistrySourceLock | undefined;
     return source && "registry" in source ? source.registry : null;
   } catch { return null; }
@@ -408,8 +409,9 @@ test("storage-35, space-99, space-90, space-87, space-29, space-117, environment
   const code = gitFolder("delta");
   const { key: local, clone } = await addFolder(home, code);
   assert.equal(await builtinRegistry(home, local, PUBLIC_REGISTRY_ORIGIN), PUBLIC_REGISTRY_ORIGIN);
-  assert.equal(parseRequests(readFileSync(join(clone, "spex.yaml"), "utf8")).registry, PUBLIC_REGISTRY_ORIGIN);
-  const packages = parseLock(readFileSync(join(clone, "spex.lock"), "utf8")).packages;
+  const root = environmentRoot(home.dataDir, local);
+  assert.equal(parseRequests(readFileSync(join(root, "spex.yaml"), "utf8")).registry, PUBLIC_REGISTRY_ORIGIN);
+  const packages = parseLock(readFileSync(join(root, "spex.lock"), "utf8")).packages;
 
   // A device that held its records at the second left them there: the
   // repository holding its spex, and its file in this clone, which
@@ -445,10 +447,12 @@ test("storage-35, space-99, space-90, space-87, space-29, space-117, environment
   assert.deepEqual(Object.keys(syncRecordsOf(home.dataDir, local)), []);
   // Collaboration follows Attach; package provenance stays independent.
   assert.equal(await builtinRegistry(home, key, PUBLIC_REGISTRY_ORIGIN), PUBLIC_REGISTRY_ORIGIN);
-  const requests = parseRequests(readFileSync(join(movedClone, "spex.yaml"), "utf8"));
+  const placedRoot = environmentRoot(home.dataDir, key);
+  assert.equal(placedRoot, root, "Attach keeps the environment in its working folder");
+  const requests = parseRequests(readFileSync(join(placedRoot, "spex.yaml"), "utf8"));
   assert.equal(requests.registry, PUBLIC_REGISTRY_ORIGIN);
   assert.equal(requests.space, secondOrigin);
-  assert.deepEqual(parseLock(readFileSync(join(movedClone, "spex.lock"), "utf8")).packages, packages);
+  assert.deepEqual(parseLock(readFileSync(join(placedRoot, "spex.lock"), "utf8")).packages, packages);
 });
 
 test("space-29, space-61, space-87, space-90, space-62, git-host-5: Attach refuses a placement a file names in a group named like your login and any placement of a group's own spex repository, no request reaching either stand-in, no remote added and no clone moved; a group's own repository's file naming a host repository it does not hold names no line, that repository standing as a row of its own; a pick or a Place joining a repository another clone here holds is refused naming that clone", async (t) => {

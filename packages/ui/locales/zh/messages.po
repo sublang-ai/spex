@@ -4576,6 +4576,11 @@ msgstr "尚未检查"
 msgid "not cited by other packages"
 msgstr "未被其他包引用"
 
+#. a project's spex.yaml and spex.lock are not both in its code's HEAD, so its environment is this device's alone
+#: src/components/EnvironmentSection.tsx
+msgid "Not committed with the code"
+msgstr "未随代码提交"
+
 #: src/lib/client.ts
 msgid "not connected"
 msgstr "未连接"

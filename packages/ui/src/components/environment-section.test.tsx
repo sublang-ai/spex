@@ -453,6 +453,29 @@ describe("playbook-library-94: the environment's controls", () => {
     expect(screen.queryByTestId("environment-builtin-update")).toBeNull();
   });
 
+  test("the project's side reads Not committed with the code while its two files are not both in the code's HEAD, and not once a commit holds both; your own group's side never reads it", async () => {
+    // Untracked, or added but not committed: the core reads the state
+    // as not committed (environments-14).
+    environments[PROJECT_ID] = { ...PROJECT_ENVIRONMENT, committed: false };
+    await renderSurface();
+    // [playbook-library-92] the phrase on the project's side.
+    expect(screen.getByTestId("environment-uncommitted").textContent).toBe("Not committed with the code");
+
+    // [playbook-library-92] a commit holding both: the state the core
+    // broadcasts reads committed, and the phrase goes.
+    act(() => {
+      deliverServerMessageForTests({ type: "environment.state", repository: PROJECT_ID, state: { ...PROJECT_ENVIRONMENT, committed: true } });
+    });
+    expect(screen.queryByTestId("environment-uncommitted")).toBeNull();
+
+    // [playbook-library-92] your own group's environment syncs with its
+    // clone and reads no such phrase.
+    environments[OWN_KEY] = { ...OWN_ENVIRONMENT, committed: null };
+    fireEvent.click(screen.getByTestId("side-own"));
+    await screen.findByTestId("env-package-sublang/playbooks");
+    expect(screen.queryByTestId("environment-uncommitted")).toBeNull();
+  });
+
   test("what the last export left out reads under Not exported with Export again, which installs; a state naming nothing reads no list", async () => {
     environments[PROJECT_ID] = {
       ...PROJECT_ENVIRONMENT,
