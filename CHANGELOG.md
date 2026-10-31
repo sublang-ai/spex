@@ -40,11 +40,11 @@ and `npm start` (desktop) or `npm run start:server` (server).
 - `spex.yaml` may name the Space its environment resolves at, as
   `space: <origin>` ([DR-165](specs/decisions/165-one-package-manager-hosted-by-the-cli-and-the-app.md)).
   The registry, the orgs you may publish to and the publish destination
-  follow it; without it, the environment uses your default Space. Where
-  a project's Space is not your default one, the app names it in the
-  `spex.yaml` it makes for the project, and a `spex.yaml` moved out of a
-  project's clone gains the Space of the clone's placement, so the
-  environment resolves at the same Space on every device.
+  follow it; without it, the environment uses your default Space. The
+  app names the project's Space in every `spex.yaml` it makes, and a
+  `spex.yaml` moved out of a project's clone gains the Space of the
+  clone's placement, so the environment resolves at the same Space on
+  every device, whichever one is the default there.
 
 - Players read by name ([DR-155](specs/decisions/155-players-named-delegated-and-recovered.md)).
   A player reads as the last segment of its id — `dev.reviewer` as
@@ -370,7 +370,8 @@ and `npm start` (desktop) or `npm run start:server` (server).
   where the folder holds neither; a folder holding its own keeps them.
   The installed files move under `.spex/` or are installed again, and
   the clone's former `packages/` and `skills/` go. The environment needs
-  no registration: the `spex` CLI reads and writes the same files.
+  no registration: the `spex` CLI reads and writes the same files. Until
+  the two files are committed, the project's Playbooks view says so.
 - A spec package you develop lives at `spex-packages/<org>/<pkg>/`, the
   org a folder, so two orgs' packages of one name stand apart; a new
   playbook's authoring session makes its folder there ([DR-165](specs/decisions/165-one-package-manager-hosted-by-the-cli-and-the-app.md)).
