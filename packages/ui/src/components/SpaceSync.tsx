@@ -1,26 +1,24 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// A spex repository's Sync tab (DR-057, DR-103, DR-128, DR-159): its
-// placements' lines (space-87), local units and each placement's
-// incoming units by kind in human words (space-7, space-8), the running
-// rail with its step line, the placement in flight and Stop (space-12,
-// space-16), the choices picker for one placement with its one inline
-// confirm (space-9, space-17, space-18) — the same picker its row's
-// Resolve shows beneath the row, sharing its choices (space-14) — the
-// stopped card with its cause, guidance and Retry (space-15) — a
-// stopped Leave's sending that Leave again (space-89), and a join only
-// where this page joined that placement (space-13) — the
-// unrelated-history card (space-13) and in-place line diffs
-// (space-10); and the home's issues list with its repairs, each named
-// by its project and group (space-46..space-55). Every side is this
-// place's or the instance's (space-17, space-27); Git's own words never
-// lead.
+// A spex repository's Sync tab (DR-057, DR-103, DR-128, DR-159,
+// DR-172): its placements' lines (space-87), "To send (<n>)" and each
+// placement's "From <display name> (<n>)" by kind in human words
+// (space-7, space-8), the running rail with its step line, the placement
+// in flight and Stop (space-12, space-16), the choices picker for one
+// placement with its one inline confirm (space-9, space-17, space-18) —
+// the same picker its row's Resolve shows beneath the row, sharing its
+// choices (space-14) — the stopped card with its cause, guidance and
+// Retry (space-15), a combining only where this page asked it
+// (space-13) — the "Started separately" card (space-13) and in-place
+// line diffs headed "Changes on this computer" and "Changes at <display
+// name>" (space-10). Every side is this computer's — at a seat's place
+// the server's (space-112) — or the Space's by its display name
+// (space-17, space-27); Git's own words never lead.
 
-import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { create, type StoreApi, type UseBoundStore } from "zustand";
 import type {
-  DiagnosticRepair,
   GroupsState,
   PlacementState,
   RepositoryState,
@@ -33,7 +31,7 @@ import type {
 } from "@sublang/spex-core/protocol";
 
 import { usePlaceStore } from "../state/place-context.js";
-import { isLocalPlace } from "../state/store.js";
+import type { SpaceLastAct } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import { heldPlacements, instanceNameAt, keyPlacement, placementAt, placementName } from "../lib/placements.js";
 import { relativeAge } from "../lib/time.js";
@@ -47,11 +45,12 @@ import {
   groupUnits,
   lineOutcome,
   notHerePhrase,
-  projectName,
+  phraseNames,
   seatName,
+  startedSeparately,
+  stoppedPhrase,
 } from "../lib/space.js";
 import { Icon } from "./Icon.js";
-import { LINK } from "./SpaceSurface.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { PlacementLines } from "./SpacePlacements.js";
 import { PRIMARY, SECONDARY, type Note } from "./SpaceSurface.js";
@@ -59,25 +58,29 @@ import { PRIMARY, SECONDARY, type Note } from "./SpaceSurface.js";
 type Side = SpaceChoice;
 /** What a sync the tab starts carries (space-18, space-29): the choices
  * and the join, each for the placement `placement` names. */
-type SyncInput = { placement?: string | null; choices?: Record<string, Side>; join?: boolean };
+export type SyncInput = { placement?: string | null; choices?: Record<string, Side>; join?: boolean };
 
 /** One unit's line diff in place (space-10): the ancestor against this
- * device's version or the host's, `+` and `−` marking every line in
+ * computer's version, headed "Changes on this computer", or the Space's,
+ * headed "Changes at <display name>", `+` and `−` marking every line in
  * text beside its tint, scrolling sideways as a canvas (DR-041). */
 function DiffBox({
   repository,
   unit,
   side,
   placement,
+  name,
   testId,
 }: {
   /** The spex repository's key every `space.*` call names. */
   repository: string;
   unit: SpaceUnit;
   side: Side;
-  /** The placement the host's side is of: its instance's origin, null
-   * for the path placement (space-10, space-29). */
+  /** The placement the Space's side is of: its Space's origin, null for
+   * the path placement (space-10, space-29). */
   placement?: string | null;
+  /** That placement's display name, or the path placement's remote. */
+  name: string;
   testId: string;
 }) {
   const store = usePlaceStore();
@@ -91,7 +94,7 @@ function DiffBox({
     setPatches(undefined);
     setError(undefined);
     const paths = unit.paths.length > 0 ? unit.paths : [unit.unit];
-    // This device's side is the clone's own; the host's is one
+    // This computer's side is the clone's own; the Space's is one
     // placement's (space-10).
     const of = side === "remote" ? placement : undefined;
     Promise.all(
@@ -127,16 +130,20 @@ function DiffBox({
       data-testid={testId}
       className="flex flex-col gap-1 rounded border border-neutral-200 bg-neutral-50 p-2 dark:border-neutral-800 dark:bg-neutral-950"
     >
-      <span className="text-xs text-neutral-500">
+      <span data-testid={`${testId}-heading`} className="text-xs text-neutral-500">
         {side === "mine"
           ? seat === undefined
-            ? i18n._("This device against the common ancestor")
+            ? i18n._({ id: "Changes on this computer", comment: "a diff's heading: this computer's version against the last version both sides shared" })
             : i18n._({
-                id: "{place} against the common ancestor",
+                id: "Changes on {place}",
                 values: { place: seat },
-                comment: "a diff's heading on a team server's Space: the server's version against the common ancestor; {place} is the server's name",
+                comment: "a diff's heading on a team server's Space: the server's version against the last version both sides shared; {place} is the server's name",
               })
-          : i18n._("The host's version against the common ancestor")}
+          : i18n._({
+              id: "Changes at {name}",
+              values: { name },
+              comment: "a diff's heading: the Space's version against the last version both sides shared; {name} is the Space's display name",
+            })}
       </span>
       {patches.map(({ path, patch, truncated }) => (
         <div key={path} className="flex min-w-0 flex-col">
@@ -192,6 +199,7 @@ function UnitRow({
   unit,
   side,
   placement,
+  name,
   conflict,
   onOpenSession,
 }: {
@@ -200,6 +208,8 @@ function UnitRow({
   side: Side;
   /** The placement an incoming row came from (space-8, space-10). */
   placement?: string | null;
+  /** The display name its diff heads the Space's side with. */
+  name: string;
   conflict: boolean;
   onOpenSession(sessionId: string): void;
 }) {
@@ -207,7 +217,7 @@ function UnitRow({
   const detailLines = unit.detail?.split("\n").filter(Boolean) ?? [];
   const label = labelLines(unit.label);
   // A local session row opens the session as a tab (space-7); an
-  // incoming one may not exist on this device yet.
+  // incoming one may not exist on this computer yet.
   const canOpen =
     side === "mine" && unit.kind === "session" && unit.sessionId && unit.change !== "deleted";
   return (
@@ -236,7 +246,7 @@ function UnitRow({
           <span
             data-testid={`space-choose-${unit.unit}`}
             className="shrink-0 text-xs text-amber-700 dark:text-amber-300"
-            title={i18n._("Changed on both sides — choose which version to keep")}
+            title={i18n._({ id: "Changed here and at {name}", values: { name }, comment: "a project's row or placement line: a sync found records changed both on this computer and at that Space, choices owed; {name} is the Space's display name; Resolve stands beside it" })}
           >
             <span aria-hidden>⚠ </span>
             {i18n._({ id: "choose", comment: "mark on a unit changed on both sides" })}
@@ -292,6 +302,7 @@ function UnitRow({
           unit={unit}
           side={side}
           placement={placement}
+          name={name}
           testId={`space-diff-${side}-${unit.unit}`}
         />
       ) : null}
@@ -304,6 +315,7 @@ function UnitList({
   units,
   side,
   placement,
+  name,
   conflicts,
   level = 3,
   onOpenSession,
@@ -314,6 +326,8 @@ function UnitList({
   side: Side;
   /** The placement an incoming list is of (space-8, space-10). */
   placement?: string | null;
+  /** That placement's display name, or the path placement's remote. */
+  name: string;
   conflicts: Set<string>;
   /** The kinds' heading level: beneath a placement's heading on the
    * incoming side, one below it. */
@@ -335,7 +349,8 @@ function UnitList({
                 unit={unit}
                 side={side}
                 placement={placement}
-                // The incoming list marks the units this device changed
+                name={name}
+                // The incoming list marks the units this computer changed
                 // too (space-8); the local list lists them plainly.
                 conflict={side === "remote" && conflicts.has(unit.unit)}
                 onOpenSession={onOpenSession}
@@ -379,11 +394,6 @@ function labelLines(label: string): { first: string; rest: string[] } {
   return { first, rest };
 }
 
-/** The pending-merge diagnostic the core folds into the issues (space-1)
- * reads in plain words; Git's own file name survives in the title
- * (space-27). */
-const MERGE_HEAD_FILE = ".git/MERGE_HEAD";
-
 /** One conflict row: a radio group named by the unit's label with two
  * exclusive choices, nothing preselected, arrow keys moving within it
  * (space-17, DR-010 §6). */
@@ -394,6 +404,7 @@ function ConflictRow({
   marked,
   now,
   placement,
+  name,
   labels,
   scope,
   disabled,
@@ -406,8 +417,10 @@ function ConflictRow({
   now: number;
   /** The placement the choices are for (space-9, space-10). */
   placement: string | null;
+  /** Its display name, which the Space's diff is headed by. */
+  name: string;
   /** The two choices' words (space-17): this place's side, and the
-   * side of the instance the choices are for. */
+   * side of the Space the choices are for. */
   labels: { mine: string; remote: string };
   /** Which picker the row stands in — beneath the row or in its Sync
    * tab — so two standing at once never share a radio group. */
@@ -453,8 +466,8 @@ function ConflictRow({
             className="accent-brand-600"
           />
           <span className="shrink-0 font-medium">{label}</span>
-          {/* A spoken space: the radio's name reads "Keep what's here
-              updated…", never two words run together. */}
+          {/* A spoken space: the radio's name reads "Keep this
+              computer's updated…", never two words run together. */}
           {" "}
           <span className="min-w-0 truncate text-xs text-neutral-500" title={sideSummary(summary, now)}>
             {sideSummary(summary, now)}
@@ -505,7 +518,7 @@ function ConflictRow({
         </ul>
       ) : null}
       {option("mine", labels.mine, conflict.mine)}
-      {/* The other side names the instance the choices are for
+      {/* The other side names the Space the choices are for
           (space-17). */}
       {option("remote", labels.remote, conflict.remote)}
       {diffSide ? (
@@ -514,6 +527,7 @@ function ConflictRow({
           unit={unit}
           side={diffSide}
           placement={placement}
+          name={name}
           testId={`space-diff-${diffSide}-${unit.unit}`}
         />
       ) : null}
@@ -527,13 +541,15 @@ function ConflictRow({
 const STEPPED_OPS: ReadonlySet<SpaceOp> = new Set(["sync", "join", "place", "attach"]);
 
 /** The six-step rail (space-12): done steps ticked, the current one
- * named by the step line, the upcoming muted, the placement in flight
- * named beside the step line where the clone holds more than one; Stop
- * stands only while a transport step runs (space-16). */
+ * named by the step line — "Checking <display name>…" while a Space is
+ * read — the upcoming muted, the placement in flight named beside the
+ * step line where the clone holds more than one; Stop stands only while
+ * a transport step runs (space-16). */
 function Rail({
   step,
   cancelable,
   op,
+  lineName,
   placement,
   onStop,
   stopping,
@@ -541,8 +557,11 @@ function Rail({
   step: SyncStep;
   cancelable: boolean;
   op: SpaceOp;
-  /** The placement in flight, by its line's name; none where the clone
-   * holds one alone or the step is at none. */
+  /** The placement in flight, by its line's name, which the step line
+   * reads; none where the step is at none. */
+  lineName?: string;
+  /** The same, named beside the step line; none where the clone holds
+   * one placement alone or the step line names it already. */
   placement?: string;
   onStop(): void;
   stopping: boolean;
@@ -591,7 +610,7 @@ function Rail({
       ) : null}
       <div className="flex flex-wrap items-center gap-2">
         <span data-testid="space-step-line" className="font-medium">
-          {STEP_LINES[step]()}
+          {STEP_LINES[step](lineName)}
         </span>
         {/* Apart from the step line, which reads the step alone. */}
         {placement !== undefined ? (
@@ -648,596 +667,39 @@ function Card({
   );
 }
 
-/**
- * A repair the core folded (space-46). A spex repository no working
- * folder here pairs asks the one question that follows: which folder
- * on this device is it? Pairing one is picking a folder, so the row
- * speaks of projects and folders and never of a folder "having" a
- * project (DR-065). A working folder whose clone is missing has no
- * records here to pair, so its row offers to forget the folder.
- *
- * Declining leaves the row standing and quiet, still offering what it
- * offered, so changing your mind needs no separate undo.
- */
-function RepairRow({
-  repair,
-  disabled,
-  focusSeq,
-  onResolved,
-  onNote,
-}: {
-  repair: DiagnosticRepair;
-  disabled: boolean;
-  /** Set when focus moves here; a new value moves it again. */
-  focusSeq?: number;
-  onResolved(key: string, summary: string, projectId?: string): void;
-  onNote: Note;
-}) {
-  const store = usePlaceStore();
-  const rebindProject = store((state) => state.rebindProject);
-  const removeProject = store((state) => state.removeProject);
-  const decline = store((state) => state.spaceRepairDecline);
-  // A remote place's core allocates every project's folder (space-103,
-  // run-view-169): no folder is named there, picked or typed; its words
-  // name the server where they would name this device (space-112).
-  const local = isLocalPlace(store.place);
-  const seat = seatName(store.place);
-  const proposal = repair.proposal;
-  const recorded = repair.directories[0] ?? "";
-  const folderRepair = repair.kind === "folder";
-  const [editing, setEditing] = useState(false);
-  const [forgetting, setForgetting] = useState(false);
-  const [path, setPath] = useState(proposal?.path ?? recorded);
-  const [busy, setBusy] = useState(false);
-  const [refusal, setRefusal] = useState<string>();
-  const fieldRef = useRef<HTMLInputElement>(null);
-  const firstRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (focusSeq !== undefined) firstRef.current?.focus();
-  }, [focusSeq]);
-
-  useEffect(() => {
-    if (!editing) return;
-    fieldRef.current?.focus();
-    fieldRef.current?.select();
-  }, [editing]);
-
-  const declined = repair.declined !== undefined;
-  const lastSegment = (p: string): string => p.replace(/[/\\]+$/, "").split(/[/\\]/).pop() ?? p;
-  // A spex repository's repair is named by the project — its name with
-  // its `-spex` dropped — and its group, the folder it remembers
-  // secondary; a folder's by the folder (space-46, DR-159).
-  const named = repair.name ?? (repair.repository ? lastSegment(repair.repository) : undefined);
-  const name = folderRepair
-    ? recorded || repair.repository || ""
-    : named !== undefined
-      ? projectName(named)
-      : recorded
-        ? lastSegment(recorded)
-        : i18n._({
-            id: "these sessions",
-            comment: "stands where a project name would, for sessions with no folder",
-          });
-  const group = folderRepair ? undefined : repair.group;
-
-  /** Pairing is picking a folder: the spex repository keeps its key,
-   * and the folders its sessions recorded ride as aliases so every
-   * session under them resolves (space-47). The reader stays put. */
-  const add = async (chosen: string): Promise<void> => {
-    if (!repair.repository) return;
-    setBusy(true);
-    setRefusal(undefined);
-    try {
-      const project = await rebindProject(repair.repository, chosen, repair.directories);
-      const summary =
-        repair.sessions > 0
-          ? i18n._(
-              "{name} · now a project at {path}, {count, plural, one {# session} other {# sessions}} listed",
-              { name: project.name, path: project.path, count: repair.sessions },
-            )
-          : i18n._("{name} · now a project at {path}", {
-              name: project.name,
-              path: project.path,
-            });
-      onResolved(repair.key, summary, project.id);
-    } catch (cause) {
-      setRefusal((cause as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  /** Forget a folder whose clone is missing (projects-9): there is no
-   * record here to lose, so the core is told so at once. */
-  const forget = async (): Promise<void> => {
-    if (!repair.repository) return;
-    setBusy(true);
-    setRefusal(undefined);
-    try {
-      await removeProject(repair.repository, true);
-      onResolved(
-        repair.key,
-        seat === undefined
-          ? i18n._("{path} · forgotten on this device", { path: name })
-          : i18n._({
-              id: "{path} · forgotten on {place}",
-              values: { path: name, place: seat },
-              comment: "a folder repair's outcome on a team server's Space; {place} is the server's name",
-            }),
-      );
-    } catch (cause) {
-      setRefusal((cause as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const setDeclined = async (next: boolean): Promise<void> => {
-    setBusy(true);
-    try {
-      await decline(repair.key, next);
-      if (next) onNote(i18n._("{name} not added.", { name }));
-    } catch (cause) {
-      setRefusal((cause as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const checkedRecorded = (repair.checked ?? []).find((entry) => entry.path === recorded);
-  const evidence = folderRepair
-    ? seat === undefined
-      ? i18n._("Its spex repository is not on this device.")
-      : i18n._({
-          id: "Its spex repository is not on {place}.",
-          values: { place: seat },
-          comment: "a folder repair's evidence on a team server's Space; {place} is the server's name",
-        })
-    : proposal && local
-      ? i18n._("That folder is here and is a git repository. Add it as a project?")
-      : checkedRecorded?.here === false
-        ? seat === undefined
-          ? i18n._("That folder is no longer on this device.")
-          : i18n._({
-              id: "That folder is no longer on {place}.",
-              values: { place: seat },
-              comment: "a repair's evidence on a team server's Space; {place} is the server's name",
-            })
-        : checkedRecorded?.claimedBy
-          ? i18n._("That folder already belongs to {owner}.", {
-              owner: checkedRecorded.claimedBy,
-            })
-          : checkedRecorded?.here && !checkedRecorded.repo
-            ? i18n._("That folder is here but is not a git repository.")
-            : undefined;
-
-  const refusalLine = refusal ? (
-    <span role="alert" className="text-xs text-red-600 dark:text-red-400">
-      {refusal}
-    </span>
-  ) : null;
-
-  const controls = folderRepair ? (
-    <div className="flex flex-wrap items-center gap-2">
-      {forgetting ? (
-        <InlineConfirm
-          question={i18n._("Forget this folder here? The folder stays on disk.")}
-          confirmLabel={i18n._({ id: "Forget", comment: "confirm: forget a folder whose records are gone from this device" })}
-          disabled={busy}
-          onConfirm={() => {
-            setForgetting(false);
-            void forget();
-          }}
-          onCancel={() => setForgetting(false)}
-        />
-      ) : (
-        <button
-          type="button"
-          ref={firstRef}
-          data-testid="space-repair-forget"
-          className={SECONDARY}
-          disabled={disabled || busy || !repair.repository}
-          onClick={() => setForgetting(true)}
-        >
-          {i18n._({ id: "Forget folder", comment: "forget a working folder whose spex repository is missing" })}
-        </button>
-      )}
-      {refusalLine}
-    </div>
-  ) : (
-    <div className="flex flex-wrap items-center gap-2">
-      {proposal && local ? (
-        <button
-          type="button"
-          ref={firstRef}
-          data-testid="space-repair-add"
-          className={SECONDARY}
-          disabled={disabled || busy || !repair.repository}
-          onClick={() => void add(proposal.path)}
-        >
-          {busy
-            ? i18n._({ id: "Adding…", comment: "the Add project control, while the add is in flight" })
-            : i18n._("Add project")}
-        </button>
-      ) : null}
-      {local ? (
-        <button
-          type="button"
-          ref={proposal ? undefined : firstRef}
-          data-testid="space-repair-choose"
-          className={SECONDARY}
-          disabled={disabled || busy || !repair.repository}
-          onClick={() => setEditing(true)}
-        >
-          {i18n._("Choose folder…")}
-        </button>
-      ) : null}
-      {!declined ? (
-        <button
-          type="button"
-          data-testid="space-repair-decline"
-          className={SECONDARY}
-          disabled={disabled || busy}
-          onClick={() => void setDeclined(true)}
-        >
-          {i18n._({
-            id: "Not on this computer",
-            comment: "on a repair: answer that this project is not kept on this computer, so it stops counting as an issue",
-          })}
-        </button>
-      ) : null}
-      {refusalLine}
-    </div>
-  );
-
-  const editor = (
-    <div className="flex min-w-0 flex-col gap-1 rounded border border-neutral-300 p-2 dark:border-neutral-700">
-      <label className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
-        <span className="shrink-0 text-neutral-500">
-          {i18n._("Which folder on this device is {name}?", { name })}
-        </span>
-        <input
-          ref={fieldRef}
-          data-testid="space-repair-path"
-          value={path}
-          onChange={(event) => setPath(event.target.value)}
-          onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
-            if (event.key === "Escape") { event.stopPropagation(); setEditing(false); }
-            if (event.key === "Enter") void submit();
-          }}
-          spellCheck={false}
-          disabled={busy}
-          className="min-w-0 flex-1 rounded border border-neutral-300 bg-white px-1.5 py-0.5 font-mono text-xs dark:border-neutral-700 dark:bg-neutral-900"
-        />
-        {window.spexNative ? (
-          <button
-            type="button"
-            className={SECONDARY}
-            disabled={busy}
-            onClick={async () => {
-              const picked = await window.spexNative!.pickDirectory();
-              if (picked) setPath(picked);
-            }}
-          >
-            {i18n._("Open folder…")}
-          </button>
-        ) : null}
-      </label>
-      <p className="text-xs text-neutral-500">
-        {i18n._("Where a project lives is recorded on this device only; this never syncs.")}
-      </p>
-      <div className="flex flex-wrap items-center gap-2">
-        <button type="button" className={SECONDARY} disabled={busy} onClick={() => void submit()}>
-          {busy
-            ? i18n._({ id: "Adding…", comment: "the Add project control, while the add is in flight" })
-            : i18n._("Add project")}
-        </button>
-        <button type="button" className={SECONDARY} disabled={busy} onClick={() => setEditing(false)}>
-          {i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}
-        </button>
-        {refusalLine}
-      </div>
-    </div>
-  );
-
-  return (
-    <li
-      data-testid={declined ? "space-repair-declined" : "space-repair"}
-      data-kind={repair.kind}
-      className={`flex min-w-0 flex-col gap-1${declined ? " text-neutral-500" : ""}`}
-    >
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <span aria-hidden>{declined ? "○" : "●"}</span>
-        <span data-testid="space-repair-title" className="min-w-0 flex-1">
-          {folderRepair ? (
-            <span className="font-mono text-xs">{name}</span>
-          ) : (
-            <span className="font-medium">
-              {group
-                ? i18n._({
-                    id: "{project} in {group}: its folder on this computer is missing",
-                    values: { project: name, group },
-                    comment: "a repair row: the project's records are here, the working folder it ran in is not; {project} is the project's name, {group} the group holding it",
-                  })
-                : i18n._({
-                    id: "{project}: its folder on this computer is missing",
-                    values: { project: name },
-                    comment: "a repair row of a project in no group: the project's records are here, the working folder it ran in is not",
-                  })}
-            </span>
-          )}
-          {declined
-            ? i18n._({
-                id: " · not added",
-                comment: "follows the project's name on a repair the reader declined",
-              })
-            : ""}
-        </span>
-      </div>
-      {!folderRepair && recorded ? (
-        // The folder it remembers, secondary (space-46).
-        <p data-testid="space-repair-folder" className="min-w-0 truncate pl-5 text-xs text-neutral-500" title={recorded}>
-          <span className="font-mono">{recorded}</span>
-          {repair.sessions > 0
-            ? i18n._({
-                id: " · {count, plural, one {# session ran there} other {# sessions ran there}}",
-                values: { count: repair.sessions },
-                comment: "follows the folder a repair remembers: how many sessions ran in it",
-              })
-            : ""}
-        </p>
-      ) : null}
-      {!declined && evidence ? <p className="text-xs text-neutral-500">{evidence}</p> : null}
-      {/* The editor opens from "Choose folder…" alone, which a remote
-          place never offers. */}
-      {editing ? editor : controls}
-    </li>
-  );
-
-  function submit(): void {
-    const chosen = path.trim();
-    if (!chosen) { setRefusal(i18n._("Name the folder on this device.")); return; }
-    void add(chosen);
+/** What Retry sends for a stopped sync (space-15, space-18): the
+ * choices last sent, with every conflict's choice standing where all
+ * are made, for the placement they are for; and the join this page
+ * asked, of the placement it named — a join stopped on its way as the
+ * join of its key placement — where no other placement's choices
+ * stand. Records started separately that nobody here asked to combine
+ * sync plainly, stopping as "Started separately" again with
+ * "Combine…" on their line, the confirm still the reader's (space-13). */
+export function stoppedRetryInput(
+  groups: GroupsState,
+  repo: RepositoryState,
+  stored: SyncInput | undefined,
+  choices: Record<string, Side> | undefined,
+  act: SpaceLastAct | undefined,
+): SyncInput {
+  const input: SyncInput = { ...stored };
+  delete input.join;
+  const { line, conflicts, units } = conflictsOf(groups, repo);
+  const chosen = chosenOf(choices, units);
+  if (line && conflicts.length > 0 && Object.keys(chosen).length === conflicts.length) {
+    input.placement = line.instance;
+    input.choices = chosen;
   }
-}
-
-/** What the reader's own act made of a repair (space-48): a pairing
- * names the project it made, a forgotten folder none. */
-interface RepairOutcome {
-  summary: string;
-  projectId?: string;
-}
-
-/** A resolved repair's outcome, standing in the row it replaced
- * (space-48): Open project is the one way off the surface. */
-function RepairOutcomeRow({
-  outcome,
-  focusSeq,
-  onOpenProject,
-}: {
-  outcome: RepairOutcome;
-  /** Set when focus moves here; a new value moves it again. */
-  focusSeq?: number;
-  onOpenProject(projectId: string): void;
-}) {
-  const openRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    if (focusSeq !== undefined) openRef.current?.focus();
-  }, [focusSeq]);
-  const projectId = outcome.projectId;
-  return (
-    <li data-testid="space-repair-resolved" className="flex min-w-0 flex-wrap items-center gap-2">
-      <span aria-hidden>✓</span>
-      <span className="min-w-0 flex-1">{outcome.summary}</span>
-      {projectId ? (
-        <button ref={openRef} type="button" className={LINK} onClick={() => onOpenProject(projectId)}>
-          {i18n._("Open project")}
-        </button>
-      ) : null}
-    </li>
-  );
-}
-
-type IssueEntry = GroupsState["diagnostics"][number];
-
-/** One row's place in the issues list: a repair keeps its place as it
- * changes condition, its outcome taking the same one. */
-const issueRowId = (entry: IssueEntry): string =>
-  entry.repair ? `repair:${entry.repair.key}` : `diagnostic:${entry.file}:${entry.reason}`;
-const outcomeRowId = (key: string): string => `repair:${key}`;
-
-/**
- * The home's issues list (space-1, space-46..space-55): every repair
- * the core folded and every diagnostic no repair folds. It opens from
- * the header's issues control, and stands by itself while a blocking
- * diagnostic does.
- */
-export function IssuesList({
-  groups,
-  connected,
-  open,
-  refreshes,
-  onOpenProject,
-  onNote,
-}: {
-  groups: GroupsState;
-  connected: boolean;
-  /** The header's issues control opened it. */
-  open: boolean;
-  /** How many times the reader's own Refresh has re-read the state. */
-  refreshes: number;
-  onOpenProject(projectId: string): void;
-  onNote: Note;
-}) {
-  // A resolved repair's outcome stands in its row's place, and a
-  // declined row keeps its place, until the reader's own Refresh or his
-  // leaving the surface (space-48, space-55), so no list reflows under
-  // the pointer. The layout is the order the list last drew, ids of
-  // rows gone meanwhile kept so an outcome landing late finds its place.
-  const [outcomes, setOutcomes] = useState<Record<string, RepairOutcome>>({});
-  const layout = useRef<string[]>([]);
-  const [focusTo, setFocusTo] = useState<{ id: string; seq: number }>();
-  const seenRefreshes = useRef(refreshes);
-  useEffect(() => {
-    if (refreshes === seenRefreshes.current) return;
-    seenRefreshes.current = refreshes;
-    layout.current = [];
-    setOutcomes({});
-    setFocusTo(undefined);
-  }, [refreshes]);
-
-  // The core carries the count (space-1): what the reader has not
-  // answered. Rows he has set aside stand on, quietly.
-  const issueCount = groups.issues;
-  const declinedCount = groups.diagnostics.filter((entry) => entry.repair?.declined !== undefined).length;
-  const blocking = groups.diagnostics.some((entry) => entry.blocking);
-  // The rows as a fresh layout orders them: the core's order, a
-  // declined repair after those still unanswered (space-46).
-  const fresh = [...groups.diagnostics].sort((a, b) =>
-    Number(a.repair?.declined !== undefined) - Number(b.repair?.declined !== undefined));
-  const rows = new Map<string, { outcomeKey: string } | { entry: IssueEntry }>();
-  for (const entry of fresh) {
-    rows.set(
-      issueRowId(entry),
-      entry.repair && outcomes[entry.repair.key] ? { outcomeKey: entry.repair.key } : { entry },
-    );
+  const joining = act?.op === "join" ? act : repo.sync.phase === "stopped" && repo.sync.op === "join" ? keyPlacement(repo) : undefined;
+  if (joining && (input.placement === undefined || input.placement === joining.instance)) {
+    input.placement = joining.instance;
+    input.join = true;
   }
-  // An outcome outlives its repair's report (space-48).
-  for (const key of Object.keys(outcomes)) {
-    if (!rows.has(outcomeRowId(key))) rows.set(outcomeRowId(key), { outcomeKey: key });
-  }
-  // Each row keeps the place it last had; a row new since then follows.
-  const arrived = [...rows.keys()].filter((id) => !layout.current.includes(id));
-  const placed = [...layout.current.filter((id) => rows.has(id)), ...arrived];
-  const nextLayout = [...layout.current, ...arrived];
-  // What a resolution reads when its act lands: the store has often
-  // re-read the state by then, the repair's row already gone.
-  const latest = useRef({ groups, outcomes });
-  useLayoutEffect(() => {
-    layout.current = nextLayout;
-    latest.current = { groups, outcomes };
-  });
-  const listOpen = rows.size > 0 && (open || blocking);
-
-  /** The reader's act resolved a repair (space-48): its outcome takes
-   * the row's place, and focus and the live region move on. */
-  const onResolved = (key: string, summary: string, projectId?: string): void => {
-    const { groups: state, outcomes: done } = latest.current;
-    const unanswered = (entry: IssueEntry): boolean =>
-      entry.repair !== undefined &&
-      entry.repair.key !== key &&
-      entry.repair.declined === undefined &&
-      !done[entry.repair.key];
-    // What the header will count: the other unanswered repairs, and
-    // every diagnostic no repair folds (space-1).
-    const left = state.diagnostics.filter((entry) => !entry.repair || unanswered(entry)).length;
-    // Focus moves to the next unanswered repair below, wrapping to the
-    // top, or else onto this outcome's Open project. The layout still
-    // holds the row's place even where its report is gone.
-    const id = outcomeRowId(key);
-    const order = layout.current;
-    const at = order.indexOf(id);
-    const targets = new Set(state.diagnostics.filter(unanswered).map(issueRowId));
-    const next = [...order.slice(at + 1), ...order.slice(0, Math.max(at, 0))]
-      .find((row) => targets.has(row));
-    setOutcomes((was) => ({ ...was, [key]: { summary, projectId } }));
-    setFocusTo((was) => ({ id: next ?? id, seq: (was?.seq ?? 0) + 1 }));
-    onNote(left
-      ? i18n._("{count, plural, one {# issue} other {# issues}} left.", { count: left })
-      : i18n._("All issues resolved."));
-  };
-  const focusSeq = (id: string): number | undefined =>
-    focusTo?.id === id ? focusTo.seq : undefined;
-
-  if (!listOpen) return null;
-  return (
-    <section
-      data-testid="space-issues-list"
-      aria-label={i18n._({
-        // Its own id: these are problems, apart from the Sources tab's GitHub issues.
-        id: "space.issues",
-        message: "Issues",
-        comment: "the list of unanswered space issues (problems, not GitHub issues)",
-      })}
-      // Amber is attention. With nothing unanswered there is none to
-      // pay, so the card stands neutral and the rows stay readable.
-      className={`flex flex-col gap-1 rounded-lg border p-3 text-sm ${
-        issueCount > 0
-          ? "border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950"
-          : "border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900"
-      }`}
-    >
-      <h2
-        className={`text-xs font-medium ${
-          issueCount > 0
-            ? "text-amber-800 dark:text-amber-200"
-            : "text-neutral-500"
-        }`}
-      >
-        {i18n._("Issues ({count})", { count: issueCount })}
-        {declinedCount > 0
-          ? i18n._({
-              id: " · {count} not added",
-              values: { count: declinedCount },
-              comment: "follows the issues heading: repairs the reader declined",
-            })
-          : ""}
-      </h2>
-      <ul className="flex flex-col gap-1">
-        {placed.map((id) => {
-          const row = rows.get(id)!;
-          if ("outcomeKey" in row) {
-            return (
-              <RepairOutcomeRow
-                key={id}
-                outcome={outcomes[row.outcomeKey]!}
-                focusSeq={focusSeq(id)}
-                onOpenProject={onOpenProject}
-              />
-            );
-          }
-          const entry = row.entry;
-          if (entry.file.endsWith(MERGE_HEAD_FILE)) {
-            return (
-              <li key={id} title={entry.file}>
-                {i18n._("A Git merge is pending; finish or abort it in your terminal.")}
-              </li>
-            );
-          }
-          if (entry.repair) {
-            return (
-              <RepairRow
-                key={id}
-                repair={entry.repair}
-                disabled={!connected}
-                focusSeq={focusSeq(id)}
-                onResolved={onResolved}
-                onNote={onNote}
-              />
-            );
-          }
-          return (
-            <li key={id} className="flex min-w-0 flex-wrap items-center gap-2">
-              <span className="min-w-0 truncate font-mono text-xs" title={entry.file}>
-                {entry.file}
-              </span>
-              <span className="min-w-0 flex-1">— {entry.reason}</span>
-              {entry.blocking ? (
-                <span className="shrink-0 rounded-full border border-current px-1.5 text-xs">
-                  {i18n._({ id: "blocking", comment: "mark on an issue that stops a sync" })}
-                </span>
-              ) : null}
-            </li>
-          );
-        })}
-      </ul>
-    </section>
-  );
+  return input;
 }
 
-/** A spex repository's Sync tab (space-7..space-18): what this device
- * changed, what the host holds that is new, the running rail, the
+/** A spex repository's Sync tab (space-7..space-18): what this computer
+ * changed, what each Space holds that is new, the running rail, the
  * outcome cards and the choices picker. */
 export function SyncTab({
   groups,
@@ -1245,7 +707,6 @@ export function SyncTab({
   now,
   connected,
   dismissed,
-  movable,
   rowName,
   refreshes,
   onDismiss,
@@ -1262,8 +723,6 @@ export function SyncTab({
    * holds it, so its placement lines and its row put the same outcomes
    * away (space-87). */
   dismissed?: string;
-  /** A project's, whose placements may move to another group (space-78). */
-  movable: boolean;
   /** How many times the reader's own Refresh has re-read the state. */
   refreshes: number;
   onDismiss(phase: string): void;
@@ -1273,13 +732,13 @@ export function SyncTab({
   const store = usePlaceStore();
   const spaceFetch = store((state) => state.spaceFetch);
   const spaceSync = store((state) => state.spaceSync);
-  const spaceLeave = store((state) => state.spaceLeave);
   const spaceLastAct = store((state) => state.spaceLastAct);
   const spaceCancel = store((state) => state.spaceCancel);
   const key = repo.key;
   const sync = repo.sync;
   const running = sync.phase === "running";
   const held = heldPlacements(repo);
+  const seat = seatName(store.place);
 
   const [busy, setBusy] = useState<"check" | "retry" | "stop">();
   // An accepted long command keeps its control busy until the machine's
@@ -1289,13 +748,8 @@ export function SyncTab({
   const [error, setError] = useState<{ where: "check" | "retry"; message: string }>();
   const useChoices = useContext(ChoicesContext);
   const choicesKey = `${store.place.key}|${key}`;
-  const choices = useChoices((state) => state.choices[choicesKey]);
   const picker = conflictsOf(groups, repo);
-  const { line: choicesLine, name: choicesName, conflicts, units: conflictUnits } = picker;
-  // The picker's choices outlive a stop and a re-plan: a choice for a
-  // unit that is no longer a conflict is dropped, the rest stand.
-  const chosenChoices = chosenOf(choices, conflictUnits);
-  const total = conflicts.length;
+  const { line: choicesLine, name: choicesName, units: conflictUnits } = picker;
 
   const phaseKey = JSON.stringify(sync);
   useEffect(() => {
@@ -1306,7 +760,7 @@ export function SyncTab({
 
   /** One placement's incoming units (space-8): what the core lists as
    * incoming, and the units changed on both sides, which it lists under
-   * conflicts alone — their rows read the host's change beside the mark
+   * conflicts alone — their rows read the Space's change beside the mark
    * to choose. */
   const unitsOf = (line: PlacementState): SpaceUnit[] => [
     ...line.incoming,
@@ -1315,49 +769,54 @@ export function SyncTab({
       .map((conflict) => ({ ...conflict.unit, change: conflict.remote.change })),
   ];
   /** What one placement's section lists, or why it lists nothing
-   * (space-8): an unrelated history lists nothing — until a join of it
-   * compares against the empty tree and asks its choices (space-9) — a
-   * placement holding no records says Sync will send these, and one
-   * whose check stopped says so. */
-  const incomingOf = (line: PlacementState): { units: SpaceUnit[]; empty?: string } => {
+   * (space-8): records started separately list nothing — until a
+   * combining compares against the empty tree and asks its choices
+   * (space-9) — a Space holding no records says Sync will send these,
+   * and one whose check stopped says so. */
+  const incomingOf = (line: PlacementState, name: string): { units: SpaceUnit[]; empty?: string } => {
     const joining = sync.phase === "choices" && sync.placement === line.instance;
     if ((sync.phase === "unrelated" && sync.placement === line.instance) || (line.branch?.unrelated && !joining)) {
-      return { units: [], empty: i18n._("Unrelated history") };
+      return { units: [], empty: startedSeparately(name) };
     }
     if (line.branch?.hostEmpty) {
-      return { units: [], empty: i18n._("The host holds no records yet; Sync will send these") };
+      return {
+        units: [],
+        empty: i18n._({
+          id: "{name} holds no records yet; Sync will send these",
+          values: { name },
+          comment: "a Sync tab's incoming section: the Space holds none of this project's records yet; {name} is the Space's display name",
+        }),
+      };
     }
     const units = unitsOf(line);
     const checked = line.branch != null && line.branch.checkedAt !== null;
     if (checked && units.length > 0) return { units };
     const outcome = lineOutcome(repo, line, dismissed);
     if (outcome?.kind === "stopped" && outcome.step === "check") {
-      return {
-        units: [],
-        empty: i18n._({
-          id: "{step} stopped — {message}",
-          values: { step: STEP_NAMES[outcome.step](), message: outcome.message },
-          comment: "{step} is the sync step's name; {message} is the cause the host gave",
-        }),
-      };
+      return { units: [], empty: stoppedPhrase(outcome.step, outcome.message) };
     }
-    return { units: [], empty: checked ? i18n._("Nothing new on the host") : i18n._("Not checked yet") };
+    return {
+      units: [],
+      empty: checked
+        ? i18n._({ id: "Nothing new at {name}", values: { name }, comment: "a Sync tab's incoming section after a check: the Space holds nothing this computer lacks; {name} is its display name" })
+        : i18n._({ id: "Not checked yet", comment: "a Sync tab's incoming section before any check" }),
+    };
   };
   // While choices stand, the incoming area lists that placement's units
   // alone, above the picker (space-9); otherwise every placement the
   // clone holds, in order (space-8).
-  const sections = (sync.phase === "choices" && choicesLine ? [choicesLine] : held).map((line) => ({
-    line,
-    ...incomingOf(line),
-  }));
-  const incomingCount = sections.reduce((sum, section) => sum + section.units.length, 0);
+  const sections = (sync.phase === "choices" && choicesLine ? [choicesLine] : held).map((line) => {
+    const name = placementName(groups, line);
+    return { line, name, ...incomingOf(line, name) };
+  });
 
-  // The placement in flight, named beside the step line where the
-  // clone holds more than one (space-12).
-  const inFlight = running && sync.placement !== undefined && held.length > 1 ? placementAt(repo, sync.placement) : undefined;
+  // The placement in flight, named on the step line — "Checking <display
+  // name>…" — and beside it where the clone holds more than one
+  // (space-12).
+  const inFlight = running && sync.placement !== undefined ? placementAt(repo, sync.placement) : undefined;
   const flightName = inFlight
     ? placementName(groups, inFlight)
-    : running && sync.placement && held.length > 1
+    : running && sync.placement
       ? instanceNameAt(groups, sync.placement)
       : undefined;
 
@@ -1380,40 +839,17 @@ export function SyncTab({
     }
   };
 
-  // A stopped Leave names no placement (space-30): its Retry sends again
-  // the Leave this page asked, confirmed as it was, and with no memory
-  // of one — another page's, or before a reload — none is offered, its
-  // row's Leave… still standing (space-89). A Place or an Attach stops
-  // only in the sync that follows its add — a refused add ends the
-  // operation where it stood — so its Retry syncs (space-97, space-99).
-  const lastAct = sync.phase === "stopped" && sync.op === "leave" ? spaceLastAct(key) : undefined;
-  const leaveAgain = lastAct?.op === "leave" ? lastAct : undefined;
-  const retryOffered = sync.phase === "stopped" && sync.retry && (sync.op !== "leave" || leaveAgain !== undefined);
+  // A stopped Leave names no placement (space-30) and was asked by no
+  // page of this surface (DR-172): it offers no Retry. A Place or an
+  // Attach stops only in the sync that follows its add, so its Retry
+  // syncs (space-97, space-99).
+  const retryOffered = sync.phase === "stopped" && sync.retry && sync.op !== "leave";
 
   const retry = () => {
     if (sync.phase !== "stopped") return;
     if (sync.op === "check") return run("retry", () => spaceFetch(key));
-    if (sync.op === "leave") {
-      if (!leaveAgain) return;
-      return run("retry", () => spaceLeave(key, leaveAgain.instance, leaveAgain.confirmed));
-    }
-    const input: SyncInput = { ...useChoices.getState().inputs[choicesKey] };
-    delete input.join;
-    if (choicesLine && total > 0 && Object.keys(chosenChoices).length === total) {
-      input.placement = choicesLine.instance;
-      input.choices = chosenChoices;
-    }
-    // Only a join this page sent runs again as a join, of the placement
-    // it named, and a join stopped on its way as the join of its
-    // placement (space-13): an unrelated placement nobody here joined
-    // syncs plainly, stopping as "Unrelated history" again with "Merge
-    // histories…" on its line, the confirm still the reader's.
-    const act = spaceLastAct(key);
-    const joining = act?.op === "join" ? act : sync.op === "join" ? keyPlacement(repo) : undefined;
-    if (joining && (input.placement === undefined || input.placement === joining.instance)) {
-      input.placement = joining.instance;
-      input.join = true;
-    }
+    const { inputs, choices } = useChoices.getState();
+    const input = stoppedRetryInput(groups, repo, inputs[choicesKey], choices[choicesKey], spaceLastAct(key));
     return run("retry", () => spaceSync(key, input));
   };
 
@@ -1437,7 +873,7 @@ export function SyncTab({
   if (!groups.git.ok) {
     return (
       <div data-testid="space-sync-tab" className="flex flex-col gap-3">
-        {/* The core names the install act for this host (space-1). */}
+        {/* The core names the install act for this computer (space-1). */}
         <p className="text-sm">{groups.git.guidance}</p>
       </div>
     );
@@ -1446,30 +882,37 @@ export function SyncTab({
   if (!cloneHere(repo)) {
     return (
       <div data-testid="space-sync-tab" className="flex flex-col gap-3">
-        <p className="text-sm text-neutral-500">{notHerePhrase(seatName(store.place))}</p>
+        <p className="text-sm text-neutral-500">{notHerePhrase(seat)}</p>
       </div>
     );
   }
 
   const checkLabel =
     busy === "check" || accepted?.where === "check" || (running && sync.op === "check")
-      ? i18n._({ id: "Checking…", comment: "the Check host control, while the check runs" })
-      : i18n._("Check host");
-  // A repository only on this device has no host copy to check
+      ? i18n._({ id: "Checking…", comment: "sync step running: reading what the Space holds" })
+      : i18n._({ id: "Check", comment: "a Sync tab's control: read what each Space holds that this computer lacks, bringing nothing in yet" });
+  // Records only on this computer have no Space's copy to check
   // (space-29: `space.fetch` refuses a local-only one).
   const checkDisabled =
     disabled || running || pending || repo.mergePending || repo.state === "local-only";
+  const nothingToSend =
+    seat === undefined
+      ? i18n._({ id: "Nothing to send from this computer", comment: "a Sync tab's To send list with nothing in it" })
+      : i18n._({
+          id: "Nothing to send from {place}",
+          values: { place: seat },
+          comment: "a Sync tab's To send list on a team server's Space, nothing in it; {place} is the server's name",
+        });
 
   return (
     <div data-testid="space-sync-tab" className="flex flex-col gap-3">
-      {/* The records' Git, one line per placement, stands here and on no
-          row (space-87, DR-159). */}
+      {/* The records' places, one line per placement, stand here and on
+          no row (space-87, DR-159). */}
       <PlacementLines
         groups={groups}
         repo={repo}
         now={now}
         dismissed={dismissed}
-        movable={movable}
         rowName={rowName}
         connected={connected}
         refreshes={refreshes}
@@ -1477,7 +920,7 @@ export function SyncTab({
       />
       {repo.mergePending ? (
         <Card testId="space-merge-note" tone="amber">
-          {i18n._("A merge is in progress in your terminal. Finish or abort it there.")}
+          {i18n._({ id: "Finish or abort the merge in your terminal", comment: "a Git merge started in a terminal is pending in a project's records" })}
         </Card>
       ) : null}
 
@@ -1486,7 +929,8 @@ export function SyncTab({
           step={sync.step}
           cancelable={sync.cancelable}
           op={sync.op}
-          placement={flightName}
+          lineName={flightName}
+          placement={held.length > 1 && sync.step !== "check" ? flightName : undefined}
           onStop={() => void stop()}
           stopping={busy === "stop" || accepted?.where === "stop"}
         />
@@ -1498,37 +942,37 @@ export function SyncTab({
           </span>
           <span className="text-xs">
             {i18n._({
-              id: "Your changes are saved; nothing is pushed to {name} yet",
+              id: "Your changes are saved; nothing is sent to {name} yet",
               values: { name: choicesName },
-              comment: "the choices note; {name} is that placement's instance's display name, or the path placement's remote",
+              comment: "the choices note; {name} is that placement's Space's display name, or the path placement's remote",
             })}
           </span>
         </Card>
       ) : null}
       {sync.phase === "unrelated" ? (
         <Card testId="space-unrelated" tone="amber">
-          <span className="font-medium">{i18n._("Unrelated history")}</span>
-          <span>{i18n._("Merge both histories into one to sync.")}</span>
+          <span className="font-medium">
+            {startedSeparately(phraseNames(groups, repo, seat).nameAt(sync.placement))}
+          </span>
         </Card>
       ) : null}
       {showStopped && sync.phase === "stopped" ? (
         <Card testId="space-stopped" tone={sync.cause === "rejected" ? "amber" : "red"}>
           <span className="font-medium" data-testid="space-stopped-title">
-            {i18n._({
-              id: "{step} stopped — {message}",
-              values: { step: STEP_NAMES[sync.step](), message: sync.message },
-              comment: "{step} is the sync step's name; {message} is the cause the host gave",
-            })}
+            {stoppedPhrase(sync.step, sync.message)}
           </span>
-          {/* One block: the guidance names what the host said and the
+          {/* One block: the guidance names what the Space said and the
               way forward (space-50). */}
           {sync.guidance ? <span className="text-xs">{sync.guidance}</span> : null}
           {sync.step === "push" && (keyPlacement(repo)?.branch?.ahead ?? 0) > 0 ? (
             <span className="text-xs">
-              {i18n._(
-                "Your changes are saved locally ({count, plural, one {# commit} other {# commits}} ahead).",
-                { count: keyPlacement(repo)?.branch?.ahead ?? 0 },
-              )}
+              {seat === undefined
+                ? i18n._({ id: "Saved on this computer, not sent yet", comment: "a stopped send's card: the records are saved here and wait to be sent" })
+                : i18n._({
+                    id: "Saved on {place}, not sent yet",
+                    values: { place: seat },
+                    comment: "a stopped send's card on a team server's Space: the records are saved there and wait to be sent; {place} is the server's name",
+                  })}
             </span>
           ) : null}
           <div className="flex flex-wrap items-center gap-2">
@@ -1590,23 +1034,16 @@ export function SyncTab({
 
       <section aria-labelledby="space-local-heading" className="flex flex-col gap-2">
         <h2 id="space-local-heading" className="text-sm font-medium">
-          {i18n._("Local changes ({count})", { count: repo.local.length })}
+          {i18n._({ id: "To send ({count})", values: { count: repo.local.length }, comment: "a Sync tab's heading over the records this computer changed that no Space holds yet; {count} how many" })}
         </h2>
         {repo.local.length === 0 ? (
-          <p className="text-sm text-neutral-500">
-            {seatName(store.place) === undefined
-              ? i18n._("Nothing to send from this device")
-              : i18n._({
-                  id: "Nothing to send from {place}",
-                  values: { place: seatName(store.place)! },
-                  comment: "a Sync tab's local changes on a team server's Space, none standing; {place} is the server's name",
-                })}
-          </p>
+          <p className="text-sm text-neutral-500">{nothingToSend}</p>
         ) : (
           <UnitList
             repository={key}
             units={repo.local}
             side="mine"
+            name=""
             conflicts={conflictUnits}
             onOpenSession={onOpenSession}
             testId="space-local-list"
@@ -1614,11 +1051,13 @@ export function SyncTab({
         )}
       </section>
 
-      <section aria-labelledby="space-incoming-heading" className="flex flex-col gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <h2 id="space-incoming-heading" className="min-w-0 flex-1 text-sm font-medium">
-            {i18n._("From the host ({count})", { count: incomingCount })}
-          </h2>
+      <section aria-label={i18n._({ id: "Incoming", comment: "the Sync tab's part listing what each Space holds that this computer lacks" })} className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {error?.where === "check" ? (
+            <span role="alert" className="min-w-0 flex-1 text-xs text-red-600 dark:text-red-400">
+              {error.message}
+            </span>
+          ) : null}
           <button
             type="button"
             data-testid="space-check"
@@ -1628,31 +1067,32 @@ export function SyncTab({
           >
             {checkLabel}
           </button>
-          {error?.where === "check" ? (
-            <span role="alert" className="text-xs text-red-600 dark:text-red-400">
-              {error.message}
-            </span>
-          ) : null}
         </div>
         {sections.length === 0 ? (
-          // A clone holding no placement has no host to check (space-29).
-          <p className="text-sm text-neutral-500">{i18n._("Not checked yet")}</p>
+          // Records held at no Space have none to check (space-29).
+          <p className="text-sm text-neutral-500">{i18n._({ id: "Not checked yet", comment: "a Sync tab's incoming section before any check" })}</p>
         ) : (
-          // Each placement's units under its instance's display name, the
+          // Each placement's units under "From <display name> (<n>)", the
           // path placement's under its remote (space-8).
-          sections.map(({ line, units, empty }) => {
-            const name = placementName(groups, line);
+          sections.map(({ line, name, units, empty }) => {
             const checkedAt = line.branch?.checkedAt ?? null;
+            const headingId = `space-incoming-heading-${line.instance ?? "path"}`;
             return (
               <div
                 key={line.instance ?? "path"}
+                role="group"
+                aria-labelledby={headingId}
                 data-testid={`space-incoming-${line.instance ?? "path"}`}
                 className="flex min-w-0 flex-col gap-1"
               >
                 <div className="flex min-w-0 items-baseline gap-2">
-                  <h3 className="min-w-0 truncate text-xs font-medium" title={name}>
-                    {name}
-                  </h3>
+                  <h2 id={headingId} className="min-w-0 truncate text-sm font-medium" title={name}>
+                    {i18n._({
+                      id: "From {name} ({count})",
+                      values: { name, count: units.length },
+                      comment: "a Sync tab's heading over what one Space holds that this computer lacks; {name} is the Space's display name, {count} how many",
+                    })}
+                  </h2>
                   {checkedAt !== null ? (
                     <span className="hidden shrink-0 text-xs text-neutral-500 @2xl:inline">
                       {i18n._("· checked {age}", { age: relativeAge(checkedAt, now) })}
@@ -1667,6 +1107,7 @@ export function SyncTab({
                     units={units}
                     side="remote"
                     placement={line.instance}
+                    name={name}
                     // Marked to choose from this placement's own
                     // conflicts (space-8).
                     conflicts={new Set(line.conflicts.map((conflict) => conflict.unit.unit))}
@@ -1760,8 +1201,8 @@ function chosenOf(choices: Record<string, Side> | undefined, units: Set<string>)
 }
 
 /** A repository's choices picker (space-17, space-18): a row per
- * conflicting unit with "Keep what's here" — at a seat's place "Keep
- * what's on <server>" (space-112) — and "Take <display name>'s",
+ * conflicting unit with "Keep this computer's" — at a seat's place
+ * "Keep <server>'s" (space-112) — and "Take <display name>'s",
  * nothing preselected; "All here" and "All <display name>'s" filling
  * every row; Apply disabled with "N of M chosen" until every row has a
  * choice, then one inline confirm, Cancel focused, starting the sync
@@ -1840,16 +1281,16 @@ export function ConflictsPicker({
   const labels = {
     mine:
       seat === undefined
-        ? i18n._({ id: "Keep what's here", comment: "conflict choice: keep this place's version of the unit" })
+        ? i18n._({ id: "Keep this computer's", comment: "a choice on records changed on both sides: keep this computer's version" })
         : i18n._({
-            id: "Keep what's on {place}",
+            id: "Keep {place}'s",
             values: { place: seat },
-            comment: "conflict choice on a team server's Space: keep the server's version of the unit; {place} is the server's name",
+            comment: "a choice on records changed on both sides, on a team server's Space: keep the server's version; {place} is the server's name",
           }),
     remote: i18n._({
       id: "Take {name}'s",
       values: { name },
-      comment: "conflict choice: take the version at that instance; {name} is the instance's display name",
+      comment: "a choice on records changed on both sides: take the Space's version; {name} is the Space's display name",
     }),
   };
   const chosenId = `${ids}-chosen`;
@@ -1873,6 +1314,7 @@ export function ConflictsPicker({
             marked={marked === conflict.unit.unit}
             now={now}
             placement={line.instance}
+            name={name}
             labels={labels}
             scope={scope}
             disabled={disabled || applying}
@@ -1888,7 +1330,7 @@ export function ConflictsPicker({
           disabled={disabled}
           onClick={() => choose(Object.fromEntries(conflicts.map((c) => [c.unit.unit, "mine" as Side])))}
         >
-          {i18n._({ id: "All here", comment: "choose this place's version for every conflict" })}
+          {i18n._({ id: "All here", comment: "choose this computer's version for every record changed on both sides" })}
         </button>
         <button
           type="button"
@@ -1900,7 +1342,7 @@ export function ConflictsPicker({
           {i18n._({
             id: "All {name}'s",
             values: { name },
-            comment: "choose the version at that instance for every conflict; {name} is the instance's display name",
+            comment: "choose the Space's version for every record changed on both sides; {name} is the Space's display name",
           })}
         </button>
         <span className="flex-1" />
@@ -1910,19 +1352,21 @@ export function ConflictsPicker({
               question={
                 remoteCount === 0
                   ? seat === undefined
-                    ? i18n._(
-                        "{count, plural, one {Keep this device's version of the unit? The host's version stays in Git history.} other {Keep this device's version of all # units? The host's version stays in Git history.}}",
-                        { count: total },
-                      )
-                    : i18n._({
-                        id: "{count, plural, one {Keep {place}'s version of the unit? The host's version stays in Git history.} other {Keep {place}'s version of all # units? The host's version stays in Git history.}}",
-                        values: { count: total, place: seat },
-                        comment: "Apply's confirm on a team server's Space, every choice keeping the server's side; {place} is the server's name",
+                    ? i18n._({
+                        id: "{count, plural, one {Keep this computer's version? {name}'s stays in Git history} other {Keep this computer's version of all #? {name}'s stays in Git history}}",
+                        values: { count: total, name },
+                        comment: "Apply's confirm, every choice keeping this computer's side; {name} is the Space's display name",
                       })
-                  : i18n._(
-                      "Replace {count, plural, one {# unit} other {# units}} with the host's version? The other version stays in Git history; a replaced session loses its local resume hints and where you stopped reading.",
-                      { count: remoteCount },
-                    )
+                    : i18n._({
+                        id: "{count, plural, one {Keep {place}'s version? {name}'s stays in Git history} other {Keep {place}'s version of all #? {name}'s stays in Git history}}",
+                        values: { count: total, place: seat, name },
+                        comment: "Apply's confirm on a team server's Space, every choice keeping the server's side; {place} is the server's name, {name} the Space's display name",
+                      })
+                  : i18n._({
+                      id: "{count, plural, one {Take {name}'s version of # record?} other {Take {name}'s version of # records?}} The other stays in Git history; a replaced session loses its resume hints and where you stopped reading",
+                      values: { count: remoteCount, name },
+                      comment: "Apply's confirm where some choices take the Space's side; {name} is the Space's display name, {count} how many records it replaces",
+                    })
               }
               confirmLabel={i18n._({ id: "Apply", comment: "confirm: apply the chosen versions" })}
               onConfirm={() => {

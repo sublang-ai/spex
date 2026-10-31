@@ -2,50 +2,51 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The groups list of the Space surface (space-1, space-61, DR-103,
-// DR-127, DR-159): your own records first under "Only you · @<login>" —
-// your sessions, then each project here in no group — then each
-// instance the home lists under its heading (SpaceInstance), its groups
-// as a tree in the order of their paths, a subgroup within its group,
-// your namespace there under "Only you" while it lists anything but your
-// own group's repository, and every other account's login under "Shared
-// by @<login>". A group's heading carries its name, its member count
-// where read, and one overflow control, "More", holding Members, "New
-// subgroup", "Rename" and "Delete" as the host lets the person act
-// (space-68, space-76, space-77, DR-114); beneath it, one line per team
-// server of that group (run-view-170), then its rows.
+// DR-127, DR-159, DR-172): each Space the home lists under its heading
+// (SpaceInstance) — "Personal" first, your sessions and the projects in
+// your namespace there, then its groups as a tree in the order of their
+// paths, a group inside a group nested within it, then every other
+// account's login under "Shared by @<login>" — and after them "This
+// computer", what stands in no group: your sessions before any sign-in
+// and each project not yet shared. A group's heading carries its name,
+// its path where the two differ, its member count where read, and one
+// overflow control, "More", holding Members alone; beneath it, one line
+// per team server of that group (run-view-170), then its rows.
 //
 // A row is a project, never a spex repository by its name: the
 // repository's with its `-spex` dropped, a group's own reading "Group
-// sessions" and your own group's own "Your sessions" — where its code
-// lives, the places it is open at ("Here", "On <server>"), one phrase
-// for its records' standing (space-87), its local changes, one primary
-// control and one overflow control (space-1). The primary control is
-// Open (space-111): this place's entry — "Open here", "Show", or, for a
-// clone whose code found no folder, "Choose folder…" (at a seat "Try
-// again") — then each server of the instance the member may open, "Open
-// on <server>" or "Show on <server>"; a menu where more than one stands,
-// else that entry alone. A row whose state offers another control reads
-// it instead: "Add to a group…" for a project in no group (space-58),
-// Retry for one unreachable. Choices owed read "Changed here and at
-// <display name>" with Resolve, the picker standing beneath the row
-// (space-14); an unrelated history "Merge histories…" (space-13). The
-// overflow holds "Sync now", Members, "Explore records", "Move…",
-// "Place at…", "Leave…" and Attach as the row's state offers them
-// (space-1, space-88, space-89, space-90). What an act opens stands
-// beneath its row: the group picker (space-58), the folder an Open asks
-// for on the served page (space-63), the first-push notice (space-57),
-// a Place's picker, a Leave's confirm, the members panel, the move
-// picker and Attach's notice. Activating a row's name opens its Sync and
-// Explore tabs beneath the list, the Sync tab carrying its placements'
-// lines (space-87). No part of the list links a page of the host, or
-// names what stands behind the instance (space-1). At a remote place an
-// Open names no folder, its core allocating one, and a clone whose code
-// clone failed offers "Try again" with "Add a credential" where the
-// failure names a code host wanting the member's credential (space-103,
-// run-view-169). Every act is a command whose outcome arrives as state
-// (space-29).
+// sessions" and your own group's own "Your sessions" — a glyph titled by
+// where its code is, the places it is open at ("Here", "On <server>"),
+// one standing phrase (space-120), one primary control and one overflow
+// control (space-1). The primary control is the first place it may be
+// opened at (space-111): this place's entry — "Open here", titled as
+// downloading the records and the code, "Show", or, for a clone whose
+// code found no folder, "Choose folder…" (at a seat "Try again") — then
+// each server of the Space the member may open, "Open on <server>" or
+// "Show on <server>", the other places offered in a menu beside it. A
+// row whose state offers another control reads it instead: "Add to a
+// group…" for a project in no group, disabled and titled "Sign in to a
+// Space first" while no Space it would offer is signed in (space-58),
+// Retry for one unreachable. The phrase carries its way forward: Resolve
+// with the picker beneath the row (space-14), "Combine…" confirmed
+// inline (space-13), Continue saying the sharing confirm (space-57),
+// Retry (space-15). The overflow holds "Sync now", Members, "Explore
+// records" and, on a clone holding no placement at a Space, "Add to a
+// group…". Moving a project to another group, placing its records at a
+// second Space, leaving one and attaching a copy another computer added
+// are not offered here (DR-172). What an act opens stands beneath its
+// row: the group picker (space-58), the folder an Open asks for on the
+// served page (space-63), the sharing confirm (space-57) and the members
+// panel. Activating a row's name opens its Sync and Explore tabs beneath
+// the list, the Sync tab carrying its placements' lines (space-87). No
+// part of the list links a page of the Space, or names what stands
+// behind it (space-1). At a remote place an Open names no folder, its
+// core allocating one, and a clone whose code clone failed offers "Try
+// again" with "Add a credential" where the failure names a code host
+// wanting the member's credential (space-103, run-view-169). Every act
+// is a command whose outcome arrives as state (space-29).
 
-import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useContext, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type {
   GroupsState,
   InstanceGroupState,
@@ -75,9 +76,9 @@ import {
   groupTestKey,
   instanceName,
   namespaceOf,
+  ownPersonalAt,
   pickInstances,
-  signedInInstances,
-  standingOf,
+  thisComputerRows,
 } from "../lib/instances.js";
 import type { SpexCommandError } from "../lib/client.js";
 import {
@@ -88,52 +89,47 @@ import {
   instanceNameAt,
   instancePlacements,
   keyPlacement,
-  leavePlacements,
-  leaveStage,
   owesNotice,
-  placeInstances,
   placementAt,
   placementName,
   rowPlacement,
   runnable,
-  standingEntry,
 } from "../lib/placements.js";
 import {
-  STEP_LINES,
-  STEP_NAMES,
   awaitsFolder,
   cloneHere,
-  displayRemote,
+  codeOf,
   isGroupRepository,
   lastSegment,
+  personalLabel,
+  phraseNames,
   pickDirectoryBridge,
   projectName,
   rowName,
   rowPhrase,
-  sameRemote,
+  sameCode,
   seatName,
+  thisComputerLabel,
 } from "../lib/space.js";
-import { InlineConfirm } from "./InlineConfirm.js";
 import { AddInstance, InstanceSection } from "./SpaceInstance.js";
 import { GroupServers, InstanceServers } from "./SpaceServers.js";
-import { GroupNameEditor, MembersPanel } from "./SpaceMembers.js";
+import { MembersPanel } from "./SpaceMembers.js";
 import { MenuButton, MoreMenu, type MenuEntry } from "./SpaceMenu.js";
-import { LeaveChoice, LeaveConfirm, PlaceChoice, alsoPlaceAt, leaveLabel, placeAtLabel, removeFrom } from "./SpacePlacementActs.js";
-import { MergeConfirm, PlacementNotice, continueLabel, mergeHistoriesLabel, mergingLabel, sharingNotice } from "./SpacePlacements.js";
+import { CombineConfirm, SharingConfirm, combineLabel, combiningLabel, continueLabel, entryName, placementGroupName } from "./SpacePlacements.js";
 import type { SignInFlow } from "./SpaceSignIn.js";
-import { ConflictsPicker } from "./SpaceSync.js";
+import { ChoicesContext, ConflictsPicker, stoppedRetryInput } from "./SpaceSync.js";
 import { SECONDARY, syncRefusal, type Note } from "./SpaceSurface.js";
 
-/** An entry's identity under its instance's heading (space-1, DR-127):
- * a group by its id, a namespace by its login, a group no read lists by
+/** An entry's identity under its Space's heading (space-1, DR-127): a
+ * group by its id, a namespace by its login, a group no read lists by
  * its path. */
 function entryKey(group: InstanceGroupState): string {
   return group.id !== null ? `id:${group.id}` : group.login !== null ? `@${group.login}` : `path:${group.fullPath}`;
 }
 
-/** Your own group as an entry of the list (space-1): its folder's name
- * and its rows, with nothing a read lets the person do there. */
-function ownEntry(groups: GroupsState): InstanceGroupState {
+/** "This computer" as an entry of the list (space-1): its rows, with
+ * nothing a read lets the person do there. */
+function thisComputerEntry(groups: GroupsState): InstanceGroupState {
   return {
     id: null,
     login: null,
@@ -142,51 +138,39 @@ function ownEntry(groups: GroupsState): InstanceGroupState {
     name: groups.own.name,
     can: { createSubgroup: false, manageMembers: false, rename: false, delete: false },
     placed: [],
-    repositories: groups.own.repositories,
+    repositories: thisComputerRows(groups),
   };
 }
 
-/** A repository's dot carries the status palette (DR-010 §8): neutral
- * idle, emerald running, amber choices and unrelated, red stopped. */
-export function statusDot(repo: RepositoryState): { className: string; tone: string; word: string } {
-  const sync = repo.sync;
-  if (sync.phase === "running") {
-    return { className: "bg-emerald-500 animate-pulse", tone: "running", word: STEP_LINES[sync.step]() };
-  }
-  if (sync.phase === "choices" || sync.phase === "unrelated") {
-    return {
-      className: "bg-amber-500",
-      tone: "attention",
-      word:
-        sync.phase === "choices"
-          ? i18n._({ id: "needs your choice", comment: "a spex repository's status, read in a title" })
-          : i18n._({ id: "unrelated history", comment: "a spex repository's status, read in a title" }),
-    };
-  }
-  if (sync.phase === "stopped") {
-    const rejected = sync.cause === "rejected";
-    return {
-      className: rejected ? "bg-amber-500" : "bg-red-500",
-      tone: rejected ? "attention" : "stopped",
-      word: i18n._({
-        id: "{step} stopped",
-        values: { step: STEP_NAMES[sync.step]() },
-        comment: "{step} is the sync step's name",
-      }),
-    };
-  }
+/** "Personal" at a Space (space-1): your namespace there, with your own
+ * group's own repository first where it stands there; none while it
+ * holds no row — a placement of a row standing elsewhere draws no line
+ * (DR-159), so it alone heads nothing. */
+function personalEntry(groups: GroupsState, instance: InstanceState): InstanceGroupState | undefined {
+  const mine = namespaceOf(instance);
+  const own = ownPersonalAt(groups) === instance ? groups.own.repositories.find((repo) => repo.own) : undefined;
+  const rows = [...(own ? [own] : []), ...(mine?.repositories ?? []).filter((repo) => repo.key !== own?.key)];
+  if (rows.length === 0) return undefined;
+  const login = instance.account.login;
   return {
-    className: "bg-neutral-400",
-    tone: "idle",
-    word: i18n._({ id: "idle", comment: "a spex repository's status: nothing is running" }),
+    ...(mine ?? {
+      id: null,
+      login,
+      mine: true,
+      fullPath: login,
+      name: login,
+      can: { createSubgroup: false, manageMembers: false, rename: false, delete: false },
+      placed: [],
+    }),
+    repositories: rows,
   };
 }
 
 /** Whether a row waits for a sign-in (space-11, space-61): a clone
  * holding placements can run none of them — no path placement, which
- * this device reaches without an instance, and no instance governing
- * one signed in; a row holding none, while the instance governing it is
- * signed out, or while the home is signed in nowhere where none does. */
+ * this computer reaches without a Space, and no Space governing one
+ * signed in; a row holding none, while the Space governing it is signed
+ * out, or while the home is signed in nowhere where none does. */
 function signedOutFor(groups: GroupsState, repo: RepositoryState, governing: InstanceState | undefined): boolean {
   const held = heldPlacements(repo);
   if (held.length > 0) return !held.some((line) => canRun(groups, repo, line));
@@ -195,8 +179,8 @@ function signedOutFor(groups: GroupsState, repo: RepositoryState, governing: Ins
 
 /** Why Sync is refused before its first step on this row (space-11):
  * the surface's own reasons, the sign-in first where no placement can
- * run, naming the first placement's instance by its display name as
- * last read, else its host name. */
+ * run, naming the first placement's Space by its display name as last
+ * read, else its host name. */
 export function rowSyncRefusal(
   groups: GroupsState,
   repo: RepositoryState,
@@ -206,9 +190,9 @@ export function rowSyncRefusal(
     const first = keyPlacement(repo)?.instance ?? governing?.origin;
     if (first) {
       return i18n._({
-        id: "Sign in to {host} first",
-        values: { host: instanceNameAt(groups, first) },
-        comment: "beside a disabled Sync: the row's instance is signed out; {host} its display name, or its host name before any read",
+        id: "Sign in to {name} first",
+        values: { name: instanceNameAt(groups, first) },
+        comment: "beside a disabled Sync now: the project's Space is signed out; {name} its display name, or its host name before any read",
       });
     }
   }
@@ -217,20 +201,21 @@ export function rowSyncRefusal(
 
 /** The words of "Add to a group…" (space-58, space-61, DR-159). */
 const addToGroupLabel = (): string =>
-  i18n._({ id: "Add to a group…", comment: "on a project here in no group: opens the groups it may be put in, your own first" });
+  i18n._({ id: "Add to a group…", comment: "on a project in no group: opens the groups at each Space its records may be shared into, Personal first" });
 
-/** Your own records' heading word, and your namespace's (space-1). */
-const onlyYouLabel = (): string =>
-  i18n._({ id: "Only you", comment: "the heading of your own records, and of your namespace at an instance: what no one else reads" });
+/** The title of a disabled "Add to a group…" (space-61). */
+const signInFirstLabel = (): string =>
+  i18n._({ id: "Sign in to a Space first", comment: "the title of a disabled Add to a group…: no Space is signed in to share the project into" });
 
 /** Each place's projects and Groups state, by its place's key: what a
  * row reads of every seat (space-1, space-111). */
 type Holdings = ReadonlyMap<string, Pick<AppState, "projects" | "space">>;
 
-/** The groups list (space-1): your own records first, then each
- * instance the home lists under its heading in the home's order, its
- * groups as a tree, its servers under their group (run-view-170), and
- * while it lists any instance, "Add instance…" at its foot. */
+/** The groups list (space-1): each Space the home lists under its
+ * heading in the home's order — "Personal", its groups as a tree, other
+ * accounts' logins, its servers under their group (run-view-170) — then
+ * "This computer" while it holds any row, and while the home lists any
+ * Space, "Add a Space…" at its foot. */
 export function GroupsList({
   groups,
   now,
@@ -288,15 +273,16 @@ export function GroupsList({
     onOpenProject,
     onNote,
   };
+  const local = thisComputerEntry(groups);
   return (
     <section
       data-testid="space-groups"
-      aria-label={i18n._({ id: "Your groups", comment: "the list of the home's groups and their spex repositories" })}
+      aria-label={i18n._({ id: "Your groups", comment: "the list of each Space's groups and their projects, and what is on this computer alone" })}
       className="flex min-w-0 flex-col gap-4"
     >
-      <GroupSection {...shared} group={ownEntry(groups)} subgroups={[]} />
       {groups.instances.map((instance) => {
         const entries = entriesOf(instance);
+        const personal = personalEntry(groups, instance);
         const tree = groupTree(entries.filter((entry) => entry.login === null));
         return (
           <InstanceSection
@@ -307,11 +293,12 @@ export function GroupsList({
             signIn={signIn}
             onNote={onNote}
           >
+            {personal ? <GroupSection key={entryKey(personal)} {...shared} instance={instance} group={personal} subgroups={[]} /> : null}
             {tree.map((node) => (
               <GroupSection key={entryKey(node.group)} {...shared} instance={instance} group={node.group} subgroups={node.children} />
             ))}
             {entries
-              .filter((entry) => entry.login !== null && (!entry.mine || entry.repositories.length > 0))
+              .filter((entry) => entry.login !== null && !entry.mine)
               .map((entry) => (
                 <GroupSection key={entryKey(entry)} {...shared} instance={instance} group={entry} subgroups={[]} />
               ))}
@@ -327,9 +314,10 @@ export function GroupsList({
           </InstanceSection>
         );
       })}
+      {local.repositories.length > 0 ? <GroupSection {...shared} group={local} subgroups={[]} /> : null}
       {groups.instances.length > 0 ? (
-        // The list's foot: another instance to sign in to (space-1,
-        // space-3), its card stacking within its own width (space-28).
+        // The list's foot: another Space to sign in to (space-1, space-3),
+        // its card stacking within its own width (space-28).
         <div className="@container flex min-w-0 flex-col border-t border-neutral-200 pt-3 dark:border-neutral-800">
           <AddInstance groups={groups} connected={connected} signIn={signIn} />
         </div>
@@ -344,8 +332,8 @@ interface GroupNode {
   children: GroupNode[];
 }
 
-/** An instance's groups as a tree in the order of their paths (space-1):
- * a subgroup within the nearest group it lies inside. */
+/** A Space's groups as a tree in the order of their paths (space-1): a
+ * group within the nearest group it lies inside. */
 function groupTree(entries: InstanceGroupState[]): GroupNode[] {
   const sorted = [...entries].sort((a, b) => a.fullPath.localeCompare(b.fullPath));
   const nodes = new Map(sorted.map((group) => [group, { group, children: [] as GroupNode[] }]));
@@ -362,60 +350,43 @@ function groupTree(entries: InstanceGroupState[]): GroupNode[] {
   return roots;
 }
 
-/** How an entry reads on its heading (space-1): your own records "Only
- * you" beside your login, or, before any sign-in, beside "named after
- * your login at sign-in"; your namespace "Only you"; another account's
- * login "Shared by @<login>"; a group by its name. */
-function groupReading(
-  groups: GroupsState,
-  group: InstanceGroupState,
-  instance: InstanceState | undefined,
-): { name: string; beside: string | null } {
-  if (!instance) {
-    return {
-      name: onlyYouLabel(),
-      beside:
-        groups.instances.length === 0 && groups.own.named
-          ? i18n._({
-              id: "named after your login at sign-in",
-              comment: "beside the heading 'Only you' before sign-in: its name and path come from the login",
-            })
-          : `@${groups.own.name}`,
-    };
-  }
+/** How an entry reads on its heading (space-1): "This computer" outside
+ * every Space; your namespace "Personal"; another account's login
+ * "Shared by @<login>"; a group by its name, its path beside it where
+ * the two differ. */
+function groupReading(group: InstanceGroupState, instance: InstanceState | undefined): { name: string; beside: string | null } {
+  if (!instance) return { name: thisComputerLabel(), beside: null };
   if (group.login !== null) {
     return group.mine
-      ? { name: onlyYouLabel(), beside: null }
+      ? { name: personalLabel(), beside: null }
       : {
           name: i18n._({
             id: "Shared by @{login}",
             values: { login: group.login },
-            comment: "the heading of the projects another account at the instance shares with you; {login} is that account's login",
+            comment: "the heading of the projects another account at the Space shares with you; {login} is that account's login",
           }),
           beside: null,
         };
   }
-  return { name: group.name, beside: null };
+  return { name: group.name, beside: group.fullPath !== group.name ? group.fullPath : null };
 }
 
-/** How an instance's entry reads in a picker (space-58, space-78), as
- * the list reads it (space-1): a group by its name with its path in the
- * instance beside it where the two differ; your namespace by your login
- * there, or, where `ownAs` says, "Only you". */
-function entryReading(entry: InstanceGroupState, ownAs: "login" | "only-you"): { name: string; beside: string | null } {
-  if (entry.login !== null) return { name: ownAs === "only-you" && entry.mine ? onlyYouLabel() : entry.login, beside: null };
+/** How a Space's entry reads in a picker (space-58), as the list reads
+ * it (space-1): a group by its name with its path beside it where the
+ * two differ; your namespace "Personal". */
+function entryReading(entry: InstanceGroupState): { name: string; beside: string | null } {
+  if (entry.login !== null) return { name: entryName(entry), beside: null };
   return { name: entry.name, beside: entry.fullPath !== entry.name ? entry.fullPath : null };
 }
 
-/** An instance's entry as a picker names it (space-58, space-78): its
- * name, then its path after the separator where the two differ — the
- * separator the eye's, so the option's name says the group's name
- * first. */
-function GroupOptionLabel({ entry, ownAs = "login" }: { entry: InstanceGroupState; ownAs?: "login" | "only-you" }) {
-  const { name, beside } = entryReading(entry, ownAs);
+/** A Space's entry as a picker names it (space-58): its name, then its
+ * path after the separator where the two differ — the separator the
+ * eye's, so the option's name says the group's name first. */
+function GroupOptionLabel({ entry }: { entry: InstanceGroupState }) {
+  const { name, beside } = entryReading(entry);
   return (
     <>
-      <span className="min-w-0 truncate" title={entry.fullPath}>
+      <span className="min-w-0 truncate" title={entry.login !== null ? name : entry.fullPath}>
         {name}
       </span>
       {beside !== null ? " " : null}
@@ -429,20 +400,9 @@ function GroupOptionLabel({ entry, ownAs = "login" }: { entry: InstanceGroupStat
   );
 }
 
-/** Whether the list holds a spex repository or a placement of one under
- * a group, or a group inside it, at its instance (space-1, DR-128): only
- * an empty group offers Delete. */
-function holdsAnything(groups: GroupsState, instance: InstanceState, group: InstanceGroupState): boolean {
-  if (group.repositories.length > 0) return true;
-  if (group.placed.some((line) => standingOf(groups, line.key) !== undefined)) return true;
-  const inside = `${group.fullPath}/`.toLowerCase();
-  return instance.groups.some((other) => other !== group && other.fullPath.toLowerCase().startsWith(inside));
-}
-
 /** A group's member count where the last read holds one (space-1): its
- * own spex repository's members at its instance — the group's members
- * and any its repository adds — which the read carries; none
- * otherwise. */
+ * own spex repository's members at its Space — the group's members and
+ * any its repository adds — which the read carries; none otherwise. */
 function memberCount(instance: InstanceState, group: InstanceGroupState): number | null {
   const own = group.repositories.find((repo) => !repo.own && isGroupRepository(group, repo));
   if (!own) return null;
@@ -466,76 +426,39 @@ interface Shared {
   onNote: Note;
 }
 
-/** One entry of the list (space-1): your own records, where `instance`
- * is none, or a group, your namespace or another account's login under
- * an instance's heading. Its heading — with one "More" holding Members
- * and, where the instance lets the person, "New subgroup", "Rename" and,
- * on an empty group, "Delete" on a group of a signed-in instance, your
- * own records' and a namespace's carrying none (DR-114, DR-120) — then
- * its servers' lines, its rows, and the groups inside it. What a
- * heading's act opens stands beneath the heading; a group's command
- * names its instance (space-29). */
+/** One entry of the list (space-1): "This computer", where `instance` is
+ * none, or "Personal", a group or another account's login under a
+ * Space's heading. Its heading — a group of a signed-in Space carrying
+ * one "More" holding Members, the others none (DR-114, DR-172) — then
+ * its servers' lines, its rows, and the groups inside it. */
 function GroupSection({
   instance,
   group,
   subgroups,
   ...shared
 }: Shared & {
-  /** The instance whose heading the entry stands under; none for your
-   * own records. */
+  /** The Space whose heading the entry stands under; none for "This
+   * computer". */
   instance?: InstanceState;
   group: InstanceGroupState;
   subgroups: GroupNode[];
 }) {
-  const { groups, connected, refreshes, servers, onNote } = shared;
-  const store = usePlaceStore();
-  const spaceGroupDelete = store((state) => state.spaceGroupDelete);
-  const [opened, setOpened] = useState<"members" | "subgroup" | "rename" | "delete">();
-  const [deleting, setDeleting] = useState(false);
-  const [refusal, setRefusal] = useState<string>();
-  const refusalId = useId();
+  const { connected, refreshes, servers, onNote } = shared;
+  const [opened, setOpened] = useState<"members">();
   const moreRef = useRef<HTMLButtonElement>(null);
-  const { name, beside } = groupReading(groups, group, instance);
-  // Your own records take no subgroup and no member: what is there is
-  // shared on its projects (DR-114); a namespace, listed by no id, takes
-  // nothing either (DR-120); nothing is offered at an instance signed
-  // out.
-  const hostGroup = instance?.signedIn && group.id !== null ? group.id : null;
-  const own = instance === undefined;
-  const testKey = own ? "own" : groupTestKey(group);
-  const Heading = own ? "h2" : "h3";
+  const { name, beside } = groupReading(group, instance);
+  // A group a signed-in Space lists names its members; "Personal",
+  // another account's login and "This computer" carry no act (DR-114,
+  // DR-120).
+  const hostGroup = instance?.signedIn && group.login === null && group.id !== null ? group.id : null;
+  const local = instance === undefined;
+  const testKey = local ? "own" : groupTestKey(group);
+  const Heading = local ? "h2" : "h3";
   const members = instance && group.login === null ? memberCount(instance, group) : null;
   const close = () => {
     setOpened(undefined);
     // Closing never strands focus (DR-010 §6).
     setTimeout(() => moreRef.current?.focus(), 0);
-  };
-  const toggle = (which: "members" | "subgroup" | "rename" | "delete") => {
-    setRefusal(undefined);
-    setOpened((was) => (was === which ? undefined : which));
-  };
-  // Delete stands only where the instance lets the person and the list
-  // holds nothing under the group there, not even a placement (space-1).
-  const deletable = hostGroup !== null && instance !== undefined && group.can.delete && !holdsAnything(groups, instance, group);
-
-  /** Delete the group (space-77): the heading reads "Deleting…" until
-   * the reply; the group leaves the list as the core holds it gone, and
-   * a refusal stands beneath the heading, the group kept. */
-  const remove = async () => {
-    if (hostGroup === null || !instance) return;
-    setOpened(undefined);
-    setDeleting(true);
-    setRefusal(undefined);
-    try {
-      await spaceGroupDelete(instance.origin, hostGroup);
-    } catch (cause) {
-      const message = (cause as Error).message;
-      setRefusal(message);
-      onNote(message);
-      setTimeout(() => moreRef.current?.focus(), 0);
-    } finally {
-      setDeleting(false);
-    }
   };
 
   const entries: MenuEntry[] =
@@ -543,39 +466,10 @@ function GroupSection({
       ? []
       : [
           {
-            label: i18n._({ id: "Members", comment: "list the people the host lets read a spex repository" }),
+            label: i18n._({ id: "Members", comment: "list the people who read a project's records, or a group's members, at the Space" }),
             testId: `space-group-members-${group.fullPath}`,
-            onSelect: () => toggle("members"),
+            onSelect: () => setOpened((was) => (was === "members" ? undefined : "members")),
           },
-          ...(group.can.createSubgroup
-            ? [
-                {
-                  label: i18n._({ id: "New subgroup", comment: "create a group inside this group on the Git host" }),
-                  testId: `space-group-subgroup-${group.fullPath}`,
-                  onSelect: () => toggle("subgroup"),
-                },
-              ]
-            : []),
-          ...(group.can.rename
-            ? [
-                {
-                  label: i18n._({ id: "Rename", comment: "rename this group of the instance: its name and its path" }),
-                  testId: `space-group-rename-${group.fullPath}`,
-                  disabled: deleting,
-                  onSelect: () => toggle("rename"),
-                },
-              ]
-            : []),
-          ...(deletable
-            ? [
-                {
-                  label: i18n._({ id: "Delete", comment: "delete this empty group of the instance" }),
-                  testId: `space-group-delete-${group.fullPath}`,
-                  disabled: deleting,
-                  onSelect: () => toggle("delete"),
-                },
-              ]
-            : []),
         ];
 
   const rows = group.repositories;
@@ -589,15 +483,16 @@ function GroupSection({
   return (
     <div
       role="group"
-      aria-label={own ? name : group.login !== null ? name : group.fullPath}
-      data-testid={own ? "space-own" : `space-group-${testKey}`}
+      aria-label={group.login === null && !local ? group.fullPath : name}
+      data-testid={local ? "space-own" : `space-group-${testKey}`}
       className="@container flex min-w-0 flex-col gap-2"
     >
       {/* The name owns the slack; what stands beside it follows the
-          separator in the secondary tone (space-1). */}
-      <div className="flex min-w-0 items-center gap-1">
-        <Heading className="flex min-w-0 flex-1 items-baseline gap-2 text-sm font-medium">
-          <span className="min-w-0 truncate" title={own ? undefined : group.fullPath}>
+          separator in the secondary tone (space-1). Below @md the
+          heading keeps its own row above its act (space-28). */}
+      <div className="flex min-w-0 flex-wrap items-center gap-1">
+        <Heading className="flex min-w-0 flex-1 basis-40 items-baseline gap-2 text-sm font-medium">
+          <span className="min-w-0 truncate" title={group.login === null && !local ? group.fullPath : name}>
             {name}
           </span>
           {beside !== null ? " " : null}
@@ -619,65 +514,8 @@ function GroupSection({
             </span>
           ) : null}
         </Heading>
-        {deleting ? (
-          <span role="status" className="shrink-0 text-xs text-neutral-500">
-            {i18n._({ id: "Deleting…", comment: "the Delete control, while the host deletes the group" })}
-          </span>
-        ) : null}
-        <MoreMenu
-          of={group.fullPath}
-          testId={`space-group-more-${group.fullPath}`}
-          buttonRef={moreRef}
-          entries={entries}
-          disabled={!connected}
-        />
+        <MoreMenu of={group.fullPath} testId={`space-group-more-${group.fullPath}`} buttonRef={moreRef} entries={entries} disabled={!connected} />
       </div>
-      {opened === "delete" && hostGroup !== null ? (
-        <div data-testid={`space-group-confirm-${group.fullPath}`} className="ml-4 min-w-0">
-          <InlineConfirm
-            question={i18n._("Delete {group}?", { group: group.fullPath })}
-            confirmLabel={i18n._({ id: "Delete", comment: "confirm: delete the group on the Git host" })}
-            cancelLabel={i18n._({ id: "Keep", comment: "cancel a deletion: leave it as it is" })}
-            onConfirm={() => void remove()}
-            onCancel={close}
-          />
-        </div>
-      ) : null}
-      {refusal ? (
-        <p
-          id={refusalId}
-          data-testid={`space-group-refusal-${group.fullPath}`}
-          role="alert"
-          className="ml-4 min-w-0 text-xs text-red-600 dark:text-red-400"
-        >
-          {refusal}
-        </p>
-      ) : null}
-      {opened === "rename" && hostGroup !== null && instance ? (
-        <div className="ml-4 min-w-0">
-          <GroupNameEditor
-            testId={`space-rename-${group.fullPath}`}
-            instance={instance.origin}
-            parent={null}
-            rename={{ group: hostGroup, name: group.name, path: lastSegment(group.fullPath) }}
-            connected={connected}
-            onClose={close}
-            onNote={onNote}
-          />
-        </div>
-      ) : null}
-      {opened === "subgroup" && hostGroup !== null && instance ? (
-        <div className="ml-4 min-w-0">
-          <GroupNameEditor
-            testId={`space-subgroup-${group.fullPath}`}
-            instance={instance.origin}
-            parent={hostGroup}
-            connected={connected}
-            onClose={close}
-            onNote={onNote}
-          />
-        </div>
-      ) : null}
       {opened === "members" && hostGroup !== null && instance ? (
         <MembersPanel
           instance={instance}
@@ -699,10 +537,10 @@ function GroupSection({
           ))}
         </ul>
       ) : serverCount === 0 && subgroups.length === 0 ? (
-        <p className="pl-2 text-xs text-neutral-500">{i18n._("No projects here yet")}</p>
+        <p className="pl-2 text-xs text-neutral-500">{i18n._({ id: "No projects here yet", comment: "beneath a group holding no project yet" })}</p>
       ) : null}
       {subgroups.length > 0 ? (
-        // A subgroup stands within its group, one step in (space-1).
+        // A group inside a group stands within it, one step in (space-1).
         <div className="flex min-w-0 flex-col gap-3 border-l border-neutral-200 pl-3 dark:border-neutral-800">
           {subgroups.map((node) => (
             <GroupSection
@@ -719,30 +557,27 @@ function GroupSection({
   );
 }
 
-type Opened =
-  | "pick"
-  | "join"
-  | "folder"
-  | "notice"
-  | "place-choice"
-  | "place"
-  | "leave-choice"
-  | "leave"
-  | "members"
-  | "move"
-  | "attach"
-  | "resolve"
-  | "merge";
+type Opened = "pick" | "join" | "folder" | "notice" | "members" | "resolve" | "combine";
 
 /** The words of "Open here" (space-111). */
 const openHereLabel = (): string =>
-  i18n._({ id: "Open here", comment: "a project's Open entry for the place shown: clones its records and code here" });
+  i18n._({ id: "Open here", comment: "a project's primary control for the place shown: downloads its records and its code there" });
 
-/** One spex repository's row (space-1, space-61, space-111): the dot,
- * the name owning the slack, where its code lives — hidden below @md —
- * the places it is open at, its phrase, its local changes, its primary
- * control and its overflow, which keep their accessible names at every
- * width (space-28). */
+/** The glyph of a project's code (space-1): code brackets, its words
+ * the title of the mark that carries it. */
+function CodeGlyph() {
+  return (
+    <svg aria-hidden viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 4 2 8l4 4M10 4l4 4-4 4" />
+    </svg>
+  );
+}
+
+/** One spex repository's row (space-1, space-61, space-111,
+ * space-120): the name owning the slack, its code glyph — hidden below
+ * @md — the places it is open at, its one phrase with its way forward,
+ * its primary control and its overflow, which keep their accessible
+ * names at every width (space-28). */
 function RepositoryRow({
   groups,
   instance,
@@ -761,8 +596,8 @@ function RepositoryRow({
   onOpenProject,
   onNote,
 }: Shared & {
-  /** The instance whose heading the row stands under; none under your
-   * own records. */
+  /** The Space whose heading the row stands under; none under "This
+   * computer". */
   instance?: InstanceState;
   group: InstanceGroupState;
   repo: RepositoryState;
@@ -772,42 +607,32 @@ function RepositoryRow({
   // run-view-169): its rows offer no folder picker and no path entry,
   // and an Open there names no folder.
   const remote = !isLocalPlace(store.place);
+  const seat = seatName(store.place);
   const spaceSync = store((state) => state.spaceSync);
+  const spaceFetch = store((state) => state.spaceFetch);
   const spaceJoin = store((state) => state.spaceJoin);
   const spaceRefresh = store((state) => state.spaceRefresh);
-  const spacePlace = store((state) => state.spacePlace);
-  const spaceLeave = store((state) => state.spaceLeave);
-  const spaceAttach = store((state) => state.spaceAttach);
-  const spaceRepositoryMove = store((state) => state.spaceRepositoryMove);
   const spaceLastAct = store((state) => state.spaceLastAct);
   const rebindProject = store((state) => state.rebindProject);
   const pending = useServerOpens((state) => state.pending);
+  const useChoices = useContext(ChoicesContext);
   const dismissed = dismissedByKey[repo.key];
   const isSelected = selected === repo.key;
   const [opened, setOpened] = useState<Opened>();
-  const [busy, setBusy] = useState<"sync" | "join" | "retry" | "place" | "leave" | "attach">();
+  // What runs from this row: a sync — asked plainly, as a combining, or
+  // as a retry — an open, or a read of the Spaces.
+  const [busy, setBusy] = useState<"sync" | "combine" | "retry" | "join" | "refresh">();
   // A long command's reply is only "accepted": its control stays busy
   // until the machine's state moves, so nothing re-enables between the
   // reply and the state (DR-010 §3, space-29).
-  const [accepted, setAccepted] = useState<{ op: "sync" | "join" | "place" | "leave" | "attach"; key: string }>();
+  const [accepted, setAccepted] = useState<{ op: "sync" | "combine" | "retry" | "join"; key: string }>();
   const [error, setError] = useState<string>();
-  // The placement the row's notice names, by its instance's origin, and
-  // what its Continue sends beside `noticed` (space-57, space-13).
+  // The placement the row's sharing confirm names, by its Space's
+  // origin, and what its Share sends beside `noticed` (space-57,
+  // space-13).
   const [noticeAt, setNoticeAt] = useState<string | null>();
   const [carried, setCarried] = useState<{ join?: true }>({});
-  // The instance a Place's picker is for, by its origin (space-88).
-  const [placeAt, setPlaceAt] = useState<string>();
-  // The placement a Leave's confirm asks about, by its instance's origin
-  // (space-89).
-  const [leaveAt, setLeaveAt] = useState<string>();
-  // The placement an Attach's notice names (space-90).
-  const [attachAt, setAttachAt] = useState<string>();
-  const [moving, setMoving] = useState(false);
-  // The Leave this row sent, until its outcome arrives: the placement,
-  // and the machine's state when it was sent (space-98).
-  const leaveSent = useRef<{ instance: string; key: string }>(undefined);
   const primaryRef = useRef<HTMLButtonElement>(null);
-  const pickRef = useRef<HTMLButtonElement>(null);
   const moreRef = useRef<HTMLButtonElement>(null);
   const nameRef = useRef<HTMLButtonElement>(null);
   const actRef = useRef<HTMLButtonElement>(null);
@@ -819,53 +644,53 @@ function RepositoryRow({
     if (accepted && accepted.key !== machineKey) setAccepted(undefined);
   }, [accepted, machineKey]);
 
-  // The instance governing the row, as the core names it, else its own
+  // The Space governing the row, as the core names it, else its own
   // (space-1, space-61).
   const governing = governingOf(groups, repo);
   const groupRepository = isGroupRepository(group, repo);
   const name = rowName(group, repo);
-  const close = (focus: "primary" | "pick" | "more" | "act" = "more") => {
+  const close = (focus: "primary" | "more" | "act" = "more") => {
     setOpened(undefined);
     // Closing never strands focus (DR-010 §6): a control gone or busy
     // hands it to the row's name.
     setTimeout(() => {
       const active = document.activeElement;
       if (active && active !== document.body && active.isConnected) return;
-      const target = { primary: primaryRef, pick: pickRef, more: moreRef, act: actRef }[focus].current ?? moreRef.current;
+      const target = { primary: primaryRef, more: moreRef, act: actRef }[focus].current ?? moreRef.current;
       (!target || target.disabled || !target.isConnected ? nameRef.current : target)?.focus();
     }, 0);
   };
 
-  /** Say the sharing notice of the placement at `origin` beneath the
-   * row before its sync (space-57), its Continue carrying `answer`. */
+  /** Say the sharing confirm of the placement at `origin` beneath the
+   * row before its sync (space-57), its Share carrying `answer`. */
   const askNotice = (origin: string | null, answer: { join?: true } = {}) => {
     setNoticeAt(origin);
     setCarried(answer);
     setOpened("notice");
   };
 
-  /** Sync every placement (space-12), with the notice of the one
-   * `placement` names seen (space-57) and the join of an unrelated one
-   * (space-13). A refusal for want of a notice the page's read missed
-   * says it for the placement the core names, else the first that owes
-   * it; any other stands beneath the row. */
-  const start = async (input: { placement?: string | null; noticed?: boolean; join?: boolean }) => {
+  /** Sync every placement (space-12), with the confirm of the one
+   * `placement` names answered (space-57) and the combining of records
+   * started separately (space-13). A refusal for want of a confirm the
+   * page's read missed says it for the placement the core names, else
+   * the first that owes it; any other stands beneath the row. */
+  const start = async (input: Parameters<typeof spaceSync>[1], op: "sync" | "combine" | "retry" = "sync") => {
     const key = machineKey;
-    setBusy("sync");
+    setBusy(op);
     setError(undefined);
     try {
       await spaceSync(repo.key, input);
-      setAccepted({ op: "sync", key });
+      setAccepted({ op, key });
     } catch (cause) {
       const details = (cause as SpexCommandError).details;
-      if (!input.noticed && details?.notice === true) {
+      if (!input?.noticed && details?.notice === true) {
         const named = details.placement;
         const owing =
           (typeof named === "string" || named === null ? placementAt(repo, named) : undefined) ??
           heldPlacements(repo).find((line) => owesNotice(repo, line)) ??
           keyPlacement(repo);
         if (owing) {
-          askNotice(owing.instance, input.join ? { join: true } : {});
+          askNotice(owing.instance, input?.join ? { join: true } : {});
           return;
         }
       }
@@ -877,11 +702,36 @@ function RepositoryRow({
     }
   };
 
-  /** Open here a repository an instance lists (space-63, space-111), at
-   * the instance whose heading the row stands under (space-29), else the
-   * one the row names: a row not on this device stands under the
-   * instance whose read lists it. At a remote place no folder is named:
-   * its core allocates one (space-103). */
+  /** Run again what stopped (space-15), as the Sync tab's Retry does: a
+   * stopped check checks again, any other stop syncs again with the
+   * choices made and the join this page asked. */
+  const retryStopped = async () => {
+    if (sync.phase === "stopped" && sync.op === "check") {
+      const key = machineKey;
+      setBusy("retry");
+      setError(undefined);
+      try {
+        await spaceFetch(repo.key);
+        setAccepted({ op: "retry", key });
+      } catch (cause) {
+        const message = (cause as Error).message;
+        setError(message);
+        onNote(message);
+      } finally {
+        setBusy(undefined);
+      }
+      return;
+    }
+    const choicesKey = `${store.place.key}|${repo.key}`;
+    const { inputs, choices } = useChoices.getState();
+    await start(stoppedRetryInput(groups, repo, inputs[choicesKey], choices[choicesKey], spaceLastAct(repo.key)), "retry");
+  };
+
+  /** Open here a repository a Space lists (space-63, space-111), at the
+   * Space whose heading the row stands under (space-29), else the one
+   * the row names: a row not on this computer stands under the Space
+   * whose read lists it. At a remote place no folder is named: its core
+   * allocates one (space-103). */
   const join = async (folder?: string): Promise<void> => {
     const at = instance?.origin ?? repo.instance;
     if (!repo.id || !at) return;
@@ -901,8 +751,8 @@ function RepositoryRow({
     }
   };
 
-  /** Pair a clone with a folder on this device (space-63, space-47):
-   * the code clone that failed leaves the spex repository here. */
+  /** Pair a clone with a folder on this computer (space-63, space-47):
+   * the code clone that failed leaves the records here. */
   const pair = async (folder: string): Promise<void> => {
     setError(undefined);
     try {
@@ -944,83 +794,9 @@ function RepositoryRow({
     }
   };
 
-  /** Place the project at another instance as its picker chose
-   * (space-88, space-97): accepted once the host's step and the
-   * placement's add are done, "Placing…" until the operation it starts
-   * has run; a refusal is the picker's to show. */
-  const place = async (choice: SpaceGroupChoice, noticed?: boolean): Promise<void> => {
-    const key = machineKey;
-    setBusy("place");
-    setError(undefined);
-    try {
-      await spacePlace(repo.key, choice, noticed);
-      setAccepted({ op: "place", key });
-    } finally {
-      setBusy(undefined);
-    }
-  };
-
-  /** Stop keeping the records at the placement at `origin` (space-89,
-   * space-98), `confirmed` on the second Remove: accepted at once,
-   * "Leaving…" until the Leave has run; a refusal stands beneath the
-   * row. */
-  const leave = async (origin: string, confirmed: boolean): Promise<void> => {
-    const key = machineKey;
-    setBusy("leave");
-    setError(undefined);
-    // Its outcome may land before the reply (space-29).
-    leaveSent.current = { instance: origin, key };
-    try {
-      await spaceLeave(repo.key, origin, confirmed);
-      setAccepted({ op: "leave", key });
-    } catch (cause) {
-      leaveSent.current = undefined;
-      const message = (cause as Error).message;
-      setError(message);
-      onNote(message);
-    } finally {
-      setBusy(undefined);
-    }
-  };
-
-  /** Attach the placement at `origin` with its notice seen (space-90,
-   * space-99): a refusal stands beneath the row. */
-  const attach = async (origin: string): Promise<void> => {
-    const key = machineKey;
-    setBusy("attach");
-    setError(undefined);
-    try {
-      await spaceAttach(repo.key, origin);
-      setAccepted({ op: "attach", key });
-    } catch (cause) {
-      const message = (cause as Error).message;
-      setError(message);
-      onNote(message);
-    } finally {
-      setBusy(undefined);
-    }
-  };
-
-  /** Move the key placement into a group of its instance, or your
-   * namespace there where `groupId` is null (space-78): a refusal is the
-   * picker's to show. */
-  const move = async (groupId: string | null): Promise<void> => {
-    const line = keyPlacement(repo);
-    if (!line || line.instance === null) return;
-    setMoving(true);
-    try {
-      await spaceRepositoryMove(repo.key, line.instance, groupId);
-      setOpened(undefined);
-    } catch (cause) {
-      onNote((cause as Error).message);
-      throw cause;
-    } finally {
-      setMoving(false);
-    }
-  };
-
-  const retry = async () => {
-    setBusy("retry");
+  /** Read every signed-in Space again, as Refresh does (space-2). */
+  const refresh = async () => {
+    setBusy("refresh");
     setError(undefined);
     try {
       await spaceRefresh();
@@ -1039,55 +815,30 @@ function RepositoryRow({
   const here = cloneHere(repo);
   const syncs = here && (repo.state === "reachable" || readOnly);
   const refusal = syncs ? rowSyncRefusal(groups, repo, governing) : undefined;
-  // The first push to a placement others share says once what goes there
-  // (space-57): where every placement this sync would run owes it, the
-  // first owing one's notice comes first; where any other can run, the
-  // sync goes and each owing one waits on its line for its Continue.
+  // The first send to a placement others share asks once (space-57):
+  // where every placement this sync would run owes it, the first owing
+  // one's confirm comes first; where any other can run, the sync goes
+  // and each owing one waits on its line for its Continue.
   const runs = heldPlacements(repo).filter((line) => runnable(groups, repo, line));
   const owing = runs.filter((line) => owesNotice(repo, line));
   const noticeFirst = runs.length > 0 && owing.length === runs.length ? owing[0] : undefined;
   const noticeLine = opened === "notice" && noticeAt !== undefined ? placementAt(repo, noticeAt) : undefined;
   const joining = busy === "join" || accepted?.op === "join" || (running && sync.op === "join");
-  const syncing =
-    busy === "sync" ||
-    accepted?.op === "sync" ||
-    (running && sync.op !== "join" && sync.op !== "check" && sync.op !== "attach" && sync.op !== "place" && sync.op !== "leave");
-  // "Place at…" on a project's row (space-88): busy from the pick until
-  // the operation it starts has run; a Place asked while a sync runs
-  // follows that sync (space-21), so only another operation holds it.
-  const offered = groupRepository ? [] : placeInstances(groups, repo);
-  const placing = busy === "place" || accepted?.op === "place" || (running && sync.op === "place");
-  const showPlace = !groupRepository && (offered.length > 0 || placing);
-  const placeTo = opened === "place" ? signedInInstances(groups).find((entry) => entry.origin === placeAt) : undefined;
-  // "Leave…" on a project's row (space-89): busy from Remove until the
-  // Leave has run.
-  const leaveOffered = groupRepository ? [] : leavePlacements(repo);
-  const leaving = busy === "leave" || accepted?.op === "leave" || (running && sync.op === "leave");
-  const showLeave = !groupRepository && (leaveOffered.length > 0 || leaving);
-  const leaveLine = opened === "leave" && leaveAt !== undefined ? leaveOffered.find((line) => line.instance === leaveAt) : undefined;
-  // A clone holding only its path placement adds itself to a group beside
-  // its Open, the pick adding its first placement with an instance
-  // (space-61, space-88, storage-35).
-  const pickBeside =
-    repo.state !== "local-only" &&
-    !groupRepository &&
-    heldPlacements(repo).length > 0 &&
-    instancePlacements(repo).length === 0 &&
-    pickInstances(groups, repo).length > 0;
-  // The key placement's acts, as its line's (space-87): Members on one
-  // reachable at a signed-in instance, "Move…" on a project's the view
-  // lets the person move (space-62, space-78).
+  const syncing = busy === "sync" || accepted?.op === "sync" || (running && sync.op !== "join" && sync.op !== "check");
+  const workingOn = (op: "combine" | "retry"): boolean => busy === op || accepted?.op === op;
+  // The Spaces "Add to a group…" would offer (space-58, space-61): none
+  // on a group's own records, your own group's among them.
+  const offered = groupRepository ? [] : pickInstances(groups, repo);
+  // A clone holding only its path placement adds itself to a group from
+  // its overflow, the pick adding its first placement at a Space
+  // (space-61, storage-35).
+  const pickInMore =
+    repo.state !== "local-only" && heldPlacements(repo).length > 0 && instancePlacements(repo).length === 0 && offered.length > 0;
+  // The key placement's Members on one reachable at a signed-in Space
+  // (space-62).
   const keyLine = here ? keyPlacement(repo) : undefined;
   const keyGoverning = keyLine ? governingOfPlacement(groups, repo, keyLine) : undefined;
-  const keyGoverned = keyLine !== undefined && keyLine.instance !== null && keyGoverning?.signedIn === true;
-  const showMembers = keyGoverned && keyLine!.state === "reachable";
-  const showMove = keyGoverned && !groupRepository && keyLine!.can.transfer;
-  // Each placement a file of the clone names that no remote here holds,
-  // no creation waiting there: Attach brings it here (space-90).
-  const attachable = here
-    ? repo.placements.filter((line) => !line.attached && line.waiting === null && line.state === "absent" && line.instance !== null)
-    : [];
-  const attachLine = opened === "attach" && attachAt !== undefined ? placementAt(repo, attachAt) : undefined;
+  const showMembers = keyLine !== undefined && keyLine.instance !== null && keyGoverning?.signedIn === true && keyLine.state === "reachable";
   // A clone whose code found no folder here is paired later (space-63):
   // at a remote place it is opened again instead, its core cloning the
   // code into the folder it allocated (space-103).
@@ -1097,49 +848,32 @@ function RepositoryRow({
   // Credentials section at it (settings-48).
   const credentialHost = remote && sync.phase === "stopped" ? sync.credential : undefined;
 
-  // A Leave this row sent that stopped for records no remaining
-  // placement received, or at a read of its placement it could not make,
-  // asks again in place, Keep focused (space-89, space-98); once that
-  // placement is gone, nothing is left to ask.
-  const heldKey = heldPlacements(repo)
-    .map((line) => line.instance)
-    .join(" ");
-  useEffect(() => {
-    const sent = leaveSent.current;
-    if (!sent) return;
-    if (sync.phase === "stopped" && sync.op === "leave" && machineKey !== sent.key) {
-      leaveSent.current = undefined;
-      if (leaveStage(repo, spaceLastAct(repo.key), sent.instance).stage !== "first") {
-        setLeaveAt(sent.instance);
-        setOpened("leave");
-      }
-      return;
-    }
-    // Gone, it was left — the live note says so (SpaceSurface) — and
-    // "Leaving…" ends even where no state between moved the machine.
-    if (placementAt(repo, sent.instance)?.attached !== true) {
-      leaveSent.current = undefined;
-      setAccepted((was) => (was?.op === "leave" ? undefined : was));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [machineKey, heldKey]);
-
   // This place's entry of Open (space-111): "Open here" for a repository
   // not here; "Choose folder…" — at a seat "Try again" — for a clone
   // whose code found no folder; "Show" for one open here. Your own
   // records, always here, open nowhere else.
   const openHere = here && repo.folder !== null && repo.state !== "local-only";
+  const openingLabel = (): string =>
+    i18n._({ id: "Opening…", comment: "a project's row while it is opened here: its records and code are downloaded" });
   const hereEntries: MenuEntry[] = [];
   if (repo.state === "absent" && repo.id) {
     hereEntries.push({
-      label: joining ? i18n._({ id: "Opening…", comment: "a project's row while it is opened here: its records and code clone" }) : openHereLabel(),
-      title: remote
-        ? i18n._({
-            id: "Brings it to {place}",
-            values: { place: placeLabel(store.place) },
-            comment: "the title of a project's Open here at a team server's seat: {place} is the server's name, which allocates the project's folder itself",
-          })
-        : i18n._("Brings it to this device"),
+      label: joining ? openingLabel() : openHereLabel(),
+      title: groupRepository
+        ? seat === undefined
+          ? i18n._({ id: "Downloads the records to this computer", comment: "the title of Open here on a group's own records, which hold no code" })
+          : i18n._({
+              id: "Downloads the records to {place}",
+              values: { place: seat },
+              comment: "the title of Open here on a group's own records at a team server: {place} is the server's name, which allocates the folder itself",
+            })
+        : seat === undefined
+          ? i18n._({ id: "Downloads the records and the code to this computer", comment: "the title of a project's Open here" })
+          : i18n._({
+              id: "Downloads the records and the code to {place}",
+              values: { place: seat },
+              comment: "the title of a project's Open here at a team server: {place} is the server's name, which allocates the project's folder itself",
+            }),
       testId: `space-row-open-here-${repo.key}`,
       disabled: joining,
       onSelect: () => void (remote ? joinRemote() : askFolder("join")),
@@ -1149,7 +883,7 @@ function RepositoryRow({
       remote
         ? {
             label: joining
-              ? i18n._({ id: "Opening…", comment: "a project's row while it is opened here: its records and code clone" })
+              ? openingLabel()
               : i18n._({ id: "Try again", comment: "on a team server's project whose code clone failed: open it again, cloning its code into the folder the server allocated" }),
             title: i18n._({
               id: "Clones its code again into its folder on {place}",
@@ -1161,8 +895,8 @@ function RepositoryRow({
             onSelect: () => void joinRemote(),
           }
         : {
-            label: i18n._("Choose folder…"),
-            title: i18n._("Pairs it with its folder on this device"),
+            label: i18n._({ id: "Choose folder…", comment: "pick the project folder on this computer that a project's records pair with" }),
+            title: i18n._({ id: "Takes its project folder on this computer", comment: "the title of Choose folder… on a project whose records are here without its folder" }),
             testId: `space-row-folder-${repo.key}`,
             disabled: running,
             onSelect: () => void askFolder("folder"),
@@ -1170,13 +904,13 @@ function RepositoryRow({
     );
   } else if (openHere) {
     hereEntries.push({
-      label: i18n._({ id: "Show", comment: "a project's Open entry where it is open at that place already: shows it on Projects" }),
+      label: i18n._({ id: "Show", comment: "a project's primary control where it is open at that place already: shows it on Projects" }),
       testId: `space-row-show-${repo.key}`,
       onSelect: () => onOpenProject(repo.key),
     });
   }
 
-  // Each server of the row's instance the member may open (space-111):
+  // Each server of the row's Space the member may open (space-111):
   // "Show on <server>" where the project is open on its seat, else "Open
   // on <server>", the seat opened where none is and its join sent once
   // it is signed in. Your own records go to no server (space-102).
@@ -1228,12 +962,14 @@ function RepositoryRow({
   const failedOpen = serverEntries.find((each) => each.failed !== undefined);
 
   // What the row's state offers in place of Open (space-61): "Add to a
-  // group…" for a project in no group, Retry for one unreachable — none
-  // while its instance is signed out — and nothing for one held as
-  // colliding.
+  // group…" for a project in no group — disabled while no Space it would
+  // offer is signed in, none on a group's own records — Retry for one
+  // unreachable, none while its Space is signed out, and nothing for one
+  // held as colliding.
   let primary: ReactNode = null;
   if (repo.state === "local-only") {
-    if (!groupRepository && pickInstances(groups, repo).length > 0) {
+    if (!groupRepository) {
+      const signedOut = offered.length === 0;
       primary = (
         <button
           ref={primaryRef}
@@ -1241,7 +977,8 @@ function RepositoryRow({
           data-testid={`space-row-pick-${repo.key}`}
           className={`${SECONDARY} shrink-0 whitespace-nowrap`}
           aria-expanded={opened === "pick"}
-          disabled={disabled}
+          title={signedOut ? signInFirstLabel() : undefined}
+          disabled={disabled || signedOut}
           onClick={() => setOpened((was) => (was === "pick" ? undefined : "pick"))}
         >
           {addToGroupLabel()}
@@ -1256,93 +993,80 @@ function RepositoryRow({
           type="button"
           data-testid={`space-row-retry-${repo.key}`}
           className={`${SECONDARY} shrink-0 whitespace-nowrap`}
-          // Retry reads every signed-in instance again, as Refresh does
+          // Retry reads every signed-in Space again, as Refresh does
           // (space-2).
-          title={i18n._("Reads each signed-in instance again")}
-          disabled={disabled || busy === "retry"}
-          onClick={() => void retry()}
+          title={i18n._({ id: "Reads every signed-in Space again", comment: "the title of Retry on records a Space could not be read for" })}
+          disabled={disabled || busy === "refresh"}
+          onClick={() => void refresh()}
         >
-          {busy === "retry"
+          {busy === "refresh"
             ? i18n._({ id: "Retrying…", comment: "the Retry control, while the retry is in flight" })
             : i18n._({ id: "Retry", comment: "run the stopped step again" })}
         </button>
       );
     }
-  } else if (openEntries.length === 1) {
-    const only = openEntries[0]!;
+  } else if (openEntries.length > 0) {
+    // The first place as the primary control, the others beside it in
+    // one menu (space-1, space-111).
+    const [first, ...others] = openEntries as [MenuEntry, ...MenuEntry[]];
     primary = (
-      <button
-        ref={primaryRef}
-        type="button"
-        data-testid={`space-row-open-${repo.key}`}
-        // The one entry it stands for, as the menu would name it.
-        data-entry={only.testId}
-        className={`${SECONDARY} shrink-0 whitespace-nowrap`}
-        title={only.title ?? only.name}
-        aria-label={only.name}
-        aria-expanded={opened === "join" || opened === "folder" ? true : undefined}
-        disabled={disabled || only.disabled}
-        onClick={only.onSelect}
-      >
-        {only.label}
-      </button>
-    );
-  } else if (openEntries.length > 1) {
-    primary = (
-      <MenuButton
-        trigger={i18n._({ id: "Open", comment: "a project's primary control: opens the places it may be opened at" })}
-        name={i18n._({
-          id: "Open {name}",
-          values: { name },
-          comment: "the accessible name of a project's Open control, which lists the places to open it at; {name} is the project's name",
-        })}
-        testId={`space-row-open-${repo.key}`}
-        buttonRef={primaryRef}
-        entries={openEntries}
-        disabled={disabled}
-      />
+      <span className="inline-flex shrink-0 items-center gap-0.5">
+        <button
+          ref={primaryRef}
+          type="button"
+          data-testid={`space-row-open-${repo.key}`}
+          // The one entry it stands for, as the menu would name it.
+          data-entry={first.testId}
+          className={`${SECONDARY} shrink-0 whitespace-nowrap`}
+          title={first.title ?? first.name}
+          aria-label={first.name}
+          aria-expanded={opened === "join" || opened === "folder" ? true : undefined}
+          disabled={disabled || first.disabled}
+          onClick={first.onSelect}
+        >
+          {first.label}
+        </button>
+        {others.length > 0 ? (
+          <MenuButton
+            trigger={<span aria-hidden>▾</span>}
+            name={i18n._({
+              id: "Other places for {name}",
+              values: { name },
+              comment: "the accessible name of the menu beside a project's primary control, listing the other places it may be opened at; {name} is the project's name",
+            })}
+            testId={`space-row-places-${repo.key}`}
+            entries={others}
+            disabled={disabled}
+          />
+        ) : null}
+      </span>
     );
   }
 
-  // The row's phrase (space-87): a server's open while it runs, else the
-  // first its placements hold, your own records signed in nowhere
-  // waiting for the sign-in that syncs them (space-61).
-  const nameOf = (origin: string | null): string => {
-    const line = placementAt(repo, origin);
-    return line ? placementName(groups, line) : origin === null ? "" : instanceNameAt(groups, origin);
-  };
+  // The row's one phrase (space-120): a server's open while it runs,
+  // else the first its state and lines hold, a row under "This computer"
+  // reading none.
   const phrase =
     waitingOn !== undefined
       ? {
           text: i18n._({
             id: "Opening on {server}…",
             values: { server: waitingOn },
-            comment: "a project's row while it is opened on a team server: the seat opens, signs in, and joins it; {server} is the server's name",
+            comment: "a project's row while it is opened on a team server: the seat opens, signs in, and downloads it; {server} is the server's name",
           }),
           title: "",
           tone: "running" as const,
           act: undefined,
         }
-      : repo.own && repo.state === "local-only" && !anySignedIn(groups)
-        ? {
-            text: i18n._({
-              id: "On this computer only — synced once you sign in",
-              comment: "your own records' row before any sign-in: kept here alone until a sign-in syncs them",
-            }),
-            title: "",
-            tone: "idle" as const,
-            act: undefined,
-          }
-        : rowPhrase(repo, now, dismissed, nameOf, seatName(store.place));
+      : rowPhrase(repo, now, dismissed, phraseNames(groups, repo, seat), instance === undefined);
+  // An unreachable row's own Retry, reading the Spaces again, stands for
+  // a stop's too: one Retry on a row.
+  const act = phrase.act?.kind === "retry" && repo.state === "unreachable" ? undefined : phrase.act;
 
-  // Where its code lives (space-1, space-40): a project's code remote as
-  // read, "Code not on a remote" where `project.json` names none, nothing
-  // for a group's own or your own records.
-  const code = repo.code
-    ? displayRemote(repo.code)
-    : groupRepository || repo.state === "absent"
-      ? null
-      : i18n._({ id: "Code not on a remote", comment: "a project's spex repository whose records name no code remote" });
+  // Where its code is (space-1): a glyph titled by the core's phrase, a
+  // warning where the project names no remote, nothing for a group's own
+  // records or before the core knows.
+  const code = groupRepository ? null : codeOf(repo);
 
   const more: MenuEntry[] = [];
   if (syncs) {
@@ -1351,7 +1075,9 @@ function RepositoryRow({
         ? i18n._({ id: "Syncing…", comment: "the Sync control, while the sync runs" })
         : i18n._({ id: "Sync now", comment: "send what is here and bring back anything new, now" }),
       // What it does is its own to say (DR-069).
-      title: readOnly ? i18n._("Brings back anything new; sends nothing") : i18n._("Sends what is here and brings back anything new"),
+      title: readOnly
+        ? i18n._({ id: "Brings back anything new; sends nothing", comment: "the title of Sync now on records the Space lets this account only read" })
+        : i18n._({ id: "Sends what is here and brings back anything new", comment: "the title of Sync now" }),
       hint: refusal,
       testId: `space-row-sync-${repo.key}`,
       disabled: refusal !== undefined || working,
@@ -1363,96 +1089,30 @@ function RepositoryRow({
   }
   if (showMembers) {
     more.push({
-      label: i18n._({ id: "Members", comment: "list the people the host lets read a spex repository" }),
+      label: i18n._({ id: "Members", comment: "list the people who read a project's records, or a group's members, at the Space" }),
       testId: `space-row-members-${repo.key}`,
       onSelect: () => setOpened("members"),
     });
   }
-  more.push({
-    label: i18n._({ id: "Explore records", comment: "open a project's records as an annotated tree, beneath the list" }),
-    testId: `space-row-explore-${repo.key}`,
-    onSelect: () => onExplore(repo.key),
-  });
-  if (showMove) {
+  // Your own sessions on this computer alone carry no control (space-1).
+  if (!(repo.own && repo.state === "local-only")) {
     more.push({
-      label: moving
-        ? i18n._({ id: "Moving…", comment: "the Move control, while the host moves the spex repository" })
-        : i18n._({ id: "Move…", comment: "open the groups a spex repository may move to; its full name is 'Move to another group'" }),
-      name: moving ? undefined : i18n._({ id: "Move to another group", comment: "move a spex repository into another group of the instance, or your own" }),
-      testId: `space-row-move-${repo.key}`,
-      disabled: moving,
-      onSelect: () => setOpened("move"),
+      label: i18n._({ id: "Explore records", comment: "open a project's records as an annotated tree, beneath the list" }),
+      testId: `space-row-explore-${repo.key}`,
+      onSelect: () => onExplore(repo.key),
     });
   }
-  if (showPlace) {
-    const long = !placing && offered.length === 1 ? alsoPlaceAt(offered[0]!) : undefined;
+  if (pickInMore) {
     more.push({
-      label: placing
-        ? i18n._({ id: "Placing…", comment: "the Place at… control while the placement is made and synced" })
-        : placeAtLabel(),
-      name: long,
-      testId: `space-row-place-${repo.key}`,
-      disabled: placing || (running && sync.op !== "sync"),
-      onSelect: () => {
-        // One instance offered opens its picker; several, the choice of
-        // them (space-88).
-        if (offered.length === 1) {
-          setPlaceAt(offered[0]!.origin);
-          setOpened("place");
-        } else {
-          setOpened("place-choice");
-        }
-      },
-    });
-  }
-  if (showLeave) {
-    const only = !leaving && leaveOffered.length === 1 ? leaveOffered[0]!.instance : null;
-    more.push({
-      label: leaving
-        ? i18n._({ id: "Leaving…", comment: "the Leave… control while that placement is checked and removed" })
-        : leaveLabel(),
-      name: only !== null ? removeFrom(instanceNameAt(groups, only)) : undefined,
-      testId: `space-row-leave-${repo.key}`,
-      disabled: leaving || (running && sync.op !== "sync"),
-      onSelect: () => {
-        // One placement held asks about it; several open the choice of
-        // them (space-89).
-        if (leaveOffered.length === 1) {
-          setLeaveAt(leaveOffered[0]!.instance!);
-          setOpened("leave");
-        } else {
-          setOpened("leave-choice");
-        }
-      },
-    });
-  }
-  for (const line of attachable) {
-    const at = line.instance!;
-    more.push({
-      label:
-        (busy === "attach" || accepted?.op === "attach" || (running && sync.op === "attach")) && attachAt === at
-          ? i18n._({ id: "Attaching…", comment: "the Attach control while the placement is added and synced" })
-          : i18n._({
-              id: "Attach from {name}",
-              values: { name: instanceNameAt(groups, at) },
-              comment: "in a project's overflow: brings here its placement another device named at that instance, after the sharing notice; {name} is the instance's display name",
-            }),
-      testId: `space-row-attach-${repo.key}@${at}`,
-      disabled: working,
-      onSelect: () => {
-        setAttachAt(at);
-        setOpened("attach");
-      },
+      label: addToGroupLabel(),
+      testId: `space-row-pick-${repo.key}`,
+      onSelect: () => setOpened("pick"),
     });
   }
 
-  // A stopped Leave stands on its row until the next operation or
-  // Dismiss (space-15): its phase names no placement, so the row's phrase
-  // reads its step and cause.
   const captionId = `space-row-caption-${repo.key}`;
   const caption = error ?? failedOpen?.failed;
   const describe = (part: string) => `space-repo-${part}-${repo.key}`;
-  const dot = statusDot(repo);
   const badges = [
     ...(openHere && !repo.own ? [{ testId: `space-row-here-${repo.key}`, text: i18n._({ id: "Here", comment: "a project's mark: it is open at the place shown" }) }] : []),
     ...serverEntries
@@ -1466,15 +1126,47 @@ function RepositoryRow({
         }),
       })),
   ];
-  const describedBy = [code !== null ? describe("code") : null, repo.local.length > 0 ? describe("changes") : null, phrase.text ? describe("state") : null]
-    .filter(Boolean)
-    .join(" ");
+  const describedBy = [code !== null ? describe("code") : null, phrase.text ? describe("state") : null].filter(Boolean).join(" ");
   const TONES: Record<string, string> = {
     idle: "text-neutral-500",
     running: "text-neutral-500",
     attention: "text-amber-700 dark:text-amber-300",
     stopped: "text-red-600 dark:text-red-400",
   };
+
+  /** The words of the phrase's way forward (space-120). */
+  const actLabel = (kind: NonNullable<typeof act>["kind"]): string => {
+    switch (kind) {
+      case "resolve":
+        return i18n._({ id: "Resolve", comment: "beside \"Changed here and at <display name>\": opens the choices beneath the row" });
+      case "combine":
+        return workingOn("combine") ? combiningLabel() : combineLabel();
+      case "continue":
+        return continueLabel();
+      case "retry":
+        return workingOn("retry")
+          ? i18n._({ id: "Retrying…", comment: "the Retry control, while the retry is in flight" })
+          : i18n._({ id: "Retry", comment: "run the stopped step again" });
+    }
+  };
+  const onAct = () => {
+    if (!act) return;
+    switch (act.kind) {
+      case "resolve":
+        setOpened((was) => (was === "resolve" ? undefined : "resolve"));
+        return;
+      case "combine":
+        setOpened((was) => (was === "combine" ? undefined : "combine"));
+        return;
+      case "continue":
+        if (opened === "notice") close("act");
+        else askNotice(act.placement);
+        return;
+      case "retry":
+        void retryStopped();
+    }
+  };
+  const actExpanded = act?.kind === "resolve" ? opened === "resolve" : act?.kind === "combine" ? opened === "combine" : act?.kind === "continue" ? opened === "notice" : undefined;
 
   return (
     <li data-testid={`space-row-${repo.key}`} data-state={repo.state} className="@container flex min-w-0 flex-col gap-1">
@@ -1486,12 +1178,6 @@ function RepositoryRow({
           isSelected ? "bg-brand-50 dark:bg-brand-950" : ""
         }`}
       >
-        <span
-          aria-hidden
-          data-testid={`space-repo-dot-${repo.key}`}
-          title={dot.word}
-          className={`inline-block h-2 w-2 shrink-0 rounded-full ${dot.className}`}
-        />
         <button
           ref={nameRef}
           type="button"
@@ -1513,11 +1199,23 @@ function RepositoryRow({
           <span
             id={describe("code")}
             data-testid={`space-repo-code-${repo.key}`}
-            // A remote reads as code; the phrases for none read as words.
-            className={`hidden min-w-0 max-w-[30%] truncate text-xs text-neutral-500 @md:inline ${repo.code ? "font-mono" : ""}`}
-            title={repo.code ?? undefined}
+            data-kind={code.kind}
+            title={code.phrase}
+            className={`hidden min-w-0 max-w-[40%] shrink-0 items-center gap-1 text-xs @md:inline-flex ${
+              code.kind === "none" ? "text-amber-700 dark:text-amber-300" : "text-neutral-500"
+            }`}
           >
-            {code}
+            {code.kind === "none" ? (
+              <span className="min-w-0 truncate">
+                <span aria-hidden>⚠ </span>
+                {code.phrase}
+              </span>
+            ) : (
+              <>
+                <CodeGlyph />
+                <span className="sr-only">{code.phrase}</span>
+              </>
+            )}
           </span>
         ) : null}
         {badges.map((badge) => (
@@ -1534,48 +1232,25 @@ function RepositoryRow({
           data-testid={`space-repo-state-${repo.key}`}
           data-tone={phrase.tone}
           // Beside the name from @md; beneath it below, the whole line
-          // its own where the controls leave it room (space-28).
+          // its own where the controls leave it room (space-28); empty
+          // where the row reads no phrase (space-120).
           className={`min-w-0 max-w-full shrink truncate text-xs @md:max-w-[45%] ${TONES[phrase.tone]}`}
           title={phrase.title || undefined}
         >
           {phrase.text}
         </span>
-        {phrase.act ? (
+        {act ? (
           <button
             ref={actRef}
             type="button"
-            data-testid={phrase.act.kind === "resolve" ? `space-row-resolve-${repo.key}` : `space-row-merge-${repo.key}`}
+            data-testid={`space-row-${act.kind}-${repo.key}`}
             className={`${SECONDARY} shrink-0 whitespace-nowrap`}
-            aria-expanded={opened === phrase.act.kind}
-            title={
-              phrase.act.kind === "merge" && !joining ? i18n._("Brings both histories into one and asks about anything that differs") : undefined
-            }
-            disabled={disabled || (phrase.act.kind === "merge" && working)}
-            onClick={() => setOpened((was) => (was === phrase.act!.kind ? undefined : phrase.act!.kind))}
+            aria-expanded={actExpanded}
+            disabled={disabled || ((act.kind === "combine" || act.kind === "retry" || act.kind === "continue") && working)}
+            onClick={onAct}
           >
-            {phrase.act.kind === "resolve"
-              ? i18n._({ id: "Resolve", comment: "beside \"Changed here and at <display name>\": opens the choices beneath the row" })
-              : busy === "sync" || accepted?.op === "sync"
-                ? mergingLabel()
-                : mergeHistoriesLabel()}
+            {actLabel(act.kind)}
           </button>
-        ) : null}
-        {repo.local.length > 0 ? (
-          <span
-            data-testid={`space-repo-changes-${repo.key}`}
-            className="shrink-0 text-xs text-neutral-500"
-            title={i18n._("{count, plural, one {# local change} other {# local changes}}", { count: repo.local.length })}
-          >
-            {/* The words beside a count yield first (DR-041): below @md
-                the number stands alone, the phrase describing the row
-                still. */}
-            <span aria-hidden className="@md:hidden">
-              {repo.local.length}
-            </span>
-            <span id={describe("changes")} className="hidden @md:inline">
-              {i18n._("{count, plural, one {# change} other {# changes}}", { count: repo.local.length })}
-            </span>
-          </span>
         ) : null}
         <span className="ml-auto flex shrink-0 items-center gap-1">
           {credentialHost !== undefined && onAddCredential ? (
@@ -1596,19 +1271,6 @@ function RepositoryRow({
               })}
             </button>
           ) : null}
-          {pickBeside ? (
-            <button
-              ref={pickRef}
-              type="button"
-              data-testid={`space-row-pick-${repo.key}`}
-              className={`${SECONDARY} shrink-0 whitespace-nowrap`}
-              aria-expanded={opened === "pick"}
-              disabled={disabled}
-              onClick={() => setOpened((was) => (was === "pick" ? undefined : "pick"))}
-            >
-              {addToGroupLabel()}
-            </button>
-          ) : null}
           {primary}
           <MoreMenu of={name} testId={`space-row-more-${repo.key}`} buttonRef={moreRef} entries={more} disabled={disabled} />
         </span>
@@ -1623,79 +1285,27 @@ function RepositoryRow({
           ) : null}
         </p>
       ) : null}
-      {opened === "resolve" && phrase.act?.kind === "resolve" ? (
+      {opened === "resolve" && act?.kind === "resolve" ? (
         // The choices beneath the row (space-14): the same picker, and
         // the same choices, as the Sync tab's.
         <div data-testid={`space-row-resolve-picker-${repo.key}`} className="ml-6 min-w-0 rounded border border-neutral-300 p-2 dark:border-neutral-700">
           <ConflictsPicker groups={groups} repo={repo} now={now} connected={connected} scope={`space-row-${repo.key}`} onNote={onNote} />
         </div>
       ) : null}
-      {opened === "merge" && phrase.act?.kind === "merge" ? (
-        <div data-testid={`space-row-merge-confirm-${repo.key}`} className="pl-6">
-          <MergeConfirm
+      {opened === "combine" && act?.kind === "combine" ? (
+        <div data-testid={`space-row-combine-confirm-${repo.key}`} className="pl-6">
+          <CombineConfirm
             onConfirm={() => {
-              const placement = phrase.act!.placement;
+              const placement = act.placement;
               close("act");
-              void start({ placement, join: true });
+              void start({ placement, join: true }, "combine");
             }}
             onCancel={() => close("act")}
           />
         </div>
       ) : null}
       {opened === "pick" ? (
-        <GroupPicker groups={groups} repo={repo} connected={connected} onClose={() => close(pickBeside ? "pick" : "primary")} onNote={onNote} />
-      ) : null}
-      {opened === "place-choice" && showPlace ? (
-        <PlaceChoice
-          repoKey={repo.key}
-          offered={offered}
-          connected={connected}
-          onChoose={(chosen) => {
-            setPlaceAt(chosen.origin);
-            setOpened("place");
-          }}
-          onCancel={() => close()}
-        />
-      ) : null}
-      {placeTo ? (
-        <GroupPicker
-          key={placeTo.origin}
-          groups={groups}
-          repo={repo}
-          place={{ instance: placeTo, send: place }}
-          connected={connected}
-          onClose={() => close()}
-          onNote={onNote}
-        />
-      ) : null}
-      {opened === "leave-choice" && showLeave ? (
-        <LeaveChoice
-          groups={groups}
-          repoKey={repo.key}
-          held={leaveOffered}
-          connected={connected}
-          onChoose={(chosen) => {
-            setLeaveAt(chosen.instance!);
-            setOpened("leave");
-          }}
-          onCancel={() => close()}
-        />
-      ) : null}
-      {leaveLine ? (
-        <LeaveConfirm
-          // Asked again, it asks afresh, Keep focused (DR-010 §4).
-          key={`${leaveLine.instance}|${leaveStage(repo, spaceLastAct(repo.key), leaveLine.instance!).stage}`}
-          repoKey={repo.key}
-          stage={leaveStage(repo, spaceLastAct(repo.key), leaveLine.instance!)}
-          name={instanceNameAt(groups, leaveLine.instance!)}
-          disabled={disabled || leaving}
-          onRemove={() => {
-            const confirmed = leaveStage(repo, spaceLastAct(repo.key), leaveLine.instance!).stage !== "first";
-            close();
-            void leave(leaveLine.instance!, confirmed);
-          }}
-          onKeep={() => close()}
-        />
+        <GroupPicker groups={groups} repo={repo} connected={connected} onClose={() => close(pickInMore ? "more" : "primary")} onNote={onNote} />
       ) : null}
       {opened === "members" && showMembers && keyGoverning && keyLine?.instance ? (
         <MembersPanel
@@ -1711,25 +1321,13 @@ function RepositoryRow({
           onNote={onNote}
         />
       ) : null}
-      {opened === "move" && showMove && keyLine ? (
-        <MovePicker
-          groups={groups}
-          repo={repo}
-          name={name}
-          line={keyLine}
-          busy={moving}
-          connected={connected}
-          onMove={move}
-          onClose={() => close()}
-        />
-      ) : null}
       {opened === "join" ? (
         <FolderEditor
           testId={`space-join-${repo.key}`}
-          label={repo.code ? i18n._("Folder for its code on this device") : i18n._("Folder its sessions run in on this device")}
+          label={folderLabel(groupRepository)}
           initial=""
           submitLabel={openHereLabel()}
-          busyLabel={i18n._({ id: "Opening…", comment: "a project's row while it is opened here: its records and code clone" })}
+          busyLabel={openingLabel()}
           onSubmit={join}
           onCancel={() => close("primary")}
         />
@@ -1737,40 +1335,26 @@ function RepositoryRow({
       {opened === "folder" ? (
         <FolderEditor
           testId={`space-folder-${repo.key}`}
-          label={groupRepository ? i18n._("Folder its sessions run in on this device") : i18n._("Folder for its code on this device")}
+          label={folderLabel(groupRepository)}
           initial=""
-          submitLabel={i18n._("Add project")}
-          busyLabel={i18n._({ id: "Adding…", comment: "the Add project control, while the add is in flight" })}
+          submitLabel={i18n._({ id: "Use this folder", comment: "pair a project's records with the folder named" })}
+          busyLabel={i18n._({ id: "Adding…", comment: "the Use this folder control, while the folder is paired" })}
           onSubmit={pair}
           onCancel={() => close("primary")}
         />
       ) : null}
-      {noticeLine ? (
+      {noticeLine && noticeLine.instance !== null ? (
         <div data-testid="space-notice-confirm" className="pl-6">
-          <PlacementNotice
-            groups={groups}
-            line={noticeLine}
+          <SharingConfirm
+            group={placementGroupName(groups, repo, noticeLine)}
+            name={placementName(groups, noticeLine)}
+            visibility={noticeLine.visibility}
             disabled={disabled}
-            onContinue={() => {
-              close();
+            onShare={() => {
+              close(act?.kind === "continue" ? "act" : "more");
               void start({ placement: noticeLine.instance, noticed: true, ...carried });
             }}
-            onCancel={() => close()}
-          />
-        </div>
-      ) : null}
-      {attachLine && attachLine.instance !== null ? (
-        <div data-testid={`space-row-attach-notice-${repo.key}`} className="pl-6">
-          <PlacementNotice
-            groups={groups}
-            line={attachLine}
-            disabled={disabled}
-            onContinue={() => {
-              const at = attachLine.instance!;
-              close();
-              void attach(at);
-            }}
-            onCancel={() => close()}
+            onCancel={() => close(act?.kind === "continue" ? "act" : "more")}
           />
         </div>
       ) : null}
@@ -1778,108 +1362,13 @@ function RepositoryRow({
   );
 }
 
-/** Where one placement of a spex repository moves (space-78): a picker
- * as space-58's, of the instance governing that placement alone — your
- * namespace there first, read by your login, then each group it lists,
- * each read as the list reads it, never another account's login, never
- * the entry that placement stands in — with Cancel, Escape cancelling.
- * A pick asks the host; a refusal stands in the picker, the placement
- * kept where it stood. */
-export function MovePicker({
-  groups,
-  repo,
-  name,
-  line,
-  busy,
-  connected,
-  onMove,
-  onClose,
-}: {
-  groups: GroupsState;
-  repo: RepositoryState;
-  /** The row's name (space-1). */
-  name: string;
-  /** The placement moved: one with an instance. */
-  line: PlacementState;
-  busy: boolean;
-  connected: boolean;
-  onMove(groupId: string | null): Promise<void>;
-  onClose(): void;
-}) {
-  const [refusal, setRefusal] = useState<string>();
-  const firstRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    firstRef.current?.focus();
-  }, []);
-  // The instance the placement is moved at, and the entry it stands in
-  // there, left out: the row's for its key placement, the one whose
-  // listing names the row as placed for any other.
-  const instance = governingOfPlacement(groups, repo, line);
-  const standing = standingEntry(groups, repo, line);
-  const mine = instance ? namespaceOf(instance) : undefined;
-  // Your namespace is named by none, a group by its host id (space-29).
-  const targets: { entry: InstanceGroupState; groupId: string | null }[] = instance
-    ? [
-        ...(mine && mine !== standing ? [{ entry: mine, groupId: null }] : []),
-        ...instance.groups
-          .filter((entry) => entry.id !== null && entry !== standing)
-          .map((entry) => ({ entry, groupId: entry.id })),
-      ]
-    : [];
-  const id = `${repo.key}@${line.instance}`;
-  const pick = async (groupId: string | null) => {
-    if (busy) return;
-    setRefusal(undefined);
-    try {
-      await onMove(groupId);
-    } catch (cause) {
-      setRefusal((cause as Error).message);
-      firstRef.current?.focus();
-    }
-  };
-  const option =
-    "flex w-full min-w-0 items-center gap-2 rounded border border-neutral-200 px-2 py-1 text-left text-sm hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-800 dark:hover:bg-neutral-800";
-  return (
-    <div
-      role="group"
-      aria-label={i18n._("Move {name} to another group", { name })}
-      data-testid={`space-move-${id}`}
-      className="ml-6 flex min-w-0 flex-col gap-2 rounded border border-neutral-300 p-2 dark:border-neutral-700"
-      onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
-        if (event.key === "Escape") {
-          event.stopPropagation();
-          if (!busy) onClose();
-        }
-      }}
-    >
-      <ul className="flex min-w-0 flex-col gap-1">
-        {targets.map((target, index) => (
-          <li key={groupTestKey(target.entry)} className="min-w-0">
-            <button
-              ref={index === 0 ? firstRef : undefined}
-              type="button"
-              data-testid={`space-move-group-${groupTestKey(target.entry)}`}
-              className={option}
-              disabled={!connected || busy}
-              onClick={() => void pick(target.groupId)}
-            >
-              <GroupOptionLabel entry={target.entry} />
-            </button>
-          </li>
-        ))}
-      </ul>
-      <div className="flex flex-wrap items-center gap-2">
-        <button type="button" data-testid={`space-move-cancel-${id}`} className={SECONDARY} disabled={busy} onClick={onClose}>
-          {i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}
-        </button>
-        {refusal ? (
-          <span role="alert" className="min-w-0 text-xs text-red-600 dark:text-red-400">
-            {refusal}
-          </span>
-        ) : null}
-      </div>
-    </div>
-  );
+/** The caption of the folder an Open or a pairing asks for (space-63):
+ * a group's own records' sessions run in it, a project's code lies in
+ * it. */
+function folderLabel(groupRepository: boolean): string {
+  return groupRepository
+    ? i18n._({ id: "Folder its sessions run in on this computer", comment: "the field a group's own records ask for: the folder their sessions run in" })
+    : i18n._({ id: "Project folder on this computer", comment: "the field a project's records ask for: the folder its code is in, or is downloaded to" });
 }
 
 /** A folder named in place where the shell offers no picker
@@ -1913,7 +1402,7 @@ function FolderEditor({
   const submit = async () => {
     const folder = path.trim();
     if (!folder) {
-      setRefusal(i18n._("Name the folder on this device."));
+      setRefusal(i18n._({ id: "Name the folder on this computer", comment: "a folder field left empty" }));
       fieldRef.current?.focus();
       return;
     }
@@ -1972,10 +1461,10 @@ function FolderEditor({
   );
 }
 
-/** One instance a pick offers (space-58): the spex repositories it
- * lists for the same code, each with the entry it stands in, and where
- * a new one may go — your namespace there first, then each group it
- * lists, never another account's login. */
+/** One Space a pick offers (space-58): the spex repositories it lists
+ * for the same code, each with the entry it stands in, and where new
+ * records may go — "Personal" first, then each group it lists, never
+ * another account's login. */
 interface PickSection {
   instance: InstanceState;
   listed: { group: InstanceGroupState; repo: RepositoryState; placement: PlacementState | undefined }[];
@@ -1983,81 +1472,68 @@ interface PickSection {
 }
 
 /** Where a project in no group goes (space-58): in one picker, one
- * section per signed-in instance under its display name — the clone's
- * instance alone where its key lies under one — each holding the spex
- * repositories that instance lists for the same code, each with its
- * group, read as the list reads it, and members' count, and, below them,
- * your namespace there reading "Only you" and every group it lists; the
- * new repository's name in one editable field every section shares.
- * Picking a listed one that may have other members says the sharing
- * notice beneath it first, and joins with `noticed` only on Continue
- * (space-57). A choice names the instance of its section (space-29).
- * With `place`, it is "Place at…"'s picker for one instance (space-88):
- * that instance's section alone, listing only the spex repositories
- * whose members the view lets the person manage, its notice naming where
- * the records go, and a pick sent as a Place — a refusal for the notice
- * the page's read missed saying it beneath the repository picked
- * (space-57). */
+ * section per signed-in Space under its display name — the clone's
+ * Space alone where its key lies under one — each holding "Join the
+ * records already in", the spex repositories that Space lists for the
+ * same code, each with its group, read as the list reads it, and its
+ * members' count, and "Share into", "Personal" first and then every
+ * group it lists; the new records take the folder's name, no field
+ * naming them. Picking a listed one that may have other members says
+ * the sharing confirm beneath it first, and joins with `noticed` only on
+ * Share (space-57). A choice names the Space of its section
+ * (space-29). */
 export function GroupPicker({
   groups,
   repo,
-  place,
   connected,
   onClose,
   onNote,
 }: {
   groups: GroupsState;
   repo: RepositoryState;
-  /** The instance a Place is for, and how its pick is sent. */
-  place?: { instance: InstanceState; send(choice: SpaceGroupChoice, noticed?: boolean): Promise<void> };
   connected: boolean;
   onClose(): void;
   onNote: Note;
 }) {
   const store = usePlaceStore();
   const spacePick = store((state) => state.spacePick);
-  const code = repo.code;
-  const sections: PickSection[] = (place ? [place.instance] : pickInstances(groups, repo)).map((instance) => {
-    const mine = namespaceOf(instance);
+  const sections: PickSection[] = pickInstances(groups, repo).map((instance) => {
+    // "Personal" is always offered: a Space lists your namespace only
+    // once it holds something there.
+    const mine = namespaceOf(instance) ?? {
+      id: null,
+      login: instance.account.login,
+      mine: true,
+      fullPath: instance.account.login,
+      name: instance.account.login,
+      can: { createSubgroup: false, manageMembers: false, rename: false, delete: false },
+      placed: [],
+      repositories: [],
+    };
     return {
       instance,
-      // The listed ones are the host's: a host id, a state the host read.
+      // The listed ones are the Space's: a host id, a state it read.
       listed: instance.groups.flatMap((group) =>
         group.repositories
-          .filter(
-            (other) =>
-              other.key !== repo.key &&
-              other.id !== null &&
-              other.state !== "local-only" &&
-              code !== null &&
-              other.code !== null &&
-              sameRemote(other.code, code),
-          )
-          // Its members, visibility and rights are its placement's there
+          .filter((other) => other.key !== repo.key && other.id !== null && other.state !== "local-only" && sameCode(other, repo))
+          // Its members and visibility are its placement's there
           // (space-30).
-          .map((other) => ({ group, repo: other, placement: placementAt(other, instance.origin) ?? rowPlacement(other) }))
-          // A Place offers only those whose members the view lets the
-          // person manage (space-88).
-          .filter((listed) => !place || listed.placement?.can.manageMembers === true),
+          .map((other) => ({ group, repo: other, placement: placementAt(other, instance.origin) ?? rowPlacement(other) })),
       ),
       // GroupsState names no right to create a repository, so every
       // group is offered and a refusal waits on the row (space-64).
-      creatable: [
-        ...(mine ? [mine] : []),
-        ...instance.groups.filter((group) => group.id !== null).sort((a, b) => a.fullPath.localeCompare(b.fullPath)),
-      ],
+      creatable: [mine, ...instance.groups.filter((group) => group.id !== null && group.login === null).sort((a, b) => a.fullPath.localeCompare(b.fullPath))],
     };
   });
-  const defaultName = repo.folder ? lastSegment(repo.folder) : repo.name.replace(/-spex$/, "");
-  const [name, setName] = useState(defaultName);
+  // The new records take the folder's name (space-58).
+  const name = repo.folder ? lastSegment(repo.folder) : repo.name.replace(/-spex$/, "");
   const [busy, setBusy] = useState<string>();
   const [refusal, setRefusal] = useState<string>();
-  // The listed spex repository whose sharing notice stands (space-57).
+  // The listed spex repository whose sharing confirm stands (space-57).
   const [notice, setNotice] = useState<string>();
   // Each section's headings are named by ids no other picker shares.
   const ids = useId();
   const pickerRef = useRef<HTMLDivElement>(null);
-  const nameRef = useRef<HTMLInputElement>(null);
   const firstRef = useRef<HTMLButtonElement>(null);
   // Where focus goes once a refused pick re-enables the picker: its
   // controls are disabled while the pick is asked (DR-010 §6).
@@ -2073,7 +1549,7 @@ export function GroupPicker({
   }, [busy]);
 
   const optionOf = (key: string) =>
-    pickerRef.current?.querySelector<HTMLButtonElement>(`[data-testid="space-pick-repo-${key}"]`);
+    pickerRef.current?.querySelector<HTMLButtonElement>(`[data-testid="space-pick-repo-${key}"], [data-testid="space-pick-group-${key}"]`);
 
   /** Cancel starts nothing; focus returns to the option (DR-010 §6). */
   const closeNotice = (key: string) => {
@@ -2081,39 +1557,29 @@ export function GroupPicker({
     setTimeout(() => optionOf(key)?.focus(), 0);
   };
 
-  const pick = async (id: string, choice: SpaceGroupChoice, noticed = false) => {
+  const pick = async (id: string, choice: SpaceGroupChoice, noticed = false, focusKey = id) => {
     setBusy(id);
     setRefusal(undefined);
     try {
-      if (place) await (noticed ? place.send(choice, true) : place.send(choice));
-      else await (noticed ? spacePick(repo.key, choice, true) : spacePick(repo.key, choice));
+      await (noticed ? spacePick(repo.key, choice, true) : spacePick(repo.key, choice));
       onClose();
     } catch (cause) {
-      // A Place refused for the notice the page's read missed says it
-      // beneath the repository picked (space-57).
-      if (place && choice.kind === "join" && !noticed && (cause as SpexCommandError).details?.notice === true) {
-        setNotice(id);
-        return;
-      }
       const message = (cause as Error).message;
       setRefusal(message);
       onNote(message);
-      // A name the host refuses asks for another in place (space-58); a
-      // refused join hands focus back to its option, its notice closed.
-      if (choice.kind === "create") refocus.current = () => nameRef.current?.focus();
-      else {
-        setNotice(undefined);
-        refocus.current = () => optionOf(id)?.focus();
-      }
+      // A refused pick hands focus back to its option, its confirm
+      // closed (space-58).
+      setNotice(undefined);
+      refocus.current = () => optionOf(focusKey)?.focus();
     } finally {
       setBusy(undefined);
     }
   };
 
-  /** Join a listed spex repository at its instance (space-58): one
-   * whose only member is the account joins at once; one with others, or
-   * whose count the host's last read lacks, says the notice first
-   * unless this device's reader has seen it for that placement
+  /** Join a listed spex repository at its Space (space-58): one whose
+   * only member is the account joins at once; one with others, or whose
+   * count the Space's last read lacks, says the sharing confirm first
+   * unless this computer's reader has answered it for that placement
    * (space-57). */
   const join = (instance: InstanceState, other: RepositoryState) => {
     const listed = placementAt(other, instance.origin) ?? rowPlacement(other);
@@ -2126,22 +1592,16 @@ export function GroupPicker({
     void pick(other.key, { kind: "join", instance: instance.origin, hostId: other.id! });
   };
 
-  /** Create `<name>-spex` in an entry at its instance (space-58): your
+  /** Create `<name>-spex` in an entry at its Space (space-58): your
    * namespace named by none, a group by its host id. */
   const create = (instance: InstanceState, group: InstanceGroupState) => {
     setNotice(undefined);
-    const chosen = name.trim();
-    if (!chosen) {
-      setRefusal(i18n._("Name the new spex repository."));
-      nameRef.current?.focus();
-      return;
-    }
-    void pick(`${instance.origin} ${groupTestKey(group)}`, {
-      kind: "create",
-      instance: instance.origin,
-      groupId: group.mine ? null : group.id,
-      name: chosen,
-    });
+    void pick(
+      `${instance.origin} ${groupTestKey(group)}`,
+      { kind: "create", instance: instance.origin, groupId: group.mine ? null : group.id, name },
+      false,
+      groupTestKey(group),
+    );
   };
 
   const option =
@@ -2158,16 +1618,12 @@ export function GroupPicker({
     <div
       ref={pickerRef}
       role="group"
-      aria-label={
-        place
-          ? alsoPlaceAt(place.instance)
-          : i18n._({
-              id: "Add {name} to a group",
-              values: { name: projectName(repo.name) },
-              comment: "the name of the group picker \"Add to a group…\" opens; {name} is the project's name",
-            })
-      }
-      data-testid={place ? `space-place-${repo.key}` : `space-picker-${repo.key}`}
+      aria-label={i18n._({
+        id: "Add {name} to a group",
+        values: { name: projectName(repo.name) },
+        comment: "the name of the group picker \"Add to a group…\" opens; {name} is the project's name",
+      })}
+      data-testid={`space-picker-${repo.key}`}
       className="ml-6 flex min-w-0 flex-col gap-2 rounded border border-neutral-300 p-2 dark:border-neutral-700"
       onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
         if (event.key === "Escape") {
@@ -2197,8 +1653,8 @@ export function GroupPicker({
               <section aria-labelledby={`${heading}-listed`} className="flex min-w-0 flex-col gap-1">
                 <h4 id={`${heading}-listed`} className="text-xs font-medium text-neutral-500">
                   {i18n._({
-                    id: "On this instance for this code",
-                    comment: "the picker's heading, inside one instance's section, over the spex repositories that instance lists for the folder's code",
+                    id: "Join the records already in",
+                    comment: "the picker's heading, inside one Space's section, over the projects that Space already holds for the folder's code, each with its group",
                   })}
                 </h4>
                 <ul className="flex min-w-0 flex-col gap-1">
@@ -2212,14 +1668,14 @@ export function GroupPicker({
                         disabled={disabled}
                         onClick={() => join(instance, other)}
                       >
-                        <span className="min-w-0 flex-1 truncate font-medium" title={other.name}>
+                        <span className="min-w-0 flex-1 truncate font-medium" title={projectName(other.name)}>
                           {rowName(group, other)}
                         </span>
                         <span
                           data-testid={`space-pick-listed-group-${other.key}`}
                           className="flex min-w-0 max-w-[40%] items-baseline gap-1 text-xs text-neutral-500"
                         >
-                          <GroupOptionLabel entry={group} ownAs="only-you" />
+                          <GroupOptionLabel entry={group} />
                         </span>
                         {placement && placement.members !== null ? (
                           <span className="shrink-0 text-xs text-neutral-500">
@@ -2229,29 +1685,14 @@ export function GroupPicker({
                       </button>
                       {notice === other.key ? (
                         <div data-testid={`space-pick-notice-${repo.key}`} className="mt-1 pl-2">
-                          {place && placement ? (
-                            // A Place's notice names where the records go
-                            // (space-57, space-88).
-                            <PlacementNotice
-                              groups={groups}
-                              line={placement}
-                              disabled={disabled}
-                              onContinue={() =>
-                                void pick(other.key, { kind: "join", instance: instance.origin, hostId: other.id! }, true)
-                              }
-                              onCancel={() => closeNotice(other.key)}
-                            />
-                          ) : (
-                            <InlineConfirm
-                              question={sharingNotice(placement?.visibility ?? null)}
-                              confirmLabel={continueLabel()}
-                              disabled={disabled}
-                              onConfirm={() =>
-                                void pick(other.key, { kind: "join", instance: instance.origin, hostId: other.id! }, true)
-                              }
-                              onCancel={() => closeNotice(other.key)}
-                            />
-                          )}
+                          <SharingConfirm
+                            group={entryName(group)}
+                            name={instanceName(instance)}
+                            visibility={placement?.visibility ?? null}
+                            disabled={disabled}
+                            onShare={() => void pick(other.key, { kind: "join", instance: instance.origin, hostId: other.id! }, true)}
+                            onCancel={() => closeNotice(other.key)}
+                          />
                         </div>
                       ) : null}
                     </li>
@@ -2261,7 +1702,10 @@ export function GroupPicker({
             ) : null}
             <section aria-labelledby={`${heading}-create`} className="flex min-w-0 flex-col gap-1">
               <h4 id={`${heading}-create`} className="text-xs font-medium text-neutral-500">
-                {i18n._("New in a group")}
+                {i18n._({
+                  id: "Share into",
+                  comment: "the picker's heading, inside one Space's section, over Personal and the groups the project's records may be shared into",
+                })}
               </h4>
               <ul className="flex min-w-0 flex-col gap-1">
                 {creatable.map((group) => (
@@ -2274,7 +1718,7 @@ export function GroupPicker({
                       disabled={disabled}
                       onClick={() => create(instance, group)}
                     >
-                      <GroupOptionLabel entry={group} ownAs="only-you" />
+                      <GroupOptionLabel entry={group} />
                     </button>
                   </li>
                 ))}
@@ -2283,23 +1727,6 @@ export function GroupPicker({
           </div>
         );
       })}
-      {sections.length > 0 ? (
-        // One name for the new repository, whichever entry it goes to
-        // (space-58).
-        <label className="flex min-w-0 items-center gap-1 text-xs">
-          <span className="shrink-0 text-neutral-500">{i18n._({ id: "Name", comment: "the new spex repository's name" })}</span>
-          <input
-            ref={nameRef}
-            data-testid={`space-pick-name-${repo.key}`}
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            spellCheck={false}
-            disabled={busy !== undefined}
-            className="min-w-0 flex-1 rounded border border-neutral-300 bg-white px-1.5 py-0.5 font-mono text-xs dark:border-neutral-700 dark:bg-neutral-900"
-          />
-          <span className="shrink-0 font-mono text-neutral-500">-spex</span>
-        </label>
-      ) : null}
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" data-testid={`space-pick-cancel-${repo.key}`} className={SECONDARY} onClick={onClose}>
           {i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}

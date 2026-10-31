@@ -342,29 +342,10 @@ export interface AppState extends AttachmentState {
    * the sharing notice was seen for a join (space-57). Accepted at
    * once, outcome as state. */
   spacePick(repository: string, choice: SpaceGroupChoice, noticed?: boolean): Promise<void>;
-  /** Place a project's spex repository at another instance (space-88,
-   * space-97): a spex repository that instance lists by its host id, or
-   * a new one in a group there, the choice naming the instance it is at
-   * (space-29); `noticed` once the sharing notice was seen for a join
-   * (space-57). Accepted once the host's step and the placement's add
-   * are done, its sync then running as state. */
-  spacePlace(repository: string, choice: SpaceGroupChoice, noticed?: boolean): Promise<void>;
   /** Clone a spex repository an instance lists and this device lacks
    * (space-63), `instance` the one its row stands under, pairing it with
    * a folder. Accepted at once. */
   spaceJoin(instance: string, hostId: string, folder?: string): Promise<void>;
-  /** Bring here a placement a placement file of the clone names and no
-   * remote here holds (space-90): the host repository at `instance`,
-   * its origin, with its sharing notice seen, as `space.attach` requires
-   * (space-99). Accepted once the placement is added, its sync then
-   * running as state. */
-  spaceAttach(repository: string, instance: string): Promise<void>;
-  /** Stop keeping a project's records at one instance (space-89,
-   * space-98): its placement at `instance`, its origin, fetched first
-   * and refused, unless `confirmed`, while records it or the clone holds
-   * reached no remaining placement, or while it cannot be read; nothing
-   * at the host changes. Accepted at once, outcome as state. */
-  spaceLeave(repository: string, instance: string, confirmed?: boolean): Promise<void>;
   /** What the page last asked of a spex repository's clone beyond a
    * plain sync — a join, an Attach, a Place or a Leave, and where —
    * which a stopped phase does not name (space-30); none after a
@@ -378,19 +359,6 @@ export interface AppState extends AttachmentState {
    * its root or inside the group whose host id is `parent` (space-68);
    * the state listing it arrives before the reply. */
   spaceGroupCreate(instance: string, name: string, path: string, parent: string | null): Promise<CommandResults["space.group.create"]>;
-  /** Rename a group of the instance by its host id — its name, its path
-   * segment, or both (space-76); the state holding it renamed arrives
-   * before the reply. */
-  spaceGroupRename(instance: string, group: string, change: { name?: string; path?: string }): Promise<CommandResults["space.group.rename"]>;
-  /** Delete a group of the instance by its host id (space-77); the state
-   * without it arrives before the reply. */
-  spaceGroupDelete(instance: string, group: string): Promise<CommandResults["space.group.delete"]>;
-  /** Move one placement of a spex repository — by its key, and the
-   * placement by its instance's origin — into a group of that instance by
-   * its host id, or your namespace there where `groupId` is null
-   * (space-78); the state holding it in its new group arrives before the
-   * reply. */
-  spaceRepositoryMove(repository: string, instance: string, groupId: string | null): Promise<CommandResults["space.repository.move"]>;
   /** Add the account of `login` to a group or a spex repository's
    * placement at one of its instance's roles, by its id (space-69); the
    * reply lists the members after the addition. */
@@ -1962,11 +1930,6 @@ function placeState(
       await getClient().command("space.pick", { repository, choice, ...(noticed ? { noticed: true } : {}) });
     },
 
-    async spacePlace(repository, choice, noticed): Promise<void> {
-      lastActs.set(repository, { op: "place", instance: choice.instance, choice });
-      await getClient().command("space.place", { repository, choice, ...(noticed ? { noticed: true } : {}) });
-    },
-
     async spaceJoin(instance: string, hostId: string, folder?: string): Promise<void> {
       await getClient().command("space.join", {
         instance,
@@ -1975,29 +1938,11 @@ function placeState(
       });
     },
 
-    async spaceAttach(repository, instance): Promise<void> {
-      lastActs.set(repository, { op: "attach", instance });
-      await getClient().command("space.attach", { repository, instance, noticed: true });
-    },
-
-    async spaceLeave(repository, instance, confirmed): Promise<void> {
-      // Remembered before the reply: a stop inside the operation is
-      // still this Leave's (space-30).
-      lastActs.set(repository, { op: "leave", instance, confirmed: confirmed === true });
-      await getClient().command("space.leave", { repository, instance, ...(confirmed ? { confirmed: true } : {}) });
-    },
-
     spaceLastAct: (repository) => lastActs.get(repository),
 
     spaceMembers: (target) => getClient().command("space.members", { ...target }),
 
     spaceGroupCreate: (instance, name, path, parent) => getClient().command("space.group.create", { instance, name, path, parent }),
-
-    spaceGroupRename: (instance, group, change) => getClient().command("space.group.rename", { instance, group, ...change }),
-
-    spaceGroupDelete: (instance, group) => getClient().command("space.group.delete", { instance, group }),
-
-    spaceRepositoryMove: (repository, instance, groupId) => getClient().command("space.repository.move", { repository, instance, groupId }),
 
     spaceShare: (target, login, role) => getClient().command("space.share", { ...target, login, role }),
 
