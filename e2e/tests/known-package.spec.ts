@@ -104,7 +104,7 @@ test("playbook-library-117: install a private known package with explicit requir
   await versionField.fill("1.2.3");
   await submit.click();
   await expect(page.getByTestId("environment-error")).toContainText(refusedName);
-  await expect(page.getByTestId("environment-error")).toContainText(/may not fetch|forbidden/i);
+  await expect(page.getByTestId("environment-error")).toContainText(/not shared with you at .+ — ask its owner/);
   await expect(page.getByTestId(`env-installed-${refusedName}`)).toHaveCount(0);
   expect(registry.script.received.some((request) => request.path === `/api/v1/packages/${refusedName}` && request.instance === instance.url && request.account === HOST_LOGIN && request.bearer)).toBe(true);
   registry.script.setPrivate(refusedOrg, [instance.url]);
