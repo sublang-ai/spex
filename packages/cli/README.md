@@ -9,10 +9,9 @@
 
 *The essential spec layer AI agents need to build software reliably.*
 
-Scaffolds a `specs/` directory so AI coding agents can read and follow
-your project's requirements and design. It makes a spec package folder from
-a skill or a spec you already have, and attaches to the running Spex app for
-project, Space sign-in and package operations.
+The package manager for Spex environments, and the scaffolder for `specs/`.
+Requires Node.js 22 or later. Package commands run independently and share their
+library and files with the Spex app.
 
 ## Install
 
@@ -20,112 +19,91 @@ project, Space sign-in and package operations.
 npm install -g @sublang/spex
 ```
 
-Or run once without installing:
+Or run `npx @sublang/spex <command>`.
+
+## Packages
+
+Run in a project's folder; Spex finds the nearest `spex.yaml`, else the Git
+working tree's root, else the current folder.
 
 ```sh
-npx @sublang/spex scaffold
+spex add my-org/toolkit@^1.0.0
+spex install
+spex update
+spex list
+spex search toolkit
+spex remove my-org/toolkit
 ```
 
-## Make a package folder
+`add` records a request and installs. `install` materializes the lock, resolving
+when missing or stale; `update` resolves again. Commit `spex.yaml` and
+`spex.lock`; installed files and exports under `.spex/` are ignored.
 
-`spex package init` turns a skill folder or a spec file you already have into
-a spec package folder ready to add and publish. It needs no running app.
-From your project's root:
+New manifests explicitly select the public registry:
+
+```yaml
+format: 1
+registry: https://spex.sublang.ai
+space: https://your-space.example
+packages:
+  my-org/toolkit:
+    version: ^1.0.0
+```
+
+`registry` selects package resolution, private package access and publishing.
+`space` independently selects records and Git-source credential brokerage.
+Existing manifests without `registry` retain their former Space/default
+package source until explicitly migrated. Their locked package origins,
+versions and checksums remain authoritative; inspect the source before adding
+`registry`, especially before publishing private packages.
+Locked downloads use their recorded registry or an explicitly trusted equivalent;
+signing in to another Space does not add a package source.
+
+Public packages need no sign-in. Private packages and publishing require a
+registry sign-in on the machine running the package manager, including a team
+server seat. A Space seat admission supplies no registry grant.
 
 ```sh
-spex package init my-org/my-skill --skill .claude/skills/my-skill --move
-spex package init my-org/my-spec --spec specs/packages/my-spec.md
+spex login
+spex whoami
+spex logout
+spex login --registry https://spex.sublang.ai
+spex login --space https://your-space.example
 ```
 
-It writes `spex-packages/<name>/` holding `meta.yaml` (format 2, version
-`0.1.0`), a `README.md`, the project's `LICENSE` where there is one, each
-`--skill` folder under `skills/<language>/<id>/` — `<id>` being the `name`
-its `SKILL.md` declares — and the `--spec` file under
-`specs/<language>/<name>.md`. Give `--skill` once per skill; a package holds
-at most one spec, whose file must be named `<name>.md`.
-`--move` moves the skill folders instead of copying them: once the package is
-added, Spex exports the skills back to your agents.
+Without a target flag, these commands use registry purpose at the environment's
+package origin, or the public registry when there is no manifest.
+`--registry` and `--space` are mutually exclusive. Their credentials remain
+independent even at the same origin; signing out of one keeps the other signed
+in. `login --force` replaces only the selected grant. Follow the displayed
+verification URL and code to approve device sign-in.
 
-| Option | Default |
-| --- | --- |
-| `--language <tag>` | `en` |
-| `--description <text>` | the first skill's `SKILL.md` description, else the first paragraph under the spec's Intent heading |
-| `--license <id>` | `MIT` where `./LICENSE` begins with "MIT License", else `Apache-2.0` |
-
-Every rule is checked before anything is written; a refusal writes nothing
-and names the rule. It ends with the next steps: in the app, **Playbooks →
-Add from folder** with the name and `spex-packages/<name>`, then **Publish**
-on its row; or with the CLI, as below,
-`spex package add <org>/<name> --path spex-packages/<name>` and
-`spex package publish spex-packages/<name> --dry-run`.
-
-## Use the running Spex app
-
-These commands require Node.js 22 or later and the Spex app from
-0.9.0-beta.18 or later — the desktop app or the server shell — with attached
-CLI version 1 support and a matching protocol.
-Keep the app running on this computer: the CLI finds it through the
-`local/endpoint.json` file the app keeps in its home, `SPEX_HOME` or
-`~/.spex`, while it serves on a loopback address. Pass
-`--server <access-url>` or set `SPEX_SERVER_URL` only to use another
-server; either wins over the file. App 0.9.0-beta.18 keeps no such file and
-needs that URL, which its server shell started with `npm run start:server`
-prints. Keep the URL private: it grants access to that server's home.
-The CLI connects only to literal loopback addresses; it starts no server and
-stores no separate credentials or package state. Without a running app it
-says so and exits 1.
+## Make and publish a package
 
 ```sh
-spex project add /absolute/path/to/project
-cd /absolute/path/to/project
-spex project list
-spex auth login --instance https://spex.sublang.ai
-spex auth status
-spex package search toolkit
-spex package status
+spex new my-org/my-skill --skill .claude/skills/my-skill --move
+spex new my-org/my-spec --spec specs/packages/my-spec.md
+spex publish my-org/my-skill --dry-run
+spex publish my-org/my-skill
 ```
 
-Open the displayed sign-in URL and approve with the displayed code when asked.
-The CLI waits for that sign-in's result. Sign-in success does not mean the
-later catalog read or records Sync succeeded.
-Package commands select the registered project at the exact current working
-directory; run from its root, or pass `--project <registered-folder>`.
-An unmatched folder is an error, never an implicit project registration.
+`new` creates `spex-packages/<org>/<pkg>/` with `meta.yaml` format 2 at version
+`0.1.0`, README, the root's LICENSE where present, and the declared artifacts.
+It adds a path request and installs immediately. `--move` relocates a skill's
+source, then exports it back to the agent folders. Give `--skill` once per skill,
+and at most one `--spec` whose basename matches the package. Optional
+`--language`, `--description` and `--license` override inferred values.
 
-```sh
-spex package add my-org/toolkit --version '^1.0.0'
-spex package install
-spex package resolve
-spex package remove my-org/toolkit
-```
+Use `spex add my-org/toolkit --path spex-packages/my-org/toolkit` for an existing
+release folder. `publish <org>/<pkg>` uses that name's path request, else its
+folder under `spex-packages/`. Omit the name only when there is one package.
+The dry run shows the destination, version and declared files without upload.
+Publishing requires the selected registry account to be a member of an authorized namespace;
+namespace authorization is independent of Space membership.
 
-`install` uses the existing lock. `resolve` selects versions again and installs.
-For a package you are authoring inside the project, such as one
-`spex package init` made, request its relative folder:
-
-```sh
-spex package add my-org/toolkit --path spex-packages/toolkit
-spex package publish spex-packages/toolkit --dry-run
-spex package publish spex-packages/toolkit
-```
-
-`add` requires exactly one of `--version` or `--path`. Core validates package
-folders and performs resolution, installation and native exports.
-Publishing requires the server's Space sign-in and an eligible claimed org.
-The dry run shows the actual destination, identity, version and declared files
-without uploading; a later direct publish performs its own current checks.
-The explicit publish command uploads without an interactive confirmation.
-It reports the server's actual publication receipt.
-
-Commands wait for their own terminal result, normally for up to ten minutes.
-Use `--timeout <positive-seconds>` to change that observation limit.
-A rejection exits 1. A lost connection or timeout after dispatch exits 2 with
-an unknown result: the operation may still complete. Inspect its state before
-manually retrying; the CLI never reconnects or resends mutations.
-Ctrl+C exits 130: package work may continue, while sign-in requests cancellation
-of its own attempt where still connected. Neither promises rollback.
-Use `spex --help` for command forms. Scaffold, lint and `package init` remain
-usable without a server.
+Commands exit 0 on success, 1 on refusal and 130 on interrupt. An interrupted
+publish cannot undo an upload the registry already accepted. Set `SPEX_HOME`
+to share a home with the app, or use the default `~/.spex`.
 
 ## Usage
 

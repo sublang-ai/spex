@@ -59,6 +59,7 @@ import { absoluteTitle, relativeAge } from "../lib/time.js";
 import { useClock } from "../lib/useClock.js";
 import { AuthoringWorkspace, DraftStateChip } from "./AuthoringWorkspace.js";
 import { BindingEditorPopover } from "./BindingEditor.js";
+import { RegistryAccount } from "./RegistryAccount.js";
 import { AddSpecPackages, EnvironmentSection } from "./EnvironmentSection.js";
 import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
@@ -938,6 +939,7 @@ function NewPlaybookField({
   taken,
   drafts,
   org,
+  orgs,
   license,
   onOrgChange,
   onLicenseChange,
@@ -955,6 +957,7 @@ function NewPlaybookField({
   drafts: Record<string, DraftInfo>;
   /** The new spec package's org and license, as the person left them. */
   org: string;
+  orgs?: { name: string; path: string; provider?: string }[];
   license: string;
   onOrgChange: (org: string) => void;
   onLicenseChange: (license: string) => void;
@@ -1056,6 +1059,7 @@ function NewPlaybookField({
         </label>
         <label className="flex min-w-0 flex-1 basis-28 flex-col gap-0.5 text-sm">
           <span className="text-xs text-neutral-500">{i18n._({ id: "Org", comment: "field of New playbook: the registry org its spec package is published under" })}</span>
+          {orgs?.length ? <select aria-label={i18n._("Registry namespaces")} value={orgs.some((entry) => entry.name === org) ? org : ""} onChange={(event) => onOrgChange(event.target.value)} className={field}><option value="">{i18n._("Choose namespace")}</option>{orgs.map((entry) => <option key={entry.name} value={entry.name}>{entry.name}{entry.provider ? ` (${entry.provider})` : ""}</option>)}</select> : null}
           <input
             data-testid="new-playbook-org"
             value={org}
@@ -1180,6 +1184,9 @@ export function LibrarySurface({
   // New playbook's Org and License (playbook-library-51), filled with
   // the project's defaults as the core reads them, then the person's.
   const [newOrg, setNewOrg] = useState("");
+  const [registryOrgs, setRegistryOrgs] = useState<{ name: string; path: string; provider?: string }[]>([]);
+  const registryAccounts = store((current) => current.registryAccounts);
+  const environments = store((current) => current.environments);
   const [newLicense, setNewLicense] = useState("");
   const [revealed, setRevealed] = useState<string>();
   // The card an enabling revealed keeps its success line until the
@@ -1197,6 +1204,17 @@ export function LibrarySurface({
   const side: PlaybooksSide = project ? storedSide : "own";
   const repository = side === "project" ? projectId : ownKey;
   const connected = connection === "open";
+  const registryOrigin = projectId ? environments[projectId]?.registry?.origin : undefined;
+  const registryAccount = registryOrigin ? registryAccounts?.[registryOrigin]?.account?.id : undefined;
+  useEffect(() => {
+    let active = true;
+    setRegistryOrgs([]);
+    if (connected && projectId && registryOrigin) void (async () => {
+      try { const reply = await store.getClient().command("registry.orgs", { repository: projectId }); if (active) setRegistryOrgs(reply.orgs); } catch { /* The editable namespace stays available. */ }
+    })();
+    return () => { active = false; };
+  }, [connected, projectId, registryOrigin, registryAccount, store]);
+
 
   const reloadLists = useCallback(() => {
     setListError(undefined);
@@ -1468,6 +1486,7 @@ export function LibrarySurface({
       taken={taken}
       drafts={drafts}
       org={newOrg}
+      orgs={registryOrgs}
       license={newLicense}
       onOrgChange={editOrg}
       onLicenseChange={editLicense}
@@ -1537,6 +1556,7 @@ export function LibrarySurface({
         // The ways to add a spec package stand directly beneath the
         // environment's list, above the playbooks (playbook-library-92).
         <div className="flex flex-col gap-3">
+          <RegistryAccount repository={repository} />
           <EnvironmentSection
             repository={repository}
             project={side === "project" ? project?.name : undefined}

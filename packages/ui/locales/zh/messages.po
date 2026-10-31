@@ -1698,6 +1698,7 @@ msgstr "无法连接 {endpoint} 上的 Spex 核心 — 每秒重试中。网页�
 #: src/components/ProjectGroup.tsx
 #: src/components/ProjectPalette.tsx
 #: src/components/PublishControl.tsx
+#: src/components/RegistryAccount.tsx
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceInstance.tsx
 #: src/components/SpaceMembers.tsx
@@ -1875,6 +1876,10 @@ msgstr "选择项目"
 msgid "Choose a project folder…"
 msgstr "选择项目文件夹…"
 
+#: src/components/SpaceDirectory.tsx
+msgid "Choose a Space or enter a custom URL"
+msgstr "选择 Space 或输入自定义地址"
+
 #. empty choice of the reasoning-effort select
 #: src/components/TuningField.tsx
 msgid "Choose effort…"
@@ -1888,6 +1893,10 @@ msgstr "选择文件夹…"
 #: src/components/SpaceSync.tsx
 msgid "Choose for {count, plural, one {# conflict} other {# conflicts}}"
 msgstr "为 {count, plural, other {# 处冲突}}选择"
+
+#: src/components/LibrarySurface.tsx
+msgid "Choose namespace"
+msgstr "选择命名空间"
 
 #. a step: the analyst chooses which workflows the request takes
 #: src/lib/step-words.ts
@@ -2104,7 +2113,7 @@ msgstr "折叠侧栏"
 msgid "Collapse the sidebar ({keys})"
 msgstr "折叠侧栏（{keys}）"
 
-#. after enabling an authored playbook: {folder} is its spec package's folder in the working folder, e.g. spex-packages/triage
+#. after enabling an authored playbook: {folder} is its spec package's folder in the working folder, e.g. spex-packages/acme/triage
 #: src/components/LibrarySurface.tsx
 msgid "Commit {folder} with your code"
 msgstr "把 {folder} 和代码一起提交"
@@ -2336,6 +2345,10 @@ msgstr "继续"
 msgid "Continue in your browser:"
 msgstr "请在浏览器中继续："
 
+#: src/components/RegistryAccount.tsx
+msgid "Continue registry sign-in"
+msgstr "继续登录注册表"
+
 #: src/components/ApprovalInbox.tsx
 msgid "Conversation: {name}"
 msgstr "对话：{name}"
@@ -2564,6 +2577,10 @@ msgstr "自定义模型"
 #: src/components/ModelField.tsx
 msgid "Custom model…"
 msgstr "自定义模型…"
+
+#: src/components/SpaceDirectory.tsx
+msgid "Custom URL"
+msgstr "自定义地址"
 
 #: src/components/NavRail.tsx
 #: src/components/SpecView.tsx
@@ -3987,6 +4004,10 @@ msgstr "正在加载媒体…"
 msgid "Loading model options…"
 msgstr "加载模型选项中…"
 
+#: src/components/PublishControl.tsx
+msgid "Loading registry…"
+msgstr "正在加载注册表…"
+
 #: src/components/DraftConversation.tsx
 msgid "Loading the conversation…"
 msgstr "加载对话中…"
@@ -4625,6 +4646,10 @@ msgstr "未设置"
 msgid "Not signed in"
 msgstr "未登录"
 
+#: src/components/RegistryAccount.tsx
+msgid "Not signed in to registry"
+msgstr "尚未登录注册表"
+
 #: src/components/AgentEditor.tsx
 msgid "Not supported by this model"
 msgstr "此模型不支持"
@@ -4958,8 +4983,8 @@ msgstr "已开 PR"
 
 #. the instance's contract, in the words its record fixes, shown before a seat's first open on this device; {server} is the server's name, {instance} the instance's; Devices is the instance's page of devices
 #: src/components/SpaceServers.tsx
-msgid "Opening a seat places your sign-in on {server}. Whoever runs {server} can act as you: in your spaces, in your records, and with the account you sign in to {instance} with, wherever it reaches. Agents on {server} run on the sign-ins its administrator set up, unless you set your own. A credential you place on {server} stays there until you remove it. Retiring the server or revoking the seat under Devices stops new use; a credential already on the server lasts until it expires."
-msgstr "打开席位会把你的登录放到 {server} 上。运行 {server} 的人可以以你的身份行事：在你的空间中、在你的记录中，以及凭你登录 {instance} 所用的账号，在它能触及的任何地方。{server} 上的智能体使用其管理员设置的登录运行，除非你设置自己的。你放到 {server} 上的凭据会一直留在那里，直到你将其移除。停用该服务器或在“设备”中撤销该席位会阻止新的使用；已在服务器上的凭据会一直有效，直到过期。"
+msgid "Opening a seat places your Space sign-in on {server}. Whoever runs {server} can act as you: in your spaces, in your records, and with the account you sign in to {instance} with, wherever it reaches. Private packages require a separate registry sign-in on this seat. Agents on {server} run on the sign-ins its administrator set up, unless you set your own. A credential you place on {server} stays there until you remove it. Retiring the server or revoking the seat under Devices stops new use; a credential already on the server lasts until it expires."
+msgstr "打开席位会把你的 Space 登录放到 {server} 上。运行 {server} 的人可以以你的身份行事：在你的空间中、在你的记录中，以及凭你登录 {instance} 所用的账号，在它能触及的任何地方。使用私有规约包需要在这个席位上单独登录注册中心。{server} 上的智能体使用其管理员设置的登录运行，除非你设置自己的。你放到 {server} 上的凭据会一直留在那里，直到你将其移除。停用该服务器或在“设备”中撤销该席位会阻止新的使用；已在服务器上的凭据会一直有效，直到过期。"
 
 #. a project's row while it is opened on a team server: the seat opens, signs in, and joins it; {server} is the server's name
 #: src/components/SpaceGroups.tsx
@@ -5050,6 +5075,10 @@ msgstr "归属未知"
 #: src/lib/compile-log.ts
 msgid "Package"
 msgstr "打包"
+
+#: src/components/RegistryAccount.tsx
+msgid "Package registry"
+msgstr "软件包注册表"
 
 #: src/components/SpaceGroups.tsx
 msgid "Pairs it with its folder on this device"
@@ -5593,6 +5622,14 @@ msgstr "注册表"
 #: src/lib/environments.ts
 msgid "registry {requirement}"
 msgstr "注册表 {requirement}"
+
+#: src/components/LibrarySurface.tsx
+msgid "Registry namespaces"
+msgstr "注册表命名空间"
+
+#: src/components/RegistryAccount.tsx
+msgid "Registry URL"
+msgstr "注册表地址"
 
 #. a call's outcome: the coder rejected every finding
 #: src/lib/step-words.ts
@@ -6462,10 +6499,9 @@ msgstr "请先登录 {host}"
 msgid "Sign in to {who} again"
 msgstr "重新登录 {who}"
 
-#. in Publish's place: the home is not signed in to the instance a publish from this project goes to; {name} is that instance's display name as last read, else its host name
-#: src/components/PublishControl.tsx
-msgid "Sign in to publish at {name}"
-msgstr "登录 {name} 后发布"
+#: src/components/RegistryAccount.tsx
+msgid "Sign in to registry"
+msgstr "登录注册表"
 
 #. the sign-in card on a team server's Space: what signing in brings there; {server} is the server's name
 #: src/components/SpaceSignIn.tsx
@@ -6485,6 +6521,10 @@ msgstr "登录你的空间"
 #: src/components/SpaceInstance.tsx
 msgid "Sign out"
 msgstr "退出登录"
+
+#: src/components/RegistryAccount.tsx
+msgid "Sign out of registry"
+msgstr "退出注册表"
 
 #: src/components/SpaceInstance.tsx
 msgid "Signed in as @{login}"
@@ -7134,6 +7174,10 @@ msgstr "无法加载队列。<0>重试</0>"
 msgid "The raw prose the example starts from"
 msgstr "示例所基于的原始文稿"
 
+#: src/components/RegistryAccount.tsx
+msgid "The registry could not be read. Try again."
+msgstr "无法读取注册表。请重试。"
+
 #: src/components/SpecEditor.tsx
 msgid "the reload failed"
 msgstr "重新加载失败"
@@ -7145,6 +7189,10 @@ msgstr "保存失败"
 #: src/components/SpaceSignIn.tsx
 msgid "The sign-in did not start"
 msgstr "登录未能开始"
+
+#: src/components/SpaceDirectory.tsx
+msgid "The Space directory could not be read. Enter a custom URL."
+msgstr "无法读取 Space 目录。请输入自定义地址。"
 
 #: src/lib/drafts.ts
 msgid "The spec package folder is gone from the working folder; only Delete remains"
@@ -7254,6 +7302,10 @@ msgstr "此设备在每个实例上的登录凭据"
 #: src/state/store.ts
 msgid "This draft is no longer listed."
 msgstr "该草稿已不在列表中。"
+
+#: src/components/RegistryAccount.tsx
+msgid "This environment keeps its previous package destination until you choose a registry."
+msgstr "在选择注册表之前，此环境保留原有的软件包目标。"
 
 #: src/components/SpecEditor.tsx
 msgid "This file changed on disk since you opened it."
@@ -7590,6 +7642,10 @@ msgstr "使用设置中的浏览器选项"
 #: src/components/AgentSettings.tsx
 msgid "Use default"
 msgstr "使用默认"
+
+#: src/components/RegistryAccount.tsx
+msgid "Use registry"
+msgstr "使用此注册表"
 
 #: src/components/EnvironmentSection.tsx
 msgid "Version of {name}"

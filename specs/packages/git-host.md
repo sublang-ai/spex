@@ -240,6 +240,16 @@ Where the core runs as a seat [[core-service-125](core-service.md#core-service-1
 
 When the core lists a signed-in instance's servers or asks it for a ticket — `GET /api/v1/host/servers` and `POST /api/v1/host/servers/:id/tickets`, with that instance's app token [[git-host-4](#git-host-4)] — it shall take the listing and the ticket as the instance answers them, holding nothing after the reply, and relay any other answer [[git-host-11](#git-host-11)] ([DR-133](../decisions/133-one-desktop-over-several-cores.md)).
 
+### Registry purpose
+
+#### git-host-31
+
+The shared sign-in client shall bind each authorization, device, token, refresh and revoke request to its `registry` or `space` scope, defaulting an omitted client scope to `space`, and keep credentials independently by canonical origin and purpose, treating legacy origin-only entries solely as Space credentials ([DR-168](../decisions/168-independent-package-registry.md)):
+
+- registry sign-in reads its account through the registry account API, acquires no host description or Git origin, and registers no Space;
+- registry devices carry no Space server, person or admission ticket;
+- refresh, refusal and sign-out affect only the selected purpose's credential, even when both share an origin.
+
 ## Internal Behavior
 
 #### git-host-12
@@ -352,6 +362,10 @@ Where the core runs as a seat against the stand-in instance and the Git HTTP hos
 #### git-host-30
 
 Where the stand-in instance answers the servers listing and the ticket route, the test suite shall assert that each call carries that instance's app token, that the listing and the ticket are returned as answered and held nowhere, and that a `host_refused`, a `not_found` and a `429` are relayed as [[git-host-11](#git-host-11)] states [[git-host-29](#git-host-29)].
+
+#### git-host-32
+
+When a real shared-client integration runs against an HTTP service fixture at one origin, it shall verify that Space and registry grants survive each other's login, refresh and logout, legacy credentials are Space-only, each auth request carries its scope, registry login asks no host API, and a refused registry grant leaves Space usable [[git-host-31](#git-host-31)].
 
 ## References
 

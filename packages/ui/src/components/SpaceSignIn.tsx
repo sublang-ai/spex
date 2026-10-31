@@ -17,6 +17,7 @@
 // the surface reads `signIn` and the instances as the core sends them
 // and keeps only the start's reply, which state does not carry.
 
+import { SpaceDirectory } from "./SpaceDirectory.js";
 import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import type { CommandResults, GroupsState } from "@sublang/spex-core/protocol";
 
@@ -435,6 +436,7 @@ export function SignInCard({
       <div data-testid="space-signin-body" className="flex min-w-0 flex-col gap-1 break-words text-sm text-neutral-600 dark:text-neutral-300">
         {body}
       </div>
+      <SpaceDirectory onChoose={setTyped} />
       <InstanceField
         inputRef={fieldRef}
         value={field}

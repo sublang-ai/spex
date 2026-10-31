@@ -6,7 +6,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { makeRelease } from "@sublang/spex-core/testing";
-import { HOST_LOGIN, expect, nav, open, pickGroup, signInCore, test } from "../src/harness";
+import { HOST_LOGIN, expect, nav, open, pickGroup, signInCore, signInRegistryCore, selectRegistryCore, test } from "../src/harness";
 
 test.use({ appOptions: { project: true, signedIn: true, host: { registry: true, second: { registry: true } } } });
 
@@ -17,6 +17,8 @@ test("playbook-library-117: install a private known package with explicit requir
   if (!instance || !firstRegistry || !registry) throw new Error("two instances and registries required");
   await signInCore(app, instance);
   const project = await pickGroup(app, { host: instance, namespace: true });
+  await selectRegistryCore(app, instance.url, project.key);
+  await signInRegistryCore(app, instance);
   const org = "private-notes";
   const name = `${org}/notes`;
   const refusedOrg = "private-refused";

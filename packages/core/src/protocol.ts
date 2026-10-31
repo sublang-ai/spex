@@ -13,7 +13,7 @@ import type { AgentCapabilities, ApprovalDecision, ApprovalRequest, BrowserSetup
 import type { SessionRecord as RuntimeRecord } from "@sublang/playbook/session-assets";
 import { LANGUAGES, type Language } from "./language.js";
 
-export const PROTOCOL_VERSION = 30;
+export const PROTOCOL_VERSION = 31;
 
 /** The compile pipeline's phases and their human names, shared so the
  * core's thread lines and the UI's band name a phase alike. */
@@ -330,6 +330,15 @@ export interface MissingPlayer {
 // Environments (environments-14, environments-17, DR-104)
 // ---------------------------------------------------------------------------
 
+/** Registry account state contains no credential or collaboration metadata. */
+export interface RegistryState {
+  origin: string;
+  displayName: string;
+  account: { id: string; login: string } | null;
+  signIn: { phase: "idle" } | { phase: "running"; flow: "browser"; url: string } | { phase: "running"; flow: "device"; userCode: string; verificationUri: string };
+  error: string | null;
+}
+
 /** One spex repository's environment as the Playbooks surface lists it. */
 export interface EnvironmentState {
   repository: string;
@@ -351,12 +360,10 @@ export interface EnvironmentState {
    * (environments-2): the paired working folder, or your own group's
    * clone; null where none is paired. */
   pathRoot: string | null;
-  /** The origin of the environment's instance (environments-2): the
-   * `space` its `spex.yaml` names, else the home's default instance —
-   * where its registry is asked and a publish from it goes
-   * (environments-10, playbook-library-93); null where `spex.yaml` does
-   * not read, so no instance is named. */
+  /** Collaboration and Git-source brokerage origin, independent of packages. */
   instance?: string | null;
+  /** Package destination; legacy manifests preserve their previous routing. */
+  registry?: { origin: string; legacy: boolean };
   /** The built-in spec package this app ships, where the lock selects an
    * older release and the requirement `spex.yaml` requests it at admits
    * the shipped one; absent otherwise. The lock stays until the reader
@@ -1321,6 +1328,13 @@ export const commandSchema = z.discriminatedUnion("type", [
   // one spex repository at a time, `repository` naming it by its key
   // and `instance` an instance by its origin (DR-127); long commands
   // reply `accepted` at once and report their outcome as `space.state`.
+  z.object({ type: z.literal("registry.get"), id, origin: instanceOriginSchema.optional(), repository: repositoryKeySchema.optional() }).strict(),
+  z.object({ type: z.literal("registry.signin.start"), id, origin: instanceOriginSchema }).strict(),
+  z.object({ type: z.literal("registry.signin.cancel"), id, origin: instanceOriginSchema }).strict(),
+  z.object({ type: z.literal("registry.signout"), id, origin: instanceOriginSchema }).strict(),
+  z.object({ type: z.literal("registry.orgs"), id, repository: repositoryKeySchema }).strict(),
+  z.object({ type: z.literal("registry.directory"), id, origin: instanceOriginSchema.optional() }).strict(),
+  z.object({ type: z.literal("environment.registry.set"), id, repository: repositoryKeySchema, origin: instanceOriginSchema }).strict(),
   z.object({ type: z.literal("space.get"), id }).strict(),
   z.object({ type: z.literal("space.refresh"), id }).strict(),
   /** `url`: the instance's URL as the reader gave it, held by its origin;
@@ -1628,6 +1642,13 @@ export interface CommandResults {
      * (playbook-library-2), each with the specific failure. */
     invalid?: InvalidPlaybookEntry[];
   };
+  "registry.get": RegistryState;
+  "registry.signin.start": CommandResults["space.signin.start"];
+  "registry.signin.cancel": { stopped: boolean };
+  "registry.signout": RegistryState;
+  "registry.orgs": { orgs: { name: string; path: string; provider?: string }[] };
+  "registry.directory": { spaces: { origin: string; displayName: string; signIn: string[] }[] };
+  "environment.registry.set": EnvironmentState;
   "space.get": GroupsState;
   "space.refresh": { accepted: true };
   "space.signin.start":
@@ -2547,6 +2568,7 @@ export type ServerMessage =
   | IntentsChangedMessage
   | LanguageStateMessage
   | SpaceSignInCompletedMessage
+  | { type: "registry.state"; state: RegistryState }
   | SpaceStateMessage
   | ServerStateMessage
   | EnvironmentStateMessage

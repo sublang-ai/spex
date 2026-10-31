@@ -175,6 +175,7 @@ before(async () => {
   CLI = join(prefix, process.platform === "win32" ? "node_modules" : "lib/node_modules", "@sublang/spex/dist/cli.js");
   assert.ok(existsSync(CLI), CLI);
   workingFolder(WORK);
+  writeFileSync(join(WORK, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages: {}\n`);
 });
 
 after(async () => {
@@ -217,6 +218,7 @@ test("cli-15: add writes the request, resolves, installs under .spex/ and export
   const fresh = workingFolder(join(SCRATCH, "fresh"));
   for (const at of [WORK, fresh]) {
     for (const [label, args, cause] of refusals) {
+      if (at === fresh && label === "a spec package the registry does not list") continue;
       const before = snapshot(at);
       const ran = await spex(at, ...args);
       assert.equal(ran.code, 1, `${label}: ${ran.stdout}${ran.stderr}`);
@@ -322,6 +324,7 @@ test("cli-15: the root is found from a subfolder, and at the Git top level of a 
   const fifth = workingFolder(join(SCRATCH, "fifth"));
   const sub = join(fifth, "app", "lib");
   mkdirSync(sub, { recursive: true });
+  writeFileSync(join(fifth, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages: {}\n`);
   await ok(sub, "add", "demo/tool");
   assert.ok(existsSync(join(fifth, "spex.yaml")), "[cli-1] made at the Git top level");
   assert.equal(existsSync(join(sub, "spex.yaml")), false);
@@ -345,6 +348,7 @@ test("cli-15: the root is found from a subfolder, and at the Git top level of a 
   // Outside any Git work tree and below no spex.yaml, the current folder.
   const loose = join(SCRATCH, "loose", "here");
   mkdirSync(loose, { recursive: true });
+  writeFileSync(join(loose, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages: {}\n`);
   await ok(loose, "add", "demo/tool@^1.0.0");
   assert.ok(existsSync(join(loose, "spex.yaml")), "[cli-1] else the current folder");
   assert.equal(existsSync(join(SCRATCH, "loose", "spex.yaml")), false);
@@ -374,6 +378,7 @@ test("cli-15: the root is found from a subfolder, and at the Git top level of a 
   }
   // A seat's project below the home's projects/ is a working folder.
   const seat = workingFolder(join(home, "projects", `@${host.replace(":", "_")}`, "tester", "app"));
+  writeFileSync(join(seat, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages: {}\n`);
   await ok(seat, "add", "demo/tool@^1.0.0");
   assert.ok(existsSync(join(seat, "spex.lock")), "[cli-1] a seat's project is a root");
 });
@@ -394,6 +399,7 @@ test("cli-15: a Git source is shown with no network remote named, and the lock's
   // A registry package moved to a path source at the same version is a
   // move of its source, not a package gained.
   const moved = workingFolder(join(SCRATCH, "source-move"));
+  writeFileSync(join(moved, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages: {}\n`);
   await ok(moved, "add", "demo/tool@~1.0.0");
   await makeRelease(join(moved, "vendor", "tool"), manifestOf("demo/tool", "1.0.0", { tool: skill }), skillFiles("tool", "1.0.0"));
   const changed = await ok(moved, "add", "demo/tool", "--path", "vendor/tool");
@@ -444,6 +450,7 @@ test("cli-15: the built-in spec package a lock holds installs from this device's
 test("cli-15: a lock recording the app's built-in at a checksum no registry serves installs the rest and names the built-in as the app's", async () => {
   // A real resolution of demo/tool, made in a folder of its own.
   const made = workingFolder(join(SCRATCH, "app-made"));
+  writeFileSync(join(made, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages: {}\n`);
   await ok(made, "add", "demo/tool@^1.0.0");
   const tool = parseLock(readFileSync(join(made, "spex.lock"), "utf8")).packages["demo/tool"]!;
   const toolVersion = (tool.source as RegistrySourceLock).version.replace(/\./g, "\\.");
@@ -552,7 +559,7 @@ test("cli-15: new makes spex-packages/<org>/<pkg>/, requests it by path and expo
   assert.equal(readFileSync(join(folder, "specs", "en", "hello.md"), "utf8"), SPEC_MD);
   // Requested by path in a spex.yaml made naming the default instance,
   // locked, and installed in place: nothing copied under .spex/packages/.
-  assert.deepEqual(readYaml(join(dir, "spex.yaml")), { format: 1, space: registry.url, packages: { "acme/hello": { path: "spex-packages/acme/hello" } } }, "[cli-8] the path request");
+  assert.deepEqual(readYaml(join(dir, "spex.yaml")), { format: 1, registry: "https://spex.sublang.ai", packages: { "acme/hello": { path: "spex-packages/acme/hello" } } }, "[cli-8] the path request");
   const lock = readYaml(join(dir, "spex.lock"));
   assert.deepEqual(lock.packages["acme/hello"].source, { path: "spex-packages/acme/hello", version: "0.1.0", dependencies: {}, requires: {} });
   assert.equal(existsSync(join(dir, ".spex", "packages", "acme", "hello")), false, "[cli-8] a path source copies nothing");
@@ -682,7 +689,7 @@ test("cli-16: publish by name to the Space spex.yaml names, a dry run uploading 
       { origin: registry.url, clientId: "spex", account: { id: "7", login: "pat", displayName: "Pat" }, displayName: "Stand-in Space" },
     ],
   }));
-  assert.ok(fileCredentialStore(PUBLISHER, registry.url).replace(null, { access: TOKEN, accessExpiresAt: Date.now() + 86_400_000, refresh: `refresh-${TOKEN}` }));
+  assert.ok(fileCredentialStore(PUBLISHER, registry.url, "registry").replace(null, { access: TOKEN, accessExpiresAt: Date.now() + 86_400_000, refresh: `refresh-${TOKEN}` }));
   registry.script.setPrivate("acme", [TOKEN]);
   registry.script.clearRequests();
   const uploads = (): string[] => registry.script.requests.filter((request) => request.startsWith("PUT "));
@@ -723,7 +730,7 @@ test("cli-16: publish by name to the Space spex.yaml names, a dry run uploading 
     ["a folder that is no release", PUBLISHER, ["publish", "acme/broken"], /spex-packages\/acme\/broken is not a spec package release/],
     ["a missing license", PUBLISHER, ["publish", "acme/bare"], /spex-packages\/acme\/bare cannot be published: meta\.yaml: missing required field "license"/],
     ["several packages and no name", PUBLISHER, ["publish"], /spex-packages\/ holds 4 packages: acme\/bare, acme\/broken, acme\/hello, acme\/other; name one/],
-    ["a device signed out there", HOME, ["publish", "acme/hello"], new RegExp(`not signed in at ${host.replace(/\./g, "\\.")}; spex login signs in to publish there`)],
+    ["a device signed out there", HOME, ["publish", "acme/hello"], new RegExp(`not signed in at ${host.replace(/\./g, "\\.")}; spex login --registry ${registry.url} signs in to publish there`)],
   ];
   for (const [label, home, args, cause] of refusals) {
     const before = uploads().length;

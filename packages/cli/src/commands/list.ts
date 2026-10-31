@@ -67,7 +67,7 @@ export const list: Command = async (args) => {
   const env = new Environment();
   const read = env.readRequests();
   const locked = env.readLock();
-  const lines = [`Space: ${env.nameOf(env.instanceOf(read?.requests ?? null))}`, `Root: ${env.root}`];
+  const lines = [`Registry: ${env.registryOf(read?.requests ?? null).origin}`, `Space: ${env.nameOf(env.instanceOf(read?.requests ?? null))}`, `Root: ${env.root}`];
   if (read === null && locked === null) {
     lines.push("No spex.yaml here; spex add <org>/<pkg> makes one.");
     console.log(lines.join("\n"));

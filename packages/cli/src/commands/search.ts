@@ -14,10 +14,11 @@ export const search: Command = async (args) => {
   const { positionals } = parsed("search", args, {}, { min: 1, max: Infinity, usage: "<query>" });
   const query = positionals.join(" ");
   const env = new Environment();
-  const instance = env.instanceOf(env.readRequests()?.requests ?? null);
+  const target = env.registryOf(env.readRequests()?.requests ?? null);
+  const instance = target.origin;
   let found;
   try {
-    found = await env.registryAt(instance).search(query);
+    found = await env.registryAt(instance, target.scope).search(query);
   } catch (error) {
     throw new Refusal(registryCause(error));
   }

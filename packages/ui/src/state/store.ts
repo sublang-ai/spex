@@ -297,6 +297,7 @@ export interface AppState extends AttachmentState {
    * described them (space-30, DR-103): replaced wholesale by every
    * `space.state` and `space.get`. */
   space?: GroupsState;
+  registryAccounts?: Record<string, import("@sublang/spex-core/protocol").RegistryState>;
   /** The last `space.get` failure, shown on the surface. */
   spaceError?: string;
   /** When the surface last read the core's state (space-2). */
@@ -1585,6 +1586,9 @@ function placeState(
         // The open seats, whole (core-service-128), sent on every change
         // and as the connection opens.
         set({ seats: message.seats });
+        break;
+      case "registry.state":
+        set({ registryAccounts: { ...get().registryAccounts, [message.state.origin]: message.state } });
         break;
       case "space.state":
         // The core's state replaces the last one wholesale (space-29),

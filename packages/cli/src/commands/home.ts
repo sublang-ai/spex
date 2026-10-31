@@ -10,7 +10,7 @@
 import { hostname, homedir } from "node:os";
 import { join, resolve } from "node:path";
 
-import { fileCredentialStore, GitHostClient, HostError, retryAfterSeconds, type CredentialStore } from "../lib/git-host.js";
+import { fileCredentialStore, GitHostClient, HostError, retryAfterSeconds, type CredentialStore, type AuthScope } from "../lib/git-host.js";
 import { defaultInstanceOf, homeFilePath, instanceAt, notAnOrigin, readHomeFile, type HomeFile, type HomeInstance } from "../lib/home-file.js";
 import { canonicalOrigin, hostUrlFor, OriginRefused, parseOrigin } from "../lib/instance.js";
 import { Refusal } from "./run.js";
@@ -89,15 +89,15 @@ export function nameOf(instance: HomeInstance): string {
 }
 
 /** The credential store of one instance under the home (storage-19). */
-export function credentialsOf(dir: string, origin: string): CredentialStore {
-  return fileCredentialStore(dir, origin);
+export function credentialsOf(dir: string, origin: string, scope: AuthScope = "space"): CredentialStore {
+  return fileCredentialStore(dir, origin, scope);
 }
 
 /** The client of one instance, signing in as this device (git-host-3). */
-export function clientOf(origin: string, credentials: CredentialStore, onSignedOut?: () => void): GitHostClient {
+export function clientOf(origin: string, credentials: CredentialStore, onSignedOut?: () => void, scope: AuthScope = "space"): GitHostClient {
   let device = "this device";
   try { device = hostname() || device; } catch { /* the label's fallback */ }
-  return new GitHostClient({ url: origin, label: `spex on ${device}`, credentials, ...(onSignedOut ? { onSignedOut } : {}) });
+  return new GitHostClient({ url: origin, scope, label: `spex on ${device}`, credentials, ...(onSignedOut ? { onSignedOut } : {}) });
 }
 
 /** A host's answer in the CLI's words (git-host-11): what the instance

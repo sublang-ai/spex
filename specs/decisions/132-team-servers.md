@@ -16,6 +16,8 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 - [DR-127](127-a-home-signed-in-to-several-instances.md) in "your own group's own repository is created or joined at the first sign-in", and [DR-128](128-a-spex-repository-placed-at-several-instances.md) in placing your own group at every instance: not on a seat.
 - [DR-004](004-config-and-persistence.md) in its credentials and readiness, and [DR-036](036-file-state-store.md) in "forge auth stay with their own tools": on a seat the core reads the shared credential file into its environment before each run, readiness recognizes the injected forms, and a code host's token the member places is kept under `local/`.
 
+Amended by [DR-168](168-independent-package-registry.md) for independent registry selection, account authority and credentials; Space collaboration and server admission remain unchanged.
+
 ## Context
 
 - The server shell is one home, one core, one handshake token, one user ([DR-033](033-remote-gui-serving.md)); the core admits one lease holder per home ([DR-036](036-file-state-store.md)), and Playbook's machine identity is per OS user and state folder ([DR-108](108-the-root-lease-names-the-machine.md)).

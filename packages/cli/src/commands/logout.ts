@@ -6,16 +6,23 @@
 // and, in the turn its pair is removed, mark the instance's entry signed
 // out in `home.yaml`, keeping the entry and every other instance's.
 
+import { authTarget } from "./auth-target.js";
 import { CredentialChanged } from "../lib/git-host.js";
 import { instanceAt, updateHomeFile, withSignOut } from "../lib/home-file.js";
 import { clientOf, credentialsOf, homeDir, hostOf, namedInstance, nameOf, readHome, signedIn } from "./home.js";
 import { options, Refusal, type Command } from "./run.js";
 
 export const logout: Command = async (args) => {
-  const values = options("logout", args, { space: { type: "string" } });
+  const values = options("logout", args, { space: { type: "string" }, registry: { type: "string" } });
   const dir = homeDir();
   const home = readHome(dir);
-  const target = namedInstance(home, values.space);
+  const { target, scope } = authTarget(home, values);
+  if (scope === "registry") {
+    try { await clientOf(target.origin, credentialsOf(dir, target.origin, scope), undefined, scope).signOut(); }
+    catch (error) { throw new Refusal(`not signed out at registry ${target.origin}: ${(error as Error).message}`); }
+    console.log(`Signed out at registry ${target.origin}.`);
+    return;
+  }
   const entry = home ? instanceAt(home, target.origin) : undefined;
   if (!entry) throw new Refusal(`${hostOf(target.origin)} is not among this device's Spaces; spex whoami lists them`);
   const name = nameOf(entry);

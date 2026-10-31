@@ -24,6 +24,8 @@ import {
   compositeRegistry,
   ContentStore,
   environmentInstance,
+  environmentRegistry,
+  type EnvironmentRegistry,
   gitSource,
   installRegistryOrder,
   parseLock,
@@ -38,7 +40,7 @@ import {
   type Requests,
 } from "../lib/environment/index.js";
 import { readVersioned, type FileVersion } from "../lib/files.js";
-import type { GitHostClient } from "../lib/git-host.js";
+import type { AuthScope, GitHostClient } from "../lib/git-host.js";
 import { accountAt, instanceAt, updateHomeFile, withSignOut, type HomeFile, type HomeInstance } from "../lib/home-file.js";
 import { canonicalOrigin } from "../lib/instance.js";
 import { clientOf, credentialsOf, defaultInstance, homeDir, hostCause, nameOf, readHome } from "./home.js";
@@ -196,6 +198,10 @@ export class Environment {
     return environmentInstance(requests, { origin: defaultInstance(this.home).origin, instances: this.home?.instances ?? [] });
   }
 
+  registryOf(requests: Pick<Requests, "space" | "registry"> | null): EnvironmentRegistry {
+    return environmentRegistry(requests, { origin: defaultInstance(this.home).origin, instances: this.home?.instances ?? [] });
+  }
+
   /** An instance as the reader knows it: its display name where the home
    * holds one, else its host. */
   nameOf(origin: string): string {
@@ -217,10 +223,10 @@ export class Environment {
   /** The app token a registry call presents at an instance
    * (environments-12): its access secret, kept current by its client,
    * where the device is signed in there; none otherwise. */
-  async tokenAt(origin: string): Promise<string | null> {
-    if (!this.signedInAt(origin)) return null;
+  async tokenAt(origin: string, scope: AuthScope = "space"): Promise<string | null> {
+    if (scope === "space" ? !this.signedInAt(origin) : !(await credentialsOf(this.homeDir, origin, scope).read())) return null;
     try {
-      return await this.clientAt(origin).accessSecret();
+      return await this.clientAt(origin, scope).accessSecret();
     } catch (error) {
       throw new Error(hostCause(error, this.nameOf(origin)));
     }
@@ -229,12 +235,13 @@ export class Environment {
   /** An instance's client, one per command: a refresh the instance
    * refuses removes its token and marks it signed out in `home.yaml` in
    * one step, as the app's sign-out does (git-host-4). */
-  private clientAt(origin: string): GitHostClient {
+  private clientAt(origin: string, scope: AuthScope = "space"): GitHostClient {
     const at = canonicalOrigin(origin);
-    let client = this.clients.get(at);
+    const key = `${scope}:${at}`;
+    let client = this.clients.get(key);
     if (!client) {
-      client = clientOf(at, credentialsOf(this.homeDir, at), () => this.markSignedOut(at));
-      this.clients.set(at, client);
+      client = clientOf(at, credentialsOf(this.homeDir, at, scope), scope === "space" ? () => this.markSignedOut(at) : undefined, scope);
+      this.clients.set(key, client);
     }
     return client;
   }
@@ -257,29 +264,30 @@ export class Environment {
    * the device out there marks it signed out in `home.yaml`
    * (environments-12, git-host-4). The built-in spec package is answered
    * from this device's seed first, as the app answers it. */
-  registryAt(origin: string): RegistrySource {
+  registryAt(origin: string, scope: AuthScope = "space"): RegistrySource {
     const at = canonicalOrigin(origin);
-    let registry = this.registries.get(at);
+    const key = `${scope}:${at}`;
+    let registry = this.registries.get(key);
     if (!registry) {
       const remote = new RegistryClient({
         url: at,
-        token: () => this.tokenAt(at),
+        token: () => this.tokenAt(at, scope),
         refused: async (token) => {
-          if (!(await this.clientAt(at).signOutRefused(token))) throw new Error(`the sign-in at ${this.nameOf(at)} changed meanwhile; retry`);
-          this.markSignedOut(at);
+          if (!(await this.clientAt(at, scope).signOutRefused(token))) throw new Error(`the sign-in at ${this.nameOf(at)} changed meanwhile; retry`);
+          if (scope === "space") this.markSignedOut(at);
         },
       });
       registry = compositeRegistry(this.seed(), remote);
-      this.registries.set(at, registry);
+      this.registries.set(key, registry);
     }
     return registry;
   }
 
   /** The registries an install asks for a registry package's files, in
    * the library's order (environments-7). */
-  installRegistries(instance: string, source: RegistrySourceLock): RegistrySource[] {
-    return installRegistryOrder(instance, source.registry, this.signedIn())
-      .map((entry) => ("origin" in entry ? this.registryAt(entry.origin) : compositeRegistry(this.seed(), unaskedRegistry(entry.unasked))));
+  installRegistries(instance: string, source: RegistrySourceLock, scope: AuthScope = "space"): RegistrySource[] {
+    return installRegistryOrder(instance, source.registry, this.signedIn(), { independent: scope === "registry" })
+      .map((entry) => ("origin" in entry ? this.registryAt(entry.origin, scope) : compositeRegistry(this.seed(), unaskedRegistry(entry.unasked))));
   }
 }
 

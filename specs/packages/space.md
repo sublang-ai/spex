@@ -982,7 +982,25 @@ The core shall build each `space.tree` level by reading one directory of the clo
 - a path in an ignored family of the catalog is marked ignored whatever Git reports [[storage-1](storage.md#storage-1)];
 - `space.read` refuses a path resolving outside the clone or through a symlink, withholds provider hints, and caps text at 256 KB or 2,000 lines on complete lines.
 
+#### space-115
+
+When the reader opens a Space sign-in card, the surface shall offer the public registry's directory of Spaces by display name, origin and sign-in kinds [[environments-39](environments.md#environments-39)] beside the editable custom URL, with directory failure leaving custom sign-in available and no discovery entry establishing credential trust ([DR-168](../decisions/168-independent-package-registry.md)).
+
+#### space-117
+
+When a project's placement selects a Space, the core shall name that Space as the environment's collaboration and Git-broker preference while preserving its explicit registry selection [[environments-38](environments.md#environments-38)] and all existing locked package pins and source provenance, advancing only a lock digest that matched the manifest before this Space-only edit and leaving an already-stale, malformed or unreadable lock unchanged ([DR-168](../decisions/168-independent-package-registry.md)).
+
 ## Verification
+
+#### space-118
+
+When a real-core integration suite places a fresh project at a second signed-in Space, the suite shall assert the environment reports and records that Space for brokerage while retaining its public registry origin and every package pin, a previously current lock changing only its requests digest without a stale hint, and a previously stale lock remaining byte-identical and stale, and a malformed lock remaining byte-identical without blocking the Space binding [[space-117](#space-117)].
+
+
+#### space-116
+
+When a browser journey opens Add instance, it shall verify directory choices fill the ordinary sign-in URL, custom URLs remain editable, and a failed directory read still permits custom sign-in without any backend locator on the page [[space-115](#space-115)].
+
 
 ### Core Coverage
 

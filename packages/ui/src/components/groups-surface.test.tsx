@@ -283,8 +283,8 @@ describe("GROUPS: the header (space-1, space-2)", () => {
       expect(rowControls(key).map((button) => button.dataset.testid), key).toEqual([`space-row-more-${key}`]);
       expect(moreEntries(key), key).toEqual(["Explore records"]);
     }
-    // Nothing is sent to the host before the control is activated.
-    expect(commandMock.mock.calls.map(([type]) => type)).toEqual(["space.get"]);
+    // Public discovery is independent of Space sign-in; it grants no access.
+    expect(commandMock.mock.calls.map(([type]) => type)).toEqual(["space.get", "registry.directory"]);
     cleanup();
     // Listing no instance once its folder bears a login — the last
     // instance forgotten — your own records read your login, as the core
@@ -1398,7 +1398,8 @@ describe("GROUPS: copy and fit (space-27, space-28)", () => {
       }
       const text = document.body.textContent ?? "";
       expect(text).not.toMatch(GIT_WORDS);
-      expect(text).not.toMatch(HOST_WORDS);
+      // Space names the product and its public directory, never a backend object.
+      expect(text.replaceAll("Space", "")).not.toMatch(HOST_WORDS);
       expect(strayRemote(text)).toBe(false);
       cleanup();
     }

@@ -213,7 +213,8 @@ for file in package-lock.json apps/server/package.json apps/hub/package.json \
   apps/hub/bin/spex-seatctl apps/hub/deploy/spex-hub.service \
   apps/hub/deploy/spex-seat@.service apps/hub/deploy/spex-seat-reaper.service \
   apps/hub/deploy/spex-seat-reaper.timer apps/hub/deploy/spex-hub.sudoers \
-  apps/hub/deploy/spex-hub.tmpfiles apps/hub/deploy/spex-hub; do
+  apps/hub/deploy/spex-hub.tmpfiles apps/hub/deploy/spex-hub \
+  apps/hub/deploy/validate-sudoers.sh; do
   [ -f "$checkout/$file" ] || not_checkout "$file is missing"
 done
 
@@ -415,7 +416,7 @@ step="installing $SUDOERS_DIR/spex-hub"
 rendered=$(mktemp "$SUDOERS_DIR/.spex-hub.XXXXXX")
 render "$checkout/apps/hub/deploy/spex-hub.sudoers" "$rendered"
 chmod 0440 "$rendered"
-visudo -cf "$rendered" >/dev/null ||
+bash "$checkout/apps/hub/deploy/validate-sudoers.sh" "$rendered" ||
   refuse 70 "the sudoers fragment does not pass visudo -cf; $SUDOERS_DIR/spex-hub is left as it was"
 mv -f -- "$rendered" "$SUDOERS_DIR/spex-hub"
 rendered=""
@@ -490,6 +491,12 @@ The seats are then administered as $HUB_USER:
   $hub status
   $hub evict <person id>
   $hub retire
+
+Admission signs a seat in to its Space only. Public packages need no registry
+sign-in. For private packages or publishing, each member signs in to the package
+registry on their own seat: select that seat in the IDE, then Playbooks > Package
+registry > Sign in to registry. The shared agent credential file supplies no
+registry sign-in.
 
 A seat loads Spex's modules from $prefix/app as it needs them, so a seat that
 runs while install.sh replaces $prefix/app may load modules of the new version

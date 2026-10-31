@@ -142,6 +142,7 @@ import { readAgentOptions, type AgentModelDiscovery } from "./agent-options.js";
 import { DEFAULT_ADAPTER_IMPORTS } from "./agent-runtime.js";
 import { canonicalHost, codeCredentialsPath, codeCredentialStore, isAdapterName, type AgentCredential, type CodeCredentialStore, type HostCredential } from "./code-credentials.js";
 import { AGENT_CREDENTIAL_FORMS, SeatEnvironment, seatAdapterImports, seatCredentialHalf, type SeatCredentialSources } from "./seat-credentials.js";
+import { RegistryManager } from "./registry.js";
 import { SpaceManager, type SpaceHost, type SpaceStepEvent } from "./space.js";
 import { Places } from "./places.js";
 import { GitHostClient, SEAT_ID_MAX, fileCredentialStore } from "@sublang/spex/git-host";
@@ -719,6 +720,7 @@ export class CoreService {
   private readonly submitting = new Map<string, Promise<void>>();
   /** Groups' engine (DR-103): one sync machine per spex repository. */
   private readonly space: SpaceManager;
+  private readonly registry: RegistryManager;
   /** The seats this core holds on team servers (core-service-128). */
   private readonly places: Places;
   /** Every spex repository's environment (DR-104). */
@@ -821,6 +823,7 @@ export class CoreService {
         this.queueLedgerChange([handoff.projectId]);
       });
     };
+    this.registry = new RegistryManager({ home: this.store.dir, label: `Spex on ${this.runtimeLabel}`, flow: options.seat ? "device" : options.signIn ?? "device", ...(options.registryFetch ? { fetch: options.registryFetch } : {}), broadcast: (state) => this.broadcast({ type: "registry.state", state }) });
     this.environments = new EnvironmentManager({
       store: this.store,
       userHome: CoreService.userHomeOf(options, this.env, this.home),
@@ -834,7 +837,11 @@ export class CoreService {
       // (environments-12, git-host-4, DR-127), an instance that cannot
       // be reached, or asks to wait, read as it answered (git-host-11).
       placedAt: (key) => this.space.instanceOriginOf(key),
-      tokenFor: async (origin) => {
+      tokenFor: async (origin, scope = "space") => {
+        if (scope === "registry") {
+          try { return await this.registry.client(origin).accessSecret(); }
+          catch (error) { throw new Error(relayHostError(error, this.registry.name(origin))); }
+        }
         try {
           return await this.space.accessSecretFor(origin);
         } catch (error) {
@@ -843,12 +850,13 @@ export class CoreService {
       },
       // The instance a publish goes to, named by its display name as last
       // read, else its host name (environments-10, playbook-library-93).
-      instanceName: (origin) => this.space.instanceName(origin),
+      instanceName: (origin) => this.registry.name(origin),
       // A registry refusing an instance's token signs that instance alone
       // out, where that token is still its stored pair's; a pair replaced
       // meanwhile fails the call as changed meanwhile (environments-12,
       // git-host-4, DR-127).
-      refused: async (origin, token) => {
+      refused: async (origin, token, scope = "space") => {
+        if (scope === "registry") { await this.registry.client(origin).signOutRefused(token); return; }
         try {
           await this.space.registryRefused(origin, token);
         } catch (error) {
@@ -1869,6 +1877,7 @@ export class CoreService {
       await bound.within(this.space.stop());
       // An environment's resolve or install finishes; nothing new starts.
       await bound.within(this.environments.stop());
+      await bound.within(this.registry.stop());
       await bound.within(this.adoptScan);
       if (this.ledgerTimer) clearTimeout(this.ledgerTimer);
       // A draft compile cut here stays "running" on disk and reads as
@@ -3690,6 +3699,20 @@ export class CoreService {
       // Groups (space-29): the core performs every Git operation, one
       // spex repository at a time; long commands reply accepted and
       // report as state.
+      case "registry.get":
+        return this.registry.get(command.origin ?? (command.repository ? this.environments.registryOf(command.repository).origin : undefined));
+      case "registry.signin.start":
+        return this.registry.start(command.origin);
+      case "registry.signin.cancel":
+        return this.registry.cancel(command.origin);
+      case "registry.signout":
+        return this.registry.signOut(command.origin);
+      case "registry.orgs":
+        return { orgs: await this.environments.publishableOrgs(command.repository) ?? [] };
+      case "registry.directory":
+        return this.registry.directory(command.origin);
+      case "environment.registry.set":
+        return this.environments.setRegistry(command.repository, command.origin);
       case "space.get":
         return this.requireSpace().get();
       // The Git host (git-host-2..10, space-3..6, space-58..65): sign-in

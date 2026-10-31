@@ -194,6 +194,7 @@ export function DraftRegisterTab({
   const gearRef = useRef<HTMLButtonElement>(null);
   const project = store((state) => state.projects.find((entry) => entry.id === draft.projectId));
   const space = store((state) => state.space);
+  const registryAccounts = store((state) => state.registryAccounts);
   // A publish goes to the project's environment's instance, as the core
   // reads it from its `spex.yaml` (playbook-library-93, environments-2):
   // its state is read where none is held yet.
@@ -447,7 +448,7 @@ export function DraftRegisterTab({
             : i18n._({ id: "Enable", comment: "enable this playbook in this config" })}
         </button>
       </div>
-      <PublishControl repository={draft.projectId} name={draft.package ?? draft.id} path={draftPackagePath(draft)} target={publishTargetOf(space, environment)} onNavigate={onNavigate} />
+      <PublishControl repository={draft.projectId} name={draft.package ?? draft.id} path={draftPackagePath(draft)} target={publishTargetOf(environment, registryAccounts)} onNavigate={onNavigate} />
     </div>
   );
 }

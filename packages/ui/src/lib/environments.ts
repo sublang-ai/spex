@@ -18,7 +18,7 @@ import type {
 } from "@sublang/spex-core/protocol";
 
 import { i18n } from "../i18n.js";
-import { hostNameOf, instanceName, instanceOf } from "./instances.js";
+import { hostNameOf } from "./instances.js";
 
 /** A spec package's name, `<org>/<pkg>` in lowercase kebab-case
  * (DR-104), as `environment.request` takes it. */
@@ -47,27 +47,19 @@ export function ownRepositoryKey(
   return space?.own?.repositories?.find((entry) => entry.own)?.key ?? own?.[0]?.repository;
 }
 
-/** The instance a publish from a spex repository goes to
- * (playbook-library-93, environments-10, DR-127): whether the home is
- * signed in there, and the name "Sign in to publish at <name>" gives it,
- * the instance's display name as the home last read it, else its host
- * name. */
+/** The independent registry destination and publication account. */
 export interface PublishTarget {
   origin: string;
   signedIn: boolean;
   name: string;
 }
 
-/** The publish target of an environment: its instance as the core
- * reads it from `spex.yaml` — the `space` it names, else the home's
- * default instance (environments-2) — signed in and named as the Groups
- * state reads it, so a sign-in or sign-out anywhere re-reads it; none
- * until both are held, or where `spex.yaml` does not read. */
-export function publishTargetOf(space: GroupsState | undefined, environment: EnvironmentState | undefined): PublishTarget | undefined {
-  if (!space || !environment || environment.instance === null) return undefined;
-  const origin = environment.instance ?? space.defaultInstance;
-  const entry = instanceOf(space, origin);
-  return { origin, signedIn: entry?.signedIn ?? false, name: entry ? instanceName(entry) : hostNameOf(origin) };
+/** Package authorization is read only from its selected registry account.
+ * A missing registry state never borrows a Space grant. */
+export function publishTargetOf(environment: EnvironmentState | undefined, accounts?: Record<string, import("@sublang/spex-core/protocol").RegistryState>): PublishTarget | undefined {
+  if (!environment?.registry) return undefined;
+  const account = accounts?.[environment.registry.origin];
+  return { origin: environment.registry.origin, signedIn: !!account?.account, name: account?.displayName ?? hostNameOf(environment.registry.origin) };
 }
 
 /** What the core is doing to an environment, as its line reads. */

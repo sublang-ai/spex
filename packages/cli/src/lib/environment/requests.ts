@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // Requests: an environment's `spex.yaml` (environments-2, DR-104,
-// DR-165). Exactly `{format: 1, language?, space?, packages}` — `space`
+// DR-165, DR-168). Exactly `{format: 1, language?, space?, registry?, packages}` — `space`
 // the origin of the environment's instance — each package named
 // `<org>/<pkg>` and requested from one source — a registry version
 // requirement, a path inside the working folder, or a Git repository at
@@ -16,6 +16,7 @@ import { isAbsolute, posix } from "node:path";
 import { Document, isMap, isSeq, parseDocument } from "yaml";
 
 import { readVersioned, writeVersionedBytes } from "../files.js";
+import type { AuthScope } from "../git-host.js";
 import { defaultInstanceOf, type HomeFile } from "../home-file.js";
 import { canonicalOrigin, OriginRefused } from "../instance.js";
 import { isLanguageTag, isPackageName, isSkillName, sha256Hex, type Issue } from "./format.js";
@@ -42,6 +43,8 @@ export interface Requests {
   /** The origin of the environment's instance, as `spex.yaml` names it
    * (environments-2). */
   space?: string;
+  /** Package service selected independently from Space. */
+  registry?: string;
   packages: Record<string, Request>;
 }
 
@@ -159,7 +162,7 @@ export function parseRequestsValue(raw: unknown): Requests {
   if (!isPlainObject(raw)) throw new RequestsError([{ rule: "requests", message: "spex.yaml is not a mapping" }]);
   if (raw.format !== 1) throw new RequestsError([{ rule: "format", message: `format ${JSON.stringify(raw.format ?? null)} is not the known format 1` }]);
   for (const key of Object.keys(raw)) {
-    if (key !== "format" && key !== "language" && key !== "space" && key !== "packages" && !key.startsWith("x-")) {
+    if (key !== "format" && key !== "language" && key !== "space" && key !== "registry" && key !== "packages" && !key.startsWith("x-")) {
       issues.push({ rule: "field", message: `unknown field "${key}"` });
     }
   }
@@ -169,6 +172,10 @@ export function parseRequestsValue(raw: unknown): Requests {
   if (raw.space !== undefined) {
     const refusal = spaceRefusal(raw.space);
     if (refusal !== null) issues.push({ rule: "space", message: refusal });
+  }
+  if (raw.registry !== undefined) {
+    const refusal = spaceRefusal(raw.registry);
+    if (refusal !== null) issues.push({ rule: "registry", message: refusal.replace(/space/g, "registry") });
   }
   const packages: Record<string, Request> = {};
   const rawPackages = raw.packages ?? {};
@@ -186,6 +193,7 @@ export function parseRequestsValue(raw: unknown): Requests {
     format: 1,
     ...(typeof raw.language === "string" ? { language: raw.language } : {}),
     ...(typeof raw.space === "string" ? { space: raw.space } : {}),
+    ...(typeof raw.registry === "string" ? { registry: canonicalOrigin(raw.registry) } : {}),
     packages,
   };
 }
@@ -215,6 +223,28 @@ function spaceRefusal(value: unknown): string | null {
 export function environmentInstance(requests: Pick<Requests, "space"> | null, home: Pick<HomeFile, "origin" | "instances">): string {
   const space = requests?.space;
   return canonicalOrigin(space ?? defaultInstanceOf(home as HomeFile).origin);
+}
+
+/** The public package service used explicitly by new environments. */
+export const PUBLIC_REGISTRY_ORIGIN = "https://spex.sublang.ai";
+
+export interface EnvironmentRegistry { origin: string; scope: AuthScope; legacy: boolean }
+
+/** Existing manifests without registry preserve their former source and
+ * credential. An absent manifest starts in independent registry mode. */
+export function environmentRegistry(
+  requests: Pick<Requests, "space" | "registry"> | null,
+  home: Pick<HomeFile, "origin" | "instances">,
+): EnvironmentRegistry {
+  if (requests !== null && requests.registry === undefined) {
+    return { origin: environmentInstance(requests, home), scope: "space", legacy: true };
+  }
+  return { origin: canonicalOrigin(requests?.registry ?? PUBLIC_REGISTRY_ORIGIN), scope: "registry", legacy: false };
+}
+
+/** Name a package registry without changing the Space binding. */
+export function setRegistryIn(doc: Document, origin: string): void {
+  doc.set("registry", canonicalOrigin(origin));
 }
 
 /** Parse `spex.yaml` text, or throw. */
@@ -260,6 +290,7 @@ function requestsValue(requests: Requests): Record<string, unknown> {
     format: 1,
     ...(requests.language !== undefined ? { language: requests.language } : {}),
     ...(requests.space !== undefined ? { space: requests.space } : {}),
+    ...(requests.registry !== undefined ? { registry: requests.registry } : {}),
     packages,
   };
 }

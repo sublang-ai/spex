@@ -16,6 +16,15 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Added
 
+- Independent package registries ([DR-168](specs/decisions/168-independent-package-registry.md)).
+  Library offers a registry setting and separate registry sign-in; the
+  public registry lists available Spaces beside the custom Space URL.
+  Package namespaces are chosen from every organization the registry
+  account may publish to, independently of the project's Space. Registry
+  and Space sign-out do not affect each other, including at one origin.
+  A server seat needs its own registry sign-in for private packages.
+  Existing manifests and lock sources remain preserved until explicitly
+  changed.
 - Applets in the IDE ([DR-161](specs/decisions/161-an-applet-is-a-page-the-ide-serves.md)).
   A spec package's applet is a static web page entered at
   `applets/<id>/index.html`; a folder without that entry is refused.

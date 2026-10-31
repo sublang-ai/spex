@@ -74,6 +74,7 @@ function seed(over: Partial<ReturnType<typeof useAppStore.getState>> = {}) {
     projects: [PROJECT],
     currentProjectId: PROJECT_ID,
     space: home(),
+    registryAccounts: { "https://spex.example": { origin: "https://spex.example", displayName: "Spex Example", account: { id: "registry", login: "me" }, signIn: { phase: "idle" }, error: null } },
     playbooksSide: "project",
     playbookLists: undefined,
     environments: {},
@@ -96,7 +97,7 @@ async function renderSurface(over: Partial<ReturnType<typeof useAppStore.getStat
 }
 
 beforeEach(() => {
-  environments = { [PROJECT_ID]: PROJECT_ENVIRONMENT, [OWN_KEY]: OWN_ENVIRONMENT };
+  environments = { [PROJECT_ID]: { ...PROJECT_ENVIRONMENT, registry: { origin: "https://spex.example", legacy: false } }, [OWN_KEY]: { ...OWN_ENVIRONMENT, registry: { origin: "https://spex.example", legacy: false } } };
   commandMock.mockReset();
   commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) => {
     switch (type) {
@@ -599,6 +600,7 @@ describe("playbook-library-113: publish a directly requested local package", () 
     requests: { ...PROJECT_ENVIRONMENT.requests, [NAME]: { kind: "path", path: PATH } },
     stale: ["requests changed"],
     pathRoot: "/project",
+    registry: { origin: "https://spex.example", legacy: false },
   });
   function update(state: EnvironmentState) {
     environments[PROJECT_ID] = state;
@@ -692,6 +694,9 @@ describe("playbook-library-113: publish a directly requested local package", () 
     changed.defaultInstance = "https://second.test";
     changed.instances = [instanceState("https://second.test", { displayName: "Spex Example" })];
     act(() => useAppStore.setState({ space: changed }));
+    expect(row().queryByTestId("publish-summary")).not.toBeNull();
+    update({ ...local(), registry: { origin: "https://second.test", legacy: false } });
+    act(() => deliverServerMessageForTests({ type: "registry.state", state: { origin: "https://second.test", displayName: "Spex Example", account: { id: "registry", login: "me" }, signIn: { phase: "idle" }, error: null } }));
     expect(row().queryByTestId("publish-summary")).toBeNull();
     fireEvent.click(row().getByTestId("publish-button"));
     await row().findByTestId("publish-summary");
@@ -701,8 +706,8 @@ describe("playbook-library-113: publish a directly requested local package", () 
     fireEvent.click(screen.getByTestId("side-project"));
     await screen.findByTestId(`env-package-${NAME}`);
     expect(row().queryByTestId("publish-summary")).toBeNull();
-    act(() => useAppStore.setState({ space: home({ account: null }) }));
-    expect(row().getByTestId("publish-signin").textContent).toContain("Sign in to publish at");
+    act(() => deliverServerMessageForTests({ type: "registry.state", state: { origin: "https://second.test", displayName: "Spex Example", account: null, signIn: { phase: "idle" }, error: null } }));
+    expect(row().getByRole("button", { name: "Sign in to registry" })).toBeTruthy();
     expect(row().queryByTestId("publish-button")).toBeNull();
   });
 });

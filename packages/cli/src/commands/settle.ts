@@ -147,8 +147,9 @@ export async function settle(env: Environment, mode: SettleMode): Promise<Settle
   const { root, requestsFile, lockFile } = env;
   // The environment's registry, at the instance its `spex.yaml` names,
   // else the default instance's (environments-2, environments-5).
-  const instance = env.instanceOf(read?.requests ?? null);
-  const registry = env.registryAt(instance);
+  const target = env.registryOf(read?.requests ?? null);
+  const instance = target.origin;
+  const registry = env.registryAt(instance, target.scope);
   const locators = gitLocators(read?.requests ?? null, locked?.lock ?? null);
 
   let lock = locked?.lock ?? null;
@@ -198,7 +199,7 @@ export async function settle(env: Environment, mode: SettleMode): Promise<Settle
       store: env.store,
       cache: env.cache,
       registry,
-      registries: (source) => env.installRegistries(instance, source),
+      registries: (source) => env.installRegistries(instance, source, target.scope),
       // The built-in spec package from this device's seed, by its files'
       // digests; where no seed and no registry serves it, left out as not
       // installed for the app's next use to install, the rest installed

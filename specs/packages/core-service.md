@@ -693,6 +693,16 @@ While a seat is open [[core-service-128](#core-service-128)], the core service s
 - the shell reads one attention count from the core: this core's badge [[core-service-49](#core-service-49)] plus each seat's last read badge while its relay stands open or closed, none for a mismatched seat;
 - the bearer and the endpoint reach no client and no log.
 
+### core-service-143
+
+The core service shall expose independent registry commands `registry.get`, `registry.signin.start`, `registry.signin.cancel`, `registry.signout`, `registry.directory` and `registry.orgs`, plus `environment.registry.set`, using protocol version 31 and broadcasting `registry.state` for account changes ([DR-168](../decisions/168-independent-package-registry.md)):
+
+- `registry.get` names an origin or an environment, defaulting to the public registry, and reports its origin, display name, account without credentials, sign-in progress and read error;
+- sign-in uses the shell's existing browser or device flow with registry purpose, no seat ticket, and stores no Space entry or placement;
+- sign-out, refresh and a refused registry grant affect only its registry slot, even when a Space shares its origin; a start cancelled before its first reply stores no grant, and an old read or sign-in completion cannot restore an account after cancellation or sign-out;
+- `registry.orgs` reports every namespace the environment's registry account may publish to, with provider metadata, and directory discovery returns only public names, origins and sign-in kinds [[environments-39](environments.md#environments-39)];
+- explicit registry selection writes the environment's registry origin through a comment-preserving version-checked edit, retaining format, extension fields, Space, requests and existing lock provenance [[environments-38](environments.md#environments-38)].
+
 ## Internal Behavior
 
 ### Package Layout
@@ -805,6 +815,11 @@ The core package shall run each `compile.run` as its own toolchain process with 
 The readiness report of [[core-service-9](#core-service-9)] shall be keyed by adapter: the core package shall resolve every configured position — the captain and each referenced session player, whether an inline agent block or a scalar adapter id, under the same resolution rule as the launcher [[core-service-16](#core-service-16)] — to its adapter and emit exactly one entry per distinct adapter listing those positions, so that no referenced adapter's unmet requirement is hidden by deduplication and a hand-written scalar still surfaces its adapter's requirements before the first turn fails.
 
 ## Verification
+
+### core-service-144
+
+When a real-core integration suite drives registry and Space accounts at one origin, it shall verify separate sign-in, refresh and sign-out, a registry sign-in creating no Space entry, registry status discovering a CLI-created credential, public package reads before registry sign-in and private refusal until registry sign-in, cancellation during the initial device request, directory and namespace replies without backend metadata, and explicit registry selection retaining comments, extension fields, format, Space and exact lock bytes [[core-service-143](#core-service-143)].
+
 
 ### Session Coverage
 

@@ -27,6 +27,8 @@ import {
   open,
   pickGroup,
   signInCore,
+  signInRegistryCore,
+  selectRegistryCore,
   startApp,
   test,
   type App,
@@ -90,7 +92,7 @@ test.use({
   },
 });
 
-test("playbook-library-95: Publish from a project at the second instance reads the version with its link to the second's registry, the first's holding no such release; a home signed in to the second alone installs and enables it; the first home, signed out of the second alone, is asked to sign in there", async ({
+test("playbook-library-95: Publish from a project at the second instance reads the version with its link to the second's registry, the first's holding no such release; a home signed in to the second alone installs and enables it; Space sign-out preserves publication while registry sign-out asks for its own grant", async ({
   page,
   app,
 }) => {
@@ -103,6 +105,8 @@ test("playbook-library-95: Publish from a project at the second instance reads t
   // the second, so a publish from it goes to the second (arrange only).
   await signInCore(app, second);
   const project = await pickGroup(app, { host: second, namespace: true });
+  await selectRegistryCore(app, second.url, project.key);
+  await signInRegistryCore(app, second);
   expect(project.instance).toBe(second.url);
   await arrangeEnabled(app);
   await open(page, app);
@@ -140,6 +144,7 @@ test("playbook-library-95: Publish from a project at the second instance reads t
   try {
     const listed = (await other.core.command("space.get", {})).instances;
     expect(listed.map((instance) => [instance.origin, instance.signedIn])).toEqual([[second.url, true]]);
+    await selectRegistryCore(other, second.url);
     await open(page, other);
     await nav(page, "Playbooks").click();
     await expect(page.getByTestId("side-project")).toHaveAttribute("aria-pressed", "true");
@@ -176,7 +181,10 @@ test("playbook-library-95: Publish from a project at the second instance reads t
   await expect(secondSection.getByTestId("space-signin-again")).toHaveText("Sign in again");
   await expect(instanceSection(page, first).getByTestId("space-account")).toContainText(`Signed in as @${HOST_LOGIN}`);
   await openEnableTab(page);
-  await expect(page.getByTestId("publish").getByTestId("publish-signin")).toHaveText(`Sign in to publish at ${SECOND_HOST_NAME}`);
+  await expect(page.getByTestId("publish-button")).toBeVisible();
+  await app.core.command("registry.signout", { origin: second.url });
+  await expect(page.getByTestId("publish").getByRole("button", { name: "Sign in to registry", exact: true })).toBeVisible();
+  await expect(page.getByTestId("publish")).toContainText(SECOND_HOST_NAME);
   await expect(page.getByTestId("publish-button")).toHaveCount(0);
 });
 
@@ -188,6 +196,8 @@ test("playbook-library-114: a local spec-and-skill package publishes without a p
   if (!first || !second || !firstRegistry || !registry) throw new Error("two configured instances and registries");
   await signInCore(app, second);
   const project = await pickGroup(app, { host: second, namespace: true });
+  await selectRegistryCore(app, second.url, project.key);
+  await signInRegistryCore(app, second);
   const id = "notes-tools";
   const name = `${HOST_LOGIN}/${id}`;
   const path = `spex-packages/${HOST_LOGIN}/${id}`;
@@ -242,6 +252,7 @@ test("playbook-library-114: a local spec-and-skill package publishes without a p
 
   const other = await startApp({ project: true, host: { share: { host: second, registry } }, signedIn: true });
   try {
+    await selectRegistryCore(other, second.url);
     await open(page, other);
     await nav(page, "Playbooks").click();
     await page.getByTestId("add-from-registry").click();
@@ -265,6 +276,9 @@ test("playbook-library-114: a local spec-and-skill package publishes without a p
   await atSecond.getByTestId("space-signout").click();
   await expect(atSecond.getByTestId("space-signin-again")).toBeVisible();
   await nav(page, "Playbooks").click();
-  await expect(publish.getByTestId("publish-signin")).toHaveText(`Sign in to publish at ${SECOND_HOST_NAME}`);
+  await expect(publish.getByTestId("publish-button")).toBeVisible();
+  await app.core.command("registry.signout", { origin: second.url });
+  await expect(publish.getByRole("button", { name: "Sign in to registry", exact: true })).toBeVisible();
+  await expect(publish).toContainText(SECOND_HOST_NAME);
   await expect(publish.getByTestId("publish-button")).toHaveCount(0);
 });

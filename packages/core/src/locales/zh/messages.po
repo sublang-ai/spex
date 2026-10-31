@@ -884,6 +884,10 @@ msgstr "新规程需要一行许可证，例如 Apache-2.0"
 msgid "a project's settings name only the playbooks they enable and the player each role uses; edit the rest in your own settings"
 msgstr "项目的设置只能列出它启用的规程及每个角色使用的 Player；其余内容请在你自己的设置中编辑"
 
+#: src/registry.ts
+msgid "A registry sign-in is already running."
+msgstr "注册表登录正在进行。"
+
 #. Media transfer refusal
 #: src/media-transfers.ts
 msgid "A retried upload chunk contains different bytes."
@@ -2303,6 +2307,10 @@ msgstr "请刷新，然后重试。"
 msgid "Refusing to share {leak}"
 msgstr "拒绝共享 {leak}"
 
+#: src/registry.ts
+msgid "Registry sign-in did not complete. Try again."
+msgstr "注册表登录未完成。请重试。"
+
 #. The lock no longer matches spex.yaml; the last installed files stay in use
 #: src/environments.ts
 msgid "Requests changed; resolve again to install"
@@ -2456,8 +2464,12 @@ msgstr "请先登录 {host}"
 
 #. Refusal: publishing needs the home signed in at the instance the publish goes to; {name} is that instance's display name as last read, else its host name
 #: src/environments.ts
-msgid "Sign in to publish at {name}"
-msgstr "登录 {name} 后才能发布"
+msgid "Sign in to registry to publish at {name}"
+msgstr "登录注册表以发布到 {name}"
+
+#: src/environments.ts
+msgid "Sign in to registry to use private packages."
+msgstr "登录注册表以使用私有软件包。"
 
 #. Refusal of Forget: the instance is still signed in; {host} is its display name, or its host name before any read
 #: src/space.ts
@@ -2851,6 +2863,10 @@ msgstr "路径中包含符号链接"
 #: src/space.ts
 msgid "the path must be relative to the home"
 msgstr "路径必须相对于空间目录"
+
+#: src/registry.ts
+msgid "The registry could not be read. Try again."
+msgstr "无法读取注册表。请重试。"
 
 #. Stands where a message names the remote's host and no URL says which
 #: src/space-git.ts

@@ -10,20 +10,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.0.0] - 2026-10-31
+
 ### Added
 
 - The package-manager library ships in the package as its own modules:
   `@sublang/spex/environment`, `files`, `instance`, `git-host`,
   `home-file` and `words`, with the stand-in registry as
   `@sublang/spex/testing`.
-- `spex login`, `spex logout` and `spex whoami` sign this device in at
-  a Space by the device flow from the command line, sign it out, and
-  say who is signed in where, `--space <origin>` naming the Space, with
-  no running app.
+- `spex login`, `spex logout` and `spex whoami` work without a running
+  app, with separate `--registry <origin>` and `--space <origin>` grants.
+  Package commands use the environment's registry by default; registry
+  sign-in creates no Space account or repository consent.
 - The command line is the package manager, needing no running app, on
   the environment of the current folder — the nearest folder holding
-  `spex.yaml`, else the Git work tree's top level — at the Space its
-  `space` names, else the home's default:
+  `spex.yaml`, else the Git work tree's top level — using its independent
+  `registry` setting. New environments explicitly choose the public
+  registry; existing manifests preserve their previous source:
   - `spex add <org>/<pkg>[@<requirement>]` and `spex add <org>/<pkg>
     --path <folder>` record a request and install it;
   - `spex remove` (`rm`) drops a request and installs what remains;
@@ -37,13 +40,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Package registry selection, credentials, refresh and sign-out are
+  independent of Space selection, even at the same origin. Private
+  installs require registry sign-in on the machine or server seat doing
+  the install. Locks retain their exact source, version and checksums;
+  independent installs no longer search every signed-in Space.
 - **Breaking:** the package declares an `exports` map. Beside the
   library's modules it exports the scaffold's files by path, as
   `@sublang/spex/scaffold/<path>`, and `package.json`; any other deep
   import, such as `@sublang/spex/dist/cli.js`, no longer resolves.
 - `spex publish [<org>/<pkg>] [--dry-run]` publishes a package by name
   from `spex-packages/<org>/<pkg>/`, or the folder its path request
-  names, to the environment's Space.
+  names, to the environment's registry.
 - `spex install` leaves the app's built-in package, `sublang/playbooks`,
   to the app where nothing serves it, installing the rest.
 
@@ -433,7 +441,8 @@ into this release. npm users upgrade straight from 0.3.0.
 - Integration tests exercising the CLI binary end-to-end
 - RELEASE spec package with package hygiene and pre-release checks
 
-[Unreleased]: https://github.com/sublang-ai/spex/compare/cli-v4.2.0...HEAD
+[Unreleased]: https://github.com/sublang-ai/spex/compare/cli-v5.0.0...HEAD
+[5.0.0]: https://github.com/sublang-ai/spex/compare/cli-v4.2.0...cli-v5.0.0
 [4.2.0]: https://github.com/sublang-ai/spex/compare/cli-v4.1.0...cli-v4.2.0
 [4.1.0]: https://github.com/sublang-ai/spex/compare/cli-v4.0.1...cli-v4.1.0
 [4.0.1]: https://github.com/sublang-ai/spex/compare/cli-v4.0.0...cli-v4.0.1

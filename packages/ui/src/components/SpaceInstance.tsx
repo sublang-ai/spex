@@ -21,6 +21,7 @@
 // space-3). Every act is a command whose outcome arrives as state
 // (space-29).
 
+import { SpaceDirectory } from "./SpaceDirectory.js";
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { GroupsState, InstanceState } from "@sublang/spex-core/protocol";
 
@@ -688,6 +689,7 @@ export function AddInstance({
           {lines}
         </div>
       ) : null}
+      <SpaceDirectory onChoose={setTyped} />
       <InstanceField
         inputRef={fieldRef}
         value={field}

@@ -11,7 +11,7 @@ A **spec package** shares a spec and related skills or playbooks as a
 versioned package. Find and publish packages on
 [Spex Space](https://spex.sublang.ai); install them from the IDE. Public
 packages need no account to browse or install. Publishing and private
-packages require access. Project-record sync is optional.
+packages require a separate registry sign-in with access. Project-record sync is optional.
 
 ## Open the IDE and a project
 
@@ -49,7 +49,8 @@ coordinates; players inspect files, implement, and review through playbooks.
    every role, and select **Enable**. Start a new task and type `/` to find
    its command. Installing a package alone does not enable it.
 
-Private packages never appear in search. Sign in with access, select
+Private packages never appear in search. In **Playbooks → Package registry**,
+choose **Sign in to registry** with access, then select
 **Add from registry → Add by name**, and enter the known `org/name` and
 an explicit version or range, such as `1.2.3`, `^1.2.3`, or `~1.2.3`, then
 **Add**. This also works for known public packages. **Requested** confirms
@@ -67,37 +68,56 @@ package inside the project before publishing it.
 
 ## Use the package CLI
 
-With Spex CLI 4.1 or later and app beta.18 or later, you can do the same
-package operations from a terminal. Keep the Spex app running on this
-computer — the desktop app, or the server shell started with
-`npm run start:server`. Releases after those two find the app by
-themselves; with CLI 4.1 or app beta.18, set `SPEX_SERVER_URL` to the
-server shell's printed access URL, which you keep private. In another
-terminal, select your project:
+The Spex CLI runs independently with Node.js 22 or later and shares its
+package-manager library and environment files with the IDE. Run it in your
+project's folder; it needs no running app or project registration:
 
 ```sh
 npm install -g @sublang/spex
-spex project add /absolute/path/to/project
 cd /absolute/path/to/project
-spex package search toolkit
-spex package add my-org/toolkit --version '^1.0.0'
-spex package status
+spex search toolkit
+spex add my-org/toolkit@^1.0.0
+spex install
+spex update
+spex list
 ```
 
-Pass `--server <access-url>` or set `SPEX_SERVER_URL` only to use another
-server.
-For private packages or publishing, run
-`spex auth login --instance https://spex.sublang.ai` and follow its browser
-instructions; use your team's instance address when it differs.
-For your own package, run
-`spex package publish spex-packages/toolkit --dry-run` to inspect the
-destination and files, then omit `--dry-run` to publish.
-Only use the placeholder package name after replacing it with a real one.
-If a command loses its connection, inspect the result before retrying:
-work may still finish.
-Enable and run playbooks in the IDE as described above.
-See the [CLI guide](../packages/cli/README.md) for local-folder packages,
-locked installation, resolution and observation limits.
+Replace the example package name with a real one. Commit `spex.yaml` and
+`spex.lock`; installed files under `.spex/` are ignored. A new manifest explicitly
+selects the public registry as `registry: https://spex.sublang.ai`, independently
+of an optional `space` binding for project records. Existing manifests without
+`registry` keep their prior package source until you explicitly migrate them.
+The lock retains each package's exact origin, version and checksum.
+
+Public packages need no sign-in. For private packages or publishing:
+
+```sh
+spex login --registry https://spex.sublang.ai
+spex whoami --registry https://spex.sublang.ai
+```
+
+Follow the verification URL and code. `--space <origin>` signs in to a Space
+separately; it cannot be combined with `--registry`. Signing out of either
+keeps the other signed in. For a package of your own, `spex new org/pkg --skill
+<folder>` makes `spex-packages/org/pkg/`, requests it by path and installs it.
+Run `spex publish org/pkg --dry-run` to inspect its destination and files,
+then omit `--dry-run` to publish. Enable and run playbooks in the IDE as above.
+See the [CLI guide](../packages/cli/README.md) for all commands and options.
+
+## Open a project on a team server
+
+In **Space**, choose a server under your group and read its contract before
+opening a seat. Whoever runs the server can act with credentials you place
+there. Admission signs that seat in to its Space only; your computer's registry
+credentials and the administrator's shared agent sign-ins grant it no registry
+access.
+
+Public packages install without a registry sign-in. For private packages or
+publishing, select the server's place in the IDE, then open **Playbooks → Package
+registry → Sign in to registry**. Approve that seat's own sign-in. Its registry
+credential stays on that server until removed or expired, independently of your
+Space grant and execution lease. Sign out of the registry on that seat when you
+want to remove that grant.
 
 ## Try a spec-first task
 

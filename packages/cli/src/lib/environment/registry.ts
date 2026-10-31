@@ -11,6 +11,7 @@
 // in there; an answer refusing it as the instance's sign-out is reported
 // with the token it refused (environments-12, DR-127).
 
+import { canonicalOrigin } from "../instance.js";
 import { isPackageName } from "./format.js";
 
 export type RegistryErrorKind = "not_found" | "forbidden" | "unauthenticated" | "unavailable" | "unreadable" | "format" | "rejected";
@@ -89,6 +90,7 @@ export interface SearchResult {
 /** An org the signed-in person may publish to (environments-27): its
  * name, its group's path in the instance, and the person's role there. */
 export interface RegistryOrg {
+  provider?: string;
   name: string;
   path: string;
   role: string;
@@ -218,6 +220,9 @@ export function readVersionResource(name: string, version: string, raw: unknown)
  * of them, an expired access secret being a failure of its call. */
 export const SIGN_OUT_CODES: readonly string[] = ["invalid_token", "token_revoked", "reauth_required"];
 
+export interface RegistryDescriptor { origin: string; displayName: string; providers: string[] }
+export interface SpaceDirectoryEntry { origin: string; displayName: string; signIn: string[] }
+
 export interface RegistryClientOptions {
   url: string;
   /** The app token of the instance the registry answers for, where the
@@ -247,6 +252,34 @@ export class RegistryClient implements RegistrySource {
     this.fetcher = options.fetch ?? fetch;
   }
 
+  /** Public discovery never presents a stored credential. */
+  private async discovery(path: string): Promise<Record<string, unknown>> {
+    const response = await this.fetcher(`${this.url}${path}`, { headers: { accept: "application/json" }, redirect: "manual", signal: AbortSignal.timeout(ORGS_TIMEOUT_MS) });
+    if (!response.ok) throw new RegistryError("unavailable", undefined, `service discovery answered ${response.status}`);
+    const raw: unknown = await response.json();
+    if (!isPlainObject(raw)) throw new RegistryError("unreadable", undefined, "service discovery is unreadable");
+    return raw;
+  }
+
+  async describe(): Promise<RegistryDescriptor> {
+    const raw = await this.discovery("/api/v1/registry");
+    if (typeof raw.origin !== "string" || typeof raw.display_name !== "string" || !Array.isArray(raw.providers) || !raw.providers.every((provider) => typeof provider === "string")) {
+      throw new RegistryError("unreadable", undefined, "registry descriptor is unreadable");
+    }
+    return { origin: canonicalOrigin(raw.origin), displayName: raw.display_name, providers: raw.providers as string[] };
+  }
+
+  async spaces(): Promise<SpaceDirectoryEntry[]> {
+    const raw = await this.discovery("/api/v1/spaces");
+    if (!Array.isArray(raw.spaces)) throw new RegistryError("unreadable", undefined, "Space directory is unreadable");
+    return raw.spaces.map((entry: unknown) => {
+      if (!isPlainObject(entry) || typeof entry.origin !== "string" || typeof entry.display_name !== "string" || !Array.isArray(entry.sign_in) || !entry.sign_in.every((provider) => typeof provider === "string")) {
+        throw new RegistryError("unreadable", undefined, "Space directory is unreadable");
+      }
+      return { origin: canonicalOrigin(entry.origin), displayName: entry.display_name, signIn: entry.sign_in as string[] };
+    });
+  }
+
   private async request(path: string, name: string | undefined, init: RequestInit = {}): Promise<Response> {
     const headers = new Headers(init.headers);
     if (!headers.has("accept")) headers.set("accept", "application/json");
@@ -262,7 +295,7 @@ export class RegistryClient implements RegistrySource {
     if (token) headers.set("authorization", `Bearer ${token}`);
     let response: Response;
     try {
-      response = await this.fetcher(`${this.url}${path}`, { ...init, headers });
+      response = await this.fetcher(`${this.url}${path}`, { ...init, headers, redirect: "manual" });
     } catch (error) {
       throw new RegistryError("unavailable", name, `the registry at ${this.url} is unreachable${name ? ` for ${name}` : ""}: ${(error as Error).message}`);
     }
@@ -351,7 +384,7 @@ export class RegistryClient implements RegistrySource {
       const orgs: RegistryOrg[] = [];
       for (const org of raw.orgs) {
         if (!isPlainObject(org) || typeof org.name !== "string" || typeof org.path !== "string" || typeof org.role !== "string") return null;
-        orgs.push({ name: org.name, path: org.path, role: org.role });
+        orgs.push({ name: org.name, path: org.path, role: org.role, ...(typeof org.provider === "string" ? { provider: org.provider } : {}) });
       }
       return orgs;
     })().catch(() => null);

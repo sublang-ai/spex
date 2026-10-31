@@ -283,11 +283,11 @@ When the Boss activates an authoring session row's Delete, the Playbooks surface
 
 #### playbook-library-93
 
-While an authoring session's last compile succeeded and the home is signed in to the instance a publish from its project goes to — the environment's instance [[environments-2](environments.md#environments-2)] — the Enable tab shall offer "Publish" beneath the form, which publishes the spec package under development, named `<org>/<pkg>` [[environments-10](environments.md#environments-10)], to that instance's registry as that instance's account after showing, inline, the actual destination instance origin, the package's name, version and the files it will upload with Publish and Cancel ([DR-104](../decisions/104-spec-package-format-and-client-environments.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
+While an authoring session's last compile succeeded and the home holds a registry grant at its environment's package registry [[environments-38](environments.md#environments-38)] — the Enable tab shall offer "Publish" beneath the form, which publishes the spec package under development, named `<org>/<pkg>` [[environments-10](environments.md#environments-10)], to that registry as its registry account after showing, inline, the actual destination registry origin, the package's name, version and the files it will upload with Publish and Cancel ([DR-104](../decisions/104-spec-package-format-and-client-environments.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
 
 - a refusal from the core's checks or the registry shows its issues in place; success reads the published version with a link to its page at the registry;
 - a retained receipt from a previous publish does not establish success of a later attempt, and a later settled refusal remains visible even when its text repeats an earlier refusal ([DR-151](../decisions/151-publish-local-spec-packages.md));
-- a home not signed in to that instance shows "Sign in to publish at <name>" in place of the control, <name> being the instance's display name as the home last read it, else its host name.
+- a home without that registry grant shows "Sign in to registry to publish at <name>" in place of the control, <name> being the registry's display name as the home last read it, else its host name.
 
 #### playbook-library-113
 
@@ -608,14 +608,27 @@ When a client sends `draft.defaults` for a project, the authoring store shall re
 
 | Field | Default |
 | --- | --- |
-| `org` | where the registry of the project's environment's instance [[environments-2](environments.md#environments-2)] lists orgs that instance's account may publish to [[environments-27](environments.md#environments-27)], the one whose path is the project's group — its spex repository key without any instance folder leading it [[storage-1](storage.md#storage-1)] and without the last segment — or an ancestor of it, else the first listed; where it lists none, the home is not signed in to that instance, or the registry gives no answer, the first `/`-separated segment of that key past any instance folder — `slbeta1` for `@spex.sublang.ai/slbeta1/workshop/graph-crate-spex` |
+| `org` | where the project's selected registry [[environments-38](environments.md#environments-38)] lists orgs its registry account may publish to [[environments-27](environments.md#environments-27)], the one whose path is the project's group — its spex repository key without any instance folder leading it [[storage-1](storage.md#storage-1)] and without the last segment — or an ancestor of it, else the first listed; where it lists none, the home holds no registry grant there, or the registry gives no answer, the first `/`-separated segment of that key past any instance folder — `slbeta1` for `@spex.sublang.ai/slbeta1/workshop/graph-crate-spex` |
 | `license` | `Apache-2.0` where the working folder's `LICENSE`, past a byte order mark and leading whitespace, begins with "Apache License"; `MIT` where it begins with "MIT License"; else none |
 
 #### playbook-library-71
 
 When the conversation runner observes a `tool_result` event or the turn ends, it shall read `<id>.md`, and when its digest differs from the last one streamed, broadcast the source with its version token to every client, so the Source tab follows the agent's writes at tool-call granularity [[playbook-library-56](#playbook-library-56)].
 
+#### playbook-library-119
+
+The Playbooks surface shall show the selected environment's registry name and editable URL with its independent account, Sign in to registry, Sign out of registry and cancellable browser or device sign-in progress, with errors shown in place and Space account state unchanged [[core-service-143](core-service.md#core-service-143)] ([DR-168](../decisions/168-independent-package-registry.md)).
+
+#### playbook-library-121
+
+When the new-playbook form offers an organization choice, the form shall offer every namespace its registry account may publish to with provider metadata [[environments-27](environments.md#environments-27)], permitting a project-group match only as the initial suggestion without filtering or requiring a Space association ([DR-168](../decisions/168-independent-package-registry.md)).
+
 ## Verification
+
+#### playbook-library-120
+
+When a browser journey uses a project's Playbooks surface, it shall verify independent registry sign-in and sign-out at a Space's origin, selected registry changes remaining separate from the project's Space [[playbook-library-119](#playbook-library-119)], and all authorized namespace choices remaining available despite the suggested project-group match [[playbook-library-121](#playbook-library-121)].
+
 
 ### Compile Coverage
 
@@ -788,7 +801,7 @@ Where the core runs with the scripted fake adapter, when authoring sessions are 
 
 #### playbook-library-104
 
-Where the core runs with the scripted fake adapter on a home signed in to two stand-in instances whose folders are `@<first>` and `@<second>`, each with its stand-in registry, the first the home's default instance, when `draft.defaults` is sent for a local-only project whose working folder's `LICENSE` stands as each case of the first table, and for it and a project of `acme/workshop/team` at each instance while the first instance's registry stands as each case of the second and the second's lists `alpha-two` at `alpha` and `team-two` at `acme/workshop/team`, and an authoring session and a one-shot compile then make their spec packages, the test suite shall assert the `license` and `org` replied per case, each reply asking once the registry of its project's instance — the first's for the local-only project — where the home is signed in there, and no other registry [[playbook-library-103](#playbook-library-103)]:
+Where the core runs with the scripted fake adapter on a home signed in to two stand-in instances whose folders are `@<first>` and `@<second>`, each with its stand-in registry, the first the home's default instance, when `draft.defaults` is sent for a local-only project whose working folder's `LICENSE` stands as each case of the first table, and for it and a project of `acme/workshop/team` at each instance while the first instance's registry stands as each case of the second and the second's lists `alpha-two` at `alpha` and `team-two` at `acme/workshop/team`, and an authoring session and a one-shot compile then make their spec packages, the test suite shall assert the `license` and `org` replied per case, each reply asking once its explicitly selected registry — the first's for the local-only project — where the home holds that registry's grant, and no other registry [[playbook-library-103](#playbook-library-103)]:
 
 | `LICENSE` | `license` replied |
 | --- | --- |
@@ -799,13 +812,13 @@ Where the core runs with the scripted fake adapter on a home signed in to two st
 
 | The first instance's registry | `org` for `tester/project-spex` | `org` for `@<first>/acme/workshop/team/graph-spex` | `org` for `@<second>/acme/workshop/team/graph-spex` |
 | --- | --- | --- | --- |
-| refusing the first instance's app token (`401`) | `tester` | `acme` | `team-two` |
+| refusing the first registry's app token (`401`) | `tester` | `acme` | `team-two` |
 | out of service (`500`) | `tester` | `acme` | `team-two` |
 | listing no org | `tester` | `acme` | `team-two` |
 | listing `workshop-261011` alone | `workshop-261011` | `workshop-261011` | `team-two` |
 | listing `acme-work` at `acme/work`, `alpha` at `alpha`, and `workshop` at `acme/workshop` | `acme-work` | `workshop` | `team-two` |
-| not asked, the home signed out of the first instance | `tester` | `acme` | `team-two` |
-| not asked, the home signed out of both instances | `tester` | `acme` | `acme` |
+| not asked, the home signed out of the first registry | `tester` | `acme` | `team-two` |
+| not asked, the home signed out of both registries | `tester` | `acme` | `acme` |
 
 - the session's `meta.yaml` names the org and the license `draft.create` gave, its package named under that org [[playbook-library-70](#playbook-library-70)];
 - the one-shot compile's `meta.yaml` names the project's defaults [[playbook-library-69](#playbook-library-69)].
@@ -821,15 +834,13 @@ Where the Playbooks surface renders over a project through a client whose `draft
 
 #### playbook-library-111
 
-Where the Enable tab renders a compiled authoring session through a client whose core replies are scripted, two instances reading the display names One and Two, when the session's project and the home's instances stand as each case, the test suite shall assert what stands beneath the form [[playbook-library-93](#playbook-library-93)]:
+Where the Enable tab renders a compiled authoring session with an explicit registry and independently scripted registry account state, when its registry grant stands as each case, the test suite shall assert the control beneath the form [[playbook-library-93](#playbook-library-93)]:
 
-| The session's project | The home's instances, in its list's order | Beneath the form |
+| Registry account | Space account | Beneath the form |
 | --- | --- | --- |
-| at Two | One and Two, both signed in | Publish |
-| at Two | One signed in, Two signed out | "Sign in to publish at Two" |
-| local-only | One signed in, Two signed out | Publish |
-| local-only | One signed out, Two signed in | "Sign in to publish at One" |
-| local-only | none, the home created with `https://spex.sublang.ai` | "Sign in to publish at spex.sublang.ai" |
+| signed in | signed in or signed out | Publish |
+| signed out | signed in or signed out | Sign in to registry, starting registry sign-in without navigating to Space |
+| registry state absent | any | Loading registry…, with no publication authority borrowed from Space |
 
 #### playbook-library-88
 
@@ -948,7 +959,7 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 
 #### playbook-library-95
 
-Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell signed in to two stand-in instances, each with its stand-in host and registry, the first the home's default instance, with a compiled authoring session enabled in a project at the second, when the journey activates Publish on the Enable tab, confirms the inline summary, and then, on a second scratch home signed in to the second instance alone, adds the published spec package from the registry and enables its playbook, the test suite shall assert through the page that the summary names the second instance's origin before confirmation and the published version reads with its link to that instance's registry, the first's registry holding no such release [[playbook-library-93](#playbook-library-93)], that the second home's search finds it and Add requests it, that its playbook lists from the registry source and enables [[playbook-library-92](#playbook-library-92)] [[playbook-library-34](#playbook-library-34)], and that the first home, signed out of the second instance alone, shows "Sign in to publish at <name>" with the second's display name in the control's place [[playbook-library-93](#playbook-library-93)].
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell signed in to two stand-in instances, each with its stand-in host and registry, the first the home's default instance, with a compiled authoring session enabled in a project whose independently chosen registry is the second and whose registry grant is signed in, when the journey activates Publish on the Enable tab, confirms the inline summary, and then, on a second scratch home whose environment selects the second registry, adds the published spec package from the registry and enables its playbook, the test suite shall assert through the page that the summary names the second instance's origin before confirmation and the published version reads with its link to that instance's registry, the first's registry holding no such release [[playbook-library-93](#playbook-library-93)], that the second home's search finds it and Add requests it, that its playbook lists from the registry source and enables [[playbook-library-92](#playbook-library-92)] [[playbook-library-34](#playbook-library-34)], and that the first home retains publication after signing out of the second Space, then offers "Sign in to registry" with the registry's display name after signing out of that registry [[playbook-library-93](#playbook-library-93)].
 
 #### playbook-library-114
 

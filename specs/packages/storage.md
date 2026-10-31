@@ -128,7 +128,7 @@ The preference store shall encode `local/prefs.json` as exactly `{format: 1, pre
 
 ### storage-19
 
-The credential store shall encode `local/credentials.yaml` as exactly `{format: 1, hosts: {<origin>: {access, accessExpiresAt, refresh}}}` with owner-only permissions: keyed by an instance's origin [[storage-2](#storage-2)], the app token that instance issued to this device, its access secret with its expiry in Unix milliseconds, and its refresh secret, written at its sign-in and at every refresh and removed at its sign-out or on its refusal, each as a versioned write of that instance's pair ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
+The credential store shall encode `local/credentials.yaml` as exactly `{format: 1, hosts: {<slot>: {access, accessExpiresAt, refresh}}}` with owner-only permissions: keyed by `registry:<origin>` for an independent registry grant and by the instance's origin for a Space grant [[storage-2](#storage-2)], legacy origin-only entries remaining Space grants, the app token that instance issued to this device, its access secret with its expiry in Unix milliseconds, and its refresh secret, written at its sign-in and at every refresh and removed at its sign-out or on its refusal, each as a versioned write of that instance's pair ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
 
 - a write names the pair its writer read, or none; in one step, the file is read, that instance's pair compared with the named one in every field, and the file replaced only where they are equal, every other instance's pair kept and the file removed with the last pair;
 - where the pairs differ, nothing is written and the writer is told the pair changed meanwhile;
@@ -404,7 +404,16 @@ When a home writer — the core or a mutating storage Git command — takes the 
 
 When a session read completes after its clone's location has changed [[storage-35](#storage-35)] [[space-60](space.md#space-60)], the store shall discard the retired location's result without changing the session's current association, indexed history, diagnostics or exclusion from Sync [[storage-17](#storage-17)].
 
+### storage-51
+
+The registry account metadata store shall keep only each registry's canonical origin, display name and public account identity in owner-only `local/registry-accounts.json`, with registry credentials exclusively in their purpose-scoped slots [[storage-19](#storage-19)], never creating or modifying a Space entry in `home.yaml` ([DR-168](../decisions/168-independent-package-registry.md)).
+
 ## Verification
+
+### storage-52
+
+When a real-core integration suite signs in to a registry and a Space at one origin and restarts the core, it shall verify independent credential slots and purpose-scoped removal [[storage-19](#storage-19)], public registry metadata without any credential and no registry-created Space entry [[storage-51](#storage-51)].
+
 
 ### storage-49
 

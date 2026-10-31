@@ -29,9 +29,9 @@ spex.yaml, else the Git work tree's top level, else this folder.
   search <query>                                                  Search the environment's registry
   new <org>/<pkg> [--skill <folder>]... [--spec <file>]           Make spex-packages/<org>/<pkg>/, request it by path, install it
   publish [<org>/<pkg>] [--dry-run]                               Publish that package's folder to the environment's Space
-  login [--space <origin>] [--force]                              Sign this device in at a Space by the device flow
-  logout [--space <origin>]                                       Sign this device out of a Space
-  whoami [--space <origin>]                                       Say who is signed in at each Space, the default marked
+  login [--registry <origin> | --space <origin>] [--force]                              Sign this device in at a Space by the device flow
+  logout [--registry <origin> | --space <origin>]                                       Sign this device out of a Space
+  whoami [--registry <origin> | --space <origin>]                                       Say who is signed in at each Space, the default marked
   scaffold [--update] [--lang <code>] [--agents <names>] [<path>] Create the specs structure; --update refreshes its templates
   lint [<path>]                                                   Check the specs tree's structure, item IDs and citations
 
