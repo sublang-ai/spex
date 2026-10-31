@@ -194,7 +194,7 @@ function isExtension(key: string): boolean {
 export function parseManifest(raw: unknown): { manifest: Manifest | null; issues: Issue[] } {
   const at = "meta.yaml";
   const issues: Issue[] = [];
-  if (!isPlainObject(raw)) return { manifest: null, issues: [{ path: at, rule: "manifest", message: "the manifest is not a mapping" }] };
+  if (!isPlainObject(raw)) return { manifest: null, issues: [{ path: at, rule: "manifest", message: "meta.yaml is not a mapping" }] };
   if (raw.format !== 2) {
     return { manifest: null, issues: [{ path: at, rule: "format", message: `format ${JSON.stringify(raw.format ?? null)} is not the known format 2` }] };
   }
@@ -438,7 +438,7 @@ export function checkRelease(dir: string | ReadReleaseFile, manifest: Manifest, 
     if (shared.has(place.id)) continue;
     const artifact = manifest.artifacts[place.id];
     if (!artifact) {
-      issues.push({ path: place.folder, rule: "folder", message: `folder has no manifest entry ${place.id}` });
+      issues.push({ path: place.folder, rule: "folder", message: `meta.yaml lists no artifact ${place.id} for this folder` });
     } else if (artifact.kind !== place.kind) {
       issues.push({ path: place.folder, rule: "folder", message: `folder is a ${place.kind} folder but ${place.id} is a ${artifact.kind}` });
     }
@@ -583,7 +583,7 @@ export async function listReleaseFiles(dir: string): Promise<{ files: ReleaseFil
 /** Read the manifest of a folder, refusing a missing or unknown one. */
 export function readManifest(dir: string): Manifest {
   const file = join(dir, "meta.yaml");
-  if (!existsSync(file)) throw new FormatError([{ path: "meta.yaml", rule: "manifest", message: "the release has no meta.yaml manifest" }]);
+  if (!existsSync(file)) throw new FormatError([{ path: "meta.yaml", rule: "manifest", message: "the folder has no meta.yaml" }]);
   const { manifest, issues } = parseManifestText(readFileSync(file, "utf8"));
   if (!manifest) throw new FormatError(issues);
   return manifest;
@@ -592,7 +592,7 @@ export function readManifest(dir: string): Manifest {
 /** Read and check a release folder (environments-1). */
 export async function readRelease(dir: string): Promise<Release> {
   const file = join(dir, "meta.yaml");
-  if (!existsSync(file)) throw new FormatError([{ path: "meta.yaml", rule: "manifest", message: "the release has no meta.yaml manifest" }]);
+  if (!existsSync(file)) throw new FormatError([{ path: "meta.yaml", rule: "manifest", message: "the folder has no meta.yaml" }]);
   const { manifest, issues } = parseManifestText(readFileSync(file, "utf8"));
   const listed = await listReleaseFiles(dir);
   issues.push(...listed.issues);

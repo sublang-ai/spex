@@ -17,6 +17,10 @@ import { isPackageName } from "./format.js";
 export type RegistryErrorKind = "not_found" | "forbidden" | "unauthenticated" | "unavailable" | "unreadable" | "format" | "rejected";
 
 export class RegistryError extends Error {
+  /** The HTTP status the registry answered, where it answered one. */
+  readonly status?: number;
+  /** The registry that answered, by its URL, where one did. */
+  readonly registry?: string;
   constructor(
     readonly kind: RegistryErrorKind,
     /** The spec package the answer was about, where there is one. */
@@ -25,10 +29,19 @@ export class RegistryError extends Error {
     /** The registry's error code and issues, for a refused publish. */
     readonly code?: string,
     readonly details?: unknown[],
+    answer: { status?: number; registry?: string } = {},
   ) {
     super(message);
     this.name = "RegistryError";
+    if (answer.status !== undefined) this.status = answer.status;
+    if (answer.registry !== undefined) this.registry = answer.registry;
   }
+}
+
+/** A registry's URL as a reader reads it: its host, with its port where
+ * it names one. */
+export function registryHost(url: string): string {
+  try { return new URL(url).host || url; } catch { return url; }
 }
 
 export interface IndexArtifact {
@@ -284,20 +297,24 @@ export class RegistryClient implements RegistrySource {
     const headers = new Headers(init.headers);
     if (!headers.has("accept")) headers.set("accept", "application/json");
     const about = name ? `${name}: ` : "";
+    const host = registryHost(this.url);
+    const at = { registry: this.url };
     let token: string | null = null;
     try {
       token = this.token ? await this.token() : null;
     } catch (error) {
       // No token to be had: the call fails as one the registry could
       // not be asked, so a caller with another registry moves on.
-      throw new RegistryError("unavailable", name, `${about}${error instanceof Error ? error.message : String(error)}`);
+      throw new RegistryError("unavailable", name, `${about}${error instanceof Error ? error.message : String(error)}`, undefined, undefined, at);
     }
     if (token) headers.set("authorization", `Bearer ${token}`);
     let response: Response;
     try {
       response = await this.fetcher(`${this.url}${path}`, { ...init, headers, redirect: "manual" });
-    } catch (error) {
-      throw new RegistryError("unavailable", name, `the registry at ${this.url} is unreachable${name ? ` for ${name}` : ""}: ${(error as Error).message}`);
+    } catch {
+      // The runtime's own words (`fetch failed`) name no cause a reader
+      // can act on.
+      throw new RegistryError("unavailable", name, `${about}${host} could not be reached`, "unreachable", undefined, at);
     }
     if (response.ok) return response;
     let code: string | undefined;
@@ -310,8 +327,11 @@ export class RegistryClient implements RegistrySource {
       details = body.error?.details;
     } catch { /* not the envelope */ }
     const said = message ? ` (${message})` : "";
-    if (response.status === 404) throw new RegistryError("not_found", name, `${about}not found at the registry, or not readable by this account${said}`, code);
-    if (response.status === 410) throw new RegistryError("not_found", name, `${about}suppressed by the registry's operator${said}`, code);
+    const answered = { status: response.status, registry: this.url };
+    // A private package answers a reader it does not share with as one
+    // that is not there.
+    if (response.status === 404) throw new RegistryError("not_found", name, `${about}not at ${host}, or private`, code, undefined, answered);
+    if (response.status === 410) throw new RegistryError("not_found", name, `${about}withdrawn at ${host}`, code ?? "suppressed", undefined, answered);
     if (response.status === 401) {
       // A refusal answers the token this call presented (git-host-4); a
       // hook that throws says why the call fails instead.
@@ -319,16 +339,17 @@ export class RegistryClient implements RegistrySource {
         try {
           await this.refused(token, code);
         } catch (error) {
-          throw new RegistryError("unauthenticated", name, `${about}${error instanceof Error ? error.message : String(error)}`, code);
+          throw new RegistryError("unauthenticated", name, `${about}${error instanceof Error ? error.message : String(error)}`, code, undefined, answered);
         }
       }
-      throw new RegistryError("unauthenticated", name, `${about}the registry did not accept this device's sign-in${said}`, code);
+      throw new RegistryError("unauthenticated", name, `${about}sign-in expired at ${host}`, code, undefined, answered);
     }
-    if (response.status === 403) throw new RegistryError("forbidden", name, `${about}this account may not fetch it from the registry${said}`, code);
+    if (response.status === 403) throw new RegistryError("forbidden", name, `${about}not shared with this account at ${host}`, code, undefined, answered);
     if (response.status === 409 || response.status === 422 || response.status === 413) {
-      throw new RegistryError("rejected", name, `${about}the registry refused it${said}`, code, details);
+      throw new RegistryError("rejected", name, `${about}${host} refused it${said}`, code, details, answered);
     }
-    throw new RegistryError("unavailable", name, `${about}the registry answered ${response.status}${said}`, code);
+    if (response.status >= 500) throw new RegistryError("unavailable", name, `${about}${host} is down (${response.status})`, code, undefined, answered);
+    throw new RegistryError("unavailable", name, `${about}${host} answered ${response.status}${said}`, code, undefined, answered);
   }
 
   private async json(path: string, name: string | undefined, init: RequestInit = {}): Promise<unknown> {
@@ -362,13 +383,26 @@ export class RegistryClient implements RegistrySource {
     return new Uint8Array(await response.arrayBuffer());
   }
 
+  /** A publish's refusals name what the publisher can act on: an org
+   * not theirs, a version already there, or the registry's checks. */
   async publish(name: string, version: string, tgz: Uint8Array): Promise<void> {
     const [org, pkg] = splitName(name);
-    await this.request(`/api/v1/packages/${org}/${pkg}/${encodeURIComponent(version)}`, name, {
-      method: "PUT",
-      headers: { "content-type": "application/gzip" },
-      body: tgz as unknown as BodyInit,
-    });
+    const host = registryHost(this.url);
+    try {
+      await this.request(`/api/v1/packages/${org}/${pkg}/${encodeURIComponent(version)}`, name, {
+        method: "PUT",
+        headers: { "content-type": "application/gzip" },
+        body: tgz as unknown as BodyInit,
+      });
+    } catch (error) {
+      if (!(error instanceof RegistryError)) throw error;
+      const answer = { ...(error.status !== undefined ? { status: error.status } : {}), registry: this.url };
+      if (error.kind === "forbidden") throw new RegistryError("forbidden", name, `${org} is not yours at ${host}`, error.code, error.details, answer);
+      if (error.kind === "rejected" && error.status === 409) throw new RegistryError("rejected", name, `${name} ${version} is already at ${host}`, error.code, error.details, answer);
+      if (error.kind === "rejected" && error.status === 413) throw new RegistryError("rejected", name, `${name} ${version} is too large for ${host}`, error.code, error.details, answer);
+      if (error.kind === "rejected") throw new RegistryError("rejected", name, `${host} refused ${name} ${version}`, error.code, error.details, answer);
+      throw error;
+    }
   }
 
   /** The orgs the signed-in person may publish to (environments-27):

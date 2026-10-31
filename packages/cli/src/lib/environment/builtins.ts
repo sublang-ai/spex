@@ -153,7 +153,7 @@ export function builtinRegistrySource(options: BuiltinSourceOptions): RegistrySo
   async function releaseOf(name: string, version: string): Promise<BuiltinRelease> {
     if (name !== BUILTIN_PACKAGE_NAME) throw new RegistryError("not_found", name, `${name} is not the built-in spec package`);
     const release = (await releases()).find((item) => item.version === version);
-    if (!release) throw new RegistryError("not_found", name, `${name} ${version} is not seeded on this device`);
+    if (!release) throw new RegistryError("not_found", name, `${name} ${version} is not on this computer yet`);
     return release;
   }
 
@@ -228,7 +228,7 @@ export function builtinRegistrySource(options: BuiltinSourceOptions): RegistrySo
       return packFiles(release.manifest.name, data);
     },
     async publish(name: string): Promise<void> {
-      throw new RegistryError("forbidden", name, `${name}: the built-in spec package is not published from this device`);
+      throw new RegistryError("forbidden", name, `${name} comes with Spex and is not published from here`);
     },
     async search(query: string): Promise<SearchResult[]> {
       const all = await releases();

@@ -27,10 +27,11 @@ import {
 import { randomBytes } from "node:crypto";
 import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 
+import { packageNameRefusal } from "../lib/environment/index.js";
 import { settleAndTell, writeRequest } from "./add.js";
 import { actualPath, Environment } from "./environment.js";
 import { exportedIn, projectFolders } from "./settle.js";
-import { Refusal, type Command } from "./run.js";
+import { misuse, needs, Refusal, type Command } from "./run.js";
 
 function refuse(message: string): never {
   throw new Refusal(message);
@@ -83,29 +84,30 @@ function parseInit(args: string[]): InitOptions {
     const match = /^--([a-z-]+)(?:=([\s\S]*))?$/.exec(arg);
     const key = match?.[1];
     if (key === "move") {
-      if (match![2] !== undefined) refuse("--move takes no value.");
-      if (move) refuse("Option --move was repeated.");
+      if (match![2] !== undefined) throw misuse("new", "--move takes no value");
+      if (move) throw misuse("new", "--move given twice — give it once");
       move = true;
       continue;
     }
-    if (!key || !VALUED.has(key)) refuse(`Unknown option ${arg.split("=")[0]}. See spex --help.`);
+    if (!key || !VALUED.has(key)) throw misuse("new", `unknown option ${arg.split("=")[0]}`);
     const inline = match![2];
     const value = inline ?? args[++i];
-    if (value === undefined || value === "" || (inline === undefined && value.startsWith("-"))) refuse(`--${key} requires a value.`);
+    if (value === undefined || value === "" || (inline === undefined && value.startsWith("-"))) throw misuse("new", `--${key} needs ${needs("new", key)}`);
     if (key === "skill") { skills.push(value); continue; }
-    if (Object.hasOwn(single, key)) refuse(`Option --${key} was repeated.`);
+    if (Object.hasOwn(single, key)) throw misuse("new", `--${key} given twice — give it once`);
     single[key] = value;
   }
-  if (words.length !== 1) refuse("spex new takes exactly one <org>/<pkg> argument. See spex --help.");
+  if (words.length === 0) throw misuse("new", "missing <org>/<pkg>");
+  if (words.length > 1) throw misuse("new", `unexpected argument ${words[1]}`);
   const parts = words[0]!.split("/");
   if (parts.length !== 2 || !isName(parts[0]!) || !isName(parts[1]!))
-    refuse("The package name must be <org>/<pkg>, each part lowercase letters, digits and single hyphens, at most 64 characters.");
+    refuse(packageNameRefusal(words[0]!));
   const language = single.language ?? "en";
-  if (!LANGTAG.test(language) || language.length > 64) refuse(`--language ${JSON.stringify(language)} is not a BCP 47 language tag such as en or zh-Hans.`);
-  if (single.description !== undefined && CONTROL.test(single.description.replace(/[\n\t]/g, " "))) refuse("--description must not hold control characters.");
-  if (single.license !== undefined && CONTROL.test(single.license)) refuse("--license must not hold control characters.");
-  if (single.license !== undefined && !single.license.trim()) refuse("--license requires a value.");
-  if (single.description !== undefined && !single.description.trim()) refuse("--description requires a value.");
+  if (!LANGTAG.test(language) || language.length > 64) refuse(`--language ${JSON.stringify(language)} is not a language tag — use one like en or zh-Hans`);
+  if (single.description !== undefined && CONTROL.test(single.description.replace(/[\n\t]/g, " "))) refuse("--description holds control characters — remove them");
+  if (single.license !== undefined && CONTROL.test(single.license)) refuse("--license holds control characters — remove them");
+  if (single.license !== undefined && !single.license.trim()) throw misuse("new", `--license needs ${needs("new", "license")}`);
+  if (single.description !== undefined && !single.description.trim()) throw misuse("new", `--description needs ${needs("new", "description")}`);
   return {
     org: parts[0]!,
     name: parts[1]!,
@@ -236,32 +238,32 @@ function lstatOrNull(path: string): Stats | null {
 function readSkill(argument: string, cwd: string): SkillSource {
   const folder = resolve(cwd, argument);
   const stat = lstatOrNull(folder);
-  if (stat?.isSymbolicLink()) refuse(`--skill ${argument} is a link; give the skill's own folder.`);
-  if (!stat?.isDirectory()) refuse(`--skill ${argument} is no folder holding a SKILL.md.`);
+  if (stat?.isSymbolicLink()) refuse(`--skill ${argument} is a link — name the skill's own folder`);
+  if (!stat?.isDirectory()) refuse(`--skill ${argument} is not a folder holding a SKILL.md`);
   const dirs: string[] = [];
   const files: string[] = [];
   const walk = (relativeDir: string): void => {
     for (const entry of readdirSync(join(folder, relativeDir)).sort()) {
       const path = relativeDir ? `${relativeDir}/${entry}` : entry;
       const entryStat = lstatSync(join(folder, path));
-      if (entryStat.isSymbolicLink()) refuse(`--skill ${argument} holds a link at ${path}; a package holds files only.`);
+      if (entryStat.isSymbolicLink()) refuse(`--skill ${argument} holds a link at ${path} — a package holds files only`);
       if (entryStat.isDirectory()) { dirs.push(path); walk(path); }
       else if (entryStat.isFile()) files.push(path);
-      else refuse(`--skill ${argument} holds a special file at ${path}; a package holds files only.`);
+      else refuse(`--skill ${argument} holds a special file at ${path} — a package holds files only`);
     }
   };
   walk("");
-  if (!files.includes("SKILL.md")) refuse(`--skill ${argument} holds no SKILL.md.`);
+  if (!files.includes("SKILL.md")) refuse(`--skill ${argument} holds no SKILL.md`);
   const text = readFileSync(join(folder, "SKILL.md"), "utf8");
   // A release's readers find the frontmatter from the first byte, so a
   // byte order mark would hide the name from the app and the registry.
   if (text.startsWith("\uFEFF"))
-    refuse(`--skill ${argument}: its SKILL.md begins with a byte order mark, which hides its frontmatter from a package's readers; save it as UTF-8 without one.`);
+    refuse(`--skill ${argument}: its SKILL.md begins with a byte order mark, which hides its name — save it as UTF-8 without one`);
   const frontmatter = skillFrontmatter(text);
   if (frontmatter.unreadable)
-    refuse(`--skill ${argument}: its SKILL.md frontmatter is no YAML, so its name cannot be read: the ${frontmatter.unreadable} holds ": " unquoted; put the value in quotes.`);
+    refuse(`--skill ${argument}: its SKILL.md's ${frontmatter.unreadable} holds ": " unquoted, so its name cannot be read — put the value in quotes`);
   if (frontmatter.name === undefined || !isName(frontmatter.name))
-    refuse(`--skill ${argument}: its SKILL.md declares no Agent Skills name (lowercase letters, digits and single hyphens, at most 64 characters) as its frontmatter's name.`);
+    refuse(`--skill ${argument}: its SKILL.md names no skill — give it a name of lowercase letters, digits and single hyphens, at most 64 characters`);
   return { folder, id: frontmatter.name, ...(frontmatter.description ? { description: frontmatter.description } : {}), dirs, files };
 }
 
@@ -308,10 +310,10 @@ export const newPackage: Command = async (args) => {
   const options = parseInit(args);
   const { org, name, language } = options;
   const pkg = `${org}/${name}`;
-  if (options.skills.length === 0 && options.spec === undefined) refuse("Name at least one artifact: --skill <folder> or --spec <file>.");
+  if (options.skills.length === 0 && options.spec === undefined) refuse("name at least one skill or spec — --skill <folder> or --spec <file>");
 
-  // The environment it is requested in: its spex.yaml must read before
-  // anything is written (environments-2).
+  // The folder it is added in: its spex.yaml must read before anything
+  // is written (environments-2).
   const env = new Environment(cwd);
   const root = env.root;
   const read = env.readRequests();
@@ -322,17 +324,17 @@ export const newPackage: Command = async (args) => {
   const parent = join(packages, org);
   const destination = join(parent, name);
   const packagesStat = lstatOrNull(packages);
-  if (packagesStat && !packagesStat.isDirectory()) refuse(`spex-packages in ${root} is not a folder.`);
+  if (packagesStat && !packagesStat.isDirectory()) refuse(`spex-packages in ${root} is not a folder — move it aside, then retry`);
   const parentStat = lstatOrNull(parent);
-  if (parentStat && !parentStat.isDirectory()) refuse(`spex-packages/${org} in ${root} is not a folder.`);
-  if (lstatOrNull(destination)) refuse(`spex-packages/${org}/${name}/ already exists in ${root}; nothing was written.`);
+  if (parentStat && !parentStat.isDirectory()) refuse(`spex-packages/${org} in ${root} is not a folder — move it aside, then retry`);
+  if (lstatOrNull(destination)) refuse(`spex-packages/${org}/${name}/ already exists — publish it, or choose another name`);
 
   const skills: SkillSource[] = [];
   for (const argument of options.skills) {
-    if (options.move && holdsDestination(resolve(cwd, argument), root, org, name)) refuse(`--move cannot move ${argument}: it holds spex-packages/${org}/${name}/.`);
+    if (options.move && holdsDestination(resolve(cwd, argument), root, org, name)) refuse(`--move cannot move ${argument}: it holds spex-packages/${org}/${name}/ — name the skill's own folder`);
     const skill = readSkill(argument, cwd);
-    if (skills.some((other) => other.id === skill.id)) refuse(`Two skills declare the id ${skill.id}; each skill needs its own name.`);
-    if (options.spec !== undefined && skill.id === name) refuse(`The skill ${skill.id} has the spec's id ${name}; a package names each artifact once, so rename the skill or the package.`);
+    if (skills.some((other) => other.id === skill.id)) refuse(`two skills are named ${skill.id} — give each its own name in its SKILL.md`);
+    if (options.spec !== undefined && skill.id === name) refuse(`the skill ${skill.id} takes the spec's name ${name} — rename the skill or the package`);
     skills.push(skill);
   }
 
@@ -341,15 +343,15 @@ export const newPackage: Command = async (args) => {
     const file = resolve(cwd, options.spec);
     let stat: Stats | null = null;
     try { stat = statSync(file); } catch { stat = null; }
-    if (!stat?.isFile()) refuse(`--spec ${options.spec} is no file.`);
-    if (basename(file) !== `${name}.md`) refuse(`The spec file must be named ${name}.md, since its items are ${name}-<N>; rename it or the package.`);
+    if (!stat?.isFile()) refuse(`--spec ${options.spec} is not a file`);
+    if (basename(file) !== `${name}.md`) refuse(`the spec file must be named ${name}.md, as its items are ${name}-<N> — rename it or the package`);
     specText = readFileSync(file);
   }
 
   const description = options.description
     ?? skills[0]?.description
     ?? (specText ? intentParagraph(specText.toString("utf8")) : undefined);
-  if (!description) refuse("No description was found in the first skill's SKILL.md or under the spec's Intent heading; pass --description <text>.");
+  if (!description) refuse("no description in the first skill's SKILL.md or under the spec's Intent heading — pass --description <text>");
 
   const licenseFile = join(root, "LICENSE");
   let licenseText: Buffer | undefined;
@@ -400,19 +402,19 @@ export const newPackage: Command = async (args) => {
     ...(options.spec !== undefined ? [`spec ${name}`] : []),
   ].join(", ");
   console.log(`Made ${folder}/ for ${pkg} (${made}).`);
-  if (left.length) process.stderr.write(`The package holds a copy, but these skill folders could not be removed; remove them yourself: ${left.join(", ")}\n`);
+  if (left.length) process.stderr.write(`The package holds a copy, but these skill folders stay — remove them yourself: ${left.join(", ")}\n`);
 
-  // Requested by path and installed as `spex add --path` does (cli-2).
+  // Added by path and installed as `spex add --path` does (cli-2).
   await writeRequest(env, pkg, { path: folder }, read === null);
   await settleAndTell(env);
 
   // A skill moved from an agent folder of the root stands there again,
-  // now as Spex's export.
+  // now placed there by Spex.
   if (options.move) {
     for (const skill of skills) {
       for (const { folder: agentFolder } of projectFolders()) {
         if (actualPath(resolve(root, ...agentFolder.split("/"), skill.id)) === actualPath(skill.folder) && exportedIn(root, agentFolder).includes(skill.id)) {
-          console.log(`The skill ${skill.id} moved from ${agentFolder}/${skill.id}/ now stands there as Spex's export.`);
+          console.log(`The skill ${skill.id} now stands in ${agentFolder}/${skill.id}/, placed there by Spex.`);
         }
       }
     }
@@ -422,5 +424,5 @@ export const newPackage: Command = async (args) => {
     `  spex publish ${pkg} --dry-run`,
     `  spex publish ${pkg}`,
   ].join("\n"));
-  if (left.length) throw new Refusal("some moved skill folders still stand; remove them yourself");
+  if (left.length) throw new Refusal("some moved skill folders still stand — remove them yourself");
 };

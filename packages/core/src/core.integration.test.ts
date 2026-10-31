@@ -664,21 +664,21 @@ const DEFECT_CONFIGS: { name: string; pattern: RegExp; config: string }[] = [
     pattern: /playbooks\.code\.from is not allowed: a playbook's module comes from the environment/,
     config: VALID_CONFIG.replace("  code:\n", '  code:\n    from: "@sublang/playbook/code/registry"\n'),
   },
-  // Skills reach agents from the environments that install them, never
-  // from a path in a shared file (core-service-2, DR-123).
+  // Skills reach agents from the packages spex.yaml adds, never from a
+  // path in a shared file (core-service-2, DR-123).
   {
     name: "a skills list at the top of your own file",
-    pattern: /(?:^|; )skills is not allowed: skills reach agents from the environments/,
+    pattern: /(?:^|; )skills is not allowed: skills reach agents from the packages spex\.yaml adds/,
     config: `skills: [./team-guide]\n${VALID_CONFIG}`,
   },
   {
     name: "a skills list on the Captain",
-    pattern: /captain\.skills is not allowed: skills reach agents from the environments/,
+    pattern: /captain\.skills is not allowed: skills reach agents from the packages spex\.yaml adds/,
     config: VALID_CONFIG.replace("  model: claude-test\nplayers:", "  model: claude-test\n  skills: [./team-guide]\nplayers:"),
   },
   {
     name: "a skills list on a player",
-    pattern: /players\.dev\.coder\.skills is not allowed: skills reach agents from the environments/,
+    pattern: /players\.dev\.coder\.skills is not allowed: skills reach agents from the packages spex\.yaml adds/,
     config: VALID_CONFIG.replace("    model: claude-test\nplaybooks:", "    model: claude-test\n    skills: [./team-guide]\nplaybooks:"),
   },
   {

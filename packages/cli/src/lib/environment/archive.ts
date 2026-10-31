@@ -71,7 +71,7 @@ export function unpackRelease(tgz: Uint8Array, pkg: string): UnpackedRelease {
   issues.push(...portablePathIssues(files.map((file) => file.path)).filter((issue) => !issues.some((other) => other.path === issue.path)));
   const meta = data.get("meta.yaml");
   if (!meta) {
-    issues.push({ path: "meta.yaml", rule: "manifest", message: "the release has no meta.yaml manifest" });
+    issues.push({ path: "meta.yaml", rule: "manifest", message: "the folder has no meta.yaml" });
     return { manifest: null, files, data, issues };
   }
   const parsed = parseManifestText(Buffer.from(meta).toString("utf8"));

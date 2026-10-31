@@ -49,6 +49,7 @@ import {
   ResolveError,
   isGitRequest,
   install,
+  InstallError,
   installedDir,
   installedPackages,
   isGitSource,
@@ -59,6 +60,7 @@ import {
   isRegistryRequest,
   isRegistrySource,
   listReleaseFiles,
+  LockError,
   lockStaleness,
   lockStoreKeys,
   moduleLocations,
@@ -112,6 +114,7 @@ import { installEngine } from "./compile.js";
 import { i18n } from "./i18n.js";
 import { migrateEnvironments, type MigratedRepository } from "./migrate-environment.js";
 import { gitEnvironment } from "./storage-git.js";
+import { splitKey } from "./home.js";
 import { canonicalOrigin } from "@sublang/spex/instance";
 import type { PlaybookModules } from "./config.js";
 import type { EnvironmentPackage, EnvironmentRequest, EnvironmentRequestSummary, EnvironmentState, PublishedPackage, PublishPreview } from "./protocol.js";
@@ -158,10 +161,11 @@ export interface EnvironmentManagerOptions {
    * none. Asked only of an instance the home is signed in to
    * (environments-12). */
   tokenFor: (origin: string, scope?: AuthScope) => Promise<string | null>;
-  /** An instance's name in what the core says of it: its display name
-   * as the home last read it, else its host name — the instance a
-   * publish needs the home signed in at, named as the Enable tab names
-   * it (environments-10, playbook-library-93, DR-127). */
+  /** A registry's name in what the core says of it: the display name
+   * its descriptor gave when last read, else its host name, never a
+   * Space's — the registry every package phrase and a publish's
+   * preview name (environments-10, playbook-library-93, core-service-145,
+   * DR-172). */
   instanceName: (origin: string) => string;
   /** Told the token an instance's registry refused with a code that
    * signs that instance out (environments-12, git-host-4); where it
@@ -239,12 +243,56 @@ interface EnvironmentGit {
   failure: (repo: string, run: GitRun) => string;
 }
 
+/** A project's name as every surface shows it: its key's last segment
+ * without the records' `-spex` suffix (DR-172). */
+const shownName = (key: string): string => splitKey(key).name.replace(/-spex$/, "");
+
 const listed = (items: readonly string[]): string =>
   items.join(i18n._({ id: "; ", comment: "Separates reasons listed in one message" }));
 
+/** A file's issues as one cause, in the library's own words. */
+function issuesCause(error: RequestsError | LockError): string {
+  return listed(error.issues.map((issue) => issue.message));
+}
+
+/** The format a refused file names where it is a number above the one
+ * this Spex reads: a file a newer Spex wrote; null otherwise. */
+function newerFormat(error: RequestsError | LockError): number | null {
+  const told = (error as { newerFormat?: unknown }).newerFormat;
+  if (typeof told === "number") return told;
+  for (const issue of error.issues) {
+    const named = issue.rule === "format" ? /format (\d+)/.exec(issue.message) : null;
+    if (named && Number(named[1]) > 1) return Number(named[1]);
+  }
+  return null;
+}
+
+/** The reader's words for a `spex.yaml` or a `spex.lock` that cannot be
+ * read, each with what to do (core-service-145, DR-172): `spex.yaml`
+ * fixed by hand; `spex.lock` from a newer Spex needing that Spex, else
+ * removed for Update to write it again, as an operation reading it
+ * refuses it until then (environments-11). */
+function unreadablePhrase(file: "spex.yaml" | "spex.lock", error: unknown): string {
+  const known = error instanceof RequestsError || error instanceof LockError ? error : null;
+  const cause = known ? issuesCause(known) : error instanceof Error ? error.message : String(error);
+  const format = known ? newerFormat(known) : null;
+  if (file === "spex.yaml") {
+    return format !== null
+      ? i18n._({ id: "spex.yaml is from a newer Spex (format {format}) — update Spex", comment: "spex.yaml names a format a newer Spex writes; {format} is its number. 'update Spex' means install the newer Spex", values: { format: String(format) } })
+      : i18n._({ id: "spex.yaml cannot be read: {cause} — fix the file, then Retry", comment: "spex.yaml does not parse or holds a value Spex refuses; {cause} is the library's own words", values: { cause } });
+  }
+  return format !== null
+    ? i18n._({ id: "spex.lock is from a newer Spex (format {format}) — update Spex", comment: "spex.lock names a format a newer Spex writes; {format} is its number. 'update Spex' means install the newer Spex", values: { format: String(format) } })
+    : i18n._({ id: "spex.lock cannot be read: {cause} — remove it, then Update", comment: "spex.lock does not parse; {cause} is the library's own words. Update is the Packages tab's control that writes spex.lock again", values: { cause } });
+}
+
 /** The reader's words for why an operation stopped (environments-12):
- * the library's own words carried as the cause. */
+ * the library's own words carried as the cause, the step to take
+ * closing it, a `spex.yaml` or a `spex.lock` that does not read said as
+ * such. */
 function failurePhrase(stage: "resolve" | "install" | "publish", error: unknown): string {
+  if (error instanceof RequestsError) return unreadablePhrase("spex.yaml", error);
+  if (error instanceof LockError) return unreadablePhrase("spex.lock", error);
   const cause = error instanceof FormatError
     ? listed(error.issues.map((issue) => (issue.path ? `${issue.path}: ${issue.message}` : issue.message)))
     : error instanceof RegistryError && error.details?.length
@@ -252,21 +300,21 @@ function failurePhrase(stage: "resolve" | "install" | "publish", error: unknown)
       : error instanceof Error ? error.message : String(error);
   switch (stage) {
     case "resolve":
-      return i18n._({ id: "Resolving stopped: {cause}", comment: "An environment's resolution failed; {cause} is the library's or the registry's own words", values: { cause } });
+      return i18n._({ id: "Updating stopped: {cause} — Retry", comment: "Choosing the versions spex.yaml allows and writing spex.lock failed, after Add, Remove or Update; {cause} is the library's or the registry's own words. Retry is the control that runs it again", values: { cause } });
     case "install":
-      return i18n._({ id: "Installing stopped; the last files stay: {cause}", comment: "An environment's install failed and kept its previous files; {cause} is the library's or the registry's own words", values: { cause } });
+      return i18n._({ id: "Installing stopped; the last files stay: {cause} — Retry", comment: "Installing a project's packages failed and kept the files installed before; {cause} is the library's or the registry's own words. Retry is the control that runs it again", values: { cause } });
     case "publish":
-      return i18n._({ id: "Publishing stopped: {cause}", comment: "A publish to the registry failed; {cause} is the core's checks' or the registry's own words", values: { cause } });
+      return i18n._({ id: "Publishing stopped: {cause} — Retry", comment: "A publish to the registry failed; {cause} is the core's checks' or the registry's own words. Retry is the control that runs it again", values: { cause } });
   }
 }
 
 /** The one stale phrase of playbook-library-92, and one per path
  * source whose manifest moved where its path resolves under
- * `pathRoot`. */
+ * `pathRoot`: what the Packages tab's chip reads beside Update. */
 function stalePhrases(lock: Lock, requestsText: string | null, pathRoot: string | null): string[] | null {
   const phrases: string[] = [];
   if (requestsText === null || requestsDigest(requestsText) !== lock.requests) {
-    phrases.push(i18n._({ id: "Requests changed; resolve again to install", comment: "The lock no longer matches spex.yaml; the last installed files stay in use" }));
+    phrases.push(i18n._({ id: "spex.yaml changed", comment: "The stale report: spex.yaml no longer matches spex.lock, the last installed files staying in use until Update; the Packages tab's chip reads it beside its Update control" }));
   }
   for (const name of Object.keys(lock.packages).sort()) {
     const resolution = lock.packages[name]!;
@@ -282,8 +330,8 @@ function stalePhrases(lock: Lock, requestsText: string | null, pathRoot: string 
     });
     if (verdict.stale) {
       phrases.push(i18n._({
-        id: "{name} changed in {path}; resolve again to install",
-        comment: "A spec package requested by path changed its manifest since the lock was written",
+        id: "{name} changed in {path}",
+        comment: "The stale report: a package added from a folder changed its meta.yaml since spex.lock was written; {path} is that folder. Shown beside the Packages tab's Update control",
         values: { name, path: resolution.source.path },
       }));
     }
@@ -310,30 +358,54 @@ function isDirectory(path: string): boolean {
   try { return statSync(path).isDirectory(); } catch { return false; }
 }
 
-/** The reader's words for a path your own group's clone refuses
- * (environments-32). */
+/** The reader's words for a folder your Personal records refuse as a
+ * package's folder (environments-32), each with what to do, alike when
+ * the package is added, updated or installed: your own group is
+ * "Personal" and its clone "your Personal records" on every surface
+ * (core-service-145, DR-172). */
 function confinedPhrase(path: string, issue: OwnPathIssue): string {
   switch (issue.reason) {
     case "root":
-      return i18n._({ id: "{path} is not a folder below your own group's clone's root", comment: "Refusal: a request by path in your own group's environment names its clone's root", values: { path } });
+      return i18n._({ id: "{path} is not a folder inside your Personal records — pick a folder inside them", comment: "Refusal: a Personal package's folder is the Personal records' own top folder; 'Personal records' are what Spex keeps for you alone", values: { path } });
     case "spex":
-      return i18n._({ id: "{path} is a path Spex keeps in your own group's clone", comment: "Refusal: a request by path in your own group's environment names a folder under Spex's own paths, such as sessions/ or skills/", values: { path } });
+      return i18n._({ id: "{path} is a folder Spex keeps in your Personal records — pick another folder", comment: "Refusal: a Personal package's folder is one Spex itself keeps, such as sessions/ or skills/", values: { path } });
     case "ignored":
-      return i18n._({ id: "{path} is a path the clone's Git rules ignore, so it would not sync", comment: "Refusal: a request by path in your own group's environment names a folder the clone's sync rules drop, such as one named *.tmp", values: { path } });
+      return i18n._({ id: "{path} is ignored by Git in your Personal records, so it would not sync — pick another folder", comment: "Refusal: a Personal package's folder is one the records' Git ignores, such as one named *.tmp", values: { path } });
     case "link":
-      return i18n._({ id: "{path} is reached through a link, which the clone's sync does not carry", comment: "Refusal: a request by path in your own group's environment names a folder that is, or lies under, a link", values: { path } });
+      return i18n._({ id: "{path} is reached through a link, which your Personal records do not sync — pick the folder itself", comment: "Refusal: a Personal package's folder is, or lies under, a link", values: { path } });
     case "repository":
-      return i18n._({ id: "{path}: {entry} is a Git repository of its own, which the clone's sync does not carry", comment: "Refusal: a request by path in your own group's environment names a folder that is, lies in or holds a folder holding .git; {entry} is that folder's path in the clone", values: { path, entry: issue.entry } });
+      return i18n._({ id: "{path}: {entry} is a Git repository of its own, which your Personal records do not sync — move it out, or pick another folder", comment: "Refusal: a Personal package's folder is, lies in or holds a folder holding .git; {entry} is that folder's path in the records", values: { path, entry: issue.entry } });
     case "ignored_file":
-      return i18n._({ id: "{path} holds {file}, which the clone's Git rules ignore, so it would not sync", comment: "Refusal: a request by path in your own group's environment names a folder holding a file the clone's sync rules drop; {file} is that file's path in the clone", values: { path, file: issue.file } });
+      return i18n._({ id: "{path} holds {file}, which Git ignores in your Personal records, so it would not sync — remove it, or pick another folder", comment: "Refusal: a Personal package's folder holds a file the records' Git ignores; {file} is that file's path in the records", values: { path, file: issue.file } });
     case "unshared_file":
-      return i18n._({ id: "{path} holds {file}, which the clone's sync refuses to share", comment: "Refusal: a request by path in your own group's environment names a folder holding a tracked file of a family that stays on the device, such as a *.tmp file forced into Git; {file} is that file's path in the clone", values: { path, file: issue.file } });
+      return i18n._({ id: "{path} holds {file}, which your Personal records never share — remove it, or pick another folder", comment: "Refusal: a Personal package's folder holds a tracked file of a kind that stays on this computer, such as a *.tmp file forced into Git; {file} is that file's path in the records", values: { path, file: issue.file } });
     case "link_entry":
-      return i18n._({ id: "{path}: {entry} is a link, which the clone's sync does not carry", comment: "Refusal: a request by path in your own group's environment names a folder holding a link the clone's Git rules do not ignore; {entry} is the link's path in the clone", values: { path, entry: issue.entry } });
+      return i18n._({ id: "{path}: {entry} is a link, which your Personal records do not sync — replace it with what it links to, or pick another folder", comment: "Refusal: a Personal package's folder holds a link Git does not ignore; {entry} is the link's path in the records", values: { path, entry: issue.entry } });
     case "special":
-      return i18n._({ id: "{path}: {entry} is no regular file or folder, so the clone's sync does not carry it", comment: "Refusal: a request by path in your own group's environment names a folder holding a special file, such as a pipe or a socket; {entry} is its path in the clone", values: { path, entry: issue.entry } });
+      return i18n._({ id: "{path}: {entry} is no regular file or folder, so your Personal records do not sync it — remove it, or pick another folder", comment: "Refusal: a Personal package's folder holds a special file, such as a pipe or a socket; {entry} is its path in the records", values: { path, entry: issue.entry } });
     case "unreadable":
-      return i18n._({ id: "{path}: {entry} cannot be inspected to confirm it syncs with the clone", comment: "Refusal: a nonignored subtree of your own group's path source cannot be read; {entry} is its path in the clone", values: { path, entry: issue.entry } });
+      return i18n._({ id: "{path}: {entry} cannot be read to confirm it syncs with your Personal records — check its permissions, then Retry", comment: "Refusal: a folder inside a Personal package's folder, which Git does not ignore, cannot be read; {entry} is its path in the records", values: { path, entry: issue.entry } });
+  }
+}
+
+/** The reader's words for a package added from a folder of this computer
+ * whose folder holds no package of that name (environments-5), each
+ * with what to do; null for any other refusal of a resolution. */
+function folderPhrase(error: ResolveError): string | null {
+  const name = error.packageName;
+  const { path, git, folderMissing, found, issues } = error.detail;
+  if (name === undefined || path === undefined || git !== undefined) return null;
+  switch (error.kind) {
+    case "path_missing":
+      return folderMissing
+        ? i18n._({ id: "{name}: no folder at {path} — put the folder back, or Remove {name}", comment: "A package added from a folder whose folder is gone; {path} is that folder in the project. Remove is the package row's control", values: { name, path } })
+        : i18n._({ id: "{name}: {path} has no meta.yaml, so it is no package — fix the folder, or Remove {name}", comment: "A package added from a folder that holds no meta.yaml; {path} is that folder in the project. Remove is the package row's control", values: { name, path } });
+    case "not_a_package":
+      return i18n._({ id: "{name}: {path} is not a package: {issues} — fix its meta.yaml, then Retry", comment: "A package added from a folder whose meta.yaml does not pass the checks; {issues} are the checks' own words", values: { name, path, issues: issues ?? "" } });
+    case "name_mismatch":
+      return i18n._({ id: "{name}: {path} holds {found} — fix the name in spex.yaml or in its meta.yaml, then Retry", comment: "A package added from a folder whose meta.yaml names another package, {found}", values: { name, path, found: found ?? "" } });
+    default:
+      return null;
   }
 }
 
@@ -378,7 +450,7 @@ function readLockAt(file: string): { lock: Lock; version: FileVersion } | null {
 }
 
 /** The refusal of work asked of a stopped manager. */
-const stoppingError = (): CoreError => new CoreError("aborted", i18n._({ id: "The core is stopping.", comment: "Refusal: environment work asked once the core stops" }));
+const stoppingError = (): CoreError => new CoreError("aborted", i18n._({ id: "Spex is stopping", comment: "Refusal: package work asked while Spex shuts down" }));
 
 /** A conflict the reader retries, as a command's reply (DR-111). */
 const conflictError = (error: VersionConflictError): CoreError => new CoreError("conflict", error.message);
@@ -423,15 +495,142 @@ export class EnvironmentManager {
     return text.split(repo).join(git.label(repo));
   }
 
-  private failure(stage: "resolve" | "install" | "publish", error: unknown, git: EnvironmentGit, requests?: Requests): string {
+  /** A registry by its name (core-service-145, DR-172): the display
+   * name its descriptor gave when last read, else its host. */
+  private registryName(origin: string): string {
+    return this.options.instanceName(origin);
+  }
+
+  /** Whether this computer holds a registry grant at `origin`, the
+   * access secret kept current by its client; null where that cannot be
+   * told now. */
+  private async signedInAtRegistry(origin: string): Promise<boolean | null> {
+    try { return (await this.tokenAt(origin, "registry")) !== null; } catch { return null; }
+  }
+
+  /** The reader's words for why an Update or an install stopped
+   * (environments-12, core-service-145): a Git source's failure in the
+   * safe words of environments-29; a registry's refusal — the error
+   * itself, or the first an install met (environments-7) — said whole
+   * with what to do: a package private, or not shared, where the
+   * environment names its registry, a sign-in that expired, a registry
+   * not reached or down; else the stage's phrase carrying the library's
+   * words. */
+  private async failure(stage: "resolve" | "install", error: unknown, git: EnvironmentGit, requests: Requests | undefined, origin: string): Promise<string> {
+    // A Personal package's folder your Personal records refuse, said as
+    // when it was added (environments-32).
+    const confined = error instanceof ResolveError && error.detail.confined && error.detail.path !== undefined
+      ? { path: error.detail.path, issue: error.detail.confined }
+      : error instanceof InstallError ? error.confined : undefined;
+    if (confined) return confinedPhrase(confined.path, confined.issue);
+    const folder = error instanceof ResolveError ? folderPhrase(error) : null;
+    if (folder !== null) return folder;
     if (error instanceof GitSourceError) {
       error = new Error(error.run ? git.failure(error.repo, error.run) : this.sourceText(error.message, error.repo, git));
     } else if (error instanceof ResolveError && error.packageName) {
       const request = requests?.packages[error.packageName];
       if (request && isGitRequest(request)) error = new Error(this.sourceText(error.message, request.git, git));
     }
-    const phrase = failurePhrase(stage, error);
-    return requests?.registry && error instanceof RegistryError && (error.kind === "unauthenticated" || error.kind === "forbidden" || error.kind === "not_found") ? `${phrase} ${i18n._("Sign in to registry to use private packages.")}` : phrase;
+    const refusal = error instanceof RegistryError ? error
+      : error instanceof InstallError && error.cause instanceof RegistryError ? error.cause : null;
+    if (refusal === null) return failurePhrase(stage, error);
+    const at = this.refusedAt(refusal, origin);
+    const registry = this.registryName(at);
+    const name = refusal.packageName ?? (error instanceof InstallError ? error.packageName : undefined);
+    // A manifest naming no registry keeps its former Space-held reads,
+    // so a registry sign-in would not reach it, the Space's would
+    // (environments-38).
+    const legacy = requests !== undefined && requests.registry === undefined;
+    if (name !== undefined && refusal.kind === "not_found" && refusal.code === "suppressed") {
+      return i18n._({ id: "{name} is withdrawn at {registry} — Update picks another version", comment: "The registry's operator withdrew the version spex.lock records; {registry} is the registry's display name. Update is the Packages tab's control that picks the versions again", values: { name, registry } });
+    }
+    if (name !== undefined && (refusal.kind === "forbidden" || refusal.kind === "not_found")) {
+      const signedIn = legacy ? this.store.home.account(at) !== null : await this.signedInAtRegistry(at);
+      if (signedIn === false) {
+        if (legacy) {
+          return refusal.kind === "forbidden"
+            ? i18n._({ id: "{name} is private at {registry} — Sign in on Space, then Retry", comment: "A package the registry keeps private, asked while this computer is signed out of the Space whose sign-in a spex.yaml naming no registry reads with; {registry} is the registry's display name. Space is the rail's surface holding the sign-in", values: { name, registry } })
+            : i18n._({ id: "{name} is private or not at {registry} — Sign in on Space, then Retry", comment: "A package the registry does not show while this computer is signed out of the Space whose sign-in a spex.yaml naming no registry reads with, either private or never published; {registry} is the registry's display name. Space is the rail's surface holding the sign-in", values: { name, registry } });
+        }
+        return refusal.kind === "forbidden"
+          ? i18n._({ id: "{name} is private — Sign in to {registry}", comment: "A package the registry keeps private, asked while signed out there; {registry} is the registry's display name. 'Sign in to' names the Packages tab's sign-in control", values: { name, registry } })
+          : i18n._({ id: "{name} is private or not at {registry} — Sign in to {registry}", comment: "A package the registry does not show while signed out there, either private or never published; {registry} is the registry's display name. 'Sign in to' names the Packages tab's sign-in control", values: { name, registry } });
+      }
+      if (signedIn === true || refusal.kind === "forbidden") {
+        return refusal.kind === "forbidden"
+          ? i18n._({ id: "{name} is not shared with you at {registry} — ask its owner", comment: "A private package this account may not read at the registry; {registry} is the registry's display name", values: { name, registry } })
+          : i18n._({ id: "{name} is not at {registry}, or not shared with you — check the name, or ask its owner", comment: "A package the registry does not show this signed-in account, either never published or private to others; {registry} is the registry's display name", values: { name, registry } });
+      }
+      return i18n._({ id: "{name} is not at {registry}, or private — check the name and your sign-in, then Retry", comment: "A package the registry does not show, when whether this computer is signed in there cannot be read now; {registry} is the registry's display name", values: { name, registry } });
+    }
+    // Signed out by the refusal, as a refusal of the pair a refresh
+    // replaced meanwhile does not (environments-12).
+    if (legacy && refusal.kind === "unauthenticated" && this.store.home.account(at) === null) {
+      return name === undefined
+        ? i18n._({ id: "Sign-in at {registry} expired — Sign in again on Space", comment: "The Space whose sign-in a spex.yaml naming no registry reads with no longer accepts this computer's sign-in; {registry} is the registry's display name. Space is the rail's surface holding the sign-in", values: { registry } })
+        : i18n._({ id: "{name}: sign-in at {registry} expired — Sign in again on Space", comment: "Asked for the package {name}, the Space whose sign-in a spex.yaml naming no registry reads with no longer accepts this computer's sign-in; {registry} is the registry's display name. Space is the rail's surface holding the sign-in", values: { name, registry } });
+    }
+    return this.registryPhrase(refusal, registry, !legacy, name) ?? failurePhrase(stage, error);
+  }
+
+  /** The registry a refusal came from: the one it names, else the one
+   * the operation asked. */
+  private refusedAt(refusal: RegistryError, origin: string): string {
+    const named = (refusal as { registry?: unknown }).registry;
+    if (typeof named !== "string") return origin;
+    try { return canonicalOrigin(named); } catch { return origin; }
+  }
+
+  /** A registry's refusal any operation says alike (core-service-145):
+   * a sign-in it no longer accepts, where the grant is the registry's
+   * own; a registry not reached; one down, each after the package it was
+   * asked for where it was asked for one; null for any other. */
+  private registryPhrase(refusal: RegistryError, registry: string, ownGrant: boolean, name = refusal.packageName): string | null {
+    const status = (refusal as { status?: unknown }).status;
+    if (ownGrant && refusal.kind === "unauthenticated") {
+      return i18n._({ id: "Sign-in to {registry} expired — Sign in again", comment: "The registry no longer accepts this computer's sign-in, so Spex signed out there; {registry} is the registry's display name", values: { registry } });
+    }
+    if (refusal.kind !== "unavailable") return null;
+    // A registry spex.lock names by no address is never asked.
+    if (refusal.code === "unasked") {
+      return name === undefined
+        ? i18n._({ id: "spex.lock names no registry address — Update writes spex.lock again", comment: "spex.lock records a registry by a value that is not an address, so Spex asks it nothing; Update is the Packages tab's control that writes spex.lock again" })
+        : i18n._({ id: "{name}: spex.lock names no registry address for it — Update writes spex.lock again", comment: "spex.lock records the package's registry by a value that is not an address, so Spex asks it nothing; Update is the Packages tab's control that writes spex.lock again", values: { name } });
+    }
+    if (refusal.code === "unreachable") {
+      return name === undefined
+        ? i18n._({ id: "{registry} could not be reached — check the connection, then Retry", comment: "The registry did not answer; {registry} is the registry's display name as last read, else its host", values: { registry } })
+        : i18n._({ id: "{name}: {registry} could not be reached — check the connection, then Retry", comment: "The registry did not answer when asked for the package {name}; {registry} is the registry's display name as last read, else its host", values: { name, registry } });
+    }
+    if (typeof status === "number" && status >= 500) {
+      return name === undefined
+        ? i18n._({ id: "{registry} is down ({status}) — Retry later", comment: "The registry answered that it cannot serve now; {registry} is its display name, {status} the HTTP status it answered, such as 503", values: { registry, status: String(status) } })
+        : i18n._({ id: "{name}: {registry} is down ({status}) — Retry later", comment: "The registry answered that it cannot serve the package {name} now; {registry} is its display name, {status} the HTTP status it answered, such as 503", values: { name, registry, status: String(status) } });
+    }
+    if (typeof status === "number") {
+      return name === undefined
+        ? i18n._({ id: "{registry} answered {status} — Retry later", comment: "The registry answered with an HTTP status Spex does not expect; {registry} is its display name, {status} the status, such as 429", values: { registry, status: String(status) } })
+        : i18n._({ id: "{name}: {registry} answered {status} — Retry later", comment: "The registry answered with an HTTP status Spex does not expect when asked for the package {name}; {registry} is its display name, {status} the status, such as 429", values: { name, registry, status: String(status) } });
+    }
+    return null;
+  }
+
+  /** The reader's words for why a publish stopped (environments-10),
+   * each with what to do where the registry's answer tells it. */
+  private publishFailure(error: unknown, origin: string, name: string, version: string): string {
+    if (!(error instanceof RegistryError)) return failurePhrase("publish", error);
+    const registry = this.registryName(this.refusedAt(error, origin));
+    const status = (error as { status?: unknown }).status;
+    if (error.kind === "forbidden") {
+      return i18n._({ id: "{org} is not yours to publish to at {registry} — claim it there, or publish under one of your orgs", comment: "Refusal of Publish: the registry refuses this account the package's org, a package name's first half; {registry} is the registry's display name", values: { org: name.split("/")[0]!, registry } });
+    }
+    if (error.kind === "rejected" && status === 409) {
+      return i18n._({ id: "{name} {version} is already at {registry} — raise its version in meta.yaml, then Retry", comment: "Refusal of Publish: the registry holds this version already and never takes it twice; {registry} is the registry's display name", values: { name, version, registry } });
+    }
+    if (error.kind === "rejected" && status === 413) {
+      return i18n._({ id: "{name} {version} is too large for {registry} — leave out what it does not need, then Retry", comment: "Refusal of Publish: the package is larger than the registry takes; {registry} is the registry's display name", values: { name, version, registry } });
+    }
+    return this.registryPhrase(error, registry, true) ?? failurePhrase("publish", error);
   }
 
   private shownConflicts(conflicts: readonly Conflict[], requests: Requests | null, git: EnvironmentGit): Conflict[] {
@@ -478,11 +677,11 @@ export class EnvironmentManager {
     const target = this.registryOf(key);
     const { origin, remote } = this.registryAt(target.origin, "registry");
     if ((await this.tokenAt(origin, "registry")) === null) {
-      throw new CoreError("invalid_request", i18n._("Sign in to registry to load publishing namespaces."));
+      throw new CoreError("invalid_request", i18n._({ id: "Sign in to {registry} to see your orgs", comment: "Refusal: listing the orgs this account may publish to needs a sign-in at the registry; {registry} is its display name. An org is a package name's first half", values: { registry: this.registryName(origin) } }));
     }
     const orgs = await remote.orgs(30_000);
     if (orgs === null) {
-      throw new CoreError("invalid_request", i18n._("Could not load registry namespaces. Try again."));
+      throw new CoreError("invalid_request", i18n._({ id: "Your orgs at {registry} could not be read — check the connection, then Retry", comment: "Refusal: the registry gave no answer listing the orgs this account may publish to; {registry} is its display name", values: { registry: this.registryName(origin) } }));
     }
     return orgs;
   }
@@ -523,12 +722,8 @@ export class EnvironmentManager {
     if (root === null) return null;
     try { return readRequestsAt(join(root, "spex.yaml"))?.requests ?? null; }
     catch (error) {
-      const cause = error instanceof RequestsError ? listed(error.issues.map((issue) => issue.message)) : error instanceof Error ? error.message : String(error);
-      throw new CoreError("invalid_request", i18n._({
-        id: "spex.yaml does not read: {cause}",
-        comment: "Refusal: a search or publish needs the environment's instance, and its spex.yaml does not read; {cause} is the library's own words, such as a space that is no instance origin",
-        values: { cause },
-      }));
+      // A search or publish needs the registry spex.yaml names.
+      throw new CoreError("invalid_request", unreadablePhrase("spex.yaml", error));
     }
   }
 
@@ -546,7 +741,7 @@ export class EnvironmentManager {
     await this.run(key, async () => {
       try { await editRequests(path, (doc) => setRegistryIn(doc, origin)); }
       catch (error) {
-        if (error instanceof RequestsError) throw new CoreError("invalid_request", listed(error.issues.map((issue) => issue.message)));
+        if (error instanceof RequestsError) throw new CoreError("invalid_request", unreadablePhrase("spex.yaml", error));
         if (error instanceof VersionConflictError) throw conflictError(error);
         throw error;
       }
@@ -629,9 +824,9 @@ export class EnvironmentManager {
 
   private unavailable(key: string): CoreError {
     return new CoreError("not_found", i18n._({
-      id: "no records {key} on this computer",
-      comment: "Refusal: the key names no project's or group's records under workspace/; {key} is their path",
-      values: { key },
+      id: "The records of {name} are not on this computer — Open here first",
+      comment: "Refusal: package work asked of a project whose records Spex does not hold here; {name} is the project's name. 'Open here' is the project's control on the Space surface",
+      values: { name: shownName(key) },
     }));
   }
 
@@ -666,11 +861,18 @@ export class EnvironmentManager {
   /** The refusal of a command on an environment with no root here
    * (environments-15). */
   private noRoot(key: string): CoreError {
-    return new CoreError("not_found", i18n._({
-      id: "{key} has no project folder on this computer",
-      comment: "Refusal: the installed packages stand in the project folder, which this computer does not hold; {key} is the records' path",
-      values: { key },
-    }));
+    return new CoreError("not_found", this.noFolderPhrase(key));
+  }
+
+  /** The reader's words for a project whose folder this computer does
+   * not hold (core-service-145): the folder it had, gone, chosen again;
+   * none yet, the project opened here first. */
+  private noFolderPhrase(key: string): string {
+    const name = shownName(key);
+    const path = this.workingFolder(key);
+    return path !== null
+      ? i18n._({ id: "The folder of {name} is missing at {path} — choose its folder, then Retry", comment: "Refusal: package work in a project whose project folder is gone from where Spex last found it; {name} is the project's name, {path} that folder", values: { name, path } })
+      : i18n._({ id: "{name} has no project folder on this computer — Open here first", comment: "Refusal: package work in a project not opened on this computer, so its spex.yaml has no folder here; 'Open here' is the project's control on the Space surface", values: { name } });
   }
 
   /** A command's environment: its clone, refused `not_found` where the
@@ -762,7 +964,7 @@ export class EnvironmentManager {
   private readonly migrationBlocked = new Set<string>();
 
   private migrationError(): CoreError {
-    return new CoreError("conflict", i18n._({ id: "Environment migration is incomplete; restore the original or planned files and restart to recover.", comment: "Package operation refused while its manifest and lock migration needs recovery" }));
+    return new CoreError("conflict", i18n._({ id: "Moving spex.yaml and spex.lock into the project folder did not finish — restore the two files, then restart Spex", comment: "Package work refused while the one-time move of a project's spex.yaml and spex.lock from its records into its project folder stopped part way; restoring them as they were before, or as the move planned, and restarting Spex finishes it" }));
   }
 
   private assertMigrated(key: string): void {
@@ -918,11 +1120,13 @@ export class EnvironmentManager {
     const lockPath = join(root, "spex.lock");
     let read: ReturnType<typeof readRequestsAt> = null;
     let locked: ReturnType<typeof readLockAt>;
+    let reading: "spex.yaml" | "spex.lock" = "spex.yaml";
     try {
       read = readRequestsAt(requestsPath);
+      reading = "spex.lock";
       locked = readLockAt(lockPath);
     } catch (error) {
-      state.error = this.failure("resolve", error, envGit, read?.requests);
+      state.error = unreadablePhrase(reading, error);
       this.announce(state.key);
       if (strict) throw new CoreError("invalid_request", state.error);
       return;
@@ -953,9 +1157,10 @@ export class EnvironmentManager {
           ...(locked ? { previous: locked.lock } : {}),
         });
       } catch (error) {
+        const phrase = await this.failure("resolve", error, envGit, read.requests, target.origin);
         const changed = this.changedSince(requestsPath, read.version, lockPath, lockVersion);
         if (changed) return this.overtaken(changed, strict);
-        state.error = this.failure("resolve", error, envGit, read?.requests);
+        state.error = phrase;
         if (strict) throw new CoreError("invalid_request", state.error);
         return;
       }
@@ -964,7 +1169,9 @@ export class EnvironmentManager {
         const changed = this.changedSince(requestsPath, read.version, lockPath, lockVersion);
         if (changed) return this.overtaken(changed, strict);
         state.conflicts = { requests: read.version, conflicts: result.conflicts };
-        state.error = !target.legacy && (await this.tokenAt(target.origin, "registry")) === null ? i18n._("Sign in to registry to use private packages.") : null;
+        state.error = !target.legacy && (await this.signedInAtRegistry(target.origin)) === false
+          ? i18n._({ id: "Sign in to {registry} to see private versions", comment: "No version fits every package while signed out at the registry, whose private versions Spex cannot see; {registry} is its display name", values: { registry: this.registryName(target.origin) } })
+          : null;
         if (strict) throw new CoreError("invalid_request", this.conflictPhrase(this.shownConflicts(result.conflicts, read.requests, envGit)));
         return;
       }
@@ -975,7 +1182,7 @@ export class EnvironmentManager {
         lockVersion = sha256(await writeLock(lockPath, result.lock, lockVersion));
       } catch (error) {
         if (error instanceof VersionConflictError) return this.overtaken(error, strict);
-        state.error = this.failure("resolve", error, envGit, read?.requests);
+        state.error = await this.failure("resolve", error, envGit, read.requests, target.origin);
         if (strict) throw new CoreError("invalid_request", state.error);
         return;
       }
@@ -1013,7 +1220,7 @@ export class EnvironmentManager {
       // (playbook-library-46).
       for (const kept of report.engineKept) console.error(`spex: ${kept.module} keeps the playbook engine it was bundled with: ${kept.reason}`);
       // A stale lock installs nothing and exports nothing: the state's
-      // stale phrases say resolving again is needed (environments-7),
+      // stale phrases say an Update is needed (environments-7),
       // and an awaiting caller is refused with them.
       if (report.stale) {
         // A stale report on files changed since is no outcome either.
@@ -1023,7 +1230,11 @@ export class EnvironmentManager {
         if (strict) {
           let current: string | null = null;
           try { current = readRequestsAt(requestsPath)?.text ?? null; } catch { /* unreadable reads as changed */ }
-          throw new CoreError("invalid_request", failurePhrase("install", new Error(listed(stalePhrases(lock, current, pathRoot) ?? report.stale))));
+          throw new CoreError("invalid_request", i18n._({
+            id: "{changes} — Update first",
+            comment: "Refusal of Install: spex.lock no longer matches what it was written from, so nothing installs until Update; {changes} is the stale report, such as \"spex.yaml changed\"",
+            values: { changes: listed(stalePhrases(lock, current, pathRoot) ?? report.stale) },
+          }));
         }
         return;
       }
@@ -1046,9 +1257,10 @@ export class EnvironmentManager {
       // The stale lock's refusal above is the strict caller's reply alone.
       if (error instanceof CoreError) throw error;
       if (error instanceof VersionConflictError) return this.overtaken(error, strict);
+      const phrase = await this.failure("install", error, envGit, read?.requests, target.origin);
       const changed = this.changedSince(requestsPath, read?.version ?? null, lockPath, lockVersion);
       if (changed) return this.overtaken(changed, strict);
-      state.error = this.failure("install", error, envGit, read?.requests);
+      state.error = phrase;
       if (strict) throw new CoreError("invalid_request", state.error);
       return;
     }
@@ -1079,8 +1291,8 @@ export class EnvironmentManager {
 
   private conflictPhrase(conflicts: readonly Conflict[]): string {
     return i18n._({
-      id: "No set of versions meets every requirement: {conflicts}",
-      comment: "Refusal: resolution found no solution; {conflicts} names each spec package with the requirements in conflict",
+      id: "No version fits every package: {conflicts} — change or remove one",
+      comment: "Refusal of Add, Remove or Update: no versions satisfy every requirement; {conflicts} names each package with what asks for which versions, such as \"acme/kit (spex.yaml: ^2.0.0, acme/app: ^1.0.0)\"",
       values: {
         conflicts: listed(conflicts.map((conflict) => `${conflict.name} (${conflict.requirements.map((entry) => `${entry.by}: ${entry.requirement}`).join(", ")})`)),
       },
@@ -1091,17 +1303,14 @@ export class EnvironmentManager {
    * a request by path in your own group's environment checked against
    * what stands at its path in the clone (environments-32). */
   private async refuseRequest(key: string, name: string, request: Request): Promise<void> {
+    // A folder leading out of the one it is relative to is said with
+    // what to do, ahead of the library's own words for it.
+    if (isPathRequest(request) && typeof request.path === "string" && !isInsidePath(request.path)) throw this.outside(request.path, this.isOwn(key));
     const issues = requestIssues(name, request);
     if (issues.length > 0) throw new CoreError("invalid_request", listed(issues.map((issue) => issue.message)));
     if (!isPathRequest(request)) return;
     const root = this.pathRoot(key);
-    if (root === null) {
-      throw new CoreError("invalid_request", i18n._({
-        id: "{name} is added by path, which needs a project folder on this computer",
-        comment: "Refusal: a package added by its folder's path needs the project folder here; {name} is the package",
-        values: { name },
-      }));
-    }
+    if (root === null) throw new CoreError("invalid_request", this.noFolderPhrase(key));
     const own = this.isOwn(key);
     const inside = relative(resolvePath(root), resolvePath(root, request.path));
     if (!isInsidePath(request.path) || inside.startsWith("..") || isAbsolute(inside)) throw this.outside(request.path, own);
@@ -1121,13 +1330,13 @@ export class EnvironmentManager {
   private outside(path: string, own: boolean): CoreError {
     return new CoreError("invalid_request", own
       ? i18n._({
-        id: "{path} is outside your own group's clone",
-        comment: "Refusal: a request by path in your own group's environment names a folder outside its spex repository's clone",
+        id: "{path} is outside your Personal records — pick a folder inside them",
+        comment: "Refusal: a Personal package added or published from a folder names one outside what Spex keeps for you alone",
         values: { path },
       })
       : i18n._({
-        id: "{path} is outside the working folder",
-        comment: "Refusal: a request by path names a folder outside the repository's working folder",
+        id: "{path} is outside the project folder — pick a folder inside it",
+        comment: "Refusal: a package added or published from a folder names one outside the project folder",
         values: { path },
       }));
   }
@@ -1142,7 +1351,7 @@ export class EnvironmentManager {
     await this.run(key, async () => {
       try { await setRequest(join(root, "spex.yaml"), name, request); }
       catch (error) {
-        if (error instanceof RequestsError) throw new CoreError("invalid_request", listed(error.issues.map((issue) => issue.message)));
+        if (error instanceof RequestsError) throw new CoreError("invalid_request", unreadablePhrase("spex.yaml", error));
         if (error instanceof VersionConflictError) throw conflictError(error);
         throw error;
       }
@@ -1168,8 +1377,8 @@ export class EnvironmentManager {
     const current = readRequestsAt(join(root, "spex.yaml"));
     if (!current?.requests.packages[name]) {
       throw new CoreError("invalid_request", i18n._({
-        id: "{name} is not requested here",
-        comment: "Refusal: removing a spec package this environment does not request",
+        id: "{name} is not in spex.yaml here",
+        comment: "Refusal of Remove: the package is not one spex.yaml adds here, such as one another package requires",
         values: { name },
       }));
     }
@@ -1187,7 +1396,7 @@ export class EnvironmentManager {
     await this.refuseRequest(key, name, request);
     let current: Request | undefined;
     try { current = readRequestsAt(join(root, "spex.yaml"))?.requests.packages[name]; }
-    catch (error) { throw new CoreError("invalid_request", failurePhrase("resolve", error)); }
+    catch (error) { throw new CoreError("invalid_request", unreadablePhrase("spex.yaml", error)); }
     if (current !== undefined && toRequestValue(current) === toRequestValue(request)) return false;
     await this.writeRequest(key, root, name, request);
     this.announce(key);
@@ -1440,17 +1649,11 @@ export class EnvironmentManager {
     if (strict && this.stopped) throw stoppingError();
     this.cloneDir(key);
     const root = this.pathRoot(key);
-    if (root === null) {
-      throw new CoreError("invalid_request", i18n._({
-        id: "{key} has no project folder on this computer",
-        comment: "Refusal: publishing reads a folder inside the project folder; {key} is the records' path",
-        values: { key },
-      }));
-    }
+    if (root === null) throw new CoreError("invalid_request", this.noFolderPhrase(key));
     if (!isPackageName(name)) {
       throw new CoreError("invalid_request", i18n._({
-        id: "{name} is not an org/pkg name",
-        comment: "Refusal: a publish names its spec package as org/pkg, both lowercase kebab-case; {name} is what it named",
+        id: "{name} is not a package name — name it like acme/triage",
+        comment: "Refusal of Publish: a package name is an org and a name joined by a slash, both lowercase words joined by hyphens, as acme/triage is; {name} is what was given",
         values: { name },
       }));
     }
@@ -1467,8 +1670,8 @@ export class EnvironmentManager {
     // reported with its cause, rather than reading as signed out.
     if (!isDirectory(folder)) {
       throw new CoreError("invalid_request", i18n._({
-        id: "No folder holds {name}: {path} is not there",
-        comment: "Refusal: a publish names a spec package with no folder; {path} is where its folder would stand, its request's path or spex-packages/<org>/<pkg>",
+        id: "No folder for {name} at {path} — npx @sublang/spex new {name} starts one",
+        comment: "Refusal of Publish: the package has no folder; {path} is where it would stand, the folder spex.yaml adds it from or spex-packages/<org>/<pkg>. 'npx @sublang/spex new' runs the command line's command that starts a package's folder",
         values: { name, path },
       }));
     }
@@ -1476,9 +1679,9 @@ export class EnvironmentManager {
     const target = this.registryAt(selected.origin, "registry");
     if (!dryRun && (await this.tokenAt(target.origin, "registry").catch(() => "")) === null) {
       throw new CoreError("invalid_request", i18n._({
-        id: "Sign in to registry to publish at {name}",
-        comment: "Refusal: publishing needs the home signed in at the instance the publish goes to; {name} is that instance's display name as last read, else its host name",
-        values: { name: this.options.instanceName(target.origin) },
+        id: "Sign in to {registry} to publish",
+        comment: "Refusal of Publish: publishing needs a sign-in at the registry the package goes to; {registry} is its display name as last read, else its host name",
+        values: { registry: this.registryName(target.origin) },
       }));
     }
     let manifest: Manifest;
@@ -1490,8 +1693,8 @@ export class EnvironmentManager {
     } catch (error) {
       if (error instanceof FormatError) {
         throw new CoreError("invalid_request", i18n._({
-          id: "{path} is not a spec package release: {issues}",
-          comment: "Refusal: the folder fails the core's release checks; {issues} are the checks' own words",
+          id: "{path} is not a package Spex can publish: {issues} — fix them, then Retry",
+          comment: "Refusal of Publish: the folder fails the checks a package's meta.yaml and files must pass; {issues} are the checks' own words",
           values: { path, issues: listed(error.issues.map((issue) => (issue.path ? `${issue.path}: ${issue.message}` : issue.message))) },
         }));
       }
@@ -1502,8 +1705,8 @@ export class EnvironmentManager {
     const held = `${manifest.org}/${manifest.name}`;
     if (held !== name) {
       throw new CoreError("invalid_request", i18n._({
-        id: "{path} holds {held}, not {name}",
-        comment: "Refusal: the folder a publish of {name} reads holds another spec package, {held}, by its meta.yaml",
+        id: "{path} holds {held}, not {name} — fix its meta.yaml, or publish {held}",
+        comment: "Refusal of Publish: the folder a publish of {name} reads holds another package, {held}, by its meta.yaml",
         values: { path, held, name },
       }));
     }
@@ -1513,14 +1716,14 @@ export class EnvironmentManager {
     const missing = publishIssues(manifest);
     if (missing.length > 0) {
       throw new CoreError("invalid_request", i18n._({
-        id: "{path} cannot be published: {issues}",
-        comment: "Refusal: the manifest lacks a field the registry requires to publish; {issues} name each field in the checks' own words",
+        id: "{path} cannot be published: {issues} — add them to meta.yaml, then Retry",
+        comment: "Refusal of Publish: the package's meta.yaml lacks a field the registry requires, such as description or license; {issues} name each field in the checks' own words",
         values: { path, issues: listed(missing.map((issue) => `${issue.path}: ${issue.message}`)) },
       }));
     }
     // What the upload would hold: the declared release files, in the
     // archive's order (playbook-library-93).
-    const preview: PublishPreview = { instance: { origin: target.origin, name: this.options.instanceName(target.origin) }, name: `${manifest.org}/${manifest.name}`, version: manifest.version, files: [...files].sort() };
+    const preview: PublishPreview = { instance: { origin: target.origin, name: this.registryName(target.origin) }, name: `${manifest.org}/${manifest.name}`, version: manifest.version, files: [...files].sort() };
     if (dryRun) return { done: Promise.resolve(undefined), preview };
     if (this.stopped) throw stoppingError();
     const done = this.run(key, async (step) => {
@@ -1533,7 +1736,7 @@ export class EnvironmentManager {
         state.error = null;
         return receipt;
       } catch (error) {
-        state.error = failurePhrase("publish", error);
+        state.error = this.publishFailure(error, target.origin, preview.name, preview.version);
         if (strict) throw new CoreError("invalid_request", state.error);
         return undefined;
       }
@@ -1552,7 +1755,10 @@ export class EnvironmentManager {
       const results = await this.registryAt(target.origin, target.scope).source.search(query);
       return results.map((result) => ({ name: result.name, description: result.description || null, versions: result.versions }));
     } catch (error) {
-      throw new CoreError("invalid_request", error instanceof Error ? error.message : String(error));
+      const registry = this.registryName(target.origin);
+      const cause = error instanceof Error ? error.message : String(error);
+      throw new CoreError("invalid_request", (error instanceof RegistryError ? this.registryPhrase(error, registry, !target.legacy) : null)
+        ?? i18n._({ id: "Searching {registry} stopped: {cause} — Retry", comment: "A search of the registry's packages failed; {registry} is its display name, {cause} the library's or the registry's own words. Retry is the control that runs it again", values: { registry, cause } }));
     }
   }
 
@@ -1675,14 +1881,14 @@ export class EnvironmentManager {
       const selected = environmentRegistry(requests, { origin: this.store.home.defaultInstance().origin, instances: this.store.home.instances() });
       registry = { origin: selected.origin, legacy: selected.legacy };
     } catch (cause) {
-      error = failurePhrase("resolve", cause);
+      error = unreadablePhrase("spex.yaml", cause);
     }
     // A Git source's labels name an instance, the environment's own
     // preferred, read only where one is shown (environments-29).
     const envGit = this.gitOf(key, requests);
     let lock: Lock | null = null;
     try { lock = envRoot === null ? null : readLockSync(join(envRoot, "spex.lock")); }
-    catch (cause) { error = failurePhrase("install", cause); }
+    catch (cause) { error = unreadablePhrase("spex.lock", cause); }
     const installedNames = lock && envRoot !== null ? installedPackages(envRoot, lock) : new Set<string>();
     const conflicts = clone.conflicts !== null && clone.conflicts.requests === requestsVersion ? clone.conflicts.conflicts : null;
     const packages: EnvironmentPackage[] = [];

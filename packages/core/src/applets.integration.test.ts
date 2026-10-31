@@ -77,11 +77,12 @@ class Client {
     return reply.result;
   }
 
-  async expectError<T extends Command["type"]>(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">, code: string): Promise<void> {
+  async expectError<T extends Command["type"]>(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">, code: string, pattern?: RegExp): Promise<void> {
     const reply = await this.command(type, fields);
     assert.ok(!reply.ok, `${type} must be refused`);
     if (reply.ok) return;
     assert.equal(reply.error.code, code, `${type}: ${reply.error.message}`);
+    if (pattern) assert.match(reply.error.message, pattern, `${type}: ${reply.error.message}`);
   }
 
   private async waitFor(check: (message: ServerMessage) => boolean, timeoutMs = 30_000): Promise<ServerMessage> {
@@ -327,10 +328,10 @@ test("applets-7: applet.open answers each capability, the core's endpoint serves
   const edited = notesEntry.replace("first", "second");
   writeFileSync(join(notesDir, "applets", "notes", "index.html"), edited);
   await served(notesPath, edited, "text/html; charset=utf-8");
-  // Its folder removed, its files are not on this device (applets-3),
+  // Its folder removed, its files are not on this computer (applets-3),
   // and its capability serves nothing.
   rmSync(notesDir, { recursive: true, force: true });
-  await client.expectError("applet.open", { repository: key, applet: "notes", project: key }, "invalid_request");
+  await client.expectError("applet.open", { repository: key, applet: "notes", project: key }, "invalid_request", /^The files of the applet notes are not on this computer — Install in Packages$/);
   await refused(notesPath, 404);
 
   // Once environment.remove and its install took the release away,

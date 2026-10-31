@@ -7,12 +7,15 @@
 // writes it only where a command records something; it never reads or
 // writes `workspace/`, a clone, the lease, a session or a record.
 
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { hostname, homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
+import { RegistryClient } from "../lib/environment/registry.js";
+import { writeApplicationBytes } from "../lib/files.js";
 import { fileCredentialStore, GitHostClient, HostError, retryAfterSeconds, type CredentialStore, type AuthScope } from "../lib/git-host.js";
-import { defaultInstanceOf, homeFilePath, instanceAt, notAnOrigin, readHomeFile, type HomeFile, type HomeInstance } from "../lib/home-file.js";
-import { canonicalOrigin, hostUrlFor, OriginRefused, parseOrigin } from "../lib/instance.js";
+import { defaultInstanceOf, homeFilePath, instanceAt, readHomeFile, type HomeFile, type HomeInstance } from "../lib/home-file.js";
+import { canonicalOrigin, hostUrlFor, instanceFolder, OriginRefused, parseOrigin, type OriginRefusal } from "../lib/instance.js";
 import { Refusal } from "./run.js";
 
 /** The home's folder: a nonempty `SPEX_HOME`, else `~/.spex`. */
@@ -29,18 +32,45 @@ export function readHome(dir: string): HomeFile | null {
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     const file = homeFilePath(dir);
-    throw new Refusal(reason.startsWith(file) ? `cannot read ${reason}` : `cannot read ${file}: ${reason}`);
+    // A layout this Spex does not read is a newer Spex's: update Spex.
+    const next = /unsupported format/.test(reason) ? "update Spex" : "fix the file, then retry";
+    throw new Refusal(`${reason.startsWith(file) ? `${file} cannot be read${reason.slice(file.length)}` : `${file} cannot be read: ${reason}`} — ${next}`);
   }
 }
 
+/** Why the origin rule refuses an address, in the reader's words. */
+const ADDRESS_RULES: Record<OriginRefusal, string> = {
+  invalid: "it is not a URL",
+  scheme: "it is neither http nor https",
+  user: "it carries a user or a password",
+  path: "it names a path",
+  query: "it carries a query",
+  fragment: "it carries a fragment",
+  host: "its host is not a plain domain name",
+  port: "its port is not from 1 to 65535",
+  insecure: "http works only on this computer",
+};
+
+/** An address as a reader is shown it: any user info it carries, which
+ * may hold a secret, stands as `…`. */
+export function shownAddress(value: string): string {
+  return value.trim().replace(/^([a-z][a-z0-9+.-]*:\/\/)[^/?#]*@/i, "$1…@");
+}
+
+/** An address the origin rule refuses, for `flag`, as one phrase ending
+ * in what to do (cli-13). */
+export function addressRefusal(flag: string, value: string, error: OriginRefused, example = "https://spex.sublang.ai"): Refusal {
+  return new Refusal(`${flag} ${shownAddress(value)}: ${ADDRESS_RULES[error.reason]} — enter just the address, like ${example}`);
+}
+
 /** The canonical origin `--space` names; one the origin rule refuses
- * is refused with the library's reason. */
+ * is refused saying why. */
 export function spaceOption(value: string): string {
   try {
     return canonicalOrigin(value);
   } catch (error) {
     if (!(error instanceof OriginRefused)) throw error;
-    throw new Refusal(`--space: ${notAnOrigin(value)}: ${error.message}`);
+    throw addressRefusal("--space", value, error);
   }
 }
 
@@ -54,7 +84,7 @@ export function defaultInstance(home: HomeFile | null, env: NodeJS.ProcessEnv = 
     origin = hostUrlFor(env);
   } catch (error) {
     if (!(error instanceof OriginRefused)) throw error;
-    throw new Refusal(`SPEX_HOST_URL: ${notAnOrigin(env.SPEX_HOST_URL?.trim() ?? "")}: ${error.message}`);
+    throw addressRefusal("SPEX_HOST_URL", env.SPEX_HOST_URL?.trim() ?? "", error);
   }
   return { origin, clientId: "spex" };
 }
@@ -100,17 +130,89 @@ export function clientOf(origin: string, credentials: CredentialStore, onSignedO
   return new GitHostClient({ url: origin, scope, label: `spex on ${device}`, credentials, ...(onSignedOut ? { onSignedOut } : {}) });
 }
 
-/** A host's answer in the CLI's words (git-host-11): what the instance
- * said where it said something, never a secret. */
-export function hostCause(error: unknown, name: string): string {
-  if (!(error instanceof HostError)) return error instanceof Error ? error.message : String(error);
+/** A host's answer in the CLI's words (git-host-11, cli-13): what the
+ * Space or registry said, its own words as the detail, and what to do —
+ * `again`, the command that tries once more — never a secret. An answer
+ * of no known kind, such as a page that is not there, comes from an
+ * address that is no Space or registry. */
+export function hostCause(error: unknown, name: string, again = "retry"): string {
+  if (!(error instanceof HostError)) {
+    const message = error instanceof Error ? error.message : String(error);
+    return / — /.test(message) ? message : `${message} — ${again}`;
+  }
   switch (error.kind) {
-    case "unreachable": return `${name} could not be reached${error.words ? `: ${error.words}` : ""}`;
+    case "unreachable": return `${name} could not be reached — check the connection, then retry`;
     case "rate_limited": {
       const seconds = retryAfterSeconds(error.retryAfter);
-      return `${name} asked to wait${seconds === null ? "" : ` ${seconds} seconds`} before another request`;
+      return `${name} asked to wait${seconds === null ? "" : ` ${seconds} seconds`} — retry then`;
     }
-    case "host_refused": return `${name} refused: ${error.words ?? error.code ?? "no reason given"}`;
-    default: return `${name} answered ${error.code ?? error.kind}${error.words ? `: ${error.words}` : ""}`;
+    case "reauth": return `sign-in expired at ${name} — spex login`;
+    case "host_refused": return `${name} refused (${error.words ?? error.code ?? "no reason given"}) — ${again}`;
+    default: return `${name} gave no answer Spex reads (${error.code ?? error.kind}${error.words ? `: ${error.words}` : ""}) — check the address, then retry`;
   }
+}
+
+// -- a registry's name (cli-22) -----------------------------------------------
+
+/** How long a registry's display name read from its descriptor stands
+ * before a command naming it reads the descriptor again. */
+const REGISTRY_NAME_TTL_MS = 24 * 60 * 60_000;
+
+/** Where the home keeps a registry's descriptor as fetched metadata,
+ * under `cache/`, which may be deleted at any time (environments-7). */
+function registryNameFile(dir: string, origin: string): string {
+  return join(dir, "cache", "registries", `${instanceFolder(origin)}.json`);
+}
+
+/** The display name cached for a registry, with when it was read; null
+ * where none is, or it does not read. */
+function cachedRegistryName(dir: string, origin: string): { displayName: string; readAt: number } | null {
+  try {
+    const value = JSON.parse(readFileSync(registryNameFile(dir, origin), "utf8")) as { origin?: unknown; displayName?: unknown; readAt?: unknown };
+    if (value.origin !== origin || typeof value.displayName !== "string" || value.displayName.trim() === "" || typeof value.readAt !== "number") return null;
+    return { displayName: value.displayName, readAt: value.readAt };
+  } catch {
+    return null;
+  }
+}
+
+/** Cache a registry's display name as its descriptor gave it. A cache
+ * never makes the home: where it is missing, nothing is written unless
+ * `create`; a write that fails leaves the name uncached. */
+export function cacheRegistryName(dir: string, origin: string, displayName: string, create = false): void {
+  if (!create && !existsSync(dir)) return;
+  try {
+    const file = registryNameFile(dir, origin);
+    mkdirSync(dirname(file), { recursive: true });
+    writeApplicationBytes(file, JSON.stringify({ origin, displayName, readAt: Date.now() }));
+  } catch { /* the name stays uncached */ }
+}
+
+/** The display name a registry's public descriptor gives
+ * (environments-39), read with no credential; null where it does not
+ * answer in time or names none. */
+export async function describedRegistryName(origin: string): Promise<string | null> {
+  try {
+    const name = (await new RegistryClient({ url: origin }).describe()).displayName.trim();
+    return name === "" ? null : name;
+  } catch {
+    return null;
+  }
+}
+
+/** A registry as the reader knows it (cli-22): the display name its
+ * descriptor gives — read at login and kept in the home's cache, read
+ * again where none is cached or the cached one is a day old — else its
+ * origin's host; never the name of a Space entry at its origin. */
+export async function registryName(dir: string, origin: string): Promise<string> {
+  let at: string;
+  try { at = canonicalOrigin(origin); } catch { return origin; }
+  const cached = cachedRegistryName(dir, at);
+  if (cached && Date.now() - cached.readAt < REGISTRY_NAME_TTL_MS) return cached.displayName;
+  const described = await describedRegistryName(at);
+  if (described !== null) {
+    cacheRegistryName(dir, at, described);
+    return described;
+  }
+  return cached?.displayName ?? hostOf(at);
 }

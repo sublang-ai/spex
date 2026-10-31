@@ -73,14 +73,19 @@ test("real CLI and shared clients isolate registry purpose at the same origin", 
     writeFileSync(join(work, "spex.yaml"), `format: 1\nregistry: ${origin}\nspace: https://private.example\npackages: {}\n`);
     const login = await cli(home, work, "login");
     assert.equal(login.code, 0, login.out);
+    assert.match(login.out, /^Signed in at Registry as @reader\.$/m, "[cli-10] the registry named by its descriptor, the login in whoami's grammar");
     assert.equal(existsSync(join(home, "home.yaml")), false, "registry login registers no Space");
     assert.ok(requests.every((request) => !request.path.startsWith("/api/v1/host")));
     const registry = fileCredentialStore(home, origin, "registry");
     const space = fileCredentialStore(home, origin);
     assert.ok(await registry.read());
     const firstGrant = await registry.read();
-    assert.equal((await cli(home, work, "login")).code, 0);
+    const again = await cli(home, work, "login");
+    assert.equal(again.code, 0, again.out);
+    assert.equal(again.out, "Already signed in at Registry as @reader — spex login --force signs in again\n", "[cli-10] an existing sign-in reported");
     assert.deepEqual(await registry.read(), firstGrant, "existing grant is retained without force");
+    const named = await cli(home, work, "login", "--registry", origin);
+    assert.equal(named.out, `Already signed in at Registry as @reader — spex login --registry ${origin} --force signs in again\n`, "[cli-10] the command that signs in again names the registry given");
     const forced = await cli(home, work, "login", "--force");
     assert.equal(forced.code, 0, forced.out);
     assert.notDeepEqual(await registry.read(), firstGrant);
@@ -88,15 +93,25 @@ test("real CLI and shared clients isolate registry purpose at the same origin", 
     assert.equal(await space.read(), null, "registry pair never upgrades a legacy Space slot");
     const both = await cli(home, work, "login", "--registry", origin, "--space", origin);
     assert.equal(both.code, 1);
-    assert.match(both.out, /mutually exclusive/);
+    assert.equal(both.out, "spex login: --registry and --space together — give one\n");
+    for (const command of ["logout", "whoami"]) {
+      const refused = await cli(home, work, command, "--registry", origin, "--space", origin);
+      assert.equal(refused.code, 1, `[cli-11] [cli-12] ${command}: both flags refused`);
+      assert.equal(refused.out, `spex ${command}: --registry and --space together — give one\n`);
+    }
     const spaceLogin = await cli(home, work, "login", "--space", origin);
     assert.equal(spaceLogin.code, 0, spaceLogin.out);
     const spacePair = await space.read();
     assert.ok(spacePair);
     const storedHome = readFileSync(join(home, "home.yaml"), "utf8");
+    // whoami: the registry's line, then each Space's, in one grammar;
+    // a flag's line alone (cli-12).
     const registryWho = await cli(home, work, "whoami");
     assert.equal(registryWho.code, 0, registryWho.out);
-    assert.match(registryWho.out, /reader/);
+    assert.equal(registryWho.out, "Registry  Registry  @reader\nSpace     Space     @reader (default)\n", "[cli-12] the registry and every Space, by name, login and default");
+    assert.equal((await cli(home, work, "whoami", "--registry", origin)).out, "Registry  Registry  @reader\n", "[cli-12] the registry's line alone");
+    assert.equal((await cli(home, work, "whoami", "--space", origin)).out, "Space  Space  @reader (default)\n", "[cli-12] the Space's line alone");
+    for (const secret of [(await registry.read())!.access, (await registry.read())!.refresh, spacePair.access, spacePair.refresh]) assert.ok(!registryWho.out.includes(secret), "[cli-12] no secret");
     const descriptorClient = new RegistryClient({ url: origin, token: async () => "must-not-leak" });
     assert.deepEqual((await descriptorClient.describe()).providers, ["github", "gitlab"]);
     assert.deepEqual((await descriptorClient.spaces())[0].signIn, ["gitlab"]);
@@ -114,6 +129,11 @@ test("real CLI and shared clients isolate registry purpose at the same origin", 
     assert.equal((await cli(home, work, "login")).code, 0);
     const logout = await cli(home, work, "logout");
     assert.equal(logout.code, 0, logout.out);
+    assert.equal(logout.out, "Signed out at Registry.\n", "[cli-11] one line, the registry by its name");
+    const unlisted = await cli(home, work, "logout", "--space", "http://127.0.0.1:9");
+    assert.equal(unlisted.code, 1);
+    assert.equal(unlisted.out, "spex logout: 127.0.0.1:9: not signed in on this computer — spex whoami\n", "[cli-11] a Space not signed in here refused, naming whoami");
+    assert.equal((await cli(home, work, "whoami")).out, "Registry  Registry  signed out\nSpace     Space     @reader (default)\n", "[cli-12] the registry signed out, the Space's sign-in kept");
     assert.equal(await registry.read(), null);
     assert.deepEqual(await space.read(), spacePair);
     assert.equal(readFileSync(join(home, "home.yaml"), "utf8"), storedHome);
@@ -196,6 +216,7 @@ test("real CLI installs public packages, isolates private reads and publishing, 
     assert.ok(first.script.received.every((request) => !request.bearer), "public install never presents the same-origin Space grant");
     const privateRefused = await cli(home, work, "add", "private/hello@1.0.0");
     assert.equal(privateRefused.code, 1, privateRefused.out);
+    assert.equal(privateRefused.out, "spex add: private/hello: not at Stand-in Registry, or private — spex login, then retry\n", "[cli-13] the registry by its own name, never the Space entry's");
     const registryStore = fileCredentialStore(home, first.url, "registry");
     registryStore.replace(null, pair);
     assert.equal((await cli(home, work, "remove", "demo/hello")).code, 0);
@@ -211,7 +232,7 @@ test("real CLI installs public packages, isolates private reads and publishing, 
     registryStore.replace(pair, null);
     const deniedPublish = await cli(home, work, "publish", "private/owned");
     assert.equal(deniedPublish.code, 1);
-    assert.match(deniedPublish.out, /login --registry/);
+    assert.equal(deniedPublish.out, "spex publish: not signed in at Stand-in Registry to publish — spex login, then retry\n", "[cli-9] signed out for publishing");
     assert.deepEqual(await fileCredentialStore(home, first.url).read(), oldPair);
     assert.equal(readFileSync(join(home, "home.yaml"), "utf8"), homeText);
 

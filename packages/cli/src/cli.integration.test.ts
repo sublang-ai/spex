@@ -8,6 +8,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
@@ -188,6 +189,60 @@ function assertMigrationPrompt(stdout: string): void {
   assert.ok(stdout.includes(readBundledMigrationPrompt()));
   assert.ok(!stdout.includes(readBundledMergePrompt()));
   assert.ok(stdout.slice(guidanceAt).includes("spex lint"));
+}
+
+/** The usage block cli-21 writes, read from the spec itself. */
+function specUsage(): string {
+  const spec = readFileSync(resolve(ROOT, "..", "..", "specs", "packages", "cli.md"), "utf-8").replace(/\r\n/g, "\n");
+  const item = spec.slice(spec.indexOf("#### cli-21"));
+  const block = /```text\n([\s\S]*?)\n```/.exec(item);
+  assert.ok(block, "cli-21 holds the usage block");
+  return block[1]!;
+}
+
+/** The commands a usage line names: its leading words, up to its first
+ * argument. */
+function namesOfLine(line: string): string[] {
+  const names: string[] = [];
+  for (const word of line.trim().split(/\s{2,}/)[0]!.split(" ")) {
+    if (!/^[a-z]+,?$/.test(word)) break;
+    names.push(word.replace(",", ""));
+  }
+  return names;
+}
+
+/** Every command of the usage, its aliases and the options it takes. */
+const COMMAND_HELP: Record<string, { aliases?: string[]; options: string[] }> = {
+  add: { options: ["--path <folder>"] },
+  remove: { aliases: ["rm"], options: [] },
+  install: { aliases: ["i"], options: [] },
+  update: { options: [] },
+  list: { aliases: ["ls"], options: [] },
+  search: { options: [] },
+  new: { options: ["--skill <folder>", "--spec <file>", "--language <tag>", "--description <text>", "--license <id>", "--move"] },
+  publish: { options: ["--dry-run"] },
+  login: { options: ["--registry <url>", "--space <url>", "--force"] },
+  logout: { options: ["--registry <url>", "--space <url>"] },
+  whoami: { options: ["--registry <url>", "--space <url>"] },
+  scaffold: { options: ["--update", "--lang <code>", "--agents <names>"] },
+  lint: { options: [] },
+};
+
+/** Run the CLI in an empty folder with a home not yet made, and check
+ * the run wrote neither (cli-21). */
+function quietly(args: string[], check: (result: ReturnType<typeof run>) => void): void {
+  const scratch = makeTmp();
+  try {
+    const work = join(scratch, "work");
+    const home = join(scratch, "home");
+    mkdirSync(work);
+    const result = run(args, { cwd: work, env: { SPEX_HOME: home } });
+    check(result);
+    assert.deepEqual(readdirSync(work), [], `spex ${args.join(" ")} writes nothing in the folder`);
+    assert.equal(existsSync(home), false, `spex ${args.join(" ")} makes no home`);
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
 }
 
 describe("CLI integration", () => {
@@ -440,19 +495,100 @@ describe("CLI integration", () => {
     assert.ok(result.stderr.includes("Path does not exist"));
   });
 
-  // Acceptance: unknown command exits non-zero
-  it("unknown command exits non-zero", () => {
-    const result = run(["bogus"]);
-    assert.notEqual(result.exitCode, 0);
-    assert.ok(result.stderr.includes("Unknown command"));
+  // cli-13: a word naming no command is refused on one line, with what
+  // to do and no usage dump.
+  it("an unknown command or option is refused on one line naming spex --help", () => {
+    for (const [args, line] of [
+      [["bogus"], "spex: unknown command bogus \u2014 spex --help\n"],
+      [["help", "bogus"], "spex: unknown command bogus \u2014 spex --help\n"],
+      [["--bogus"], "spex: unknown option --bogus \u2014 spex --help\n"],
+    ] as const) {
+      const result = run([...args]);
+      assert.equal(result.exitCode, 1, `[cli-13] spex ${args.join(" ")} exits 1`);
+      assert.equal(result.stderr, line, `[cli-13] spex ${args.join(" ")} says what to do on one line`);
+      assert.equal(result.stdout, "");
+    }
   });
 
-  // Acceptance: --help exits zero and names every command, one line each
-  it("--help prints usage naming every command and exits zero", () => {
-    const result = run(["--help"]);
-    assert.equal(result.exitCode, 0);
-    const named = result.stdout.split("\n").filter((line) => /^ {2}[a-z]/.test(line)).map((line) => line.trim().split(" ")[0]);
-    assert.deepEqual(named, ["add", "remove", "install", "update", "list", "search", "new", "publish", "login", "logout", "whoami", "scaffold", "lint"], "[cli-1] --help names every command and nothing else");
+  // cli-21: the usage, as the spec writes it, for every way of asking.
+  it("spex, --help, -h and help print the usage cli-21 writes and exit zero, writing nothing", () => {
+    const usage = specUsage();
+    for (const args of [[], ["--help"], ["-h"], ["help"]]) {
+      quietly(args, (result) => {
+        assert.equal(result.exitCode, 0, `[cli-21] spex ${args.join(" ")} exits 0`);
+        assert.equal(result.stdout, `${usage}\n`, `[cli-21] spex ${args.join(" ")} prints the usage verbatim`);
+        assert.equal(result.stderr, "");
+      });
+    }
+  });
+
+  // cli-21: every command of the usage, scaffold and lint included,
+  // prints its own lines of the usage and every option it takes.
+  it("<command> --help, -h and help <command> print that command's lines and options for every command", () => {
+    const usageLines = specUsage().split("\n").filter((line) => line.startsWith("  "));
+    const named = [...new Set(usageLines.flatMap(namesOfLine))].sort();
+    const known = Object.entries(COMMAND_HELP).flatMap(([name, { aliases = [] }]) => [name, ...aliases]).sort();
+    assert.deepEqual(known, named, "[cli-21] the test covers every command the usage names");
+    for (const [name, { aliases = [], options }] of Object.entries(COMMAND_HELP)) {
+      const forms = [[name, "--help"], [name, "-h"], ["help", name], ...aliases.flatMap((alias) => [[alias, "--help"], ["help", alias]])];
+      let first: string | undefined;
+      for (const args of forms) {
+        quietly(args, (result) => {
+          assert.equal(result.exitCode, 0, `[cli-21] spex ${args.join(" ")} exits 0: ${result.stderr}`);
+          assert.equal(result.stderr, "");
+          first ??= result.stdout;
+          assert.equal(result.stdout, first, `[cli-21] spex ${args.join(" ")} prints ${name}'s help`);
+        });
+      }
+      const help = first!;
+      assert.match(help, new RegExp(`^Usage: spex ${name}\\b`), `[cli-21] ${name}'s help opens with its usage`);
+      for (const line of usageLines.filter((line) => namesOfLine(line).includes(name))) {
+        assert.ok(help.split("\n").includes(line), `[cli-21] ${name}'s help holds its usage line ${JSON.stringify(line)}`);
+      }
+      const rows = help.slice(help.indexOf("\nOptions\n") + "\nOptions\n".length).split("\n").filter((row) => row.startsWith("  -"));
+      assert.deepEqual(
+        rows.map((row) => row.trim().split(/\s{2,}/)[0]).sort(),
+        [...options, "-h, --help"].sort(),
+        `[cli-21] ${name}'s help lists every option it takes`,
+      );
+      for (const row of rows) assert.match(row, /^ {2}\S.*\S {2,}\S/, `[cli-21] ${name}'s option row ${JSON.stringify(row)} says what it does`);
+    }
+  });
+
+  // cli-21: the installed version.
+  it("--version and -V print the installed version and exit zero, writing nothing", () => {
+    const version = (JSON.parse(readFileSync(join(ROOT, "package.json"), "utf-8")) as { version: string }).version;
+    for (const args of [["--version"], ["-V"]]) {
+      quietly(args, (result) => {
+        assert.equal(result.exitCode, 0, `[cli-21] spex ${args[0]} exits 0`);
+        assert.equal(result.stdout, `spex ${version}\n`, `[cli-21] spex ${args[0]} prints spex <version>`);
+        assert.equal(result.stderr, "");
+      });
+    }
+  });
+
+  // cli-13: a command called wrongly names the cause in the CLI's words,
+  // never Node's, then its one-line usage, and writes nothing.
+  it("an option or argument a command does not take is refused in the CLI's words with its one-line usage", () => {
+    const addUsage = "Usage: spex add <org>/<pkg>[@<version>] | <org>/<pkg> --path <folder>";
+    for (const [args, cause] of [
+      [["install", "--bogus"], "spex install: unknown option --bogus\nUsage: spex install"],
+      [["add", "demo/tool", "--path"], `spex add: --path needs a folder\n${addUsage}`],
+      [["add", "demo/tool", "--path="], `spex add: --path needs a folder\n${addUsage}`],
+      [["add"], `spex add: missing <org>/<pkg>\n${addUsage}`],
+      [["rm", "demo/tool", "demo/other"], "spex rm: unexpected argument demo/other\nUsage: spex remove <org>/<pkg>"],
+      [["update", "extra"], "spex update: unexpected argument extra\nUsage: spex update"],
+      [["publish", "--dry-run=yes"], "spex publish: --dry-run takes no value\nUsage: spex publish [<org>/<pkg>] [--dry-run]"],
+      [["whoami", "stray"], "spex whoami: unexpected argument stray\nUsage: spex whoami [--registry <url> | --space <url>]"],
+      [["login", "--registry"], "spex login: --registry needs a URL\nUsage: spex login [--registry <url> | --space <url>] [--force]"],
+    ] as const) {
+      quietly([...args], (result) => {
+        assert.equal(result.exitCode, 1, `[cli-13] spex ${args.join(" ")} exits 1`);
+        assert.equal(result.stderr, `${cause}\n`, `[cli-13] spex ${args.join(" ")} names the cause, then the usage`);
+        assert.doesNotMatch(result.stderr, /Unknown option '|positional|argument missing|ambiguous/, "[cli-13] never Node's text");
+        assert.equal(result.stdout, "");
+      });
+    }
   });
 
   // Acceptance: scaffold without path in git repo uses repo root

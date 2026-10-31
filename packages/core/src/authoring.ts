@@ -950,9 +950,9 @@ export class AuthorManager {
       throw new CoreError(
         "invalid_request",
         i18n._({
-          id: "{id} is already a playbook of this project's or your own environment; pick another id",
+          id: "{id} is already a playbook of this project or of your Personal packages — pick another id",
           values: { id },
-          comment: "Refusal: the id offered for a new playbook is one an installed spec package exports",
+          comment: "Refusal: the id offered for a new playbook is one an installed package exports, in this project or among the packages Spex keeps for you alone",
         }),
       );
     }

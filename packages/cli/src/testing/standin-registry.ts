@@ -10,11 +10,13 @@
 // Scripted yank, suppression, private namespaces honouring app tokens,
 // the orgs each app token's person may publish to, held as scripted,
 // and outages let the core's tests and the browser journeys drive every
-// registry answer. It answers at each stand-in instance set to relay to
-// it (DR-127): the instance names itself and its verdict on the bearer
-// in the relay headers, so one registry stands behind several instances,
-// honouring each one's tokens, and a scripted refusal answers one
-// instance's tokens alone. A scripted hold keeps one download waiting
+// registry answer. It describes itself by a display name at
+// `/api/v1/registry` (environments-39) and names the account a scripted
+// bearer stands for at `/api/v1/whoami`. It answers at each stand-in
+// instance set to relay to it (DR-127): the instance names itself and
+// its verdict on the bearer in the relay headers, so one registry stands
+// behind several instances, honouring each one's tokens, and a scripted
+// refusal answers one instance's tokens alone. A scripted hold keeps one download waiting
 // until released, so a test can interrupt an install mid-download.
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync, writeFileSync, chmodSync } from "node:fs";
@@ -111,6 +113,10 @@ export interface StandinRegistryScript {
    * to, which `GET /api/v1/account/orgs` lists sorted by name; any other
    * bearer, or none, is answered 401. */
   setOrgs(reader: string, orgs: { name: string; path: string; role: string }[]): void;
+  /** The account a bearer `reader` covers stands for, which
+   * `GET /api/v1/whoami` names; any other bearer, or none, is answered
+   * 401. */
+  setAccount(reader: string, account: { id: string; login: string }): void;
   /** Answer every request presenting a bearer `reader` covers 401 with
    * `code`, `token_revoked` unless given, as Spex Space answers a device
    * signed out; null lifts every such refusal. */
@@ -171,12 +177,15 @@ async function readBody(req: IncomingMessage): Promise<Uint8Array> {
 }
 
 /** Start the stand-in over the releases stored under `dir`. */
-export async function startStandinRegistry(options: { dir: string }): Promise<StandinRegistry> {
+export async function startStandinRegistry(options: { dir: string; displayName?: string }): Promise<StandinRegistry> {
   const { dir } = options;
+  const displayName = options.displayName ?? "Stand-in Registry";
   mkdirSync(dir, { recursive: true });
   const releases = new Map<string, Map<string, Stored>>();
   const privateOrgs = new Map<string, Set<string>>();
   const accountOrgs = new Map<string, { name: string; path: string; role: string }[]>();
+  const accounts = new Map<string, { id: string; login: string }>();
+  let origin = "";
   const refusedReaders = new Map<string, string>();
   let orgsDelay = 0;
   const requests: string[] = [];
@@ -368,6 +377,17 @@ export async function startStandinRegistry(options: { dir: string }): Promise<St
     const refused = refusal(caller);
     if (refused !== null) { sendError(res, 401, refused, REFUSED_WORDS[refused] ?? "The token was refused."); return; }
     const segments = url.pathname.split("/").filter(Boolean).map((segment) => decodeURIComponent(segment));
+    // The public descriptor, read with no credential (environments-39).
+    if (method === "GET" && url.pathname === "/api/v1/registry") {
+      sendJson(res, 200, { origin, display_name: displayName, providers: [] });
+      return;
+    }
+    if (method === "GET" && url.pathname === "/api/v1/whoami") {
+      const account = readersOf(caller).map((reader) => accounts.get(reader)).find((found) => found !== undefined);
+      if (!account) { sendError(res, 401, "unauthenticated", "sign in to see your account"); return; }
+      sendJson(res, 200, { id: account.id, login: account.login, display_name: null, can_create_group: false });
+      return;
+    }
     if (method === "GET" && url.pathname === "/api/v1/account/orgs") {
       if (orgsDelay > 0) await new Promise((resolve) => setTimeout(resolve, orgsDelay));
       const orgs = readersOf(caller).map((reader) => accountOrgs.get(reader)).find((found) => found !== undefined);
@@ -442,6 +462,7 @@ export async function startStandinRegistry(options: { dir: string }): Promise<St
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address() as AddressInfo;
+  origin = `http://127.0.0.1:${port}`;
 
   function find(name: string, version: string): Stored {
     const stored = releases.get(name)?.get(version);
@@ -450,12 +471,13 @@ export async function startStandinRegistry(options: { dir: string }): Promise<St
   }
 
   return {
-    url: `http://127.0.0.1:${port}`,
+    url: origin,
     script: {
       yank: (name, version) => { find(name, version).yanked = true; },
       suppress: (name, version) => { find(name, version).suppressed = true; },
       setPrivate: (org, readers) => { privateOrgs.set(org, new Set([...readers].map(readerKey))); },
       setOrgs: (reader, orgs) => { accountOrgs.set(readerKey(reader), orgs.map((org) => ({ ...org }))); },
+      setAccount: (reader, account) => { accounts.set(readerKey(reader), { ...account }); },
       refuseTokens: (reader, code = "token_revoked") => {
         if (reader === null) refusedReaders.clear();
         else refusedReaders.set(readerKey(reader), code);

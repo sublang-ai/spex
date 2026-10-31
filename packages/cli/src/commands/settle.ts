@@ -9,14 +9,17 @@
 // package that no seed and no registry serves left to the app; export
 // into the root with the library's agent table. It follows the order
 // and the version checks of the app's settle, without its state,
-// announcements or catalog: every write is a versioned write, refused in
-// the library's words where its file changed meanwhile (DR-111).
+// announcements or catalog: every write is a versioned write, refused
+// where its file changed meanwhile (DR-111). What it prints speaks a
+// project's Packages tab's words (DR-172): added, installed, updated,
+// removed, the registry by its name, skills for agents.
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 
 import {
   AGENT_FOLDERS,
+  BUILTIN_PACKAGE_NAME,
   EXPORTS_MANIFEST,
   exportEnvironment,
   GitSourceError,
@@ -31,9 +34,10 @@ import {
   packageRoot,
   installedDir,
   parseManifestText,
+  recordedPackages,
   RegistryError,
-  ResolveError,
   resolve,
+  ResolveError,
   resolutionVersion,
   serializeLock,
   writeLock,
@@ -45,17 +49,21 @@ import {
   type Resolution,
 } from "../lib/environment/index.js";
 import { fileVersion, sha256, VersionConflictError, type FileVersion } from "../lib/files.js";
-import { hostOf } from "./home.js";
-import { registryCause, type Environment } from "./environment.js";
+import type { AuthScope } from "../lib/git-host.js";
+import { shown, type Environment } from "./environment.js";
 import { Refusal } from "./run.js";
 
 /** `install`: resolve only where the lock is missing or stale;
- * `resolve`: resolve again from `spex.yaml` whatever the lock holds. */
+ * `resolve`: resolve again from `spex.yaml` whatever the lock holds,
+ * rewriting a lock that does not read. */
 export type SettleMode = "install" | "resolve";
 
 export interface Settled {
-  /** The lock as it stood before. */
+  /** The lock as it stood before; null where none stood or it did not
+   * read. */
   before: Lock | null;
+  /** Why the lock standing before was stale; null where it was not. */
+  staleBefore: string[] | null;
   /** The lock installed. */
   lock: Lock;
   /** Whether a resolution ran, and whether it wrote the lock. */
@@ -83,8 +91,8 @@ export function staleReasons(root: string, lock: Lock, requestsText: string | nu
 
 // -- Git locators as a reader is shown them (environments-29, DR-120) ---------
 
-/** Whether a Git locator is a folder of this device: a path, or a file
- * URL. */
+/** Whether a Git locator is a folder of this computer: a path, or a
+ * file URL. */
 function localGit(repo: string): boolean {
   return isAbsolute(repo) || /^file:/i.test(repo)
     || (!/^[a-z][a-z0-9+.-]*:\/\//i.test(repo) && !/^[^/\\]+:/.test(repo));
@@ -92,10 +100,16 @@ function localGit(repo: string): boolean {
 
 /** A Git locator as a reader reads it: a local path or file URL as
  * given; a network remote unnamed, since the command line reads no
- * instance's Git origin and so never tells an instance's repository from
- * another's, and never names the Git host behind an instance. */
+ * Space's Git origin and so never tells a Space's repository from
+ * another's, and never names the Git host behind a Space. */
 export function gitShown(repo: string): string {
   return localGit(repo) ? repo : "a Git remote";
+}
+
+/** A Git repository as a source's words name it: `Git <repository>`
+ * for one of this computer, `a Git remote` for a network one. */
+export function gitLabel(repo: string): string {
+  return localGit(repo) ? `Git ${repo}` : gitShown(repo);
 }
 
 /** Every Git locator the environment's files name, longest first, with
@@ -117,62 +131,101 @@ export function unnamedText(text: string, locators: GitLocators): string {
 
 /** A Git fetch's failure as a reader reads it: Git's own words for a
  * local repository; for a network remote, what it answered and no raw
- * output, which may name the host behind an instance. */
+ * output, which may name the host behind a Space. */
 function gitFailure(error: GitSourceError, locators: GitLocators): string {
   if (localGit(error.repo)) return error.message;
   const status = /returned error: (\d{3})|RPC failed; HTTP (\d{3})|HTTP (\d{3})/i.exec(error.run?.stderr ?? "");
   const answer = status ? ` (HTTP ${status[1] ?? status[2] ?? status[3]})` : "";
   const names = locators.find(([repo]) => repo === error.repo)?.[1] ?? [];
-  return `${names.length > 0 ? `${names.join(", ")}: ` : ""}${gitShown(error.repo)} answered with an error${answer}; check that this device's Git can read it, then retry`;
+  return `${names.length > 0 ? `${names.join(", ")}: ` : ""}${gitShown(error.repo)} answered with an error${answer} — check that Git on this computer can read it, then retry`;
 }
 
-function refusalOf(error: unknown, locators: GitLocators = []): Refusal {
+/** What the library's install says before its cause where it kept the
+ * last files. */
+const KEPT = "installing failed; the last files stay: ";
+
+/** A resolution's refusal of a package's source in the CLI's words, each
+ * ending in what to do (cli-13): a folder missing, holding no
+ * `meta.yaml` or another package, leading out of the project folder, or
+ * no package; a Git repository holding none; no versions found in time. */
+function resolvePhrase(error: ResolveError): string | null {
+  const pkg = error.packageName ?? "a package";
+  const { path, git, rev, folderMissing, found, issues } = error.detail;
+  const where = git !== undefined ? `${gitShown(git)} at ${rev}${path ? `, folder ${path}` : ""}` : path;
+  const fix = git !== undefined ? "fix its git, rev or path in spex.yaml" : "fix its path in spex.yaml";
+  switch (error.kind) {
+    case "path_missing":
+      if (git !== undefined) return `${pkg}: ${where} holds no package — ${fix}`;
+      return folderMissing
+        ? `${pkg}: no folder at ${path} — ${fix}, or spex remove ${pkg}`
+        : `${pkg}: ${path} has no meta.yaml, so it is no package — ${fix}, or spex remove ${pkg}`;
+    case "path_outside":
+      return `${pkg}: ${path} leads out of this project folder — ${fix} to a folder inside it, or spex remove ${pkg}`;
+    case "name_mismatch":
+      return `${pkg}: ${where} holds ${found} — fix the name in spex.yaml, or in its meta.yaml`;
+    case "not_a_package":
+      return `${pkg}: ${where} is not a package: ${issues} — fix its meta.yaml, then retry`;
+    case "bound":
+      return "no versions found that fit every package in time — loosen a version in spex.yaml, then spex update";
+    default:
+      return null;
+  }
+}
+
+/** A failure of a settle as one phrase ending in what to do (cli-13). */
+export async function refusalOf(env: Environment, error: unknown, context: { origin: string; scope: AuthScope }, locators: GitLocators = []): Promise<Refusal> {
   if (error instanceof Refusal) return error;
   if (error instanceof GitSourceError) return new Refusal(gitFailure(error, locators));
-  if (error instanceof InstallError && error.cause instanceof GitSourceError) {
-    const prefix = error.message.startsWith("installing failed; the last files stay: ") ? "installing failed; the last files stay: " : "";
-    return new Refusal(`${prefix}${gitFailure(error.cause, locators)}`);
+  if (error instanceof InstallError && error.cause instanceof GitSourceError) return new Refusal(gitFailure(error.cause, locators));
+  const registryError = error instanceof RegistryError ? error : error instanceof InstallError && error.cause instanceof RegistryError ? error.cause : null;
+  if (registryError !== null) return new Refusal(unnamedText((await env.registryRefusal(registryError, context)).message, locators));
+  if (error instanceof VersionConflictError) return new Refusal(`${shown(env.root, error.file)} changed meanwhile — retry`);
+  const phrase = error instanceof ResolveError ? resolvePhrase(error) : null;
+  if (phrase !== null) return new Refusal(unnamedText(phrase, locators));
+  const message = error instanceof Error ? error.message : String(error);
+  if (error instanceof InstallError && message.startsWith(KEPT)) return new Refusal(unnamedText(`installing stopped, the last files stay: ${message.slice(KEPT.length)} — retry`, locators));
+  if (error instanceof InstallError && / no registry has it as spex\.lock records it/.test(message)) {
+    return new Refusal(unnamedText(`${message} — spex update picks a version the registry has`, locators));
   }
-  if (error instanceof VersionConflictError || error instanceof InstallError || error instanceof ResolveError || error instanceof RegistryError) {
-    return new Refusal(unnamedText(registryCause(error), locators));
-  }
-  return new Refusal(unnamedText(error instanceof Error ? error.message : String(error), locators));
+  // Anything else still ends in what to do.
+  return new Refusal(unnamedText(/ — /.test(message) ? message : `${message} — retry`, locators));
 }
 
 /** Settle the environment; null where it holds neither file. */
 export async function settle(env: Environment, mode: SettleMode): Promise<Settled | null> {
   const read = env.readRequests();
-  const locked = env.readLock();
+  const locked = mode === "resolve" ? env.readLockForUpdate() : env.readLock();
   if (read === null && locked === null) return null;
   const { root, requestsFile, lockFile } = env;
-  // The environment's registry, at the instance its `spex.yaml` names,
-  // else the default instance's (environments-2, environments-5).
+  // The environment's registry: the one its `spex.yaml` names, else its
+  // Space's in a file naming none (environments-2, environments-38).
   const target = env.registryOf(read?.requests ?? null);
+  const context = { origin: target.origin, scope: target.scope };
   const instance = target.origin;
   const registry = env.registryAt(instance, target.scope);
   const locators = gitLocators(read?.requests ?? null, locked?.lock ?? null);
 
   let lock = locked?.lock ?? null;
   let lockVersion: FileVersion = locked?.version ?? null;
-  const stale = lock !== null && read !== null && staleReasons(root, lock, read.text) !== null;
-  const needsResolve = mode === "resolve" || lock === null || stale;
+  const staleBefore = lock !== null && read !== null ? staleReasons(root, lock, read.text) : null;
+  const needsResolve = mode === "resolve" || lock === null || staleBefore !== null;
   let lockWritten = false;
   if (needsResolve) {
-    if (read === null) throw new Refusal(`${root} holds no spex.yaml to resolve the lock from; spex add <org>/<pkg> makes one`);
+    if (read === null) throw new Refusal(`no spex.yaml in ${root} — spex add <org>/<pkg>`);
     let result;
     try {
       result = await resolve({
         requests: read.requests, requestsText: read.text, registry, pathRoot: root, git: env.git,
         // A package resolving to the release its lock records keeps the
         // registry recorded there (environments-5).
-        ...(locked ? { previous: locked.lock } : {}),
+        ...(locked?.lock ? { previous: locked.lock } : {}),
       });
     } catch (error) {
-      throw refusalOf(error, locators);
+      throw await refusalOf(env, error, context, locators);
     }
     if (!result.ok) {
       const conflicts = result.conflicts.map((conflict) => `${conflict.name} (${conflict.requirements.map((entry) => `${entry.by}: ${entry.requirement}`).join(", ")})`);
-      throw new Refusal(unnamedText(`no set of versions meets every requirement: ${conflicts.join(", ")}`, locators));
+      throw new Refusal(unnamedText(`no version fits every package: ${conflicts.join(", ")} — change or remove one`, locators));
     }
     // The lock is written only while `spex.yaml` stands as resolved and
     // the lock as read, both checked at the instant of the write; a lock
@@ -184,11 +237,11 @@ export async function settle(env: Environment, mode: SettleMode): Promise<Settle
         lockWritten = true;
       }
     } catch (error) {
-      throw refusalOf(error);
+      throw await refusalOf(env, error, context);
     }
     lock = result.lock;
   }
-  if (lock === null) throw new Refusal(`${root} holds no spex.lock`);
+  if (lock === null) throw new Refusal(`no spex.lock in ${root} — spex install`);
 
   let report: InstallReport;
   try {
@@ -200,10 +253,10 @@ export async function settle(env: Environment, mode: SettleMode): Promise<Settle
       cache: env.cache,
       registry,
       registries: (source) => env.installRegistries(instance, source, target.scope),
-      // The built-in spec package from this device's seed, by its files'
-      // digests; where no seed and no registry serves it, left out as not
-      // installed for the app's next use to install, the rest installed
-      // (environments-7).
+      // The built-in spec package from this computer's seed, by its
+      // files' digests; where no seed and no registry serves it, left
+      // out as not installed for the app's next use to install, the rest
+      // installed (environments-7).
       seed: env.seed(),
       builtinUnserved: "leave",
       git: env.git,
@@ -211,10 +264,10 @@ export async function settle(env: Environment, mode: SettleMode): Promise<Settle
       requestsText: read?.text ?? null,
     });
   } catch (error) {
-    throw refusalOf(error, locators);
+    throw await refusalOf(env, error, context, locators);
   }
   // A stale lock installs and exports nothing (environments-7).
-  if (report.stale) throw new Refusal(unnamedText(`spex.lock no longer matches: ${report.stale.join("; ")}; spex update resolves it again`, locators));
+  if (report.stale) throw new Refusal(unnamedText(`${report.stale.join("; ")} while spex ran — retry`, locators));
   // Exports derive from the installed tree and its lock: written only
   // while both still stand as this install left them, and cover the
   // spec packages installed alone (environments-8).
@@ -229,9 +282,9 @@ export async function settle(env: Environment, mode: SettleMode): Promise<Settle
     const exportedLock = left.size === 0 ? lock : { ...lock, packages: Object.fromEntries(Object.entries(lock.packages).filter(([name]) => !left.has(name))) };
     exported = await exportEnvironment({ root, lock: exportedLock, workingFolder: root, pathRoot: root, userHome: null, agents: [] });
   } catch (error) {
-    throw refusalOf(error);
+    throw await refusalOf(env, error, context);
   }
-  return { before: locked?.lock ?? null, lock, resolved: needsResolve, lockWritten, install: report, exported };
+  return { before: locked?.lock ?? null, staleBefore, lock, resolved: needsResolve, lockWritten, install: report, exported };
 }
 
 // -- what a reader is told ----------------------------------------------------
@@ -248,15 +301,14 @@ function manifestVersion(root: string, name: string, resolution: Resolution): st
   try { return pathManifest(dir, ".")?.version ?? null; } catch { return null; }
 }
 
-/** A resolution's source as a reader reads it: the instance by its
- * host, a path, or a Git repository at its commit, no user in its URL. */
-export function sourceLabel(resolution: Resolution): string {
+/** Where a package comes from, as a project's Packages tab says it
+ * (cli-6): the registry, a folder, a Git repository at its commit with
+ * no network remote named, or built in for the app's own. */
+export function sourceLabel(name: string, resolution: Resolution): string {
   const source = resolution.source;
-  if (isRegistrySource(source)) {
-    try { return hostOf(source.registry); } catch { return source.registry; }
-  }
-  if (isGitSource(source)) return `git ${gitShown(source.git)} at ${source.commit.slice(0, 12)}${source.path ? ` (${source.path})` : ""}`;
-  return `path ${source.path}`;
+  if (isRegistrySource(source)) return name === BUILTIN_PACKAGE_NAME ? "built in" : "from the registry";
+  if (isGitSource(source)) return `from ${gitLabel(source.git)} at ${source.commit.slice(0, 12)}${source.path ? `, folder ${source.path}` : ""}`;
+  return `from folder ${source.path}`;
 }
 
 /** The project-level agent folders of the table, each once, with
@@ -278,26 +330,93 @@ export function exportedIn(root: string, folder: string): string[] {
   }
 }
 
-/** Where each of a package's exported skills stands as Spex's export:
- * name to the agent folders holding it. */
-export function exportsOf(root: string, resolution: Resolution): Map<string, string[]> {
-  const out = new Map<string, string[]>();
-  const folders = projectFolders().map(({ folder }) => ({ folder, skills: new Set(exportedIn(root, folder)) }));
-  for (const name of Object.keys(resolution.exports).sort()) {
-    out.set(name, folders.filter((entry) => entry.skills.has(name)).map((entry) => `${entry.folder}/${name}/`));
-  }
-  return out;
+/** Whether a package's files stand as the lock records them
+ * (environments-14): `installed`; `not installed`; or `files missing`
+ * where the install placed it, or its folder is not at its path. */
+export type PackageState = "installed" | "not installed" | "files missing";
+
+export function packageState(root: string, lock: Lock, name: string, installed: Set<string>, recorded: Set<string>): PackageState {
+  const resolution = lock.packages[name]!;
+  if (isPathSource(resolution.source)) return existsSync(join(root, ...resolution.source.path.split("/"), "meta.yaml")) ? "installed" : "files missing";
+  if (installed.has(name)) return "installed";
+  return recorded.has(name) ? "files missing" : "not installed";
 }
 
-/** Each change from one lock to the next: a package gained, moved from
- * one version to another, moved to another source at one version, or
- * lost. */
+/** The state of every package of a lock, read from the files. */
+export function packageStates(root: string, lock: Lock): Map<string, PackageState> {
+  const installed = installedPackages(root, lock);
+  const recorded = recordedPackages(root, lock);
+  return new Map(Object.keys(lock.packages).map((name) => [name, packageState(root, lock, name, installed, recorded)]));
+}
+
+function standing(path: string): boolean {
+  try { lstatSync(path); return true; } catch { return false; }
+}
+
+/** Where one exported skill of a package stands, read from the files:
+ * the agent folders holding it as Spex's export, those a folder of the
+ * reader's keeps it out of, and why it is placed nowhere (environments-8). */
+export interface SkillPlace { skill: string; placed: string[]; yours: string[]; why: string | null }
+
+export function skillPlaces(root: string, lock: Lock, name: string, state: PackageState): SkillPlace[] {
+  const resolution = lock.packages[name]!;
+  const skills = Object.keys(resolution.exports).sort();
+  if (skills.length === 0) return [];
+  const dir = packageRoot(name, resolution, installedDir(root), root);
+  let manifest: Manifest | null = null;
+  try { manifest = dir === null ? null : pathManifest(dir, "."); } catch { manifest = null; }
+  const folders = projectFolders().map((entry) => ({ ...entry, skills: new Set(exportedIn(root, entry.folder)) }));
+  return skills.map((skill) => {
+    const playbook = manifest?.artifacts[resolution.exports[skill]!]?.kind === "playbook";
+    const placed: string[] = [];
+    const yours: string[] = [];
+    for (const folder of folders) {
+      if (playbook && !folder.playbooks) continue;
+      if (folder.skills.has(skill)) placed.push(folder.folder);
+      else if (standing(join(root, ...folder.folder.split("/"), skill))) yours.push(folder.folder);
+    }
+    let why: string | null = null;
+    if (placed.length === 0) {
+      why = yours.length > 0 ? `yours is in ${yours.join(", ")}`
+        : state === "files missing" ? "files missing"
+          : state === "not installed" ? (name === BUILTIN_PACKAGE_NAME ? "the Spex app installs it" : "not installed")
+            : "spex install places it";
+    }
+    return { skill, placed, yours, why };
+  });
+}
+
+/** One skill's place as a line's cell: its folders, with those yours
+ * keeps it out of, or `not placed` with why. */
+export function placeText(place: SkillPlace): string {
+  if (place.placed.length === 0) return `not placed: ${place.why ?? "spex install places it"}`;
+  return `${place.placed.join(", ")}${place.yours.length > 0 ? `, not ${place.yours.join(", ")} (yours is there)` : ""}`;
+}
+
+/** Rows aligned in columns, two spaces apart, under a two-space indent;
+ * a column no row fills is left out. */
+export function table(rows: string[][]): string[] {
+  const widths = rows.reduce<number[]>((out, row) => row.map((cell, at) => Math.max(out[at] ?? 0, cell.length)), []);
+  const kept = widths.map((width, at) => (width > 0 ? at : -1)).filter((at) => at >= 0);
+  const last = kept.at(-1);
+  return rows.map((row) => `  ${kept.map((at) => (at === last ? row[at] ?? "" : (row[at] ?? "").padEnd(widths[at]!))).join("  ")}`.trimEnd());
+}
+
+/** The lines of a package's skills under its line: each skill with where
+ * it stands for the agents (cli-2, cli-4). */
+export function skillLines(root: string, lock: Lock, name: string, state: PackageState): string[] {
+  return table(skillPlaces(root, lock, name, state).map((place) => [place.skill, placeText(place)]));
+}
+
+/** Each change from one lock to the next: a package gained, updated from
+ * one version to another, switched to another source at one version, or
+ * removed. */
 export interface LockChange {
   name: string;
   from: string | null;
   to: string | null;
-  /** The sources before and after, where the source changed. */
-  source?: { from: string; to: string };
+  /** The source after, where the source changed. */
+  source?: string;
 }
 
 export function lockChanges(root: string, before: Lock | null, after: Lock): LockChange[] {
@@ -309,7 +428,7 @@ export function lockChanges(root: string, before: Lock | null, after: Lock): Loc
     const from = was ? versionOf(root, name, was) : null;
     const to = now ? versionOf(root, name, now) : null;
     const moved = was !== undefined && now !== undefined && sourceKind(was) !== sourceKind(now);
-    if (from !== to || moved) out.push({ name, from, to, ...(moved ? { source: { from: sourceLabel(was!), to: sourceLabel(now!) } } : {}) });
+    if (from !== to || moved) out.push({ name, from, to, ...(moved ? { source: sourceLabel(name, now!) } : {}) });
   }
   return out;
 }
@@ -322,32 +441,38 @@ function sourceKind(resolution: Resolution): string {
   return `path ${source.path}`;
 }
 
-/** A change as a reader reads it. */
-export function changeLine(change: LockChange): string {
-  if (change.from === null) return `Added ${change.name} ${change.to}`;
+/** A change as a reader reads it: added, with the packages it came for
+ * where `spex.yaml` does not add it itself; updated, with both versions
+ * and its new source; removed. */
+export function changeLine(change: LockChange, lock?: Lock, added?: ReadonlySet<string>): string {
+  if (change.from === null) {
+    const requiredBy = lock?.packages[change.name]?.requiredBy ?? [];
+    const forOthers = added !== undefined && !added.has(change.name) && requiredBy.length > 0 ? ` for ${requiredBy.join(", ")}` : "";
+    return `Added ${change.name} ${change.to}${forOthers}`;
+  }
   if (change.to === null) return `Removed ${change.name} ${change.from}`;
-  const version = change.from === change.to ? change.to : `${change.from} -> ${change.to}`;
-  return change.source ? `Moved ${change.name} ${version} from ${change.source.from} to ${change.source.to}` : `Moved ${change.name} ${version}`;
+  const version = change.from === change.to ? change.to : `${change.from} → ${change.to}`;
+  return `Updated ${change.name} ${version}${change.source ? `, now ${change.source}` : ""}`;
 }
 
-/** The lines naming each package gained or moved with where its exports
- * went (cli-2). */
-export function gainedLines(root: string, settled: Settled): string[] {
+/** The lines naming each package gained, updated or removed, with where
+ * each one's skills went for the agents (cli-2, cli-3). */
+export function gainedLines(root: string, settled: Settled, added: ReadonlySet<string>): string[] {
   const lines: string[] = [];
+  const states = packageStates(root, settled.lock);
   for (const change of lockChanges(root, settled.before, settled.lock)) {
-    lines.push(changeLine(change));
+    lines.push(changeLine(change, settled.lock, added));
     if (change.to === null) continue;
-    for (const [skill, folders] of exportsOf(root, settled.lock.packages[change.name]!)) {
-      lines.push(`  ${skill}: ${folders.length > 0 ? folders.join(", ") : "exported nowhere"}`);
-    }
+    lines.push(...skillLines(root, settled.lock, change.name, states.get(change.name)!));
   }
   return lines;
 }
 
 /** The line naming the app's built-in spec package an install left to
- * the app, no seed and no registry serving it (cli-4). */
+ * the app, no seed and no registry serving it: marked built in, for
+ * the Spex app to install (cli-4). */
 export function leftToAppLine(name: string, version: string): string {
-  return `Left to the app: ${name} ${version}, its built-in package, installed by the app at its next use`;
+  return `${name} ${version}  built in — the Spex app installs it when it opens this project`;
 }
 
 /** The lines naming each spec package an install left to the app. */
@@ -355,18 +480,11 @@ export function leftToAppLines(root: string, settled: Settled): string[] {
   return (settled.install.left ?? []).map((name) => leftToAppLine(name, versionOf(root, name, settled.lock.packages[name]!)));
 }
 
-/** The lines naming what an export left out (environments-8). */
-export function leftOutLines(report: ExportReport): string[] {
-  const lines: string[] = [];
-  for (const { name, folder } of report.skipped) lines.push(`Left out ${name} from ${folder}: a folder of yours stands there`);
-  for (const name of report.missing) lines.push(`Left out ${name}: its files are not here`);
-  return lines;
-}
-
-/** Whether a package's files stand as the lock records them: installed
- * for a registry or Git source, in place for a path source. */
-export function installedState(root: string, lock: Lock, name: string, installed: Set<string>): string {
-  const resolution = lock.packages[name]!;
-  if (isPathSource(resolution.source)) return existsSync(join(root, ...resolution.source.path.split("/"), "meta.yaml")) ? "in place" : "missing";
-  return installed.has(name) ? "installed" : "not installed";
+/** The lines naming each folder package whose folder is not at its path
+ * here (environments-7). */
+export function missingPathLines(settled: Settled): string[] {
+  return settled.install.missingPaths.map((name) => {
+    const source = settled.lock.packages[name]?.source;
+    return `Files missing for ${name}: no folder at ${source && isPathSource(source) ? source.path : "its path"}`;
+  });
 }

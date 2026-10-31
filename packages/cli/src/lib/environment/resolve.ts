@@ -21,6 +21,7 @@ import { isAbsolute, join, relative, resolve as resolvePath, sep } from "node:pa
 import {
   ARTIFACT_KINDS,
   artifactLanguages,
+  FormatError,
   inArtifact,
   readRelease,
   ROOT_FILES,
@@ -75,14 +76,33 @@ export interface ResolveInput {
   maxSteps?: number;
 }
 
-export type ResolveErrorKind = "no_working_folder" | "path_outside" | "path_confined" | "path_missing" | "name_mismatch" | "bound";
+export type ResolveErrorKind = "no_working_folder" | "path_outside" | "path_confined" | "path_missing" | "not_a_package" | "name_mismatch" | "bound";
+
+/** What a host needs to phrase a resolution's refusal in its own words:
+ * the request's folder or Git repository at its revision; whether the
+ * folder itself is missing; the package a folder holds in place of the
+ * one asked; the issues of a `meta.yaml` that does not read; and the
+ * reason your own group's clone refuses a folder (environments-32). */
+export interface ResolveErrorDetail {
+  path?: string;
+  git?: string;
+  rev?: string;
+  folderMissing?: boolean;
+  found?: string;
+  issues?: string;
+  confined?: OwnPathIssue;
+}
 
 export class ResolveError extends Error {
-  constructor(readonly kind: ResolveErrorKind, readonly packageName: string | undefined, message: string) {
+  constructor(readonly kind: ResolveErrorKind, readonly packageName: string | undefined, message: string, readonly detail: ResolveErrorDetail = {}) {
     super(message);
     this.name = "ResolveError";
   }
 }
+
+/** A `meta.yaml`'s issues as one cause. */
+const issuesText = (error: FormatError): string =>
+  error.issues.map((issue) => (issue.path ? `${issue.path}: ${issue.message}` : issue.message)).join("; ");
 
 /** Where the request file names spec packages in a conflict report. */
 export const REQUESTS_FILE = "spex.yaml";
@@ -125,48 +145,63 @@ function selectionHolds(selection: readonly Selection[], artifacts: Candidate["a
 }
 
 /** A path your own group's clone refuses, in the library's words
- * (environments-32). */
+ * (environments-32), with its reason for a host to phrase. */
 function confinedError(name: string, path: string, issue: OwnPathIssue): ResolveError {
-  return new ResolveError("path_confined", name, ownPathMessage(name, path, issue));
+  return new ResolveError("path_confined", name, ownPathMessage(name, path, issue), { path, confined: issue });
+}
+
+/** A release read from a request's folder; one whose `meta.yaml` does not
+ * read is no package, named with where it was asked. */
+async function readRequested(name: string, dir: string, where: string, detail: ResolveErrorDetail): Promise<Release> {
+  try {
+    return await readRelease(dir);
+  } catch (error) {
+    if (!(error instanceof FormatError)) throw error;
+    throw new ResolveError("not_a_package", name, `${name}: ${where} is not a package: ${issuesText(error)}`, { ...detail, issues: issuesText(error) });
+  }
 }
 
 async function loadFixed(name: string, request: Request, input: ResolveInput): Promise<Fixed | undefined> {
   if (isPathRequest(request)) {
     const root = input.pathRoot;
-    if (root === null) throw new ResolveError("no_working_folder", name, `${name} is requested by path, and this spex repository has no working folder on this device`);
-    const place = input.confined ? "your own group's clone" : "the working folder";
-    if (!isInsidePath(request.path)) throw new ResolveError("path_outside", name, `${name}: ${request.path} is outside ${place}`);
-    const dir = resolvePath(root, request.path);
+    const path = request.path;
+    if (root === null) throw new ResolveError("no_working_folder", name, `${name} is added from a folder, and this project has no folder on this computer`, { path });
+    const place = input.confined ? "your Personal records" : "the project folder";
+    if (!isInsidePath(path)) throw new ResolveError("path_outside", name, `${name}: ${path} is outside ${place}`, { path });
+    const dir = resolvePath(root, path);
     const inside = relative(resolvePath(root), dir);
-    if (inside.startsWith("..") || inside.startsWith(sep)) throw new ResolveError("path_outside", name, `${name}: ${request.path} is outside ${place}`);
+    if (inside.startsWith("..") || inside.startsWith(sep)) throw new ResolveError("path_outside", name, `${name}: ${path} is outside ${place}`, { path });
     if (input.confined) {
-      const issue = ownPathIssue(root, request.path);
-      if (issue) throw confinedError(name, request.path, issue);
+      const issue = ownPathIssue(root, path);
+      if (issue) throw confinedError(name, path, issue);
     }
-    if (!existsSync(join(dir, "meta.yaml"))) throw new ResolveError("path_missing", name, `${name}: ${request.path} is missing in ${root}`);
+    if (!existsSync(join(dir, "meta.yaml"))) {
+      const folderMissing = !existsSync(dir);
+      throw new ResolveError("path_missing", name, folderMissing ? `${name}: no folder at ${path}` : `${name}: ${path} has no meta.yaml`, { path, folderMissing });
+    }
     // A link may not lead the path out of the folder either.
     const real = relative(realpathSync(root), realpathSync(dir));
-    if (real.startsWith("..") || isAbsolute(real)) throw new ResolveError("path_outside", name, `${name}: ${request.path} leads outside ${place}`);
-    const release = await readRelease(dir);
+    if (real.startsWith("..") || isAbsolute(real)) throw new ResolveError("path_outside", name, `${name}: ${path} leads out of ${place} through a link`, { path });
+    const release = await readRequested(name, dir, path, { path });
     // Everything your own group's folder holds syncs with its clone.
     if (input.confined) {
       const issue = ownFolderIssue(root, request.path, release.files.map((file) => file.path));
       if (issue) throw confinedError(name, request.path, issue);
     }
     const found = `${release.manifest.org}/${release.manifest.name}`;
-    if (found !== name) throw new ResolveError("name_mismatch", name, `${name}: the folder ${request.path} holds ${found}`);
-    return { kind: "path", release, path: request.path };
+    if (found !== name) throw new ResolveError("name_mismatch", name, `${name}: the folder ${path} holds ${found}`, { path, found });
+    return { kind: "path", release, path };
   }
   if (isGitRequest(request)) {
     const credential = input.gitCredential ? await input.gitCredential(request.git) : undefined;
     const { commit, dir } = await input.git.fetch(request.git, request.rev, credential);
     const releaseDir = request.path ? join(dir, ...request.path.split("/")) : dir;
-    if (!existsSync(join(releaseDir, "meta.yaml"))) {
-      throw new ResolveError("path_missing", name, `${name}: ${request.git} at ${request.rev} has no release${request.path ? ` at ${request.path}` : ""}`);
-    }
-    const release = await readRelease(releaseDir);
+    const detail: ResolveErrorDetail = { git: request.git, rev: request.rev, ...(request.path ? { path: request.path } : {}) };
+    const where = `${request.git} at ${request.rev}${request.path ? `, folder ${request.path}` : ""}`;
+    if (!existsSync(join(releaseDir, "meta.yaml"))) throw new ResolveError("path_missing", name, `${name}: ${where} holds no package`, detail);
+    const release = await readRequested(name, releaseDir, where, detail);
     const found = `${release.manifest.org}/${release.manifest.name}`;
-    if (found !== name) throw new ResolveError("name_mismatch", name, `${name}: ${request.git} at ${request.rev} holds ${found}`);
+    if (found !== name) throw new ResolveError("name_mismatch", name, `${name}: ${where} holds ${found}`, { ...detail, found });
     return { kind: "git", release, repo: request.git, commit, ...(request.path ? { subpath: request.path } : {}) };
   }
   return undefined;
@@ -209,6 +244,11 @@ export async function resolve(input: ResolveInput): Promise<ResolveResult> {
   }
 
   const indexes = new Map<string, VersionIndexEntry[]>();
+  // The packages the registry does not list to this reader — absent, or
+  // private to others — with its answer: a search finding no solution
+  // through one of them says the registry's answer, not a conflict, so a
+  // host can tell the reader to sign in (environments-12).
+  const unlisted = new Map<string, RegistryError>();
   async function indexOf(name: string): Promise<VersionIndexEntry[]> {
     const cached = indexes.get(name);
     if (cached) return cached;
@@ -216,8 +256,9 @@ export async function resolve(input: ResolveInput): Promise<ResolveResult> {
     try {
       entries = (await registry.index(name)).versions;
     } catch (error) {
-      if (error instanceof RegistryError && error.kind === "not_found") entries = [];
-      else throw error;
+      if (!(error instanceof RegistryError && error.kind === "not_found")) throw error;
+      unlisted.set(name, error);
+      entries = [];
     }
     indexes.set(name, entries);
     return entries;
@@ -290,7 +331,7 @@ export async function resolve(input: ResolveInput): Promise<ResolveResult> {
     }
     for (const candidate of found) {
       steps += 1;
-      if (steps > maxSteps) throw new ResolveError("bound", name, `resolution gave up after ${maxSteps} trials`);
+      if (steps > maxSteps) throw new ResolveError("bound", name, `no versions found that fit every package within ${maxSteps} tries`);
       const broken = Object.entries(candidate.dependencies)
         .find(([dependency, requirement]) => assigned.has(dependency) && !satisfies(assigned.get(dependency)!.version, requirement));
       if (broken) {
@@ -313,6 +354,8 @@ export async function resolve(input: ResolveInput): Promise<ResolveResult> {
       seen.add(key);
       conflicts.push(failure);
     }
+    const missing = conflicts.find((conflict) => unlisted.has(conflict.name));
+    if (missing) throw unlisted.get(missing.name)!;
     return { ok: false, conflicts };
   }
 

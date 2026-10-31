@@ -26,12 +26,15 @@ import {
   environmentInstance,
   environmentRegistry,
   type EnvironmentRegistry,
+  FormatError,
   gitSource,
   installRegistryOrder,
+  LockError,
   parseLock,
   parseRequests,
   RegistryClient,
   RegistryError,
+  RequestsError,
   unaskedRegistry,
   type GitSource,
   type Lock,
@@ -43,7 +46,7 @@ import { readVersioned, type FileVersion } from "../lib/files.js";
 import type { AuthScope, GitHostClient } from "../lib/git-host.js";
 import { accountAt, instanceAt, updateHomeFile, withSignOut, type HomeFile, type HomeInstance } from "../lib/home-file.js";
 import { canonicalOrigin } from "../lib/instance.js";
-import { clientOf, credentialsOf, defaultInstance, homeDir, hostCause, nameOf, readHome } from "./home.js";
+import { clientOf, credentialsOf, defaultInstance, homeDir, hostCause, nameOf, readHome, registryName } from "./home.js";
 import { Refusal } from "./run.js";
 
 /** Where a path is on disk, spelled as the file system spells it: its
@@ -73,9 +76,9 @@ function within(outer: string, inner: string): boolean {
 export function refusedRoot(dir: string, home: string): string | null {
   const at = actualPath(dir);
   const spexHome = actualPath(home);
-  if (at === actualPath(homedir())) return "is your home folder, whose agent folders are your own user-level ones";
+  if (at === actualPath(homedir())) return "is your home folder, where spex manages no packages";
   if (within(spexHome, at) && !(within(join(spexHome, "projects"), at) && at !== join(spexHome, "projects"))) {
-    return `lies in the Spex home ${home}, whose clones the app keeps`;
+    return `lies in the Spex home ${home}, which the app keeps`;
   }
   if (within(join(at, ".spex"), spexHome)) return `holds the Spex home ${home} as its .spex`;
   return null;
@@ -94,7 +97,7 @@ export function environmentRoot(cwd: string = process.cwd(), home: string = home
   }
   root ??= gitTopLevel(start) ?? start;
   const refused = refusedRoot(root, home);
-  if (refused !== null) throw new Refusal(`${root} ${refused}: no environment of the command line is there; run spex in a project's folder`);
+  if (refused !== null) throw new Refusal(`${root} ${refused} — run spex in a project folder`);
   return root;
 }
 
@@ -162,7 +165,8 @@ export class Environment {
   }
 
   /** `spex.yaml` as it stands, null where absent; one that does not read
-   * refuses the command in the library's words (environments-2). */
+   * refuses the command saying why and what to do (environments-2,
+   * cli-13). */
   readRequests(): ReadRequests | null {
     const { bytes, version } = readVersioned(this.requestsFile);
     if (bytes === null) return null;
@@ -170,20 +174,36 @@ export class Environment {
     try {
       return { requests: parseRequests(text), text, version };
     } catch (error) {
-      throw new Refusal(`${this.requestsFile}: ${(error as Error).message}`);
+      if (error instanceof RequestsError && error.newerFormat !== undefined) throw new Refusal("spex.yaml is from a newer Spex — update Spex");
+      // The same words as the Packages tab's (DR-172).
+      throw new Refusal(`${(error as Error).message} — fix the file, then retry`);
     }
   }
 
-  /** `spex.lock` as it stands, null where absent; one that does not read
-   * refuses the command in the library's words (environments-3). */
+  /** `spex.lock` as it stands, null where absent; one from a newer Spex,
+   * or one that does not read, refuses the command saying what to do
+   * (environments-3, cli-13): `spex update` writes it again, where the
+   * Packages tab, whose Update refuses a lock that does not read, says
+   * to remove it first. */
   readLock(): ReadLock | null {
+    const read = this.readLockForUpdate();
+    if (read !== null && read.lock === null) throw new Refusal(`${read.cause} — spex update rewrites it`);
+    return read as ReadLock | null;
+  }
+
+  /** `spex.lock` as `spex update` reads it: one that does not read stands
+   * with its version and no lock, for the update to rewrite under that
+   * version; one from a newer Spex still refuses the command, as this
+   * Spex would lose what it records. */
+  readLockForUpdate(): (Omit<ReadLock, "lock"> & { lock: Lock | null; cause?: string }) | null {
     const { bytes, version } = readVersioned(this.lockFile);
     if (bytes === null) return null;
     const text = bytes.toString("utf8");
     try {
       return { lock: parseLock(text), text, version };
     } catch (error) {
-      throw new Refusal(`${this.lockFile}: ${(error as Error).message}; spex update resolves it again`);
+      if (error instanceof LockError && error.newerFormat !== undefined) throw new Refusal("spex.lock is from a newer Spex — update Spex");
+      return { lock: null, text, version, cause: (error as Error).message };
     }
   }
 
@@ -202,7 +222,88 @@ export class Environment {
     return environmentRegistry(requests, { origin: defaultInstance(this.home).origin, instances: this.home?.instances ?? [] });
   }
 
-  /** An instance as the reader knows it: its display name where the home
+  /** A registry as the reader knows it (cli-22): its descriptor's
+   * display name, else its host; never a Space entry's name. */
+  registryName(origin: string): Promise<string> {
+    return registryName(this.homeDir, origin);
+  }
+
+  /** The login a registry call presents at an origin, for a refusal to
+   * name (cli-13): null where this computer holds no sign-in for that
+   * purpose there; undefined where it holds one whose login cannot be
+   * read now. A Space's login is its home entry's; a registry's is read
+   * from its account API. */
+  async loginAt(origin: string, scope: AuthScope): Promise<string | null | undefined> {
+    if (scope === "space") return this.home ? accountAt(this.home, origin)?.login ?? null : null;
+    const credentials = credentialsOf(this.homeDir, origin, scope);
+    try { if (!(await credentials.read())) return null; } catch { return undefined; }
+    try {
+      return (await clientOf(origin, credentials, undefined, scope).me()).login;
+    } catch {
+      try { return (await credentials.read()) ? undefined : null; } catch { return undefined; }
+    }
+  }
+
+  /** A registry's refusal or failure as one phrase ending in what to do
+   * (cli-13): the registry named as cli-22 names it, a private package by
+   * the sign-in state, a 403 by the operation refused. */
+  async registryRefusal(error: unknown, context: { origin: string; scope: AuthScope; operation?: "read" | "publish"; version?: string }): Promise<Refusal> {
+    if (error instanceof Refusal) return error;
+    if (error instanceof FormatError) {
+      const issues = error.issues.map((issue) => (issue.path ? `${issue.path}: ${issue.message}` : issue.message)).join("; ");
+      return new Refusal(`the package is not ready: ${issues} — fix its meta.yaml, then retry`);
+    }
+    if (!(error instanceof RegistryError)) return new Refusal(`${error instanceof Error ? error.message : String(error)} — retry`);
+    let origin = context.origin;
+    try { if (error.registry !== undefined) origin = canonicalOrigin(error.registry); } catch { /* the registry asked */ }
+    const name = await this.registryName(origin);
+    const pkg = error.packageName;
+    // `spex login` here signs in at this folder's registry for packages
+    // (cli-10); another registry, or a Space's sign-in — what a
+    // `spex.yaml` naming no `registry` reads with (environments-38) — is
+    // named.
+    const login = context.scope === "space" ? `spex login --space ${origin}` : origin === context.origin ? "spex login" : `spex login --registry ${origin}`;
+    const about = pkg ? `${pkg}: ` : "";
+    switch (error.kind) {
+      case "not_found": {
+        if (error.code === "suppressed") return new Refusal(`${about}withdrawn at ${name} — spex update picks another version`);
+        const who = await this.loginAt(origin, context.scope);
+        if (who === null) return new Refusal(`${about}not at ${name}, or private — ${login}, then retry`);
+        return new Refusal(`${about}not at ${name}, or not shared with ${who === undefined ? "this account" : `@${who}`} — check the name, or ask its owner`);
+      }
+      case "forbidden": {
+        if (context.operation === "publish") {
+          const org = pkg?.split("/")[0] ?? "this org";
+          return new Refusal(`${org} is not yours at ${name} — claim it at ${origin}/account/orgs`);
+        }
+        const who = await this.loginAt(origin, context.scope);
+        return new Refusal(`${about}not shared with ${typeof who === "string" ? `@${who}` : "this account"} at ${name} — ask its owner`);
+      }
+      case "unauthenticated":
+        return new Refusal(`sign-in expired at ${name} — ${login}`);
+      case "unavailable":
+        if (error.code === "unreachable") return new Refusal(`${name} could not be reached — check the connection, then retry`);
+        // A registry the lock names by no address is never asked.
+        if (error.code === "unasked") return new Refusal(`${about}spex.lock names no registry address for it — spex update writes spex.lock again`);
+        if (error.status !== undefined && error.status >= 500) return new Refusal(`${name} is down (${error.status}) — retry later`);
+        if (error.status !== undefined) return new Refusal(`${name} answered ${error.status} — retry later`);
+        // No sign-in to present: its cause, which says what to do.
+        return new Refusal(/ — /.test(error.message) ? error.message : `${error.message} — retry later`);
+      case "rejected": {
+        const release = pkg && context.version ? `${pkg}@${context.version}` : pkg ?? "the package";
+        if (error.status === 409) return new Refusal(`${release} is already at ${name} — raise the version in meta.yaml, then retry`);
+        if (error.status === 413) return new Refusal(`${release} is too large for ${name} — leave out what it does not need, then retry`);
+        const details = (error.details ?? []).map((detail) => typeof detail === "object" && detail !== null && "message" in detail ? String((detail as { message: unknown }).message) : JSON.stringify(detail));
+        return new Refusal(`${name} refused ${release}${details.length > 0 ? `: ${details.join("; ")}` : ""} — fix the package, then retry`);
+      }
+      case "format":
+        return new Refusal(`${error.message} — update Spex`);
+      case "unreadable":
+        return new Refusal(`${error.message} — retry later, or update Spex`);
+    }
+  }
+
+  /** A Space as the reader knows it: its display name where the home
    * holds one, else its host. */
   nameOf(origin: string): string {
     const entry: HomeInstance = (this.home && instanceAt(this.home, origin)) ?? { origin, clientId: "spex" };
@@ -228,7 +329,7 @@ export class Environment {
     try {
       return await this.clientAt(origin, scope).accessSecret();
     } catch (error) {
-      throw new Error(hostCause(error, this.nameOf(origin)));
+      throw new Error(hostCause(error, await this.registryName(origin)));
     }
   }
 
@@ -273,7 +374,7 @@ export class Environment {
         url: at,
         token: () => this.tokenAt(at, scope),
         refused: async (token) => {
-          if (!(await this.clientAt(at, scope).signOutRefused(token))) throw new Error(`the sign-in at ${this.nameOf(at)} changed meanwhile; retry`);
+          if (!(await this.clientAt(at, scope).signOutRefused(token))) throw new Error(`your sign-in at ${await this.registryName(at)} changed meanwhile — retry`);
           if (scope === "space") this.markSignedOut(at);
         },
       });
@@ -289,14 +390,6 @@ export class Environment {
     return installRegistryOrder(instance, source.registry, this.signedIn(), { independent: scope === "registry" })
       .map((entry) => ("origin" in entry ? this.registryAt(entry.origin, scope) : compositeRegistry(this.seed(), unaskedRegistry(entry.unasked))));
   }
-}
-
-/** A registry's answer in the CLI's words: the library's, and what to do
- * where a sign-in is wanted. */
-export function registryCause(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-  if (error instanceof RegistryError && error.kind === "unauthenticated") return `${message}; spex login signs in`;
-  return message;
 }
 
 /** Whether a folder stands at a path. */

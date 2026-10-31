@@ -382,14 +382,16 @@ test("environments-34, environments-5, environments-12, environments-3, environm
   writeFileSync(localYaml, localText.replace("format: 1\n", "format: 1\nspace: http://example.com\n"));
   await home.client.expectOk("environment.resolve", { repository: local });
   state = await environmentOf(home, local, (candidate) => candidate.error !== null);
-  assert.match(state.error ?? "", /space "http:\/\/example\.com" is not an instance origin/);
+  // The library's own words name the value; the core says what to do.
+  const unreadable = /^spex\.yaml cannot be read: space "http:\/\/example\.com" is not a Space address: .+ — fix the file, then Retry$/;
+  assert.match(state.error ?? "", unreadable, "[core-service-145]");
   // Its environment then names no instance: a search and a publish are
   // refused with that reason, never sent to the default instance's
   // registry (environments-2, environments-10, environments-17).
   assert.equal(state.instance, null, "a spex.yaml that does not read names no instance");
   const asked = R1.script.requests.length;
-  await home.client.expectError("environment.search", { repository: local, query: "search" }, "invalid_request", /^spex\.yaml does not read: space "http:\/\/example\.com" is not an instance origin/);
-  await home.client.expectError("environment.publish", { repository: local, name: "acme/none", dryRun: true }, "invalid_request", /^spex\.yaml does not read: space "http:\/\/example\.com" is not an instance origin/);
+  await home.client.expectError("environment.search", { repository: local, query: "search" }, "invalid_request", unreadable);
+  await home.client.expectError("environment.publish", { repository: local, name: "acme/none", dryRun: true }, "invalid_request", unreadable);
   assert.equal(R1.script.requests.length, asked, "the default instance's registry is asked nothing");
   writeFileSync(localYaml, localText);
 
@@ -770,7 +772,7 @@ test("environments-34, environments-10, environments-17, environments-5: a publi
   const later = await underDevelopment(south, "acme/south-later");
   one = R1.script.received.length;
   two = R2.script.received.length;
-  await home.client.expectError("environment.publish", { repository: south, name: later }, "invalid_request", new RegExp(`^Sign in to registry to publish at ${new URL(second.url).host.replaceAll(".", "\\.")}$`));
+  await home.client.expectError("environment.publish", { repository: south, name: later }, "invalid_request", new RegExp(`^Sign in to ${new URL(second.url).host.replaceAll(".", "\\.")} to publish$`));
   assert.deepEqual([R1.script.received.length, R2.script.received.length], [one, two], "no registry is asked");
   assert.deepEqual([await holds(R2, "acme/south-later"), await holds(R1, "acme/south-later")], [false, false]);
 
