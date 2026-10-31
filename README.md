@@ -144,37 +144,40 @@ Monolithic schema-7 sessions remain readable; continuing one requires explicit
 session store. The [storage guide](docs/storage.md#migration-and-definitions)
 describes the retained originals and migration boundaries.
 
-**Playbooks come in spec packages.** Each spex repository has an
-environment: `spex.yaml` requests spec packages — specs with the skills
-and playbooks made from them — from a Spex Space registry, a Git
-repository, or a folder in the working folder, and `spex.lock` pins what
-was resolved ([environments](specs/packages/environments.md)). Their
-skills and specs reach every agent Spex runs: a working folder's
-`.claude/skills` for Claude Code and `.agents/skills` for Codex, Gemini
-CLI, Kimi Code and OpenCode, and your own group's in your home's. The app
-ships the built-in spec package `sublang/playbooks`, which holds `/code`,
-`/review`, `/decide` and the other built-ins: the first start seeds it, so
-they run offline, and every new environment requests it. **Playbooks**
-shows each environment's spec packages and the playbooks they export;
-enable one there by choosing a player for each of its roles.
+**Playbooks come in packages.** A project's `spex.yaml` lists the
+packages it adds — specs with the skills and playbooks made from them —
+from a registry, a Git repository or a folder in the project, and
+`spex.lock` records the exact versions installed
+([package format](specs/packages/environments.md)). Their skills and
+specs reach every agent Spex runs: a project folder's `.claude/skills`
+for Claude Code and `.agents/skills` for Codex, Gemini CLI, Kimi Code
+and OpenCode, and, for your Personal packages, the same folders in your
+home folder. The app ships the built-in playbooks, `sublang/playbooks`,
+which hold `/code`, `/review`, `/decide` and the others: the first start
+seeds them, so they run offline, and every project has them. A
+project's **Packages** tab adds, updates, removes and publishes its
+packages; its **Playbooks** tab shows the playbooks they provide, and
+enables one when you choose a player for each of its roles.
 
-**Publish and install through Spex Space.** Browse public spec packages
-without an account; in **Playbooks → Add from registry**, search, choose
-a version and **Add**. Enable an installed playbook by choosing a player
-for each role; skills are exported for native agents separately. Author
-a workflow through **New playbook**, compile it, and use **Enable →
-Publish** after signing in with access to its claimed org. See the
-[package guide](docs/getting-started.md#install-and-use-a-package).
-For a spec-only or ordinary skill package, prepare a valid local folder,
-use **Playbooks → Add from folder**, then **Publish** on its package row.
-Review the upload preview and confirm using your existing app sign-in;
-no playbook compilation or separate API token is needed. See
+**Publish and install through Spex Space.** Browse public packages
+without an account: on a project's **Packages** tab, choose **Add…**,
+search on **Registry**, pick a version and choose **Add**. Adding
+installs a package and places its skills for your agents; enable a
+playbook it provides on the **Playbooks** tab by choosing a player for
+each role. Author a workflow through **New playbook**, compile it, and
+**Publish** it after signing in to the registry with access to its org.
+See the [package guide](docs/getting-started.md#install-and-use-a-package).
+For a spec-only or skill package, prepare a valid folder in the
+project, add it with **Add… → Folder**, then choose **Publish** on its
+row. Review the preview and confirm with your registry sign-in; no
+compilation or separate API token is needed. See
 [publishing packages](docs/getting-started.md#publish-specs-skills-and-playbooks),
 or the optional [HTTP guide](https://spex.sublang.ai/llms.txt) for automation.
 Registry search lists public packages. For a known public or private
-package, use **Add from registry → Add by name** with its `org/name` and
-version or range, such as `1.2.3` or `^1.2.3`. Private packages require
-sign-in with access.
+package, type its `org/name` on **Add… → Registry** with a version such
+as `1.2.3` or `^1.2.3`. Private packages need a sign-in with access. The
+[`spex` command line](packages/cli/README.md) does the same from a
+terminal, with no app running.
 
 **Optional project-record sharing.** Sign in on **Space** when you want
 to sync records with a group. The default is [Spex Space](https://spex.sublang.ai) unless
