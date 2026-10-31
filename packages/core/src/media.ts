@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 import { retainEntryForPublication } from "@openclaw/fs-safe/advanced";
-import { hasPrivatePermissions } from "./files.js";
+import { hasPrivatePermissions } from "@sublang/spex/files";
 import { randomUUID } from "node:crypto";
 import { basename, dirname, join, relative, sep } from "node:path";
 import { closeSync, constants, copyFileSync, fstatSync, fsyncSync, linkSync, lstatSync, mkdirSync, openSync, realpathSync, statSync, unlinkSync, type BigIntStats, type Stats } from "node:fs";

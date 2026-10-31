@@ -17,6 +17,13 @@ source; run source with `npm ci` and `npm start` (desktop) or
 
 ### Added
 
+- Fork verification build rebased onto upstream `a8cd6fd9`; the desktop
+  and server use the upstream 5.0 package manager and slc 0.20 shared
+  engine contract with native Windows private storage retained.
+  This Fork beta uses the owner-authorized targeted checks instead of
+  repeating the full signed-in-agent workflow; scope and results are
+  recorded in [the verification record](docs/releases/0.9.0-beta.20-fork-verification.md).
+
 - Independent package registries ([DR-168](specs/decisions/168-independent-package-registry.md)).
   Library offers a registry setting and separate registry sign-in; the
   public registry lists available Spaces beside the custom Space URL.
