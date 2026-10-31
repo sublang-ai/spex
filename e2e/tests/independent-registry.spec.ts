@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
-import { test, expect, open, nav, signInCore, refreshProjectKey, spaceChooser, spaceAddress, chosenSpace, chooseSpace } from "../src/harness";
+import { test, expect, open, nav, packagesSection, projectTab, signInCore, refreshProjectKey, spaceChooser, spaceAddress, chosenSpace, chooseSpace } from "../src/harness";
 
 test.use({ appOptions: { project: true, host: { registry: true }, independentRegistry: true } });
 
@@ -12,9 +12,10 @@ test("playbook-library-120/space-116: independent same-origin registry account, 
   await signInCore(app);
   const key = (await refreshProjectKey(app))!;
   await open(page, app);
-  await nav(page, "Playbooks").click();
-  await page.getByTestId("side-project").click();
-  const card = page.getByTestId("registry-account");
+  // The project's registry and the account there head its packages on
+  // the project's Packages tab (playbook-library-119).
+  await projectTab(page, "Packages");
+  const card = packagesSection(page, "project").getByTestId("registry-account");
   await expect(card.getByLabel("Registry URL")).toHaveValue("https://spex.sublang.ai");
   await expect(card.getByRole("button", { name: "Sign in to registry", exact: true })).toBeVisible();
   await card.getByLabel("Registry URL").fill(host.url);
@@ -28,10 +29,14 @@ test("playbook-library-120/space-116: independent same-origin registry account, 
   if (state.signIn.phase !== "running" || state.signIn.flow !== "device") throw new Error("Expected a device registry sign-in");
   host.script.approveDevice(state.signIn.userCode);
   await expect(card.getByRole("button", { name: "Sign out of registry", exact: true })).toBeVisible();
+  // The new-playbook form on the project's Playbooks tab offers the
+  // account's orgs (playbook-library-121).
+  await projectTab(page, "Playbooks");
   const orgs = page.getByLabel("Registry namespaces");
   await expect(orgs.locator("option")).toHaveText(["Choose namespace", "acme", "other"]);
   await orgs.selectOption("other");
   await expect(page.getByTestId("new-playbook-org")).toHaveValue("other");
+  await projectTab(page, "Packages");
   await card.getByRole("button", { name: "Sign out of registry", exact: true }).click();
   await expect(card.getByRole("button", { name: "Sign in to registry", exact: true })).toBeVisible();
   expect((await app.core.command("space.get", {})).instances.find((entry) => entry.origin === host.url)?.signedIn).toBe(true);

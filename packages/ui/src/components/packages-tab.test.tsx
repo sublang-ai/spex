@@ -1,26 +1,25 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// playbook-library-94 over a simulated document: the Playbooks surface
-// rendering a project's environment and your own group's through the
-// real store, against a stand-in client answering as the core does —
-// each side's spec packages with versions, sources, artifacts with
-// languages and fallback marks, and installed state; the playbooks of
-// both environments once per origin with where each is enabled; Add
+// playbook-library-94 over a simulated document: a project's Packages
+// tab rendering the project's environment and your own group's beneath
+// it through the real store, against a stand-in client answering as the
+// core does — each section's spec packages with versions, sources,
+// artifacts with languages and fallback marks, and installed state; Add
 // from registry, from a folder and from Git; Resolve again while the
 // lock is stale; the newer built-in release's line with Update; what
 // the last export left out with Export again; Remove behind Remove or
 // Keep; and every control waiting while that spex repository syncs,
-// naming the sync; each side headed by the project's name or by your
-// own group, never by a spex repository, with the ways to add a spec
-// package beneath its list and above the playbooks
-// (playbook-library-1, playbook-library-92).
+// naming the sync; each section headed by the project's name or by
+// your own group, never by a spex repository, with the ways to add a
+// spec package beneath its list, every command naming that section's
+// spex repository (playbook-library-92, DR-172).
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type { CommandResults, EnvironmentState } from "@sublang/spex-core/protocol";
 
-import { LibrarySurface } from "./LibrarySurface.js";
+import { PackagesTab } from "./PackagesTab.js";
 import { instanceState } from "../fixtures/groups-state.js";
 import { deliverServerMessageForTests, setClientForTests, useAppStore } from "../state/store.js";
 import {
@@ -75,7 +74,6 @@ function seed(over: Partial<ReturnType<typeof useAppStore.getState>> = {}) {
     currentProjectId: PROJECT_ID,
     space: home(),
     registryAccounts: { "https://spex.example": { origin: "https://spex.example", displayName: "Spex Example", account: { id: "registry", login: "me" }, signIn: { phase: "idle" }, error: null } },
-    playbooksSide: "project",
     playbookLists: undefined,
     environments: {},
     environmentErrors: {},
@@ -88,11 +86,16 @@ function seed(over: Partial<ReturnType<typeof useAppStore.getState>> = {}) {
   });
 }
 
-async function renderSurface(over: Partial<ReturnType<typeof useAppStore.getState>> = {}) {
+/** The project's section and your own group's, each found by itself:
+ * both stand at once, with the same controls (playbook-library-92). */
+const projectSection = () => within(screen.getByTestId("packages-project"));
+const personalSection = () => within(screen.getByTestId("packages-personal"));
+
+async function renderTab(over: Partial<ReturnType<typeof useAppStore.getState>> = {}) {
   seed(over);
-  const view = render(<LibrarySurface />);
-  await screen.findByTestId("playbook-card-triage");
+  const view = render(<PackagesTab project={PROJECT} />);
   await screen.findByTestId("env-package-acme/triage");
+  await vi.waitFor(() => personalSection().getByTestId("env-package-sublang/playbooks"));
   return view;
 }
 
@@ -137,7 +140,7 @@ afterEach(() => {
   setClientForTests(undefined);
 });
 
-describe("playbook-library-94: each side's environment", () => {
+describe("playbook-library-94: each section's environment", () => {
   test("Git request labels and tooltips use the display summary through live state updates", async () => {
     const setSource = (repository: string): EnvironmentState => ({
       ...PROJECT_ENVIRONMENT,
@@ -145,7 +148,7 @@ describe("playbook-library-94: each side's environment", () => {
       packages: PROJECT_ENVIRONMENT.packages.filter((pkg) => pkg.name === "acme/triage").map((pkg) => ({ ...pkg, source: { kind: "git" as const, detail: repository } })),
     });
     environments[PROJECT_ID] = setSource("the remote");
-    await renderSurface();
+    await renderTab();
     const source = screen.getByTestId("env-source-acme/triage");
     expect(source.textContent).toBe("Git the remote at v1, pkg");
     expect(source.title).toBe("the remote");
@@ -154,36 +157,32 @@ describe("playbook-library-94: each side's environment", () => {
       expect(source.textContent).toBe(`Git ${label} at v1, pkg`);
       expect(source.title).toBe(label);
     }
-    expect(screen.getByTestId("environment-section").innerHTML).not.toContain("secret-user");
+    expect(projectSection().getByTestId("environment-section").innerHTML).not.toContain("secret-user");
   });
 
   test("lists its spec packages with versions, sources, artifacts, languages, fallback marks and installed state", async () => {
-    await renderSurface();
-    const section = screen.getByTestId("environment-section");
+    await renderTab();
+    const section = projectSection().getByTestId("environment-section");
     // The word stands as the section's heading, naming the project by
     // its name and never its spex repository (DR-159).
     expect(within(section).getByRole("heading").textContent).toBe(`Environment of ${PROJECT.name}`);
     expect(section.textContent).not.toContain(PROJECT_ID);
     expect(section.textContent).not.toContain("-spex");
-    // The switch names the project and your own group, with no key in
-    // a label or a tooltip.
-    const sides = screen.getByRole("group", { name: "Playbooks of" });
-    expect(within(sides).getByTestId("side-project").textContent).toBe(PROJECT.name);
-    expect(within(sides).getByTestId("side-project").title).toBe(PROJECT.name);
-    expect(within(sides).getByTestId("side-own").textContent).toBe("Your own group");
-    expect(within(sides).getByTestId("side-own").hasAttribute("title")).toBe(false);
-    expect(sides.outerHTML).not.toContain("-spex");
+    // No switch and no playbook: the project's section and your own
+    // group's stand together, the playbooks on their own tab (DR-172).
+    expect(screen.queryByTestId("playbooks-switch")).toBeNull();
+    expect(screen.queryByTestId(/^playbook-card-/)).toBeNull();
+    expect(
+      screen.getByTestId("packages-project").compareDocumentPosition(screen.getByTestId("packages-personal")) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
 
     // [playbook-library-92] the ways to add a spec package stand
-    // directly beneath the environment's list, above the playbooks.
-    const add = screen.getByTestId("add-packages");
+    // directly beneath the environment's list.
+    const add = projectSection().getByTestId("add-packages");
     expect(
-      screen.getByTestId("environment-packages").compareDocumentPosition(add) & Node.DOCUMENT_POSITION_FOLLOWING,
+      projectSection().getByTestId("environment-packages").compareDocumentPosition(add) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    expect(
-      add.compareDocumentPosition(screen.getAllByTestId(/^playbook-card-/)[0]!) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-    expect(add.compareDocumentPosition(screen.getByTestId("playbooks-enabled")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     // [playbook-library-92] a requested package: its source and its
     // resolved version, its artifacts with their languages.
@@ -217,95 +216,50 @@ describe("playbook-library-94: each side's environment", () => {
     expect(screen.getByTestId("env-source-acme/local-tools").textContent).toBe("path spex-packages/local-tools");
 
     // [playbook-library-92] files missing: Install is offered.
-    fireEvent.click(screen.getByTestId("environment-install"));
+    fireEvent.click(projectSection().getByTestId("environment-install"));
     await vi.waitFor(() =>
       expect(commandMock).toHaveBeenCalledWith("environment.install", { repository: PROJECT_ID }),
     );
     // A current lock offers no Resolve again.
     expect(screen.queryByTestId("environment-resolve")).toBeNull();
 
-    // Your own group's side shows its own environment.
-    fireEvent.click(screen.getByTestId("side-own"));
-    await screen.findByTestId("env-package-sublang/playbooks");
-    const own = screen.getByTestId("environment-section");
+    // Your own group's section shows its own environment beneath.
+    const own = personalSection().getByTestId("environment-section");
     expect(within(own).getByRole("heading").textContent).toBe("Environment of your own group");
     expect(own.textContent).not.toContain(OWN_KEY);
     expect(own.textContent).not.toContain("-spex");
-    // Its ways to add stand above its playbooks too.
+    // Its ways to add stand beneath its list too.
     expect(
-      screen.getByTestId("add-packages").compareDocumentPosition(screen.getAllByTestId(/^playbook-card-/)[0]!) &
+      personalSection().getByTestId("environment-packages").compareDocumentPosition(personalSection().getByTestId("add-packages")) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    expect(screen.queryByTestId("env-package-acme/triage")).toBeNull();
-    expect(screen.getByTestId("env-source-sublang/playbooks").textContent).toBe("registry ^17.4.1");
+    expect(personalSection().queryByTestId("env-package-acme/triage")).toBeNull();
+    expect(personalSection().getByTestId("env-source-sublang/playbooks").textContent).toBe("registry ^17.4.1");
     expect(commandMock).toHaveBeenCalledWith("environment.get", { repository: OWN_KEY });
   });
 
-  test("the playbooks of both environments list once per origin, each reading where it is enabled", async () => {
-    await renderSurface();
-    // [playbook-library-1] the project's side: what its environment
-    // exports, with where each is enabled.
-    expect(screen.getAllByTestId("playbook-card-code")).toHaveLength(1);
-    expect(screen.getByTestId("playbook-enabled-triage").textContent).toBe("Enabled in the project");
-    expect(screen.getByTestId("playbook-enabled-code").textContent).toBe("Not enabled");
-    expect(screen.getByTestId("playbook-enabled-review").textContent).toBe("Enabled in your own group");
-    // Sectioned by what a session effectively runs: one your own group
-    // enables stands under Enabled beside the project's, still offering
-    // Enable for the project; one neither enables below with Enable.
-    expect(within(screen.getByTestId("playbooks-enabled")).getByTestId("playbook-card-triage")).toBeTruthy();
-    expect(within(screen.getByTestId("playbooks-available")).getByTestId("playbook-card-code")).toBeTruthy();
-    const review = within(screen.getByTestId("playbooks-enabled")).getByTestId("playbook-card-review");
-    expect(within(review).getByTestId("playbook-enable-review")).toBeTruthy();
-    expect(within(screen.getByTestId("playbooks-available")).queryByTestId("playbook-card-review")).toBeNull();
-    expect(screen.queryByTestId("playbooks-empty")).toBeNull();
-    // [playbook-library-29] the spec package and version, with the
-    // muted prefix outside the truncation.
-    expect(screen.getByTestId("playbook-from-triage").textContent).toBe("fromacme/triage 1.2.3");
-    expect(screen.getByTestId("playbook-from-code").textContent).toBe("fromsublang/playbooks 17.4.1");
-    // [playbook-library-1] the role's player and what it runs.
-    expect(screen.getByTestId("role-binding-triage-triager").textContent).toBe("Ccoder");
-
-    // [playbook-library-1] your own group's side lists its own export
-    // of the same playbooks, once each.
-    fireEvent.click(screen.getByTestId("side-own"));
-    expect(screen.getByTestId("side-own").getAttribute("aria-pressed")).toBe("true");
-    expect(screen.queryByTestId("playbook-card-triage")).toBeNull();
-    expect(screen.getAllByTestId("playbook-card-code")).toHaveLength(1);
-    expect(screen.getAllByTestId("playbook-card-review")).toHaveLength(1);
-    expect(screen.getByTestId("playbook-enabled-review").textContent).toBe("Enabled in your own group");
-    expect(within(screen.getByTestId("playbooks-enabled")).getByTestId("playbook-card-review")).toBeTruthy();
-    expect(screen.getByTestId("role-binding-review-host").textContent).toBe("Rreviewer");
-  });
-
-  test("with no project chosen, your own group's side alone stands", async () => {
-    commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) =>
-      type === "environment.playbooks"
-        ? { project: null, own: LISTS.own }
-        : type === "environment.get"
-          ? environments[String(params?.repository)]
-          : type === "draft.list"
-            ? []
-            : null,
-    );
-    seed({ projects: [], currentProjectId: undefined });
-    render(<LibrarySurface />);
-    await screen.findByTestId("env-package-sublang/playbooks");
-    expect(screen.queryByTestId("playbooks-switch")).toBeNull();
-    expect(screen.getByTestId("playbook-card-review")).toBeTruthy();
-    expect(commandMock).toHaveBeenCalledWith("environment.playbooks", {});
+  test("a project that is your own group's spex repository stands as one section", async () => {
+    const space = home();
+    space.own.repositories = space.own.repositories.map((entry) => ({ ...entry, key: PROJECT_ID }));
+    seed({ space });
+    render(<PackagesTab project={PROJECT} />);
+    await screen.findByTestId("env-package-acme/triage");
+    expect(screen.getAllByTestId("environment-section")).toHaveLength(1);
+    expect(screen.queryByTestId("packages-personal")).toBeNull();
+    expect(commandMock).not.toHaveBeenCalledWith("environment.get", { repository: OWN_KEY });
   });
 });
 
 describe("playbook-library-94: the environment's controls", () => {
   test("Add from registry searches the registry and requests the chosen version at a caret", async () => {
-    await renderSurface();
-    fireEvent.click(screen.getByTestId("add-from-registry"));
-    expect(screen.getByTestId("add-from-registry").getAttribute("aria-expanded")).toBe("true");
-    fireEvent.change(screen.getByTestId("registry-query"), { target: { value: "tri" } });
+    await renderTab();
+    fireEvent.click(projectSection().getByTestId("add-from-registry"));
+    expect(projectSection().getByTestId("add-from-registry").getAttribute("aria-expanded")).toBe("true");
+    fireEvent.change(projectSection().getByTestId("registry-query"), { target: { value: "tri" } });
     await vi.waitFor(() =>
       expect(commandMock).toHaveBeenCalledWith("environment.search", { repository: PROJECT_ID, query: "tri" }),
     );
-    const result = await screen.findByTestId("registry-result-acme/triage");
+    const result = await projectSection().findByTestId("registry-result-acme/triage");
     expect(result.textContent).toContain("Sort issues into labels");
     const versions = within(result).getByTestId("registry-version-acme/triage") as HTMLSelectElement;
     expect([...versions.options].map((option) => option.value)).toEqual(["1.2.3", "1.2.0"]);
@@ -318,14 +272,12 @@ describe("playbook-library-94: the environment's controls", () => {
         request: { kind: "registry", version: "^1.2.0" },
       }),
     );
-    expect((await screen.findByTestId("add-note")).textContent).toBe("Requested acme/triage");
+    expect((await projectSection().findByTestId("add-note")).textContent).toBe("Requested acme/triage");
 
-    // Your own group's side searches its own environment's registry.
+    // Your own group's section searches its own environment's registry.
     commandMock.mockClear();
-    fireEvent.click(screen.getByTestId("side-own"));
-    await screen.findByTestId("env-package-sublang/playbooks");
-    fireEvent.click(screen.getByTestId("add-from-registry"));
-    fireEvent.change(screen.getByTestId("registry-query"), { target: { value: "tidy" } });
+    fireEvent.click(personalSection().getByTestId("add-from-registry"));
+    fireEvent.change(personalSection().getByTestId("registry-query"), { target: { value: "tidy" } });
     await vi.waitFor(() =>
       expect(commandMock).toHaveBeenCalledWith("environment.search", { repository: OWN_KEY, query: "tidy" }),
     );
@@ -333,32 +285,32 @@ describe("playbook-library-94: the environment's controls", () => {
   });
 
   test("a request the core refuses shows its cause in place", async () => {
-    await renderSurface();
+    await renderTab();
     const base = commandMock.getMockImplementation()!;
     commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) => {
       if (type === "environment.request") throw new Error("acme/tidy has no release meeting ^0.3.0");
       return base(type, params);
     });
-    fireEvent.click(screen.getByTestId("add-from-registry"));
-    fireEvent.change(screen.getByTestId("registry-query"), { target: { value: "tidy" } });
-    const result = await screen.findByTestId("registry-result-acme/tidy");
+    fireEvent.click(projectSection().getByTestId("add-from-registry"));
+    fireEvent.change(projectSection().getByTestId("registry-query"), { target: { value: "tidy" } });
+    const result = await projectSection().findByTestId("registry-result-acme/tidy");
     fireEvent.click(within(result).getByTestId("registry-add-acme/tidy"));
-    expect((await screen.findByTestId("registry-add-error-acme/tidy")).textContent).toBe(
+    expect((await projectSection().findByTestId("registry-add-error-acme/tidy")).textContent).toBe(
       "acme/tidy has no release meeting ^0.3.0",
     );
   });
 
   test("Add from folder and Add from Git request by path and by repository and rev; a bad name is refused before anything is sent", async () => {
-    await renderSurface();
-    fireEvent.click(screen.getByTestId("add-from-folder"));
-    expect(screen.getByTestId("folder-request").textContent).toContain(`Folder inside ${PROJECT.path}`);
-    fireEvent.change(screen.getByTestId("folder-request-name"), { target: { value: "Acme/Tools" } });
-    fireEvent.change(screen.getByTestId("folder-request-path"), { target: { value: "spex-packages/tools" } });
-    fireEvent.click(screen.getByTestId("folder-request-submit"));
-    expect((await screen.findByTestId("folder-request-error")).textContent).toContain("org/name");
+    await renderTab();
+    fireEvent.click(projectSection().getByTestId("add-from-folder"));
+    expect(projectSection().getByTestId("folder-request").textContent).toContain(`Folder inside ${PROJECT.path}`);
+    fireEvent.change(projectSection().getByTestId("folder-request-name"), { target: { value: "Acme/Tools" } });
+    fireEvent.change(projectSection().getByTestId("folder-request-path"), { target: { value: "spex-packages/tools" } });
+    fireEvent.click(projectSection().getByTestId("folder-request-submit"));
+    expect((await projectSection().findByTestId("folder-request-error")).textContent).toContain("org/name");
     expect(commandMock).not.toHaveBeenCalledWith("environment.request", expect.anything());
-    fireEvent.change(screen.getByTestId("folder-request-name"), { target: { value: "acme/tools" } });
-    fireEvent.click(screen.getByTestId("folder-request-submit"));
+    fireEvent.change(projectSection().getByTestId("folder-request-name"), { target: { value: "acme/tools" } });
+    fireEvent.click(projectSection().getByTestId("folder-request-submit"));
     await vi.waitFor(() =>
       expect(commandMock).toHaveBeenCalledWith("environment.request", {
         repository: PROJECT_ID,
@@ -367,11 +319,11 @@ describe("playbook-library-94: the environment's controls", () => {
       }),
     );
 
-    fireEvent.click(screen.getByTestId("add-from-git"));
-    fireEvent.change(screen.getByTestId("git-request-name"), { target: { value: "acme/flows" } });
-    fireEvent.change(screen.getByTestId("git-request-url"), { target: { value: "https://github.com/acme/flows.git" } });
-    fireEvent.change(screen.getByTestId("git-request-rev"), { target: { value: "v0.2.0" } });
-    fireEvent.click(screen.getByTestId("git-request-submit"));
+    fireEvent.click(projectSection().getByTestId("add-from-git"));
+    fireEvent.change(projectSection().getByTestId("git-request-name"), { target: { value: "acme/flows" } });
+    fireEvent.change(projectSection().getByTestId("git-request-url"), { target: { value: "https://github.com/acme/flows.git" } });
+    fireEvent.change(projectSection().getByTestId("git-request-rev"), { target: { value: "v0.2.0" } });
+    fireEvent.click(projectSection().getByTestId("git-request-submit"));
     await vi.waitFor(() =>
       expect(commandMock).toHaveBeenCalledWith("environment.request", {
         repository: PROJECT_ID,
@@ -383,11 +335,11 @@ describe("playbook-library-94: the environment's controls", () => {
 
   test("a stale lock reads its phrase with Resolve again, and a conflict names the requirements", async () => {
     environments[PROJECT_ID] = { ...PROJECT_ENVIRONMENT, stale: ["spex.yaml changed"] };
-    await renderSurface();
-    const stale = screen.getByTestId("environment-stale");
+    await renderTab();
+    const stale = projectSection().getByTestId("environment-stale");
     expect(stale.textContent).toBe("Requests changed; resolve again to install");
     expect(stale.title).toBe("spex.yaml changed");
-    fireEvent.click(screen.getByTestId("environment-resolve"));
+    fireEvent.click(projectSection().getByTestId("environment-resolve"));
     await vi.waitFor(() =>
       expect(commandMock).toHaveBeenCalledWith("environment.resolve", { repository: PROJECT_ID }),
     );
@@ -412,23 +364,23 @@ describe("playbook-library-94: the environment's controls", () => {
         },
       });
     });
-    expect(screen.queryByTestId("environment-stale")).toBeNull();
-    expect(screen.getByTestId("environment-conflicts").textContent).toContain(
+    expect(projectSection().queryByTestId("environment-stale")).toBeNull();
+    expect(projectSection().getByTestId("environment-conflicts").textContent).toContain(
       "acme/labels — ^0.4.0 by acme/triage; ^1.0.0 by acme/local-tools",
     );
-    expect(screen.getByTestId("environment-resolve")).toBeTruthy();
+    expect(projectSection().getByTestId("environment-resolve")).toBeTruthy();
   });
 
   test("a newer built-in release reads its line with Update, which resolves again; a state naming none reads no line", async () => {
     environments[PROJECT_ID] = { ...PROJECT_ENVIRONMENT, builtinUpdate: { shipped: "17.8.0", locked: "17.4.1" } };
-    await renderSurface();
+    await renderTab();
     // [playbook-library-92] the line names both releases, with Update
     // beside it while the lock is current and no Resolve again stands.
-    expect(screen.getByTestId("environment-builtin-update-line").textContent).toBe(
+    expect(projectSection().getByTestId("environment-builtin-update-line").textContent).toBe(
       "Built-in playbooks 17.8.0 shipped with this app; this environment runs 17.4.1",
     );
-    expect(screen.queryByTestId("environment-resolve")).toBeNull();
-    const update = screen.getByTestId("environment-update") as HTMLButtonElement;
+    expect(projectSection().queryByTestId("environment-resolve")).toBeNull();
+    const update = projectSection().getByTestId("environment-update") as HTMLButtonElement;
     expect(update.textContent).toBe("Update");
     fireEvent.click(update);
     // [playbook-library-92] Update sends environment.resolve for this
@@ -443,37 +395,35 @@ describe("playbook-library-94: the environment's controls", () => {
     act(() => {
       deliverServerMessageForTests({ type: "environment.state", repository: PROJECT_ID, state: PROJECT_ENVIRONMENT });
     });
-    expect(screen.queryByTestId("environment-builtin-update")).toBeNull();
-    expect(screen.queryByTestId("environment-update")).toBeNull();
+    expect(projectSection().queryByTestId("environment-builtin-update")).toBeNull();
+    expect(projectSection().queryByTestId("environment-update")).toBeNull();
 
-    // [playbook-library-92] your own group's side, its state naming no
-    // newer release, reads no line.
-    fireEvent.click(screen.getByTestId("side-own"));
-    await screen.findByTestId("env-package-sublang/playbooks");
-    expect(screen.queryByTestId("environment-builtin-update")).toBeNull();
+    // [playbook-library-92] your own group's section, its state naming
+    // no newer release, reads no line.
+    expect(personalSection().queryByTestId("environment-builtin-update")).toBeNull();
   });
 
-  test("the project's side reads Not committed with the code while its two files are not both in the code's HEAD, and not once a commit holds both; your own group's side never reads it", async () => {
+  test("the project's section reads Not committed with the code while its two files are not both in the code's HEAD, and not once a commit holds both; your own group's section never reads it", async () => {
     // Untracked, or added but not committed: the core reads the state
     // as not committed (environments-14).
     environments[PROJECT_ID] = { ...PROJECT_ENVIRONMENT, committed: false };
-    await renderSurface();
-    // [playbook-library-92] the phrase on the project's side.
-    expect(screen.getByTestId("environment-uncommitted").textContent).toBe("Not committed with the code");
+    await renderTab();
+    // [playbook-library-92] the phrase on the project's section.
+    expect(projectSection().getByTestId("environment-uncommitted").textContent).toBe("Not committed with the code");
 
     // [playbook-library-92] a commit holding both: the state the core
     // broadcasts reads committed, and the phrase goes.
     act(() => {
       deliverServerMessageForTests({ type: "environment.state", repository: PROJECT_ID, state: { ...PROJECT_ENVIRONMENT, committed: true } });
     });
-    expect(screen.queryByTestId("environment-uncommitted")).toBeNull();
+    expect(projectSection().queryByTestId("environment-uncommitted")).toBeNull();
 
     // [playbook-library-92] your own group's environment syncs with its
     // clone and reads no such phrase.
-    environments[OWN_KEY] = { ...OWN_ENVIRONMENT, committed: null };
-    fireEvent.click(screen.getByTestId("side-own"));
-    await screen.findByTestId("env-package-sublang/playbooks");
-    expect(screen.queryByTestId("environment-uncommitted")).toBeNull();
+    act(() => {
+      deliverServerMessageForTests({ type: "environment.state", repository: OWN_KEY, state: { ...OWN_ENVIRONMENT, committed: null } });
+    });
+    expect(personalSection().queryByTestId("environment-uncommitted")).toBeNull();
   });
 
   test("what the last export left out reads under Not exported with Export again, which installs; a state naming nothing reads no list", async () => {
@@ -481,19 +431,19 @@ describe("playbook-library-94: the environment's controls", () => {
       ...PROJECT_ENVIRONMENT,
       unexported: { skipped: [{ name: "lint", folder: ".agents/skills" }], missing: ["acme/local-tools"] },
     };
-    await renderSurface();
+    await renderTab();
     // [playbook-library-92] each skill a folder of the reader's kept out
     // names that folder; each spec package says its files are not here.
-    expect(screen.getByTestId("environment-unexported").firstElementChild?.textContent).toBe("Not exported");
-    expect(screen.getByTestId("environment-unexported-.agents/skills-lint").textContent).toBe(
+    expect(projectSection().getByTestId("environment-unexported").firstElementChild?.textContent).toBe("Not exported");
+    expect(projectSection().getByTestId("environment-unexported-.agents/skills-lint").textContent).toBe(
       "lint — .agents/skills holds a folder of yours by that name",
     );
-    expect(screen.getByTestId("environment-unexported-package-acme/local-tools").textContent).toBe(
+    expect(projectSection().getByTestId("environment-unexported-package-acme/local-tools").textContent).toBe(
       "acme/local-tools — Its files are not on this device",
     );
     // [playbook-library-92] Export again sends environment.install for
     // this spex repository, and nothing else.
-    const again = screen.getByTestId("environment-export-again") as HTMLButtonElement;
+    const again = projectSection().getByTestId("environment-export-again") as HTMLButtonElement;
     expect(again.textContent).toBe("Export again");
     fireEvent.click(again);
     await vi.waitFor(() =>
@@ -506,35 +456,33 @@ describe("playbook-library-94: the environment's controls", () => {
     act(() => {
       deliverServerMessageForTests({ type: "environment.state", repository: PROJECT_ID, state: PROJECT_ENVIRONMENT });
     });
-    expect(screen.queryByTestId("environment-unexported")).toBeNull();
-    expect(screen.queryByTestId("environment-export-again")).toBeNull();
+    expect(projectSection().queryByTestId("environment-unexported")).toBeNull();
+    expect(projectSection().queryByTestId("environment-export-again")).toBeNull();
   });
 
   test("Remove asks Remove or Keep; Keep writes nothing", async () => {
-    await renderSurface();
-    fireEvent.click(screen.getByTestId("env-remove-acme/triage"));
-    const row = screen.getByTestId("env-package-acme/triage");
+    await renderTab();
+    fireEvent.click(projectSection().getByTestId("env-remove-acme/triage"));
+    const row = projectSection().getByTestId("env-package-acme/triage");
     expect(row.textContent).toContain("Remove acme/triage?");
     const keep = within(row).getByRole("button", { name: "Keep" });
     expect(document.activeElement).toBe(keep);
     fireEvent.click(keep);
     expect(commandMock).not.toHaveBeenCalledWith("environment.remove", expect.anything());
-    fireEvent.click(screen.getByTestId("env-remove-acme/triage"));
+    fireEvent.click(projectSection().getByTestId("env-remove-acme/triage"));
     fireEvent.click(within(row).getByRole("button", { name: "Remove" }));
     await vi.waitFor(() =>
       expect(commandMock).toHaveBeenCalledWith("environment.remove", { repository: PROJECT_ID, name: "acme/triage" }),
     );
   });
 
-  test("on your own group's side, Add from folder asks for a folder inside its clone and requests the path there", async () => {
-    await renderSurface();
-    fireEvent.click(screen.getByTestId("side-own"));
-    await screen.findByTestId("env-package-sublang/playbooks");
-    fireEvent.click(screen.getByTestId("add-from-folder"));
-    expect(screen.getByTestId("folder-request").textContent).toContain(`Folder inside ${OWN_ENVIRONMENT.pathRoot}`);
-    fireEvent.change(screen.getByTestId("folder-request-name"), { target: { value: "me/notes" } });
-    fireEvent.change(screen.getByTestId("folder-request-path"), { target: { value: "mine/notes" } });
-    fireEvent.click(screen.getByTestId("folder-request-submit"));
+  test("in your own group's section, Add from folder asks for a folder inside its clone and requests the path there", async () => {
+    await renderTab();
+    fireEvent.click(personalSection().getByTestId("add-from-folder"));
+    expect(personalSection().getByTestId("folder-request").textContent).toContain(`Folder inside ${OWN_ENVIRONMENT.pathRoot}`);
+    fireEvent.change(personalSection().getByTestId("folder-request-name"), { target: { value: "me/notes" } });
+    fireEvent.change(personalSection().getByTestId("folder-request-path"), { target: { value: "mine/notes" } });
+    fireEvent.click(personalSection().getByTestId("folder-request-submit"));
     await vi.waitFor(() =>
       expect(commandMock).toHaveBeenCalledWith("environment.request", {
         repository: OWN_KEY,
@@ -546,8 +494,8 @@ describe("playbook-library-94: the environment's controls", () => {
 
   test("Add from folder waits for a path root: a state naming none disables it", async () => {
     environments[PROJECT_ID] = { ...PROJECT_ENVIRONMENT, pathRoot: null };
-    await renderSurface();
-    const control = screen.getByTestId("add-from-folder") as HTMLButtonElement;
+    await renderTab();
+    const control = projectSection().getByTestId("add-from-folder") as HTMLButtonElement;
     expect(control.disabled).toBe(true);
     expect(control.title).toBe("No working folder on this device");
   });
@@ -557,8 +505,8 @@ describe("playbook-library-94: the environment's controls", () => {
       ...PROJECT_ENVIRONMENT,
       unexported: { skipped: [{ name: "lint", folder: ".agents/skills" }], missing: [] },
     };
-    await renderSurface({ space: home({ syncing: PROJECT_ID }) });
-    expect(screen.queryByTestId("environment-progress")).toBeNull();
+    await renderTab({ space: home({ syncing: PROJECT_ID }) });
+    expect(projectSection().queryByTestId("environment-progress")).toBeNull();
     const controls = [
       "env-remove-acme/triage",
       "env-remove-acme/local-tools",
@@ -567,13 +515,13 @@ describe("playbook-library-94: the environment's controls", () => {
       "add-from-registry",
       "add-from-folder",
       "add-from-git",
-    ].map((id) => screen.getByTestId(id) as HTMLButtonElement);
+    ].map((id) => projectSection().getByTestId(id) as HTMLButtonElement);
     for (const control of controls) {
       expect(control.disabled, control.dataset.testid).toBe(false);
       expect(control.title, control.dataset.testid).not.toMatch(/sync/i);
     }
     // An act during the sync reaches the core, which answers it as any.
-    fireEvent.click(screen.getByTestId("environment-install"));
+    fireEvent.click(projectSection().getByTestId("environment-install"));
     await vi.waitFor(() => expect(commandMock).toHaveBeenCalledWith("environment.install", { repository: PROJECT_ID }));
   });
 
@@ -583,11 +531,11 @@ describe("playbook-library-94: the environment's controls", () => {
       busy: "installing",
       unexported: { skipped: [{ name: "lint", folder: ".agents/skills" }], missing: [] },
     };
-    await renderSurface();
-    expect(screen.getByTestId("environment-progress").textContent).toBe("Installing…");
-    expect((screen.getByTestId("add-from-registry") as HTMLButtonElement).disabled).toBe(false);
-    expect((screen.getByTestId("environment-export-again") as HTMLButtonElement).disabled).toBe(false);
-    expect((screen.getByTestId("env-remove-acme/triage") as HTMLButtonElement).disabled).toBe(false);
+    await renderTab();
+    expect(projectSection().getByTestId("environment-progress").textContent).toBe("Installing…");
+    expect((projectSection().getByTestId("add-from-registry") as HTMLButtonElement).disabled).toBe(false);
+    expect((projectSection().getByTestId("environment-export-again") as HTMLButtonElement).disabled).toBe(false);
+    expect((projectSection().getByTestId("env-remove-acme/triage") as HTMLButtonElement).disabled).toBe(false);
     act(() => {
       deliverServerMessageForTests({
         type: "environment.state",
@@ -595,18 +543,18 @@ describe("playbook-library-94: the environment's controls", () => {
         state: { ...PROJECT_ENVIRONMENT, error: "acme/labels 0.4.0: a file's digest does not match the lock" },
       });
     });
-    expect(screen.queryByTestId("environment-progress")).toBeNull();
-    expect(screen.getByTestId("environment-error").textContent).toBe(
+    expect(projectSection().queryByTestId("environment-progress")).toBeNull();
+    expect(projectSection().getByTestId("environment-error").textContent).toBe(
       "acme/labels 0.4.0: a file's digest does not match the lock",
     );
-    expect((screen.getByTestId("add-from-registry") as HTMLButtonElement).disabled).toBe(false);
+    expect((projectSection().getByTestId("add-from-registry") as HTMLButtonElement).disabled).toBe(false);
   });
 
   test("an empty environment says so", async () => {
     environments[PROJECT_ID] = environment({ repository: PROJECT_ID });
     seed();
-    render(<LibrarySurface />);
-    expect((await screen.findByTestId("environment-empty")).textContent).toBe("No spec packages requested yet");
+    render(<PackagesTab project={PROJECT} />);
+    expect((await projectSection().findByTestId("environment-empty")).textContent).toBe("No spec packages requested yet");
   });
 });
 
@@ -616,7 +564,7 @@ describe("playbook-library-113: publish a directly requested local package", () 
   const PATH = "spex-packages/current";
   const PREVIEW = { name: NAME, version: "1.2.3", files: ["meta.yaml", "specs/en/triage.md", "skills/en/tidy/SKILL.md"] };
   const receipt = { name: NAME, version: "1.2.3", url: `https://spex.example/${NAME}` };
-  const row = () => within(screen.getByTestId(`env-package-${NAME}`));
+  const row = () => within(projectSection().getByTestId(`env-package-${NAME}`));
   const local = (): EnvironmentState => ({
     ...PROJECT_ENVIRONMENT,
     // The current request, not its older registry lock, owns the folder.
@@ -646,9 +594,9 @@ describe("playbook-library-113: publish a directly requested local package", () 
   test("uses the current folder despite a stale lock, previews and cancels without uploading, and excludes other sources", async () => {
     environments[PROJECT_ID] = local();
     publishingReplies();
-    await renderSurface();
-    expect(within(screen.getByTestId("env-package-acme/labels")).queryByTestId("publish")).toBeNull();
-    expect(within(screen.getByTestId("env-package-sublang/playbooks")).queryByTestId("publish")).toBeNull();
+    await renderTab();
+    expect(within(projectSection().getByTestId("env-package-acme/labels")).queryByTestId("publish")).toBeNull();
+    expect(within(projectSection().getByTestId("env-package-sublang/playbooks")).queryByTestId("publish")).toBeNull();
     fireEvent.click(row().getByTestId("publish-button"));
     const summary = await row().findByTestId("publish-summary");
     expect(summary.textContent).toContain(`${NAME} 1.2.3`);
@@ -668,7 +616,7 @@ describe("playbook-library-113: publish a directly requested local package", () 
     let state = local();
     environments[PROJECT_ID] = state;
     publishingReplies();
-    await renderSurface();
+    await renderTab();
     await confirm();
     update(state = { ...state, published: receipt, error: null });
     expect(row().getByTestId("publish-done").textContent).toContain(`Published ${NAME} 1.2.3`);
@@ -683,7 +631,7 @@ describe("playbook-library-113: publish a directly requested local package", () 
       expect(row().queryByTestId("publish-done")).toBeNull();
     }
     const other = "acme/local-tools";
-    const otherRow = within(screen.getByTestId(`env-package-${other}`));
+    const otherRow = within(projectSection().getByTestId(`env-package-${other}`));
     const base = commandMock.getMockImplementation()!;
     commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) =>
       type === "environment.publish" && params?.dryRun
@@ -703,7 +651,7 @@ describe("playbook-library-113: publish a directly requested local package", () 
       type === "environment.publish" && params?.dryRun
         ? new Promise((resolve) => { finish = resolve; })
         : base(type, params));
-    await renderSurface();
+    await renderTab();
     fireEvent.click(row().getByTestId("publish-button"));
     await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
     update({ ...local(), requests: { ...local().requests, [NAME]: { kind: "path", path: "spex-packages/replacement" } } });
@@ -723,13 +671,10 @@ describe("playbook-library-113: publish a directly requested local package", () 
     expect(row().queryByTestId("publish-summary")).toBeNull();
     fireEvent.click(row().getByTestId("publish-button"));
     await row().findByTestId("publish-summary");
-    fireEvent.click(screen.getByTestId("side-own"));
-    await screen.findByTestId("env-package-sublang/playbooks");
-    expect(screen.queryByTestId("publish-summary")).toBeNull();
-    fireEvent.click(screen.getByTestId("side-project"));
-    await screen.findByTestId(`env-package-${NAME}`);
-    expect(row().queryByTestId("publish-summary")).toBeNull();
+    // Signed out at that registry, the open preview goes with the
+    // account it would have published as.
     act(() => deliverServerMessageForTests({ type: "registry.state", state: { origin: "https://second.test", displayName: "Spex Example", account: null, signIn: { phase: "idle" }, error: null } }));
+    expect(row().queryByTestId("publish-summary")).toBeNull();
     expect(row().getByRole("button", { name: "Sign in to registry" })).toBeTruthy();
     expect(row().queryByTestId("publish-button")).toBeNull();
   });
@@ -737,48 +682,48 @@ describe("playbook-library-113: publish a directly requested local package", () 
 
 describe("playbook-library-115, playbook-library-116: request a known registry package", () => {
   const name = "private/notes";
-  function openKnown() {
-    fireEvent.click(screen.getByTestId("add-from-registry"));
-    fireEvent.click(screen.getByTestId("add-by-name"));
+  function openKnown(section = projectSection()) {
+    fireEvent.click(section.getByTestId("add-from-registry"));
+    fireEvent.click(section.getByTestId("add-by-name"));
   }
-  function fill(version: string, packageName = name) {
-    fireEvent.change(screen.getByTestId("known-package-name"), { target: { value: packageName } });
-    fireEvent.change(screen.getByTestId("known-package-version"), { target: { value: version } });
+  function fill(version: string, packageName = name, section = projectSection()) {
+    fireEvent.change(section.getByTestId("known-package-name"), { target: { value: packageName } });
+    fireEvent.change(section.getByTestId("known-package-version"), { target: { value: version } });
   }
 
   test.each(["1.2.3", "^1.2.3", "~1.2.3"])("preserves trimmed %s without searching or claiming installation", async (version) => {
-    await renderSurface();
+    await renderTab();
     openKnown();
     fill(`  ${version}  `, `  ${name}  `);
-    fireEvent.click(screen.getByTestId("known-package-request-submit"));
-    expect((await screen.findByTestId("add-note")).textContent).toBe(`Requested ${name}`);
+    fireEvent.click(projectSection().getByTestId("known-package-request-submit"));
+    expect((await projectSection().findByTestId("add-note")).textContent).toBe(`Requested ${name}`);
     expect(commandMock).toHaveBeenCalledWith("environment.request", {
       repository: PROJECT_ID, name, request: { kind: "registry", version },
     });
     expect(commandMock.mock.calls.some(([type]) => type === "environment.search")).toBe(false);
-    expect(screen.queryByTestId(`env-installed-${name}`)).toBeNull();
+    expect(projectSection().queryByTestId(`env-installed-${name}`)).toBeNull();
     act(() => deliverServerMessageForTests({
       type: "environment.state", repository: PROJECT_ID,
       state: { ...PROJECT_ENVIRONMENT, error: `${name}: this account may not fetch it from the registry` },
     }));
-    expect(screen.getByTestId("environment-error").textContent).toContain("may not fetch");
-    expect(screen.queryByTestId(`env-installed-${name}`)).toBeNull();
+    expect(projectSection().getByTestId("environment-error").textContent).toContain("may not fetch");
+    expect(projectSection().queryByTestId(`env-installed-${name}`)).toBeNull();
   });
 
   test("requires both fields, checks the name and shows the authoritative requirement refusal", async () => {
-    await renderSurface();
+    await renderTab();
     openKnown();
-    const submit = screen.getByTestId("known-package-request-submit") as HTMLButtonElement;
+    const submit = projectSection().getByTestId("known-package-request-submit") as HTMLButtonElement;
     expect(submit.disabled).toBe(true);
     fill("   ");
     expect(submit.disabled).toBe(true);
     fill("1.2.3", "not-a-package");
     fireEvent.click(submit);
-    expect((await screen.findByTestId("known-package-request-error")).textContent).toContain("org/name");
+    expect((await projectSection().findByTestId("known-package-request-error")).textContent).toContain("org/name");
     expect(commandMock.mock.calls.some(([type]) => type === "environment.request")).toBe(false);
     fill("1.2.3");
     fireEvent.click(submit);
-    await screen.findByTestId("add-note");
+    await projectSection().findByTestId("add-note");
     const base = commandMock.getMockImplementation()!;
     commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) => {
       if (type === "environment.request") throw new Error('"*" is not a version requirement: use 1.2.3, ^1.2.3 or ~1.2.3');
@@ -786,8 +731,8 @@ describe("playbook-library-115, playbook-library-116: request a known registry p
     });
     fill("*");
     fireEvent.click(submit);
-    expect((await screen.findByTestId("known-package-request-error")).textContent).toContain("not a version requirement");
-    expect(screen.queryByTestId("add-note")).toBeNull();
+    expect((await projectSection().findByTestId("known-package-request-error")).textContent).toContain("not a version requirement");
+    expect(projectSection().queryByTestId("add-note")).toBeNull();
   });
 
   test.each(["resolve", "reject"])("a delayed %s stays with its original environment", async (outcome) => {
@@ -801,22 +746,28 @@ describe("playbook-library-115, playbook-library-116: request a known registry p
       }
       return base(type, params);
     });
-    await renderSurface();
+    await renderTab();
     openKnown();
     fill("1.2.3");
-    fireEvent.click(screen.getByTestId("known-package-request-submit"));
+    fireEvent.click(projectSection().getByTestId("known-package-request-submit"));
     await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
-    fireEvent.click(screen.getByTestId("side-own"));
-    await screen.findByTestId("env-package-sublang/playbooks");
-    openKnown();
-    expect((screen.getByTestId("known-package-name") as HTMLInputElement).value).toBe("");
-    expect((screen.getByTestId("known-package-version") as HTMLInputElement).value).toBe("");
+    // Your own group's section holds a form of its own, empty.
+    openKnown(personalSection());
+    expect((personalSection().getByTestId("known-package-name") as HTMLInputElement).value).toBe("");
+    expect((personalSection().getByTestId("known-package-version") as HTMLInputElement).value).toBe("");
     await act(async () => finish());
-    expect(screen.queryByTestId("add-note")).toBeNull();
-    expect(screen.queryByTestId("known-package-request-error")).toBeNull();
-    fill("~1.2.3");
-    fireEvent.click(screen.getByTestId("known-package-request-submit"));
-    await screen.findByTestId("add-note");
+    // The delayed outcome lands in the section that sent it, never in
+    // yours.
+    expect(personalSection().queryByTestId("add-note")).toBeNull();
+    expect(personalSection().queryByTestId("known-package-request-error")).toBeNull();
+    if (outcome === "resolve") {
+      expect(projectSection().getByTestId("add-note").textContent).toBe(`Requested ${name}`);
+    } else {
+      expect(projectSection().getByTestId("known-package-request-error").textContent).toBe("old destination refusal");
+    }
+    fill("~1.2.3", name, personalSection());
+    fireEvent.click(personalSection().getByTestId("known-package-request-submit"));
+    await personalSection().findByTestId("add-note");
     expect(commandMock).toHaveBeenCalledWith("environment.request", {
       repository: OWN_KEY, name, request: { kind: "registry", version: "~1.2.3" },
     });

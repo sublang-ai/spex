@@ -83,7 +83,8 @@ export interface CaptainHomeProps {
   /** Go to a surface at the place this home shows (run-view-168):
    * the server form's "Open Space" opens Space there (run-view-174),
    * and the local form's "Sign in to your Space" the Space surface's
-   * sign-in (run-view-172). */
+   * sign-in (run-view-172); "Playbooks" opens the project's Playbooks
+   * tab (DR-172). */
   onNavigate: (surface: "Settings" | "Playbooks" | "Space") => void;
   /** Apply a merge patch to the Captain's block (captain.set). */
   onSaveCaptain: (patch: AgentPatch) => Promise<unknown>;
@@ -820,9 +821,9 @@ export function CaptainHome(props: CaptainHomeProps) {
               activeIndex={Math.min(slashIndex, slash.length - 1)}
               onPick={insertCommand}
               onCompileNew={() => {
-                // The Library lands on its id field (playbook-library-51),
-                // at the place shown here: the navigation opens Playbooks
-                // there (run-view-168).
+                // The project's Playbooks tab lands on its id field
+                // (playbook-library-51), at the place shown here
+                // (run-view-168, DR-172).
                 store.getState().requestNewPlaybook();
                 props.onNavigate("Playbooks");
               }}

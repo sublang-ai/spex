@@ -3,9 +3,10 @@
 
 // run-view-171: the place selector and the team servers (run-view-168,
 // run-view-170, DR-133). The local store and two seat stores, each over
-// a fake client of its own: the selector switches Settings, Playbooks —
-// with its Environments — and Groups between this computer's store and
-// a seat's, each surface reading and acting at the place it names; this
+// a fake client of its own: the selector switches Settings and Space
+// between this computer's store and a seat's, each surface reading and
+// acting at the place it names, while a project's Playbooks and
+// Packages tabs stand at the project's place (DR-172); this
 // computer's Space surface lists each server an instance lets the
 // person open, one line under its group's heading, with Connect, or
 // "Connected" and Disconnect in its overflow, by whether a seat is open
@@ -20,8 +21,8 @@
 // "Sign in again", sending `server.signin`; Disconnect sends
 // `server.close`; a refusal reads the core's cause in place; and the
 // page waits for an open or a close as long as the admission may take.
-// A new playbook asked for from a seat's Captain home opens Playbooks at
-// that seat.
+// A new playbook asked for from a seat's Captain home opens that seat's
+// project's Playbooks tab.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -298,7 +299,7 @@ const commandsOf = (fake: Fake): string[] => fake.command.mock.calls.map(([type]
 const callsOf = (fake: Fake, type: string): unknown[] =>
   fake.command.mock.calls.filter(([name]) => name === type).map(([, fields]) => fields);
 
-function goTo(surface: "Settings" | "Playbooks" | "Space"): void {
+function goTo(surface: "Settings" | "Space"): void {
   fireEvent.click(document.querySelector<HTMLElement>(`[data-surface="${surface}"]`)!);
 }
 
@@ -313,7 +314,7 @@ const shownPlace = (): string => {
   return selector.selectedOptions[0]!.textContent ?? "";
 };
 
-describe("run-view-171: the selector switches Settings, Playbooks, Groups and Environments", () => {
+describe("run-view-171: the selector switches Settings and Space", () => {
   test("each surface reads and acts at the place the selector names", async () => {
     render(<App />);
 
@@ -345,30 +346,12 @@ describe("run-view-171: the selector switches Settings, Playbooks, Groups and En
     expect(commandsOf(alpha)).toContain("config.edit");
     expect(commandsOf(local)).not.toContain("config.edit");
 
-    // Playbooks and its Environments: the place stays picked across the
-    // four surfaces, each read from the seat's core alone. This
-    // computer's workspace read its own lists for its applet tabs
-    // (applets-1) before; Playbooks asks it nothing more.
-    const localLists = callsOf(local, "environment.playbooks").length;
-    goTo("Playbooks");
-    await settle();
-    // [run-view-171] Playbooks reads the seat's lists for its project.
-    expect(shownPlace()).toBe("build-box");
-    expect(callsOf(alpha, "environment.playbooks")).toContainEqual({ projectId: "p2" });
-    expect(callsOf(local, "environment.playbooks").slice(localLists)).toEqual([]);
-    // [run-view-171] Environments reads the seat's environment.
-    expect(callsOf(alpha, "environment.get")).toContainEqual({ repository: "p2" });
-    await waitFor(() => expect(screen.getByText("acme/gpu-tools")).toBeTruthy());
-    expect(screen.queryByText("acme/home-tools")).toBeNull();
-    pick("This computer");
-    await settle();
-    // [run-view-171] back at this computer, its own environment.
-    expect(callsOf(local, "environment.get")).toContainEqual({ repository: "p1" });
-    await waitFor(() => expect(screen.getByText("acme/home-tools")).toBeTruthy());
-    expect(screen.queryByText("acme/gpu-tools")).toBeNull();
-
-    // Groups: this computer's instances, then the seat's own.
+    // Groups: the place stays picked across the surfaces it serves; back
+    // at this computer, its instances, then the seat's own.
     goTo("Space");
+    await settle();
+    expect(shownPlace()).toBe("build-box");
+    pick("This computer");
     await settle();
     expect(screen.getByRole("group", { name: "spex.pub" })).toBeTruthy();
     pick("build-box");
@@ -384,6 +367,42 @@ describe("run-view-171: the selector switches Settings, Playbooks, Groups and En
     expect(document.querySelector('[data-testid^="space-servers-"]')).toBeNull();
     expect(document.querySelector('[data-testid^="space-server-"]')).toBeNull();
     // A seat's state touches no other place.
+    expect(commandsOf(beta)).toEqual([]);
+  });
+
+  test("[run-view-168] a project's Playbooks and Packages tabs stand at the project's place, with no selector", async () => {
+    render(<App />);
+    // This computer's project: its tabs read this computer's core.
+    const seatLists = callsOf(alpha, "environment.playbooks").length;
+    fireEvent.click(screen.getByTestId("workspace-tab-packages"));
+    await settle();
+    expect(screen.queryByTestId("place-selector")).toBeNull();
+    expect(callsOf(local, "environment.get")).toContainEqual({ repository: "p1" });
+    await waitFor(() => expect(screen.getByText("acme/home-tools")).toBeTruthy());
+    expect(screen.queryByText("acme/gpu-tools")).toBeNull();
+    fireEvent.click(screen.getByTestId("workspace-tab-playbooks"));
+    await settle();
+    expect(callsOf(local, "environment.playbooks")).toContainEqual({ projectId: "p1" });
+    expect(callsOf(alpha, "environment.playbooks").length).toBe(seatLists);
+
+    // The seat's project: its tabs read the seat's core alone, whatever
+    // place Settings and Space show.
+    goTo("Settings");
+    expect(shownPlace()).toBe("This computer");
+    const localGets = callsOf(local, "environment.get").length;
+    fireEvent.click(screen.getByTestId(`sidebar-project-p2@${ALPHA.place}`));
+    await settle();
+    expect(screen.queryByTestId("place-selector")).toBeNull();
+    fireEvent.click(screen.getByTestId("workspace-tab-playbooks"));
+    await settle();
+    expect(callsOf(alpha, "environment.playbooks")).toContainEqual({ projectId: "p2" });
+    expect(await screen.findByTestId("playbook-card-train")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("workspace-tab-packages"));
+    await settle();
+    expect(callsOf(alpha, "environment.get")).toContainEqual({ repository: "p2" });
+    await waitFor(() => expect(screen.getByText("acme/gpu-tools")).toBeTruthy());
+    expect(screen.queryByText("acme/home-tools")).toBeNull();
+    expect(callsOf(local, "environment.get").slice(localGets)).not.toContainEqual({ repository: "p2" });
     expect(commandsOf(beta)).toEqual([]);
   });
 
@@ -448,7 +467,7 @@ function expectTerms(contract: HTMLElement): void {
 }
 
 describe("run-view-168: a new playbook asked for at a seat", () => {
-  test("the Captain home's New playbook opens Playbooks at the seat shown, its field focused", async () => {
+  test("the Captain home's New playbook opens the Playbooks tab of the seat's project shown, its field focused", async () => {
     const summary = (SEAT_CONFIG as Extract<ConfigState, { status: "valid" }>).summary;
     alphaStore.setState({
       configState: {
@@ -466,9 +485,11 @@ describe("run-view-168: a new playbook asked for at a seat", () => {
     fireEvent.change(screen.getByTestId("start-composer"), { target: { value: "/" } });
     fireEvent.mouseDown(screen.getByTestId("slash-new-playbook"));
     await settle();
-    // [run-view-168] asked at the place shown, Playbooks opens there with
-    // the new playbook's field focused (playbook-library-51).
-    expect(shownPlace()).toBe("build-box");
+    // [run-view-168] asked at the place shown, its project's Playbooks
+    // tab opens there with the new playbook's field focused
+    // (playbook-library-51).
+    expect(alphaStore.getState().workspaceTabs.p2).toBe("playbooks");
+    expect(screen.queryByTestId("place-selector")).toBeNull();
     await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("new-playbook-id")));
     expect(alphaStore.getState().newPlaybookRequested).toBe(false);
     expect(useAppStore.getState().newPlaybookRequested).toBe(false);

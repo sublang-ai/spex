@@ -27,7 +27,8 @@ import {
   test,
   expect,
   open,
-  nav,
+  newTaskTab,
+  projectTab,
   send,
   git,
   LIVE,
@@ -40,7 +41,6 @@ import {
   commitCount,
   commitIdentity,
   expectEngaged,
-  surfaceEntry,
 } from "../src/harness";
 
 test.use({ appOptions: { config: "none", project: true } });
@@ -72,7 +72,7 @@ test.describe("the app's own example", () => {
     test.setTimeout(220 * 60_000);
     const TURN = 10 * 60_000;
     await open(page, app);
-    await nav(page, "Playbooks").click();
+    await projectTab(page, "Playbooks");
     await page.getByTestId("example-prefill").click();
     await expect(page.getByTestId("authoring-workspace")).toBeVisible();
     const chip = page.getByTestId("draft-chip");
@@ -224,7 +224,7 @@ test.describe("the app's own example", () => {
     // the enabled playbook to its finish with both role players
     // engaged and the change committed (playbook-library-14), any
     // player's question answered through the Captain.
-    await surfaceEntry(page, "Workspace").click();
+    await newTaskTab(page);
     await page.getByTestId("start-composer").fill("/");
     await expect(page.getByRole("listbox")).toContainText(`/${command}`);
     commitIdentity(app.projectDir);
@@ -267,7 +267,7 @@ test.describe("the changelog playbook", () => {
     test.setTimeout(250 * 60_000);
     const TURN = 10 * 60_000;
     await open(page, app);
-    await nav(page, "Playbooks").click();
+    await projectTab(page, "Playbooks");
     // The seeded template configures every built-in, so no built-ins
     // section stands here; the New playbook field proves the surface.
     const idField = page.getByTestId("new-playbook-id");
@@ -418,7 +418,7 @@ test.describe("the changelog playbook", () => {
     }
 
     // A new session's slash menu offers it.
-    await surfaceEntry(page, "Workspace").click();
+    await newTaskTab(page);
     const box = page.getByTestId("start-composer");
     await box.fill("/");
     await expect(page.getByRole("listbox")).toContainText("/changelog");

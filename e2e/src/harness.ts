@@ -1842,20 +1842,74 @@ async function load(page: Page, app: App, path: string): Promise<void> {
   await page.goto(`${app.origin}/${path}?token=${encodeURIComponent(app.token)}`);
 }
 
-/** The surfaces as the rail names them in its own attributes. */
+/** The surfaces as the rail names them in its own attributes: the rail
+ * holds Dashboard, Projects, Space and Settings (run-view-67, DR-172). */
 export type SurfaceName =
   | "Dashboard"
   | "Workspace"
-  | "Playbooks"
   | "Space"
   | "Settings";
 
 /** The sidebar entry for a surface, by its English name. */
 export function nav(
   page: Page,
-  name: "Dashboard" | "Projects" | "Playbooks" | "Space" | "Settings",
+  name: "Dashboard" | "Projects" | "Space" | "Settings",
 ) {
   return page.getByRole("button", { name, exact: true });
+}
+
+/** The project's pinned tabs this harness opens by name: beside Specs
+ * and Overview, the playbooks a session in the project can run and its
+ * packages (run-view-58, DR-172). */
+export type ProjectTabName = "Playbooks" | "Packages";
+
+/** The strip's control for one of the current project's pinned tabs. */
+export function projectTabControl(page: Page, name: ProjectTabName): Locator {
+  return page.getByTestId(`workspace-tab-${name.toLowerCase()}`);
+}
+
+/**
+ * Open the current project's pinned Playbooks or Packages tab from
+ * wherever the page stands — the Projects surface first where another
+ * surface is shown — and return the tab's panel (run-view-58). The
+ * Playbooks tab's panel gives way to a draft's workspace while one is
+ * open, so callers reach into the page where a draft may stand.
+ */
+export async function projectTab(page: Page, name: ProjectTabName): Promise<Locator> {
+  const control = projectTabControl(page, name);
+  if (!(await control.isVisible())) await surfaceEntry(page, "Workspace").click();
+  await control.click();
+  await expect(control).toHaveAttribute("aria-selected", "true");
+  return page.getByTestId(`${name.toLowerCase()}-tab`);
+}
+
+/** Where a row of the Playbooks tab comes from: the project's
+ * environment, or your own group's, which the tab calls Personal
+ * (playbook-library-1). */
+export type PlaybookOrigin = "project" | "personal";
+
+/** A playbook's row on the Playbooks tab from one environment: a
+ * playbook both environments export is listed once per environment,
+ * each row naming its origin (playbook-library-1). The row carries its
+ * origin as the config it writes, `project` or `own`. */
+export function playbookCard(scope: Page | Locator, id: string, origin: PlaybookOrigin): Locator {
+  const config = origin === "personal" ? "own" : "project";
+  return scope.locator(`[data-testid="playbook-card-${id}"][data-origin="${config}"]`);
+}
+
+/** One heading's half of the Packages tab: the project's packages, or
+ * your own group's beneath them under Personal (playbook-library-92).
+ * Each half holds its registry account, its packages and its Add. */
+export function packagesSection(page: Page, whose: PlaybookOrigin): Locator {
+  return page.getByTestId(`packages-${whose}`);
+}
+
+/** The project's New task tab, where its start composer stands. */
+export async function newTaskTab(page: Page): Promise<void> {
+  const control = page.getByRole("tab", { name: "New task", exact: true });
+  if (!(await control.isVisible())) await surfaceEntry(page, "Workspace").click();
+  await control.click();
+  await expect(composer(page)).toBeVisible();
 }
 
 /** The Boss composer on the Captain home or in a session (the test

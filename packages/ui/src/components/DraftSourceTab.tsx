@@ -298,9 +298,15 @@ export function DraftSourceTab({
           </button>
         </span>
       </div>
+      {/* The source scrolls in a box of its own and holds nothing
+          focusable, so the box takes the keyboard stop that scrolls it
+          and says what it holds (run-view-50). */}
       <div
         data-testid="source-markdown"
-        className="relative min-h-0 flex-1 overflow-y-auto rounded-md border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-950"
+        tabIndex={0}
+        role="group"
+        aria-label={i18n._({ id: "Source", comment: "pipeline stage: the authored workflow" })}
+        className="relative min-h-0 flex-1 overflow-y-auto rounded-md border border-neutral-200 bg-neutral-50 p-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 dark:border-neutral-800 dark:bg-neutral-950"
       >
         <Markdown text={source.markdown} links="web-only" />
       </div>

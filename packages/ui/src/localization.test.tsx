@@ -362,12 +362,24 @@ describe("localization-4: the rail reads the resolved language", () => {
     render(<Root />);
     const labels = railLabels();
     // Space is a product name the glossary keeps as authored (DR-172).
-    for (const label of ["仪表盘", "项目", "规程", "Space", "设置"]) {
+    // The rail holds four entries; the playbooks are a project's tab
+    // (DR-172).
+    for (const label of ["仪表盘", "项目", "Space", "设置"]) {
       expect(labels).toContain(label);
     }
-    for (const label of ["Dashboard", "Playbooks", "Settings"]) {
+    for (const label of ["Dashboard", "Playbooks", "规程", "Settings"]) {
       expect(labels).not.toContain(label);
     }
+  });
+});
+
+describe("localization-4: the project's pinned tabs read the resolved language", () => {
+  test("with zh resolved Specs, Playbooks, Packages and Overview read the glossary's words", () => {
+    speak("zh");
+    render(<Root />);
+    expect(
+      ["specs", "playbooks", "packages", "overview"].map((tab) => screen.getByTestId(`workspace-tab-${tab}`).textContent),
+    ).toEqual(["规约", "规程", "规约包", "概览"]);
   });
 });
 

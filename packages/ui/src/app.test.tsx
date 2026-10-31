@@ -38,7 +38,11 @@ function defaultReply(type: string): object {
         ? { project: [], own: [] }
         : type === "space.get"
           ? groupsState()
-          : {};
+          : type === "draft.list"
+            ? []
+            : type === "draft.defaults"
+              ? { org: "me", license: "Apache-2.0" }
+              : {};
 }
 
 vi.mock("./state/store.js", async (importOriginal) => {
@@ -407,10 +411,10 @@ describe("run-view-70: the sidebar navigates, the tabs hold what is open", () =>
       screen.getByTestId("sidebar-session-a-live").getAttribute("aria-selected"),
     ).toBe("true");
 
-    // Playbooks is a place of its own: its entry is the only current
-    // one, and no row in the tree still reads as where the reader is.
-    fireEvent.click(entry("Playbooks"));
-    expect(entry("Playbooks").getAttribute("aria-current")).toBe("page");
+    // Space is a place of its own: its entry is the only current one,
+    // and no row in the tree still reads as where the reader is.
+    fireEvent.click(entry("Space"));
+    expect(entry("Space").getAttribute("aria-current")).toBe("page");
     expect(selectedRows().length).toBe(0);
 
     // The store still remembers the project, so choosing Projects
@@ -592,7 +596,7 @@ describe("run-view-72: the chrome folds without dropping a duty", () => {
     // collapsing never strands it (run-view-71).
     expect(document.activeElement).toBe(screen.getByTestId("sidebar-collapse"));
     // Collapsed entries keep their names and the count survives.
-    expect(screen.getByLabelText(/^Playbooks$/)).toBeTruthy();
+    expect(screen.getByLabelText(/^Space$/)).toBeTruthy();
     expect(screen.getByTestId("nav-attention-badge").textContent).toBe("2");
     // Sessions stop listing, but the open tab is still the reach.
     expect(screen.queryByTestId("sidebar-session-a-live")).toBeNull();
@@ -626,9 +630,9 @@ describe("run-view-72: the chrome folds without dropping a duty", () => {
     expect(main.getAttribute("aria-label")).toBe("Dashboard");
     expect(main.contains(document.activeElement)).toBe(true);
     expect(document.activeElement).not.toBe(document.body);
-    // Playbooks by number, from the Dashboard's region.
+    // Space by number, from the Dashboard's region (run-view-49).
     fireEvent.keyDown(window, { key: "3", metaKey: true });
-    expect(main.getAttribute("aria-label")).toBe("Playbooks");
+    expect(main.getAttribute("aria-label")).toBe("Space");
     expect(main.contains(document.activeElement)).toBe(true);
     // Back to Projects by number: the composer is the stop.
     fireEvent.keyDown(window, { key: "2", metaKey: true });
@@ -1094,13 +1098,13 @@ describe("run-view-58, projects-4: the Overview tab pins the project's group", (
     expect(
       screen.getByTestId("workspace-tab-overview").getAttribute("aria-selected"),
     ).toBe("true");
-    // ⌘⇧[ from the Overview reaches Specs; ⌘⇧] returns (run-view-58).
+    // ⌘⇧[ from the Overview reaches Packages; ⌘⇧] returns (run-view-58).
     fireEvent.keyDown(window, {
       code: "BracketLeft",
       metaKey: true,
       shiftKey: true,
     });
-    expect(useAppStore.getState().workspaceTabs.p1).toBe("specs");
+    expect(useAppStore.getState().workspaceTabs.p1).toBe("packages");
     fireEvent.keyDown(window, {
       code: "BracketRight",
       metaKey: true,
@@ -1270,9 +1274,11 @@ describe("run-view-48/50: the strip walks by keyboard and names its attention", 
     });
     const plus = screen.getByRole("tab", { name: "New task" });
     const specs = screen.getByTestId("workspace-tab-specs");
+    const playbooks = screen.getByTestId("workspace-tab-playbooks");
+    const packages = screen.getByTestId("workspace-tab-packages");
     const overview = screen.getByTestId("workspace-tab-overview");
     expect(live.tabIndex).toBe(0);
-    for (const other of [failed, plus, specs, overview]) {
+    for (const other of [failed, plus, specs, playbooks, packages, overview]) {
       expect(other.tabIndex).toBe(-1);
     }
 
@@ -1753,5 +1759,127 @@ describe("run-view-135/136: a summons the session answers names its turn", () =>
       "Sign in to coder again",
     );
     expect(screen.getByTestId("boss-composer")).toBeTruthy();
+  });
+});
+
+describe("DR-172: the rail of four, and the project's Playbooks and Packages tabs", () => {
+  /** This page's storage, kept in memory for one test: the host's own
+   * may answer no call. */
+  function keepStorage(initial: Record<string, string>): { kept: Map<string, string>; restore: () => void } {
+    const kept = new Map(Object.entries(initial));
+    const real = Object.getOwnPropertyDescriptor(window, "localStorage");
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (key: string) => kept.get(key) ?? null,
+        setItem: (key: string, value: string) => kept.set(key, value),
+        removeItem: (key: string) => kept.delete(key),
+        clear: () => kept.clear(),
+        key: (index: number) => [...kept.keys()][index] ?? null,
+        get length() {
+          return kept.size;
+        },
+      },
+    });
+    return { kept, restore: () => { if (real) Object.defineProperty(window, "localStorage", real); } };
+  }
+
+  test("[run-view-67] [run-view-49] the rail reads Dashboard, Projects, Space and Settings, Cmd/Ctrl+1..4 in its order", () => {
+    // A config Settings can draw without a Captain.
+    useAppStore.setState({ configState: { status: "missing", path: "/tmp/config.yaml" } as never });
+    render(<App />);
+    const rail = screen.getByTestId("sidebar");
+    expect([...rail.querySelectorAll<HTMLElement>("[data-surface]")].map((entry) => entry.dataset.surface)).toEqual([
+      "Dashboard",
+      "Space",
+      "Settings",
+    ]);
+    expect(within(rail).getByTestId("sidebar-workspace").textContent).toBe("Projects");
+    expect(rail.querySelector('[data-surface="Playbooks"]')).toBeNull();
+    const main = screen.getByRole("main");
+    for (const [key, label] of [["1", "Dashboard"], ["2", "Projects"], ["3", "Space"], ["4", "Settings"]] as const) {
+      fireEvent.keyDown(window, { key, metaKey: true });
+      expect(main.getAttribute("aria-label")).toBe(label);
+    }
+    // No fifth surface: the key moves nothing.
+    fireEvent.keyDown(window, { key: "5", metaKey: true });
+    expect(main.getAttribute("aria-label")).toBe("Settings");
+  });
+
+  test("[run-view-67] a remembered Playbooks surface opens Projects at the current project's Playbooks tab, read once", async () => {
+    const storage = keepStorage({ "spex.surface": "Playbooks" });
+    try {
+      render(<App />);
+      expect(screen.getByRole("main").getAttribute("aria-label")).toBe("Projects");
+      await vi.waitFor(() => expect(useAppStore.getState().workspaceTabs.p1).toBe("playbooks"));
+      expect(screen.getByTestId("workspace-tab-playbooks").getAttribute("aria-selected")).toBe("true");
+      expect(await screen.findByTestId("playbooks-tab")).toBeTruthy();
+      // The stored value is mapped once: Projects stands in its place.
+      expect(storage.kept.get("spex.surface")).toBe("Workspace");
+    } finally {
+      storage.restore();
+    }
+  });
+
+  test("[run-view-67] a stored surface the rail does not hold opens Projects", () => {
+    const storage = keepStorage({ "spex.surface": "Environments" });
+    try {
+      render(<App />);
+      expect(screen.getByRole("main").getAttribute("aria-label")).toBe("Projects");
+      expect(useAppStore.getState().workspaceTabs.p1).toBe("a-live");
+    } finally {
+      storage.restore();
+    }
+  });
+
+  test("[run-view-58] the strip pins Specs, Playbooks, Packages and Overview in order, each in the tab list and the cycle", async () => {
+    render(<App />);
+    const pinned = [...screen.getAllByRole("tab")].filter((tab) => tab.dataset.testid?.startsWith("workspace-tab-"));
+    expect(pinned.map((tab) => tab.dataset.testid)).toEqual([
+      "workspace-tab-specs",
+      "workspace-tab-playbooks",
+      "workspace-tab-packages",
+      "workspace-tab-overview",
+    ]);
+    expect(screen.getByTestId("workspace-tab-playbooks").textContent).toBe("Playbooks");
+    expect(screen.getByTestId("workspace-tab-packages").textContent).toBe("Packages");
+
+    // The arrows walk them in order.
+    const specs = screen.getByTestId("workspace-tab-specs");
+    specs.focus();
+    fireEvent.keyDown(specs, { key: "ArrowRight" });
+    expect(document.activeElement).toBe(screen.getByTestId("workspace-tab-playbooks"));
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowRight" });
+    expect(document.activeElement).toBe(screen.getByTestId("workspace-tab-packages"));
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowRight" });
+    expect(document.activeElement).toBe(screen.getByTestId("workspace-tab-overview"));
+
+    // Activated, each shows its view.
+    fireEvent.click(screen.getByTestId("workspace-tab-playbooks"));
+    expect(useAppStore.getState().workspaceTabs.p1).toBe("playbooks");
+    expect(await screen.findByTestId("playbooks-tab")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("workspace-tab-packages"));
+    expect(useAppStore.getState().workspaceTabs.p1).toBe("packages");
+    expect(await screen.findByTestId("packages-tab")).toBeTruthy();
+    expect(screen.queryByTestId("playbooks-tab")).toBeNull();
+    // Their commands name the project (playbook-library-1, -92).
+    await vi.waitFor(() => expect(commandMock).toHaveBeenCalledWith("environment.get", { repository: "p1" }));
+    expect(commandMock).toHaveBeenCalledWith("environment.playbooks", { projectId: "p1" });
+
+    // ⌘⇧] from Specs walks Playbooks, Packages, then Overview.
+    fireEvent.click(specs);
+    for (const next of ["playbooks", "packages", "overview"]) {
+      fireEvent.keyDown(window, { code: "BracketRight", metaKey: true, shiftKey: true });
+      expect(useAppStore.getState().workspaceTabs.p1).toBe(next);
+    }
+  });
+
+  test("the start view's way to the playbooks opens the project's Playbooks tab", async () => {
+    useAppStore.setState({ workspaceTabs: { p1: "start" } });
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "No playbooks available — open Playbooks" }));
+    expect(useAppStore.getState().workspaceTabs.p1).toBe("playbooks");
+    expect(screen.getByRole("main").getAttribute("aria-label")).toBe("Projects");
+    expect(await screen.findByTestId("playbooks-tab")).toBeTruthy();
   });
 });

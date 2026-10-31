@@ -1,17 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The Playbooks surface (playbook-library, DR-104): a view over the
-// environments of the current project and your own group. A switch
-// picks the side; each side shows that spex repository's environment —
-// the spec packages it requests and what it got, the ways to add one
-// beneath them — above the playbooks it exports, each with its spec
+// A project's Playbooks tab (playbook-library-1, DR-104, DR-172): what
+// a session in the project can run, read from the environments of the
+// project and your own group together — no switch between them — each
+// playbook listed once per environment exporting it, with its spec
 // package and version, its roles bound to session players, and where
-// it is enabled. Enabling writes that side's config with a player per
-// role; a project's entry names players alone, your own group's may
-// tune each role. On the project's side the authoring sessions follow
-// the playbooks; the example closes the surface. An authoring session
-// opened here replaces the list with its workspace.
+// it is enabled. Enabling writes the config of the row's own
+// environment with a player per role; a project's entry names players
+// alone, your own group's may tune each role. The project's authoring
+// sessions follow the playbooks; the example closes the tab. An
+// authoring session of the project opened here replaces the list with
+// its workspace. The packages themselves stand on the project's
+// Packages tab.
 
 import { type KeyboardEvent as ReactKeyboardEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -22,15 +23,13 @@ import {
   type InvalidPlaybookEntry,
   type PlaybookArtifacts,
   type PlaybookAvailability,
+  type ProjectInfo,
   type ReadinessEntry,
   type RoleBindingSummary,
   type SessionPlayerSummary,
 } from "@sublang/spex-core/protocol";
 
-import {
-  draftNeedsProject,
-  type PlaybooksSide,
-} from "../state/store.js";
+import type { PlaybookOrigin } from "../state/store.js";
 import { usePlaceStore } from "../state/place-context.js";
 import { SLC_DEMO } from "../examples/slc-demo.js";
 import {
@@ -48,7 +47,6 @@ import {
   packageOrgRuleText,
 } from "../lib/drafts.js";
 import {
-  chosenProject,
   ownRepositoryKey,
   sourceKindWord,
 } from "../lib/environments.js";
@@ -59,8 +57,6 @@ import { absoluteTitle, relativeAge } from "../lib/time.js";
 import { useClock } from "../lib/useClock.js";
 import { AuthoringWorkspace, DraftStateChip } from "./AuthoringWorkspace.js";
 import { BindingEditorPopover } from "./BindingEditor.js";
-import { RegistryAccount } from "./RegistryAccount.js";
-import { AddSpecPackages, EnvironmentSection } from "./EnvironmentSection.js";
 import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { Markdown } from "./Markdown.js";
@@ -203,8 +199,8 @@ function FromLabel({ entry }: { entry: PlaybookAvailability }) {
   );
 }
 
-/** One role of a playbook enabled on this side: the player bound to
- * it, what that binding runs, whether the lane is shared, and the
+/** One role of a playbook its row's config enables: the player bound
+ * to it, what that binding runs, whether the lane is shared, and the
  * binding editor (playbook-library-1, playbook-library-4,
  * playbook-library-38). */
 function BoundRole({
@@ -213,7 +209,7 @@ function BoundRole({
   binding,
   roster,
   readiness,
-  side,
+  origin,
   repository,
 }: {
   entry: PlaybookAvailability;
@@ -221,7 +217,7 @@ function BoundRole({
   binding: RoleBindingSummary | undefined;
   roster: SessionPlayerSummary[];
   readiness: ReadinessEntry[];
-  side: PlaybooksSide;
+  origin: PlaybookOrigin;
   repository: string;
 }) {
   const store = usePlaceStore();
@@ -300,7 +296,7 @@ function BoundRole({
           position={`${entry.id}.${role}`}
           binding={binding ?? { playerId: roster[0]?.id ?? "", display: "" }}
           players={roster}
-          playerOnly={side === "project"}
+          playerOnly={origin === "project"}
           anchorRef={gearRef}
           onSave={(next) =>
             bindRole(entry.id, role, next, repository, store.getClient()).then((result) => {
@@ -315,7 +311,7 @@ function BoundRole({
   );
 }
 
-/** One role of a playbook this side does not enable yet: the player
+/** One role of a playbook its row's config does not enable yet: the player
  * the enabling would name, `dev.<role>` by default and editable, and —
  * for a player your own roster lacks — the agent block it is written
  * with (playbook-library-34). */
@@ -415,12 +411,12 @@ function commitPhrase(folder: string): ReactNode {
 }
 
 /** One listed playbook (playbook-library-1): its command and intent,
- * where it is enabled, its spec package, its roles — bound where this
- * side enables it, proposed where it does not — Enable or Disable for
- * this side's config, its hints, and its stage row. */
+ * where it is enabled, its spec package, its roles — bound where its
+ * environment's config enables it, proposed where it does not — Enable
+ * or Disable for that config, its hints, and its stage row. */
 function PlaybookRow({
   entry,
-  side,
+  origin,
   repository,
   invalid,
   bindings,
@@ -433,8 +429,10 @@ function PlaybookRow({
   onChanged,
 }: {
   entry: PlaybookAvailability;
-  side: PlaybooksSide;
-  /** The spex repository whose config this side writes. */
+  /** Whose environment lists this row: the project's or your own
+   * group's (playbook-library-1). */
+  origin: PlaybookOrigin;
+  /** The spex repository whose config this row writes: its origin's. */
   repository: string;
   invalid?: string;
   bindings: Record<string, RoleBindingSummary> | undefined;
@@ -451,7 +449,7 @@ function PlaybookRow({
   onChanged: () => void;
 }) {
   const store = usePlaceStore();
-  const enabledHere = entry.enabled.includes(side);
+  const enabledHere = entry.enabled.includes(origin);
   const [players, setPlayers] = useState<Record<string, string>>({});
   const [blocks, setBlocks] = useState<Record<string, AgentBlockInput>>({});
   const [busy, setBusy] = useState(false);
@@ -515,8 +513,11 @@ function PlaybookRow({
 
   return (
     <div
-      id={`playbook-card-${entry.id}`}
+      id={`playbook-card-${origin}-${entry.id}`}
       data-testid={`playbook-card-${entry.id}`}
+      // A playbook both environments export is listed once per
+      // environment (playbook-library-1): the row says whose it is.
+      data-origin={origin}
       className={`flex flex-col gap-2 rounded-lg border bg-white px-4 py-3 dark:bg-neutral-900 ${
         enabledHere ? "border-neutral-200 dark:border-neutral-800" : "border-dashed border-neutral-300 dark:border-neutral-700"
       } ${revealed ? "ring-2 ring-brand-400 dark:ring-brand-500" : ""}`}
@@ -596,7 +597,7 @@ function PlaybookRow({
               binding={bindings?.[role]}
               roster={roster}
               readiness={readiness}
-              side={side}
+              origin={origin}
               repository={repository}
             />
           ) : (
@@ -636,6 +637,7 @@ function InvalidEntryRow({
   onChanged,
 }: {
   entry: InvalidPlaybookEntry;
+  /** The spex repository whose config holds the entry. */
   repository: string;
   onChanged: () => void;
 }) {
@@ -645,6 +647,7 @@ function InvalidEntryRow({
   return (
     <div
       data-testid={`playbook-card-${entry.playbook}`}
+      data-origin={entry.config}
       className="flex flex-col gap-1 rounded-lg border border-red-300 bg-white px-4 py-3 dark:border-red-900 dark:bg-neutral-900"
     >
       <div className="flex flex-wrap items-center gap-2">
@@ -950,11 +953,7 @@ function NewPlaybookField({
   onOpenExisting,
   autoFocus,
   onAutoFocused,
-  blockedReason,
 }: {
-  /** Why no session can be made here, the field disabled meanwhile:
-   * an authoring session lives in a project's spex repository. */
-  blockedReason?: string;
   /** The playbooks either environment exports, by id. */
   taken: ReadonlyMap<string, PlaybookAvailability>;
   drafts: Record<string, DraftInfo>;
@@ -990,7 +989,7 @@ function NewPlaybookField({
 
   async function submit(): Promise<void> {
     const id = value.trim();
-    if (!id || busy || blockedReason) return;
+    if (!id || busy) return;
     if (!isDraftId(id)) {
       setError(draftIdRuleText());
       return;
@@ -1057,7 +1056,6 @@ function NewPlaybookField({
             onKeyDown={onKeyDown}
             placeholder={i18n._({ id: "e.g. triage", comment: "placeholder of the new-playbook id field; triage is an example id" })}
             spellCheck={false}
-            disabled={blockedReason !== undefined}
             aria-invalid={error !== undefined}
             aria-describedby="new-playbook-caption"
             className={field}
@@ -1075,7 +1073,6 @@ function NewPlaybookField({
             }}
             onKeyDown={onKeyDown}
             spellCheck={false}
-            disabled={blockedReason !== undefined}
             className={field}
           />
           {orgsStatus === "loading" ? <span role="status" className="text-xs text-neutral-500">{i18n._("Loading registry namespaces…")}</span> : null}
@@ -1094,15 +1091,13 @@ function NewPlaybookField({
             onKeyDown={onKeyDown}
             placeholder={i18n._({ id: "e.g. Apache-2.0", comment: "placeholder of the new-playbook license field; an SPDX license id" })}
             spellCheck={false}
-            disabled={blockedReason !== undefined}
             className={field}
           />
         </label>
         <button
           type="button"
           data-testid="new-playbook-button"
-          disabled={busy || empty || blockedReason !== undefined}
-          title={blockedReason}
+          disabled={busy || empty}
           onClick={() => void submit()}
           className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-40"
         >
@@ -1110,7 +1105,7 @@ function NewPlaybookField({
         </button>
       </div>
       <span id="new-playbook-caption" data-testid="new-playbook-caption" className="text-xs text-neutral-500">
-        {blockedReason ?? draftIdCaption()}
+        {draftIdCaption()}
       </span>
       {error ? (
         <span
@@ -1144,19 +1139,31 @@ function announcementFor(previous: DraftInfo | undefined, next: DraftInfo): stri
   }
 }
 
-/** The playbooks a side lists, sectioned by what a session there
- * effectively runs: enabled in the project's config or your own
+/** One listed row: the playbook as its environment exports it, whose
+ * environment that is, and the spex repository whose config the row
+ * writes (playbook-library-1). */
+interface ListedRow {
+  entry: PlaybookAvailability;
+  origin: PlaybookOrigin;
+  repository: string;
+}
+
+/** The playbooks the tab lists, sectioned by what a session in the
+ * project effectively runs: enabled in the project's config or your own
  * group's, each row naming which, then enabled in neither
  * (playbook-library-1, playbook-library-34). */
-function splitByEnablement(rows: readonly PlaybookAvailability[]) {
-  const enabled = rows.filter((row) => row.enabled.length > 0);
-  const rest = rows.filter((row) => row.enabled.length === 0);
+function splitByEnablement(rows: readonly ListedRow[]) {
+  const enabled = rows.filter((row) => row.entry.enabled.length > 0);
+  const rest = rows.filter((row) => row.entry.enabled.length === 0);
   return { enabled, rest };
 }
 
-export function LibrarySurface({
+export function PlaybooksTab({
+  project,
   onNavigate,
 }: {
+  /** The project whose tab this is, at the place it is shown. */
+  project: ProjectInfo;
   onNavigate?: (surface: "Settings" | "Space") => void;
 }) {
   const store = usePlaceStore();
@@ -1171,8 +1178,6 @@ export function LibrarySurface({
   const loadDraftDefaults = store((state) => state.loadDraftDefaults);
   const openDraft = store((state) => state.openDraft);
   const closeDraft = store((state) => state.closeDraft);
-  const projects = store((state) => state.projects);
-  const currentProjectId = store((state) => state.currentProjectId);
   const deleteDraft = store((state) => state.deleteDraft);
   const setDraftSourceMode = store((state) => state.setDraftSourceMode);
   const consumeNewPlaybookRequest = store((state) => state.consumeNewPlaybookRequest);
@@ -1181,11 +1186,9 @@ export function LibrarySurface({
   const revealPlaybook = store((state) => state.revealPlaybook);
   const space = store((state) => state.space);
   const loadSpace = store((state) => state.loadSpace);
-  const lists = store((state) => state.playbookLists);
+  const readLists = store((state) => state.playbookLists);
   const loadPlaybookLists = store((state) => state.loadPlaybookLists);
   const loadEnvironment = store((state) => state.loadEnvironment);
-  const storedSide = store((state) => state.playbooksSide);
-  const setSide = store((state) => state.setPlaybooksSide);
 
   const [listError, setListError] = useState<string>();
   const [exampleError, setExampleError] = useState<string>();
@@ -1200,30 +1203,28 @@ export function LibrarySurface({
   const registryAccounts = store((current) => current.registryAccounts);
   const environments = store((current) => current.environments);
   const [newLicense, setNewLicense] = useState("");
-  const [revealed, setRevealed] = useState<string>();
+  const [revealed, setRevealed] = useState<{ id: string; origin: PlaybookOrigin }>();
   // The card an enabling revealed keeps its success line until the
-  // surface is left, its highlight fading sooner (playbook-library-61).
-  const [enabledNote, setEnabledNote] = useState<string>();
+  // tab is left, its highlight fading sooner (playbook-library-61).
+  const [enabledNote, setEnabledNote] = useState<{ id: string; origin: PlaybookOrigin }>();
   const [liveNote, setLiveNote] = useState("");
   const [deletedNote, setDeletedNote] = useState<string>();
   const previousDrafts = useRef<Record<string, DraftInfo>>({});
 
-  const project = chosenProject(projects, currentProjectId);
-  const projectId = project?.id;
-  const ownKey = ownRepositoryKey(space, lists?.own);
-  // With no project chosen, your own group's side alone stands
-  // (playbook-library-1).
-  const side: PlaybooksSide = project ? storedSide : "own";
-  const repository = side === "project" ? projectId : ownKey;
+  const projectId = project.id;
+  // What the environments export, as read for this project: a read for
+  // another project lists nothing here.
+  const lists = readLists?.projectId === projectId ? readLists : undefined;
+  const ownKey = ownRepositoryKey(space, readLists?.own);
   const connected = connection === "open";
-  const registryOrigin = projectId ? environments[projectId]?.registry?.origin : undefined;
+  const registryOrigin = environments[projectId]?.registry?.origin;
   const registryAccount = registryOrigin ? registryAccounts?.[registryOrigin]?.account?.id : undefined;
   useEffect(() => {
     let active = true;
     setRegistryOrgs([]);
     setRegistryOrgsError(undefined);
     setRegistryOrgsStatus("idle");
-    if (connected && projectId && registryOrigin && registryAccount) void (async () => {
+    if (connected && registryOrigin && registryAccount) void (async () => {
       setRegistryOrgsStatus("loading");
       try {
         const reply = await store.getClient().command("registry.orgs", { repository: projectId }, { timeoutMs: 35_000 });
@@ -1243,17 +1244,19 @@ export function LibrarySurface({
 
   useEffect(() => {
     if (!connected) return;
-    // Surface activation reads the authoring sessions
+    // The tab's activation reads the authoring sessions
     // (playbook-library-50), what each environment exports
-    // (playbook-library-1) and, for the sync and the account, Space.
+    // (playbook-library-1) and, for your own group's key, Space.
     void listDrafts().catch(() => {});
     reloadLists();
     if (!store.getState().space) void loadSpace().catch(() => {});
   }, [connected, listDrafts, reloadLists, loadSpace]);
 
+  // The project's environment names the registry New playbook's orgs
+  // are read at (playbook-library-121).
   useEffect(() => {
-    if (connected && repository) void loadEnvironment(repository).catch(() => {});
-  }, [connected, repository, loadEnvironment]);
+    if (connected) void loadEnvironment(projectId).catch(() => {});
+  }, [connected, projectId, loadEnvironment]);
 
   // New playbook's Org and License start from the project's defaults,
   // read as the field is shown for it (playbook-library-51, -103): a
@@ -1267,7 +1270,7 @@ export function LibrarySurface({
     setNewLicense("");
   }, [projectId]);
   useEffect(() => {
-    if (!connected || !projectId) return;
+    if (!connected) return;
     let current = true;
     void loadDraftDefaults(projectId)
       .then((defaults) => {
@@ -1293,25 +1296,22 @@ export function LibrarySurface({
   const newPackage = { org: newOrg.trim(), license: newLicense.trim() };
   const newPackageReady = isPackageOrg(newPackage.org) && newPackage.license.length > 0;
 
-  // The slash menu's request lands on the id field (playbook-library-51),
-  // which stands on the project's side.
+  // The slash menu's request lands on the id field (playbook-library-51).
   useEffect(() => {
-    if (newPlaybookRequested && consumeNewPlaybookRequest()) {
-      setSide("project");
-      setFocusNew(true);
-    }
-  }, [newPlaybookRequested, consumeNewPlaybookRequest, setSide]);
+    if (newPlaybookRequested && consumeNewPlaybookRequest()) setFocusNew(true);
+  }, [newPlaybookRequested, consumeNewPlaybookRequest]);
 
-  // An enabling brings its card into view (playbook-library-61).
+  // An enabling brings its card into view (playbook-library-61): the
+  // row of the environment whose config it was enabled in.
   useEffect(() => {
     if (revealPlaybook === undefined) return;
-    const id = consumeRevealPlaybook();
-    if (!id) return;
-    setRevealed(id);
-    setEnabledNote(id);
-    const listed = [...(lists?.project ?? []), ...(lists?.own ?? [])].find((entry) => entry.id === id);
-    setLiveNote(i18n._("Enabled /{command}", { command: listed?.command ?? id }));
-    document.getElementById(`playbook-card-${id}`)?.scrollIntoView?.({ block: "center" });
+    const reveal = consumeRevealPlaybook();
+    if (!reveal) return;
+    setRevealed(reveal);
+    setEnabledNote(reveal);
+    const listed = [...(lists?.project ?? []), ...(lists?.own ?? [])].find((entry) => entry.id === reveal.id);
+    setLiveNote(i18n._("Enabled /{command}", { command: listed?.command ?? reveal.id }));
+    document.getElementById(`playbook-card-${reveal.origin}-${reveal.id}`)?.scrollIntoView?.({ block: "center" });
   }, [revealPlaybook, consumeRevealPlaybook, lists]);
   useEffect(() => {
     if (revealed === undefined) return;
@@ -1383,13 +1383,13 @@ export function LibrarySurface({
     );
   }
   const summary = configState.summary;
-  // Your own group's roster: every side's bindings name its players.
+  // Your own group's roster: every row's bindings name its players.
   const roster = summary.players ?? [];
 
-  // An authoring session's workspace replaces the list
-  // (playbook-library-52); it stays open in the core while the list is
-  // shown.
-  if (openDraftId && drafts[openDraftId]) {
+  // An authoring session of this project replaces the list with its
+  // workspace (playbook-library-52); it stays open in the core while the
+  // list is shown.
+  if (openDraftId && drafts[openDraftId]?.projectId === projectId) {
     return (
       <>
         {liveRegion}
@@ -1398,12 +1398,25 @@ export function LibrarySurface({
     );
   }
 
-  const rows = (side === "project" ? lists?.project : lists?.own) ?? [];
-  const invalid = (lists?.invalid ?? []).filter((entry) => entry.config === side);
-  const invalidFor = new Map(invalid.map((entry) => [entry.playbook, entry.reason]));
-  const strayInvalid = invalid.filter((entry) => !rows.some((row) => row.id === entry.playbook));
+  // Both environments' playbooks, the project's first, each row writing
+  // the config of its own environment (playbook-library-1).
+  const repositoryOf = (origin: PlaybookOrigin): string | undefined => (origin === "project" ? projectId : ownKey);
+  const rows: ListedRow[] = [
+    ...(lists?.project ?? []).map((entry) => ({ entry, origin: "project" as const, repository: projectId })),
+    ...(lists?.own ?? []).map((entry) => ({ entry, origin: "own" as const, repository: ownKey ?? entry.repository })),
+  ];
+  const invalidOf = (origin: PlaybookOrigin) => (lists?.invalid ?? []).filter((entry) => entry.config === origin);
+  const invalidFor = {
+    project: new Map(invalidOf("project").map((entry) => [entry.playbook, entry.reason])),
+    own: new Map(invalidOf("own").map((entry) => [entry.playbook, entry.reason])),
+  };
+  // An enabled entry no row of its environment lists stands marked with
+  // its failure (playbook-library-2).
+  const strayInvalid = (lists?.invalid ?? []).filter(
+    (entry) => !rows.some((row) => row.origin === entry.config && row.entry.id === entry.playbook),
+  );
   const { enabled, rest } = splitByEnablement(rows);
-  const everyRow = [...(lists?.project ?? []), ...(lists?.own ?? [])];
+  const everyRow = rows.map((row) => row.entry);
   const invalidIds = new Set((lists?.invalid ?? []).map((entry) => entry.playbook));
   // Neither config enables anything: only then does the list read as
   // having no playbook (playbook-library-1).
@@ -1476,23 +1489,23 @@ export function LibrarySurface({
     return notes.length > 0 ? <>{notes}</> : null;
   };
 
-  const rowFor = (entry: PlaybookAvailability) => (
+  const rowFor = ({ entry, origin, repository }: ListedRow) => (
     <PlaybookRow
-      key={`${entry.repository}:${entry.name}`}
+      key={`${origin}:${entry.repository}:${entry.name}`}
       entry={entry}
-      side={side}
-      repository={repository ?? entry.repository}
-      invalid={invalidFor.get(entry.id)}
+      origin={origin}
+      repository={repository}
+      invalid={invalidFor[origin].get(entry.id)}
       bindings={
-        entry.bindings?.[side] ??
-        (side === "own" ? (summary.playbooks ?? []).find((playbook) => playbook.id === entry.id)?.roles : undefined)
+        entry.bindings?.[origin] ??
+        (origin === "own" ? (summary.playbooks ?? []).find((playbook) => playbook.id === entry.id)?.roles : undefined)
       }
       roster={roster}
       readiness={readiness}
       captain={summary.captain}
-      revealed={revealed === entry.id}
+      revealed={revealed?.id === entry.id && revealed.origin === origin}
       enabledFolder={
-        enabledNote === entry.id
+        enabledNote?.id === entry.id && enabledNote.origin === origin
           ? drafts[entry.id] ? draftPackagePath(drafts[entry.id]!) : `spex-packages/${entry.package}`
           : undefined
       }
@@ -1517,75 +1530,27 @@ export function LibrarySurface({
       onOpenExisting={(id) => void openDraft(id)}
       autoFocus={focusNew}
       onAutoFocused={() => setFocusNew(false)}
-      blockedReason={project ? undefined : draftNeedsProject()}
     />
   );
 
   return (
-    // The surface root is the box Playbooks scrolls in (DR-041 §9):
+    // The tab's root is the box Playbooks scrolls in (DR-041 §9):
     // height-constrained, and the containing block for its own
     // positioned content, so the page itself never scrolls.
-    <div className="@container relative mx-auto flex w-full min-h-0 max-w-3xl flex-1 flex-col gap-5 overflow-y-auto p-6">
+    <div
+      data-testid="playbooks-tab"
+      className="@container relative mx-auto flex w-full min-h-0 max-w-3xl flex-1 flex-col gap-5 overflow-y-auto p-6"
+    >
       {liveRegion}
       <datalist id="playbooks-roster">
         {roster.map((player) => (
           <option key={player.id} value={player.id} />
         ))}
       </datalist>
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-lg font-semibold">{i18n._({ id: "Playbooks", comment: "the surface listing every playbook" })}</h1>
-        {project ? (
-          <div
-            role="group"
-            aria-label={i18n._({ id: "Playbooks of", comment: "name of the switch between the project's playbooks and your own group's" })}
-            data-testid="playbooks-switch"
-            className="ml-auto flex min-w-0 flex-wrap items-center gap-1 rounded-md border border-neutral-200 p-0.5 dark:border-neutral-800"
-          >
-            {(
-              [
-                // The project by its name, never its spex repository
-                // (DR-159): the title holds the whole name a long one
-                // truncates.
-                ["project", project.name, project.name],
-                ["own", i18n._({ id: "Your own group", comment: "switch: show your own group's playbooks" }), ""],
-              ] as const
-            ).map(([key, label, title]) => (
-              <button
-                key={key}
-                type="button"
-                data-testid={`side-${key}`}
-                aria-pressed={side === key}
-                title={title || undefined}
-                onClick={() => setSide(key)}
-                className={`min-h-6 max-w-[14rem] truncate rounded px-2 py-0.5 text-xs ${
-                  side === key
-                    ? "bg-brand-100 font-medium text-brand-700 dark:bg-brand-950 dark:text-brand-300"
-                    : "text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        ) : null}
-      </div>
+      <h1 className="text-lg font-semibold">{i18n._({ id: "Playbooks", comment: "heading of the project's Playbooks tab" })}</h1>
       {listError ? (
         <div role="alert" className={ERROR}>
           {listError}
-        </div>
-      ) : null}
-
-      {repository ? (
-        // The ways to add a spec package stand directly beneath the
-        // environment's list, above the playbooks (playbook-library-92).
-        <div className="flex flex-col gap-3">
-          <RegistryAccount repository={repository} />
-          <EnvironmentSection
-            repository={repository}
-            project={side === "project" ? project?.name : undefined}
-            onNavigate={onNavigate}
-          />
-          <AddSpecPackages repository={repository} />
         </div>
       ) : null}
 
@@ -1596,9 +1561,9 @@ export function LibrarySurface({
         {enabled.map(rowFor)}
         {strayInvalid.map((entry) => (
           <InvalidEntryRow
-            key={entry.playbook}
+            key={`${entry.config}:${entry.playbook}`}
             entry={entry}
-            repository={repository ?? ""}
+            repository={repositoryOf(entry.config) ?? ""}
             onChanged={reloadLists}
           />
         ))}
@@ -1623,50 +1588,43 @@ export function LibrarySurface({
         </section>
       ) : null}
 
-      {side === "project" && project ? (
-        // Authoring follows the playbooks, the way to a new playbook at
-        // its foot (playbook-library-50/51); with no session the section
-        // is absent and the field stands alone.
-        projectDrafts.length > 0 ? (
-          <section data-testid="drafts-section" className="flex flex-col gap-2">
-            <h2 className="text-sm font-semibold text-neutral-500">{i18n._({ id: "Authoring", comment: "section heading: playbooks being written in this project" })}</h2>
-            {deletedNote ? (
-              <p data-testid="deleted-note" className="text-xs text-neutral-500">
-                {deletedNote}
-              </p>
-            ) : null}
-            {projectDrafts.map((draft) => (
-              <DraftRow
-                key={draft.id}
-                draft={draft}
-                onOpen={() => void openDraft(draft.id)}
-                onDelete={async () => {
-                  await deleteDraft(draft.id);
-                  const note = i18n._("Deleted {id}; its spec package folder stays at {path}", {
-                    id: draft.id,
-                    path: draftPackagePath(draft),
-                  });
-                  setDeletedNote(note);
-                  setLiveNote(note);
-                }}
-              />
-            ))}
-            {newPlaybook}
-          </section>
-        ) : draftsLoaded ? (
-          <section data-testid="new-playbook-section" className="flex flex-col gap-2">
-            <h2 className="text-sm font-semibold text-neutral-500">{i18n._({ id: "New playbook", comment: "start writing a playbook of one's own" })}</h2>
-            {deletedNote ? (
-              <p data-testid="deleted-note" className="text-xs text-neutral-500">
-                {deletedNote}
-              </p>
-            ) : null}
-            {newPlaybook}
-          </section>
-        ) : null
-      ) : !project && draftsLoaded ? (
+      {/* Authoring follows the playbooks, the way to a new playbook at
+          its foot (playbook-library-50/51); with no session the section
+          is absent and the field stands alone. */}
+      {projectDrafts.length > 0 ? (
+        <section data-testid="drafts-section" className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold text-neutral-500">{i18n._({ id: "Authoring", comment: "section heading: playbooks being written in this project" })}</h2>
+          {deletedNote ? (
+            <p data-testid="deleted-note" className="text-xs text-neutral-500">
+              {deletedNote}
+            </p>
+          ) : null}
+          {projectDrafts.map((draft) => (
+            <DraftRow
+              key={draft.id}
+              draft={draft}
+              onOpen={() => void openDraft(draft.id)}
+              onDelete={async () => {
+                await deleteDraft(draft.id);
+                const note = i18n._("Deleted {id}; its spec package folder stays at {path}", {
+                  id: draft.id,
+                  path: draftPackagePath(draft),
+                });
+                setDeletedNote(note);
+                setLiveNote(note);
+              }}
+            />
+          ))}
+          {newPlaybook}
+        </section>
+      ) : draftsLoaded ? (
         <section data-testid="new-playbook-section" className="flex flex-col gap-2">
           <h2 className="text-sm font-semibold text-neutral-500">{i18n._({ id: "New playbook", comment: "start writing a playbook of one's own" })}</h2>
+          {deletedNote ? (
+            <p data-testid="deleted-note" className="text-xs text-neutral-500">
+              {deletedNote}
+            </p>
+          ) : null}
           {newPlaybook}
         </section>
       ) : null}
@@ -1676,11 +1634,9 @@ export function LibrarySurface({
         <ExampleCard
           onPrefill={prefillFromExample}
           blockedReason={
-            !project
-              ? draftNeedsProject()
-              : drafts[SLC_DEMO.playbookId] || newPackageReady
-                ? undefined
-                : i18n._({ id: "Org and License first", comment: "the example's prefill waits for New playbook's Org and License" })
+            drafts[SLC_DEMO.playbookId] || newPackageReady
+              ? undefined
+              : i18n._({ id: "Org and License first", comment: "the example's prefill waits for New playbook's Org and License" })
           }
           error={exampleError}
         />

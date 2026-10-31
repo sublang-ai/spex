@@ -43,7 +43,8 @@ import type { SessionView } from "./state/reducer.js";
 import { RunView } from "./components/RunView.js";
 import { CaptainHome } from "./components/CaptainHome.js";
 import { DashboardSurface } from "./components/DashboardSurface.js";
-import { LibrarySurface } from "./components/LibrarySurface.js";
+import { PlaybooksTab } from "./components/PlaybooksTab.js";
+import { PackagesTab } from "./components/PackagesTab.js";
 import { SettingsSurface } from "./components/SettingsSurface.js";
 import { SpaceSurface } from "./components/SpaceSurface.js";
 import { PlaceSelector } from "./components/PlaceSelector.js";
@@ -77,9 +78,6 @@ import { homeAttachmentKey, sessionAttachmentKey, useComposerAttachments } from 
 
 export type { Surface };
 
-/** The pinned project views beside the sessions (run-view-58). "repo"
- * is the retired name of the Overview (DR-038): a remembered value
- * still lands there. */
 /** What a tab's name says about its entry (run-view-48). Each is a
  * thunk, never a string: a table read at module load would freeze the
  * language it was imported in (localization-4). */
@@ -121,10 +119,19 @@ function projectApplets(
   ]);
 }
 
-function pinnedTab(tab: string | undefined): "start" | "specs" | "overview" | undefined {
+/** The project's pinned tabs, in the strip's order (run-view-58): one
+ * spec view, the playbooks a session in it can run, its packages and
+ * one overview (DR-172). */
+const PINNED_TABS = ["specs", "playbooks", "packages", "overview"] as const;
+type PinnedTab = (typeof PINNED_TABS)[number];
+
+/** The pinned project views beside the sessions (run-view-58). "repo"
+ * is the retired name of the Overview (DR-038): a remembered value
+ * still lands there. */
+function pinnedTab(tab: string | undefined): "start" | PinnedTab | undefined {
   if (tab === "repo") return "overview";
-  return tab === "start" || tab === "specs" || tab === "overview"
-    ? tab
+  return tab === "start" || (PINNED_TABS as readonly string[]).includes(tab ?? "")
+    ? (tab as "start" | PinnedTab)
     : undefined;
 }
 
@@ -719,7 +726,9 @@ function WorkspaceSurface({
       onOpenPalette={onOpenPalette}
       onOpenOwnProject={onOpenOwnProject}
       onOpenFromGroups={onOpenFromGroups}
-      onNavigate={(surface) => onNavigate(surface)}
+      // The playbooks are the project's own tab (DR-172): a way there
+      // from the start view opens it.
+      onNavigate={(surface) => (surface === "Playbooks" ? pickTab("playbooks") : onNavigate(surface))}
       onSaveCaptain={(patch) => setCaptain(patch, store.getClient())}
       next={
         nextIntent
@@ -790,8 +799,7 @@ function WorkspaceSurface({
   const tabOrder = [
     ...open.map((session) => session.id),
     "start",
-    "specs",
-    "overview",
+    ...PINNED_TABS,
     ...applets.map((entry) => entry.tab),
   ];
   function walkTabs(event: React.KeyboardEvent, id: string): void {
@@ -824,14 +832,17 @@ function WorkspaceSurface({
   // One tablist holds every tab — the sessions, the "+", and the
   // pinned views — so assistive technology reads the strip whole
   // (run-view-50). Each close control is a pointer affordance hidden
-  // from that tree; Delete on a focused tab closes it instead.
+  // from that tree; Delete on a focused tab closes it instead. The
+  // sessions scroll in their own box, which keeps room for the new-task
+  // control; where the pinned tabs do not fit beside it, the strip
+  // itself scrolls sideways, each reached whole (run-view-48, DR-041).
   const strip = (
     <div
       role="tablist"
       aria-label={i18n._("Sessions and project views")}
-      className="flex items-center gap-1 border-b border-neutral-200 px-3 pt-2 dark:border-neutral-800"
+      className="flex items-center gap-1 overflow-x-auto border-b border-neutral-200 px-3 pt-2 dark:border-neutral-800"
     >
-      <div className="relative flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+      <div className="relative flex min-w-[7.5rem] flex-1 items-center gap-1 overflow-x-auto">
         {open.map((session) => {
           const attentionItem = attentionBySession.get(session.id);
           const isActive = session.id === tab;
@@ -972,7 +983,7 @@ function WorkspaceSurface({
           <span>{i18n._("New task")}</span>
         </button>
       </div>
-      {(["specs", "overview"] as const).map((pinned) => (
+      {PINNED_TABS.map((pinned) => (
         <button
           key={pinned}
           type="button"
@@ -989,9 +1000,11 @@ function WorkspaceSurface({
               ? i18n._("The project's spec packages ({keys})", {
                   keys: keyLabel("⇧S"),
                 })
-              : i18n._(
-                  "This project's overview: history, now, up next, sources, repo state",
-                )
+              : pinned === "overview"
+                ? i18n._(
+                    "This project's overview: history, now, up next, sources, repo state",
+                  )
+                : undefined
           }
           onKeyDown={(event) => walkTabs(event, pinned)}
           onClick={() => pickTab(pinned)}
@@ -1031,6 +1044,16 @@ function WorkspaceSurface({
                 </>
               ) : null}
             </>
+          ) : pinned === "playbooks" ? (
+            i18n._({
+              id: "Playbooks",
+              comment: "tab name: the playbooks a session in this project can run",
+            })
+          ) : pinned === "packages" ? (
+            i18n._({
+              id: "Packages",
+              comment: "tab name: the spec packages this project and your own group install",
+            })
           ) : (
             i18n._({
               id: "Overview",
@@ -1132,6 +1155,10 @@ function WorkspaceSurface({
           onRecordOpened={onRecordOpened}
           onReturn={onReturn}
         />
+      ) : tab === "playbooks" ? (
+        <PlaybooksTab key={project.id} project={project} onNavigate={(surface) => onNavigate(surface)} />
+      ) : tab === "packages" ? (
+        <PackagesTab key={project.id} project={project} onNavigate={(surface) => onNavigate(surface)} />
       ) : appletShown ? (
         <AppletTab
           key={appletShown.tab}
@@ -1214,7 +1241,19 @@ export function App() {
       ? (stored as Surface)
       : "Workspace";
   });
+  // The retired Playbooks surface (DR-172): a remembered one opens
+  // Projects with the current project's Playbooks tab, the stored value
+  // replaced by Projects as the page mounts, so it is read only once.
+  const [retiredPlaybooks, setRetiredPlaybooks] = useState(
+    () => safeStorageGet(SURFACE_KEY) === "Playbooks",
+  );
+  useEffect(() => {
+    if (safeStorageGet(SURFACE_KEY) === "Playbooks") safeStorageSet(SURFACE_KEY, "Workspace");
+  }, []);
   const setSurface = useCallback((next: Surface) => {
+    // The reader chose where to stand: a remembered Playbooks surface
+    // owes nothing more.
+    setRetiredPlaybooks(false);
     setSurfaceState(next);
     safeStorageSet(SURFACE_KEY, next);
   }, []);
@@ -1254,9 +1293,10 @@ export function App() {
   useEffect(() => {
     if (shown.place.key !== shownPlace) setShownPlace(LOCAL_PLACE_KEY);
   }, [shown, shownPlace]);
-  // The place Settings, Playbooks, Groups and Environments show, as the
-  // place selector names it (run-view-168): this computer's until the
-  // reader picks a seat, and again once a seat it showed is closed.
+  // The place Settings and Space show, as the place selector names it
+  // (run-view-168): this computer's until the reader picks a seat, and
+  // again once a seat it showed is closed; a project's tabs stand at the
+  // project's place (DR-172).
   const [configuredPlace, setConfiguredPlace] = useState<string>(LOCAL_PLACE_KEY);
   const configured = storeAt(configuredPlace);
   useEffect(() => {
@@ -1269,10 +1309,10 @@ export function App() {
   // The agent a failure asked Settings to open at (run-view-179,
   // settings-52), until that place's Settings has opened its row.
   const [agentAsk, setAgentAsk] = useState<{ place: string; agent: string }>();
-  /** Go to a surface on behalf of `store`'s place: Settings, Playbooks
-   * and Groups open at that place (run-view-168). */
+  /** Go to a surface on behalf of `store`'s place: Settings and Space
+   * open at that place (run-view-168). */
   const navigateFrom = (store: AppStore) => (next: Surface) => {
-    if (next === "Settings" || next === "Playbooks" || next === "Space") {
+    if (next === "Settings" || next === "Space") {
       setConfiguredPlace(store.place.key);
     }
     setSurface(next);
@@ -1296,6 +1336,13 @@ export function App() {
     connection: state.connection,
   }));
   const local = placeStates[0]!.value;
+  // A remembered Playbooks surface lands on the Playbooks tab of the
+  // project current at this computer once one is (run-view-67).
+  useEffect(() => {
+    if (!retiredPlaybooks || !local.currentProjectId) return;
+    setRetiredPlaybooks(false);
+    useAppStore.getState().setWorkspaceTab(local.currentProjectId, "playbooks");
+  }, [retiredPlaybooks, local.currentProjectId]);
   // The seats the local core holds, each with its sign-in at its
   // instance (core-service-142): the palette says where one still runs.
   const seatStates = useAppStore((state) => state.seats);
@@ -1583,8 +1630,7 @@ export function App() {
           const order = [
             ...openIds,
             "start",
-            "specs",
-            "overview",
+            ...PINNED_TABS,
             ...projectApplets(state, isLocalPlace(shown.place), projectId).map((entry) => entry.tab),
           ];
           event.preventDefault();
@@ -1810,10 +1856,10 @@ export function App() {
           aria-label={SURFACE_LABELS[surface]()}
           className="flex min-h-0 min-w-0 flex-1 flex-col outline-none"
         >
-          {surface === "Playbooks" || surface === "Settings" || surface === "Space" ? (
-            // Settings, Playbooks — with its Environments — and Groups
-            // show one place at a time, the one the selector names
-            // (run-view-168); with no seat open there is none to pick.
+          {surface === "Settings" || surface === "Space" ? (
+            // Settings and Space show one place at a time, the one the
+            // selector names (run-view-168); with no seat open there is
+            // none to pick. A project's tabs stand at its place.
             <PlaceStoreContext.Provider value={configured}>
               {stores.length > 1 ? (
                 <PlaceSelector
@@ -1822,9 +1868,7 @@ export function App() {
                   onShow={(store) => setConfiguredPlace(store.place.key)}
                 />
               ) : null}
-              {surface === "Playbooks" ? (
-                <LibrarySurface key={configured.place.key} onNavigate={setSurface} />
-              ) : surface === "Settings" ? (
+              {surface === "Settings" ? (
                 <SettingsSurface
                   key={configured.place.key}
                   credentialHost={

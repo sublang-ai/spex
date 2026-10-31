@@ -151,7 +151,7 @@ msgstr "{command} 在 {step} 失败"
 msgid "{command} is not installed"
 msgstr "未安装 {command}"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "{command} is unavailable until /review is enabled below."
 msgstr "{command} 暂不可运行；请先在下方启用 /review。"
 
@@ -267,7 +267,7 @@ msgstr "{count, plural, other {保留 {place} 的 # 项版本？{name} 的版本
 msgid "{count, plural, one {Keep this computer's version? {name}'s stays in Git history} other {Keep this computer's version of all #? {name}'s stays in Git history}}"
 msgstr "{count, plural, other {保留本机的 # 项版本？{name} 的版本仍保留在 Git 历史中}}"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "{count, plural, one {Pull-request delivery is unavailable until {names} is enabled below; a plain /dev request still runs.} other {Pull-request delivery is unavailable until {names} are enabled below; a plain /dev request still runs.}}"
 msgstr "{count, plural, other {需在下方启用 {names} 才能交付 PR；普通的 /dev 请求仍可运行。}}"
 
@@ -323,7 +323,7 @@ msgstr "{days} 天前"
 msgid "{declined, plural, =0 {To fix ({count})} other {To fix ({count}) · # set aside}}"
 msgstr "{declined, plural, =0 {待处理（{count}）} other {待处理（{count}） · # 项暂不处理}}"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "{diagnostic} — delete the session, or repair the file and restart Spex"
 msgstr "{diagnostic} — 删除该会话，或修复文件后重启 Spex"
 
@@ -342,7 +342,7 @@ msgid "{effort} (unsupported)"
 msgstr "{effort}（不支持）"
 
 #. joins the two playbook names the /dev hint asks for
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "{first} and {second}"
 msgstr "{first} 和 {second}"
 
@@ -387,11 +387,11 @@ msgstr "{hours} 小时 {minutes} 分"
 msgid "{hours}h ago"
 msgstr "{hours} 小时前"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "{id} is a built-in — enable it instead"
 msgstr "{id} 是内置规程 — 请直接启用它"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "{id} is already a playbook of {package}"
 msgstr "{id} 已是 {package} 中的规程"
 
@@ -492,7 +492,7 @@ msgid "{name} {version} · applet {id}"
 msgstr "{name} {version} · 小应用 {id}"
 
 #: src/components/DraftRegisterTab.tsx
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "{name} agent"
 msgstr "{name} 智能体"
 
@@ -604,7 +604,7 @@ msgstr "收到 {received}；未发出任何内容"
 msgid "{requirement} by {requirer}"
 msgstr "{requirer} 要求 {requirement}"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "{role} needs a player id: lowercase segments joined by dots"
 msgstr "{role} 需要 Player ID：用点连接的小写分段"
 
@@ -763,7 +763,7 @@ msgstr "已移除 @{login}"
 msgid "/ for playbooks · Enter sends"
 msgstr "/ 打开规程 · Enter 发送"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "/{command} stops being offered; the spec package stays"
 msgstr "不再提供 /{command}；规约包保留"
 
@@ -1447,7 +1447,7 @@ msgstr "附件"
 
 #. heading over a project's changed authoring sessions
 #. section heading: playbooks being written in this project
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 #: src/lib/space.ts
 msgid "Authoring"
 msgstr "编写"
@@ -1520,7 +1520,7 @@ msgid "binary file · {size}"
 msgstr "二进制文件 · {size}"
 
 #: src/components/BindingEditor.tsx
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Bind {role}"
 msgstr "绑定 {role}"
 
@@ -1878,7 +1878,7 @@ msgstr "选择文件夹…"
 msgid "Choose for {count, plural, one {# conflict} other {# conflicts}}"
 msgstr "为 {count, plural, other {# 处冲突}}选择"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Choose namespace"
 msgstr "选择命名空间"
 
@@ -1891,7 +1891,7 @@ msgstr "判断怎么做"
 msgid "Choose which agent answers"
 msgstr "选择由哪个智能体答复"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Choose which session player answers {role}"
 msgstr "选择由哪个会话 Player 担任 {role}"
 
@@ -2097,7 +2097,7 @@ msgid "Combining…"
 msgstr "合并中…"
 
 #. after enabling an authored playbook: {folder} is its spec package's folder in the working folder, e.g. spex-packages/acme/triage
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Commit {folder} with your code"
 msgstr "把 {folder} 和代码一起提交"
 
@@ -2161,11 +2161,11 @@ msgstr "编译"
 msgid "Compile canceled"
 msgstr "编译已取消"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Compile failed at {phase}"
 msgstr "编译在 {phase} 阶段失败"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Compile failed at an unknown phase"
 msgstr "编译在未知阶段失败"
 
@@ -2187,7 +2187,7 @@ msgstr "{age}编译"
 msgid "Compiled {age}; the source changed since"
 msgstr "{age}编译；此后源文已更改"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Compiled {id}"
 msgstr "已编译 {id}"
 
@@ -2204,7 +2204,7 @@ msgstr "需先编译"
 msgid "Compiling"
 msgstr "编译中"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Compiling {id}"
 msgstr "正在编译 {id}"
 
@@ -2234,7 +2234,7 @@ msgid "Config file invalid"
 msgstr "配置文件无效"
 
 #: src/components/DraftRegisterTab.tsx
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Configure {name}"
 msgstr "配置 {name}"
 
@@ -2418,7 +2418,7 @@ msgstr "无法答复 {actor} 的 {tool} 请求：{reason}"
 msgid "could not inspect"
 msgstr "无法调查"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Could not load registry namespaces. Try again."
 msgstr "无法加载注册表命名空间。请重试。"
 
@@ -2589,12 +2589,12 @@ msgstr "决策记录 {count}"
 #. confirm: delete this session for good
 #. confirm: remove the authoring session for good
 #. remove the authoring session for good
-#: src/components/LibrarySurface.tsx
 #: src/components/NavRail.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Delete"
 msgstr "删除"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Delete authoring session {id}"
 msgstr "删除编写会话 {id}"
 
@@ -2606,7 +2606,7 @@ msgstr "删除失败"
 msgid "Delete session {title}"
 msgstr "删除会话 {title}"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Delete this authoring session? Its spec package folder stays."
 msgstr "删除此编写会话？其规约包文件夹会保留。"
 
@@ -2635,7 +2635,7 @@ msgstr "删除此会话？它由终端运行，其历史也会一并删除。未
 msgid "deleted"
 msgstr "已删除"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Deleted {id}; its spec package folder stays at {path}"
 msgstr "已删除 {id}；其规约包文件夹保留在 {path}"
 
@@ -2645,7 +2645,7 @@ msgid "deleting…"
 msgstr "删除中…"
 
 #. the delete request is in flight
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Deleting…"
 msgstr "删除中…"
 
@@ -2690,21 +2690,21 @@ msgstr "未发布"
 
 #. stop offering this playbook in this config
 #. stop offering this playbook in this config
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Disable"
 msgstr "停用"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Disable {id}"
 msgstr "停用 {id}"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Disable /{command}"
 msgstr "停用 /{command}"
 
 #. the disable request is in flight
 #. the disable request is in flight
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Disabling…"
 msgstr "停用中…"
 
@@ -2895,11 +2895,11 @@ msgstr "放弃中…"
 msgid "e.g. .git, docs/generated"
 msgstr "例如 .git、docs/generated"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "e.g. Apache-2.0"
 msgstr "例如 Apache-2.0"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "e.g. triage"
 msgstr "例如 triage"
 
@@ -2985,15 +2985,15 @@ msgstr "推理强度选项适用于适配器；该模型的支持情况未验证
 #. enable this playbook in this config
 #: src/components/AuthoringWorkspace.tsx
 #: src/components/DraftRegisterTab.tsx
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Enable"
 msgstr "启用"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Enable /{command}"
 msgstr "启用 /{command}"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Enable /{command} with a player per role"
 msgstr "为每个角色指定 Player 并启用 /{command}"
 
@@ -3003,28 +3003,28 @@ msgstr "启用于"
 
 #. authoring state chip, at most 14 characters: the compiled playbook is enabled in a config
 #. section heading: the playbooks the project's config or your own group's enables
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 #: src/lib/drafts.ts
 msgid "Enabled"
 msgstr "已启用"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Enabled /{command}"
 msgstr "已启用 /{command}"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Enabled in the project"
 msgstr "已在项目中启用"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Enabled in the project and your own group"
 msgstr "已在项目和你自己的群组中启用"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Enabled in your own group"
 msgstr "已在你自己的群组中启用"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Enabled. Sessions started before must be restarted to use it."
 msgstr "已启用。此前开始的会话须重启后才能使用。"
 
@@ -3035,7 +3035,7 @@ msgstr "将启用上一次编译的结果 — 源文此后已更改。"
 #. the enable request is in flight
 #. the enable request is in flight
 #: src/components/DraftRegisterTab.tsx
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Enabling…"
 msgstr "启用中…"
 
@@ -3104,11 +3104,11 @@ msgid "Everything is in sync"
 msgstr "全部已同步"
 
 #. section heading: the demo playbook
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Example"
 msgstr "示例"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Example: {title}"
 msgstr "示例：{title}"
 
@@ -3417,7 +3417,7 @@ msgid "found problems"
 msgstr "发现问题"
 
 #. label before the spec package a playbook comes from
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "from"
 msgstr "来自"
 
@@ -3425,7 +3425,7 @@ msgstr "来自"
 msgid "From {actor}"
 msgstr "来自 {actor}"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "from {credit}"
 msgstr "来自 {credit}"
 
@@ -3475,7 +3475,7 @@ msgstr "来自你在 {place} 上的群组"
 #. pipeline stage: the compiler's normative spec items (a proper name)
 #. pipeline stage: the compiler's normative spec items (a proper name)
 #: src/components/AuthoringWorkspace.tsx
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 #: src/components/PlaybookStages.tsx
 msgid "Gears"
 msgstr "Gears"
@@ -3523,8 +3523,8 @@ msgid "Give the player an id first."
 msgstr "请先为该 Player 设置 id。"
 
 #: src/lib/shortcuts.ts
-msgid "Go to Dashboard, Projects, Playbooks, Space, Settings"
-msgstr "前往仪表盘、项目、规程、Space、设置"
+msgid "Go to Dashboard, Projects, Space, Settings"
+msgstr "前往仪表盘、项目、Space、设置"
 
 #. the field naming a new group at the Space
 #: src/components/SpaceMembers.tsx
@@ -3792,7 +3792,7 @@ msgstr "中断的同步"
 msgid "Interrupted turn"
 msgstr "中断的轮次"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Invalid: {reason}"
 msgstr "无效：{reason}"
 
@@ -3837,7 +3837,7 @@ msgid "its endpoint"
 msgstr "该端点"
 
 #: src/components/EnvironmentSection.tsx
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Its files are not on this device"
 msgstr "它的文件不在本机"
 
@@ -3883,9 +3883,9 @@ msgstr "刚刚"
 #. confirm: leave the run as it is
 #: src/components/DashboardSurface.tsx
 #: src/components/EnvironmentSection.tsx
-#: src/components/LibrarySurface.tsx
 #: src/components/NavRail.tsx
 #: src/components/ParkedRun.tsx
+#: src/components/PlaybooksTab.tsx
 #: src/components/ProjectGroup.tsx
 #: src/components/ProjectsSurface.tsx
 #: src/components/SettingsSurface.tsx
@@ -3942,7 +3942,7 @@ msgid "Last refreshed {age}"
 msgstr "上次刷新：{age}"
 
 #. field of New playbook: the SPDX license its spec package is published under
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "License"
 msgstr "许可证"
 
@@ -3973,7 +3973,7 @@ msgstr "正在加载媒体…"
 msgid "Loading model options…"
 msgstr "加载模型选项中…"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Loading registry namespaces…"
 msgstr "正在加载注册表命名空间…"
 
@@ -3999,7 +3999,7 @@ msgstr "加载对话记录中…"
 #. a request for this pane's content is in flight
 #: src/components/AuthoringWorkspace.tsx
 #: src/components/EnvironmentSection.tsx
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "loading…"
 msgstr "加载中…"
 
@@ -4125,7 +4125,7 @@ msgstr "每对关系的最少引用数"
 msgid "Missing on this device: {path}"
 msgstr "本机缺失：{path}"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "missing stages: {stages}"
 msgstr "缺少阶段：{stages}"
 
@@ -4235,8 +4235,7 @@ msgstr "新建群组"
 
 #. start writing a playbook of one's own
 #. start writing a playbook of one's own
-#. start writing a playbook of one's own
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "New playbook"
 msgstr "新建规程"
 
@@ -4363,7 +4362,7 @@ msgstr "没有未关闭的 PR。"
 msgid "No playbooks available — open Playbooks"
 msgstr "暂无可用规程，打开“规程”"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "No playbooks enabled yet — enable a built-in below, or make your own with New playbook."
 msgstr "尚未启用任何规程 — 在下方启用内置规程，或用“新建规程”自己创建。"
 
@@ -4401,7 +4400,7 @@ msgstr "这里还没有项目"
 msgid "No projects yet — register a repository in the <0>Projects</0> to put its work here."
 msgstr "还没有项目 — 在<0>项目</0>中注册一个仓库，其工作就会出现在这里。"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "No publishing namespaces available."
 msgstr "没有可发布的命名空间。"
 
@@ -4465,11 +4464,11 @@ msgid "Normalize"
 msgstr "规范化"
 
 #. pipeline stage: slc's normalized workflow markdown
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Normalized"
 msgstr "规范化"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Normalized text: the prose as workflow markdown, in slc's normalized form"
 msgstr "规范化文本：自由文本写成的工作流 markdown，采用 slc 的规范化形式"
 
@@ -4517,7 +4516,7 @@ msgstr "未删除"
 
 #. a listed playbook no config enables
 #. section heading: playbooks neither the project's config nor your own group's enables
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Not enabled"
 msgstr "未启用"
 
@@ -4732,7 +4731,7 @@ msgstr "开启（不支持）"
 msgid "On {server}"
 msgstr "在 {server} 上"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 #: src/components/PlaybookStages.tsx
 msgid "One normative spec item per state behavior — the compiler's middle stage"
 msgstr "每个状态行为一条规范规约条目 — 编译器的中间阶段"
@@ -4747,7 +4746,7 @@ msgid "Only pairs with ≥ {field} {count, plural, one {citation} other {citatio
 msgstr "只显示 ≥ {field} {count, plural, other {条引用的关系}}"
 
 #. open this authoring session's workspace
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Open"
 msgstr "打开"
 
@@ -4917,8 +4916,8 @@ msgstr "正在打开小应用…"
 #. an authoring session is being opened
 #. an authoring session is being opened
 #: src/components/CaptainHome.tsx
-#: src/components/LibrarySurface.tsx
 #: src/components/NavRail.tsx
+#: src/components/PlaybooksTab.tsx
 #: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
 #: src/lib/space.ts
@@ -4930,7 +4929,7 @@ msgstr "打开中…"
 msgid "Opens {space} in your browser"
 msgstr "在浏览器中打开 {space}"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Opens a playbook named {id} with the normalized text ready to paste — nothing is written or compiled"
 msgstr "打开名为 {id} 的规程，并备好可粘贴的规范化文本 — 不写入也不编译"
 
@@ -4949,12 +4948,12 @@ msgid "Or enter an existing Git repository path"
 msgstr "或手动输入已有 Git 仓库路径"
 
 #. field of New playbook: the registry org its spec package is published under
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Org"
 msgstr "组织"
 
 #. the example's prefill waits for New playbook's Org and License
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Org and License first"
 msgstr "请先填写组织和许可证"
 
@@ -5009,6 +5008,8 @@ msgid "Package registry"
 msgstr "软件包注册表"
 
 #. heading over a project's changed spex.yaml and spex.lock: the packages it adds
+#. tab name: the spec packages this project and your own group install
+#: src/App.tsx
 #: src/lib/space.ts
 msgid "Packages"
 msgstr "规约包"
@@ -5101,7 +5102,7 @@ msgstr "选择本机上存放其代码的文件夹"
 msgid "pin a value…"
 msgstr "指定一个值…"
 
-#. the selector of where Settings, Playbooks, Groups and Environments are shown: This computer or a team server
+#. the selector of where Settings and Space are shown: This computer or a team server
 #: src/components/PlaceSelector.tsx
 msgid "Place"
 msgstr "位置"
@@ -5121,7 +5122,7 @@ msgid "playbook"
 msgstr "规程"
 
 #: src/components/DraftRegisterTab.tsx
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Playbook id"
 msgstr "规程 id"
 
@@ -5134,26 +5135,22 @@ msgstr "Playbook 运行实例 {session}"
 msgid "playbook: {playbookId}"
 msgstr "规程：{playbookId}"
 
-#. the surface listing every playbook
-#. the surface listing every playbook
+#. back to the project's Playbooks tab, listing its playbooks
+#. heading of the project's Playbooks tab
+#. tab name: the playbooks a session in this project can run
+#: src/App.tsx
 #: src/components/AuthoringWorkspace.tsx
 #: src/components/CaptainHome.tsx
-#: src/components/LibrarySurface.tsx
-#: src/components/NavRail.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Playbooks"
 msgstr "规程"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Playbooks need a valid config — fix it in <0>Settings</0>."
 msgstr "规程需要有效的配置 — 请在<0>设置</0>中修复。"
 
-#. name of the switch between the project's playbooks and your own group's
-#: src/components/LibrarySurface.tsx
-msgid "Playbooks of"
-msgstr "显示谁的规程"
-
 #: src/components/DraftRegisterTab.tsx
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Player for {role}"
 msgstr "{role} 的 Player"
 
@@ -5179,7 +5176,7 @@ msgid "preferences"
 msgstr "偏好设置"
 
 #. open an authoring session carrying the example's text
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Prefill"
 msgstr "预填"
 
@@ -5564,7 +5561,7 @@ msgstr "注册表"
 msgid "registry {requirement}"
 msgstr "注册表 {requirement}"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Registry namespaces"
 msgstr "注册表命名空间"
 
@@ -5682,7 +5679,7 @@ msgstr "移除项目"
 msgid "Remove the credential for {name}"
 msgstr "移除 {name} 的凭据"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Remove the session and its conversation; the spec package folder stays"
 msgstr "移除会话及其对话；规约包文件夹保留"
 
@@ -5911,7 +5908,7 @@ msgstr "本机智能体对话的续接令牌；在别处无效"
 #: src/App.tsx
 #: src/components/ComposerAttachments.tsx
 #: src/components/DashboardSurface.tsx
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 #: src/components/RunView.tsx
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceGroups.tsx
@@ -6363,7 +6360,7 @@ msgid "Share with {group} at {name}?"
 msgstr "与 {name} 上的 {group} 共享？"
 
 #. badge: this lane answers more than one role
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "shared"
 msgstr "共用"
 
@@ -6586,8 +6583,10 @@ msgstr "源材料"
 #. pipeline stage: the authored workflow
 #. pipeline stage: the authored workflow
 #. pipeline stage: the authored workflow
+#. pipeline stage: the authored workflow
 #: src/components/AuthoringWorkspace.tsx
-#: src/components/LibrarySurface.tsx
+#: src/components/DraftSourceTab.tsx
+#: src/components/PlaybooksTab.tsx
 #: src/components/PlaybookStages.tsx
 msgid "Source"
 msgstr "源文"
@@ -6787,7 +6786,7 @@ msgstr "启动中…"
 
 #. pipeline stage: the compiled machine
 #. pipeline stage: the compiled machine
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 #: src/components/PlaybookStages.tsx
 msgid "State machine"
 msgstr "状态机"
@@ -7031,7 +7030,7 @@ msgstr "智能体的登录已过期 — 请在终端用该智能体的 CLI 重�
 msgid "The call timed out"
 msgstr "调用超时"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "The Captain can only run playbooks listed here."
 msgstr "Captain 只能运行这里列出的规程。"
 
@@ -7063,7 +7062,7 @@ msgstr "编译得到的角色为：{roles}。"
 msgid "The compiled state machine, from the last compile"
 msgstr "上次编译得到的状态机"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 #: src/components/PlaybookStages.tsx
 msgid "The compiled XState machine that drives the players"
 msgstr "驱动各 Player 的已编译 XState 状态机"
@@ -7130,7 +7129,7 @@ msgstr "服务商的默认值"
 msgid "The queue could not be loaded. <0>Retry</0>"
 msgstr "无法加载队列。<0>重试</0>"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "The raw prose the example starts from"
 msgstr "示例所基于的原始文稿"
 
@@ -7271,7 +7270,7 @@ msgid "This file is too large to preview."
 msgstr "文件过大，无法预览。"
 
 #: src/components/DraftRegisterTab.tsx
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "This lane also answers {positions} — one conversation across them"
 msgstr "此 Player 还担任 {positions} — 它们共用一个对话"
 
@@ -7299,7 +7298,7 @@ msgstr "此会话已结束 — 回放为只读"
 msgid "this stage was not found for this draft"
 msgstr "此草稿未找到该阶段"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "this stage was not found for this playbook"
 msgstr "此规程未找到该阶段"
 
@@ -7425,7 +7424,7 @@ msgid "Turn workflows written in plain language into steps AI can run"
 msgstr "将自然语言描述的工作流转成 AI 可执行的步骤"
 
 #: src/components/DraftRegisterTab.tsx
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Tweak the {name} agent in place"
 msgstr "就地调整 {name} 智能体"
 
@@ -7438,7 +7437,7 @@ msgid "Type <0>/</0> in the task box to see {count, plural, one {# playbook} oth
 msgstr "在输入框输入 <0>/</0>，查看 {count} 个规程"
 
 #. a required role no player answers yet
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "unbound"
 msgstr "未绑定"
 
@@ -7847,9 +7846,7 @@ msgid "Your groups"
 msgstr "你的群组"
 
 #. switch: show your own group's playbooks
-#. switch: show your own group's playbooks
 #: src/components/DraftRegisterTab.tsx
-#: src/components/LibrarySurface.tsx
 msgid "Your own group"
 msgstr "你自己的群组"
 

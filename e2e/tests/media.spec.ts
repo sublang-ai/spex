@@ -6,7 +6,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Locator } from "@playwright/test";
-import { test, expect, open, nav, clonePath } from "../src/harness";
+import { test, expect, open, projectTab, clonePath } from "../src/harness";
 import { measure, record, setRail } from "../src/fit";
 
 const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=";
@@ -163,7 +163,7 @@ test.describe("authoring media output", () => {
   test("media-15: authoring file-only input and native screenshot render from owned bytes after restart", async ({ page, app }) => {
     test.setTimeout(90_000);
     await open(page, app);
-    await nav(page, "Playbooks").click();
+    await projectTab(page, "Playbooks");
     // The project's defaults fill Org and License (playbook-library-51).
     await expect(page.getByTestId("new-playbook-license")).toHaveValue("Apache-2.0");
     await page.getByTestId("new-playbook-id").fill("visual");
@@ -196,7 +196,7 @@ test.describe("authoring media output", () => {
     await app.stop();
     await app.start();
     await page.reload();
-    await nav(page, "Playbooks").click();
+    await projectTab(page, "Playbooks");
     await page.getByTestId("draft-open-visual").click();
     await decoded(page.getByTestId("draft-thread").getByRole("figure", { name: "native-screen.png", exact: true }));
     await decoded(page.getByTestId("draft-thread").getByRole("figure", { name: "authoring-input.png", exact: true }));

@@ -19,14 +19,14 @@ import {
   test,
   expect,
   open,
-  nav,
+  newTaskTab,
+  projectTab,
   send,
   EXAMPLE_ID,
   assertFixtureGeneration,
   commitCount,
   compiledFixture,
   expectEngaged,
-  surfaceEntry,
 } from "../src/harness";
 
 const fixture = compiledFixture();
@@ -50,7 +50,7 @@ test.describe("the compiled example", () => {
   }) => {
     await assertFixtureGeneration(fixture!.capture);
     await open(page, app);
-    await nav(page, "Playbooks").click();
+    await projectTab(page, "Playbooks");
     await page.getByTestId("example-prefill").click();
     await expect(page.getByTestId("authoring-workspace")).toBeVisible();
     await page.getByTestId("paste-use").click();
@@ -82,7 +82,7 @@ test.describe("the compiled example", () => {
     // registry module wrapping its entry, to its finish with both role
     // players engaged and the coder's commit made (playbook-library-14).
     const commits = commitCount(app.projectDir);
-    await surfaceEntry(page, "Workspace").click();
+    await newTaskTab(page);
     await send(page, `/${EXAMPLE_ID} ${COMPILED_RUN.task}`);
     const captain = page.getByTestId("captain-pane");
     await expect(captain).toContainText(`/${EXAMPLE_ID} started`);

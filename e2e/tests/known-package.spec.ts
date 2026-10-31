@@ -6,7 +6,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { makeRelease } from "@sublang/spex-core/testing";
-import { HOST_LOGIN, expect, nav, open, pickGroup, signInCore, signInRegistryCore, selectRegistryCore, test } from "../src/harness";
+import { HOST_LOGIN, expect, open, packagesSection, pickGroup, projectTab, signInCore, signInRegistryCore, selectRegistryCore, test } from "../src/harness";
 
 test.use({ appOptions: { project: true, signedIn: true, host: { registry: true, second: { registry: true } } } });
 
@@ -53,15 +53,18 @@ test("playbook-library-117: install a private known package with explicit requir
   firstRegistry.script.clearRequests();
 
   await open(page, app);
-  await nav(page, "Playbooks").click();
-  await page.getByTestId("add-from-registry").click();
-  await page.getByTestId("registry-query").fill(org);
-  await expect(page.getByTestId("registry-none")).toBeVisible();
-  await expect(page.getByTestId(`registry-result-${name}`)).toHaveCount(0);
+  await projectTab(page, "Packages");
+  // The project's packages, under its own heading on the Packages tab
+  // (playbook-library-92).
+  const packages = packagesSection(page, "project");
+  await packages.getByTestId("add-from-registry").click();
+  await packages.getByTestId("registry-query").fill(org);
+  await expect(packages.getByTestId("registry-none")).toBeVisible();
+  await expect(packages.getByTestId(`registry-result-${name}`)).toHaveCount(0);
   // Clear the independent public-search field before direct submissions.
-  await page.getByTestId("registry-query").fill("");
-  await page.getByTestId("add-by-name").click();
-  const form = page.getByTestId("known-package-request");
+  await packages.getByTestId("registry-query").fill("");
+  await packages.getByTestId("add-by-name").click();
+  const form = packages.getByTestId("known-package-request");
   const submit = form.getByTestId("known-package-request-submit");
   const nameField = form.getByTestId("known-package-name");
   const versionField = form.getByTestId("known-package-version");
@@ -85,8 +88,8 @@ test("playbook-library-117: install a private known package with explicit requir
   for (const [requirement, selected] of [["1.2.3", "1.2.3"], ["^1.2.3", "1.3.0"], ["~1.2.3", "1.2.4"]]) {
     await versionField.fill(`  ${requirement}  `);
     await submit.click();
-    await expect(page.getByTestId("add-note")).toHaveText(`Requested ${name}`);
-    const row = page.getByTestId(`env-package-${name}`);
+    await expect(packages.getByTestId("add-note")).toHaveText(`Requested ${name}`);
+    const row = packages.getByTestId(`env-package-${name}`);
     await expect(row.getByTestId(`env-source-${name}`)).toHaveText(`registry ${requirement}`);
     await expect(row.getByTestId(`env-version-${name}`)).toHaveText(selected!);
     await expect(row.getByTestId(`env-installed-${name}`)).toHaveText("Installed");
@@ -103,24 +106,26 @@ test("playbook-library-117: install a private known package with explicit requir
   await nameField.fill(refusedName);
   await versionField.fill("1.2.3");
   await submit.click();
-  await expect(page.getByTestId("environment-error")).toContainText(refusedName);
-  await expect(page.getByTestId("environment-error")).toContainText(/not shared with you at .+ — ask its owner/);
+  await expect(packages.getByTestId("environment-error")).toContainText(refusedName);
+  await expect(packages.getByTestId("environment-error")).toContainText(/not shared with you at .+ — ask its owner/);
   await expect(page.getByTestId(`env-installed-${refusedName}`)).toHaveCount(0);
   expect(registry.script.received.some((request) => request.path === `/api/v1/packages/${refusedName}` && request.instance === instance.url && request.account === HOST_LOGIN && request.bearer)).toBe(true);
   registry.script.setPrivate(refusedOrg, [instance.url]);
-  await page.getByTestId("registry-query").fill("public/notes");
-  const publicResult = page.getByTestId("registry-result-public/notes");
+  await packages.getByTestId("registry-query").fill("public/notes");
+  const publicResult = packages.getByTestId("registry-result-public/notes");
   await expect(publicResult).toBeVisible();
   await publicResult.getByTestId("registry-add-public/notes").click();
-  await expect(page.getByTestId("env-installed-public/notes")).toHaveText("Installed");
+  await expect(packages.getByTestId("env-installed-public/notes")).toHaveText("Installed");
   const state = await app.core.command("environment.get", { repository: project.key });
   expect(state.requests["public/notes"]).toEqual({ kind: "registry", version: "^1.0.0" });
 
-  await page.getByTestId("side-own").click();
-  await expect(page.getByTestId("add-note")).toHaveCount(0);
-  await page.getByTestId("add-from-registry").click();
-  await page.getByTestId("add-by-name").click();
-  await expect(page.getByTestId("known-package-name")).toHaveValue("");
-  await expect(page.getByTestId("known-package-version")).toHaveValue("");
-  await expect(page.getByTestId("known-package-request-error")).toHaveCount(0);
+  // Your own group's heading beneath holds a form of its own, carrying
+  // nothing of the project's (playbook-library-92).
+  const personal = packagesSection(page, "personal");
+  await expect(personal.getByTestId("add-note")).toHaveCount(0);
+  await personal.getByTestId("add-from-registry").click();
+  await personal.getByTestId("add-by-name").click();
+  await expect(personal.getByTestId("known-package-name")).toHaveValue("");
+  await expect(personal.getByTestId("known-package-version")).toHaveValue("");
+  await expect(personal.getByTestId("known-package-request-error")).toHaveCount(0);
 });

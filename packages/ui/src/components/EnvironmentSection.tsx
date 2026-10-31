@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// A spex repository's environment on the Playbooks surface
-// (playbook-library-92, DR-104): what it requests and what it got —
+// A spex repository's environment on the project's Packages tab
+// (playbook-library-92, DR-104, DR-172): what it requests and what it got —
 // each requested spec package with its source and resolved version,
 // what it requires nested under it, every selected artifact with its
 // language and a fallback mark, whether its files are installed, a
@@ -15,7 +15,7 @@
 // names whose environment it is — the project by its name, or your own
 // group — never the spex repository behind it (DR-159). The ways to add
 // a spec package — from the registry, a folder or Git — stand directly
-// beneath the list, above the playbooks. A sync, a resolve or an
+// beneath the list. A sync, a resolve or an
 // install running beside them refuses nothing (DR-111): its progress
 // shows by the heading, and a change the core refuses shows its cause
 // in place.

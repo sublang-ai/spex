@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The Playbooks surface's reading of environments (DR-104): which
-// spex repository each side shows, whether it syncs, where a publish
+// The project's Packages and Playbooks tabs' reading of environments
+// (DR-104, DR-172): your own group's spex repository, where a publish
 // goes, what its words are for sources, artifacts and the core's busy
-// states, and the two name rules the surface checks in place. Pure
+// states, and the two name rules the tabs check in place. Pure
 // functions; the components render them. Every phrase is read when
 // called, never at module load (localization-4).
 
@@ -14,7 +14,6 @@ import type {
   EnvironmentState,
   GroupsState,
   PlaybookAvailability,
-  ProjectInfo,
 } from "@sublang/spex-core/protocol";
 
 import { i18n } from "../i18n.js";
@@ -28,15 +27,6 @@ export const SPEC_PACKAGE_NAME_RULE = /^[a-z0-9]+(?:-[a-z0-9]+)*\/[a-z0-9]+(?:-[
  * playbook-library-51). */
 export const PLAYBOOK_ID_RULE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 export const PLAYBOOK_ID_MAX = 64;
-
-/** The project the Playbooks surface shows beside your own group: the
- * workspace's current project, else the first registered one. */
-export function chosenProject(
-  projects: readonly ProjectInfo[],
-  currentProjectId: string | undefined,
-): ProjectInfo | undefined {
-  return projects.find((project) => project.id === currentProjectId) ?? projects[0];
-}
 
 /** Your own group's spex repository: as Space reads it under your own
  * group (space-1), else as the playbook list names it. */

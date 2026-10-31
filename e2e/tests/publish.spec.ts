@@ -25,7 +25,10 @@ import {
   instanceSection,
   nav,
   open,
+  packagesSection,
   pickGroup,
+  playbookCard,
+  projectTab,
   signInCore,
   signInRegistryCore,
   selectRegistryCore,
@@ -74,9 +77,10 @@ async function arrangeEnabled(app: App): Promise<void> {
     .toBe("enabled");
 }
 
-/** Open the authoring session's Enable tab (playbook-library-61). */
+/** Open the authoring session's Enable tab (playbook-library-61) from
+ * the project's Playbooks tab. */
 async function openEnableTab(page: Page): Promise<void> {
-  await nav(page, "Playbooks").click();
+  await projectTab(page, "Playbooks");
   await page.getByTestId(`draft-open-${ID}`).click();
   await expect(page.getByTestId("authoring-workspace")).toBeVisible();
   await page.getByRole("tablist", { name: "Draft artifacts" }).getByRole("tab", { name: "Enable", exact: true }).click();
@@ -137,33 +141,34 @@ test("playbook-library-95: Publish from a project at the second instance reads t
   expect(firstRegistry.script.received.filter((request) => request.method === "PUT")).toEqual([]);
 
   // A second scratch home signed in to the second instance alone finds
-  // it by search, Add requests it, and its playbook lists from the
-  // registry source and enables (playbook-library-92,
-  // playbook-library-34).
+  // it by search on its project's Packages tab, Add requests it, and
+  // its playbook lists on the Playbooks tab from the registry source
+  // and enables (playbook-library-92, playbook-library-34).
   const other = await startApp({ project: true, host: { share: { host: second, registry: secondRegistry } }, signedIn: true });
   try {
     const listed = (await other.core.command("space.get", {})).instances;
     expect(listed.map((instance) => [instance.origin, instance.signedIn])).toEqual([[second.url, true]]);
     await selectRegistryCore(other, second.url);
     await open(page, other);
-    await nav(page, "Playbooks").click();
-    await expect(page.getByTestId("side-project")).toHaveAttribute("aria-pressed", "true");
-    await page.getByTestId("add-from-registry").click();
-    await page.getByTestId("registry-query").fill(ID);
-    const result = page.getByTestId(`registry-result-${PACKAGE}`);
+    await projectTab(page, "Packages");
+    const packages = packagesSection(page, "project");
+    await packages.getByTestId("add-from-registry").click();
+    await packages.getByTestId("registry-query").fill(ID);
+    const result = packages.getByTestId(`registry-result-${PACKAGE}`);
     await expect(result).toBeVisible();
     await expect(result.getByTestId(`registry-version-${PACKAGE}`)).toHaveValue("0.1.0");
     await result.getByTestId(`registry-add-${PACKAGE}`).click();
-    await expect(page.getByTestId("add-note")).toHaveText(`Requested ${PACKAGE}`);
-    const requested = page.getByTestId("environment-section").getByTestId(`env-package-${PACKAGE}`);
+    await expect(packages.getByTestId("add-note")).toHaveText(`Requested ${PACKAGE}`);
+    const requested = packages.getByTestId(`env-package-${PACKAGE}`);
     await expect(requested.getByTestId(`env-version-${PACKAGE}`)).toHaveText("0.1.0", { timeout: 30_000 });
     await expect(requested.getByTestId(`env-source-${PACKAGE}`)).toHaveText("registry ^0.1.0");
     await expect(requested.getByTestId(`env-installed-${PACKAGE}`)).toHaveText("Installed");
-    const card = page.getByTestId("playbooks-available").getByTestId(`playbook-card-${ID}`);
+    await projectTab(page, "Playbooks");
+    const card = playbookCard(page.getByTestId("playbooks-available"), ID, "project");
     await expect(card).toContainText(`/${ID}`);
     await expect(card.getByTestId(`playbook-from-${ID}`)).toHaveText(new RegExp(`^from\\s*${PACKAGE} 0\\.1\\.0$`));
     await card.getByTestId(`playbook-enable-${ID}`).click();
-    const enabled = page.getByTestId("playbooks-enabled").getByTestId(`playbook-card-${ID}`);
+    const enabled = playbookCard(page.getByTestId("playbooks-enabled"), ID, "project");
     await expect(enabled.getByTestId(`playbook-enabled-${ID}`)).toHaveText("Enabled in the project");
     await expect.poll(() => other.readProjectConfig()).toContain(`${ID}:`);
   } finally {
@@ -212,11 +217,12 @@ test("playbook-library-114: a local spec-and-skill package publishes without a p
   await app.core.command("environment.request", { repository: project.key, name, request: { kind: "path", path } });
   expect(await app.core.command("draft.list", {})).toEqual([]);
   await open(page, app);
-  await nav(page, "Playbooks").click();
-  const row = page.getByTestId(`env-package-${name}`);
+  await projectTab(page, "Packages");
+  const packages = packagesSection(page, "project");
+  const row = packages.getByTestId(`env-package-${name}`);
   const publish = row.getByTestId("publish");
   await expect(publish.getByTestId("publish-button")).toBeVisible();
-  await expect(page.getByTestId("env-package-sublang/playbooks").getByTestId("publish")).toHaveCount(0);
+  await expect(packages.getByTestId("env-package-sublang/playbooks").getByTestId("publish")).toHaveCount(0);
   await publish.getByTestId("publish-button").click();
   await expect(publish.getByTestId("publish-summary")).toContainText(`${name} 0.1.0`);
   await expect(publish.getByTestId("publish-target")).toHaveText(`Publish to ${second.url}`);
@@ -254,13 +260,14 @@ test("playbook-library-114: a local spec-and-skill package publishes without a p
   try {
     await selectRegistryCore(other, second.url);
     await open(page, other);
-    await nav(page, "Playbooks").click();
-    await page.getByTestId("add-from-registry").click();
-    await page.getByTestId("registry-query").fill(id);
-    const result = page.getByTestId(`registry-result-${name}`);
+    await projectTab(page, "Packages");
+    const otherPackages = packagesSection(page, "project");
+    await otherPackages.getByTestId("add-from-registry").click();
+    await otherPackages.getByTestId("registry-query").fill(id);
+    const result = otherPackages.getByTestId(`registry-result-${name}`);
     await expect(result).toBeVisible();
     await result.getByTestId(`registry-add-${name}`).click();
-    const installed = page.getByTestId(`env-package-${name}`);
+    const installed = otherPackages.getByTestId(`env-package-${name}`);
     await expect(installed.getByTestId(`env-version-${name}`)).toHaveText("0.1.0");
     await expect(installed.getByTestId(`env-installed-${name}`)).toHaveText("Installed");
     await expect(installed.getByTestId(`env-artifact-${name}-notes-tools`)).toContainText("spec");
@@ -275,7 +282,7 @@ test("playbook-library-114: a local spec-and-skill package publishes without a p
   const atSecond = instanceSection(page, second);
   await atSecond.getByTestId("space-signout").click();
   await expect(atSecond.getByTestId("space-signin-again")).toBeVisible();
-  await nav(page, "Playbooks").click();
+  await projectTab(page, "Packages");
   await expect(publish.getByTestId("publish-button")).toBeVisible();
   await app.core.command("registry.signout", { origin: second.url });
   await expect(publish.getByRole("button", { name: "Sign in to registry", exact: true })).toBeVisible();

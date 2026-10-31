@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The Playbooks surface's fixtures (playbook-library, DR-104): a home
-// with your own group's spex repository and one project's, the own
-// config's roster, the environments each side installs, and what they
+// The Playbooks and Packages tabs' fixtures (playbook-library, DR-104):
+// a home with your own group's spex repository and one project's, the
+// own config's roster, the environments each installs, and what they
 // export — the shapes the core answers over the protocol, so a test
-// drives the real store and surface against a stand-in client.
+// drives the real store and tabs against a stand-in client.
 
 import type {
   ConfigState,

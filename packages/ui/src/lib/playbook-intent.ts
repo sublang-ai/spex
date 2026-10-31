@@ -9,7 +9,7 @@
 // team's own playbook's — is the team's words and renders as given.
 //
 // Every surface that shows a playbook's intent — the quick-start card,
-// the slash menu, the Playbooks surface — reads it through
+// the slash menu, the project's Playbooks tab — reads it through
 // `playbookIntent`.
 //
 // Each key is written twice, as the table's key and inside its

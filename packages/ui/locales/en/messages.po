@@ -151,7 +151,7 @@ msgstr "{command} failed at {step}"
 msgid "{command} is not installed"
 msgstr "{command} is not installed"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "{command} is unavailable until /review is enabled below."
 msgstr "{command} is unavailable until /review is enabled below."
 
@@ -267,7 +267,7 @@ msgstr "{count, plural, one {Keep {place}'s version? {name}'s stays in Git histo
 msgid "{count, plural, one {Keep this computer's version? {name}'s stays in Git history} other {Keep this computer's version of all #? {name}'s stays in Git history}}"
 msgstr "{count, plural, one {Keep this computer's version? {name}'s stays in Git history} other {Keep this computer's version of all #? {name}'s stays in Git history}}"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "{count, plural, one {Pull-request delivery is unavailable until {names} is enabled below; a plain /dev request still runs.} other {Pull-request delivery is unavailable until {names} are enabled below; a plain /dev request still runs.}}"
 msgstr "{count, plural, one {Pull-request delivery is unavailable until {names} is enabled below; a plain /dev request still runs.} other {Pull-request delivery is unavailable until {names} are enabled below; a plain /dev request still runs.}}"
 
@@ -323,7 +323,7 @@ msgstr "{days}d ago"
 msgid "{declined, plural, =0 {To fix ({count})} other {To fix ({count}) · # set aside}}"
 msgstr "{declined, plural, =0 {To fix ({count})} other {To fix ({count}) · # set aside}}"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "{diagnostic} — delete the session, or repair the file and restart Spex"
 msgstr "{diagnostic} — delete the session, or repair the file and restart Spex"
 
@@ -342,7 +342,7 @@ msgid "{effort} (unsupported)"
 msgstr "{effort} (unsupported)"
 
 #. joins the two playbook names the /dev hint asks for
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "{first} and {second}"
 msgstr "{first} and {second}"
 
@@ -387,11 +387,11 @@ msgstr "{hours}h {minutes}m"
 msgid "{hours}h ago"
 msgstr "{hours}h ago"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "{id} is a built-in — enable it instead"
 msgstr "{id} is a built-in — enable it instead"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "{id} is already a playbook of {package}"
 msgstr "{id} is already a playbook of {package}"
 
@@ -492,7 +492,7 @@ msgid "{name} {version} · applet {id}"
 msgstr "{name} {version} · applet {id}"
 
 #: src/components/DraftRegisterTab.tsx
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "{name} agent"
 msgstr "{name} agent"
 
@@ -604,7 +604,7 @@ msgstr "{received} received; nothing sent"
 msgid "{requirement} by {requirer}"
 msgstr "{requirement} by {requirer}"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "{role} needs a player id: lowercase segments joined by dots"
 msgstr "{role} needs a player id: lowercase segments joined by dots"
 
@@ -763,7 +763,7 @@ msgstr "@{login} removed"
 msgid "/ for playbooks · Enter sends"
 msgstr "/ for playbooks · Enter sends"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "/{command} stops being offered; the spec package stays"
 msgstr "/{command} stops being offered; the spec package stays"
 
@@ -1447,7 +1447,7 @@ msgstr "Attachments"
 
 #. heading over a project's changed authoring sessions
 #. section heading: playbooks being written in this project
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 #: src/lib/space.ts
 msgid "Authoring"
 msgstr "Authoring"
@@ -1520,7 +1520,7 @@ msgid "binary file · {size}"
 msgstr "binary file · {size}"
 
 #: src/components/BindingEditor.tsx
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Bind {role}"
 msgstr "Bind {role}"
 
@@ -1878,7 +1878,7 @@ msgstr "Choose folder…"
 msgid "Choose for {count, plural, one {# conflict} other {# conflicts}}"
 msgstr "Choose for {count, plural, one {# conflict} other {# conflicts}}"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Choose namespace"
 msgstr "Choose namespace"
 
@@ -1891,7 +1891,7 @@ msgstr "Choose the approach"
 msgid "Choose which agent answers"
 msgstr "Choose which agent answers"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Choose which session player answers {role}"
 msgstr "Choose which session player answers {role}"
 
@@ -2097,7 +2097,7 @@ msgid "Combining…"
 msgstr "Combining…"
 
 #. after enabling an authored playbook: {folder} is its spec package's folder in the working folder, e.g. spex-packages/acme/triage
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Commit {folder} with your code"
 msgstr "Commit {folder} with your code"
 
@@ -2161,11 +2161,11 @@ msgstr "Compile"
 msgid "Compile canceled"
 msgstr "Compile canceled"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Compile failed at {phase}"
 msgstr "Compile failed at {phase}"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Compile failed at an unknown phase"
 msgstr "Compile failed at an unknown phase"
 
@@ -2187,7 +2187,7 @@ msgstr "Compiled {age}"
 msgid "Compiled {age}; the source changed since"
 msgstr "Compiled {age}; the source changed since"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Compiled {id}"
 msgstr "Compiled {id}"
 
@@ -2204,7 +2204,7 @@ msgstr "Compiles first"
 msgid "Compiling"
 msgstr "Compiling"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Compiling {id}"
 msgstr "Compiling {id}"
 
@@ -2234,7 +2234,7 @@ msgid "Config file invalid"
 msgstr "Config file invalid"
 
 #: src/components/DraftRegisterTab.tsx
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Configure {name}"
 msgstr "Configure {name}"
 
@@ -2418,7 +2418,7 @@ msgstr "Could not answer {tool} for {actor}: {reason}"
 msgid "could not inspect"
 msgstr "could not inspect"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Could not load registry namespaces. Try again."
 msgstr "Could not load registry namespaces. Try again."
 
@@ -2589,12 +2589,12 @@ msgstr "decision records {count}"
 #. confirm: delete this session for good
 #. confirm: remove the authoring session for good
 #. remove the authoring session for good
-#: src/components/LibrarySurface.tsx
 #: src/components/NavRail.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Delete"
 msgstr "Delete"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Delete authoring session {id}"
 msgstr "Delete authoring session {id}"
 
@@ -2606,7 +2606,7 @@ msgstr "delete failed"
 msgid "Delete session {title}"
 msgstr "Delete session {title}"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Delete this authoring session? Its spec package folder stays."
 msgstr "Delete this authoring session? Its spec package folder stays."
 
@@ -2635,7 +2635,7 @@ msgstr "Delete this session? It was run from the terminal; its history goes too.
 msgid "deleted"
 msgstr "deleted"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Deleted {id}; its spec package folder stays at {path}"
 msgstr "Deleted {id}; its spec package folder stays at {path}"
 
@@ -2645,7 +2645,7 @@ msgid "deleting…"
 msgstr "deleting…"
 
 #. the delete request is in flight
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Deleting…"
 msgstr "Deleting…"
 
@@ -2690,21 +2690,21 @@ msgstr "did not publish"
 
 #. stop offering this playbook in this config
 #. stop offering this playbook in this config
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Disable"
 msgstr "Disable"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Disable {id}"
 msgstr "Disable {id}"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Disable /{command}"
 msgstr "Disable /{command}"
 
 #. the disable request is in flight
 #. the disable request is in flight
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Disabling…"
 msgstr "Disabling…"
 
@@ -2895,11 +2895,11 @@ msgstr "Dropping…"
 msgid "e.g. .git, docs/generated"
 msgstr "e.g. .git, docs/generated"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "e.g. Apache-2.0"
 msgstr "e.g. Apache-2.0"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "e.g. triage"
 msgstr "e.g. triage"
 
@@ -2985,15 +2985,15 @@ msgstr "Effort options apply to the adapter; support for this model is unverifie
 #. enable this playbook in this config
 #: src/components/AuthoringWorkspace.tsx
 #: src/components/DraftRegisterTab.tsx
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Enable"
 msgstr "Enable"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Enable /{command}"
 msgstr "Enable /{command}"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Enable /{command} with a player per role"
 msgstr "Enable /{command} with a player per role"
 
@@ -3003,28 +3003,28 @@ msgstr "Enable in"
 
 #. authoring state chip, at most 14 characters: the compiled playbook is enabled in a config
 #. section heading: the playbooks the project's config or your own group's enables
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 #: src/lib/drafts.ts
 msgid "Enabled"
 msgstr "Enabled"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Enabled /{command}"
 msgstr "Enabled /{command}"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Enabled in the project"
 msgstr "Enabled in the project"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Enabled in the project and your own group"
 msgstr "Enabled in the project and your own group"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Enabled in your own group"
 msgstr "Enabled in your own group"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Enabled. Sessions started before must be restarted to use it."
 msgstr "Enabled. Sessions started before must be restarted to use it."
 
@@ -3035,7 +3035,7 @@ msgstr "Enables the last compile — the source changed since."
 #. the enable request is in flight
 #. the enable request is in flight
 #: src/components/DraftRegisterTab.tsx
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Enabling…"
 msgstr "Enabling…"
 
@@ -3104,11 +3104,11 @@ msgid "Everything is in sync"
 msgstr "Everything is in sync"
 
 #. section heading: the demo playbook
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Example"
 msgstr "Example"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Example: {title}"
 msgstr "Example: {title}"
 
@@ -3417,7 +3417,7 @@ msgid "found problems"
 msgstr "found problems"
 
 #. label before the spec package a playbook comes from
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "from"
 msgstr "from"
 
@@ -3425,7 +3425,7 @@ msgstr "from"
 msgid "From {actor}"
 msgstr "From {actor}"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "from {credit}"
 msgstr "from {credit}"
 
@@ -3475,7 +3475,7 @@ msgstr "From your groups on {place}"
 #. pipeline stage: the compiler's normative spec items (a proper name)
 #. pipeline stage: the compiler's normative spec items (a proper name)
 #: src/components/AuthoringWorkspace.tsx
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 #: src/components/PlaybookStages.tsx
 msgid "Gears"
 msgstr "Gears"
@@ -3523,8 +3523,8 @@ msgid "Give the player an id first."
 msgstr "Give the player an id first."
 
 #: src/lib/shortcuts.ts
-msgid "Go to Dashboard, Projects, Playbooks, Space, Settings"
-msgstr "Go to Dashboard, Projects, Playbooks, Space, Settings"
+msgid "Go to Dashboard, Projects, Space, Settings"
+msgstr "Go to Dashboard, Projects, Space, Settings"
 
 #. the field naming a new group at the Space
 #: src/components/SpaceMembers.tsx
@@ -3792,7 +3792,7 @@ msgstr "interrupted sync"
 msgid "Interrupted turn"
 msgstr "Interrupted turn"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Invalid: {reason}"
 msgstr "Invalid: {reason}"
 
@@ -3837,7 +3837,7 @@ msgid "its endpoint"
 msgstr "its endpoint"
 
 #: src/components/EnvironmentSection.tsx
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Its files are not on this device"
 msgstr "Its files are not on this device"
 
@@ -3883,9 +3883,9 @@ msgstr "just now"
 #. confirm: leave the run as it is
 #: src/components/DashboardSurface.tsx
 #: src/components/EnvironmentSection.tsx
-#: src/components/LibrarySurface.tsx
 #: src/components/NavRail.tsx
 #: src/components/ParkedRun.tsx
+#: src/components/PlaybooksTab.tsx
 #: src/components/ProjectGroup.tsx
 #: src/components/ProjectsSurface.tsx
 #: src/components/SettingsSurface.tsx
@@ -3942,7 +3942,7 @@ msgid "Last refreshed {age}"
 msgstr "Last refreshed {age}"
 
 #. field of New playbook: the SPDX license its spec package is published under
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "License"
 msgstr "License"
 
@@ -3973,7 +3973,7 @@ msgstr "Loading media…"
 msgid "Loading model options…"
 msgstr "Loading model options…"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Loading registry namespaces…"
 msgstr "Loading registry namespaces…"
 
@@ -3999,7 +3999,7 @@ msgstr "Loading transcript…"
 #. a request for this pane's content is in flight
 #: src/components/AuthoringWorkspace.tsx
 #: src/components/EnvironmentSection.tsx
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "loading…"
 msgstr "loading…"
 
@@ -4125,7 +4125,7 @@ msgstr "Minimum citations per pair"
 msgid "Missing on this device: {path}"
 msgstr "Missing on this device: {path}"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "missing stages: {stages}"
 msgstr "missing stages: {stages}"
 
@@ -4235,8 +4235,7 @@ msgstr "New group"
 
 #. start writing a playbook of one's own
 #. start writing a playbook of one's own
-#. start writing a playbook of one's own
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "New playbook"
 msgstr "New playbook"
 
@@ -4363,7 +4362,7 @@ msgstr "No open pull requests."
 msgid "No playbooks available — open Playbooks"
 msgstr "No playbooks available — open Playbooks"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "No playbooks enabled yet — enable a built-in below, or make your own with New playbook."
 msgstr "No playbooks enabled yet — enable a built-in below, or make your own with New playbook."
 
@@ -4401,7 +4400,7 @@ msgstr "No projects here yet"
 msgid "No projects yet — register a repository in the <0>Projects</0> to put its work here."
 msgstr "No projects yet — register a repository in the <0>Projects</0> to put its work here."
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "No publishing namespaces available."
 msgstr "No publishing namespaces available."
 
@@ -4465,11 +4464,11 @@ msgid "Normalize"
 msgstr "Normalize"
 
 #. pipeline stage: slc's normalized workflow markdown
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Normalized"
 msgstr "Normalized"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Normalized text: the prose as workflow markdown, in slc's normalized form"
 msgstr "Normalized text: the prose as workflow markdown, in slc's normalized form"
 
@@ -4517,7 +4516,7 @@ msgstr "not deleted"
 
 #. a listed playbook no config enables
 #. section heading: playbooks neither the project's config nor your own group's enables
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Not enabled"
 msgstr "Not enabled"
 
@@ -4732,7 +4731,7 @@ msgstr "On (unsupported)"
 msgid "On {server}"
 msgstr "On {server}"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 #: src/components/PlaybookStages.tsx
 msgid "One normative spec item per state behavior — the compiler's middle stage"
 msgstr "One normative spec item per state behavior — the compiler's middle stage"
@@ -4747,7 +4746,7 @@ msgid "Only pairs with ≥ {field} {count, plural, one {citation} other {citatio
 msgstr "Only pairs with ≥ {field} {count, plural, one {citation} other {citations}}"
 
 #. open this authoring session's workspace
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Open"
 msgstr "Open"
 
@@ -4917,8 +4916,8 @@ msgstr "Opening the applet…"
 #. an authoring session is being opened
 #. an authoring session is being opened
 #: src/components/CaptainHome.tsx
-#: src/components/LibrarySurface.tsx
 #: src/components/NavRail.tsx
+#: src/components/PlaybooksTab.tsx
 #: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
 #: src/lib/space.ts
@@ -4930,7 +4929,7 @@ msgstr "Opening…"
 msgid "Opens {space} in your browser"
 msgstr "Opens {space} in your browser"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Opens a playbook named {id} with the normalized text ready to paste — nothing is written or compiled"
 msgstr "Opens a playbook named {id} with the normalized text ready to paste — nothing is written or compiled"
 
@@ -4949,12 +4948,12 @@ msgid "Or enter an existing Git repository path"
 msgstr "Or enter an existing Git repository path"
 
 #. field of New playbook: the registry org its spec package is published under
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Org"
 msgstr "Org"
 
 #. the example's prefill waits for New playbook's Org and License
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Org and License first"
 msgstr "Org and License first"
 
@@ -5009,6 +5008,8 @@ msgid "Package registry"
 msgstr "Package registry"
 
 #. heading over a project's changed spex.yaml and spex.lock: the packages it adds
+#. tab name: the spec packages this project and your own group install
+#: src/App.tsx
 #: src/lib/space.ts
 msgid "Packages"
 msgstr "Packages"
@@ -5101,7 +5102,7 @@ msgstr "Pick the folder on this computer that holds its code"
 msgid "pin a value…"
 msgstr "pin a value…"
 
-#. the selector of where Settings, Playbooks, Groups and Environments are shown: This computer or a team server
+#. the selector of where Settings and Space are shown: This computer or a team server
 #: src/components/PlaceSelector.tsx
 msgid "Place"
 msgstr "Place"
@@ -5121,7 +5122,7 @@ msgid "playbook"
 msgstr "playbook"
 
 #: src/components/DraftRegisterTab.tsx
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Playbook id"
 msgstr "Playbook id"
 
@@ -5134,26 +5135,22 @@ msgstr "Playbook runtime {session}"
 msgid "playbook: {playbookId}"
 msgstr "playbook: {playbookId}"
 
-#. the surface listing every playbook
-#. the surface listing every playbook
+#. back to the project's Playbooks tab, listing its playbooks
+#. heading of the project's Playbooks tab
+#. tab name: the playbooks a session in this project can run
+#: src/App.tsx
 #: src/components/AuthoringWorkspace.tsx
 #: src/components/CaptainHome.tsx
-#: src/components/LibrarySurface.tsx
-#: src/components/NavRail.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Playbooks"
 msgstr "Playbooks"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Playbooks need a valid config — fix it in <0>Settings</0>."
 msgstr "Playbooks need a valid config — fix it in <0>Settings</0>."
 
-#. name of the switch between the project's playbooks and your own group's
-#: src/components/LibrarySurface.tsx
-msgid "Playbooks of"
-msgstr "Playbooks of"
-
 #: src/components/DraftRegisterTab.tsx
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Player for {role}"
 msgstr "Player for {role}"
 
@@ -5179,7 +5176,7 @@ msgid "preferences"
 msgstr "preferences"
 
 #. open an authoring session carrying the example's text
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Prefill"
 msgstr "Prefill"
 
@@ -5564,7 +5561,7 @@ msgstr "registry"
 msgid "registry {requirement}"
 msgstr "registry {requirement}"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Registry namespaces"
 msgstr "Registry namespaces"
 
@@ -5682,7 +5679,7 @@ msgstr "Remove project"
 msgid "Remove the credential for {name}"
 msgstr "Remove the credential for {name}"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Remove the session and its conversation; the spec package folder stays"
 msgstr "Remove the session and its conversation; the spec package folder stays"
 
@@ -5911,7 +5908,7 @@ msgstr "resume tokens for this computer's agent conversations; they work nowhere
 #: src/App.tsx
 #: src/components/ComposerAttachments.tsx
 #: src/components/DashboardSurface.tsx
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 #: src/components/RunView.tsx
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceGroups.tsx
@@ -6363,7 +6360,7 @@ msgid "Share with {group} at {name}?"
 msgstr "Share with {group} at {name}?"
 
 #. badge: this lane answers more than one role
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "shared"
 msgstr "shared"
 
@@ -6586,8 +6583,10 @@ msgstr "source"
 #. pipeline stage: the authored workflow
 #. pipeline stage: the authored workflow
 #. pipeline stage: the authored workflow
+#. pipeline stage: the authored workflow
 #: src/components/AuthoringWorkspace.tsx
-#: src/components/LibrarySurface.tsx
+#: src/components/DraftSourceTab.tsx
+#: src/components/PlaybooksTab.tsx
 #: src/components/PlaybookStages.tsx
 msgid "Source"
 msgstr "Source"
@@ -6787,7 +6786,7 @@ msgstr "Starting…"
 
 #. pipeline stage: the compiled machine
 #. pipeline stage: the compiled machine
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 #: src/components/PlaybookStages.tsx
 msgid "State machine"
 msgstr "State machine"
@@ -7031,7 +7030,7 @@ msgstr "The agent's sign-in has expired — in a terminal, sign in again with th
 msgid "The call timed out"
 msgstr "The call timed out"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "The Captain can only run playbooks listed here."
 msgstr "The Captain can only run playbooks listed here."
 
@@ -7063,7 +7062,7 @@ msgstr "The compiled roles stand: {roles}."
 msgid "The compiled state machine, from the last compile"
 msgstr "The compiled state machine, from the last compile"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 #: src/components/PlaybookStages.tsx
 msgid "The compiled XState machine that drives the players"
 msgstr "The compiled XState machine that drives the players"
@@ -7130,7 +7129,7 @@ msgstr "the provider's default"
 msgid "The queue could not be loaded. <0>Retry</0>"
 msgstr "The queue could not be loaded. <0>Retry</0>"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "The raw prose the example starts from"
 msgstr "The raw prose the example starts from"
 
@@ -7271,7 +7270,7 @@ msgid "This file is too large to preview."
 msgstr "This file is too large to preview."
 
 #: src/components/DraftRegisterTab.tsx
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "This lane also answers {positions} — one conversation across them"
 msgstr "This lane also answers {positions} — one conversation across them"
 
@@ -7299,7 +7298,7 @@ msgstr "This session has ended — the replay is read-only"
 msgid "this stage was not found for this draft"
 msgstr "this stage was not found for this draft"
 
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "this stage was not found for this playbook"
 msgstr "this stage was not found for this playbook"
 
@@ -7425,7 +7424,7 @@ msgid "Turn workflows written in plain language into steps AI can run"
 msgstr "Turn workflows written in plain language into steps AI can run"
 
 #: src/components/DraftRegisterTab.tsx
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "Tweak the {name} agent in place"
 msgstr "Tweak the {name} agent in place"
 
@@ -7438,7 +7437,7 @@ msgid "Type <0>/</0> in the task box to see {count, plural, one {# playbook} oth
 msgstr "Type <0>/</0> in the task box to see {count, plural, one {# playbook} other {# playbooks}}"
 
 #. a required role no player answers yet
-#: src/components/LibrarySurface.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "unbound"
 msgstr "unbound"
 
@@ -7847,9 +7846,7 @@ msgid "Your groups"
 msgstr "Your groups"
 
 #. switch: show your own group's playbooks
-#. switch: show your own group's playbooks
 #: src/components/DraftRegisterTab.tsx
-#: src/components/LibrarySurface.tsx
 msgid "Your own group"
 msgstr "Your own group"
 

@@ -20,7 +20,18 @@ import {
 } from "@sublang/spex-core/testing";
 import type { Locator, Page } from "@playwright/test";
 
-import { test, expect, open, nav, runTurn, send, type App } from "../src/harness";
+import {
+  test,
+  expect,
+  open,
+  nav,
+  packagesSection,
+  projectTab,
+  projectTabControl,
+  runTurn,
+  send,
+  type App,
+} from "../src/harness";
 import {
   HEIGHTS,
   OPEN_RAIL_MIN_WIDTH,
@@ -502,9 +513,29 @@ async function assertSurfaceMatrix(
       },
     },
     {
-      name: "Playbooks",
-      show: () => nav(page, "Playbooks").click(),
-      ready: () => expect(page.getByTestId("playbooks-enabled")).toBeVisible(),
+      // The project's Playbooks tab, a view of the project (run-view-58).
+      name: "Playbooks tab",
+      show: async () => {
+        await projectTab(page, "Playbooks");
+      },
+      ready: async () => {
+        await expect(projectTabControl(page, "Playbooks")).toHaveAttribute("aria-selected", "true");
+        await expect(page.getByTestId("playbooks-enabled")).toBeVisible();
+      },
+    },
+    {
+      // The project's Packages tab: the project's packages and, beneath
+      // them, your own group's (playbook-library-92).
+      name: "Packages tab",
+      show: async () => {
+        await projectTab(page, "Packages");
+      },
+      ready: async () => {
+        await expect(projectTabControl(page, "Packages")).toHaveAttribute("aria-selected", "true");
+        for (const whose of ["project", "personal"] as const) {
+          await expect(packagesSection(page, whose).getByTestId("env-package-sublang/playbooks")).toBeVisible();
+        }
+      },
     },
     {
       // The authoring workspace at rest after a compile: the thread
@@ -512,6 +543,7 @@ async function assertSurfaceMatrix(
       // and the compiled tabs enabled (playbook-library-52).
       name: "Playbook draft",
       show: async () => {
+        await projectTab(page, "Playbooks");
         const idField = page.getByTestId("new-playbook-id");
         // The project's defaults fill Org and License (playbook-library-51).
         await expect(page.getByTestId("new-playbook-license")).toHaveValue("Apache-2.0");
@@ -1376,6 +1408,73 @@ test.describe("chrome the sweep does not open", () => {
       }
     }
     expect(defects, defects.join("\n")).toEqual([]);
+  });
+});
+
+test.describe("the strip's pinned tabs at the narrowest width", () => {
+  test.use({ appOptions: { project: true } });
+
+  test("run-view-105: at 320px the new-task control, Specs, Playbooks, Packages and Overview each stand whole in the strip", async ({
+    page,
+    app,
+  }) => {
+    await open(page, app);
+    await setRail(page, false);
+    await page.setViewportSize({ width: 320, height: TALL });
+    const strip = page.getByRole("tablist", { name: "Sessions and project views" });
+    await expect(strip).toBeVisible();
+    // The strip's five pinned controls, in their order (run-view-58).
+    const controls = [
+      page.getByRole("tab", { name: "New task", exact: true }),
+      page.getByTestId("workspace-tab-specs"),
+      projectTabControl(page, "Playbooks"),
+      projectTabControl(page, "Packages"),
+      page.getByTestId("workspace-tab-overview"),
+    ];
+    /** Where a control stands now: whole inside the strip and every
+     * box that clips it, and inside the window. */
+    const standing = (control: (typeof controls)[number]) =>
+      control.evaluate((element) => {
+        const own = element.getBoundingClientRect();
+        const clips = [element.closest('[role="tablist"]')!.getBoundingClientRect()];
+        for (let at = element.parentElement; at && at !== document.body; at = at.parentElement) {
+          if (getComputedStyle(at).overflowX !== "visible") clips.push(at.getBoundingClientRect());
+        }
+        return {
+          name: (element.getAttribute("data-testid") ?? element.textContent ?? "").trim(),
+          left: own.left,
+          right: own.right,
+          whole:
+            own.width > 0 &&
+            own.left >= -0.5 &&
+            own.right <= window.innerWidth + 0.5 &&
+            clips.every((clip) => own.left >= clip.left - 0.5 && own.right <= clip.right + 0.5),
+        };
+      });
+    for (const [index, control] of controls.entries()) {
+      // Each is reached by the strip's own sideways scroll where the
+      // controls overflow it (run-view-48).
+      await control.scrollIntoViewIfNeeded();
+      await expect(control).toBeVisible();
+      const here = await standing(control);
+      expect(here.whole, `${here.name} stands whole in the strip at 320px`).toBe(true);
+      // No two overlap: every neighbour standing whole beside it now
+      // keeps clear of it.
+      for (const other of [controls[index - 1], controls[index + 1]]) {
+        if (!other) continue;
+        const there = await standing(other);
+        if (!there.whole) continue;
+        const apart = there.right <= here.left + 0.5 || there.left >= here.right - 0.5;
+        expect(apart, `${there.name} overlaps ${here.name} at 320px`).toBe(true);
+      }
+      // The page itself never scrolls sideways (run-view-106).
+      expect(
+        await page.evaluate(
+          () => window.scrollX === 0 && document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1,
+        ),
+        `the page scrolls sideways with ${here.name} in view`,
+      ).toBe(true);
+    }
   });
 });
 

@@ -117,9 +117,9 @@ export interface DraftRegisterForm {
   repository?: string;
 }
 
-/** Which spex repository the Playbooks surface shows: the chosen
- * project's, or your own group's (playbook-library-1). */
-export type PlaybooksSide = "project" | "own";
+/** Whose environment a listed playbook comes from: the project's, or
+ * your own group's (playbook-library-1). */
+export type PlaybookOrigin = "project" | "own";
 
 /** What `environment.playbooks` answered, and for which project. */
 export type PlaybookLists = CommandResults["environment.playbooks"] & {
@@ -436,11 +436,13 @@ export interface AppState extends AttachmentState {
    * compileProgress, so the band can tick "last output ⟨age⟩ ago". */
   compileProgressAt: Record<string, number[]>;
   /** The Captain home's slash menu asked for a new playbook: the
-   * Library focuses its id field on arrival (playbook-library-51). */
+   * project's Playbooks tab focuses its id field on arrival
+   * (playbook-library-51). */
   newPlaybookRequested: boolean;
-  /** A playbook the Library should bring into view on its next render —
-   * the one an enabling just made (playbook-library-61). */
-  revealPlaybook?: string;
+  /** A playbook the Playbooks tab should bring into view on its next
+   * render — the one an enabling just made, by the environment whose
+   * config it was enabled in (playbook-library-61). */
+  revealPlaybook?: { id: string; origin: PlaybookOrigin };
   /** Each spex repository's environment as last read or broadcast
    * (playbook-library-92), by the repository's key. */
   environments: Record<string, EnvironmentState>;
@@ -449,12 +451,8 @@ export interface AppState extends AttachmentState {
   /** The playbooks the chosen project's and your own group's
    * environments export (playbook-library-1); undefined until read. */
   playbookLists?: PlaybookLists;
-  /** The Playbooks surface's side (playbook-library-1). */
-  playbooksSide: PlaybooksSide;
-
-  setPlaybooksSide(side: PlaybooksSide): void;
-  /** Read what each environment exports, for this project's side and
-   * your own group's; the newest read wins. */
+  /** Read what each environment exports, the project's and your own
+   * group's; the newest read wins. */
   loadPlaybookLists(projectId: string | undefined): Promise<void>;
   loadEnvironment(repository: string): Promise<void>;
   /** Write a request into a spex repository's `spex.yaml`; resolving
@@ -527,7 +525,7 @@ export interface AppState extends AttachmentState {
   requestNewPlaybook(): void;
   /** Take the pending request, if any; true once per request. */
   consumeNewPlaybookRequest(): boolean;
-  consumeRevealPlaybook(): string | undefined;
+  consumeRevealPlaybook(): { id: string; origin: PlaybookOrigin } | undefined;
 
   loadAgentOptions(adapter: AdapterName): Promise<AgentOptions>;
   /** One agent's settings for one conversation (DR-067, DR-068). It
@@ -1859,7 +1857,6 @@ function placeState(
     newPlaybookRequested: false,
     environments: {},
     environmentErrors: {},
-    playbooksSide: "project",
     spaceChangeSeq: 0,
     spaceSplit: readPercent(
       prefKey(SPACE_SPLIT_KEY),
@@ -3036,16 +3033,16 @@ function placeState(
         ...(input.repository ? { repository: input.repository } : {}),
       });
       // The session stays, to be worked on further and published; the
-      // list opens on the side enabled in, with the new card in view
-      // (playbook-library-61).
+      // list opens with the new card in view, the one of the environment
+      // enabled in (playbook-library-61).
       // The config it wrote is everyone's; the workspace closes only if
       // it still shows the session that enabled.
       set({ configState });
       void get().loadPlaybookLists(projectId).catch(() => {});
       if (!isShown(draftId, instance) || get().openDraftId !== draftId) return;
-      const side: PlaybooksSide =
+      const origin: PlaybookOrigin =
         input.repository && input.repository !== projectId ? "own" : "project";
-      set({ revealPlaybook: draftId, playbooksSide: side, openDraftId: undefined });
+      set({ revealPlaybook: { id: draftId, origin }, openDraftId: undefined });
     },
 
     async setDraftPlayer(draftId, playerId): Promise<void> {
@@ -3134,7 +3131,7 @@ function placeState(
       return requested;
     },
 
-    consumeRevealPlaybook(): string | undefined {
+    consumeRevealPlaybook(): { id: string; origin: PlaybookOrigin } | undefined {
       const reveal = get().revealPlaybook;
       if (reveal !== undefined) set({ revealPlaybook: undefined });
       return reveal;
@@ -3143,10 +3140,6 @@ function placeState(
     // -----------------------------------------------------------------
     // Environments (playbook-library-1, playbook-library-92, DR-104)
     // -----------------------------------------------------------------
-
-    setPlaybooksSide(side: PlaybooksSide): void {
-      set({ playbooksSide: side });
-    },
 
     async loadPlaybookLists(projectId: string | undefined): Promise<void> {
       const read = (playbookListReads += 1);
