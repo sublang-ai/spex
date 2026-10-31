@@ -37,14 +37,15 @@
   },
   "dependencies": {
     "@lingui/core": "^6.7.0",
-    "@sublang/cligent": "^0.36.1",
-    "@sublang/playbook": "^18.1.0",
+    "@openclaw/fs-safe": "0.26.13",
+    "@sublang/cligent": "file:../../vendor/cligent/sublang-cligent-0.36.1-windows.20261031.1.tgz",
+    "@sublang/playbook": "file:../../vendor/playbook/sublang-playbook-18.1.0-windows.20261030.tgz",
     "@sublang/spex": "*",
     "better-sqlite3": "^12.11.1",
+    "esbuild": "^0.28.2",
     "ws": "^8.18.0",
     "yaml": "^2.8.0",
-    "zod": "^4.0.0",
-    "esbuild": "^0.28.2"
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@lingui/cli": "^6.7.0",
@@ -53,5 +54,8 @@
     "@types/node": "^26.4.0",
     "@types/ws": "^8.18.0",
     "typescript": "^7.0.2"
+  },
+  "optionalDependencies": {
+    "@vscode/windows-process-tree": "0.8.0"
   }
 }

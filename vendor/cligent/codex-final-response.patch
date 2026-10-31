@@ -1,0 +1,102 @@
+--- a/src/adapters/codex.ts
++++ b/src/adapters/codex.ts
+@@ -2346,6 +2346,8 @@
+     let backendProvidedSessionId = false;
+     const startTime = Date.now();
+     let doneYielded = false;
++    // Match the public SDK run() finalResponse contract; retain streamed progress separately.
++    let lastAgentMessage: string | undefined;
+     let terminalUsageObserved = false;
+     let initYielded = false;
+     // Tool lifecycle correlation (codex-19): ids that already produced a
+@@ -2487,6 +2489,9 @@
+             continue;
+           }
+ 
++          if (item.type === 'agent_message' && typeof item.text === 'string') {
++            lastAgentMessage = item.text;
++          }
+           const itemEvents = parseItemCompleted(event.item);
+ 
+           for (const itemEvent of itemEvents) {
+@@ -2619,7 +2624,7 @@
+             AGENT,
+             {
+               status,
+-              result: asString(turn.result) ?? asString(event.result),
++              result: asString(turn.result) ?? asString(event.result) ?? lastAgentMessage,
+               ...doneResumeTokenPayload(
+                 status,
+                 backendProvidedSessionId,
+--- a/specs/packages/adapters/codex.md
++++ b/specs/packages/adapters/codex.md
+@@ -147,7 +147,7 @@
+ | `status: 'max_turns'` | `max_turns` or `maxturns` |
+ | `status: 'max_budget'` | `max_budget`, `maxbudget`, or `budget_exceeded` |
+ | `status: 'error'` | `error` or `failed` |
+-| `result` | first non-empty `turn.result`, then event `result`, otherwise omitted |
++| `result` | first non-empty `turn.result`, then event `result`, then the exact text of the last completed `agent_message` in this run (including an empty message), otherwise omitted; earlier progress messages remain separate streamed events |
+ | `durationMs` | first finite `turn.durationMs`, `turn.duration_ms`, event `durationMs`, or event `duration_ms`, otherwise elapsed run time |
+ | `resumeToken` with `status: 'interrupted'` | the interrupted-terminal selection in [[codex-33](#codex-33)] |
+ | `resumeToken` with any other status | the normal-terminal selection in [[codex-6](#codex-6)] |
+--- a/src/__tests__/codex-adapter.test.ts
++++ b/src/__tests__/codex-adapter.test.ts
+@@ -261,6 +261,22 @@
+ }
+ 
+ describe('CodexAdapter', () => {
++  it('keeps streamed progress while terminal result uses the SDK final agent message', async () => {
++    for (const explicit of [undefined, 'explicit native result']) {
++      const adapter = new CodexAdapter({
++        loadSdk: makeLoader({ events: [
++          { type: 'thread.started', thread_id: CANONICAL_THREAD_ID },
++          { type: 'item.completed', item: { type: 'agent_message', id: 'progress', text: 'Inspecting the task.' } },
++          { type: 'item.completed', item: { type: 'agent_message', id: 'final', text: '{"status":"ready"}' } },
++          { type: 'item.completed', item: { type: 'command_execution', id: 'tool', command: 'echo tool', status: 'completed', aggregated_output: 'must not become the answer', exit_code: 0 } },
++          { type: 'turn.completed', ...(explicit ? { result: explicit } : {}), usage: canonicalUsage },
++        ] }),
++      });
++      const events = await collect(adapter.run('task'));
++      expect(events.filter(e => e.type === 'text').map(e => (e.payload as {content:string}).content)).toEqual(['Inspecting the task.', '{"status":"ready"}']);
++      expect((events.find(e => e.type === 'done')?.payload as DonePayload).result).toBe(explicit ?? '{"status":"ready"}');
++    }
++  });
+ 
+   it('emits native MCP media once without changing the opaque result or tool count', async () => {
+     const content = [
+--- a/specs/map.md
++++ b/specs/map.md
+@@ -67,6 +67,7 @@
+ | [DR-039](decisions/039-merge-on-green.md) | 039-merge-on-green.md | Merge on green: protected `main` with the pull request's jobs as required checks, auto-merge, one run per pull-request head, Linux, Windows and one macOS job on a pull request, the full set on `main` and nightly, kept base branches, a pre-push check, deterministic suites |
+ | [DR-040](decisions/040-native-windows-codex-isolation.md) | 040-native-windows-codex-isolation.md | Native Windows Codex permission isolation using public SDK launch options and an owned runtime supervisor |
+ 
++| [DR-041](decisions/041-codex-final-response.md) | 041-codex-final-response.md | Codex terminal result follows the public SDK final-response contract |
+ 
+ ## Packages
+ 
+--- /dev/null
++++ b/specs/decisions/041-codex-final-response.md
+@@ -0,0 +1,23 @@
++# DR-041: Codex final response selection
++
++## Status
++
++Accepted 2026-10-30 after native SPEX workflow acceptance exposed progress text concatenated with its final JSON.
++Amends [DR-002](002-unified-event-stream-and-adapter-interface.md).
++
++## Decision
++
++- Follow the public Codex SDK `Thread.run()` finalResponse contract: retain the text of the last completed `agent_message` in the current run as the terminal result fallback.
++- Explicit native turn/event result keeps precedence; no JSON substring scraping, content repair or prompt-specific parsing.
++- Keep every intermediate text event in its original stream and journal, with existing usage, resume, cancellation and permission behavior.
++- A run-local variable prevents carrying a previous turn's final answer into a new run.
++
++## Context
++
++The installed SDK and [public SDK source](https://github.com/openai/codex/blob/main/sdk/typescript/src/thread.ts) assign `finalResponse = event.item.text` for each completed agent message.
++The real Mac APP case implementation emitted two progress messages and one final JSON; concatenating all three made strict JSON parsing fail after its successful local test.
++
++## Consequences
++
++Hosts receive an authentic whole final message while their full progress journal remains available.
++No workflow-specific JSON parser or relaxed assertion is introduced.

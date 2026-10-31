@@ -9,6 +9,8 @@
 // permanent nonempty `.lease.retired/<token>/`; a publication never
 // replaces what stands at `.lease`.
 
+import { hasPrivatePermissions, writeApplicationBytes } from "@sublang/spex/files";
+import { createDirectorySync } from "@openclaw/fs-safe/advanced";
 import { randomUUID } from "node:crypto";
 import {
   lstatSync,
@@ -177,8 +179,8 @@ const isUsers = (stat: { uid: number }): boolean =>
 
 /** A private entry: the current user's, with no group or other
  * permission bit (storage-26). */
-const isPrivate = (stat: { mode: number; uid: number }): boolean =>
-  (stat.mode & 0o077) === 0 && isUsers(stat);
+const isPrivate = (path: string, stat: { mode: number; uid: number }): boolean =>
+  hasPrivatePermissions(path, stat);
 
 /** Signal 0 to the owner: success or EPERM is a live process, ESRCH a
  * dead one, and anything else answers neither way, its code kept for the
@@ -262,7 +264,7 @@ function readOwner(dir: string, lock: string): RootLeaseOwner {
   // tagged owner open to the group or others is not one; an untagged
   // record, which an older core wrote with the default mode, is read
   // whatever its mode (storage-26).
-  if (isMachineIdentity(owner.hostname) && !isPrivate(fileStat)) {
+  if (isMachineIdentity(owner.hostname) && !isPrivate(file, fileStat)) {
     throw new StateRootLeaseError(dir, lock, reasons.malformed());
   }
   return owner as unknown as RootLeaseOwner;
@@ -281,9 +283,10 @@ function retire(
   // instead, and any other creation error refuses.
   const retiredRoot = join(dir, ".lease.retired");
   try {
-    mkdirSync(retiredRoot, { mode: 0o700 });
+    if (process.platform === "win32") createDirectorySync(retiredRoot, { private: true });
+    else mkdirSync(retiredRoot, { mode: 0o700 });
   } catch (error) {
-    if (errorCode(error) !== "EEXIST") {
+    if (!["EEXIST", "already-exists"].includes(errorCode(error))) {
       throw new StateRootLeaseError(dir, lock, reasons.inspect(errorCode(error)));
     }
   }
@@ -293,7 +296,7 @@ function retire(
   } catch (error) {
     throw new StateRootLeaseError(dir, lock, reasons.inspect(errorCode(error)));
   }
-  if (rootStat.isSymbolicLink() || !rootStat.isDirectory() || !isPrivate(rootStat)) {
+  if (rootStat.isSymbolicLink() || !rootStat.isDirectory() || !isPrivate(retiredRoot, rootStat)) {
     throw new StateRootLeaseError(dir, lock, reasons.malformed());
   }
   const target = join(retiredRoot, owner.token);
@@ -358,12 +361,11 @@ export function acquireRootLease(dir: string, options: RootLeaseOptions): RootLe
     // re-inspects; any other failure is reported as what it is.
     const stage = join(dir, `.lease.stage.${token}`);
     try {
-      mkdirSync(stage, { mode: 0o700 });
-      writeFileSync(
-        join(stage, "owner.json"),
-        JSON.stringify({ pid, hostname: options.machineIdentity, acquiredAt: Date.now(), token }),
-        { mode: 0o600 },
-      );
+      if (process.platform === "win32") createDirectorySync(stage, { private: true });
+      else mkdirSync(stage, { mode: 0o700 });
+      const ownerBytes = JSON.stringify({ pid, hostname: options.machineIdentity, acquiredAt: Date.now(), token });
+      if (process.platform === "win32") writeApplicationBytes(join(stage, "owner.json"), ownerBytes);
+      else writeFileSync(join(stage, "owner.json"), ownerBytes, { mode: 0o600 });
     } catch (error) {
       rmSync(stage, { recursive: true, force: true });
       throw new StateRootLeaseError(dir, lock, reasons.inspect(errorCode(error)));

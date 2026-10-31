@@ -1,0 +1,15 @@
+--- a/src/adapters/codex.ts
++++ b/src/adapters/codex.ts
+@@ -848,7 +848,12 @@
+     codexDefaultPermissions(options.permissions) !== ':read-only'
+       ? codexProjectTrustConfigOverride(options.cwd)
+       : undefined;
++  // PowerShell 5.1 otherwise falls back to cwd when Codex filters LOCALAPPDATA.
++  // Control only its incidental module cache; do not broaden inherited env or permissions.
+   const overrides = [
++    ...(process.platform === 'win32'
++      ? [`shell_environment_policy.set.PSModuleAnalysisCachePath=${JSON.stringify(process.env.PSModuleAnalysisCachePath || 'NUL')}`]
++      : []),
+     ...(projectTrustOverride ? [projectTrustOverride] : []),
+     ...(permissions.codexCliConfigOverrides ?? []),
+     ...mcpOverrides,

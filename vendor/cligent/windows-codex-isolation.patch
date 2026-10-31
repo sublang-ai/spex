@@ -1,0 +1,650 @@
+diff --git a/docs/media-and-computer-use.md b/docs/media-and-computer-use.md
+index 6d26750..a3cae9d 100644
+--- a/docs/media-and-computer-use.md
++++ b/docs/media-and-computer-use.md
+@@ -269,7 +269,7 @@ semantics; this API does not promise universal MCP isolation.
+ | Adapter | Admission and output |
+ | --- | --- |
+ | Claude Code | Only supplied servers are admitted; account connectors remain disabled. Their tools receive scoped approval, with `disallowedTools` retained. A supplied server or managed browser together with an explicit `allowedTools` list is rejected because that combination cannot preserve Cligent's exact tool-availability contract. Native tool-result screenshots produce correlated `media` events. |
+-| Codex | Supplied servers are passed as runtime configuration, including under existing permission-policy isolation. Native MCP image/resource results produce `media`. Raw SDK configuration supports ordinary MCP/browser calls on native Windows. A supplied `permissions` policy remains unsupported there because Cligent cannot enforce its isolated-config executable wrapper; discovery reports that restriction before downloading a browser. |
++| Codex | Supplied servers are passed as runtime configuration, including under existing permission-policy isolation. Native MCP image/resource results produce `media`. Raw SDK configuration supports ordinary MCP/browser calls on native Windows. On native Windows with Node 18.19 or later, a supplied `permissions` policy uses the embedding Node/Electron runtime to preserve `--ignore-user-config`, authentication/session home and JSONL framing. An independent supervisor closes the native child on SDK cancellation or early return. Older Windows runtimes report the restriction before browser preparation. |
+ | Gemini | Supplied servers use a temporary native settings overlay. Unsupported overlay contexts fail explicitly. The CLI exposes text-only tool display output, so the model can use screenshots while screenshot bytes are unavailable to Cligent; use the runtime's saved-file references where needed. |
+ | Kimi | Servers are supplied through ACP, with HTTP capability negotiation. Run-specific server names keep scoped approvals separate from ambient tools. Native rules naming the original server do not match those aliases; use applicable wildcard rules or the exposed native names. Native image/tool content produces `media`. |
+ | OpenCode | Supplied servers are admitted into the run's managed server. External shared servers reject caller MCP/browser options because changing their tool registry affects other sessions; configure those servers independently. Native file and completed-tool attachments produce `media`. |
+diff --git a/scripts/fixtures/codex-windows.cs b/scripts/fixtures/codex-windows.cs
+new file mode 100644
+index 0000000..65552b4
+--- /dev/null
++++ b/scripts/fixtures/codex-windows.cs
+@@ -0,0 +1,41 @@
++// SPDX-License-Identifier: Apache-2.0
++// SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
++using System;
++using System.IO;
++using System.Text;
++using System.Threading;
++using System.Diagnostics;
++using System.Web.Script.Serialization;
++class RecordingCodex {
++    static int Main(string[] args) {
++        Console.InputEncoding = new UTF8Encoding(false);
++        Console.OutputEncoding = new UTF8Encoding(false);
++        var json = new JavaScriptSerializer();
++        var prompt = Console.In.ReadToEnd();
++        File.WriteAllText(Environment.GetEnvironmentVariable("CLIGENT_RECORD"), json.Serialize(new {
++            pid = Process.GetCurrentProcess().Id, args, prompt,
++            home = Environment.GetEnvironmentVariable("CODEX_HOME"),
++            electron = Environment.GetEnvironmentVariable("ELECTRON_RUN_AS_NODE"),
++            nodeOptions = Environment.GetEnvironmentVariable("NODE_OPTIONS"),
++            path = Environment.GetEnvironmentVariable("PATH")
++        }));
++        var mode = Environment.GetEnvironmentVariable("CLIGENT_CASE");
++        Console.WriteLine("{\"type\":\"thread.started\",\"thread_id\":\"windows-recording\"}");
++        if (mode == "hang") { Thread.Sleep(Timeout.Infinite); }
++        if (mode == "malformed") { Console.WriteLine("{broken"); return 0; }
++        if (mode == "nonzero") { Console.Error.Write("native failure evidence"); return 7; }
++        var text = "left\u2028middle\u2029right 中文 😀";
++        if (mode == "git") {
++            var start = new ProcessStartInfo("git.exe", "--version");
++            start.UseShellExecute = false; start.CreateNoWindow = true;
++            start.RedirectStandardOutput = true; start.RedirectStandardError = true;
++            using (var git = Process.Start(start)) {
++                text = git.StandardOutput.ReadToEnd().Trim(); git.WaitForExit();
++                if (git.ExitCode != 0) return git.ExitCode;
++            }
++        }
++        Console.WriteLine("{\"type\":\"item.completed\",\"item\":{\"id\":\"message\",\"type\":\"agent_message\",\"text\":\"" + text + "\"}}");
++        Console.WriteLine("{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":1,\"cached_input_tokens\":0,\"output_tokens\":1}}");
++        return 0;
++    }
++}
+diff --git a/scripts/verify-codex-windows.mjs b/scripts/verify-codex-windows.mjs
+new file mode 100644
+index 0000000..e575c92
+--- /dev/null
++++ b/scripts/verify-codex-windows.mjs
+@@ -0,0 +1,207 @@
++// SPDX-License-Identifier: Apache-2.0
++// SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
++// Real installed SDK -> runtime carrier -> independent supervisor -> native fixture.
++import assert from 'node:assert/strict';
++import { spawnSync } from 'node:child_process';
++import { existsSync } from 'node:fs';
++import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
++import { tmpdir } from 'node:os';
++import { delimiter, dirname, join } from 'node:path';
++import { pathToFileURL, fileURLToPath } from 'node:url';
++if (process.platform !== 'win32')
++  throw Error('This integration check requires native Windows');
++const adapter =
++  process.env.CLIGENT_WINDOWS_TEST_ADAPTER ??
++  fileURLToPath(new URL('../dist/adapters/codex.js', import.meta.url));
++const sdk = process.env.CLIGENT_WINDOWS_TEST_SDK ?? '@openai/codex-sdk';
++const { createCodexConfigOverrideWrapper, mapPermissionsToCodexOptions } =
++  await import(pathToFileURL(adapter).href);
++const { Codex } = await import(
++  sdk.startsWith('@') ? sdk : pathToFileURL(sdk).href
++);
++const root = await mkdtemp(join(tmpdir(), 'cligent Windows 中文 '));
++const native = join(root, 'bin', 'recording CLI.exe');
++const helperPath = join(root, 'codex-path');
++await mkdir(dirname(native));
++await mkdir(helperPath);
++const compiler = join(
++  process.env.WINDIR,
++  'Microsoft.NET/Framework64/v4.0.30319/csc.exe',
++);
++const compiled = spawnSync(
++  compiler,
++  [
++    '/nologo',
++    '/r:System.Web.Extensions.dll',
++    '/out:' + native,
++    fileURLToPath(new URL('./fixtures/codex-windows.cs', import.meta.url)),
++  ],
++  { encoding: 'utf8', windowsHide: true },
++);
++assert.equal(compiled.status, 0, compiled.stdout + compiled.stderr);
++let count = 0;
++const wrappers = [];
++const gone = (pid) => {
++  try {
++    process.kill(pid, 0);
++    return false;
++  } catch (error) {
++    return error.code === 'ESRCH';
++  }
++};
++const make = async (mode) => {
++  const wrapper = await createCodexConfigOverrideWrapper(
++    ['fixture.setting="中文 & space"'],
++    ['--ignore-user-config'],
++    native,
++  );
++  wrappers.push(wrapper);
++  const record = join(root, 'record-' + count++ + '.json');
++  const env = {
++    ...wrapper.env,
++    CLIGENT_CASE: mode,
++    CLIGENT_RECORD: record,
++    CODEX_HOME: join(root, 'unchanged home'),
++  };
++  // Exercise the actual Windows mixed-case environment key, as desktop
++  // launchers preserve it, rather than a POSIX-only PATH spelling.
++  const inheritedPath = process.env.PATH ?? '';
++  for (const key of Object.keys(env)) {
++    if (key.toLowerCase() === 'path') delete env[key];
++  }
++  env.Path = inheritedPath;
++  const codex = new Codex({
++    codexPathOverride: wrapper.path,
++    env,
++    configOverrides: ['fixture.sdk="exact"'],
++  });
++  const read = async () => JSON.parse(await readFile(record, 'utf8'));
++  const cleanup = async () => {
++    await wrapper.cleanup();
++    assert(gone((await read()).pid), 'native fixture must have exited');
++    const bootstrap = new URL(
++      wrapper.env.NODE_OPTIONS.split('--import=').at(-1),
++    );
++    assert(
++      !existsSync(dirname(fileURLToPath(bootstrap))),
++      'carrier removed after settled evidence',
++    );
++  };
++  return { wrapper, codex, read, cleanup };
++};
++const collect = async (codex, signal) => {
++  const stream = await codex
++    .startThread()
++    .runStreamed('exact 中文\nprompt & "quoted"', { signal });
++  const events = [];
++  for await (const event of stream.events) events.push(event);
++  return events;
++};
++const checks = [];
++try {
++  assert.equal(
++    mapPermissionsToCodexOptions({ mode: 'auto' }).codexOptions.config
++      .default_permissions,
++    ':workspace',
++  );
++  const f = await make('success');
++  const events = await collect(f.codex);
++  assert.equal(events[1].item.text, 'left\u2028middle\u2029right 中文 😀');
++  const record = await f.read();
++  assert.deepEqual(record.args.slice(0, 5), [
++    'exec',
++    '--ignore-user-config',
++    '--config',
++    'fixture.setting="中文 & space"',
++    '--experimental-json',
++  ]);
++  assert.equal(record.prompt, 'exact 中文\nprompt & "quoted"');
++  assert.equal(record.home, join(root, 'unchanged home'));
++  assert.equal(record.electron, process.env.ELECTRON_RUN_AS_NODE ?? null);
++  assert.equal(record.nodeOptions, process.env.NODE_OPTIONS ?? null);
++  assert.deepEqual(record.path.split(delimiter), [helperPath, ...(process.env.PATH ?? '').split(delimiter).filter(Boolean)]);
++  await f.cleanup();
++  checks.push(
++    'arguments, Unicode JSONL, stdin, native environment, home, cleanup',
++  );
++  checks.push('mixed-case Windows Path preserves inherited entries');
++  if (process.env.CLIGENT_WINDOWS_TEST_BUNDLED_GIT) {
++    const git = await make('git');
++    const events = await collect(git.codex);
++    assert.match(events[1].item.text, /^git version /);
++    await git.cleanup();
++    checks.push('native fixture invokes bundled Git through mixed-case Path');
++  }
++  for (const originalFlag of [undefined, '0', '1']) {
++    const previousFlag = process.env.ELECTRON_RUN_AS_NODE;
++    const previousOptions = process.env.NODE_OPTIONS;
++    let f;
++    try {
++      if (originalFlag === undefined) delete process.env.ELECTRON_RUN_AS_NODE;
++      else process.env.ELECTRON_RUN_AS_NODE = originalFlag;
++      process.env.NODE_OPTIONS = '--stack-trace-limit=27';
++      f = await make('success');
++    } finally {
++      if (previousFlag === undefined) delete process.env.ELECTRON_RUN_AS_NODE;
++      else process.env.ELECTRON_RUN_AS_NODE = previousFlag;
++      if (previousOptions === undefined) delete process.env.NODE_OPTIONS;
++      else process.env.NODE_OPTIONS = previousOptions;
++    }
++    await collect(f.codex);
++    const record = await f.read();
++    assert.equal(record.electron, originalFlag ?? null);
++    assert.equal(record.nodeOptions, '--stack-trace-limit=27');
++    await f.cleanup();
++  }
++  checks.push(
++    'original Electron flag absent/zero/one and Node options restored',
++  );
++  for (const mode of ['nonzero', 'malformed']) {
++    const f = await make(mode);
++    await assert.rejects(
++      collect(f.codex),
++      mode === 'nonzero'
++        ? /code 7: native failure evidence/
++        : /Failed to parse item/,
++    );
++    await f.cleanup();
++    checks.push(mode);
++  }
++  for (const mode of ['abort', 'early-return']) {
++    const f = await make('hang');
++    const abort = new AbortController();
++    const iterator = (
++      await f.codex
++        .startThread()
++        .runStreamed('exact prompt', { signal: abort.signal })
++    ).events;
++    assert.equal((await iterator.next()).value.type, 'thread.started');
++    if (mode === 'abort') {
++      abort.abort();
++      await assert.rejects(iterator.next());
++    } else await iterator.return();
++    await f.cleanup();
++    checks.push(mode + ' reaps native child');
++  }
++  const unused = await make('hang');
++  const already = new AbortController();
++  already.abort();
++  await assert.rejects(collect(unused.codex, already.signal));
++  await unused.wrapper.cleanup();
++  assert(!existsSync(join(root, 'record-' + (count - 1) + '.json')));
++  checks.push('already-aborted request prevents native spawn');
++  console.log(
++    JSON.stringify(
++      { passed: true, runtime: process.versions, checks },
++      null,
++      2,
++    ),
++  );
++} finally {
++  const failures = await Promise.allSettled(
++    wrappers.map((wrapper) => wrapper.cleanup()),
++  );
++  if (failures.some((result) => result.status === 'rejected'))
++    console.error('Retained unproven carrier');
++  await rm(root, { recursive: true, force: true });
++}
+diff --git a/specs/decisions/040-native-windows-codex-isolation.md b/specs/decisions/040-native-windows-codex-isolation.md
+new file mode 100644
+index 0000000..25ff722
+--- /dev/null
++++ b/specs/decisions/040-native-windows-codex-isolation.md
+@@ -0,0 +1,31 @@
++<!-- SPDX-License-Identifier: Apache-2.0 -->
++<!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
++
++# DR-040: Native Windows Codex Isolation
++
++## Status
++
++Accepted (2026-10-30).
++Amends [DR-033](033-host-capabilities-and-browser-readiness.md)'s native Windows isolation refusal.
++
++## Context
++
++The Codex SDK public launch options select an executable and its environment but cannot insert `--ignore-user-config` into `exec` arguments.
++POSIX shell wrappers cannot run through native Windows process creation.
++Removing the permission policy would allow user configuration to replace the caller's permission profile.
++Windows forcibly terminates a killed SDK-facing process, so POSIX signal forwarding alone cannot establish native-child shutdown.
++
++## Decision
++
++- Preserve the permission mapping, isolated configuration, authentication and session home on both platforms.
++- Use the embedding Node/Electron runtime through the SDK's public launch options on Windows, with no global Node, shell, WSL, SDK patch or system configuration change.
++- Require Node 18.19 or later on Windows for its public import startup hook.
++- Reuse the existing transport supervisor and atomic lifecycle evidence, with an inherited IPC connection cancelling its exact native child when the SDK-facing process disappears.
++- Preserve the caller's native environment after the owned runtime launch; scope startup hooks to the owned carrier.
++- Retain an unproven carrier as a cleanup failure instead of claiming successful termination.
++
++## Consequences
++
++Native Windows permission-managed calls become supported without changing SPEX workflow semantics or weakening caller policy.
++The Windows startup and forced-termination paths require real Windows integration and packaged Electron acceptance evidence.
++Intentional tool descendants remain outside the transport's native-child shutdown claim.
+diff --git a/specs/map.md b/specs/map.md
+index 02cfeb1..aea303e 100644
+--- a/specs/map.md
++++ b/specs/map.md
+@@ -65,6 +65,7 @@ meta.md       The spec of specs
+ | [DR-037](decisions/037-per-run-native-skill-switch.md) | 037-per-run-native-skill-switch.md | Shared `nativeSkills` switch turning a runtime's own skill discovery off per run, per-adapter levers and disclosed residue, frozen install folders; Captain call settings amended by DR-038 |
+ | [DR-038](decisions/038-native-skills-in-tmux-play-call-settings.md) | 038-native-skills-in-tmux-play-call-settings.md | `nativeSkills` in tmux-play call settings: admitted, snapshotted and forwarded unchanged, Kimi's `false` rejected before the prompt record, no configured default |
+ | [DR-039](decisions/039-merge-on-green.md) | 039-merge-on-green.md | Merge on green: protected `main` with the pull request's jobs as required checks, auto-merge, one run per pull-request head, Linux, Windows and one macOS job on a pull request, the full set on `main` and nightly, kept base branches, a pre-push check, deterministic suites |
++| [DR-040](decisions/040-native-windows-codex-isolation.md) | 040-native-windows-codex-isolation.md | Native Windows Codex permission isolation using public SDK launch options and an owned runtime supervisor |
+ 
+ ## Packages
+ 
+diff --git a/specs/packages/adapters/codex.md b/specs/packages/adapters/codex.md
+index fb2183d..c4936fb 100644
+--- a/specs/packages/adapters/codex.md
++++ b/specs/packages/adapters/codex.md
+@@ -213,9 +213,9 @@ When a run has no permission policy or a supplied policy whose mapping succeeds,
+ | Permission-policy input | Configuration source |
+ | --- | --- |
+ | policy absent | emit no `--ignore-user-config`, inherit Codex's native configuration, and preserve normal `CODEX_HOME` authentication and session state |
+-| any supplied policy on POSIX, including empty | include `--ignore-user-config` in the selected Codex `exec` arguments while preserving normal `CODEX_HOME` authentication and session state, so user-level legacy `sandbox_mode` or stale `default_permissions` cannot replace the selected profile |
++| any supplied policy on POSIX or native Windows, including empty | include `--ignore-user-config` in the selected Codex `exec` arguments while preserving normal `CODEX_HOME` authentication and session state, so user-level legacy `sandbox_mode` or stale `default_permissions` cannot replace the selected profile |
+ 
+-| any supplied policy on native Windows | reject before browser preparation because the executable wrapper cannot enforce isolated configuration on that host |
++Native Windows isolation uses the host runtime and requires Node 18.19 or later per [DR-040](../../decisions/040-native-windows-codex-isolation.md); an older runtime rejects before native execution.
+ 
+ ### codex-32
+ 
+@@ -586,7 +586,7 @@ When a run starts through the SDK, the adapter shall select its transport from t
+ | POSIX permission policy absent                      | retain native configuration and environment under [[codex-31](#codex-31)] without adding isolation arguments                                                                       |
+ | POSIX supplied policy                               | preserve [[codex-31](#codex-31)]'s isolation arguments and [[codex-12](#codex-12)]'s SDK-owned entry as resolution anchor for [[codex-64](#codex-64)]'s selected native executable |
+ | native Windows without policy                       | retain direct SDK execution without separator protection                                                                                                                           |
+-| native Windows with policy                          | retain [[codex-31](#codex-31)]'s rejection                                                                                                                                         |
++| native Windows with policy                          | use the host Node/Electron runtime through SDK public launch options, with POSIX-equivalent JSONL protection and isolation                                                                                                                                         |
+ 
+ The transport executes that selected native binary directly, prepends its existing modern `codex-path` helper directory as the SDK does, and preserves stdin, stderr, argument order, authentication, session state, the caller's original `ELECTRON_RUN_AS_NODE` presence and value, and decoded JSON values; malformed JSON and actual child failures remain failures under [[codex-24](#codex-24)] through [[codex-27](#codex-27)].
+ 
+@@ -595,6 +595,7 @@ The transport executes that selected native binary directly, prepends its existi
+ When [[codex-79](#codex-79)]'s owned wrapper terminates or its SDK consumer closes early, the wrapper and adapter shall complete their owned lifecycle before removing the carrier:
+ 
+ - arbitrate startup and unused-carrier retirement through one exclusive claim directory, with a cleanup winner preventing any later native spawn and a wrapper winner requiring cleanup to await both atomic lifecycle records;
++- on Windows, supervise the native child independently of the SDK-facing runtime, using an inherited IPC connection whose closure cancels the native child even when the SDK-facing runtime is forcibly terminated;
+ - register signal and output-error handling before claiming startup, atomically publish the wrapper's started identity before spawning the selected native executable, and forward cancellation or a closed stdout only to that exact owned native child;
+ - await child close and output drain, preserve child nonzero exits and forwarding failures, and avoid an immediate process exit that truncates output;
+ - bound cancellation escalation to that exact native child and bound adapter cleanup waiting for the matching atomically published wrapper completion record after native close and output drain, without terminating or claiming cleanup of intentional tool descendants;
+@@ -848,16 +849,17 @@ Where [[codex-219](#codex-219)]'s credential, retry, and skip preconditions hold
+ 
+ ### codex-81
+ 
+-Where POSIX recording CLI fixtures run through the installed real Codex SDK and the adapter's wrapper, when [the installed-SDK transport matrix](../../../src/__tests__/codex-jsonl.test.ts) executes, verification shall assert the following outcomes without replacing the SDK parser [[codex-79](#codex-79)], [[codex-80](#codex-80)]:
++Where POSIX or native Windows recording CLI fixtures run through the installed real Codex SDK and the adapter's wrapper, when [the POSIX transport matrix](../../../src/__tests__/codex-jsonl.test.ts) or [the native Windows check](../../../src/__tests__/codex-windows.test.ts) executes, verification shall assert the following host-specific outcomes without replacing the SDK parser [[codex-79](#codex-79)], [[codex-80](#codex-80)]:
+ 
+ | Case                                                                                                                 | Assertions                                                                                                 |
+ | -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+-| raw and escaped U+2028/U+2029, nested strings, LF/CRLF, final unterminated record, byte-split UTF-8 and large output | exact decoded event strings and unchanged other wire data, with complete output under backpressure         |
+-| no policy, managed policy and resumed thread                                                                         | exact prompt, arguments, configuration and environment, with only the declared policy isolation difference |
+-| malformed JSON, nonzero child exit and `turn.failed`                                                                 | original failure classification under [[codex-24](#codex-24)] and [[codex-26](#codex-26)]                  |
+-| abort, early iterator return, closed stdout, already-aborted request and startup/cleanup race                                                                       | finite child termination, closed/drained wrapper, no leaked carrier and no unhandled forwarding error      |
+-| original Electron flag absent, empty or set, and existing helper PATH | exact native environment presence/value and SDK-equivalent helper precedence |
+-| non-JSON command                                                                                                     | unchanged stdout bytes                                                                                     |
++| POSIX: raw and escaped U+2028/U+2029, nested strings, LF/CRLF, final unterminated record, byte-split UTF-8 and large output | exact decoded event strings and unchanged other wire data, with complete output under backpressure         |
++| POSIX: no policy, managed policy and resumed thread                                                                         | exact prompt, arguments, configuration and environment, with only the declared policy isolation difference |
++| POSIX: malformed JSON, nonzero child exit and `turn.failed`                                                                 | original failure classification under [[codex-24](#codex-24)] and [[codex-26](#codex-26)]                  |
++| POSIX: abort, early iterator return, closed stdout, already-aborted request and startup/cleanup race                                                                       | finite child termination, closed/drained wrapper, no leaked carrier and no unhandled forwarding error      |
++| POSIX: original Electron flag absent, empty or set, and existing helper PATH | exact native environment presence/value and SDK-equivalent helper precedence |
++| POSIX: non-JSON command                                                                                                     | unchanged stdout bytes                                                                                     |
++| native Windows managed policy through the real SDK and a compiled recording executable | exact isolation/config arguments, Unicode JSONL and prompt, unchanged auth/session home and native Node/Electron environment including mixed-case Windows Path, original malformed/nonzero failures, and proven native-child exit and carrier removal on normal completion, abort, early return and already-aborted startup |
+ 
+ ## References
+ 
+diff --git a/specs/packages/capabilities.md b/specs/packages/capabilities.md
+index a7dd720..47f9d3f 100644
+--- a/specs/packages/capabilities.md
++++ b/specs/packages/capabilities.md
+@@ -32,7 +32,7 @@ When a built-in adapter reports browser admission, discovery shall apply the sam
+ | Gemini native sandbox enabled [[gemini-48](adapters/gemini.md#gemini-48)] | unsupported native sandbox |
+ | Gemini child environment naming no home [[gemini-48](adapters/gemini.md#gemini-48)] | unsupported home |
+ | Gemini per-run server, the browser's included, replacing a same-name user entry that fails the runtime's MCP entry schema beside a string its validation could coerce [[gemini-48](adapters/gemini.md#gemini-48)] | unsupported settings validity |
+-| native Windows Codex explicit permission isolation [[codex-31](adapters/codex.md#codex-31)] | unsupported permissions |
++| native Windows Codex explicit permission isolation on Node older than 18.19 [[codex-31](adapters/codex.md#codex-31)] | unsupported permissions |
+ | Codex with explicit `allowedTools` or `disallowedTools` [[codex-70](adapters/codex.md#codex-70)] | unsupported tool restriction |
+ | other known rejected adapter options | unsupported option |
+ | supported transport with no known conflict | supported |
+diff --git a/src/__tests__/codex-windows.test.ts b/src/__tests__/codex-windows.test.ts
+new file mode 100644
+index 0000000..7845b67
+--- /dev/null
++++ b/src/__tests__/codex-windows.test.ts
+@@ -0,0 +1,35 @@
++// SPDX-License-Identifier: Apache-2.0
++// SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
++import { spawn } from 'node:child_process';
++import { fileURLToPath } from 'node:url';
++import { describe, expect, it } from 'vitest';
++
++describe.skipIf(process.platform !== 'win32')(
++  'native Windows Codex transport (codex-81)',
++  () => {
++    it('preserves SDK data and reaps the native child on cancellation and early return', async () => {
++      const child = spawn(
++        process.execPath,
++        [
++          fileURLToPath(
++            new URL('../../scripts/verify-codex-windows.mjs', import.meta.url),
++          ),
++        ],
++        { env: process.env, windowsHide: true },
++      );
++      let output = '';
++      child.stdout.on('data', (data) => {
++        output += data;
++      });
++      child.stderr.on('data', (data) => {
++        output += data;
++      });
++      const code = await new Promise((resolve, reject) => {
++        child.on('error', reject);
++        child.on('close', resolve);
++      });
++      expect(code, output).toBe(0);
++      expect(JSON.parse(output).passed).toBe(true);
++    }, 30000);
++  },
++);
+diff --git a/src/adapters/codex.ts b/src/adapters/codex.ts
+index 9ed58dd..b1c5dea 100644
+--- a/src/adapters/codex.ts
++++ b/src/adapters/codex.ts
+@@ -24,6 +24,7 @@ import {
+ import { homedir, tmpdir } from 'node:os';
+ import { basename, dirname, join, resolve } from 'node:path';
+ import { TextDecoder } from 'node:util';
++import { pathToFileURL } from 'node:url';
+ import { createEvent, generateSessionId } from '../events.js';
+ import { prepareAttachments } from '../attachments.js';
+ import { mediaFromMcpContent } from '../media.js';
+@@ -412,6 +413,18 @@ function codexProjectRoot(cwd: string): string {
+   }
+ }
+ 
++function assertCodexWindowsIsolationRuntime(): void {
++  if (process.platform !== 'win32') return;
++  // The public --import startup hook is available on this supported floor.
++  const [major, minor] = process.versions.node.split('.').map(Number);
++  if (major! < 18 || (major === 18 && minor! < 19)) {
++    throw new CapabilityError(
++      'unsupported-permissions',
++      'Native Windows Codex permission isolation requires Node 18.19 or later',
++    );
++  }
++}
++
+ export function mapPermissionsToCodexOptions(
+   policy: PermissionPolicy | undefined,
+ ): CodexPermissionOptions {
+@@ -419,12 +432,7 @@ export function mapPermissionsToCodexOptions(
+     return {};
+   }
+ 
+-  if (process.platform === 'win32') {
+-    throw new CapabilityError(
+-      'unsupported-permissions',
+-      'Native Windows Codex explicit permission isolation is unsupported; omit the policy or use a supported host',
+-    );
+-  }
++  assertCodexWindowsIsolationRuntime();
+   const defaultPermissions = codexDefaultPermissions(policy);
+   const writablePaths = mapWritablePathsPermission(
+     policy,
+@@ -1216,6 +1224,8 @@ function firstString(
+ 
+ interface CodexConfigOverrideWrapper {
+   path: string;
++  /** Public SDK environment overlay for the Windows runtime carrier. */
++  env?: Record<string, string>;
+   cleanup: () => Promise<void>;
+ }
+ 
+@@ -1285,11 +1295,21 @@ else delete childEnv.ELECTRON_RUN_AS_NODE;
+ // Mirror the SDK's current package layout, without changing its supported
+ // native selection or adding the JavaScript launcher's update metadata.
+ const helperPath = join(dirname(nativePath), '..', 'codex-path');
++const pathKey = process.platform === 'win32'
++  ? Object.keys(childEnv).find((key) => key.toLowerCase() === 'path') ?? 'Path'
++  : 'PATH';
+ try {
+   if (statSync(helperPath).isDirectory()) {
+-    const entries = (childEnv.PATH ?? '').split(delimiter)
++    const entries = (childEnv[pathKey] ?? '').split(delimiter)
+       .filter((entry) => entry.length > 0 && entry !== helperPath);
+-    childEnv.PATH = [helperPath, ...entries].join(delimiter);
++    // Windows environment names are case-insensitive, unlike this object.
++    // Keep the inherited key and remove aliases before Node selects one.
++    if (process.platform === 'win32') {
++      for (const key of Object.keys(childEnv)) {
++        if (key.toLowerCase() === 'path' && key !== pathKey) delete childEnv[key];
++      }
++    }
++    childEnv[pathKey] = [helperPath, ...entries].join(delimiter);
+   }
+ } catch {
+   // Like SDK existingDirs, an unavailable optional helper directory is absent.
+@@ -1316,6 +1336,14 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
+   process.on(signal, () => stop(signal));
+ }
+ process.stdout.on('error', () => stop());
++// Windows terminates the SDK-facing runtime without delivering SIGTERM.
++// Its inherited IPC handle closes even on forced death: this supervisor
++// remains alive to close its exact native child and publish exit evidence.
++if (process.platform === 'win32' && process.send) {
++  process.on('disconnect', () => stop());
++  process.channel?.unref();
++  if (!process.connected) stop();
++}
+ const record = (name, value) => {
+   const temporary = dir + '/' + name + '.' + process.pid + '.tmp';
+   writeFileSync(temporary, JSON.stringify(value));
+@@ -1332,6 +1360,7 @@ try {
+   child = spawn(nativePath, args, {
+     env: childEnv,
+     stdio: ['inherit', 'pipe', 'inherit'],
++    windowsHide: true,
+   });
+   closed = new Promise((resolve) => {
+     child.on('error', (error) => { forwardingError = error; });
+@@ -1381,6 +1410,7 @@ try {
+     code: exit.code, signal: exit.signal,
+     forwardingFailed: Boolean(forwardingError),
+   });
++  if (process.connected) process.disconnect();
+ }
+ `;
+ }
+@@ -1406,14 +1436,11 @@ export async function createCodexConfigOverrideWrapper(
+   if (executable.state !== 'present') throw codexExecutableRefusal(executable);
+   const dir = await mkdtemp(join(tmpdir(), 'cligent-codex-config-'));
+   const scriptPath = join(dir, 'codex-wrapper.mjs');
+-  if (process.platform === 'win32') {
+-    await rm(dir, { recursive: true, force: true });
+-    throw new CapabilityError(
+-      'unsupported-permissions',
+-      'Native Windows Codex executable wrappers are unsupported',
+-    );
+-  }
+-  const wrapperPath = join(dir, 'codex-wrapper.sh');
++  const windows = process.platform === 'win32';
++  const wrapperPath = windows
++    ? process.execPath
++    : join(dir, 'codex-wrapper.sh');
++  let env: Record<string, string> | undefined;
+ 
+   try {
+     await writeFile(
+@@ -1422,15 +1449,55 @@ export async function createCodexConfigOverrideWrapper(
+       'utf8',
+     );
+ 
+-    const environment = Object.entries(nodeChildEnvironment())
+-      .map(([key, value]) => `${key}=${quoteShellArgument(value)} `)
+-      .join('');
+-    await writeFile(
+-      wrapperPath,
+-      `#!/bin/sh\n${environment}exec ${quoteShellArgument(process.execPath)} ${quoteShellArgument(scriptPath)} "\${ELECTRON_RUN_AS_NODE+x}" "\${ELECTRON_RUN_AS_NODE-}" "$@"\n`,
+-      'utf8',
+-    );
+-    await chmod(wrapperPath, 0o700);
++    if (windows) {
++      assertCodexWindowsIsolationRuntime();
++      const bootstrapPath = join(dir, 'codex-bootstrap.mjs');
++      await writeFile(
++        bootstrapPath,
++        `
++import { spawn } from 'node:child_process';
++const env = { ...process.env };
++const originalNodeOptions = ${JSON.stringify(process.env.NODE_OPTIONS ?? null)};
++if (originalNodeOptions === null) delete env.NODE_OPTIONS;
++else env.NODE_OPTIONS = originalNodeOptions;
++const child = spawn(process.execPath, [
++  ${JSON.stringify(scriptPath)},
++  ${JSON.stringify(Object.hasOwn(process.env, 'ELECTRON_RUN_AS_NODE') ? 'x' : '')},
++  ${JSON.stringify(process.env.ELECTRON_RUN_AS_NODE ?? '')},
++  'exec', ...process.argv.slice(2),
++], { env, detached: true, windowsHide: true, stdio: ['inherit', 'inherit', 'inherit', 'ipc'] });
++let failed = false;
++child.on('error', (error) => { failed = true; console.error(error); });
++const code = await new Promise((resolve) => child.on('close', resolve));
++// All native output uses inherited handles and has closed before this exit.
++// Do not interpret the SDK exec argument as a JavaScript filename.
++process.exit(failed ? 1 : (code ?? 1));
++`,
++        'utf8',
++      );
++      env = Object.fromEntries(
++        Object.entries(process.env).filter(
++          (entry): entry is [string, string] => entry[1] !== undefined,
++        ),
++      );
++      env.ELECTRON_RUN_AS_NODE = '1';
++      env.NODE_OPTIONS = [
++        process.env.NODE_OPTIONS,
++        '--import=' + pathToFileURL(bootstrapPath).href,
++      ]
++        .filter(Boolean)
++        .join(' ');
++    } else {
++      const environment = Object.entries(nodeChildEnvironment())
++        .map(([key, value]) => `${key}=${quoteShellArgument(value)} `)
++        .join('');
++      await writeFile(
++        wrapperPath,
++        `#!/bin/sh\n${environment}exec ${quoteShellArgument(process.execPath)} ${quoteShellArgument(scriptPath)} "\${ELECTRON_RUN_AS_NODE+x}" "\${ELECTRON_RUN_AS_NODE-}" "$@"\n`,
++        'utf8',
++      );
++      await chmod(wrapperPath, 0o700);
++    }
+   } catch (error) {
+     await rm(dir, { recursive: true, force: true });
+     throw error;
+@@ -1438,6 +1505,7 @@ export async function createCodexConfigOverrideWrapper(
+ 
+   return {
+     path: wrapperPath,
++    ...(env ? { env } : {}),
+     cleanup: async () => {
+       // An exclusive claim prevents an absence check from racing startup.
+       // Winning cleanup retires an unused carrier before any native spawn.
+@@ -2188,7 +2256,12 @@ export class CodexAdapter implements AgentAdapter<CodexEffort, boolean> {
+               ? { configOverrides: codexCliConfigOverrides }
+               : {}),
+             ...(codexConfigWrapper
+-              ? { codexPathOverride: codexConfigWrapper.path }
++              ? {
++                  codexPathOverride: codexConfigWrapper.path,
++                  ...(codexConfigWrapper.env
++                    ? { env: codexConfigWrapper.env }
++                    : {}),
++                }
+               : packagedExecutable
+                 ? { codexPathOverride: packagedExecutable }
+                 : {}),

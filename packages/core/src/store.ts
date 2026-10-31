@@ -9,6 +9,7 @@
 // descriptor is kept only as its paths and session store. The session
 // maps are rebuilt projections for UI and run folds.
 
+import { randomUUID } from "node:crypto";
 import {
   appendFileSync,
   existsSync,
@@ -34,7 +35,7 @@ import {
   type ProjectFile, type StorageDiagnostic,
 } from "./app-storage.js";
 import { occupied } from "./clone-moves.js";
-import { readJsonFile, StorageFormatError, VersionConflictError, writeApplicationFile } from "@sublang/spex/files";
+import { makePrivateDirectory, readJsonFile, StorageFormatError, VersionConflictError, writeApplicationFile } from "@sublang/spex/files";
 import { defaultOwnName, Home, repositoryNameFor, splitKey, WORKSPACE_DEPTH } from "./home.js";
 import { filedIn, formerPlacementPrefKey, PLACEMENT_PREF_KINDS, placementPrefKey, readPlacementFiles, readPlacements, type PlacementPrefKind } from "./placements.js";
 import { folderRemote, needsGroupsMigration, migrateFormerHome } from "./migrate-home.js";
@@ -517,8 +518,11 @@ export class Store {
     this.options = options;
     this.env = options.env ?? process.env;
     this.scratch = !options.dir;
-    this.dir = resolve(options.dir ?? mkdtempSync(join(tmpdir(), "spex-memory-home-")));
-    mkdirSync(this.dir, { recursive: true });
+    this.dir = resolve(options.dir ?? (process.platform === "win32"
+      ? join(tmpdir(), `spex-memory-home-${randomUUID()}`)
+      : mkdtempSync(join(tmpdir(), "spex-memory-home-"))));
+    if (process.platform === "win32") makePrivateDirectory(this.dir);
+    else mkdirSync(this.dir, { recursive: true });
     this.acquireRootLease();
     try {
       this.meta = existsSync(this.metaFile()) ? readJsonFile(this.metaFile()) as StoreMeta : { version: 0 };
@@ -1396,18 +1400,19 @@ export class Store {
   /** The legacy rows, written in the former layout the groups migration
    * then carries into spex repositories (storage-9). */
   private runLegacyImport(legacyDbPath: string): void {
-    // better-sqlite3's only remaining use: reading the store a
-    // pre-DR-036 release left behind, which stays in place untouched.
+    // Read the untouched pre-DR-036 store. Windows uses Node's bundled
+    // SQLite so a desktop install needs no Electron-ABI-specific addon.
     const require = createRequire(import.meta.url);
-    const Database = require("better-sqlite3") as new (
+    const Database = (process.platform === "win32" ? require("node:sqlite").DatabaseSync : require("better-sqlite3")) as new (
       path: string,
-      options?: { readonly?: boolean },
+      options?: { readonly?: boolean; readOnly?: boolean },
     ) => {
       prepare(sql: string): { all(...args: unknown[]): Record<string, unknown>[] };
       close(): void;
     };
-    const db = new Database(legacyDbPath, { readonly: true });
+    const db = new Database(legacyDbPath, process.platform === "win32" ? { readOnly: true } : { readonly: true });
     try {
+      if (process.platform === "win32") db.prepare("PRAGMA schema_version").all();
       const rows = (sql: string): Record<string, unknown>[] => {
         try {
           return db.prepare(sql).all();

@@ -57,7 +57,10 @@ export class GitSourceError extends Error {
 
 export const defaultRunGit: RunGit = (args, options = {}) =>
   new Promise<GitRun>((resolve, reject) => {
-    const child = spawn("git", args, {
+    // Git for Windows otherwise rejects pack/ref files below long cache roots.
+    // Keep this on the command, never in the user's or mirror's configuration.
+    const commandArgs = process.platform === "win32" ? ["-c", "core.longpaths=true", ...args] : args;
+    const child = spawn("git", commandArgs, {
       env: {
         ...process.env,
         GIT_TERMINAL_PROMPT: "0",

@@ -1,0 +1,10 @@
+{
+  "upstream_repository": "https://github.com/sublang-ai/playbook",
+  "upstream_commit": "cffc5ae8ff219b0f6d822161b1b3448841bd401b",
+  "upstream_version": "18.1.0",
+  "purpose": "Unpublished coordinated Windows storage validation snapshot; not an npm release",
+  "files": {
+    "sublang-playbook-18.1.0-windows.20261030.tgz": "3aba056bd59325f58a0fb2c2bf45ad48de2175ecd20ed8e6c6002202952a35bb",
+    "windows-storage.patch": "c8159538ceb4b8bd171dac7978827f6e3ea387fa361679543f973bbbc934e192"
+  }
+}
