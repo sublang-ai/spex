@@ -7,6 +7,7 @@
 
 Accepted (2026-10-29) on the owner's direction to make the merge gate faster without dropping a test.
 Amends [DR-145](145-merge-on-green.md) in the pull request's matrix: the macOS smoke job leaves it, and a pull request changing documentation alone runs the spec gates and not the suites.
+Amended by [DR-169](169-documentation-alone-reports-the-suites-names.md) in how documentation alone satisfies the required checks: a stand-in reports the suites' names.
 
 ## Context
 
