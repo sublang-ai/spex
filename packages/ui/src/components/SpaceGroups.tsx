@@ -11,7 +11,9 @@
 // and each project not yet shared. A group's heading carries its name,
 // its path where the two differ, its member count where read, and one
 // overflow control, "More", holding Members alone; beneath it, one line
-// per team server of that group (run-view-170), then its rows.
+// per team server of that group (run-view-170), then its rows, then one
+// quiet line, with no control, per row standing elsewhere a placement of
+// which its listing holds, naming the row and where it stands (DR-128).
 //
 // A row is a project, never a spex repository by its name: the
 // repository's with its `-spex` dropped, a group's own reading "Group
@@ -78,6 +80,7 @@ import {
   namespaceOf,
   ownPersonalAt,
   pickInstances,
+  standingOf,
   thisComputerRows,
 } from "../lib/instances.js";
 import type { SpexCommandError } from "../lib/client.js";
@@ -144,15 +147,13 @@ function thisComputerEntry(groups: GroupsState): InstanceGroupState {
 
 /** "Personal" at a Space (space-1): your namespace there, with your own
  * group's own repository first where it stands there; none while it
- * holds no row — a placement of a row standing elsewhere draws no line
- * (DR-159), so it alone heads nothing. */
-function personalEntry(groups: GroupsState, instance: InstanceState): InstanceGroupState | undefined {
+ * holds no row and no line of a row standing elsewhere. */
+function personalEntry(groups: GroupsState, instance: InstanceState, seat?: string): InstanceGroupState | undefined {
   const mine = namespaceOf(instance);
   const own = ownPersonalAt(groups) === instance ? groups.own.repositories.find((repo) => repo.own) : undefined;
   const rows = [...(own ? [own] : []), ...(mine?.repositories ?? []).filter((repo) => repo.key !== own?.key)];
-  if (rows.length === 0) return undefined;
   const login = instance.account.login;
-  return {
+  const entry: InstanceGroupState = {
     ...(mine ?? {
       id: null,
       login,
@@ -164,6 +165,78 @@ function personalEntry(groups: GroupsState, instance: InstanceState): InstanceGr
     }),
     repositories: rows,
   };
+  return rows.length > 0 || placedLines(groups, entry, seat).length > 0 ? entry : undefined;
+}
+
+/** How a row standing elsewhere reads as a line under an entry whose
+ * listing holds one of its placements (space-1, DR-128): the row's name
+ * and the heading it stands under — a group by its name, "Personal" and
+ * its Space, another account's login, or this computer, the server at a
+ * seat's place (space-112). None for a key the state does not stand. */
+function placedReading(groups: GroupsState, line: InstanceGroupState["placed"][number], seat?: string): string | undefined {
+  const stands = standingOf(groups, line.key);
+  if (!stands) return undefined;
+  if (stands.own) {
+    const repo = groups.own.repositories.find((each) => each.key === line.key);
+    if (!repo) return undefined;
+    const name = rowName({ fullPath: groups.own.name }, repo);
+    const personal = repo.own ? ownPersonalAt(groups) : undefined;
+    if (personal) {
+      return i18n._({
+        id: "{name} · in Personal at {space}",
+        values: { name, space: instanceName(personal) },
+        comment: "a quiet line, with no control, under a group or Personal of a Space whose listing holds a copy of records standing under Personal at another Space; {name} is the row's name, as Your sessions, {space} that Personal's Space by its display name",
+      });
+    }
+    return seat === undefined
+      ? i18n._({
+          id: "{name} · on this computer",
+          values: { name },
+          comment: "a quiet line, with no control, under a group or Personal of a Space whose listing holds a copy of records standing under This computer; {name} is the row's name",
+        })
+      : i18n._({
+          id: "{name} · on {place}",
+          values: { name, place: seat },
+          comment: "a quiet line, with no control, on a team server's Space: a copy of records standing under the server's own heading; {name} is the row's name, {place} the server's name",
+        });
+  }
+  const repo = stands.group.repositories.find((each) => each.key === line.key);
+  if (!repo) return undefined;
+  const name = rowName(stands.group, repo);
+  const space = instanceName(stands.instance);
+  if (stands.group.login !== null) {
+    return stands.group.mine
+      ? i18n._({
+          id: "{name} · in Personal at {space}",
+          values: { name, space },
+          comment: "a quiet line, with no control, under a group or Personal of a Space whose listing holds a copy of records standing under Personal at another Space; {name} is the row's name, as Your sessions, {space} that Personal's Space by its display name",
+        })
+      : i18n._({
+          id: "{name} · shared by @{login} at {space}",
+          values: { name, login: stands.group.login, space },
+          comment: "a quiet line, with no control, under a group of a Space whose listing holds a copy of records another account shares; {name} is the row's name, {login} that account's login, {space} the Space where the row stands, by its display name",
+        });
+  }
+  return i18n._({
+    id: "{name} · in {group} at {space}",
+    values: { name, group: stands.group.name, space },
+    comment: "a quiet line, with no control, under a group or Personal of a Space whose listing holds a copy of records standing in another group; {name} is the row's name, {group} the group it stands under, by its name, {space} that group's Space by its display name",
+  });
+}
+
+/** The lines an entry shows (space-1, DR-128): one per row standing
+ * elsewhere one of whose placements its listing holds, a row standing
+ * in the entry itself drawing none. */
+function placedLines(groups: GroupsState, group: InstanceGroupState, seat?: string): { key: string; reading: string; title: string }[] {
+  return group.placed.flatMap((line) => {
+    if (group.repositories.some((repo) => repo.key === line.key)) return [];
+    const reading = placedReading(groups, line, seat);
+    if (reading === undefined) return [];
+    // A group's path rides the title where its name alone may repeat.
+    const stands = standingOf(groups, line.key);
+    const path = stands && !stands.own && stands.group.login === null && stands.group.fullPath !== stands.group.name ? stands.group.fullPath : null;
+    return [{ key: line.key, reading, title: path === null ? reading : `${reading} · ${path}` }];
+  });
 }
 
 /** Whether a row waits for a sign-in (space-11, space-61): a clone
@@ -274,6 +347,7 @@ export function GroupsList({
     onNote,
   };
   const local = thisComputerEntry(groups);
+  const seat = seatName(usePlaceStore().place);
   return (
     <section
       data-testid="space-groups"
@@ -282,7 +356,7 @@ export function GroupsList({
     >
       {groups.instances.map((instance) => {
         const entries = entriesOf(instance);
-        const personal = personalEntry(groups, instance);
+        const personal = personalEntry(groups, instance, seat);
         const tree = groupTree(entries.filter((entry) => entry.login === null));
         return (
           <InstanceSection
@@ -444,6 +518,7 @@ function GroupSection({
   subgroups: GroupNode[];
 }) {
   const { connected, refreshes, servers, onNote } = shared;
+  const seat = seatName(usePlaceStore().place);
   const [opened, setOpened] = useState<"members">();
   const moreRef = useRef<HTMLButtonElement>(null);
   const { name, beside } = groupReading(group, instance);
@@ -473,6 +548,9 @@ function GroupSection({
         ];
 
   const rows = group.repositories;
+  // Each row standing elsewhere one of whose placements this entry's
+  // listing holds, named with where it stands (space-1, DR-128).
+  const placed = instance ? placedLines(shared.groups, group, seat) : [];
   const lines = instance && servers ? (
     <GroupServers instance={instance} group={group.fullPath} listing={servers} connected={connected} onNote={onNote} />
   ) : null;
@@ -530,10 +608,24 @@ function GroupSection({
         />
       ) : null}
       {lines}
-      {rows.length > 0 ? (
+      {rows.length > 0 || placed.length > 0 ? (
         <ul className="flex min-w-0 flex-col gap-0.5">
           {rows.map((repo) => (
             <RepositoryRow key={repo.key} {...shared} instance={instance} group={group} repo={repo} />
+          ))}
+          {/* A row standing elsewhere reads here as one quiet line, in
+              the secondary tone, with no control: it is acted on where
+              it stands (space-1, DR-128). The line truncates, its title
+              keeping the whole (space-28). */}
+          {placed.map((line) => (
+            <li
+              key={`placed:${line.key}`}
+              data-testid={`space-placed-${line.key}`}
+              className="min-w-0 truncate pl-2 text-xs text-neutral-500"
+              title={line.title}
+            >
+              {line.reading}
+            </li>
           ))}
         </ul>
       ) : serverCount === 0 && subgroups.length === 0 ? (
@@ -858,7 +950,9 @@ function RepositoryRow({
   const hereEntries: MenuEntry[] = [];
   if (repo.state === "absent" && repo.id) {
     hereEntries.push({
-      label: joining ? openingLabel() : openHereLabel(),
+      // The row's phrase reads "Opening…" while the join runs
+      // (space-120): the control keeps its words, disabled.
+      label: openHereLabel(),
       title: groupRepository
         ? seat === undefined
           ? i18n._({ id: "Downloads the records to this computer", comment: "the title of Open here on a group's own records, which hold no code" })
@@ -882,13 +976,11 @@ function RepositoryRow({
     hereEntries.push(
       remote
         ? {
-            label: joining
-              ? openingLabel()
-              : i18n._({ id: "Try again", comment: "on a team server's project whose code clone failed: open it again, cloning its code into the folder the server allocated" }),
+            label: i18n._({ id: "Try again", comment: "on a team server's project whose code download failed: open it again, downloading its code into the folder the server allocated" }),
             title: i18n._({
-              id: "Clones its code again into its folder on {place}",
+              id: "Downloads its code again into its folder on {place}",
               values: { place: placeLabel(store.place) },
-              comment: "the title of 'Try again' on a team server's project whose code clone failed: {place} is the server's name",
+              comment: "the title of 'Try again' on a team server's project whose code download failed: {place} is the server's name",
             }),
             testId: `space-row-join-again-${repo.key}`,
             disabled: running || !repo.id || joining,
@@ -896,7 +988,7 @@ function RepositoryRow({
           }
         : {
             label: i18n._({ id: "Choose folder…", comment: "pick the project folder on this computer that a project's records pair with" }),
-            title: i18n._({ id: "Takes its project folder on this computer", comment: "the title of Choose folder… on a project whose records are here without its folder" }),
+            title: i18n._({ id: "Pick the folder on this computer that holds its code", comment: "the title of Choose folder… on a project whose records are here without its folder" }),
             testId: `space-row-folder-${repo.key}`,
             disabled: running,
             onSelect: () => void askFolder("folder"),
@@ -1030,9 +1122,9 @@ function RepositoryRow({
           <MenuButton
             trigger={<span aria-hidden>▾</span>}
             name={i18n._({
-              id: "Other places for {name}",
+              id: "More ways to open {name}",
               values: { name },
-              comment: "the accessible name of the menu beside a project's primary control, listing the other places it may be opened at; {name} is the project's name",
+              comment: "the accessible name of the menu beside a project's primary control, listing the other servers, or this computer, it may be opened on; {name} is the project's name",
             })}
             testId={`space-row-places-${repo.key}`}
             entries={others}
@@ -1402,7 +1494,7 @@ function FolderEditor({
   const submit = async () => {
     const folder = path.trim();
     if (!folder) {
-      setRefusal(i18n._({ id: "Name the folder on this computer", comment: "a folder field left empty" }));
+      setRefusal(i18n._({ id: "Name a folder", comment: "the folder field's refusal of an empty path" }));
       fieldRef.current?.focus();
       return;
     }

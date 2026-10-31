@@ -14,7 +14,7 @@
 // first Connect on this device shows the instance's contract and sends
 // `server.open` with consent only on "I understand", a later Connect
 // sending it at once; while the open runs the line says so, and past
-// ten seconds that a seat's first start can take a minute; a seat whose
+// ten seconds its title says the first connection can take a minute; a seat whose
 // sign-in runs reads the approval's link, the desktop asked to open it
 // once per flow, and one whose sign-in failed reads its cause with
 // "Sign in again", sending `server.signin`; Disconnect sends
@@ -431,12 +431,12 @@ function disconnect(place: string): void {
 /** The Space's terms for lab-box, as bullets in the words its record
  * fixes, naming no seat or ticket (run-view-170, DR-172). */
 const TERMS = [
-  "Connecting places your Space sign-in on lab-box",
+  "Connecting puts your Space sign-in on lab-box",
   "Whoever runs lab-box can act as you: in your groups, in your records, and with your spex.pub account, wherever it reaches",
   "Private packages need a separate registry sign-in on lab-box",
   "Agents on lab-box run on the sign-ins its administrator set up, unless you set your own",
   "A credential you place on lab-box stays there until you remove it",
-  "Retiring lab-box, or revoking its access at spex.pub, stops new use; a credential already there lasts until it expires",
+  "Removing lab-box, or revoking its access at spex.pub, stops new use; a credential already there lasts until it expires",
 ];
 
 /** The terms stand as bullets, no paragraph, and say no seat or ticket
@@ -674,7 +674,7 @@ function serverState(...seats: SeatState[]): void {
 }
 
 describe("run-view-170: a server's line while its seat opens and signs in", () => {
-  test("while server.open runs the line reads Connecting to <server>…, and past ten seconds that the seat's first start can take a minute", async () => {
+  test("while server.open runs the line reads Connecting to <server>…, titled past ten seconds that the first connection can take a minute", async () => {
     await openGroups();
     // Understood on this device before: Connect sends at once.
     kept.set(`spex.serverContract:${LAB_BOX}`, "1");
@@ -688,15 +688,19 @@ describe("run-view-170: a server's line while its seat opens and signs in", () =
         await Promise.resolve();
       });
       // [run-view-170] the open runs: the line says so, Connect waits.
-      const line = (): string => screen.getByTestId(`space-server-connecting-${LAB_BOX}`).textContent ?? "";
+      const connecting = (): HTMLElement => screen.getByTestId(`space-server-connecting-${LAB_BOX}`);
+      const line = (): string => connecting().textContent ?? "";
       expect(line()).toBe("Connecting to lab-box…");
+      expect(connecting().getAttribute("title")).toBeNull();
       expect(control(LAB_BOX).disabled).toBe(true);
       act(() => vi.advanceTimersByTime(9_999));
       expect(line()).toBe("Connecting to lab-box…");
-      // [run-view-170] past ten seconds, a seat's first start can take a
-      // minute.
+      expect(connecting().getAttribute("title")).toBeNull();
+      // [run-view-170] past ten seconds, the line's title says the first
+      // connection can take a minute, its words unchanged.
       act(() => vi.advanceTimersByTime(1));
-      expect(line()).toBe("Connecting to lab-box… the first connection can take a minute");
+      expect(line()).toBe("Connecting to lab-box…");
+      expect(connecting().getAttribute("title")).toBe("The first connection can take a minute");
       answer({ place: LAB_BOX, leaseExpiresAt: Date.now() + 3_600_000 });
       await act(async () => {
         for (let tick = 0; tick < 20; tick += 1) await Promise.resolve();
@@ -814,7 +818,7 @@ describe("run-view-171: Open on <server> on a row of this computer's Space", () 
     // server of the instance the member may open beside it.
     const open = screen.getByTestId(`space-row-open-${NOTES_KEY}`);
     expect(open.textContent).toBe("Open here");
-    expect(screen.getByTestId(`space-row-places-${NOTES_KEY}`).getAttribute("aria-label")).toBe("Other places for notes");
+    expect(screen.getByTestId(`space-row-places-${NOTES_KEY}`).getAttribute("aria-label")).toBe("More ways to open notes");
     const menu = openMenu();
     expect(within(menu).getAllByRole("menuitem").map((item) => item.textContent)).toEqual([
       "Open on build-box",

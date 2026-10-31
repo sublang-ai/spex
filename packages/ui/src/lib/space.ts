@@ -274,7 +274,11 @@ export function placementPhrase(
         const at = line.lastSync?.at ?? (sync.phase === "done" ? sync.at : now);
         const text =
           line.state === "read-only"
-            ? i18n._("Brought {received}; nothing sent", { received: outcome.received })
+            ? i18n._({
+                id: "{received} received; nothing sent",
+                values: { received: outcome.received },
+                comment: "a read-only placement's line after a sync: how many records came back; nothing was sent, the Space letting this account only read",
+              })
             : outcome.sent + outcome.received === 0
               ? i18n._("Everything is in sync")
               : i18n._("Synced {age} · {sent} sent · {received} received", {
@@ -718,7 +722,7 @@ export const STEP_NAMES: Record<SyncStep, () => string> = {
   refresh: () => i18n._({ id: "Reloading", comment: "sync step's name: reading the records again" }),
   push: () => i18n._({ id: "Sending", comment: "sync step's name: sending the records to the Space" }),
   // A join's step while its code clones (space-63).
-  code: () => i18n._({ id: "Cloning code", comment: "a project's open, step's name: downloading the project's code" }),
+  code: () => i18n._({ id: "Downloading code", comment: "a project's open, step's name: downloading the project's code into its folder" }),
 };
 
 /** What the step line reads while a step runs (space-12, space-63),
@@ -734,7 +738,7 @@ export const STEP_LINES: Record<SyncStep, (name?: string) => string> = {
   apply: () => i18n._({ id: "Merging…", comment: "sync step running: bringing both sides' records together" }),
   refresh: () => i18n._({ id: "Reloading…", comment: "sync step running: reading the records again" }),
   push: () => i18n._({ id: "Sending…", comment: "sync step running: sending the records to the Space" }),
-  code: () => i18n._({ id: "Cloning code…", comment: "join step running: cloning the project's code into its folder" }),
+  code: () => i18n._({ id: "Downloading code…", comment: "a project's open, step running: downloading the project's code into its folder" }),
 };
 
 /** A byte count in the reader's units: "312 B", "4.1 KB", "2.3 MB". */
@@ -776,35 +780,36 @@ export const SHARING_LABELS: Record<SpaceEntry["sync"], () => string> = {
  * was imported in. */
 export const FAMILY_LABELS: Record<string, () => string> = {
   "Git data": () => i18n._({ id: "Git data", comment: "entry mark: the repository's own files" }),
-  lease: () => i18n._({ id: "lease", comment: "catalog family: the lock naming the process writing now" }),
-  "temporary write": () => i18n._({ id: "temporary write", comment: "catalog family: a copy made while writing" }),
-  "config backup": () => i18n._({ id: "config backup", comment: "catalog family: a copy of the config kept before a write" }),
-  "sync repair marker": () => i18n._({ id: "sync repair marker", comment: "catalog family: the mark of a repair this computer acknowledged" }),
-  "session bundles": () => i18n._({ id: "session bundles", comment: "catalog family: the folder holding every session's files" }),
-  "session manifest": () => i18n._({ id: "session manifest", comment: "catalog family: one session's manifest file" }),
-  "session records": () => i18n._({ id: "session records", comment: "catalog family: one session's record stream" }),
-  "session chunks": () => i18n._({ id: "session chunks", comment: "catalog family: immutable pieces of one session's state and replay" }),
-  "session attachments": () => i18n._({ id: "session attachments", comment: "catalog family: the files attached to one session's turns" }),
+  lease: () => i18n._({ id: "in-use file", comment: "what a file is, in the records' tree: it marks which Spex is writing the records right now" }),
+  "temporary write": () => i18n._({ id: "temporary copy", comment: "what a file is, in the records' tree: a copy made while writing" }),
+  "config backup": () => i18n._({ id: "Settings backup", comment: "what a file is, in the records' tree: a copy of the settings kept before a write" }),
+  "sync repair marker": () => i18n._({ id: "interrupted sync", comment: "what a file is, in the records' tree: it marks a sync that stopped midway, which the next sync finishes" }),
+  "session bundles": () => i18n._({ id: "sessions", comment: "what a folder is, in the records' tree: every session's files" }),
+  "session manifest": () => i18n._({ id: "session file", comment: "what a file is, in the records' tree: one session's own file" }),
+  "session records": () => i18n._({ id: "session transcript", comment: "what a file is, in the records' tree: one session's transcript, every turn as it happened" }),
+  "session chunks": () => i18n._({ id: "session history", comment: "what a folder is, in the records' tree: the saved pieces of one session's history" }),
+  "session attachments": () => i18n._({ id: "session attachments", comment: "what a folder is, in the records' tree: the files attached to one session's turns" }),
   "provider hints": () => i18n._({ id: "provider hints", comment: "a file family that stays on this computer" }),
-  "legacy session sidecar": () => i18n._({ id: "legacy session sidecar", comment: "catalog family: a session file an earlier release wrote" }),
-  intents: () => i18n._({ id: "intents", comment: "catalog family: the folder holding every intent's file" }),
-  intent: () => i18n._({ id: "intent", comment: "catalog family: one intent's file" }),
-  "intent attachments": () => i18n._({ id: "intent attachments", comment: "catalog family: the files attached to one intent" }),
-  "authoring sessions": () => i18n._({ id: "authoring sessions", comment: "catalog family: the folder holding every authoring session" }),
-  "authoring session": () => i18n._({ id: "authoring session", comment: "catalog family: one authoring session's files" }),
-  "authoring records": () => i18n._({ id: "authoring records", comment: "catalog family: one authoring session's record stream" }),
-  "authoring attachments": () => i18n._({ id: "authoring attachments", comment: "catalog family: the files attached to one authoring session" }),
-  "spec package requests": () => i18n._({ id: "spec package requests", comment: "catalog family: the spec packages the environment asks for" }),
-  "spec package lock": () => i18n._({ id: "spec package lock", comment: "catalog family: the exact spec packages the environment resolved" }),
-  "spec package": () => i18n._({ id: "spec package", comment: "catalog family: a spec package's folder kept in the clone, synced whole, or a file in it" }),
-  "upload staging": () => i18n._({ id: "upload staging", comment: "catalog family: files uploaded and not yet attached" }),
-  Settings: () => i18n._({ id: "Settings", comment: "catalog family: the shared config the Settings surface edits" }),
-  "code remote": () => i18n._({ id: "code remote", comment: "catalog family: the file naming where a project's code lives" }),
-  "installed spec packages": () => i18n._({ id: "installed spec packages", comment: "catalog family: spec packages installed on this computer from spex.lock" }),
-  "exported skills": () => i18n._({ id: "exported skills", comment: "catalog family: skills exported from the installed spec packages" }),
-  "sync rules": () => i18n._({ id: "sync rules", comment: "catalog family: the files saying what syncs" }),
-  "Not a Spex folder": () => i18n._({ id: "Not a Spex folder", comment: "catalog family: a folder Spex did not write" }),
-  "Not a Spex file": () => i18n._({ id: "Not a Spex file", comment: "catalog family: a file Spex did not write" }),
+  "legacy session sidecar": () => i18n._({ id: "older session file", comment: "what a file is, in the records' tree: a session file an earlier release wrote" }),
+  intents: () => i18n._({ id: "intents", comment: "what a folder is, in the records' tree: every intent's file" }),
+  intent: () => i18n._({ id: "intent", comment: "what a file is, in the records' tree: one intent's file" }),
+  "intent attachments": () => i18n._({ id: "intent attachments", comment: "what a folder is, in the records' tree: the files attached to one intent" }),
+  "authoring sessions": () => i18n._({ id: "authoring sessions", comment: "what a folder is, in the records' tree: every playbook being written" }),
+  "authoring session": () => i18n._({ id: "authoring session", comment: "what a file is, in the records' tree: one playbook being written" }),
+  "authoring records": () => i18n._({ id: "authoring transcript", comment: "what a file is, in the records' tree: the transcript of one playbook being written" }),
+  "authoring attachments": () => i18n._({ id: "authoring attachments", comment: "what a folder is, in the records' tree: the files attached to one playbook being written" }),
+  "spec package requests": () => "spex.yaml",
+  "spec package lock": () => "spex.lock",
+  "spec package": () => i18n._({ id: "package", comment: "what a folder or file is, in the records' tree: a package kept in the records, or a file in it" }),
+  "upload staging": () => i18n._({ id: "uploads not yet attached", comment: "what a folder is, in the records' tree: files uploaded and not yet attached to a turn" }),
+  Settings: () => i18n._({ id: "Settings", comment: "what a file is, in the records' tree: the shared settings the Settings surface edits" }),
+  "code remote": () => i18n._({ id: "where the code is", comment: "what a file is, in the records' tree: it names where a project's code is" }),
+  placement: () => i18n._({ id: "where the records sync", comment: "what a file is, in the records' tree: it names a Space these records sync with" }),
+  "installed spec packages": () => i18n._({ id: "installed packages", comment: "what a folder is, in the records' tree: packages installed on this computer from spex.lock" }),
+  "exported skills": () => i18n._({ id: "skills for agents", comment: "what a folder is, in the records' tree: the installed packages' skills, placed where the agents read them" }),
+  "sync rules": () => i18n._({ id: "sync rules", comment: "what a file is, in the records' tree: it says what syncs" }),
+  "Not a Spex folder": () => i18n._({ id: "Not a Spex folder", comment: "what a folder is, in the records' tree: Spex did not write it" }),
+  "Not a Spex file": () => i18n._({ id: "Not a Spex file", comment: "what a file is, in the records' tree: Spex did not write it" }),
 };
 
 /** The word an entry's family reads as; a family this interface does
@@ -831,12 +836,12 @@ export function staysHere(seat?: string): readonly { family: string; reason: str
             }),
     },
     {
-      family: i18n._({ id: "leases and locks", comment: "a file family that stays on this computer" }),
+      family: i18n._({ id: "in-use files", comment: "a file family that stays on this computer: the files marking which Spex is writing now" }),
       reason: i18n._("which process is writing right now"),
     },
     {
       family: i18n._({
-        id: "installed spec packages and exported skills",
+        id: "installed packages and skills for agents",
         comment: "a file family that stays on this computer",
       }),
       reason:
@@ -897,9 +902,9 @@ export function staysHere(seat?: string): readonly { family: string; reason: str
 export function sessionPartName(entry: SpaceEntry): string {
   switch (entry.family) {
     case "session manifest":
-      return i18n._({ id: "manifest", comment: "a session's part: its manifest file" });
+      return i18n._({ id: "file", comment: "a session's part, under its node in the records' tree: the session's own file" });
     case "session records":
-      return i18n._({ id: "records", comment: "a session's part: its record file" });
+      return i18n._({ id: "transcript", comment: "a session's part, under its node in the records' tree: its transcript, every turn as it happened" });
     case "provider hints":
       return i18n._({ id: "provider hints", comment: "a file family that stays on this computer" });
     default:

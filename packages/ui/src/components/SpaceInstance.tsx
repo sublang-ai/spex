@@ -331,7 +331,6 @@ function InstanceHeading({
                 {i18n._({ id: "New group", comment: "create a group at the root of the Space whose heading carries it" })}
               </button>
             ) : null}
-            {more}
             <button
               key="signout"
               type="button"
@@ -357,10 +356,11 @@ function InstanceHeading({
                 ? i18n._({ id: "Signing out…", comment: "the Sign out control, while signing out" })
                 : i18n._({ id: "Sign out", comment: "sign this computer out of the Space whose heading carries it" })}
             </button>
+            {/* The overflow comes last, after Sign out (space-1). */}
+            {more}
           </>
         ) : (
           <>
-            {more}
             {runningHere ? (
               <button
                 key="cancel"
@@ -385,6 +385,7 @@ function InstanceHeading({
             >
               {here && flowing ? signingInLabel() : signInAgainLabel()}
             </button>
+            {more}
           </>
         )}
       </div>

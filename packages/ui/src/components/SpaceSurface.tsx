@@ -33,7 +33,7 @@ import { usePlaceStore } from "../state/place-context.js";
 import { isLocalPlace } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import { useClock } from "../lib/useClock.js";
-import { allRepositories, anySignedIn, standingOf } from "../lib/instances.js";
+import { allRepositories, anySignedIn, standingOf, thisComputerRows } from "../lib/instances.js";
 import { instanceNameAt } from "../lib/placements.js";
 import { relativeAge } from "../lib/time.js";
 import {
@@ -42,10 +42,11 @@ import {
   cloneHere,
   clonePath,
   notHerePhrase,
-  repositoryStatePhrase,
+  phraseNames,
   revealBridge,
   revealLabel,
   rowName,
+  rowPhrase,
   seatName,
   tildify,
 } from "../lib/space.js";
@@ -567,22 +568,25 @@ function HomeHeader({
         data-testid="space-issues"
         aria-expanded={issuesOpen}
         title={issueCount > 0 ? undefined : nothing}
-        // Amber and the warning glyph say attention is owed. With
-        // nothing unanswered none is, so the control stays reachable
-        // while reading as settled (space-55).
+        // With nothing unanswered the glyph stands alone, named "Nothing
+        // to fix" (space-1).
+        aria-label={issueCount > 0 ? undefined : nothing}
+        // Amber says attention is owed. With nothing unanswered none is,
+        // so the control stays reachable while reading as settled
+        // (space-55).
         className={`flex items-center gap-1 text-sm hover:underline ${
           issueCount > 0 ? "text-amber-700 dark:text-amber-300" : "text-neutral-500"
         }`}
         onClick={() => onIssuesOpen(!issuesOpen)}
       >
-        {issueCount > 0 ? <span aria-hidden>⚠</span> : null}
+        <span aria-hidden>⚠</span>
         {issueCount > 0
           ? i18n._({
               id: "{count} to fix",
               values: { count: issueCount },
               comment: "the header's control after its warning glyph: how many repairs and problems wait for an answer; opens the list",
             })
-          : i18n._({ id: "To fix", comment: "the header's control once nothing waits for an answer: still opens the list of what was set aside" })}
+          : null}
       </button>
     ) : null;
   const empty = groups.git.ok && listed && !refresh && !issues;
@@ -723,9 +727,10 @@ function RepositoryPanel({
   // No clone here: records a Space lists that this computer lacks, or
   // ones in a group named like a login (space-61).
   const absent = !cloneHere(repo);
-  // The row's standing reads beside its name; records in no group read
-  // none (space-120).
-  const standingPhrase = repositoryStatePhrase(repo, now, seat);
+  // The row's own phrase reads beside its name, the same words the row
+  // reads; a row under "This computer" reads none (space-120).
+  const quiet = thisComputerRows(groups).some((row) => row.key === repo.key);
+  const standingPhrase = rowPhrase(repo, now, dismissed, phraseNames(groups, repo, seat), quiet).text;
   return (
     <section
       id="space-repository"

@@ -8,13 +8,13 @@
 // server `lab-1` of `acme`, a repository under another login `bob`, and
 // your namespace holding your own group's repository alone, with one
 // seat open at `lab-1` holding `beta-spex` — a second instance signed in
-// beside it. The test reads, through the surface: the headings, the
-// group's overflow and its server's line, the rows' names, marks, phrase
-// and overflow, each Open and what it sends, a project in no group and
-// its picker, the choices owed and records started separately, a repair
-// named by its project, the same surface at the seat's place naming the
-// server, and the new controls' budget. The new words read in English
-// here; their Chinese follows the catalogs once they are regenerated.
+// beside it. The test reads, through the surface, in English and in
+// Chinese: the instance's heading and its registry line, the headings,
+// the group's overflow and its server's line, the rows' names, marks,
+// phrase and overflow, each Open and what it sends, a project in no
+// group and its picker, the choices owed and records started
+// separately, a repair named by its project, the same surface at the
+// seat's place naming the server, and the new controls' budget.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -22,6 +22,7 @@ import type {
   GroupsState,
   InstanceGroupState,
   ProjectInfo,
+  RegistryState,
   RepositoryState,
   SeatState,
   ServerListing,
@@ -35,7 +36,7 @@ import { activateLanguage } from "../i18n.js";
 import { PlaceStoreContext } from "../state/place-context.js";
 import { usePlaces } from "../state/places.js";
 import { useServerOpens } from "../state/server-opens.js";
-import { createAppStore, setClientForTests, useAppStore, type AppStore } from "../state/store.js";
+import { createAppStore, deliverServerMessageForTests, setClientForTests, useAppStore, type AppStore } from "../state/store.js";
 
 const NOW = Date.now();
 const MIN = 60_000;
@@ -98,7 +99,74 @@ const WORDS = {
     signOutLab: "Signs lab-1 out of Spex Example; every record stays there",
     cancel: "Cancel",
     signInTitle: "Sign in to a Space",
+    heading: "Spex Example · @ada",
+    newGroup: "New group",
+    signOut: "Sign out",
+    removeFromList: "Remove from this list",
+    registry: "Registry",
+    signIn: "Sign in",
+    registryTitle: "For publishing and private packages",
+    registrySignedIn: "Registry · signed in as @ada",
+    toSend: "1 to send",
+    use: "Use ~/code/delta",
     exempt: ["Add to a group…"],
+  },
+  zh: {
+    personal: "个人",
+    thisComputer: "本机",
+    sharedByBob: "@bob 共享的",
+    members: "4 名成员",
+    research: "Research · acme/research",
+    more: (name: string) => `${name} 的更多操作`,
+    groupActs: ["成员"],
+    connected: "已连接",
+    disconnect: "断开连接",
+    connect: "连接",
+    groupSessions: "群组会话",
+    yourSessions: "你的会话",
+    here: "这里",
+    onLab: "在 lab-1 上",
+    synced: "5 分钟前同步",
+    rowActs: ["立即同步", "成员", "浏览记录"],
+    show: "显示",
+    openOnLab: "在 lab-1 上打开",
+    openHere: "在这里打开",
+    showOnLab: "在 lab-1 上显示",
+    openingOnLab: "正在 lab-1 上打开…",
+    folderForSessions: "本机上运行其会话的文件夹",
+    addToGroup: "加入群组…",
+    changed: "这里和 Spex Example 都有更改",
+    resolve: "解决",
+    keepHere: "保留本机的",
+    take: "取 Spex Example 的",
+    allHere: "全用这里的",
+    allTake: "全用 Spex Example 的",
+    apart: "在 Spex Example 上各自开始",
+    combine: "合并…",
+    combineConfirm: "合并",
+    repair: "delta · acme — 本机缺少文件夹",
+    repairFolder: "~/code/delta · 3 个会话曾在此运行",
+    chooseFolder: "选择文件夹…",
+    notHere: "不在本机上",
+    notOnLab: "不在 lab-1 上",
+    keepOnLab: "保留 lab-1 的",
+    labFiles: "Spex 将 lab-1 的文件保存在 ~/.spex",
+    keepLabVersion: "保留 lab-1 的 1 项版本？Spex Example 的版本仍保留在 Git 历史中",
+    nothingFromLab: "lab-1 没有要发送的内容",
+    signOutLab: "让 lab-1 退出 Spex Example；所有记录仍保留在那里",
+    cancel: "取消",
+    signInTitle: "登录到 Space",
+    heading: "Spex Example · @ada",
+    newGroup: "新建群组",
+    signOut: "退出登录",
+    removeFromList: "从列表中移除",
+    registry: "注册中心",
+    signIn: "登录",
+    registryTitle: "用于发布和私有规约包",
+    registrySignedIn: "注册中心 · 已登录为 @ada",
+    toSend: "1 项待发送",
+    use: "使用 ~/code/delta",
+    exempt: ["加入群组…"],
   },
 } as const;
 type Language = keyof typeof WORDS;
@@ -173,7 +241,7 @@ function absent(key: string, name: string, id: string, code: string | null, memb
 
 /** This computer's home (space-113): your own records, `acme` with its
  * subgroup, bob's listing, and a second instance. */
-function home(over: { alpha?: RepositoryState; diagnostics?: GroupsState["diagnostics"] } = {}): GroupsState {
+function home(over: { alpha?: RepositoryState; diagnostics?: GroupsState["diagnostics"]; gamma?: false } = {}): GroupsState {
   const own = repositoryRow(OWN_KEY, {
     instance: ORIGIN,
     governing: ORIGIN,
@@ -190,7 +258,7 @@ function home(over: { alpha?: RepositoryState; diagnostics?: GroupsState["diagno
   return groupsState({
     home: HOME,
     defaultInstance: ORIGIN,
-    own: { name: "ada", named: false, repositories: [own, gamma] },
+    own: { name: "ada", named: false, repositories: over.gamma === false ? [own] : [own, gamma] },
     instances: [
       instanceState(ORIGIN, {
         displayName: "Spex Example",
@@ -317,9 +385,69 @@ function pick(trigger: string, entry: string): void {
 
 const phrase = (key: string): string => screen.getByTestId(`space-repo-state-${key}`).textContent ?? "";
 
-describe.each(["en"] as const)("space-113: the Space surface reads as projects in groups (%s)", (language: Language) => {
+/** The registry at the instance, as the core reports it
+ * (core-service-143). */
+function registry(over: Partial<RegistryState> = {}): RegistryState {
+  return { origin: ORIGIN, displayName: "Spex Example", account: null, signIn: { phase: "idle" }, error: null, ...over };
+}
+
+describe.each(["en", "zh"] as const)("space-113: the Space surface reads as projects in groups (%s)", (language: Language) => {
   const words = WORDS[language];
   beforeEach(() => activateLanguage(language));
+
+  test("the instance's heading and its registry line; no This computer while no row is local only", async () => {
+    state = home({ gamma: false });
+    local = fakeClient({
+      "space.get": () => state,
+      "server.list": () => listing(),
+      "registry.directory": () => {
+        throw new Error("unreadable");
+      },
+      "registry.get": (fields?: Record<string, unknown>) => registry({ origin: fields?.origin as string }),
+      "registry.signin.start": (fields?: Record<string, unknown>) => ({
+        flow: "device",
+        userCode: "QRST-UVWX",
+        verificationUri: `${fields?.origin as string}/login/device?user_code=QRST-UVWX`,
+        expiresAt: NOW + 15 * MIN,
+        interval: 5,
+      }),
+    });
+    setClientForTests(local.client);
+    await renderHere();
+    const instance = within(screen.getByTestId(`space-instance-${ORIGIN}`));
+    // [space-1] its display name beside "@ada", New group, Sign out and
+    // one More holding "Remove from this list" disabled.
+    expect(instance.getByRole("heading", { level: 2 }).textContent).toBe(words.heading);
+    expect(instance.getByTestId("space-new-group").textContent).toBe(words.newGroup);
+    expect(instance.getByTestId("space-signout").textContent).toBe(words.signOut);
+    const more = instance.getByTestId("space-instance-more");
+    expect(more.getAttribute("aria-label")).toBe(words.more("Spex Example"));
+    fireEvent.click(more);
+    const remove = within(instance.getByTestId("space-instance-more-menu")).getByTestId("space-instance-remove") as HTMLButtonElement;
+    expect(within(remove).getByText(words.removeFromList)).toBeTruthy();
+    expect(remove.disabled).toBe(true);
+    fireEvent.keyDown(window, { key: "Escape" });
+    // [space-1] Personal holds "Your sessions"; with no row local only,
+    // no "This computer" stands.
+    expect(within(screen.getByTestId("space-group-@ada")).getByTestId(`space-repo-${OWN_KEY}`).textContent).toBe(words.yourSessions);
+    expect(screen.queryByTestId("space-own")).toBeNull();
+    // [space-119] beneath the heading, "Registry" with Sign in, titled
+    // for what it is for, starting the registry's sign-in at the
+    // instance's origin.
+    const line = await instance.findByTestId("space-registry");
+    await waitFor(() => expect(line.textContent).toBe(`${words.registry}${words.signIn}`));
+    const signIn = within(line).getByTestId("space-registry-signin") as HTMLButtonElement;
+    expect(signIn.title).toBe(words.registryTitle);
+    fireEvent.click(signIn);
+    await waitFor(() => expect(callsOf(local, "registry.signin.start")).toEqual([{ origin: ORIGIN }]));
+    // Signed in there, "Registry · signed in as @ada", the heading
+    // unchanged and no package control on the surface.
+    act(() => deliverServerMessageForTests({ type: "registry.state", state: registry({ account: { id: "7", login: "ada" } }) }));
+    await waitFor(() => expect(instance.getByTestId("space-registry").textContent).toBe(words.registrySignedIn));
+    expect(within(instance.getByTestId("space-registry")).queryAllByRole("button")).toEqual([]);
+    expect(instance.getByRole("heading", { level: 2 }).textContent).toBe(words.heading);
+    expect(screen.queryAllByRole("button").filter((button) => /package|Publish|规约包|发布/i.test(button.textContent ?? ""))).toEqual([]);
+  });
 
   test("the headings, the group's overflow and its server's line", async () => {
     await renderHere();
@@ -466,7 +594,18 @@ describe.each(["en"] as const)("space-113: the Space surface reads as projects i
     expect(options[2]?.startsWith("Research")).toBe(true);
   });
 
-  test("choices owed read Changed here with Resolve beneath the row; records started separately Combine…", async () => {
+  test("choices owed read Changed here with Resolve beneath the row, or N to send while a unit waits; records started separately Combine…", async () => {
+    // [space-120] a local unit comes first: "1 to send".
+    state = home({
+      alpha: alpha(
+        { sync: { phase: "choices", placement: ORIGIN, savedCommit: null }, conflicts: CONFLICTS, local: [SESSION] },
+        { outcome: { kind: "choices", sent: 0, received: 0 }, conflicts: CONFLICTS },
+      ),
+    });
+    await renderHere();
+    expect(phrase(ALPHA_KEY)).toBe(words.toSend);
+    cleanup();
+
     state = home({
       alpha: alpha(
         { sync: { phase: "choices", placement: ORIGIN, savedCommit: null }, conflicts: CONFLICTS },
@@ -520,6 +659,8 @@ describe.each(["en"] as const)("space-113: the Space surface reads as projects i
             directories: ["/Users/ada/code/delta"],
             sessions: 3,
             key: "repair-delta",
+            checked: [{ path: "/Users/ada/code/delta", here: true, repo: true }],
+            proposal: { path: "/Users/ada/code/delta", from: "recorded" },
           },
         },
       ],
@@ -531,6 +672,8 @@ describe.each(["en"] as const)("space-113: the Space surface reads as projects i
     // the folder beneath it.
     expect(within(repair).getByTestId("space-repair-title").textContent).toBe(words.repair);
     expect(within(repair).getByTestId("space-repair-folder").textContent).toBe(words.repairFolder);
+    // [space-47] "Use <folder>" where the core proposes one.
+    expect(within(repair).getByTestId("space-repair-use").textContent).toBe(words.use);
     // [space-47] [space-49] "Choose folder…" and "Not on this computer",
     // declining sending `space.repair.decline`.
     expect(within(repair).getByTestId("space-repair-choose").textContent).toBe(words.chooseFolder);

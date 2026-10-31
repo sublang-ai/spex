@@ -410,12 +410,12 @@ describe("GROUPS: signing in (space-3, space-6, space-29)", () => {
     await renderGroups(signedOutAt(ORIGIN, { byHost: true }), { open: false });
     const section = screen.getByTestId(`space-instance-${ORIGIN}`);
     expect(within(section).getByRole("heading", { level: 2 }).textContent).toBe("Spex Example · signed out · @jane");
-    // Beside it, its overflow and Sign in again (space-1, space-82).
+    // Beside it, Sign in again and its overflow (space-1, space-82).
     const controls = (heading: HTMLElement) =>
       within(within(heading).getByTestId("space-instance-heading"))
         .getAllByRole("button")
         .map((button) => button.getAttribute("aria-label") ?? button.textContent);
-    const both = ["More for Spex Example", "Sign in again"];
+    const both = ["Sign in again", "More for Spex Example"];
     expect(controls(section)).toEqual(both);
     expect(within(section).queryByRole("button", { name: "Sign out" })).toBeNull();
     // The home lists an instance, so no card stands in the header.
@@ -885,7 +885,7 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
     const field = screen.getByTestId(`space-folder-${KEY}-path`);
     expect(document.activeElement).toBe(field);
     fireEvent.click(within(editor).getByRole("button", { name: "Use this folder" }));
-    expect(within(editor).getByRole("alert").textContent).toBe("Name the folder on this computer");
+    expect(within(editor).getByRole("alert").textContent).toBe("Name a folder");
     fireEvent.change(field, { target: { value: "/Users/jane/code/academy" } });
     fireEvent.keyDown(field, { key: "Enter" });
     await waitFor(() => expect(calls("project.rebind")).toEqual([{ projectId: KEY, path: "/Users/jane/code/academy" }]));
@@ -1110,7 +1110,8 @@ describe("GROUPS: Open here (space-63, space-111, space-29)", () => {
     expect(control.dataset.entry).toBe(`space-row-open-here-${ABSENT}`);
     fireEvent.click(control);
     const editor = screen.getByTestId(`space-join-${ABSENT}`);
-    expect(editor.textContent).toContain("Project folder on this computer");
+    // Its caption reads exactly the field's words (space-63).
+    expect(editor.querySelector("label > span")?.textContent).toBe("Project folder on this computer");
     const field = screen.getByTestId(`space-join-${ABSENT}-path`);
     expect(document.activeElement).toBe(field);
     fireEvent.keyDown(field, { key: "Escape" });
@@ -1120,8 +1121,24 @@ describe("GROUPS: Open here (space-63, space-111, space-29)", () => {
     fireEvent.change(screen.getByTestId(`space-join-${ABSENT}-path`), { target: { value: "/Users/jane/code/docs" } });
     fireEvent.click(within(screen.getByTestId(`space-join-${ABSENT}`)).getByRole("button", { name: "Open here" }));
     await waitFor(() => expect(calls("space.join")).toEqual([{ instance: ORIGIN, hostId: "52", folder: "/Users/jane/code/docs" }]));
-    // Accepted, the control stays busy until the machine moves.
-    await waitFor(() => expect(screen.getByTestId(`space-row-open-${ABSENT}`).textContent).toBe("Opening…"));
+    // Accepted, the control stays disabled until the machine moves,
+    // keeping its words: the row's phrase alone says "Opening…" once the
+    // join runs (space-120).
+    await waitFor(() => expect((screen.getByTestId(`space-row-open-${ABSENT}`) as HTMLButtonElement).disabled).toBe(true));
+    expect(screen.getByTestId(`space-row-open-${ABSENT}`).textContent).toBe("Open here");
+    // The join running, the row says "Opening…" once, in its phrase.
+    const group = teamGroup();
+    deliver(
+      withGroups(base({}, [repo({ state: "local-only", remote: null, id: null, code: CODE, branch: null, members: null })]), {
+        ...group,
+        repositories: group.repositories.map((each) =>
+          each.key === ABSENT ? { ...each, sync: { phase: "running", op: "join", step: "code", placement: ORIGIN, since: NOW, cancelable: false } } : each,
+        ),
+      }),
+    );
+    await waitFor(() => expect(screen.getByTestId(`space-repo-state-${ABSENT}`).textContent).toBe("Opening…"));
+    expect(screen.getByTestId(`space-row-open-${ABSENT}`).textContent).toBe("Open here");
+    expect(within(screen.getByTestId(`space-row-${ABSENT}`)).getAllByText("Opening…")).toHaveLength(1);
   });
 
   test("a group's own spex repository asks for the folder its sessions run in", async () => {
@@ -1418,7 +1435,7 @@ describe("GROUPS: copy and fit (space-27, space-28)", () => {
     }
   });
 
-  test("the sidebar entry and the surface read Groups", async () => {
+  test("the sidebar entry and the surface read Space", async () => {
     await renderGroups(base(), { open: false });
     expect(screen.getByRole("region", { name: "Space" })).toBeTruthy();
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Space");

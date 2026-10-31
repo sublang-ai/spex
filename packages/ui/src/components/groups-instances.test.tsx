@@ -232,12 +232,13 @@ describe("SPACE: each Space under its heading (space-1, git-host-5, space-3, spa
     expect(within(remove).getByText("Sign out first")).toBeTruthy();
     expect(remove.disabled).toBe(true);
     expect(within(menu).getAllByRole("menuitem")).toEqual([remove]);
-    // The heading's controls, the primary last (space-28).
+    // The heading's controls, the overflow after Sign out (space-1,
+    // space-28).
     const row = second.getByTestId("space-instance-heading").firstElementChild!;
     expect([...row.querySelectorAll(":scope > button, :scope > span > button")].map((button) => button.getAttribute("data-testid"))).toEqual([
       "space-new-group",
-      "space-instance-more",
       "space-signout",
+      "space-instance-more",
     ]);
     // Beneath each heading its own entries: Personal while it holds a
     // row, then every group by its name in the order of their paths — its
@@ -501,15 +502,17 @@ describe("SPACE: each Space under its heading (space-1, git-host-5, space-3, spa
       expect(seen, label).toContain(label);
     }
     // Each Space is a container; below 20rem its fields stack, the
-    // primary control last and full-width.
+    // primary control full-width and the overflow after it.
     for (const section of sections()) {
       expect(section.className.split(/\s+/)).toContain("@container");
       const row = within(section).getByTestId("space-instance-heading").firstElementChild!;
       expect(row.className).toContain("flex-col");
       expect(row.className).toContain("@xs:flex-row");
-      const last = [...row.querySelectorAll("button")].at(-1)!;
-      expect(last.className).toContain("w-full");
-      expect(last.className).toContain("@xs:w-auto");
+      const buttons = [...row.querySelectorAll("button")];
+      expect(buttons.at(-1)!.getAttribute("aria-haspopup")).toBe("menu");
+      const primary = buttons.at(-2)!;
+      expect(primary.className).toContain("w-full");
+      expect(primary.className).toContain("@xs:w-auto");
     }
   });
 
@@ -1207,16 +1210,16 @@ describe("SPACE: Remove a signed-out Space from this list (space-82, space-29, s
     await renderGroups(out, { open: false });
     const first = within(sectionOf(ORIGIN));
     const second = within(sectionOf(SECOND));
-    // On the signed-out heading its overflow stands beside Sign in again,
-    // which stays the last control (space-1, space-28).
+    // On the signed-out heading its overflow stands after Sign in again
+    // (space-1, space-28).
     expect(removeOf(ORIGIN).disabled).toBe(true);
     const remove = removeOf(SECOND);
     expect(remove.disabled).toBe(false);
     expect(remove.title).toBe("Every record stays on this computer");
     const row = second.getByTestId("space-instance-heading").firstElementChild!;
     expect([...row.querySelectorAll(":scope > button, :scope > span > button")].map((button) => button.getAttribute("data-testid"))).toEqual([
-      "space-instance-more",
       "space-signin-again",
+      "space-instance-more",
     ]);
 
     // It sends the Space's origin and asks nothing first; while it runs

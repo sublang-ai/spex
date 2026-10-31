@@ -31,6 +31,7 @@ import {
   base,
   calls,
   commandMock,
+  deliver,
   installClient,
   live,
   namespace,
@@ -283,14 +284,16 @@ describe("GROUPS: each act where the host's read says (space-1, space-62, space-
     expect(within(own).getByTestId(`space-share-${at(OWN)}`)).toBeTruthy();
   });
 
-  test("space-70, space-1: where the instance's read says no group may be created, New group stands disabled, titled who makes groups, with no link; neither before a read is held", async () => {
+  test.each(["en", "zh"] as const)("space-70, space-1: where the instance's read says no group may be created, New group stands disabled, titled who makes groups, with no link; neither before a read is held (%s)", async (language) => {
+    activateLanguage(language);
     const refused = sharingHome({ canCreateGroup: false });
     await renderGroups(refused, { open: false });
     const create = screen.getByTestId("space-new-group") as HTMLButtonElement;
     // The reason is the control's title, no sentence beside it (DR-069,
     // DR-172).
     expect(create.disabled).toBe(true);
-    expect(create.title).toBe("Made by the people who run Spex Example");
+    expect(create.textContent).toBe(language === "zh" ? "新建群组" : "New group");
+    expect(create.title).toBe(language === "zh" ? "由运营 Spex Example 的人创建" : "Made by the people who run Spex Example");
     expect(screen.queryByTestId("space-groups-made-by")).toBeNull();
     expect(screen.getByTestId("space-groups").querySelector("a")).toBeNull();
     cleanup();
@@ -373,6 +376,102 @@ describe("GROUPS: New group (space-68, space-29)", () => {
     fireEvent.click(within(screen.getByTestId("space-new-group-editor")).getByRole("button", { name: "Cancel" }));
     expect(screen.queryByTestId("space-new-group-editor")).toBeNull();
     expect(calls("space.group.create")).toHaveLength(1);
+  });
+
+  test("space-70: New group's editor in place — the path following the name until edited, Create disabled until both hold text, Escape closing, Creating… until the reply, a refusal kept, a success closing with the group listed", async () => {
+    const replies: ReturnType<typeof deferred<unknown>>[] = [];
+    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
+      if (type !== "space.group.create") return core(type, fields);
+      const reply = deferred<unknown>();
+      replies.push(reply);
+      return reply.promise;
+    });
+    await renderGroups(sharingHome(), { open: false });
+    // New group stands on the instance's heading; closing its editor
+    // hands focus back to it (space-68, DR-010 §6).
+    const control = screen.getByTestId("space-new-group");
+    fireEvent.click(control);
+    expect(control.getAttribute("aria-expanded")).toBe("true");
+    const editor = screen.getByTestId("space-new-group-editor");
+    const field = within(editor).getByLabelText("Group name") as HTMLInputElement;
+    const pathField = within(editor).getByLabelText("Path") as HTMLInputElement;
+    expect(document.activeElement).toBe(field);
+    expect(pathField.value).toBe("");
+    const create = within(editor).getByRole("button", { name: "Create" }) as HTMLButtonElement;
+    expect(create.disabled).toBe(true);
+    fireEvent.change(field, { target: { value: "   " } });
+    expect(pathField.value).toBe("");
+    expect(create.disabled).toBe(true);
+    // The path follows the name as the Space derives it.
+    fireEvent.change(field, { target: { value: "Lumen Labs" } });
+    expect(pathField.value).toBe("lumen-labs");
+    expect(create.disabled).toBe(false);
+    // A name that derives no path leaves it empty, and Create disabled.
+    fireEvent.change(field, { target: { value: "华芯智造" } });
+    expect(pathField.value).toBe("");
+    expect(create.disabled).toBe(true);
+    fireEvent.keyDown(field, { key: "Enter" });
+    // Escape closes it, sending nothing, focus back on the control.
+    fireEvent.keyDown(field, { key: "Escape" });
+    expect(screen.queryByTestId("space-new-group-editor")).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(control));
+    expect(calls("space.group.create")).toEqual([]);
+
+    fireEvent.click(control);
+    const again = screen.getByTestId("space-new-group-editor");
+    const name = within(again).getByLabelText("Group name") as HTMLInputElement;
+    const path = within(again).getByLabelText("Path") as HTMLInputElement;
+    fireEvent.change(name, { target: { value: "Team 1" } });
+    expect(path.value).toBe("team-1");
+    const createAgain = within(again).getByTestId("space-new-group-editor-create") as HTMLButtonElement;
+    expect(createAgain.disabled).toBe(false);
+    fireEvent.click(createAgain);
+    await waitFor(() => expect(createAgain.textContent).toBe("Creating…"));
+    expect(createAgain.disabled).toBe(true);
+    // A second submission while the command runs sends nothing.
+    fireEvent.keyDown(name, { key: "Enter" });
+    expect(calls("space.group.create")).toEqual([{ instance: ORIGIN, name: "Team 1", path: "team-1", parent: null }]);
+    // The Space reports the name taken: in the editor, the name kept.
+    replies[0]!.reject(new SpexCommandError("invalid_request", "Team 1 is taken; name another"));
+    await waitFor(() => expect(within(again).getByRole("alert").textContent).toBe("Team 1 is taken; name another"));
+    expect(name.value).toBe("Team 1");
+    expect(path.value).toBe("team-1");
+    expect(createAgain.textContent).toBe("Create");
+    expect(document.activeElement).toBe(name);
+    expect(live()).toBe("Team 1 is taken; name another");
+
+    // A name in Chinese: the reader gives the path, which then no longer
+    // follows the name; an empty path disables Create.
+    fireEvent.change(name, { target: { value: "华芯智造" } });
+    expect(path.value).toBe("");
+    expect(createAgain.disabled).toBe(true);
+    fireEvent.change(path, { target: { value: "huaxin-mfg" } });
+    expect(createAgain.disabled).toBe(false);
+    fireEvent.change(name, { target: { value: "华芯智造 Lab" } });
+    expect(path.value).toBe("huaxin-mfg");
+    fireEvent.change(path, { target: { value: "  " } });
+    expect(createAgain.disabled).toBe(true);
+    fireEvent.change(path, { target: { value: "huaxin-lab" } });
+    fireEvent.keyDown(path, { key: "Enter" });
+    await waitFor(() => expect(calls("space.group.create")).toHaveLength(2));
+    expect(calls("space.group.create")[1]).toEqual({ instance: ORIGIN, name: "华芯智造 Lab", path: "huaxin-lab", parent: null });
+    // The core holds the created group as listed and announces it before
+    // its reply; the reply closes the editor with the group standing in
+    // the list by its name, its full path beside it where the two differ.
+    const listed = sharingHome();
+    deliver(
+      withInstance(listed, {
+        groups: [
+          ...listedGroups(listed),
+          { id: "70", login: null, mine: false, fullPath: "huaxin-lab", name: "华芯智造 Lab", can: { createSubgroup: true, manageMembers: true, rename: false, delete: false }, placed: [], repositories: [] },
+        ],
+      }),
+    );
+    replies[1]!.resolve({ group: { id: "70", fullPath: "huaxin-lab", name: "华芯智造 Lab" } });
+    await waitFor(() => expect(screen.queryByTestId("space-new-group-editor")).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(control));
+    const created = region("huaxin-lab");
+    expect(within(created).getAllByRole("heading", { level: 3 })[0]!.textContent).toBe("华芯智造 Lab · huaxin-lab");
   });
 });
 

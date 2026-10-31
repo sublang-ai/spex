@@ -8,7 +8,7 @@
 // computer reads "<project> · <group> — Folder missing on this computer"
 // with "Use <folder>" where the core found one, "Choose folder…" and
 // "Not on this computer"; a project folder whose records are missing
-// offers to forget the folder. An answered row keeps its place until the
+// offers to remove the project, as the Overview tab's Remove does. An answered row keeps its place until the
 // reader's own Refresh, so nothing reflows under the pointer, and focus
 // and the live region move on. At a team server's place the server is
 // named where this computer would be, and no folder is picked or typed:
@@ -48,7 +48,7 @@ function notHereAnswer(seat?: string): string {
  * this computer is the project? Pairing one is picking a folder, so the
  * row speaks of projects and folders (DR-065). A project folder whose
  * records are missing has nothing here to pair, so its row offers to
- * forget the folder.
+ * remove the project, its files staying (projects-9).
  *
  * Declining leaves the row standing and quiet, still offering what it
  * offered, so changing your mind needs no separate undo.
@@ -80,7 +80,7 @@ function RepairRow({
   const recorded = repair.directories[0] ?? "";
   const folderRepair = repair.kind === "folder";
   const [editing, setEditing] = useState(false);
-  const [forgetting, setForgetting] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const [path, setPath] = useState(proposal?.path ?? recorded);
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string>();
@@ -142,9 +142,9 @@ function RepairRow({
     }
   };
 
-  /** Forget a project folder whose records are missing (projects-9):
-   * there is no record here to lose, so the core is told so at once. */
-  const forget = async (): Promise<void> => {
+  /** Remove a project whose records are missing (projects-9): there is
+   * no record here to lose, so the core is told so at once. */
+  const remove = async (): Promise<void> => {
     if (!repair.repository) return;
     setBusy(true);
     setRefusal(undefined);
@@ -152,17 +152,11 @@ function RepairRow({
       await removeProject(repair.repository, true);
       onResolved(
         repair.key,
-        seat === undefined
-          ? i18n._({
-              id: "{path} · forgotten on this computer",
-              values: { path: name },
-              comment: "a folder repair's outcome: the project folder is no longer a project here; {path} is the folder",
-            })
-          : i18n._({
-              id: "{path} · forgotten on {place}",
-              values: { path: name, place: seat },
-              comment: "a folder repair's outcome on a team server's Space; {place} is the server's name",
-            }),
+        i18n._({
+          id: "{path} · removed",
+          values: { path: name },
+          comment: "a folder repair's outcome: the project whose records were missing is removed, its folder's files kept; {path} is the folder",
+        }),
       );
     } catch (cause) {
       setRefusal((cause as Error).message);
@@ -227,27 +221,27 @@ function RepairRow({
   const first = showUse ? "use" : local ? "choose" : "decline";
   const controls = folderRepair ? (
     <div className="flex flex-wrap items-center gap-2">
-      {forgetting ? (
+      {removing ? (
         <InlineConfirm
-          question={i18n._({ id: "Forget this folder? Its files stay.", comment: "confirm forgetting a project folder whose records are gone from this computer" })}
-          confirmLabel={i18n._({ id: "Forget", comment: "confirm: forget a project folder whose records are gone from this computer" })}
+          question={i18n._({ id: "Remove this project? Its files stay.", comment: "confirm removing a project whose records are gone from this computer; its folder and files stay" })}
+          confirmLabel={i18n._({ id: "Remove", comment: "confirm: remove a project whose records are gone from this computer" })}
           disabled={busy}
           onConfirm={() => {
-            setForgetting(false);
-            void forget();
+            setRemoving(false);
+            void remove();
           }}
-          onCancel={() => setForgetting(false)}
+          onCancel={() => setRemoving(false)}
         />
       ) : (
         <button
           type="button"
           ref={firstRef}
-          data-testid="space-repair-forget"
+          data-testid="space-repair-remove"
           className={SECONDARY}
           disabled={disabled || busy || !repair.repository}
-          onClick={() => setForgetting(true)}
+          onClick={() => setRemoving(true)}
         >
-          {i18n._({ id: "Forget folder", comment: "forget a project folder whose records are missing" })}
+          {i18n._({ id: "Remove project", comment: "on a repair: remove a project whose records are missing, as the Overview tab's Remove does; its files stay" })}
         </button>
       )}
       {refusalLine}
@@ -361,29 +355,32 @@ function RepairRow({
     </div>
   );
 
+  // One whole message per case, "set aside" after the fact where the
+  // reader declined it (space-55, localization-4).
+  const state = declined ? "aside" : "open";
   const missing =
     seat === undefined
       ? group
         ? i18n._({
-            id: "{project} · {group} — Folder missing on this computer",
-            values: { project: name, group },
-            comment: "a repair row: the project's records are here, its folder on this computer is not; {project} is the project, {group} the group holding its records",
+            id: "{state, select, aside {{project} · {group} — Folder missing on this computer · set aside} other {{project} · {group} — Folder missing on this computer}}",
+            values: { project: name, group, state },
+            comment: "a repair row: the project's records are here, its folder on this computer is not; {project} is the project, {group} the group holding its records; 'set aside' follows once the reader answered Not on this computer",
           })
         : i18n._({
-            id: "{project} — Folder missing on this computer",
-            values: { project: name },
-            comment: "a repair row of a project in no group: its records are here, its folder on this computer is not",
+            id: "{state, select, aside {{project} — Folder missing on this computer · set aside} other {{project} — Folder missing on this computer}}",
+            values: { project: name, state },
+            comment: "a repair row of a project in no group: its records are here, its folder on this computer is not; 'set aside' follows once the reader answered Not on this computer",
           })
       : group
         ? i18n._({
-            id: "{project} · {group} — Folder missing on {place}",
-            values: { project: name, group, place: seat },
-            comment: "a repair row on a team server's Space; {project} is the project, {group} the group holding its records, {place} the server's name",
+            id: "{state, select, aside {{project} · {group} — Folder missing on {place} · set aside} other {{project} · {group} — Folder missing on {place}}}",
+            values: { project: name, group, place: seat, state },
+            comment: "a repair row on a team server's Space; {project} is the project, {group} the group holding its records, {place} the server's name; 'set aside' follows once the reader answered Not on the server",
           })
         : i18n._({
-            id: "{project} — Folder missing on {place}",
-            values: { project: name, place: seat },
-            comment: "a repair row of a project in no group on a team server's Space; {place} is the server's name",
+            id: "{state, select, aside {{project} — Folder missing on {place} · set aside} other {{project} — Folder missing on {place}}}",
+            values: { project: name, place: seat, state },
+            comment: "a repair row of a project in no group on a team server's Space; {place} is the server's name; 'set aside' follows once the reader answered Not on the server",
           });
 
   return (
@@ -409,12 +406,6 @@ function RepairRow({
           ) : (
             <span className={declined ? "" : "font-medium"}>{missing}</span>
           )}
-          {declined
-            ? i18n._({
-                id: " · set aside",
-                comment: "follows a repair the reader answered \"Not on this computer\"",
-              })
-            : ""}
         </span>
       </div>
       {!folderRepair && recorded ? (
@@ -623,17 +614,10 @@ export function IssuesList({
         className={`text-xs font-medium ${issueCount > 0 ? "text-amber-800 dark:text-amber-200" : "text-neutral-500"}`}
       >
         {i18n._({
-          id: "To fix ({count})",
-          values: { count: issueCount },
-          comment: "the heading of the list of what needs fixing: how many wait for an answer",
+          id: "{declined, plural, =0 {To fix ({count})} other {To fix ({count}) · # set aside}}",
+          values: { count: issueCount, declined: declinedCount },
+          comment: "the heading of the list of what needs fixing: {count} wait for an answer; '# set aside' counts the repairs the reader answered Not on this computer",
         })}
-        {declinedCount > 0
-          ? i18n._({
-              id: " · {count} set aside",
-              values: { count: declinedCount },
-              comment: "follows the heading \"To fix (<n>)\": repairs the reader answered \"Not on this computer\"",
-            })
-          : ""}
       </h2>
       <ul className="flex flex-col gap-1">
         {placed.map((id) => {

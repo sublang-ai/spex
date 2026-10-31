@@ -68,6 +68,7 @@ import {
   signInCore,
   signInThroughPage,
   spaceAddress,
+  spaceChooser,
   surfaceEntry,
   test,
   type App,
@@ -1076,8 +1077,10 @@ test.describe("a second Space", () => {
     await expect(add).toHaveCount(0);
     await expect.poll(() => chosenSpace(card)).toContain("Stand-in Git host");
     await expect(spaceAddress(card)).toBeHidden();
+    // The chooser holds focus as the card opens, and Escape from it
+    // closes the card (space-3, DR-010 §6).
+    await expect(spaceChooser(card)).toBeFocused();
     await expectNoSentence(card, "the card Add a Space… opens");
-    await card.getByTestId("space-signin").focus();
     await page.keyboard.press("Escape");
     await expect(card).toHaveCount(0);
     await expect(add).toBeFocused();
@@ -1247,7 +1250,7 @@ test.describe("a second Space", () => {
       await add.click();
       await expect(card).toBeVisible();
     });
-    await card.getByTestId("space-signin").focus();
+    await expect(spaceChooser(card)).toBeFocused();
     await page.keyboard.press("Escape");
     await expect(card).toHaveCount(0);
 
@@ -1401,9 +1404,7 @@ test.describe("daily sync", () => {
     // keeps the choices; confirming ends synced (space-18).
     await picker.getByTestId("space-apply").click();
     const confirm = picker.getByTestId("space-apply-confirm");
-    await expect(confirm).toContainText(/\b1\b/);
-    await expect(confirm).toContainText("Stand-in Git host");
-    await expect(confirm).toContainText("Git history");
+    await expect(confirm).toContainText("Take Stand-in Git host's version of 1 record? The other stays in Git history");
     await expect(confirm.getByRole("button", { name: "Cancel" })).toBeFocused();
     await scanVocabulary(page, "the apply confirm", words);
     await page.keyboard.press("Escape");
@@ -1450,7 +1451,7 @@ test.describe("daily sync", () => {
     // Two passes against the host: Save, Check, Compare and a send the
     // host rejects, then the re-check's Check, Compare, Merge, Reload
     // and a second rejected send. Twice a sync's work, twice its budget.
-    await expect(stopped.getByTestId("space-stopped-title")).toContainText("Stand-in Git host changed again", { timeout: 30_000 });
+    await expect(stopped.getByTestId("space-stopped-title")).toHaveText("Sending stopped — Stand-in Git host changed again", { timeout: 30_000 });
     await expect(counts).toHaveAttribute("title", /[1-9]\d* commits? ahead/);
     await expect(stopped.getByTestId("space-retry")).toBeVisible();
     await expect(phraseOf(page, TEAM_KEY)).toHaveText(/^[1-9]\d* to send$/);
@@ -1473,7 +1474,7 @@ test.describe("daily sync", () => {
     const stop = rail.getByTestId("space-stop");
     await expect(stop).toBeVisible();
     await stop.click();
-    await expect(stopped.getByTestId("space-stopped-title")).toContainText("No answer from Stand-in Git host");
+    await expect(stopped.getByTestId("space-stopped-title")).toHaveText("Checking stopped — No answer from Stand-in Git host");
     await expect(stopped.getByTestId("space-retry")).toHaveText("Retry");
     await expect(tab.getByTestId("space-check")).toHaveText("Check");
     expect(await checkLabels()).toEqual(["Check", "Checking…", "Check"]);
@@ -1567,12 +1568,13 @@ test.describe("exploring", () => {
     const records = tree.getByTestId(`space-node-sessions/${session.id}.replay.json`);
     const chunks = tree.getByTestId(`space-node-${chunkDirectory}`);
     const hints = tree.getByTestId(`space-node-sessions/${session.id}.hints.json`);
-    await expect(manifest).toContainText("manifest");
+    await expect(manifest).toContainText("session file");
+    await expect(manifest).not.toContainText("manifest");
     await expect(manifest).toContainText("Shared");
     await expect(manifest.locator("[data-sync]")).toHaveAttribute("data-sync", "shared");
-    await expect(records).toContainText("records");
+    await expect(records).toContainText("transcript");
     await expect(records).toContainText("Shared");
-    await expect(chunks).toContainText("session chunks");
+    await expect(chunks).toContainText("session history");
     await expect(chunks.locator("[data-sync]")).toHaveAttribute("data-sync", "shared");
     await expect(hints).toContainText("provider hints");
     await expect(hints).toContainText("Stays here");
@@ -1592,7 +1594,7 @@ test.describe("exploring", () => {
     // chunks stay shared, records offer Open session, and hints are withheld.
     const preview = explore.getByTestId("space-preview");
     await manifest.click();
-    await expect(preview).toContainText("session manifest");
+    await expect(preview).toContainText("session file");
     await expect(preview.getByTestId("space-preview-owner")).toHaveText(`"${SESSION_TITLE}"`);
     const json = preview.getByTestId("space-preview-text");
     await expect(json).toContainText('"sessionId"');
@@ -1606,7 +1608,7 @@ test.describe("exploring", () => {
     const chunk = tree.getByTestId(`space-node-${chunkDirectory}/${chunkNames[0]}`);
     await expect(chunk.locator("[data-sync]")).toHaveAttribute("data-sync", "shared");
     await chunk.click();
-    await expect(preview).toContainText("session chunks");
+    await expect(preview).toContainText("session history");
     await expect(preview.getByTestId("space-preview-owner")).toHaveText(`"${SESSION_TITLE}"`);
     await hints.click();
     await expect(preview.getByTestId("space-preview-withheld")).toContainText("May hold provider tokens — not shown");
@@ -1625,8 +1627,8 @@ test.describe("exploring", () => {
     if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
     const families: [string, RegExp][] = [
       ["provider hints", /resume tokens for this computer's agent conversations; they work nowhere else/],
-      ["leases and locks", /which process is writing right now/],
-      ["installed spec packages and exported skills", /copies installed from spex\.lock; every computer installs its own/],
+      ["in-use files", /which process is writing right now/],
+      ["installed packages and skills for agents", /copies installed from spex\.lock; every computer installs its own/],
       ["where projects live", /where your project folders are on this computer, in the home file/],
       ["preferences", /where you last stopped reading in each session/],
       ["credentials", /this computer's sign-in to each Space/],

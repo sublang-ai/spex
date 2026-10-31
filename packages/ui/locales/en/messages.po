@@ -28,16 +28,6 @@ msgstr " — runs {role}"
 msgid " · {count, plural, one {# session ran there} other {# sessions ran there}}"
 msgstr " · {count, plural, one {# session ran there} other {# sessions ran there}}"
 
-#. follows the heading "To fix (<n>)": repairs the reader answered "Not on this computer"
-#: src/components/SpaceRepairs.tsx
-msgid " · {count} set aside"
-msgstr " · {count} set aside"
-
-#. follows a repair the reader answered "Not on this computer"
-#: src/components/SpaceRepairs.tsx
-msgid " · set aside"
-msgstr " · set aside"
-
 #. how old the listed data is; follows the Sources summary
 #: src/components/SourcesTabs.tsx
 msgid "— {age}"
@@ -192,13 +182,13 @@ msgstr "{count, plural, one {# file uploads:} other {# files upload:}}"
 
 #. a session's node in the Explore tab on a team server's Space; {place} is the server's name
 #: src/components/SpaceExplorer.tsx
-msgid "{count, plural, one {# file} other {# files}} · the manifest, the records and, where {place} ran it, provider hints"
-msgstr "{count, plural, one {# file} other {# files}} · the manifest, the records and, where {place} ran it, provider hints"
+msgid "{count, plural, one {# file} other {# files}} · the session's file, its transcript and, where {place} ran it, provider hints"
+msgstr "{count, plural, one {# file} other {# files}} · the session's file, its transcript and, where {place} ran it, provider hints"
 
 #. a session's node in the Explore tab: the files it holds
 #: src/components/SpaceExplorer.tsx
-msgid "{count, plural, one {# file} other {# files}} · the manifest, the records and, where this computer ran it, provider hints"
-msgstr "{count, plural, one {# file} other {# files}} · the manifest, the records and, where this computer ran it, provider hints"
+msgid "{count, plural, one {# file} other {# files}} · the session's file, its transcript and, where this computer ran it, provider hints"
+msgstr "{count, plural, one {# file} other {# files}} · the session's file, its transcript and, where this computer ran it, provider hints"
 
 #: src/components/SpecGraph.tsx
 #: src/components/SpecView.tsx
@@ -327,6 +317,11 @@ msgstr "{count} to send"
 #: src/lib/time.ts
 msgid "{days}d ago"
 msgstr "{days}d ago"
+
+#. the heading of the list of what needs fixing: {count} wait for an answer; '# set aside' counts the repairs the reader answered Not on this computer
+#: src/components/SpaceRepairs.tsx
+msgid "{declined, plural, =0 {To fix ({count})} other {To fix ({count}) · # set aside}}"
+msgstr "{declined, plural, =0 {To fix ({count})} other {To fix ({count}) · # set aside}}"
 
 #: src/components/LibrarySurface.tsx
 msgid "{diagnostic} — delete the session, or repair the file and restart Spex"
@@ -457,6 +452,17 @@ msgstr "{minutes}m ago"
 msgid "{name} · applet {id}"
 msgstr "{name} · applet {id}"
 
+#. a quiet line, with no control, under a group or Personal of a Space whose listing holds a copy of records standing in another group; {name} is the row's name, {group} the group it stands under, by its name, {space} that group's Space by its display name
+#: src/components/SpaceGroups.tsx
+msgid "{name} · in {group} at {space}"
+msgstr "{name} · in {group} at {space}"
+
+#. a quiet line, with no control, under a group or Personal of a Space whose listing holds a copy of records standing under Personal at another Space; {name} is the row's name, as Your sessions, {space} that Personal's Space by its display name
+#. a quiet line, with no control, under a group or Personal of a Space whose listing holds a copy of records standing under Personal at another Space; {name} is the row's name, as Your sessions, {space} that Personal's Space by its display name
+#: src/components/SpaceGroups.tsx
+msgid "{name} · in Personal at {space}"
+msgstr "{name} · in Personal at {space}"
+
 #: src/components/SpaceRepairs.tsx
 msgid "{name} · now a project at {path}"
 msgstr "{name} · now a project at {path}"
@@ -464,6 +470,21 @@ msgstr "{name} · now a project at {path}"
 #: src/components/SpaceRepairs.tsx
 msgid "{name} · now a project at {path}, {count, plural, one {# session} other {# sessions}} listed"
 msgstr "{name} · now a project at {path}, {count, plural, one {# session} other {# sessions}} listed"
+
+#. a quiet line, with no control, on a team server's Space: a copy of records standing under the server's own heading; {name} is the row's name, {place} the server's name
+#: src/components/SpaceGroups.tsx
+msgid "{name} · on {place}"
+msgstr "{name} · on {place}"
+
+#. a quiet line, with no control, under a group or Personal of a Space whose listing holds a copy of records standing under This computer; {name} is the row's name
+#: src/components/SpaceGroups.tsx
+msgid "{name} · on this computer"
+msgstr "{name} · on this computer"
+
+#. a quiet line, with no control, under a group of a Space whose listing holds a copy of records another account shares; {name} is the row's name, {login} that account's login, {space} the Space where the row stands, by its display name
+#: src/components/SpaceGroups.tsx
+msgid "{name} · shared by @{login} at {space}"
+msgstr "{name} · shared by @{login} at {space}"
 
 #. the line above an applet's frame: the spec package and version it comes from, then the applet's id
 #: src/components/AppletTab.tsx
@@ -529,15 +550,10 @@ msgstr "{packages, plural, one {# package} other {# packages}} · {items} items"
 msgid "{path} — needs you"
 msgstr "{path} — needs you"
 
-#. a folder repair's outcome on a team server's Space; {place} is the server's name
+#. a folder repair's outcome: the project whose records were missing is removed, its folder's files kept; {path} is the folder
 #: src/components/SpaceRepairs.tsx
-msgid "{path} · forgotten on {place}"
-msgstr "{path} · forgotten on {place}"
-
-#. a folder repair's outcome: the project folder is no longer a project here; {path} is the folder
-#: src/components/SpaceRepairs.tsx
-msgid "{path} · forgotten on this computer"
-msgstr "{path} · forgotten on this computer"
+msgid "{path} · removed"
+msgstr "{path} · removed"
 
 #: src/components/SpecView.tsx
 msgid "{path} is not in the tree"
@@ -569,33 +585,20 @@ msgstr "{playbookId} state machine, {state} active"
 msgid "{player} · {step} · {span}"
 msgstr "{player} · {step} · {span}"
 
-#. a repair row of a project in no group on a team server's Space; {place} is the server's name
-#: src/components/SpaceRepairs.tsx
-msgid "{project} — Folder missing on {place}"
-msgstr "{project} — Folder missing on {place}"
-
-#. a repair row of a project in no group: its records are here, its folder on this computer is not
-#: src/components/SpaceRepairs.tsx
-msgid "{project} — Folder missing on this computer"
-msgstr "{project} — Folder missing on this computer"
-
 #: src/components/DraftRegisterTab.tsx
 msgid "{project} — the project"
 msgstr "{project} — the project"
 
-#. a repair row on a team server's Space; {project} is the project, {group} the group holding its records, {place} the server's name
-#: src/components/SpaceRepairs.tsx
-msgid "{project} · {group} — Folder missing on {place}"
-msgstr "{project} · {group} — Folder missing on {place}"
-
-#. a repair row: the project's records are here, its folder on this computer is not; {project} is the project, {group} the group holding its records
-#: src/components/SpaceRepairs.tsx
-msgid "{project} · {group} — Folder missing on this computer"
-msgstr "{project} · {group} — Folder missing on this computer"
-
 #: src/components/ProjectsSurface.tsx
 msgid "{reason} Remove anyway?"
 msgstr "{reason} Remove anyway?"
+
+#. a read-only placement's line after a sync: how many records came back; nothing was sent, the Space letting this account only read
+#. a read-only project's Sync tab after a sync: how many records came back; nothing was sent, the Space letting this account only read
+#: src/components/SpaceSync.tsx
+#: src/lib/space.ts
+msgid "{received} received; nothing sent"
+msgstr "{received} received; nothing sent"
 
 #: src/components/EnvironmentSection.tsx
 msgid "{requirement} by {requirer}"
@@ -653,6 +656,26 @@ msgstr "{span} ago"
 #: src/components/PlaybookStages.tsx
 msgid "{stage} not found beside this playbook's module"
 msgstr "{stage} not found beside this playbook's module"
+
+#. a repair row of a project in no group on a team server's Space; {place} is the server's name; 'set aside' follows once the reader answered Not on the server
+#: src/components/SpaceRepairs.tsx
+msgid "{state, select, aside {{project} — Folder missing on {place} · set aside} other {{project} — Folder missing on {place}}}"
+msgstr "{state, select, aside {{project} — Folder missing on {place} · set aside} other {{project} — Folder missing on {place}}}"
+
+#. a repair row of a project in no group: its records are here, its folder on this computer is not; 'set aside' follows once the reader answered Not on this computer
+#: src/components/SpaceRepairs.tsx
+msgid "{state, select, aside {{project} — Folder missing on this computer · set aside} other {{project} — Folder missing on this computer}}"
+msgstr "{state, select, aside {{project} — Folder missing on this computer · set aside} other {{project} — Folder missing on this computer}}"
+
+#. a repair row on a team server's Space; {project} is the project, {group} the group holding its records, {place} the server's name; 'set aside' follows once the reader answered Not on the server
+#: src/components/SpaceRepairs.tsx
+msgid "{state, select, aside {{project} · {group} — Folder missing on {place} · set aside} other {{project} · {group} — Folder missing on {place}}}"
+msgstr "{state, select, aside {{project} · {group} — Folder missing on {place} · set aside} other {{project} · {group} — Folder missing on {place}}}"
+
+#. a repair row: the project's records are here, its folder on this computer is not; {project} is the project, {group} the group holding its records; 'set aside' follows once the reader answered Not on this computer
+#: src/components/SpaceRepairs.tsx
+msgid "{state, select, aside {{project} · {group} — Folder missing on this computer · set aside} other {{project} · {group} — Folder missing on this computer}}"
+msgstr "{state, select, aside {{project} · {group} — Folder missing on this computer · set aside} other {{project} · {group} — Folder missing on this computer}}"
 
 #: src/lib/space.ts
 msgid "{state} · last synced {at}"
@@ -1429,17 +1452,12 @@ msgstr "Attachments"
 msgid "Authoring"
 msgstr "Authoring"
 
-#. catalog family: the files attached to one authoring session
+#. what a folder is, in the records' tree: the files attached to one playbook being written
 #: src/lib/space.ts
 msgid "authoring attachments"
 msgstr "authoring attachments"
 
-#. catalog family: one authoring session's record stream
-#: src/lib/space.ts
-msgid "authoring records"
-msgstr "authoring records"
-
-#. catalog family: one authoring session's files
+#. what a file is, in the records' tree: one playbook being written
 #: src/lib/space.ts
 msgid "authoring session"
 msgstr "authoring session"
@@ -1449,10 +1467,15 @@ msgstr "authoring session"
 msgid "Authoring session"
 msgstr "Authoring session"
 
-#. catalog family: the folder holding every authoring session
+#. what a folder is, in the records' tree: every playbook being written
 #: src/lib/space.ts
 msgid "authoring sessions"
 msgstr "authoring sessions"
+
+#. what a file is, in the records' tree: the transcript of one playbook being written
+#: src/lib/space.ts
+msgid "authoring transcript"
+msgstr "authoring transcript"
 
 #: src/components/AgentEditor.tsx
 msgid "auto (protected)"
@@ -1522,11 +1545,6 @@ msgstr "Brings a file in as the source, then asks to adapt it"
 #: src/components/SpaceGroups.tsx
 msgid "Brings back anything new; sends nothing"
 msgstr "Brings back anything new; sends nothing"
-
-#: src/components/SpaceSync.tsx
-#: src/lib/space.ts
-msgid "Brought {received}; nothing sent"
-msgstr "Brought {received}; nothing sent"
 
 #: src/components/BrowserControl.tsx
 #: src/components/ConfiguredBrowserTools.tsx
@@ -1980,21 +1998,6 @@ msgstr "Clear the search (Escape)"
 msgid "client not connected"
 msgstr "client not connected"
 
-#. the title of 'Try again' on a team server's project whose code clone failed: {place} is the server's name
-#: src/components/SpaceGroups.tsx
-msgid "Clones its code again into its folder on {place}"
-msgstr "Clones its code again into its folder on {place}"
-
-#. a project's open, step's name: downloading the project's code
-#: src/lib/space.ts
-msgid "Cloning code"
-msgstr "Cloning code"
-
-#. join step running: cloning the project's code into its folder
-#: src/lib/space.ts
-msgid "Cloning code…"
-msgstr "Cloning code…"
-
 #: src/lib/shortcuts.ts
 msgid "Close the focused session tab"
 msgstr "Close the focused session tab"
@@ -2029,11 +2032,6 @@ msgstr "Code"
 #: src/components/SettingsSurface.tsx
 msgid "Code hosts"
 msgstr "Code hosts"
-
-#. catalog family: the file naming where a project's code lives
-#: src/lib/space.ts
-msgid "code remote"
-msgstr "code remote"
 
 #: src/components/SpecGraph.tsx
 msgid "Collapse {name}'s citation list"
@@ -2232,11 +2230,6 @@ msgstr "Config {status} — open Settings"
 msgid "Config {status} →"
 msgstr "Config {status} →"
 
-#. catalog family: a copy of the config kept before a write
-#: src/lib/space.ts
-msgid "config backup"
-msgstr "config backup"
-
 #: src/components/SettingsSurface.tsx
 msgid "Config file invalid"
 msgstr "Config file invalid"
@@ -2295,18 +2288,13 @@ msgstr "Connected, but {reason}"
 
 #. a term shown before the first connection to a team server; {server} is its name
 #: src/components/SpaceServers.tsx
-msgid "Connecting places your Space sign-in on {server}"
-msgstr "Connecting places your Space sign-in on {server}"
+msgid "Connecting puts your Space sign-in on {server}"
+msgstr "Connecting puts your Space sign-in on {server}"
 
 #. a team server's line while this computer connects to it; {server} is the server's name
 #: src/components/SpaceServers.tsx
 msgid "Connecting to {server}…"
 msgstr "Connecting to {server}…"
-
-#. a team server's line while this computer connects to it, past ten seconds; {server} is the server's name
-#: src/components/SpaceServers.tsx
-msgid "Connecting to {server}… the first connection can take a minute"
-msgstr "Connecting to {server}… the first connection can take a minute"
 
 #. the page is reaching for the core
 #: src/components/CaptainHome.tsx
@@ -2785,6 +2773,21 @@ msgstr "done"
 msgid "Download {name}"
 msgstr "Download {name}"
 
+#. a project's open, step's name: downloading the project's code into its folder
+#: src/lib/space.ts
+msgid "Downloading code"
+msgstr "Downloading code"
+
+#. a project's open, step running: downloading the project's code into its folder
+#: src/lib/space.ts
+msgid "Downloading code…"
+msgstr "Downloading code…"
+
+#. the title of 'Try again' on a team server's project whose code download failed: {place} is the server's name
+#: src/components/SpaceGroups.tsx
+msgid "Downloads its code again into its folder on {place}"
+msgstr "Downloads its code again into its folder on {place}"
+
 #. the title of a project's Open here at a team server: {place} is the server's name, which allocates the project's folder itself
 #: src/components/SpaceGroups.tsx
 msgid "Downloads the records and the code to {place}"
@@ -3169,11 +3172,6 @@ msgstr "Export again"
 msgid "Export this environment's skills to the agents' folders again"
 msgstr "Export this environment's skills to the agents' folders again"
 
-#. catalog family: skills exported from the installed spec packages
-#: src/lib/space.ts
-msgid "exported skills"
-msgstr "exported skills"
-
 #. the environment's skills are being exported again
 #: src/components/EnvironmentSection.tsx
 msgid "Exporting…"
@@ -3270,6 +3268,11 @@ msgstr "Fast mode <0/>"
 #: src/components/AgentEditor.tsx
 msgid "Fast mode <0/> (unsupported)"
 msgstr "Fast mode <0/> (unsupported)"
+
+#. a session's part, under its node in the records' tree: the session's own file
+#: src/lib/space.ts
+msgid "file"
+msgstr "file"
 
 #: src/components/SpaceExplorer.tsx
 msgid "Files in {name}"
@@ -3408,21 +3411,6 @@ msgstr "For publishing and private packages"
 #: src/components/RunView.tsx
 msgid "For this conversation, from the next message"
 msgstr "For this conversation, from the next message"
-
-#. confirm: forget a project folder whose records are gone from this computer
-#: src/components/SpaceRepairs.tsx
-msgid "Forget"
-msgstr "Forget"
-
-#. forget a project folder whose records are missing
-#: src/components/SpaceRepairs.tsx
-msgid "Forget folder"
-msgstr "Forget folder"
-
-#. confirm forgetting a project folder whose records are gone from this computer
-#: src/components/SpaceRepairs.tsx
-msgid "Forget this folder? Its files stay."
-msgstr "Forget this folder? Its files stay."
 
 #. a call's outcome: the review raised nothing
 #: src/lib/step-words.ts
@@ -3661,6 +3649,16 @@ msgstr "Implement an IR task"
 msgid "in use elsewhere"
 msgstr "in use elsewhere"
 
+#. what a file is, in the records' tree: it marks which Spex is writing the records right now
+#: src/lib/space.ts
+msgid "in-use file"
+msgstr "in-use file"
+
+#. a file family that stays on this computer: the files marking which Spex is writing now
+#: src/lib/space.ts
+msgid "in-use files"
+msgstr "in-use files"
+
 #. the Sync tab's part listing what each Space holds that this computer lacks
 #: src/components/SpaceSync.tsx
 msgid "Incoming"
@@ -3711,15 +3709,15 @@ msgstr "Install the missing command"
 msgid "Installed"
 msgstr "Installed"
 
-#. catalog family: spec packages installed on this computer from spex.lock
+#. what a folder is, in the records' tree: packages installed on this computer from spex.lock
 #: src/lib/space.ts
-msgid "installed spec packages"
-msgstr "installed spec packages"
+msgid "installed packages"
+msgstr "installed packages"
 
 #. a file family that stays on this computer
 #: src/lib/space.ts
-msgid "installed spec packages and exported skills"
-msgstr "installed spec packages and exported skills"
+msgid "installed packages and skills for agents"
+msgstr "installed packages and skills for agents"
 
 #: src/lib/useBrowserTools.ts
 msgid "Installing browser…"
@@ -3737,8 +3735,8 @@ msgstr "Installing…"
 msgid "Int"
 msgstr "Int"
 
-#. catalog family: one intent's file
 #. chip on a queued message: it carries a queued intent
+#. what a file is, in the records' tree: one intent's file
 #: src/components/Composer.tsx
 #: src/lib/space.ts
 msgid "intent"
@@ -3753,12 +3751,12 @@ msgstr "Intent"
 msgid "Intent (one line; the Captain routes free text with it)"
 msgstr "Intent (one line; the Captain routes free text with it)"
 
-#. catalog family: the files attached to one intent
+#. what a folder is, in the records' tree: the files attached to one intent
 #: src/lib/space.ts
 msgid "intent attachments"
 msgstr "intent attachments"
 
-#. catalog family: the folder holding every intent's file
+#. what a folder is, in the records' tree: every intent's file
 #: src/lib/space.ts
 msgid "intents"
 msgstr "intents"
@@ -3790,6 +3788,11 @@ msgstr "Interrupted"
 #: src/lib/drafts.ts
 msgid "Interrupted {age} — Spex closed while it compiled"
 msgstr "Interrupted {age} — Spex closed while it compiled"
+
+#. what a file is, in the records' tree: it marks a sync that stopped midway, which the next sync finishes
+#: src/lib/space.ts
+msgid "interrupted sync"
+msgstr "interrupted sync"
 
 #: src/components/SessionRecovery.tsx
 msgid "Interrupted turn"
@@ -3944,21 +3947,6 @@ msgstr "last output {age}"
 msgid "Last refreshed {age}"
 msgstr "Last refreshed {age}"
 
-#. catalog family: the lock naming the process writing now
-#: src/lib/space.ts
-msgid "lease"
-msgstr "lease"
-
-#. a file family that stays on this computer
-#: src/lib/space.ts
-msgid "leases and locks"
-msgstr "leases and locks"
-
-#. catalog family: a session file an earlier release wrote
-#: src/lib/space.ts
-msgid "legacy session sidecar"
-msgstr "legacy session sidecar"
-
 #. field of New playbook: the SPDX license its spec package is published under
 #: src/components/LibrarySurface.tsx
 msgid "License"
@@ -4064,11 +4052,6 @@ msgstr "Made by the people who run {space}"
 #: src/lib/failure-catalogue.ts
 msgid "Made more than one commit"
 msgstr "Made more than one commit"
-
-#. a session's part: its manifest file
-#: src/lib/space.ts
-msgid "manifest"
-msgstr "manifest"
 
 #. spec view footer link: the tree's index file
 #: src/components/SpecView.tsx
@@ -4189,21 +4172,23 @@ msgstr "More details"
 msgid "More for {name}"
 msgstr "More for {name}"
 
+#. the accessible name of the menu beside a project's primary control, listing the other servers, or this computer, it may be opened on; {name} is the project's name
+#: src/components/SpaceGroups.tsx
+msgid "More ways to open {name}"
+msgstr "More ways to open {name}"
+
 #: src/lib/shortcuts.ts
 msgid "Move the focused Up next row"
 msgstr "Move the focused Up next row"
 
 #. the folder field's refusal of an empty path
+#. the folder field's refusal of an empty path
 #. the repair editor's refusal of an empty path
 #: src/components/ProjectPalette.tsx
+#: src/components/SpaceGroups.tsx
 #: src/components/SpaceRepairs.tsx
 msgid "Name a folder"
 msgstr "Name a folder"
-
-#. a folder field left empty
-#: src/components/SpaceGroups.tsx
-msgid "Name the folder on this computer"
-msgstr "Name the folder on this computer"
 
 #: src/components/SettingsSurface.tsx
 msgid "Named by {project}, not set up here"
@@ -4494,12 +4479,12 @@ msgstr "Normalized"
 msgid "Normalized text: the prose as workflow markdown, in slc's normalized form"
 msgstr "Normalized text: the prose as workflow markdown, in slc's normalized form"
 
-#. catalog family: a file Spex did not write
+#. what a file is, in the records' tree: Spex did not write it
 #: src/lib/space.ts
 msgid "Not a Spex file"
 msgstr "Not a Spex file"
 
-#. catalog family: a folder Spex did not write
+#. what a folder is, in the records' tree: Spex did not write it
 #: src/lib/space.ts
 msgid "Not a Spex folder"
 msgstr "Not a Spex folder"
@@ -4720,6 +4705,11 @@ msgstr "Off (unsupported)"
 #: src/components/PlayerPane.tsx
 msgid "ok"
 msgstr "ok"
+
+#. what a file is, in the records' tree: a session file an earlier release wrote
+#: src/lib/space.ts
+msgid "older session file"
+msgstr "older session file"
 
 #. History pager: fetch the next page back in time
 #: src/components/ProjectGroup.tsx
@@ -4988,11 +4978,6 @@ msgstr "original files kept from an upgrade"
 msgid "Other"
 msgstr "Other"
 
-#. the accessible name of the menu beside a project's primary control, listing the other places it may be opened at; {name} is the project's name
-#: src/components/SpaceGroups.tsx
-msgid "Other places for {name}"
-msgstr "Other places for {name}"
-
 #. the sign-in card chooser's last entry: reveals the field for a Space the directory does not list
 #: src/components/SpaceDirectory.tsx
 msgid "Other Space…"
@@ -5014,6 +4999,11 @@ msgstr "Overwrite"
 #: src/components/NavRail.tsx
 msgid "ownership unknown"
 msgstr "ownership unknown"
+
+#. what a folder or file is, in the records' tree: a package kept in the records, or a file in it
+#: src/lib/space.ts
+msgid "package"
+msgstr "package"
 
 #. compile phase: Spex packages the artifacts
 #: src/lib/compile-log.ts
@@ -5106,6 +5096,11 @@ msgstr "Pick file"
 #: src/components/EnvironmentSection.tsx
 msgid "Pick folder"
 msgstr "Pick folder"
+
+#. the title of Choose folder… on a project whose records are here without its folder
+#: src/components/SpaceGroups.tsx
+msgid "Pick the folder on this computer that holds its code"
+msgstr "Pick the folder on this computer that holds its code"
 
 #. tuning choice: set an explicit value here
 #: src/components/TuningField.tsx
@@ -5507,11 +5502,6 @@ msgstr "Reconnecting to the Spex core… actions are paused until the connection
 msgid "Reconnecting…"
 msgstr "Reconnecting…"
 
-#. a session's part: its record file
-#: src/lib/space.ts
-msgid "records"
-msgstr "records"
-
 #. the Overview's field naming where the project's records are: its group and their standing follow
 #: src/components/ProjectsSurface.tsx
 msgid "Records"
@@ -5631,6 +5621,7 @@ msgstr "Reloading…"
 
 #. confirm: forget this project, leaving the repo on disk
 #. confirm: forget this project, leaving the repo on disk
+#. confirm: remove a project whose records are gone from this computer
 #. confirm: take the member out at the Space
 #. confirm: take this player out of the roster
 #. confirm: take this row off the record
@@ -5646,6 +5637,7 @@ msgstr "Reloading…"
 #: src/components/ProjectsSurface.tsx
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceMembers.tsx
+#: src/components/SpaceRepairs.tsx
 msgid "Remove"
 msgstr "Remove"
 
@@ -5695,7 +5687,9 @@ msgstr "Remove from Spex? The repo stays on disk."
 msgid "Remove from this list"
 msgstr "Remove from this list"
 
+#. on a repair: remove a project whose records are missing, as the Overview tab's Remove does; its files stay
 #: src/components/ProjectsSurface.tsx
+#: src/components/SpaceRepairs.tsx
 msgid "Remove project"
 msgstr "Remove project"
 
@@ -5724,6 +5718,11 @@ msgstr "Remove this message"
 msgid "Remove this player from the roster"
 msgstr "Remove this player from the roster"
 
+#. confirm removing a project whose records are gone from this computer; its folder and files stay
+#: src/components/SpaceRepairs.tsx
+msgid "Remove this project? Its files stay."
+msgstr "Remove this project? Its files stay."
+
 #: src/components/Composer.tsx
 msgid "Remove this queued message"
 msgstr "Remove this queued message"
@@ -5737,6 +5736,11 @@ msgstr "Removed “{title}”"
 #: src/components/SpaceInstance.tsx
 msgid "Removed {space} from this list"
 msgstr "Removed {space} from this list"
+
+#. a term shown before the first connection to a team server; {server} is its name, {space} the Space's display name
+#: src/components/SpaceServers.tsx
+msgid "Removing {server}, or revoking its access at {space}, stops new use; a credential already there lasts until it expires"
+msgstr "Removing {server}, or revoking its access at {space}, stops new use; a credential already there lasts until it expires"
 
 #. queue row control, busy: the removal is in flight
 #. the removal is in flight
@@ -5907,11 +5911,6 @@ msgstr "resume tokens for {place}'s agent conversations; they work nowhere else"
 #: src/lib/space.ts
 msgid "resume tokens for this computer's agent conversations; they work nowhere else"
 msgstr "resume tokens for this computer's agent conversations; they work nowhere else"
-
-#. a term shown before the first connection to a team server; {server} is its name, {space} the Space's display name
-#: src/components/SpaceServers.tsx
-msgid "Retiring {server}, or revoking its access at {space}, stops new use; a credential already there lasts until it expires"
-msgstr "Retiring {server}, or revoking its access at {space}, stops new use; a credential already there lasts until it expires"
 
 #. act: load the transcript again
 #. read the record again
@@ -6258,29 +6257,24 @@ msgstr "Servers"
 msgid "Session"
 msgstr "Session"
 
-#. catalog family: the files attached to one session's turns
+#. what a folder is, in the records' tree: the files attached to one session's turns
 #: src/lib/space.ts
 msgid "session attachments"
 msgstr "session attachments"
 
-#. catalog family: the folder holding every session's files
+#. what a file is, in the records' tree: one session's own file
 #: src/lib/space.ts
-msgid "session bundles"
-msgstr "session bundles"
+msgid "session file"
+msgstr "session file"
 
-#. catalog family: immutable pieces of one session's state and replay
+#. what a folder is, in the records' tree: the saved pieces of one session's history
 #: src/lib/space.ts
-msgid "session chunks"
-msgstr "session chunks"
+msgid "session history"
+msgstr "session history"
 
 #: src/components/RunView.tsx
 msgid "Session is in use elsewhere"
 msgstr "Session is in use elsewhere"
-
-#. catalog family: one session's manifest file
-#: src/lib/space.ts
-msgid "session manifest"
-msgstr "session manifest"
 
 #: src/components/RunView.tsx
 msgid "Session ownership is unknown · controls are unavailable"
@@ -6302,14 +6296,19 @@ msgstr "Session ownership must be idle before sending a message."
 msgid "Session players"
 msgstr "Session players"
 
-#. catalog family: one session's record stream
-#: src/lib/space.ts
-msgid "session records"
-msgstr "session records"
-
 #: src/state/reducer.ts
 msgid "session shut down"
 msgstr "session shut down"
+
+#. what a file is, in the records' tree: one session's transcript, every turn as it happened
+#: src/lib/space.ts
+msgid "session transcript"
+msgstr "session transcript"
+
+#. what a folder is, in the records' tree: every session's files
+#: src/lib/space.ts
+msgid "sessions"
+msgstr "sessions"
 
 #: src/lib/space.ts
 msgid "Sessions"
@@ -6346,12 +6345,17 @@ msgstr "Set up browser"
 msgid "Setting"
 msgstr "Setting"
 
-#. catalog family: the shared config the Settings surface edits
+#. what a file is, in the records' tree: the shared settings the Settings surface edits
 #: src/components/NavRail.tsx
 #: src/components/SettingsSurface.tsx
 #: src/lib/space.ts
 msgid "Settings"
 msgstr "Settings"
+
+#. what a file is, in the records' tree: a copy of the settings kept before a write
+#: src/lib/space.ts
+msgid "Settings backup"
+msgstr "Settings backup"
 
 #: src/components/DeliveryCard.tsx
 msgid "Settled — {title}"
@@ -6577,6 +6581,11 @@ msgstr "Signs this computer out of {space}; every record stays here"
 msgid "skill"
 msgstr "skill"
 
+#. what a folder is, in the records' tree: the installed packages' skills, placed where the agents read them
+#: src/lib/space.ts
+msgid "skills for agents"
+msgstr "skills for agents"
+
 #: src/components/DraftRegisterTab.tsx
 msgid "Slash command"
 msgstr "Slash command"
@@ -6644,28 +6653,13 @@ msgstr "spec"
 msgid "Spec items"
 msgstr "Spec items"
 
-#. catalog family: a spec package's folder kept in the clone, synced whole, or a file in it
-#: src/lib/space.ts
-msgid "spec package"
-msgstr "spec package"
-
 #: src/components/SpecGraph.tsx
 msgid "Spec package citation graph"
 msgstr "Spec package citation graph"
 
-#. catalog family: the exact spec packages the environment resolved
-#: src/lib/space.ts
-msgid "spec package lock"
-msgstr "spec package lock"
-
 #: src/components/EnvironmentSection.tsx
 msgid "Spec package name"
 msgstr "Spec package name"
-
-#. catalog family: the spec packages the environment asks for
-#: src/lib/space.ts
-msgid "spec package requests"
-msgstr "spec package requests"
 
 #. tab name: the project's spec packages
 #. the spec view's own heading
@@ -6916,17 +6910,12 @@ msgstr "Sync"
 msgid "Sync now"
 msgstr "Sync now"
 
-#. catalog family: the mark of a repair this computer acknowledged
-#: src/lib/space.ts
-msgid "sync repair marker"
-msgstr "sync repair marker"
-
 #. one unit's kind: a sync rule file
 #: src/lib/space.ts
 msgid "Sync rule"
 msgstr "Sync rule"
 
-#. catalog family: the files saying what syncs
+#. what a file is, in the records' tree: it says what syncs
 #: src/lib/space.ts
 msgid "sync rules"
 msgstr "sync rules"
@@ -6984,24 +6973,19 @@ msgstr "Take the task out of the message"
 msgid "Take this task out of the queue — Undo puts it back"
 msgstr "Take this task out of the queue — Undo puts it back"
 
-#. the title of Choose folder… on a project whose records are here without its folder
-#: src/components/SpaceGroups.tsx
-msgid "Takes its project folder on this computer"
-msgstr "Takes its project folder on this computer"
-
 #: src/components/DraftConversation.tsx
 msgid "Tell the agent what the playbook does, who does what, and when it is done"
 msgstr "Tell the agent what the playbook does, who does what, and when it is done"
+
+#. what a file is, in the records' tree: a copy made while writing
+#: src/lib/space.ts
+msgid "temporary copy"
+msgstr "temporary copy"
 
 #. a file family that stays on this computer
 #: src/lib/space.ts
 msgid "temporary files"
 msgstr "temporary files"
-
-#. catalog family: a copy made while writing
-#: src/lib/space.ts
-msgid "temporary write"
-msgstr "temporary write"
 
 #: src/components/SettingsSurface.tsx
 msgid "Terminal pane theme"
@@ -7123,6 +7107,11 @@ msgstr "The file returned inconsistent content."
 #: src/components/StoredMedia.tsx
 msgid "The file's conversation is unavailable."
 msgstr "The file's conversation is unavailable."
+
+#. the title of a team server's line while this computer connects to it, past ten seconds
+#: src/components/SpaceServers.tsx
+msgid "The first connection can take a minute"
+msgstr "The first connection can take a minute"
 
 #: src/components/RunView.tsx
 msgid "The last turn failed. Send a message to pick it up."
@@ -7336,16 +7325,9 @@ msgstr "three in a row — tell the agent how to proceed"
 
 #. a repair's condition, for assistive technology: it waits for an answer
 #. the accessible name of the Space surface's list of what needs fixing
-#. the header's control once nothing waits for an answer: still opens the list of what was set aside
 #: src/components/SpaceRepairs.tsx
-#: src/components/SpaceSurface.tsx
 msgid "To fix"
 msgstr "To fix"
-
-#. the heading of the list of what needs fixing: how many wait for an answer
-#: src/components/SpaceRepairs.tsx
-msgid "To fix ({count})"
-msgstr "To fix ({count})"
 
 #. a Sync tab's heading over the records this computer changed that no Space holds yet; {count} how many
 #: src/components/SpaceSync.tsx
@@ -7409,13 +7391,18 @@ msgstr "Tool requests can ask for approval; existing agent policies still apply.
 msgid "Tool: {tool}"
 msgstr "Tool: {tool}"
 
+#. a session's part, under its node in the records' tree: its transcript, every turn as it happened
+#: src/lib/space.ts
+msgid "transcript"
+msgstr "transcript"
+
 #: src/state/store.ts
 msgid "transcript could not be loaded: {reason}"
 msgstr "transcript could not be loaded: {reason}"
 
 #. error boundary: re-render the surface in place
 #. on a project of your groups whose open stopped: open it again
-#. on a team server's project whose code clone failed: open it again, cloning its code into the folder the server allocated
+#. on a team server's project whose code download failed: open it again, downloading its code into the folder the server allocated
 #: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
 #: src/main.tsx
@@ -7590,11 +7577,6 @@ msgstr "Upload {path} to the registry"
 msgid "Upload failed"
 msgstr "Upload failed"
 
-#. catalog family: files uploaded and not yet attached
-#: src/lib/space.ts
-msgid "upload staging"
-msgstr "upload staging"
-
 #: src/components/ComposerAttachments.tsx
 msgid "Uploading {name}"
 msgstr "Uploading {name}"
@@ -7606,6 +7588,11 @@ msgstr "Uploading {progress}%"
 #: src/components/ComposerAttachments.tsx
 msgid "Uploading…"
 msgstr "Uploading…"
+
+#. what a folder is, in the records' tree: files uploaded and not yet attached to a turn
+#: src/lib/space.ts
+msgid "uploads not yet attached"
+msgstr "uploads not yet attached"
 
 #. on a repair: make the folder the core found this project's folder; {folder} is its path
 #: src/components/SpaceRepairs.tsx
@@ -7759,6 +7746,16 @@ msgstr "What would you change in {project}?"
 #: src/lib/space.ts
 msgid "where projects live"
 msgstr "where projects live"
+
+#. what a file is, in the records' tree: it names where a project's code is
+#: src/lib/space.ts
+msgid "where the code is"
+msgstr "where the code is"
+
+#. what a file is, in the records' tree: it names a Space these records sync with
+#: src/lib/space.ts
+msgid "where the records sync"
+msgstr "where the records sync"
 
 #. the Explore tab's annotation of the folder naming each Space these records are kept at
 #: src/components/SpaceExplorer.tsx

@@ -1635,10 +1635,16 @@ export async function signInThroughPage(
     if (!(await field.isVisible()) && host !== app.hosts[0]) await chooseSpace(where, "Other Space…");
     if ((await field.isVisible()) && (await field.inputValue()) !== host.url) await field.fill(host.url);
   }
+  // The control's title names the Space it opens, as the link then does:
+  // its display name as the home or the directory reads it, else its
+  // host name (space-3).
+  const title = (await control.getAttribute("title")) ?? "";
+  const named = /^Opens (.+) in your browser$/.exec(title)?.[1];
+  expect(named, title).toBeTruthy();
   await control.click();
   await expect(where).toContainText("Continue in your browser");
   const link = where.getByTestId("space-signin-link");
-  await expect(link).toHaveText(/^Open \S.*$/);
+  await expect(link).toHaveText(`Open ${named}`);
   await expect(control).toHaveText("Signing in…");
   await expect(control).toBeDisabled();
   const href = new URL((await link.getAttribute("href")) ?? "");

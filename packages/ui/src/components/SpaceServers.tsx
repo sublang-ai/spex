@@ -12,7 +12,8 @@
 // record fixes (Spex Space DR-029), rendered in the page's language, "I
 // understand" sending `server.open` with consent and remembered here, so
 // a later connection sends it at once. While it connects the line says
-// so, and past ten seconds that the first connection can take a minute;
+// so, and past ten seconds its title says the first connection can take
+// a minute;
 // once connected and until the server's sign-in at the Space completes
 // (core-service-142), the line reads "Signing in to <Space>…" and, where
 // the Space asks for its page, links that page where the person approves
@@ -36,8 +37,8 @@ import { causePhrase, signInAgainLabel } from "./SpaceSignIn.js";
 import { MoreMenu } from "./SpaceMenu.js";
 import { PRIMARY, SECONDARY, type Note } from "./SpaceSurface.js";
 
-/** How long a connection runs before the line says the first one can
- * take a minute (run-view-170). */
+/** How long a connection runs before the line's title says the first
+ * one can take a minute (run-view-170). */
 const SLOW_OPEN_MS = 10_000;
 
 const LINK_CLASS = "text-brand-600 hover:underline dark:text-brand-300";
@@ -75,7 +76,7 @@ export function ApprovalLink({ href, testId, children }: { href: string; testId:
 function contractTerms(server: string, space: string): string[] {
   return [
     i18n._({
-      id: "Connecting places your Space sign-in on {server}",
+      id: "Connecting puts your Space sign-in on {server}",
       values: { server },
       comment: "a term shown before the first connection to a team server; {server} is its name",
     }),
@@ -100,7 +101,7 @@ function contractTerms(server: string, space: string): string[] {
       comment: "a term shown before the first connection to a team server; {server} is its name",
     }),
     i18n._({
-      id: "Retiring {server}, or revoking its access at {space}, stops new use; a credential already there lasts until it expires",
+      id: "Removing {server}, or revoking its access at {space}, stops new use; a credential already there lasts until it expires",
       values: { server, space },
       comment: "a term shown before the first connection to a team server; {server} is its name, {space} the Space's display name",
     }),
@@ -270,8 +271,8 @@ function ServerLine({
   const controlRef = useRef<HTMLButtonElement>(null);
   const moreRef = useRef<HTMLButtonElement>(null);
 
-  // A connection still running past ten seconds says the first one
-  // can take a minute (run-view-170).
+  // A connection still running past ten seconds says in its title that
+  // the first one can take a minute (run-view-170).
   useEffect(() => {
     setSlow(false);
     if (acting !== "open") return;
@@ -318,18 +319,24 @@ function ServerLine({
   let status: ReactNode = null;
   if (acting === "open") {
     status = (
-      <span data-testid={`space-server-connecting-${place}`} role="status" className="min-w-0 text-xs text-neutral-500">
-        {slow
-          ? i18n._({
-              id: "Connecting to {server}… the first connection can take a minute",
-              values: { server: name },
-              comment: "a team server's line while this computer connects to it, past ten seconds; {server} is the server's name",
-            })
-          : i18n._({
-              id: "Connecting to {server}…",
-              values: { server: name },
-              comment: "a team server's line while this computer connects to it; {server} is the server's name",
-            })}
+      <span
+        data-testid={`space-server-connecting-${place}`}
+        role="status"
+        className="min-w-0 text-xs text-neutral-500"
+        title={
+          slow
+            ? i18n._({
+                id: "The first connection can take a minute",
+                comment: "the title of a team server's line while this computer connects to it, past ten seconds",
+              })
+            : undefined
+        }
+      >
+        {i18n._({
+          id: "Connecting to {server}…",
+          values: { server: name },
+          comment: "a team server's line while this computer connects to it; {server} is the server's name",
+        })}
       </span>
     );
   } else if (signIn?.state === "running") {

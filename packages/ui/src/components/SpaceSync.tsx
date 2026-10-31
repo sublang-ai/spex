@@ -1011,7 +1011,11 @@ export function SyncTab({
             <Icon name="check" className="h-4 w-4 text-emerald-700 dark:text-emerald-300" />
             <span className="font-medium" data-testid="space-done-line">
               {!sync.pushed && repo.state === "read-only"
-                ? i18n._("Brought {received}; nothing sent", { received: sync.received })
+                ? i18n._({
+                    id: "{received} received; nothing sent",
+                    values: { received: sync.received },
+                    comment: "a read-only project's Sync tab after a sync: how many records came back; nothing was sent, the Space letting this account only read",
+                  })
                 : sync.sent + sync.received === 0
                   ? i18n._("Everything is in sync")
                   : i18n._("Synced {age} · {sent} sent · {received} received", {

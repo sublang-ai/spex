@@ -792,12 +792,12 @@ function PreviewPane({
         <p className="text-sm text-neutral-500">
           {seat === undefined
             ? i18n._({
-                id: "{count, plural, one {# file} other {# files}} · the manifest, the records and, where this computer ran it, provider hints",
+                id: "{count, plural, one {# file} other {# files}} · the session's file, its transcript and, where this computer ran it, provider hints",
                 values: { count: node.children.length },
                 comment: "a session's node in the Explore tab: the files it holds",
               })
             : i18n._({
-                id: "{count, plural, one {# file} other {# files}} · the manifest, the records and, where {place} ran it, provider hints",
+                id: "{count, plural, one {# file} other {# files}} · the session's file, its transcript and, where {place} ran it, provider hints",
                 values: { count: node.children.length, place: seat },
                 comment: "a session's node in the Explore tab on a team server's Space; {place} is the server's name",
               })}

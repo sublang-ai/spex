@@ -268,7 +268,7 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     await waitFor(() => expect(calls("project.rebind")).toEqual([{ projectId: KEY, path: "/code/infra", aliases: ["/code/infra"] }]));
   });
 
-  test("a project folder whose records are missing offers to forget the folder, behind an inline confirm (space-46, projects-9)", async () => {
+  test("a project folder whose records are missing offers Remove project, behind an inline confirm (space-46, projects-9)", async () => {
     const { answer } = await import("../fixtures/groups.js");
     commandMock.mockImplementation(async (type: string, fields: Record<string, unknown> = {}) => {
       if (type === "project.remove") return null;
@@ -292,16 +292,18 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     expect(row.textContent).toContain("/code/old");
     expect(row.textContent).toContain("Records not on this computer");
     expect(within(row).queryByTestId("space-repair-use")).toBeNull();
-    fireEvent.click(within(row).getByRole("button", { name: "Forget folder" }));
-    expect(row.textContent).toContain("Its files stay.");
+    // The Overview tab's word for the same act (projects-9, DR-172).
+    expect(within(row).getByTestId("space-repair-remove").textContent).toBe("Remove project");
+    fireEvent.click(within(row).getByRole("button", { name: "Remove project" }));
+    expect(row.textContent).toContain("Remove this project? Its files stay.");
     // Cancel is the safe default (DR-010 §4).
     expect(document.activeElement).toBe(within(row).getByRole("button", { name: "Cancel" }));
-    fireEvent.click(within(row).getByRole("button", { name: "Forget" }));
+    fireEvent.click(within(row).getByRole("button", { name: "Remove" }));
     await waitFor(() =>
       expect(calls("project.remove")).toEqual([{ projectId: "jane/old-spex", confirm: true }]),
     );
     const resolved = await screen.findByTestId("space-repair-resolved");
-    expect(resolved.textContent).toContain("/code/old · forgotten on this computer");
+    expect(resolved.textContent).toContain("/code/old · removed");
     expect(within(resolved).queryByRole("button", { name: "Open project" })).toBeNull();
   });
 
@@ -334,7 +336,7 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     expect(within(row).queryByTestId("space-repair-submit")).toBeNull();
   });
 
-  test("a repair set aside stands in the list, marked 'set aside', and counts no more, the header's control reading 'To fix' (space-54, space-55)", async () => {
+  test("a repair set aside stands in the list, marked 'set aside', and counts no more, the header's control reading '⚠' alone, titled 'Nothing to fix' (space-1, space-54, space-55)", async () => {
     const repair = unpaired({
       checked: [{ path: "/code/infra", here: false, repo: false }],
       proposal: undefined,
@@ -344,8 +346,9 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     // It counts as no issue, but the control stays reachable — and
     // with nothing unanswered it stops wearing attention's colour.
     const issues = screen.getByTestId("space-issues");
-    expect(issues.textContent).toBe("To fix");
+    expect(issues.textContent).toBe("⚠");
     expect(issues.title).toBe("Nothing to fix");
+    expect(issues.getAttribute("aria-label")).toBe("Nothing to fix");
     expect(issues.className).not.toContain("amber");
     fireEvent.click(issues);
     expect(screen.getByTestId("space-issues-list").className).not.toContain("amber");
@@ -638,7 +641,7 @@ describe("SPACE: syncing from the row (space-11, space-12, space-15, space-16, s
           step: "push",
           cause: "refused",
           message: "Spex Example refused: you are not allowed to push",
-          guidance: "Ask a maintainer of jane on Spex Example for a role that can push. Then Retry.",
+          guidance: "Ask a maintainer of jane on Spex Example for a role that can push, then Retry",
           retry: true,
         },
       }),
@@ -665,7 +668,7 @@ describe("SPACE: syncing from the row (space-11, space-12, space-15, space-16, s
     for (const [cause, message] of stops) {
       await renderGroups(
         repoState({
-          sync: { phase: "stopped", op: "check", step: "check", cause: cause as never, message, guidance: "Then Retry.", retry: true },
+          sync: { phase: "stopped", op: "check", step: "check", cause: cause as never, message, guidance: "Then Retry", retry: true },
         }),
       );
       expect(screen.getByTestId("space-stopped-title").textContent).toBe(`Checking stopped — ${message}`);
@@ -699,7 +702,7 @@ describe("SPACE: syncing from the row (space-11, space-12, space-15, space-16, s
     expect(screen.getByTestId("space-done-line").textContent).toBe("Everything is in sync");
     expect(live()).toBe("Everything is in sync");
     deliver(repoState({ state: "read-only", reason: "archived", sync: { phase: "done", at: NOW + 1, sent: 0, received: 4, pushed: false } }));
-    expect(screen.getByTestId("space-done-line").textContent).toBe("Brought 4; nothing sent");
+    expect(screen.getByTestId("space-done-line").textContent).toBe("4 received; nothing sent");
     // A read-only repository's Sync only brings, and says so.
     expect(syncControl().title).toBe("Brings back anything new; sends nothing");
     expect(screen.getByTestId("space-read-only-note").textContent).toBe("New sessions stay on this computer");
@@ -1002,13 +1005,16 @@ describe("SPACE: the explorer (space-23, space-24, space-25)", () => {
     expect(screen.getByTestId("space-explore-tab").textContent).toContain(CLONE);
     const items = within(tree).getAllByRole("treeitem");
     expect(items.filter((item) => item.tabIndex === 0)).toHaveLength(1);
-    expect(screen.getByTestId("space-node-project.json").textContent).toContain("code remote");
+    expect(screen.getByTestId("space-node-project.json").textContent).toContain("where the code is");
     expect(screen.getByTestId("space-node-project.json").textContent).toContain("Shared");
     // The environment's files read by their file names, never the
     // catalog's nouns (space-23, DR-172).
     expect(screen.getByTestId("space-node-spex.yaml").textContent).not.toContain("spec package requests");
     expect(screen.getByTestId("space-node-spex.yaml").textContent?.match(/spex\.yaml/g)).toHaveLength(2);
-    expect(screen.getByTestId("space-node-packages").textContent).toContain("installed spec packages");
+    expect(screen.getByTestId("space-node-packages").textContent).toContain("installed packages");
+    // No catalog noun stands in the tree: manifest, request, lock, lease
+    // (DR-172).
+    expect(tree.textContent).not.toMatch(/manifest|request|lease|spec package lock|sidecar|staging|marker/);
     expect(screen.getByTestId("space-node-packages").textContent).toContain("Stays here");
     expect(screen.getByTestId("space-node-README.md").textContent).toContain("Not a Spex file");
     expect(screen.getByTestId("space-node-README.md").textContent).toContain("Not yet shared");
@@ -1071,8 +1077,8 @@ describe("SPACE: the explorer (space-23, space-24, space-25)", () => {
     const text = panel.textContent ?? "";
     for (const family of [
       "provider hints",
-      "leases and locks",
-      "installed spec packages and exported skills",
+      "in-use files",
+      "installed packages and skills for agents",
       "where projects live",
       "preferences",
       "credentials",
@@ -1095,7 +1101,7 @@ describe("SPACE: the explorer (space-23, space-24, space-25)", () => {
     fireEvent.click(session);
     const chunks = screen.getByTestId("space-node-sessions/s1.chunks");
     expect(chunks.getAttribute("aria-level")).toBe("3");
-    expect(chunks.textContent).toContain("session chunks");
+    expect(chunks.textContent).toContain("session history");
     fireEvent.click(chunks);
     const chunk = await screen.findByTestId(`space-node-sessions/s1.chunks/${"a".repeat(64)}`);
     expect(chunk.getAttribute("aria-level")).toBe("4");
@@ -1117,8 +1123,12 @@ describe("SPACE: the explorer (space-23, space-24, space-25)", () => {
     expect(document.activeElement).toBe(node);
     fireEvent.keyDown(tree, { key: "ArrowRight" });
     expect(node.getAttribute("aria-expanded")).toBe("true");
+    // A session's parts read by what they are: its file and its
+    // transcript, never a manifest or records (DR-172).
     const manifest = screen.getByTestId("space-node-sessions/s1.json");
-    expect(manifest.textContent).toContain("manifest");
+    expect(manifest.textContent).toContain("session file");
+    expect(manifest.textContent).not.toContain("manifest");
+    expect(screen.getByTestId("space-node-sessions/s1.records.jsonl").textContent).toContain("transcript");
     expect(manifest.textContent).toContain("Shared");
     expect(screen.getByTestId("space-node-sessions/s1.hints.json").textContent).toContain("provider hints");
     expect(screen.getByTestId("space-node-sessions/s1.hints.json").textContent).toContain("Stays here");
@@ -1170,7 +1180,7 @@ describe("SPACE: the explorer (space-23, space-24, space-25)", () => {
     fireEvent.click(screen.getByTestId("space-node-notes.bin"));
     expect(screen.getByTestId("space-preview").textContent).toContain("binary file · 8.8 KB");
     fireEvent.click(screen.getByTestId("space-node-packages"));
-    expect(screen.getByTestId("space-preview").textContent).toContain("installed spec packages · 1 entry");
+    expect(screen.getByTestId("space-preview").textContent).toContain("installed packages · 1 entry");
   });
 
   test("a read the core withheld is known by its kind, whatever language its reason speaks", async () => {

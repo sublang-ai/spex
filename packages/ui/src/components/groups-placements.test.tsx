@@ -313,7 +313,7 @@ describe("GROUPS: a line per placement (space-87, space-61, space-12, space-15, 
     expect(screen.queryByTestId(`space-lines-${KEY}@9`)).toBeNull();
   });
 
-  test("space-87, space-12: the step in flight stands on its placement's line; synced reads 'Synced just now · N sent · M received' or 'Everything is in sync', a read-only line 'Brought M; nothing sent', 'Behind — Sync again'; 'Changed here and at <display name>', 'Started separately at <display name>' and 'Waiting for you to continue' stand until the next operation, and Dismiss puts away the synced and stopped ones", async () => {
+  test("space-87, space-12: the step in flight stands on its placement's line; synced reads 'Synced just now · N sent · M received' or 'Everything is in sync', a read-only line 'M received; nothing sent', 'Behind — Sync again'; 'Changed here and at <display name>', 'Started separately at <display name>' and 'Waiting for you to continue' stand until the next operation, and Dismiss puts away the synced and stopped ones", async () => {
     const synced = (sent: number, received: number) => ({ kind: "synced" as const, sent, received });
     const now = { at: NOW, sent: 0, received: 0 };
 
@@ -348,7 +348,7 @@ describe("GROUPS: a line per placement (space-87, space-61, space-12, space-15, 
         { state: "read-only", reason: "archived", outcome: synced(0, 3), lastSync: { at: NOW, sent: 0, received: 3 } },
         { phase: "done", at: NOW, sent: 1, received: 3, pushed: true },
         "Synced just now · 1 sent · 0 received",
-        "Brought 3; nothing sent",
+        "3 received; nothing sent",
       ],
       [
         { outcome: synced(1, 0), lastSync: { ...now, sent: 1 } },
@@ -494,6 +494,21 @@ describe("GROUPS: a line per placement (space-87, space-61, space-12, space-15, 
     expect(phraseOf(KEY, SECOND).textContent).toBe("Sending stopped — the repository is archived");
     expect(phraseOf(KEY, SECOND).getAttribute("title")).toMatch(/^Ask a member who can share it · 0 commits ahead, 0 commits behind · checked /);
     expect(screen.queryByTestId(`space-row-retry-${KEY}`)).toBeNull();
+    cleanup();
+
+    // In the reader's language, the step's name and the Space's words.
+    activateLanguage("zh");
+    await renderGroups(
+      placedAtTwo({
+        second: {
+          outcome: { kind: "stopped", step: "push", cause: "refused", message: "仓库已归档", guidance: "请联系能共享它的成员", retry: false },
+        },
+      }),
+      { open: false },
+    );
+    expect(phraseOf(KEY, SECOND).textContent).toBe("发送已停止 — 仓库已归档");
+    expect(phraseOf(KEY, SECOND).getAttribute("title")).toMatch(/^请联系能共享它的成员 · /);
+    expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("发送已停止 — 仓库已归档");
   });
 
   test("space-61: a placement unreachable while the row reads reachable; every one unreachable makes the row unreachable; the row's last sync is its key placement's", async () => {
@@ -876,10 +891,14 @@ describe("GROUPS: a placement's sharing confirm, combining and retry (space-57, 
     expect(within(lineOf(KEY, SECOND)).getByTestId("space-line-notice").textContent).toContain("Public: anyone can read");
     cleanup();
 
-    // In the reader's language.
+    // In the reader's language, the line and its confirm (space-57).
     activateLanguage("zh");
     await renderGroups(placedAtTwo({ second: waiting }, { sync: DONE }), { open: false });
     expect(reading(lineOf(KEY, SECOND)).state).toBe("等待你继续");
+    fireEvent.click(within(lineOf(KEY, SECOND)).getByTestId("space-line-continue"));
+    const zhNotice = within(lineOf(KEY, SECOND)).getByTestId("space-line-notice");
+    expect(within(zhNotice).getByTestId("space-sharing-confirm").firstElementChild?.textContent).toBe("与 Second Example 上的 workshop 共享？");
+    expect(within(zhNotice).getByRole("button", { name: "共享" })).toBeTruthy();
   });
 
   test("space-57: Sync where the only runnable placement owes the confirm asks it first and sends that placement's noticed; where another can run, Sync asks nothing and the owing line waits; a read-only or path placement owes none", async () => {
@@ -1586,17 +1605,27 @@ function rowControls(key: string): string[] {
  * (space-57). */
 const WAITING = { kind: "waiting" as const, sent: 0, received: 0 };
 
-describe("GROUPS: a group holding a placement of a row standing elsewhere (space-1, DR-172)", () => {
-  test("space-1: the second's group holding a placement shows no line for it — the row stands where it stands, its placements in its Sync tab — and its More holds Members alone; Personal at the second heads nothing", async () => {
+describe("GROUPS: a group holding a placement of a row standing elsewhere (space-1, DR-128, DR-172)", () => {
+  test("space-1: the second's group holding a placement shows one quiet line per row standing elsewhere, naming the row and where it stands, with no control; its More holds Members alone; Personal at the second stands for its one line", async () => {
     await renderGroups(walkHome(), { open: false });
     const first = screen.getByTestId(`space-instance-${ORIGIN}`);
     const second = screen.getByTestId(`space-instance-${SECOND}`);
     const workshop = within(second).getByTestId("space-group-workshop");
-    // No group shows a quiet line for a row standing elsewhere: the
-    // placements are the row's Sync tab's (space-87, DR-159).
-    expect(screen.queryAllByTestId(/^space-placed-/)).toEqual([]);
+    // One line per row a placement of which its listing holds, each
+    // naming the row and the heading it stands under, no control: the
+    // row is acted on where it stands (space-1, DR-128).
+    const lines = within(workshop).getAllByTestId(/^space-placed-/);
+    expect(lines.map((line) => [line.dataset.testid, line.textContent])).toEqual([
+      [`space-placed-${KEY}`, "academy · in Personal at Spex Example"],
+      [`space-placed-${BETA}`, "beta · in Personal at Spex Example"],
+    ]);
+    for (const line of lines) {
+      expect(within(line).queryAllByRole("button")).toEqual([]);
+      expect(line.getAttribute("title")).toBe(line.textContent);
+    }
+    // The rows themselves stand where they stand, never twice.
     expect(within(second).queryByTestId(`space-row-${KEY}`)).toBeNull();
-    expect(within(workshop).getByText("No projects here yet")).toBeTruthy();
+    expect(within(workshop).queryByText("No projects here yet")).toBeNull();
     // Its heading's More holds Members alone: no rename, delete or
     // group inside it is offered here (space-1, DR-172).
     fireEvent.click(screen.getByTestId("space-group-more-workshop"));
@@ -1605,11 +1634,17 @@ describe("GROUPS: a group holding a placement of a row standing elsewhere (space
         .getAllByRole("menuitem")
         .map((item) => item.dataset.testid),
     ).toEqual(["space-group-members-workshop"]);
+    fireEvent.keyDown(window, { key: "Escape" });
     // Your own group's own repository stands under Personal at the
-    // instance governing it, the first; at the second, Personal holds no
-    // row and heads nothing (space-1).
-    expect(within(second).queryByTestId("space-group-@jada")).toBeNull();
-    expect(within(within(first).getByTestId("space-group-@jane")).getAllByRole("listitem").map((item) => item.dataset.testid)).toEqual([
+    // instance governing it, the first, drawing no line there; at the
+    // second, Personal stands for its one line (space-1).
+    const jada = within(second).getByTestId("space-group-@jada");
+    expect(within(jada).getByRole("heading", { level: 3 }).textContent).toBe("Personal");
+    expect(within(jada).queryAllByTestId(/^space-row-/)).toEqual([]);
+    expect(within(jada).getAllByTestId(/^space-placed-/).map((line) => line.textContent)).toEqual(["Your sessions · in Personal at Spex Example"]);
+    const jane = within(first).getByTestId("space-group-@jane");
+    expect(within(jane).queryAllByTestId(/^space-placed-/)).toEqual([]);
+    expect(within(jane).getAllByRole("listitem").map((item) => item.dataset.testid)).toEqual([
       `space-row-${OWN}`,
       `space-row-${KEY}`,
       `space-row-${BETA}`,
@@ -1617,11 +1652,62 @@ describe("GROUPS: a group holding a placement of a row standing elsewhere (space
     // The project in no group stands under "This computer" (space-1).
     expect(within(screen.getByTestId("space-own")).getAllByRole("listitem").map((item) => item.dataset.testid)).toEqual([`space-row-${GAMMA}`]);
   });
+
+  test("space-1: a line names a group by its name, another account's login, or this computer, in the reader's language", async () => {
+    const home = twoPlacementsHome();
+    const [atFirst, atSecond] = home.instances;
+    // acme-spex stands in Acme at the first; the second's workshop lists
+    // a placement of it and of gamma, which stands under This computer.
+    const placedHome: GroupsState = {
+      ...home,
+      instances: [
+        atFirst!,
+        {
+          ...atSecond!,
+          groups: atSecond!.groups.map((group) =>
+            group.fullPath === "workshop"
+              ? { ...group, placed: [{ key: ACME, name: "acme-spex" }, { key: GAMMA, name: "gamma-spex" }] }
+              : group,
+          ),
+        },
+      ],
+    };
+    await renderGroups(placedHome, { open: false });
+    const workshop = within(screen.getByTestId(`space-instance-${SECOND}`)).getByTestId("space-group-workshop");
+    expect(within(workshop).getAllByTestId(/^space-placed-/).map((line) => line.textContent)).toEqual([
+      "Group sessions · in Acme at Spex Example",
+      "gamma · on this computer",
+    ]);
+    // The group's path rides the title where it differs from its name.
+    expect(within(workshop).getByTestId(`space-placed-${ACME}`).getAttribute("title")).toBe("Group sessions · in Acme at Spex Example · acme");
+    cleanup();
+
+    activateLanguage("zh");
+    await renderGroups(placedHome, { open: false });
+    const zhWorkshop = within(screen.getByTestId(`space-instance-${SECOND}`)).getByTestId("space-group-workshop");
+    expect(within(zhWorkshop).getAllByTestId(/^space-placed-/).map((line) => line.textContent)).toEqual([
+      "群组会话 · 在 Spex Example 的 Acme 中",
+      "gamma · 在本机上",
+    ]);
+  });
 });
 
 describe("GROUPS: the placements surface at the floor (space-95, space-28, DR-172)", () => {
   test("space-95: lines with Members, a line not on this computer offering nothing, rows of one primary and one overflow, the sharing confirm of your own group's second placement, the members' 'also placed at'", async () => {
     await renderGroups(walkHome(), { open: false });
+
+    // The second's group holding a placement shows one line naming the
+    // row, with no control; "Your sessions" stands under the first's
+    // Personal and the second's Personal shows one line naming it
+    // (space-1).
+    const atSecond = within(screen.getByTestId(`space-instance-${SECOND}`));
+    const workshopLine = within(atSecond.getByTestId("space-group-workshop")).getByTestId(`space-placed-${KEY}`);
+    expect(workshopLine.textContent).toBe("academy · in Personal at Spex Example");
+    expect(within(workshopLine).queryAllByRole("button")).toEqual([]);
+    expect(within(within(screen.getByTestId(`space-instance-${ORIGIN}`)).getByTestId("space-group-@jane")).getByTestId(`space-repo-${OWN}`).textContent).toBe("Your sessions");
+    const personalLine = within(atSecond.getByTestId("space-group-@jada")).getByTestId(`space-placed-${OWN}`);
+    expect(personalLine.textContent).toBe("Your sessions · in Personal at Spex Example");
+    expect(within(personalLine).queryAllByRole("button")).toEqual([]);
 
     // Each row lists one line per placement in its Sync tab, by its
     // Space's display name and its path there, its state, and its last
