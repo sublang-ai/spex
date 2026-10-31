@@ -331,7 +331,7 @@ When the reader activates Open on a spex repository's row — or "Open here" whe
 
 Where the surface shows a seat's place [[run-view-168](run-view.md#run-view-168)], every phrase of this package naming this device or this computer shall name the server instead — "Not on <server>", "Keep what's on <server>", "Spex keeps <server>'s files in <home>" among them — so that a member reading a seat's Space is never told that the server is their own device ([DR-133](../decisions/133-one-desktop-over-several-cores.md), [DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md)):
 
-- the sign-in card on a seat reads "Sign in to see your groups and open their projects on <server>." and "Until you do, nothing on <server> is contacted."; the "Add instance…" card there says nothing of your own group's records, which a seat places at no instance [[space-102](#space-102)].
+- the sign-in card on a seat reads "Sign in to see your groups and open their projects on <server>." and "Package registry access is separate from this Space sign-in." [[hub-12](hub.md#hub-12)]; the "Add instance…" card there says nothing of your own group's records, which a seat places at no instance [[space-102](#space-102)].
 
 ### Repairs
 

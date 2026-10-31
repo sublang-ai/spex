@@ -404,9 +404,8 @@ export function SignInCard({
         </p>
         <p>
           {i18n._({
-            id: "Until you do, nothing on {server} is contacted.",
-            values: { server: seat },
-            comment: "the sign-in card on a team server's Space; {server} is the server's name",
+            id: "Package registry access is separate from this Space sign-in.",
+            comment: "the sign-in card on a team server: registry access uses an independent grant",
           })}
         </p>
       </>

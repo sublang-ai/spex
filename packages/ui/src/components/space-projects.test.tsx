@@ -96,7 +96,7 @@ const WORDS = {
     nothingFromLab: "Nothing to send from lab-1",
     signOutLab: "Signs lab-1 out of Spex Example; every record stays there",
     cancel: "Cancel",
-    labSignIn: ["Sign in to see your groups and open their projects on lab-1.", "Until you do, nothing on lab-1 is contacted."],
+    labSignIn: ["Sign in to see your groups and open their projects on lab-1.", "Package registry access is separate from this Space sign-in."],
     exempt: ["Add to a group…", "Merge histories…"],
   },
   zh: {
@@ -142,7 +142,7 @@ const WORDS = {
     nothingFromLab: "lab-1 没有要发送的内容",
     signOutLab: "让 lab-1 退出 Spex Example；所有记录仍保留在那里",
     cancel: "取消",
-    labSignIn: ["登录后即可查看你的群组，并在 lab-1 上打开其中的项目。", "在此之前，lab-1 上不会联系任何服务。"],
+    labSignIn: ["登录后即可查看你的群组，并在 lab-1 上打开其中的项目。", "规约包注册中心的访问权限与此空间登录相互独立。"],
     exempt: ["加入群组…", "合并历史…"],
   },
 } as const;

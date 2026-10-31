@@ -7561,10 +7561,10 @@ msgstr "unresolved"
 msgid "Until you sign in to this Space, your records stay on this device."
 msgstr "Until you sign in to this Space, your records stay on this device."
 
-#. the sign-in card on a team server's Space; {server} is the server's name
+#. the sign-in card on a team server: registry access uses an independent grant
 #: src/components/SpaceSignIn.tsx
-msgid "Until you do, nothing on {server} is contacted."
-msgstr "Until you do, nothing on {server} is contacted."
+msgid "Package registry access is separate from this Space sign-in."
+msgstr "Package registry access is separate from this Space sign-in."
 
 #. a session with no title of its own
 #: src/components/SpaceExplorer.tsx
