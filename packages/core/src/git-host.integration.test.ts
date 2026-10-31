@@ -1318,6 +1318,16 @@ test("git-host-9: the helper names the runtime and refuses what the shell cannot
   } finally {
     await handle.dispose();
   }
+  const scoped = await withGitCredential({ username: "oauth2", secret: "tok", origin: "https://EXAMPLE.test:443/git" }, currentRuntime());
+  try {
+    const helper = /" "(.*)"$/.exec(scoped.configArgs[3])?.[1] ?? "";
+    const ask = (protocol: string, host: string) => execFileSync(process.execPath, [helper, "get"], { input: `protocol=${protocol}\nhost=${host}\n\n`, encoding: "utf8", env: { ...process.env, ...scoped.env } });
+    assert.equal(ask("https", "example.test"), "username=oauth2\npassword=tok\n\n");
+    assert.equal(ask("https", "EXAMPLE.test:443"), "username=oauth2\npassword=tok\n\n");
+    assert.equal(ask("http", "example.test"), "");
+    assert.equal(ask("https", "example.test:444"), "");
+    assert.equal(ask("https", "elsewhere.test"), "");
+  } finally { await scoped.dispose(); }
 });
 
 // ---------------------------------------------------------------------------

@@ -7,7 +7,8 @@
 // For one Git child of the core's, as `"<runtime>" "<this file>"
 // <operation>`, it answers `get` with the username and password in the
 // file named by SPEX_GIT_CREDENTIAL_FILE — written owner-only by the core
-// for that child and removed when the child ends.
+// for that child and removed when the child ends. A brokered credential
+// carries its permitted origin and answers only that scheme, host and port.
 //
 // On a seat, in its member mode, as `"<runtime>" "<this file>" --member
 // "<store>" <operation>`, named by the seat account's own Git
@@ -43,13 +44,13 @@ process.stdin.on("data", (chunk) => request.push(chunk));
 process.stdin.on("error", () => {});
 process.stdin.on("end", () => {
   const answered = store === undefined
-    ? answerChild()
+    ? answerChild(Buffer.concat(request).toString("utf8"))
     : answerMember(store, Buffer.concat(request).toString("utf8"));
   // Nothing is said on a failure: Git reads an empty answer as none.
   Promise.resolve(answered).catch(() => {});
 });
 
-function answerChild() {
+function answerChild(text) {
   if (operation !== "get") return;
   const file = process.env.SPEX_GIT_CREDENTIAL_FILE;
   if (!file) return;
@@ -58,6 +59,14 @@ function answerChild() {
     lines = readFileSync(file, "utf8");
   } catch {
     return;
+  }
+  const scope = lines.split("\n").find((line) => line.startsWith("origin="))?.slice(7);
+  if (scope !== undefined) {
+    const fields = new Map(text.split("\n").map((line) => { const at = line.indexOf("="); return [line.slice(0, at), line.slice(at + 1)]; }));
+    const protocol = fields.get("protocol"), host = fields.get("host");
+    if ((protocol !== "http" && protocol !== "https") || !host || /[\s/@?#]/.test(host)) return;
+    try { if (new URL(`${protocol}://${host}`).origin !== scope) return; }
+    catch { return; }
   }
   const kept = lines
     .split("\n")

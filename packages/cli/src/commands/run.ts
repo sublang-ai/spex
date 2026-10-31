@@ -48,6 +48,22 @@ export function options<T extends NonNullable<ParseArgsConfig["options"]>>(name:
   }
 }
 
+/** A command's options and its words, parsed strictly: an unknown
+ * option, or fewer or more words than it takes, refuses the command. */
+export function parsed<T extends NonNullable<ParseArgsConfig["options"]>>(name: string, args: string[], spec: T, words: { min: number; max: number; usage: string }) {
+  let result;
+  try {
+    result = parseArgs({ args, options: spec, strict: true, allowPositionals: true });
+  } catch (error) {
+    throw new Refusal(`${(error as Error).message}; see spex --help`);
+  }
+  const { positionals } = result;
+  if (positionals.length < words.min || positionals.length > words.max) {
+    throw new Refusal(words.usage === "" ? "it takes no arguments; see spex --help" : `usage: spex ${name} ${words.usage}`);
+  }
+  return { values: result.values, positionals };
+}
+
 /** Run one command to its exit code, printing a cause on standard error. */
 export async function runCommand(name: string, command: Command, args: string[]): Promise<number> {
   const hooks = new Set<() => void>();

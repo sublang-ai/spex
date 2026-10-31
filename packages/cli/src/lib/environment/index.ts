@@ -10,6 +10,7 @@ export * from "./semver.js";
 export * from "./requests.js";
 export * from "./lock.js";
 export * from "./registry.js";
+export * from "./registries.js";
 export * from "./git-source.js";
 export * from "./resolve.js";
 export * from "./store.js";

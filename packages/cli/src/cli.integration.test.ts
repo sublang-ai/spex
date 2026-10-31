@@ -447,12 +447,12 @@ describe("CLI integration", () => {
     assert.ok(result.stderr.includes("Unknown command"));
   });
 
-  // Acceptance: --help exits zero and lists both commands
-  it("--help prints usage and exits zero", () => {
+  // Acceptance: --help exits zero and names every command, one line each
+  it("--help prints usage naming every command and exits zero", () => {
     const result = run(["--help"]);
     assert.equal(result.exitCode, 0);
-    assert.ok(result.stdout.includes("scaffold"));
-    assert.ok(result.stdout.includes("lint"));
+    const named = result.stdout.split("\n").filter((line) => /^ {2}[a-z]/.test(line)).map((line) => line.trim().split(" ")[0]);
+    assert.deepEqual(named, ["add", "remove", "install", "update", "list", "search", "new", "publish", "login", "logout", "whoami", "scaffold", "lint"], "[cli-1] --help names every command and nothing else");
   });
 
   // Acceptance: scaffold without path in git repo uses repo root

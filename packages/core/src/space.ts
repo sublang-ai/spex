@@ -78,6 +78,7 @@ import {
   StorageWriteRefused,
   UPLOAD_STAGING,
   validateStorageSnapshot,
+  storageTreeUsesLfs,
   validateStorageTree,
   type StorageChoice,
   type StorageMergeUnit,
@@ -3618,6 +3619,10 @@ class RepositorySync {
       if (heads.code !== 0) throw this.transportStop("check", heads, target, host !== undefined, held);
       const fetched = await this.git.run(["fetch", "-q", "--no-tags", name, `+refs/heads/${SPEX_BRANCH}:${ref}`], options);
       if (fetched.code !== 0) throw this.transportStop("check", fetched, target, host !== undefined, held);
+      if (storageTreeUsesLfs(this.dir, ref)) {
+        const lfs = await this.git.run(["-c", "lfs.fetchrecentalways=false", "lfs", "fetch", "--include=", "--exclude=", name, ref], options);
+        if (lfs.code !== 0) throw this.transportStop("check", lfs, target, host !== undefined, held);
+      }
       run.remoteEmpty = false;
       run.checkedAt = Date.now();
       this.boundary += 1;
@@ -5015,14 +5020,14 @@ export class SpaceManager {
    * where this device's own Git fetches it — on a seat, the member's own
    * token where they placed one for its host. A refusal reads as that
    * instance said. */
-  async sourceCredential(repo: string, preferred: string | null = null): Promise<{ username: string; secret: string } | undefined> {
+  async sourceCredential(repo: string, preferred: string | null = null): Promise<{ username: string; secret: string; origin?: string } | undefined> {
     for (const instance of this.preferring(preferred)) {
       if (!this.signedInAt(instance)) continue;
       const origin = await this.gitOriginOf(instance.origin);
       if (!origin || !underOrigin(repo, origin)) continue;
       try {
         const credential = await instance.client.credential(origin);
-        return { username: credential.username, secret: credential.secret };
+        return { username: credential.username, secret: credential.secret, origin };
       } catch (error) {
         throw new Error(relayHostError(error, this.nameOf(instance)));
       }
@@ -7543,7 +7548,7 @@ export class SpaceManager {
         ? await machine.hostCall(step, (signal) => instance.client.credential(origin, { signal }))
         : await instance.client.credential(origin);
     } catch (error) { throw hostStop(step, error, this.nameOf(instance)); }
-    return withGitCredential(credential, this.host.hostRuntime);
+    return withGitCredential({ ...credential, origin }, this.host.hostRuntime);
   }
 
   /** On a seat, the member's own token for a remote's code host
