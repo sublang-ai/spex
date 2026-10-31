@@ -57,7 +57,7 @@ export class LockError extends Error {
   constructor(readonly issues: Issue[], newerFormat?: number) {
     super(newerFormat !== undefined
       ? `spex.lock is from a newer Spex (format ${newerFormat})`
-      : `spex.lock does not read: ${issues.map((issue) => issue.message).join("; ")}`);
+      : `spex.lock cannot be read: ${issues.map((issue) => issue.message).join("; ")}`);
     this.name = "LockError";
     if (newerFormat !== undefined) this.newerFormat = newerFormat;
   }
@@ -178,7 +178,7 @@ function parseSource(raw: unknown, at: string, issues: Issue[]): SourceLock | un
  * the in-memory `requiredBy` alike. */
 export function parseLockValue(raw: unknown): Lock {
   const issues: Issue[] = [];
-  if (!isPlainObject(raw)) throw new LockError([{ rule: "lock", message: "spex.lock is not a mapping" }]);
+  if (!isPlainObject(raw)) throw new LockError([{ rule: "lock", message: "it is not a mapping" }]);
   if (typeof raw.format === "number" && Number.isInteger(raw.format) && raw.format > 1) {
     throw new LockError([{ rule: "format", message: `spex.lock is from a newer Spex (format ${raw.format})` }], raw.format);
   }
@@ -269,7 +269,9 @@ export type Staleness = { stale: false } | { stale: true; reasons: string[] };
  * digest no longer matches `spex.yaml`, or a path source's manifest no
  * longer states the version, dependencies and `requires` it recorded or
  * lacks an artifact it selected. A path source missing on this device
- * (`null`) is missing, not stale. */
+ * (`null`) is missing, not stale. Each reason is a phrase of a project's
+ * Packages tab (DR-172): a folder package "changed in" its folder, with
+ * what changed. */
 export function lockStaleness(
   lock: Lock,
   requestsText: string | null,
@@ -286,16 +288,16 @@ export function lockStaleness(
     try {
       manifest = pathSources(source.path);
     } catch (error) {
-      reasons.push(`${name} at ${source.path} no longer reads as a release: ${(error as Error).message}`);
+      reasons.push(`${name} changed in ${source.path}: its meta.yaml cannot be read: ${(error as Error).message}`);
       continue;
     }
     if (manifest === null) continue;
-    if (`${manifest.org}/${manifest.name}` !== name) reasons.push(`${name} at ${source.path} is now ${manifest.org}/${manifest.name}`);
-    if (manifest.version !== source.version) reasons.push(`${name} at ${source.path} changed version from ${source.version} to ${manifest.version}`);
-    if (canonical(manifest.dependencies) !== canonical(source.dependencies)) reasons.push(`${name} at ${source.path} changed its dependencies`);
-    if (canonical(manifestRequires(manifest)) !== canonical(source.requires)) reasons.push(`${name} at ${source.path} changed what its artifacts require`);
+    if (`${manifest.org}/${manifest.name}` !== name) reasons.push(`${name} changed in ${source.path}: it is now ${manifest.org}/${manifest.name}`);
+    if (manifest.version !== source.version) reasons.push(`${name} changed in ${source.path}: version ${source.version} is now ${manifest.version}`);
+    if (canonical(manifest.dependencies) !== canonical(source.dependencies)) reasons.push(`${name} changed in ${source.path}: the packages it needs`);
+    if (canonical(manifestRequires(manifest)) !== canonical(source.requires)) reasons.push(`${name} changed in ${source.path}: what it needs installed`);
     for (const id of Object.keys(resolution.artifacts).sort()) {
-      if (!manifest.artifacts[id]) reasons.push(`${name} at ${source.path} no longer holds the selected artifact ${id}`);
+      if (!manifest.artifacts[id]) reasons.push(`${name} changed in ${source.path}: it no longer has ${id}`);
     }
   }
   return reasons.length > 0 ? { stale: true, reasons } : { stale: false };

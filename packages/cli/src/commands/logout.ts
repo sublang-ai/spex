@@ -32,13 +32,13 @@ export const logout: Command = async (args) => {
     try { await clientOf(target.origin, credentials, undefined, scope).signOut(); }
     catch (error) {
       if (error instanceof CredentialChanged) throw new Refusal(`your sign-in at ${name} changed meanwhile — spex logout again`);
-      throw new Refusal(`not signed out at ${name}: ${hostCause(error, name)}`);
+      throw new Refusal(`not signed out at ${name}: ${hostCause(error, name, "spex logout again")}`);
     }
     console.log(`Signed out at ${name}.`);
     return;
   }
   const entry = home ? instanceAt(home, target.origin) : undefined;
-  if (!entry) throw new Refusal(`${hostOf(target.origin)}: not signed in here — spex whoami`);
+  if (!entry) throw new Refusal(`${hostOf(target.origin)}: not signed in on this computer — spex whoami`);
   const name = nameOf(entry);
   if (!signedIn(entry)) {
     console.log(`Already signed out at ${name}.`);
@@ -55,7 +55,7 @@ export const logout: Command = async (args) => {
     });
   } catch (error) {
     if (error instanceof CredentialChanged) throw new Refusal(`your sign-in at ${name} changed meanwhile — spex logout again`);
-    throw new Refusal(`not signed out at ${name}: ${hostCause(error, name)}`);
+    throw new Refusal(`not signed out at ${name}: ${hostCause(error, name, "spex logout again")}`);
   }
   if (marked) throw new Refusal(`signed out at ${name}, but home.yaml was not updated: ${(marked as Error).message} — spex logout again`);
   console.log(`Signed out at ${name}.`);

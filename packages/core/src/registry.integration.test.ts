@@ -127,7 +127,7 @@ test("core-service-144/hub-13: a self-managed Space seat installs canonical publ
   const publicInstall = await seat.client.expectOk("environment.request", { repository: own, name: "public/guide", request: { kind: "registry", version: "^1.0.0" }, wait: true });assert.ok(publicInstall);
   const denied = await seat.client.command("environment.request", { repository: own, name: "private/guide", request: { kind: "registry", version: "^1.0.0" }, wait: true });assert.equal(denied.ok, false);
   // [core-service-145] the registry by its descriptor's display name, with what to do.
-  assert.equal((await seat.client.expectOk("environment.get", { repository: own })).error, "Sign in to Public registry to see private versions");
+  assert.equal((await seat.client.expectOk("environment.get", { repository: own })).error, "private/guide is private or not at Public registry — Sign in to Public registry");
   assert.equal(await fileCredentialStore(seat.dataDir, PUBLIC_REGISTRY_ORIGIN, "registry").read(), null);
   await registrySignIn(seat, PUBLIC_REGISTRY_ORIGIN, publicHost);
   assert.equal(publicHost.script.deviceRequests.at(-1)?.serverId, null, "registry sign-in inherits no seat grant");

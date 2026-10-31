@@ -383,7 +383,7 @@ test("storage-29: a home file damaged under a running core routes no command int
   assert.ok(!write.ok && write.error.code === "not_found" && write.error.message === `no project ${projectId}`, JSON.stringify(write));
   assert.equal(readFileSync(spec, "utf8"), "edited\n");
   const draft = await client.command("draft.create", { projectId, draftId: "remembered", org: "acme", license: "MIT" });
-  assert.ok(!draft.ok && draft.error.code === "invalid_request" && draft.error.message === `${projectId.split("/").pop()?.replace(/-spex$/, "")} has no project folder on this computer`, JSON.stringify(draft));
+  assert.ok(!draft.ok && draft.error.code === "invalid_request" && draft.error.message === `${projectId.slice(projectId.lastIndexOf("/") + 1).replace(/-spex$/, "")} has no project folder on this computer — Open here first`, JSON.stringify(draft));
   assert.equal(existsSync(join(clone, "authoring", "remembered.json")), false);
   const compile = await client.command("compile.run", {
     projectId, playbookId: "remembered", sourceText: "# Remembered\n", roles: ["coder"], command: "remembered", intent: "Remembered",

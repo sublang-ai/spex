@@ -37,6 +37,7 @@ import {
   recordedPackages,
   RegistryError,
   resolve,
+  ResolveError,
   resolutionVersion,
   serializeLock,
   writeLock,
@@ -143,6 +144,34 @@ function gitFailure(error: GitSourceError, locators: GitLocators): string {
  * last files. */
 const KEPT = "installing failed; the last files stay: ";
 
+/** A resolution's refusal of a package's source in the CLI's words, each
+ * ending in what to do (cli-13): a folder missing, holding no
+ * `meta.yaml` or another package, leading out of the project folder, or
+ * no package; a Git repository holding none; no versions found in time. */
+function resolvePhrase(error: ResolveError): string | null {
+  const pkg = error.packageName ?? "a package";
+  const { path, git, rev, folderMissing, found, issues } = error.detail;
+  const where = git !== undefined ? `${gitShown(git)} at ${rev}${path ? `, folder ${path}` : ""}` : path;
+  const fix = git !== undefined ? "fix its git, rev or path in spex.yaml" : "fix its path in spex.yaml";
+  switch (error.kind) {
+    case "path_missing":
+      if (git !== undefined) return `${pkg}: ${where} holds no package — ${fix}`;
+      return folderMissing
+        ? `${pkg}: no folder at ${path} — ${fix}, or spex remove ${pkg}`
+        : `${pkg}: ${path} has no meta.yaml, so it is no package — ${fix}, or spex remove ${pkg}`;
+    case "path_outside":
+      return `${pkg}: ${path} leads out of this project folder — ${fix} to a folder inside it, or spex remove ${pkg}`;
+    case "name_mismatch":
+      return `${pkg}: ${where} holds ${found} — fix the name in spex.yaml, or in its meta.yaml`;
+    case "not_a_package":
+      return `${pkg}: ${where} is not a package: ${issues} — fix its meta.yaml, then retry`;
+    case "bound":
+      return "no versions found that fit every package in time — loosen a version in spex.yaml, then spex update";
+    default:
+      return null;
+  }
+}
+
 /** A failure of a settle as one phrase ending in what to do (cli-13). */
 export async function refusalOf(env: Environment, error: unknown, context: { origin: string; scope: AuthScope }, locators: GitLocators = []): Promise<Refusal> {
   if (error instanceof Refusal) return error;
@@ -151,12 +180,15 @@ export async function refusalOf(env: Environment, error: unknown, context: { ori
   const registryError = error instanceof RegistryError ? error : error instanceof InstallError && error.cause instanceof RegistryError ? error.cause : null;
   if (registryError !== null) return new Refusal(unnamedText((await env.registryRefusal(registryError, context)).message, locators));
   if (error instanceof VersionConflictError) return new Refusal(`${shown(env.root, error.file)} changed meanwhile — retry`);
+  const phrase = error instanceof ResolveError ? resolvePhrase(error) : null;
+  if (phrase !== null) return new Refusal(unnamedText(phrase, locators));
   const message = error instanceof Error ? error.message : String(error);
-  if (error instanceof InstallError && message.startsWith(KEPT)) return new Refusal(unnamedText(`installing stopped, the last files stay: ${message.slice(KEPT.length)}`, locators));
+  if (error instanceof InstallError && message.startsWith(KEPT)) return new Refusal(unnamedText(`installing stopped, the last files stay: ${message.slice(KEPT.length)} — retry`, locators));
   if (error instanceof InstallError && / no registry has it as spex\.lock records it/.test(message)) {
     return new Refusal(unnamedText(`${message} — spex update picks a version the registry has`, locators));
   }
-  return new Refusal(unnamedText(message, locators));
+  // Anything else still ends in what to do.
+  return new Refusal(unnamedText(/ — /.test(message) ? message : `${message} — retry`, locators));
 }
 
 /** Settle the environment; null where it holds neither file. */
@@ -347,7 +379,7 @@ export function skillPlaces(root: string, lock: Lock, name: string, state: Packa
     if (placed.length === 0) {
       why = yours.length > 0 ? `yours is in ${yours.join(", ")}`
         : state === "files missing" ? "files missing"
-          : state === "not installed" ? (name === BUILTIN_PACKAGE_NAME ? "installed by Spex later" : "not installed")
+          : state === "not installed" ? (name === BUILTIN_PACKAGE_NAME ? "the Spex app installs it" : "not installed")
             : "spex install places it";
     }
     return { skill, placed, yours, why };
@@ -438,9 +470,9 @@ export function gainedLines(root: string, settled: Settled, added: ReadonlySet<s
 
 /** The line naming the app's built-in spec package an install left to
  * the app, no seed and no registry serving it: marked built in, for
- * Spex to install (cli-4). */
+ * the Spex app to install (cli-4). */
 export function leftToAppLine(name: string, version: string): string {
-  return `${name} ${version}  built in, installed by Spex later`;
+  return `${name} ${version}  built in — the Spex app installs it when it opens this project`;
 }
 
 /** The lines naming each spec package an install left to the app. */

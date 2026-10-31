@@ -210,7 +210,7 @@ test("cli-15: --help prints the usage, add and scaffold their lines and options,
   assert.match(add, /^ {2}--path <folder> {2,}\S/m, "[cli-21] add's help lists --path");
   assert.match(add, /^ {2}-h, --help {2,}\S/m, "[cli-21] add's help lists --help");
   const scaffold = await asked("scaffold", "--help");
-  assert.ok(scaffold.split("\n").includes("  scaffold, lint"), "[cli-21] scaffold's help holds its line of the usage");
+  for (const line of usage.split("\n").filter((row) => row.startsWith("  scaffold "))) assert.ok(scaffold.split("\n").includes(line), `[cli-21] scaffold's help holds ${JSON.stringify(line)}`);
   for (const option of ["--update", "--lang <code>", "--agents <names>", "-h, --help"]) {
     assert.ok(scaffold.split("\n").some((row) => row.startsWith(`  ${option}  `)), `[cli-21] scaffold's help lists ${option}`);
   }
@@ -223,7 +223,7 @@ test("cli-15: add writes the package into spex.yaml, installs under .spex/ and p
   const added = await ok(WORK, "add", "demo/tool@^1.0.0");
   // The file is made naming the default instance (cli-2).
   const requests = readYaml(join(WORK, "spex.yaml"));
-  assert.deepEqual(requests, { format: 1, space: registry.url, packages: { "demo/tool": { version: "^1.0.0" } } }, "[cli-2] the requirement given, space naming the default instance");
+  assert.deepEqual(requests, { format: 1, space: registry.url, packages: { "demo/tool": { version: "^1.0.0" } } }, "[cli-2] the requirement written into the existing spex.yaml, its space kept");
   assert.match(added, /^Added demo\/tool 1\.0\.0\n {2}tool {2}\.agents\/skills, \.claude\/skills$/m, "[cli-2] the package added, with its version and where its skill went");
   assert.equal(readFileSync(join(WORK, ".spex", ".gitignore"), "utf8"), "*\n", "[cli-2] .spex/ ignores everything in it");
   assert.match(readFileSync(join(WORK, ".spex", "packages", "demo", "tool", "skills", "en", "tool", "SKILL.md"), "utf8"), /at 1\.0\.0/);
@@ -244,17 +244,24 @@ test("cli-15: add writes the package into spex.yaml, installs under .spex/ and p
 
   const refusals: [string, string[], RegExp][] = [
     ["a name that is not <org>/<pkg>", ["add", "Demo/tool"], /^spex add: "Demo\/tool" is not a package name — use <org>\/<pkg>, /m],
-    ["a malformed version", ["add", "demo/tool@1.x"], /^spex add: "1\.x" is not a version: use 1\.2\.3, \^1\.2\.3 or ~1\.2\.3$/m],
+    ["a malformed version", ["add", "demo/tool@1.x"], /^spex add: "1\.x" is not a version — use 1\.2\.3, \^1\.2\.3 or ~1\.2\.3$/m],
     ["a version and a path together", ["add", "demo/tool@^1.0.0", "--path", "kits/tool"], /^spex add: a version and --path together — give one$/m],
     ["a path leading out of the root", ["add", "demo/tool", "--path", "../elsewhere"], /^spex add: --path \.\.\/elsewhere leads out of this project folder, .+ — use a folder inside it$/m],
+    ["a path to no folder", ["add", "demo/tool", "--path", "kits/none"], /^spex add: --path kits\/none: no folder there — give the folder holding the package's meta\.yaml$/m],
+    ["a folder holding no meta.yaml", ["add", "demo/tool", "--path", "kits/empty"], /^spex add: --path kits\/empty has no meta\.yaml, so it is no package — spex new demo\/tool starts one$/m],
+    ["a folder holding another package", ["add", "demo/tool", "--path", "kits/wrong"], /^spex add: --path kits\/wrong holds demo\/other, not demo\/tool — spex add demo\/other --path kits\/wrong$/m],
     // A spex.yaml naming no registry reads with its Space's sign-in.
     ["a package the registry does not list", ["add", "demo/missing"], new RegExp(`^spex add: demo/missing: not at ${REGISTRY}, or private — spex login --space ${exactly(registry.url)}, then retry$`, "m")],
   ];
-  // Each refusal, where spex.yaml stands and where none does yet.
+  // Each refusal, where spex.yaml stands and where none does yet; the
+  // folders given by --path stand in this one alone.
+  mkdirSync(join(WORK, "kits", "empty"), { recursive: true });
+  await makeRelease(join(WORK, "kits", "wrong"), manifestOf("demo/other", "1.0.0", { other: skill }), skillFiles("other", "1.0.0"));
+  const here = new Set(["a package the registry does not list", "a folder holding no meta.yaml", "a folder holding another package"]);
   const fresh = workingFolder(join(SCRATCH, "fresh"));
   for (const at of [WORK, fresh]) {
     for (const [label, args, cause] of refusals) {
-      if (at === fresh && label === "a package the registry does not list") continue;
+      if (at === fresh && here.has(label)) continue;
       const before = snapshot(at);
       const ran = await spex(at, ...args);
       assert.equal(ran.code, 1, `${label}: ${ran.stdout}${ran.stderr}`);
@@ -311,7 +318,7 @@ test("cli-15: install from the committed files alone writes no spex.lock and ins
 
   const before = { files: stamps(second) };
   const again = await ok(second, "install");
-  assert.match(again, /^Up to date demo\/tool 1\.0\.0$/m, "[cli-4] installed already");
+  assert.match(again, /^Already installed demo\/tool 1\.0\.0$/m, "[cli-4] installed already");
   const after = stamps(second);
   // Every file, the generated skills and the export manifests included,
   // keeps its bytes, its modification time and its inode.
@@ -419,7 +426,7 @@ test("cli-15: the root is found from a subfolder, and at the Git top level of a 
   for (const [label, vars, at, cause] of [
     ["a clone of the home", {}, join(clone, "sub"), /lies in the Spex home .+ — run spex in a project folder$/m],
     ["the home itself", {}, home, /lies in the Spex home .+ — run spex in a project folder$/m],
-    ["the user's home folder", userVars, user, /is your home folder, whose agent folders are your own — run spex in a project folder$/m],
+    ["the user's home folder", userVars, user, /is your home folder, where spex manages no packages — run spex in a project folder$/m],
   ] as [string, NodeJS.ProcessEnv, string, RegExp][]) {
     mkdirSync(at, { recursive: true });
     const before = { home: snapshot(home), user: snapshot(user) };
@@ -477,7 +484,25 @@ test("cli-15: list says the lock is missing or stale, and a skill a folder of yo
   writeFileSync(join(dir, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages:\n  demo/tool:\n    version: ^1.0.0\n  demo/base:\n    version: ^1.0.0\n`);
   const stale = await ok(dir, "list");
   assert.match(stale, /^Added\n {2}demo\/base {2}\^1\.0\.0\n {2}demo\/tool {2}\^1\.0\.0$/m);
-  assert.ok(stale.endsWith("\nspex.yaml changed — spex install\n"), `[cli-6] the lock stale, last with the command that installs it: ${stale}`);
+  assert.ok(stale.endsWith("\nspex.yaml changed — spex update\n"), `[cli-6] the lock stale, last with the command that updates it: ${stale}`);
+  // A lock that stands, its files not installed here, as after a clone.
+  const cloned = workingFolder(join(SCRATCH, "list-cloned"));
+  copyFileSync(join(WORK, "spex.yaml"), join(cloned, "spex.yaml"));
+  copyFileSync(join(WORK, "spex.lock"), join(cloned, "spex.lock"));
+  const unplaced = await ok(cloned, "list");
+  assert.match(unplaced, /^ {2}demo\/tool +1\.\d\.\d +from the registry +not installed$/m);
+  assert.ok(unplaced.endsWith("\nNot installed yet — spex install\n"), `[cli-6] the files not installed, last with the command that installs them: ${unplaced}`);
+  // A folder package whose meta.yaml no longer reads: fix it first.
+  const kit = workingFolder(join(SCRATCH, "list-kit"));
+  writeFileSync(join(kit, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages: {}\n`);
+  await makeRelease(join(kit, "kit"), manifestOf("acme/kit", "0.1.0", { kit: skill }), skillFiles("kit", "0.1.0"));
+  await ok(kit, "add", "acme/kit", "--path", "kit");
+  writeFileSync(join(kit, "kit", "meta.yaml"), stringifyYaml(manifestOf("acme/kit", "0.2.0", { kit: skill })));
+  assert.ok((await ok(kit, "list")).endsWith("\nacme/kit changed in kit: version 0.1.0 is now 0.2.0 — spex update\n"), "[cli-6] a folder package changed, in the Packages tab's words");
+  writeFileSync(join(kit, "kit", "meta.yaml"), stringifyYaml(manifestOf("acme/kit", "0.2.0", {})));
+  const broken = await ok(kit, "list");
+  assert.match(broken, /\nacme\/kit changed in kit: its meta\.yaml cannot be read: .+ — fix kit\/meta\.yaml, then spex update\n$/, `[cli-6] a meta.yaml that cannot be read is fixed first: ${broken}`);
+  assert.doesNotMatch(broken, /release/, "[cli-6] no word of the library's own");
 });
 
 test("cli-15: the built-in spec package a lock holds installs from this device's seed", async () => {
@@ -535,7 +560,7 @@ test("cli-15: a lock recording the app's built-in at a checksum no registry serv
   const lockBytes = write(dir, { "demo/tool": tool, "sublang/playbooks": builtin });
 
   const installed = await ok(dir, "install");
-  assert.match(installed, /^sublang\/playbooks 18\.1\.0 {2}built in, installed by Spex later$/m, "[cli-4] the built-in marked built in, Spex's to install");
+  assert.match(installed, /^sublang\/playbooks 18\.1\.0 {2}built in — the Spex app installs it when it opens this project$/m, "[cli-4] the built-in marked built in, the Spex app's to install");
   assert.match(installed, new RegExp(`^Installed demo/tool ${toolVersion}\n {2}tool {2}\\.agents/skills, \\.claude/skills$`, "m"), "[cli-4] the rest installed and placed");
   assert.doesNotMatch(installed, /not placed|yours is there/, "[cli-4] the exports cover the installed packages alone");
   assert.equal(readFileSync(join(dir, "spex.lock"), "utf8"), lockBytes, "[cli-4] the lock as written");
@@ -546,11 +571,12 @@ test("cli-15: a lock recording the app's built-in at a checksum no registry serv
   const listed = await ok(dir, "list");
   assert.match(listed, /^ {2}sublang\/playbooks +18\.1\.0 +built in +not installed$/m, "[cli-6] the built-in read built in and not installed");
   assert.match(listed, new RegExp(`^  demo/tool +${toolVersion} +from the registry +installed$`, "m"), "[cli-6] the rest installed");
-  assert.match(listed, /^ {2}review +not placed: installed by Spex later$/m, "[cli-6] the built-in's skill not placed, and why");
+  assert.match(listed, /^ {2}review +not placed: the Spex app installs it$/m, "[cli-6] the built-in's skill not placed, and why");
+  assert.doesNotMatch(listed, /Not installed yet/, "[cli-6] the built-in waits for the Spex app, nothing to install");
 
   // Again, it installs as it stands: the built-in named, nothing rewritten.
   const before = stamps(dir);
-  assert.match(await ok(dir, "install"), /^sublang\/playbooks 18\.1\.0 {2}built in, installed by Spex later$/m, "[cli-4] named again");
+  assert.match(await ok(dir, "install"), /^sublang\/playbooks 18\.1\.0 {2}built in — the Spex app installs it when it opens this project$/m, "[cli-4] named again");
   assert.deepEqual(stamps(dir), before, "[cli-4] a second install rewrites no file");
 
   // Any other spec package nothing serves fails the install naming it,
@@ -593,7 +619,7 @@ const exportsIn = (dir: string, folder: string): string[] => {
   return existsSync(file) ? JSON.parse(readFileSync(file, "utf8")).skills : [];
 };
 
-test("cli-15: new makes spex-packages/<org>/<pkg>/, adds it by path and places its skills; --move leaves the skill as Spex's export", async () => {
+test("cli-15: new makes spex-packages/<org>/<pkg>/, adds it by path and places its skills; --move leaves the skill placed there by Spex", async () => {
   const dir = project();
   const made = await ok(dir, "new", "acme/hello", "--skill", ".claude/skills/greet", "--spec", "specs/hello.md");
   const folder = join(dir, "spex-packages", "acme", "hello");
@@ -631,13 +657,13 @@ test("cli-15: new makes spex-packages/<org>/<pkg>/, adds it by path and places i
   assert.match(made, /^Made spex-packages\/acme\/hello\/ for acme\/hello \(skill greet, spec hello\)\.$/m, "[cli-8] the folder");
   assert.match(made, /^Next: edit spex-packages\/acme\/hello\/, then\n {2}spex publish acme\/hello --dry-run\n {2}spex publish acme\/hello$/m, "[cli-8] the next steps");
 
-  // --move: the original folder now stands as Spex's export.
+  // --move: the original folder now stands placed there by Spex.
   const moved = project();
   const movedOut = await ok(moved, "new", "acme/greeting", "--skill", ".claude/skills/greet", "--move");
   assert.ok(exportsIn(moved, ".claude/skills").includes("greet"), "[cli-8] .claude/skills/greet/ is Spex's export now");
   assert.equal(readFileSync(join(moved, ".claude", "skills", "greet", "SKILL.md"), "utf8"), GREET_MD);
   assert.ok(existsSync(join(moved, "spex-packages", "acme", "greeting", "skills", "en", "greet", "scripts", "wave.sh")));
-  assert.match(movedOut, /^The skill greet moved from \.claude\/skills\/greet\/ now stands there as Spex's export\.$/m, "[cli-8] the moved-skill note");
+  assert.match(movedOut, /^The skill greet now stands in \.claude\/skills\/greet\/, placed there by Spex\.$/m, "[cli-8] the moved-skill note");
   assert.doesNotMatch(movedOut, /yours is there/);
 
   // A spec alone: the description from its Intent; MIT past a byte
@@ -733,7 +759,7 @@ test("cli-15: new refuses each rule before writing anything", async () => {
   assert.deepEqual(snapshot(dir), before, "[cli-8] an existing destination is left as it was");
 });
 
-test("cli-16: publish by name to the registry spex.yaml names, named by its own display name, a dry run uploading nothing, each refusal before any upload", async () => {
+test("cli-16: publish by name to the registry spex.yaml names, named by its own display name, a dry run publishing nothing, each refusal before any upload", async () => {
   // The publisher's home lists another instance first, its default, and
   // is signed in at the stand-in, which spex.yaml names as its space.
   const elsewhere = "http://127.0.0.1:9";
@@ -756,15 +782,15 @@ test("cli-16: publish by name to the registry spex.yaml names, named by its own 
 
   const dry = await okAt(PUBLISHER, dir, "publish", "acme/hello", "--dry-run");
   assert.equal(dry, [
-    `Destination: ${REGISTRY}, acme/hello@0.1.0`,
-    "Files (dry run, nothing uploaded):",
+    `Publishing acme/hello@0.1.0 to ${REGISTRY}`,
+    "Files (dry run, nothing published):",
     "  LICENSE", "  README.md", "  meta.yaml", "  skills/en/greet/SKILL.md", "  skills/en/greet/scripts/wave.sh", "  specs/en/hello.md",
     "",
   ].join("\n"), "[cli-9] the registry's own name, never the Space entry's at its origin, the package and its files");
-  assert.deepEqual(uploads(), [], "[cli-9] a dry run uploads nothing");
+  assert.deepEqual(uploads(), [], "[cli-9] a dry run publishes nothing");
 
   const published = await okAt(PUBLISHER, dir, "publish", "acme/hello");
-  assert.equal(published, `Destination: ${REGISTRY}, acme/hello@0.1.0\nPublished: ${registry.url}/acme/hello\n`, "[cli-9] the package's page at the registry");
+  assert.equal(published, `Publishing acme/hello@0.1.0 to ${REGISTRY}\nPublished: ${registry.url}/acme/hello\n`, "[cli-9] the package's page at the registry");
   assert.deepEqual(uploads(), ["PUT /api/v1/packages/acme/hello/0.1.0"]);
   const reader = new RegistryClient({ url: registry.url, token: async () => TOKEN });
   assert.deepEqual((await reader.index("acme/hello")).versions.map((entry) => entry.version), ["0.1.0"], "[cli-9] the release landed there");
@@ -772,7 +798,7 @@ test("cli-16: publish by name to the registry spex.yaml names, named by its own 
   // With no name and one package under spex-packages/, that package.
   const meta = join(dir, "spex-packages", "acme", "hello", "meta.yaml");
   writeFileSync(meta, readFileSync(meta, "utf8").replace('version: "0.1.0"', 'version: "0.2.0"'));
-  assert.match(await okAt(PUBLISHER, dir, "publish"), new RegExp(`^Destination: ${REGISTRY}, acme/hello@0\\.2\\.0$`, "m"), "[cli-9] the one package");
+  assert.match(await okAt(PUBLISHER, dir, "publish"), new RegExp(`^Publishing acme/hello@0\\.2\\.0 to ${REGISTRY}$`, "m"), "[cli-9] the one package");
   assert.equal(uploads().length, 2);
 
   // Each refusal, before any upload.
@@ -781,7 +807,7 @@ test("cli-16: publish by name to the registry spex.yaml names, named by its own 
   mkdirSync(join(dir, "spex-packages", "acme", "broken"));
   writeFileSync(join(dir, "spex-packages", "acme", "broken", "meta.yaml"), "format: 1\n");
   const refusals: [string, string, string[], RegExp][] = [
-    ["no folder", PUBLISHER, ["publish", "acme/nothing"], /^spex publish: acme\/nothing has no folder here: spex-packages\/acme\/nothing is not there — spex new acme\/nothing makes one$/m],
+    ["no folder", PUBLISHER, ["publish", "acme/nothing"], /^spex publish: no folder for acme\/nothing at spex-packages\/acme\/nothing — spex new acme\/nothing starts one$/m],
     ["another package's manifest", PUBLISHER, ["publish", "acme/other"], /^spex publish: spex-packages\/acme\/other holds acme\/hello, not acme\/other — fix the name in its meta\.yaml, or publish acme\/hello$/m],
     ["a folder that is no release", PUBLISHER, ["publish", "acme/broken"], /^spex publish: spex-packages\/acme\/broken is not a package: .+ — fix it, then retry$/m],
     ["a missing license", PUBLISHER, ["publish", "acme/bare"], /^spex publish: spex-packages\/acme\/bare cannot be published: meta\.yaml: missing required field "license" — add it to its meta\.yaml$/m],
@@ -801,7 +827,7 @@ test("cli-18: exit 0, 1 and 130 with the cause on standard error, no token print
   // A refusal: 1, its cause on standard error naming the command.
   const unknown = await spex(WORK, "install", "--bogus");
   assert.equal(unknown.code, 1, "[cli-13] a refusal exits 1");
-  assert.equal(unknown.stderr, "spex install: unknown option --bogus\nusage: spex install\n", "[cli-13] the cause on standard error, in the CLI's words, then the command's usage");
+  assert.equal(unknown.stderr, "spex install: unknown option --bogus\nUsage: spex install\n", "[cli-13] the cause on standard error, in the CLI's words, then the command's usage");
   assert.equal(unknown.stdout, "");
   // A failure the registry answers, signed in: 1, its words, no token.
   const again = await spexAt(PUBLISHER, publishedFrom, "publish", "acme/hello");
@@ -893,6 +919,21 @@ test("cli-18: each cause of the table names the registry by its name and ends in
   await refusedWith(signedIn, dir, ["add", "demo/none"], `demo/none: not at ${REGISTRY}, or not shared with @sam — check the name, or ask its owner`, "a package the registry lists to no account signed in");
   await refusedWith(signedIn, publishedFrom, ["publish", "acme/hello"], `acme is not yours at ${REGISTRY} — claim it at ${registry.url}/account/orgs`, "a refused publish (403)");
 
+  // The same package asked by spex.yaml, its spex.lock written by an
+  // install or an update: the registry's answer, never a conflict of
+  // versions.
+  const asking = workingFolder(join(SCRATCH, "causes-asking"));
+  writeFileSync(join(asking, "spex.yaml"), `format: 1\nregistry: ${registry.url}\npackages:\n  secret/tool:\n    version: ^1.0.0\n`);
+  for (const command of ["install", "update"]) {
+    await refusedWith(HOME, asking, [command], `secret/tool: not at ${REGISTRY}, or private — spex login, then retry`, `a private package to a device signed out, at ${command}`);
+    await refusedWith(signedIn, asking, [command], `secret/tool: not shared with @sam at ${REGISTRY} — ask its owner`, `a refused read (403), at ${command}`);
+  }
+
+  // A spex.yaml naming no registry reads with its Space's sign-in.
+  const legacy = workingFolder(join(SCRATCH, "causes-legacy"));
+  writeFileSync(join(legacy, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages: {}\n`);
+  await refusedWith(HOME, legacy, ["add", "secret/tool"], `secret/tool: not at ${REGISTRY}, or private — spex login --space ${registry.url}, then retry`, "a private package to a device signed out of the Space a spex.yaml naming no registry reads with");
+
   // The sign-in expired.
   registry.script.refuseTokens(other, "token_expired");
   try {
@@ -919,8 +960,36 @@ test("cli-18: each cause of the table names the registry by its name and ends in
   const unreadable = workingFolder(join(SCRATCH, "causes-unreadable"));
   writeFileSync(join(unreadable, "spex.yaml"), `format: 1\nregistry: ${registry.url}\npackages:\n  demo/tool:\n    version: ^1.0.0\n`);
   writeFileSync(join(unreadable, "spex.lock"), "format: 1\nrequests: 5\npackages: {}\n");
-  await refusedWith(HOME, unreadable, ["install"], "spex.lock does not read: requests is not a digest — spex update rewrites it", "a lock that does not read");
+  await refusedWith(HOME, unreadable, ["install"], "spex.lock cannot be read: requests is not a digest — spex update rewrites it", "a lock that does not read");
   const rewritten = await ok(unreadable, "update");
   assert.match(rewritten, /^Wrote spex\.lock\nAdded demo\/tool 1\.\d\.\d$/m, "[cli-5] spex update rewrites a lock that does not read");
   assert.ok(parseLock(readFileSync(join(unreadable, "spex.lock"), "utf8")).packages["demo/tool"]);
+
+  // A spex.lock naming a package's registry by no address: never asked,
+  // on a home whose store lacks the files.
+  const text = `format: 1\nregistry: ${registry.url}\npackages:\n  demo/tool:\n    version: ^1.0.0\n`;
+  const made = workingFolder(join(SCRATCH, "causes-unasked-made"));
+  writeFileSync(join(made, "spex.yaml"), text);
+  await ok(made, "install");
+  const unasked = workingFolder(join(SCRATCH, "causes-unasked"));
+  writeFileSync(join(unasked, "spex.yaml"), text);
+  const madeLock = readFileSync(join(made, "spex.lock"), "utf8");
+  assert.ok(madeLock.includes(`registry: ${registry.url}\n`));
+  writeFileSync(join(unasked, "spex.lock"), madeLock.replace(`registry: ${registry.url}\n`, "registry: spex-registry\n"));
+  const bare = join(SCRATCH, "causes-bare-home");
+  mkdirSync(bare, { recursive: true });
+  copyFileSync(join(HOME, "home.yaml"), join(bare, "home.yaml"));
+  await refusedWith(bare, unasked, ["install"], "demo/tool: spex.lock names no registry address for it — spex update writes spex.lock again", "a spex.lock naming its registry by no address");
+
+  // A folder package whose folder is missing, holds no meta.yaml, or
+  // holds one that does not read: the CLI's words and what to do.
+  const folders = workingFolder(join(SCRATCH, "causes-folders"));
+  writeFileSync(join(folders, "spex.yaml"), `format: 1\nregistry: ${registry.url}\npackages:\n  demo/tool:\n    path: kit\n`);
+  await refusedWith(HOME, folders, ["install"], "demo/tool: no folder at kit — fix its path in spex.yaml, or spex remove demo/tool", "a folder package whose folder is missing");
+  mkdirSync(join(folders, "kit"));
+  await refusedWith(HOME, folders, ["update"], "demo/tool: kit has no meta.yaml, so it is no package — fix its path in spex.yaml, or spex remove demo/tool", "a folder package whose folder holds no meta.yaml");
+  writeFileSync(join(folders, "kit", "meta.yaml"), stringifyYaml(manifestOf("demo/tool", "1.0.0", {})));
+  const notPackage = await spex(folders, "install");
+  assert.equal(notPackage.code, 1, notPackage.stdout + notPackage.stderr);
+  assert.match(notPackage.stderr, /^spex install: demo\/tool: kit is not a package: .+ — fix its meta\.yaml, then retry\n$/, `[cli-13] a folder that is no package: ${notPackage.stderr}`);
 });

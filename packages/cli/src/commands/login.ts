@@ -22,14 +22,14 @@ import { Interrupted, options, Refusal, type Command } from "./run.js";
 /** A sign-in that ended without an account, as one phrase ending in
  * what to do (cli-13). */
 function signInCause(error: unknown, name: string): string {
-  if (!(error instanceof HostError) || error.cause === undefined) return `not signed in: ${hostCause(error, name)}`;
+  if (!(error instanceof HostError) || error.cause === undefined) return `not signed in: ${hostCause(error, name, "spex login to try again")}`;
   switch (error.cause) {
     case "denied": return `not signed in: the code was denied at ${name} — spex login to try again`;
     case "expired": return `not signed in: the code expired at ${name} — spex login to try again`;
     case "account": return `not signed in: this computer is signed in at ${name} as @${error.words} — sign in there as @${error.words}`;
     case "stopped": return `not signed in: your sign-in at ${name} changed meanwhile — spex login to try again`;
     case "unreachable": return `not signed in: ${name} could not be reached — check the connection, then retry`;
-    default: return `not signed in: ${name} refused the sign-in${error.words ? `: ${error.words}` : error.code ? `: ${error.code}` : ""}`;
+    default: return `not signed in: ${name} refused the sign-in${error.words ? ` (${error.words})` : error.code ? ` (${error.code})` : ""} — spex login to try again`;
   }
 }
 
@@ -69,7 +69,7 @@ export const login: Command = async (args, interrupt) => {
   try {
     held = await credentials.read();
   } catch (error) {
-    throw new Refusal(`your sign-in at ${name} does not read: ${(error as Error).message}`);
+    throw new Refusal(`your sign-in at ${name} cannot be read: ${(error as Error).message} — spex logout, then spex login`);
   }
   const entry = home ? instanceAt(home, origin) : undefined;
   if (held && (scope === "registry" || signedIn(entry)) && values.force !== true) {
@@ -85,7 +85,9 @@ export const login: Command = async (args, interrupt) => {
       }
     }
     if (held) {
-      console.log(`Already signed in at ${name} as @${login} — spex login --force signs in again`);
+      // The command that signs in again here, the target named as given.
+      const target = values.space !== undefined ? ` --space ${origin}` : values.registry !== undefined ? ` --registry ${origin}` : "";
+      console.log(`Already signed in at ${name} as @${login} — spex login${target} --force signs in again`);
       return;
     }
   }
@@ -178,7 +180,11 @@ export const login: Command = async (args, interrupt) => {
       if (issued && credentials.replace(issued, held)) {
         await clientOf(origin, heldOnly(issued)).signOut().catch(() => undefined);
       }
-      throw new Refusal(`not signed in: ${(error as Error).message}; nothing recorded`);
+      // The home file's own words name it and why; a layout from a
+      // newer Spex needs that Spex.
+      const reason = (error as Error).message;
+      const next = /unsupported format/.test(reason) ? "update Spex, then spex login again" : "fix the file, then spex login again";
+      throw new Refusal(`not signed in, nothing recorded: ${reason.includes(homeFilePath(dir)) ? reason : `${homeFilePath(dir)}: ${reason}`} — ${next}`);
     }
     // A forced sign-in replaced the device's former token: that device
     // is revoked at the instance, so it lists this device once.

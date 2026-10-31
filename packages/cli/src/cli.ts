@@ -35,9 +35,10 @@ function say(text: string): void {
   process.exitCode = 0;
 }
 
-/** Refuse a word naming no command, on one line (cli-13). */
+/** Refuse a word naming no command, on one line, in the form a command's
+ * own refusal takes (cli-13). */
 function unknown(word: string): void {
-  process.stderr.write(`${word.startsWith("-") ? "unknown option" : "unknown command:"} ${word} \u2014 spex --help\n`);
+  process.stderr.write(`spex: ${word.startsWith("-") ? "unknown option" : "unknown command"} ${word} \u2014 spex --help\n`);
   process.exitCode = 1;
 }
 
@@ -68,7 +69,7 @@ async function main(): Promise<void> {
   if (command === "--version" || command === "-V") {
     const installed = version();
     if (installed !== undefined) return say(`spex ${installed}`);
-    process.stderr.write("spex: package.json does not read \u2014 reinstall @sublang/spex\n");
+    process.stderr.write("spex: package.json cannot be read \u2014 reinstall @sublang/spex\n");
     process.exitCode = 1;
     return;
   }

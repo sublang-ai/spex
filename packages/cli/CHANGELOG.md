@@ -21,19 +21,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Every printed line speaks the Packages tab's words. `spex list` heads
   with `Folder` and `Registry`, then lists what is Added, Installed and
-  placed under Skills for agents; `add`, `remove`, `install` and
-  `update` say Added, Updated, Removed, Installed and Up to date. The
-  built-in playbooks read `built in`, and `spex remove sublang/playbooks`
-  is refused: "sublang/playbooks comes with Spex".
+  placed under Skills for agents, last with what to do where `spex.lock`
+  is stale or a package is not installed; `add`, `remove`, `install` and
+  `update` say Added, Updated, Removed and Installed, `install` says
+  Already installed for a package in place, and `update` says Up to date
+  where nothing moved. `publish` says `Publishing <org>/<pkg>@<version>
+  to <registry>`. The built-in playbooks read `built in`, and
+  `spex remove sublang/playbooks` is refused: "sublang/playbooks comes
+  with Spex".
 - A registry is named by the display name its descriptor gives, kept in
   the home's `cache/registries/`, else by its host, and never by a Space
   at the same address. `whoami` lists the registry and every Space in
   one grammar; `login` and `logout` print one line each.
 - Every refusal is one phrase ending in what to do: an unknown command
   or option with the command's usage, a package not at the registry or
-  private, an expired sign-in, a registry that cannot be reached or is
-  down, an org not yours, and a `spex.lock` from a newer Spex or one
-  that does not read, which `spex update` writes again.
+  private — at `install` and `update` too, never a conflict of versions —
+  an expired sign-in, a registry that cannot be reached or is down, an
+  org not yours, a folder package's folder missing or holding no
+  package, and a `spex.lock` from a newer Spex or one that cannot be
+  read, which `spex update` writes again. `spex add --path` checks the
+  folder holds the package before writing `spex.yaml`.
 - The stand-in registry of `@sublang/spex/testing` describes itself at
   `/api/v1/registry` and names a scripted account at `/api/v1/whoami`.
 
