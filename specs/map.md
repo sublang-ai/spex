@@ -199,7 +199,7 @@ meta.md       The spec of specs
 | [DR-174](decisions/174-owned-session-start-wait.md) | 174-owned-session-start-wait.md | Observe the single owned session creation through initialization without a false UI deadline or automatic resend |
 | [DR-175](decisions/175-windows-bounded-codex-commands.md) | 175-windows-bounded-codex-commands.md | Native Windows bounded Codex command transport through supplied Cligent |
 | [DR-176](decisions/176-native-desktop-tag-packages.md) | 176-native-desktop-tag-packages.md | App tags build native macOS arm64 and Windows x64 packages; both builds gate one release with checksums; amends DR-040 |
-| [DR-177](decisions/177-native-desktop-installers.md) | 177-native-desktop-installers.md | macOS M-series DMG and Windows Intel/AMD x86-64 NSIS installer; amends DR-170 for the Mac download format |
+| [DR-177](decisions/177-native-desktop-installers.md) | 177-native-desktop-installers.md | macOS M-series DMG and Windows Intel/AMD x86-64 NSIS installer; amends DR-176 for the Mac download format |
 
 ## Packages
 

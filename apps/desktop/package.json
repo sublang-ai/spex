@@ -1,8 +1,8 @@
 {
   "name": "spex-desktop",
-  "version": "0.9.0-beta.19",
+  "version": "0.9.0-beta.20",
   "private": true,
-  "description": "Spex \u2014 the desktop app for running playbooks",
+  "description": "Spex — the desktop app for running playbooks",
   "author": {
     "name": "SubLang International"
   },

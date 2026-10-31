@@ -17,7 +17,7 @@ const read = (path) => readFileSync(new URL(path, root), "utf8");
 const workflow = parse(read(".github/workflows/app-release.yml"));
 const desktop = JSON.parse(read("apps/desktop/package.json"));
 
-test("release-38: only app tags enter CI-gated preparation, with version and notes checked before builds", () => {
+test("release-40: only app tags enter CI-gated preparation, with version and notes checked before builds", () => {
   assert.deepEqual(workflow.on, { push: { tags: ["app-v*"] } });
   assert.deepEqual(workflow.permissions, {});
   assert.equal(workflow.concurrency["cancel-in-progress"], false);
@@ -37,7 +37,7 @@ test("release-38: only app tags enter CI-gated preparation, with version and not
   assert.equal(prepare.steps.find((s) => s.uses?.startsWith("actions/checkout@")).with["fetch-depth"], 0);
 });
 
-test("release-38: both native jobs build locked dependencies and upload their exact versioned download", () => {
+test("release-40: both native jobs build locked dependencies and upload their exact versioned download", () => {
   const job = workflow.jobs.package;
   assert.equal(job.needs, "prepare");
   assert.equal(job.strategy["fail-fast"], false);
@@ -73,7 +73,7 @@ test("release-38: both native jobs build locked dependencies and upload their ex
   assert.deepEqual(desktop.build.asarUnpack, ["node_modules/**/*"]);
 });
 
-test("release-38: the sole publisher waits for both platforms, requires both downloads and adds checksums", () => {
+test("release-40: the sole publisher waits for both platforms, requires both downloads and adds checksums", () => {
   const release = workflow.jobs.release;
   assert.deepEqual(release.needs, ["prepare", "package"]);
   assert.equal(release.if, undefined, "failed needs must skip publication");
@@ -98,7 +98,7 @@ test("release-38: the sole publisher waits for both platforms, requires both dow
   assert.equal(publish.with.prerelease, "${{ needs.prepare.outputs.beta == 'true' }}");
 });
 
-test("release-38: the publication command rejects a missing platform and hashes both supplied downloads", { skip: process.platform === "win32" }, (t) => {
+test("release-40: the publication command rejects a missing platform and hashes both supplied downloads", { skip: process.platform === "win32" }, (t) => {
   const dir = mkdtempSync(join(tmpdir(), "spex-release-assets-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const version = "1.2.3-beta.1";
