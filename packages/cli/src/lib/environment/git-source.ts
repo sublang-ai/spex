@@ -19,6 +19,8 @@ import { readTar } from "./tar.js";
 export interface GitCredential {
   username: string;
   secret: string;
+  /** A brokered credential's permitted HTTP(S) origin, retained for its helper. */
+  origin?: string;
 }
 
 export interface GitSource {

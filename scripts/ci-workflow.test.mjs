@@ -36,6 +36,9 @@ test("release-33: a pull request runs the reduced matrix, main and the nightly t
     return { pullRequest: JSON.parse(m[1]), other: JSON.parse(m[2]) };
   };
   const test = workflow.jobs.test;
+  const lfs = test.steps.find((step) => step.run === "git lfs version");
+  assert.ok(lfs, "complete app tests require real Git LFS");
+  assert.equal(lfs.if, "runner.os != 'Windows'", "the prerequisite runs wherever complete app tests run");
   const exclude = byEvent(test.strategy.matrix.exclude);
   assert.deepEqual(exclude.pullRequest, [{ os: "windows-latest", "node-version": 24 }, { os: "macos-latest", "node-version": 22 }, { os: "macos-latest", "node-version": 24 }]);
   assert.deepEqual(exclude.other, [{ os: "windows-latest", "node-version": 24 }]);
