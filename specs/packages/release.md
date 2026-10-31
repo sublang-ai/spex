@@ -80,13 +80,13 @@ When a release tag is pushed, the release workflow shall confirm the CI workflow
 Where the repo hosts multiple release channels ([DR-002](../decisions/002-desktop-app-architecture.md)), release tags shall use disjoint namespaces per channel ([DR-056](../decisions/056-release-naming.md)):
 
 - tags matching `cli-vMAJOR.MINOR.PATCH` release only the `@sublang/spex` package from `packages/cli`;
-- tags matching `app-vMAJOR.MINOR.PATCH` release the app — source instructions for both shells and native desktop downloads [[release-37](#release-37)] ([DR-170](../decisions/176-native-desktop-tag-packages.md));
+- tags matching `app-vMAJOR.MINOR.PATCH` release the app — source instructions for both shells and native desktop downloads [[release-39](#release-39)] ([DR-176](../decisions/176-native-desktop-tag-packages.md));
 - tags matching `app-vMAJOR.MINOR.PATCH-beta.N`, `N` counting from 1 within one version, release a beta of the app with the same downloads and source instructions, marked pre-release ([DR-087](../decisions/087-beta-app-releases.md)); a tag carrying any other pre-release identifier is refused;
 - historical `vMAJOR.MINOR.PATCH` CLI tags remain valid release-history evidence; published tags and their URLs are preserved when titles are normalized.
 
-#### release-37
+#### release-39
 
-When an app tag passes the existing CI, version, changelog and build/test gates [[release-18](#release-18)] [[release-8](#release-8)], the app release workflow shall publish a macOS Apple Silicon ZIP and a Windows x64 per-user NSIS installer only after both native packaging jobs succeed ([DR-170](../decisions/176-native-desktop-tag-packages.md)):
+When an app tag passes the existing CI, version, changelog and build/test gates [[release-18](#release-18)] [[release-8](#release-8)], the app release workflow shall publish a macOS Apple Silicon DMG and a Windows x64 per-user NSIS installer ([DR-177](../decisions/177-native-desktop-installers.md)) only after both native packaging jobs succeed ([DR-176](../decisions/176-native-desktop-tag-packages.md)):
 
 - each job installs the tagged tree's locked dependencies, builds it on the target OS and uploads its exact versioned download, failing on a missing file;
 - packaging commands do not publish; only the final job has release-write permission;
@@ -143,11 +143,11 @@ When preparing a release tag, the developer/agent shall run the automated smoke 
 
 #### release-21
 
-When preparing a regular app release tag, the developer/agent shall complete the manual smoke checklist (`docs/release-smoke.md`) — the residue no automation sees: the native notification and the dock badge of a settled turn, the desktop releasing the home on `Ctrl+C` in `npm start` [[app-shell-39](app-shell.md#app-shell-39)], and the packaged app as a local option ([DR-170](../decisions/176-native-desktop-tag-packages.md)) — with a failing step blocking the tag until resolved:
+When preparing a regular app release tag, the developer/agent shall complete the manual smoke checklist (`docs/release-smoke.md`) — the residue no automation sees: the native notification and the dock badge of a settled turn, the desktop releasing the home on `Ctrl+C` in `npm start` [[app-shell-39](app-shell.md#app-shell-39)], and the packaged app as a local option ([DR-176](../decisions/176-native-desktop-tag-packages.md)) — with a failing step blocking the tag until resolved:
 
 - a CLI release tag is not gated on it: the checklist's only CLI step is the tarball inspection that [[release-17](#release-17)] already requires and [[release-23](#release-23)] verifies;
 - a beta app release tag is not gated on it ([DR-087](../decisions/087-beta-app-releases.md));
-- the checklist's local packaging pass is optional; both native packaging jobs remain publication gates [[release-37](#release-37)].
+- the checklist's local packaging pass is optional; both native packaging jobs remain publication gates [[release-39](#release-39)].
 
 #### release-22
 
@@ -262,9 +262,9 @@ When a release candidate tarball is inspected via `npm pack --dry-run`, the insp
 
 ### Release Workflow
 
-#### release-38
+#### release-40
 
-When the repository-system audit reads the app release workflow and desktop packaging commands, the test suite shall assert the tag-only trigger, unchanged CI-green prerequisite, native macOS and Windows jobs installing and building the tagged tree, versioned artifact names and missing-file failures, non-publishing package commands and the final release's dependency on both builds, required files, checksums and exclusive release-write permission [[release-37](#release-37)] [[release-19](#release-19)].
+When the repository-system audit reads the app release workflow and desktop packaging commands, the test suite shall assert the tag-only trigger, unchanged CI-green prerequisite, native macOS and Windows jobs installing and building the tagged tree, versioned artifact names and missing-file failures, non-publishing package commands and the final release's dependency on both builds, required files, checksums and exclusive release-write permission [[release-39](#release-39)] [[release-19](#release-19)].
 
 #### release-28
 

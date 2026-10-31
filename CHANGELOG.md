@@ -26,11 +26,11 @@ source; run source with `npm ci` and `npm start` (desktop) or
   A server seat needs its own registry sign-in for private packages.
   Existing manifests and lock sources remain preserved until explicitly
   changed.
-- App tags build a macOS Apple Silicon ZIP and a Windows x64 per-user
+- App tags build a macOS Apple Silicon DMG and a Windows x64 per-user
   installer on native runners. Both builds must succeed before the
   release publishes both downloads and SHA-256 checksums; source
   instructions remain available. Builds are unsigned and the macOS app
-  is not notarized ([DR-170](specs/decisions/170-native-desktop-tag-packages.md)).
+  is not notarized ([DR-176](specs/decisions/176-native-desktop-tag-packages.md)).
 
 - Applets in the IDE ([DR-161](specs/decisions/161-an-applet-is-a-page-the-ide-serves.md)).
   A spec package's applet is a static web page entered at

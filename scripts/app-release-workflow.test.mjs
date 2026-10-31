@@ -42,7 +42,7 @@ test("release-38: both native jobs build locked dependencies and upload their ex
   assert.equal(job.needs, "prepare");
   assert.equal(job.strategy["fail-fast"], false);
   assert.deepEqual(job.strategy.matrix.include, [
-    { os: "macos-15", script: "package:mac", asset: "mac-arm64.zip" },
+    { os: "macos-15", script: "package:mac", asset: "mac-arm64.dmg" },
     { os: "windows-2022", script: "package:windows", asset: "win-x64.exe" },
   ]);
   assert.equal(job["runs-on"], "${{ matrix.os }}");
@@ -63,8 +63,10 @@ test("release-38: both native jobs build locked dependencies and upload their ex
     assert.match(desktop.scripts[name], /--publish never$/);
     assert.match(desktop.scripts[name], /rebuild:electron/);
   }
-  assert.match(desktop.scripts["package:mac"], /--mac zip --arm64/);
+  assert.match(desktop.scripts["package:mac"], /--mac dmg --arm64/);
   assert.match(desktop.scripts["package:windows"], /stage:windows-runtime.*--win nsis --x64/);
+  assert.deepEqual(desktop.build.mac.target, [{ target: "dmg", arch: ["arm64"] }]);
+  assert.deepEqual(desktop.build.win.target, [{ target: "nsis", arch: ["x64"] }]);
   assert.equal(desktop.build.mac.artifactName, "Spex-${version}-mac-${arch}.${ext}");
   assert.equal(desktop.build.win.artifactName, "Spex-${version}-win-${arch}.${ext}");
   assert.equal(desktop.build.nsis.perMachine, false);
@@ -86,13 +88,13 @@ test("release-38: the sole publisher waits for both platforms, requires both dow
   assert.equal(sums["working-directory"], "artifacts");
   assert.equal(sums.env.VERSION, "${{ needs.prepare.outputs.version }}");
   assert.match(sums.run, /set -euo pipefail/);
-  assert.match(sums.run, /test -s "Spex-\$VERSION-mac-arm64\.zip"/);
+  assert.match(sums.run, /test -s "Spex-\$VERSION-mac-arm64\.dmg"/);
   assert.match(sums.run, /test -s "Spex-\$VERSION-win-x64\.exe"/);
-  assert.match(sums.run, /sha256sum "Spex-\$VERSION-mac-arm64\.zip" "Spex-\$VERSION-win-x64\.exe" > SHA256SUMS/);
+  assert.match(sums.run, /sha256sum "Spex-\$VERSION-mac-arm64\.dmg" "Spex-\$VERSION-win-x64\.exe" > SHA256SUMS/);
   const publish = release.steps.at(-1);
   assert.ok(publish.uses.startsWith("softprops/action-gh-release@"));
   assert.equal(publish.with["fail_on_unmatched_files"], true);
-  assert.deepEqual(publish.with.files.trim().split("\n"), ["artifacts/*.zip", "artifacts/*.exe", "artifacts/SHA256SUMS"]);
+  assert.deepEqual(publish.with.files.trim().split("\n"), ["artifacts/*.dmg", "artifacts/*.exe", "artifacts/SHA256SUMS"]);
   assert.equal(publish.with.prerelease, "${{ needs.prepare.outputs.beta == 'true' }}");
 });
 
@@ -100,7 +102,7 @@ test("release-38: the publication command rejects a missing platform and hashes 
   const dir = mkdtempSync(join(tmpdir(), "spex-release-assets-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const version = "1.2.3-beta.1";
-  const mac = `Spex-${version}-mac-arm64.zip`;
+  const mac = `Spex-${version}-mac-arm64.dmg`;
   const win = `Spex-${version}-win-x64.exe`;
   const command = workflow.jobs.release.steps.find((s) => s.run).run;
   const run = () => spawnSync("bash", ["-c", command], {

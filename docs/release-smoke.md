@@ -206,7 +206,7 @@ What no automation sees (release-21).
 | Step | Expect |
 | --- | --- |
 | A settled turn's notification and badge: `SPEX_SMOKE_MANUAL=1 npm run smoke:desktop` | The native notification follows the scratch preferences; the dock badge matches the Dashboard's attention, and a cleanly settled standalone session leaves both at zero. A failure blocks the tag. |
-| Local package preview: `npm run package:mac -w apps/desktop` on macOS, or `npm run package:windows -w apps/desktop` on Windows | The ZIP or installer in `apps/desktop/release/` carries the product icon; the packaged app boots to the Captain home and seeds the Academy example. Both native builds are required by the tag workflow ([DR-170](../specs/decisions/170-native-desktop-tag-packages.md)). |
+| Local package preview: `npm run package:mac -w apps/desktop` on macOS, or `npm run package:windows -w apps/desktop` on Windows | The DMG or installer in `apps/desktop/release/` carries the product icon; the packaged app boots to the Captain home and seeds the Academy example. Both native builds are required by the tag workflow ([DR-170](../specs/decisions/170-native-desktop-tag-packages.md)). |
 | `Ctrl+C` in the terminal running `npm start` against a scratch home (`SPEX_HOME=$(mktemp -d) npm start`) | The app quits without a confirmation, the command returns 130 after the Node restore, and the scratch home holds no `.lease/`, only `.lease.retired/<token>/` ([DR-108](../specs/decisions/108-the-root-lease-names-the-machine.md)). A failure blocks the tag. |
 
 ## 5. Beta app releases
@@ -246,7 +246,7 @@ The app release workflow waits for that commit's green CI, validates the
 version and notes, then builds on macOS and Windows native runners.
 Only after both succeed does one release publish:
 
-- `Spex-<version>-mac-arm64.zip` — macOS Apple Silicon.
+- `Spex-<version>-mac-arm64.dmg` — macOS Apple Silicon.
 - `Spex-<version>-win-x64.exe` — Windows x64 per-user NSIS installer.
 - `SHA256SUMS` — both downloads' SHA-256 hashes.
 

@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-178: Session Creation Waits for Initialization
+# DR-179: Session Creation Waits for Initialization
 
 ## Status
 
