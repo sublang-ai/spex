@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
-import { test, expect, open, nav, signInCore, refreshProjectKey } from "../src/harness";
+import { test, expect, open, nav, signInCore, refreshProjectKey, spaceChooser, spaceAddress, chosenSpace, chooseSpace } from "../src/harness";
 
 test.use({ appOptions: { project: true, host: { registry: true }, independentRegistry: true } });
 
@@ -36,11 +36,16 @@ test("playbook-library-120/space-116: independent same-origin registry account, 
   await expect(card.getByRole("button", { name: "Sign in to registry", exact: true })).toBeVisible();
   expect((await app.core.command("space.get", {})).instances.find((entry) => entry.origin === host.url)?.signedIn).toBe(true);
   await nav(page, "Space").click();
-  await page.getByTestId("space-add-instance").click();
-  const directory = page.getByTestId("space-directory");
-  await expect(directory.getByRole("combobox")).toBeVisible();
-  await directory.getByRole("combobox").selectOption(host.url);
-  await expect(page.getByTestId("space-signin-instance")).toHaveValue(host.url);
-  await page.getByTestId("space-signin-instance").fill("https://custom.example");
-  await expect(page.getByTestId("space-signin-instance")).toHaveValue("https://custom.example");
+  await page.getByTestId("space-add-space").click();
+  // The card's chooser lists the directory's Spaces by display name,
+  // the stand-in preselected; "Other Space…" reveals the address field
+  // (space-115).
+  const signIn = page.getByTestId("space-add-card");
+  await expect(spaceChooser(signIn)).toBeVisible();
+  await expect.poll(() => chosenSpace(signIn)).toContain("Stand-in Git host");
+  await expect(spaceAddress(signIn)).toBeHidden();
+  await chooseSpace(signIn, "Other Space…");
+  await expect(spaceAddress(signIn)).toBeVisible();
+  await spaceAddress(signIn).fill("https://custom.example");
+  await expect(spaceAddress(signIn)).toHaveValue("https://custom.example");
 });

@@ -1,20 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// space-113: the Space surface reads as projects in groups (DR-159). A
-// signed-in home whose instance lists a group `acme` holding a subgroup
-// `acme/research`, a project `alpha-spex` cloned here, one `beta-spex`
-// not on this device, `acme-spex` as the group's own, one server `lab-1`
-// of `acme`, a repository under another login `bob`, and your namespace
-// holding your own group's repository alone, with one seat open at
-// `lab-1` holding `beta-spex` — a second instance signed in beside it so
-// "Place at…" has somewhere to go. In English and in Chinese the test
-// reads, through the surface: the headings, the group's overflow and its
-// server's line, the rows' names, marks, phrase and overflow, each Open
-// and what it sends, a project in no group and its picker, the choices
-// owed and an unrelated history, a repair named by its project, the
-// same surface at the seat's place naming the server, and the new
-// controls' budget.
+// space-113: the Space surface reads as projects in groups (DR-159,
+// DR-172). A signed-in home whose instance lists a group `acme` holding
+// a group `acme/research`, a project `alpha-spex` cloned here, one
+// `beta-spex` not on this computer, `acme-spex` as the group's own, one
+// server `lab-1` of `acme`, a repository under another login `bob`, and
+// your namespace holding your own group's repository alone, with one
+// seat open at `lab-1` holding `beta-spex` — a second instance signed in
+// beside it. The test reads, through the surface: the headings, the
+// group's overflow and its server's line, the rows' names, marks, phrase
+// and overflow, each Open and what it sends, a project in no group and
+// its picker, the choices owed and records started separately, a repair
+// named by its project, the same surface at the seat's place naming the
+// server, and the new controls' budget. The new words read in English
+// here; their Chinese follows the catalogs once they are regenerated.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -54,96 +54,51 @@ const BOB_KEY = "@spex.example/bob/shared-spex";
 /** What each language reads (localization-4): the catalog's words. */
 const WORDS = {
   en: {
-    onlyYou: "Only you",
+    personal: "Personal",
+    thisComputer: "This computer",
     sharedByBob: "Shared by @bob",
     members: "4 members",
-    research: "Research",
+    research: "Research · acme/research",
     more: (name: string) => `More for ${name}`,
-    groupActs: ["Members", "New subgroup", "Rename"],
+    groupActs: ["Members"],
     connected: "Connected",
     disconnect: "Disconnect",
     connect: "Connect",
     groupSessions: "Group sessions",
+    yourSessions: "Your sessions",
     here: "Here",
     onLab: "On lab-1",
     synced: "Synced 5m ago",
-    rowActs: ["Sync now", "Members", "Explore records", "Move…", "Place at…", "Leave…"],
+    rowActs: ["Sync now", "Members", "Explore records"],
     show: "Show",
     openOnLab: "Open on lab-1",
     openHere: "Open here",
     showOnLab: "Show on lab-1",
     openingOnLab: "Opening on lab-1…",
-    folderForSessions: "Folder its sessions run in on this device",
-    computerOnly: "On this computer only",
+    folderForSessions: "Folder its sessions run in on this computer",
     addToGroup: "Add to a group…",
     changed: "Changed here and at Spex Example",
     resolve: "Resolve",
-    keepHere: "Keep what's here",
+    keepHere: "Keep this computer's",
     take: "Take Spex Example's",
     allHere: "All here",
     allTake: "All Spex Example's",
-    unrelated: "Unrelated history",
-    merge: "Merge histories…",
-    mergeConfirm: "Merge",
-    repair: "delta in acme: its folder on this computer is missing",
-    repairFolder: "/Users/ada/code/delta · 3 sessions ran there",
+    apart: "Started separately at Spex Example",
+    combine: "Combine…",
+    combineConfirm: "Combine",
+    repair: "delta · acme — Folder missing on this computer",
+    repairFolder: "~/code/delta · 3 sessions ran there",
     chooseFolder: "Choose folder…",
     notHere: "Not on this computer",
     notOnLab: "Not on lab-1",
-    keepOnLab: "Keep what's on lab-1",
+    keepOnLab: "Keep lab-1's",
     labFiles: "Spex keeps lab-1's files in ~/.spex",
-    keepLabVersion: "Keep lab-1's version of the unit? The host's version stays in Git history.",
+    keepLabVersion: "Keep lab-1's version? Spex Example's stays in Git history",
     nothingFromLab: "Nothing to send from lab-1",
     signOutLab: "Signs lab-1 out of Spex Example; every record stays there",
     cancel: "Cancel",
-    labSignIn: ["Sign in to see your groups and open their projects on lab-1.", "Package registry access is separate from this Space sign-in."],
-    exempt: ["Add to a group…", "Merge histories…"],
-  },
-  zh: {
-    onlyYou: "仅你自己",
-    sharedByBob: "@bob 共享的",
-    members: "4 名成员",
-    research: "Research",
-    more: (name: string) => `${name} 的更多操作`,
-    groupActs: ["成员", "新建子群组", "重命名"],
-    connected: "已连接",
-    disconnect: "断开连接",
-    connect: "连接",
-    groupSessions: "群组会话",
-    here: "这里",
-    onLab: "在 lab-1 上",
-    synced: "同步",
-    rowActs: ["立即同步", "成员", "浏览记录", "移动…", "放到…", "移除…"],
-    show: "显示",
-    openOnLab: "在 lab-1 上打开",
-    openHere: "在这里打开",
-    showOnLab: "在 lab-1 上显示",
-    openingOnLab: "正在 lab-1 上打开…",
-    folderForSessions: "此设备上运行其会话的文件夹",
-    computerOnly: "仅在本机上",
-    addToGroup: "加入群组…",
-    changed: "这里和 Spex Example 都有改动",
-    resolve: "解决",
-    keepHere: "保留这里的",
-    take: "取 Spex Example 的",
-    allHere: "全用这里的",
-    allTake: "全用 Spex Example 的",
-    unrelated: "历史互不相关",
-    merge: "合并历史…",
-    mergeConfirm: "合并",
-    repair: "acme 中的 delta：它在本机上的文件夹不见了",
-    repairFolder: "/Users/ada/code/delta · 3 个会话曾在此运行",
-    chooseFolder: "选择文件夹…",
-    notHere: "不在本机上",
-    notOnLab: "不在 lab-1 上",
-    keepOnLab: "保留 lab-1 上的",
-    labFiles: "Spex 将 lab-1 的文件保存在 ~/.spex",
-    keepLabVersion: "保留这 1 个单元的 lab-1 版本？托管平台的版本仍留在 Git 历史中。",
-    nothingFromLab: "lab-1 没有要发送的内容",
-    signOutLab: "让 lab-1 退出 Spex Example；所有记录仍保留在那里",
-    cancel: "取消",
-    labSignIn: ["登录后即可查看你的群组，并在 lab-1 上打开其中的项目。", "规约包注册中心的访问权限与此空间登录相互独立。"],
-    exempt: ["加入群组…", "合并历史…"],
+    signInTitle: "Sign in to a Space",
+    exempt: ["Add to a group…"],
   },
 } as const;
 type Language = keyof typeof WORDS;
@@ -362,26 +317,34 @@ function pick(trigger: string, entry: string): void {
 
 const phrase = (key: string): string => screen.getByTestId(`space-repo-state-${key}`).textContent ?? "";
 
-describe.each(["en", "zh"] as const)("space-113: the Space surface reads as projects in groups (%s)", (language: Language) => {
+describe.each(["en"] as const)("space-113: the Space surface reads as projects in groups (%s)", (language: Language) => {
   const words = WORDS[language];
   beforeEach(() => activateLanguage(language));
 
   test("the headings, the group's overflow and its server's line", async () => {
     await renderHere();
-    // [space-1] your own records first, "Only you · @ada".
-    const own = screen.getByTestId("space-own");
-    expect(within(own).getByRole("heading", { level: 2 }).textContent).toBe(`${words.onlyYou} · @ada`);
+    const instance = screen.getByTestId(`space-instance-${ORIGIN}`);
+    // [space-1] under the instance's heading, Personal first, holding
+    // your sessions, placed there.
+    const personal = screen.getByTestId("space-group-@ada");
+    expect(instance.contains(personal)).toBe(true);
+    expect(within(personal).getAllByRole("heading", { level: 3 })[0]!.textContent).toBe(words.personal);
+    expect(screen.getByTestId(`space-repo-${OWN_KEY}`).textContent).toBe(words.yourSessions);
+    expect(personal.contains(screen.getByTestId(`space-row-${OWN_KEY}`))).toBe(true);
     // [space-1] acme by its name beside its member count, Research
-    // nested within it; no heading for your namespace; bob's listing
-    // "Shared by @bob".
+    // nested within it, its path beside its name; bob's listing "Shared
+    // by @bob".
     const acme = screen.getByTestId("space-group-acme");
     const headings = within(acme).getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent);
     expect(headings).toEqual([`acme · ${words.members}`, words.research]);
     expect(acme.contains(screen.getByTestId("space-group-acme/research"))).toBe(true);
-    expect(screen.queryByTestId("space-group-@ada")).toBeNull();
     expect(within(screen.getByTestId("space-group-@bob")).getByRole("heading").textContent).toBe(words.sharedByBob);
-    // [space-1] acme's heading carries one "More": Members, New subgroup,
-    // Rename and no Delete — it holds projects.
+    // [space-1] "This computer", after every Space, holds the project in
+    // no group.
+    const computer = screen.getByTestId("space-own");
+    expect(instance.contains(computer)).toBe(false);
+    expect(within(computer).getByRole("heading", { level: 2 }).textContent).toBe(words.thisComputer);
+    // [space-1] acme's heading carries one "More" holding Members alone.
     expect(screen.getByTestId("space-group-more-acme").getAttribute("aria-label")).toBe(words.more("acme"));
     expect(entries("space-group-more-acme")).toEqual(words.groupActs);
     // [space-1] [run-view-170] beneath acme's heading, before its rows,
@@ -412,10 +375,12 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
     expect(screen.getByTestId(`space-row-here-${ALPHA_KEY}`).textContent).toBe(words.here);
     expect(screen.queryByTestId(`space-row-here-${BETA_KEY}`)).toBeNull();
     expect(screen.getByTestId(`space-row-on-${PLACE}-${BETA_KEY}`).textContent).toBe(words.onLab);
-    // [space-1] [space-87] alpha's one phrase is its last sync.
-    expect(phrase(ALPHA_KEY)).toContain(words.synced);
-    // [space-1] alpha's "More": Sync now, Members, Explore records,
-    // Move…, Place at… and Leave….
+    // [space-120] alpha's one phrase is its last sync; beta, not on this
+    // computer, reads none.
+    expect(phrase(ALPHA_KEY)).toBe(words.synced);
+    expect(phrase(BETA_KEY)).toBe("");
+    // [space-1] alpha's "More": Sync now, Members and Explore records
+    // alone.
     expect(entries(`space-row-more-${ALPHA_KEY}`)).toEqual(words.rowActs);
     // [space-87] no placement's line on the row; its lines in the Sync
     // tab the row's name opens.
@@ -427,28 +392,31 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
     expect(within(within(panel).getByTestId(`space-lines-${ALPHA_KEY}`)).getByTestId(`space-line-${ORIGIN}`).textContent).toContain("Spex Example");
   });
 
-  test("each row's Open: this computer first, then the server; what each entry sends", async () => {
+  test("each row's Open: this computer first, then the server beside it; what each entry sends", async () => {
     const { onOpenProject } = await renderHere();
-    // [space-111] alpha: "Show", then "Open on lab-1".
-    expect(entries(`space-row-open-${ALPHA_KEY}`)).toEqual([words.show, words.openOnLab]);
-    // beta: "Open here", then "Show on lab-1".
-    expect(entries(`space-row-open-${BETA_KEY}`)).toEqual([words.openHere, words.showOnLab]);
+    // [space-111] alpha: "Show", "Open on lab-1" beside it.
+    expect(screen.getByTestId(`space-row-open-${ALPHA_KEY}`).textContent).toBe(words.show);
+    expect(entries(`space-row-places-${ALPHA_KEY}`)).toEqual([words.openOnLab]);
+    // beta: "Open here", "Show on lab-1" beside it.
+    expect(screen.getByTestId(`space-row-open-${BETA_KEY}`).textContent).toBe(words.openHere);
+    expect(entries(`space-row-places-${BETA_KEY}`)).toEqual([words.showOnLab]);
     // acme-spex: "Open here" asking for the folder its sessions run in.
-    expect(entries(`space-row-open-${ACME_KEY}`)[0]).toBe(words.openHere);
-    pick(`space-row-open-${ACME_KEY}`, `space-row-open-here-${ACME_KEY}`);
+    const acmeOpen = screen.getByTestId(`space-row-open-${ACME_KEY}`);
+    expect(acmeOpen.textContent).toBe(words.openHere);
+    fireEvent.click(acmeOpen);
     expect(within(screen.getByTestId(`space-join-${ACME_KEY}`)).getByText(words.folderForSessions)).toBeTruthy();
     fireEvent.keyDown(screen.getByTestId(`space-join-${ACME_KEY}-path`), { key: "Escape" });
     // [space-111] "Show" shows alpha here; "Show on lab-1" shows beta at
     // the seat's place.
-    pick(`space-row-open-${ALPHA_KEY}`, `space-row-show-${ALPHA_KEY}`);
+    fireEvent.click(screen.getByTestId(`space-row-open-${ALPHA_KEY}`));
     expect(onOpenProject).toHaveBeenLastCalledWith(ALPHA_KEY);
-    pick(`space-row-open-${BETA_KEY}`, `space-row-show-at-${PLACE}-${BETA_KEY}`);
+    pick(`space-row-places-${BETA_KEY}`, `space-row-show-at-${PLACE}-${BETA_KEY}`);
     expect(onOpenProject).toHaveBeenLastCalledWith(BETA_KEY, PLACE);
     // [space-63] "Open here" on beta sends `space.join` with the folder
     // the picker the act opens returns.
     const pickDirectory = vi.fn(async () => "/Users/ada/code/beta");
     (window as { spexNative?: unknown }).spexNative = { pickDirectory };
-    pick(`space-row-open-${BETA_KEY}`, `space-row-open-here-${BETA_KEY}`);
+    fireEvent.click(screen.getByTestId(`space-row-open-${BETA_KEY}`));
     await settle();
     expect(pickDirectory).toHaveBeenCalledTimes(1);
     expect(callsOf(local, "space.join")).toEqual([{ instance: ORIGIN, hostId: "22", folder: "/Users/ada/code/beta" }]);
@@ -458,7 +426,7 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
   test("Open on lab-1 sends the seat's join with no folder once it is signed in, nothing while it signs in", async () => {
     act(() => useAppStore.setState({ seats: [{ ...SEAT, signIn: { state: "running", verificationUri: `${ORIGIN}/login/device?user_code=X`, expiresAt: NOW + 600_000 } }] }));
     await renderHere();
-    pick(`space-row-open-${ALPHA_KEY}`, `space-row-open-at-${PLACE}-${ALPHA_KEY}`);
+    pick(`space-row-places-${ALPHA_KEY}`, `space-row-open-at-${PLACE}-${ALPHA_KEY}`);
     await settle();
     // [space-111] the seat signs in: nothing sent yet, the row reading
     // "Opening on lab-1…"; no seat opened, one is open there.
@@ -475,30 +443,30 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
     act(() => seatStore.setState({ projects: [project(BETA_KEY, "beta"), project(ALPHA_KEY, "alpha")] }));
     await settle();
     expect(screen.getByTestId(`space-row-on-${PLACE}-${ALPHA_KEY}`).textContent).toBe(words.onLab);
-    expect(phrase(ALPHA_KEY)).toContain(words.synced);
+    expect(phrase(ALPHA_KEY)).toBe(words.synced);
     expect(callsOf(seat, "space.join")).toHaveLength(1);
   });
 
-  test("a project in no group reads On this computer only with Add to a group…, Only you first in its picker", async () => {
+  test("a project in no group stands under This computer reading nothing, with Add to a group…, Personal first in its picker", async () => {
     await renderHere();
-    // [space-61] under "Only you".
-    const own = screen.getByTestId("space-own");
-    expect(own.contains(screen.getByTestId(`space-row-${GAMMA_KEY}`))).toBe(true);
-    expect(phrase(GAMMA_KEY)).toBe(words.computerOnly);
+    // [space-61] under "This computer", no phrase.
+    const computer = screen.getByTestId("space-own");
+    expect(computer.contains(screen.getByTestId(`space-row-${GAMMA_KEY}`))).toBe(true);
+    expect(phrase(GAMMA_KEY)).toBe("");
     expect(screen.queryByTestId(`space-row-open-${GAMMA_KEY}`)).toBeNull();
-    // [space-58] its picker lists "Only you" first, then acme and
+    // [space-58] its picker lists "Personal" first, then acme and
     // Research.
     const add = screen.getByTestId(`space-row-pick-${GAMMA_KEY}`);
     expect(add.textContent).toBe(words.addToGroup);
     fireEvent.click(add);
     const section = within(screen.getByTestId(`space-picker-${GAMMA_KEY}`)).getByTestId(`space-pick-instance-${ORIGIN}`);
     const options = within(section).getAllByTestId(/^space-pick-group-/).map((option) => option.textContent ?? "");
-    expect(options[0]).toBe(words.onlyYou);
+    expect(options[0]).toBe(words.personal);
     expect(options[1]).toBe("acme");
-    expect(options[2]?.startsWith(words.research)).toBe(true);
+    expect(options[2]?.startsWith("Research")).toBe(true);
   });
 
-  test("choices owed read Changed here with Resolve beneath the row; an unrelated history Merge histories…", async () => {
+  test("choices owed read Changed here with Resolve beneath the row; records started separately Combine…", async () => {
     state = home({
       alpha: alpha(
         { sync: { phase: "choices", placement: ORIGIN, savedCommit: null }, conflicts: CONFLICTS },
@@ -521,18 +489,18 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
     expect(within(picker).getByRole("button", { name: words.allTake })).toBeTruthy();
     cleanup();
 
-    // [space-13] an unrelated history reads "Unrelated history" with
-    // "Merge histories…", confirmed inline, the join of that placement
-    // sent on Merge.
+    // [space-13] records started separately read "Started separately at
+    // Spex Example" with "Combine…", confirmed inline, the join of that
+    // placement sent on Combine.
     state = home({ alpha: alpha({ sync: { phase: "unrelated", placement: ORIGIN } }, { outcome: { kind: "unrelated", sent: 0, received: 0 } }) });
     await renderHere();
-    expect(phrase(ALPHA_KEY)).toBe(words.unrelated);
-    const merge = screen.getByTestId(`space-row-merge-${ALPHA_KEY}`);
-    expect(merge.textContent).toBe(words.merge);
-    fireEvent.click(merge);
-    const confirm = screen.getByTestId(`space-row-merge-confirm-${ALPHA_KEY}`);
+    expect(phrase(ALPHA_KEY)).toBe(words.apart);
+    const combine = screen.getByTestId(`space-row-combine-${ALPHA_KEY}`);
+    expect(combine.textContent).toBe(words.combine);
+    fireEvent.click(combine);
+    const confirm = screen.getByTestId(`space-row-combine-confirm-${ALPHA_KEY}`);
     expect(callsOf(local, "space.sync")).toEqual([]);
-    fireEvent.click(within(confirm).getByRole("button", { name: words.mergeConfirm }));
+    fireEvent.click(within(confirm).getByRole("button", { name: words.combineConfirm }));
     await settle();
     expect(callsOf(local, "space.sync")).toEqual([{ repository: ALPHA_KEY, placement: ORIGIN, join: true }]);
   });
@@ -559,12 +527,12 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
     await renderHere();
     fireEvent.click(screen.getByTestId("space-issues"));
     const repair = screen.getByTestId("space-repair");
-    // [space-46] "<project> in acme: its folder on this computer is
-    // missing", the folder beneath it.
+    // [space-46] "<project> · acme — Folder missing on this computer",
+    // the folder beneath it.
     expect(within(repair).getByTestId("space-repair-title").textContent).toBe(words.repair);
     expect(within(repair).getByTestId("space-repair-folder").textContent).toBe(words.repairFolder);
-    // [space-49] "Choose folder…" and "Not on this computer", declining
-    // sending `space.repair.decline`.
+    // [space-47] [space-49] "Choose folder…" and "Not on this computer",
+    // declining sending `space.repair.decline`.
     expect(within(repair).getByTestId("space-repair-choose").textContent).toBe(words.chooseFolder);
     const decline = within(repair).getByTestId("space-repair-decline");
     expect(decline.textContent).toBe(words.notHere);
@@ -605,7 +573,7 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
     // [space-112] "Not on lab-1".
     fireEvent.click(screen.getByTestId(`space-repo-${BETA_KEY}`));
     expect(within(await screen.findByTestId("space-repository")).getAllByText(words.notOnLab).length).toBeGreaterThan(0);
-    // "Keep what's on lab-1".
+    // "Keep lab-1's".
     fireEvent.click(screen.getByTestId(`space-row-resolve-${ALPHA_KEY}`));
     const picker = screen.getByTestId(`space-row-resolve-picker-${ALPHA_KEY}`);
     expect(within(picker).getByLabelText(new RegExp(`^${words.keepOnLab}`))).toBeTruthy();
@@ -614,7 +582,7 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
     fireEvent.click(within(picker).getByTestId("space-apply"));
     expect(within(picker).getByTestId("space-apply-confirm").textContent).toContain(words.keepLabVersion);
     fireEvent.keyDown(within(picker).getByRole("button", { name: words.cancel }), { key: "Escape" });
-    // The Sync tab's local changes name it.
+    // The Sync tab's To send list names it.
     fireEvent.click(screen.getByTestId(`space-repo-${ALPHA_KEY}`));
     const panel = await screen.findByTestId("space-repository");
     expect(within(panel).getByText(words.nothingFromLab)).toBeTruthy();
@@ -622,15 +590,12 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
     expect(screen.getByTestId("space-signout").getAttribute("title")).toBe(words.signOutLab);
     // "Spex keeps lab-1's files in <home>".
     expect(screen.getByTestId("space-home").textContent).toBe(words.labFiles);
-    // Its "Add instance…" card says nothing of your own group's records.
-    fireEvent.click(screen.getByTestId("space-add-instance"));
-    expect(screen.getByTestId("space-add-card")).toBeTruthy();
-    expect(screen.queryByTestId("space-add-own")).toBeNull();
     // No server's line at a seat's place: the seats are this computer's.
     expect(document.querySelector('[data-testid^="space-server-"]')).toBeNull();
     cleanup();
 
-    // Signed in nowhere there, the sign-in card's two sentences name it.
+    // Signed in nowhere there, the sign-in card reads its title and no
+    // sentence (space-3).
     seat.command.mockImplementation(async (type: string) =>
       type === "space.get" ? groupsState({ home: HOME, defaultInstance: ORIGIN }) : {},
     );
@@ -640,8 +605,8 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
       </PlaceStoreContext.Provider>,
     );
     const card = await screen.findByTestId("space-signin-card");
-    const sentences = within(card).getByTestId("space-signin-body").querySelectorAll("p");
-    expect([...sentences].map((sentence) => sentence.textContent)).toEqual(words.labSignIn);
+    expect(within(card).getByRole("heading", { level: 2 }).textContent).toBe(words.signInTitle);
+    expect(card.querySelector("p")).toBeNull();
   });
 
   test("every new control reads at most 14 characters", async () => {
@@ -653,8 +618,8 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
     });
     await renderHere();
     // [space-28] the controls a row, a heading or a server's line shows;
-    // a menu's entries read in full within it, and "Add to a group…"
-    // and "Merge histories…" are DR-159's own words.
+    // a menu's entries read in full within it, and "Add to a group…" is
+    // a whole phrase a decision fixes.
     const controls = [...screen.getByTestId("space-groups").querySelectorAll("button")]
       .filter((button) => button.getAttribute("role") !== "menuitem")
       .map((button) => (button.getAttribute("aria-haspopup") ? (button.textContent ?? "").replace(/^⋯/, "") : button.textContent ?? ""))

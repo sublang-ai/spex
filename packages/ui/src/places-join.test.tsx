@@ -369,7 +369,7 @@ describe("run-view-171: a project opened from the palette is current while it op
     // [run-view-168] the cause in the row's own words, and the way to
     // its row.
     expect(screen.getByTestId("project-opening").textContent).toContain("gamma");
-    expect(screen.getByTestId("project-opening-step").textContent).toBe("Code stopped — the code host refused the clone");
+    expect(screen.getByTestId("project-opening-step").textContent).toBe("Cloning code stopped — the code host refused the clone");
     fireEvent.click(screen.getByTestId("project-opening-space"));
     expect(screen.getByTestId("space-surface")).toBeTruthy();
     expect(screen.queryByTestId("project-opening")).toBeNull();

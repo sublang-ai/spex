@@ -2134,7 +2134,7 @@ test("environments-21 through a real core: an install whose lock or requests cha
     await folderDone;
     assert.equal(existsSync(root), false, "the install made no working folder at the root's address");
     assert.deepEqual(existsSync(join(core.dataDir, "cache", "staging")) ? readdirSync(join(core.dataDir, "cache", "staging")) : [], [], "no staged tree outlives the install");
-    const noFolder = /has no working folder on this device/;
+    const noFolder = /has no project folder on this computer/;
     await client.expectError("environment.request", { repository: key, name: "acme/kit", request: { kind: "registry", version: "1.0.0" } }, "not_found", noFolder);
     await client.expectError("environment.remove", { repository: key, name: "acme/kit" }, "not_found", noFolder);
     await client.expectError("environment.resolve", { repository: key, wait: true }, "not_found", noFolder);

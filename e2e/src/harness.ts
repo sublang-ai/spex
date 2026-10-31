@@ -7,7 +7,7 @@
 // the shell's token URL in the browser. The live lane keeps the
 // machine's agents and sign-in, redirecting only the state it writes.
 
-import { test as base, expect, type Page } from "@playwright/test";
+import { test as base, expect, type Locator, type Page } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
@@ -1522,6 +1522,14 @@ export async function seedHostProject(app: App): Promise<{ key: string; code: st
     { type: "turn_finished", turnId: 1, timestamp: Date.now() + 2 },
   ]);
   writeIntentFile(dir, "Queued on the other laptop");
+  // The peer's Spex placed these records at the stand-in, so they carry
+  // the tracked file naming that placement (storage-36), as every
+  // computer opening them receives it: nothing of it is left to send.
+  mkdirSync(join(dir, "placements"), { recursive: true });
+  writeFileSync(
+    join(dir, "placements", `${hostFolder(host)}.yaml`),
+    `format: 1\ninstance: ${JSON.stringify(host.url)}\nid: ${JSON.stringify(repo.id)}\n`,
+  );
   git(dir, "add", "-A", "--", ".");
   git(dir, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "peer records");
   git(dir, "push", "-q", "origin", "HEAD:spex");
@@ -1530,19 +1538,73 @@ export async function seedHostProject(app: App): Promise<{ key: string; code: st
   return { key, code };
 }
 
+/** The sign-in card's chooser of Spaces (space-115): each Space of the
+ * public registry's directory by its display name, then "Other
+ * Space…", which reveals the field captioned "Space address". Where the
+ * directory cannot be read the field stands alone and no chooser does. */
+export function spaceChooser(card: Locator): Locator {
+  return card.getByTestId("space-signin-chooser");
+}
+
+/** The field captioned "Space address" of a sign-in card (space-115):
+ * standing behind "Other Space…", or alone where no directory reads. */
+export function spaceAddress(card: Locator): Locator {
+  return card.getByTestId("space-signin-address");
+}
+
+/** How the chooser's chosen entry reads (space-115): a native select's
+ * chosen option, a listbox's selected option, or its trigger's text;
+ * empty where no chooser stands. */
+export async function chosenSpace(card: Locator): Promise<string> {
+  const chooser = spaceChooser(card);
+  if ((await chooser.count()) === 0) return "";
+  return chooser.first().evaluate((root) => {
+    const select = root instanceof HTMLSelectElement ? root : root.querySelector("select");
+    if (select) return (select.selectedOptions[0]?.textContent ?? "").trim();
+    const selected = root.querySelector('[role="option"][aria-selected="true"]');
+    if (selected) return (selected.textContent ?? "").trim();
+    const trigger = root.querySelector('[role="combobox"], [aria-haspopup="listbox"], button');
+    return (trigger?.textContent ?? root.textContent ?? "").trim();
+  });
+}
+
+/** Choose an entry of a sign-in card's chooser by the name it reads — a
+ * Space's display name, or "Other Space…" (space-115) — whether the
+ * chooser is a native select or a listbox. */
+export async function chooseSpace(card: Locator, entry: string): Promise<void> {
+  const chooser = spaceChooser(card).first();
+  const native = await chooser.evaluate((root) => root instanceof HTMLSelectElement);
+  const select = native ? chooser : chooser.locator("select");
+  if (native || (await select.count()) > 0) {
+    const value = await select.locator("option", { hasText: entry }).first().getAttribute("value");
+    await select.selectOption(value !== null ? value : { label: entry });
+    return;
+  }
+  const option = chooser.getByRole("option", { name: entry }).first();
+  if (!(await option.isVisible())) {
+    await chooser.locator('[role="combobox"], [aria-haspopup="listbox"]').first().click();
+  }
+  await option.click();
+}
+
 /**
  * Sign in through the page (space-3): while the home lists no instance,
- * the header card's Sign in at the instance its field holds; where the
- * home lists the stand-in, signed out, its heading's "Sign in again";
- * where it lists others alone, the card "Add instance…" opens at the
- * list's foot, unless it stands open already — each card's field
- * filled with the stand-in's origin where it holds another; the link to
- * the page that carries the code shown while the control reads "Signing
- * in…" and no code is, `during` then asserting what holds while the
- * flow runs, the code the link carries approved at the stand-in —
- * `app.host` unless another of `app.hosts` is named — as its page
- * would, and the stand-in's heading reading its person's account.
- * Groups must be shown.
+ * the header card titled "Sign in to a Space"; where the home lists the
+ * stand-in, signed out, its heading's "Sign in again"; where it lists
+ * others alone, the card "Add a Space…" opens at the list's foot,
+ * unless it stands open already. In a card, the chooser preselects the
+ * default instance where the directory lists it (space-115) — the first
+ * stand-in, whose directory a journey routing the public registry to
+ * it reads — so another stand-in is chosen under "Other Space…" and its
+ * origin typed in the field captioned "Space address", as it is where
+ * the field stands alone and holds another. The card reads "Continue
+ * in your browser" with the link "Open <Space>" to the page that
+ * carries the code while the control reads "Signing in…" and no code
+ * shows, `during` then asserting what holds while the flow runs; the
+ * code the link carries is approved at the stand-in — `app.host`
+ * unless another of `app.hosts` is named — as its page would, and the
+ * stand-in's heading then reads the account's login beside Sign out.
+ * Space must be shown.
  */
 export async function signInThroughPage(
   page: Page,
@@ -1555,11 +1617,11 @@ export async function signInThroughPage(
   const section = page.getByTestId(`space-instance-${host.url}`);
   const listed = page.locator('[data-testid^="space-instance-http"]');
   const how = via ?? ((await section.count()) > 0 ? "again" : (await listed.count()) > 0 ? "add" : "card");
-  // The card "Add instance…" opens stands in its place until closed, as
+  // The card "Add a Space…" opens stands in its place until closed, as
   // after a start the core refused (space-3).
   const groups = page.getByTestId("space-groups");
   if (how === "add" && (await groups.getByTestId("space-add-card").count()) === 0) {
-    await groups.getByTestId("space-add-instance").click();
+    await groups.getByTestId("space-add-space").click();
   }
   const where =
     how === "card"
@@ -1569,12 +1631,14 @@ export async function signInThroughPage(
         : section.getByTestId("space-instance-heading");
   const control = where.getByTestId(how === "again" ? "space-signin-again" : "space-signin");
   if (how !== "again") {
-    const field = where.getByTestId("space-signin-instance");
-    if ((await field.inputValue()) !== host.url) await field.fill(host.url);
+    const field = spaceAddress(where);
+    if (!(await field.isVisible()) && host !== app.hosts[0]) await chooseSpace(where, "Other Space…");
+    if ((await field.isVisible()) && (await field.inputValue()) !== host.url) await field.fill(host.url);
   }
   await control.click();
+  await expect(where).toContainText("Continue in your browser");
   const link = where.getByTestId("space-signin-link");
-  await expect(link).toHaveText(/^Open .+ to sign in$/);
+  await expect(link).toHaveText(/^Open \S.*$/);
   await expect(control).toHaveText("Signing in…");
   await expect(control).toBeDisabled();
   const href = new URL((await link.getAttribute("href")) ?? "");
@@ -1584,7 +1648,9 @@ export async function signInThroughPage(
   await expect(page.getByTestId("space-surface")).not.toContainText(code);
   await during?.();
   host.script.approveDevice(code);
-  await expect(section.getByTestId("space-account")).toContainText(`Signed in as @${host.script.person.login}`);
+  const heading = section.getByTestId("space-instance-heading");
+  await expect(heading.getByTestId("space-signout")).toBeVisible();
+  await expect(heading.getByRole("heading", { level: 2 })).toHaveText(new RegExp(` · @${host.script.person.login}$`));
 }
 
 /** An instance's section of the Groups list (space-1): its heading and

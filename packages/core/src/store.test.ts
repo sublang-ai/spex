@@ -977,7 +977,7 @@ test("storage-2: a new home writes home.yaml with this device, the origin it was
   // A URL the environment names that is no instance's origin creates no home.
   const refused = tempRoot();
   assert.throws(() => new Store({ machineIdentity, dir: refused, own: "tester", env: { ...process.env, SPEX_HOST_URL: "http://host.test" } }),
-    (error: unknown) => error instanceof StorageFormatError && error.reason === "http://host.test is not an instance's origin");
+    (error: unknown) => error instanceof StorageFormatError && error.reason === "http://host.test is not a Space's address");
   assert.equal(existsSync(join(refused, "home.yaml")), false);
 });
 
@@ -1013,9 +1013,9 @@ test("storage-2: home.yaml lists every instance by its origin, the first the def
   assert.throws(() => home.signIn("https://spex.pub", ada), (error: unknown) => error instanceof InstanceRefused && error.reason === "another-account" && error.origin === "https://spex.pub");
   assert.equal(home.account("https://spex.pub")?.login, "lovelace");
   // An origin that is none, or whose folder a listed one's equals, is refused.
-  assert.throws(() => home.signIn("http://spex.pub", ada), (error: unknown) => error instanceof StorageFormatError && /is not an instance's origin/.test(error.reason));
+  assert.throws(() => home.signIn("http://spex.pub", ada), (error: unknown) => error instanceof StorageFormatError && /is not a Space's address/.test(error.reason));
   assert.throws(() => home.signIn("https://127.0.0.1:4100", ada), (error: unknown) => error instanceof StorageFormatError &&
-    error.reason === "instances http://127.0.0.1:4100 and https://127.0.0.1:4100 share the folder @127.0.0.1_4100");
+    error.reason === "Spaces http://127.0.0.1:4100 and https://127.0.0.1:4100 share the folder @127.0.0.1_4100");
   assert.equal(home.instances().length, 2);
   // Sign out keeps the entry; Forget refuses one signed in and takes one signed out.
   assert.throws(() => home.forget("https://spex.pub"), (error: unknown) => error instanceof InstanceRefused && error.reason === "signed-in");
@@ -1051,15 +1051,15 @@ test("storage-1, storage-2: home.yaml in format 1 is refused until the instances
   };
   assert.equal(refusal(valid), "accepted");
   assert.equal(refusal({ format: 1, device, host: { url: "https://spex.pub", clientId: "spex" }, own: "tester", folders: [] }),
-    "format 1: the instances migration has not run; preserved unchanged");
+    "format 1: the migration to several Spaces has not run; preserved unchanged");
   assert.equal(refusal({ ...valid, format: 3 }), "unsupported format 3; preserved unchanged");
-  assert.equal(refusal({ ...valid, origin: "https://spex.pub/" }), "https://spex.pub/ is not an instance's origin");
-  assert.equal(refusal({ ...valid, instances: [{ origin: "https://Spex.pub", clientId: "spex", account }] }), "https://Spex.pub is not an instance's origin");
-  assert.equal(refusal({ ...valid, instances: [{ origin: "https://ada:secret@spex.pub", clientId: "spex", account }] }), "https://…@spex.pub is not an instance's origin");
-  assert.equal(refusal({ ...valid, instances: [valid.instances[0], valid.instances[0]] }), "instances https://spex.pub and https://spex.pub share the folder @spex.pub");
+  assert.equal(refusal({ ...valid, origin: "https://spex.pub/" }), "https://spex.pub/ is not a Space's address");
+  assert.equal(refusal({ ...valid, instances: [{ origin: "https://Spex.pub", clientId: "spex", account }] }), "https://Spex.pub is not a Space's address");
+  assert.equal(refusal({ ...valid, instances: [{ origin: "https://ada:secret@spex.pub", clientId: "spex", account }] }), "https://…@spex.pub is not a Space's address");
+  assert.equal(refusal({ ...valid, instances: [valid.instances[0], valid.instances[0]] }), "Spaces https://spex.pub and https://spex.pub share the folder @spex.pub");
   assert.equal(refusal({ ...valid, instances: [{ origin: "http://localhost:8443", clientId: "spex", account }, { origin: "https://localhost:8443", clientId: "spex", account }] }),
-    "instances http://localhost:8443 and https://localhost:8443 share the folder @localhost_8443");
-  assert.equal(refusal({ ...valid, instances: [{ origin: "https://spex.pub", clientId: "spex", account, signedOut: "yes" }] }), "invalid home file");
+    "Spaces http://localhost:8443 and https://localhost:8443 share the folder @localhost_8443");
+  assert.equal(refusal({ ...valid, instances: [{ origin: "https://spex.pub", clientId: "spex", account, signedOut: "yes" }] }), "invalid fields");
   assert.match(refusal({ ...valid, instances: [{ url: "https://spex.pub", clientId: "spex", account }] }), /^expected fields /, "an entry names its origin as origin");
   assert.match(refusal({ ...valid, instances: [{ origin: "https://spex.pub", clientId: "spex" }] }), /^expected fields /, "an entry carries its account");
   assert.match(refusal({ ...valid, host: valid.instances[0] }), /^expected fields /);

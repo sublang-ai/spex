@@ -74,7 +74,7 @@ test("space-37: a working folder added pairs with a local-only spex repository w
   assert.equal(row.state, "local-only");
   assert.equal(row.own, false);
   assert.equal(row.folder, home.projectDir);
-  assert.equal(row.code, null, "the folder has no remote of its own");
+  assert.deepEqual([row.code, row.codeKind], ["Code: no remote", "none"], "the folder has no remote of its own");
   assert.equal(row.sync.phase, "idle");
   // Its clone begins on `spex` with one commit of the managed rules and
   // project.json, under the fallback identity, its environment
@@ -112,8 +112,8 @@ test("space-37: setting a remote turns a repository reachable, refuses malformed
   const { key, clone } = await addFolder(home, home.projectDir);
   // A clone no instance holds reaches one by a group picked for it
   // (space-11).
-  await home.client.expectError("space.fetch", { repository: key }, "invalid_request", /^Pick a group first$/);
-  await home.client.expectError("space.sync", { repository: "tester/nowhere-spex" }, "not_found", /no spex repository/);
+  await home.client.expectError("space.fetch", { repository: key }, "invalid_request", /^Add it to a group first$/);
+  await home.client.expectError("space.sync", { repository: "tester/nowhere-spex" }, "not_found", /^nowhere is not on this computer — Refresh, then Retry$/);
   const bare = bareRepo();
   const set = await home.client.expectOk("space.remote.set", { repository: key, url: bare });
   assert.equal(repositoryOf(set, key).state, "reachable");
@@ -139,7 +139,7 @@ test("space-37: setting a remote turns a repository reachable, refuses malformed
   const cleared = repositoryOf(await home.client.expectOk("space.remote.set", { repository: key, url: null }), key);
   assert.equal(cleared.state, "local-only");
   assert.deepEqual(cleared.placements, []);
-  await home.client.expectError("space.sync", { repository: key }, "invalid_request", /^Pick a group first$/);
+  await home.client.expectError("space.sync", { repository: key }, "invalid_request", /^Add it to a group first$/);
 });
 
 test("space-37, space-22, storage-5: the first sync pushes spex to the empty host, sets the upstream and records sync:<repository>:<placement>:last under its path placement origin; naming another path placement removes it", async (t) => {
@@ -484,7 +484,7 @@ test("space-39: local changes of every unit kind list in order, incoming units a
   writeFileSync(join(clone, "mine", "notes", "meta.yaml"), "format: 2\norg: tester\nname: notes\nversion: 0.1.0\nartifacts:\n  notes: { kind: skill, language: en }\n");
   writeFileSync(join(clone, "mine", "notes", "skills", "en", "notes", "SKILL.md"), "---\nname: notes\ndescription: Notes.\n---\n");
   const listed = await home.client.repository(key);
-  assert.equal(listed.code, "Code on a remote", "the row withholds the remote until the instance reports its Git origin");
+  assert.deepEqual([listed.code, listed.codeKind], [null, "unknown"], "the row withholds the code until the instance reports its Git origin");
   const local = listed.local;
   assert.deepEqual(local.map((u) => u.kind), ["session", "intent", "authoring", "environment", "settings", "code", "rules", "other", "other"], JSON.stringify(local));
   const [session, queued, authoring, environment, settings, code, rules, folder, other] = local;
@@ -554,8 +554,8 @@ test("space-39: local changes of every unit kind list in order, incoming units a
   assert.match(codeDiff.patch, /^\+.*acme\/app\.git/m);
   await home.client.expectError("space.diff", { repository: key, unit: `sessions/${sessionId}`, path: `sessions/${sessionId}.json`, side: "mine" }, "invalid_request", /no text diff/);
   await home.client.expectError("space.diff", { repository: key, unit: `intents/${intent.id}`, path: `intents/${intent.id}.json`, side: "mine" }, "invalid_request", /no text diff/);
-  await home.client.expectError("space.diff", { repository: key, unit: "config/playbook.config.yaml", path: "other", side: "mine" }, "invalid_request", /unknown path/);
-  await home.client.expectError("space.diff", { repository: key, unit: "nope", path: "nope", side: "mine" }, "invalid_request", /unknown unit/);
+  await home.client.expectError("space.diff", { repository: key, unit: "config/playbook.config.yaml", path: "other", side: "mine" }, "invalid_request", /^other is not part of config\/playbook\.config\.yaml$/);
+  await home.client.expectError("space.diff", { repository: key, unit: "nope", path: "nope", side: "mine" }, "invalid_request", /^nope is not among the changes — Check again$/);
   const empty = bareRepo();
   await home.client.expectOk("space.remote.set", { repository: key, url: empty });
   const vacant = await home.client.settle("space.fetch", { repository: key });
@@ -617,7 +617,7 @@ test("space-39: local changes of every unit kind list in order, incoming units a
   assert.ok(root.entries.findIndex((e) => e.kind !== "dir" && e.kind !== "git") > root.entries.findIndex((e) => e.kind === "dir"), "directories first");
   await home.client.expectError("space.tree", { repository: key, path: "link" }, "invalid_request", /symbolic link/);
   await home.client.expectError("space.tree", { repository: key, path: "link/README.md" }, "invalid_request", /symbolic link/);
-  await home.client.expectError("space.tree", { repository: key, path: "../" }, "invalid_request", /escapes/);
+  await home.client.expectError("space.tree", { repository: key, path: "../" }, "invalid_request", /^the path leads outside these records$/);
   await home.client.expectError("space.tree", { repository: key, path: ".git" }, "invalid_request", /Git data/);
   await home.client.expectError("space.tree", { repository: key, path: "nope" }, "not_found");
   const sessions = await home.client.expectOk("space.tree", { repository: key, path: "sessions" });
@@ -665,7 +665,7 @@ test("space-39: local changes of every unit kind list in order, incoming units a
   assert.ok(cut.kind === "text" && cut.truncated && cut.lines <= 2_000 && cut.text.endsWith("\n") && Buffer.byteLength(cut.text) <= 256 * 1024);
   assert.ok(cut.kind === "text" && cut.text.split("\n").every((line) => line === "" || /^line \d{6} x{80}$/.test(line)), "cut on a complete line");
   assert.deepEqual(await home.client.expectOk("space.read", { repository: key, path: `sessions/${sessionId}.hints.json` }), { kind: "withheld", reason: "May hold provider tokens — not shown" });
-  await home.client.expectError("space.read", { repository: key, path: "../etc/passwd" }, "invalid_request", /escapes/);
+  await home.client.expectError("space.read", { repository: key, path: "../etc/passwd" }, "invalid_request", /^the path leads outside these records$/);
   await home.client.expectError("space.read", { repository: key, path: ".git/HEAD" }, "invalid_request", /Git data/);
   await home.client.expectError("space.read", { repository: key, path: "sessions" }, "invalid_request", /not a file/);
   await home.client.expectError("space.read", { repository: key, path: "link" }, "invalid_request", /symbolic link/);

@@ -139,7 +139,7 @@ test("space-104, space-103, projects-37, git-host-9: a seat's join allocates the
 
   // A join naming no folder of a project here is refused as any join of
   // a clone here; its folder stays the one.
-  await home.client.expectError("space.join", { instance: host.url, hostId: records.id }, "invalid_request", /is on this device already$/);
+  await home.client.expectError("space.join", { instance: host.url, hostId: records.id }, "invalid_request", /is on this computer already — Show it instead$/);
 
   // Removed, its folder stands; a join again reuses the folder allocated
   // for it, its code there, and makes no second one (space-103).
@@ -198,10 +198,10 @@ test("space-104, space-103: a code clone failing for want of the member's creden
   // The row shows the failure with the phrase, the host in `credential`
   // for a client to open the Credentials section by (space-103).
   assert.deepEqual([stopped.sync.op, stopped.sync.step, stopped.folder], ["join", "code", null]);
-  assert.equal(stopped.sync.message, `Code not cloned: ${code.host} needs a credential of yours. Add one under Settings.`);
+  assert.equal(stopped.sync.message, `Code not downloaded: ${code.host} needs your credential — add it in Settings`);
   assert.equal(stopped.sync.credential, code.host);
   // A retry is a join of it again (space-103).
-  assert.equal(stopped.sync.guidance, "The spex repository is here; join it again to clone its code.");
+  assert.equal(stopped.sync.guidance, "The records are here — Open here again to download the code");
   const folder = allocated(home.dataDir, host, "acme", "alpha-spex");
   // The cloned session descriptor and intent read in the explorer
   // (space-35); the shared store hydrates the logical replay while the
@@ -274,9 +274,9 @@ test("space-103, storage-44: on a seat an ssh remote's failed code clone shows a
   const unread = await home.client.waitRepository(fromHttps, httpsKey, (repository) => repository.folder !== null || repository.sync.phase === "stopped", 30_000);
   assert.ok(unread.sync.phase === "stopped", JSON.stringify(unread.sync));
   assert.deepEqual([unread.sync.op, unread.sync.step, unread.folder], ["join", "code", null]);
-  assert.equal(unread.sync.message, `Code not cloned: your credential for ${code.host} cannot be read`);
+  assert.equal(unread.sync.message, `Code not downloaded: your credential for ${code.host} cannot be read — set it again in Settings`);
   assert.equal(unread.sync.credential, code.host);
-  assert.equal(unread.sync.guidance, "The spex repository is here; join it again to clone its code.");
+  assert.equal(unread.sync.guidance, "The records are here — Open here again to download the code");
   const folder = allocated(home.dataDir, host, "acme", "alpha-spex");
   assert.ok(existsSync(join(home.dataDir, "workspace", ...httpsKey.split("/"), "project.json")), "the records are cloned");
 
@@ -297,7 +297,7 @@ test("space-103, storage-44: on a seat an ssh remote's failed code clone shows a
   await home.client.expectOk("space.join", { instance: host.url, hostId: https.id });
   const again = await home.client.waitRepository(fromAgain, httpsKey, (repository) => repository.folder !== null || (repository.sync.phase === "stopped" && repository.sync.message !== said), 30_000);
   assert.ok(again.sync.phase === "stopped", JSON.stringify(again.sync));
-  assert.deepEqual([again.sync.message, again.sync.credential, again.sync.guidance], [`代码未克隆：无法读取你为 ${code.host} 设置的凭据`, code.host, "spex 仓库已在本设备上；再次加入即可克隆其代码。"]);
+  assert.deepEqual([again.sync.message, again.sync.credential, again.sync.guidance], [`代码未下载：无法读取你在 ${code.host} 的凭据 — 请在设置中重新设置`, code.host, "记录已在这里 — 再次点击“在这里打开”以下载代码"]);
   assert.deepEqual([codeInto, recordClones], [[folder], 0], "the code clone runs alone, into the folder allocated for it");
   await home.client.expectOk("language.set", { language: "en" });
 });

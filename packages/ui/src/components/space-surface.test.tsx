@@ -1,19 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// One spex repository on the Groups surface over a mocked client
-// (DR-103): the issues list with its repairs (space-46..space-56), the
-// local and incoming lists with Open session and View diff (space-7,
-// space-8, space-10), "Sync now" from the row's overflow with its rail,
-// Stop, stopped, done and unrelated cards (space-11..space-16), the
-// placement's line in the Sync tab (space-87), the picker — in the Sync
-// tab and beneath the row by Resolve — its keyboard and the Apply
-// confirm (space-9, space-14, space-17, space-18), "Explore records"
-// and the explorer tree and previews (space-1, space-23..space-25),
-// reveal and copy (space-26), the copy law (space-27) and the roles
-// assistive technology needs (space-44). Every `space.*` call names
-// the repository it acts on by its key. The header, the groups list,
-// sign-in, pick, join and members are groups-surface.test.tsx's.
+// One project's records on the Space surface over a mocked client
+// (DR-103, DR-172): what needs fixing — "⚠ <n> to fix" and "To fix (<n>)
+// · <m> set aside" with its repairs (space-1, space-46..space-56); "To
+// send" and each Space's incoming list with Open session and View diff
+// (space-7, space-8, space-10); "Sync now" from the row's overflow with
+// its rail, Stop, stopped, done and "Started separately" cards
+// (space-11..space-16); the Space's line in the Sync tab (space-87); the
+// picker — in the Sync tab and beneath the row by Resolve — its keyboard
+// and the Apply confirm (space-9, space-14, space-17, space-18); "Explore
+// records" and the explorer tree, its annotations and previews (space-1,
+// space-23..space-25); reveal and copy (space-26); the copy law
+// (space-27) and the roles assistive technology needs (space-44). Every
+// `space.*` call names the records it acts on by their key. The header's
+// sign-in, the headings and "Add a Space…" are groups-instances.test.tsx's.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
@@ -27,7 +28,6 @@ import {
   CONFLICTS,
   GIT_WORDS,
   HOME,
-  HOST_WORDS,
   INCOMING_INTENT,
   INCOMING_SESSION,
   INTENT_ID,
@@ -120,9 +120,14 @@ describe("GROUPS: re-reads on events, never on a timer (space-2)", () => {
       window.dispatchEvent(new Event("focus"));
     });
     await waitFor(() => expect(calls("space.get")).toHaveLength(2));
-    expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("On this computer only");
-    deliver(repoState());
+    // Records in no group read no phrase (space-120).
+    expect(screen.queryByTestId(`space-repo-state-${KEY}`)?.textContent ?? "").toBe("");
+    // Nothing to send, its last sync is its phrase (space-120).
+    deliver(repoState({ local: [] }));
     expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("Synced 2h ago");
+    // Something to send outranks it (space-120).
+    deliver(repoState());
+    expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("9 to send");
     expect(screen.getByTestId("space-repository")).toBeTruthy();
     expect(syncWords()).toBe("Sync now");
     expect(useAppStore.getState().space?.instances[0]?.groups[0]?.repositories[0]?.state).toBe("reachable");
@@ -157,7 +162,7 @@ describe("GROUPS: re-reads on events, never on a timer (space-2)", () => {
   });
 });
 
-describe("GROUPS: issues and repairs (space-1, space-46..space-56)", () => {
+describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
   const unpaired = (over: Record<string, unknown> = {}) => ({
     kind: "repository" as const,
     repository: "jane/infra-spex",
@@ -171,7 +176,7 @@ describe("GROUPS: issues and repairs (space-1, space-46..space-56)", () => {
     ...over,
   });
 
-  test("issues open in place, a pending merge read in plain words and the merge noted in the Sync tab", async () => {
+  test("'⚠ <n> to fix' opens 'To fix (<n>)' in place, a pending merge read in plain words and the merge noted in the Sync tab", async () => {
     await renderGroups(
       repoState(
         { mergePending: true },
@@ -184,19 +189,21 @@ describe("GROUPS: issues and repairs (space-1, space-46..space-56)", () => {
       ),
     );
     const issues = screen.getByTestId("space-issues");
-    expect(issues.textContent).toContain("2 issues");
+    expect(issues.textContent).toBe("⚠2 to fix");
+    expect(issues.className).toContain("amber");
     expect(screen.queryByTestId("space-issues-list")).toBeNull();
     fireEvent.click(issues);
     const list = screen.getByTestId("space-issues-list");
-    expect(list.textContent).toContain("Issues (2)");
-    expect(list.textContent).toContain("A Git merge is pending");
+    expect(screen.getByRole("region", { name: "To fix" })).toBe(list);
+    expect(screen.getByTestId("space-issues-heading").textContent).toBe("To fix (2)");
+    expect(list.textContent).toContain("Finish or abort the merge in your terminal");
     expect(list.textContent).not.toContain("MERGE_HEAD");
     expect(within(list).getAllByRole("listitem")).toHaveLength(2);
     expect(list.textContent).toContain("sessions/x.json");
-    expect(screen.getByTestId("space-merge-note").textContent).toContain("Finish or abort it there");
+    expect(screen.getByTestId("space-merge-note").textContent).toContain("Finish or abort the merge in your terminal");
   });
 
-  test("a spex repository no folder pairs proposes the folder the core checked, and one gesture pairs it (space-53, space-47)", async () => {
+  test("records no project folder pairs read '<project> · <group> — Folder missing on this computer', propose the folder the core checked, and 'Use <folder>' pairs it in one gesture (space-46, space-53, space-47)", async () => {
     commandMock.mockImplementation(async (type: string, fields: Record<string, unknown> = {}) => {
       if (type === "project.rebind") return { id: "jane/infra-spex", name: "infra", path: fields.path, registeredAt: 1 };
       if (type === "project.list") return [];
@@ -207,22 +214,26 @@ describe("GROUPS: issues and repairs (space-1, space-46..space-56)", () => {
       { open: false },
     );
     // Displaying it settles nothing: it still counts (space-54).
-    expect(screen.getByTestId("space-issues").textContent).toContain("1 issue");
+    expect(screen.getByTestId("space-issues").textContent).toBe("⚠1 to fix");
     fireEvent.click(screen.getByTestId("space-issues"));
     const row = screen.getByTestId("space-repair");
     expect(row.dataset.kind).toBe("repository");
-    // Named by the project and its group, the folder it remembers
-    // secondary (space-46, DR-159).
-    expect(within(row).getByTestId("space-repair-title").textContent).toBe("infra in jane: its folder on this computer is missing");
+    // Named by the project and its group, the folder it last ran in
+    // secondary, no sentence (space-46, DR-159, DR-069).
+    expect(within(row).getByTestId("space-repair-title").textContent).toBe("infra · jane — Folder missing on this computer");
     expect(row.textContent).not.toContain("infra-spex");
     expect(within(row).getByTestId("space-repair-folder").textContent).toBe("/code/infra · 5 sessions ran there");
-    expect(row.textContent).toContain("That folder is here and is a git repository. Add it as a project?");
-    expect(within(row).getByRole("button", { name: "Choose folder…" })).toBeTruthy();
-    expect(within(row).getByRole("button", { name: "Not on this computer" })).toBeTruthy();
+    expect(row.querySelectorAll("p")).toHaveLength(1);
+    // Its controls, in their order (space-47).
+    expect(within(row).getAllByRole("button").map((button) => button.textContent)).toEqual([
+      "Use /code/infra",
+      "Choose folder…",
+      "Not on this computer",
+    ]);
 
-    // One gesture pairs the spex repository with the folder, its key
-    // naming the project, the recorded folders riding as aliases.
-    fireEvent.click(within(row).getByRole("button", { name: "Add project" }));
+    // One gesture pairs the records with the folder, their key naming the
+    // project, the recorded folders riding as aliases.
+    fireEvent.click(within(row).getByRole("button", { name: "Use /code/infra" }));
     await waitFor(() =>
       expect(calls("project.rebind")).toEqual([
         { projectId: "jane/infra-spex", path: "/code/infra", aliases: ["/code/infra"] },
@@ -250,14 +261,14 @@ describe("GROUPS: issues and repairs (space-1, space-46..space-56)", () => {
     );
     fireEvent.click(screen.getByTestId("space-issues"));
     const row = screen.getByTestId("space-repair");
-    const add = within(row).getByRole("button", { name: "Add project" }) as HTMLButtonElement;
+    const add = within(row).getByTestId("space-repair-use") as HTMLButtonElement;
     expect(add.disabled).toBe(false);
     expect((within(row).getByRole("button", { name: "Choose folder…" }) as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(add);
     await waitFor(() => expect(calls("project.rebind")).toEqual([{ projectId: KEY, path: "/code/infra", aliases: ["/code/infra"] }]));
   });
 
-  test("a working folder whose clone is missing offers to forget the folder, behind an inline confirm (space-46, projects-9)", async () => {
+  test("a project folder whose records are missing offers to forget the folder, behind an inline confirm (space-46, projects-9)", async () => {
     const { answer } = await import("../fixtures/groups.js");
     commandMock.mockImplementation(async (type: string, fields: Record<string, unknown> = {}) => {
       if (type === "project.remove") return null;
@@ -279,10 +290,10 @@ describe("GROUPS: issues and repairs (space-1, space-46..space-56)", () => {
     const row = screen.getByTestId("space-repair");
     expect(row.dataset.kind).toBe("folder");
     expect(row.textContent).toContain("/code/old");
-    expect(row.textContent).toContain("Its spex repository is not on this device.");
-    expect(within(row).queryByRole("button", { name: "Add project" })).toBeNull();
+    expect(row.textContent).toContain("Records not on this computer");
+    expect(within(row).queryByTestId("space-repair-use")).toBeNull();
     fireEvent.click(within(row).getByRole("button", { name: "Forget folder" }));
-    expect(row.textContent).toContain("The folder stays on disk.");
+    expect(row.textContent).toContain("Its files stay.");
     // Cancel is the safe default (DR-010 §4).
     expect(document.activeElement).toBe(within(row).getByRole("button", { name: "Cancel" }));
     fireEvent.click(within(row).getByRole("button", { name: "Forget" }));
@@ -290,11 +301,11 @@ describe("GROUPS: issues and repairs (space-1, space-46..space-56)", () => {
       expect(calls("project.remove")).toEqual([{ projectId: "jane/old-spex", confirm: true }]),
     );
     const resolved = await screen.findByTestId("space-repair-resolved");
-    expect(resolved.textContent).toContain("/code/old · forgotten on this device");
+    expect(resolved.textContent).toContain("/code/old · forgotten on this computer");
     expect(within(resolved).queryByRole("button", { name: "Open project" })).toBeNull();
   });
 
-  test("a folder the core did not find proposes nothing and says so (space-53)", async () => {
+  test("a folder the core did not find proposes nothing, the row saying the folder is missing (space-53)", async () => {
     const repair = unpaired({
       directories: ["/gone/worktree"],
       sessions: 2,
@@ -305,12 +316,25 @@ describe("GROUPS: issues and repairs (space-1, space-46..space-56)", () => {
     await renderGroups(repoState({}, { diagnostics: [{ file: "workspace/jane/infra-spex", reason: "no working folder pairs it", blocking: false, repair }] }), { open: false });
     fireEvent.click(screen.getByTestId("space-issues"));
     const row = screen.getByTestId("space-repair");
-    expect(row.textContent).toContain("That folder is no longer on this device.");
-    expect(within(row).queryByRole("button", { name: "Add project" })).toBeNull();
-    expect(within(row).getByRole("button", { name: "Not on this computer" })).toBeTruthy();
+    expect(within(row).getByTestId("space-repair-title").textContent).toBe("infra · jane — Folder missing on this computer");
+    expect(within(row).queryByTestId("space-repair-use")).toBeNull();
+    expect(within(row).getAllByRole("button").map((button) => button.textContent)).toEqual(["Choose folder…", "Not on this computer"]);
+    // "Choose folder…" opens the row as an editor over the recorded path:
+    // "Use this folder" and Cancel, Escape cancelling, its note a phrase
+    // (space-47).
+    fireEvent.click(within(row).getByRole("button", { name: "Choose folder…" }));
+    const path = within(row).getByLabelText("Project folder of infra") as HTMLInputElement;
+    expect(path.value).toBe("/gone/worktree");
+    expect(row.textContent).toContain("Kept on this computer only; never synced");
+    expect(within(row).getByTestId("space-repair-submit").textContent).toBe("Use this folder");
+    fireEvent.change(path, { target: { value: "" } });
+    fireEvent.click(within(row).getByTestId("space-repair-submit"));
+    expect(within(row).getByRole("alert").textContent).toBe("Name a folder");
+    fireEvent.keyDown(path, { key: "Escape" });
+    expect(within(row).queryByTestId("space-repair-submit")).toBeNull();
   });
 
-  test("a repair set aside stands in the list, marked, and counts no more (space-54, space-55)", async () => {
+  test("a repair set aside stands in the list, marked 'set aside', and counts no more, the header's control reading 'To fix' (space-54, space-55)", async () => {
     const repair = unpaired({
       checked: [{ path: "/code/infra", here: false, repo: false }],
       proposal: undefined,
@@ -320,18 +344,20 @@ describe("GROUPS: issues and repairs (space-1, space-46..space-56)", () => {
     // It counts as no issue, but the control stays reachable — and
     // with nothing unanswered it stops wearing attention's colour.
     const issues = screen.getByTestId("space-issues");
-    expect(issues.textContent).not.toMatch(/\d/);
+    expect(issues.textContent).toBe("To fix");
+    expect(issues.title).toBe("Nothing to fix");
     expect(issues.className).not.toContain("amber");
-    expect(issues.textContent).not.toContain("⚠");
     fireEvent.click(issues);
     expect(screen.getByTestId("space-issues-list").className).not.toContain("amber");
     const row = screen.getByTestId("space-repair-declined");
-    expect(row.textContent).toContain("not added");
-    expect(within(row).getByTestId("space-repair-title").textContent).toBe("infra in jane: its folder on this computer is missing · not added");
+    expect(within(row).getByTestId("space-repair-title").textContent).toBe("infra · jane — Folder missing on this computer · set aside");
+    // Its condition is named for assistive technology, by mark and word
+    // (space-55).
+    expect(row.textContent).toContain("Set aside");
     // Declining strips nothing: the row still offers what it offered.
     expect(within(row).getByRole("button", { name: "Choose folder…" })).toBeTruthy();
     expect(within(row).queryByRole("button", { name: "Not on this computer" })).toBeNull();
-    expect(screen.getByTestId("space-issues-list").textContent).toContain("1 not added");
+    expect(screen.getByTestId("space-issues-heading").textContent).toBe("To fix (0) · 1 set aside");
   });
 
   test("space-56: an outcome and a declined row hold their places until the reader's Refresh, as focus and the count move on", async () => {
@@ -384,7 +410,7 @@ describe("GROUPS: issues and repairs (space-1, space-46..space-56)", () => {
       }
     });
     const { onOpenProject } = await renderGroups(report(), { open: false });
-    expect(screen.getByTestId("space-issues").textContent).toContain("3 issues");
+    expect(screen.getByTestId("space-issues").textContent).toBe("⚠3 to fix");
     fireEvent.click(screen.getByTestId("space-issues"));
     const items = () => within(screen.getByTestId("space-issues-list")).getAllByRole("listitem");
     const at = (index: number) => items()[index]!;
@@ -394,19 +420,21 @@ describe("GROUPS: issues and repairs (space-1, space-46..space-56)", () => {
     fireEvent.click(within(infra!).getByRole("button", { name: "Not on this computer" }));
     await waitFor(() => expect(at(0).dataset.testid).toBe("space-repair-declined"));
     expect(at(0).textContent).toContain("infra");
-    expect(at(0).textContent).toContain("not added");
-    expect(screen.getByTestId("space-issues").textContent).toContain("2 issues");
+    expect(at(0).textContent).toContain("set aside");
+    expect(screen.getByTestId("space-issues").textContent).toBe("⚠2 to fix");
+    expect(screen.getByTestId("space-issues-heading").textContent).toBe("To fix (2) · 1 set aside");
+    expect(live()).toBe("infra set aside");
 
     // The last row gives way to its outcome in its own place.
-    fireEvent.click(within(docs!).getByRole("button", { name: "Add project" }));
+    fireEvent.click(within(docs!).getByTestId("space-repair-use"));
     await waitFor(() => expect(at(2).dataset.testid).toBe("space-repair-resolved"));
     expect(at(2).textContent).toContain("docs · now a project at /code/docs, 1 session listed");
     // The count falls, the live region counts what the header does —
     // the declined row not among them — and focus wraps to the next
     // unanswered repair's first control.
-    expect(screen.getByTestId("space-issues").textContent).toContain("1 issue");
-    expect(live()).toBe("1 issue left.");
-    await waitFor(() => expect(document.activeElement).toBe(within(at(1)).getByRole("button", { name: "Add project" })));
+    expect(screen.getByTestId("space-issues").textContent).toBe("⚠1 to fix");
+    expect(live()).toBe("1 left to fix.");
+    await waitFor(() => expect(document.activeElement).toBe(within(at(1)).getByTestId("space-repair-use")));
     expect(at(1).textContent).toContain("slc");
 
     // A re-read the core delivers moves nothing.
@@ -421,9 +449,9 @@ describe("GROUPS: issues and repairs (space-1, space-46..space-56)", () => {
 
     // With no unanswered repair left, focus lands on the outcome's own
     // Open project, the one way off the surface.
-    fireEvent.click(within(at(0)).getByRole("button", { name: "Add project" }));
+    fireEvent.click(within(at(0)).getByTestId("space-repair-use"));
     await waitFor(() => expect(at(0).dataset.testid).toBe("space-repair-resolved"));
-    expect(live()).toBe("All issues resolved.");
+    expect(live()).toBe("Nothing left to fix.");
     const openSlc = within(at(0)).getByRole("button", { name: "Open project" });
     await waitFor(() => expect(document.activeElement).toBe(openSlc));
     fireEvent.click(openSlc);
@@ -431,10 +459,10 @@ describe("GROUPS: issues and repairs (space-1, space-46..space-56)", () => {
 
     // The last repair resolved, the list stands with every outcome
     // though the core reports nothing, until the reader's Refresh.
-    fireEvent.click(within(at(1)).getByRole("button", { name: "Add project" }));
+    fireEvent.click(within(at(1)).getByTestId("space-repair-use"));
     await waitFor(() => expect(at(1).dataset.testid).toBe("space-repair-resolved"));
     expect(at(1).textContent).toContain("infra · now a project at /code/infra, 5 sessions listed");
-    expect(live()).toBe("All issues resolved.");
+    expect(live()).toBe("Nothing left to fix.");
     await waitFor(() => expect(document.activeElement).toBe(within(at(1)).getByRole("button", { name: "Open project" })));
     expect(home.current.diagnostics).toEqual([]);
     expect(items()).toHaveLength(2);
@@ -443,12 +471,12 @@ describe("GROUPS: issues and repairs (space-1, space-46..space-56)", () => {
   });
 });
 
-describe("GROUPS: changes (space-7, space-8, space-10)", () => {
+describe("SPACE: changes (space-7, space-8, space-10)", () => {
   test("local units group by kind in order with their labels and details; a session row opens its session", async () => {
     const { onOpenSession } = await renderGroups(repoState());
     const list = screen.getByTestId("space-local-list");
     const headings = within(list).getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
-    expect(headings).toEqual(["Sessions", "Intents", "Authoring", "Environment", "Settings", "Code", "Sync rules", "Other"]);
+    expect(headings).toEqual(["Sessions", "Intents", "Authoring", "Packages", "Settings", "Code", "Sync rules", "Other"]);
     const session = screen.getByTestId("space-unit-mine-sessions/s1");
     expect(session.textContent).toContain("Fix the login redirect");
     expect(session.textContent).toContain("12 turns");
@@ -470,10 +498,10 @@ describe("GROUPS: changes (space-7, space-8, space-10)", () => {
     expect(within(screen.getByTestId("space-unit-mine-notes.txt")).getByRole("button", { name: "View diff" })).toBeTruthy();
   });
 
-  test("with no local unit the list reads 'Nothing to send from this device'", async () => {
+  test("with nothing to send the list reads 'Nothing to send from this computer' under 'To send (0)'", async () => {
     await renderGroups(repoState({ local: [] }));
-    expect(screen.getByText("Nothing to send from this device")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Local changes (0)" })).toBeTruthy();
+    expect(screen.getByText("Nothing to send from this computer")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "To send (0)" })).toBeTruthy();
   });
 
   test("View diff shows the line diff in place for the right side and Hide diff removes it", async () => {
@@ -484,7 +512,7 @@ describe("GROUPS: changes (space-7, space-8, space-10)", () => {
     await waitFor(() => expect(screen.getByTestId(diffId).textContent).toContain("+new: 2"));
     const diff = screen.getByTestId(diffId);
     expect(diff.textContent).toContain("-old: 1");
-    expect(diff.textContent).toContain("This device against the common ancestor");
+    expect(diff.textContent).toContain("Changes on this computer");
     expect(calls("space.diff")).toEqual([{ repository: KEY, unit: "config/playbook.config.yaml", path: "config/playbook.config.yaml", side: "mine" }]);
     fireEvent.click(within(row).getByRole("button", { name: "Hide diff" }));
     expect(screen.queryByTestId("space-diff-mine-config/playbook.config.yaml")).toBeNull();
@@ -494,20 +522,20 @@ describe("GROUPS: changes (space-7, space-8, space-10)", () => {
     // The host's side is the placement's the incoming row came from
     // (space-10).
     expect(calls("space.diff")[1]).toEqual({ repository: KEY, unit: "config/playbook.config.yaml", path: "config/playbook.config.yaml", side: "remote", placement: ORIGIN });
-    await waitFor(() => expect(screen.getByTestId("space-diff-remote-config/playbook.config.yaml").textContent).toContain("The host's version against the common ancestor"));
+    await waitFor(() => expect(screen.getByTestId("space-diff-remote-config/playbook.config.yaml").textContent).toContain("Changes at Spex Example"));
   });
 
-  test("Check host fetches, reads 'Checking…' with Stop while it runs, and marks the units this device changed too", async () => {
+  test("Check fetches, reads 'Checking…' with Stop while it runs, and marks what this computer changed too", async () => {
     await renderGroups(repoState({ conflicts: [CONFLICTS[0]], incoming: [SESSION_UNIT, INCOMING_INTENT] }));
     // The mark stands on the incoming row alone (space-8).
     expect(screen.getAllByTestId("space-choose-sessions/s1")).toHaveLength(1);
     expect(screen.getByTestId("space-unit-remote-sessions/s1").textContent).toContain("choose");
     expect(screen.getByTestId("space-unit-mine-sessions/s1").textContent).not.toContain("choose");
-    fireEvent.click(screen.getByRole("button", { name: "Check host" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check" }));
     await waitFor(() => expect(calls("space.fetch")).toEqual([{ repository: KEY }]));
     deliver(repoState({ sync: { phase: "running", op: "check", step: "check", since: NOW, cancelable: true } }));
     expect(screen.getByTestId("space-check").textContent).toBe("Checking…");
-    expect(screen.getByTestId("space-step-line").textContent).toBe("Checking host…");
+    expect(screen.getByTestId("space-step-line").textContent).toBe("Checking…");
     expect(screen.queryByTestId("space-step-save")).toBeNull();
     expect(screen.getAllByRole("button", { name: "Stop" })).toHaveLength(1);
     fireEvent.click(screen.getByRole("button", { name: "Stop" }));
@@ -522,21 +550,21 @@ describe("GROUPS: changes (space-7, space-8, space-10)", () => {
     expect(screen.queryByTestId(`space-repo-counts-${KEY}`)).toBeNull();
   });
 
-  test("a host holding no records and an unrelated history read as such; a local-only repository offers no Check host", async () => {
+  test("a Space holding no records and records started separately read as such; records in no group offer no Check", async () => {
     await renderGroups(repoState({ branch: { ...BRANCH, hostEmpty: true, behind: 0 }, incoming: [] }));
-    expect(screen.getByText("The host holds no records yet; Sync will send these")).toBeTruthy();
+    expect(screen.getByText("Spex Example holds no records yet; Sync will send these")).toBeTruthy();
     cleanup();
-    await renderGroups(repoState({ branch: { ...BRANCH, unrelated: true }, incoming: [], sync: { phase: "unrelated", placement: ORIGIN } }));
-    expect(screen.getByTestId("space-unrelated").textContent).toContain("Merge both histories into one");
+    await renderGroups(repoState({ local: [], branch: { ...BRANCH, unrelated: true }, incoming: [], sync: { phase: "unrelated", placement: ORIGIN } }));
+    expect(screen.getByTestId("space-unrelated").textContent).toContain("Started separately at Spex Example");
     expect(screen.queryByTestId(`space-repo-counts-${KEY}`)).toBeNull();
-    // The row keeps its "Sync now"; "Merge histories…" stands on the
-    // placement's line and beside the row's phrase, never Join
-    // (space-13, space-87, DR-159).
+    // The row keeps its "Sync now"; "Combine…" stands on the Space's
+    // line and beside the row's phrase, never Join or Merge (space-13,
+    // space-87, space-120, DR-172).
     expect(syncWords()).toBe("Sync now");
-    expect(within(lineAt()).getByTestId("space-line-join").textContent).toBe("Merge histories…");
-    expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("Unrelated history");
-    expect(screen.getByTestId(`space-row-merge-${KEY}`).textContent).toBe("Merge histories…");
-    expect(document.body.textContent).not.toMatch(/\bJoin\b/);
+    expect(within(lineAt()).getByTestId("space-line-combine").textContent).toBe("Combine…");
+    expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("Started separately at Spex Example");
+    expect(screen.getByTestId(`space-row-combine-${KEY}`).textContent).toBe("Combine…");
+    expect(document.body.textContent).not.toMatch(/\b(Join|Merge histories|Unrelated history)\b/);
     cleanup();
     await renderGroups(base({}, [repo({ state: "local-only", remote: null, branch: null })]));
     expect((screen.getByTestId("space-check") as HTMLButtonElement).disabled).toBe(true);
@@ -544,7 +572,7 @@ describe("GROUPS: changes (space-7, space-8, space-10)", () => {
   });
 });
 
-describe("GROUPS: syncing from the row (space-11, space-12, space-15, space-16, space-57)", () => {
+describe("SPACE: syncing from the row (space-11, space-12, space-15, space-16, space-57)", () => {
   test("Sync sends the command naming the repository and reads 'Syncing…' with the rail naming each step while it runs", async () => {
     await renderGroups(repoState());
     // "Sync now" stands in the row's overflow, titled as what it does
@@ -566,8 +594,9 @@ describe("GROUPS: syncing from the row (space-11, space-12, space-15, space-16, 
     expect(live()).toBe("Comparing…");
     deliver(repoState({ sync: { phase: "running", op: "sync", step: "push", since: NOW, cancelable: true } }));
     expect(screen.getByRole("button", { name: "Stop" })).toBeTruthy();
-    expect(live()).toBe("Pushing…");
-    expect(screen.getByTestId("space-status-dot").getAttribute("data-tone")).toBe("running");
+    expect(live()).toBe("Sending…");
+    // No dot carries the standing: the phrase does (DR-172).
+    expect(screen.queryByTestId("space-status-dot")).toBeNull();
   });
 
   test("Sync is refused before the first step with the reason beside the disabled control", async () => {
@@ -615,11 +644,10 @@ describe("GROUPS: syncing from the row (space-11, space-12, space-15, space-16, 
       }),
     );
     const card = screen.getByTestId("space-stopped");
-    expect(screen.getByTestId("space-stopped-title").textContent).toBe("Push stopped — Spex Example refused: you are not allowed to push");
+    expect(screen.getByTestId("space-stopped-title").textContent).toBe("Sending stopped — Spex Example refused: you are not allowed to push");
     expect(card.textContent).toContain("a role that can push");
-    expect(card.textContent).toContain("saved locally (3 commits ahead)");
-    expect(live()).toContain("Push stopped");
-    expect(screen.getByTestId("space-status-dot").getAttribute("data-tone")).toBe("stopped");
+    expect(card.textContent).toContain("Saved on this computer, not sent yet");
+    expect(live()).toContain("Sending stopped");
     fireEvent.click(within(card).getByRole("button", { name: "Retry" }));
     await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY }]));
     fireEvent.click(within(card).getByRole("button", { name: "Dismiss" }));
@@ -640,7 +668,7 @@ describe("GROUPS: syncing from the row (space-11, space-12, space-15, space-16, 
           sync: { phase: "stopped", op: "check", step: "check", cause: cause as never, message, guidance: "Then Retry.", retry: true },
         }),
       );
-      expect(screen.getByTestId("space-stopped-title").textContent).toBe(`Check stopped — ${message}`);
+      expect(screen.getByTestId("space-stopped-title").textContent).toBe(`Checking stopped — ${message}`);
       cleanup();
     }
   });
@@ -655,11 +683,11 @@ describe("GROUPS: syncing from the row (space-11, space-12, space-15, space-16, 
     await waitFor(() => expect(calls("space.fetch")).toEqual([{ repository: KEY }]));
     deliver(
       repoState({
-        sync: { phase: "stopped", op: "sync", step: "push", cause: "rejected", message: "The host changed again", guidance: "Sync again to take the new changes.", retry: true },
+        sync: { phase: "stopped", op: "sync", step: "push", cause: "rejected", message: "Spex Example changed again", guidance: "Sync again to take the new changes.", retry: true },
       }),
     );
-    expect(screen.getByTestId("space-stopped-title").textContent).toContain("The host changed again");
-    expect(screen.getByTestId("space-status-dot").getAttribute("data-tone")).toBe("attention");
+    expect(screen.getByTestId("space-stopped-title").textContent).toContain("Spex Example changed again");
+    expect(screen.getByTestId("space-stopped").className).toContain("amber");
   });
 
   test("a finished sync reads its counts, 'Everything is in sync' when nothing moved, and a read-only one what it brought", async () => {
@@ -674,61 +702,58 @@ describe("GROUPS: syncing from the row (space-11, space-12, space-15, space-16, 
     expect(screen.getByTestId("space-done-line").textContent).toBe("Brought 4; nothing sent");
     // A read-only repository's Sync only brings, and says so.
     expect(syncControl().title).toBe("Brings back anything new; sends nothing");
-    expect(screen.getByTestId("space-read-only-note").textContent).toBe("New sessions stay on this device");
+    expect(screen.getByTestId("space-read-only-note").textContent).toBe("New sessions stay on this computer");
   });
 
-  test("unrelated histories offer Join on the placement's line, confirmed inline with Cancel focused; the row keeps Sync (space-13)", async () => {
+  test("records started separately offer Combine… on the Space's line, confirmed inline with Cancel focused; the row keeps Sync (space-13)", async () => {
     await renderGroups(repoState({ branch: { ...BRANCH, unrelated: true }, sync: { phase: "unrelated", placement: ORIGIN } }));
-    // The row's one "Sync now" stands as ever (DR-128); "Merge
-    // histories…" says what it does in its title on the placement's
-    // line, never named Join (DR-159).
+    // The row's one "Sync now" stands as ever (DR-128); "Combine…" on the
+    // Space's line, never named Join or Merge (DR-172).
     expect(syncWords()).toBe("Sync now");
     expect(syncControl().title).toBe("Sends what is here and brings back anything new");
     fireEvent.keyDown(window, { key: "Escape" });
     const line = lineAt();
-    const join = within(line).getByTestId("space-line-join");
-    expect(join.textContent).toBe("Merge histories…");
-    expect(join.title).toBe("Brings both histories into one and asks about anything that differs");
+    const join = within(line).getByTestId("space-line-combine");
+    expect(join.textContent).toBe("Combine…");
     fireEvent.click(join);
-    const confirm = within(line).getByTestId("space-line-join-confirm");
-    expect(confirm.textContent).toContain("Join both histories into one?");
-    expect(confirm.textContent).toContain("Anything that differs will ask you to choose.");
+    const confirm = within(line).getByTestId("space-line-combine-confirm");
+    expect(confirm.textContent).toContain("Combine both sets of records into one?");
+    expect(confirm.textContent).toContain("Anything that differs asks you to choose");
     expect(document.activeElement).toBe(within(confirm).getByRole("button", { name: "Cancel" }));
     fireEvent.keyDown(document.activeElement!, { key: "Escape" });
-    expect(screen.queryByTestId("space-line-join-confirm")).toBeNull();
+    expect(screen.queryByTestId("space-line-combine-confirm")).toBeNull();
     expect(calls("space.sync")).toHaveLength(0);
     await waitFor(() => expect(document.activeElement).toBe(join));
     fireEvent.click(join);
-    fireEvent.click(within(within(line).getByTestId("space-line-join-confirm")).getByRole("button", { name: "Merge" }));
+    fireEvent.click(within(within(line).getByTestId("space-line-combine-confirm")).getByRole("button", { name: "Combine" }));
     // The join names its placement (space-29).
     await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY, placement: ORIGIN, join: true }]));
     cleanup();
     commandMock.mockClear();
-    // The row offers the same beside its phrase: "Merge histories…",
-    // confirmed inline beneath the row, Cancel focused (space-13,
-    // space-87).
-    await renderGroups(repoState({ branch: { ...BRANCH, unrelated: true }, sync: { phase: "unrelated", placement: ORIGIN } }), { open: false });
-    const merge = screen.getByTestId(`space-row-merge-${KEY}`);
-    expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("Unrelated history");
+    // The row offers the same beside its phrase: "Combine…", confirmed
+    // inline beneath the row, Cancel focused (space-13, space-120).
+    await renderGroups(repoState({ local: [], branch: { ...BRANCH, unrelated: true }, sync: { phase: "unrelated", placement: ORIGIN } }), { open: false });
+    const merge = screen.getByTestId(`space-row-combine-${KEY}`);
+    expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("Started separately at Spex Example");
     fireEvent.click(merge);
-    const rowConfirm = screen.getByTestId(`space-row-merge-confirm-${KEY}`);
-    expect(rowConfirm.textContent).toContain("Join both histories into one?");
+    const rowConfirm = screen.getByTestId(`space-row-combine-confirm-${KEY}`);
+    expect(rowConfirm.textContent).toContain("Combine both sets of records into one?");
     expect(document.activeElement).toBe(within(rowConfirm).getByRole("button", { name: "Cancel" }));
-    fireEvent.click(within(rowConfirm).getByRole("button", { name: "Merge" }));
+    fireEvent.click(within(rowConfirm).getByRole("button", { name: "Combine" }));
     await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY, placement: ORIGIN, join: true }]));
   });
 
-  test("space-57: the first sync of a repository others share says once what goes there; Continue records it", async () => {
+  test("space-57: the first sync of records others share asks 'Share with <group> at <Space>?' over its three phrases; Share records it", async () => {
     await renderGroups(repoState({ members: 3, noticed: false }));
     fireEvent.click(syncControl());
     let notice = screen.getByTestId("space-notice-confirm");
-    // It leads with where the records go: the placement's path at its
-    // instance (space-57).
-    expect(notice.textContent).toContain("Records go to jane/academy-spex at Spex Example.");
-    expect(notice.textContent).toContain("Every session goes there whole");
-    expect(notice.textContent).toContain("hidden parts and attachments included");
-    expect(notice.textContent).toContain("nothing recalls what others downloaded");
-    expect(notice.textContent).not.toContain("public");
+    // Titled by the group the records are in — "Personal" for your own —
+    // and the Space, over three phrases, no sentence (space-57).
+    expect(notice.textContent).toContain("Share with Personal at Spex Example?");
+    expect(notice.textContent).toContain("Every session, whole, attachments included");
+    expect(notice.textContent).toContain("Past and future records");
+    expect(notice.textContent).toContain("Members keep what they download");
+    expect(notice.textContent).not.toContain("Public: anyone can read");
     expect(document.activeElement).toBe(within(notice).getByRole("button", { name: "Cancel" }));
     fireEvent.keyDown(document.activeElement!, { key: "Escape" });
     expect(screen.queryByTestId("space-notice-confirm")).toBeNull();
@@ -738,14 +763,14 @@ describe("GROUPS: syncing from the row (space-11, space-12, space-15, space-16, 
     expect(calls("space.sync")).toHaveLength(0);
     fireEvent.click(syncControl());
     notice = screen.getByTestId("space-notice-confirm");
-    fireEvent.click(within(notice).getByRole("button", { name: "Continue" }));
+    fireEvent.click(within(notice).getByRole("button", { name: "Share" }));
     // The notice is seen for that placement (space-29).
     await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY, placement: ORIGIN, noticed: true }]));
     cleanup();
     // A public repository says its records are public.
     await renderGroups(repoState({ members: 3, noticed: false, visibility: "public" }));
     fireEvent.click(syncControl());
-    expect(screen.getByTestId("space-notice-confirm").textContent).toContain("its records are public");
+    expect(screen.getByTestId("space-notice-confirm").textContent).toContain("Public: anyone can read");
     cleanup();
     // Once seen it is not said again, and a repository whose only
     // member is the account says nothing.
@@ -753,7 +778,7 @@ describe("GROUPS: syncing from the row (space-11, space-12, space-15, space-16, 
     // have others: it says so too.
     await renderGroups(repoState({ members: null, noticed: false, lastSync: null }));
     fireEvent.click(syncControl());
-    expect(screen.getByTestId("space-notice-confirm").textContent).toContain("Every session goes there whole");
+    expect(screen.getByTestId("space-notice-confirm").textContent).toContain("Every session, whole, attachments included");
     cleanup();
     for (const over of [{ members: 3, noticed: true }, { members: 1, noticed: false }, { members: null, noticed: false }]) {
       commandMock.mockClear();
@@ -778,9 +803,12 @@ describe("GROUPS: syncing from the row (space-11, space-12, space-15, space-16, 
   });
 });
 
-describe("GROUPS: choices (space-9, space-17, space-18)", () => {
+describe("SPACE: choices (space-9, space-17, space-18)", () => {
+  // Nothing waits to be sent, so the row's phrase is the choices owed
+  // (space-120).
   const choicesState = (over: RowOver = {}) =>
     repoState({
+      local: [],
       incoming: [SESSION_UNIT, SETTINGS_UNIT, INCOMING_INTENT],
       conflicts: CONFLICTS,
       sync: { phase: "choices", placement: ORIGIN, savedCommit: "abc123" },
@@ -792,13 +820,12 @@ describe("GROUPS: choices (space-9, space-17, space-18)", () => {
     expect(screen.getByTestId("space-step-line").textContent).toBe("Needs your choice");
     // The caption and the incoming section name the placement's
     // instance (space-8, space-9).
-    expect(screen.getByText("Your changes are saved; nothing is pushed to Spex Example yet")).toBeTruthy();
-    expect(within(screen.getByTestId(`space-incoming-${ORIGIN}`)).getByRole("heading", { level: 3 }).textContent).toBe("Spex Example");
+    expect(screen.getByText("Your changes are saved; nothing is sent to Spex Example yet")).toBeTruthy();
+    expect(within(screen.getByTestId(`space-incoming-${ORIGIN}`)).getByRole("heading", { level: 2 }).textContent).toBe("From Spex Example (3)");
     const incoming = screen.getByTestId("space-incoming-list");
     const picker = screen.getByTestId("space-picker");
     expect(incoming.compareDocumentPosition(picker) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Choose for 2 conflicts" })).toBeTruthy();
-    expect(screen.getByTestId("space-status-dot").getAttribute("data-tone")).toBe("attention");
     // The row reads the placement's outcome, with Resolve showing the
     // same picker beneath the row, its choices the Sync tab's (space-14,
     // space-87, DR-159).
@@ -822,7 +849,7 @@ describe("GROUPS: choices (space-9, space-17, space-18)", () => {
         expect((radio as HTMLInputElement).checked).toBe(false);
       }
     }
-    expect(within(session).getByLabelText(/Keep what's here/).parentElement?.textContent).toContain("updated 2h ago · 12 turns");
+    expect(within(session).getByLabelText(/Keep this computer's/).parentElement?.textContent).toContain("updated 2h ago · 12 turns");
     expect(within(session).getByLabelText(/Take Spex Example's/).parentElement?.textContent).toContain("updated 5h ago · 9 turns");
     expect(within(settings).getAllByRole("button", { name: "View diff" })).toHaveLength(2);
     expect(within(session).queryByRole("button", { name: "View diff" })).toBeNull();
@@ -832,7 +859,7 @@ describe("GROUPS: choices (space-9, space-17, space-18)", () => {
     fireEvent.click(within(session).getByLabelText(/Take Spex Example's/));
     expect(screen.getByTestId("space-chosen").textContent).toBe("1 of 2 chosen");
     expect(apply.disabled).toBe(true);
-    fireEvent.click(within(settings).getByLabelText(/Keep what's here/));
+    fireEvent.click(within(settings).getByLabelText(/Keep this computer's/));
     expect(screen.getByTestId("space-chosen").textContent).toBe("2 of 2 chosen");
     expect(apply.disabled).toBe(false);
   });
@@ -856,19 +883,20 @@ describe("GROUPS: choices (space-9, space-17, space-18)", () => {
     }
     fireEvent.click(screen.getByRole("button", { name: "All here" }));
     for (const group of screen.getAllByRole("radiogroup")) {
-      expect((within(group).getByLabelText(/Keep what's here/) as HTMLInputElement).checked).toBe(true);
+      expect((within(group).getByLabelText(/Keep this computer's/) as HTMLInputElement).checked).toBe(true);
     }
   });
 
   test("Apply asks one inline confirm with Cancel focused; Escape keeps the choices; confirming syncs with them", async () => {
     await renderGroups(choicesState());
     fireEvent.click(within(screen.getByRole("radiogroup", { name: "Fix the login redirect" })).getByLabelText(/Take Spex Example's/));
-    fireEvent.click(within(screen.getByRole("radiogroup", { name: "Settings changed" })).getByLabelText(/Keep what's here/));
+    fireEvent.click(within(screen.getByRole("radiogroup", { name: "Settings changed" })).getByLabelText(/Keep this computer's/));
     fireEvent.click(screen.getByTestId("space-apply"));
     const confirm = screen.getByTestId("space-apply-confirm");
-    expect(confirm.textContent).toContain("Replace 1 unit with the host's version?");
+    expect(confirm.textContent).toContain("Take Spex Example's version of 1 record?");
     expect(confirm.textContent).toContain("stays in Git history");
-    expect(confirm.textContent).toContain("loses its local resume hints");
+    expect(confirm.textContent).toContain("loses its resume hints");
+    expect(confirm.textContent).not.toMatch(/\bunits?\b/);
     expect(document.activeElement).toBe(within(confirm).getByRole("button", { name: "Cancel" }));
     fireEvent.keyDown(document.activeElement!, { key: "Escape" });
     expect(screen.queryByTestId("space-apply-confirm")).toBeNull();
@@ -883,7 +911,7 @@ describe("GROUPS: choices (space-9, space-17, space-18)", () => {
     );
   });
 
-  test("a join waiting for choices lists the incoming units, offers Join, and applies with the join", async () => {
+  test("a combine waiting for choices lists what is incoming, offers Combine…, and applies with the join", async () => {
     await renderGroups(
       choicesState({
         branch: { ...BRANCH, unrelated: true, ahead: null, behind: null },
@@ -893,18 +921,18 @@ describe("GROUPS: choices (space-9, space-17, space-18)", () => {
     );
     // The incoming list stands above the picker (space-9); the histories
     // stay unrelated until the merge lands, so the placement's line
-    // offers Join beside the row's Sync (space-13).
+    // offers Combine… beside the row's Sync (space-13).
     expect(screen.getByTestId("space-incoming-list")).toBeTruthy();
     expect(screen.getByTestId("space-unit-remote-sessions/s2").textContent).toContain("Draft the release notes");
     // The row reads the choices it owes, not the history being merged
     // (space-87, space-14).
     expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("Changed here and at Spex Example");
     expect(screen.getByTestId(`space-row-resolve-${KEY}`)).toBeTruthy();
-    expect(screen.queryByText("Unrelated history")).toBeNull();
+    expect(screen.queryByText("Started separately at Spex Example")).toBeNull();
     expect(syncWords()).toBe("Sync now");
-    expect(within(lineAt()).getByTestId("space-line-join").textContent).toBe("Merge histories…");
+    expect(within(lineAt()).getByTestId("space-line-combine").textContent).toBe("Combine…");
     expect(screen.queryByTestId(`space-repo-counts-${KEY}`)).toBeNull();
-    fireEvent.click(within(screen.getByRole("radiogroup", { name: "Settings changed" })).getByLabelText(/Keep what's here/));
+    fireEvent.click(within(screen.getByRole("radiogroup", { name: "Settings changed" })).getByLabelText(/Keep this computer's/));
     fireEvent.click(screen.getByTestId("space-apply"));
     fireEvent.click(within(screen.getByTestId("space-apply-confirm")).getByRole("button", { name: "Apply" }));
     // Apply carries the choices and the join, for that placement
@@ -927,7 +955,7 @@ describe("GROUPS: choices (space-9, space-17, space-18)", () => {
       }),
     );
     const group = screen.getByRole("radiogroup", { name: "Fix the login redirect" });
-    expect(within(group).getByLabelText(/Keep what's here/).parentElement?.textContent).toContain("deleted");
+    expect(within(group).getByLabelText(/Keep this computer's/).parentElement?.textContent).toContain("deleted");
     expect(within(group).getByLabelText(/Take Spex Example's/).parentElement?.textContent).toContain("updated 1h ago · 13 turns");
   });
 
@@ -958,7 +986,7 @@ describe("GROUPS: choices (space-9, space-17, space-18)", () => {
   });
 });
 
-describe("GROUPS: the explorer (space-23, space-24, space-25)", () => {
+describe("SPACE: the explorer (space-23, space-24, space-25)", () => {
   async function openExplore(state: GroupsState = repoState()) {
     const rendered = await renderGroups(state);
     fireEvent.click(screen.getByRole("tab", { name: "Explore" }));
@@ -976,7 +1004,10 @@ describe("GROUPS: the explorer (space-23, space-24, space-25)", () => {
     expect(items.filter((item) => item.tabIndex === 0)).toHaveLength(1);
     expect(screen.getByTestId("space-node-project.json").textContent).toContain("code remote");
     expect(screen.getByTestId("space-node-project.json").textContent).toContain("Shared");
-    expect(screen.getByTestId("space-node-spex.yaml").textContent).toContain("spec package requests");
+    // The environment's files read by their file names, never the
+    // catalog's nouns (space-23, DR-172).
+    expect(screen.getByTestId("space-node-spex.yaml").textContent).not.toContain("spec package requests");
+    expect(screen.getByTestId("space-node-spex.yaml").textContent?.match(/spex\.yaml/g)).toHaveLength(2);
     expect(screen.getByTestId("space-node-packages").textContent).toContain("installed spec packages");
     expect(screen.getByTestId("space-node-packages").textContent).toContain("Stays here");
     expect(screen.getByTestId("space-node-README.md").textContent).toContain("Not a Spex file");
@@ -1007,10 +1038,11 @@ describe("GROUPS: the explorer (space-23, space-24, space-25)", () => {
     expect(screen.getByRole("tab", { name: "Sync" }).getAttribute("aria-selected")).toBe("true");
   });
 
-  test.each(["en", "zh"] as const)("space-23: `placements/<folder>.yaml` and its folder read 'placement', Shared (%s)", async (language) => {
+  test.each(["en", "zh"] as const)("space-23, space-27: `placements/<folder>.yaml` reads 'kept at <Space>' and its folder 'where these records are kept', Shared, never 'placement' (%s)", async (language) => {
     activateLanguage(language);
     const zh = language === "zh";
-    const family = zh ? "放置" : "placement";
+    const folderWord = zh ? "保存这些记录的位置" : "where these records are kept";
+    const fileWord = zh ? "保存在 Spex Example" : "kept at Spex Example";
     const shared = zh ? "已共享" : "Shared";
     await renderGroups(repoState());
     fireEvent.click(screen.getByRole("tab", { name: zh ? "浏览" : "Explore" }));
@@ -1018,19 +1050,21 @@ describe("GROUPS: the explorer (space-23, space-24, space-25)", () => {
     // (space-35); the entry reads this interface's word for it, never
     // the raw family in another language (space-23).
     const folder = await screen.findByTestId("space-node-placements");
-    expect(within(folder).getByText(family).textContent).toBe(family);
+    expect(within(folder).getByText(folderWord).textContent).toBe(folderWord);
+    expect(folder.textContent?.replace("placements/", "")).not.toMatch(/placement|放置/);
     expect(folder.querySelector("[data-sync]")?.getAttribute("data-sync")).toBe("shared");
     expect(folder.querySelector("[data-sync]")?.textContent).toBe(shared);
     fireEvent.click(folder);
     const file = await screen.findByTestId("space-node-placements/@spex.example.yaml");
     expect(calls("space.tree").at(-1)).toEqual({ repository: KEY, path: "placements" });
     expect(file.getAttribute("aria-level")).toBe("2");
-    expect(within(file).getByText(family).textContent).toBe(family);
+    expect(within(file).getByText(fileWord).textContent).toBe(fileWord);
+    expect(file.textContent?.replace("@spex.example.yaml", "")).not.toMatch(/placement|放置/);
     expect(file.querySelector("[data-sync]")?.getAttribute("data-sync")).toBe("shared");
     expect(file.querySelector("[data-sync]")?.textContent).toBe(shared);
   });
 
-  test("'Stays on this device' names the eight families with one reason each", async () => {
+  test("'Stays on this computer' names the eight families with one reason each", async () => {
     await openExplore();
     const panel = screen.getByTestId("space-privacy");
     fireEvent.click(within(panel).getByRole("button"));
@@ -1047,8 +1081,11 @@ describe("GROUPS: the explorer (space-23, space-24, space-25)", () => {
     ]) {
       expect(text).toContain(family);
     }
-    expect(text).toContain("this device's sign-in to each instance");
-    expect(text).toContain("Stays on this device (8 kinds)");
+    expect(text).toContain("this computer's sign-in to each Space");
+    expect(text).toContain("resume tokens for this computer's agent conversations; they work nowhere else");
+    expect(text).toContain("copies installed from spex.lock; every computer installs its own");
+    expect(within(panel).getByTestId("space-privacy-toggle").textContent).toBe("Stays on this computer");
+    expect(text).not.toMatch(/\b(device|machine|instance)\b/);
   });
 
   test("a session's chunk directory stays under its one session node", async () => {
@@ -1129,7 +1166,7 @@ describe("GROUPS: the explorer (space-23, space-24, space-25)", () => {
     await screen.findByTestId("space-preview-markdown");
     expect(screen.getByRole("heading", { name: "Hello" })).toBeTruthy();
     fireEvent.click(screen.getByTestId("space-node-spex.yaml"));
-    await waitFor(() => expect(screen.getByTestId("space-preview").textContent).toContain("Showing the first 2,000 lines"));
+    await waitFor(() => expect(screen.getByTestId("space-preview").textContent).toContain("First 2,000 lines shown"));
     fireEvent.click(screen.getByTestId("space-node-notes.bin"));
     expect(screen.getByTestId("space-preview").textContent).toContain("binary file · 8.8 KB");
     fireEvent.click(screen.getByTestId("space-node-packages"));
@@ -1162,7 +1199,7 @@ describe("GROUPS: the explorer (space-23, space-24, space-25)", () => {
   });
 });
 
-describe("GROUPS: reveal and copy (space-26)", () => {
+describe("SPACE: reveal and copy (space-26)", () => {
   test("with the native bridge the clone reveals in the file manager; a path it refuses says so", async () => {
     const revealPath = vi.fn<(path: string) => Promise<boolean>>().mockResolvedValue(true);
     (window as { spexNative?: unknown }).spexNative = { pickDirectory: vi.fn(), revealPath };
@@ -1185,7 +1222,7 @@ describe("GROUPS: reveal and copy (space-26)", () => {
     const field = screen.getByTestId("space-clone-path-field") as HTMLInputElement;
     expect(field.readOnly).toBe(true);
     expect(field.value).toBe(CLONE);
-    expect(live()).toContain("shown to select");
+    expect(live()).toBe("Copy unavailable — select the path");
   });
 
   test("with clipboard access Copy path acknowledges the copy in words", async () => {
@@ -1201,15 +1238,20 @@ describe("GROUPS: reveal and copy (space-26)", () => {
   });
 });
 
-describe("GROUPS: copy and roles (space-27, space-28, space-44)", () => {
-  test("no visible text in a repository's tabs says ours, theirs, HEAD, origin/spex, MERGE_HEAD, space or namespace", async () => {
+/** The words the surface never shows for its things (space-27, DR-172):
+ * the Space is named by its display name and this computer as such. */
+const BANNED_WORDS =
+  /\b(instances?|hosts?|sites?|subgroups?|namespaces?|spex repositor(y|ies)|clones?|units?|placements?|devices?|machines?|seats?|tickets?)\b/i;
+
+describe("SPACE: copy and roles (space-27, space-28, space-44)", () => {
+  test("no visible text in the records' tabs says ours, theirs, HEAD, origin/spex, MERGE_HEAD, or names the Space or this computer by another word", async () => {
     const states: GroupsState[] = [
       base({}, [repo({ state: "local-only", remote: null, branch: null })]),
       repoState(),
       repoState({ incoming: [SESSION_UNIT, SETTINGS_UNIT], conflicts: CONFLICTS, sync: { phase: "choices", placement: ORIGIN, savedCommit: null } }),
       repoState({ sync: { phase: "running", op: "sync", step: "apply", since: NOW, cancelable: false } }),
       repoState({ branch: { ...BRANCH, unrelated: true }, mergePending: true, sync: { phase: "unrelated", placement: ORIGIN } }, { diagnostics: [MERGE_DIAGNOSTIC] }),
-      repoState({ sync: { phase: "stopped", op: "sync", step: "push", cause: "rejected", message: "The host changed again", guidance: "Sync again.", retry: true } }),
+      repoState({ sync: { phase: "stopped", op: "sync", step: "push", cause: "rejected", message: "Spex Example changed again", guidance: "Sync again.", retry: true } }),
       repoState({ sync: { phase: "done", at: NOW, sent: 1, received: 2, pushed: true } }),
     ];
     for (const state of states) {
@@ -1219,30 +1261,30 @@ describe("GROUPS: copy and roles (space-27, space-28, space-44)", () => {
       if (issues) fireEvent.click(issues);
       for (const text of [document.body.textContent ?? ""]) {
         expect(text).not.toMatch(GIT_WORDS);
-        expect(text).not.toMatch(HOST_WORDS);
+        expect(text).not.toMatch(BANNED_WORDS);
         expect(strayRemote(text)).toBe(false);
       }
       fireEvent.click(screen.getByRole("tab", { name: "Explore" }));
       await screen.findByTestId("space-tree");
       const text = document.body.textContent ?? "";
       expect(text).not.toMatch(GIT_WORDS);
-      expect(text).not.toMatch(HOST_WORDS);
+      expect(text).not.toMatch(BANNED_WORDS);
       expect(strayRemote(text)).toBe(false);
       cleanup();
     }
   });
 
-  test("every control in a repository's tabs reads at most 14 characters, its busy form included", async () => {
+  test("every control in the records' tabs reads at most 14 characters, its busy form included", async () => {
     const states: GroupsState[] = [
       base({}, [repo({ state: "local-only", remote: null, branch: null })]),
       repoState({ incoming: [SESSION_UNIT, SETTINGS_UNIT], conflicts: CONFLICTS, sync: { phase: "choices", placement: ORIGIN, savedCommit: null } }),
       repoState({ sync: { phase: "running", op: "sync", step: "push", since: NOW, cancelable: true } }),
       repoState({ sync: { phase: "stopped", op: "sync", step: "push", cause: "git", message: "x", guidance: "y", retry: true } }),
     ];
-    // DR-159 names these in its own words, past the budget: "Add to a
-    // group…", "Merge histories…", and the fill naming the instance the
-    // choices are for, "All <display name>'s" (space-17, space-58).
-    const named = new Set(["Add to a group…", "Merge histories…", "All Spex Example's"]);
+    // The acts a decision fixes as whole phrases stand past the budget:
+    // "Add to a group…" and the fill naming the Space the choices are
+    // for, "All <display name>'s" (space-17, space-28, space-58).
+    const named = new Set(["Add to a group…", "All Spex Example's"]);
     for (const state of states) {
       await renderGroups(state);
       for (const button of screen.getAllByRole("button")) {
@@ -1256,13 +1298,20 @@ describe("GROUPS: copy and roles (space-27, space-28, space-44)", () => {
     }
   });
 
+  test("space-1: the surface ends in 'Spex keeps this computer's files in <home>', the full path in its title, with no control", async () => {
+    await renderGroups(repoState(), { open: false });
+    const foot = screen.getByTestId("space-home");
+    expect(foot.textContent).toBe("Spex keeps this computer's files in ~/.spex");
+    expect(foot.title).toBe(HOME);
+    expect(foot.querySelector("button, a")).toBeNull();
+  });
+
   test("the surface, the groups, the tabs, the tree, the picker's groups and the live region are named for assistive technology", async () => {
     await renderGroups(repoState({ incoming: [SESSION_UNIT], conflicts: [CONFLICTS[0]], sync: { phase: "choices", placement: ORIGIN, savedCommit: null } }));
     expect(screen.getByRole("region", { name: "Space" })).toBeTruthy();
     expect(screen.getByRole("region", { name: "Your groups" })).toBeTruthy();
-    // Your own records head the list, "Only you", as your namespace at
-    // the instance does while it lists a project (space-1).
-    expect(screen.getAllByRole("group", { name: "Only you" })[0]).toBe(screen.getByTestId("space-own"));
+    // Your records at the Space stand under "Personal" (space-1).
+    expect(screen.getAllByRole("heading").map((heading) => heading.textContent)).toContain("Personal");
     // The panel is named by the row's name, its `-spex` dropped (space-1).
     expect(screen.getByRole("region", { name: "academy" })).toBe(screen.getByTestId("space-repository"));
     expect(screen.getByRole("tablist", { name: "Views of academy" })).toBeTruthy();

@@ -592,7 +592,7 @@ test("storage-44: a file of another format is refused and left as it is; a malfo
 test("settings-48: off a seat the credential commands are refused, and readiness carries no credential class", async (t) => {
   const home = await startHome("no-seat-credentials", { project: false });
   t.after(() => home.stop());
-  const OFF_SEAT = /^Credentials are kept on a server's seat$/;
+  const OFF_SEAT = /^Credentials are set on a server only$/;
   await home.client.expectError("credential.list", {}, "invalid_request", OFF_SEAT);
   await home.client.expectError("credential.set", { kind: "host", name: "git.example.com", values: { token: "t" } }, "invalid_request", OFF_SEAT);
   await home.client.expectError("credential.remove", { kind: "agent", name: "claude" }, "invalid_request", OFF_SEAT);

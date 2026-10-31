@@ -208,7 +208,7 @@ test("git-host-26, git-host-5, space-87, space-61, space-1, space-29, space-30, 
   assert.deepEqual([...row.placedAt].sort(), [firstOrigin, secondOrigin].sort());
   // Join of it is refused: it is a placement of the clone's, to attach
   // on its row (space-29, space-87).
-  await home.client.expectError("space.join", { instance: second.url, hostId: there.id }, "invalid_request", /^atlas-spex is a placement of atlas-spex not on this device yet$/);
+  await home.client.expectError("space.join", { instance: second.url, hostId: there.id }, "invalid_request", /^atlas belongs to atlas on this computer — open atlas instead$/);
   assert.ok(!rowsOf(await home.client.expectOk("space.get", {})).some((repository) => repository.key === absentKey), "the refused join cloned nothing");
 
   // Its remote added as a device holding it adds it (storage-34): the
@@ -224,7 +224,7 @@ test("git-host-26, git-host-5, space-87, space-61, space-1, space-29, space-30, 
   assert.deepEqual(entryAt(attached, second.url, "workshop").placed, [{ key, name: "atlas-spex" }]);
   assert.deepEqual(entryAt(attached, first.url, "acme").repositories.map((repository) => repository.key), [key]);
   assert.ok(!rowsOf(attached).some((repository) => repository.key === absentKey), "no row of its own");
-  await home.client.expectError("space.join", { instance: second.url, hostId: there.id }, "invalid_request", /^atlas-spex is on this device already$/);
+  await home.client.expectError("space.join", { instance: second.url, hostId: there.id }, "invalid_request", /^atlas is on this computer already — Show it instead$/);
 });
 
 test("git-host-26, git-host-5, space-87, space-1, space-29, space-62: a host repository both of two instances over one Git backend list is one placement — a clone holding it through the first, with a file for the second naming it too, holds one line, no line or row offering it through the second, the namespace listing it at the second naming the row in one line and your namespace at the first naming your own group's own repository, a Place and a Join through the second refused as on this device, the row carrying both instances its files name", async (t) => {
@@ -268,8 +268,8 @@ test("git-host-26, git-host-5, space-87, space-1, space-29, space-62: a host rep
   assert.deepEqual(atSecond.filter((group) => group.placed.some((line) => line.key === key)).map((group) => group.fullPath), [LOGIN]);
   assert.ok(entryAt(state, second.url, LOGIN).placed.some((line) => line.key === key && line.name === "team-spex"));
   // A Place there is refused, the row placed there already (space-29).
-  await home.client.expectError("space.place", { repository: key, choice: { kind: "create", instance: second.url, groupId: null, name: "team" } }, "invalid_request", new RegExp(`^team-spex is placed at ${SECOND_NAME} already$`));
-  await home.client.expectError("space.join", { instance: second.url, hostId: id }, "invalid_request", /^team-spex is on this device already$/);
+  await home.client.expectError("space.place", { repository: key, choice: { kind: "create", instance: second.url, groupId: null, name: "team" } }, "invalid_request", new RegExp(`^team is at ${SECOND_NAME} already$`));
+  await home.client.expectError("space.join", { instance: second.url, hostId: id }, "invalid_request", /^team is on this computer already — Show it instead$/);
 });
 
 test("git-host-26, git-host-8, git-host-16, git-host-17, git-host-20, space-29, space-62, space-69, space-72, space-78, space-60, space-1, space-4: members are read from, a member added to and removed from, and the repository moved at the instance of the placement each command names, its first where none is named, nothing asked of the other; a move of the second leaves the key and the clone, the group naming the row following it at once, beside your own group's own repository the sign-in placed there; a move of the first stands the row under its new group at once and moves the clone at its next sync, the second's placement kept; an instance at which the spex repository holds no placement is refused, one the home does not list not found, and the second signed out refuses acts at it alone", async (t) => {
@@ -341,11 +341,11 @@ test("git-host-26, git-host-8, git-host-16, git-host-17, git-host-20, space-29, 
   // home does not list is not found (space-29).
   const { key: solo } = await addFolder(home, gitFolder("solo"));
   await home.client.expectOk("space.remote.set", { repository: solo, url: bareRepo() });
-  const noPlacement = /^solo-spex holds no such placement$/;
+  const noPlacement = /^solo does not sync there$/;
   await home.client.expectError("space.members", { repository: solo, instance: second.url }, "invalid_request", noPlacement);
   await home.client.expectError("space.share", { repository: solo, instance: second.url, login: "grace", role: "developer" }, "invalid_request", noPlacement);
   await home.client.expectError("space.unshare", { repository: solo, instance: second.url, login: "grace" }, "invalid_request", noPlacement);
-  await home.client.expectError("space.members", { repository: notesKey, instance: second.url }, "invalid_request", /^notes-spex holds no such placement$/);
+  await home.client.expectError("space.members", { repository: notesKey, instance: second.url }, "invalid_request", /^notes does not sync there$/);
   assert.deepEqual(logins(await home.client.expectOk("space.members", { repository: notesKey, instance: first.url })), [LOGIN]);
   await home.client.expectError("space.members", { repository: key, instance: "http://127.0.0.1:9" }, "not_found");
 
@@ -407,9 +407,9 @@ test("git-host-26, git-host-8, git-host-16, git-host-17, git-host-20, space-29, 
   // The second signed out, acts at its placement are refused; the
   // first's still read (space-29).
   await signOut(home, second);
-  await home.client.expectError("space.members", { repository: movedKey, instance: second.url }, "invalid_request", /^Sign in first$/);
-  await home.client.expectError("space.share", { repository: movedKey, instance: second.url, login: "grace", role: "developer" }, "invalid_request", /^Sign in first$/);
-  await home.client.expectError("space.repository.move", { repository: movedKey, instance: second.url, groupId: "2002" }, "invalid_request", /^Sign in first$/);
+  await home.client.expectError("space.members", { repository: movedKey, instance: second.url }, "invalid_request", /^Sign in to a Space first$/);
+  await home.client.expectError("space.share", { repository: movedKey, instance: second.url, login: "grace", role: "developer" }, "invalid_request", /^Sign in to a Space first$/);
+  await home.client.expectError("space.repository.move", { repository: movedKey, instance: second.url, groupId: "2002" }, "invalid_request", /^Sign in to a Space first$/);
   assert.deepEqual(logins(await home.client.expectOk("space.members", { repository: movedKey })), [LOGIN]);
 });
 
@@ -557,11 +557,11 @@ test("space-100, space-97, space-88, space-29, space-57, space-64, space-13, spa
   // list; a group the second's view lists not; a name with nothing of a
   // name (space-29, space-88).
   const secondAsked = second.script.requests.length;
-  await refused(loose, atSecond, "invalid_request", /^Pick a group first$/);
-  await refused(HOST_OWN, atSecond, "invalid_request", /^ada-spex holds a group's records; only a project's are placed at another instance$/);
-  await refused(atlas, { ...atSecond, instance: first.url }, "invalid_request", new RegExp(`^atlas-spex is placed at ${HOST_NAME} already$`));
+  await refused(loose, atSecond, "invalid_request", /^Add it to a group first$/);
+  await refused(HOST_OWN, atSecond, "invalid_request", /^ada holds a group's records, which stay at one Space$/);
+  await refused(atlas, { ...atSecond, instance: first.url }, "invalid_request", new RegExp(`^atlas is at ${HOST_NAME} already$`));
   await refused(atlas, { ...atSecond, instance: "http://127.0.0.1:9" }, "not_found", /has not signed in/);
-  await refused(atlas, { ...atSecond, groupId: "9999" }, "not_found", /^The host lists no such group$/);
+  await refused(atlas, { ...atSecond, groupId: "9999" }, "not_found", new RegExp(`^${SECOND_NAME} lists no such group — Refresh, then pick again$`));
   await refused(atlas, { ...atSecond, name: "--" }, "invalid_request", /letter or a digit/);
   assert.deepEqual(apiCalls(second, secondAsked), [], "no refusal asked the second");
   // Placing widens who reads every record: refused while the view does
@@ -571,7 +571,7 @@ test("space-100, space-97, space-88, space-29, space-57, space-64, space-13, spa
   assert.ok(atlasThere);
   atlasThere.can = { manageMembers: false, transfer: false };
   await refreshed(home);
-  await refused(atlas, atSecond, "invalid_request", /^Placing atlas-spex elsewhere needs the right to manage the members of each of its placements$/);
+  await refused(atlas, atSecond, "invalid_request", /^Sharing atlas at another Space needs the right to manage its members everywhere it syncs$/);
   delete atlasThere.can;
   await refreshed(home);
 
@@ -582,7 +582,7 @@ test("space-100, space-97, space-88, space-29, space-57, space-64, space-13, spa
   await refreshed(home);
   const joining = { kind: "join" as const, instance: second.url, hostId: listed.id };
   const theirs = git(listed.bare, "rev-parse", "spex");
-  await refused(atlas, joining, "invalid_request", /^Read the sharing notice before joining atlas-spex$/);
+  await refused(atlas, joining, "invalid_request", /^Confirm sharing before joining atlas$/);
   const firstAsked = first.script.requests.length;
   let firstBeforeSave: string[] | undefined;
   home.hooks.beforeStep = (event: SpaceStepEvent) => {
@@ -784,8 +784,8 @@ test("space-94, space-4, space-65, space-57, space-29, space-1, space-82, space-
   // space.place and space.leave naming your own group's own repository
   // are each refused, nothing changed and nothing asked (space-29).
   const asked = [first, second, third].map((host) => host.script.requests.length);
-  await home.client.expectError("space.place", { repository: HOST_OWN, choice: { kind: "create", instance: second.url, groupId: null, name: LOGIN } }, "invalid_request", new RegExp(`^${LOGIN}-spex holds a group's records; only a project's are placed at another instance$`));
-  await home.client.expectError("space.leave", { repository: HOST_OWN, instance: third.url }, "invalid_request", new RegExp(`^${LOGIN}-spex holds a group's records; only a project's are removed from an instance$`));
+  await home.client.expectError("space.place", { repository: HOST_OWN, choice: { kind: "create", instance: second.url, groupId: null, name: LOGIN } }, "invalid_request", new RegExp(`^${LOGIN} holds a group's records, which stay at one Space$`));
+  await home.client.expectError("space.leave", { repository: HOST_OWN, instance: third.url }, "invalid_request", new RegExp(`^${LOGIN} holds a group's records, which stay at their Space$`));
   assert.deepEqual(remoteNamesOf(own), [hostFolder(first), hostFolder(third)]);
   assert.deepEqual([first, second, third].map((host) => host.script.requests.length), asked);
 
@@ -935,7 +935,7 @@ test("space-101, space-82, space-60, space-29, space-65, space-64, storage-31, s
   const before = [atlasMoved, borealisClone, own].map(standing);
   const asked = [first, second, third].map((host) => host.script.requests.length);
   await home.client.expectError("space.forget", { instance: third.url }, "invalid_request",
-    new RegExp(`^Still kept under ${THIRD_NAME}: (borealis-spex, acme-spex|acme-spex, borealis-spex) · Still placed at ${THIRD_NAME}: atlas-spex$`));
+    /^Still syncing: (borealis, acme|acme, borealis), atlas — stop them first$/);
   assert.deepEqual([atlasMoved, borealisClone, own].map(standing), before);
   assert.ok(existsSync(join(groupClone, ".git")), "the group's clone stays keyed under the third");
   assert.deepEqual(remotesOf(own), [secondFolder, thirdFolder]);

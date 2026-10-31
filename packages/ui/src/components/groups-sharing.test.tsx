@@ -2,20 +2,18 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // Groups and sharing through the Space surface over a mocked client
-// (space-70, DR-114, DR-127, DR-159): each act stands exactly where the
-// instance's last read says the person may take it (space-1, space-62)
-// — "New group" on the instance's heading, Members and "New subgroup"
-// in a group's heading's one "More", Share and Remove in a members
+// (space-70, DR-114, DR-127, DR-159, DR-172): each act stands exactly
+// where the Space's last read says the person may take it (space-1,
+// space-62) — "New group" on the Space's heading, disabled and titled
+// "Made by the people who run <display name>" where it may not, Members
+// alone in a group's heading's one "More", Share and Remove in a members
 // panel — the group editor (space-68), Share (space-69), Remove
-// (space-72), and the label budget the fit rests on (space-28); where
-// the person may not create a group, the heading's one phrase, and no
-// link to a page of the host anywhere (DR-120); and the undo — "Rename"
-// (space-76) and, on an empty group, "Delete" (space-77) in a heading's
-// "More", "Move to another group" in a project's row's "More" and on its
-// placement's line in its Sync tab (space-78, space-87). A spex
-// repository's Members, Share, Remove and Move act on its placement at
-// the fixtures' instance, named in each command (DR-128). Each act is
-// checked by the command it sends.
+// (space-72), and the label budget the fit rests on (space-28); no link
+// to a page of the Space anywhere (DR-120); and renaming, deleting, a
+// group inside a group and moving a project not offered (DR-172). A spex
+// repository's Members, Share and Remove act on its placement at the
+// fixtures' Space, named in each command (DR-128). Each act is checked
+// by the command it sends.
 
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
@@ -33,14 +31,12 @@ import {
   base,
   calls,
   commandMock,
-  deliver,
   installClient,
   live,
   namespace,
   renderGroups,
   ownRepo,
   repo,
-  withGroups,
   withInstance,
 } from "../fixtures/groups.js";
 
@@ -150,7 +146,6 @@ function deferred<T>() {
 }
 
 const region = (name: string) => screen.getByRole("group", { name });
-const panel = (id: string) => screen.getByTestId(`space-members-${id}`);
 
 /** A heading's or a row's one overflow control, "More", opened where it
  * stands closed (space-1, DR-159), within `scope`. */
@@ -165,13 +160,22 @@ const closeMenus = (): void => {
   fireEvent.keyDown(window, { key: "Escape" });
 };
 
-/** A group heading's act in its "More" (space-1), where it stands. */
-function groupAct(path: string, act: "members" | "subgroup" | "rename" | "delete", scope: HTMLElement = document.body): HTMLButtonElement | null {
+/** A heading's act in its "More" (space-1), where it stands. */
+function groupAct(path: string, act: "members", scope: HTMLElement = document.body): HTMLButtonElement | null {
   return within(openMore(`space-group-more-${path}`, scope)).queryByTestId(`space-group-${act}-${path}`) as HTMLButtonElement | null;
 }
 
+/** The entries of a heading's "More", by test id, the menu closed after. */
+function groupMenu(path: string, scope: HTMLElement = document.body): string[] {
+  const ids = within(openMore(`space-group-more-${path}`, scope))
+    .getAllByRole("menuitem")
+    .map((item) => item.dataset.testid ?? "");
+  closeMenus();
+  return ids;
+}
+
 /** A row's act in its "More" (space-1), where it stands. */
-function rowAct(key: string, act: "members" | "move"): HTMLButtonElement | null {
+function rowAct(key: string, act: "members"): HTMLButtonElement | null {
   return within(openMore(`space-row-more-${key}`)).queryByTestId(`space-row-${act}-${key}`) as HTMLButtonElement | null;
 }
 
@@ -189,9 +193,6 @@ function lineOf(key: string): HTMLElement {
   return within(screen.getByTestId(`space-lines-${key}`)).getByTestId(`space-line-${ORIGIN}`);
 }
 
-/** The "Move…" on a row's placement line, where it stands. */
-const moveOf = (key: string): HTMLButtonElement | null => within(lineOf(key)).queryByTestId("space-line-move") as HTMLButtonElement | null;
-
 /** Open the members panel of a row's key placement through its
  * overflow's Members (space-1, space-62). */
 async function openPlacementMembers(key: string): Promise<HTMLElement> {
@@ -202,36 +203,35 @@ async function openPlacementMembers(key: string): Promise<HTMLElement> {
 }
 
 describe("GROUPS: each act where the host's read says (space-1, space-62, space-29)", () => {
-  test("space-70, space-1: New group stands on the instance's heading; acme's heading carries Members and New subgroup, other's Members alone, your own group's and your namespace's neither", async () => {
+  test("space-70, space-1: New group stands on the instance's heading; each group's heading carries Members alone, Personal's none", async () => {
     commandMock.mockImplementation(core);
     await renderGroups(sharingHome(), { open: false });
     const head = screen.getByTestId("space-new-group");
     expect(head.textContent).toBe("New group");
     expect(within(screen.getByTestId(`space-instance-${ORIGIN}`)).getByTestId("space-instance-heading").contains(head)).toBe(true);
     // acme: its heading's one "More", outside the heading, holds Members
-    // and New subgroup (space-1).
+    // alone, whatever else the Space lets the person do there (space-1,
+    // DR-172).
     const acme = region("acme");
     const more = within(acme).getByTestId("space-group-more-acme");
     expect(more.getAttribute("aria-label")).toBe("More for acme");
     expect(within(acme).getByRole("heading", { level: 3 }).contains(more)).toBe(false);
     expect(groupAct("acme", "members")!.textContent).toBe("Members");
-    expect(groupAct("acme", "subgroup")!.textContent).toBe("New subgroup");
-    expect(within(acme).getByRole("heading", { level: 3 }).textContent).toBe("acme");
-    // other: the host lets the person do neither, so nothing but Members.
-    const other = region("other");
-    expect(within(other).getByTestId("space-group-more-other")).toBeTruthy();
-    expect(groupAct("other", "members")).toBeTruthy();
-    expect(groupAct("other", "subgroup")).toBeNull();
     closeMenus();
-    // Your own records' heading carries none, whatever the flags say, and
-    // your namespace, listing only your own group's repository, heads
-    // nothing (space-1, DR-159).
-    const own = region("Only you");
-    expect(own).toBe(screen.getByTestId("space-own"));
-    expect(within(own).queryByTestId("space-group-more-jane")).toBeNull();
-    expect(within(own).queryByTestId("space-group-members-jane")).toBeNull();
-    expect(within(own).queryByTestId("space-group-subgroup-jane")).toBeNull();
-    expect(screen.queryByTestId("space-group-@jane")).toBeNull();
+    expect(groupMenu("acme")).toEqual(["space-group-members-acme"]);
+    expect(within(acme).getByRole("heading", { level: 3 }).textContent).toBe("acme");
+    // other: Members alone too, its path beside its name.
+    const other = region("other");
+    expect(within(other).getByRole("heading", { level: 3 }).textContent).toBe("Other team · other");
+    expect(groupMenu("other")).toEqual(["space-group-members-other"]);
+    // Personal — your sessions, placed at the Space — carries none,
+    // whatever the flags say, and "This computer", holding nothing,
+    // heads nothing (space-1).
+    const own = region("Personal");
+    expect(own).toBe(screen.getByTestId("space-group-@jane"));
+    expect(within(own).getByTestId(`space-row-${OWN}`)).toBeTruthy();
+    expect(screen.queryByTestId("space-group-more-jane")).toBeNull();
+    expect(screen.queryByTestId("space-own")).toBeNull();
     // Share stands in a members panel only, never on a heading.
     expect(screen.queryByRole("button", { name: "Share" })).toBeNull();
 
@@ -283,24 +283,19 @@ describe("GROUPS: each act where the host's read says (space-1, space-62, space-
     expect(within(own).getByTestId(`space-share-${at(OWN)}`)).toBeTruthy();
   });
 
-  test.each(["en", "zh"] as const)("space-70, space-1: where the instance's read says no group may be created, its heading holds the phrase naming who makes groups, with no link and no control, neither before a read is held (%s)", async (language) => {
-    activateLanguage(language);
+  test("space-70, space-1: where the instance's read says no group may be created, New group stands disabled, titled who makes groups, with no link; neither before a read is held", async () => {
     const refused = sharingHome({ canCreateGroup: false });
     await renderGroups(refused, { open: false });
-    expect(screen.queryByTestId("space-new-group")).toBeNull();
-    const heading = within(screen.getByTestId(`space-instance-${ORIGIN}`)).getByTestId("space-instance-heading");
-    const phrase = within(heading).getByTestId("space-groups-made-by");
-    // One key phrase on the heading, naming the instance, and no
-    // sentence explaining what is not offered (DR-069).
-    expect(phrase.textContent).toBe(
-      language === "zh" ? "群组由运营 Spex Example 的人创建" : "Groups are made by the people who run Spex Example",
-    );
-    expect(phrase.querySelector("a, button")).toBeNull();
+    const create = screen.getByTestId("space-new-group") as HTMLButtonElement;
+    // The reason is the control's title, no sentence beside it (DR-069,
+    // DR-172).
+    expect(create.disabled).toBe(true);
+    expect(create.title).toBe("Made by the people who run Spex Example");
+    expect(screen.queryByTestId("space-groups-made-by")).toBeNull();
     expect(screen.getByTestId("space-groups").querySelector("a")).toBeNull();
     cleanup();
-    // Before a read is held, neither stands.
+    // Before a read is held, it does not stand.
     await renderGroups(withInstance(refused, { readAt: null }), { open: false });
-    expect(screen.queryByTestId("space-groups-made-by")).toBeNull();
     expect(screen.queryByTestId("space-new-group")).toBeNull();
   });
 
@@ -337,21 +332,18 @@ describe("GROUPS: each act where the host's read says (space-1, space-62, space-
     expect(calls("space.members")).toEqual([{ instance: SECOND, group: ACME }]);
     fireEvent.click(within(list).getByTestId("space-share-group:acme"));
     const editor = within(list).getByTestId("space-share-group:acme-editor");
-    expect(within(editor).getByLabelText("Login at second.example")).toBeTruthy();
+    expect(within(editor).getByLabelText("Login at Second Example")).toBeTruthy();
     expect(within(within(editor).getByRole("listbox", { name: "Role" })).getAllByRole("option").map((option) => option.textContent)).toEqual([
       "Viewer",
       "Editor",
     ]);
-    fireEvent.click(groupAct("acme", "rename", secondSection)!);
-    const rename = second.getByTestId("space-rename-acme");
-    fireEvent.change(within(rename).getByLabelText("Group name"), { target: { value: "Acme Two" } });
-    fireEvent.click(within(rename).getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(calls("space.group.rename")).toEqual([{ instance: SECOND, group: ACME, name: "Acme Two" }]));
+    // Its heading's More holds Members alone there too (DR-172).
+    expect(groupMenu("acme", secondSection)).toEqual(["space-group-members-acme"]);
   });
 
   test("nothing stands for an act the host does not let the person take, nor before sign-in", async () => {
     await renderGroups(sharingHome({ canCreateGroup: false }), { open: false });
-    expect(screen.queryByTestId("space-new-group")).toBeNull();
+    expect((screen.getByTestId("space-new-group") as HTMLButtonElement).disabled).toBe(true);
     cleanup();
     const out = sharingHome();
     await renderGroups(withInstance(out, { signedIn: false, readAt: null }), { open: false });
@@ -361,117 +353,10 @@ describe("GROUPS: each act where the host's read says (space-1, space-62, space-
     // nothing (space-1).
     expect(screen.queryByTestId("space-group-more-acme")).toBeNull();
     expect(screen.queryByTestId("space-group-members-acme")).toBeNull();
-    expect(screen.queryByTestId("space-group-subgroup-acme")).toBeNull();
   });
 });
 
-describe("GROUPS: New group and New subgroup (space-68, space-29)", () => {
-  test("New subgroup opens the editor in place: the path following the name until edited, Create disabled until both hold text, Escape closing, Creating… until the reply, a refusal kept, a success closing", async () => {
-    const replies: ReturnType<typeof deferred<unknown>>[] = [];
-    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
-      if (type !== "space.group.create") return core(type, fields);
-      const reply = deferred<unknown>();
-      replies.push(reply);
-      return reply.promise;
-    });
-    await renderGroups(sharingHome(), { open: false });
-    // New subgroup stands in acme's heading's "More"; closing its editor
-    // hands focus back to that "More" (space-1, DR-010 §6).
-    const control = screen.getByTestId("space-group-more-acme");
-    fireEvent.click(groupAct("acme", "subgroup")!);
-    expect(screen.queryByTestId("space-group-more-acme-menu")).toBeNull();
-    const editor = screen.getByTestId("space-subgroup-acme");
-    const field = within(editor).getByLabelText("Group name") as HTMLInputElement;
-    const pathField = within(editor).getByLabelText("Path") as HTMLInputElement;
-    expect(document.activeElement).toBe(field);
-    expect(pathField.value).toBe("");
-    const create = within(editor).getByRole("button", { name: "Create" }) as HTMLButtonElement;
-    expect(create.disabled).toBe(true);
-    fireEvent.change(field, { target: { value: "   " } });
-    expect(pathField.value).toBe("");
-    expect(create.disabled).toBe(true);
-    // The path follows the name as the host derives it.
-    fireEvent.change(field, { target: { value: "Lumen Labs" } });
-    expect(pathField.value).toBe("lumen-labs");
-    expect(create.disabled).toBe(false);
-    // A name that derives no path leaves it empty, and Create disabled.
-    fireEvent.change(field, { target: { value: "华芯智造" } });
-    expect(pathField.value).toBe("");
-    expect(create.disabled).toBe(true);
-    fireEvent.keyDown(field, { key: "Enter" });
-    // Escape closes it, sending nothing, focus back on the control.
-    fireEvent.keyDown(field, { key: "Escape" });
-    expect(screen.queryByTestId("space-subgroup-acme")).toBeNull();
-    await waitFor(() => expect(document.activeElement).toBe(control));
-    expect(calls("space.group.create")).toEqual([]);
-
-    fireEvent.click(groupAct("acme", "subgroup")!);
-    const again = screen.getByTestId("space-subgroup-acme");
-    const name = within(again).getByLabelText("Group name") as HTMLInputElement;
-    const path = within(again).getByLabelText("Path") as HTMLInputElement;
-    fireEvent.change(name, { target: { value: "Team 1" } });
-    expect(path.value).toBe("team-1");
-    const createAgain = within(again).getByTestId("space-subgroup-acme-create") as HTMLButtonElement;
-    expect(createAgain.disabled).toBe(false);
-    fireEvent.click(createAgain);
-    await waitFor(() => expect(createAgain.textContent).toBe("Creating…"));
-    expect(createAgain.disabled).toBe(true);
-    // A second submission while the command runs sends nothing.
-    fireEvent.keyDown(name, { key: "Enter" });
-    expect(calls("space.group.create")).toEqual([{ instance: ORIGIN, name: "Team 1", path: "team-1", parent: ACME }]);
-    // The host reports the name taken: in the editor, the name kept.
-    replies[0]!.reject(new SpexCommandError("invalid_request", "Team 1 is taken in acme; name another"));
-    await waitFor(() => expect(within(again).getByRole("alert").textContent).toBe("Team 1 is taken in acme; name another"));
-    expect(name.value).toBe("Team 1");
-    expect(path.value).toBe("team-1");
-    expect(createAgain.textContent).toBe("Create");
-    expect(document.activeElement).toBe(name);
-    expect(live()).toBe("Team 1 is taken in acme; name another");
-
-    // A name in Chinese: the reader gives the path, which then no longer
-    // follows the name; an empty path disables Create.
-    fireEvent.change(name, { target: { value: "华芯智造" } });
-    expect(path.value).toBe("");
-    expect(createAgain.disabled).toBe(true);
-    fireEvent.change(path, { target: { value: "huaxin-mfg" } });
-    expect(createAgain.disabled).toBe(false);
-    fireEvent.change(name, { target: { value: "华芯智造 Lab" } });
-    expect(path.value).toBe("huaxin-mfg");
-    fireEvent.change(path, { target: { value: "  " } });
-    expect(createAgain.disabled).toBe(true);
-    fireEvent.change(path, { target: { value: "huaxin-lab" } });
-    fireEvent.keyDown(path, { key: "Enter" });
-    await waitFor(() => expect(calls("space.group.create")).toHaveLength(2));
-    expect(calls("space.group.create")[1]).toEqual({ instance: ORIGIN, name: "华芯智造 Lab", path: "huaxin-lab", parent: ACME });
-    // The core holds the created group as listed and announces it before
-    // its reply; the reply closes the editor with the group standing
-    // after acme, its full path beside its name.
-    const listed = sharingHome();
-    const [mine, acme, other] = listedGroups(listed);
-    deliver(
-      withInstance(listed, {
-        groups: [
-          mine!,
-          acme!,
-          { id: "70", login: null, mine: false, fullPath: "acme/huaxin-lab", name: "华芯智造 Lab", can: { createSubgroup: true, manageMembers: true, rename: false, delete: false }, placed: [], repositories: [] },
-          other!,
-        ],
-      }),
-    );
-    replies[1]!.resolve({ group: { id: "70", fullPath: "acme/huaxin-lab", name: "华芯智造 Lab" } });
-    await waitFor(() => expect(screen.queryByTestId("space-subgroup-acme")).toBeNull());
-    await waitFor(() => expect(document.activeElement).toBe(control));
-    // The subgroup stands within its group, headed by its name alone
-    // (space-1, DR-159).
-    const subgroup = region("acme/huaxin-lab");
-    expect(within(subgroup).getAllByRole("heading", { level: 3 })[0]!.textContent).toBe("华芯智造 Lab");
-    expect(region("acme").contains(subgroup)).toBe(true);
-    const headings = [...screen.getByTestId("space-groups").querySelectorAll("[data-testid^='space-group-']")]
-      .map((element) => element.getAttribute("data-testid"))
-      .filter((id) => id === "space-group-acme" || id === "space-group-acme/huaxin-lab" || id === "space-group-other");
-    expect(headings).toEqual(["space-group-acme", "space-group-acme/huaxin-lab", "space-group-other"]);
-  });
-
+describe("GROUPS: New group (space-68, space-29)", () => {
   test("space-68: New group on the instance's heading creates at that instance's root", async () => {
     commandMock.mockImplementation(core);
     await renderGroups(sharingHome(), { open: false });
@@ -506,7 +391,7 @@ describe("GROUPS: Share (space-69, space-29)", () => {
     fireEvent.click(share);
     expect(share.getAttribute("aria-expanded")).toBe("true");
     const editor = within(list).getByTestId("space-share-group:acme-editor");
-    const login = within(editor).getByLabelText("Login at spex.example") as HTMLInputElement;
+    const login = within(editor).getByLabelText("Login at Spex Example") as HTMLInputElement;
     expect(document.activeElement).toBe(login);
     const roles = within(editor).getByRole("listbox", { name: "Role" }) as HTMLSelectElement;
     expect(within(roles).getAllByRole("option").map((option) => option.textContent)).toEqual([
@@ -557,7 +442,7 @@ describe("GROUPS: Share (space-69, space-29)", () => {
     const list = await openPlacementMembers(A_SPEX);
     fireEvent.click(within(list).getByTestId(`space-share-${at(A_SPEX)}`));
     const editor = within(list).getByTestId(`space-share-${at(A_SPEX)}-editor`);
-    fireEvent.change(within(editor).getByLabelText("Login at spex.example"), { target: { value: "@dave" } });
+    fireEvent.change(within(editor).getByLabelText("Login at Spex Example"), { target: { value: "@dave" } });
     fireEvent.click(within(editor).getByRole("button", { name: "Add" }));
     // The fixture's host lists the added account at the role it got.
     await waitFor(() => expect(calls("space.share")).toEqual([{ repository: A_SPEX, instance: ORIGIN, login: "dave", role: "30" }]));
@@ -571,7 +456,7 @@ describe("GROUPS: Share (space-69, space-29)", () => {
     const list = await openGroupMembers("acme");
     const share = within(list).getByTestId("space-share-group:acme");
     fireEvent.click(share);
-    fireEvent.keyDown(within(list).getByLabelText("Login at spex.example"), { key: "Escape" });
+    fireEvent.keyDown(within(list).getByLabelText("Login at Spex Example"), { key: "Escape" });
     expect(within(list).queryByTestId("space-share-group:acme-editor")).toBeNull();
     // The panel itself stays open.
     expect(screen.getByTestId("space-members-group:acme")).toBeTruthy();
@@ -642,263 +527,41 @@ describe("GROUPS: Remove (space-72, space-29)", () => {
   });
 });
 
-describe("GROUPS: Rename, Delete and Move (space-1, space-76, space-77, space-78, space-29)", () => {
-  test("Rename stands where the host lets the person, Delete only on an empty group, Move… on a project's placement line it may move — none on your own group or its own records", async () => {
+describe("GROUPS: what the IDE no longer offers (space-1, DR-172)", () => {
+  test("no heading offers a group inside it, a rename or a delete, and no row or line moves a project to another group", async () => {
     commandMock.mockImplementation(core);
     await renderGroups(sharingHome(), { open: false });
-    // acme may be renamed and deleted, but holds a-spex: no Delete in
-    // its heading's "More".
-    expect(groupAct("acme", "rename")!.textContent).toBe("Rename");
-    expect(groupAct("acme", "delete")).toBeNull();
-    // empty holds nothing: both.
-    expect(groupAct("empty", "rename")!.textContent).toBe("Rename");
-    expect(groupAct("empty", "delete")!.textContent).toBe("Delete");
-    // other: the host lets the person do neither.
-    expect(groupAct("other", "rename")).toBeNull();
-    expect(groupAct("other", "delete")).toBeNull();
+    for (const path of ["acme", "other", "empty"]) {
+      expect(groupMenu(path), path).toEqual([`space-group-members-${path}`]);
+    }
+    expect(screen.queryByText("New subgroup")).toBeNull();
+    // The row's More holds Sync now, Members and Explore records, its
+    // line Members alone (space-1, space-87).
+    expect(within(openMore(`space-row-more-${A_SPEX}`)).getAllByRole("menuitem").map((item) => item.dataset.testid)).toEqual([
+      `space-row-sync-${A_SPEX}`,
+      `space-row-members-${A_SPEX}`,
+      `space-row-explore-${A_SPEX}`,
+    ]);
     closeMenus();
-    // Your own records' heading carries no "More", whatever the flags
-    // say.
-    const own = region("Only you");
-    expect(within(own).queryByTestId("space-group-more-jane")).toBeNull();
-    expect(within(own).queryByTestId("space-group-rename-jane")).toBeNull();
-    expect(within(own).queryByTestId("space-group-delete-jane")).toBeNull();
-    // a-spex's placement may be moved: "Move…" in its row's "More", the
-    // long name its title and its accessible name; b-spex's may not, nor
-    // your own group's records' (space-1).
-    const rowMove = rowAct(A_SPEX, "move")!;
-    expect(rowMove.textContent).toBe("Move…");
-    expect(rowMove.getAttribute("aria-label")).toBe("Move to another group");
-    expect(rowMove.getAttribute("title")).toBe("Move to another group");
-    expect(screen.getByRole("menuitem", { name: "Move to another group" })).toBe(rowMove);
-    expect(rowAct(B_SPEX, "move")).toBeNull();
-    expect(rowAct(OWN, "move")).toBeNull();
-    closeMenus();
-    // And on its placement's line in its Sync tab, alike (space-87).
-    const move = moveOf(A_SPEX)!;
-    expect(move.textContent).toBe("Move…");
-    expect(move.getAttribute("aria-label")).toBe("Move to another group");
-    expect(move.getAttribute("title")).toBe("Move to another group");
-    expect(screen.getByRole("button", { name: "Move to another group" })).toBe(move);
-    expect(moveOf(B_SPEX)).toBeNull();
-    expect(moveOf(OWN)).toBeNull();
-    // A group holding a group offers no Delete either.
-    cleanup();
-    const nested = withGroups(sharingHome(), { id: "6", login: null, mine: false, fullPath: "empty/team", name: "team", can: { createSubgroup: true, manageMembers: true, rename: true, delete: true }, placed: [], repositories: [] });
-    await renderGroups(nested, { open: false });
-    expect(groupAct("empty", "delete")).toBeNull();
-    expect(groupAct("empty/team", "delete")).toBeTruthy();
-    closeMenus();
-    // Signed out, none of them stands.
-    cleanup();
-    await renderGroups(withInstance(sharingHome(), { signedIn: false, readAt: null }), { open: false });
-    expect(screen.queryByTestId("space-group-more-acme")).toBeNull();
-    expect(screen.queryByTestId("space-group-more-empty")).toBeNull();
-    expect(rowAct(A_SPEX, "move")).toBeNull();
-    closeMenus();
-    expect(moveOf(A_SPEX)).toBeNull();
-  });
-
-  test("Rename opens the editor holding the name and the path, which no longer follows it; Save sends only what changed, Saving… until the reply, a refusal kept, a success closing", async () => {
-    const replies: ReturnType<typeof deferred<unknown>>[] = [];
-    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
-      if (type !== "space.group.rename") return core(type, fields);
-      const reply = deferred<unknown>();
-      replies.push(reply);
-      return reply.promise;
-    });
-    await renderGroups(sharingHome(), { open: false });
-    // Rename stands in acme's heading's "More"; its editor hands focus
-    // back to that "More" (space-1, DR-010 §6).
-    const control = screen.getByTestId("space-group-more-acme");
-    fireEvent.click(groupAct("acme", "rename")!);
-    const editor = screen.getByTestId("space-rename-acme");
-    const name = within(editor).getByLabelText("Group name") as HTMLInputElement;
-    const path = within(editor).getByLabelText("Path") as HTMLInputElement;
-    expect(document.activeElement).toBe(name);
-    expect([name.value, path.value]).toEqual(["acme", "acme"]);
-    const save = within(editor).getByRole("button", { name: "Save" }) as HTMLButtonElement;
-    // Nothing changed: Save is disabled, Enter sends nothing.
-    expect(save.disabled).toBe(true);
-    fireEvent.keyDown(name, { key: "Enter" });
-    // The path no longer follows the name.
-    fireEvent.change(name, { target: { value: "Acme Labs" } });
-    expect(path.value).toBe("acme");
-    expect(save.disabled).toBe(false);
-    // Escape closes it, sending nothing, focus back on Rename.
-    fireEvent.keyDown(name, { key: "Escape" });
-    expect(screen.queryByTestId("space-rename-acme")).toBeNull();
-    await waitFor(() => expect(document.activeElement).toBe(control));
+    expect(within(lineOf(A_SPEX)).queryByTestId("space-line-move")).toBeNull();
     expect(calls("space.group.rename")).toEqual([]);
-
-    fireEvent.click(groupAct("acme", "rename")!);
-    const again = screen.getByTestId("space-rename-acme");
-    const name2 = within(again).getByLabelText("Group name") as HTMLInputElement;
-    const path2 = within(again).getByLabelText("Path") as HTMLInputElement;
-    const save2 = within(again).getByTestId("space-rename-acme-save") as HTMLButtonElement;
-    fireEvent.change(name2, { target: { value: "Acme Labs" } });
-    fireEvent.click(save2);
-    await waitFor(() => expect(save2.textContent).toBe("Saving…"));
-    expect(save2.disabled).toBe(true);
-    fireEvent.keyDown(name2, { key: "Enter" });
-    // Only what changed is sent.
-    expect(calls("space.group.rename")).toEqual([{ instance: ORIGIN, group: ACME, name: "Acme Labs" }]);
-    replies[0]!.reject(new SpexCommandError("invalid_request", "Spex Example refused: You need the Owner role to rename acme."));
-    await waitFor(() => expect(within(again).getByRole("alert").textContent).toBe("Spex Example refused: You need the Owner role to rename acme."));
-    expect(name2.value).toBe("Acme Labs");
-    expect(save2.textContent).toBe("Save");
-    expect(live()).toBe("Spex Example refused: You need the Owner role to rename acme.");
-
-    // An empty path disables Save; a new one is sent with the name.
-    fireEvent.change(path2, { target: { value: " " } });
-    expect(save2.disabled).toBe(true);
-    fireEvent.change(path2, { target: { value: "acme-labs" } });
-    fireEvent.keyDown(path2, { key: "Enter" });
-    await waitFor(() => expect(calls("space.group.rename")).toHaveLength(2));
-    expect(calls("space.group.rename")[1]).toEqual({ instance: ORIGIN, group: ACME, name: "Acme Labs", path: "acme-labs" });
-    // The core holds the group renamed and announces it before its reply.
-    const listed = sharingHome();
-    deliver(withInstance(listed, { groups: listedGroups(listed).map((group) => (group.id === ACME ? { ...group, fullPath: "acme-labs", name: "Acme Labs" } : group)) }));
-    replies[1]!.resolve({ group: { id: ACME, fullPath: "acme-labs", name: "Acme Labs" } });
-    await waitFor(() => expect(screen.queryByTestId("space-rename-acme")).toBeNull());
-    expect(within(region("acme-labs")).getByRole("heading", { level: 3 }).textContent).toBe("Acme Labs");
-    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("space-group-more-acme-labs")));
-  });
-
-  test("Delete asks with Keep focused, Escape keeping; Deleting… until the reply; a refusal beneath the heading with the group kept; a success leaving the list without it", async () => {
-    const replies: ReturnType<typeof deferred<unknown>>[] = [];
-    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
-      if (type !== "space.group.delete") return core(type, fields);
-      const reply = deferred<unknown>();
-      replies.push(reply);
-      return reply.promise;
-    });
-    await renderGroups(sharingHome(), { open: false });
-    // Delete stands in empty's heading's "More", which takes focus back
-    // as its confirm and its refusal leave (space-1, DR-010 §6).
-    const more = () => screen.getByTestId("space-group-more-empty") as HTMLButtonElement;
-    const control = () => groupAct("empty", "delete")!;
-    const status = () => within(region("empty")).queryByRole("status");
-    fireEvent.click(control());
-    const confirm = screen.getByTestId("space-group-confirm-empty");
-    expect(confirm.textContent).toContain("Delete empty?");
-    expect(document.activeElement?.textContent).toBe("Keep");
-    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
-    expect(screen.queryByTestId("space-group-confirm-empty")).toBeNull();
-    await waitFor(() => expect(document.activeElement).toBe(more()));
-    fireEvent.click(control());
-    fireEvent.click(within(screen.getByTestId("space-group-confirm-empty")).getByRole("button", { name: "Keep" }));
     expect(calls("space.group.delete")).toEqual([]);
-
-    fireEvent.click(control());
-    fireEvent.click(within(screen.getByTestId("space-group-confirm-empty")).getByRole("button", { name: "Delete" }));
-    // The heading reads "Deleting…" until the reply, its Delete waiting.
-    await waitFor(() => expect(status()?.textContent).toBe("Deleting…"));
-    expect(control().disabled).toBe(true);
-    closeMenus();
-    expect(calls("space.group.delete")).toEqual([{ instance: ORIGIN, group: EMPTY }]);
-    replies[0]!.reject(new SpexCommandError("invalid_request", "Spex Example refused: The group is scheduled for deletion already."));
-    await waitFor(() => expect(screen.getByTestId("space-group-refusal-empty").textContent).toBe("Spex Example refused: The group is scheduled for deletion already."));
-    expect(screen.getByTestId("space-group-refusal-empty").getAttribute("role")).toBe("alert");
-    expect(status()).toBeNull();
-    expect(region("empty")).toBeTruthy();
-    await waitFor(() => expect(document.activeElement).toBe(more()));
-    expect(control().disabled).toBe(false);
-
-    fireEvent.click(control());
-    fireEvent.click(within(screen.getByTestId("space-group-confirm-empty")).getByRole("button", { name: "Delete" }));
-    await waitFor(() => expect(calls("space.group.delete")).toHaveLength(2));
-    // The core holds it gone and announces that before its reply.
-    const listed = sharingHome();
-    deliver(withInstance(listed, { groups: listedGroups(listed).filter((group) => group.id !== EMPTY) }));
-    replies[1]!.resolve({ deleted: true });
-    await waitFor(() => expect(screen.queryByTestId("space-group-empty")).toBeNull());
-  });
-
-  test("space-78: Move… on the placement's line opens the picker, your login first and every other group of its instance by its path; a pick sends the move naming the instance, Moving… until the reply, a refusal in the picker, a success closing it", async () => {
-    const replies: ReturnType<typeof deferred<unknown>>[] = [];
-    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
-      if (type !== "space.repository.move") return core(type, fields);
-      const reply = deferred<unknown>();
-      replies.push(reply);
-      return reply.promise;
-    });
-    await renderGroups(sharingHome(), { open: false });
-    const control = () => moveOf(A_SPEX) as HTMLButtonElement;
-    fireEvent.click(control());
-    expect(control().getAttribute("aria-expanded")).toBe("true");
-    const picker = screen.getByRole("group", { name: "Move a to another group" });
-    expect(picker).toBe(screen.getByTestId(`space-move-${at(A_SPEX)}`));
-    // It opens beneath its placement's line.
-    expect(lineOf(A_SPEX).contains(picker)).toBe(true);
-    // Your namespace first, read by your login, then every group but
-    // the one it stands in, each read as the list reads it: its name,
-    // then its path where the two differ (space-78); no link anywhere
-    // (DR-120).
-    const options = within(picker).getAllByTestId(/^space-move-group-/);
-    expect(options.map((option) => option.textContent)).toEqual(["jane", "Other team · other", "empty"]);
-    expect(options[0]!.dataset.testid).toBe("space-move-group-@jane");
-    // The separator is the eye's: an option's name says the group's
-    // name first (space-78).
-    expect(within(picker).getByRole("button", { name: "Other team other" })).toBe(options[1]);
-    expect(document.activeElement).toBe(options[0]);
-    expect(picker.querySelector("a")).toBeNull();
-    // Escape closes it, sending nothing, focus back on the control.
-    fireEvent.keyDown(options[0]!, { key: "Escape" });
-    expect(screen.queryByTestId(`space-move-${at(A_SPEX)}`)).toBeNull();
-    await waitFor(() => expect(document.activeElement).toBe(control()));
     expect(calls("space.repository.move")).toEqual([]);
-
-    fireEvent.click(control());
-    const again = screen.getByTestId(`space-move-${at(A_SPEX)}`);
-    fireEvent.click(within(again).getByTestId("space-move-group-other"));
-    await waitFor(() => expect(control().textContent).toBe("Moving…"));
-    expect(control().disabled).toBe(true);
-    // A second pick while the command runs sends nothing.
-    fireEvent.click(within(again).getByTestId("space-move-group-empty"));
-    expect(calls("space.repository.move")).toEqual([{ repository: A_SPEX, instance: ORIGIN, groupId: OTHER }]);
-    replies[0]!.reject(new SpexCommandError("invalid_request", "other already holds a-spex"));
-    await waitFor(() => expect(within(again).getByRole("alert").textContent).toBe("other already holds a-spex"));
-    expect(control().textContent).toBe("Move…");
-    expect(live()).toBe("other already holds a-spex");
-    expect(within(region("acme")).getByTestId(`space-row-${A_SPEX}`)).toBeTruthy();
-
-    // Your namespace is named by none.
-    fireEvent.click(within(again).getByTestId("space-move-group-@jane"));
-    await waitFor(() => expect(calls("space.repository.move")).toHaveLength(2));
-    expect(calls("space.repository.move")[1]).toEqual({ repository: A_SPEX, instance: ORIGIN, groupId: null });
-    // The core holds the row under your namespace and announces it first.
-    const listed = sharingHome();
-    const moved = listedGroups(listed)[1]!.repositories[0]!;
-    deliver(
-      withInstance(listed, {
-        groups: listedGroups(listed).map((group) =>
-          group.mine ? { ...group, repositories: [...group.repositories, moved] } : group.id === ACME ? { ...group, repositories: [] } : group,
-        ),
-      }),
-    );
-    replies[1]!.resolve({ repository: { id: "60", fullPath: "jane/a-spex" } });
-    await waitFor(() => expect(screen.queryByTestId(`space-move-${at(A_SPEX)}`)).toBeNull());
-    expect(within(screen.getByTestId("space-group-@jane")).getByTestId(`space-row-${A_SPEX}`)).toBeTruthy();
-    await waitFor(() => expect(document.activeElement).toBe(moveOf(A_SPEX)));
   });
 });
 
 describe("GROUPS: the new controls fit (space-28)", () => {
   test("every new control reads at most 14 characters, its busy form included, and a heading's controls keep their names", async () => {
     commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) =>
-      type === "space.group.create" || type === "space.share" || type === "space.unshare" || type === "space.group.rename" || type === "space.group.delete" || type === "space.repository.move"
-        ? new Promise(() => {})
-        : core(type, fields),
+      type === "space.group.create" || type === "space.share" || type === "space.unshare" ? new Promise(() => {}) : core(type, fields),
     );
     await renderGroups(sharingHome(), { open: false });
     const seen = new Set<string>();
     const measure = () => {
       for (const button of screen.getAllByRole("button")) {
-        // A row, and a picker's option, is a list row whose words are
-        // its own (space-28).
+        // A row is a list row whose words are its own (space-28).
         const id = button.dataset.testid ?? "";
-        if (id.startsWith("space-repo-") || id.startsWith("space-move-group-")) continue;
+        if (id.startsWith("space-repo-")) continue;
         const text = (button.textContent ?? "").trim();
         seen.add(text);
         expect(text.length, `"${text}"`).toBeLessThanOrEqual(14);
@@ -915,41 +578,24 @@ describe("GROUPS: the new controls fit (space-28)", () => {
     // Idle forms, then each editor and confirm open, then busy forms.
     fireEvent.click(screen.getByTestId("space-new-group"));
     hold(openMore("space-group-more-acme"));
-    fireEvent.click(groupAct("acme", "subgroup")!);
+    closeMenus();
+    hold(openMore(`space-row-more-${A_SPEX}`));
+    closeMenus();
     const list = await openGroupMembers("acme");
     fireEvent.click(within(list).getByTestId("space-share-group:acme"));
     fireEvent.click(within(list).getByTestId("space-member-remove-bob"));
     measure();
     fireEvent.change(within(screen.getByTestId("space-new-group-editor")).getByLabelText("Group name"), { target: { value: "Workshop" } });
     fireEvent.click(within(screen.getByTestId("space-new-group-editor")).getByRole("button", { name: "Create" }));
-    fireEvent.change(within(list).getByLabelText("Login at spex.example"), { target: { value: "carol" } });
+    fireEvent.change(within(list).getByLabelText("Login at Spex Example"), { target: { value: "carol" } });
     fireEvent.click(within(list).getByRole("button", { name: "Add" }));
     fireEvent.click(within(within(list).getByTestId("space-member-confirm-bob")).getByRole("button", { name: "Remove" }));
     await waitFor(() => expect(within(list).getByTestId("space-member-remove-bob").textContent).toBe("Removing…"));
     measure();
-    // The undo's controls, idle with each editor, confirm and picker
-    // open, then busy (space-76, space-77, space-78): Rename and Delete
-    // from the headings' "More", Move… on the placement's line in its
-    // Sync tab.
-    hold(openMore("space-group-more-empty"));
-    fireEvent.click(groupAct("acme", "rename")!);
-    fireEvent.click(groupAct("empty", "delete")!);
-    hold(openMore(`space-row-more-${A_SPEX}`));
-    closeMenus();
-    fireEvent.click(moveOf(A_SPEX)!);
-    measure();
-    fireEvent.change(within(screen.getByTestId("space-rename-acme")).getByLabelText("Group name"), { target: { value: "Acme Labs" } });
-    fireEvent.click(within(screen.getByTestId("space-rename-acme")).getByRole("button", { name: "Save" }));
-    fireEvent.click(within(screen.getByTestId("space-group-confirm-empty")).getByRole("button", { name: "Delete" }));
-    fireEvent.click(within(screen.getByTestId(`space-move-${at(A_SPEX)}`)).getByTestId("space-move-group-other"));
-    await waitFor(() => expect(moveOf(A_SPEX)!.textContent).toBe("Moving…"));
-    // A deletion running reads on the heading itself (space-77).
-    await waitFor(() => expect(within(region("empty")).getByRole("status").textContent).toBe("Deleting…"));
-    measure();
-    for (const label of ["New group", "Members", "Share", "Create", "Creating…", "Add", "Adding…", "Cancel", "Remove", "Removing…", "Keep", "Save", "Saving…", "Delete", "Move…", "Moving…", "⋯More"]) {
+    for (const label of ["New group", "Share", "Create", "Creating…", "Add", "Adding…", "Cancel", "Remove", "Removing…", "Keep", "⋯More"]) {
       expect(seen, label).toContain(label);
     }
-    for (const label of ["Members", "New subgroup", "Rename", "Delete", "Sync now", "Explore records", "Move…"]) {
+    for (const label of ["Members", "Sync now", "Explore records"]) {
       expect(entries, label).toContain(label);
     }
 
@@ -969,39 +615,17 @@ describe("GROUPS: the new controls fit (space-28)", () => {
     expect(name.className).toContain("truncate");
   });
 
-  test("in Chinese the new controls and lines read the catalog's words", async () => {
+  test("in Chinese the controls kept read the catalog's words", async () => {
     activateLanguage("zh");
     commandMock.mockImplementation(core);
     await renderGroups(sharingHome(), { open: false });
     expect(screen.getByTestId("space-new-group").textContent).toBe("新建群组");
     expect(screen.getByTestId("space-group-more-acme").getAttribute("aria-label")).toBe("acme 的更多操作");
-    expect(groupAct("acme", "subgroup")!.textContent).toBe("新建子群组");
-    expect(groupAct("acme", "rename")!.textContent).toBe("重命名");
-    expect(groupAct("empty", "delete")!.textContent).toBe("删除");
+    expect(groupAct("acme", "members")!.textContent).toBe("成员");
     closeMenus();
-    expect(rowAct(A_SPEX, "move")!.textContent).toBe("移动…");
-    expect(rowAct(A_SPEX, "move")!.getAttribute("aria-label")).toBe("移到另一个群组");
-    closeMenus();
-    expect(moveOf(A_SPEX)!.textContent).toBe("移动…");
-    expect(moveOf(A_SPEX)!.getAttribute("aria-label")).toBe("移到另一个群组");
-    fireEvent.click(groupAct("empty", "delete")!);
-    expect(screen.getByTestId("space-group-confirm-empty").textContent).toContain("要删除 empty 吗？");
-    // The row's Move… opens the picker beneath the row.
-    fireEvent.click(rowAct(A_SPEX, "move")!);
-    // The picker is named in the catalog's words; your namespace reads
-    // your login, which no language changes (space-78).
-    const zhPicker = screen.getByTestId(`space-move-${at(A_SPEX)}`);
-    expect(zhPicker.getAttribute("aria-label")).toBe("将 a 移到另一个群组");
-    expect(within(zhPicker).getByTestId("space-move-group-@jane").textContent).toBe("jane");
-    expect(within(zhPicker).getByTestId(`space-move-cancel-${at(A_SPEX)}`).textContent).toBe("取消");
     const list = await openGroupMembers("acme");
     const share = within(list).getByTestId("space-share-group:acme");
     expect(share.textContent).toBe("共享");
     expect(list.querySelector("a")).toBeNull();
-    fireEvent.click(share);
-    const editor = within(list).getByTestId("space-share-group:acme-editor");
-    fireEvent.change(within(editor).getByLabelText("spex.example 上的用户名"), { target: { value: "carol" } });
-    fireEvent.click(within(editor).getByRole("button", { name: "添加" }));
-    await waitFor(() => expect(within(list).getByTestId("space-members-outcome-group:acme").textContent).toBe("已添加 @carol，角色为 Developer"));
   });
 });

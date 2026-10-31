@@ -147,7 +147,7 @@ test("space-93, space-99, space-90, space-87, space-29, space-61, space-62, spac
   assert.deepEqual(lines(row), [[firstOrigin, true, "reachable"], [secondOrigin, false, "absent"]]);
   assert.equal(placementOf(row, second.url).id, there.id);
   assert.ok(!rowsOf(state).some((repository) => repository.key === hostKey(second, "acme/atlas-spex")), "no row of its own");
-  await three.client.expectError("space.join", { instance: second.url, hostId: there.id }, "invalid_request", /^atlas-spex is a placement of atlas-spex not on this device yet$/);
+  await three.client.expectError("space.join", { instance: second.url, hostId: there.id }, "invalid_request", /^atlas belongs to atlas on this computer — open atlas instead$/);
 
   // The first home's reader continues past Attach: its first step adds
   // the remote, named by the second's folder with the id in its own
@@ -233,20 +233,20 @@ test("space-93, space-99, space-90, space-87, space-29, space-61, space-62, spac
   // instance lists; for a repository another clone here holds; at an
   // instance the home does not list, or for no clone, not found; and
   // signed out there (space-29, space-90).
-  await three.client.expectError("space.attach", { repository: key, instance: second.url, noticed: false }, "invalid_request", /^Read the sharing notice before attaching atlas-spex$/);
-  await three.client.expectError("space.attach", { repository: key, instance: first.url, noticed: true }, "invalid_request", new RegExp(`^atlas-spex is placed at ${HOST_NAME} already$`));
+  await three.client.expectError("space.attach", { repository: key, instance: second.url, noticed: false }, "invalid_request", /^Confirm sharing before attaching atlas$/);
+  await three.client.expectError("space.attach", { repository: key, instance: first.url, noticed: true }, "invalid_request", new RegExp(`^atlas is at ${HOST_NAME} already$`));
   // Your own group's own repository, which the third home's sign-in at
   // the second placed there, is placed there already (space-4).
-  await three.client.expectError("space.attach", { repository: HOST_OWN, instance: second.url, noticed: true }, "invalid_request", new RegExp(`^${LOGIN}-spex is placed at ${SECOND_NAME} already$`));
+  await three.client.expectError("space.attach", { repository: HOST_OWN, instance: second.url, noticed: true }, "invalid_request", new RegExp(`^${LOGIN} is at ${SECOND_NAME} already$`));
   const { key: other, clone: otherClone } = await addFolder(two, gitFolder("other"));
-  await two.client.expectError("space.attach", { repository: other, instance: second.url, noticed: true }, "invalid_request", new RegExp(`^No placement file of other-spex names a spex repository ${SECOND_NAME} lists$`));
+  await two.client.expectError("space.attach", { repository: other, instance: second.url, noticed: true }, "invalid_request", new RegExp(`^other has no records at ${SECOND_NAME} to attach — Refresh, then Retry$`));
   mkdirSync(join(otherClone, PLACEMENTS_DIR), { recursive: true });
   writeFileSync(join(otherClone, file), bytes);
-  await two.client.expectError("space.attach", { repository: other, instance: second.url, noticed: true }, "invalid_request", /^atlas-spex is on this device already, as a placement of atlas-spex$/);
+  await two.client.expectError("space.attach", { repository: other, instance: second.url, noticed: true }, "invalid_request", /^atlas is on this computer already, syncing with atlas$/);
   await two.client.expectError("space.attach", { repository: twoKey, instance: first.url, noticed: true }, "not_found");
   await three.client.expectError("space.attach", { repository: hostKey(first, "acme/nowhere-spex"), instance: second.url, noticed: true }, "not_found");
   await signOut(three, second);
-  await three.client.expectError("space.attach", { repository: key, instance: second.url, noticed: true }, "invalid_request", /^Sign in first$/);
+  await three.client.expectError("space.attach", { repository: key, instance: second.url, noticed: true }, "invalid_request", /^Sign in to a Space first$/);
   await signIn(three, second);
   await refreshed(three);
 
@@ -259,7 +259,7 @@ test("space-93, space-99, space-90, space-87, space-29, space-61, space-62, spac
   assert.equal(configOf(threeClone, `remote.${secondFolder}.spexId`), there.id);
   assert.equal(syncRecordsOf(three.dataDir, key)[`sync:${key}:${secondFolder}:noticed`], true);
   assert.equal(git(there.bare, "rev-parse", "spex"), git(threeClone, "rev-parse", "HEAD"));
-  await three.client.expectError("space.attach", { repository: key, instance: second.url, noticed: true }, "invalid_request", new RegExp(`^atlas-spex is placed at ${SECOND_NAME} already$`));
+  await three.client.expectError("space.attach", { repository: key, instance: second.url, noticed: true }, "invalid_request", new RegExp(`^atlas is at ${SECOND_NAME} already$`));
 
   // The first home's Leave of the second, asked while its Sync runs,
   // follows that sync, then deletes the file and drops the remote
@@ -530,7 +530,7 @@ test("space-29, space-61, space-87, space-90, space-62, git-host-5: Attach refus
   assert.deepEqual([standing?.key, standing?.state], [hostKey(second, "acme/other-spex"), "absent"]);
   assert.ok(!secondAcme.placed.some((line) => line.key === groupKey), "no line names the group's row");
   before = asked();
-  await home.client.expectError("space.attach", { repository: groupKey, instance: second.url, noticed: true }, "invalid_request", /^acme-spex holds a group's records; only a project's are placed at another instance$/);
+  await home.client.expectError("space.attach", { repository: groupKey, instance: second.url, noticed: true }, "invalid_request", /^acme holds a group's records, which stay at one Space$/);
   assert.deepEqual(asked(), before, "no request reached either stand-in");
   assert.deepEqual(remoteNamesOf(groupClone), [firstFolder]);
 
@@ -551,8 +551,8 @@ test("space-29, space-61, space-87, space-90, space-62, git-host-5: Attach refus
   const atSecond = fixture.attachByHand(home, atlas, second);
   await refreshed(home);
   before = asked();
-  await home.client.expectError("space.pick", { repository: local, choice: { kind: "join", instance: second.url, hostId: atSecond.id }, noticed: true }, "invalid_request", /^atlas-spex is on this device already, as a placement of atlas-spex$/);
-  await home.client.expectError("space.place", { repository: borealis, choice: { kind: "join", instance: second.url, hostId: atSecond.id }, noticed: true }, "invalid_request", /^atlas-spex is on this device already, as a placement of atlas-spex$/);
+  await home.client.expectError("space.pick", { repository: local, choice: { kind: "join", instance: second.url, hostId: atSecond.id }, noticed: true }, "invalid_request", /^atlas is on this computer already, syncing with atlas$/);
+  await home.client.expectError("space.place", { repository: borealis, choice: { kind: "join", instance: second.url, hostId: atSecond.id }, noticed: true }, "invalid_request", /^atlas is on this computer already, syncing with atlas$/);
   assert.deepEqual(asked(), before, "no request reached either stand-in");
   assert.equal(git(localClone, "remote"), "");
   assert.deepEqual(remoteNamesOf(clonePath(home.dataDir, borealis)), [firstFolder]);

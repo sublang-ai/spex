@@ -516,7 +516,7 @@ test("space-4, git-host-5: your namespace's listing of your own group's own repo
     const own = repositoryOf(state, OWN_KEY);
     assert.deepEqual([own.id, own.state], [null, "local-only"]);
     assert.deepEqual(listedOwnKeys(state), [], "no row not on this device");
-    await home.client.expectError("space.join", { instance: host.url, hostId: listedOwn.id, folder: join(scratch, "own-elsewhere") }, "invalid_request", /on this device already/);
+    await home.client.expectError("space.join", { instance: host.url, hostId: listedOwn.id, folder: join(scratch, "own-elsewhere") }, "invalid_request", /on this computer already — Show it instead$/);
     assert.ok(!existsSync(clonePath(home.dataDir, hostKey(host, HOST_OWN))), "no second clone");
     await lease.release();
     released = true;
@@ -529,7 +529,7 @@ test("space-4, git-host-5: your namespace's listing of your own group's own repo
   const joined = await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
   assert.equal(joined.id, listedOwn.id);
   assert.deepEqual(listedOwnKeys(await home.client.expectOk("space.get", {})), [HOST_OWN]);
-  await home.client.expectError("space.join", { instance: host.url, hostId: listedOwn.id }, "invalid_request", /on this device already/);
+  await home.client.expectError("space.join", { instance: host.url, hostId: listedOwn.id }, "invalid_request", /on this computer already — Show it instead$/);
   assert.ok(!existsSync(clonePath(home.dataDir, hostKey(host, HOST_OWN))));
 });
 
@@ -616,7 +616,7 @@ test("space-60, storage-30: a host's rename onto the destination a deferred clon
     const stopped = await again.client.settle("space.sync", { repository: key });
     assert.ok(stopped.sync.phase === "stopped" && stopped.sync.step === "check", JSON.stringify(stopped.sync));
     assert.deepEqual([stopped.sync.message, stopped.sync.guidance, stopped.sync.retry],
-      [`workspace/${destination} waits for ${waiting}, so the clone cannot follow the host there`, `Sync ${waiting} first, then Retry.`, true]);
+      [`workspace/${destination} is kept for held, so these records cannot move there`, "Sync held first, then Retry.", true]);
     assert.ok(existsSync(join(clonePath(home.dataDir, key), ".git")) && !existsSync(clonePath(home.dataDir, destination)), "nothing moved");
 
     // The deferred clone removed, its receipt entry settles and the
@@ -907,7 +907,7 @@ test("git-host-24, git-host-2, git-host-3: a sign-in at the second instance, the
   first.script.person = ada;
   assert.ok(refused.signIn.phase === "failed", JSON.stringify(refused.signIn));
   assert.deepEqual([refused.signIn.instance, refused.signIn.cause], [first.url, "refused"]);
-  assert.match(refused.signIn.message, /signed you in as another account; this device uses @ada there/);
+  assert.match(refused.signIn.message, /signed you in as another account — sign in as @ada$/);
   assert.deepEqual(pairs(), after);
   assert.deepEqual(entries(), [[second.url, bob.login, false], [first.url, LOGIN, false]]);
 });
@@ -1317,7 +1317,7 @@ test("space-29, git-host-4, git-host-10, space-6, space-64, space-63: space.sign
   // heading still says it signed this device out, the step waiting there
   // stands, and so does the second's stopped join.
   const asked = first.script.requests.length;
-  await home.client.expectError("space.signout", { instance: first.url }, "invalid_request", /^Sign in first$/);
+  await home.client.expectError("space.signout", { instance: first.url }, "invalid_request", /^Sign in to a Space first$/);
   assert.equal(first.script.requests.length, asked, "nothing is asked of the first");
   assert.deepEqual(Home.load(home.dataDir).instances().map((entry) => [entry.origin, entry.signedOut === true]), [[first.url, true], [second.url, false]]);
   const kept = await home.client.expectOk("space.get", {});
@@ -1497,7 +1497,7 @@ test("git-host-24, space-83, git-host-6, git-host-9, git-host-15, git-host-16, g
   // A remote the reader names under either instance's Git origin is
   // refused, whichever instance the clone is at (space-29, space-5).
   for (const host of [first, second]) {
-    await home.client.expectError("space.remote.set", { repository: alphaKey, url: `${host.gitOrigin}/acme/other-spex.git` }, "invalid_request", /used as the host gives them/);
+    await home.client.expectError("space.remote.set", { repository: alphaKey, url: `${host.gitOrigin}/acme/other-spex.git` }, "invalid_request", /^That address is a Space's own — Add it to a group instead$/);
   }
   assert.deepEqual(remoteNamesOf(clonePath(home.dataDir, alphaKey)), [hostFolder(first)]);
 
@@ -1506,7 +1506,7 @@ test("git-host-24, space-83, git-host-6, git-host-9, git-host-15, git-host-16, g
   // away from a terminal.
   git(clonePath(home.dataDir, alphaKey), "config", "--remove-section", `remote.${hostFolder(first)}`);
   const createdThere = second.script.creations.length;
-  await home.client.expectError("space.pick", { repository: alphaKey, choice: { kind: "create", instance: second.url, groupId: "2002", name: "alpha" } }, "invalid_request", new RegExp(`^alpha-spex is kept under ${HOST_NAME}; pick a group there$`));
+  await home.client.expectError("space.pick", { repository: alphaKey, choice: { kind: "create", instance: second.url, groupId: "2002", name: "alpha" } }, "invalid_request", new RegExp(`^alpha belongs to ${HOST_NAME} — pick a group there$`));
   assert.equal(second.script.creations.length, createdThere);
 
   // No reply or broadcast holds a string under either stand-in's URL but
@@ -1647,7 +1647,7 @@ test("space-83, git-host-24, git-host-9, git-host-4, space-11, space-6, space-61
   const ownRow = repositoryOf(signedOut, HOST_OWN);
   assert.deepEqual([ownRow.state, ownRow.reason, ownRow.instance], ["reachable", null, first.url]);
   assert.deepEqual(ownRow.placements.map((line) => [line.instance, line.state, line.reason]), [[first.url, "unreachable", "Sign in again"], [second.url, "reachable", null]]);
-  await home.client.expectError("space.sync", { repository: HOST_OWN }, "invalid_request", /^Read the sharing notice before the first sync of ada-spex$/);
+  await home.client.expectError("space.sync", { repository: HOST_OWN }, "invalid_request", /^Confirm sharing before the first sync of ada$/);
   assert.deepEqual([repositoryOf(signedOut, betaKey).state, repositoryOf(signedOut, betaKey).instance], ["reachable", second.url]);
   const fetchedFirst = first.script.transportCredentials.length;
   const fetchedSecond = second.script.transportCredentials.length;
@@ -1741,7 +1741,7 @@ test("git-host-25, space-84, git-host-5, git-host-8, git-host-16, git-host-9, sp
   assert.deepEqual(rowsUnder(joined, second.url, LOGIN), []);
   assert.deepEqual(placedUnder(joined, second.url, LOGIN), [aKey, bKey, HOST_OWN].sort());
   for (const fields of [{ instance: second.url, hostId: a.id }, { instance: first.url, hostId: a.id }, { instance: second.url, hostId: b.id }]) {
-    await home.client.expectError("space.join", fields, "invalid_request", /on this device already/);
+    await home.client.expectError("space.join", fields, "invalid_request", /on this computer already — Show it instead$/);
   }
 
   // The second answering `a-spex` archived and the account below the
@@ -2050,7 +2050,7 @@ test("space-83, space-82, space-29, git-host-10: space.forget of a signed-out in
   // its clones still keyed under it with their remotes, your own
   // group's own repository's remotes there and at the second untouched,
   // its entry kept signed out (space-82, git-host-10).
-  await home.client.expectError("space.forget", { instance: first.url }, "invalid_request", new RegExp(`^Still kept under ${HOST_NAME}: (alpha-spex, delta-spex|delta-spex, alpha-spex)$`));
+  await home.client.expectError("space.forget", { instance: first.url }, "invalid_request", /^Still syncing: (alpha, delta|delta, alpha) — stop them first$/);
   for (const key of [alphaKey, deltaKey]) {
     assert.ok(existsSync(join(clonePath(home.dataDir, key), ".git")), key);
     assert.deepEqual(remotes(key), [hostFolder(first)], key);
@@ -2101,7 +2101,7 @@ test("space-83, space-82, space-61, space-4, space-59, space-5, space-32, storag
   assert.equal(git(ownDir, "for-each-ref", "--format=%(refname)", `refs/remotes/${hostFolder(first)}`), "", "what it fetched goes with it");
   assert.throws(() => git(ownDir, "config", "--get", "branch.spex.remote"), "no upstream left");
   assert.equal(readFileSync(join(ownDir, PLACEMENTS_DIR, `${hostFolder(first)}.yaml`), "utf8"), encodePlacementFile(canonicalOrigin(first.url), created.id as string), "its placement file is left as it stood");
-  await home.client.expectError("space.sync", { repository: HOST_OWN }, "invalid_request", /^Pick a group first$/);
+  await home.client.expectError("space.sync", { repository: HOST_OWN }, "invalid_request", /^Add it to a group first$/);
 
   // A sign-in then at the second creates `bob-spex` in the second's
   // namespace for it and pushes it there, its remote named by the
@@ -2166,7 +2166,7 @@ test("space-84, space-82, space-60, space-29, space-5, storage-34, storage-36: t
   const live = await sessions.acquireManagement(sessionId);
   let released = false;
   try {
-    await home.client.expectError("space.forget", { instance: first.url }, "invalid_request", new RegExp(`^Session ${sessionId.slice(0, 8)} is in use$`));
+    await home.client.expectError("space.forget", { instance: first.url }, "invalid_request", new RegExp(`^Still syncing: Session ${sessionId.slice(0, 8)} — stop them first$`));
     assert.deepEqual(entries(), [[first.url, true], [second.url, false]]);
     assert.ok(existsSync(join(bClone, ".git")) && !existsSync(clonePath(home.dataDir, bFollowed)), "that clone stays where it lay");
     assert.deepEqual(remotes(bKey), [hostFolder(first)]);
@@ -2338,7 +2338,7 @@ test("space-86: an explicit content-size rejection keeps access and Save, names 
   const sized = await home.client.settle("space.sync", { repository: key });
   assert.ok(sized.sync.phase === "stopped", JSON.stringify(sized.sync));
   assert.deepEqual([sized.sync.step, sized.sync.cause, sized.sync.message, sized.sync.retry], ["push", "size_limit", `${HOST_NAME} refused content above its size limit (100.0MiB)`, true]);
-  assert.equal(sized.sync.guidance, "Your saved commits remain on this device. Address the content limit, then Retry.");
+  assert.equal(sized.sync.guidance, "Your saved commits remain on this computer. Address the content limit, then Retry.");
   assert.equal(sized.state, "reachable", "a content rejection is not loss of access");
   assert.doesNotMatch(`${sized.sync.message} ${sized.sync.guidance}`, /159MiB|GitLab|https?:|Share|membership|sign in|reauth/i);
   const saved = git(clone, "rev-parse", "HEAD");

@@ -166,7 +166,7 @@ test("instances migration: a host URL the origin rule refuses stops it naming th
   const homeBefore = readFileSync(join(root, "home.yaml"));
   const credentialsBefore = readFileSync(join(root, "local", "credentials.yaml"));
   await assert.rejects(Store.open({ machineIdentity, dir: root }), (error: unknown) => error instanceof StorageFormatError &&
-    error.file === join(root, "home.yaml") && error.reason === "http://spex.example is not an instance's origin");
+    error.file === join(root, "home.yaml") && error.reason === "http://spex.example is not a Space's address");
   assert.deepEqual(readFileSync(join(root, "home.yaml")), homeBefore);
   assert.deepEqual(readFileSync(join(root, "local", "credentials.yaml")), credentialsBefore);
   assert.equal(needsInstancesMigration(root), true);
@@ -564,7 +564,7 @@ test("instances migration: a deferred clone whose destination is taken stays def
     assert.deepEqual(store.deferredMoves().map((move) => [move.from, move.to]), [[held, to]]);
     // The stray folder itself reads as a clone no folder pairs, its repair apart.
     assert.deepEqual(store.storageDiagnostics().filter((entry) => entry.file === join("workspace", ...to.split("/")) && !entry.repair), [
-      { file: join("workspace", ...to.split("/")), reason: `taken, so ${held} cannot move here under its instance's folder; move it aside`, blocking: false },
+      { file: join("workspace", ...to.split("/")), reason: `taken, so ${held} cannot move here under its Space's folder; move it aside`, blocking: false },
     ]);
   } finally { store.close(); }
   assert.deepEqual(deferredIn(root), [{ from: held, to }]);

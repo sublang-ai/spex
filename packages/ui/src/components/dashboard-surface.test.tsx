@@ -3539,7 +3539,7 @@ describe("projects-4/6/9, forge-work-lists-1: the Overview tab", () => {
   });
 
   test("projects-29: the header names the GitHub state only while the Sources band is folded (projects-7)", () => {
-    const guidance = "no GitHub origin remote — add one to list issues and PRs.";
+    const guidance = "No GitHub remote — run git remote add origin … to see issues and PRs";
     seed({
       projectMeta: {
         "me/alpha-spex": {

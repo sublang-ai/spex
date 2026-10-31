@@ -83,7 +83,7 @@ const COPY = [
     connected: "已连接",
     headline: "从本机在 lab-3 上工作。",
     openFromGroups: "从群组打开项目",
-    openGroups: "打开空间",
+    openGroups: "打开 Space",
   },
 ] as const;
 

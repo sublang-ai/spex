@@ -65,7 +65,7 @@ test("home file: a change overtaken by another writer is refused and leaves that
 test("home file: a file another format or a URL that is no origin is refused, never guessed", () => {
   const root = mkdtempSync(join(tmpdir(), "spex-home-file-"));
   writeFileSync(homeFilePath(root), "format: 1\n");
-  assert.throws(() => readHomeFile(root), (error: unknown) => error instanceof StorageFormatError && /instances migration has not run/.test(error.reason));
+  assert.throws(() => readHomeFile(root), (error: unknown) => error instanceof StorageFormatError && /migration to several Spaces has not run/.test(error.reason));
   assert.throws(() => updateHomeFile(mkdtempSync(join(tmpdir(), "spex-home-file-")), (home) => home, { env: { SPEX_HOST_URL: "ftp://spex.pub" } }),
-    (error: unknown) => error instanceof StorageFormatError && error.reason === "ftp://spex.pub is not an instance's origin");
+    (error: unknown) => error instanceof StorageFormatError && error.reason === "ftp://spex.pub is not a Space's address");
 });

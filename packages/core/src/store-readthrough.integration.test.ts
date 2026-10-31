@@ -94,14 +94,14 @@ test("storage-29: home pairs, project names and clones changed outside the core 
   assert.equal(store.repository(project.id), undefined);
   assert.deepEqual(store.listProjects().map((entry) => entry.id), ["acme/tool-spex"]);
   assert.ok(store.storageDiagnostics().some((report) => report.repair?.kind === "folder" && report.repair.repository === project.id));
-  assert.throws(() => store.sessionStore(project.id), /no spex repository/);
+  assert.throws(() => store.sessionStore(project.id), /no records /);
   assert.equal(existsSync(clone), false);
 
   // Your own group's clone, made only at the open, is refused once gone.
   const own = join(dir, "workspace", "tester", "tester-spex");
   rmSync(own, { recursive: true, force: true });
-  assert.throws(() => store.ownRepository(), /no spex repository/);
-  assert.throws(() => store.sessionStore(), /no spex repository/);
+  assert.throws(() => store.ownRepository(), /no records /);
+  assert.throws(() => store.sessionStore(), /no records /);
   assert.equal(existsSync(own), false);
 });
 
@@ -383,7 +383,7 @@ test("storage-29: a home file damaged under a running core routes no command int
   assert.ok(!write.ok && write.error.code === "not_found" && write.error.message === `no project ${projectId}`, JSON.stringify(write));
   assert.equal(readFileSync(spec, "utf8"), "edited\n");
   const draft = await client.command("draft.create", { projectId, draftId: "remembered", org: "acme", license: "MIT" });
-  assert.ok(!draft.ok && draft.error.code === "invalid_request" && draft.error.message === `${projectId} has no working folder on this device`, JSON.stringify(draft));
+  assert.ok(!draft.ok && draft.error.code === "invalid_request" && draft.error.message === `${projectId.split("/").pop()?.replace(/-spex$/, "")} has no project folder on this computer`, JSON.stringify(draft));
   assert.equal(existsSync(join(clone, "authoring", "remembered.json")), false);
   const compile = await client.command("compile.run", {
     projectId, playbookId: "remembered", sourceText: "# Remembered\n", roles: ["coder"], command: "remembered", intent: "Remembered",

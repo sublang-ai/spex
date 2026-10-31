@@ -261,7 +261,7 @@ test("no GitHub origin degrades to guidance naming which condition (projects-7)"
   assert.equal(none.authenticated, null);
   assert.equal(
     none.guidance,
-    "No GitHub origin remote. Add one (git remote add origin …) to see issues and PRs.",
+    "No GitHub remote — run git remote add origin … to see issues and PRs",
   );
 
   // An origin elsewhere is named by its host alone, in every remote
@@ -277,7 +277,7 @@ test("no GitHub origin degrades to guidance naming which condition (projects-7)"
     assert.deepEqual([elsewhere.issues, elsewhere.prs], [[], []], origin);
     assert.equal(
       elsewhere.guidance,
-      "Issues and PRs come from GitHub; this project's origin is at gitlab.com.",
+      "Issues and PRs come from GitHub · Code: gitlab.com",
       origin,
     );
   }

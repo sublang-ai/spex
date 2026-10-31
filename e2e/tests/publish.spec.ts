@@ -179,7 +179,7 @@ test("playbook-library-95: Publish from a project at the second instance reads t
   const secondSection = instanceSection(page, second);
   await secondSection.getByTestId("space-signout").click();
   await expect(secondSection.getByTestId("space-signin-again")).toHaveText("Sign in again");
-  await expect(instanceSection(page, first).getByTestId("space-account")).toContainText(`Signed in as @${HOST_LOGIN}`);
+  await expect(instanceSection(page, first).getByTestId("space-account")).toContainText(`@${HOST_LOGIN}`);
   await openEnableTab(page);
   await expect(page.getByTestId("publish-button")).toBeVisible();
   await app.core.command("registry.signout", { origin: second.url });

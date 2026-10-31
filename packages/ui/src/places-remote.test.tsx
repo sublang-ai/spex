@@ -494,12 +494,11 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
     goTo("Space");
     await settle();
 
-    // This computer: the proposal's Add project, and Choose folder…
+    // This computer: the proposal's "Use <folder>", and Choose folder…
     // opening the path editor with the shell's picker (space-47).
     fireEvent.click(screen.getByTestId("space-issues"));
     const here = screen.getByTestId("space-repair");
-    expect(here.textContent).toContain("Add it as a project?");
-    expect(within(here).getByTestId("space-repair-add").textContent).toBe("Add project");
+    expect(within(here).getByTestId("space-repair-use").textContent).toBe("Use /code/infra");
     fireEvent.click(within(here).getByTestId("space-repair-choose"));
     expect(within(here).getByTestId("space-repair-path")).toBeTruthy();
     expect(within(here).getByRole("button", { name: "Open folder…" })).toBeTruthy();
@@ -510,24 +509,25 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
     fireEvent.click(screen.getByTestId("space-issues"));
     const there = screen.getByTestId("space-repair");
     // Named by the project and its group, the folder it remembers
-    // secondary (space-46).
+    // secondary, the server named where this computer would be
+    // (space-46, space-112).
     expect(within(there).getByTestId("space-repair-title").textContent).toBe(
-      "infra in acme: its folder on this computer is missing",
+      "infra · acme — Folder missing on build-box",
     );
     expect(within(there).getByTestId("space-repair-folder").textContent).toBe("/code/infra · 2 sessions ran there");
     // [run-view-171] [run-view-169] a remote place's repair row offers
-    // no folder: neither its proposal's "Add project" nor "Choose
+    // no folder: neither its proposal's "Use <folder>" nor "Choose
     // folder…", no path editor and no picker (space-47, space-103).
-    expect(there.textContent).not.toContain("Add it as a project?");
-    expect(within(there).queryByTestId("space-repair-add")).toBeNull();
-    expect(within(there).queryByText("Add project")).toBeNull();
+    expect(within(there).queryByTestId("space-repair-use")).toBeNull();
+    expect(within(there).queryByText(/^Use /)).toBeNull();
     expect(within(there).queryByTestId("space-repair-choose")).toBeNull();
     expect(within(there).queryByText("Choose folder…")).toBeNull();
     expect(within(there).queryByTestId("space-repair-path")).toBeNull();
     expect(within(there).queryByText("Open folder…")).toBeNull();
     expect(pathEntries(there)).toEqual([]);
-    // Declining names no folder, and stands.
-    expect(within(there).getByTestId("space-repair-decline").textContent).toBe("Not on this computer");
+    // Declining names no folder, and stands, naming the server
+    // (space-112).
+    expect(within(there).getByTestId("space-repair-decline").textContent).toBe("Not on build-box");
     expect(pickDirectory).not.toHaveBeenCalled();
     expect(callsOf(alpha, "project.rebind")).toEqual([]);
   });
@@ -693,8 +693,8 @@ describe("run-view-171: a remote place holding no project shows the server welco
     const welcome = screen.getByTestId("welcome-home");
     expect(within(welcome).getByRole("heading", { level: 1 }).textContent).toBe("Work on gpu-box from this computer.");
     expect([...welcome.querySelectorAll("ol > li")].map((step) => step.textContent)).toEqual([
-      "SpaceYour projects here come from the spex repositories of your groups",
-      "SeatAgents run on gpu-box as you, in folders the server allocates",
+      "GroupsProjects here come from your groups",
+      "gpu-boxAgents run here as you",
       "DeliveryAI builds and reviews changes, with a record of each step",
     ]);
     // [run-view-174] no local-folder action, no Academy example, and none
@@ -894,7 +894,7 @@ describe("run-view-171: opening a group's project at a seat", () => {
     // (DR-159).
     expect(again.textContent).toContain("beta");
     expect(again.textContent).not.toContain("beta-spex");
-    expect(again.textContent).toContain("Join again");
+    expect(again.textContent).toContain("Try again");
     fireEvent.click(again);
     await settle();
     // [run-view-169] the join is sent again, with no folder, to the seat
@@ -1021,7 +1021,7 @@ describe("run-view-171: opening a group's project on this computer", () => {
     const field = screen.getByTestId(`palette-join-folder-${ABSENT_KEY}-path`);
     expect(row.getAttribute("aria-expanded")).toBe("true");
     expect(document.activeElement).toBe(field);
-    expect(screen.getByLabelText("Folder its sessions run in on this device")).toBe(field);
+    expect(screen.getByLabelText("Project folder")).toBe(field);
     // Escape leaves the field alone, the palette standing.
     fireEvent.keyDown(field, { key: "Escape" });
     expect(screen.queryByTestId(`palette-join-folder-${ABSENT_KEY}`)).toBeNull();
@@ -1030,7 +1030,7 @@ describe("run-view-171: opening a group's project on this computer", () => {
     fireEvent.click(row);
     const again = screen.getByTestId(`palette-join-folder-${ABSENT_KEY}-path`);
     fireEvent.keyDown(again, { key: "Enter" });
-    expect(screen.getByTestId(`palette-join-folder-${ABSENT_KEY}-error`).textContent).toBe("Name the folder on this device.");
+    expect(screen.getByTestId(`palette-join-folder-${ABSENT_KEY}-error`).textContent).toBe("Name a folder");
     expect(callsOf(local, "space.join")).toEqual([]);
     fireEvent.change(again, { target: { value: "/taken" } });
     fireEvent.keyDown(again, { key: "Enter" });
@@ -1099,7 +1099,7 @@ describe("run-view-171: opening a group's project on this computer", () => {
     expect(document.querySelector('[data-surface="Space"]')!.getAttribute("aria-current")).toBe("page");
     expect(shownPlace()).toBe("This computer");
     const card = screen.getByTestId("space-signin-card");
-    expect(within(card).getByRole("heading", { level: 2 }).textContent).toBe("Not signed in");
+    expect(within(card).getByRole("heading", { level: 2 }).textContent).toBe("Sign in to a Space");
   });
 });
 

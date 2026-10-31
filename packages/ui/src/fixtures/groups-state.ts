@@ -163,6 +163,7 @@ export function repositoryRow(key: string, over: RowOver = {}): RepositoryState 
     id: null,
     own: false,
     code: null,
+    codeKind: "unknown",
     folder: null,
     remote: null,
     state: "local-only",
