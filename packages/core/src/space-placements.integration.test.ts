@@ -60,7 +60,7 @@ const HOST_NAME = "Stand-in Git host";
 const SECOND_NAME = "Second stand-in";
 const THIRD_NAME = "Third stand-in";
 /** The commit identity the first's account gives a clone (space-32). */
-const ADA = "Ada Lovelace <ada@users.noreply.127.0.0.1>";
+const ADA = "ada <ada@users.noreply.127.0.0.1>";
 
 /** A Refresh of every signed-in instance, landed. */
 async function refreshed(home: Awaited<ReturnType<typeof startHome>>): Promise<GroupsState> {

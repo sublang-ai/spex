@@ -4718,7 +4718,7 @@ export class SpaceManager {
   }
 
   /** A clone's commit identity (space-32): where its instance is signed
-   * in, the account's display name or login there, at that instance's
+   * in, the account's login there, at that instance's
    * no-reply address — while its own is signed out, the account at the
    * instance governing it, whose sync follows that one (space-60); none
    * for a clone not at the host, nor while no signed-in instance serves
@@ -4730,7 +4730,7 @@ export class SpaceManager {
     if (!instance || !account) return null;
     let domain: string;
     try { domain = new URL(instance.origin).hostname; } catch { domain = "localhost"; }
-    return { name: account.displayName || account.login, email: `${account.login}@users.noreply.${domain}` };
+    return { name: account.login, email: `${account.login}@users.noreply.${domain}` };
   }
 
   /** The instances whose Git origins a remote is read against

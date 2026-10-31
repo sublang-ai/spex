@@ -1339,7 +1339,7 @@ describe("GROUPS: Members (space-62)", () => {
     await waitFor(() => expect(calls("space.members")).toEqual([{ repository: KEY, instance: ORIGIN }]));
     const list = await screen.findByRole("region", { name: "Members of academy" });
     await waitFor(() => expect(within(list).getAllByRole("listitem")).toHaveLength(2));
-    expect(screen.getByTestId("space-member-jane").textContent).toContain("Jane");
+    expect(screen.getByTestId("space-member-jane").textContent).toContain("jane");
     expect(screen.getByTestId("space-member-jane").textContent).toContain("Owner");
     expect(screen.getByTestId("space-member-bob").textContent).toContain("bob");
     expect(screen.getByTestId("space-member-bob").textContent).toContain("Developer");

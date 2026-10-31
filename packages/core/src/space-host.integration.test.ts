@@ -524,7 +524,7 @@ test("space-37: Pick a group creates <name>-spex there and pushes, its placement
   assert.ok(git(bareOf(host, hostKey(host, "acme/alpha-spex")), "ls-tree", "-r", "--name-only", "spex").split("\n").includes(`sessions/${sessionId}.json`));
   assert.equal(Home.load(home.dataDir).keyForFolder(alpha), hostKey(host, "acme/alpha-spex"));
   // The account commits, at the host's no-reply address (space-32).
-  assert.equal(git(clone, "log", "-1", "--format=%an <%ae>"), "Ada Lovelace <ada@users.noreply.127.0.0.1>");
+  assert.equal(git(clone, "log", "-1", "--format=%an <%ae>"), "ada <ada@users.noreply.127.0.0.1>");
   // The host's own URLs are its to hand over (space-5).
   await home.client.expectError("space.remote.set", { repository: hostKey(host, "acme/alpha-spex"), url: `${host.gitOrigin}/acme/other-spex.git` }, "invalid_request", /used as the host gives them/);
   // A name the host reports taken is refused in place (space-58).
@@ -650,7 +650,7 @@ test("git-host-14: a creation's first sync reads the stand-in again until the RE
   assert.equal(git(neverBare, "ls-tree", "--name-only", "main"), "README.md");
   assert.equal(git(neverBare, "show", "main:README.md"), "# never-spex");
   assert.equal(git(neverBare, "rev-list", "--count", "main"), "1");
-  assert.equal(git(neverBare, "log", "-1", "--format=%an <%ae>", "main"), "Ada Lovelace <ada@users.noreply.127.0.0.1>");
+  assert.equal(git(neverBare, "log", "-1", "--format=%an <%ae>", "main"), "ada <ada@users.noreply.127.0.0.1>");
   assert.equal(git(neverBare, "rev-parse", "spex"), git(neverClone, "rev-parse", "spex"));
   assert.equal(git(neverClone, "for-each-ref", "--format=%(refname)", "refs/heads/"), "refs/heads/spex");
   assert.equal(git(neverClone, "status", "--porcelain"), "");

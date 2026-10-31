@@ -17,6 +17,8 @@ Amended by [DR-127](127-a-home-signed-in-to-several-instances.md) in its keys, i
 Amended by [DR-128](128-a-spex-repository-placed-at-several-instances.md) in its keys, its entries and rows, its acts and its Git lines: a clone's key follows its first placement; a placed clone has one row, under the group its key placement's instance last named for it, every other group that lists a placement of it showing one line; a move acts on one placement; a report reads each placement's remote as its path in its instance.
 Amended by [DR-159](159-projects-in-groups-opened-where-you-work.md) in the groups list's headings: your namespace heads nothing while it lists only your own group's repository; another account's login heads "Shared by @<login>"; the servers of a space stand under their group.
 
+Amended by [DR-171](171-personal-names-are-space-logins.md) in member presentation: a member is labelled by Space login alone.
+
 ## Context
 
 - A spex.pub deployment, an **instance**, keeps every group its people make inside one group of its own, its container, on the Git system behind it, run by a service identity of its own; that system is its storage [[1]].

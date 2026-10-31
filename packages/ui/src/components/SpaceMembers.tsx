@@ -435,11 +435,8 @@ function MemberRow({
     <li data-testid={`space-member-${member.login}`} className="flex min-w-0 flex-col gap-0.5">
       <div className="flex min-w-0 items-center gap-2">
         <span className="min-w-0 truncate font-medium" title={member.login}>
-          {member.displayName ?? member.login}
+          {member.login}
         </span>
-        {member.displayName ? (
-          <span className="hidden min-w-0 truncate text-xs text-neutral-500 @md:inline">{member.login}</span>
-        ) : null}
         {inherited ? (
           <span
             data-testid={`space-member-via-${member.login}`}

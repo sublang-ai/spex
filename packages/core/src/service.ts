@@ -3479,7 +3479,7 @@ export class CoreService {
         // repository, none where it has none (core-service-42).
         const at = this.space.instanceOriginOf(project.id);
         const account = at === null ? null : this.store.home.account(at);
-        const author = account ? { login: account.login, displayName: account.displayName } : undefined;
+        const author = account ? { login: account.login, displayName: account.login } : undefined;
         const intent = {
           id,
           projectId: project.id,
