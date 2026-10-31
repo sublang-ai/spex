@@ -92,7 +92,7 @@ jobs:
         include:
           - os: macos-15
             script: package:mac
-            asset: mac-arm64.zip
+            asset: mac-arm64.dmg
           - os: windows-2022
             script: package:windows
             asset: win-x64.exe
@@ -140,9 +140,9 @@ jobs:
         working-directory: artifacts
         run: |
           set -euo pipefail
-          test -s "Spex-$VERSION-mac-arm64.zip"
+          test -s "Spex-$VERSION-mac-arm64.dmg"
           test -s "Spex-$VERSION-win-x64.exe"
-          sha256sum "Spex-$VERSION-mac-arm64.zip" "Spex-$VERSION-win-x64.exe" > SHA256SUMS
+          sha256sum "Spex-$VERSION-mac-arm64.dmg" "Spex-$VERSION-win-x64.exe" > SHA256SUMS
       - name: Create GitHub release with both native downloads
         uses: softprops/action-gh-release@v2
         with:
@@ -151,6 +151,6 @@ jobs:
           prerelease: ${{ needs.prepare.outputs.beta == 'true' }}
           fail_on_unmatched_files: true
           files: |
-            artifacts/*.zip
+            artifacts/*.dmg
             artifacts/*.exe
             artifacts/SHA256SUMS

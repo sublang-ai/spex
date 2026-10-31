@@ -117,7 +117,7 @@ Where `npm ci` has installed the repository dependencies and built `better-sqlit
 2. Once the Electron rebuild is attempted, normal app exit, command failure, SIGINT, and SIGTERM each lead through the Node rebuild before the command returns.
 3. An interrupted or failed build, Electron rebuild, or app launch returns non-zero after any required restore.
 4. A failed Node rebuild reports the restore failure with an actionable warning and any preceding stage failure, then selects the command outcome in this order: a signal that interrupted an active stage returns 130 or 143; otherwise, a preceding stage failure keeps its status; otherwise, a signal first received during restoration returns 130 or 143 even when restoration fails; otherwise, the restore failure returns 1.
-5. On Windows, the ABI rebuild stages return without rebuilding an addon, since legacy database reads use bundled Node SQLite ([DR-165](../decisions/177-native-windows-private-storage.md)).
+5. On Windows, the ABI rebuild stages return without rebuilding an addon, since legacy database reads use bundled Node SQLite ([DR-178](../decisions/178-native-windows-private-storage.md)).
 6. On a POSIX host, a signal forwarded to the launch stage's process group is followed, 15 seconds later if that stage has not exited, by `SIGKILL` to the same group, so the Node rebuild is never held by an app that ignores the signal ([DR-108](../decisions/108-the-root-lease-names-the-machine.md)).
 
 #### app-shell-31
@@ -148,7 +148,7 @@ The shell shall create renderer windows with the Chromium sandbox enabled, Node 
 
 #### app-shell-12
 
-When the app starts, the shell shall pass its inherited launch environment to the core, merged on POSIX with the user's login-shell environment captured once, before the core runs any adapter readiness check or spawns any agent process ([DR-165](../decisions/177-native-windows-private-storage.md)):
+When the app starts, the shell shall pass its inherited launch environment to the core, merged on POSIX with the user's login-shell environment captured once, before the core runs any adapter readiness check or spawns any agent process ([DR-178](../decisions/178-native-windows-private-storage.md)):
 
 - On Windows, the inherited PATH follows the application directory, the bundled Git command directory and its actual root `usr/bin` helper directory, so supplied helpers such as `env.exe` are callable without WSL or a global tool installation.
 - The shell persists no captured environment values and does not refresh the snapshot while running, so shell-profile changes take effect on the next launch.
@@ -159,8 +159,8 @@ When the app starts, the shell shall pass its inherited launch environment to th
 
 The desktop shell shall declare the `claude`, `codex` and `opencode` agent SDKs at the unconstrained range ([DR-024](../decisions/024-app-supplied-agent-runtimes.md)), the playbook compiler `@sublang/slc` at a caret on its CLI contract ([DR-081](../decisions/081-the-app-supplies-the-compiler.md)), and its host engine `@sublang/playbook` at a range compatible with the core and compiler ([DR-167](../decisions/167-the-compiler-shares-the-apps-engine.md)) as its `apps/desktop` package's own dependencies, and shall start the core it embeds with its own Electron binary as the compile runtime and the module directories above its own module [[playbook-library-83](playbook-library.md#playbook-library-83)] — each inside the asar archive named by its asar-unpacked copy [[app-shell-13](#app-shell-13)], so the engine links an install provisions [[environments-11](environments.md#environments-11)] resolve on the real file system — and with the checkout's own scaffold CLI `@sublang/spex` found there, on that binary run as Node, as the scaffold command [[projects-31](projects.md#projects-31)] ([DR-096](../decisions/096-the-app-supplies-the-scaffold.md)), so compiles and scaffolds run on the app's own Node and find the compiler, the scaffold CLI and the SDKs the app ships:
 
-- bounded Windows Codex calls use the supplied adapter's compatible native sandbox selection and command-shell guidance, preserving their declared permission and approval values ([DR-169](../decisions/175-windows-bounded-codex-commands.md));
-- the shell declares the same shared Playbook dependency as its embedded core, so packaging keeps an older compiler-private runtime from becoming the engine linked into installed playbooks ([DR-165](../decisions/177-native-windows-private-storage.md));
+- bounded Windows Codex calls use the supplied adapter's compatible native sandbox selection and command-shell guidance, preserving their declared permission and approval values ([DR-175](../decisions/175-windows-bounded-codex-commands.md));
+- the shell declares the same shared Playbook dependency as its embedded core, so packaging keeps an older compiler-private runtime from becoming the engine linked into installed playbooks ([DR-178](../decisions/178-native-windows-private-storage.md));
 - the shell also ships the built-in spec package the core seeds at start [[environments-11](environments.md#environments-11)], staged from the `@sublang/playbook` it depends on at build time, so the built-in playbooks work offline from the first start ([DR-104](../decisions/104-spec-package-format-and-client-environments.md)).
 
 ### Packaging
@@ -173,12 +173,12 @@ Where the app is packaged, the packaged app shall ship its complete `node_module
 
 #### app-shell-14
 
-When a valid tag matching `app-v*` is pushed, the app release workflow shall create a GitHub release for that tag carrying the version's notes from the app changelog, the run-from-source instructions and both native desktop downloads ([DR-170](../decisions/176-native-desktop-tag-packages.md)):
+When a valid tag matching `app-v*` is pushed, the app release workflow shall create a GitHub release for that tag carrying the version's notes from the app changelog, the run-from-source instructions and both native desktop downloads ([DR-176](../decisions/176-native-desktop-tag-packages.md)):
 
 - the workflow confirms the CI workflow concluded `success` for the tagged commit, verifies the tag's version against both shells' `package.json`, and builds and tests the tree before creating the release — empty notes or a mismatch fail it without a release;
 - the release names Node.js 22.19 or later and, from a checkout of its tag, `npm ci`, `npm start` for the desktop, and `npm run start:server` for the server shell as the way to run it;
 - the desktop package names its Electron version exactly, never as a range: the local packager (`npm run package -w apps/desktop`, electron-builder [[3]]) downloads the platform binaries of one release and refuses a range outright;
-- the downloads are a macOS Apple Silicon ZIP and a Windows x64 per-user NSIS installer, named with version, platform and architecture, with SHA-256 checksums and notes identifying unsigned and non-notarized status;
+- the downloads are a macOS Apple Silicon DMG and a Windows x64 per-user NSIS installer ([DR-177](../decisions/177-native-desktop-installers.md)), named with version, platform and architecture, with SHA-256 checksums and notes identifying unsigned and non-notarized status;
 - native runners build both downloads with the shipped physical dependency tree [[app-shell-13](#app-shell-13)], and the workflow publishes only after both packaging jobs succeed [[release-37](release.md#release-37)];
 - the workflow does not publish to npm and does not run for CLI tags, keeping the release channels disjoint [[release-19](release.md#release-19)].
 

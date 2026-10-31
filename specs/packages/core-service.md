@@ -16,7 +16,7 @@ A **runtime** is one core on one home, named by the home's `device` [[storage-2]
 
 #### core-service-89
 
-When started on a native platform other than macOS, Linux or Windows, the core service shall refuse before creating or migrating config or storage, naming the supported hosts ([DR-165](../decisions/177-native-windows-private-storage.md)):
+When started on a native platform other than macOS, Linux or Windows, the core service shall refuse before creating or migrating config or storage, naming the supported hosts ([DR-178](../decisions/178-native-windows-private-storage.md)):
 
 - Windows storage admission verifies the private-storage policy before config or storage is created or migrated.
 

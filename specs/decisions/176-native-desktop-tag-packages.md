@@ -8,6 +8,8 @@
 Accepted (2026-10-31) on the owner's request to build macOS and Windows apps when an app tag is pushed.
 Amends [DR-040](040-source-only-app-releases.md) for binary distribution; source instructions, channel versions and existing release gates remain.
 
+Amended by [DR-177](177-native-desktop-installers.md) for macOS download format: a DMG replaces the ZIP; platform architectures and publication gates remain.
+
 ## Context
 
 Native macOS and Windows installation builds have been exercised locally, but the app tag workflow still publishes source instructions alone.

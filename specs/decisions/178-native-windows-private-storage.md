@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-177: Native Windows Private Storage
+# DR-178: Native Windows Private Storage
 
 ## Status
 

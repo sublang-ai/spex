@@ -25,7 +25,7 @@
     "rebuild:node": "node scripts/rebuild-native.mjs node",
     "package:windows": "npm run build && npm run stage:windows-runtime && npm run rebuild:electron && electron-builder --win nsis --x64 --publish never",
     "stage:windows-runtime": "node scripts/stage-windows-runtime.mjs",
-    "package:mac": "npm run build && npm run rebuild:electron && electron-builder --mac zip --arm64 --publish never"
+    "package:mac": "npm run build && npm run rebuild:electron && electron-builder --mac dmg --arm64 --publish never"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "*",
@@ -63,7 +63,7 @@
     "mac": {
       "target": [
         {
-          "target": "zip",
+          "target": "dmg",
           "arch": [
             "arm64"
           ]

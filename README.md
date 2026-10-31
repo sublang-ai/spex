@@ -95,9 +95,9 @@ in the IDE with the [`slc`](https://github.com/sublang-ai/slc) it ships.
 **3. Work in the Spex IDE**, where specs, playbook runs and compilation, and
 the intent Dashboard live together. Desktop downloads are available on
 [GitHub Releases](https://github.com/sublang-ai/spex/releases): a macOS
-Apple Silicon ZIP (unzip and move Spex.app to Applications) and a Windows
-x64 per-user installer (no WSL required). Each release includes SHA-256
-checksums. These builds are unsigned and the macOS app is not notarized;
+M-series DMG (open it and drag Spex.app to Applications) and a Windows
+x86-64 per-user installer for 64-bit Intel/AMD PCs (no WSL required).
+Each release includes SHA-256 checksums. These builds are unsigned and the macOS app is not notarized;
 the operating system may require approval before opening.
 Desktop and server hosts require a filesystem with private POSIX
 permissions or supported private Windows ACLs.
