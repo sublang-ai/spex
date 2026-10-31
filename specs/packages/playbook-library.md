@@ -621,13 +621,13 @@ The Playbooks surface shall show the selected environment's registry name and ed
 
 #### playbook-library-121
 
-When the new-playbook form offers an organization choice, the form shall offer every namespace its registry account may publish to with provider metadata [[environments-27](environments.md#environments-27)], permitting a project-group match only as the initial suggestion without filtering or requiring a Space association ([DR-168](../decisions/168-independent-package-registry.md)).
+When the new-playbook form offers an organization choice, the form shall read namespaces only while its selected registry account is signed in and offer every authorized namespace with provider metadata [[environments-27](environments.md#environments-27)], showing loading, successful emptiness or an error with Retry in place, preserving manually entered names and ignoring responses for a former project, registry or account, with a project-group match only an initial suggestion rather than a filter or required Space association ([DR-168](../decisions/168-independent-package-registry.md)).
 
 ## Verification
 
 #### playbook-library-120
 
-When a browser journey uses a project's Playbooks surface, it shall verify independent registry sign-in and sign-out at a Space's origin, selected registry changes remaining separate from the project's Space [[playbook-library-119](#playbook-library-119)], and all authorized namespace choices remaining available despite the suggested project-group match [[playbook-library-121](#playbook-library-121)].
+When browser interactions use a project's Playbooks surface, they shall verify independent registry sign-in and sign-out at a Space's origin and selected registry changes remaining separate from the project's Space [[playbook-library-119](#playbook-library-119)], and namespace reads waiting for that registry account, loading and failure remaining visible through retry, successful empty and complete authorized choices, manual names preserved and former-account responses ignored [[playbook-library-121](#playbook-library-121)].
 
 
 ### Compile Coverage

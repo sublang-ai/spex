@@ -20,6 +20,39 @@ async function registrySignIn(home: Awaited<ReturnType<typeof harness.startHome>
   await home.client.waitFor((message) => home.client.messages.indexOf(message) >= from && message.type === "registry.state" && message.state.origin === origin && message.state.account !== null && message.state.signIn.phase === "idle");
 }
 
+test("environments-28: explicit registry namespaces survive the suggestion timeout and distinguish failure, empty answers and retry", { timeout: 90_000 }, async (t) => {
+  const dir = join(harness.scratch, "registry-namespaces");mkdirSync(dir);
+  const registry = await startStandinRegistry({ dir });t.after(() => registry.close());
+  const host = await harness.startHost({ registry });host.script.deviceInterval = 0;
+  let unavailable = false;
+  const registryFetch: typeof fetch = (input, init) => {
+    const url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
+    return unavailable && url.pathname === "/api/v1/account/orgs"
+      ? Promise.resolve(Response.json({ error: "unavailable" }, { status: 503 })) : fetch(input, init);
+  };
+  const home = await harness.startHome("registry-namespaces", { host, project: false, extra: { registryFetch } });t.after(() => home.stop());
+  const repository = "tester/tester-spex";
+  await home.client.expectOk("environment.registry.set", { repository, origin: host.url });
+  const unsigned = await home.client.command("registry.orgs", { repository });
+  assert.equal(unsigned.ok, false);if (!unsigned.ok) assert.match(unsigned.error.message, /Sign in to registry/);
+  await registrySignIn(home, host.url, host);
+  const orgs = [{ name: "alpha", path: "alpha", role: "Owner" }, { name: "zeta", path: "zeta", role: "Owner" }];
+  registry.script.setOrgs(host.url, orgs);
+  // A real response beyond the two-second background-suggestion budget
+  // still supplies the explicit selector, reproducing live latency.
+  registry.script.delayOrgs(3_000);
+  assert.deepEqual((await home.client.expectOk("registry.orgs", { repository })).orgs, orgs);
+  registry.script.delayOrgs(0);
+  unavailable = true;
+  const refused = await home.client.command("registry.orgs", { repository });
+  assert.equal(refused.ok, false);if (!refused.ok) assert.match(refused.error.message, /Could not load registry namespaces/);
+  unavailable = false;
+  registry.script.setOrgs(host.url, []);
+  assert.deepEqual((await home.client.expectOk("registry.orgs", { repository })).orgs, []);
+  registry.script.setOrgs(host.url, orgs);
+  assert.deepEqual((await home.client.expectOk("registry.orgs", { repository })).orgs, orgs);
+});
+
 test("core-service-144/storage-52: same-origin registry and Space grants stay independent across login, refresh, logout and restart", { timeout: 120_000 }, async (t) => {
   const host = await harness.startHost({ displayName: "Shared Space" });
   const home = await harness.startHome("registry-account", { host, project: false, extra: { signIn: "browser" } });

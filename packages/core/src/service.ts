@@ -3708,7 +3708,7 @@ export class CoreService {
       case "registry.signout":
         return this.registry.signOut(command.origin);
       case "registry.orgs":
-        return { orgs: await this.environments.publishableOrgs(command.repository) ?? [] };
+        return { orgs: await this.environments.registryOrgs(command.repository) };
       case "registry.directory":
         return this.registry.directory(command.origin);
       case "environment.registry.set":

@@ -2433,6 +2433,10 @@ msgstr "无法答复 {actor} 的 {tool} 请求：{reason}"
 msgid "could not inspect"
 msgstr "无法调查"
 
+#: src/components/LibrarySurface.tsx
+msgid "Could not load registry namespaces. Try again."
+msgstr "无法加载注册表命名空间。请重试。"
+
 #: src/components/SpecView.tsx
 msgid "Could not open {path}"
 msgstr "无法打开 {path}"
@@ -4004,6 +4008,10 @@ msgstr "正在加载媒体…"
 msgid "Loading model options…"
 msgstr "加载模型选项中…"
 
+#: src/components/LibrarySurface.tsx
+msgid "Loading registry namespaces…"
+msgstr "正在加载注册表命名空间…"
+
 #: src/components/PublishControl.tsx
 msgid "Loading registry…"
 msgstr "正在加载注册表…"
@@ -4477,6 +4485,10 @@ msgstr "这里还没有项目"
 #: src/components/DashboardSurface.tsx
 msgid "No projects yet — register a repository in the <0>Projects</0> to put its work here."
 msgstr "还没有项目 — 在<0>项目</0>中注册一个仓库，其工作就会出现在这里。"
+
+#: src/components/LibrarySurface.tsx
+msgid "No publishing namespaces available."
+msgstr "没有可发布的命名空间。"
 
 #: src/components/FailureCard.tsx
 msgid "No reason was reported"
@@ -5961,6 +5973,7 @@ msgstr "本机智能体对话的续接令牌；在别处无效"
 #: src/App.tsx
 #: src/components/ComposerAttachments.tsx
 #: src/components/DashboardSurface.tsx
+#: src/components/LibrarySurface.tsx
 #: src/components/RunView.tsx
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceGroups.tsx

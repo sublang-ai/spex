@@ -2433,6 +2433,10 @@ msgstr "Could not answer {tool} for {actor}: {reason}"
 msgid "could not inspect"
 msgstr "could not inspect"
 
+#: src/components/LibrarySurface.tsx
+msgid "Could not load registry namespaces. Try again."
+msgstr "Could not load registry namespaces. Try again."
+
 #: src/components/SpecView.tsx
 msgid "Could not open {path}"
 msgstr "Could not open {path}"
@@ -4004,6 +4008,10 @@ msgstr "Loading media…"
 msgid "Loading model options…"
 msgstr "Loading model options…"
 
+#: src/components/LibrarySurface.tsx
+msgid "Loading registry namespaces…"
+msgstr "Loading registry namespaces…"
+
 #: src/components/PublishControl.tsx
 msgid "Loading registry…"
 msgstr "Loading registry…"
@@ -4477,6 +4485,10 @@ msgstr "No projects here yet"
 #: src/components/DashboardSurface.tsx
 msgid "No projects yet — register a repository in the <0>Projects</0> to put its work here."
 msgstr "No projects yet — register a repository in the <0>Projects</0> to put its work here."
+
+#: src/components/LibrarySurface.tsx
+msgid "No publishing namespaces available."
+msgstr "No publishing namespaces available."
 
 #: src/components/FailureCard.tsx
 msgid "No reason was reported"
@@ -5961,6 +5973,7 @@ msgstr "resume tokens for this machine's agent conversations; they work nowhere 
 #: src/App.tsx
 #: src/components/ComposerAttachments.tsx
 #: src/components/DashboardSurface.tsx
+#: src/components/LibrarySurface.tsx
 #: src/components/RunView.tsx
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceGroups.tsx

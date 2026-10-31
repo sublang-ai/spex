@@ -454,6 +454,21 @@ export class EnvironmentManager {
     return remote.orgs();
   }
 
+  /** An explicit namespace selection is authoritative, unlike the
+   * short best-effort authoring suggestion (environments-27). */
+  async registryOrgs(key: string): Promise<RegistryOrg[]> {
+    const target = this.registryOf(key);
+    const { origin, remote } = this.registryAt(target.origin, "registry");
+    if ((await this.tokenAt(origin, "registry")) === null) {
+      throw new CoreError("invalid_request", i18n._("Sign in to registry to load publishing namespaces."));
+    }
+    const orgs = await remote.orgs(30_000);
+    if (orgs === null) {
+      throw new CoreError("invalid_request", i18n._("Could not load registry namespaces. Try again."));
+    }
+    return orgs;
+  }
+
   /** The home's default instance's origin (storage-2): the registry of
    * an environment with no instance (DR-127). */
   private defaultOrigin(): string {

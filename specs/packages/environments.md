@@ -203,7 +203,8 @@ When an authoring session [[storage-23](storage.md#storage-23)] writes a spec pa
 
 While the home holds the selected registry credential, when the core asks the registry for the orgs its account may publish to, it shall send one `GET /api/v1/account/orgs` to that registry presenting its selected purpose's app token as resolving and installing do [[environments-12](#environments-12)], and take a `200` whose `orgs` lists each org's `name`, its provider namespace `path`, the account's `role` and optional identity `provider`, independent of Space affiliation, sorted by name, as the answer ([DR-120](../decisions/120-the-instance-is-the-space.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
 
-- any status but `200`, a body not in that shape, a network failure, or no answer within two seconds is no answer.
+- the background authoring-default suggestion treats any status but `200`, a body not in that shape, a network failure, or no answer within two seconds as no answer;
+- the explicit `registry.orgs` selection waits up to thirty seconds and refuses with a readable error when the registry grant is missing or the registry gives no valid answer, preserving a valid empty `orgs` list as a successful empty answer.
 
 ### The Built-In Spec Package
 
@@ -406,7 +407,7 @@ When an integration suite drives the environment commands over the protocol, it 
 
 #### environments-28
 
-When an integration suite asks the stand-in registry [[environments-18](#environments-18)] for the orgs a person may publish to, it shall assert that one request presenting the app token the orgs are scripted for reads them sorted by name, and that another token, no token, an outage, and an answer delayed a second past the timeout each read as no answer, the last once two seconds have passed [[environments-27](#environments-27)].
+When an integration suite asks the stand-in registry [[environments-18](#environments-18)] for the orgs a person may publish to, it shall assert sorted authorized answers, the background suggestion giving no answer for a refused, missing or failing grant and after two seconds, and explicit selection accepting an answer delayed beyond that suggestion window, refusing missing grants or failures rather than reporting an empty list, and succeeding with a valid empty list and on retry after failure [[environments-27](#environments-27)].
 
 #### environments-34
 

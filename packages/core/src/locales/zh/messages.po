@@ -1213,6 +1213,10 @@ msgstr "配置必须是 YAML 映射"
 msgid "Confirm to remove it anyway."
 msgstr "仍要移除请再次确认。"
 
+#: src/environments.ts
+msgid "Could not load registry namespaces. Try again."
+msgstr "无法加载注册表命名空间。请重试。"
+
 #. A stopped transfer's message; {host} is the remote's host
 #. A stopped transfer's message; {host} is the remote's host
 #. A stopped transfer's message; {host} is the remote's host
@@ -2461,6 +2465,10 @@ msgstr "请从页头登录，然后重试。"
 #: src/space.ts
 msgid "Sign in to {host} first"
 msgstr "请先登录 {host}"
+
+#: src/environments.ts
+msgid "Sign in to registry to load publishing namespaces."
+msgstr "请登录注册表以加载可发布的命名空间。"
 
 #. Refusal: publishing needs the home signed in at the instance the publish goes to; {name} is that instance's display name as last read, else its host name
 #: src/environments.ts

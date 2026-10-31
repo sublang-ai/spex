@@ -359,6 +359,8 @@ beforeEach(() => {
       case "environment.get":
         return { repository: String(params?.repository), language: null, requests: {}, packages: [], stale: null, conflicts: null, busy: null, error: null,
           ...(missingRegistry ? {} : { registry: { origin: environmentInstance ?? "https://spex.example", legacy: false } }), ...(environmentInstance !== undefined ? { instance: environmentInstance } : {}) };
+      case "registry.orgs":
+        return { orgs: [] };
       case "playbook.artifacts":
         return { source: null, gears: null, fsm: null, stateIds: null, machine: null, missing: [] };
       case "config.edit":
@@ -1872,6 +1874,57 @@ describe("playbook-library-111: what stands beneath the Enable form by the proje
     const publish = await screen.findByTestId("publish");
     expect(within(publish).getByTestId("publish-button").textContent).toBe("Publish");
     expect(within(publish).queryByTestId("publish-signin")).toBeNull();
+  });
+});
+
+describe("playbook-library-120/121: authoritative registry namespaces", () => {
+  test("loading, failure and retry remain visible without replacing a manually entered namespace", async () => {
+    const original = commandMock.getMockImplementation()!;
+    const held: { resolve: (value: unknown) => void; reject: (cause: Error) => void }[] = [];
+    commandMock.mockImplementation((type, ...args) => type === "registry.orgs"
+      ? new Promise((resolve, reject) => held.push({ resolve, reject })) : original(type, ...args));
+    seed();
+    render(<LibrarySurface />);
+    await defaultsShown();
+    await screen.findByText("Loading registry namespaces…");
+    fireEvent.change(screen.getByTestId("new-playbook-org"), { target: { value: "manual-org" } });
+    await act(async () => held[0]!.reject(new Error("Registry unavailable")));
+    expect((await screen.findByRole("alert")).textContent).toContain("Registry unavailable");
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await screen.findByText("Loading registry namespaces…");
+    await act(async () => held[1]!.resolve({ orgs: [{ name: "alpha", path: "alpha", role: "Owner" }, { name: "zeta", path: "zeta", role: "Owner", provider: "github" }] }));
+    const namespaces = await screen.findByRole("combobox", { name: "Registry namespaces" });
+    expect(within(namespaces).getByRole("option", { name: "alpha" })).toBeTruthy();
+    expect(within(namespaces).getByRole("option", { name: "zeta (github)" })).toBeTruthy();
+    expect((screen.getByTestId("new-playbook-org") as HTMLInputElement).value).toBe("manual-org");
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  test("waits for a registry account, ignores its late answer after sign-out, and distinguishes a valid empty answer", async () => {
+    const original = commandMock.getMockImplementation()!;
+    const held: ((value: unknown) => void)[] = [];
+    commandMock.mockImplementation((type, ...args) => type === "registry.orgs"
+      ? new Promise((resolve) => held.push(resolve)) : original(type, ...args));
+    const origin = "https://spex.example";
+    const registry = { origin, displayName: "Registry", account: null, signIn: { phase: "idle" as const }, error: null };
+    seed({ registryAccounts: { [origin]: registry } });
+    render(<LibrarySurface />);
+    await defaultsShown();
+    await vi.waitFor(() => expect(useAppStore.getState().environments[PROJECT_ID]?.registry?.origin).toBe(origin));
+    expect(commandMock.mock.calls.filter(([type]) => type === "registry.orgs")).toEqual([]);
+    act(() => useAppStore.setState({ registryAccounts: { [origin]: { ...registry, account: { id: "old", login: "old" } } } }));
+    await screen.findByText("Loading registry namespaces…");
+    fireEvent.change(screen.getByTestId("new-playbook-org"), { target: { value: "my-choice" } });
+    act(() => useAppStore.setState({ registryAccounts: { [origin]: registry } }));
+    await act(async () => held[0]!({ orgs: [{ name: "former-account", path: "former-account", role: "Owner" }] }));
+    expect(screen.queryByRole("combobox", { name: "Registry namespaces" })).toBeNull();
+    expect(screen.queryByText("Loading registry namespaces…")).toBeNull();
+    act(() => useAppStore.setState({ registryAccounts: { [origin]: { ...registry, account: { id: "new", login: "new" } } } }));
+    await screen.findByText("Loading registry namespaces…");
+    await act(async () => held[1]!({ orgs: [] }));
+    expect(await screen.findByText("No publishing namespaces available.")).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect((screen.getByTestId("new-playbook-org") as HTMLInputElement).value).toBe("my-choice");
   });
 });
 

@@ -1213,6 +1213,10 @@ msgstr "config must be a YAML mapping"
 msgid "Confirm to remove it anyway."
 msgstr "Confirm to remove it anyway."
 
+#: src/environments.ts
+msgid "Could not load registry namespaces. Try again."
+msgstr "Could not load registry namespaces. Try again."
+
 #. A stopped transfer's message; {host} is the remote's host
 #. A stopped transfer's message; {host} is the remote's host
 #. A stopped transfer's message; {host} is the remote's host
@@ -2461,6 +2465,10 @@ msgstr "Sign in from the header, then Retry."
 #: src/space.ts
 msgid "Sign in to {host} first"
 msgstr "Sign in to {host} first"
+
+#: src/environments.ts
+msgid "Sign in to registry to load publishing namespaces."
+msgstr "Sign in to registry to load publishing namespaces."
 
 #. Refusal: publishing needs the home signed in at the instance the publish goes to; {name} is that instance's display name as last read, else its host name
 #: src/environments.ts

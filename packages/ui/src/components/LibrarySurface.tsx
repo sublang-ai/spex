@@ -940,6 +940,9 @@ function NewPlaybookField({
   drafts,
   org,
   orgs,
+  orgsStatus,
+  orgsError,
+  onRetryOrgs,
   license,
   onOrgChange,
   onLicenseChange,
@@ -958,6 +961,9 @@ function NewPlaybookField({
   /** The new spec package's org and license, as the person left them. */
   org: string;
   orgs?: { name: string; path: string; provider?: string }[];
+  orgsStatus: "idle" | "loading" | "ready" | "error";
+  orgsError?: string;
+  onRetryOrgs: () => void;
   license: string;
   onOrgChange: (org: string) => void;
   onLicenseChange: (license: string) => void;
@@ -1072,6 +1078,9 @@ function NewPlaybookField({
             disabled={blockedReason !== undefined}
             className={field}
           />
+          {orgsStatus === "loading" ? <span role="status" className="text-xs text-neutral-500">{i18n._("Loading registry namespaces…")}</span> : null}
+          {orgsStatus === "ready" && !orgs?.length ? <span role="status" className="text-xs text-neutral-500">{i18n._("No publishing namespaces available.")}</span> : null}
+          {orgsStatus === "error" ? <span role="alert" className="text-xs text-amber-700 dark:text-amber-300">{orgsError} <button type="button" onClick={onRetryOrgs} className="underline">{i18n._("Retry")}</button></span> : null}
         </label>
         <label className="flex min-w-0 flex-1 basis-28 flex-col gap-0.5 text-sm">
           <span className="text-xs text-neutral-500">{i18n._({ id: "License", comment: "field of New playbook: the SPDX license its spec package is published under" })}</span>
@@ -1185,6 +1194,9 @@ export function LibrarySurface({
   // the project's defaults as the core reads them, then the person's.
   const [newOrg, setNewOrg] = useState("");
   const [registryOrgs, setRegistryOrgs] = useState<{ name: string; path: string; provider?: string }[]>([]);
+  const [registryOrgsStatus, setRegistryOrgsStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [registryOrgsError, setRegistryOrgsError] = useState<string>();
+  const [registryOrgsAttempt, setRegistryOrgsAttempt] = useState(0);
   const registryAccounts = store((current) => current.registryAccounts);
   const environments = store((current) => current.environments);
   const [newLicense, setNewLicense] = useState("");
@@ -1209,11 +1221,19 @@ export function LibrarySurface({
   useEffect(() => {
     let active = true;
     setRegistryOrgs([]);
-    if (connected && projectId && registryOrigin) void (async () => {
-      try { const reply = await store.getClient().command("registry.orgs", { repository: projectId }); if (active) setRegistryOrgs(reply.orgs); } catch { /* The editable namespace stays available. */ }
+    setRegistryOrgsError(undefined);
+    setRegistryOrgsStatus("idle");
+    if (connected && projectId && registryOrigin && registryAccount) void (async () => {
+      setRegistryOrgsStatus("loading");
+      try {
+        const reply = await store.getClient().command("registry.orgs", { repository: projectId }, { timeoutMs: 35_000 });
+        if (active) { setRegistryOrgs(reply.orgs); setRegistryOrgsStatus("ready"); }
+      } catch (cause) {
+        if (active) { setRegistryOrgsError(cause instanceof Error ? cause.message : i18n._("Could not load registry namespaces. Try again.")); setRegistryOrgsStatus("error"); }
+      }
     })();
     return () => { active = false; };
-  }, [connected, projectId, registryOrigin, registryAccount, store]);
+  }, [connected, projectId, registryOrigin, registryAccount, registryOrgsAttempt, store]);
 
 
   const reloadLists = useCallback(() => {
@@ -1487,6 +1507,9 @@ export function LibrarySurface({
       drafts={drafts}
       org={newOrg}
       orgs={registryOrgs}
+      orgsStatus={registryOrgsStatus}
+      orgsError={registryOrgsError}
+      onRetryOrgs={() => setRegistryOrgsAttempt((attempt) => attempt + 1)}
       license={newLicense}
       onOrgChange={editOrg}
       onLicenseChange={editLicense}
