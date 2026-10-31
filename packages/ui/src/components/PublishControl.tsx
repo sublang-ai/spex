@@ -3,6 +3,7 @@
 
 // One explicit preview and confirmation for a local spec package, shared
 // by environment rows and playbook authoring (playbook-library-93, -113).
+import { RegistryAccount } from "./RegistryAccount.js";
 import { useState } from "react";
 import type { EnvironmentState, PublishPreview } from "@sublang/spex-core/protocol";
 import type { PublishTarget } from "../lib/environments.js";
@@ -46,15 +47,13 @@ export function PublishControl(props: PublishProps) {
  * of the destination and what would upload — name, version, files —
  * confirmed with Publish or left with Cancel; the outcome reads from
  * the environment's state, the published version with its page at the
- * registry or the issues in place. A home not signed in to the instance
- * the publish goes to reads "Sign in to publish at <name>" instead;
- * nothing stands until the Groups state says which instance that is. */
+ * registry or the issues in place. A missing registry grant offers its
+ * own sign-in in place; no Space state establishes publication authority. */
 function PublishAttempt({
   repository,
   name,
   path,
   target,
-  onNavigate,
 }: PublishProps) {
   const store = usePlaceStore();
   const environment = store((state) => state.environments[repository]);
@@ -67,32 +66,8 @@ function PublishAttempt({
   // read from what changed rather than from what stood.
   const [sent, setSent] = useState<{ name: string; version: string; previous: EnvironmentState["published"] }>();
 
-  if (!target) return null;
-  if (!target.signedIn) {
-    const label = i18n._({
-      id: "Sign in to publish at {name}",
-      comment: "in Publish's place: the home is not signed in to the instance a publish from this project goes to; {name} is that instance's display name as last read, else its host name",
-      values: { name: target.name },
-    });
-    return (
-      <div data-testid="publish" className="flex flex-wrap items-center gap-2 border-t border-neutral-200 pt-3 dark:border-neutral-800">
-        {onNavigate ? (
-          <button
-            type="button"
-            data-testid="publish-signin"
-            onClick={() => onNavigate("Space")}
-            className="rounded-md border border-neutral-300 px-2.5 py-1 text-xs text-neutral-700 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
-          >
-            {label}
-          </button>
-        ) : (
-          <span data-testid="publish-signin" className="text-xs text-neutral-500">
-            {label}
-          </span>
-        )}
-      </div>
-    );
-  }
+  if (!target) return <div data-testid="publish" role="status" className="text-xs text-neutral-500">{i18n._("Loading registry…")}</div>;
+  if (!target.signedIn) return <div data-testid="publish"><RegistryAccount repository={repository} /></div>;
 
   const publishing = environment?.busy === "publishing";
   const settled = sent && pending === undefined && !publishing;

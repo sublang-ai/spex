@@ -20,18 +20,15 @@
 // (environments-2, environments-32, DR-125). The built-in spec
 // package is seeded at start and requested where an environment lacks
 // it, so the built-in playbooks work offline from the first start. An
-// environment resolves at its instance's registry, or the default
-// instance's where it has none, and installs from the first of its
-// instance's, its lock's and every signed-in instance's registries
-// serving each locked release, a token presented only to an instance the
-// home is signed in to (environments-5, environments-7, environments-12,
-// DR-127).
+// environment's explicit registry is independent of its Space. Legacy
+// manifests retain their former routing, while independent installations
+// use only the selected registry and its registry grant (DR-168).
 
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, rmSync, statSync } from "node:fs";
 import { isAbsolute, join, relative, resolve as resolvePath, sep } from "node:path";
 
-import { fileVersion, readVersioned, sha256, VersionConflictError, type FileVersion } from "@sublang/spex/files";
+import { fileVersion, readVersioned, writeVersionedBytes, sha256, VersionConflictError, type FileVersion } from "@sublang/spex/files";
 import {
   AGENT_FOLDERS,
   BUILTIN_PACKAGE_NAME,
@@ -40,6 +37,11 @@ import {
   compositeRegistry,
   ContentStore,
   environmentInstance,
+  environmentRegistry,
+  editRequests,
+  setRegistryIn,
+  setSpaceIn,
+  installRegistryOrder,
   exportEnvironment,
   FormatError,
   gitSource,
@@ -102,6 +104,8 @@ import {
   type Request,
   type Requests,
 } from "@sublang/spex/environment";
+import { parseDocument } from "yaml";
+import type { AuthScope } from "@sublang/spex/git-host";
 import { shippedBuiltinPackage } from "./builtins.js";
 import { installEngine } from "./compile.js";
 import { i18n } from "./i18n.js";
@@ -152,7 +156,7 @@ export interface EnvironmentManagerOptions {
    * current by that instance's client (git-host-4); null where it holds
    * none. Asked only of an instance the home is signed in to
    * (environments-12). */
-  tokenFor: (origin: string) => Promise<string | null>;
+  tokenFor: (origin: string, scope?: AuthScope) => Promise<string | null>;
   /** An instance's name in what the core says of it: its display name
    * as the home last read it, else its host name — the instance a
    * publish needs the home signed in at, named as the Enable tab names
@@ -161,7 +165,7 @@ export interface EnvironmentManagerOptions {
   /** Told the token an instance's registry refused with a code that
    * signs that instance out (environments-12, git-host-4); where it
    * throws, the refused call fails with what it threw. */
-  refused?: (origin: string, token: string) => void | Promise<void>;
+  refused?: (origin: string, token: string, scope?: AuthScope) => void | Promise<void>;
   /** The brokered credential for a Git source (environments-13): the
    * one an instance the home is signed in to brokers at whose Git origin
    * the source lies, the environment's own instance — `preferred` —
@@ -425,7 +429,8 @@ export class EnvironmentManager {
       const request = requests?.packages[error.packageName];
       if (request && isGitRequest(request)) error = new Error(this.sourceText(error.message, request.git, git));
     }
-    return failurePhrase(stage, error);
+    const phrase = failurePhrase(stage, error);
+    return requests?.registry && error instanceof RegistryError && (error.kind === "unauthenticated" || error.kind === "forbidden" || error.kind === "not_found") ? `${phrase} ${i18n._("Sign in to registry to use private packages.")}` : phrase;
   }
 
   private shownConflicts(conflicts: readonly Conflict[], requests: Requests | null, git: EnvironmentGit): Conflict[] {
@@ -453,19 +458,32 @@ export class EnvironmentManager {
       .map(([agent]) => agent);
   }
 
-  /** The orgs the account at a project's instance may publish to, as
-   * that instance's registry lists them — the default instance's where
-   * the project has none — asked once (environments-27,
-   * playbook-library-103, DR-127); null while the home is not signed in
-   * there, the registry not asked, and where it gives no answer. */
+  /** Every namespace the selected registry account may publish to,
+   * independent of Space membership (DR-168); null without its registry
+   * grant or where the registry gives no answer. */
   async publishableOrgs(key: string): Promise<RegistryOrg[] | null> {
     // A `spex.yaml` that does not read names no instance: no registry is
     // asked, the default instance's least of all (environments-2).
-    let instance: string;
-    try { instance = this.instanceOf(key); } catch { return null; }
-    const { origin, remote } = this.registryAt(instance);
-    if (this.store.home.account(origin) === null) return null;
+    let target: ReturnType<typeof environmentRegistry>;
+    try { target = this.registryOf(key); } catch { return null; }
+    const { origin, remote } = this.registryAt(target.origin, "registry");
+    if ((await this.tokenAt(origin, "registry")) === null) return null;
     return remote.orgs();
+  }
+
+  /** An explicit namespace selection is authoritative, unlike the
+   * short best-effort authoring suggestion (environments-27). */
+  async registryOrgs(key: string): Promise<RegistryOrg[]> {
+    const target = this.registryOf(key);
+    const { origin, remote } = this.registryAt(target.origin, "registry");
+    if ((await this.tokenAt(origin, "registry")) === null) {
+      throw new CoreError("invalid_request", i18n._("Sign in to registry to load publishing namespaces."));
+    }
+    const orgs = await remote.orgs(30_000);
+    if (orgs === null) {
+      throw new CoreError("invalid_request", i18n._("Could not load registry namespaces. Try again."));
+    }
+    return orgs;
   }
 
   /** The home's default instance's origin (storage-2): the registry of
@@ -498,6 +516,7 @@ export class EnvironmentManager {
    * the command asking, never read as naming no instance; none while
    * this device holds no root for it (environments-26). */
   private requestsOf(key: string): Requests | null {
+    this.assertMigrated(key);
     this.cloneDir(key);
     const root = this.rootOf(key);
     if (root === null) return null;
@@ -512,38 +531,53 @@ export class EnvironmentManager {
     }
   }
 
-  /** The instance of a spex repository's environment (environments-2,
-   * DR-165) — its registry, the orgs its account may publish to and its
-   * publish destination: the `space` its `spex.yaml` names, else the
-   * home's default instance; refused where `spex.yaml` does not read. */
-  private instanceOf(key: string): string {
-    return this.instanceOfRequests(this.requestsOf(key));
+  registryOf(key: string): ReturnType<typeof environmentRegistry> {
+    return environmentRegistry(this.requestsOf(key), { origin: this.store.home.defaultInstance().origin, instances: this.store.home.instances() });
+  }
+
+  async setRegistry(key: string, origin: string): Promise<EnvironmentState> {
+    origin = canonicalOrigin(origin);
+    const { root } = this.environmentOf(key);
+    const path = join(root, "spex.yaml");
+    // The shared document editor preserves comments, extension fields and
+    // key order, validates format, and writes under the exact version read.
+    // Selection changes no lock or package provenance.
+    await this.run(key, async () => {
+      try { await editRequests(path, (doc) => setRegistryIn(doc, origin)); }
+      catch (error) {
+        if (error instanceof RequestsError) throw new CoreError("invalid_request", listed(error.issues.map((issue) => issue.message)));
+        if (error instanceof VersionConflictError) throw conflictError(error);
+        throw error;
+      }
+    });
+    this.announce(key);
+    return this.state(key);
   }
 
   /** The `space` an environment's built-in request names where the core
-   * writes it (environments-11): the instance its spex repository is
-   * placed at wherever it has one, the home's default included; null for
-   * one local only, which names none. */
+   * writes it (environments-11): its placed instance's origin, independent
+   * of each device's default; null for a local-only environment. */
   private spaceOf(placed: string | null): string | null {
-    return placed === null ? null : canonicalOrigin(placed);
+    if (placed === null) return null;
+    return canonicalOrigin(placed);
   }
 
   /** The registry answering under an instance's origin: one client per
    * origin for the run, each composed with the built-in spec package
    * this device serves offline (environments-11, environments-12). */
-  private registryAt(origin: string): { origin: string; remote: RegistryClient; source: RegistrySource } {
+  private registryAt(origin: string, scope: AuthScope = "space"): { origin: string; remote: RegistryClient; source: RegistrySource } {
     const at = canonicalOrigin(origin);
-    let registry = this.registries.get(at);
+    let registry = this.registries.get(`${scope}:${at}`);
     if (!registry) {
       const refused = this.options.refused;
       const remote = new RegistryClient({
         url: at,
-        token: () => this.tokenAt(at),
-        ...(refused ? { refused: (token: string) => refused(at, token) } : {}),
+        token: () => this.tokenAt(at, scope),
+        ...(refused ? { refused: (token: string) => refused(at, token, scope) } : {}),
         ...(this.options.fetch ? { fetch: this.options.fetch } : {}),
       });
       registry = { origin: at, remote, source: compositeRegistry(this.builtinSource(), remote) };
-      this.registries.set(at, registry);
+      this.registries.set(`${scope}:${at}`, registry);
     }
     return registry;
   }
@@ -562,8 +596,8 @@ export class EnvironmentManager {
   /** The token a registry call presents at an instance (environments-12):
    * that instance's access secret where the home is signed in to it, as
    * its client keeps it current (git-host-4); none to any other origin. */
-  private tokenAt(origin: string): Promise<string | null> {
-    return this.store.home.account(origin) !== null ? this.options.tokenFor(origin) : Promise.resolve(null);
+  private tokenAt(origin: string, scope: AuthScope = "space"): Promise<string | null> {
+    return scope === "registry" || this.store.home.account(origin) !== null ? this.options.tokenFor(origin, scope) : Promise.resolve(null);
   }
 
   /** The registries an install asks for a registry package's files, in
@@ -572,24 +606,9 @@ export class EnvironmentManager {
    * to, in the home's order, each asked once. A recorded registry that
    * names no instance's origin is never asked; it stands in the list to
    * be named where no other serves. */
-  private installRegistries(instance: string, source: RegistrySourceLock): RegistrySource[] {
-    const home = this.store.home;
-    const out: RegistrySource[] = [];
-    const asked = new Set<string>();
-    const add = (origin: string): void => {
-      if (asked.has(origin)) return;
-      asked.add(origin);
-      out.push(this.registryAt(origin).source);
-    };
-    add(canonicalOrigin(instance));
-    let recorded: string | null;
-    try { recorded = canonicalOrigin(source.registry); } catch { recorded = null; }
-    if (recorded !== null) add(recorded);
-    else out.push(compositeRegistry(this.builtinSource(), unaskedRegistry(source.registry)));
-    for (const entry of home.instances()) {
-      if (home.account(entry.origin) !== null) add(canonicalOrigin(entry.origin));
-    }
-    return out;
+  private installRegistries(target: ReturnType<typeof environmentRegistry>, source: RegistrySourceLock): RegistrySource[] {
+    const order = installRegistryOrder(target.origin, source.registry, this.store.home.instances().filter((entry) => this.store.home.account(entry.origin) !== null).map((entry) => entry.origin), { independent: !target.legacy });
+    return order.map((entry) => "origin" in entry ? this.registryAt(entry.origin, target.scope).source : compositeRegistry(this.builtinSource(), unaskedRegistry(entry.unasked)));
   }
 
   private cloneState(key: string): CloneState {
@@ -657,6 +676,7 @@ export class EnvironmentManager {
    * key names none on this device, and its root, refused the same way
    * where this device holds none (environments-15). */
   private environmentOf(key: string): { root: string } {
+    this.assertMigrated(key);
     this.cloneDir(key);
     const root = this.rootOf(key);
     if (root === null) throw this.noRoot(key);
@@ -722,6 +742,7 @@ export class EnvironmentManager {
     }
     this.migrate(null);
     for (const repository of this.store.listRepositories()) {
+      if (this.migrationBlocked.has(repository.key)) continue;
       const root = this.rootOf(repository.key);
       let wrote = false;
       if (this.isOwn(repository.key) && root !== null) {
@@ -737,6 +758,16 @@ export class EnvironmentManager {
   /** The environment migration (storage-24) over every spex repository
    * on this device, or over one project's at its pairing: its moves are
    * installed and exported by the settle that follows. */
+  private readonly migrationBlocked = new Set<string>();
+
+  private migrationError(): CoreError {
+    return new CoreError("conflict", i18n._({ id: "Environment migration is incomplete; restore the original or planned files and restart to recover.", comment: "Package operation refused while its manifest and lock migration needs recovery" }));
+  }
+
+  private assertMigrated(key: string): void {
+    if (this.migrationBlocked.has(key)) throw this.migrationError();
+  }
+
   private migrate(key: string | null): void {
     const own = this.store.home.own();
     const repositories: MigratedRepository[] = [];
@@ -747,14 +778,29 @@ export class EnvironmentManager {
       try { instance = this.options.placedAt(repository.key); } catch { instance = null; }
       repositories.push({ key: repository.key, clone: repository.dir, own: isOwn, folder: isOwn ? null : this.workingFolder(repository.key), instance });
     }
-    try { migrateEnvironments(this.store.dir, repositories); }
-    catch (error) { console.error(`spex: the environment migration stopped: ${error instanceof Error ? error.message : String(error)}`); }
+    const report = (repository: string, blocked: boolean): void => {
+      const message = this.migrationError().message;
+      if (blocked) {
+        this.migrationBlocked.add(repository);
+        this.cloneState(repository).error = message;
+      } else {
+        this.migrationBlocked.delete(repository);
+        if (this.cloneState(repository).error === message) this.cloneState(repository).error = null;
+      }
+    };
+    try { migrateEnvironments(this.store.dir, repositories, { report }); }
+    catch (error) {
+      for (const repository of repositories) report(repository.key, true);
+      console.error(`spex: the environment migration stopped: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   /** Remove store entries no lock on this device selects (environments-7):
    * each environment's at its root, and the lock a project's clone still
    * holds until its working folder is paired here (storage-24). */
   collect(): void {
+    // A partially retired source may survive only in its retained plan.
+    if (this.migrationBlocked.size) return;
     const locks: Lock[] = [];
     for (const repository of this.store.listRepositories()) {
       const root = this.rootOf(repository.key);
@@ -788,6 +834,7 @@ export class EnvironmentManager {
   /** Run one operation on a clone now, beside any already running: the
    * set tracks it for progress and for stop, never for admission. */
   private run<T>(key: string, work: (step: (busy: Busy) => void) => Promise<T>): Promise<T> {
+    if (this.migrationBlocked.has(key)) return Promise.reject(this.migrationError());
     const state = this.cloneState(key);
     const operation: Operation = { busy: null };
     state.running.add(operation);
@@ -826,6 +873,7 @@ export class EnvironmentManager {
    * and `progress` records what was written before.
    */
   settle(key: string, mode: SettleMode, strict: boolean, progress?: SettleProgress): Promise<void> {
+    if (this.migrationBlocked.has(key)) return strict ? Promise.reject(this.migrationError()) : Promise.resolve();
     // No work starts once the manager stops; a strict caller is told.
     if (this.stopped) return strict ? Promise.reject(stoppingError()) : Promise.resolve();
     return this.run(key, (step) => this.settleNow(key, mode, strict, step, progress));
@@ -890,8 +938,8 @@ export class EnvironmentManager {
     // else the default instance's (environments-2, environments-5,
     // DR-165), read from the requests this operation read.
     envGit = this.gitOf(key, read?.requests ?? null);
-    const instance = envGit.instance();
-    const registry = this.registryAt(instance).source;
+    const target = environmentRegistry(read?.requests ?? null, { origin: this.store.home.defaultInstance().origin, instances: this.store.home.instances() });
+    const registry = this.registryAt(target.origin, target.scope).source;
     const needsResolve = mode === "resolve" || (mode === "auto" && lock === null && read !== null);
     if (needsResolve && read !== null) {
       step("resolving");
@@ -915,7 +963,7 @@ export class EnvironmentManager {
         const changed = this.changedSince(requestsPath, read.version, lockPath, lockVersion);
         if (changed) return this.overtaken(changed, strict);
         state.conflicts = { requests: read.version, conflicts: result.conflicts };
-        state.error = null;
+        state.error = !target.legacy && (await this.tokenAt(target.origin, "registry")) === null ? i18n._("Sign in to registry to use private packages.") : null;
         if (strict) throw new CoreError("invalid_request", this.conflictPhrase(this.shownConflicts(result.conflicts, read.requests, envGit)));
         return;
       }
@@ -949,7 +997,7 @@ export class EnvironmentManager {
         store: this.contentStore,
         cache: this.cacheDir,
         registry,
-        registries: (source) => this.installRegistries(instance, source),
+        registries: (source) => this.installRegistries(target, source),
         seed: this.builtinSource(),
         git: this.git,
         gitCredential: envGit.credential,
@@ -1229,6 +1277,7 @@ export class EnvironmentManager {
    * lock, so a failing install is not retried by every read; it reports
    * through state. A stale lock installs nothing (environments-7). */
   use(key: string): void {
+    if (this.migrationBlocked.has(key)) return;
     const root = this.rootOf(key);
     if (!this.store.repository(key) || root === null) return;
     if (this.clones.get(key)?.running.size || !this.needsSettle(key)) return;
@@ -1249,6 +1298,7 @@ export class EnvironmentManager {
     const own = this.store.home.own();
     const keys = [...new Set([...(projectKey !== null ? [projectKey] : []), own])];
     for (const key of keys) {
+      if (this.migrationBlocked.has(key)) continue;
       const root = this.rootOf(key);
       const lock = this.lockOf(key);
       if (root === null || lock === null) continue;
@@ -1279,6 +1329,7 @@ export class EnvironmentManager {
   paired(key: string): Promise<void> {
     if (!this.store.repository(key)) return Promise.resolve();
     this.migrate(key);
+    if (this.migrationBlocked.has(key)) return Promise.resolve();
     const root = this.rootOf(key);
     if (root === null) return Promise.resolve();
     let wrote = false;
@@ -1296,13 +1347,52 @@ export class EnvironmentManager {
    * lock now records it (environments-11, DR-127); a lock resolved to
    * anything else stays as it is (environments-5). */
   placed(key: string): Promise<void> {
-    const root = this.rootOf(key);
-    if (!this.store.repository(key) || root === null || !this.options.builtin) return Promise.resolve();
-    let wrote = false;
-    // The instance placed at becomes the environment's, named as `space`
-    // (environments-11).
+    if (this.migrationBlocked.has(key)) return Promise.resolve();
+    const dir = this.rootOf(key);
+    if (!this.store.repository(key) || dir === null || this.stopped) return Promise.resolve();
     const placed = this.options.placedAt(key);
-    try { wrote = rehomeBuiltinLock(root, this.options.builtin, placed ?? this.defaultOrigin(), this.spaceOf(placed)); }
+    try {
+      const path = join(dir, "spex.yaml");
+      const read = readRequestsAt(path);
+      if (read?.requests.registry !== undefined) {
+        // Collaboration changes its own binding, not any package pin.
+        // Advance a previously current lock's digest only; never bless
+        // a lock already stale before this Space-only edit.
+        if (placed !== null && read.requests.space !== canonicalOrigin(placed)) {
+          const doc = parseDocument(read.text);
+          setSpaceIn(doc, canonicalOrigin(placed));
+          const next = doc.toString({ lineWidth: 0 });
+          parseRequests(next);
+          const lockPath = join(dir, "spex.lock");
+          let held: ReturnType<typeof readVersioned> | undefined;
+          let wasCurrent = false;
+          try {
+            held = readVersioned(lockPath);
+            wasCurrent = held.bytes !== null && parseLock(held.bytes.toString("utf8")).requests === requestsDigest(read.text);
+          } catch { /* A damaged or unreadable package lock cannot block collaboration. */ }
+          writeVersionedBytes(path, next, read.version);
+          if (wasCurrent && held?.bytes) {
+            try {
+              const lockDoc = parseDocument(held.bytes.toString("utf8"));
+              lockDoc.set("requests", requestsDigest(next));
+              const nextLock = lockDoc.toString({ lineWidth: 0 });
+              parseLock(nextLock);
+              writeVersionedBytes(lockPath, nextLock, held.version);
+            } catch (error) {
+              if (!(error instanceof VersionConflictError)) console.error(`spex: ${key} could not advance its package lock digest: ${error instanceof Error ? error.message : String(error)}`);
+            }
+          }
+          this.announce(key);
+        }
+        return Promise.resolve();
+      }
+    } catch (error) {
+      if (!(error instanceof VersionConflictError)) console.error(`spex: ${key} keeps its environment's Space binding: ${error instanceof Error ? error.message : String(error)}`);
+      return Promise.resolve();
+    }
+    if (!this.options.builtin) return Promise.resolve();
+    let wrote = false;
+    try { wrote = rehomeBuiltinLock(dir, this.options.builtin, placed ?? this.defaultOrigin(), this.spaceOf(placed)); }
     catch (error) { console.error(`spex: ${key} keeps its built-in spec package's lock: ${error instanceof Error ? error.message : String(error)}`); }
     return wrote ? this.settle(key, "auto", false) : Promise.resolve();
   }
@@ -1311,6 +1401,7 @@ export class EnvironmentManager {
    * operation still running at the old address finds its files gone and
    * writes nothing there. */
   moved(oldKey: string, newKey: string): Promise<void> {
+    if (this.migrationBlocked.delete(oldKey)) this.migrationBlocked.add(newKey);
     const state = this.clones.get(oldKey);
     if (state) {
       this.clones.delete(oldKey);
@@ -1378,10 +1469,11 @@ export class EnvironmentManager {
         values: { name, path },
       }));
     }
-    const target = this.registryAt(this.instanceOfRequests(requests));
-    if (!dryRun && (await this.tokenAt(target.origin).catch(() => "")) === null) {
+    const selected = this.registryOf(key);
+    const target = this.registryAt(selected.origin, "registry");
+    if (!dryRun && (await this.tokenAt(target.origin, "registry").catch(() => "")) === null) {
       throw new CoreError("invalid_request", i18n._({
-        id: "Sign in to publish at {name}",
+        id: "Sign in to registry to publish at {name}",
         comment: "Refusal: publishing needs the home signed in at the instance the publish goes to; {name} is that instance's display name as last read, else its host name",
         values: { name: this.options.instanceName(target.origin) },
       }));
@@ -1452,9 +1544,9 @@ export class EnvironmentManager {
    * there (environments-17, environments-5, environments-12); a key
    * naming no clone on this device is refused first. */
   async search(key: string, query: string): Promise<{ name: string; description: string | null; versions: string[] }[]> {
-    const instance = this.instanceOf(key);
+    const target = this.registryOf(key);
     try {
-      const results = await this.registryAt(instance).source.search(query);
+      const results = await this.registryAt(target.origin, target.scope).source.search(query);
       return results.map((result) => ({ name: result.name, description: result.description || null, versions: result.versions }));
     } catch (error) {
       throw new CoreError("invalid_request", error instanceof Error ? error.message : String(error));
@@ -1570,12 +1662,15 @@ export class EnvironmentManager {
     let requestsVersion: FileVersion | undefined;
     let error = clone.error;
     let instance: string | null = null;
+    let registry: EnvironmentState["registry"];
     try {
       const read = envRoot === null ? null : readRequestsAt(join(envRoot, "spex.yaml"));
       requests = read?.requests ?? null;
       requestsText = read?.text ?? null;
       requestsVersion = read?.version ?? null;
       instance = envRoot === null ? null : this.instanceOfRequests(requests);
+      const selected = environmentRegistry(requests, { origin: this.store.home.defaultInstance().origin, instances: this.store.home.instances() });
+      registry = { origin: selected.origin, legacy: selected.legacy };
     } catch (cause) {
       error = failurePhrase("resolve", cause);
     }
@@ -1656,9 +1751,8 @@ export class EnvironmentManager {
       published: clone.published ? { ...clone.published } : null,
       pathRoot,
       instance,
-      // A project's two files are committed with the code while its
-      // `HEAD` holds both (environments-14, environments-26); your own
-      // group's environment syncs with its clone instead.
+      ...(registry ? { registry } : {}),
+      // A project's files travel with the code once both are committed.
       committed: this.isOwn(key) ? null : envRoot !== null && committedWithCode(envRoot),
       ...(builtinUpdate ? { builtinUpdate } : {}),
       ...(unexported ? { unexported } : {}),

@@ -277,7 +277,7 @@ test.describe("first start", () => {
     await expect(header.getByTestId("space-signin-card").getByRole("heading", { level: 2 })).toHaveText("Not signed in");
     await expect(header.getByTestId("space-signin-body")).toHaveText(
       "Sign in to see your groups and share each project's records with the people in them." +
-        "Until you do, everything stays on this device and nothing is contacted.",
+        "Until you sign in to this Space, your records stay on this device.",
     );
     await expect(header.getByRole("textbox", { name: "Instance" })).toHaveValue(host.url);
     await expect(header.getByTestId("space-signin-instance")).toBeEditable();
@@ -285,7 +285,7 @@ test.describe("first start", () => {
     await expect(header.locator("button.bg-brand-600")).toHaveCount(1);
     await expect(header.locator("button.bg-brand-600")).toHaveAttribute("data-testid", "space-signin");
     await expect(header.getByRole("button")).toHaveCount(1);
-    await expect(header).not.toContainText("/");
+    await expect(header.getByTestId("space-signin-body")).not.toContainText("/");
     await expect(page.getByTestId("space-refresh")).toHaveCount(0);
     await expect(page.getByTestId("space-read-at")).toHaveCount(0);
     await expect(page.getByTestId("space-home")).toHaveCount(0);
@@ -303,7 +303,7 @@ test.describe("first start", () => {
     // No control but the row's name and its overflow (space-61).
     const controls = 'button:not([data-testid^="space-repo-"]):not([data-testid^="space-row-more-"])';
     await expect(ownRow.locator(controls)).toHaveCount(0);
-    // Nothing was contacted.
+    // This Space was not contacted; public directory discovery is independent.
     expect(host.script.requests.filter((request) => request.path.startsWith("/api/"))).toEqual([]);
 
     // A project added from the palette lists under "Only you" as "On

@@ -16,6 +16,8 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 - [DR-151](151-publish-local-spec-packages.md) in how a publish names its package;
 - [DR-161](161-an-applet-is-a-page-the-ide-serves.md) in where an installed applet's folder stands.
 
+Amended by [DR-168](168-independent-package-registry.md) for independent registry selection, account authority and credentials; Space collaboration and server admission remain unchanged.
+
 ## Context
 
 The package manager — the release format, requests and lock, resolution, the content-addressed store, installs, exports, the registry client and publishing — was written as a module of the app's core, and the `spex` command line reached it only by attaching to a running app over its WebSocket endpoint.

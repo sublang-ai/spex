@@ -435,6 +435,7 @@ const PAGE_SIZE = 2;
 const SPEX_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*-spex$/;
 
 interface Device {
+  scope: "registry" | "space";
   id: string;
   label: string;
   revoked: boolean;
@@ -444,9 +445,10 @@ interface Device {
   spent: Set<string>;
 }
 
-interface AuthCode { label: string; redirectUri: string; challenge: string; used: boolean; expiresAt: number }
+interface AuthCode { scope?: "registry" | "space"; label: string; redirectUri: string; challenge: string; used: boolean; expiresAt: number }
 
 interface DeviceCode {
+  scope?: "registry" | "space";
   userCode: string;
   label: string;
   status: "pending" | "approved" | "denied";
@@ -460,7 +462,7 @@ interface DeviceCode {
   ticket: string | null;
 }
 
-interface HeldSignIn { redirectUri: string; state: string; challenge: string; label: string }
+interface HeldSignIn { scope?: "registry" | "space"; redirectUri: string; state: string; challenge: string; label: string }
 
 /** An instance over a Git backend, as its transport sees it. */
 interface BackendInstance {
@@ -1000,8 +1002,9 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
 
   // ---- tokens -------------------------------------------------------------
 
-  function issue(label: string): { access: string; refresh: string; device: Device } {
+  function issue(label: string, scope: "registry" | "space" = "space"): { access: string; refresh: string; device: Device } {
     const device: Device = {
+      scope,
       id: randomBytes(8).toString("hex"),
       label,
       revoked: false,
@@ -1106,7 +1109,7 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
       const request = held.shift();
       if (!request) throw new Error("stand-in: no held sign-in");
       const code = secret("");
-      authCodes.set(code, { label: request.label, redirectUri: request.redirectUri, challenge: request.challenge, used: false, expiresAt: Date.now() + CODE_TTL_MS });
+      authCodes.set(code, { scope: request.scope, label: request.label, redirectUri: request.redirectUri, challenge: request.challenge, used: false, expiresAt: Date.now() + CODE_TTL_MS });
       return deliver(request.redirectUri, { code, state: request.state });
     },
     denyHeld: async () => {
@@ -1240,6 +1243,14 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
     // The transport is served at one origin: over another instance's Git
     // backend, `/git` here is nothing (DR-127).
     if (serves && (path === "/git" || path.startsWith("/git/"))) return transport(req, res, target);
+    if (path === "/api/v1/registry" && method === "GET") return json(res, 200, { origin: url, display_name: displayName, providers: ["github", "gitlab"] });
+    if (path === "/api/v1/spaces" && method === "GET") return json(res, 200, { spaces: [{ origin: url, display_name: displayName, sign_in: ["github", "gitlab"] }] });
+    if (path === "/api/v1/whoami" && method === "GET") {
+      const found = bearerDevice(bearerOf(req));
+      if ("code" in found) return envelope(res, 401, found.code, found.message);
+      if (found.device.scope !== "registry" || target.searchParams.get("scope") !== "registry") return envelope(res, 403, "wrong_scope", "Sign in to registry.");
+      return json(res, 200, { id: script.person.id, login: script.person.login, display_name: script.person.displayName, can_create_group: false });
+    }
     if (path === "/login/app" && method === "GET") return loginApp(res, target.searchParams);
     if (path === "/login/device") return loginDevice(req, res, target.searchParams);
     if (path === "/api/v1/auth/device" && method === "POST") return deviceStart(req, res);
@@ -1277,7 +1288,7 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
     if (label.length === 0 || label.length > 80) return html(res, 400, "Bad request", "<p>A label of at most 80 characters is required.</p>");
     if (state.length === 0) return html(res, 400, "Bad request", "<p>A state is required.</p>");
     if (script.browser === "hold") {
-      held.push({ redirectUri, state, challenge, label });
+      held.push({ scope: query.get("scope") === "registry" ? "registry" : "space", redirectUri, state, challenge, label });
       return html(res, 200, `Sign in Spex on ${label}?`, "<p>Waiting for approval.</p>");
     }
     const back = new URL(redirectUri);
@@ -1285,7 +1296,7 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
       back.searchParams.set("error", "access_denied");
     } else {
       const code = secret("");
-      authCodes.set(code, { label, redirectUri, challenge, used: false, expiresAt: Date.now() + CODE_TTL_MS });
+      authCodes.set(code, { scope: query.get("scope") === "registry" ? "registry" : "space", label, redirectUri, challenge, used: false, expiresAt: Date.now() + CODE_TTL_MS });
       back.searchParams.set("code", code);
     }
     back.searchParams.set("state", state);
@@ -1330,6 +1341,7 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
     const code = userCode();
     const now = performance.now();
     deviceCodes.set(deviceCode, {
+      scope: body.scope === "registry" ? "registry" : "space",
       userCode: code,
       label: body.label,
       status: "pending",
@@ -1377,7 +1389,7 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
       const hash = createHash("sha256").update(verifier).digest("base64url");
       if (hash !== entry.challenge) return refuse("invalid_grant", "The code verifier does not match.");
       entry.used = true;
-      return grant(issue(entry.label).device);
+      return grant(issue(entry.label, entry.scope).device);
     }
 
     if (grantType === "refresh_token") {
@@ -1420,7 +1432,7 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
     }
     if (entry.status === "pending") return refuse("authorization_pending", "The sign-in is not approved yet.");
     entry.consumed = true;
-    return grant(issue(entry.label).device, minted !== null);
+    return grant(issue(entry.label, entry.scope).device, minted !== null);
   }
 
   /** The ticket a seat's pending device code is granted on, as Spex
@@ -1458,6 +1470,7 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
     if (serversRoute) script.serverCalls.push({ method, path, bearer: bearerOf(req) });
     const found = bearerDevice(bearerOf(req));
     if ("code" in found) return envelope(res, 401, found.code, found.message);
+    if (found.device.scope !== "space") return envelope(res, 403, "wrong_scope", "Sign in to Space.");
     const fault = hostFaults.shift() ?? lastingFault;
     if (fault?.kind === "rate") return envelope(res, 429, "rate_limited", "Too many requests to the Git host.", fault.retryAfter === null ? {} : { "retry-after": fault.retryAfter });
     if (fault?.kind === "unavailable") return envelope(res, 503, "provider_unavailable", "The Git host did not answer.");

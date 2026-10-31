@@ -192,6 +192,7 @@ test("cli-19: the CLI's install of a playbook artifact leaves its folder without
   const work = join(SCRATCH, "work");
   mkdirSync(work);
   execFileSync("git", ["init", "--quiet", work]);
+  writeFileSync(join(work, "spex.yaml"), `format: 1\nregistry: ${registry.url}\npackages: {}\n`);
   await makeRelease(join(work, "kits", "walk"), manifestOf("acme/walk-kit", "walk"), playbookFiles("walk"));
 
   for (const args of [["add", "acme/ship-kit"], ["add", "acme/walk-kit", "--path", "kits/walk"]]) {

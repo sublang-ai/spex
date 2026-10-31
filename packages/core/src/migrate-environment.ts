@@ -45,7 +45,26 @@ export interface EnvironmentReceipt {
   inputs: { path: string; sha256: string }[];
   /** One entry per spex repository migrated: its key and what was done. */
   steps: { step: "project" | "own"; key: string; outcome: "moved" | "folder" | "own" }[];
+  /** Durable plans survive both partial publication and retirement. */
+  pending?: EnvironmentPlan[];
   complete: boolean;
+}
+
+
+export interface EnvironmentPlan {
+  key: string;
+  clone: string;
+  root: string;
+  outcome: "moved" | "folder" | "own";
+  phase: "writing" | "retiring";
+  sources: { path: string; before: FileVersion }[];
+  files: { path: string; before: FileVersion; after: FileVersion; retained: string | null }[];
+}
+
+export interface EnvironmentMigrationOptions {
+  report?: (key: string, blocked: boolean) => void;
+  /** A durable boundary, also usable by a process-interruption harness. */
+  checkpoint?: (point: "planned" | "written" | "retired", key: string, path?: string) => void;
 }
 
 /** A spex repository as the migration sees it. */
@@ -76,13 +95,39 @@ function findReceipt(home: string): { receipt: EnvironmentReceipt; dir: string }
   for (const id of readdirSync(migrations).sort()) {
     const file = join(migrations, id, "receipt.json");
     if (!existsSync(file)) continue;
-    let value: unknown;
-    try { value = readJsonFile(file); } catch { continue; }
-    if (isObject(value) && value.kind === "environment" && Array.isArray(value.inputs) && Array.isArray(value.steps)) {
+    // An unreadable journal must never turn our partial destination into
+    // an apparently reader-owned environment on retry.
+    const value = readJsonFile(file);
+    if (isObject(value) && value.kind === "environment") {
+      validateReceipt(value);
       return { receipt: value as unknown as EnvironmentReceipt, dir: join(migrations, id) };
     }
   }
   return undefined;
+}
+
+function validateReceipt(value: Record<string, unknown>): void {
+  const version = (held: unknown): boolean => held === null || typeof held === "string" && /^[a-f0-9]{64}$/.test(held);
+  function fail(): never { throw new Error("unsupported or damaged environment migration journal; original files preserved"); }
+  if (value.format !== 1 || typeof value.id !== "string" || typeof value.complete !== "boolean"
+    || !Array.isArray(value.inputs) || !value.inputs.every((file) => isObject(file) && typeof file.path === "string" && typeof file.sha256 === "string" && version(file.sha256))
+    || !Array.isArray(value.steps) || !value.steps.every((step) => isObject(step) && typeof step.key === "string" && ["own", "project"].includes(String(step.step)) && ["own", "folder", "moved"].includes(String(step.outcome)))) fail();
+  if (value.pending === undefined) {
+    if (!value.complete) fail();
+    return; // Completed pre-journal receipts remain readable.
+  }
+  if (!Array.isArray(value.pending)) fail();
+  for (const plan of value.pending as unknown[]) {
+    if (!isObject(plan) || typeof plan.key !== "string" || typeof plan.clone !== "string" || !isAbsolute(plan.clone)
+      || typeof plan.root !== "string" || !isAbsolute(plan.root) || !["own", "folder", "moved"].includes(String(plan.outcome))
+      || !["writing", "retiring"].includes(String(plan.phase)) || !Array.isArray(plan.sources) || !Array.isArray(plan.files)) fail();
+    const sources = plan.sources as unknown[];
+    const files = plan.files as unknown[];
+    const clone = plan.clone as string, root = plan.root as string;
+    if (sources.length !== (plan.outcome === "own" ? 0 : 2) || !sources.every((source, index) => isObject(source) && source.path === join(clone, FILES[index]!) && version(source.before))) fail();
+    if (files.length !== 2 || !files.every((file, index) => isObject(file) && file.path === join(root, FILES[index]!) && version(file.before) && version(file.after)
+      && (file.after === null ? file.retained === null : typeof file.retained === "string" && /^inputs\/\d+$/.test(file.retained)))) fail();
+  }
 }
 
 /** Whether a folder stands at `path`. */
@@ -185,124 +230,131 @@ function moveTrees(clone: string, root: string, lockText: string | null): void {
  * clone. Returns the keys whose environments it changed. A repository
  * whose step fails is left as it stood, reported, the others going on.
  */
-export function migrateEnvironments(home: string, repositories: readonly MigratedRepository[]): string[] {
+export function migrateEnvironments(home: string, repositories: readonly MigratedRepository[], options: EnvironmentMigrationOptions = {}): string[] {
   let found = findReceipt(home);
-  const todo = repositories.filter((repository) => pending(repository, found?.receipt));
+  const planFor = (repository: MigratedRepository): EnvironmentPlan | undefined => found?.receipt.pending?.find((plan) =>
+    plan.key === repository.key || plan.root === (repository.own ? repository.clone : repository.folder));
+  const todo = repositories.filter((repository) => planFor(repository) || pending(repository, found?.receipt));
+  for (const repository of repositories) if (!todo.includes(repository)) options.report?.(repository.key, false);
   if (todo.length === 0) return [];
   if (!found) {
     const id = randomUUID();
     const dir = join(migrationsDir(home), id);
     mkdirSync(join(dir, "inputs"), { recursive: true, mode: 0o700 });
-    found = { receipt: { format: 1, id, kind: "environment", inputs: [], steps: [], complete: false }, dir };
+    found = { receipt: { format: 1, id, kind: "environment", inputs: [], steps: [], pending: [], complete: false }, dir };
   }
   const { receipt, dir } = found;
+  receipt.pending ??= [];
   mkdirSync(join(dir, "inputs"), { recursive: true, mode: 0o700 });
   receipt.complete = false;
   const save = (): void => writeApplicationFile(join(dir, "receipt.json"), receipt);
   save();
-  // Each file's original bytes kept before it changes (storage-9).
-  const keep = (file: string, bytes: Buffer): void => {
+  const keep = (file: string, bytes: Buffer): string => {
     const rel = relative(home, file);
     const path = rel !== "" && !rel.startsWith("..") && !isAbsolute(rel) ? rel.split("\\").join("/") : file;
-    writeApplicationBytes(join(dir, "inputs", String(receipt.inputs.length)), bytes);
+    const retained = `inputs/${receipt.inputs.length}`;
+    writeApplicationBytes(join(dir, retained), bytes);
     receipt.inputs.push({ path, sha256: sha256(bytes) });
     save();
+    return retained;
   };
   const changed: string[] = [];
   for (const repository of todo) {
+    options.report?.(repository.key, true);
     try {
-      if (repository.own) migrateOwn(repository, receipt, keep);
-      else migrateProject(repository, receipt, keep);
-      changed.push(repository.key);
+      let plan = planFor(repository);
+      if (!plan) {
+        plan = planRepository(repository, receipt, keep);
+        receipt.pending.push(plan);
+        save(); // All planned bytes and versions stand before any publication.
+        options.checkpoint?.("planned", repository.key);
+      }
+      if (plan.clone !== repository.clone || plan.root !== (repository.own ? repository.clone : repository.folder)) {
+        throw new Error("environment migration binding changed; original files preserved");
+      }
+      finishPlan(plan, dir, save, options, repository.key);
+      receipt.steps.push({ step: plan.outcome === "own" ? "own" : "project", key: repository.key, outcome: plan.outcome });
+      receipt.pending = receipt.pending.filter((held) => held !== plan);
       save();
+      changed.push(repository.key);
+      options.report?.(repository.key, false);
     } catch (error) {
+      receipt.complete = false;
+      save();
       console.error(`spex: the environment of ${repository.key} did not move: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
-  receipt.complete = true;
+  receipt.complete = receipt.pending.length === 0 && todo.every((repository) => changed.includes(repository.key));
   save();
   return changed;
 }
 
-type Keep = (file: string, bytes: Buffer) => void;
-
-/** A file's bytes with their version; null bytes where absent. */
+type Keep = (file: string, bytes: Buffer) => string;
 const read = (file: string): { bytes: Buffer | null; version: FileVersion } => readVersioned(file);
 
-/** A project's environment into its working folder (storage-24). */
-function migrateProject(repository: MigratedRepository, receipt: EnvironmentReceipt, keep: Keep): void {
-  const folder = repository.folder!;
-  const clone = repository.clone;
-  const cloneFiles = { yaml: read(join(clone, "spex.yaml")), lock: read(join(clone, "spex.lock")) };
-  for (const [name, file] of [["spex.yaml", cloneFiles.yaml], ["spex.lock", cloneFiles.lock]] as const) {
-    if (file.bytes !== null) keep(join(clone, name), file.bytes);
+/** Capture both files, even an unchanged or absent one, so a retry cannot
+ * mistake our partial publication for the reader's existing environment. */
+function planRepository(repository: MigratedRepository, receipt: EnvironmentReceipt, keep: Keep): EnvironmentPlan {
+  const root = repository.own ? repository.clone : repository.folder!;
+  const source = FILES.map((name) => ({ path: join(repository.clone, name), ...read(join(repository.clone, name)) }));
+  const outcome = repository.own ? "own" : holdsFiles(root) ? "folder" : "moved";
+  const destination = FILES.map((name) => ({ path: join(root, name), ...read(join(root, name)) }));
+  let texts = (outcome === "moved" ? source : destination).map((file) => file.bytes?.toString("utf8") ?? null);
+  const done = receipt.steps.some((entry) => entry.step === "own" && entry.key === repository.key);
+  if (texts[0] !== null && repository.instance !== null && !(repository.own && done)) {
+    const named = withSpace(texts[0]!, texts[1]!, repository.instance);
+    if (named) texts = [named.requests, named.lock];
   }
-  const folderHolds = FILES.some((name) => existsSync(join(folder, name)));
-  let outcome: "moved" | "folder";
-  if (!folderHolds) {
-    // The clone's files move to the folder's root, naming the clone's
-    // instance as `space` where they name none.
-    let yaml = cloneFiles.yaml.bytes?.toString("utf8") ?? null;
-    let lock = cloneFiles.lock.bytes?.toString("utf8") ?? null;
-    if (yaml !== null && repository.instance !== null) {
-      const named = withSpace(yaml, lock, repository.instance);
-      if (named) ({ requests: yaml, lock } = named);
-    }
-    // Written only where the folder still holds none (DR-111).
-    if (yaml !== null) writeVersionedBytes(join(folder, "spex.yaml"), yaml, null, 0o644);
-    if (lock !== null) writeVersionedBytes(join(folder, "spex.lock"), lock, null, 0o644);
-    moveTrees(clone, folder, lock);
-    outcome = "moved";
-  } else {
-    // The folder's own files stand, gaining `space` where they name
-    // none; the clone's are dropped with its trees.
-    const own = { yaml: read(join(folder, "spex.yaml")), lock: read(join(folder, "spex.lock")) };
-    if (own.yaml.bytes !== null && repository.instance !== null) {
-      const text = own.yaml.bytes.toString("utf8");
-      const lockText = own.lock.bytes?.toString("utf8") ?? null;
-      const named = withSpace(text, lockText, repository.instance);
-      if (named) {
-        keep(join(folder, "spex.yaml"), own.yaml.bytes);
-        writeVersionedBytes(join(folder, "spex.yaml"), named.requests, own.yaml.version, 0o644);
-        if (named.lock !== null && named.lock !== lockText) {
-          keep(join(folder, "spex.lock"), own.lock.bytes!);
-          writeVersionedBytes(join(folder, "spex.lock"), named.lock, own.lock.version, 0o644);
-        }
-      }
-    }
-    for (const tree of FORMER_TREES) rmSync(join(clone, tree), { recursive: true, force: true });
-    outcome = "folder";
-  }
-  // The deletion from the clone is a local change its next sync carries
-  // (storage-24, space-7).
-  for (const name of FILES) rmSync(join(clone, name), { force: true });
-  receipt.steps.push({ step: "project", key: repository.key, outcome });
+  for (const file of [...source, ...destination]) if (file.bytes !== null) keep(file.path, file.bytes);
+  return {
+    key: repository.key, clone: repository.clone, root, outcome, phase: "writing",
+    sources: repository.own ? [] : source.map((file) => ({ path: file.path, before: file.version })),
+    files: destination.map((file, index) => {
+      const text = texts[index]!;
+      return { path: file.path, before: file.version, after: text === null ? null : sha256(text), retained: text === null ? null : keep(file.path, Buffer.from(text)) };
+    }),
+  };
 }
 
-/** Your own group's environment stays in its clone (storage-24):
- * `space` named where it lacks one, the former trees under its `.spex/`. */
-function migrateOwn(repository: MigratedRepository, receipt: EnvironmentReceipt, keep: Keep): void {
-  const clone = repository.clone;
-  const lock = read(join(clone, "spex.lock"));
-  let lockText = lock.bytes?.toString("utf8") ?? null;
-  const done = receipt.steps.some((entry) => entry.step === "own" && entry.key === repository.key);
-  if (!done && repository.instance !== null) {
-    const yaml = read(join(clone, "spex.yaml"));
-    if (yaml.bytes !== null) {
-      const named = withSpace(yaml.bytes.toString("utf8"), lockText, repository.instance);
-      if (named) {
-        keep(join(clone, "spex.yaml"), yaml.bytes);
-        writeVersionedBytes(join(clone, "spex.yaml"), named.requests, yaml.version, 0o644);
-        if (named.lock !== null && named.lock !== lockText) {
-          keep(join(clone, "spex.lock"), lock.bytes!);
-          writeVersionedBytes(join(clone, "spex.lock"), named.lock, lock.version, 0o644);
-          lockText = named.lock;
-        }
+/** Validate the whole pair before any retry write or source retirement. */
+function finishPlan(plan: EnvironmentPlan, dir: string, save: () => void, options: EnvironmentMigrationOptions, key: string): void {
+  const planned = plan.files.map((file) => {
+    const bytes = file.retained === null ? null : read(join(dir, file.retained)).bytes;
+    if ((bytes === null ? null : sha256(bytes)) !== file.after) throw new Error("retained environment plan changed; source preserved");
+    const current = read(file.path);
+    if (current.version !== file.after && (plan.phase !== "writing" || current.version !== file.before)) {
+      throw new Error(`${file.path}: migration destination diverged; preserved unchanged`);
+    }
+    return { file, bytes, current };
+  });
+  const verifySources = (): void => {
+    for (const source of plan.sources) {
+      const current = read(source.path).version;
+      if (current !== source.before && !(plan.phase === "retiring" && current === null)) {
+        throw new Error(`${source.path}: migration source changed; preserved unchanged`);
       }
     }
+  };
+  verifySources();
+  for (const { file, bytes, current } of planned) {
+    if (current.version === file.after) continue;
+    if (bytes === null) throw new Error("invalid environment plan deletion");
+    writeVersionedBytes(file.path, bytes, file.before, 0o644);
+    options.checkpoint?.("written", key, file.path);
   }
-  moveTrees(clone, clone, lockText);
-  if (!done && repository.instance !== null) receipt.steps.push({ step: "own", key: repository.key, outcome: "own" });
+  for (const file of plan.files) if (read(file.path).version !== file.after) throw new Error(`${file.path}: migration destination changed; source preserved`);
+  verifySources();
+  plan.phase = "retiring";
+  save(); // Missing source members are accepted only after this boundary.
+  const lock = planned.find(({ file }) => file.path === join(plan.root, "spex.lock"))?.bytes?.toString("utf8") ?? null;
+  if (plan.outcome === "folder") {
+    for (const tree of FORMER_TREES) rmSync(join(plan.clone, tree), { recursive: true, force: true });
+  } else moveTrees(plan.clone, plan.root, lock);
+  for (const source of plan.sources) {
+    verifySources();
+    rmSync(source.path, { force: true });
+    options.checkpoint?.("retired", key, source.path);
+  }
 }
 
 /** The home's environment receipt, where one stands. */

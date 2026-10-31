@@ -188,6 +188,8 @@ test("applets-7: applet.open answers each capability, the core's endpoint serves
   }, { "applets/notes/index.html": notesEntry });
   const { id: key } = await client.expectOk("project.register", { path: working });
   const own = `${OWN}/${OWN}-spex`;
+  await client.expectOk("environment.registry.set", { repository: key, origin: registry.url });
+  await client.expectOk("environment.registry.set", { repository: own, origin: registry.url });
   await client.expectOk("environment.request", { repository: key, name: APPLET_PACKAGE, request: { kind: "registry", version: "^1.0.0" }, wait: true });
   await client.expectOk("environment.request", { repository: key, name: "acme/notes-view", request: { kind: "path", path: "spex-packages/notes-view" }, wait: true });
   await client.expectOk("environment.request", { repository: own, name: APPLET_PACKAGE, request: { kind: "registry", version: "^1.0.0" }, wait: true });

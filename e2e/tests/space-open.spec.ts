@@ -124,7 +124,8 @@ test("space-114: Open on <server> opens the seat, sends that seat's core the joi
   // shows the contract and sends nothing; "I understand" sends
   // `server.open` with consent.
   const contract = page.getByTestId(`space-server-contract-${lab.place}`);
-  await expect(contract).toContainText("Opening a seat places your sign-in on lab-4.");
+  await expect(contract).toContainText("Opening a seat places your Space sign-in on lab-4.");
+  await expect(contract).toContainText("Private packages require a separate registry sign-in on this seat.");
   expect(toHere("server.open")).toEqual([]);
   await expect(row.getByTestId(`space-repo-state-${notes.key}`)).toHaveText("Opening on lab-4…");
   // The line says the open runs, then that the seat is connected.

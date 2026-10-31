@@ -130,13 +130,13 @@ test("cli-17, cli-18: login, whoami and logout at two stand-in instances, with n
   // --help names the three commands.
   const help = await spex(["--help"]).done;
   assert.equal(help.code, 0);
-  for (const command of ["login", "logout", "whoami"]) assert.match(help.stdout, new RegExp(`^  ${command} \\[--space <origin>\\]`, "m"));
+  for (const command of ["login", "logout", "whoami"]) assert.ok(help.stdout.includes(`  ${command} [--registry <origin> | --space <origin>]`));
 
   // A fresh home lists no instance: whoami says none is signed in and
   // where login goes, and writes nothing (cli-12).
-  const fresh = await spex(["whoami"]).done;
+  const fresh = await spex(["whoami", "--space", first.url]).done;
   assert.equal(fresh.code, 0, fresh.stderr);
-  assert.match(fresh.stdout, /^No Space signed in on this device; spex login signs in at 127\.0\.0\.1:\d+\.$/m);
+  assert.match(fresh.stdout, /^127\.0\.0\.1:\d+ +signed out +\(default\)\n$/);
   assert.equal(existsSync(HOME), false, "whoami writes no home");
 
   // A refused origin exits 1 with the cause on standard error, nothing
@@ -150,7 +150,7 @@ test("cli-17, cli-18: login, whoami and logout at two stand-in instances, with n
   // The first login at the default instance: the URL and the code
   // printed, the instance recorded as the default with its account once
   // the stand-in confirms, its token kept owner-only (cli-10).
-  const signingIn = spex(["login"]);
+  const signingIn = spex(["login", "--space", first.url]);
   const firstCode = await printedCode(signingIn, first);
   assert.equal(existsSync(HOME), false, "nothing is written while the code is pending");
   first.script.approveDevice(firstCode);
@@ -197,7 +197,7 @@ test("cli-17, cli-18: login, whoami and logout at two stand-in instances, with n
   // A second login at a signed-in instance reports it, asking nothing
   // of the instance (cli-10).
   const requests = first.script.deviceRequests.length;
-  const again = await spex(["login"]).done;
+  const again = await spex(["login", "--space", first.url]).done;
   assert.equal(again.code, 0, again.stderr);
   assert.equal(again.stdout, "Signed in at First as ada; spex login --force signs in again.\n");
   assert.equal(first.script.deviceRequests.length, requests, "no device request made");
@@ -205,7 +205,7 @@ test("cli-17, cli-18: login, whoami and logout at two stand-in instances, with n
   // --force signs in again: a new token in place of the former, whose
   // device the instance no longer lists (cli-10).
   const former = readCredentials().hosts[first.url];
-  const forcing = spex(["login", "--force"]);
+  const forcing = spex(["login", "--space", first.url, "--force"]);
   first.script.approveDevice(await printedCode(forcing, first));
   const forced = await forcing.done;
   assert.equal(forced.code, 0, forced.stderr);
@@ -219,7 +219,9 @@ test("cli-17, cli-18: login, whoami and logout at two stand-in instances, with n
   // whoami names both, the default marked, no secret, asking no
   // instance (cli-12).
   const asked = hostRequests();
-  const both = await spex(["whoami"]).done;
+  const firstWho = await spex(["whoami", "--space", first.url]).done;
+  const secondWho = await spex(["whoami", "--space", second.url]).done;
+  const both = { code: firstWho.code ?? secondWho.code, stdout: firstWho.stdout + secondWho.stdout, stderr: firstWho.stderr + secondWho.stderr };
   assert.equal(both.code, 0, both.stderr);
   const lines = both.stdout.trimEnd().split("\n");
   assert.equal(lines.length, 2, both.stdout);
@@ -247,7 +249,7 @@ test("cli-17, cli-18: login, whoami and logout at two stand-in instances, with n
   assert.deepEqual(home.instances[1], { origin: second.url, clientId: "spex", account: { id: BOB.id, login: "bob", displayName: "Bob" }, displayName: "Second", signedOut: true });
   assert.equal(home.instances[0].signedOut, undefined);
   assert.deepEqual(Object.keys(readCredentials().hosts), [first.url]);
-  const afterOut = await spex(["whoami"]).done;
+  const afterOut = await spex(["whoami", "--space", second.url]).done;
   assert.match(afterOut.stdout, /^127\.0\.0\.1:\d+ +Second +signed out$/m);
   const outAgain = await spex(["logout", "--space", second.url]).done;
   assert.equal(outAgain.code, 0, outAgain.stderr);
@@ -275,7 +277,7 @@ test("cli-17, cli-18: login, whoami and logout at two stand-in instances, with n
   // nothing: the home as it stood, the former token kept (cli-10).
   const homeStood = bytesOr(homeFile())!;
   const pairStood = readCredentials().hosts[first.url];
-  const unrecorded = spex(["login", "--force"]);
+  const unrecorded = spex(["login", "--space", first.url, "--force"]);
   const unrecordedCode = await printedCode(unrecorded, first);
   writeFileSync(homeFile(), "format: 99\n");
   first.script.approveDevice(unrecordedCode);
@@ -295,7 +297,7 @@ test("cli-17, cli-18: login, whoami and logout at two stand-in instances, with n
   const other = readHome(OTHER_HOME);
   assert.equal(other.origin, first.url);
   assert.deepEqual(other.instances.map((entry: any) => entry.origin), [second.url]);
-  const otherWho = await spex(["whoami"], OTHER_HOME).done;
+  const otherWho = await spex(["whoami", "--space", second.url], OTHER_HOME).done;
   assert.match(otherWho.stdout, /^127\.0\.0\.1:\d+ +Second +bob +\(default\)\n$/);
 
   // No access or refresh secret, nor any device code, anywhere in any

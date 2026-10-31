@@ -474,6 +474,52 @@ test("the sudoers fragment lets the hub's account run the helper's four forms an
   assert.deepEqual([...paths], [DEFAULT_HELPER], "the helper's path is the one path named");
 });
 
+test("sudoers validation retries only unsupported requiretty and validates the complete unchanged allowlist (hub-7)", () => {
+  const original = readFileSync(SUDOERS, "utf8").replaceAll("/opt/spex/", "/srv/acceptance/");
+  for (const mode of ["supported", "sudo-rs", "malformed", "malformed-after-retry"]) {
+    const root = scratch();
+    const fragment = join(root, "fragment");
+    const path = join(root, "bin");
+    mkdirSync(path);
+    writeFileSync(fragment, original);
+    // visudo is the host boundary: record every complete candidate, emulate
+    // sudo-rs's diagnostic, and reject malformed policy independently.
+    const visudo = join(path, "visudo");
+    writeFileSync(visudo, `#!/bin/bash
+set -eu
+[ "$1" = -cf ]
+count=1
+[ ! -f "$EVIDENCE/1" ] || count=2
+cp "$2" "$EVIDENCE/$count"
+if [ "$MODE" = supported ]; then exit 0; fi
+if [ "$MODE" = malformed ]; then
+  echo "$2:11:1: syntax error: invalid command" >&2
+  exit 1
+fi
+if grep -qFx 'Defaults:spex-hub !requiretty' "$2"; then
+  line=$(grep -nFx 'Defaults:spex-hub !requiretty' "$2")
+  echo "$2:\${line%%:*}:20: syntax error: unknown setting: 'requiretty'" >&2
+  exit 1
+fi
+if [ "$MODE" = malformed-after-retry ]; then
+  echo "$2:10:1: syntax error: invalid command" >&2
+  exit 1
+fi
+`);
+    chmodSync(visudo, 0o755);
+    const result = run("bash", [join(DEPLOY, "validate-sudoers.sh"), fragment], root, `${path}:/usr/bin:/bin`, "", {
+      MODE: mode, EVIDENCE: root,
+    });
+    assert.equal(result.status, mode.startsWith("malformed") ? 1 : 0, `${mode}: ${result.stderr}`);
+    assert.equal(readFileSync(join(root, "1"), "utf8"), original, "the first check sees the complete rendered policy");
+    const retry = mode === "sudo-rs" || mode === "malformed-after-retry";
+    assert.equal(existsSync(join(root, "2")), retry, `${mode}: retries only the exact optional setting diagnostic`);
+    const compatible = original.replace(/^Defaults:spex-hub !requiretty\n/m, "");
+    if (retry) assert.equal(readFileSync(join(root, "2"), "utf8"), compatible, "the second check sees every allowlisted command unchanged");
+    assert.equal(readFileSync(fragment, "utf8"), mode === "sudo-rs" ? compatible : original, "a failed complete validation never replaces the policy");
+  }
+});
+
 test("the seat unit runs the server shell as a seat with exactly its flags (hub-4, server-shell-25)", () => {
   const keys = unitKeys(SEAT_UNIT);
   const { program, script, words, flags } = execStart(one(keys, "ExecStart"));

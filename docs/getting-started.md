@@ -9,10 +9,10 @@ and review through a workflow written in plain language.
 
 A **spec package** shares a spec and related skills or playbooks as a
 versioned package. Find and publish packages on
-[Spex Space](https://spex.sublang.ai); install them from the IDE or the
-`spex` command line. Public packages need no account to browse or
-install. Publishing and private packages require access. Project-record
-sync is optional.
+[Spex Registry](https://spex.sublang.ai); install them from the IDE or the
+`spex` command line. Public packages need no account to browse or install.
+Publishing and private packages require a separate registry sign-in with
+access. Project-record sync is optional.
 
 ## Open the IDE and a project
 
@@ -50,7 +50,8 @@ coordinates; players inspect files, implement, and review through playbooks.
    every role, and select **Enable**. Start a new task and type `/` to find
    its command. Installing a package alone does not enable it.
 
-Private packages never appear in search. Sign in with access, select
+Private packages never appear in search. In **Playbooks → Package registry**,
+choose **Sign in to registry** with access, then select
 **Add from registry → Add by name**, and enter the known `org/name` and
 an explicit version or range, such as `1.2.3`, `^1.2.3`, or `~1.2.3`, then
 **Add**. This also works for known public packages. **Requested** confirms
@@ -68,30 +69,60 @@ package inside the project before publishing it.
 
 ## Use the CLI
 
-The `spex` command line manages the same packages from a terminal. It
-needs Node.js 22 or later and no running app. Install it once, or put
-`npx @sublang/spex` in place of `spex`. Run it in your project's folder:
+The Spex CLI runs independently with Node.js 22 or later and shares its
+package-manager library and environment files with the IDE. Run it in your
+project's folder; it needs no running app or project registration. You can
+also put `npx @sublang/spex` in place of `spex`:
 
 ```sh
 npm install -g @sublang/spex
-cd /path/to/project
+cd /absolute/path/to/project
 spex search toolkit
-spex add my-org/toolkit
+spex add my-org/toolkit@^1.0.0
+spex install
+spex update
 spex list
 ```
 
-`spex add` records the request in `spex.yaml` at the project's root,
-writes the exact versions to `spex.lock`, installs the files under
-`.spex/` and exports the skills. Commit `spex.yaml` and `spex.lock` with
-your code; Git ignores `.spex/`. After a clone, `spex install` installs
-what the lock records. For private packages, run `spex login` first.
-Replace the placeholder package name with a real one.
+Replace the example package name with a real one. Commit `spex.yaml` and
+`spex.lock`; installed files under `.spex/` are ignored. A new manifest explicitly
+selects the public registry as `registry: https://spex.sublang.ai`, independently
+of an optional `space` binding for project records. Existing manifests without
+`registry` keep their prior package source until you explicitly migrate them.
+The lock retains each package's exact origin, version and checksum.
 
-The IDE reads the same files. Open the folder as a project, and
-**Playbooks** shows what the CLI installed; what the IDE changes, the CLI
-reads too. Enable and run playbooks in the IDE as described above. See
-the [CLI guide](../packages/cli/README.md) for every command, signing in
-at another Space, and exit codes.
+Public packages need no sign-in. For private packages or publishing:
+
+```sh
+spex login --registry https://spex.sublang.ai
+spex whoami --registry https://spex.sublang.ai
+```
+
+Follow the verification URL and code. `--space <origin>` signs in to a Space
+separately; it cannot be combined with `--registry`. Signing out of either
+keeps the other signed in. For a package of your own, `spex new org/pkg --skill
+<folder>` makes `spex-packages/org/pkg/`, requests it by path and installs it.
+Run `spex publish org/pkg --dry-run` to inspect its destination and files,
+then omit `--dry-run` to publish. Enable and run playbooks in the IDE as above.
+After a clone, `spex install` installs what the lock records. Open that folder
+in the IDE and **Playbooks** shows the same environment; what either host
+changes, the other reads. See the [CLI guide](../packages/cli/README.md) for
+all commands, separate registry/Space sign-in and exit codes.
+
+## Open a project on a team server
+
+In **Space**, choose a server under your group and read its contract before
+opening a seat. Whoever runs the server can act with credentials you place
+there. Admission signs that seat in to its Space only; your computer's registry
+credentials and the administrator's shared agent sign-ins grant it no registry
+access.
+
+Public packages install without a registry sign-in. For private packages or
+publishing, select the server's place in the IDE, then open **Playbooks → Package
+registry → Sign in to registry**. Approve that seat's own sign-in. Its registry
+credential stays on that server until removed or expired, independently of your
+Space grant and execution lease. Sign out of the registry on that seat when you
+want to remove that grant.
 
 ## Try a spec-first task
 
@@ -107,20 +138,16 @@ implementing with `/code`. See [Approvals](approvals.md) for permissions.
 
 ## Publish specs, skills, and playbooks
 
-Publishing needs a claimed org you can publish to; manage claims on
-Space's [Your orgs](https://spex.sublang.ai/account/orgs) page.
-If you do not own a first-level group, open **Space** in Spex and choose
-**New group** under your signed-in publishing instance. Enter **Group name**
-and a lowercase **Path** such as `team-tools`, choose **Create**, then claim
-that **Path** in **Your orgs**. If **New group** is unavailable, ask the
-instance administrator to provide a first-level group you own.
-Your personal namespace alone does not qualify as an org. Choose **Private**
-on a new claim when the packages should be private.
+Publishing needs a registry namespace you may publish to. Manage claims on
+[Your orgs](https://spex.sublang.ai/account/orgs) after signing in to the
+registry. Choose a namespace your registry account may claim; no Space group
+or membership is required. Choose **Private** on a new claim when the
+packages should be private.
 
 ### Publish a spec or skill package
 
 To publish a skill you already have, such as one Claude Code keeps under
-`.claude/skills/`, sign in at the Space you publish to, then make a
+`.claude/skills/`, sign in to the registry you publish to, then make a
 package folder from the skill in your project's root. Use an org you can
 publish to:
 
@@ -147,15 +174,15 @@ npx @sublang/spex publish my-org/my-skill
 ```
 
 The dry run shows the destination, name, version and files, and uploads
-nothing. The publish prints the package's page at the Space.
+nothing. The publish prints the package's page at the registry.
 
 Or publish from the IDE. A folder `spex new` made is already requested,
 so its row is in **Playbooks**. For a folder you made another way, use
 **Playbooks → Add from folder**, enter its `org/name` and
-`spex-packages/<org>/<name>`, then **Add**. Sign in through **Space** to
-the publishing instance. On the local package's row, select **Publish**,
+`spex-packages/<org>/<name>`, then **Add**. Sign in through
+**Playbooks → Package registry** to the publishing registry. On the local package's row, select **Publish**,
 review the destination, name, version, and upload files, then confirm
-**Publish**. This uses your existing app sign-in; no playbook,
+**Publish**. This uses your registry sign-in; no playbook,
 compilation, or separate API token is needed.
 
 ### Publish a playbook
@@ -169,7 +196,7 @@ compilation, or separate API token is needed.
    that choice. Check the phases, **Gears**, and **Machine**.
 4. On **Enable**, choose the command and a player per role, then enable it
    for the project. Try its command in a new task and review its work.
-5. Sign in through **Space** to the publishing instance. Return to the
+5. Sign in through **Playbooks → Package registry**. Return to the
    author's **Enable** tab and select **Publish**. Review the destination,
    package name, version, and upload files, then confirm **Publish**. Success
    shows the published version and package-page link.

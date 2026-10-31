@@ -12,7 +12,7 @@
 Scaffolds a `specs/` directory so AI coding agents can read and follow
 your project's requirements and design. It is also the package manager for
 spec packages: it adds, installs and publishes specs, skills and playbooks
-in a folder, with no running app.
+in a folder, with no running app. Requires Node.js 22 or later.
 
 ## Install
 
@@ -40,13 +40,13 @@ spex publish my-org/my-skill --dry-run
 spex publish my-org/my-skill
 ```
 
-`spex login` signs this device in at a Space. Open the URL it prints and
+`spex login` signs this device in to the environment's registry. Open the URL it prints and
 enter the code it shows. `spex new` makes `spex-packages/my-org/my-skill/`
 from the skill, requests it in `spex.yaml` and installs it. `--move` moves
 the skill into the package, and Spex exports it back to
 `.claude/skills/`. The dry run shows the destination, the version and the
 files, and uploads nothing. Publishing needs an org you may publish to at
-that Space.
+that registry.
 
 Use published packages in a project:
 
@@ -83,7 +83,8 @@ A `spex.yaml` looks like this:
 
 ```yaml
 format: 1
-space: https://spex.sublang.ai
+registry: https://spex.sublang.ai
+space: https://your-space.example
 language: en
 packages:
   my-org/toolkit:
@@ -92,11 +93,16 @@ packages:
     path: spex-packages/my-org/my-skill
 ```
 
-- `space` names the Space the environment resolves at, by its origin.
-  Its registry serves the packages, and `spex publish` publishes there.
-  Without `space`, the environment uses your default Space. `spex add`
-  and `spex new` write it, naming your default Space, when they make the
-  file.
+- `registry` selects package resolution, private access and publication by
+  origin. New manifests explicitly select `https://spex.sublang.ai`.
+- `space`, optional, independently selects records and Git-source credential
+  brokerage. It supplies no package registry authority.
+- Existing manifests without `registry` keep their former Space/default
+  package source until explicitly migrated. Locked versions, checksums and
+  origins remain authoritative: inspect the source before setting `registry`,
+  especially before publishing private packages. Locked downloads use their
+  recorded registry or an explicitly trusted equivalent; another signed-in
+  Space does not add a package source.
 - `language`, optional, picks each artifact's language where the package
   has it, else its original.
 - Each request has one source: `version` from the registry, `path` for a
@@ -128,8 +134,9 @@ Only the app:
 - enables a playbook, by choosing a player for each role, and runs it
   in a session;
 - prepares each installed playbook to run on its engine;
-- installs its built-in package, `sublang/playbooks`. `spex install`
-  leaves that one to the app and says so.
+- seeds its built-in package, `sublang/playbooks`. `spex install` uses a
+  copy in the same home or a registry where available; otherwise it leaves
+  that package to the app and says so.
 
 ## Commands
 
@@ -140,13 +147,13 @@ Only the app:
 | `spex remove <org>/<pkg>`, alias `rm` | Drop a request, then install what remains | |
 | `spex install`, alias `i` | Install the lock and export, resolving first where the lock is missing or stale | |
 | `spex update` | Resolve again from `spex.yaml`, install and export, and print each version that moved | |
-| `spex list`, alias `ls` | Show the Space, the requests, each locked package with its state, the exported skills and what the export left out | |
+| `spex list`, alias `ls` | Show the registry, Space, requests, each locked package with its state, the exported skills and what the export left out | |
 | `spex search <query>` | Search the environment's registry, and print each match with its versions, newest first | |
 | `spex new <org>/<pkg>` | Make `spex-packages/<org>/<pkg>/` from skills and a spec, request it by path and install it | `--skill <folder>` (once per skill), `--spec <file>`, `--language <tag>`, `--description <text>`, `--license <id>`, `--move` |
-| `spex publish [<org>/<pkg>]` | Publish the package's folder to the environment's Space | `--dry-run` |
-| `spex login` | Sign this device in at a Space | `--space <origin>`, `--force` |
-| `spex logout` | Sign this device out of a Space | `--space <origin>` |
-| `spex whoami` | Show who is signed in at each Space, the default marked | `--space <origin>` |
+| `spex publish [<org>/<pkg>]` | Publish the package's folder to the environment's registry | `--dry-run` |
+| `spex login` | Sign in to the selected registry or Space | `--registry <origin>` or `--space <origin>`, `--force` |
+| `spex logout` | Sign out of the selected registry or Space | `--registry <origin>` or `--space <origin>` |
+| `spex whoami` | Show the selected registry or Space sign-in | `--registry <origin>` or `--space <origin>` |
 
 `scaffold` and `lint` are described under [Usage](#usage) and
 [Linting](#linting). `spex --help` lists every command.
@@ -176,46 +183,50 @@ Only the app:
 - With a name, it publishes the folder `spex.yaml` requests that name by,
   else `spex-packages/<org>/<pkg>/`. With no name, it publishes the one
   package under `spex-packages/`, and lists them where there are several.
-- It publishes to the environment's Space, as the account signed in
-  there. Signed out there, it refuses and names `spex login`.
+- It publishes to the environment's registry with that registry's grant.
+  Signed out there, it refuses and names `spex login`. Namespace eligibility
+  follows registry permission, independently of Space membership.
 - The manifest needs a `description` and a `license`.
 - `--dry-run` prints the destination, `<org>/<pkg>@<version>` and the
   files, and uploads nothing. A publish prints the package's page at the
-  Space.
+  registry.
 - A release never changes. Raise `version` in `meta.yaml` before you
   publish again.
 
 ## Signing in
 
-A Space is a deployment of Spex Space, named by its origin, such as
-`https://spex.sublang.ai`.
+Registry and Space grants are independent, even at the same origin:
 
 ```sh
 spex login
-spex login --space https://spex.example.com
+spex login --registry https://spex.sublang.ai
+spex login --space https://your-space.example
 spex whoami
-spex logout --space https://spex.example.com
+spex logout --registry https://spex.sublang.ai
 ```
 
-- `spex login` signs this device in by the device flow. It prints a URL
-  and a code. Open the URL, enter the code and approve. The command waits
-  until the Space confirms or the code expires. Ctrl-C stops it, and
-  nothing is recorded.
-- Without `--space`, `spex login` and `spex logout` use your default
-  Space, and `spex whoami` lists every Space. The first Space you sign in
-  to becomes the default. Before any sign-in, the default is
-  `https://spex.sublang.ai`.
+- Without a target flag, `login`, `logout` and `whoami` use registry purpose
+  at the environment's package origin, or the public registry when no
+  manifest exists. `--registry` and `--space` are mutually exclusive.
+- `spex login` prints a verification URL and code. Open the URL, enter the
+  code and approve. It waits until the selected service confirms or the
+  code expires. Ctrl-C stops it and records nothing.
+- Public packages need no sign-in. Private packages and publishing need
+  their registry's own grant on the machine running the package manager,
+  including a team server seat. Space admission supplies no registry grant.
 - An origin is `https://<host>`, with a port where it is not the default;
   `http` is accepted only on a loopback host.
-- At a Space where you are signed in, `spex login` says so. `--force`
-  signs in again and revokes the token it replaces.
-- `spex whoami` reads the home alone. It lists each Space by its host and
-  name, the login signed in there or "signed out", and marks the default.
-- `spex logout` revokes this device at the Space and removes its token.
-  The Space stays listed, as signed out.
-- The home is `SPEX_HOME`, else `~/.spex`. It records each Space in
-  `home.yaml`, and keeps each token in `local/credentials.yaml`, readable
-  by you alone. No command prints a token.
+- An existing selected grant is reported unless `--force` replaces it.
+  Registry sign-in creates no Space entry or repository consent.
+- Registry `whoami` reads that registry's account; explicit Space `whoami`
+  reports the recorded Space account or that it is signed out.
+- Logout revokes and removes only the selected grant. Signing out of a
+  registry keeps Space grants, and signing out of a Space keeps registry
+  grants. Space entries remain listed as signed out.
+- The home is `SPEX_HOME`, else `~/.spex`. Space entries are in `home.yaml`;
+  purpose-specific credentials are in owner-readable `local/credentials.yaml`.
+  Existing origin-only slots remain Space credentials and are never promoted
+  to registry credentials. No command prints a token.
 
 ## Exit codes
 
@@ -240,12 +251,12 @@ take back an upload the registry already accepted.
 - `spex update` resolves the whole environment again. It takes no
   package name.
 - No command adds a Git source. A `git` request you write in `spex.yaml`
-  by hand is resolved and installed as written, fetched with this
-  device's Git alone. A private repository needs Git access on this
-  device.
+  by hand is resolved and installed as written. A signed-in Space may
+  broker its permitted Git sources; other sources use this device's Git
+  access. Registry sign-in supplies no Git transport credential.
 - The built-in package `sublang/playbooks` is the app's. `spex install`
   installs it from the copy the app keeps in the same home, where there
-  is one, else leaves it to the app.
+  is one, or from its registry, else leaves it to the app.
 
 ## Usage
 
@@ -371,7 +382,7 @@ top-level commands that need no app:
 | `spex package status` | `spex list` |
 | `spex package publish <folder> [--dry-run]` | `spex publish <org>/<pkg> [--dry-run]` |
 | `spex auth login --instance <origin>` | `spex login --space <origin>` |
-| `spex auth status` | `spex whoami` |
+| `spex auth status` | `spex whoami --space <origin>` |
 | none | `spex logout` |
 | `spex project add <folder>`, `spex project list` | none: no project registration is needed |
 | `--server`, `SPEX_SERVER_URL`, `--project`, `--timeout` | none: no app is needed |
@@ -381,6 +392,11 @@ and the Spex app runs the same code. An environment's files stand at the
 folder's root, with the installed files under `.spex/`; an environment
 an earlier app kept in the project's records moves into the working
 folder at the app's next start.
+The move preserves explicit registry selection and locked provenance. An old
+manifest without `registry` keeps its previous package destination; adding the
+field is an explicit migration, not permission to retarget a private publish.
+Old Space credentials remain Space-only, so private registry access needs a
+separate `spex login --registry <origin>`.
 
 A folder `spex package init` made at `spex-packages/<name>/` still
 publishes by name while `spex.yaml` requests it by that path. Exit code

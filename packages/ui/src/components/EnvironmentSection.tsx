@@ -256,8 +256,8 @@ export function EnvironmentSection({
 }) {
   const store = usePlaceStore();
   const state = store((current) => current.environments[repository]);
-  const space = store((current) => current.space);
-  const target = publishTargetOf(space, state);
+  const registryAccounts = store((current) => current.registryAccounts);
+  const target = publishTargetOf(state, registryAccounts);
   const loadError = store((current) => current.environmentErrors[repository]);
   const resolve = store((current) => current.resolveEnvironment);
   const install = store((current) => current.installEnvironment);

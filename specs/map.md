@@ -189,12 +189,14 @@ meta.md       The spec of specs
 | [DR-167](decisions/167-the-compiler-shares-the-apps-engine.md) | 167-the-compiler-shares-the-apps-engine.md | slc 0.20 uses the app-supplied Playbook peer; build and CI enforce one Playbook, Cligent and xstate with shared compiler and artifact resolution; retires DR-144's nested compiler engine |
 | [DR-169](decisions/169-documentation-alone-reports-the-suites-names.md) | 169-documentation-alone-reports-the-suites-names.md | Documentation alone reports the suites' names: a stand-in job, run only where the classifier found documentation alone, reports success under each of the suites' required names; the classifier, its gates and the required checks unchanged; amends DR-166 |
 
+| [DR-168](decisions/168-independent-package-registry.md) | 168-independent-package-registry.md | Independent registry setting and account, shared CLI and IDE package operations, public Space discovery, preserved legacy sources and private package sign-in per seat |
+
 ## Packages
 
 | File | Summary |
 | --- | --- |
 | [applets.md](packages/applets.md) | Applets in the IDE: a tab per installed applet in the project's workspace, `applet.open` and its capability, the paths the core serves under it with a read-only window on the working folder, the policy and sandbox confining the page |
-| [cli.md](packages/cli.md) | The `spex` command line: the environment of the current folder with `add`, `remove`, `install`, `update`, `list` and `search`, a package made with `new` and published with `publish` from `spex-packages/<org>/<pkg>/`, `login`, `logout` and `whoami` at a Space, no running app needed; scaffold and lint keep their packages |
+| [cli.md](packages/cli.md) | The `spex` command line: the environment of the current folder with `add`, `remove`, `install`, `update`, `list` and `search`, a package made with `new` and published with `publish` from `spex-packages/<org>/<pkg>/`, `login`, `logout` and `whoami` independently at a registry or Space, no running app needed; scaffold and lint keep their packages |
 | [app-shell.md](packages/app-shell.md) | Desktop shell: guarded source launch and ABI restoration; single-instance window, quit on a signal, notifications, dock badge, core-in-main over WebSocket, packaging, supplied compiler, scaffold CLI and agent SDKs; packaged-app acceptance |
 | [core-service.md](packages/core-service.md) | Headless core: WebSocket protocol, the root lease by machine identity, shared session lifecycle/recovery/deletion, per-agent summary folds, scoped storage diagnostics, config, records and readiness |
 | [dashboard.md](packages/dashboard.md) | Dashboard as the intent ledger: two-band attention queue, Running band, per-project History/Now/Up next/Sources groups, one-gesture capture, and shared queued-intent standing presentation; one deterministic core fold |

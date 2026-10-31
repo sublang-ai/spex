@@ -38,6 +38,7 @@ import { readJsonFile, StorageFormatError, VersionConflictError, writeApplicatio
 import { defaultOwnName, Home, repositoryNameFor, splitKey, WORKSPACE_DEPTH } from "./home.js";
 import { filedIn, formerPlacementPrefKey, PLACEMENT_PREF_KINDS, placementPrefKey, readPlacementFiles, readPlacements, type PlacementPrefKind } from "./placements.js";
 import { folderRemote, needsGroupsMigration, migrateFormerHome } from "./migrate-home.js";
+import { environmentReceipt } from "./migrate-environment.js";
 import { needsBoundedSessionImport, stageBoundedHomeSessions, finishBoundedHomeSessions } from "./migrate-bounded-sessions.js";
 import { deferredMoves, migrateInstances, needsInstancesMigration, settleDeferred, type DeferredMove } from "./migrate-instances.js";
 import { gitEnvironment, initializeClone } from "./storage-git.js";
@@ -686,6 +687,9 @@ export class Store {
    * failure leaves the folder as it is, reported, never failing the open. */
   private prepareRepository(dir: string, key: string, root = dir): boolean {
     try {
+      // Recovery owns both environment files until its pending plan is
+      // complete. Store opens before EnvironmentManager resumes that plan.
+      if (environmentReceipt(this.dir)?.pending?.some((plan) => plan.key === key || plan.root === root)) return false;
       const placed = instanceOfClone(this.homeFile, this.deferred, key, () => this.remoteNameOf(dir, key));
       const defaultOrigin = canonicalOrigin(this.homeFile.defaultInstance().origin);
       const registryOrigin = placed ?? defaultOrigin;

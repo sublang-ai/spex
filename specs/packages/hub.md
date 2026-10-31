@@ -75,11 +75,16 @@ When the administrator runs `spex-hub status`, `spex-hub evict <id>` or `spex-hu
 
 #### hub-7
 
-When the administrator runs the install script of a source release on a Linux host with systemd and sudo, the script shall build the server shell and the hub from that checkout, install them under one prefix with the helper and a `spex-hub` command, the units — the hub's, the seat's, and the sweep's service and timer, the timer enabled and the sweep run once [[hub-5](#hub-5)] — and the sudoers fragment in the system's own places, create the hub's account and the seats' group and the hub's state directory with its `locks/` [[hub-8](#hub-8)], make the shared credential file empty and readable by the seats' group where none exists, and print the four files the administrator writes before `attach`: the server's environment file, the server token's file read by `attach` [[hub-1](#hub-1)], the shared credential file, and the TLS material ([DR-132](../decisions/132-team-servers.md), [DR-040](../decisions/040-source-only-app-releases.md)):
+When the administrator runs the install script of a source release on a Linux host with systemd and sudo, the script shall build the server shell and the hub from that checkout, install them under one prefix with the helper and a `spex-hub` command, the units — the hub's, the seat's, and the sweep's service and timer, the timer enabled and the sweep run once [[hub-5](#hub-5)] — and the sudoers fragment in the system's own places, create the hub's account and the seats' group and the hub's state directory with its `locks/` [[hub-8](#hub-8)], make the shared credential file empty and readable by the seats' group where none exists, and print the four files the administrator writes before `attach`: the server's environment file, the server token's file read by `attach` [[hub-1](#hub-1)], the shared credential file, and the TLS material — with setup guidance that admission supplies Space sign-in alone and private packages require the member's own registry sign-in on each seat [[hub-12](#hub-12)] ([DR-132](../decisions/132-team-servers.md), [DR-040](../decisions/040-source-only-app-releases.md)):
 
 - the script installs no binary of Spex's own that the release does not build from source; the dependencies come as `npm ci` fetches them;
 - every refusal — not root, no systemd, no sudo or a sudoers that does not read `/etc/sudoers.d`, no release checkout, a prefix overlapping the checkout — comes before anything changes, and a second run updates the installed files and leaves the accounts, the groups and the administrator's files as they are;
 - once the units are in place, a sweep that does not run on the host and a sudo that does not let the hub's account run the helper each refuse the install with the cause, the installed files standing for the next run.
+- the sudoers fragment passes complete validation before installation; rejection of only the optional `!requiretty` setting may omit that exact Defaults line only after the remaining fragment passes complete validation with its command allowlist unchanged.
+
+### hub-12
+
+A server admission shall convey only the member's Space grant to its seat, granting no registry authority or copied registry credential; private package use on that seat requires the member's separate registry sign-in [[core-service-143](core-service.md#core-service-143)], with tickets, leases and execution ownership unchanged ([DR-168](../decisions/168-independent-package-registry.md)).
 
 ## Internal Behavior
 
@@ -90,6 +95,11 @@ When the administrator runs the install script of a source release on a Linux ho
 The hub shall keep its state under its own directory with owner-only permissions: the instance's URL, the server's id, name, address and token, and the leases as `{<person id>: {login, expires_at, bearer_hashes, stop_owed}}`, `stop_owed` true from a lease's admission until the helper's stop succeeds after its end [[hub-5](#hub-5)] and absent otherwise, each bearer stored as its SHA-256 and minted from 32 random bytes, `bearer_hashes` holding the last eight admissions' in their order, the oldest dropped by the ninth [[hub-2](#hub-2)] and every one dropped once the lease ends ([DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md)), and, under `locks/`, made by the hub, a lock per seat holding its holder's pid, taken by the hub and by the sweep [[hub-5](#hub-5)], a lock whose holder is gone cleared by the sweep alone [[hub-5](#hub-5)], the lease table read by the sweep and written by the hub alone, so that a restart continues every lease and no secret is written elsewhere or logged.
 
 ## Verification
+
+### hub-13
+
+When a real seat integration suite admits a Space member, it shall verify that public packages install without a registry grant while a private package remains refused with Sign in to registry guidance until that seat receives its own registry grant, without changing its admission or lease [[hub-12](#hub-12)].
+
 
 ### Hub Coverage
 

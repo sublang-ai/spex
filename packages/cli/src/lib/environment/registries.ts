@@ -1,13 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The registries an install asks for a registry package's files
-// (environments-7, DR-127, DR-165), as a rule either host applies: the
-// registry of the environment's instance first, then the one its lock
-// records, then that of every other instance the home is signed in to,
-// in the home's order, each asked once. A recorded registry that names
-// no instance's origin is never asked: it stands in the order to be
-// named where no other serves.
+// Registry installs retain the exact source in the lock (DR-168).
+// Legacy manifests retain their previous ordered fallback during migration;
+// independent manifests never scan unrelated signed-in Spaces.
 
 import { canonicalOrigin } from "../instance.js";
 import { RegistryError, type RegistrySource } from "./registry.js";
@@ -22,8 +18,10 @@ export type InstallRegistry = { origin: string } | { unasked: string };
  * (environments-7): `instance`, the environment's instance; `recorded`,
  * the registry its lock records for the package; `signedIn`, the origin
  * of every instance the home is signed in to, in the home's order.
+ * Independent mode instead asks only the pinned registry and explicitly
+ * trusted equivalents, keeping sign-in separate from package trust.
  */
-export function installRegistryOrder(instance: string, recorded: string, signedIn: readonly string[]): InstallRegistry[] {
+export function installRegistryOrder(instance: string, recorded: string, signedIn: readonly string[], options: { independent?: boolean; trusted?: readonly string[] } = {}): InstallRegistry[] {
   const out: InstallRegistry[] = [];
   const asked = new Set<string>();
   const add = (origin: string): void => {
@@ -31,6 +29,13 @@ export function installRegistryOrder(instance: string, recorded: string, signedI
     asked.add(origin);
     out.push({ origin });
   };
+  if (options.independent) {
+    try { add(canonicalOrigin(recorded)); }
+    catch { out.push({ unasked: recorded }); }
+
+    for (const origin of options.trusted ?? []) add(canonicalOrigin(origin));
+    return out;
+  }
   add(canonicalOrigin(instance));
   let origin: string | null;
   try { origin = canonicalOrigin(recorded); } catch { origin = null; }

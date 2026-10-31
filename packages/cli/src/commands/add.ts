@@ -3,7 +3,7 @@
 
 // `spex add <org>/<pkg>[@<requirement>]` and `spex add <org>/<pkg>
 // --path <folder>` (cli-2, environments-15): write the request into
-// `spex.yaml` — made naming the home's default instance as `space` where
+// `spex.yaml` — made explicitly naming the public registry where
 // the root holds none — then resolve, install and export, printing each
 // spec package the lock gained or moved and where its exports went.
 // Every refusal comes before any write.
@@ -21,7 +21,8 @@ import {
   requestIssues,
   RequestsError,
   setRequest,
-  setSpaceIn,
+  setRegistryIn,
+  PUBLIC_REGISTRY_ORIGIN,
   type Request,
 } from "../lib/environment/index.js";
 import { VersionConflictError } from "../lib/files.js";
@@ -30,17 +31,17 @@ import { gainedLines, leftOutLines, leftToAppLines, settle } from "./settle.js";
 import { parsed, Refusal, type Command } from "./run.js";
 
 /** Write one request into the environment's `spex.yaml` (environments-15):
- * a file made new names the home's default instance as `space`
+ * a file made new explicitly names the public registry
  * (environments-2); comments and key order stay; a file changed
  * meanwhile is refused in the library's words. */
 export async function writeRequest(env: Environment, name: string, request: Request, made: boolean): Promise<void> {
   try {
     if (made) {
       await editRequests(env.requestsFile, (doc) => {
-        setSpaceIn(doc, env.defaultOrigin());
+        setRegistryIn(doc, PUBLIC_REGISTRY_ORIGIN);
         doc.setIn(["packages", name], doc.createNode(request));
       });
-      console.log(`Made ${shown(env.root, env.requestsFile)} at ${env.root}, its Space ${env.nameOf(env.defaultOrigin())}.`);
+      console.log(`Made ${shown(env.root, env.requestsFile)} at ${env.root}, its registry ${PUBLIC_REGISTRY_ORIGIN}.`);
     } else {
       await setRequest(env.requestsFile, name, request);
     }
@@ -88,8 +89,9 @@ export const add: Command = async (args) => {
       const malformed = requestIssues(name, { version: requirement });
       if (malformed.length > 0) throw new Refusal(malformed.map((issue) => issue.message).join("; "));
     }
-    const instance = env.instanceOf(read?.requests ?? null);
-    const registry = env.registryAt(instance);
+    const target = env.registryOf(read?.requests ?? null);
+  const instance = target.origin;
+    const registry = env.registryAt(instance, target.scope);
     let versions;
     try {
       versions = (await registry.index(name)).versions;

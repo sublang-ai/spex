@@ -1,31 +1,33 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Environments at several instances (environments-34, DR-127), through
+// Legacy environments without registry settings at several instances
+// (environments-34/39, DR-168), through
 // real cores: a home signed in to two stand-in instances over one Git
 // backend, each relaying to a stand-in registry of its own, the first
 // the home's default instance; and a second home signed in only to a
 // third stand-in instance that the first's registry also answers. An
 // environment resolves at its instance's registry, or the default
 // instance's where it has none, with that instance's token, keeping the
-// registry its lock records for the same release; a project paired at
-// an instance locks the built-in spec package there; and an install
+// registry its lock records for the same release; new pairings instead
+// lock the built-in at the public registry; and a compatibility install
 // takes each locked release from the environment's instance, else the
 // registry its lock records, else any instance the home is signed in
 // to. A search asks the registry of the environment it names, the orgs
 // a project's new playbook defaults from are asked of its environment's
-// registry, and a publish goes to it as its instance's account. A
+// registry, and a publish uses a separately obtained registry grant. A
 // registry refusing an instance's token signs that instance alone out,
 // where that token is still the stored pair's.
 
 import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
-import { cpSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml, parseDocument } from "yaml";
 
 import {
   BUILTIN_PACKAGE_NAME,
+  PUBLIC_REGISTRY_ORIGIN,
   gitSource,
   parseLock,
   parseRequests,
@@ -47,10 +49,49 @@ import type { StandinHost } from "./testing/standin-host.js";
 import { makeRelease, startStandinRegistry, type StandinRegistry, type StandinRegistryRequest } from "@sublang/spex/testing";
 
 const fixture = createSpaceHarness();
-const { scratch, git, gitFolder, addFolder, sleep, startHome, startHost, signIn, signOut, forget } = fixture;
+const { scratch, git, gitFolder, sleep, startHost, signIn, signOut, forget } = fixture;
 test.after(() => fixture.dispose());
 
-type Home = Awaited<ReturnType<typeof startHome>>;
+type Home = Awaited<ReturnType<typeof fixture.startHome>>;
+
+// These compatibility journeys start with actual old manifests, without a
+// registry setting, before the core prepares their builtin request and lock.
+async function startHome(name: string, options: Parameters<typeof fixture.startHome>[1] = {}): Promise<Home> {
+  if (options.dataDir) return fixture.startHome(name, options);
+  const dataDir = mkdtempSync(join(scratch, `${name}-legacy-`));
+  seedLegacy(ownClone(dataDir));
+  return fixture.startHome(name, { ...options, dataDir });
+}
+function seedLegacy(clone: string): void {
+  mkdirSync(clone, { recursive: true });
+  writeFileSync(join(clone, "spex.yaml"), "format: 1\npackages: {}\n");
+}
+async function addFolder(home: Home, path: string) {
+  const added = await fixture.addFolder(home, path);
+  // Restore a pre-migration project snapshot after allocating its real key.
+  // Precreating its directory would make registration allocate another key.
+  const root = environmentRoot(home.dataDir, added.key);
+  const yaml = join(root, "spex.yaml");
+  const doc = parseDocument(readFileSync(yaml, "utf8"));
+  doc.delete("registry");
+  const text = doc.toString({ lineWidth: 0 });
+  const lock = parseLock(readFileSync(join(root, "spex.lock"), "utf8"));
+  const builtin = lock.packages[BUILTIN_PACKAGE_NAME]!;
+  const origin = (await home.client.expectOk("space.get", {})).defaultInstance!;
+  writeFileSync(yaml, text);
+  writeFileSync(join(root, "spex.lock"), serializeLock({ ...lock, requests: requestsDigest(text), packages: {
+    ...lock.packages, [BUILTIN_PACKAGE_NAME]: { ...builtin, source: { ...(builtin.source as RegistrySourceLock), registry: origin } },
+  } }));
+  return added;
+}
+async function registrySignIn(home: Home, host: StandinHost): Promise<void> {
+  host.script.deviceInterval = 0;
+  const from = home.client.messages.length;
+  const start = await home.client.expectOk("registry.signin.start", { origin: host.url });
+  if (start.flow === "browser") await (await fetch(start.url)).text();
+  else host.script.approveDevice(start.userCode);
+  await home.client.waitFor((message) => home.client.messages.indexOf(message) >= from && message.type === "registry.state" && message.state.origin === host.url && message.state.account !== null && message.state.signIn.phase === "idle");
+}
 
 /** The stand-ins' default person, and your own group's repository once
  * signed in as them. */
@@ -215,7 +256,7 @@ async function twoInstances(t: TestContext, name: string, registryFetch?: typeof
   return { R1, R2, first, second, home, south, local };
 }
 
-test("environments-34, environments-5, environments-12, environments-3, environments-7, environments-11: the second's project resolves at the second's registry with its token, its lock recording the second's origin, and installs from it, the local-only project resolving at the first's; a lock recording the first's origin for a release the second's registry holds alike keeps it; a project paired at the second by a pick, a join or a rebind locks the built-in there; a release the second's registry lacks installs from the first's; and a second home installs a private release locked at the first's through the third with its token, failing naming it while signed out there", { timeout: 300_000 }, async (t) => {
+test("environments-34, environments-5, environments-12, environments-3, environments-7, environments-11: the second's project resolves at the second's registry with its token, its lock recording the second's origin, and installs from it, the local-only project resolving at the first's; a lock recording the first's origin for a release the second's registry holds alike keeps it; a legacy project picked at the second keeps legacy source behavior while a fresh join or rebind uses the public registry; a release the second's registry lacks installs from the first's; and a second home installs a private release locked at the first's through the third with its token, failing naming it while signed out there", { timeout: 300_000 }, async (t) => {
   const { R1, R2, first, second, home, south, local } = await twoInstances(t, "instances");
   const third = await startHost({ registry: R1, displayName: "Third stand-in", person: GRACE });
 
@@ -305,25 +346,25 @@ test("environments-34, environments-5, environments-12, environments-3, environm
 
   // A repository joined at the second with its working folder paired,
   // and one joined bare and paired by a rebind, hold no environment
-  // until paired; each pairing locks the built-in at the second's origin
+  // until paired; each new pairing locks the built-in at the public registry
   // (environments-11).
   const joined = await joinAt(home, second, "acme/joined-spex", gitFolder("joined"));
-  await environmentOf(home, joined, (candidate) => installedFrom(candidate, BUILTIN_PACKAGE_NAME, second.url));
-  assert.equal(registryOf(lockOf(home, joined), BUILTIN_PACKAGE_NAME), second.url);
+  await environmentOf(home, joined, (candidate) => installedFrom(candidate, BUILTIN_PACKAGE_NAME, PUBLIC_REGISTRY_ORIGIN));
+  assert.equal(registryOf(lockOf(home, joined), BUILTIN_PACKAGE_NAME), PUBLIC_REGISTRY_ORIGIN);
   assert.equal(spaceOf(home, joined), second.url, "[environments-11] the pairing names the second as space");
   const rebound = await joinAt(home, second, "acme/rebound-spex");
   assert.equal(existsSync(join(clonePath(home.dataDir, rebound), "spex.yaml")), false, "a bare join requests nothing");
   await home.client.expectOk("project.rebind", { projectId: rebound, path: gitFolder("rebound") });
-  await environmentOf(home, rebound, (candidate) => installedFrom(candidate, BUILTIN_PACKAGE_NAME, second.url));
-  assert.equal(registryOf(lockOf(home, rebound), BUILTIN_PACKAGE_NAME), second.url);
+  await environmentOf(home, rebound, (candidate) => installedFrom(candidate, BUILTIN_PACKAGE_NAME, PUBLIC_REGISTRY_ORIGIN));
+  assert.equal(registryOf(lockOf(home, rebound), BUILTIN_PACKAGE_NAME), PUBLIC_REGISTRY_ORIGIN);
   assert.equal(spaceOf(home, rebound), second.url, "[environments-11] the pairing names the second as space");
   // One joined at the first, the default instance, with its working
-  // folder paired names the first as space too, locked at the first's
-  // origin (environments-11, environments-2).
+  // folder paired records that Space separately and uses the public registry
+  // (environments-11, environments-2).
   const atFirst = await joinAt(home, first, "acme/at-first-spex", gitFolder("at-first"));
-  await environmentOf(home, atFirst, (candidate) => installedFrom(candidate, BUILTIN_PACKAGE_NAME, first.url));
-  assert.equal(registryOf(lockOf(home, atFirst), BUILTIN_PACKAGE_NAME), first.url);
-  assert.equal(spaceOf(home, atFirst), first.url, "[environments-11] a pairing at the default instance names it as space");
+  await environmentOf(home, atFirst, (candidate) => installedFrom(candidate, BUILTIN_PACKAGE_NAME, PUBLIC_REGISTRY_ORIGIN));
+  assert.equal(registryOf(lockOf(home, atFirst), BUILTIN_PACKAGE_NAME), PUBLIC_REGISTRY_ORIGIN);
+  assert.equal(spaceOf(home, atFirst), first.url, "a fresh independent environment records collaboration separately from its public registry");
 
   // A `space` that is no instance origin is refused naming it
   // (environments-2), the files kept as they stand.
@@ -660,9 +701,10 @@ test("environments-34, environments-17, environments-12: environment.search for 
   assert.deepEqual(searched(R1, one), []);
 });
 
-test("environments-34, environments-10, environments-17, environments-5: a publish from the second's project lands at the second's registry as the second's account and one from the local-only project at the first's; once the second is signed out, a publish from its project is refused as not signed in there, naming it, and nothing is uploaded; the first then forgotten, your own group's environment, whose own repository was created at the first and now syncs with the second, resolves at the second's registry, its lock recording the second's origin, and a publish from it lands there", { timeout: 300_000 }, async (t) => {
+test("environments-34, environments-10, environments-17, environments-5: a publish from the second's project lands at the second's registry as the second's account and one from the local-only project at the first's; once the second registry is signed out, a publish from its project is refused as not signed in there, naming it, and nothing is uploaded; the first then forgotten, your own group's environment, whose own repository was created at the first and now syncs with the second, resolves at the second's registry, its lock recording the second's origin, and a publish from it lands there", { timeout: 300_000 }, async (t) => {
   const { R1, R2, first, second, home, south, local } = await twoInstances(t, "publish");
-  const SECOND = "Second stand-in";
+  await registrySignIn(home, first);
+  await registrySignIn(home, second);
   // Each upload a registry received after a mark: its path, the instance
   // that relayed it, that instance's account and whether a bearer came
   // (environments-18).
@@ -711,15 +753,15 @@ test("environments-34, environments-10, environments-17, environments-5: a publi
   assert.deepEqual(uploads(R2, two), []);
   assert.deepEqual([await holds(R1, "acme/local-pub"), await holds(R2, "acme/local-pub")], [true, false]);
 
-  // Signed out of the second alone, a publish from its project is
+  // Signed out of the second registry alone, a publish from its project is
   // refused as not signed in there, naming the second by its display
-  // name, though the default instance stays signed in; nothing reaches
+  // name, though both Spaces stay signed in; nothing reaches
   // either registry (environments-10, environments-17).
-  await signOut(home, second);
+  await home.client.expectOk("registry.signout", { origin: second.url });
   const later = await underDevelopment(south, "acme/south-later");
   one = R1.script.received.length;
   two = R2.script.received.length;
-  await home.client.expectError("environment.publish", { repository: south, name: later }, "invalid_request", new RegExp(`^Sign in to publish at ${SECOND}$`));
+  await home.client.expectError("environment.publish", { repository: south, name: later }, "invalid_request", new RegExp(`^Sign in to registry to publish at ${new URL(second.url).host.replaceAll(".", "\\.")}$`));
   assert.deepEqual([R1.script.received.length, R2.script.received.length], [one, two], "no registry is asked");
   assert.deepEqual([await holds(R2, "acme/south-later"), await holds(R1, "acme/south-later")], [false, false]);
 
@@ -727,7 +769,7 @@ test("environments-34, environments-10, environments-17, environments-5: a publi
   // your own group's own repository, created at the first, follows the
   // second — the second lists it over the shared Git backend — and syncs
   // with it.
-  await signIn(home, second);
+  await registrySignIn(home, second);
   await signOut(home, first);
   const before = instanceOf(await home.client.expectOk("space.get", {}), second.url)?.readAt ?? 0;
   const mark = home.client.mark();
@@ -777,6 +819,8 @@ test("environments-34, environments-10, environments-17, environments-5: a publi
 
 test("environments-34, environments-27: the orgs asked for the second's project are asked of the second's registry once, relayed by the second with its token as its account, the first's registry asked nothing; the local-only project's are asked of the first's with the first's token", { timeout: 300_000 }, async (t) => {
   const { R1, R2, first, second, home, south, local } = await twoInstances(t, "orgs");
+  await registrySignIn(home, first);
+  await registrySignIn(home, second);
   // Each registry lists an org for the bearers its own instance accepts
   // (environments-18), at the namespace both projects' keys name, so an
   // org replied is the one its registry read (playbook-library-103).
@@ -806,7 +850,7 @@ test("environments-34, environments-27: the orgs asked for the second's project 
   assert.deepEqual(orgsAsked(R2, two), []);
 });
 
-test("environments-34, environments-11, storage-31: with the first, the default instance, signed out and your own group's own repository following the second by its remote, a start finding your own group's environment gone requests the built-in spec package there, its lock recording the second's origin", { timeout: 300_000 }, async (t) => {
+test("environments-34, environments-11, storage-31: with the first, the default instance, signed out and your own group's own repository following the second by its remote, a start finding your own group's environment gone requests the built-in spec package at the public registry with the second still selected for collaboration", { timeout: 300_000 }, async (t) => {
   const { first, second, home } = await twoInstances(t, "own-prepare");
 
   // The first signed out, the second read again: your own group's own
@@ -839,11 +883,11 @@ test("environments-34, environments-11, storage-31: with the first, the default 
   assert.equal(rowOf(state, HOST_OWN).instance, second.url);
 
   // The start requests the built-in spec package in your own group's
-  // environment again, locked at the registry of the instance its
-  // remote names, the second's, not the default instance's
+  // environment again, locked at the public registry while its Space
+  // still follows the remote at the second
   // (environments-11).
   assert.ok(parseRequests(readFileSync(join(ownClone(again.dataDir), "spex.yaml"), "utf8")).packages[BUILTIN_PACKAGE_NAME], "the built-in is requested");
   assert.equal(spaceOf(again, HOST_OWN), second.url, "[environments-11] with space naming the second, not the default");
-  assert.equal(registryOf(lockOf(again, HOST_OWN), BUILTIN_PACKAGE_NAME), second.url);
-  await environmentOf(again, HOST_OWN, (candidate) => installedFrom(candidate, BUILTIN_PACKAGE_NAME, second.url));
+  assert.equal(registryOf(lockOf(again, HOST_OWN), BUILTIN_PACKAGE_NAME), PUBLIC_REGISTRY_ORIGIN);
+  await environmentOf(again, HOST_OWN, (candidate) => installedFrom(candidate, BUILTIN_PACKAGE_NAME, PUBLIC_REGISTRY_ORIGIN));
 });

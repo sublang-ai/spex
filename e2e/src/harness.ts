@@ -96,6 +96,8 @@ const repoRoot = join(here, "..", "..");
 export const uiDist = join(repoRoot, "apps", "server", "ui-dist");
 
 export interface AppOptions {
+  /** Route the canonical registry to the stand-in while retaining its origin. */
+  independentRegistry?: boolean;
   /** Additional native-style provider rules for approval journeys. */
   approvalRules?: FakeScript["rules"];
   /** The core host's preferred languages, independent of the browser. */
@@ -1056,6 +1058,10 @@ async function arrangeApp(
           discoverAgentModels: options.discoverAgentModels ?? (async (adapter) => fixtureModelDiscovery(adapter)),
           ...(options.realCaptain || options.park || options.failPlayer || options.ask || options.compiled || options.develop ? {} : { captainFactory: async (_composed: unknown, sessionId: string) => demoCaptain(sessionId, { governedCompletion: options.governedCompletion }) }),
           env,
+          ...(options.independentRegistry && host ? { registryFetch: ((input, init) => {
+            const target = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
+            return fetch(target.origin === "https://spex.sublang.ai" ? `${host!.url}${target.pathname}${target.search}` : input, init);
+          }) as typeof fetch } : {}),
           home,
           own: E2E_OWN,
           // New projects must have a real baseline, independent of the
@@ -1377,6 +1383,22 @@ export async function signInCore(app: App, host: StandinHost | undefined = app.h
   const state = await app.core.waitSpace(from, (candidate) => ownSetUp(candidate, host.url), 60_000);
   await refreshProjectKey(app);
   return state;
+}
+
+/** Arrange an independent registry grant, without changing Space state. */
+export async function signInRegistryCore(app: App, host: StandinHost = app.host!): Promise<void> {
+  const from = app.core.mark();
+  const started = await app.core.command("registry.signin.start", { origin: host.url });
+  if (started.flow !== "device") throw new Error("Expected a device registry sign-in");
+  host.script.approveDevice(started.userCode);
+  await app.core.waitFor((message) => app.core.messages.indexOf(message) >= from && message.type === "registry.state" && message.state.origin === host.url && message.state.account !== null && message.state.signIn.phase === "idle", 60_000);
+}
+
+/** A fixture explicitly chooses its package destination; joining a Space
+ * never makes that choice for the product. */
+export async function selectRegistryCore(app: App, origin: string, repository: string = app.projectId!): Promise<void> {
+  await app.core.command("environment.registry.set", { repository, origin });
+  await app.core.command("environment.resolve", { repository, wait: true });
 }
 
 /** Whether a sign-in's set-up has ended: signed in at the instance at

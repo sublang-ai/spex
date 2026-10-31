@@ -71,7 +71,7 @@ When a reply carrying Space state arrives, the UI shall apply it only if no newe
 
 #### space-3
 
-The Space surface shall offer the sign-in at an instance in one card holding a field captioned "Instance", which holds the default instance's origin [[storage-2](storage.md#storage-2)] until the reader edits it, and Sign in as its one primary control, starting the sign-in at the origin the field holds — the card standing as the header while the home lists no instance, titled "Not signed in" and reading "Sign in to see your groups and share each project's records with the people in them." and "Until you do, everything stays on this device and nothing is contacted.", and in place of "Add instance…" once the reader activates it [[space-1](#space-1)], with Cancel beside Sign in and Escape cancelling ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
+The Space surface shall offer the sign-in at an instance in one card holding a field captioned "Instance", which holds the default instance's origin [[storage-2](storage.md#storage-2)] until the reader edits it, and Sign in as its one primary control, starting the sign-in at the origin the field holds — the card standing as the header while the home lists no instance, titled "Not signed in" and reading "Sign in to see your groups and share each project's records with the people in them." and "Until you sign in to this Space, your records stay on this device.", and in place of "Add instance…" once the reader activates it [[space-1](#space-1)], with Cancel beside Sign in and Escape cancelling ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
 
 - "Sign in again" on a signed-out instance's heading starts the sign-in at that instance's origin, its flow reading on that heading as on the card;
 - the card opened from "Add instance…" also reads "Your own group's records will be kept there too." ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md));
@@ -982,7 +982,25 @@ The core shall build each `space.tree` level by reading one directory of the clo
 - a path in an ignored family of the catalog is marked ignored whatever Git reports [[storage-1](storage.md#storage-1)];
 - `space.read` refuses a path resolving outside the clone or through a symlink, withholds provider hints, and caps text at 256 KB or 2,000 lines on complete lines.
 
+#### space-115
+
+When the reader opens a Space sign-in card, the surface shall offer the public registry's directory of Spaces by display name, origin and sign-in kinds [[environments-39](environments.md#environments-39)] beside the editable custom URL, with directory failure leaving custom sign-in available and no discovery entry establishing credential trust ([DR-168](../decisions/168-independent-package-registry.md)).
+
+#### space-117
+
+When a project's placement selects a Space, the core shall name that Space as the environment's collaboration and Git-broker preference while preserving its explicit registry selection [[environments-38](environments.md#environments-38)] and all existing locked package pins and source provenance, advancing only a lock digest that matched the manifest before this Space-only edit and leaving an already-stale, malformed or unreadable lock unchanged ([DR-168](../decisions/168-independent-package-registry.md)).
+
 ## Verification
+
+#### space-118
+
+When a real-core integration suite places a fresh project at a second signed-in Space, the suite shall assert the environment reports and records that Space for brokerage while retaining its public registry origin and every package pin, a previously current lock changing only its requests digest without a stale hint, and a previously stale lock remaining byte-identical and stale, and a malformed lock remaining byte-identical without blocking the Space binding [[space-117](#space-117)].
+
+
+#### space-116
+
+When a browser journey opens Add instance, it shall verify directory choices fill the ordinary sign-in URL, custom URLs remain editable, and a failed directory read still permits custom sign-in without any backend locator on the page [[space-115](#space-115)].
+
 
 ### Core Coverage
 

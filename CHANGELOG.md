@@ -16,6 +16,15 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Added
 
+- Independent package registries ([DR-168](specs/decisions/168-independent-package-registry.md)).
+  Library offers a registry setting and separate registry sign-in; the
+  public registry lists available Spaces beside the custom Space URL.
+  Package namespaces are chosen from every organization the registry
+  account may publish to, independently of the project's Space. Registry
+  and Space sign-out do not affect each other, including at one origin.
+  A server seat needs its own registry sign-in for private packages.
+  Existing manifests and lock sources remain preserved until explicitly
+  changed.
 - Applets in the IDE ([DR-161](specs/decisions/161-an-applet-is-a-page-the-ide-serves.md)).
   A spec package's applet is a static web page entered at
   `applets/<id>/index.html`; a folder without that entry is refused.
@@ -32,19 +41,16 @@ and `npm start` (desktop) or `npm run start:server` (server).
   and its tab leaves with its package. A project open on a team server
   shows no applet tab for now.
 
-- An environment command sent with `wait: true` replies once its own
-  operation settles: a publish with its actual destination, name,
-  version and page, a refusal with its error. A client that disconnects
-  ends the delivery alone; the core neither replays nor cancels the
-  work. Every other reply is unchanged.
-- `spex.yaml` may name the Space its environment resolves at, as
-  `space: <origin>` ([DR-165](specs/decisions/165-one-package-manager-hosted-by-the-cli-and-the-app.md)).
-  The registry, the orgs you may publish to and the publish destination
-  follow it; without it, the environment uses your default Space. The
-  app names the project's Space in every `spex.yaml` it makes, and a
-  `spex.yaml` moved out of a project's clone gains the Space of the
-  clone's placement, so the environment resolves at the same Space on
-  every device, whichever one is the default there.
+- The command line and app share one package-manager library
+  ([DR-165](specs/decisions/165-one-package-manager-hosted-by-the-cli-and-the-app.md)).
+  `spex add`, `remove`, `install`, `update`, `list`, `search` and `publish`
+  work in an environment's folder without a running app or an IDE project
+  registration. `login`, `logout` and `whoami` use separate registry and
+  Space grants; publishing's dry run names the destination and files.
+- `spex new <org>/<pkg>` makes a package from existing skill folders or a
+  spec file at `spex-packages/<org>/<pkg>/`, with its manifest, README and
+  the project's license, records its path request and installs it. The
+  app's authoring sessions use the same package-folder layout.
 
 - Players read by name ([DR-155](specs/decisions/155-players-named-delegated-and-recovered.md)).
   A player reads as the last segment of its id — `dev.reviewer` as
@@ -142,9 +148,9 @@ and `npm start` (desktop) or `npm run start:server` (server).
   signs this device out, Space says so and offers to sign in again as
   the same account ([DR-106](specs/decisions/106-groups-after-a-restart-and-a-host-sign-out.md)).
 - Playbooks come in spec packages ([DR-104](specs/decisions/104-spec-package-format-and-client-environments.md)).
-  Each spex repository has an environment: `spex.yaml` requests spec
-  packages from the instance's registry, a Git repository or a folder in
-  the working folder, and `spex.lock` pins the versions, languages and
+  Each project and your own group has an environment: `spex.yaml` requests
+  spec packages from its selected registry, a Git repository or a local
+  folder, and `spex.lock` pins the versions, languages and
   files resolved, so every member and device installs the same. Installs
   go through one content-addressed store under the home, replace an
   environment's files at once, and export skills into each agent's
@@ -359,27 +365,29 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Changed
 
-- A project's environment lives in its working folder ([DR-165](specs/decisions/165-one-package-manager-hosted-by-the-cli-and-the-app.md)).
-  `spex.yaml` and `spex.lock` stand at the folder's root, for you to
-  commit with the code, and the installed files, generated skills and
-  install record under its `.spex/`, whose own `.gitignore` keeps Git
-  out of it. A group's own environment keeps its two files in its clone,
-  with its installed files under the clone's `.spex/`. At its next start,
-  and when it pairs a folder, the app moves a project's `spex.yaml` and
-  `spex.lock` out of its records clone into the working folder once,
-  where the folder holds neither; a folder holding its own keeps them.
-  The installed files move under `.spex/` or are installed again, and
-  the clone's former `packages/` and `skills/` go. The environment needs
-  no registration: the `spex` CLI reads and writes the same files. Until
-  the two files are committed, the project's Playbooks view says so.
-- A spec package you develop lives at `spex-packages/<org>/<pkg>/`, the
-  org a folder, so two orgs' packages of one name stand apart; a new
-  playbook's authoring session makes its folder there ([DR-165](specs/decisions/165-one-package-manager-hosted-by-the-cli-and-the-app.md)).
-  **Publish** on the Enable tab and on an environment's path row
-  publishes the package by its name: the folder its path request names,
-  else `spex-packages/<org>/<pkg>/`. `environment.publish` takes `name`
-  in place of `path`.
-
+- Package environments are complete in their root folder: `spex.yaml`,
+  `spex.lock` and the ignored `.spex/` installation. A project's root is
+  its working folder; your own group's is its records clone. The CLI and
+  app read the same files at each use, and the app prepares installed
+  playbooks for its engine. The CLI's attached `auth`, `project`
+  and `package` commands, `--server`, `SPEX_SERVER_URL` and endpoint
+  discovery are removed in CLI 5.0.0; `spex new` replaces
+  `spex package init` ([DR-165](specs/decisions/165-one-package-manager-hosted-by-the-cli-and-the-app.md)).
+- An environment command sent with `wait: true` replies once its own
+  operation settles: a publish with its actual destination, name,
+  version and page, a refusal with its error. A client that disconnects
+  ends the delivery alone; the core neither replays nor cancels the
+  work. Every other reply is unchanged.
+- A project's complete environment lives in its working folder:
+  `spex.yaml`, `spex.lock` and the ignored `.spex/` installation. The IDE
+  and standalone CLI use those same files. Existing environments move
+  out of project-record clones at startup or pairing while preserving
+  working-folder files, registry selection and locked sources. Interrupted
+  moves resume from a recorded plan without losing package pins; a changed
+  file stays untouched and its environment's package operations wait for
+  recovery. `space` binds collaboration
+  independently of `registry`; old manifests without `registry` retain
+  their former package destination until explicitly migrated.
 - On Playbooks, **Add from registry**, **Add from folder** and **Add from
   Git** stand directly beneath the environment's list of spec packages,
   above the playbooks, instead of at the page's foot. The environment's
@@ -473,11 +481,12 @@ and `npm start` (desktop) or `npm run start:server` (server).
   placement another device named, and **Leave…**, which keeps its server copy.
   Sync runs placement by placement, each with its own incoming changes,
   choices and outcome ([DR-128](specs/decisions/128-a-spex-repository-placed-at-several-instances.md)).
-- Each environment searches, resolves and publishes at its own instance's
-  registry; Git sources use that instance's broker. Installation can
-  retrieve the locked version and checksum across the available registries,
-  and built-ins use the local seed when its files match the lock.
-  Protocol 27 requires `repository` on `environment.search`.
+- Each environment searches, resolves and publishes at its selected
+  registry; Git sources use its selected Space's broker. Independent
+  installs use the lock's recorded registry or an explicitly trusted
+  equivalent, preserving the locked version and checksum; built-ins use
+  the local seed when its files match the lock. `environment.search`
+  requires `repository`.
 
 - The app previously adopted Cligent 0.34.1 and slc 0.18.1, keeping Playbook 17.10.1 and the locked agent SDKs ([DR-126](specs/decisions/126-cligent-0-34-1-slc-0-18-1-adoption.md)). On POSIX, Codex retains Unicode line and paragraph separators in valid JSON output; the compiler verifies JSON renderings of typed arrays and records without changing their input shapes.
 
@@ -499,10 +508,10 @@ and `npm start` (desktop) or `npm run start:server` (server).
   behaviors' prose, so a compiled run no longer parks on a reply that
   waited for a later round.
 - Space names the instance alone ([DR-120](specs/decisions/120-the-instance-is-the-space.md)).
-  A Spex Space instance is the one thing you sign in to and the only name
-  you see: Space lists your own group, the instance's groups you belong
-  to by their paths in it, and the spex repositories another person
-  shares from their own group, under that person's login. Keys and
+  Space names the collaboration instance alone: it lists your own group,
+  the instance's groups you belong to by their paths in it, and the spex
+  repositories another person shares from their own group, under that
+  person's login. Keys and
   workspace folders follow the paths the instance answers, so a clone
   filed under the old storage path moves once, on its next sync. No
   link leads to the Git system behind the instance — no "Open at …" in
@@ -834,7 +843,10 @@ and `npm start` (desktop) or `npm run start:server` (server).
   `server.close` with the `server.state` event for the seats a desktop
   opens on team servers; `intent.move`, `intent.link` and `space.init`
   leave; and a draft's `malformedDirectives` entries carry `text` and
-  `reason`. The protocol is 28.
+  `reason`. Registry account commands, directory discovery and
+  `environment.registry.set` join independently of Space commands, with
+  `registry.state` and a separate registry selection in environment
+  state. The protocol is 31.
 
 - The dependency lock previously took Playbook 17.8.1 — the Captain ends a relayed question with the question's own words and reports a step's ending with the facts the step gave — and cligent 0.33.4 — the Claude Code adapter withholds the structured-question tool it cannot serve, so no refused call shows in the Captain's pane. That adoption left the floors of DR-116 unchanged.
 - The app previously adopted Playbook 17.9.0 and Cligent 0.33.5 ([DR-121](specs/decisions/121-playbook-17-9-0-cligent-0-33-5-adoption.md)). Claude Code runs with its own commit and pull-request attribution off, so a player's commits carry only the trailers the project asks for, and every player prompt opens with `Role: <role> · Model: <model>`, so such a trailer can name both. Every role after a Boss answer hears the run's questions and answers, whatever the playbook retains; a question and a reply reach a player behind `? ⟶` and `Boss ⟶` lines, and the lines the Captain appends to a reply read as marks — `✓`, `✕ <code>`, `▸ <label>` — not English sentences. The closing reply names each commit's hash and branch, and a judge's reply the machine admits is no longer forced into a string where the runtime could not read the field's shape. **Upgrade together:** stop every Playbook CLI and Spex shell sharing the home before the first new writer runs; an earlier Playbook rejects the run snapshots and ledgers this one writes.
@@ -868,7 +880,7 @@ and `npm start` (desktop) or `npm run start:server` (server).
   its border: a long agent reading such as `claude-opus-5-5 @ xhigh` ends
   in an ellipsis, its whole in the tooltip.
 
-- Publishing previews now show the destination instance before confirmation,
+- Publishing previews now show the destination registry before confirmation,
   for both local packages and authored playbooks.
 - Preserve the actual Git failure and affected ref alongside bounded advice in Space errors.
 
@@ -991,9 +1003,11 @@ and `npm start` (desktop) or `npm run start:server` (server).
 - New playbook's Org starts from an org you may publish to, not from the
   first segment of the project's spex repository key, which for a
   project under a nested group is no registry org: signed in, Spex asks
-  the registry for your orgs and takes the one whose path holds the
-  project's group, else the first; with none listed, signed out, or no
-  answer within two seconds, the key's first segment stands as before.
+  the selected registry for your orgs and suggests the one whose path holds
+  the project's group, else the first. Every eligible namespace remains
+  selectable, independently of the project's Space; with none listed,
+  signed out, or no answer within two seconds, the key's first segment
+  stands as before.
   A one-shot compile names the same org.
 - An answer continues its intent ([DR-119](specs/decisions/119-an-answer-continues-its-intent.md)).
   A Dashboard row for a conversation serving no intent no longer reads

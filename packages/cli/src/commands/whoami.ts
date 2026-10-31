@@ -8,13 +8,22 @@
 // signed in — read from `home.yaml` alone, asking no instance and
 // printing no secret.
 
+import { authTarget } from "./auth-target.js";
 import { instanceAt, type HomeInstance } from "../lib/home-file.js";
-import { defaultInstance, homeDir, hostOf, namedInstance, readHome, signedIn } from "./home.js";
-import { options, type Command } from "./run.js";
+import { clientOf, credentialsOf, defaultInstance, homeDir, hostOf, namedInstance, readHome, signedIn } from "./home.js";
+import { options, Refusal, type Command } from "./run.js";
 
 export const whoami: Command = async (args) => {
-  const values = options("whoami", args, { space: { type: "string" } });
+  const values = options("whoami", args, { space: { type: "string" }, registry: { type: "string" } });
   const home = readHome(homeDir());
+  const { target, scope } = authTarget(home, values);
+  if (scope === "registry") {
+    const client = clientOf(target.origin, credentialsOf(homeDir(), target.origin, scope), undefined, scope);
+    if (!(await client.signedIn())) { console.log(`Registry ${target.origin}: signed out`); return; }
+    try { console.log(`Registry ${target.origin}: ${(await client.me()).login}`); }
+    catch (error) { throw new Refusal(`cannot read registry sign-in: ${(error as Error).message}`); }
+    return;
+  }
   // The one named, signed out where the home does not list it.
   const shown: HomeInstance[] = values.space !== undefined
     ? [namedInstance(home, values.space)]

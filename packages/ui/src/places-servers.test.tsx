@@ -429,7 +429,7 @@ function disconnect(place: string): void {
 }
 
 const CONTRACT =
-  "Opening a seat places your sign-in on lab-box. Whoever runs lab-box can act as you: in your spaces, in your records, and with the account you sign in to spex.pub with, wherever it reaches. Agents on lab-box run on the sign-ins its administrator set up, unless you set your own. A credential you place on lab-box stays there until you remove it. Retiring the server or revoking the seat under Devices stops new use; a credential already on the server lasts until it expires.";
+  "Opening a seat places your Space sign-in on lab-box. Whoever runs lab-box can act as you: in your spaces, in your records, and with the account you sign in to spex.pub with, wherever it reaches. Private packages require a separate registry sign-in on this seat. Agents on lab-box run on the sign-ins its administrator set up, unless you set your own. A credential you place on lab-box stays there until you remove it. Retiring the server or revoking the seat under Devices stops new use; a credential already on the server lasts until it expires.";
 
 describe("run-view-168: a new playbook asked for at a seat", () => {
   test("the Captain home's New playbook opens Playbooks at the seat shown, its field focused", async () => {
@@ -592,7 +592,8 @@ describe("run-view-170: the servers under each group's heading", () => {
     fireEvent.click(control(LAB_BOX));
     const contract = screen.getByTestId(`space-server-contract-${LAB_BOX}`);
     // [run-view-170] the record's words, in the page's language.
-    expect(contract.textContent).toContain("打开席位会把你的登录放到 lab-box 上。");
+    expect(contract.textContent).toContain("打开席位会把你的 Space 登录放到 lab-box 上。");
+    expect(contract.textContent).toContain("使用私有规约包需要在这个席位上单独登录注册中心。");
     expect(contract.textContent).toContain("凭你登录 spex.pub 所用的账号");
     fireEvent.click(within(contract).getByRole("button", { name: "我已了解" }));
     await settle();

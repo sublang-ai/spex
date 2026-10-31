@@ -128,7 +128,7 @@ The preference store shall encode `local/prefs.json` as exactly `{format: 1, pre
 
 ### storage-19
 
-The credential store shall encode `local/credentials.yaml` as exactly `{format: 1, hosts: {<origin>: {access, accessExpiresAt, refresh}}}` with owner-only permissions: keyed by an instance's origin [[storage-2](#storage-2)], the app token that instance issued to this device, its access secret with its expiry in Unix milliseconds, and its refresh secret, written at its sign-in and at every refresh and removed at its sign-out or on its refusal, each as a versioned write of that instance's pair ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
+The credential store shall encode `local/credentials.yaml` as exactly `{format: 1, hosts: {<slot>: {access, accessExpiresAt, refresh}}}` with owner-only permissions: keyed by `registry:<origin>` for an independent registry grant and by the instance's origin for a Space grant [[storage-2](#storage-2)], legacy origin-only entries remaining Space grants, the app token that instance issued to this device, its access secret with its expiry in Unix milliseconds, and its refresh secret, written at its sign-in and at every refresh and removed at its sign-out or on its refusal, each as a versioned write of that instance's pair ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
 
 - a write names the pair its writer read, or none; in one step, the file is read, that instance's pair compared with the named one in every field, and the file replaced only where they are equal, every other instance's pair kept and the file removed with the last pair;
 - where the pairs differ, nothing is written and the writer is told the pair changed meanwhile;
@@ -164,7 +164,7 @@ When a working folder is added, the core shall pair it with a spex repository an
 
 ### storage-35
 
-When, for a clone under your own group's folder holding no placement with an instance, the host accepts a pick that creates or joins a spex repository at an instance [[space-58](space.md#space-58)], or an Attach adds its first placement [[space-99](space.md#space-99)], the core shall move the clone under that instance's folder at the repository's path there [[storage-1](#storage-1)] in one rename, as a host's rename moves a clone [[space-60](space.md#space-60)], its built-in spec package's lock, where its pairing's stands, taking that instance's registry whether or not the clone moves [[environments-11](environments.md#environments-11)] ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
+When, for a clone under your own group's folder holding no placement with an instance, the host accepts a pick that creates or joins a spex repository at an instance [[space-58](space.md#space-58)], or an Attach adds its first placement [[space-99](space.md#space-99)], the core shall move the clone under that instance's folder at the repository's path there [[storage-1](#storage-1)] in one rename, as a host's rename moves a clone [[space-60](space.md#space-60)], a legacy environment's built-in spec package's lock, where its pairing's stands, taking that instance's registry whether or not the clone moves [[environments-11](environments.md#environments-11)], while an explicitly selected registry and package pins remain unchanged as only the Space binding and a current lock's request digest follow the placement [[environments-38](environments.md#environments-38)] ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
 
 - where a session lease beneath refuses the rename as it refuses a sign-in's [[space-59](space.md#space-59)], the pick or the Attach stands and the clone stays, read as that instance's by its remote [[storage-31](#storage-31)], until its next sync moves it [[space-60](space.md#space-60)].
 
@@ -268,7 +268,11 @@ When the core, serving a home under the root lease [[storage-26](#storage-26)], 
 - the deletion from the clone is a local change the next sync of that spex repository carries [[space-7](space.md#space-7)];
 - a `spex.yaml` moved or standing without `space` gains `space` naming the instance of the clone's placement where it has one, so an environment placed before `space` existed keeps resolving there [[environments-11](environments.md#environments-11)] [[environments-2](environments.md#environments-2)];
 - a group's own spex repository, holding no `project.json`, keeps its two files [[storage-1](#storage-1)], its `spex.yaml` gaining `space` naming the instance its own repository's remote names where it lacks one, and its `packages/` and `skills/` moving under its clone's `.spex/` by the same rule;
-- the moved files are installed and exported from where they now stand [[environments-7](environments.md#environments-7)].
+- the moved files are installed and exported from where they now stand [[environments-7](environments.md#environments-7)];
+- before changing either destination file, persist a per-repository pending plan with the source versions, both destination files' original and planned versions and retained planned bytes; resume only where every destination is still original or planned, verifying both planned files before retiring unchanged sources, including a retirement interrupted after source removal;
+- a divergent destination or source remains untouched, the original source files not yet retired retained, and the receipt incomplete; until that repository recovers, its package operations and automatic preparation, resolution, installation and export make no changes, while other repositories remain usable;
+- an unsupported or damaged journal refuses package writes across the home because its affected repositories cannot be trusted, with original files unchanged; an unreadable shared journal may refuse opening the home before package management starts;
+- the plan preserves an explicit registry, locked origins, versions, checksums and file digests, advancing a lock's request digest only where it matched the manifest before the migration [[environments-38](environments.md#environments-38)].
 
 ### storage-30
 
@@ -404,7 +408,16 @@ When a home writer — the core or a mutating storage Git command — takes the 
 
 When a session read completes after its clone's location has changed [[storage-35](#storage-35)] [[space-60](space.md#space-60)], the store shall discard the retired location's result without changing the session's current association, indexed history, diagnostics or exclusion from Sync [[storage-17](#storage-17)].
 
+### storage-51
+
+The registry account metadata store shall keep only each registry's canonical origin, display name and public account identity in owner-only `local/registry-accounts.json`, with registry credentials exclusively in their purpose-scoped slots [[storage-19](#storage-19)], never creating or modifying a Space entry in `home.yaml` ([DR-168](../decisions/168-independent-package-registry.md)).
+
 ## Verification
+
+### storage-52
+
+When a real-core integration suite signs in to a registry and a Space at one origin and restarts the core, it shall verify independent credential slots and purpose-scoped removal [[storage-19](#storage-19)], public registry metadata without any credential and no registry-created Space entry [[storage-51](#storage-51)].
+
 
 ### storage-49
 
@@ -430,7 +443,12 @@ When an integration suite migrates a former-layout home of two projects and one 
 
 ### storage-25
 
-When an integration suite starts the core on a home whose project clones hold `spex.yaml` and `spex.lock` — one project's working folder holding none, one holding its own `spex.yaml`, and one missing on this device — then pairs the third folder and syncs the first project with the stand-in host, it shall verify that the first folder's root holds the clone's two files with `space` naming the clone's placement's instance, its installed tree with its record under `.spex/` moved without a fetch, and its clone none of them, that the second folder's files are unchanged but for `space` and its clone's files and trees deleted, that the third clone keeps its files until its folder is paired and moves them then, that a clone whose record does not match its lock installs from the store, that your own group's clone keeps its two files with `space` naming its remote's instance and its trees under its `.spex/`, that a receipt of kind `environment` stands and a restart repeats nothing, and that the sync pushes the deletion [[storage-24](#storage-24)].
+When a real-core integration suite migrates environments, including child processes killed after the first destination write and during source retirement, it shall verify these cases:
+
+- a project's empty working folder receives its clone's two files with `space` naming the placement, its matching installed trees move without fetching, and its clone keeps none of them; a folder holding either file keeps its own pair, while a missing folder's clone keeps its environment until pairing [[storage-24](#storage-24)];
+- a tree whose install record does not match installs from the store, your own group's pair remains in its clone with its remote's instance named, one receipt stands, a restart repeats nothing and the next sync carries the clone's deletion [[storage-24](#storage-24)];
+- interrupted moved, own-group and preexisting-folder pairs resume with their explicit registry, package origins, versions, checksums and file digests unchanged, fresh locks still fresh and originally stale locks still stale, including retirement after one or both source files were removed [[storage-24](#storage-24)];
+- a divergent partial destination remains byte-identical with the remaining source retained and receipt incomplete, that repository's package mutations are refused without automatic file changes, another repository remains usable, restoring planned bytes allows recovery, and unreadable, unsupported or damaged journal metadata refuses package writes or home startup without bootstrapping an incomplete own-group pair [[storage-24](#storage-24)].
 
 ### storage-32
 

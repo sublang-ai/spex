@@ -270,6 +270,7 @@ function seed(overrides: Partial<ReturnType<typeof useAppStore.getState>> = {}) 
     configState: CONFIG_STATE,
     readiness: READINESS,
     space: home(),
+    registryAccounts: { "https://spex.example": { origin: "https://spex.example", displayName: "Spex Example", account: { id: "registry", login: "me" }, signIn: { phase: "idle" }, error: null } },
     playbooksSide: "project",
     playbookLists: undefined,
     environments: {},
@@ -332,9 +333,11 @@ function tab(name: string): HTMLButtonElement {
 /** The instance the scripted core reports for an environment
  * (environments-2): absent, the home's default instance is meant. */
 let environmentInstance: string | undefined;
+let missingRegistry = false;
 
 beforeEach(() => {
   environmentInstance = undefined;
+  missingRegistry = false;
   useAppStore.setState({
     loadAgentOptions: async (adapter) => ({
       adapter,
@@ -355,7 +358,9 @@ beforeEach(() => {
         return lists;
       case "environment.get":
         return { repository: String(params?.repository), language: null, requests: {}, packages: [], stale: null, conflicts: null, busy: null, error: null,
-          ...(environmentInstance !== undefined ? { instance: environmentInstance } : {}) };
+          ...(missingRegistry ? {} : { registry: { origin: environmentInstance ?? "https://spex.example", legacy: false } }), ...(environmentInstance !== undefined ? { instance: environmentInstance } : {}) };
+      case "registry.orgs":
+        return { orgs: [] };
       case "playbook.artifacts":
         return { source: null, gears: null, fsm: null, stateIds: null, machine: null, missing: [] };
       case "config.edit":
@@ -1647,7 +1652,7 @@ describe("playbook-library-93: Publish beneath the Enable form", () => {
     version: "0.1.0",
     files: ["meta.yaml", "playbooks/en/triage/triage.md", "playbooks/en/triage/triage.playbook/triage.fsm.ts"],
   };
-  const CURRENT = { repository: PROJECT_ID, language: null, requests: {}, packages: [], stale: null, conflicts: null, busy: null, error: null, pathRoot: null };
+  const CURRENT = { repository: PROJECT_ID, registry: { origin: "https://spex.example", legacy: false }, language: null, requests: {}, packages: [], stale: null, conflicts: null, busy: null, error: null, pathRoot: null };
 
   async function openEnable(draft: DraftInfo = COMPILED) {
     renderWorkspace(draft, { view: foldView(THREAD) });
@@ -1775,7 +1780,7 @@ describe("playbook-library-111: what stands beneath the Enable form by the proje
       project: "at Two",
       instances: "One signed in, Two signed out",
       space: groups("two", [{ origin: ONE, name: "One", signedIn: true }, { origin: TWO, name: "Two", signedIn: false }]),
-      beneath: "Sign in to publish at Two",
+      beneath: "Sign in to registry",
       // The environment's instance as the core reads it from spex.yaml:
       // its space, else the home's default (environments-2).
       instance: TWO,
@@ -1793,7 +1798,7 @@ describe("playbook-library-111: what stands beneath the Enable form by the proje
       project: "local-only",
       instances: "One signed out, Two signed in",
       space: groups("local", [{ origin: ONE, name: "One", signedIn: false }, { origin: TWO, name: "Two", signedIn: true }]),
-      beneath: "Sign in to publish at One",
+      beneath: "Sign in to registry",
       // The environment's instance as the core reads it from spex.yaml:
       // its space, else the home's default (environments-2).
       instance: ONE,
@@ -1802,7 +1807,7 @@ describe("playbook-library-111: what stands beneath the Enable form by the proje
       project: "local-only",
       instances: "none, the home created with https://spex.pub",
       space: groups("local", [], "https://spex.pub"),
-      beneath: "Sign in to publish at spex.pub",
+      beneath: "Sign in to registry",
       // The environment's instance as the core reads it from spex.yaml:
       // its space, else the home's default (environments-2).
       instance: "https://spex.pub",
@@ -1812,6 +1817,7 @@ describe("playbook-library-111: what stands beneath the Enable form by the proje
     const onNavigate = vi.fn();
     seed({
       space,
+      registryAccounts: { [instance]: { origin: instance, displayName: instance === TWO ? "Two" : instance === ONE ? "One" : new URL(instance).host, account: beneath === "Publish" ? { id: "registry", login: "me" } : null, signIn: { phase: "idle" }, error: null } },
       drafts: { triage: COMPILED },
       openDraftId: "triage",
       draftViews: { triage: foldView(THREAD) },
@@ -1832,10 +1838,22 @@ describe("playbook-library-111: what stands beneath the Enable form by the proje
     }
     // In the control's place, opening Groups to sign in.
     expect(within(publish).queryByTestId("publish-button")).toBeNull();
-    const signIn = within(publish).getByTestId("publish-signin");
+    const signIn = within(publish).getByRole("button", { name: "Sign in to registry" });
     expect(signIn.textContent).toBe(beneath);
     fireEvent.click(signIn);
-    expect(onNavigate).toHaveBeenCalledWith("Space");
+    await vi.waitFor(() => expect(commandMock).toHaveBeenCalledWith("registry.signin.start", { origin: instance }));
+    expect(onNavigate).not.toHaveBeenCalled();
+  });
+
+  test("missing registry state never borrows a signed-in Space account", async () => {
+    missingRegistry = true;
+    seed({ drafts: { triage: COMPILED }, openDraftId: "triage", draftViews: { triage: foldView(THREAD) }, draftSources: { triage: SOURCE } });
+    render(<LibrarySurface />);
+    await vi.waitFor(() => expect(tab("Enable").disabled).toBe(false));
+    fireEvent.click(tab("Enable"));
+    expect((await screen.findByTestId("publish")).textContent).toBe("Loading registry…");
+    expect(screen.queryByTestId("publish-button")).toBeNull();
+    expect(commandMock).not.toHaveBeenCalledWith("space.signin.start", expect.anything());
   });
 
   test("the target is the environment's instance, not the repository's placement (playbook-library-93)", async () => {
@@ -1843,7 +1861,8 @@ describe("playbook-library-111: what stands beneath the Enable form by the proje
     // the default instance's, One's, where the home is signed in.
     environmentInstance = ONE;
     seed({
-      space: groups("two", [{ origin: ONE, name: "One", signedIn: true }, { origin: TWO, name: "Two", signedIn: false }]),
+      space: groups("two", [{ origin: ONE, name: "One", signedIn: false }, { origin: TWO, name: "Two", signedIn: true }]),
+      registryAccounts: { [ONE]: { origin: ONE, displayName: "One", account: { id: "registry", login: "me" }, signIn: { phase: "idle" }, error: null } },
       drafts: { triage: COMPILED },
       openDraftId: "triage",
       draftViews: { triage: foldView(THREAD) },
@@ -1855,6 +1874,57 @@ describe("playbook-library-111: what stands beneath the Enable form by the proje
     const publish = await screen.findByTestId("publish");
     expect(within(publish).getByTestId("publish-button").textContent).toBe("Publish");
     expect(within(publish).queryByTestId("publish-signin")).toBeNull();
+  });
+});
+
+describe("playbook-library-120/121: authoritative registry namespaces", () => {
+  test("loading, failure and retry remain visible without replacing a manually entered namespace", async () => {
+    const original = commandMock.getMockImplementation()!;
+    const held: { resolve: (value: unknown) => void; reject: (cause: Error) => void }[] = [];
+    commandMock.mockImplementation((type, ...args) => type === "registry.orgs"
+      ? new Promise((resolve, reject) => held.push({ resolve, reject })) : original(type, ...args));
+    seed();
+    render(<LibrarySurface />);
+    await defaultsShown();
+    await screen.findByText("Loading registry namespaces…");
+    fireEvent.change(screen.getByTestId("new-playbook-org"), { target: { value: "manual-org" } });
+    await act(async () => held[0]!.reject(new Error("Registry unavailable")));
+    expect((await screen.findByRole("alert")).textContent).toContain("Registry unavailable");
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await screen.findByText("Loading registry namespaces…");
+    await act(async () => held[1]!.resolve({ orgs: [{ name: "alpha", path: "alpha", role: "Owner" }, { name: "zeta", path: "zeta", role: "Owner", provider: "github" }] }));
+    const namespaces = await screen.findByRole("combobox", { name: "Registry namespaces" });
+    expect(within(namespaces).getByRole("option", { name: "alpha" })).toBeTruthy();
+    expect(within(namespaces).getByRole("option", { name: "zeta (github)" })).toBeTruthy();
+    expect((screen.getByTestId("new-playbook-org") as HTMLInputElement).value).toBe("manual-org");
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  test("waits for a registry account, ignores its late answer after sign-out, and distinguishes a valid empty answer", async () => {
+    const original = commandMock.getMockImplementation()!;
+    const held: ((value: unknown) => void)[] = [];
+    commandMock.mockImplementation((type, ...args) => type === "registry.orgs"
+      ? new Promise((resolve) => held.push(resolve)) : original(type, ...args));
+    const origin = "https://spex.example";
+    const registry = { origin, displayName: "Registry", account: null, signIn: { phase: "idle" as const }, error: null };
+    seed({ registryAccounts: { [origin]: registry } });
+    render(<LibrarySurface />);
+    await defaultsShown();
+    await vi.waitFor(() => expect(useAppStore.getState().environments[PROJECT_ID]?.registry?.origin).toBe(origin));
+    expect(commandMock.mock.calls.filter(([type]) => type === "registry.orgs")).toEqual([]);
+    act(() => useAppStore.setState({ registryAccounts: { [origin]: { ...registry, account: { id: "old", login: "old" } } } }));
+    await screen.findByText("Loading registry namespaces…");
+    fireEvent.change(screen.getByTestId("new-playbook-org"), { target: { value: "my-choice" } });
+    act(() => useAppStore.setState({ registryAccounts: { [origin]: registry } }));
+    await act(async () => held[0]!({ orgs: [{ name: "former-account", path: "former-account", role: "Owner" }] }));
+    expect(screen.queryByRole("combobox", { name: "Registry namespaces" })).toBeNull();
+    expect(screen.queryByText("Loading registry namespaces…")).toBeNull();
+    act(() => useAppStore.setState({ registryAccounts: { [origin]: { ...registry, account: { id: "new", login: "new" } } } }));
+    await screen.findByText("Loading registry namespaces…");
+    await act(async () => held[1]!({ orgs: [] }));
+    expect(await screen.findByText("No publishing namespaces available.")).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect((screen.getByTestId("new-playbook-org") as HTMLInputElement).value).toBe("my-choice");
   });
 });
 

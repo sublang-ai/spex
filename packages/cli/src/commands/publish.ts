@@ -69,10 +69,11 @@ export const publish: Command = async (args) => {
 
   // The destination: the registry of the environment's instance, as the
   // account signed in there (environments-10, DR-127).
-  const instance = env.instanceOf(read?.requests ?? null);
+  const target = env.registryOf(read?.requests ?? null);
+  const instance = target.origin;
   const destination = env.nameOf(instance);
-  if (!dryRun && (await env.tokenAt(instance).catch(() => "")) === null) {
-    const space = instance === env.defaultOrigin() ? "" : ` --space ${instance}`;
+  if (!dryRun && (await env.tokenAt(instance, "registry").catch(() => "")) === null) {
+    const space = ` --registry ${instance}`;
     throw new Refusal(`not signed in at ${destination}; spex login${space} signs in to publish there`);
   }
   let manifest: Manifest;
@@ -95,7 +96,7 @@ export const publish: Command = async (args) => {
     console.log(["Files (dry run, nothing uploaded):", ...files.map((file) => `  ${file}`)].join("\n"));
     return;
   }
-  const registry = env.registryAt(instance);
+  const registry = env.registryAt(instance, "registry");
   try {
     await publishRelease(registry, folder);
   } catch (error) {

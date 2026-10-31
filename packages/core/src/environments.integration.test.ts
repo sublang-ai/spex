@@ -17,7 +17,7 @@ import type { AddressInfo } from "node:net";
 import { dirname, isAbsolute, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { WebSocket } from "ws";
-import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import { parse as parseYaml, parseDocument, stringify as stringifyYaml } from "yaml";
 
 import { CoreService, type CoreServiceOptions } from "./service.js";
 import type { EnvironmentManager } from "./environments.js";
@@ -64,7 +64,7 @@ class Client {
   readonly messages: ServerMessage[] = [];
   private nextId = 0;
 
-  constructor(port: number) {
+  constructor(port: number, private readonly fixtureRegistry?: string) {
     this.socket = new WebSocket(`ws://127.0.0.1:${port}/?token=test`);
     this.socket.on("message", (data) => this.messages.push(JSON.parse(String(data)) as ServerMessage));
   }
@@ -93,6 +93,14 @@ class Client {
 
   async expectOk<T extends Command["type"]>(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">): Promise<CommandResults[T]> {
     const reply = await this.command(type, fields);
+    // Package-operation fixtures explicitly select their stand-in registry;
+    // fresh-default selection is covered with no override below and by the
+    // independent registry suite. Existing manifests remain compatibility cases.
+    if (reply.ok && type === "project.register" && this.fixtureRegistry) {
+      const project = reply.result as CommandResults["project.register"];
+      await this.expectOk("environment.registry.set", { repository: project.id, origin: this.fixtureRegistry });
+      await this.expectOk("environment.resolve", { repository: project.id, wait: true });
+    }
     if (!reply.ok) throw new Error(`${type} failed: ${reply.error.code} ${reply.error.message}`);
     return reply.result;
   }
@@ -182,7 +190,7 @@ function signedInHome(dataDir: string, hostUrl: string, token: string): void {
     own: OWN, folders: [],
   }));
   writeFileSync(join(dataDir, "local", "credentials.yaml"), stringifyYaml({
-    format: 1, hosts: { [hostUrl]: { access: token, accessExpiresAt: Date.now() + 3_600_000, refresh: "refresh" } },
+    format: 1, hosts: { [hostUrl]: { access: token, accessExpiresAt: Date.now() + 3_600_000, refresh: "space-refresh" }, [`registry:${hostUrl}`]: { access: token, accessExpiresAt: Date.now() + 3_600_000, refresh: "registry-refresh" } },
   }), { mode: 0o600 });
 }
 
@@ -216,14 +224,19 @@ async function startCore(dir: string, options: {
     env.SPEX_SLC = `${process.execPath} ${stub}`;
   }
   const captain = createScriptedCaptain(async (_turn, _context, session) => { await session.emitStatus("◇ scripted"); });
+  const hadOwnRequests = existsSync(join(dataDir, "workspace", OWN, `${OWN}-spex`, "spex.yaml"));
   const service = await CoreService.start({
     token: "test", configPath, dataDir, adapterImports: imports, adapterRuntime: () => ({ usable: true }),
     env, home: userHome(join(dir, "user")), own: OWN, watchConfig: false, compileSpawner: probeSpawner(),
     ...(options.realShell ? {} : { captainFactory: async () => captain }),
     ...options.extra,
   });
-  const client = new Client(service.port());
+  const client = new Client(service.port(), options.hostUrl === UNREACHABLE ? undefined : options.hostUrl);
   await client.open();
+  if (!hadOwnRequests && options.hostUrl !== UNREACHABLE) {
+    await client.expectOk("environment.registry.set", { repository: `${OWN}/${OWN}-spex`, origin: options.hostUrl });
+    await client.expectOk("environment.resolve", { repository: `${OWN}/${OWN}-spex`, wait: true });
+  }
   return { service, client, dataDir, configPath, stop: async () => { client.close(); await service.stop(); } };
 }
 
@@ -254,7 +267,7 @@ test("environments-23: a fresh home with no registry reachable seeds the built-i
   assert.ok(existsSync(join(core.dataDir, "cache", "builtins", `${shipped.version}.json`)));
   assert.ok(readdirSync(join(core.dataDir, "store")).some((name) => /^[0-9a-f]{64}$/.test(name)));
   // Requested in your own group's environment, at a caret, and locked.
-  assert.deepEqual(parseYaml(readFileSync(join(ownClone, "spex.yaml"), "utf8")), { format: 1, packages: { "sublang/playbooks": { version: `^${shipped.version}` } } });
+  assert.deepEqual(parseYaml(readFileSync(join(ownClone, "spex.yaml"), "utf8")), { format: 1, registry: "https://spex.sublang.ai", packages: { "sublang/playbooks": { version: `^${shipped.version}` } } });
   const ownState = await core.client.expectOk("environment.get", { repository: own });
   assert.deepEqual(ownState.packages.map((pkg) => [pkg.name, pkg.version, pkg.source.kind, pkg.installed]), [["sublang/playbooks", shipped.version, "builtin", true]]);
   assert.equal(ownState.stale, null);
@@ -266,7 +279,7 @@ test("environments-23: a fresh home with no registry reachable seeds the built-i
   const projectRoot = join(dir, "project");
   const firstCommit = execFileSync("git", ["-C", projectClone, "show", "--name-only", "--format=", "HEAD"], { encoding: "utf8" });
   assert.doesNotMatch(firstCommit, /^spex\.(yaml|lock)$/m);
-  assert.deepEqual(parseYaml(readFileSync(join(projectRoot, "spex.yaml"), "utf8")), { format: 1, packages: { "sublang/playbooks": { version: `^${shipped.version}` } } });
+  assert.deepEqual(parseYaml(readFileSync(join(projectRoot, "spex.yaml"), "utf8")), { format: 1, registry: "https://spex.sublang.ai", packages: { "sublang/playbooks": { version: `^${shipped.version}` } } });
   assert.ok(existsSync(join(projectRoot, "spex.lock")));
   const config = await core.client.expectOk("config.get", {});
   assert.equal(config.status, "valid", JSON.stringify(config));
@@ -1293,11 +1306,14 @@ test("environments-25: every environment command replies and refuses as its tabl
   const working = gitFolder(join(dir, "project"));
   const project = await client.expectOk("project.register", { path: working });
   const key = project.id;
+  const withLint = (text: string, version: string): string => {
+    const doc = parseDocument(text); doc.setIn(["packages", "acme/lint"], { version }); return doc.toString();
+  };
 
   // environment.get carries every field the surface lists (environments-14).
   await client.expectError("environment.get", { repository: "nobody/none-spex" }, "not_found");
   const initial = await client.expectOk("environment.get", { repository: key });
-  assert.deepEqual(Object.keys(initial).sort(), ["busy", "committed", "conflicts", "error", "instance", "language", "packages", "pathRoot", "published", "repository", "requests", "stale"]);
+  assert.deepEqual(Object.keys(initial).sort(), ["busy", "committed", "conflicts", "error", "instance", "language", "packages", "pathRoot", "published", "registry", "repository", "requests", "stale"]);
   assert.equal(initial.committed, false, "a project's environment its code does not hold is this device's (environments-14)");
   assert.equal(initial.pathRoot, project.path, "a project's paths are relative to its working folder (environments-2)");
   assert.deepEqual(Object.keys(initial.packages[0]!).sort(), ["artifacts", "direct", "exports", "installed", "missingPath", "name", "requiredBy", "source", "version"]);
@@ -1324,7 +1340,7 @@ test("environments-25: every environment command replies and refuses as its tabl
 
   // A changed spex.yaml reads stale with the surface's phrase; resolve
   // and install reply at once and broadcast.
-  writeFileSync(join(working, "spex.yaml"), `${requests.trimEnd()}\n  acme/lint:\n    version: "~1.2.0"\n`);
+  writeFileSync(join(working, "spex.yaml"), withLint(requests, "~1.2.0"));
   const stale = await client.expectOk("environment.get", { repository: key });
   assert.deepEqual(stale.stale, ["Requests changed; resolve again to install"]);
   mark = client.mark();
@@ -1358,7 +1374,7 @@ test("environments-25: every environment command replies and refuses as its tabl
   // The folder of a name with no request is spex-packages/<org>/<pkg>/.
   mkdirSync(join(working, "spex-packages", "acme", "none"), { recursive: true });
   await client.expectError("environment.publish", { repository: key, name: "acme/none" }, "invalid_request",
-    new RegExp(`^Sign in to publish at ${new URL(registry.url).hostname.replace(/\./g, "\\.")}$`));
+    new RegExp(`^Sign in to registry to publish at ${new URL(registry.url).host.replace(/\./g, "\\.")}$`));
   await client.expectError("environment.publish", { repository: key, name: "acme/none", dryRun: true }, "invalid_request", /not a spec package release/);
   await client.expectError("environment.publish", { repository: key, name: "acme/absent", dryRun: true }, "invalid_request", /^No folder holds acme\/absent/);
   await client.expectError("environment.publish", { repository: key, name: "none", dryRun: true }, "invalid_request", /^none is not an org\/pkg name$/);
@@ -1386,7 +1402,7 @@ test("environments-25: every environment command replies and refuses as its tabl
   // (environments-17, environments-7).
   const peer = join(dir, "peer");
   execFileSync("git", ["clone", "-q", "-b", "spex", bare, peer]);
-  const peerRequests = `${readFileSync(join(peer, "spex.yaml"), "utf8").trimEnd()}\n  acme/lint:\n    version: ^1.0.0\n`;
+  const peerRequests = withLint(readFileSync(join(peer, "spex.yaml"), "utf8"), "^1.0.0");
   writeFileSync(join(peer, "spex.yaml"), peerRequests);
   const { builtinRegistrySource, compositeRegistry, ContentStore, gitSource, parseRequests, RegistryClient, resolve, writeLock } = await import("@sublang/spex/environment");
   const peerHome = scratchDir("spex-env-peer-home-");
@@ -1531,6 +1547,13 @@ test("environments-21, environments-26, environments-7, environments-14: a worki
     await writeLock(join(folder, "spex.lock"), result.lock, null);
     return { folder, lock: result.lock };
   };
+  // These reader-owned files must use the unmodified registration RPC,
+  // without the fresh-fixture shortcut that selects a test registry.
+  const registerExisting = async (path: string): Promise<CommandResults["project.register"]> => {
+    const reply = await core.client.command("project.register", { path });
+    assert.ok(reply.ok, JSON.stringify(reply));
+    return reply.result;
+  };
   const kitInstalled = (state: EnvironmentState): boolean => state.busy === null && state.packages.some((pkg) => pkg.name === "acme/kit" && pkg.installed);
   const settledOn = async (key: string): Promise<EnvironmentState> => {
     const start = Date.now();
@@ -1549,7 +1572,7 @@ test("environments-21, environments-26, environments-7, environments-14: a worki
   codeGit(committed.folder, "commit", "-q", "-m", "The environment");
   const head = codeGit(committed.folder, "rev-parse", "HEAD").trim();
   const files = ["spex.yaml", "spex.lock"].map((file) => readFileSync(join(committed.folder, file)));
-  const paired = await core.client.expectOk("project.register", { path: committed.folder });
+  const paired = await registerExisting(committed.folder);
   // [environments-26] [environments-7] installed from it, the files and
   // the code's Git as they stood: nothing written but .spex/ and the
   // exports the code's Git excludes.
@@ -1571,7 +1594,7 @@ test("environments-21, environments-26, environments-7, environments-14: a worki
   const placed = fileStamps(join(cli.folder, ".spex", "packages"));
   assert.ok(placed[INSTALL_RECORD], "the command line's install recorded what it placed");
   const cliFiles = ["spex.yaml", "spex.lock"].map((file) => readFileSync(join(cli.folder, file)));
-  const fromCli = await core.client.expectOk("project.register", { path: cli.folder });
+  const fromCli = await registerExisting(cli.folder);
   const read = await settledOn(fromCli.id);
   assert.ok(kitInstalled(read), "[environments-14] read installed by its install record");
   assert.ok(existsSync(join(cli.folder, ".claude", "skills", "kit-skill", "SKILL.md")), "and exported into the folder");
@@ -1602,6 +1625,8 @@ test("environments-21 through a real core: the registry presents the access secr
   const home = await harness.startHome("front", { project: false, env: { SPEX_HOST_URL: front.url } });
   t.after(() => home.stop());
   const own = `${host.script.person.login}/${host.script.person.login}-spex`;
+  const localOwn = join(home.dataDir, "workspace", OWN, `${OWN}-spex`, "spex.yaml");
+  const legacy = parseYaml(readFileSync(localOwn, "utf8")) as Record<string, unknown>; delete legacy.registry; writeFileSync(localOwn, stringifyYaml(legacy));
   const signing = home.client.mark();
   // The home's instance is the front, which serves the stand-in's sign-in.
   await harness.signIn(home, host, front.url);

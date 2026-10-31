@@ -21,7 +21,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { BUILTIN_PACKAGE_NAME, parseLock, type RegistrySourceLock } from "@sublang/spex/environment";
+import { BUILTIN_PACKAGE_NAME, PUBLIC_REGISTRY_ORIGIN, parseLock, parseRequests, type RegistrySourceLock } from "@sublang/spex/environment";
 import { Home } from "./home.js";
 import { canonicalOrigin } from "@sublang/spex/instance";
 import { encodePlacementFile, PLACEMENTS_DIR } from "./placements.js";
@@ -392,7 +392,7 @@ async function builtinRegistry(home: Device, key: string, expected: string): Pro
   return found;
 }
 
-test("storage-35, space-99, space-90, space-87, space-29, environments-11, storage-34, storage-5: a local-only project under your own group's folder, holding a placement file that names a spex repository the second lists, shows it as a line not on this device; its Attach takes that placement as its first, moving the clone under the second's folder at the repository's path there with its working folder's pair, its built-in spec package's lock taking the second's registry, and syncs it there", async (t) => {
+test("storage-35, space-99, space-90, space-87, space-29, space-117, environments-11, storage-34, storage-5: a local-only project under your own group's folder shows its named remote placement as not on this device; Attach moves its clone and pair to that placement and syncs it, changing its Space while keeping the explicit public registry and package pins", async (t) => {
   const first = await startHost();
   const second = await startHost({ displayName: SECOND_NAME, person: BOB });
   const secondOrigin = canonicalOrigin(second.url);
@@ -404,12 +404,14 @@ test("storage-35, space-99, space-90, space-87, space-29, environments-11, stora
   await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
   await signIn(home, second);
 
-  // A project added on this device is local only, its pairing locking
-  // the built-in at the default instance's registry, the first's
-  // (environments-11).
+  // A new local project explicitly selects the public package registry,
+  // independently of its collaboration Space (environments-11, -38).
   const code = gitFolder("delta");
   const { key: local, clone } = await addFolder(home, code);
-  assert.equal(await builtinRegistry(home, local, first.url), first.url);
+  assert.equal(await builtinRegistry(home, local, PUBLIC_REGISTRY_ORIGIN), PUBLIC_REGISTRY_ORIGIN);
+  const root = environmentRoot(home.dataDir, local);
+  assert.equal(parseRequests(readFileSync(join(root, "spex.yaml"), "utf8")).registry, PUBLIC_REGISTRY_ORIGIN);
+  const packages = parseLock(readFileSync(join(root, "spex.lock"), "utf8")).packages;
 
   // A device that held its records at the second left them there: the
   // repository holding its spex, and its file in this clone, which
@@ -443,9 +445,14 @@ test("storage-35, space-99, space-90, space-87, space-29, environments-11, stora
   assert.equal(records[`sync:${key}:${secondFolder}:noticed`], true);
   assert.equal(typeof (records[`sync:${key}:${secondFolder}:last`] as { at?: unknown } | undefined)?.at, "number");
   assert.deepEqual(Object.keys(syncRecordsOf(home.dataDir, local)), []);
-  // Its built-in spec package's lock takes the second's registry
-  // (storage-35, environments-11).
-  assert.equal(await builtinRegistry(home, key, second.url), second.url);
+  // Collaboration follows Attach; package provenance stays independent.
+  assert.equal(await builtinRegistry(home, key, PUBLIC_REGISTRY_ORIGIN), PUBLIC_REGISTRY_ORIGIN);
+  const placedRoot = environmentRoot(home.dataDir, key);
+  assert.equal(placedRoot, root, "Attach keeps the environment in its working folder");
+  const requests = parseRequests(readFileSync(join(placedRoot, "spex.yaml"), "utf8"));
+  assert.equal(requests.registry, PUBLIC_REGISTRY_ORIGIN);
+  assert.equal(requests.space, secondOrigin);
+  assert.deepEqual(parseLock(readFileSync(join(placedRoot, "spex.lock"), "utf8")).packages, packages);
 });
 
 test("space-29, space-61, space-87, space-90, space-62, git-host-5: Attach refuses a placement a file names in a group named like your login and any placement of a group's own spex repository, no request reaching either stand-in, no remote added and no clone moved; a group's own repository's file naming a host repository it does not hold names no line, that repository standing as a row of its own; a pick or a Place joining a repository another clone here holds is refused naming that clone", async (t) => {

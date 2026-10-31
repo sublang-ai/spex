@@ -19,7 +19,7 @@ import { BUILTIN_PACKAGE_NAME, specExportName } from "./exports.js";
 import { artifactLanguages, inArtifact, parseManifestText, readRelease, ROOT_FILES, sha256Hex, type Manifest, type ReleaseFile } from "./format.js";
 import { isRegistrySource, parseLock, serializeLock, type Lock, type LockedFile } from "./lock.js";
 import { RegistryError, type RegistrySource, type SearchResult, type VersionIndex, type VersionIndexEntry, type VersionResource } from "./registry.js";
-import { parseRequests, requestsDigest, setSpaceIn } from "./requests.js";
+import { parseRequests, PUBLIC_REGISTRY_ORIGIN, setRegistryIn, requestsDigest, setSpaceIn } from "./requests.js";
 import { compareVersions, isVersion } from "./semver.js";
 import type { ContentStore } from "./store.js";
 
@@ -359,7 +359,7 @@ export function prepareBuiltinEnvironment(root: string, pkg: BuiltinPackage, reg
   if (requested.length !== 1 || requested[0] !== BUILTIN_PACKAGE_NAME) return wrote;
   try {
     // Written only where no lock stands yet (DR-111).
-    writeVersionedBytes(lockFile, serializeLock(builtinLock(pkg, registryUrl, text)), null);
+    writeVersionedBytes(lockFile, serializeLock(builtinLock(pkg, parseRequests(text).registry ?? registryUrl, text)), null);
   } catch (error) {
     // The first resolve writes it instead.
     console.error(`spex: ${root} holds no lock yet: ${error instanceof Error ? error.message : String(error)}`);
@@ -390,7 +390,9 @@ export function rehomeBuiltinLock(root: string, pkg: BuiltinPackage, registryUrl
   const current = locked.bytes.toString("utf8");
   let lock: Lock;
   try {
-    const requested = Object.keys(parseRequests(text).packages);
+    const parsed = parseRequests(text);
+    if (parsed.registry !== undefined) return false;
+    const requested = Object.keys(parsed.packages);
     if (requested.length !== 1 || requested[0] !== BUILTIN_PACKAGE_NAME) return false;
     lock = parseLock(current);
   } catch {
@@ -448,6 +450,7 @@ export function ensureBuiltinRequest(root: string, version: string, space: strin
     }
   }
   const doc = text.trim() === "" ? new Document({ format: 1, packages: {} }) : parseDocument(text);
+  if (read.bytes === null) setRegistryIn(doc, PUBLIC_REGISTRY_ORIGIN);
   if (space !== null && !doc.has("space")) setSpaceIn(doc, space);
   if (!isMap(doc.get("packages", true))) doc.set("packages", doc.createNode({}));
   doc.setIn(["packages", BUILTIN_PACKAGE_NAME], doc.createNode({ version: `^${version}` }));

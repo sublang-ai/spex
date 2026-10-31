@@ -9,6 +9,8 @@ Accepted (2026-10-25), under the owner's fresh-user publishing and installation 
 Extends [DR-104](104-spec-package-format-and-client-environments.md) in the publishing surface for packages without an authoring session.
 Amended by [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) in where a package is published from: by its name, from `spex-packages/<org>/<name>/`.
 
+Amended by [DR-168](168-independent-package-registry.md) for independent registry selection, account authority and credentials; Space collaboration and server admission remain unchanged.
+
 ## Context
 
 A spec package may contain only a spec or an ordinary skill.

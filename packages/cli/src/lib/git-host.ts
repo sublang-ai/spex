@@ -278,6 +278,8 @@ export class SignInBusyError extends Error {
 // ---------------------------------------------------------------------------
 // The credential file (storage-19)
 
+export type AuthScope = "registry" | "space";
+
 export interface StoredCredential { access: string; accessExpiresAt: number; refresh: string }
 
 export interface CredentialStore {
@@ -315,7 +317,8 @@ export function credentialsPath(homeDir: string): string {
 /**
  * The app token of one instance in `local/credentials.yaml`, exactly
  * `{format: 1, hosts: {<origin>: {access, accessExpiresAt, refresh}}}`
- * keyed by the instance's canonical origin (DR-127),
+ * Space entries keyed by canonical origin; registry entries keyed by
+ * `registry:<origin>` (DR-168), with no implicit scope upgrade,
  * written atomically with owner-only permissions under a `local/` made
  * owner-only (storage-19). A file of another format is refused, never
  * guessed at or overwritten, and no refusal or warning repeats the file's
@@ -324,10 +327,11 @@ export function credentialsPath(homeDir: string): string {
  * the last one removes the file. Every access is synchronous, so a
  * replacement's read, comparison and rename leave no await between them.
  */
-export function fileCredentialStore(homeDir: string, hostUrl: string): CredentialStore {
+export function fileCredentialStore(homeDir: string, hostUrl: string, scope: AuthScope = "space"): CredentialStore {
   const dir = join(homeDir, "local");
   const file = credentialsPath(homeDir);
-  const key = canonicalOrigin(hostUrl);
+  const origin = canonicalOrigin(hostUrl);
+  const key = scope === "space" ? origin : `registry:${origin}`;
 
   function load(): CredentialsFile | null {
     let text: string;
@@ -411,6 +415,7 @@ export function fileCredentialStore(homeDir: string, hostUrl: string): Credentia
 
 export interface GitHostClientOptions {
   url: string;
+  scope?: AuthScope;
   /** The public client id; `spex`. */
   clientId?: string;
   /** This device and app, e.g. "Spex on <hostname>", shown on the host's
@@ -508,6 +513,7 @@ const REAUTH_CODES = new Set(["invalid_token", "token_revoked", "reauth_required
  */
 export class GitHostClient {
   readonly url: string;
+  readonly scope: AuthScope;
   private readonly clientId: string;
   private readonly label: string;
   private readonly credentials: CredentialStore;
@@ -526,6 +532,8 @@ export class GitHostClient {
 
   constructor(options: GitHostClientOptions) {
     this.url = trimUrl(options.url);
+    this.scope = options.scope ?? "space";
+    if (this.scope === "registry" && options.server) throw new HostError("bad_request", { code: "registry_seat_forbidden" });
     this.clientId = options.clientId ?? CLIENT_ID;
     const label = options.label.trim();
     this.label = (label.length > 0 ? label : "Spex").slice(0, LABEL_MAX);
@@ -593,6 +601,7 @@ export class GitHostClient {
     const state = base64url(randomBytes(32));
     const query = new URLSearchParams({
       client_id: this.clientId,
+      scope: this.scope,
       label: this.label,
       redirect_uri: redirectUri,
       code_challenge: challenge,
@@ -671,7 +680,7 @@ export class GitHostClient {
       const code = params.get("code");
       if (!code) return { error: signInError("refused") };
       const answer = await this.send("POST", "/api/v1/auth/token", {
-        body: { grant_type: "authorization_code", code, code_verifier: flow.verifier, redirect_uri: flow.redirectUri, client_id: this.clientId },
+        body: { scope: this.scope, grant_type: "authorization_code", code, code_verifier: flow.verifier, redirect_uri: flow.redirectUri, client_id: this.clientId },
       });
       if (flow.isSettled()) return { error: signInError("stopped") };
       if (answer.status !== 200) return { error: exchangeError(answer) };
@@ -698,7 +707,7 @@ export class GitHostClient {
       const seat = this.server
         ? { server_id: this.server.id, person_id: this.server.personId, ...(options.ticket ? { ticket: options.ticket } : {}) }
         : {};
-      const answer = await this.send("POST", "/api/v1/auth/device", { body: { client_id: this.clientId, label: this.label, ...seat } });
+      const answer = await this.send("POST", "/api/v1/auth/device", { body: { scope: this.scope, client_id: this.clientId, label: this.label, ...seat } });
       if (answer.status !== 200) throw answerError(answer);
       const body = record(answer.json);
       start = {
@@ -752,7 +761,7 @@ export class GitHostClient {
         let answer: Answer;
         try {
           answer = await this.send("POST", "/api/v1/auth/token", {
-            body: { grant_type: "urn:ietf:params:oauth:grant-type:device_code", device_code: start.deviceCode, client_id: this.clientId },
+            body: { scope: this.scope, grant_type: "urn:ietf:params:oauth:grant-type:device_code", device_code: start.deviceCode, client_id: this.clientId },
           });
         } catch {
           continue; // no answer: keep polling until the code expires
@@ -825,7 +834,7 @@ export class GitHostClient {
         // An expired access secret cannot revoke; a fresh one can.
         const fresh = async (): Promise<string | null> => {
           const answer = await this.send("POST", "/api/v1/auth/token", {
-            body: { grant_type: "refresh_token", refresh_token: stored.refresh, client_id: this.clientId },
+            body: { scope: this.scope, grant_type: "refresh_token", refresh_token: stored.refresh, client_id: this.clientId },
           });
           return answer.status === 200 ? tokenFrom(answer, this.now()).access : null;
         };
@@ -836,10 +845,10 @@ export class GitHostClient {
           refreshed = true;
         }
         if (access !== null) {
-          const answer = await this.send("POST", "/api/v1/auth/revoke", { bearer: access });
+          const answer = await this.send("POST", "/api/v1/auth/revoke", { bearer: access, body: { scope: this.scope } });
           if (!refreshed && answer.status === 401 && codeOf(answer) === "token_expired") {
             const next = await fresh();
-            if (next !== null) await this.send("POST", "/api/v1/auth/revoke", { bearer: next });
+            if (next !== null) await this.send("POST", "/api/v1/auth/revoke", { bearer: next, body: { scope: this.scope } });
           }
         }
       } catch {
@@ -856,9 +865,9 @@ export class GitHostClient {
     return this.credentials.replace(null, null);
   }
 
-  /** `GET /api/v1/host/me`: the person, as the host reports them. */
+  /** The selected purpose's account; registry identity needs no host API. */
   async me(options: HostCallOptions = {}): Promise<HostAccount> {
-    return accountFrom((await this.call("GET", "/api/v1/host/me", undefined, options)).json);
+    return accountFrom((await this.call("GET", (this.scope === "registry" ? "/api/v1/whoami?scope=registry" : "/api/v1/host/me"), undefined, options)).json);
   }
 
   /** `GET /api/v1/host/groups`: the person's own group and every group
@@ -1088,7 +1097,7 @@ export class GitHostClient {
    * yet; a person the host does not return throws (git-host-2). */
   private async issued(answer: Answer): Promise<Issued> {
     const credential = tokenFrom(answer, this.now());
-    const me = await this.send("GET", "/api/v1/host/me", { bearer: credential.access });
+    const me = await this.send("GET", (this.scope === "registry" ? "/api/v1/whoami?scope=registry" : "/api/v1/host/me"), { bearer: credential.access });
     if (me.status !== 200) throw answerError(me);
     return { credential, account: accountFrom(me.json) };
   }
@@ -1198,7 +1207,7 @@ export class GitHostClient {
     if (!latest) throw new HostError("reauth", { code: "signed_out" });
     if (latest.access !== stale.access && latest.accessExpiresAt - this.now() >= REFRESH_MARGIN_MS) return latest;
     const answer = await this.send("POST", "/api/v1/auth/token", {
-      body: { grant_type: "refresh_token", refresh_token: latest.refresh, client_id: this.clientId },
+      body: { scope: this.scope, grant_type: "refresh_token", refresh_token: latest.refresh, client_id: this.clientId },
       wait: waits,
     });
     if (answer.status === 200) {

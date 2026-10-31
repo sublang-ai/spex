@@ -1698,6 +1698,7 @@ msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a 
 #: src/components/ProjectGroup.tsx
 #: src/components/ProjectPalette.tsx
 #: src/components/PublishControl.tsx
+#: src/components/RegistryAccount.tsx
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceInstance.tsx
 #: src/components/SpaceMembers.tsx
@@ -1875,6 +1876,10 @@ msgstr "Choose a project"
 msgid "Choose a project folder…"
 msgstr "Choose a project folder…"
 
+#: src/components/SpaceDirectory.tsx
+msgid "Choose a Space or enter a custom URL"
+msgstr "Choose a Space or enter a custom URL"
+
 #. empty choice of the reasoning-effort select
 #: src/components/TuningField.tsx
 msgid "Choose effort…"
@@ -1888,6 +1893,10 @@ msgstr "Choose folder…"
 #: src/components/SpaceSync.tsx
 msgid "Choose for {count, plural, one {# conflict} other {# conflicts}}"
 msgstr "Choose for {count, plural, one {# conflict} other {# conflicts}}"
+
+#: src/components/LibrarySurface.tsx
+msgid "Choose namespace"
+msgstr "Choose namespace"
 
 #. a step: the analyst chooses which workflows the request takes
 #: src/lib/step-words.ts
@@ -2336,6 +2345,10 @@ msgstr "Continue"
 msgid "Continue in your browser:"
 msgstr "Continue in your browser:"
 
+#: src/components/RegistryAccount.tsx
+msgid "Continue registry sign-in"
+msgstr "Continue registry sign-in"
+
 #: src/components/ApprovalInbox.tsx
 msgid "Conversation: {name}"
 msgstr "Conversation: {name}"
@@ -2419,6 +2432,10 @@ msgstr "Could not answer {tool} for {actor}: {reason}"
 #: src/lib/step-words.ts
 msgid "could not inspect"
 msgstr "could not inspect"
+
+#: src/components/LibrarySurface.tsx
+msgid "Could not load registry namespaces. Try again."
+msgstr "Could not load registry namespaces. Try again."
 
 #: src/components/SpecView.tsx
 msgid "Could not open {path}"
@@ -2564,6 +2581,10 @@ msgstr "Custom model"
 #: src/components/ModelField.tsx
 msgid "Custom model…"
 msgstr "Custom model…"
+
+#: src/components/SpaceDirectory.tsx
+msgid "Custom URL"
+msgstr "Custom URL"
 
 #: src/components/NavRail.tsx
 #: src/components/SpecView.tsx
@@ -3987,6 +4008,14 @@ msgstr "Loading media…"
 msgid "Loading model options…"
 msgstr "Loading model options…"
 
+#: src/components/LibrarySurface.tsx
+msgid "Loading registry namespaces…"
+msgstr "Loading registry namespaces…"
+
+#: src/components/PublishControl.tsx
+msgid "Loading registry…"
+msgstr "Loading registry…"
+
 #: src/components/DraftConversation.tsx
 msgid "Loading the conversation…"
 msgstr "Loading the conversation…"
@@ -4457,6 +4486,10 @@ msgstr "No projects here yet"
 msgid "No projects yet — register a repository in the <0>Projects</0> to put its work here."
 msgstr "No projects yet — register a repository in the <0>Projects</0> to put its work here."
 
+#: src/components/LibrarySurface.tsx
+msgid "No publishing namespaces available."
+msgstr "No publishing namespaces available."
+
 #: src/components/FailureCard.tsx
 msgid "No reason was reported"
 msgstr "No reason was reported"
@@ -4629,6 +4662,10 @@ msgstr "not set"
 #: src/components/SpaceSignIn.tsx
 msgid "Not signed in"
 msgstr "Not signed in"
+
+#: src/components/RegistryAccount.tsx
+msgid "Not signed in to registry"
+msgstr "Not signed in to registry"
 
 #: src/components/AgentEditor.tsx
 msgid "Not supported by this model"
@@ -4963,8 +5000,8 @@ msgstr "opened the pull request"
 
 #. the instance's contract, in the words its record fixes, shown before a seat's first open on this device; {server} is the server's name, {instance} the instance's; Devices is the instance's page of devices
 #: src/components/SpaceServers.tsx
-msgid "Opening a seat places your sign-in on {server}. Whoever runs {server} can act as you: in your spaces, in your records, and with the account you sign in to {instance} with, wherever it reaches. Agents on {server} run on the sign-ins its administrator set up, unless you set your own. A credential you place on {server} stays there until you remove it. Retiring the server or revoking the seat under Devices stops new use; a credential already on the server lasts until it expires."
-msgstr "Opening a seat places your sign-in on {server}. Whoever runs {server} can act as you: in your spaces, in your records, and with the account you sign in to {instance} with, wherever it reaches. Agents on {server} run on the sign-ins its administrator set up, unless you set your own. A credential you place on {server} stays there until you remove it. Retiring the server or revoking the seat under Devices stops new use; a credential already on the server lasts until it expires."
+msgid "Opening a seat places your Space sign-in on {server}. Whoever runs {server} can act as you: in your spaces, in your records, and with the account you sign in to {instance} with, wherever it reaches. Private packages require a separate registry sign-in on this seat. Agents on {server} run on the sign-ins its administrator set up, unless you set your own. A credential you place on {server} stays there until you remove it. Retiring the server or revoking the seat under Devices stops new use; a credential already on the server lasts until it expires."
+msgstr "Opening a seat places your Space sign-in on {server}. Whoever runs {server} can act as you: in your spaces, in your records, and with the account you sign in to {instance} with, wherever it reaches. Private packages require a separate registry sign-in on this seat. Agents on {server} run on the sign-ins its administrator set up, unless you set your own. A credential you place on {server} stays there until you remove it. Retiring the server or revoking the seat under Devices stops new use; a credential already on the server lasts until it expires."
 
 #. a project's row while it is opened on a team server: the seat opens, signs in, and joins it; {server} is the server's name
 #: src/components/SpaceGroups.tsx
@@ -5055,6 +5092,10 @@ msgstr "ownership unknown"
 #: src/lib/compile-log.ts
 msgid "Package"
 msgstr "Package"
+
+#: src/components/RegistryAccount.tsx
+msgid "Package registry"
+msgstr "Package registry"
 
 #: src/components/SpaceGroups.tsx
 msgid "Pairs it with its folder on this device"
@@ -5599,6 +5640,14 @@ msgstr "registry"
 msgid "registry {requirement}"
 msgstr "registry {requirement}"
 
+#: src/components/LibrarySurface.tsx
+msgid "Registry namespaces"
+msgstr "Registry namespaces"
+
+#: src/components/RegistryAccount.tsx
+msgid "Registry URL"
+msgstr "Registry URL"
+
 #. a call's outcome: the coder rejected every finding
 #: src/lib/step-words.ts
 msgid "rejected the findings"
@@ -5929,6 +5978,7 @@ msgstr "resume tokens for this machine's agent conversations; they work nowhere 
 #: src/App.tsx
 #: src/components/ComposerAttachments.tsx
 #: src/components/DashboardSurface.tsx
+#: src/components/LibrarySurface.tsx
 #: src/components/RunView.tsx
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceGroups.tsx
@@ -6467,10 +6517,9 @@ msgstr "Sign in to {host} first"
 msgid "Sign in to {who} again"
 msgstr "Sign in to {who} again"
 
-#. in Publish's place: the home is not signed in to the instance a publish from this project goes to; {name} is that instance's display name as last read, else its host name
-#: src/components/PublishControl.tsx
-msgid "Sign in to publish at {name}"
-msgstr "Sign in to publish at {name}"
+#: src/components/RegistryAccount.tsx
+msgid "Sign in to registry"
+msgstr "Sign in to registry"
 
 #. the sign-in card on a team server's Space: what signing in brings there; {server} is the server's name
 #: src/components/SpaceSignIn.tsx
@@ -6490,6 +6539,10 @@ msgstr "Sign in to your Space"
 #: src/components/SpaceInstance.tsx
 msgid "Sign out"
 msgstr "Sign out"
+
+#: src/components/RegistryAccount.tsx
+msgid "Sign out of registry"
+msgstr "Sign out of registry"
 
 #: src/components/SpaceInstance.tsx
 msgid "Signed in as @{login}"
@@ -7139,6 +7192,10 @@ msgstr "The queue could not be loaded. <0>Retry</0>"
 msgid "The raw prose the example starts from"
 msgstr "The raw prose the example starts from"
 
+#: src/components/RegistryAccount.tsx
+msgid "The registry could not be read. Try again."
+msgstr "The registry could not be read. Try again."
+
 #: src/components/SpecEditor.tsx
 msgid "the reload failed"
 msgstr "the reload failed"
@@ -7150,6 +7207,10 @@ msgstr "the save failed"
 #: src/components/SpaceSignIn.tsx
 msgid "The sign-in did not start"
 msgstr "The sign-in did not start"
+
+#: src/components/SpaceDirectory.tsx
+msgid "The Space directory could not be read. Enter a custom URL."
+msgstr "The Space directory could not be read. Enter a custom URL."
 
 #: src/lib/drafts.ts
 msgid "The spec package folder is gone from the working folder; only Delete remains"
@@ -7259,6 +7320,10 @@ msgstr "this device's sign-in to each instance"
 #: src/state/store.ts
 msgid "This draft is no longer listed."
 msgstr "This draft is no longer listed."
+
+#: src/components/RegistryAccount.tsx
+msgid "This environment keeps its previous package destination until you choose a registry."
+msgstr "This environment keeps its previous package destination until you choose a registry."
 
 #: src/components/SpecEditor.tsx
 msgid "This file changed on disk since you opened it."
@@ -7493,8 +7558,8 @@ msgid "unresolved"
 msgstr "unresolved"
 
 #: src/components/SpaceSignIn.tsx
-msgid "Until you do, everything stays on this device and nothing is contacted."
-msgstr "Until you do, everything stays on this device and nothing is contacted."
+msgid "Until you sign in to this Space, your records stay on this device."
+msgstr "Until you sign in to this Space, your records stay on this device."
 
 #. the sign-in card on a team server's Space; {server} is the server's name
 #: src/components/SpaceSignIn.tsx
@@ -7595,6 +7660,10 @@ msgstr "Use browser setting from Settings"
 #: src/components/AgentSettings.tsx
 msgid "Use default"
 msgstr "Use default"
+
+#: src/components/RegistryAccount.tsx
+msgid "Use registry"
+msgstr "Use registry"
 
 #: src/components/EnvironmentSection.tsx
 msgid "Version of {name}"

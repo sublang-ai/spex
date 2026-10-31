@@ -11,6 +11,8 @@ import {
   anotherAccountError, HostError, type CredentialStore, type DeviceSignIn, type HostAccount, type StoredCredential,
 } from "../lib/git-host.js";
 import { homeFilePath, instanceAt, readHomeFile, updateHomeFile, withDisplayName, withSignIn } from "../lib/home-file.js";
+import { RegistryClient } from "../lib/environment/registry.js";
+import { authTarget } from "./auth-target.js";
 import { instanceFolder } from "../lib/instance.js";
 import { clientOf, credentialsOf, homeDir, hostCause, hostOf, listed, namedInstance, nameOf, readHome, signedIn } from "./home.js";
 import { Interrupted, options, Refusal, type Command } from "./run.js";
@@ -43,21 +45,21 @@ function heldOnly(pair: StoredCredential): CredentialStore {
 }
 
 export const login: Command = async (args, interrupt) => {
-  const values = options("login", args, { space: { type: "string" }, force: { type: "boolean" } });
+  const values = options("login", args, { space: { type: "string" }, registry: { type: "string" }, force: { type: "boolean" } });
   const dir = homeDir();
   const home = readHome(dir);
-  const target = namedInstance(home, values.space);
+  const { target, scope } = authTarget(home, values);
   const origin = target.origin;
   const name = nameOf(target);
 
   // No two instances at one folder (storage-2): refused before the flow.
-  if (home && !listed(home, origin)) {
+  if (scope === "space" && home && !listed(home, origin)) {
     const folder = instanceFolder(origin);
     const clash = home.instances.find((entry) => instanceFolder(entry.origin) === folder);
     if (clash) throw new Refusal(`${hostOf(origin)} would share the folder ${folder} with ${clash.origin}, which this device lists`);
   }
 
-  const credentials = credentialsOf(dir, origin);
+  const credentials = credentialsOf(dir, origin, scope);
   let held: StoredCredential | null;
   try {
     held = await credentials.read();
@@ -65,18 +67,19 @@ export const login: Command = async (args, interrupt) => {
     throw new Refusal(`cannot read the sign-in at ${name}: ${(error as Error).message}`);
   }
   const entry = home ? instanceAt(home, origin) : undefined;
-  if (held && signedIn(entry) && values.force !== true) {
-    console.log(`Signed in at ${name} as ${entry?.account?.login}; spex login --force signs in again.`);
+  if (held && (scope === "registry" || signedIn(entry)) && values.force !== true) {
+    console.log(`Signed in at ${name} as ${scope === "registry" ? (await clientOf(origin, credentials, undefined, scope).me()).login : entry?.account?.login}; spex login --force signs in again.`);
     return;
   }
 
-  const client = clientOf(origin, credentials);
+  const client = clientOf(origin, credentials, undefined, scope);
   // The instance's display name, read while the person approves; a
   // sign-in goes on where it does not answer.
-  const described = client.describe().then((description) => description.displayName || null, () => null);
+  const described = (scope === "registry" ? new RegistryClient({ url: origin }).describe() : client.describe()).then((description) => description.displayName || null, () => null);
   // At a listed instance, only its entry's account (git-host-2): read in
   // the turn that would store the token, so another stores nothing.
   const admit = (account: HostAccount): HostError | null => {
+    if (scope === "registry") return null;
     let recorded;
     try { recorded = readHomeFile(dir); } catch { return null; }
     const listedAccount = recorded ? instanceAt(recorded, origin)?.account : undefined;
@@ -133,6 +136,12 @@ export const login: Command = async (args, interrupt) => {
   const deferred = interrupt.hold(() => skipName());
   try {
     const displayName = await Promise.race([described, nameSkipped]);
+    if (scope === "registry") {
+      if (held) await clientOf(origin, heldOnly(held), undefined, scope).signOut().catch(() => undefined);
+      console.log(`Signed in at registry ${displayName ?? name} as ${account.login}.`);
+      if (interrupt.requested) throw new Interrupted(`interrupted once signed in at ${name} as ${account.login}`);
+      return;
+    }
     let recorded;
     try {
       recorded = updateHomeFile(dir, (current) => {

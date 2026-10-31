@@ -1225,7 +1225,7 @@ test("playbook-library-102: a session takes its folder's, its project's, else th
 // playbook-library-104: a new playbook's org and license
 // ---------------------------------------------------------------------------
 
-test("playbook-library-104: New playbook's defaults come from the orgs the registry of the project's instance lists, else the project's key, and from its LICENSE, each reply asking that registry alone, and the manifests name the org and license", { timeout: 120_000 }, async (t) => {
+test("playbook-library-104: New playbook's defaults come from its independently selected registry's namespaces, else the project's key, and from its LICENSE, each reply asking that registry alone, and the manifests name the org and license", { timeout: 120_000 }, async (t) => {
   // A home signed in to two stand-in registries, each standing as its
   // instance, the first the home's default instance, with a project
   // paired at each instance two groups deeper than the home's own, its
@@ -1256,13 +1256,16 @@ test("playbook-library-104: New playbook's defaults come from the orgs the regis
   }
   const pair = (access: string) => ({ access, accessExpiresAt: Date.now() + 3_600_000, refresh: "refresh" });
   writeFileSync(join(state, "local", "credentials.yaml"), stringifyYaml({
-    format: 1, hosts: { [first.url]: pair("first-token"), [second.url]: pair("second-token") },
+    format: 1, hosts: { [first.url]: pair("space-first"), [second.url]: pair("space-second"), [`registry:${first.url}`]: pair("first-token"), [`registry:${second.url}`]: pair("second-token") },
   }), { mode: 0o600 });
   const harness = await startHarness({ script: {}, slc: stubSlcSource("['Helper']"), dir });
   const { projectId } = harness;
   const client = new Client(harness.service.port());
   t.after(async () => { client.close(); await harness.service.stop(); });
   await client.open();
+  await client.expectOk("environment.registry.set", { repository: projectId, origin: first.url });
+  await client.expectOk("environment.registry.set", { repository: atFirst, origin: first.url });
+  await client.expectOk("environment.registry.set", { repository: atSecond, origin: second.url });
   const folder = join(dir, "project");
   const license = join(folder, "LICENSE");
   const org = projectId.split("/")[0];
@@ -1356,7 +1359,7 @@ test("playbook-library-104: New playbook's defaults come from the orgs the regis
   // Signed out of the first, its registry is not asked and the key's
   // first segment stands, the second's still asked; the local-only
   // project's compile then names that segment and the Apache license.
-  await client.expectOk("space.signout", { instance: first.url });
+  await client.expectOk("registry.signout", { origin: first.url });
   signedIn.first = false;
   assert.deepEqual(await orgsOf(), ["tester", "acme", "team-two"], "signed out of the first");
   writeFileSync(license, cases[0]![0]!);
@@ -1365,7 +1368,7 @@ test("playbook-library-104: New playbook's defaults come from the orgs the regis
   assert.deepEqual([licensed.org, licensed.license], [org, "Apache-2.0"]);
 
   // Signed out of both, no registry is asked.
-  await client.expectOk("space.signout", { instance: second.url });
+  await client.expectOk("registry.signout", { origin: second.url });
   signedIn.second = false;
   assert.deepEqual(await orgsOf(), ["tester", "acme", "acme"], "signed out of both");
 });
