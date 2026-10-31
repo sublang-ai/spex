@@ -244,7 +244,7 @@ describe("GROUPS: the header (space-1, space-2)", () => {
     expect(within(account).getByRole("heading", { level: 2 }).textContent).toBe("Not signed in");
     expect(screen.getByTestId("space-signin-body").textContent).toBe(
       "Sign in to see your groups and share each project's records with the people in them." +
-        "Until you do, everything stays on this device and nothing is contacted.",
+        "Until you sign in to this Space, your records stay on this device.",
     );
     // No home path, Copy path, read time or Refresh while signed out
     // (space-3).
@@ -542,7 +542,7 @@ describe("GROUPS: the sign-in card's Instance field (space-66, space-3, git-host
     expect(within(card).getByRole("heading", { level: 2 }).textContent).toBe("Not signed in");
     expect(screen.getByTestId("space-signin-body").textContent).toBe(
       "Sign in to see your groups and share each project's records with the people in them." +
-        "Until you do, everything stays on this device and nothing is contacted.",
+        "Until you sign in to this Space, your records stay on this device.",
     );
     // The field is captioned "Instance" and holds the default instance's
     // origin until the reader edits it (space-3, storage-2).

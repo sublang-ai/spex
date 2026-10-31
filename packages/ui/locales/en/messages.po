@@ -7553,8 +7553,8 @@ msgid "unresolved"
 msgstr "unresolved"
 
 #: src/components/SpaceSignIn.tsx
-msgid "Until you do, everything stays on this device and nothing is contacted."
-msgstr "Until you do, everything stays on this device and nothing is contacted."
+msgid "Until you sign in to this Space, your records stay on this device."
+msgstr "Until you sign in to this Space, your records stay on this device."
 
 #. the sign-in card on a team server's Space; {server} is the server's name
 #: src/components/SpaceSignIn.tsx

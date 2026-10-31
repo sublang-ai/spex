@@ -14,7 +14,7 @@ import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import { APPLET_ID, APPLET_PACKAGE, APPLET_VERSION, publishAppletRelease } from "@sublang/spex-core/testing";
 
-import { expect, nav, open, test, uiDist } from "../src/harness";
+import { expect, nav, open, selectRegistryCore, test, uiDist } from "../src/harness";
 
 test.use({ appOptions: { project: true, host: { registry: true } } });
 
@@ -23,6 +23,7 @@ test("applets-8: an applet installed from the registry stands as a tab, shows th
   const registry = app.registry;
   if (!registry) throw new Error("a stand-in registry is required");
   await publishAppletRelease(join(app.home, "applet-release"), registry.url);
+  await selectRegistryCore(app, app.host!.url);
   const readme = "Applet journey: the first README.\n";
   writeFileSync(join(app.projectDir, "README.md"), readme);
   mkdirSync(join(app.projectDir, "notes"), { recursive: true });

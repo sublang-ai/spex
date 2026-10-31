@@ -391,7 +391,7 @@ export function SignInCard({
         <p data-testid="space-signin-caption">
           {i18n._("Sign in to see your groups and share each project's records with the people in them.")}
         </p>
-        <p>{i18n._("Until you do, everything stays on this device and nothing is contacted.")}</p>
+        <p>{i18n._("Until you sign in to this Space, your records stay on this device.")}</p>
       </>
     ) : (
       <>
