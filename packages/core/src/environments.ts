@@ -86,6 +86,7 @@ import {
   satisfies,
   seedBuiltinPackage,
   setRequest,
+  unaskedRegistry,
   writeLock,
   type BuiltinPackage,
   type Conflict,
@@ -1764,23 +1765,6 @@ export class EnvironmentManager {
     this.stopped = true;
     await Promise.allSettled([...this.operations]);
   }
-}
-
-/** A registry a lock records under no instance's origin (environments-7):
- * never asked, every call failing naming it, so an install where no other
- * registry serves the release says why this one was not asked. */
-function unaskedRegistry(url: string): RegistrySource {
-  const unasked = (name: string): Promise<never> =>
-    Promise.reject(new RegistryError("unavailable", name, `${name}: not asked, as it names no instance's origin`));
-  return {
-    url,
-    index: (name) => unasked(name),
-    version: (name) => unasked(name),
-    file: (name) => unasked(name),
-    archive: (name) => unasked(name),
-    publish: (name) => unasked(name),
-    search: () => Promise.resolve([]),
-  };
 }
 
 /** A request's value for comparison: keys sorted at every level. */
