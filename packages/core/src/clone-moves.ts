@@ -8,6 +8,7 @@
 // which moves clones while writers run, and by the instances migration,
 // which moves them once before any writer is admitted.
 
+import { hasPrivatePermissions } from "@sublang/spex/files";
 import { existsSync, lstatSync, readdirSync, readFileSync, rmdirSync, statSync } from "node:fs";
 import { hostname } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
@@ -77,11 +78,11 @@ const LEASE_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 export function deadOwnLease(dir: string, id: string, identity: string | undefined): boolean {
   try {
     const lease = lstatSync(dir);
-    if (!lease.isDirectory() || (lease.mode & 0o7777) !== 0o700) return false;
+    if (!lease.isDirectory() || !hasPrivatePermissions(dir, lease)) return false;
     const names = readdirSync(dir);
     if (names.length !== 1 || names[0] !== "owner.json") return false;
     const file = lstatSync(join(dir, "owner.json"));
-    if (!file.isFile() || (file.mode & 0o7777) !== 0o600) return false;
+    if (!file.isFile() || !hasPrivatePermissions(join(dir, "owner.json"), file)) return false;
     const owner = JSON.parse(readFileSync(join(dir, "owner.json"), "utf8")) as Record<string, unknown> | null;
     if (!owner || typeof owner !== "object" || Array.isArray(owner)) return false;
     if (Object.keys(owner).sort().join(",") !== LEASE_OWNER_KEYS.join(",")) return false;

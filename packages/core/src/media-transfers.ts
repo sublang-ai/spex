@@ -154,7 +154,7 @@ export class MediaTransfers<Hold extends UploadHold = UploadHold> {
         if (upload.offset !== upload.request.byteLength) {
           throw new MediaTransferError("conflict", i18n._({id: "The file has not finished uploading.", comment: "Media transfer refusal"}));
         }
-        const file = await open(upload.path, "r");
+        const file = await open(upload.path, process.platform === "win32" ? "r+" : "r");
         try { await file.sync(); } finally { await file.close(); }
         const asset = await this.options.publish(upload.request, upload.path, upload.hold);
         if (asset.byteLength !== upload.request.byteLength) throw new Error(i18n._({id: "Published upload has a different byte length.", comment: "Media storage failure"}));

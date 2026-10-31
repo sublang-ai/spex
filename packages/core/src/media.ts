@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
+import { retainEntryForPublication } from "@openclaw/fs-safe/advanced";
+import { hasPrivatePermissions } from "./files.js";
 import { randomUUID } from "node:crypto";
-import { dirname, join, relative, sep } from "node:path";
-import { closeSync, constants, copyFileSync, fstatSync, fsyncSync, linkSync, lstatSync, mkdirSync, openSync, statSync, unlinkSync, type BigIntStats, type Stats } from "node:fs";
+import { basename, dirname, join, relative, sep } from "node:path";
+import { closeSync, constants, copyFileSync, fstatSync, fsyncSync, linkSync, lstatSync, mkdirSync, openSync, realpathSync, statSync, unlinkSync, type BigIntStats, type Stats } from "node:fs";
 import { lstat, mkdir, readdir, rm, rmdir, unlink } from "node:fs/promises";
 import { createAssetStore, type AssetReader, type OwnerAssetStore } from "@sublang/playbook/session-assets";
 import { i18n } from "./i18n.js";
@@ -76,8 +78,10 @@ export async function importOwnedAsset(
     const target = place();
     if (!ensureBeneath(target.root, target.directory)) throw unavailableUpload();
     for (const name of [files.path, files.metadataPath]) publishFile(join(dir, name), join(target.directory, name));
-    const handle = openSync(target.directory, "r");
-    try { fsyncSync(handle); } finally { closeSync(handle); }
+    if (process.platform !== "win32") {
+      const handle = openSync(target.directory, "r");
+      try { fsyncSync(handle); } finally { closeSync(handle); }
+    }
     // What the owner now holds is verified as the facade's own import
     // verifies it — a file that stood there before included — reading
     // only; a failure leaves every published file as it is.
@@ -432,6 +436,25 @@ function ensureBeneath(root: string, directory: string): boolean {
 /** The directory at `path` held open until released, once; `undefined`
  * where none stands there. */
 function holdDirectory(path: string): ClonePin | undefined {
+  if (process.platform === "win32") {
+    let physical: string, info: BigIntStats;
+    try { physical = realpathSync.native(path); info = lstatSync(physical, { bigint: true }); }
+    catch (error) { if (absent(error)) return undefined; throw error; }
+    if (!info.isDirectory() || info.isSymbolicLink()) throw unavailableUpload();
+    const parentPath = dirname(physical);
+    const parent = { path: parentPath, identity: statSync(parentPath, { bigint: true }) };
+    // Retain the exact directory object through the library; this capability
+    // is closed only, never used to rename, publish or delete an entry.
+    const retained = retainEntryForPublication({
+      source: { parent, basename: basename(physical), expected: { dev: info.dev, ino: info.ino, kind: "directory" } },
+      destination: { parent, basename: `.spex-media-pin-${randomUUID()}` },
+      assertBeforeMutation: () => { throw unavailableUpload(); },
+    });
+    return { id: `${info.dev}:${info.ino}`, release: () => {
+      const result = retained.dispose();
+      if (result.resources !== "closed") throw unavailableUpload();
+    } };
+  }
   let handle: number;
   try { handle = openSync(path, constants.O_RDONLY | constants.O_DIRECTORY); }
   catch (error) { if (absent(error)) return undefined; throw error; }
@@ -466,5 +489,5 @@ function unsafeStaging(path: string): Error {
 function assertStagingDirectory(info: Stats, path: string, privateMode: boolean): void {
   if (!info.isDirectory() || info.isSymbolicLink() ||
       (process.getuid && info.uid !== process.getuid()) ||
-      (privateMode && (info.mode & 0o077) !== 0)) throw unsafeStaging(path);
+      (privateMode && !hasPrivatePermissions(path, info))) throw unsafeStaging(path);
 }

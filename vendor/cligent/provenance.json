@@ -1,0 +1,29 @@
+{
+  "upstream_repository": "https://github.com/sublang-ai/cligent",
+  "upstream_commit": "e411c5acb8bcf9442283d05fc7a849eede22f3ae",
+  "upstream_version": "0.36.1",
+  "purpose": "Unpublished native Windows isolation, final response, PowerShell cache and bounded native command transport snapshot; not a registry release",
+  "files": {
+    "windows-codex-isolation.patch": "fd3a675049035c87a661c37fd1117ef69862526cf73208f067a13b3da2a16836",
+    "codex-final-response.patch": "6bce38c7c5f94c6f7fd599e6592a0128a03ea4d2e9afc36ff267928e0b50412b",
+    "sublang-cligent-0.36.1-windows.20261030.6.tgz": "9ffda75f929232ae95041dd7921fcd252d44e94a7b69bb30168f725e6f9aa048",
+    "powershell-module-cache.patch": "a860e1e4bec537f080722e0c2f0d996e2b37e29e32bdb0cf9d24744a371e0766",
+    "sublang-cligent-0.36.1-windows.20261031.1.tgz": "0d020e3b18a52048b6a6bf468b518c7f0aba72ec3956ed24787325fb39502084",
+    "windows-native-sandbox.patch": "ce77e8ea0da7939ec098fb3f8a6654cb38e43ebb1e49f0288befb787664fcf87"
+  },
+  "bounded_commands_20261031": {
+    "base_archive": "sublang-cligent-0.36.1-windows.20261030.6.tgz",
+    "base_sha256": "9ffda75f929232ae95041dd7921fcd252d44e94a7b69bb30168f725e6f9aa048",
+    "archive": "sublang-cligent-0.36.1-windows.20261031.1.tgz",
+    "sha256": "0d020e3b18a52048b6a6bf468b518c7f0aba72ec3956ed24787325fb39502084",
+    "compiled_replacement_patch": "windows-native-sandbox.patch",
+    "patch_sha256": "ce77e8ea0da7939ec098fb3f8a6654cb38e43ebb1e49f0288befb787664fcf87",
+    "replacements": {
+      "dist/adapters/codex.js": {
+        "before": "cb03769ab5b2800614f3ac87e5d8c832f348fac6c1f6d1a160e4ab92ea0f43be",
+        "after": "5023406e6b13e25cc2e32a4b3b4843a06f9ff61e7e697a12d18e31217fc98979"
+      }
+    },
+    "scope": "Native Windows bounded Codex configuration only; all permission and approval values retained. Other packaged bytes unchanged except explicit version/dependency metadata."
+  }
+}

@@ -34,6 +34,7 @@ export function captureLoginShellEnv(
   shell: string = process.env.SHELL ?? "/bin/zsh",
   timeoutMs = 4000,
 ): Promise<Record<string, string>> {
+  if (process.platform === "win32") return Promise.resolve({});
   return new Promise((resolve) => {
     const child = execFile(
       shell,

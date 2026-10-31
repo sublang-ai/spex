@@ -1,0 +1,1278 @@
+diff --git a/package.json b/package.json
+index 6a4c362..5cdca0a 100644
+--- a/package.json
++++ b/package.json
+@@ -302,5 +302,8 @@
+     "@types/node": "^22.0.0",
+     "typescript": "^5.8.0",
+     "vitest": "^3.0.0"
++  },
++  "optionalDependencies": {
++    "@openclaw/fs-safe": "0.26.13"
+   }
+ }
+diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
+index cdf94f8..85fe9da 100644
+--- a/pnpm-lock.yaml
++++ b/pnpm-lock.yaml
+@@ -39,6 +39,10 @@ importers:
+       vitest:
+         specifier: ^3.0.0
+         version: 3.2.4(@types/debug@4.1.13)(@types/node@22.19.19)(yaml@2.9.0)
++    optionalDependencies:
++      '@openclaw/fs-safe':
++        specifier: 0.26.13
++        version: 0.26.13
+ 
+ packages:
+ 
+@@ -332,6 +336,74 @@ packages:
+     cpu: [x64]
+     os: [win32]
+ 
++  '@openclaw/fs-safe-darwin-arm64@0.26.13':
++    resolution: {integrity: sha512-R3mXijsyLrFVRiLjNlpEcmN9SZWMVd7keZWtVngGp19C56lHm/ye5/UJV2rICe5xsuxXM6q0iGKXkcQdUc9uKA==}
++    engines: {node: '>=22'}
++    cpu: [arm64]
++    os: [darwin]
++
++  '@openclaw/fs-safe-darwin-x64@0.26.13':
++    resolution: {integrity: sha512-s0ZKDbVIQCjUpgwxA3RMmt7UTyGQcWmkicxC7DdOq/hqLwzCRx74nb0zDrbuBHZCW9y6lF6PeqPfppPtwXqjDg==}
++    engines: {node: '>=22'}
++    cpu: [x64]
++    os: [darwin]
++
++  '@openclaw/fs-safe-freebsd-arm64@0.26.13':
++    resolution: {integrity: sha512-doLvVPENhF5tUCKSYRctHt5WN27YP/QwQoeCzI88Nfh27r91KrXIsyFWohffou1hHlYX3ucDgDqp129Xz/ccNg==}
++    engines: {node: '>=22'}
++    cpu: [arm64]
++    os: [freebsd]
++
++  '@openclaw/fs-safe-freebsd-x64@0.26.13':
++    resolution: {integrity: sha512-rYYIKwy7sSQXSVgHUn8gzJrIQU4TFQ5Issjs5LvdhNmCPt9rAa9GYZWZ2HMH+sQCTeeTM4G9Jt39Q3cZkKI0gg==}
++    engines: {node: '>=22'}
++    cpu: [x64]
++    os: [freebsd]
++
++  '@openclaw/fs-safe-linux-arm64-gnu@0.26.13':
++    resolution: {integrity: sha512-2rWPoeG5f+H7/CbVv+Q2SEW4xOGZfwtLzZ4kZA2xveOb4EhiU7jSZjfCwaf7/jVGIcwiC5SEvL1cHdTyORwULg==}
++    engines: {node: '>=22'}
++    cpu: [arm64]
++    os: [linux]
++    libc: [glibc]
++
++  '@openclaw/fs-safe-linux-arm64-musl@0.26.13':
++    resolution: {integrity: sha512-K9bhtXJxH6syGcqJ5bh0+qKn1T1c8p1p+dEFjta3CMy9sHtqpbPjSOw3DfdjpVz5WUtahkQm1nlV623eSRSIOg==}
++    engines: {node: '>=22'}
++    cpu: [arm64]
++    os: [linux]
++    libc: [musl]
++
++  '@openclaw/fs-safe-linux-x64-gnu@0.26.13':
++    resolution: {integrity: sha512-nzZMTHFPaHXHQH9HXX5YoN/OEivPpmBlcWrSErK8O3iB0E05uiOG8IYIHgsZZUzLwsVdYbvrIYc6uVwxRR/Qfw==}
++    engines: {node: '>=22'}
++    cpu: [x64]
++    os: [linux]
++    libc: [glibc]
++
++  '@openclaw/fs-safe-linux-x64-musl@0.26.13':
++    resolution: {integrity: sha512-zoW3n+ovzWItj+KvM7UjN5XNRbNkTIIVVy+wJK1yRpRMd8n12qTTj03+a0hHpgzL47ZORfSO1cCbiPv5231Vgw==}
++    engines: {node: '>=22'}
++    cpu: [x64]
++    os: [linux]
++    libc: [musl]
++
++  '@openclaw/fs-safe-win32-arm64-msvc@0.26.13':
++    resolution: {integrity: sha512-aw9dhWaLuCiqykCONI7o5Suv3v61cuDQYSX/oe3UQlZHlnz4oq6j7JiHr48IdmgmgW5n9/k4wIBX5VYxeoG1PQ==}
++    engines: {node: '>=22'}
++    cpu: [arm64]
++    os: [win32]
++
++  '@openclaw/fs-safe-win32-x64-msvc@0.26.13':
++    resolution: {integrity: sha512-JQtn+zWFC74cksnynI/IK4b4jEmk64P4qUrGSlVLrEb2jJOngopHiVGq9gNB1FmvpyG7SttBg6wjvUfXe2aHeQ==}
++    engines: {node: '>=22'}
++    cpu: [x64]
++    os: [win32]
++
++  '@openclaw/fs-safe@0.26.13':
++    resolution: {integrity: sha512-wmHGL0pKcYN8oO+RlvisaZibXDUOQVj6mNQ2VVIoicsqTMvpgzZGX2U4zu8yZtb32MmvPLg1Y9bRQCcePMoEyw==}
++    engines: {node: '>=22'}
++
+   '@playwright/mcp@0.0.77':
+     resolution: {integrity: sha512-vf3PmCdOWVvEc3Vmh8DVWvsbz6/rIGi+OG0cyC/2YTn10U8tZMHEiRG62LHdPTTf0qCjoS7/1mbyS5F0RHoTzQ==}
+     engines: {node: '>=18'}
+@@ -631,6 +703,9 @@ packages:
+     resolution: {integrity: sha512-yki5XnKuf750l50uGTllt6kKILY4nQ1eNIQatoXEByZ5dWgnKqbnqmTrBE5B4N7lrMJKQ2ytWMiTO2o0v6Ew/w==}
+     engines: {node: '>= 0.6'}
+ 
++  core-util-is@1.0.3:
++    resolution: {integrity: sha512-ZQBvi1DcpJ4GDqanjucZ2Hj3wEO5pZDS89BWbkcrvdxksJorwUDDZamX9ldFkp9aw2lmBDLgkObEA4DWNJ9FYQ==}
++
+   cors@2.8.6:
+     resolution: {integrity: sha512-tJtZBBHA6vjIAaF6EnIaq6laBBP9aq/Y3ouVJjEfoHbRBcHBAHYcMh/w8LDrk2PvIMMq8gmopa5D4V8RmbrxGw==}
+     engines: {node: '>= 0.10'}
+@@ -817,6 +892,9 @@ packages:
+     resolution: {integrity: sha512-IKXpvIzjnC9XTAUbVBcMfGS0EPaIXtW6v+zr+RRp+hqULEpo0owZax6wyRwPOJbWbzjYspQwusTsfVr0ifh4uQ==}
+     engines: {node: '>=0.10.0'}
+ 
++  immediate@3.0.6:
++    resolution: {integrity: sha512-XXOFtyqDjNDAQxVfYxuF7g9Il/IbWmmlQg2MYKOH8ExIT1qg6xc4zyS3HaEEATgs1btfzxq15ciUiY7gjSXRGQ==}
++
+   inherits@2.0.4:
+     resolution: {integrity: sha512-k/vGaX4/Yla3WzyMCvTQOXYeIHvqOKtnqBduzTHpzpQZzAskKMhZ2K+EnBiSM9zGSoIFeMpXKxa4dYeZIQqewQ==}
+ 
+@@ -835,6 +913,9 @@ packages:
+   is-promise@4.0.0:
+     resolution: {integrity: sha512-hvpoI6korhJMnej285dSg6nu1+e6uxs7zG3BYAm5byqDsgJNWwxzM6z6iZiAgQR4TJ30JmBTOwqZUw3WlyH3AQ==}
+ 
++  isarray@1.0.0:
++    resolution: {integrity: sha512-VLghIWNM6ELQzo7zwmcg0NmTVyWKYjvIeM83yjp0wRDTmUnrM678fQbcKBo6n2CJEF0szoG//ytg+TKla89ALQ==}
++
+   isexe@2.0.0:
+     resolution: {integrity: sha512-RHxMLp9lnKHGHRng9QFhRCMbYAcVpn69smSGcq3f36xjgVVWThj4qqLbTLlq7Ssj8B+fIQ1EuCEGI2lKsyQeIw==}
+ 
+@@ -854,6 +935,12 @@ packages:
+   json-schema-typed@8.0.2:
+     resolution: {integrity: sha512-fQhoXdcvc3V28x7C7BMs4P5+kNlgUURe2jmUT1T//oBRMDrqy1QPelJimwZGo7Hg9VPV3EQV5Bnq4hbFy2vetA==}
+ 
++  jszip@3.10.2:
++    resolution: {integrity: sha512-3l+rb15IOWtUhU0H5MFqES/T6Kh7abYwjosBey/vD6hDt8zoEffkSC5Ws5SGtgVw3gBx2NEbhTeSW1+kWkpyTQ==}
++
++  lie@3.3.0:
++    resolution: {integrity: sha512-UaiMJzeWRlEujzAuw5LokY1L5ecNQYZKfmyZ9L7wDHb/p5etKaxXhohBcrw0EYby+G/NA52vRSN4N39dxHAIwQ==}
++
+   longest-streak@3.1.0:
+     resolution: {integrity: sha512-9Ri+o0JYgehTaVBBDoMqIl8GXtbWg711O3srftcHhZ0dqnETqLaoIK0x17fUw9rFSlK/0NlsKe0Ahhyl5pXE2g==}
+ 
+@@ -1038,6 +1125,9 @@ packages:
+     resolution: {integrity: sha512-AxTM2wDGORHGEkPCt8yqxOTMgpfbEHqF51f/5fJCmwFC3C/zNcGT63SymH2ttOAaiIws2zVg4+izQCjrakcwHg==}
+     engines: {node: '>=20'}
+ 
++  pako@1.0.11:
++    resolution: {integrity: sha512-4hLB8Py4zZce5s4yd9XzopqwVv/yGNhV1Bl8NTmCq1763HeK2+EwVTv+leGeL13Dnh2wfbqowVPXCIO0z4taYw==}
++
+   parseurl@1.3.3:
+     resolution: {integrity: sha512-CiyeOxFT/JZyN5m0z9PfXw4SCBJ6Sygz1Dpl0wqjlhDEGGBP1GnsUVEL0p63hoG1fcj3fHynXi9NYO4nWOL+qQ==}
+     engines: {node: '>= 0.8'}
+@@ -1081,6 +1171,9 @@ packages:
+     resolution: {integrity: sha512-SoSL4+OSEtR99LHFZQiJLkT59C5B1amGO1NzTwj7TT1qCUgUO6hxOvzkOYxD+vMrXBM3XJIKzokoERdqQq/Zmg==}
+     engines: {node: ^10 || ^12 || >=14}
+ 
++  process-nextick-args@2.0.1:
++    resolution: {integrity: sha512-3ouUOpQhtgrbOa17J7+uxOTpITYWaGP7/AhoR3+A+/1e9skrzelGi/dXzEYyvbxubEF6Wn2ypscTKiKJFFn1ag==}
++
+   proxy-addr@2.0.7:
+     resolution: {integrity: sha512-llQsMLSUDUPT44jdrU/O37qlnifitDP+ZwrmmZcoSKyLKvtZxpyV0n2/bD/N4tBAAZ/gJEdZU7KMraoK1+XYAg==}
+     engines: {node: '>= 0.10'}
+@@ -1097,6 +1190,9 @@ packages:
+     resolution: {integrity: sha512-K5zQjDllxWkf7Z5xJdV0/B0WTNqx6vxG70zJE4N0kBs4LovmEYWJzQGxC9bS9RAKu3bgM40lrd5zoLJ12MQ5BA==}
+     engines: {node: '>= 0.10'}
+ 
++  readable-stream@2.3.8:
++    resolution: {integrity: sha512-8p0AUk4XODgIewSi0l8Epjs+EVnWiK7NoDIEGU0HhE7+ZyY8D1IMY7odu5lRrFXGg71L15KG8QrPmum45RTtdA==}
++
+   remark-gfm@4.0.1:
+     resolution: {integrity: sha512-1quofZ2RQ9EWdeN34S79+KExV1764+wCUGop5CPL1WGdD0ocPpu91lzPGbwWMECpEpd42kJGQwzRfyov9j4yNg==}
+ 
+@@ -1119,6 +1215,9 @@ packages:
+     resolution: {integrity: sha512-nLTrUKm2UyiL7rlhapu/Zl45FwNgkZGaCpZbIHajDYgwlJCOzLSk+cIPAnsEqV955GjILJnKbdQC1nVPz+gAYQ==}
+     engines: {node: '>= 18'}
+ 
++  safe-buffer@5.1.2:
++    resolution: {integrity: sha512-Gd2UZBJDkXlY7GbJxfsE8/nvKkUEU1G38c1siN6QP6a9PT9MmHB8GnpscSmMJSoF8LOIrt8ud/wPtojys4G6+g==}
++
+   safer-buffer@2.1.2:
+     resolution: {integrity: sha512-YZo3K82SD7Riyi0E1EQPojLz7kpepnSQI9IyPbHHg1XXXevb5dJI7tpyN2ADxGcQbHG7vcyRHk0cbwqcQriUtg==}
+ 
+@@ -1130,6 +1229,9 @@ packages:
+     resolution: {integrity: sha512-xRXBn0pPqQTVQiC8wyQrKs2MOlX24zQ0POGaj0kultvoOCstBQM5yvOhAVSUwOMjQtTvsPWoNCHfPGwaaQJhTw==}
+     engines: {node: '>= 18'}
+ 
++  setimmediate@1.0.5:
++    resolution: {integrity: sha512-MATJdZp8sLqDl/68LfQmbP8zKPLQNV6BIZoIgrscFDQ+RsvK/BxeDQOgyxKKoh0y/8h3BqVFnCqQ/gd+reiIXA==}
++
+   setprototypeof@1.2.0:
+     resolution: {integrity: sha512-E5LDX7Wrp85Kil5bhZv46j8jOeboKq5JMmYM3gVGdGH8xFpPWXUMsNrlODCrkoxMEeNi/XZIwuRvY4XNwYMJpw==}
+ 
+@@ -1177,6 +1279,9 @@ packages:
+   std-env@3.10.0:
+     resolution: {integrity: sha512-5GS12FdOZNliM5mAOxFRg7Ir0pWz8MdpYm6AY6VPkGpbA7ZzmbzNcBJQ0GPvvyWgcY7QAhCgf9Uy89I03faLkg==}
+ 
++  string_decoder@1.1.1:
++    resolution: {integrity: sha512-n/ShnvDi6FHbbVfviro+WojiFzv+s8MPMHBczVePfUpDJLwoLT0ht1l4YwBCbi8pJAveEEdnkHyPyTP/mzRfwg==}
++
+   strip-literal@3.1.0:
+     resolution: {integrity: sha512-8r3mkIM/2+PpjHoOtiAW8Rg3jJLHaV7xPwG+YRGrv6FP0wwk/toTpATxWYOW0BKdWwl82VT2tFYi5DlROa0Mxg==}
+ 
+@@ -1243,6 +1348,9 @@ packages:
+     resolution: {integrity: sha512-pjy2bYhSsufwWlKwPc+l3cN7+wuJlK6uz0YdJEOlQDbl6jo/YlPi4mb8agUkVC8BF7V8NuzeyPNqRksA3hztKQ==}
+     engines: {node: '>= 0.8'}
+ 
++  util-deprecate@1.0.2:
++    resolution: {integrity: sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw==}
++
+   vary@1.1.2:
+     resolution: {integrity: sha512-BNGbWLfd0eUPabhkXUVm0j8uuvREyTh5ovRa/dyow/BqAbZJyC+5fU+IzQOzmAKzYqYRAISoRhdQr3eIZ/PXqg==}
+     engines: {node: '>= 0.8'}
+@@ -1549,6 +1657,51 @@ snapshots:
+   '@openai/codex@0.159.0-win32-x64':
+     optional: true
+ 
++  '@openclaw/fs-safe-darwin-arm64@0.26.13':
++    optional: true
++
++  '@openclaw/fs-safe-darwin-x64@0.26.13':
++    optional: true
++
++  '@openclaw/fs-safe-freebsd-arm64@0.26.13':
++    optional: true
++
++  '@openclaw/fs-safe-freebsd-x64@0.26.13':
++    optional: true
++
++  '@openclaw/fs-safe-linux-arm64-gnu@0.26.13':
++    optional: true
++
++  '@openclaw/fs-safe-linux-arm64-musl@0.26.13':
++    optional: true
++
++  '@openclaw/fs-safe-linux-x64-gnu@0.26.13':
++    optional: true
++
++  '@openclaw/fs-safe-linux-x64-musl@0.26.13':
++    optional: true
++
++  '@openclaw/fs-safe-win32-arm64-msvc@0.26.13':
++    optional: true
++
++  '@openclaw/fs-safe-win32-x64-msvc@0.26.13':
++    optional: true
++
++  '@openclaw/fs-safe@0.26.13':
++    optionalDependencies:
++      '@openclaw/fs-safe-darwin-arm64': 0.26.13
++      '@openclaw/fs-safe-darwin-x64': 0.26.13
++      '@openclaw/fs-safe-freebsd-arm64': 0.26.13
++      '@openclaw/fs-safe-freebsd-x64': 0.26.13
++      '@openclaw/fs-safe-linux-arm64-gnu': 0.26.13
++      '@openclaw/fs-safe-linux-arm64-musl': 0.26.13
++      '@openclaw/fs-safe-linux-x64-gnu': 0.26.13
++      '@openclaw/fs-safe-linux-x64-musl': 0.26.13
++      '@openclaw/fs-safe-win32-arm64-msvc': 0.26.13
++      '@openclaw/fs-safe-win32-x64-msvc': 0.26.13
++      jszip: 3.10.2
++    optional: true
++
+   '@playwright/mcp@0.0.77':
+     dependencies:
+       playwright: 1.62.0-alpha-2026-06-29
+@@ -1791,6 +1944,9 @@ snapshots:
+ 
+   cookie@0.7.2: {}
+ 
++  core-util-is@1.0.3:
++    optional: true
++
+   cors@2.8.6:
+     dependencies:
+       object-assign: 4.1.1
+@@ -2004,6 +2160,9 @@ snapshots:
+     dependencies:
+       safer-buffer: 2.1.2
+ 
++  immediate@3.0.6:
++    optional: true
++
+   inherits@2.0.4: {}
+ 
+   ip-address@10.2.0: {}
+@@ -2014,6 +2173,9 @@ snapshots:
+ 
+   is-promise@4.0.0: {}
+ 
++  isarray@1.0.0:
++    optional: true
++
+   isexe@2.0.0: {}
+ 
+   jose@6.2.3: {}
+@@ -2029,6 +2191,19 @@ snapshots:
+ 
+   json-schema-typed@8.0.2: {}
+ 
++  jszip@3.10.2:
++    dependencies:
++      lie: 3.3.0
++      pako: 1.0.11
++      readable-stream: 2.3.8
++      setimmediate: 1.0.5
++    optional: true
++
++  lie@3.3.0:
++    dependencies:
++      immediate: 3.0.6
++    optional: true
++
+   longest-streak@3.1.0: {}
+ 
+   loupe@3.2.1: {}
+@@ -2369,6 +2544,9 @@ snapshots:
+ 
+   p-timeout@7.0.1: {}
+ 
++  pako@1.0.11:
++    optional: true
++
+   parseurl@1.3.3: {}
+ 
+   path-key@3.1.1: {}
+@@ -2399,6 +2577,9 @@ snapshots:
+       picocolors: 1.1.1
+       source-map-js: 1.2.1
+ 
++  process-nextick-args@2.0.1:
++    optional: true
++
+   proxy-addr@2.0.7:
+     dependencies:
+       forwarded: 0.2.0
+@@ -2418,6 +2599,17 @@ snapshots:
+       iconv-lite: 0.7.3
+       unpipe: 1.0.0
+ 
++  readable-stream@2.3.8:
++    dependencies:
++      core-util-is: 1.0.3
++      inherits: 2.0.4
++      isarray: 1.0.0
++      process-nextick-args: 2.0.1
++      safe-buffer: 5.1.2
++      string_decoder: 1.1.1
++      util-deprecate: 1.0.2
++    optional: true
++
+   remark-gfm@4.0.1:
+     dependencies:
+       '@types/mdast': 4.0.4
+@@ -2487,6 +2679,9 @@ snapshots:
+     transitivePeerDependencies:
+       - supports-color
+ 
++  safe-buffer@5.1.2:
++    optional: true
++
+   safer-buffer@2.1.2: {}
+ 
+   send@1.2.1:
+@@ -2514,6 +2709,9 @@ snapshots:
+     transitivePeerDependencies:
+       - supports-color
+ 
++  setimmediate@1.0.5:
++    optional: true
++
+   setprototypeof@1.2.0: {}
+ 
+   shebang-command@2.0.0:
+@@ -2565,6 +2763,11 @@ snapshots:
+ 
+   std-env@3.10.0: {}
+ 
++  string_decoder@1.1.1:
++    dependencies:
++      safe-buffer: 5.1.2
++    optional: true
++
+   strip-literal@3.1.0:
+     dependencies:
+       js-tokens: 9.0.1
+@@ -2631,6 +2834,9 @@ snapshots:
+ 
+   unpipe@1.0.0: {}
+ 
++  util-deprecate@1.0.2:
++    optional: true
++
+   vary@1.1.2: {}
+ 
+   vfile-message@4.0.3:
+diff --git a/reference/sdlc/code.playbook/bin/machine-identity.js b/reference/sdlc/code.playbook/bin/machine-identity.js
+index ddcdc8e..5f3a1ce 100644
+--- a/reference/sdlc/code.playbook/bin/machine-identity.js
++++ b/reference/sdlc/code.playbook/bin/machine-identity.js
+@@ -12,7 +12,7 @@ import { constants } from 'node:fs';
+ import { chmod, link, lstat, mkdir, open, unlink } from 'node:fs/promises';
+ import { homedir } from 'node:os';
+ import { dirname, join } from 'node:path';
+-import { sameFileIdentity, syncDirectory, tightenPrivateEntry } from './private-paths.js';
++import { sameFileIdentity, syncDirectory, tightenPrivateEntry, mkdirPrivate } from './private-paths.js';
+ 
+ export const MACHINE_IDENTITY_TAG_PREFIX = 'machine-id:v1:';
+ export const PLAYBOOK_MACHINE_IDENTITY_UNAVAILABLE =
+@@ -150,7 +150,7 @@ async function prepareDirectory(directory, path, fs) {
+       throw new MachineIdentityUnavailableError(path, `its directory cannot be read: ${errorMessage(cause)}`);
+     }
+     try {
+-      await fs.mkdir(directory, { recursive: true, mode: 0o700 });
++      await mkdirPrivate(directory, fs, { recursive: true });
+       await fs.chmod(directory, 0o700);
+       stat = await fs.lstat(directory);
+     } catch (creation) {
+diff --git a/reference/sdlc/code.playbook/bin/private-paths.js b/reference/sdlc/code.playbook/bin/private-paths.js
+index 2a9a0b5..281c293 100644
+--- a/reference/sdlc/code.playbook/bin/private-paths.js
++++ b/reference/sdlc/code.playbook/bin/private-paths.js
+@@ -11,18 +11,55 @@
+ // applies it to its state directory and file (playbook-cli-97).
+ 
+ import { constants } from 'node:fs';
++import { dirname } from 'node:path';
++import { createRequire } from 'node:module';
++// POSIX hosts retain the existing Node floor and never load the optional
++// Windows mechanism. Native Windows requires Node 22.19 or newer.
++const windowsPermissions = process.platform === 'win32'
++  ? createRequire(import.meta.url)('@openclaw/fs-safe/permissions') : undefined;
++
++// The library owns Windows descriptor inspection and creation. This is the
++// store's admission policy, deliberately conservative even for unusual ACEs.
++export function privatePermissions(stat, mode, path) {
++  if (process.platform !== 'win32') return (Number(stat.mode) & 0o7777) === mode;
++  if (!path) throw new Error('private Windows permission checks require the entry path');
++  const facts = windowsPermissions.readOwnerAndDacl(path);
++  if (facts.status !== 'supported' || !facts.complete || !facts.isLocal || !facts.daclPresent || facts.unsupportedAceTypes.length) return false;
++  const trusted = new Set([facts.currentUserSid, 's-1-5-18', 's-1-5-32-544']);
++  return trusted.has(facts.ownerSid) && facts.aces.every(ace =>
++    ace.aceType === 'deny' || ace.mask === 0 || trusted.has(ace.sid));
++}
++
++export async function mkdirPrivate(path, fs, options = {}) {
++  if (process.platform !== 'win32') return fs.mkdir(path, { ...options, mode: 0o700 });
++  if (options.recursive) {
++    try { await fs.lstat(dirname(path)); }
++    catch (error) {
++      if (error.code !== 'ENOENT') throw error;
++      await mkdirPrivate(dirname(path), fs, { recursive: true });
++    }
++  }
++  try { await windowsPermissions.createPrivateDirectory(path); }
++  catch (error) {
++    if (error.code !== 'EEXIST' || !options.recursive) throw error;
++  }
++  const stat = await fs.lstat(path);
++  if (stat.isSymbolicLink() || !stat.isDirectory() || !privatePermissions(stat, 0o700, path)) {
++    throw new Error('private Windows directory permission verification failed');
++  }
++}
+ 
+ export function sameFileIdentity(left, right) {
+   return left.dev === right.dev && left.ino === right.ino;
+ }
+ 
+-export function verifyPrivateEntry(stat, directory, label, uid = process.getuid?.()) {
++export function verifyPrivateEntry(stat, directory, label, uid = process.getuid?.(), path) {
+   const required = directory ? 0o700 : 0o600;
+   if (
+     stat.isSymbolicLink() ||
+     (directory ? !stat.isDirectory() : !stat.isFile() || stat.nlink !== 1) ||
+     (uid !== undefined && stat.uid !== uid) ||
+-    (stat.mode & required) !== required
++    (process.platform === 'win32' ? !privatePermissions(stat, required, path) : (stat.mode & required) !== required)
+   ) {
+     throw new Error(`${label} refuses unsafe ownership, links, type, or owner access`);
+   }
+@@ -30,7 +67,15 @@ export function verifyPrivateEntry(stat, directory, label, uid = process.getuid?
+ 
+ export async function tightenPrivateEntry(path, before, directory, fs, label) {
+   const uid = process.getuid?.();
+-  verifyPrivateEntry(before, directory, label, uid);
++  verifyPrivateEntry(before, directory, label, uid, path);
++  // Node cannot open directory descriptors on Windows. Admission uses the
++  // library's native owner/DACL inspection and retains both identity fences.
++  if (process.platform === 'win32' && directory) {
++    const current = await fs.lstat(path);
++    verifyPrivateEntry(current, true, label, uid, path);
++    if (!sameFileIdentity(before, current)) throw new Error(`${label}: the entry changed during permission preparation`);
++    return current;
++  }
+   const handle = await fs.open(
+     path,
+     constants.O_RDONLY |
+@@ -40,20 +85,20 @@ export async function tightenPrivateEntry(path, before, directory, fs, label) {
+   );
+   try {
+     const opened = await handle.stat();
+-    verifyPrivateEntry(opened, directory, label, uid);
++    verifyPrivateEntry(opened, directory, label, uid, path);
+     if (!sameFileIdentity(before, opened)) {
+       throw new Error(`${label}: the entry changed during permission preparation`);
+     }
+     const mode = directory ? 0o700 : 0o600;
+-    if ((opened.mode & 0o7777) !== mode) await handle.chmod(mode);
++    if (process.platform !== 'win32' && (opened.mode & 0o7777) !== mode) await handle.chmod(mode);
+     const after = await handle.stat();
+-    verifyPrivateEntry(after, directory, label, uid);
++    verifyPrivateEntry(after, directory, label, uid, path);
+     const current = await fs.lstat(path);
+-    verifyPrivateEntry(current, directory, label, uid);
++    verifyPrivateEntry(current, directory, label, uid, path);
+     if (
+       !sameFileIdentity(after, current) ||
+-      (after.mode & 0o7777) !== mode ||
+-      (current.mode & 0o7777) !== mode
++      !privatePermissions(after, mode, path) ||
++      !privatePermissions(current, mode, path)
+     ) {
+       throw new Error(`${label}: permission tightening could not be verified`);
+     }
+@@ -64,6 +109,7 @@ export async function tightenPrivateEntry(path, before, directory, fs, label) {
+ }
+ 
+ export async function syncDirectory(path, fs) {
++  if (process.platform === 'win32') return;
+   let directory;
+   try {
+     directory = await fs.open(path, 'r');
+diff --git a/reference/sdlc/code.playbook/bin/repository-effects.js b/reference/sdlc/code.playbook/bin/repository-effects.js
+index c8c265c..174ab0a 100644
+--- a/reference/sdlc/code.playbook/bin/repository-effects.js
++++ b/reference/sdlc/code.playbook/bin/repository-effects.js
+@@ -1,6 +1,7 @@
+ // SPDX-License-Identifier: Apache-2.0
+ // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
+ 
++import { privatePermissions, mkdirPrivate } from "./private-paths.js";
+ import { execFile } from 'node:child_process';
+ import { createHash, randomUUID } from 'node:crypto';
+ import { constants } from 'node:fs';
+@@ -242,6 +243,7 @@ async function runGitText(cwd, args, options = {}) {
+ }
+ 
+ async function syncDirectory(path) {
++  if (process.platform === 'win32') return;
+   let directory;
+   try {
+     directory = await open(path, 'r');
+@@ -1167,7 +1169,7 @@ async function assertPrivateDirectory(path, label) {
+   if (!info.isDirectory() || info.isSymbolicLink()) {
+     throw new Error(`${label} is not a private directory`);
+   }
+-  if ((info.mode & 0o7777) !== 0o700) {
++  if (!privatePermissions(info, 0o700, path)) {
+     throw new Error(`${label} permissions must be 0700`);
+   }
+   return info;
+@@ -1176,7 +1178,7 @@ async function assertPrivateDirectory(path, label) {
+ async function ensureClaimRoot(path) {
+   let created = false;
+   try {
+-    await mkdir(path, { mode: 0o700 });
++    await mkdirPrivate(path, { mkdir, lstat });
+     created = true;
+   } catch (error) {
+     if (errorCode(error) !== 'EEXIST') throw error;
+@@ -1199,7 +1201,7 @@ async function readClaimOwner(activePath) {
+   if (
+     !pathInfo.isFile() ||
+     pathInfo.isSymbolicLink() ||
+-    (pathInfo.mode & 0o7777) !== 0o600
++    !privatePermissions(pathInfo, 0o600, filePath)
+   ) {
+     throw new Error('repository claim owner is not a private regular file');
+   }
+@@ -1213,7 +1215,7 @@ async function readClaimOwner(activePath) {
+     const info = await handle.stat();
+     if (
+       !info.isFile() ||
+-      (info.mode & 0o7777) !== 0o600 ||
++      !privatePermissions(info, 0o600, filePath) ||
+       info.dev !== pathInfo.dev ||
+       info.ino !== pathInfo.ino
+     ) {
+@@ -1234,7 +1236,7 @@ async function readClaimOwner(activePath) {
+ 
+ async function createClaimStage(root, owner) {
+   const stagePath = join(root, `.stage-${owner.ownerToken}`);
+-  await mkdir(stagePath, { mode: 0o700 });
++  await mkdirPrivate(stagePath, { mkdir, lstat });
+   await chmod(stagePath, 0o700);
+   let handle;
+   try {
+diff --git a/reference/sdlc/code.playbook/bin/session-chunks.js b/reference/sdlc/code.playbook/bin/session-chunks.js
+index fe5dbaa..98e8671 100644
+--- a/reference/sdlc/code.playbook/bin/session-chunks.js
++++ b/reference/sdlc/code.playbook/bin/session-chunks.js
+@@ -8,7 +8,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
+ import { constants } from 'node:fs';
+ import * as nativeFs from 'node:fs/promises';
+ import { dirname, isAbsolute, join } from 'node:path';
+-import { sameFileIdentity, tightenPrivateEntry, verifyPrivateEntry } from './private-paths.js';
++import { sameFileIdentity, tightenPrivateEntry, verifyPrivateEntry, mkdirPrivate, privatePermissions } from './private-paths.js';
+ 
+ export const MAX_SESSION_CHUNK_BYTES = 8 * 1024 * 1024;
+ const INLINE_BYTES = 16 * 1024;
+@@ -28,14 +28,14 @@ function reference(value) {
+       value.byteLength < 1 || value.byteLength > MAX_SESSION_CHUNK_BYTES) fail();
+   return value;
+ }
+-function privateStat(stat, directory) {
++function privateStat(stat, directory, path) {
+   if (typeof stat.mode === 'bigint') {
+     const original = stat;
+     stat = { ...stat, mode: Number(stat.mode), uid: Number(stat.uid), nlink: Number(stat.nlink),
+       isFile: () => original.isFile(), isDirectory: () => original.isDirectory(), isSymbolicLink: () => original.isSymbolicLink() };
+   }
+-  verifyPrivateEntry(stat, directory, 'session chunk');
+-  if ((stat.mode & 0o7777) !== (directory ? 0o700 : 0o600)) throw new Error('session chunk permissions must be private');
++  verifyPrivateEntry(stat, directory, 'session chunk', undefined, path);
++  if (!privatePermissions(stat, directory ? 0o700 : 0o600, path)) throw new Error('session chunk permissions must be private');
+ }
+ function unchanged(before, after) {
+   const precise = before.mtimeNs !== undefined && after.mtimeNs !== undefined;
+@@ -64,7 +64,7 @@ export function createSessionChunks({ directory, fsOps, createDirectory = true }
+     while (cachedBytes > CACHE_BYTES || verified.size > CACHE_NODES) forget(verified.keys().next().value);
+   };
+   const operations = new AsyncLocalStorage();
+-  const freshDirectory = async () => { const stat = await fs.lstat(directory); privateStat(stat, true); return stat; };
++  const freshDirectory = async () => { const stat = await fs.lstat(directory); privateStat(stat, true, directory); return stat; };
+   const checkDirectory = async () => {
+     const context = operations.getStore();
+     if (context?.owner) return context.owner;
+@@ -80,12 +80,17 @@ export function createSessionChunks({ directory, fsOps, createDirectory = true }
+     }
+   });
+   const sync = async (path, expected) => {
++    if (process.platform === 'win32') {
++      const current = await fs.lstat(path); privateStat(current, true, path);
++      if (expected && !sameFileIdentity(expected, current)) throw new Error('session chunk directory changed');
++      return;
++    }
+     const handle = await fs.open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_DIRECTORY ?? 0));
+     try {
+-      const opened = await handle.stat(); privateStat(opened, true);
++      const opened = await handle.stat(); privateStat(opened, true, path);
+       if (expected && !sameFileIdentity(expected, opened)) throw new Error('session chunk directory changed');
+       await handle.sync();
+-      const current = await fs.lstat(path); privateStat(current, true);
++      const current = await fs.lstat(path); privateStat(current, true, path);
+       if (!sameFileIdentity(opened, current)) throw new Error('session chunk directory changed');
+     } finally { await handle.close(); }
+   };
+@@ -95,8 +100,8 @@ export function createSessionChunks({ directory, fsOps, createDirectory = true }
+     try { stat = await fs.lstat(directory); }
+     catch (error) {
+       if (error.code !== 'ENOENT' || !createDirectory) throw error;
+-      const parent = await fs.lstat(dirname(directory)); privateStat(parent, true);
+-      try { await fs.mkdir(directory, { mode: 0o700 }); }
++      const parent = await fs.lstat(dirname(directory)); privateStat(parent, true, dirname(directory));
++      try { await mkdirPrivate(directory, fs); }
+       catch (cause) { if (cause.code !== 'EEXIST') throw cause; }
+       stat = await fs.lstat(directory);
+       await sync(dirname(directory), parent);
+@@ -113,12 +118,12 @@ export function createSessionChunks({ directory, fsOps, createDirectory = true }
+       if (!match) continue;
+       const path = join(directory, name);
+       const temporary = await fs.lstat(path);
+-      if (temporary.nlink === 1) privateStat(temporary, false);
++      if (temporary.nlink === 1) privateStat(temporary, false, path);
+       else {
+         // A crash between exclusive link publication and alias removal may
+         // leave precisely these two names for one private store-owned inode.
+         if (temporary.isSymbolicLink() || !temporary.isFile() || temporary.nlink !== 2 ||
+-            (process.getuid && temporary.uid !== process.getuid()) || (temporary.mode & 0o7777) !== 0o600) throw new Error('unsafe interrupted session chunk publication');
++            (process.getuid && temporary.uid !== process.getuid()) || !privatePermissions(temporary, 0o600, path)) throw new Error('unsafe interrupted session chunk publication');
+         const destination = await fs.lstat(join(directory, match[1]));
+         if (!unchanged(temporary, destination) || destination.isSymbolicLink()) throw new Error('session chunk temporary alias differs from publication');
+         pendingAliases.set(match[1], temporary);
+@@ -144,7 +149,7 @@ export function createSessionChunks({ directory, fsOps, createDirectory = true }
+     reference(ref);
+     const owner = await checkDirectory();
+     const path = join(directory, ref.sha256);
+-    const before = await fs.lstat(path, { bigint: true }); privateStat(before, false);
++    const before = await fs.lstat(path, { bigint: true }); privateStat(before, false, path);
+     if (BigInt(before.size) !== BigInt(ref.byteLength)) throw new Error('session chunk length mismatch');
+     const cached = verified.get(ref.sha256);
+     if (!operations.getStore()?.force && cached && before.mtimeNs !== undefined &&
+@@ -155,7 +160,7 @@ export function createSessionChunks({ directory, fsOps, createDirectory = true }
+     forget(ref.sha256);
+     const handle = await fs.open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
+     try {
+-      const opened = await handle.stat({ bigint: true }); privateStat(opened, false);
++      const opened = await handle.stat({ bigint: true }); privateStat(opened, false, path);
+       if (!unchanged(before, opened)) throw new Error('session chunk changed before read');
+       // Read the proven bounded length, rather than readFile on a growing file.
+       const bytes = Buffer.alloc(ref.byteLength);
+@@ -165,8 +170,8 @@ export function createSessionChunks({ directory, fsOps, createDirectory = true }
+         if (!bytesRead) throw new Error('session chunk truncated during read');
+         offset += bytesRead;
+       }
+-      const after = await handle.stat({ bigint: true }); privateStat(after, false);
+-      const current = await fs.lstat(path, { bigint: true }); privateStat(current, false);
++      const after = await handle.stat({ bigint: true }); privateStat(after, false, path);
++      const current = await fs.lstat(path, { bigint: true }); privateStat(current, false, path);
+       if (!unchanged(opened, after) || !unchanged(after, current) || !sameFileIdentity(owner, await checkDirectory())) throw new Error('session chunk changed during read');
+       if (hash(bytes) !== ref.sha256) throw new Error('session chunk digest mismatch');
+       if ([before, opened, after, current].every((stat) => stat.mtimeNs !== undefined && stat.ctimeNs !== undefined)) remember(ref.sha256, bytes, current, owner);
+@@ -202,10 +207,10 @@ export function createSessionChunks({ directory, fsOps, createDirectory = true }
+     try {
+       handle = await fs.open(temporary, 'wx', 0o600);
+       await handle.chmod(0o600);
+-      const opened = await handle.stat(); privateStat(opened, false);
++      const opened = await handle.stat(); privateStat(opened, false, temporary);
+       await handle.writeFile(bytes); await handle.sync();
+-      const after = await handle.stat(); privateStat(after, false);
+-      const current = await fs.lstat(temporary); privateStat(current, false);
++      const after = await handle.stat(); privateStat(after, false, temporary);
++      const current = await fs.lstat(temporary); privateStat(current, false, temporary);
+       if (!sameFileIdentity(opened, after) || !unchanged(after, current) || after.size !== bytes.length || !sameFileIdentity(owner, await checkDirectory())) throw new Error('session chunk changed during write');
+       await handle.close(); handle = undefined;
+       // link is exclusive publication; remove its temporary alias before any
+@@ -384,9 +389,9 @@ export function createSessionChunks({ directory, fsOps, createDirectory = true }
+         const temporary = /^\.write-([0-9a-f]{64})-[0-9a-f-]{36}\.tmp$/.exec(name);
+         if (temporary && stat.nlink === 2) {
+           if (stat.isSymbolicLink() || !stat.isFile() ||
+-              (process.getuid && stat.uid !== process.getuid()) || (stat.mode & 0o7777) !== 0o600 ||
++              (process.getuid && stat.uid !== process.getuid()) || !privatePermissions(stat, 0o600, path) ||
+               !unchanged(stat, await fs.lstat(join(directory, temporary[1])))) throw new Error('unsafe interrupted session chunk publication');
+-        } else privateStat(stat, false);
++        } else privateStat(stat, false, join(directory, name));
+         continue;
+       }
+       if (stat.size > MAX_SESSION_CHUNK_BYTES) throw new Error('session chunk exceeds file bound');
+@@ -409,10 +414,10 @@ export function createSessionChunks({ directory, fsOps, createDirectory = true }
+     const names = await fs.readdir(directory);
+     // Validate every candidate before removing any; links and subdirectories
+     // are never followed or recursively removed.
+-    for (const name of names) privateStat(await fs.lstat(join(directory, name)), false);
++    for (const name of names) privateStat(await fs.lstat(join(directory, name)), false, join(directory, name));
+     for (const name of names) {
+       if (!sameFileIdentity(owner, await checkDirectory())) throw new Error('session chunk directory changed during deletion');
+-      const path = join(directory, name); privateStat(await fs.lstat(path), false); await fs.unlink(path);
++      const path = join(directory, name); privateStat(await fs.lstat(path), false, path); await fs.unlink(path);
+     }
+     await sync(directory, owner);
+     await fs.rmdir(directory);
+diff --git a/reference/sdlc/code.playbook/bin/session-replay.js b/reference/sdlc/code.playbook/bin/session-replay.js
+index 12808b3..4a6eeb8 100644
+--- a/reference/sdlc/code.playbook/bin/session-replay.js
++++ b/reference/sdlc/code.playbook/bin/session-replay.js
+@@ -8,7 +8,7 @@ import { constants } from 'node:fs';
+ import * as nativeFs from 'node:fs/promises';
+ import { isAbsolute, join } from 'node:path';
+ import { createSessionChunks, MAX_SESSION_CHUNK_BYTES } from './session-chunks.js';
+-import { sameFileIdentity, tightenPrivateEntry, verifyPrivateEntry } from './private-paths.js';
++import { sameFileIdentity, tightenPrivateEntry, verifyPrivateEntry, privatePermissions } from './private-paths.js';
+ 
+ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+ const DIGEST = /^[0-9a-f]{64}$/;
+@@ -21,9 +21,9 @@ function reference(value) {
+       !count(value.byteLength) || value.byteLength < 1 || value.byteLength > MAX_SESSION_CHUNK_BYTES) invalid();
+   return value;
+ }
+-function privateStat(stat, directory) {
+-  verifyPrivateEntry(stat, directory, 'session replay');
+-  if ((stat.mode & 0o7777) !== (directory ? 0o700 : 0o600)) throw new Error('session replay permissions must be private');
++function privateStat(stat, directory, path) {
++  verifyPrivateEntry(stat, directory, 'session replay', undefined, path);
++  if (!privatePermissions(stat, directory ? 0o700 : 0o600, path)) throw new Error('session replay permissions must be private');
+ }
+ const unchanged = (left, right) => sameFileIdentity(left, right) && left.size === right.size &&
+   left.mtimeMs === right.mtimeMs && left.ctimeMs === right.ctimeMs;
+@@ -32,8 +32,8 @@ function rootChanged(message) {
+   error.replayRootRetry = true;
+   return error;
+ }
+-function privateRootStat(stat) {
+-  try { privateStat(stat, false); }
++function privateRootStat(stat, path) {
++  try { privateStat(stat, false, path); }
+   catch (error) {
+     // A complete initial root can briefly have its staging link, and an
+     // already opened old root loses its last link on atomic replacement.
+@@ -81,12 +81,16 @@ export async function createBoundedReplay({ sessionId, sessionsDir, fsOps, asser
+     return result;
+   };
+   const directory = async () => {
+-    const stat = await fs.lstat(sessionsDir); privateStat(stat, true); return stat;
++    const stat = await fs.lstat(sessionsDir); privateStat(stat, true, sessionsDir); return stat;
+   };
+   const syncDirectory = async (expected) => {
++    if (process.platform === 'win32') {
++      if (!sameFileIdentity(expected, await directory())) throw new Error('session replay directory changed');
++      return;
++    }
+     const handle = await fs.open(sessionsDir, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_DIRECTORY ?? 0));
+     try {
+-      const stat = await handle.stat(); privateStat(stat, true);
++      const stat = await handle.stat(); privateStat(stat, true, sessionsDir);
+       if (!sameFileIdentity(expected, stat)) throw new Error('session replay directory changed');
+       await handle.sync();
+       if (!sameFileIdentity(stat, await directory())) throw new Error('session replay directory changed');
+@@ -104,11 +108,11 @@ export async function createBoundedReplay({ sessionId, sessionsDir, fsOps, asser
+     let before;
+     try { before = await fs.lstat(path); }
+     catch (error) { if (error.code === 'ENOENT') return { root: null, rootBytes: null, stat: null, owner }; throw error; }
+-    privateRootStat(before);
++    privateRootStat(before, path);
+     if (before.size > MAX_SESSION_CHUNK_BYTES) throw new Error('session replay root exceeds file bound');
+     const handle = await fs.open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
+     try {
+-      const opened = await handle.stat(); privateRootStat(opened);
++      const opened = await handle.stat(); privateRootStat(opened, path);
+       if (!unchanged(before, opened)) throw rootChanged('session replay root changed before read');
+       const bytes = Buffer.alloc(opened.size);
+       let offset = 0;
+@@ -117,7 +121,7 @@ export async function createBoundedReplay({ sessionId, sessionsDir, fsOps, asser
+         if (!bytesRead) throw rootChanged('session replay root truncated during read');
+         offset += bytesRead;
+       }
+-      const after = await handle.stat(); privateRootStat(after);
++      const after = await handle.stat(); privateRootStat(after, path);
+       if (!unchanged(opened, after)) throw rootChanged('session replay root changed during read');
+       if (!sameFileIdentity(owner, await directory())) throw new Error('session replay directory changed during read');
+       return { root: validateRoot(JSON.parse(bytes.toString('utf8'))), rootBytes: bytes, stat: after, owner };
+@@ -137,7 +141,7 @@ export async function createBoundedReplay({ sessionId, sessionsDir, fsOps, asser
+       throw new Error('session replay root changed before publication');
+     }
+     if (snapshot.stat !== null) {
+-      const latest = await fs.lstat(path); privateStat(latest, false);
++      const latest = await fs.lstat(path); privateStat(latest, false, path);
+       if (!unchanged(snapshot.stat, latest)) throw new Error('session replay root changed before publication');
+     }
+   };
+@@ -177,10 +181,10 @@ export async function createBoundedReplay({ sessionId, sessionsDir, fsOps, asser
+       await assertSnapshot(snapshot);
+       handle = await fs.open(temporary, 'wx', 0o600);
+       await handle.chmod(0o600);
+-      temporaryStat = await handle.stat(); privateStat(temporaryStat, false);
++      temporaryStat = await handle.stat(); privateStat(temporaryStat, false, temporary);
+       await handle.writeFile(bytes); await handle.sync();
+-      const after = await handle.stat(); privateStat(after, false);
+-      const current = await fs.lstat(temporary); privateStat(current, false);
++      const after = await handle.stat(); privateStat(after, false, temporary);
++      const current = await fs.lstat(temporary); privateStat(current, false, temporary);
+       if (!sameFileIdentity(temporaryStat, after) || !sameFileIdentity(after, current)) throw new Error('session replay temporary root changed');
+       await handle.close(); handle = undefined;
+       await assertOwner();
+@@ -191,7 +195,7 @@ export async function createBoundedReplay({ sessionId, sessionsDir, fsOps, asser
+       // name before readers' single-link verification and directory syncing.
+       if (exclusive || snapshot.root === null) await fs.unlink(temporary);
+       await syncDirectory(snapshot.owner);
+-      const published = await fs.lstat(path); privateStat(published, false);
++      const published = await fs.lstat(path); privateStat(published, false, path);
+       if (!sameFileIdentity(temporaryStat, published) || published.size !== bytes.length) throw new Error('session replay root changed after publication');
+       const completed = { owner: snapshot.owner, stat: published, rootBytes: bytes };
+       mutationAnchor = proofOf(completed);
+diff --git a/reference/sdlc/code.playbook/bin/session-store.js b/reference/sdlc/code.playbook/bin/session-store.js
+index 3cf81bf..f9dcf5b 100644
+--- a/reference/sdlc/code.playbook/bin/session-store.js
++++ b/reference/sdlc/code.playbook/bin/session-store.js
+@@ -28,7 +28,7 @@ import {
+   unlink,
+ } from 'node:fs/promises';
+ import { homedir, hostname as systemHostname } from 'node:os';
+-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
++import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+ import { fileURLToPath, pathToFileURL } from 'node:url';
+ import { isDeepStrictEqual } from 'node:util';
+ import { assertSupportedEffort } from '@sublang/cligent';
+@@ -51,7 +51,7 @@ import {
+   lazyMachineIdentity,
+   resolveMachineIdentity,
+ } from './machine-identity.js';
+-import { sameFileIdentity, syncDirectory, tightenPrivateEntry } from './private-paths.js';
++import { sameFileIdentity, syncDirectory, tightenPrivateEntry, mkdirPrivate, privatePermissions } from './private-paths.js';
+ import { createSessionChunks } from './session-chunks.js';
+ import { createBoundedReplay } from './session-replay.js';
+ import { decodeStoredManifest, encodeStoredManifest, SESSION_STORAGE_VERSION } from './storage-manifest.js';
+@@ -309,7 +309,7 @@ export function sanitizeReplayRecord(value) {
+ // Bounded physical replay preserves the public readable/durable distinction.
+ // A failed append latches history incompleteness; recovery writes remain open.
+ async function createLeaseReplayWriter({ sessionsDir, path, fs, assertOwner, readStream, chunks }) {
+-  const sessionId = path.slice(path.lastIndexOf('/') + 1, -'.records.jsonl'.length);
++  const sessionId = basename(path, '.records.jsonl');
+   const backend = await createBoundedReplay({ sessionId, sessionsDir, fsOps: fs, assertOwner, chunks });
+   let lastReadableSeq = null, lastDurableSeq = null, incomplete = true, closed = false;
+   let tail = Promise.resolve();
+@@ -895,7 +895,7 @@ export function createCaptainSessionStore(options = {}) {
+       ownsTemporary = true;
+       await handle.chmod(0o600);
+       const tempStat = await handle.stat();
+-      if (!tempStat.isFile() || (tempStat.mode & 0o7777) !== 0o600) {
++      if (!tempStat.isFile() || !privatePermissions(tempStat, 0o600, temporary)) {
+         throw new Error('Captain session temporary path is not a private regular file');
+       }
+       await handle.writeFile(encoded);
+@@ -991,7 +991,7 @@ export function createCaptainSessionStore(options = {}) {
+       if (
+         directoryStat.isSymbolicLink() ||
+         !directoryStat.isDirectory() ||
+-        (directoryStat.mode & 0o7777) !== 0o700
++        !privatePermissions(directoryStat, 0o700, path)
+       ) {
+         throw new Error('lease path is not a private real directory');
+       }
+@@ -1160,21 +1160,21 @@ export function createCaptainSessionStore(options = {}) {
+     let handle;
+     let created = false;
+     try {
+-      await fs.mkdir(stagePath, { mode: 0o700 });
++      await mkdirPrivate(stagePath, fs);
+       created = true;
+       await fs.chmod(stagePath, 0o700);
+       const stageStat = await fs.lstat(stagePath);
+       if (
+         stageStat.isSymbolicLink() ||
+         !stageStat.isDirectory() ||
+-        (stageStat.mode & 0o7777) !== 0o700
++        !privatePermissions(stageStat, 0o700, stagePath)
+       ) {
+         throw new Error('Captain session lease stage is not a private directory');
+       }
+       handle = await fs.open(join(stagePath, LEASE_OWNER_FILE), 'wx', 0o600);
+       await handle.chmod(0o600);
+       const ownerStat = await handle.stat();
+-      if (!ownerStat.isFile() || (ownerStat.mode & 0o7777) !== 0o600) {
++      if (!ownerStat.isFile() || !privatePermissions(ownerStat, 0o600, join(stagePath, LEASE_OWNER_FILE))) {
+         throw new Error('Captain session lease owner is not a private regular file');
+       }
+       await handle.writeFile(`${JSON.stringify(owner)}\n`, 'utf8');
+@@ -1922,7 +1922,7 @@ async function readReplaySnapshot({
+ 
+   // During explicit migration the old root remains authoritative until the
+   // new manifest publishes. New replay-only sessions have no manifest yet.
+-  const sessionId = path.slice(path.lastIndexOf('/') + 1, -'.records.jsonl'.length);
++  const sessionId = basename(path, '.records.jsonl');
+   let storedRoot;
+   try { storedRoot = JSON.parse(await readPrivateRegularFile(join(sessionsDir, `${sessionId}.json`), 0o600, fs, 'record')); }
+   catch (cause) { if (cause?.code !== 'ENOENT' && !(cause instanceof SyntaxError)) throw cause; }
+@@ -1963,7 +1963,7 @@ async function readReplaySnapshot({
+ 
+   try {
+     const openedStat = await handle.stat();
+-    assertPrivateRegularStat(openedStat, 0o600, 'replay stream');
++    assertPrivateRegularStat(openedStat, 0o600, 'replay stream', path);
+     if (!sameFileIdentity(pathStat, openedStat)) {
+       throw new ReplaySnapshotChangedError(
+         'replay stream was replaced while opening its snapshot',
+@@ -1987,7 +1987,7 @@ async function readReplaySnapshot({
+     const bytes = await readReplayRange(handle, startOffset, snapshotLength);
+ 
+     const finalHandleStat = await handle.stat();
+-    assertPrivateRegularStat(finalHandleStat, 0o600, 'replay stream');
++    assertPrivateRegularStat(finalHandleStat, 0o600, 'replay stream', path);
+     if (
+       !sameFileIdentity(openedStat, finalHandleStat) ||
+       requireReplayFileSize(finalHandleStat.size) < snapshotLength
+@@ -2225,11 +2225,11 @@ function requireReplayFileSize(value) {
+   return value;
+ }
+ 
+-function assertPrivateRegularStat(stat, mode, label) {
++function assertPrivateRegularStat(stat, mode, label, path) {
+   if (!stat.isFile()) {
+     throw new Error(`${label} path is not a regular file`);
+   }
+-  if ((stat.mode & 0o7777) !== mode) {
++  if (!privatePermissions(stat, mode, path)) {
+     throw new Error(`${label} permissions must be ${octal(mode)}`);
+   }
+ }
+@@ -6412,7 +6412,7 @@ async function readPrivateRegularFile(path, mode, fs, label, raw = false) {
+     if (!stat.isFile()) {
+       throw new Error(`${label} path is not a regular file`);
+     }
+-    if ((stat.mode & 0o7777) !== mode) {
++    if (!privatePermissions(stat, mode, path)) {
+       throw new Error(`${label} permissions must be ${octal(mode)}`);
+     }
+     if (!sameFileIdentity(before, stat)) throw privateFileChanged(label, 'open');
+@@ -6431,7 +6431,7 @@ async function assertPrivateRegularPath(path, mode, fs, label) {
+   if (stat.isSymbolicLink() || !stat.isFile()) {
+     throw new Error(`${label} path is not a real regular file`);
+   }
+-  if ((stat.mode & 0o7777) !== mode) {
++  if (!privatePermissions(stat, mode, path)) {
+     throw new Error(`${label} permissions must be ${octal(mode)}`);
+   }
+   return stat;
+@@ -6486,7 +6486,7 @@ async function ensurePrivateDirectory(path, fs, mayCreate = () => true) {
+   for (const directory of missing.reverse()) {
+     let created = false;
+     try {
+-      await fs.mkdir(directory, { mode: 0o700 });
++      await mkdirPrivate(directory, fs);
+       created = true;
+     } catch (cause) {
+       if (cause?.code !== 'EEXIST') throw cause;
+@@ -6497,7 +6497,7 @@ async function ensurePrivateDirectory(path, fs, mayCreate = () => true) {
+       await syncDirectory(dirname(directory), fs);
+     } else if (
+       directory === path &&
+-      (stat.mode & 0o7777) !== 0o700
++      !privatePermissions(stat, 0o700, path)
+     ) {
+       throw new Error('Captain session store directory permissions must be 0700');
+     }
+@@ -6533,7 +6533,7 @@ function isPathOrAncestor(directory, path) {
+ 
+ async function assertPrivateDirectory(path, fs) {
+   const stat = await assertDirectoryNotLink(path, fs);
+-  if ((stat.mode & 0o7777) !== 0o700) {
++  if (!privatePermissions(stat, 0o700, path)) {
+     throw new Error('Captain session store directory permissions must be 0700');
+   }
+ }
+diff --git a/reference/sdlc/code.playbook/session-assets.js b/reference/sdlc/code.playbook/session-assets.js
+index 07be3d9..20a7b9c 100644
+--- a/reference/sdlc/code.playbook/session-assets.js
++++ b/reference/sdlc/code.playbook/session-assets.js
+@@ -3,6 +3,7 @@
+ 
+ import { createHash, randomUUID } from 'node:crypto';
+ import { constants } from 'node:fs';
++import { mkdirPrivate, privatePermissions } from './bin/private-paths.js';
+ import { link, lstat, mkdir, open, readdir, unlink } from 'node:fs/promises';
+ import { basename, join, resolve } from 'node:path';
+ 
+@@ -64,21 +65,21 @@ export async function externalizeAgentEvent(store, event) {
+ function assertOwner(stat, label) {
+   if (typeof process.getuid === 'function' && stat.uid !== process.getuid()) throw new Error(`${label} is not owned by the current user`);
+ }
+-function assertDirectory(stat) {
++function assertDirectory(stat, path) {
+   if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error('asset owner directory must be a real directory');
+   assertOwner(stat, 'asset owner directory');
+-  if (process.platform !== 'win32' && (stat.mode & 0o777) !== 0o700) throw new Error('asset owner directory must have private 0700 permissions');
++  if (!privatePermissions(stat, 0o700, path)) throw new Error('asset owner directory must have private 0700 permissions');
+ }
+-function assertFile(stat, label) {
++function assertFile(stat, label, path) {
+   if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1) throw new Error(`${label} must be a single-link regular file`);
+   assertOwner(stat, label);
+-  if (process.platform !== 'win32' && (stat.mode & 0o777) !== 0o600) throw new Error(`${label} must have private 0600 permissions`);
++  if (!privatePermissions(stat, 0o600, path)) throw new Error(`${label} must have private 0600 permissions`);
+ }
+ function sameFile(a, b) { return a.dev === b.dev && a.ino === b.ino && a.size === b.size && a.mtimeMs === b.mtimeMs && a.ctimeMs === b.ctimeMs; }
+ async function syncDirectory(directory) {
+   if (process.platform === 'win32') return;
+   const handle = await open(directory, constants.O_RDONLY | noFollow);
+-  try { assertDirectory(await handle.stat()); await handle.sync(); } finally { await handle.close(); }
++  try { assertDirectory(await handle.stat(), directory); await handle.sync(); } finally { await handle.close(); }
+ }
+ 
+ /** One immutable owner. A session host holds its ordinary lease around mutations. */
+@@ -93,10 +94,10 @@ export function createAssetStore(options) {
+   let importTail = Promise.resolve();
+   const ensureDirectory = async (create) => {
+     if (create) {
+-      try { await mkdir(directory, { recursive: createAncestors, mode: 0o700 }); }
++      try { await mkdirPrivate(directory, { mkdir, lstat }, { recursive: createAncestors }); }
+       catch (error) { if (createAncestors || error.code !== 'EEXIST') throw error; }
+     }
+-    assertDirectory(await lstat(directory));
++    assertDirectory(await lstat(directory), directory);
+   };
+   const prepare = async () => {
+     let before;
+@@ -104,9 +105,10 @@ export function createAssetStore(options) {
+     if (!before.isDirectory() || before.isSymbolicLink()) throw new Error('asset owner directory must be a real directory');
+     assertOwner(before, 'asset owner directory');
+     if (process.platform !== 'win32' && (before.mode & 0o700) !== 0o700) throw new Error('asset owner directory has insufficient owner permissions');
+-    const directoryHandle = await open(directory, constants.O_RDONLY | noFollow);
++    const directoryHandle = process.platform === 'win32' ? undefined : await open(directory, constants.O_RDONLY | noFollow);
+     try {
+-      const opened = await directoryHandle.stat();
++      const opened = directoryHandle ? await directoryHandle.stat() : await lstat(directory);
++      if (process.platform === 'win32') assertDirectory(opened, directory);
+       if (opened.dev !== before.dev || opened.ino !== before.ino) throw new Error('asset owner directory changed during preparation');
+       // fchmod always moves ctime, which verified readers pin: change only modes that differ.
+       if (process.platform !== 'win32' && (opened.mode & 0o777) !== 0o700) await directoryHandle.chmod(0o700);
+@@ -123,25 +125,25 @@ export function createAssetStore(options) {
+           const pinned = await handle.stat();
+           if (!sameFile(stat, pinned)) throw new Error('asset entry changed during preparation');
+           if (process.platform !== 'win32' && (pinned.mode & 0o777) !== 0o600) await handle.chmod(0o600);
+-          assertFile(await handle.stat(), 'asset entry');
++          assertFile(await handle.stat(), 'asset entry', path);
+           const final = await lstat(path);
+           if (final.dev !== pinned.dev || final.ino !== pinned.ino || final.nlink !== 1) throw new Error('asset entry changed during preparation');
+         } finally { await handle.close(); }
+       }
+       const final = await lstat(directory);
+       if (final.dev !== opened.dev || final.ino !== opened.ino || final.isSymbolicLink()) throw new Error('asset owner directory changed during preparation');
+-      assertDirectory(await directoryHandle.stat());
+-    } finally { await directoryHandle.close(); }
++      assertDirectory(directoryHandle ? await directoryHandle.stat() : await lstat(directory), directory);
++    } finally { await directoryHandle?.close(); }
+   };
+   const checkedOpen = async (filename, label) => {
+     await ensureDirectory(false);
+     const path = join(directory, filename);
+     const before = await lstat(path);
+-    assertFile(before, label);
++    assertFile(before, label, path);
+     const handle = await open(path, constants.O_RDONLY | noFollow);
+     try {
+       const after = await handle.stat();
+-      assertFile(after, label);
++      assertFile(after, label, path);
+       if (!sameFile(before, after)) throw new Error(`${label} changed while opening`);
+       return { handle, stat: after };
+     } catch (error) { await handle.close(); throw error; }
+diff --git a/specs/decisions/087-leases-name-the-machine.md b/specs/decisions/087-leases-name-the-machine.md
+index 786bf52..d0d525e 100644
+--- a/specs/decisions/087-leases-name-the-machine.md
++++ b/specs/decisions/087-leases-name-the-machine.md
+@@ -6,6 +6,7 @@
+ ## Status
+ 
+ Accepted (2026-09-30).
++Amended by [DR-098](098-native-windows-private-storage.md) for native Windows private storage.
+ Extends [DR-042](042-shared-session-store-and-replay-stream.md) in one scope: the session lease's owner names its machine by a published machine identity rather than by the operating system's host name; the store, its files, and its lifecycle otherwise stand.
+ Extends [DR-046](046-public-worktree-host-capabilities.md) in one scope: the repository claim's owner names its machine by the same identity; the capabilities and the claim discipline otherwise stand.
+ 
+diff --git a/specs/decisions/094-bounded-session-persistence.md b/specs/decisions/094-bounded-session-persistence.md
+index 6ad1cd7..4172754 100644
+--- a/specs/decisions/094-bounded-session-persistence.md
++++ b/specs/decisions/094-bounded-session-persistence.md
+@@ -6,6 +6,7 @@
+ ## Status
+ 
+ Accepted (2026-10-22).
++Amended by [DR-098](098-native-windows-private-storage.md) for native Windows private storage.
+ Amends [DR-049](049-portable-session-contract.md).
+ 
+ ## Context
+diff --git a/specs/map.md b/specs/map.md
+index 1a83710..fb9dca9 100644
+--- a/specs/map.md
++++ b/specs/map.md
+@@ -121,6 +121,7 @@ meta.md       The spec of specs
+ | [DR-095](decisions/095-merge-on-green.md) | 095-merge-on-green.md | Merge on green: `main` protected with the CI workflow's jobs as required checks and auto-merge, one run per pull-request head, base branches kept while targeted, a pre-push check, deterministic tests; the Linux-only matrix kept |
+ | [DR-096](decisions/096-a-second-adapter-reviews.md) | 096-a-second-adapter-reviews.md | A second adapter reviews: with both adapters ready only `dev.reviewer` seeds on Codex; the selection ships as `@sublang/playbook/seed-config` so every host seeds the same agent settings; amends DR-053 |
+ | [DR-097](decisions/097-readiness-reads-each-agents-token-forms.md) | 097-readiness-reads-each-agents-token-forms.md | Readiness reads each agent's token forms: `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN`, `CODEX_API_KEY` and `CODEX_ACCESS_TOKEN` count beside the API keys and sign-in folders, for the seed and the launch gate alike; amends DR-053 |
++| [DR-098](decisions/098-native-windows-private-storage.md) | 098-native-windows-private-storage.md | Native Windows private storage via fs-safe, conservative ACL admission and unchanged portable evidence |
+ 
+ ## Packages
+ 
+diff --git a/specs/packages/playbook-cli.md b/specs/packages/playbook-cli.md
+index 645f781..c749168 100644
+--- a/specs/packages/playbook-cli.md
++++ b/specs/packages/playbook-cli.md
+@@ -700,7 +700,7 @@ Where any `playbooks.<id>.players` block remains, the command shall reject it be
+ 
+ #### playbook-cli-97
+ 
+-When a session lease or repository claim needs this machine's identity, the host shall read one tagged value `machine-id:v1:<lowercase UUID>` from the private regular file `machine-id` under `${XDG_STATE_HOME:-~/.local/state}/playbook/` on macOS and Linux alike, shared by every store and Spex home the user runs on the machine ([DR-087](../decisions/087-leases-name-the-machine.md)):
++When a session lease or repository claim needs this machine's identity, the host shall read one tagged value `machine-id:v1:<lowercase UUID>` from the private regular file `machine-id` under `${XDG_STATE_HOME:-~/.local/state}/playbook/` on macOS, Linux and native Windows, shared by every store and Spex home the user runs on the machine ([DR-087](../decisions/087-leases-name-the-machine.md), [DR-098](../decisions/098-native-windows-private-storage.md)):
+ 
+ - the directory is created `0700` when absent; the directory and the file qualify only as current-user-owned, non-symlink entries, the file a single-link regular file; excess permissions on a qualifying entry are tightened in place to `0700` and `0600` through the verified tighten-only rule of the session store [[session-storage-1](session-storage.md#session-storage-1)], and a wrong owner, link, special file, absent owner access, or failed repair makes the identity unavailable;
+ - an absent file is published once: a complete value is written to a private same-directory temporary file, synced, and linked to `machine-id`, so publication is exclusive and the file never holds a partial value; a creator whose link finds the file present discards its value and reads the winner's; a read that finds no usable value retries within a bound and then fails;
+diff --git a/specs/packages/session-assets.md b/specs/packages/session-assets.md
+index 5bb8b17..a5accd5 100644
+--- a/specs/packages/session-assets.md
++++ b/specs/packages/session-assets.md
+@@ -25,7 +25,8 @@ The default per-asset limit shall be 100 MiB, with an explicit positive safe-int
+ When a caller reads or materializes a reference, the facade shall verify the owner's private directory, the asset's private current-user-owned single-link regular file, byte count and SHA-256 digest before returning bytes or an absolute local attachment path.
+ Invalid references, absent bytes, corrupt bytes and paths escaping the owner shall fail explicitly.
+ The facade shall provide immutable descriptor lookup by asset ID and a closeable verified reader whose bounded positional reads reuse one content integrity check and reject subsequent file mutation.
+-The facade shall offer preparation that verifies current-user ownership and real single-link entries, requires sufficient owner permissions, tightens excess directory and file permissions to `0700` and `0600` through verified handles without changing content, and ignores and never modifies an entry named other than a digest-named asset, its `.json` descriptor or an `.import-*.tmp` temporary.
++On POSIX, the facade shall offer preparation that verifies current-user ownership and real single-link entries, requires sufficient owner permissions, tightens excess directory and file permissions to `0700` and `0600` through verified handles without changing content, and ignores and never modifies an entry named other than a digest-named asset, its `.json` descriptor or an `.import-*.tmp` temporary.
++On Windows, the facade shall verify private ownership and ACLs under [DR-098](../decisions/098-native-windows-private-storage.md), refusing unsafe or unverified entries without modifying content or ownership.
+ Preparation shall change no mode or file status metadata of a directory already at `0700` or a file already at `0600`, so verified readers and concurrent verification survive a repeated preparation.
+ Materialized paths shall be execution-only values and shall not replace portable references.
+ 
+diff --git a/specs/packages/session-storage.md b/specs/packages/session-storage.md
+index 808bba5..497705c 100644
+--- a/specs/packages/session-storage.md
++++ b/specs/packages/session-storage.md
+@@ -29,8 +29,9 @@ The session store shall use these locations and files for each session's canonic
+ | `<id>.hints.json` | Provider hints [[session-storage-6](#session-storage-6)] | Local, ignored by Git |
+ | `.<id>.lock/` and its staging/retired directories | Existing writer lease [[playbook-cli-23](playbook-cli.md#playbook-cli-23)] | Local, ignored by Git |
+ 
++- on Windows, private entries use the verified local owner/DACL policy of [DR-098](../decisions/098-native-windows-private-storage.md), refusing unsafe or unverified ACLs without changing their contents or ownership;
+ - manifests and hints use the same private regular-file and atomic writing rules as replay [[playbook-cli-74](playbook-cli.md#playbook-cli-74)]; opening prepares permissions before strict reads or granting a lease:
+-  - only the current-user-owned, non-symlink session directory and its current-user-owned single-link regular manifest, replay and hint files qualify; verified file handles restrict the directory first to `0700` and files to `0600`, removing permissions only;
++  - on POSIX, only the current-user-owned, non-symlink session directory and its current-user-owned single-link regular manifest, replay and hint files qualify; verified file handles restrict the directory first to `0700` and files to `0600`, removing permissions only;
+   - wrong ownership, links, special files, insufficient owner permissions or failed verification block opening, and a store that met a block prepares again at its next operation; preparation changes no content, ownership or lease metadata;
+   - ordinary readers and leases retain their strict privacy checks; a private Git umask avoids exposure before opening.
+ - the former-location cutover converts and removes session files only: the `playbook/` state directory it reads from and the machine identity file beside its `sessions/` [[playbook-cli-97](playbook-cli.md#playbook-cli-97)] stay in place and are never inputs.
+diff --git a/reference/sdlc/code.playbook/windows-storage.integration.test.ts b/reference/sdlc/code.playbook/windows-storage.integration.test.ts
+new file mode 100644
+index 0000000..24f1618
+--- /dev/null
++++ b/reference/sdlc/code.playbook/windows-storage.integration.test.ts
+@@ -0,0 +1,39 @@
++// SPDX-License-Identifier: Apache-2.0
++// SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
++import { describe, expect, it } from 'vitest';
++import * as fs from 'node:fs/promises';
++import { join } from 'node:path';
++import { tmpdir } from 'node:os';
++import { execFileSync } from 'node:child_process';
++import { resolveMachineIdentity } from './machine-identity.js';
++import { createCaptainSessionStore } from './bin/session-store.js';
++import { createSessionChunks } from './bin/session-chunks.js';
++import { createAssetStore } from './session-assets.js';
++
++describe.skipIf(process.platform !== 'win32')('native Windows private session storage', () => {
++  it('retains machine identity, leases, immutable bytes and rejects an overbroad ACL', async () => {
++    const root = await fs.mkdtemp(join(tmpdir(), 'playbook-windows-'));
++    try {
++      const env = { ...process.env, XDG_STATE_HOME: join(root, 'state') };
++      const identity = await resolveMachineIdentity({ env });
++      expect(await resolveMachineIdentity({ env })).toBe(identity);
++      const sessionsDir = join(root, 'sessions');
++      const store = createCaptainSessionStore({ sessionsDir, env });
++      const sessionId = '94000000-0000-4000-8000-000000000001';
++      for (let n = 0; n < 2; n++) { const lease = await store.acquire(sessionId); await lease.release(); }
++      const chunks = createSessionChunks({ directory: join(sessionsDir, 'fixture.chunks') });
++      const value = { evidence: 'unchanged bytes', items: [1, 2, 3] };
++      const ref = await chunks.writeJson(value);
++      expect(await chunks.readJson(ref)).toEqual(value);
++      const assets = createAssetStore({ directory: join(root, 'assets') });
++      const asset = await assets.importAsset({ bytes: Buffer.from('fixture evidence'), mimeType: 'text/plain' });
++      const reader = await assets.openAsset(asset); await reader.close();
++      const files = await assets.listAssets();
++      const file = join(assets.directory, files[0].path);
++      const before = await fs.readFile(file);
++      execFileSync('icacls.exe', [file, '/grant', '*S-1-1-0:(R)'], { windowsHide: true });
++      await expect(assets.openAsset(asset)).rejects.toThrow();
++      expect(await fs.readFile(file)).toEqual(before);
++    } finally { await fs.rm(root, { recursive: true, force: true }); }
++  }, 60000);
++});
+diff --git a/specs/decisions/098-native-windows-private-storage.md b/specs/decisions/098-native-windows-private-storage.md
+new file mode 100644
+index 0000000..c8d1b17
+--- /dev/null
++++ b/specs/decisions/098-native-windows-private-storage.md
+@@ -0,0 +1,29 @@
++<!-- SPDX-License-Identifier: Apache-2.0 -->
++<!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
++
++# DR-098: Native Windows Private Storage
++
++## Status
++
++Accepted (2026-10-30).
++Amends [DR-087](087-leases-name-the-machine.md) and [DR-094](094-bounded-session-persistence.md) for native Windows storage admission.
++
++## Context
++
++Windows Node mode bits cannot establish private ownership and permissions.
++Embedding desktop hosts need native Windows session storage without WSL.
++
++## Decision
++
++- Native Windows storage requires Node 22.19 or newer and uses the optional `@openclaw/fs-safe` permission mechanisms through the existing private-entry implementation.
++- POSIX hosts keep their existing Node floor, verified permission tightening and directory synchronization, without loading the Windows mechanism.
++- Windows entries admit only complete local owner/DACL facts, trusted ownership and grants limited to the current user, LocalSystem and built-in Administrators; links, special files, unsupported descriptors and other grants refuse.
++- Windows private directory creation applies its protected inheritable DACL before session content is written; existing unsafe ACLs refuse without changing their contents or ownership.
++- Machine identity, exclusive leases, bounded manifests, replay, chunks, assets, reconciliation and retained evidence keep their existing formats and publication rules.
++- Windows keeps file synchronization and identity checks without claiming POSIX directory-fsync support.
++- Host paths are interpreted with Node's platform path operations; portable record paths retain their portable syntax.
++
++## Consequences
++
++A host must supply the Windows permission package and its supported native or packaged .NET mechanism.
++Missing or failing permission inspection refuses storage use rather than trusting synthetic mode bits.
