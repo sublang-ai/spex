@@ -1,61 +1,33 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# CLI 5.0.0 release preparation
+# CLI 5.0.0 source preparation
 
-Prepared on 2026-10-31 for `cli-v5.0.0`, under [the release rules](../../specs/packages/release.md).
-Publication and successful full main CI remain pending.
+The standalone CLI and independent registry architecture are delivered as merged, verified source. No version was released in this architecture task: no CLI tag, npm publication or post-publication consumer run was performed. The package version remains release preparation; publication belongs to a separate release task.
 
 ## Scope
 
-[DR-165](../../specs/decisions/165-one-package-manager-hosted-by-the-cli-and-the-app.md) makes the CLI a standalone package manager sharing its exported library with the app.
-`add`, `remove`, `install`, `update`, `list`, `search`, `new` and `publish` operate in the current environment without a running app or project registration.
-The environment's manifest, lock and ignored `.spex/` installation live at its root; developed packages use `spex-packages/<org>/<pkg>/`.
+[DR-165](../../specs/decisions/165-one-package-manager-hosted-by-the-cli-and-the-app.md) makes the CLI the standalone package manager and supplies the shared library. Environments keep their manifest, lock and ignored `.spex/` installation at the working root; developed packages live at `spex-packages/<org>/<pkg>/`. The prepared major version removes attached `auth`, `project` and `package` groups, `--server`, `SPEX_SERVER_URL`, endpoint discovery and arbitrary deep imports; `spex new` replaces `spex package init`.
 
-This is a major release: attached `auth`, `project` and `package` command groups, `--server`, `SPEX_SERVER_URL` and endpoint discovery are removed; `spex new` replaces `spex package init`; the declared exports map no longer permits arbitrary deep imports.
-The channel's [changelog](../../packages/cli/CHANGELOG.md) has the dated 5.0.0 section and comparison links, and the [README](../../packages/cli/README.md) documents the shipped verbs and upgrade behavior.
+[DR-168](../../specs/decisions/168-independent-package-registry.md) separates registry and Space configuration and grants, including same-origin refresh/logout. New manifests select the public registry; legacy private sources and locked versions, checksums and provenance are preserved. Private installation and publishing require the performing machine's registry grant. See the [CLI changelog](../../packages/cli/CHANGELOG.md) and [README](../../packages/cli/README.md).
 
-[DR-168](../../specs/decisions/168-independent-package-registry.md) separates registry and Space grants, even at one origin.
-`login`, `logout` and `whoami` default to registry purpose; `--registry` and `--space` select independent credentials.
-New manifests explicitly select the public registry, while legacy manifests preserve their former source and locks preserve exact origin, version and checksums.
-Private installation and publishing require the registry grant on the machine performing them, including a server seat.
+## Verification
 
-## Latest integration status
-
-Incoming main `d1c3ba497` adds the app's working-folder environment runtime and the expanded standalone CLI guide.
-The integration adds journaled recovery across partial writes and source retirement, and preserves registry selection from the working root independently of Space placement.
-Local CLI tests pass 165/165, focused UI tests pass 166/166, and three bounded Chromium journeys pass.
-The focused Core run passed 51 of 53 cases; the two corrected fixture cases then passed their focused rerun, completing all 53 cases.
-The final pre-push build, catalogs, type checks and spec lint pass.
-The fresh integrated installed smoke, full CI and publication remain pending.
-
-Earlier references to a final candidate at `5bf0b6f2`, `2b8dabc7` or the `c68c5e8a` help revision describe historical evidence, not proof of this new migration runtime.
-The scaffold/lint/prompt/legacy-fixture inputs remain byte-identical to `e580f996`, and the previous packed and merged-built CLI print byte-identical migration prompts; this preserves the spec-migration evidence without claiming coverage of project-environment migration.
-
-## Historical completed gates
-
-The package-manager implementation was verified on `0a58d44d02b5eee5469fab40a8d4c1b12f4e165b`.
-Its CLI, scaffold, migration driver, legacy fixture, root package manifest and lock are byte-identical through candidate `2b8dabc7f779b29f865dfbb87c9a31897b25a228`.
-Later runtime `5bf0b6f2` changes only Core/interface namespace loading; the final candidate adds only one integration-fixture/spec correction to it.
-The later CLI help correction changes only the entrypoint's static `USAGE` text: publishing names the registry, authentication names the selected purpose and registry default, and legacy-source compatibility is explicit.
-The entrypoint outside that text and the lint/scaffold modules, bundled migration prompt and legacy fixture remain unchanged from the successful real-agent migration.
-
-| Gate | Evidence |
+| Evidence | Outcome |
 | --- | --- |
-| Installed smoke and packed CLI journeys | `npm run smoke -- --live --keep` passed all build, lint, clean-cache committed-clone installation, server, native desktop, packed-CLI fresh-user/upgrade and real-agent live stages on `5bf0b6f2`; no waiver |
-| Real migration ([release-24](../../specs/packages/release.md#release-24)) | `npm run smoke:migration -- --keep` packed CLI 5.0.0, installed it into an isolated prefix, printed its bundled migration prompt and drove the signed-in Claude CLI through the legacy fixture within the 30-minute bound; exit 0 |
-| Migration post-gates | Lint clean, every fixture item retained under its current ID, intent checkbox states preserved, no `specs/compositions/`, migration commits present and scratch working tree clean |
-| Tarball hygiene ([release-17](../../specs/packages/release.md#release-17)) | `npm pack --dry-run --json -w packages/cli` lists 124 production files, with no test files or `src/` implementation sources |
-| Live package/account behavior | Real CLI public and private installs and private publication passed; anonymous public access kept no credentials; registry/Space grants at one origin refreshed independently and wrong-purpose access was refused in five checks |
-| Final local checks | Required pre-push passed: spec lint zero errors, both catalogs complete, workspace builds and e2e type checks; the existing `core-service-41` advisory remains |
+| Merged source | PR297 merged as `b60aad125a2e08c1c84557e96760b3443ad3a2c5` |
+| Required PR CI | All six checks passed on final PR head `b79a77657cb18917520aa7a722ae51241ec4a556`: [run 41185921075](https://github.com/sublang-ai/spex/actions/runs/41185921075) |
+| Installed live smoke | Exact b79 clean-cache clone passed build, lint, native desktop/server, packed CLI fresh-user and upgrade journeys, and real Claude dispatch/output/abort/cleanup |
+| Merge equivalence | b60 product/build/lock/README/smoke/live/migration inputs match smoked b79; only six CI/audit/spec files differ; changed workflow audit passed 10/10 and spec lint passed |
+| Working-folder migration | All 53 targeted Core cases verified as 51 initial passes and two corrected-fixture passes; three integrated browser journeys passed. These cover working-root configuration and recoverable migration journals; no clean full local Core rerun is claimed |
+| Seat sign-in copy | [PR300](https://github.com/sublang-ai/spex/pull/300) merged as `61463a48dd9a1ade2ff8639ec217de85332a272c`; the card now states registry access is separate from Space sign-in. Existing bilingual UI tests passed 18/18, required prepush passed, and [required CI](https://github.com/sublang-ai/spex/actions/runs/41189986306) passed before normal merge |
+| Main CI | The linked [run 41189131805](https://github.com/sublang-ai/spex/actions/runs/41189131805) records the full platform matrix for the merged revision |
+| Real migration | Signed-in Claude migrated the legacy fixture with packed CLI 5.0.0 and its printed prompt on `0a58d44d`: exit 0, lint clean, every fixture item and checkbox state retained, compositions removed and a clean committed scratch tree |
+| Migration equivalence | 42 operative migration inputs are byte-identical through b60; the static help correction does not change the operative entrypoint. Old packed and new built CLI printed byte-identical migration prompts |
+| Package inspection | Final b79 dry pack contains 124 production files, no tests or unnecessary implementation source; local SHA-1 `1eaf444a3137b869249e3ce360381846480c4fe7` identifies that inspection, not a published package |
 
-No passing local full Core suite is claimed; the complete suites are CI's responsibility.
-The server-seat package-install check ran on `0a58d44d`; final slow-provider namespace RPC and native selection were separately checked on `5bf0b6f2`, as recorded in the [app preparation](0.9.0-beta.19-preparation.md).
+Real CLI public/private installation, private publishing, anonymous public access and purpose-separated refresh/refusal checks passed against the deployed services. The seat walk used `0a58d44d`; native namespace/directory acceptance used `5bf0b6f2`; final installed and journal checks used b79. Older live evidence is not claimed as later migration coverage.
 
-Protected receipts retained outside the repository are `spex-release-migration-0a58d44d.log`, `spex-release-pack-0a58d44d.json`, `spex-release-smoke-5bf0b6f2.log`, `spex-release-gates-final-2b8dabc7.json`, `live-client-proof/evidence.json`, `anonymous-proof.json` and `live-acceptance-manifest.json`.
+Historical package states, checksums and user records were preserved. Temporary credentials, seats and browser sessions were cleaned up with version-attributed protected receipts. Completed owned smoke clones were removed only after retaining hashed logs and screenshots; recovery evidence is retained.
 
-## Publication
-
-Pull request [#297](https://github.com/sublang-ai/spex/pull/297) and the exact release commit's full main CI must conclude successfully before tagging ([release-15](../../specs/packages/release.md#release-15)).
-The normal Release workflow must validate the version, tests and tarball, publish through npm OIDC with provenance and public access, and create `Spex CLI v5.0.0` before publication is recorded as complete.
-Neither a tag, an npm publication nor a successful final full main CI run is claimed by this preparation record.
+Protected evidence basenames: `spex-release-merge-target-b60aad12.json`, `spex-release-migration-0a58d44d.log`, `prompt-equivalence.json`, `spex-release-pack-b79a7765.json`, `spex-release-smoke-b79a7765.log`, `live-acceptance-manifest.json`, and `cleanup-receipt.json`. Future publication follows the applicable release rules.
