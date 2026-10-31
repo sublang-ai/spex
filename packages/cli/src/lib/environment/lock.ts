@@ -52,9 +52,14 @@ export interface Lock {
 }
 
 export class LockError extends Error {
-  constructor(readonly issues: Issue[]) {
-    super(`spex.lock refused: ${issues.map((issue) => issue.message).join("; ")}`);
+  /** The format a lock from a newer Spex names, where it names one. */
+  readonly newerFormat?: number;
+  constructor(readonly issues: Issue[], newerFormat?: number) {
+    super(newerFormat !== undefined
+      ? `spex.lock is from a newer Spex (format ${newerFormat})`
+      : `spex.lock does not read: ${issues.map((issue) => issue.message).join("; ")}`);
     this.name = "LockError";
+    if (newerFormat !== undefined) this.newerFormat = newerFormat;
   }
 }
 
@@ -174,7 +179,10 @@ function parseSource(raw: unknown, at: string, issues: Issue[]): SourceLock | un
 export function parseLockValue(raw: unknown): Lock {
   const issues: Issue[] = [];
   if (!isPlainObject(raw)) throw new LockError([{ rule: "lock", message: "spex.lock is not a mapping" }]);
-  if (raw.format !== 1) throw new LockError([{ rule: "format", message: `format ${JSON.stringify(raw.format ?? null)} is not the known format 1` }]);
+  if (typeof raw.format === "number" && Number.isInteger(raw.format) && raw.format > 1) {
+    throw new LockError([{ rule: "format", message: `spex.lock is from a newer Spex (format ${raw.format})` }], raw.format);
+  }
+  if (raw.format !== 1) throw new LockError([{ rule: "format", message: `format ${JSON.stringify(raw.format ?? null)} is not format 1` }]);
   closed(raw, ["format", "requests", "packages"], "spex.lock", issues);
   if (typeof raw.requests !== "string") issues.push({ rule: "requests", message: "requests is not a digest" });
   const packages: Record<string, Resolution> = {};
@@ -269,7 +277,7 @@ export function lockStaleness(
 ): Staleness {
   const reasons: string[] = [];
   if (requestsText === null) reasons.push("spex.yaml is missing");
-  else if (requestsDigest(requestsText) !== lock.requests) reasons.push("spex.yaml changed since the lock was resolved");
+  else if (requestsDigest(requestsText) !== lock.requests) reasons.push("spex.yaml changed");
   for (const name of Object.keys(lock.packages).sort()) {
     const resolution = lock.packages[name]!;
     const source = resolution.source;

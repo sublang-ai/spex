@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// `spex add <org>/<pkg>[@<requirement>]` and `spex add <org>/<pkg>
-// --path <folder>` (cli-2, environments-15): write the request into
-// `spex.yaml` — made explicitly naming the public registry where
-// the root holds none — then resolve, install and export, printing each
-// spec package the lock gained or moved and where its exports went.
+// `spex add <org>/<pkg>[@<version>]` and `spex add <org>/<pkg> --path
+// <folder>` (cli-2, environments-15): write the package into
+// `spex.yaml` — made explicitly naming the public registry where the
+// root holds none — then resolve, install and export, printing each
+// package added or updated and where its skills went for the agents.
 // Every refusal comes before any write.
 
 import { isAbsolute, relative, resolve, sep } from "node:path";
@@ -17,7 +17,6 @@ import {
   isVersion,
   KNOWN_FORMAT,
   parseVersion,
-  RegistryError,
   requestIssues,
   RequestsError,
   setRequest,
@@ -26,14 +25,21 @@ import {
   type Request,
 } from "../lib/environment/index.js";
 import { VersionConflictError } from "../lib/files.js";
-import { actualPath, Environment, registryCause, shown } from "./environment.js";
-import { gainedLines, leftOutLines, leftToAppLines, settle } from "./settle.js";
+import { actualPath, Environment, shown } from "./environment.js";
+import { gainedLines, leftToAppLines, missingPathLines, settle } from "./settle.js";
 import { parsed, Refusal, type Command } from "./run.js";
 
-/** Write one request into the environment's `spex.yaml` (environments-15):
- * a file made new explicitly names the public registry
- * (environments-2); comments and key order stay; a file changed
- * meanwhile is refused in the library's words. */
+/** A refusal of `spex.yaml`'s edit in the CLI's words. */
+function editRefusal(env: Environment, error: unknown): Refusal | null {
+  if (error instanceof VersionConflictError) return new Refusal(`${shown(env.root, error.file)} changed meanwhile — retry`);
+  if (error instanceof RequestsError) return new Refusal(`${error.message} — fix the file, then retry`);
+  return null;
+}
+
+/** Write one package into the environment's `spex.yaml`
+ * (environments-15): a file made new explicitly names the public
+ * registry (environments-2); comments and key order stay; a file changed
+ * meanwhile is refused. */
 export async function writeRequest(env: Environment, name: string, request: Request, made: boolean): Promise<void> {
   try {
     if (made) {
@@ -41,35 +47,42 @@ export async function writeRequest(env: Environment, name: string, request: Requ
         setRegistryIn(doc, PUBLIC_REGISTRY_ORIGIN);
         doc.setIn(["packages", name], doc.createNode(request));
       });
-      console.log(`Made ${shown(env.root, env.requestsFile)} at ${env.root}, its registry ${PUBLIC_REGISTRY_ORIGIN}.`);
+      console.log(`Made spex.yaml in ${env.root}`);
     } else {
       await setRequest(env.requestsFile, name, request);
     }
   } catch (error) {
-    if (error instanceof RequestsError || error instanceof VersionConflictError) throw new Refusal(error.message);
-    throw error;
+    throw editRefusal(env, error) ?? error;
   }
 }
 
-/** Resolve, install and export, then say what the lock gained or moved
- * and what the export left out. */
-export async function settleAndTell(env: Environment): Promise<void> {
+/** Resolve, install and export, then say what was added, updated or
+ * removed, with where each package's skills went. */
+export async function settleAndTell(env: Environment, quiet = "Nothing changed."): Promise<void> {
   const settled = await settle(env, "resolve");
   if (settled === null) return;
-  const lines = gainedLines(env.root, settled);
-  for (const name of settled.install.missingPaths) lines.push(`Missing ${name}: its folder is not at its path here`);
-  lines.push(...leftToAppLines(env.root, settled), ...leftOutLines(settled.exported));
-  console.log(lines.length > 0 ? lines.join("\n") : "Nothing moved.");
+  const added = new Set(Object.keys(env.readRequests()?.requests.packages ?? {}));
+  const lines = [...gainedLines(env.root, settled, added), ...missingPathLines(settled), ...leftToAppLines(env.root, settled)];
+  console.log(lines.length > 0 ? lines.join("\n") : quiet);
+}
+
+/** The newest listed version that is no prerelease and is neither yanked
+ * nor suppressed. */
+function newestRelease(versions: { version: string; format: number; yanked: boolean; suppressed: boolean }[]): string | undefined {
+  return versions
+    .filter((entry) => entry.format === KNOWN_FORMAT && isVersion(entry.version) && !entry.yanked && !entry.suppressed && parseVersion(entry.version).prerelease.length === 0)
+    .map((entry) => entry.version)
+    .sort((a, b) => compareVersions(b, a))[0];
 }
 
 export const add: Command = async (args) => {
-  const { values, positionals } = parsed("add", args, { path: { type: "string" } }, { min: 1, max: 1, usage: "<org>/<pkg>[@<requirement>] | <org>/<pkg> --path <folder>" });
+  const { values, positionals } = parsed("add", args, { path: { type: "string" } }, { min: 1, max: 1 });
   const spec = positionals[0]!;
   const at = spec.indexOf("@");
   const name = at < 0 ? spec : spec.slice(0, at);
-  const requirement = at < 0 ? undefined : spec.slice(at + 1);
-  if (!isPackageName(name)) throw new Refusal(`"${name}" is not a <org>/<pkg> name: lowercase letters, digits and single hyphens, at most 64 characters each`);
-  if (requirement !== undefined && values.path !== undefined) throw new Refusal("a requirement and --path together: give one");
+  const version = at < 0 ? undefined : spec.slice(at + 1);
+  if (!isPackageName(name)) throw new Refusal(`"${name}" is not a package name — use <org>/<pkg>, each part lowercase letters, digits and single hyphens, like acme/tool`);
+  if (version !== undefined && values.path !== undefined) throw new Refusal("a version and --path together — give one");
 
   const env = new Environment();
   const read = env.readRequests();
@@ -81,34 +94,25 @@ export const add: Command = async (args) => {
     const out = (path: string): boolean => path === "" || isAbsolute(path) || path === ".." || path.startsWith(`..${sep}`);
     let inside = relative(env.root, resolve(values.path));
     if (out(inside)) inside = relative(actualPath(env.root), actualPath(resolve(values.path)));
-    if (out(inside)) throw new Refusal(`--path ${values.path} leads out of ${env.root}`);
-    const path = inside.split(sep).join("/");
-    request = { path };
+    if (out(inside)) throw new Refusal(`--path ${values.path} leads out of this project folder, ${env.root} — use a folder inside it`);
+    request = { path: inside.split(sep).join("/") };
   } else {
-    if (requirement !== undefined) {
-      const malformed = requestIssues(name, { version: requirement });
+    if (version !== undefined) {
+      const malformed = requestIssues(name, { version });
       if (malformed.length > 0) throw new Refusal(malformed.map((issue) => issue.message).join("; "));
     }
     const target = env.registryOf(read?.requests ?? null);
-  const instance = target.origin;
-    const registry = env.registryAt(instance, target.scope);
     let versions;
     try {
-      versions = (await registry.index(name)).versions;
+      versions = (await env.registryAt(target.origin, target.scope).index(name)).versions;
     } catch (error) {
-      if (error instanceof RegistryError && error.kind === "not_found") throw new Refusal(`${env.nameOf(instance)} lists no spec package ${name}`);
-      throw new Refusal(registryCause(error));
+      throw await env.registryRefusal(error, { origin: target.origin, scope: target.scope });
     }
-    if (requirement !== undefined) {
-      request = { version: requirement };
+    if (version !== undefined) {
+      request = { version };
     } else {
-      // A caret at the newest listed version that is no prerelease and is
-      // neither yanked nor suppressed.
-      const newest = versions
-        .filter((entry) => entry.format === KNOWN_FORMAT && isVersion(entry.version) && !entry.yanked && !entry.suppressed && parseVersion(entry.version).prerelease.length === 0)
-        .map((entry) => entry.version)
-        .sort((a, b) => compareVersions(b, a))[0];
-      if (newest === undefined) throw new Refusal(`${env.nameOf(instance)} lists no released version of ${name}; name one as ${name}@<requirement>`);
+      const newest = newestRelease(versions);
+      if (newest === undefined) throw new Refusal(`${name} has no released version at ${await env.registryName(target.origin)} — name one: spex add ${name}@<version>`);
       request = { version: `^${newest}` };
     }
   }

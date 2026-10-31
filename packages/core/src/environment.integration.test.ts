@@ -1379,9 +1379,9 @@ test("environments-7: an install takes each registry package from the first regi
     await assert.rejects(installAt(unserved, [two, three]), (error: unknown) => {
       assert.ok(error instanceof InstallError, String(error));
       assert.equal(error.packageName, "acme/kept");
-      assert.match(error.message, /^acme\/kept 1\.0\.0: no registry serves it at the locked checksum: /);
-      assert.ok(error.message.includes(`${r2.url}: acme/kept: not found at the registry`), error.message);
-      assert.ok(error.message.includes(`${r3.url} holds it at another checksum`), error.message);
+      assert.match(error.message, /^acme\/kept 1\.0\.0: no registry has it as spex\.lock records it: /);
+      assert.ok(error.message.includes(`not at ${new URL(r2.url).host}, or private`), error.message);
+      assert.ok(error.message.includes(`${new URL(r3.url).host} has it, but not as spex.lock records it`), error.message);
       return true;
     });
     assert.equal(existsSync(join(unserved.clone, ".spex", "packages")), false);

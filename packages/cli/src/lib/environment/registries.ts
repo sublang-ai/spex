@@ -54,7 +54,7 @@ export function installRegistryOrder(instance: string, recorded: string, signedI
  * install no other registry serves says why this one was not asked. */
 export function unaskedRegistry(url: string): RegistrySource {
   const unasked = (name: string): Promise<never> =>
-    Promise.reject(new RegistryError("unavailable", name, `${name}: not asked, as it names no instance's origin`));
+    Promise.reject(new RegistryError("unavailable", name, `${name}: spex.lock names its registry as ${JSON.stringify(url)}, which is no registry address, so it is not asked`, "unasked"));
   return {
     url,
     index: (name) => unasked(name),

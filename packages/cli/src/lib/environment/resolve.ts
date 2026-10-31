@@ -133,7 +133,7 @@ function confinedError(name: string, path: string, issue: OwnPathIssue): Resolve
 async function loadFixed(name: string, request: Request, input: ResolveInput): Promise<Fixed | undefined> {
   if (isPathRequest(request)) {
     const root = input.pathRoot;
-    if (root === null) throw new ResolveError("no_working_folder", name, `${name} is requested by path, and this spex repository has no working folder on this device`);
+    if (root === null) throw new ResolveError("no_working_folder", name, `${name} is added from a folder, and this project has no folder on this computer`);
     const place = input.confined ? "your own group's clone" : "the working folder";
     if (!isInsidePath(request.path)) throw new ResolveError("path_outside", name, `${name}: ${request.path} is outside ${place}`);
     const dir = resolvePath(root, request.path);

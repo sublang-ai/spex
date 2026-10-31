@@ -57,7 +57,7 @@ import { listReleaseFiles, parseManifestText, portablePathIssues, sha256Hex, typ
 import type { GitCredential, GitSource } from "./git-source.js";
 import { isGitSource, isPathSource, isRegistrySource, lockStaleness, sourceValue, type Lock, type LockedFile, type RegistrySourceLock, type Resolution } from "./lock.js";
 import { ownFolderIssue, ownPathIssue, ownPathMessage } from "./own-paths.js";
-import { readVersionResource, RegistryError, type RegistrySource, type VersionResource } from "./registry.js";
+import { readVersionResource, RegistryError, registryHost, type RegistrySource, type VersionResource } from "./registry.js";
 import { isVersion } from "./semver.js";
 import { DigestError, type ContentStore } from "./store.js";
 import { gunzip, readTar } from "./tar.js";
@@ -227,6 +227,19 @@ function treeMatches(target: string, lock: Lock, record: Record<string, unknown>
   return Object.entries(lock.packages).every(([name, resolution]) => isPathSource(resolution.source) || filesStand(target, name, resolution));
 }
 
+/** The registry and Git packages the install record holds as the lock
+ * locks them, whether or not every file still stands: one recorded here
+ * that `installedPackages` lacks has files missing (environments-14). */
+export function recordedPackages(root: string, lock: Lock): Set<string> {
+  const record = readInstallRecord(installedDir(root));
+  const out = new Set<string>();
+  if (!record) return out;
+  for (const [name, resolution] of Object.entries(lock.packages)) {
+    if (!isPathSource(resolution.source) && JSON.stringify(record.packages[name]) === JSON.stringify(recordEntry(resolution))) out.add(name);
+  }
+  return out;
+}
+
 /** The registry and Git sources of a lock whose files stand installed
  * under the root's `.spex/` as the lock locks them: recorded by the
  * install that placed them, the same source, files and artifacts, every
@@ -328,7 +341,7 @@ function putVerified(store: ContentStore, name: string, file: LockedFile, bytes:
   try {
     store.put(bytes, file.sha256, file.executable, `${name} ${file.path}`);
   } catch (error) {
-    if (error instanceof DigestError) throw new InstallError(name, `${name}: ${file.path} does not match the lock's digest; nothing was installed`, error);
+    if (error instanceof DigestError) throw new InstallError(name, `${name}: ${file.path} does not match spex.lock; nothing was installed`, error);
     throw error;
   }
 }
@@ -357,20 +370,23 @@ async function fetchMissing(options: InstallOptions, name: string, resolution: R
     // The first registry serving the release at the locked checksum
     // serves what is still missing; any other answer moves on.
     const reasons: string[] = [];
+    // The first registry's refusal, for a host to phrase by its kind.
+    let refusal: RegistryError | undefined;
     for (const registry of options.registries ? options.registries(source) : [options.registry]) {
       const left = missing.filter((file) => !store.has(file.sha256, file.executable));
       if (left.length === 0) return true;
       try {
         if (await fetchFrom(options, registry, name, source, resolution, left)) return true;
-        reasons.push(`${registry.url} holds it at another checksum`);
+        reasons.push(`${registryHost(registry.url)} has it, but not as spex.lock records it`);
       } catch (error) {
         if (!(error instanceof RegistryError)) throw error;
-        reasons.push(`${registry.url}: ${error.message}`);
+        refusal ??= error;
+        reasons.push(error.message.startsWith(`${name}: `) ? error.message.slice(name.length + 2) : error.message);
       }
     }
     // The built-in nothing serves is the app's to install from its seed.
     if (name === BUILTIN_PACKAGE_NAME && options.builtinUnserved === "leave") return false;
-    throw new InstallError(name, `${name} ${source.version}: no registry serves it at the locked checksum${reasons.length > 0 ? `: ${reasons.join("; ")}` : ""}`);
+    throw new InstallError(name, `${name} ${source.version}: no registry has it as spex.lock records it${reasons.length > 0 ? `: ${reasons.join("; ")}` : ""}`, refusal);
   }
   if (isGitSource(source)) {
     const credential = options.gitCredential ? await options.gitCredential(source.git) : undefined;

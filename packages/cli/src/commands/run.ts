@@ -290,7 +290,7 @@ export function options<T extends Spec>(name: string, args: string[], spec: T) {
 /** A command's options and its words, parsed strictly: an unknown
  * option, or fewer or more words than it takes, refuses the command
  * with its one-line usage. */
-export function parsed<T extends Spec>(name: string, args: string[], spec: T, words: { min: number; max: number; usage?: string }) {
+export function parsed<T extends Spec>(name: string, args: string[], spec: T, words: { min: number; max: number }) {
   let result;
   try {
     result = parseArgs({ args, options: spec, strict: true, allowPositionals: true });
