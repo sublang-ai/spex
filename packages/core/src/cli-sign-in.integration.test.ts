@@ -127,16 +127,16 @@ after(async () => {
 });
 
 test("cli-17, cli-18: login, whoami and logout at two stand-in instances, with no core running", async () => {
-  // --help names the three commands.
+  // --help names the three commands under Sign-in (cli-21).
   const help = await spex(["--help"]).done;
   assert.equal(help.code, 0);
-  for (const command of ["login", "logout", "whoami"]) assert.ok(help.stdout.includes(`  ${command} [--registry <origin> | --space <origin>]`));
+  assert.ok(help.stdout.includes("Sign-in\n  login [--registry <url> | --space <url>]              Sign in with a code in your browser\n  logout, whoami\n"), help.stdout);
 
   // A fresh home lists no instance: whoami says none is signed in and
   // where login goes, and writes nothing (cli-12).
   const fresh = await spex(["whoami", "--space", first.url]).done;
   assert.equal(fresh.code, 0, fresh.stderr);
-  assert.match(fresh.stdout, /^127\.0\.0\.1:\d+ +signed out +\(default\)\n$/);
+  assert.match(fresh.stdout, /^Space {2}127\.0\.0\.1:\d+ {2}signed out \(default\)\n$/);
   assert.equal(existsSync(HOME), false, "whoami writes no home");
 
   // A refused origin exits 1 with the cause on standard error, nothing
@@ -144,7 +144,7 @@ test("cli-17, cli-18: login, whoami and logout at two stand-in instances, with n
   const refused = await spex(["login", "--space", "http://example.com"]).done;
   assert.equal(refused.code, 1);
   assert.equal(refused.stdout, "");
-  assert.match(refused.stderr, /^spex login: --space: http:\/\/example\.com is not a Space's address: origin refused: http on a host that is not loopback\n$/);
+  assert.equal(refused.stderr, "spex login: --space http://example.com: http works only on this computer — enter just the address, like https://spex.sublang.ai\n");
   assert.equal(existsSync(HOME), false, "a refused login writes no home");
 
   // The first login at the default instance: the URL and the code
@@ -156,7 +156,7 @@ test("cli-17, cli-18: login, whoami and logout at two stand-in instances, with n
   first.script.approveDevice(firstCode);
   const signedIn = await signingIn.done;
   assert.equal(signedIn.code, 0, signedIn.stderr);
-  assert.match(signedIn.stdout, /Signed in at First as ada\. First is this device's default Space\.\n$/);
+  assert.match(signedIn.stdout, /Signed in at First as @ada \(default\)\.\n$/);
   let home = readHome();
   assert.deepEqual(home.instances, [{ origin: first.url, clientId: "spex", account: { id: "1001", login: "ada", displayName: "Ada Lovelace" }, displayName: "First" }]);
   assert.equal(home.origin, first.url);
@@ -179,7 +179,7 @@ test("cli-17, cli-18: login, whoami and logout at two stand-in instances, with n
   second.script.denyDevice(await printedCode(denying, second));
   const denied = await denying.done;
   assert.equal(denied.code, 1);
-  assert.match(denied.stderr, /^spex login: not signed in: the code was denied at 127\.0\.0\.1:\d+; nothing recorded\n$/);
+  assert.match(denied.stderr, /^spex login: not signed in: the code was denied at 127\.0\.0\.1:\d+ — spex login to try again\n$/);
   assert.equal(bytesOr(homeFile()), homeBefore, "a denied code leaves home.yaml as it stood");
   assert.equal(bytesOr(credentialsFile()), credentialsBefore, "a denied code keeps no credential");
 
@@ -189,7 +189,7 @@ test("cli-17, cli-18: login, whoami and logout at two stand-in instances, with n
   second.script.approveDevice(await printedCode(secondIn, second));
   const secondDone = await secondIn.done;
   assert.equal(secondDone.code, 0, secondDone.stderr);
-  assert.match(secondDone.stdout, /Signed in at Second as bob\.\n$/);
+  assert.match(secondDone.stdout, /Signed in at Second as @bob\.\n$/);
   home = readHome();
   assert.deepEqual(home.instances.map((entry: any) => [entry.origin, entry.account.login, entry.displayName]), [[first.url, "ada", "First"], [second.url, "bob", "Second"]]);
   assert.deepEqual(Object.keys(readCredentials().hosts).sort(), [first.url, second.url].sort());
@@ -199,7 +199,7 @@ test("cli-17, cli-18: login, whoami and logout at two stand-in instances, with n
   const requests = first.script.deviceRequests.length;
   const again = await spex(["login", "--space", first.url]).done;
   assert.equal(again.code, 0, again.stderr);
-  assert.equal(again.stdout, "Signed in at First as ada; spex login --force signs in again.\n");
+  assert.equal(again.stdout, "Already signed in at First as @ada — spex login --force signs in again\n");
   assert.equal(first.script.deviceRequests.length, requests, "no device request made");
 
   // --force signs in again: a new token in place of the former, whose
@@ -209,7 +209,7 @@ test("cli-17, cli-18: login, whoami and logout at two stand-in instances, with n
   first.script.approveDevice(await printedCode(forcing, first));
   const forced = await forcing.done;
   assert.equal(forced.code, 0, forced.stderr);
-  assert.match(forced.stdout, /Signed in at First as ada\./);
+  assert.match(forced.stdout, /Signed in at First as @ada \(default\)\./);
   const renewed = readCredentials().hosts[first.url];
   assert.notEqual(renewed.access, former.access);
   assert.notEqual(renewed.refresh, former.refresh);
@@ -225,16 +225,15 @@ test("cli-17, cli-18: login, whoami and logout at two stand-in instances, with n
   assert.equal(both.code, 0, both.stderr);
   const lines = both.stdout.trimEnd().split("\n");
   assert.equal(lines.length, 2, both.stdout);
-  assert.match(lines[0], /^127\.0\.0\.1:\d+ +First +ada +\(default\)$/);
-  assert.match(lines[1], /^127\.0\.0\.1:\d+ +Second +bob$/);
-  assert.ok(lines[0].startsWith(new URL(first.url).host) && lines[1].startsWith(new URL(second.url).host));
+  assert.equal(lines[0], "Space  First  @ada (default)");
+  assert.equal(lines[1], "Space  Second  @bob");
   const one = await spex(["whoami", "--space", second.url]).done;
   assert.equal(one.code, 0, one.stderr);
-  assert.match(one.stdout, /^127\.0\.0\.1:\d+ +Second +bob\n$/);
+  assert.equal(one.stdout, "Space  Second  @bob\n");
   // One the home does not list is printed signed out.
   const unlistedWho = await spex(["whoami", "--space", "http://127.0.0.1:9"]).done;
   assert.equal(unlistedWho.code, 0, unlistedWho.stderr);
-  assert.equal(unlistedWho.stdout, "127.0.0.1:9  signed out\n");
+  assert.equal(unlistedWho.stdout, "Space  127.0.0.1:9  signed out\n");
   assert.equal(hostRequests(), asked, "whoami asks no instance");
 
   // logout --space at the second revokes the device there and marks the
@@ -242,7 +241,7 @@ test("cli-17, cli-18: login, whoami and logout at two stand-in instances, with n
   assert.equal(second.script.liveDevices(), 1);
   const out = await spex(["logout", "--space", second.url]).done;
   assert.equal(out.code, 0, out.stderr);
-  assert.equal(out.stdout, "Signed out at Second; bob is no longer signed in on this device.\n");
+  assert.equal(out.stdout, "Signed out at Second.\n");
   assert.equal(second.script.liveDevices(), 0, "the second instance no longer lists the device");
   assert.equal(first.script.liveDevices(), 1, "the first instance's device stands");
   home = readHome();
@@ -250,7 +249,7 @@ test("cli-17, cli-18: login, whoami and logout at two stand-in instances, with n
   assert.equal(home.instances[0].signedOut, undefined);
   assert.deepEqual(Object.keys(readCredentials().hosts), [first.url]);
   const afterOut = await spex(["whoami", "--space", second.url]).done;
-  assert.match(afterOut.stdout, /^127\.0\.0\.1:\d+ +Second +signed out$/m);
+  assert.equal(afterOut.stdout, "Space  Second  signed out\n");
   const outAgain = await spex(["logout", "--space", second.url]).done;
   assert.equal(outAgain.code, 0, outAgain.stderr);
   assert.equal(outAgain.stdout, "Already signed out at Second.\n");
@@ -259,7 +258,7 @@ test("cli-17, cli-18: login, whoami and logout at two stand-in instances, with n
   // (cli-11).
   const unlisted = await spex(["logout", "--space", "http://127.0.0.1:9"]).done;
   assert.equal(unlisted.code, 1);
-  assert.equal(unlisted.stderr, "spex logout: 127.0.0.1:9 is not among this device's Spaces; spex whoami lists them\n");
+  assert.equal(unlisted.stderr, "spex logout: 127.0.0.1:9: not signed in here — spex whoami\n");
 
   // An interrupt while a login waits on a pending code exits 130 with
   // the cause on standard error, nothing recorded (cli-13, cli-18).
@@ -293,12 +292,12 @@ test("cli-17, cli-18: login, whoami and logout at two stand-in instances, with n
   second.script.approveDevice(await printedCode(otherIn, second));
   const otherDone = await otherIn.done;
   assert.equal(otherDone.code, 0, otherDone.stderr);
-  assert.match(otherDone.stdout, /Signed in at Second as bob\. Second is this device's default Space\.\n$/);
+  assert.match(otherDone.stdout, /Signed in at Second as @bob \(default\)\.\n$/);
   const other = readHome(OTHER_HOME);
   assert.equal(other.origin, first.url);
   assert.deepEqual(other.instances.map((entry: any) => entry.origin), [second.url]);
   const otherWho = await spex(["whoami", "--space", second.url], OTHER_HOME).done;
-  assert.match(otherWho.stdout, /^127\.0\.0\.1:\d+ +Second +bob +\(default\)\n$/);
+  assert.equal(otherWho.stdout, "Space  Second  @bob (default)\n");
 
   // No access or refresh secret, nor any device code, anywhere in any
   // output (cli-13).

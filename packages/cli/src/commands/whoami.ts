@@ -1,47 +1,66 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// `spex whoami [--space <origin>]` (cli-12): each instance the home
-// lists, or the one named, as its origin's host with its display name
-// where the home holds one, the login signed in there or that it is
-// signed out, and the default marked — or, listing none, that none is
-// signed in — read from `home.yaml` alone, asking no instance and
-// printing no secret.
+// `spex whoami [--registry <url> | --space <url>]` (cli-12, DR-168,
+// DR-172): this computer's sign-ins in one grammar, a line each — this
+// folder's registry, then every Space the home lists — or, with a flag,
+// the line of the registry or Space named alone: its kind, its name as
+// cli-22 names it, and `@<login>` or `signed out`, the home's default
+// Space marked `(default)`. A registry's login is read from its account
+// API; a Space's from its home entry, asking no Space. No secret is
+// printed.
 
 import { authTarget } from "./auth-target.js";
-import { instanceAt, type HomeInstance } from "../lib/home-file.js";
-import { clientOf, credentialsOf, defaultInstance, homeDir, hostOf, namedInstance, readHome, signedIn } from "./home.js";
+import { HostError } from "../lib/git-host.js";
+import { instanceAt, type HomeFile, type HomeInstance } from "../lib/home-file.js";
+import { clientOf, credentialsOf, defaultInstance, homeDir, hostCause, nameOf, namedInstance, readHome, registryName, signedIn } from "./home.js";
 import { options, Refusal, type Command } from "./run.js";
+
+/** The registry's line: its name and the login its account API names,
+ * or signed out; a registry that cannot say leaves its cause. */
+async function registryLine(dir: string, origin: string): Promise<{ row: string[]; cause?: string }> {
+  const name = await registryName(dir, origin);
+  const client = clientOf(origin, credentialsOf(dir, origin, "registry"), undefined, "registry");
+  let held: boolean;
+  try { held = await client.signedIn(); }
+  catch (error) { return { row: ["Registry", name, "sign-in unreadable"], cause: `your sign-in at ${name} does not read: ${(error as Error).message} — spex logout, then spex login` }; }
+  if (!held) return { row: ["Registry", name, "signed out"] };
+  try {
+    return { row: ["Registry", name, `@${(await client.me()).login}`] };
+  } catch (error) {
+    // A sign-in the registry refused is gone: signed out.
+    if (error instanceof HostError && error.kind === "reauth") return { row: ["Registry", name, "signed out"] };
+    if (!(await client.signedIn().catch(() => true))) return { row: ["Registry", name, "signed out"] };
+    return { row: ["Registry", name, "signed in"], cause: hostCause(error, name) };
+  }
+}
+
+/** A Space's line, read from its home entry alone. */
+function spaceLine(home: HomeFile | null, entry: HomeInstance, defaultOrigin: string): string[] {
+  const listedEntry = home ? instanceAt(home, entry.origin) : undefined;
+  const who = signedIn(listedEntry) ? `@${listedEntry!.account!.login}` : "signed out";
+  return ["Space", nameOf(listedEntry ?? entry), entry.origin === defaultOrigin ? `${who} (default)` : who];
+}
 
 export const whoami: Command = async (args) => {
   const values = options("whoami", args, { space: { type: "string" }, registry: { type: "string" } });
-  const home = readHome(homeDir());
-  const { target, scope } = authTarget(home, values);
-  if (scope === "registry") {
-    const client = clientOf(target.origin, credentialsOf(homeDir(), target.origin, scope), undefined, scope);
-    if (!(await client.signedIn())) { console.log(`Registry ${target.origin}: signed out`); return; }
-    try { console.log(`Registry ${target.origin}: ${(await client.me()).login}`); }
-    catch (error) { throw new Refusal(`cannot read registry sign-in: ${(error as Error).message}`); }
-    return;
-  }
-  // The one named, signed out where the home does not list it.
-  const shown: HomeInstance[] = values.space !== undefined
-    ? [namedInstance(home, values.space)]
-    : home?.instances ?? [];
+  const dir = homeDir();
+  const home = readHome(dir);
   const defaultOrigin = defaultInstance(home).origin;
-  if (shown.length === 0) {
-    console.log(`No Space signed in on this device; spex login signs in at ${hostOf(defaultOrigin)}.`);
-    return;
+  const rows: string[][] = [];
+  let cause: string | undefined;
+  if (values.space !== undefined) {
+    if (values.registry !== undefined) authTarget(home, values);
+    rows.push(spaceLine(home, namedInstance(home, values.space), defaultOrigin));
+  } else {
+    const { target } = authTarget(home, values);
+    const line = await registryLine(dir, target.origin);
+    rows.push(line.row);
+    cause = line.cause;
+    if (values.registry === undefined) for (const entry of home?.instances ?? []) rows.push(spaceLine(home, entry, defaultOrigin));
   }
-  const rows = shown.map((entry) => [
-    hostOf(entry.origin),
-    entry.displayName ?? "",
-    signedIn(home ? instanceAt(home, entry.origin) : undefined) ? entry.account?.login ?? "" : "signed out",
-    entry.origin === defaultOrigin ? "(default)" : "",
-  ]);
-  // Columns aligned; one no row fills is left out.
-  const widths = rows[0].map((_, column) => Math.max(...rows.map((row) => row[column].length)));
-  for (const row of rows) {
-    console.log(row.map((cell, column) => cell.padEnd(widths[column])).filter((_, column) => widths[column] > 0).join("  ").trimEnd());
-  }
+  // Columns aligned, two spaces apart.
+  const widths = rows.reduce<number[]>((out, row) => row.map((cell, at) => Math.max(out[at] ?? 0, cell.length)), []);
+  console.log(rows.map((row) => row.map((cell, at) => (at === row.length - 1 ? cell : cell.padEnd(widths[at]!))).join("  ")).join("\n"));
+  if (cause !== undefined) throw new Refusal(cause);
 };
