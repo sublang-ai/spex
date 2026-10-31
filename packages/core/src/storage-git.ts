@@ -7,7 +7,7 @@
 // managed Git rules, and a clone's first commit.
 
 import { execFileSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { hostname, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -43,7 +43,7 @@ export const UPLOAD_STAGING = ".spex-uploads";
 const AUTHORING_ID = /^[a-z0-9][a-z0-9_-]*$/;
 const SESSION_UNIT = /^sessions\/[0-9a-f-]{36}$/;
 const AUTHORING_UNIT = /^authoring\/[a-z0-9][a-z0-9_-]*$/;
-const git = (dir: string, args: string[], env?: NodeJS.ProcessEnv, input?: string): Buffer =>
+const git = (dir: string, args: string[], env?: NodeJS.ProcessEnv, input?: string | Buffer): Buffer =>
   execFileSync("git", ["-C", dir, ...args], { maxBuffer: 256 * 1024 * 1024, stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"], ...(env ? { env } : {}), ...(input === undefined ? {} : { input }) });
 const revision = (dir: string, ref: string): string => git(dir, ["rev-parse", "--verify", `${ref}^{commit}`]).toString().trim();
 
@@ -515,18 +515,76 @@ function unitOnDisk(dir: string, unit: StorageMergeUnit, members: boolean): Map<
   return new Map(present.map((file, index) => [file, oids[index]]));
 }
 
+/** Attributes from the candidate index, never a different working tree's rules. */
+function lfsPaths(dir: string, files: string[], env: NodeJS.ProcessEnv): string[] {
+  if (files.length === 0) return [];
+  const fields = git(dir, ["check-attr", "--cached", "-z", "--stdin", "filter"], env, files.join("\0") + "\0").toString().split("\0");
+  const paths: string[] = [];
+  for (let n = 0; n + 2 < fields.length; n += 3) if (fields[n + 2] === "lfs") paths.push(fields[n]!);
+  return paths;
+}
+
+function snapshotBytes(dir: string, file: string): Buffer {
+  assertDestinationParents(dir, file);
+  const path = join(dir, file), stat = lstatSync(path);
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1) throw new StorageDestinationRefused(file, "unsafe destination");
+  return readFileSync(path);
+}
+
+/** A fetched tree needs LFS hydration only where its own attributes ask for it. */
+export function storageTreeUsesLfs(dir: string, tree: string): boolean {
+  const stage = mkdtempSync(join(tmpdir(), "spex-lfs-index-"));
+  try {
+    const env = { ...gitEnvironment(), GIT_INDEX_FILE: join(stage, "index") };
+    git(dir, ["read-tree", tree], env);
+    return lfsPaths(dir, [...readStorageTree(dir, tree).keys()], env).length > 0;
+  } finally { rmSync(stage, { recursive: true, force: true }); }
+}
+
+/** Materialize and validate locally. Check has already fetched LFS objects;
+ * checkout's conflict form reads an isolated index entry and never downloads.
+ * The live index and working files are untouched, including on a cache miss. */
+async function storageSnapshot(dir: string, tree: string, stage: string, options: Omit<ValidateStorageOptions, "selectedSessionIds">): Promise<StorageDiagnostic[]> {
+  const entries = readTreeEntries(dir, tree);
+  const target = join(stage, "tree");
+  mkdirSync(target, { recursive: true, mode: 0o700 });
+  const env = { ...gitEnvironment(), GIT_DIR: git(dir, ["rev-parse", "--absolute-git-dir"]).toString().trim(), GIT_INDEX_FILE: join(stage, "snapshot-index"), GIT_WORK_TREE: target, GIT_LFS_SKIP_SMUDGE: "1" };
+  git(target, ["read-tree", tree], env);
+  git(target, ["checkout-index", "-a", "-f", `--prefix=${target}/`], env);
+  const lfs = lfsPaths(target, [...entries.keys()], env);
+  const local = { ...env, GIT_INDEX_FILE: join(stage, "lfs-index"), GIT_LFS_SKIP_SMUDGE: "0" };
+  if (lfs.length) git(target, ["read-tree", "--empty"], local);
+  for (const file of lfs) {
+    const path = join(target, file);
+    // A path newly put under LFS may still hold an ordinary Git blob.
+    const pointer = snapshotBytes(target, file).toString().trim();
+    // Recognize Git LFS's legacy aliases too, so a noncanonical pointer
+    // is refused by the roundtrip below instead of installed as plain bytes.
+    if (!/^version (?:https:\/\/(?:git-lfs|hawser)\.github\.com\/spec\/v1|http:\/\/git-media\.io\/v\/2)\r?\n/.test(pointer)) continue;
+    const digest = /^oid sha256:([a-f0-9]{64})\r?$/m.exec(pointer)?.[1];
+    const size = /^size ([0-9]+)\r?$/m.exec(pointer)?.[1];
+    const entry = entries.get(file)!;
+    git(target, ["update-index", "-z", "--index-info"], local, `${entry.mode} ${entry.oid} 2\t${file}\0`);
+    rmSync(path);
+    git(target, ["-c", "lfs.fetchinclude=", "-c", "lfs.fetchexclude=", "lfs", "checkout", "--to", path, "--ours", file], local);
+    // An unavailable filter or missing/corrupt object must not validate a pointer
+    // or different bytes. Cleaning the materialization must recover this blob.
+    const bytes = snapshotBytes(target, file);
+    if (size === undefined || BigInt(bytes.length) !== BigInt(size) || createHash("sha256").update(bytes).digest("hex") !== digest
+      || git(target, ["hash-object", `--path=${file}`, "--stdin"], env, bytes).toString().trim() !== entry.oid) {
+      throw new StorageFormatError(file, "materialized content does not match the selected object");
+    }
+  }
+  const sessions = new Set([...entries.keys()].map((file) => storageUnitName(file)).filter((unit) => SESSION_UNIT.test(unit)).map((unit) => unit.slice(9)));
+  return validateStorageTree(target, { ...options, selectedSessionIds: sessions });
+}
+
 /** Validate a tree of a clone as Git holds it, in a private copy: what is
  * staged or selected, never the live files beside it (storage-12). */
 export async function validateStorageSnapshot(dir: string, tree: string, options: Omit<ValidateStorageOptions, "selectedSessionIds"> = {}): Promise<StorageDiagnostic[]> {
   const stage = mkdtempSync(join(tmpdir(), "spex-storage-snapshot-"));
-  try {
-    const env = { ...process.env, GIT_INDEX_FILE: join(stage, "index") };
-    git(dir, ["read-tree", tree], env);
-    git(dir, ["checkout-index", "-a", "-f", `--prefix=${join(stage, "tree")}/`], env);
-    // Every session in the tree is tracked, so its version must be one Spex shares.
-    const sessions = new Set([...readStorageTree(dir, tree).keys()].map((file) => storageUnitName(file)).filter((unit) => SESSION_UNIT.test(unit)).map((unit) => unit.slice(9)));
-    return await validateStorageTree(join(stage, "tree"), { ...options, selectedSessionIds: sessions });
-  } finally { rmSync(stage, { recursive: true, force: true }); }
+  try { return await storageSnapshot(dir, tree, stage, options); }
+  finally { rmSync(stage, { recursive: true, force: true }); }
 }
 
 /**
@@ -586,7 +644,7 @@ export async function applyStorageSelection(dir_: string, plan: StorageMergePlan
     }));
     if (entries.length) git(dir, ["update-index", "-z", "--index-info"], env, `${entries.join("\0")}\0`);
     const tree = git(dir, ["write-tree"], env).toString().trim();
-    const diagnostics = await validateStorageSnapshot(dir, tree, options.validate ?? {});
+    const diagnostics = await storageSnapshot(dir, tree, stage, options.validate ?? {});
     if (!stands()) throw new StorageWriteRefused(plan.units[0]?.name ?? "", "moved", [], "the clone moved or was removed");
 
     // A unit the selection leaves as `ours` is the working tree's own
@@ -610,7 +668,7 @@ export async function applyStorageSelection(dir_: string, plan: StorageMergePlan
         const wanted = want(unit);
         const version = read.get(unit.name) as Map<string, string>;
         const modes = new Map(unit.paths.flatMap((path) => { const entry = sideOf(unit).get(path); return entry ? [[path, entry.mode] as const] : []; }));
-        const bytes = new Map([...wanted].map(([path, oid]) => [path, git(dir, ["cat-file", "blob", oid])]));
+        const bytes = new Map([...wanted.keys()].map((path) => [path, snapshotBytes(join(stage, "tree"), path)]));
         const moved = (): StorageWriteRefused => new StorageWriteRefused(unit.name, "moved", [...written], "the clone moved or was removed");
         let lease: { release(): Promise<unknown> } | undefined;
         if (SESSION_UNIT.test(unit.name)) {
