@@ -27,7 +27,7 @@ import {
 } from "@sublang/spex/git-host";
 import { InstanceRefused, kebab, REMOTE_URL_KEYS, remoteNamesIn, remoteOrderOf, splitKey, type HomeAccount } from "./home.js";
 import { i18n } from "./i18n.js";
-import { canonicalOrigin, instanceFolder, instanceSegmentOf, isInstanceFolder, OriginRefused, parseOrigin, type OriginRefusal } from "@sublang/spex/instance";
+import { canonicalOrigin, instanceFolder, instanceSegmentOf, isInstanceFolder, OriginRefused, parseOrigin } from "@sublang/spex/instance";
 import { isDeferredClone } from "./migrate-instances.js";
 import { deletePlacementFile, filedIn, keyPlacement, LEGACY_CREATED_KEY, LEGACY_ID_KEY, moveLegacyIds, PATH_PLACEMENT, PLACEMENT_CONFIG_KEYS, PLACEMENTS_DIR, placementCreatedKey, placementFileEverHeld, placementFilePath, placementIdKey, placementsIn, readPlacementFiles, readPlacements, writePlacementFile, type HistoryRun, type Placement, type PlacementFile, type PlacementPrefKind } from "./placements.js";
 import type {
@@ -38,6 +38,7 @@ import type {
   PlacementBranch,
   PlacementState,
   RepositoryState,
+  CodeKind,
   SpaceChange,
   SpaceChoice,
   SpaceConflict,
@@ -266,23 +267,51 @@ const CREATED_REREAD_MS = 2_000;
 // in a constant a module's first evaluation would freeze in whichever
 // language was current then (core-service-111).
 
+/** The title of a project's code glyph (space-1, core-service-145):
+ * where its code is, one phrase. */
+const codeAt = (where: string): string => i18n._({
+  id: "Code: {where}",
+  values: { where },
+  comment: "The title of a project's code glyph on its row: where its code is — {where} is a Space's display name, or the host of the code's remote as the reader set it (such as github.com), or a local remote as written",
+});
+
+/** The title of a project's warning glyph where its `project.json`
+ * names no remote for its code (space-1). */
+const codeNoRemote = (): string => i18n._({
+  id: "Code: no remote",
+  comment: "The title of a warning glyph on a project's row: no remote is set for the project's code",
+});
+
 /** Why a file of a withheld family is shown without its text (space-35). */
 const withheldReason = (): string => i18n._({
   id: "May hold provider tokens — not shown",
   comment: "Why the explorer offers no preview of a file that may hold a provider's secret",
 });
 
-/** The refusal every act meets before a clone is a repository. */
+/** The refusal every act meets while a clone is no repository: its
+ * folder holds no Git repository of its own, or a removal meanwhile
+ * took it (space-61). */
 const initializeFirst = (): string => i18n._({
-  id: "Initialize the repository first",
-  comment: "Refusal: the home is not a Git repository yet",
+  id: "These records are not a Git repository — Refresh, then Retry",
+  comment: "Refusal: the folder holding a project's or a group's records holds no Git repository of its own, or it was removed meanwhile; Refresh is the Space surface's control",
 });
+
+/** A project name as every surface reads it (space-1, DR-172): its
+ * spex repository's name with `-spex` dropped. */
+const projectName = (name: string): string => name.replace(/-spex$/i, "") || name;
+
+/** The project name of a spex repository's key (space-1). */
+const projectOf = (key: string): string => projectName(splitKey(key).name);
+
+/** Names as one list in the reader's language, never joined by hand. */
+const listOf = (names: readonly string[]): string =>
+  new Intl.ListFormat(i18n.locale || "en", { type: "conjunction", style: "narrow" }).format(names);
 
 /** The refusal of an act at the Git host while the home is signed out
  * (space-11). */
 const signInFirst = (): string => i18n._({
-  id: "Sign in first",
-  comment: "Refusal: the act needs the Git host, and the home is not signed in",
+  id: "Sign in to a Space first",
+  comment: "Refusal: the act needs a Space, and this computer is signed in to none it names; Sign in is the Space surface's control",
 });
 
 /** The refusal of a sync whose instance is signed out (space-11), naming
@@ -290,7 +319,7 @@ const signInFirst = (): string => i18n._({
 const signInTo = (host: string): string => i18n._({
   id: "Sign in to {host} first",
   values: { host },
-  comment: "Refusal of a sync: the spex repository's instance is signed out; {host} is that instance's display name, or its host name before any read",
+  comment: "Refusal of a sync: the Space holding the project's records is signed out; {host} is that Space's display name, or its host name before any read",
 });
 
 /** The refusal of Forget of an instance still signed in (space-29),
@@ -298,37 +327,29 @@ const signInTo = (host: string): string => i18n._({
 const signOutFirst = (host: string): string => i18n._({
   id: "Sign out of {host} first",
   values: { host },
-  comment: "Refusal of Forget: the instance is still signed in; {host} is its display name, or its host name before any read",
+  comment: "Refusal of Remove from this list: the Space is still signed in; {host} is its display name, or its host name before any read",
 });
 
-/** The refusal of Forget while spex repositories are still kept under
- * the instance (space-82): each named, beneath its heading. */
-const stillKeptUnder = (host: string, names: readonly string[]): string => i18n._({
-  id: "Still kept under {host}: {names}",
-  values: { host, names: new Intl.ListFormat(i18n.locale || "en", { type: "conjunction", style: "narrow" }).format(names) },
-  comment: "Refusal of Forget: spex repositories whose clones are still kept under the instance, no signed-in instance listing them; {host} is the instance's display name, {names} the repositories' names as a list",
-});
-
-/** The refusal of Forget while projects are still placed at the
- * instance by a placement beside their key placement (space-82): each
- * named, beneath its heading. */
-const stillPlacedAt = (host: string, names: readonly string[]): string => i18n._({
-  id: "Still placed at {host}: {names}",
-  values: { host, names: new Intl.ListFormat(i18n.locale || "en", { type: "conjunction", style: "narrow" }).format(names) },
-  comment: "Refusal of Forget: spex repositories kept under another instance that are still placed at this one too, no signed-in instance listing that placement; {host} is the instance's display name, {names} the repositories' names as a list",
+/** The refusal of Remove from this list while projects still sync with
+ * the instance (space-82): each project named, or the session refusing
+ * its follow, beneath its heading, as one phrase. */
+const stillSyncing = (names: readonly string[]): string => i18n._({
+  id: "Still syncing: {projects} — stop them first",
+  values: { projects: listOf(names) },
+  comment: "Refusal of Remove from this list on a Space's heading: these projects' records still sync with that Space, no other signed-in Space holding them, or a session beneath them is in use; {projects} names each project, or a session by its title, as a list",
 });
 
 /** The refusal of a sync of a clone no instance holds (space-11). */
 const pickAGroupFirst = (): string => i18n._({
-  id: "Pick a group first",
-  comment: "Refusal: the spex repository is only on this device; a group must be picked for it",
+  id: "Add it to a group first",
+  comment: "Refusal: the project's records are on this computer only; Add to a group… is the row's control",
 });
 
 /** The refusal on a seat of a pick or a remote for your own group,
  * which stays on the server (space-102). */
 const ownStaysOnTheServer = (): string => i18n._({
-  id: "Your own group stays on this server",
-  comment: "Refusal on a team server's seat of a pick or a remote for your own group: its records stay on the server and are placed at no instance",
+  id: "Personal records stay on this server",
+  comment: "Refusal on a team server of adding your Personal records to a group or naming a remote for them: they stay on the server and reach no Space",
 });
 
 /** The code host a remote's transport reaches (git-host-9, storage-44):
@@ -369,153 +390,153 @@ const UNREADABLE = "unreadable";
  * at its host (space-103): the phrase a client opens the Credentials
  * section from. */
 const codeNeedsCredential = (host: string): string => i18n._({
-  id: "Code not cloned: {host} needs a credential of yours. Add one under Settings.",
+  id: "Code not downloaded: {host} needs your credential — add it in Settings",
   values: { host },
-  comment: "A project's code clone failed on a team server's seat where the member placed no token for the code's host, which is no signed-in instance's; {host} is the code host's name as the Credentials section in Settings takes it",
+  comment: "Opening a project on a team server could not download its code: the member set no token for the code's host, which is no signed-in Space's; {host} is the code host's name as the Credentials section in Settings takes it",
 });
 
 /** A code clone on a seat that failed where the member's token for its
  * host will not read (space-103, storage-44): the phrase a client opens
  * the Credentials section from. */
 const codeCredentialUnreadable = (host: string): string => i18n._({
-  id: "Code not cloned: your credential for {host} cannot be read",
+  id: "Code not downloaded: your credential for {host} cannot be read — set it again in Settings",
   values: { host },
-  comment: "A project's code clone failed on a team server's seat where the member's token for the code's host, which is no signed-in instance's, cannot be read from the server's credentials file, its entry or the file malformed; {host} is the code host's name as the Credentials section in Settings takes it",
+  comment: "Opening a project on a team server could not download its code: the member's token for the code's host, which is no signed-in Space's, cannot be read from the server's credentials file; {host} is the code host's name as the Credentials section in Settings takes it",
 });
 
 /** The guidance after a code clone failed on a seat (space-103): the
  * records are here, and a join of it again clones its code into the
  * folder the core allocated for it. */
 const joinAgainForCode = (): string => i18n._({
-  id: "The spex repository is here; join it again to clone its code.",
-  comment: "Guidance after a project's code clone failed on a team server's seat, where the server allocates the code's folder: joining the repository again clones its code there",
+  id: "The records are here — Open here again to download the code",
+  comment: "Guidance after opening a project on a team server downloaded its records but not its code, the server choosing the code's folder: Open here again downloads the code there; Open here is the row's control",
 });
 
 /** The refusal of a join whose folder another project's pair holds
  * (space-63, space-103). */
-const folderPaired = (path: string): CoreError => new CoreError("invalid_request", i18n._({ id: "{path} is another project's working folder", values: { path }, comment: "Refusal of a join: the folder named is paired already" }));
+const folderPaired = (path: string): CoreError => new CoreError("invalid_request", i18n._({ id: "{path} is another project's folder — choose another", values: { path }, comment: "Refusal of Open here: the folder chosen is another project's already; {path} is the folder" }));
 
 /** The refusal of a pick naming another instance than the one whose
  * folder the clone's key lies in (space-29, space-58). */
 const pickAtItsInstance = (name: string, host: string): string => i18n._({
-  id: "{name} is kept under {host}; pick a group there",
-  values: { name, host },
-  comment: "Refusal of a pick: the spex repository's folder lies under one instance, and the pick named a group at another; {name} is the repository's name, {host} its instance's display name",
+  id: "{name} belongs to {host} — pick a group there",
+  values: { name: projectName(name), host },
+  comment: "Refusal of Add to a group…: the project's records belong to one Space, and the pick named a group at another; {name} is the project, {host} its Space's display name",
 });
 
 /** The refusal of a pick's or a Place's join into a spex repository with
  * other members before the reader has seen the sharing notice (space-57,
  * space-29). */
 const readNoticeBeforeJoining = (name: string): string => i18n._({
-  id: "Read the sharing notice before joining {name}",
-  values: { name },
-  comment: "Refusal of a pick joining a spex repository with other members until the reader has seen the privacy notice",
+  id: "Confirm sharing before joining {name}",
+  values: { name: projectName(name) },
+  comment: "Refusal of joining a project's records that other members share until the reader has answered the sharing confirm; {name} is the project",
 });
 
 /** The refusal of a pick's or a Place's new name holding nothing of a
  * name (space-29). */
-const nameNeedsALetter = (): string => i18n._({ id: "The name must hold a letter or a digit", comment: "Refusal of a new spex repository's name with nothing of a name in it" });
+const nameNeedsALetter = (): string => i18n._({ id: "The name must hold a letter or a digit", comment: "Refusal of a name for new records with nothing of a name in it" });
 
 /** The refusal of a pick or a Place naming a group the instance's view
  * does not list (space-29, git-host-6). */
-const noSuchGroup = (): string => i18n._({ id: "The host lists no such group", comment: "Refusal of a pick naming a group the Git host does not list" });
+const noSuchGroup = (host: string): string => i18n._({ id: "{host} lists no such group — Refresh, then pick again", values: { host }, comment: "Refusal of a pick naming a group the Space does not list; {host} is its display name; Refresh is the Space surface's control" });
 
 /** The refusal of a Place of a group's own spex repository or your own
  * group's, and of an Attach of a group's own (space-29, space-88,
  * space-87): a project's alone is placed by the reader. */
 const groupRecordsStay = (name: string): string => i18n._({
-  id: "{name} holds a group's records; only a project's are placed at another instance",
-  values: { name },
-  comment: "Refusal of Place or Attach: the spex repository is a group's own (or, for Place, your own group's), which stays at its one instance; {name} is the repository's name",
+  id: "{name} holds a group's records, which stay at one Space",
+  values: { name: projectName(name) },
+  comment: "Refusal of sharing records at another Space: they are a group's own (or your Personal records), which stay at their one Space; {name} names them",
 });
 
 /** The refusal of a Place or an Attach at an instance the clone holds a
  * placement at already (space-29). */
 const placedAlready = (name: string, host: string): string => i18n._({
-  id: "{name} is placed at {host} already",
-  values: { name, host },
-  comment: "Refusal of Place or Attach: the spex repository already has a placement at that instance; {name} is the repository's name, {host} the instance's display name",
+  id: "{name} is at {host} already",
+  values: { name: projectName(name), host },
+  comment: "Refusal of sharing a project's records at a Space they already sync with; {name} is the project, {host} the Space's display name",
 });
 
 /** The refusal of an Attach at an instance no placement file of the
  * clone names a listed host repository at (space-29). */
 const noFiledPlacement = (name: string, host: string): string => i18n._({
-  id: "No placement file of {name} names a spex repository {host} lists",
-  values: { name, host },
-  comment: "Refusal of Attach: none of the spex repository's placement files names a spex repository that the instance lists for this account; {name} is the repository's name, {host} the instance's display name",
+  id: "{name} has no records at {host} to attach — Refresh, then Retry",
+  values: { name: projectName(name), host },
+  comment: "Refusal of attaching a project's records at a Space: no file of the project names records that Space lists for this account; {name} is the project, {host} the Space's display name",
 });
 
 /** The refusal of an Attach sent before the reader saw its sharing
  * notice, which Attach is (space-90, space-29). */
 const readNoticeBeforeAttaching = (name: string): string => i18n._({
-  id: "Read the sharing notice before attaching {name}",
-  values: { name },
-  comment: "Refusal of Attach until the reader has seen the privacy notice for that placement: every record reaches its members; {name} is the spex repository's name at that instance",
+  id: "Confirm sharing before attaching {name}",
+  values: { name: projectName(name) },
+  comment: "Refusal of attaching a project's records at a Space until the reader has answered the sharing confirm: every record reaches its members there; {name} is the project",
 });
 
 /** The refusal of a join — a pick's, a Place's or an Attach's — of a
  * host repository another clone here holds as a placement (space-29,
  * git-host-5). */
 const heldByAnother = (name: string, repository: string): string => i18n._({
-  id: "{name} is on this device already, as a placement of {repository}",
-  values: { name, repository },
-  comment: "Refusal of a pick, Place or Attach that joins the spex repository {name} listed at an instance, already held on this device by the spex repository {repository}, which syncs with it",
+  id: "{name} is on this computer already, syncing with {project}",
+  values: { name: projectName(name), project: projectName(repository) },
+  comment: "Refusal of joining records a Space lists, {name}, that this computer already holds: the project {project} syncs with them",
 });
 
 /** The refusal of a Place while the view does not say the person may
  * manage the members of every placement the clone holds (space-29,
  * space-88). */
 const mayNotManageEvery = (name: string): string => i18n._({
-  id: "Placing {name} elsewhere needs the right to manage the members of each of its placements",
-  values: { name },
-  comment: "Refusal of Place: the person may not manage the members of every placement the spex repository holds, and placing it shares its records with more people; {name} is the repository's name",
+  id: "Sharing {name} at another Space needs the right to manage its members everywhere it syncs",
+  values: { name: projectName(name) },
+  comment: "Refusal of sharing a project's records at another Space: the person may not manage their members at every Space they sync with, and sharing reaches more people; {name} is the project",
 });
 
 /** The refusal of a Leave of a group's own spex repository or your own
  * group's (space-29, space-89): a project's placement alone is left. */
 const groupRecordsKept = (name: string): string => i18n._({
-  id: "{name} holds a group's records; only a project's are removed from an instance",
-  values: { name },
-  comment: "Refusal of Leave: the spex repository is a group's own or your own group's, whose placements Leave does not remove; {name} is the repository's name",
+  id: "{name} holds a group's records, which stay at their Space",
+  values: { name: projectName(name) },
+  comment: "Refusal of removing records from a Space: they are a group's own or your Personal records, which stay where they are; {name} names them",
 });
 
 /** A Leave stopped, unconfirmed, for records of the placement left or
  * of the clone that no remaining placement received (space-98), naming
  * their count. */
 const unreceivedRecords = (count: number): string => i18n._({
-  id: "{count, plural, one {# record has} other {# records have}} reached no other placement",
+  id: "{count, plural, one {# record has} other {# records have}} reached no other Space",
   values: { count },
-  comment: "A stopped Leave: that many records, of the placement being removed or of this device, are held by none of the spex repository's other placements, as this device last fetched or pushed them; a second confirmation removes it anyway",
+  comment: "A stopped removal of a project's records from one Space: that many records, of that Space or of this computer, reached none of the other Spaces the project syncs with, as this computer last saw them; a second confirmation removes them anyway",
 });
 
 /** A Leave stopped, unconfirmed, for a placement it could not read
  * (space-98), naming that placement's instance. */
 const leftBehind = (host: string): string => i18n._({
-  id: "Records pushed to {host} since the last sync may be left behind",
+  id: "Records sent to {host} since the last sync may be left behind",
   values: { host },
-  comment: "A stopped Leave: the placement being removed, at the instance {host} (its display name), could not be read, so records others pushed there since this device's last sync with it would not reach this device; a second confirmation removes it anyway",
+  comment: "A stopped removal of a project's records from the Space {host} (its display name), which could not be read: records others sent there since this computer's last sync would not reach this computer; a second confirmation removes them anyway",
 });
 
 /** Guidance under a Leave stopped before anything was removed
  * (space-98, space-89). */
 const confirmToRemove = (): string => i18n._({
   id: "Confirm to remove it anyway.",
-  comment: "Guidance under a stopped Leave: confirming again removes the placement whatever it holds",
+  comment: "Guidance under a stopped removal of a project's records from one Space: confirming again removes them there whatever they hold",
 });
 
 /** The refusal of a command naming an instance the home does not list
  * (space-29); a URL's user info, which may hold a secret, is never
  * repeated. */
 const noSuchInstance = (instance: string): string => i18n._({
-  id: "This device has not signed in to {instance}",
-  values: { instance: instance.replace(/^([a-z][a-z0-9+.-]*:\/\/)[^/?#]*@/i, "$1…@") },
-  comment: "Refusal: a command names an instance, by its address, that this device lists no entry for — never signed in to there, or forgotten since",
+  id: "This computer has not signed in to {address} — sign in there first",
+  values: { address: instance.replace(/^([a-z][a-z0-9+.-]*:\/\/)[^/?#]*@/i, "$1…@") },
+  comment: "Refusal: a command names a Space, by its address, that this computer lists no sign-in for — never signed in to there, or removed from the list since",
 });
 
 /** Guidance under a stop the host's sign-in answers (space-15). */
 const signInThenRetry = (): string => i18n._({
-  id: "Sign in from the header, then Retry.",
-  comment: "Guidance where the Git host asked this device to sign in again",
+  id: "Sign in again, then Retry.",
+  comment: "Guidance where the Space asked this computer to sign in again; Sign in again is the control on the Space's heading",
 });
 
 /** A second sign-in while one runs (git-host-2). */
@@ -525,38 +546,21 @@ const signInRunning = (): string => i18n._({
 });
 
 /** The refusal of a sign-in at a URL the origin rule refuses (git-host-2,
- * storage-2): one sentence naming the part of the rule it breaks. The
- * URL is never repeated, since its user info may hold a secret. */
-function originRuleRefusal(reason: OriginRefusal): string {
-  switch (reason) {
-    case "invalid":
-      return i18n._({ id: "Name the instance by its URL, such as https://spex.sublang.ai", comment: "Refusal of a sign-in: what the reader gave does not read as a URL at all" });
-    case "scheme":
-      return i18n._({ id: "An instance's URL begins with https://, or http:// on this device", comment: "Refusal of a sign-in: the URL's scheme is neither https nor http; http is allowed for an instance on this device alone (localhost or 127.x)" });
-    case "user":
-      return i18n._({ id: "An instance's URL carries no user or password", comment: "Refusal of a sign-in: the URL carries user info before its host" });
-    case "path":
-      return i18n._({ id: "An instance's URL names no path, only its scheme, host and port", comment: "Refusal of a sign-in: the URL names a path after its host; an instance is known by its origin alone" });
-    case "query":
-      return i18n._({ id: "An instance's URL carries no query, only its scheme, host and port", comment: "Refusal of a sign-in: the URL carries a query; an instance is known by its origin alone" });
-    case "fragment":
-      return i18n._({ id: "An instance's URL carries no fragment, only its scheme, host and port", comment: "Refusal of a sign-in: the URL carries a fragment; an instance is known by its origin alone" });
-    case "host":
-      return i18n._({ id: "An instance's host holds only letters, digits, inner hyphens and single dots", comment: "Refusal of a sign-in: the URL's host holds a character outside DNS labels, such as an underscore, or is an IPv6 literal" });
-    case "port":
-      return i18n._({ id: "An instance's port is from 1 to 65535", comment: "Refusal of a sign-in: the URL names port 0" });
-    case "insecure":
-      return i18n._({ id: "An instance's URL uses https://; http:// only on this device", comment: "Refusal of a sign-in: the URL is http on a host that is not this device (localhost or 127.x)" });
-  }
-}
+ * storage-2, core-service-145): one phrase, whichever part of the rule
+ * the URL breaks. The URL is never repeated, since its user info may
+ * hold a secret. */
+const originRuleRefusal = (): string => i18n._({
+  id: "Enter just the Space's address, like https://spex.sublang.ai",
+  comment: "Refusal of a sign-in: what the reader entered is not a Space's address alone — not a URL, a scheme other than https (or http on this computer), a user or password, a path, a query, a fragment, a host outside letters, digits, hyphens and dots, or port 0; https://spex.sublang.ai is an example address and stays as it is",
+});
 
 /** The refusal of a sign-in at a new origin whose folder a listed
  * instance's equals (git-host-2, storage-2): one instance per host and
  * port, whatever its scheme. */
 const sameFolderRefusal = (listed: string): string => i18n._({
-  id: "This device already signs in to {listed}, at the same host and port",
+  id: "Already signed in to {listed} — sign in at that address",
   values: { listed },
-  comment: "Refusal of a sign-in: the URL names the host and port of an instance this device already lists, under another scheme; {listed} is that instance's origin",
+  comment: "Refusal of a sign-in: the address names the host and port of a Space this computer already signs in to, under another scheme; {listed} is that Space's address",
 });
 
 /** Guidance under a step stopped for a reason the app does not classify. */
@@ -567,21 +571,21 @@ const retryGuidance = (): string => i18n._({
 
 /** Guidance where the host no longer lists a spex repository (space-15). */
 const nothingDeleted = (): string => i18n._({
-  id: "Nothing on this device was deleted.",
-  comment: "Guidance where the Git host no longer lists a spex repository for this account",
+  id: "Nothing on this computer was deleted.",
+  comment: "Guidance where the Space no longer lists a project's records for this account",
 });
 
 /** Guidance under a step the host left waiting (space-64). */
 const syncLater = (): string => i18n._({
   id: "It is asked again at the next sync.",
-  comment: "Guidance under a sync stopped because a step at the Git host waits for a member with the rights",
+  comment: "Guidance under a sync stopped because a step at the Space waits for a member with the rights",
 });
 
 /** Guidance under a stop the host's rate limit made, or a Stop of its
  * wait (space-15, git-host-21): a key phrase, not an explanation. */
 const retryWaits = (): string => i18n._({
   id: "Retry waits, then runs the step.",
-  comment: "Guidance where the Git host asked to wait: Retry waits out the time it asked for before running the step",
+  comment: "Guidance where the Space asked to wait: Retry waits out the time it asked for before running the step",
 });
 
 /** A step the reader stopped while its call to the host waited out the
@@ -589,7 +593,7 @@ const retryWaits = (): string => i18n._({
 function waitStopped(step: SyncStep, host: string): SpaceStopped {
   return new SpaceStopped(step, {
     cause: "stopped",
-    message: i18n._({ id: "Stopped while waiting for {host}", values: { host }, comment: "A stopped step's message: the reader stopped it while the Git host's rate limit held its call; {host} is the host's display name" }),
+    message: i18n._({ id: "Stopped while waiting for {host}", values: { host }, comment: "A stopped step's message: the reader stopped it while the Space's rate limit held its call; {host} is the Space's display name" }),
     guidance: retryWaits(),
     retry: true,
   });
@@ -632,7 +636,7 @@ function hostStop(step: SyncStep, error: unknown, host: string): SpaceStopped {
       return new SpaceStopped(step, {
         cause: "unreachable",
         message,
-        guidance: i18n._({ id: "Check the network, then Retry.", comment: "Guidance where the Git host could not be reached" }),
+        guidance: i18n._({ id: "Check the network, then Retry.", comment: "Guidance where the Space could not be reached" }),
         retry: true,
       });
     default:
@@ -643,7 +647,7 @@ function hostStop(step: SyncStep, error: unknown, host: string): SpaceStopped {
 /** A move stopped: the clone changed between the sync's read and its
  * rename — a Check cause, stopping its placement alone (space-15). */
 function movedMeanwhile(key: string): SpaceStopped {
-  return new SpaceStopped("check", { cause: "git", message: changedMeanwhile(`workspace/${key}`), guidance: retryGuidance(), retry: true }, false);
+  return new SpaceStopped("check", { cause: "git", message: recordsChangedMeanwhile(projectOf(key)), guidance: retryGuidance(), retry: true }, false);
 }
 
 /** A first placement's drop refused, the clone neither dropped nor
@@ -654,11 +658,11 @@ function nextUnread(host: string): SpaceStopped {
   return new SpaceStopped("check", {
     cause: "unreachable",
     message: i18n._({
-      id: "{host} is not read yet, so the clone cannot move to its path there",
+      id: "{host} is not read yet, so these records cannot move there",
       values: { host },
-      comment: "A stopped sync: a placement of a spex repository is dropped, which moves its clone to the path of its next placement, at the instance {host} (its display name), which the core has not read since it started",
+      comment: "A stopped sync: the project's records stop syncing with one Space and move to where the next Space it syncs with keeps them, at {host} (its display name), which Spex has not read since it started",
     }),
-    guidance: i18n._({ id: "Refresh, then Retry.", comment: "Guidance where the core must read an instance before a spex repository's clone can move to its path there" }),
+    guidance: i18n._({ id: "Refresh, then Retry.", comment: "Guidance where Spex must read a Space before a project's records can move to where that Space keeps them; Refresh is the Space surface's control" }),
     retry: true,
   }, false);
 }
@@ -668,7 +672,7 @@ function nextUnread(host: string): SpaceStopped {
 function inUseStop(step: SyncStep, unit: string, store: Store): SpaceStopped {
   const [kind, id] = unit.split("/") as [string, string];
   const title = kind === "sessions" ? store.describeSession(id)?.title : undefined;
-  return new SpaceStopped(step, {
+  const stop = new SpaceStopped(step, {
     cause: "lease",
     message: title
       ? i18n._({
@@ -687,13 +691,30 @@ function inUseStop(step: SyncStep, unit: string, store: Store): SpaceStopped {
     }),
     retry: true,
   });
+  // Named in a list as the stop names it (space-82): by its title, else
+  // by the head of its identifier.
+  stop.subject = title ? `“${title}”` : i18n._({
+    id: "Session {id}",
+    values: { id: kind === "sessions" ? id.slice(0, 8) : id },
+    comment: "A session with no title, named by the head of its identifier, as one name in a list",
+  });
+  return stop;
 }
 
-/** The refusal of a write whose file changed since it was read (DR-111). */
-const changedMeanwhile = (what: string): string => i18n._({
-  id: "{what} changed meanwhile; retry",
-  values: { what },
-  comment: "Refusal of a write: the file it would replace changed since it was read; {what} names the file or folder",
+/** A project's records changed between a read and the write that
+ * relied on it — their folder moved, their remote set elsewhere
+ * (DR-111): Retry reads them again. */
+const recordsChangedMeanwhile = (name: string): string => i18n._({
+  id: "The records of {name} changed meanwhile",
+  values: { name },
+  comment: "A stopped step: the project's records changed between Spex's read and its write — moved, or their remote set from a terminal; {name} is the project; its guidance says Retry",
+});
+
+/** The same change as a refusal, which carries no guidance of its own. */
+const recordsChangedRetry = (name: string): string => i18n._({
+  id: "The records of {name} changed meanwhile — Retry",
+  values: { name },
+  comment: "Refusal: the project's records changed between Spex's read and its write — moved, or their remote set from a terminal; {name} is the project",
 });
 
 /** The diagnostic a pending Git merge stands as (space-11). */
@@ -757,6 +778,8 @@ class SpaceStopped extends Error {
    * read from its cause, which a clone changed meanwhile at a Check's
    * move and a host's answer with an HTTP status share. */
   readonly whole: boolean;
+  /** The session a lease stop names, as a list names it (space-82). */
+  subject?: string;
   constructor(readonly step: SyncStep, readonly failure: GitFailure, whole?: boolean) {
     super(failure.message);
     this.name = "SpaceStopped";
@@ -1106,8 +1129,8 @@ function lastSyncIn(stored: unknown): { at: number; sent: number; received: numb
 
 /** The explorer's refusals of a path outside what it browses (space-35). */
 const escapesTheHome = (): string => i18n._({
-  id: "the path escapes the home",
-  comment: "Refusal: the explorer was given a path leading outside the home",
+  id: "the path leads outside these records",
+  comment: "Refusal: the explorer was given a path leading outside the records it shows",
 });
 const noFileAt = (path: string): string => i18n._({
   id: "no file at {path}",
@@ -1122,22 +1145,38 @@ const noFolderAt = (path: string): string => i18n._({
 
 /** A spex repository's read-only reason where the host gave no words
  * for its archive (space-61). */
-const archivedReason = (): string => i18n._({ id: "Archived", comment: "A spex repository's read-only reason where the host gave no words for its archive" });
+const archivedReason = (): string => i18n._({ id: "Archived", comment: "Why a project's records are read-only where the Space gave no words for its archive; read after 'Read-only: '" });
 
 /** The refusal an act naming a unit no plan holds meets. */
 const unknownUnit = (unit: string): string => i18n._({
-  id: "unknown unit {unit}",
-  comment: "Refusal: the act names a unit the current plan does not hold",
-  values: { unit },
+  id: "{name} is not among the changes — Check again",
+  comment: "Refusal: the act names a change the current comparison does not hold; {name} is the change's file or folder; Check is the Sync tab's control",
+  values: { name: unit },
 });
 
 /** The refusal a command naming a placement the clone does not hold
  * meets (space-29): an instance it holds none at, or a path placement
  * where it holds none. */
 const noSuchPlacement = (name: string): string => i18n._({
-  id: "{name} holds no such placement",
-  values: { name },
-  comment: "Refusal: the command names a placement — an instance, or the remote the reader named — that the spex repository {name} does not hold",
+  id: "{name} does not sync there",
+  values: { name: projectName(name) },
+  comment: "Refusal: the command names a Space, or a remote the reader named, that the project's records {name} do not sync with",
+});
+
+/** The refusal of Open here of records a clone here holds already
+ * (space-63): named by the project. */
+const alreadyHere = (name: string): string => i18n._({
+  id: "{name} is on this computer already — Show it instead",
+  values: { name: projectName(name) },
+  comment: "Refusal of Open here: the project's records are on this computer already; {name} is the project; Show is the row's control once a project is open here",
+});
+
+/** The refusal of a command naming records this computer holds no
+ * clone of (space-29). */
+const notHere = (key: string): string => i18n._({
+  id: "{name} is not on this computer — Refresh, then Retry",
+  values: { name: projectOf(key) },
+  comment: "Refusal: the command names a project's or a group's records that this computer does not hold; {name} names them; Refresh is the Space surface's control",
 });
 
 /** Units that count as something a removal would lose (projects-9):
@@ -1629,7 +1668,7 @@ class RepositorySync {
    * step. */
   private remoteNamed(step: SyncStep): string {
     const name = this.facts.remoteName;
-    if (name === null) throw new SpaceStopped(step, { cause: "git", message: changedMeanwhile(splitKey(this.key).name), guidance: retryGuidance(), retry: true }, false);
+    if (name === null) throw new SpaceStopped(step, { cause: "git", message: recordsChangedMeanwhile(projectOf(this.key)), guidance: retryGuidance(), retry: true }, false);
     return name;
   }
 
@@ -1763,7 +1802,7 @@ class RepositorySync {
     // A placement already at the host's URL is the one this attaches;
     // one added is named by its instance's folder (storage-34).
     const added = this.addPlacement(expected, { url, id, ...(created ? { created: id } : {}), folder });
-    if (!added) throw new CoreError("conflict", changedMeanwhile(splitKey(this.key).name));
+    if (!added) throw new CoreError("conflict", recordsChangedRetry(projectOf(this.key)));
     // The same repository keeps what the clone holds of it and this
     // device's last sync; another, now the clone's first placement,
     // clears what a remote taken away or one formerly of its name left,
@@ -1804,7 +1843,7 @@ class RepositorySync {
    * under its name. */
   setOrigin(url: string, expected: string): void {
     if (!this.publishRemote(expected, { url })) {
-      throw new SpaceStopped("check", { cause: "git", message: changedMeanwhile(splitKey(this.key).name), guidance: retryGuidance(), retry: true }, false);
+      throw new SpaceStopped("check", { cause: "git", message: recordsChangedMeanwhile(projectOf(this.key)), guidance: retryGuidance(), retry: true }, false);
     }
   }
 
@@ -2139,11 +2178,11 @@ class RepositorySync {
       // Its instance (storage-31), whose Git origin its code remote is
       // read against first (space-1).
       const instance = this.owner.cloneInstance(read.repository.key, held[0]?.name ?? null);
-      let code: string | null = null;
+      let code: { code: string | null; codeKind: CodeKind } = { code: null, codeKind: "unknown" };
       try {
         const project = existsSync(read.repository.projectFile) ? readJsonFile(read.repository.projectFile) as { remote?: unknown } : undefined;
-        code = typeof project?.remote === "string" ? this.owner.codeRemoteAsShown(project.remote, instance) : null;
-      } catch { code = null; }
+        code = this.owner.codeAsShown(project, instance);
+      } catch { code = { code: null, codeKind: "unknown" }; }
       const remote = repo.root ? repo.remote : null;
       const state: RepositoryState = {
         key: read.repository.key,
@@ -2153,7 +2192,8 @@ class RepositorySync {
         name: splitKey(read.repository.key).name,
         id: repo.root ? repo.id : null,
         own: read.repository.key === store.home.own(),
-        code,
+        code: code.code,
+        codeKind: code.codeKind,
         folder: store.home.folderOf(read.repository.key)?.path ?? null,
         state: remote === null ? "local-only" : "reachable",
         reason: null,
@@ -2604,23 +2644,23 @@ class RepositorySync {
         ? i18n._({
             id: "On {branch}; check out spex in a terminal",
             values: { branch: repo.branch },
-            comment: "Refusal: the clone sits on another branch; spex is the branch's own name",
+            comment: "Refusal: the project's records sit on another Git branch; spex is the branch's own name",
           })
         : i18n._({
             id: "Not on a branch; check out spex in a terminal",
-            comment: "Refusal: the clone's HEAD names no branch; spex is the branch's own name",
+            comment: "Refusal: the project's records name no Git branch; spex is the branch's own name",
           }));
     }
     if (repo.mergePending) {
       throw new CoreError("invalid_request", i18n._({
         id: "Finish or abort the merge in your terminal",
-        comment: "Refusal: a Git merge is pending in the home",
+        comment: "Refusal: a Git merge is pending in the project's records",
       }));
     }
     if (repo.head === null) {
       throw new CoreError("invalid_request", i18n._({
-        id: "The repository holds no commit yet; initialize it again",
-        comment: "Refusal: the home's repository holds no commit to sync",
+        id: "These records hold no commit yet — Refresh, then Retry",
+        comment: "Refusal: the Git repository holding the project's records has no commit to sync; Refresh is the Space surface's control",
       }));
     }
     return repo as ReadyRepository;
@@ -2641,8 +2681,8 @@ class RepositorySync {
       // given and never named by the reader (space-5).
       if (await this.owner.atHostOrigin(url)) {
         throw new CoreError("invalid_request", i18n._({
-          id: "The Git host's own URLs are used as the host gives them; pick a group instead.",
-          comment: "Refusal of a remote the reader named under the Git host's own origin",
+          id: "That address is a Space's own — Add it to a group instead",
+          comment: "Refusal of a remote the reader named for a project's records that lies at a Space, which hands its own addresses over itself; Add to a group… is the row's control",
         }));
       }
     }
@@ -2653,7 +2693,7 @@ class RepositorySync {
       // instance placement: the clone's check and last sync are then its.
       const first = keyPlacement(repo.placements) === undefined;
       // Written over the remote read above, or refused (DR-111).
-      if (!this.setPathPlacement(current, url)) throw new CoreError("conflict", changedMeanwhile(splitKey(this.key).name));
+      if (!this.setPathPlacement(current, url)) throw new CoreError("conflict", recordsChangedRetry(projectOf(this.key)));
       // In that step, this device's last sync and notice of a path
       // placement named before leave with it, and, where the path
       // placement is the first, what a Spex before DR-128 recorded for
@@ -2861,9 +2901,9 @@ class RepositorySync {
         if (unit.choice !== "conflict") {
           const label = [...(run?.lists.local ?? []), ...(run?.lists.incoming ?? [])].find((u) => u.unit === name)?.label ?? name;
           throw new CoreError("invalid_request", i18n._({
-            id: "{label} has no divergent change",
+            id: "{label} needs no choice — Check again",
             values: { label },
-            comment: "Refusal: a choice was sent for a unit the two sides agree on; {label} is the unit's own label",
+            comment: "Refusal: a choice was sent for a change both sides agree on; {label} is the change's own label; Check is the Sync tab's control",
           }));
         }
         choices[name] = choice === "mine" ? "ours" : "theirs";
@@ -3142,12 +3182,12 @@ class RepositorySync {
           throw this.stopOn(restart.restart, restart.placement, new SpaceStopped("apply", {
             cause: "writer",
             message: i18n._({
-              id: "The space changed twice while syncing",
-              comment: "A stopped sync's message: the home was written to twice under the sync",
+              id: "Records changed twice while syncing",
+              comment: "A stopped sync's message: the project's records were written to twice under the sync",
             }),
             guidance: i18n._({
-              id: "Another process is writing to the home; wait for it to finish, then Retry.",
-              comment: "Guidance under a sync another writer keeps restarting",
+              id: "Another Spex is writing these files — wait, then Retry",
+              comment: "Guidance under a sync another writer — another Spex, or the command line — keeps restarting",
             }),
             retry: true,
           }));
@@ -3334,12 +3374,13 @@ class RepositorySync {
                 throw new SpaceStopped("push", {
                   cause: "rejected",
                   message: i18n._({
-                    id: "The host changed again",
-                    comment: "A stopped sync's message: the host's branch moved while this machine was sending",
+                    id: "{host} changed again",
+                    values: { host: this.turnSpace(held, remote) },
+                    comment: "A stopped sync's message: the Space's records moved again while this computer was sending; {host} is the Space's display name, or the remote the reader named as a report reads it",
                   }),
                   guidance: i18n._({
-                    id: "Your merge is saved locally; Retry to send it once the host settles.",
-                    comment: "Guidance under a push the remote rejected twice",
+                    id: "Your merge is saved on this computer — Retry to send it",
+                    comment: "Guidance under a send the Space refused twice because its records moved meanwhile",
                   }),
                   retry: true,
                 });
@@ -3509,8 +3550,8 @@ class RepositorySync {
           comment: "A stopped save's message: a staged file belongs to a family the home never shares; {leak} is its path",
         }),
         i18n._({
-          id: "It belongs to a family that stays on this device; check the sync rules. Nothing was saved.",
-          comment: "Guidance under a save that refused to share a file",
+          id: "It stays on this computer; check the sync rules. Nothing was saved.",
+          comment: "Guidance under a save that refused to share a file of a kind that never leaves this computer",
         }),
       );
     }
@@ -3542,7 +3583,7 @@ class RepositorySync {
           comment: "A stopped save's message where git failed and printed nothing",
         }),
         guidance: i18n._({
-          id: "Retry; if it fails again, run git commit in the home from a terminal for detail.",
+          id: "Retry; if it fails again, run git commit in a terminal for detail.",
           comment: "Guidance under a commit git failed; git commit is the command's own name",
         }),
         retry: true,
@@ -3630,6 +3671,15 @@ class RepositorySync {
     } finally {
       await credential?.dispose();
     }
+  }
+
+  /** The name a report of a placement's turn gives it (space-12,
+   * space-15): its instance's display name — a placement beside the
+   * first by its own instance, the first by the instance the clone syncs
+   * with — or the path placement's remote as a report reads it. */
+  private turnSpace(held: Placement | undefined, remote: string): string {
+    if (held) return held.instance ? this.owner.instanceName(held.instance) : displayRemote(held.url);
+    return keyPlacement(this.placements) === undefined ? displayRemote(remote) : this.owner.hostNameOf(this);
   }
 
   /** A failed transport in the plain words of space-15: the Git host's
@@ -3819,8 +3869,8 @@ class RepositorySync {
           cause: "validation",
           message: `${error.file}: ${error.reason}`,
           guidance: i18n._({
-            id: "Choose the other side for this unit or fix the file, then Retry.",
-            comment: "Guidance where the selected side of a unit failed validation",
+            id: "Choose the other side or fix the file, then Retry.",
+            comment: "Guidance where the side chosen for a change failed validation",
           }),
           retry: true,
         });
@@ -4051,15 +4101,15 @@ class RepositorySync {
     }
     if (!found.paths.includes(path)) {
       throw new CoreError("invalid_request", i18n._({
-        id: "unknown path {path} in {unit}",
-        values: { path, unit },
-        comment: "Refusal: the diff names a path the unit does not hold",
+        id: "{path} is not part of {name}",
+        values: { path, name: unit },
+        comment: "Refusal: the diff names a path the change does not hold; {name} is the change's file or folder",
       }));
     }
     if (side === "remote" && !checked) {
       throw new CoreError("invalid_request", i18n._({
-        id: "Check the host first",
-        comment: "Refusal: the remote's side was asked for before the remote was checked",
+        id: "Check first, then view the diff",
+        comment: "Refusal: the Space's side of a change was asked for before Check read it; Check is the Sync tab's control",
       }));
     }
     const args = ["diff", "--no-color", plan.base, side === "remote" ? plan.theirs : plan.oursTree, "--", path];
@@ -4083,7 +4133,7 @@ class RepositorySync {
     const given = rel ?? "";
     if (given.includes("\0") || isAbsolute(given)) {
       throw new CoreError("invalid_request", i18n._({
-        id: "the path must be relative to the home",
+        id: "the path must be relative to these records",
         comment: "Refusal: the explorer was given an absolute path",
       }));
     }
@@ -4141,8 +4191,8 @@ class RepositorySync {
             comment: "Refusal: the explorer was asked to list something that is no folder",
           })
         : i18n._({
-            id: "the home is not a folder",
-            comment: "Refusal: the home itself is no folder",
+            id: "these records are not a folder",
+            comment: "Refusal: the records the explorer shows are no folder",
           }));
     }
     const dirents = readdirSync(abs, { withFileTypes: true });
@@ -4783,20 +4833,33 @@ export class SpaceManager {
     return this.preferring(preferred).find((instance) => this.reportedUnder(remote, instance));
   }
 
-  /** A project's code remote on its row (space-1): "Code on a remote"
-   * until the default instance and every instance the home lists have
-   * reported their Git origin, then "Code on this instance" under the
-   * Git origin of the row's instance — `origin`, the default instance
-   * where it is null — "Code on a remote" under another listed
-   * instance's, and the remote as the reader set it, with no user in an
-   * http(s) URL, under none of them (DR-120, DR-127). Its transport URL
-   * and project file stay as given. */
-  codeRemoteAsShown(remote: string, origin: string | null): string {
-    const kind = this.originsReported() ? this.codeRemoteKind(remote, origin) : "unknown";
-    if (kind === "unknown" || kind === "remote") return i18n._({ id: "Code on a remote", comment: "Where a project's code lives before every instance has reported its Git origin, or when its remote lies under another instance's; the actual remote is withheld" });
-    return kind === "instance"
-      ? i18n._({ id: "Code on this instance", comment: "Where a project's code lives when its remote is under the instance's reported Git origin; the Git system behind the instance is never named" })
-      : displayRemote(remote);
+  /** Where a project's code is, as its row's code glyph reads it
+   * (space-1, core-service-145), from its `project.json` — the one its
+   * clone holds, or the one its listing carries: nothing for none, a
+   * group's own or your own group's own; "Code: no remote" where it
+   * names no remote; and otherwise nothing until the default instance
+   * and every instance the home lists have reported their Git origin,
+   * then "Code: <display name>" of the listed instance under whose
+   * reported Git origin the remote lies — the row's own, `origin`, the
+   * default instance where it is null, first — else "Code: <host>", the
+   * remote's host as the reader set it, or the remote itself where it
+   * names no host (DR-120, DR-127, DR-172). The Git system behind an
+   * instance is never named, and its transport URL and the project file
+   * stay as given. */
+  codeAsShown(project: { remote?: unknown } | null | undefined, origin: string | null): { code: string | null; codeKind: CodeKind } {
+    if (!project) return { code: null, codeKind: "unknown" };
+    const remote = typeof project.remote === "string" ? project.remote.trim() : "";
+    if (remote.length === 0) return { code: codeNoRemote(), codeKind: "none" };
+    if (!this.originsReported()) return { code: null, codeKind: "unknown" };
+    const at = this.reportingUnder(remote, origin);
+    if (at) return { code: codeAt(this.nameOf(at)), codeKind: "space" };
+    return { code: codeAt(remoteHost(remote)), codeKind: "elsewhere" };
+  }
+
+  /** The display name of a project's own instance (projects-7): `origin`'s,
+   * the default instance's where it is null. */
+  instanceNameOrDefault(origin: string | null): string {
+    return this.nameOf(origin === null ? this.defaultInstance() : this.instanceAt(origin));
   }
 
   /** How a project's code remote reads against the Git origins already
@@ -5060,7 +5123,7 @@ export class SpaceManager {
     let origin: string;
     try { origin = parseOrigin(url).origin; }
     catch (error) {
-      if (error instanceof OriginRefused) throw new CoreError("invalid_request", originRuleRefusal(error.reason));
+      if (error instanceof OriginRefused) throw new CoreError("invalid_request", originRuleRefusal());
       throw error;
     }
     if (!home.instance(origin)) {
@@ -5295,15 +5358,15 @@ export class SpaceManager {
     for (const repository of store.listRepositories()) {
       if (repository.key === own) continue;
       const outcome = await this.followAtForget(instance, repository.key, identity);
-      if (outcome === "kept") kept.push(splitKey(repository.key).name);
-      else if (outcome === "placed") placed.push(splitKey(repository.key).name);
+      if (outcome === "kept") kept.push(projectOf(repository.key));
+      else if (outcome === "placed") placed.push(projectOf(repository.key));
       else if (outcome !== "followed" && outcome !== "other") inUse.push(outcome.inUse);
     }
     if (kept.length > 0 || placed.length > 0 || inUse.length > 0) {
       await this.publish();
-      const host = this.nameOf(instance);
-      const reasons = [...(kept.length > 0 ? [stillKeptUnder(host, kept)] : []), ...(placed.length > 0 ? [stillPlacedAt(host, placed)] : []), ...inUse];
-      throw new CoreError("invalid_request", reasons.join(" · "));
+      // One phrase naming each project, or the session refusing its
+      // follow (space-82, core-service-145).
+      throw new CoreError("invalid_request", stillSyncing([...kept, ...placed, ...inUse]));
     }
     if (store.repository(own)) {
       const machine = this.machine(own);
@@ -5388,7 +5451,7 @@ export class SpaceManager {
     const named = machine.remoteNameNow();
     try { this.renameClone(machine, to, identity); }
     catch (error) {
-      if (error instanceof SpaceStopped && error.failure.cause === "lease") return { inUse: error.failure.message };
+      if (error instanceof SpaceStopped && error.failure.cause === "lease") return { inUse: error.subject ?? projectOf(from) };
       if (error instanceof SpaceStopped) return "kept";
       throw error;
     }
@@ -5999,7 +6062,7 @@ export class SpaceManager {
     const folder = instance.folder();
     const name = folder === null ? undefined
       : machine.addPlacementAt(options.expected, { url: repository.remoteUrl, id: repository.id, created: options.created === true, folder, origin: instance.origin });
-    if (name === undefined) throw new CoreError("conflict", changedMeanwhile(splitKey(machine.key).name));
+    if (name === undefined) throw new CoreError("conflict", recordsChangedRetry(projectOf(machine.key)));
     instance.changedAfter = instance.readsBegun;
     instance.targets.delete(machine);
     instance.attached.set(repository.id, listing);
@@ -6115,7 +6178,7 @@ export class SpaceManager {
       // name.
       const expected = (await machine.readFacts()).remotes;
       if (keyPlacement(machine.placements) !== undefined) {
-        throw new CoreError("invalid_request", i18n._({ id: "{name} is on the host already", values: { name: splitKey(key).name }, comment: "Refusal of a pick: the spex repository is not local only" }));
+        throw new CoreError("invalid_request", i18n._({ id: "{name} is in a group already", values: { name: projectOf(key) }, comment: "Refusal of Add to a group…: the project's records already sync with a Space; {name} is the project" }));
       }
       // A clone keyed under an instance is picked into a group there
       // alone (space-58, storage-31).
@@ -6155,7 +6218,7 @@ export class SpaceManager {
       const group = choice.groupId === null
         ? { id: null, fullPath: userGroup(view)?.fullPath ?? this.host.store.home.ownName }
         : this.listedGroups(instance, view).find((entry) => entry.kind === "group" && entry.id === choice.groupId);
-      if (!group) throw new CoreError("not_found", noSuchGroup());
+      if (!group) throw new CoreError("not_found", noSuchGroup(this.nameOf(instance)));
       if ("kind" in group && this.collides(group, view)) {
         throw new CoreError("invalid_request", groupNamedLikeYourLogin(group.fullPath));
       }
@@ -6237,7 +6300,7 @@ export class SpaceManager {
     const group = choice.groupId === null
       ? { id: null, fullPath: userGroup(view)?.fullPath ?? store.home.ownName }
       : this.listedGroups(instance, view).find((entry) => entry.kind === "group" && entry.id === choice.groupId);
-    if (!group) throw new CoreError("not_found", noSuchGroup());
+    if (!group) throw new CoreError("not_found", noSuchGroup(this.nameOf(instance)));
     if ("kind" in group && this.collides(group, view)) throw new CoreError("invalid_request", groupNamedLikeYourLogin(group.fullPath));
     const project = this.projectFile(machine.repository);
     const description = repositoryDescription({ kind: "project", name: project?.name ?? base, code: project?.remote ?? null });
@@ -6506,7 +6569,7 @@ export class SpaceManager {
     if (this.collides(listing.repository.group, view)) throw new CoreError("invalid_request", groupNamedLikeYourLogin(listing.repository.group.fullPath));
     const key = this.keyAtHost(listing.repository, instance);
     if (!key) {
-      throw new CoreError("invalid_request", i18n._({ id: "{path} cannot stand as a folder on this device", values: { path: `${listing.repository.group.fullPath}/${listing.repository.path}` }, comment: "Refusal of a join: the host's names hold characters a folder under the home cannot" }));
+      throw new CoreError("invalid_request", i18n._({ id: "{path} cannot be a folder on this computer — rename it at its Space", values: { path: `${listing.repository.group.fullPath}/${listing.repository.path}` }, comment: "Refusal of Open here: the names the Space gives the records hold characters a folder on this computer cannot; {path} is their path at the Space" }));
     }
     const store = this.host.store;
     // Read from each clone now, whatever instance it lies under: the id
@@ -6534,11 +6597,11 @@ export class SpaceManager {
       return this.joinCodeAgain(instance, listing, here.key);
     }
     if (here || store.repository(key) || existsSync(store.home.clonePath(key)) || store.deferredMoves().some((move) => move.to === key)) {
-      throw new CoreError("invalid_request", i18n._({ id: "{name} is on this device already", values: { name: listing.repository.path }, comment: "Refusal of a join: the spex repository has a clone here" }));
+      throw new CoreError("invalid_request", alreadyHere(listing.repository.path));
     }
     const filed = clones.find(({ files }) => files.some((file) => file.id === hostId && (this.fileNamesAt(file, instance, view.gitOrigin) || this.fileNamesAt(file, at, atView.gitOrigin))));
     if (filed) {
-      throw new CoreError("invalid_request", i18n._({ id: "{name} is a placement of {repository} not on this device yet", values: { name: listing.repository.path, repository: filed.name }, comment: "Refusal of a join: a placement file of the spex repository {repository}, on this device, names the spex repository {name} listed at an instance; it stands as a line of {repository}'s row, to attach there, not as a repository of its own" }));
+      throw new CoreError("invalid_request", i18n._({ id: "{name} belongs to {project} on this computer — open {project} instead", values: { name: projectName(listing.repository.path), project: projectName(filed.name) }, comment: "Refusal of Open here: a file of the project {project}, on this computer, names the records {name} a Space lists as records of {project}, so they open with it and not on their own" }));
     }
     const path = folder === undefined ? (this.host.seat ? this.allocatedFolder(key) : undefined) : resolve(folder);
     if (path !== undefined && store.home.keyForFolder(path)) throw folderPaired(path);
@@ -6706,7 +6769,7 @@ export class SpaceManager {
       // in one synchronous step; a place taken meanwhile — another join's
       // clone — is left as it stands, and a failed rename leaves no folder.
       if (existsSync(dest)) {
-        stop({ cause: "git", message: i18n._({ id: "{name} is on this device already", values: { name: listing.repository.path }, comment: "Refusal of a join: the spex repository has a clone here" }), guidance: nothingDeleted(), retry: false });
+        stop({ cause: "git", message: alreadyHere(listing.repository.path), guidance: nothingDeleted(), retry: false });
         return;
       }
       renameSync(dir, dest);
@@ -6767,7 +6830,7 @@ export class SpaceManager {
     // the core allocates (space-103).
     const chooseFolder = (): string => this.host.seat
       ? joinAgainForCode()
-      : i18n._({ id: "The spex repository is here; choose a folder for its code to pair it.", comment: "Guidance after a join's code clone failed" });
+      : i18n._({ id: "The records are here — Choose folder… for the code", comment: "Guidance after Open here downloaded a project's records but not its code; Choose folder… is the row's control that pairs the records with a folder holding the code" });
     try {
       if (remote) {
         mkdirSync(dirname(folder), { recursive: true });
@@ -6798,7 +6861,7 @@ export class SpaceManager {
           return stopped({
             ...(brokered && instance ? classifyHostTransportFailure(run, this.nameOf(instance)) : {
               cause: run.killed ?? "git",
-              message: failureSummary(run.stderr) || i18n._({ id: "Git could not clone the code", comment: "A join's stop where git failed to clone the code and printed nothing" }),
+              message: failureSummary(run.stderr) || i18n._({ id: "Git could not download the code", comment: "Open here stopped where git failed to clone the project's code and printed nothing" }),
             }),
             guidance: chooseFolder(),
             retry: false,
@@ -7198,7 +7261,7 @@ export class SpaceManager {
     if (this.host.store.repository(key)) {
       const facts = await this.machine(key).readFacts();
       if (facts.remote === null) {
-        throw new CoreError(localOnly, i18n._({ id: "On this device only", comment: "A spex repository's state: it has no remote on the Git host" }));
+        throw new CoreError(localOnly, pickAGroupFirst());
       }
       // Attached since the view's read began, it counts as listed (git-host-5).
       const listing = listingFor(view, facts.id, facts.remote) ?? listingFor(this.attachedAt(instance), facts.id, facts.remote);
@@ -7208,7 +7271,7 @@ export class SpaceManager {
     }
     const id = view?.listings.find((listing) => !this.collides(listing.repository.group, view) && this.keyAtHost(listing.repository, instance) === key)?.repository.id;
     if (id === undefined) {
-      throw new CoreError("not_found", i18n._({ id: "no spex repository {key} on this device", comment: "Refusal: the key names no clone under workspace/", values: { key } }));
+      throw new CoreError("not_found", notHere(key));
     }
     return { kind: "repository", id };
   }
@@ -7308,9 +7371,9 @@ export class SpaceManager {
     if (this.noticeSeen(machine, name)) return undefined;
     if (!listing || listing.readOnly || (!ownLater && !mayHaveOthers(listing))) return undefined;
     return new CoreError("invalid_request", i18n._({
-      id: "Read the sharing notice before the first sync of {name}",
-      values: { name: splitKey(machine.key).name },
-      comment: "Refusal of a first push into a spex repository with other members until the reader has seen the privacy notice",
+      id: "Confirm sharing before the first sync of {name}",
+      values: { name: projectOf(machine.key) },
+      comment: "Refusal of the first send of a project's records to a Space where other members share them, until the reader has answered the sharing confirm; {name} is the project",
     }), { notice: true, members: listing.members, visibility: listing.repository.visibility, placement: origin });
   }
 
@@ -7420,7 +7483,7 @@ export class SpaceManager {
       if (repository.empty && !(created && await this.defaultBranchArrives(machine, instance, repository.id))) {
         if (!created || this.stopping) {
           this.setWaiting(machine.key, { instance: instance.origin, step: "branch", group, message: "" });
-          throw new SpaceStopped("check", { cause: "refused", message: i18n._({ id: "{host} holds no default branch for it yet", values: { host: host() }, comment: "A stopped sync: the host's repository is empty, so spex waits for its default branch; {host} is its display name" }), guidance: syncLater(), retry: true });
+          throw new SpaceStopped("check", { cause: "refused", message: i18n._({ id: "{host} holds no default branch for it yet", values: { host: host() }, comment: "A stopped sync: the project's records at the Space are empty, so their spex branch waits for the default branch; {host} is the Space's display name" }), guidance: syncLater(), retry: true });
         }
         // Still empty: the host never committed its README — a protected
         // default branch refusing a Developer's initial commit, say — so
@@ -7490,7 +7553,7 @@ export class SpaceManager {
     // its first placement's (space-57, space-4).
     const notice = this.sharingNotice(machine, placement.name, placement.instance, listing, machine.key === this.host.store.home.own());
     if (notice) throw new NoticeOwed(notice.message);
-    const changed = (): SpaceStopped => new SpaceStopped("check", { cause: "git", message: changedMeanwhile(splitKey(machine.key).name), guidance: retryGuidance(), retry: true }, false);
+    const changed = (): SpaceStopped => new SpaceStopped("check", { cause: "git", message: recordsChangedMeanwhile(projectOf(machine.key)), guidance: retryGuidance(), retry: true }, false);
     let held = placement;
     if (instance !== own) {
       // Nothing is awaited from the account's check to the rename.
@@ -7901,17 +7964,17 @@ export class SpaceManager {
     if (taken === "disk") {
       throw new SpaceStopped("check", {
         cause: "git",
-        message: i18n._({ id: "{path} already exists, so the clone cannot follow the host there", values: { path: `workspace/${to}` }, comment: "A stopped sync: the folder a renamed spex repository moves to is taken" }),
-        guidance: i18n._({ id: "Move that folder aside, then Retry.", comment: "Guidance where a renamed spex repository's new folder is taken" }),
+        message: i18n._({ id: "{path} already exists, so these records cannot move there", values: { path: `workspace/${to}` }, comment: "A stopped sync: the Space renamed or moved the project's records, and the folder on this computer they would move to is taken; {path} is that folder" }),
+        guidance: i18n._({ id: "Move that folder aside, then Retry.", comment: "Guidance where the folder a project's records move to is taken" }),
         retry: true,
       }, false);
     }
     if (taken !== undefined) {
       throw new SpaceStopped("check", {
         cause: "git",
-        message: i18n._({ id: "{path} waits for {other}, so the clone cannot follow the host there", values: { path: `workspace/${to}`, other: taken.waiting },
-          comment: "A stopped sync: the folder a renamed spex repository moves to is where another clone, {other}, which the instances migration left at its former place, moves at its own next sync" }),
-        guidance: i18n._({ id: "Sync {other} first, then Retry.", values: { other: taken.waiting }, comment: "Guidance where a renamed spex repository's new folder is another clone's destination" }),
+        message: i18n._({ id: "{path} is kept for {other}, so these records cannot move there", values: { path: `workspace/${to}`, other: projectOf(taken.waiting) },
+          comment: "A stopped sync: the folder the project's records move to, after the Space renamed or moved them, is where the records of the project {other}, left at their former place by an upgrade, move at their own next sync; {path} is that folder" }),
+        guidance: i18n._({ id: "Sync {other} first, then Retry.", values: { other: projectOf(taken.waiting) }, comment: "Guidance where the folder a project's records move to is kept for the project {other}'s records" }),
         retry: true,
       }, false);
     }
@@ -7959,8 +8022,7 @@ export class SpaceManager {
   private machine(key: string): RepositorySync {
     const repository = this.host.store.repository(key);
     if (!repository) {
-      throw new CoreError("not_found", i18n._({ id: "no spex repository {key} on this device",
-        comment: "Refusal: the key names no clone under workspace/", values: { key } }));
+      throw new CoreError("not_found", notHere(key));
     }
     let machine = this.machines.get(key);
     if (!machine || machine.repository.dir !== repository.dir) {
@@ -8605,7 +8667,7 @@ export class SpaceManager {
     const path = `${repository.group.fullPath}/${repository.path}`;
     const key = colliding ? `${folder}/${path}@${repository.id}` : hostKey(repository, folder);
     if (!key || (!colliding && (store.repository(key) || deferred.has(key)))) return undefined;
-    const code = repository.project && typeof repository.project.remote === "string" ? this.codeRemoteAsShown(repository.project.remote, instance.origin) : null;
+    const code = this.codeAsShown(repository.project, instance.origin);
     return {
       row: {
         key,
@@ -8616,7 +8678,8 @@ export class SpaceManager {
         name: repository.path,
         id: repository.id,
         own: false,
-        code,
+        code: code.code,
+        codeKind: code.codeKind,
         folder: null,
         state: colliding ? "unreachable" : "absent",
         reason: colliding ? namedLikeYourLogin() : null,

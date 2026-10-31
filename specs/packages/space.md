@@ -513,7 +513,7 @@ When a sync or check step fails, the core shall stop — the placement alone for
 | Check, Push | the host asking to wait — its rate limit [[git-host-11](git-host.md#git-host-11)] | commits stand | "<display name> asks to wait N seconds" (or "a moment"); "Retry waits, then runs the step."; Retry, which waits the time out before the step [[git-host-21](git-host.md#git-host-21)] |
 | Check, Push | Stop while a call of the step waits out the host's rate limit [[git-host-21](git-host.md#git-host-21)] | commits stand | "Stopped while waiting for <display name>"; "Retry waits, then runs the step."; Retry |
 | Check, Push | the host answering that this device must sign in again [[git-host-4](git-host.md#git-host-4)] | commits stand | "Sign in again"; that instance's heading's "Sign in again" [[space-3](#space-3)]; Retry after |
-| Push | the host explicitly rejecting content above a size limit | commits and the existing access state stand | cause `size_limit`; "<display name> refused content above its size limit", carrying the reported limit where unambiguously readable; saved commits remain on this device; address the content limit, then Retry, with no automatic retry ([DR-129](../decisions/129-content-size-is-not-permission.md)) |
+| Push | the host explicitly rejecting content above a size limit | commits and the existing access state stand | cause `size_limit`; "<display name> refused content above its size limit", carrying the reported limit where unambiguously readable; saved commits remain on this computer; address the content limit, then Retry, with no automatic retry ([DR-129](../decisions/129-content-size-is-not-permission.md)) |
 | Check, Push | the host refusing with its words — the repository read-only, the push rejected by a rule other than explicit content-size rejection, the account's role too low | commits stand | "<display name> refused: <the host's words>" [[space-50](#space-50)]; the placement turns read-only |
 | Check, Push | the host no longer listing the repository | commits stand | "No longer shared with you"; the placement turns unreachable; nothing deleted |
 | Check, Push | no answer within the transport limit, or Stop | commits stand | "No answer from <display name>"; Retry |
@@ -692,7 +692,7 @@ The Space surface shall fit its pane at every width down to the 320-pixel floor 
 - below 20rem the header's fields and an instance heading's stack with the primary control last and full-width;
 - in each repository row and change row the label owns the slack and truncates with its title, the code glyph and detail hiding below 28rem, the row's control keeping its accessible name;
 - the tree and preview stand side by side from 42rem and stack below it, the preview under the tree; the preview's box scrolls inside itself and the diff box scrolls sideways as a canvas;
-- every control reads at most 14 characters, its busy form included: Sign in, Sign in again, Signing in…, Sign out, Signing out…, Sync now, Syncing…, Check, Checking…, Stop, Open here, Opening…, Show, More, Connect, Disconnect, Resolve, Combine…, Members, Retry, Retrying…, Apply, Applying…, Cancel, Save, Saving…, Use this folder, Adding…, Choose folder…, Open folder…, Open project, View diff, Hide diff, All here, Open session, Show in Finder, Show in folder, Copy path, Refresh, Dismiss, New group, Share, Create, Creating…, Add, Keep, Add a Space…; a menu's entries and the acts a decision fixes as whole phrases — "Add to a group…", "Remove from this list", "Not on this computer", "Use <folder>", "Open on <server>", "Show on <server>", "Keep this computer's", "Take <display name>'s", "All <display name>'s" — stand outside the budget and wrap within their row ([DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md));
+- every control reads at most 14 characters, its busy form included: Sign in, Sign in again, Signing in…, Sign out, Signing out…, Sync now, Syncing…, Check, Checking…, Stop, Open here, Opening…, Show, More, Connect, Disconnect, Resolve, Combine…, Members, Retry, Retrying…, Apply, Applying…, Cancel, Save, Saving…, Adding…, Choose folder…, Open folder…, Open project, View diff, Hide diff, All here, Open session, Show in Finder, Show in folder, Copy path, Refresh, Dismiss, New group, Share, Create, Creating…, Add, Keep, Add a Space…; a menu's entries and the acts a decision fixes as whole phrases — "Add to a group…", "Remove from this list", "Not on this computer", "Use <folder>", "Use this folder", "Open on <server>", "Show on <server>", "Keep this computer's", "Take <display name>'s", "All <display name>'s" — stand outside the budget and wrap within their row ([DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md));
 - the surface scrolls inside its own box and the page never scrolls.
 
 ### On a Seat
@@ -809,7 +809,8 @@ interface RepositoryState {
   key: string;                           // the clone's path under workspace/, or, with no clone here, the one a Join would make; for a row an instance lists in a group it holds as colliding, `@<host>/<path>@<id>`, naming that instance and no clone (space-61)
   instance: string | null;               // its instance's origin (storage-31), null for a clone with none
   governing: string | null;              // the origin of the instance governing it (space-61), null while none does
-  name: string; id: string | null; own: boolean; code: string | null; folder: string | null;   // id: its first placement's host id, or the listed repository's with no clone here
+  name: string; id: string | null; own: boolean; folder: string | null;   // id: its first placement's host id, or the listed repository's with no clone here
+  code: string | null; codeKind: CodeKind;   // the code glyph's title (space-1), "Code: <where>" or "Code: no remote", null while codeKind is "unknown"
   state: "local-only" | "reachable" | "read-only" | "unreachable" | "absent";   // the row's state (space-61)
   reason: string | null;                 // the host's words for read-only or unreachable
   mergePending: boolean;                 // a Git merge pending from a terminal in the clone (space-11); false where no clone is here
@@ -843,6 +844,7 @@ interface PlacementState {
     | { kind: "synced" | "behind" | "choices" | "unrelated" | "waiting"; sent: number; received: number }
     | { kind: "stopped"; step: SyncStep; cause: SyncCause; message: string; guidance: string; retry: boolean };   // what the last sync left on its line (space-87)
 }
+type CodeKind = "space" | "elsewhere" | "none" | "unknown";   // where the code is (space-1): under a listed instance's reported Git origin, at another remote, no remote in project.json, or not yet known — an instance not yet reported, or a group's own
 type SyncStep = "save" | "check" | "compare" | "apply" | "refresh" | "push" | "code";   // code: a join's code clone
 type SyncCause = "unreachable" | "throttled" | "reauth" | "refused" | "size_limit" | "gone" | "timeout" | "stopped" | "rejected"
   | "validation" | "lease" | "writer" | "unrelated" | "git" | "unreceived";   // throttled: the host asked to wait (space-15); size_limit: content above the host's size limit (space-15); unreceived: a leave's units no remaining placement received (space-98)
@@ -1267,9 +1269,9 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 
 #### space-41
 
-Where the harness boots the served shell signed in on a home whose spex repository a peer home has pushed to — the peer holding a differing configuration and the same session changed — the test suite shall assert the daily sync with conflicts through the page:
+Where the harness boots the served shell signed in on a home whose spex repository a peer home has pushed to — the peer holding a differing configuration, the same session changed and an intent it queued — the test suite shall assert the daily sync with conflicts through the page:
 
-- Check lists the peer's session and Settings under "From <display name> (2)" with the conflict marked and the row reading behind [[space-8](#space-8)];
+- Check lists the peer's session, Settings and intent under "From <display name> (3)" with the conflicts marked and the row reading behind [[space-8](#space-8)];
 - Sync ends "Needs your choice" with Apply disabled reading "0 of 2 chosen"; "Take <display name>'s" for the session and "Keep this computer's" for Settings by keyboard enable Apply; Apply's confirm names one replaced unit with Cancel focused, Escape keeps the choices, and confirming ends synced [[space-9](#space-9)] [[space-14](#space-14)] [[space-17](#space-17)] [[space-18](#space-18)];
 - View diff on the Settings row shows this computer's side headed "Changes on this computer" and the stand-in's headed "Changes at <display name>" [[space-10](#space-10)];
 - the session's tab shows the host's turns and Settings shows this device's configuration [[space-20](#space-20)];

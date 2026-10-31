@@ -629,8 +629,8 @@ export class EnvironmentManager {
 
   private unavailable(key: string): CoreError {
     return new CoreError("not_found", i18n._({
-      id: "no spex repository {key} on this device",
-      comment: "Refusal: the key names no clone under workspace/",
+      id: "no records {key} on this computer",
+      comment: "Refusal: the key names no project's or group's records under workspace/; {key} is their path",
       values: { key },
     }));
   }
@@ -667,8 +667,8 @@ export class EnvironmentManager {
    * (environments-15). */
   private noRoot(key: string): CoreError {
     return new CoreError("not_found", i18n._({
-      id: "{key} has no working folder on this device",
-      comment: "Refusal: the environment's installed files stand in the repository's working folder, which this device does not hold",
+      id: "{key} has no project folder on this computer",
+      comment: "Refusal: the installed packages stand in the project folder, which this computer does not hold; {key} is the records' path",
       values: { key },
     }));
   }
@@ -1097,8 +1097,8 @@ export class EnvironmentManager {
     const root = this.pathRoot(key);
     if (root === null) {
       throw new CoreError("invalid_request", i18n._({
-        id: "{name} is requested by path, and this spex repository has no working folder on this device",
-        comment: "Refusal: a request by path needs the repository's working folder here",
+        id: "{name} is added by path, which needs a project folder on this computer",
+        comment: "Refusal: a package added by its folder's path needs the project folder here; {name} is the package",
         values: { name },
       }));
     }
@@ -1442,8 +1442,8 @@ export class EnvironmentManager {
     const root = this.pathRoot(key);
     if (root === null) {
       throw new CoreError("invalid_request", i18n._({
-        id: "{key} has no working folder on this device",
-        comment: "Refusal: publishing reads a folder inside the repository's working folder",
+        id: "{key} has no project folder on this computer",
+        comment: "Refusal: publishing reads a folder inside the project folder; {key} is the records' path",
         values: { key },
       }));
     }

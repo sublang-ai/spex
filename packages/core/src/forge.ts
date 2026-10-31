@@ -454,13 +454,14 @@ export class GitHubForgeAdapter implements ForgeAdapter {
         prs: [],
         guidance: originUrl
           ? i18n._({
-              id: "Issues and PRs come from GitHub; this project's origin is at {host}.",
+              id: "Issues and PRs come from GitHub · Code: {host}",
               values: { host: remoteHost(originUrl) },
-              comment: "Forge guidance where the project's origin remote is not on GitHub; {host} is that remote's host name, or a local remote as written",
+              comment: "Forge guidance where the project's code remote is not on GitHub; {host} is that remote's host name, such as gitlab.com, or a local remote as written",
             })
           : i18n._({
-              id: "No GitHub origin remote. Add one (git remote add origin …) to see issues and PRs.",
-              comment: "Forge guidance where the project has no origin remote; the command stays as it is",
+              id: "No GitHub remote — run {command} to see issues and PRs",
+              values: { command: "git remote add origin …" },
+              comment: "Forge guidance where the project has no code remote; {command} is the Git command that adds one, which stays as it is",
             }),
       };
     }

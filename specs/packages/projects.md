@@ -110,7 +110,7 @@ Where a project has no GitHub binding, or the gh CLI is not installed or not aut
 
 | Unmet condition | Guidance |
 | --- | --- |
-| no `origin` remote | "No GitHub origin remote. Add one (git remote add origin …) to see issues and PRs." |
+| no `origin` remote | "No GitHub remote — run git remote add origin … to see issues and PRs", the command a value the catalog never translates [[core-service-145](core-service.md#core-service-145)] |
 | an unbound `origin` remote under the reported Git origin [[git-host-5](git-host.md#git-host-5)] of the project's instance — its spex repository's [[storage-31](storage.md#storage-31)], or the home's default instance [[storage-2](storage.md#storage-2)] where it has none | "Issues and PRs come from GitHub · Code: ⟨Space⟩", ⟨Space⟩ being that instance's display name |
 | any other unbound `origin` remote while the home's default instance or an instance it lists has not reported its Git origin [[git-host-5](git-host.md#git-host-5)], or under another instance's reported Git origin | "Issues and PRs come from GitHub" |
 | any other `origin` remote not on GitHub | "Issues and PRs come from GitHub · Code: ⟨host⟩", ⟨host⟩ being the remote's host name in its URL or scp-like form, or a local remote as written, and never a credential its URL carries |

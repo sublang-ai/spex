@@ -114,8 +114,8 @@ function checkPairs(folders: readonly unknown[], file: string): void {
         values: { path } }));
       paths.add(path);
     }
-    need(!keys.has(folder.repository), file, i18n._({ id: "spex repository {key} is paired twice",
-      comment: "Storage diagnostic: one spex repository appears in two pairs", values: { key: folder.repository } }));
+    need(!keys.has(folder.repository), file, i18n._({ id: "records {key} are paired twice",
+      comment: "Storage diagnostic: one project's or group's records appear in two pairs of home.yaml; {key} is their path", values: { key: folder.repository } }));
     keys.add(folder.repository);
   }
 }

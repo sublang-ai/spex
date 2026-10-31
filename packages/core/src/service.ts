@@ -334,15 +334,15 @@ function checkSeat(seat: SeatOptions): SeatOptions {
 /** The refusal off a seat of a command on the member's own credentials
  * (settings-48). */
 const credentialsOffSeat = (): CoreError => new CoreError("invalid_request", i18n._({
-  id: "Credentials are kept on a server's seat",
-  comment: "Refusal of a credentials command on a machine of one's own: Spex keeps a member's code-host and agent credentials only on a team server's seat",
+  id: "Credentials are set on a server only",
+  comment: "Refusal of a credentials command on a computer of one's own: Spex keeps a member's code-host and agent credentials only on a team server",
 }));
 
 /** The refusal off a seat of a sign-in naming a ticket (git-host-27):
  * only a seat's device request carries one. */
 const ticketOffSeat = (): CoreError => new CoreError("invalid_request", i18n._({
-  id: "A ticket is taken only on a server's seat",
-  comment: "Refusal of a sign-in naming a team server's ticket on a machine of one's own: only a team server's seat signs in with the ticket its member's client presented",
+  id: "This sign-in is for a server only — sign in from the Space surface",
+  comment: "Refusal of a sign-in carrying a team server's admission on a computer of one's own: only a team server signs in that way; the person signs in from the Space surface's card",
 }));
 
 // A credential command's fields, each checked before anything is written
@@ -1344,9 +1344,9 @@ export class CoreService {
     const clone = identity();
     const stands = (): boolean => clone !== undefined && this.store.repository(key)?.dir === repository.dir && identity() === clone;
     const changed = (): CoreError => new CoreError("conflict", i18n._({
-      id: "{what} changed meanwhile; retry",
-      values: { what: splitKey(key).name },
-      comment: "Refusal of a write: the file it would replace changed since it was read; {what} names the file or folder",
+      id: "The records of {name} changed meanwhile — Retry",
+      values: { name: splitKey(key).name.replace(/-spex$/i, "") || splitKey(key).name },
+      comment: "Refusal: the project's records changed between Spex's read and its write — moved, or their remote set from a terminal; {name} is the project",
     }));
     const held: { sessionId: string; release(): Promise<unknown> }[] = [];
     try {
@@ -1483,7 +1483,7 @@ export class CoreService {
         machineIdentity = await resolveMachineIdentity({ env, homeDir: options.home ?? env.HOME ?? homedir() });
       } catch (error) {
         throw new Error(i18n._({
-          id: "Spex cannot identify this machine: {reason}",
+          id: "Spex cannot identify this computer: {reason}",
           comment: "Startup refusal the shell shows in a dialog; the reason names Playbook's machine identity file",
           values: { reason: error instanceof Error ? error.message : String(error) },
         }));
@@ -2191,8 +2191,8 @@ export class CoreService {
         const cwd = this.store.sessionCwd(id);
         if (!folder || (cwd !== undefined && cwd !== folder.path && !folder.aliases?.includes(cwd))) {
           reason = i18n._({
-            id: "this session ran in {cwd}; continue it on the device whose folder it ran in",
-            comment: "Refusal: the session's recorded working directory is not the project's working folder on this device",
+            id: "this session ran in {cwd}; continue it on the computer whose folder it ran in",
+            comment: "Refusal: the session's recorded working directory is not the project's folder on this computer",
             values: {cwd: cwd ?? ""},
           });
         } else {
@@ -2655,8 +2655,8 @@ export class CoreService {
     // `server.close` and `server.signin` answer as on any core.
     if (this.seat && command.type === "server.open") {
       throw new CoreError("invalid_request", i18n._({
-        id: "A seat opens no server",
-        comment: "Refusal on a team server's seat of opening a seat on a team server: a team server's seat holds no seats of its own",
+        id: "Already on a server — open it from your computer",
+        comment: "Refusal on a team server of opening another team server from it: a server opens no server of its own; the person opens it from their own computer",
       }));
     }
     // No operation refuses a command (space-21): each write is checked
@@ -2926,11 +2926,12 @@ export class CoreService {
         const status = await repoStatus(project.path, this.runCommand);
         const shown = (state: ForgeState): ForgeState => {
           if (!status.originUrl || state.repo) return state;
-          const kind = this.space.codeRemoteKind(status.originUrl, this.space.instanceOriginOf(project.id));
+          const origin = this.space.instanceOriginOf(project.id);
+          const kind = this.space.codeRemoteKind(status.originUrl, origin);
           if (kind === "external") return state;
           return { ...state, guidance: kind === "instance"
-            ? i18n._({ id: "Issues and PRs come from GitHub; this project's code is on this instance.", comment: "Forge setup guidance for code on the reported Git origin of the project's instance, whose underlying Git system is never named" })
-            : i18n._({ id: "Issues and PRs come from GitHub; this project's code is on a remote.", comment: "Forge setup guidance before every instance has reported its Git origin, or for code under another instance's; the actual remote and hostname stay internal" }) };
+            ? i18n._({ id: "Issues and PRs come from GitHub · Code: {space}", values: { space: this.space.instanceNameOrDefault(origin) }, comment: "Forge setup guidance for code at the project's own Space, whose underlying Git system is never named; {space} is that Space's display name; the · separates two key phrases" })
+            : i18n._({ id: "Issues and PRs come from GitHub", comment: "Forge setup guidance before every Space has reported where it keeps code, or for code at another Space; the actual remote and hostname stay internal" }) };
         };
         // The cache is persisted in the app store (dashboard-14), so a
         // restart serves the last lists rather than a blank.
@@ -2968,8 +2969,8 @@ export class CoreService {
           const units = await this.space.pendingUnits(key);
           if (units > 0) {
             throw new CoreError("conflict", i18n._({
-              id: "{count, plural, one {# record has} other {# records have}} not reached the host and would be lost; confirm to remove anyway",
-              comment: "Refusal asking a second confirmation: removing the project deletes its spex repository's clone, whose records were never sent",
+              id: "{count, plural, one {# record never reached a Space.} other {# records never reached a Space.}}",
+              comment: "Refusal asking a second confirmation of removing a project, which the Overview reads before its own \"Remove anyway?\": removing it deletes its records from this computer, and that many were never sent to any Space",
               values: { count: units },
             }), { units });
           }
@@ -4012,15 +4013,15 @@ export class CoreService {
     }
     if (!this.store.repository(project) || this.environments.workingFolder(project) === null) {
       throw new CoreError("not_found", i18n._({
-        id: "project {project} has no working folder on this device",
-        comment: "Refusal: an applet reads the project's working folder, and none is paired here",
-        values: { project },
+        id: "{project} has no project folder on this computer",
+        comment: "Refusal: an applet reads the project's folder, and none is paired on this computer; {project} is the project",
+        values: { project: splitKey(project).name.replace(/-spex$/i, "") || project },
       }));
     }
     if (!installed.present) {
       throw new CoreError("invalid_request", i18n._({
-        id: "the files of applet {applet} are not on this device",
-        comment: "Refusal: the applet is in the lock, but its installed or path-source folder is missing here",
+        id: "the files of applet {applet} are not on this computer",
+        comment: "Refusal: the applet is in spex.lock, but its installed or source folder is missing on this computer",
         values: { applet },
       }));
     }
@@ -4347,9 +4348,9 @@ export class CoreService {
     const repository = this.store.repository(projectId);
     if (!project || !repository) {
       throw new CoreError("invalid_request", i18n._({
-        id: "{projectId} has no working folder on this device",
-        comment: "Refusal: an authoring session belongs to a project whose working folder is on this device",
-        values: { projectId },
+        id: "{project} has no project folder on this computer",
+        comment: "Refusal: an authoring session belongs to a project whose folder is on this computer, and this one has none here; {project} is the project",
+        values: { project: splitKey(projectId).name.replace(/-spex$/i, "") || projectId },
       }));
     }
     return { project, repository };
@@ -4665,8 +4666,8 @@ export class CoreService {
     const cwd = this.store.sessionCwd(session.id);
     if (!folder || (cwd !== undefined && cwd !== folder.path && !folder.aliases?.includes(cwd))) {
       throw new CoreError("invalid_request", i18n._({
-        id: "this session ran in {cwd}; continue it on the device whose folder it ran in",
-        comment: "Refusal: the session's recorded working directory is not the project's working folder on this device",
+        id: "this session ran in {cwd}; continue it on the computer whose folder it ran in",
+        comment: "Refusal: the session's recorded working directory is not the project's folder on this computer",
         values: { cwd: cwd ?? "" },
       }));
     }

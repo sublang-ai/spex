@@ -133,18 +133,18 @@ class AdmissionFailed extends Error {
 // -- phrases (core-service-111) ----------------------------------------------
 
 const consentFirst = (): string => i18n._({
-  id: "Read and accept the server's contract before opening a seat",
-  comment: "Refusal of a seat's opening sent without the person's consent to the contract the instance's record fixes for team servers",
+  id: "Accept the server's terms before connecting",
+  comment: "Refusal of Connect sent without the person's acceptance of the terms the Space fixes for team servers, which the server's line shows before the first connection",
 });
 
 const noSeatOpen = (): string => i18n._({
-  id: "No seat is open on this server",
-  comment: "Refusal of a seat's closing: this device holds no seat on the server named",
+  id: "Not connected to this server",
+  comment: "Refusal of Disconnect or of a server's sign-in: this computer is not connected to the server named",
 });
 
 const seatsChanged = (): string => i18n._({
-  id: "The seats changed meanwhile; try again",
-  comment: "Refusal of a seat's opening or closing: the seats file changed between the core's read and its write",
+  id: "Your server connections changed meanwhile — try again",
+  comment: "Refusal of Connect or Disconnect: the record of this computer's server connections changed between the core's read and its write",
 });
 
 const seatStopping = (): string => i18n._({
@@ -166,9 +166,9 @@ function admissionFailure(error: AdmissionFailed, server: string, host: string):
   }
   if (error.kind === "unanswered") {
     return i18n._({
-      id: "{server} answered no seat",
+      id: "{server} answered without connecting you",
       values: { server },
-      comment: "A seat's opening failed: the team server answered its admission with nothing that opens a seat; {server} is the server's name",
+      comment: "Connect failed: the team server answered with nothing that connects the person; {server} is the server's name",
     });
   }
   if (error.status === 502) {
@@ -181,26 +181,26 @@ function admissionFailure(error: AdmissionFailed, server: string, host: string):
   if (error.status === 503) {
     return error.words
       ? i18n._({
-          id: "{server} could not start your seat: {words}",
+          id: "{server} could not start Spex for you: {words}",
           values: { server, words: error.words },
-          comment: "A seat's opening failed: the team server did not start the person's seat; {server} is the server's name, {words} its own words, kept whole",
+          comment: "Connect failed: the team server did not start the person's own Spex there; {server} is the server's name, {words} its own words, kept whole",
         })
       : i18n._({
-          id: "{server} could not start your seat",
+          id: "{server} could not start Spex for you",
           values: { server },
-          comment: "A seat's opening failed: the team server did not start the person's seat and said no more; {server} is the server's name",
+          comment: "Connect failed: the team server did not start the person's own Spex there and said no more; {server} is the server's name",
         });
   }
   return error.words
     ? i18n._({
-        id: "{server} refused the seat: {words}",
+        id: "{server} refused to connect you: {words}",
         values: { server, words: error.words },
-        comment: "A seat's opening refused by the team server, its refusal relayed from it or from the instance; {server} is the server's name, {words} its own words, kept whole",
+        comment: "Connect refused by the team server, its refusal relayed from it or from the Space; {server} is the server's name, {words} its own words, kept whole",
       })
     : i18n._({
-        id: "{server} refused the seat",
+        id: "{server} refused to connect you",
         values: { server },
-        comment: "A seat's opening refused by the team server with no words of its own; {server} is the server's name",
+        comment: "Connect refused by the team server with no words of its own; {server} is the server's name",
       });
 }
 

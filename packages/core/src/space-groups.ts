@@ -260,7 +260,7 @@ export function ownNameFor(login: string): string {
 
 /** The host could not be reached. */
 export function couldNotReach(host: string): string {
-  return i18n._({ id: "Could not reach {host}", values: { host }, comment: "A stopped transfer's message; {host} is the remote's host" });
+  return i18n._({ id: "Could not reach {host}", values: { host }, comment: "A stopped transfer's message; {host} is the Space's display name, or the remote's host" });
 }
 
 /** A step at the host is waiting for a member with the rights, in the
@@ -271,24 +271,24 @@ export function waitingPhrase(step: "create" | "branch", group: string, words: s
       ? i18n._({
           id: "Waiting for a member who can create it in {group}: {words}",
           values: { group, words },
-          comment: "A spex repository's row while its creation waits; {group} is the group's full path, {words} the host's own words",
+          comment: "A project's line while creating its records at a Space waits for a member with the right; {group} is the group's full path, {words} the Space's own words",
         })
       : i18n._({
           id: "Waiting for a member who can create it in {group}",
           values: { group },
-          comment: "A spex repository's row while its creation waits; {group} is the group's full path",
+          comment: "A project's line while creating its records at a Space waits for a member with the right; {group} is the group's full path",
         });
   }
   return words
     ? i18n._({
         id: "Waiting for a member who can prepare its branch in {group}: {words}",
         values: { group, words },
-        comment: "A spex repository's row while its branch preparation waits; {group} is the group's full path, {words} the host's own words",
+        comment: "A project's line while preparing its records' Git branch at a Space waits for a member with the right; {group} is the group's full path, {words} the Space's own words",
       })
     : i18n._({
         id: "Waiting for a member who can prepare its branch in {group}",
         values: { group },
-        comment: "A spex repository's row while its branch preparation waits; {group} is the group's full path",
+        comment: "A project's line while preparing its records' Git branch at a Space waits for a member with the right; {group} is the group's full path",
       });
 }
 
@@ -297,7 +297,7 @@ export function waitingPhrase(step: "create" | "branch", group: string, words: s
 export function namedLikeYourLogin(): string {
   return i18n._({
     id: "a group named like your login",
-    comment: "Why a spex repository is unreachable: its group's path is your login's, so it can have no folder of its own on this device; read after 'Unreachable: '",
+    comment: "Why a project's records are unreachable: their group's path is your login's, so they can have no folder of their own on this computer; read after 'Unreachable: '",
   });
 }
 
@@ -307,7 +307,7 @@ export function groupNamedLikeYourLogin(group: string): string {
   return i18n._({
     id: "{group} is a group named like your login",
     values: { group },
-    comment: "Refusal of a join or a pick: the group's path is your login's, so its records can have no folder of their own on this device; {group} is the group's path",
+    comment: "Refusal of Open here or Add to a group…: the group's path is your login's, so its records can have no folder of their own on this computer; {group} is the group's path",
   });
 }
 
@@ -316,7 +316,7 @@ export function nameTaken(name: string, group: string): string {
   return i18n._({
     id: "{name} is taken in {group}; choose another name",
     values: { name, group },
-    comment: "Refusal of a new spex repository's name; {name} is the whole name, {group} the group's full path",
+    comment: "Refusal of a name in a group: the Space reports it taken there; {name} is the name, {group} the group's full path",
   });
 }
 
@@ -327,7 +327,7 @@ export function groupNameTaken(name: string, parent: string | null, host: string
     ? i18n._({
         id: "{name} is taken at {host}; choose another name",
         values: { name, host },
-        comment: "Refusal of a new top-level group's name; {name} is the name typed, {host} the Git host's display name",
+        comment: "Refusal of a new top-level group's name; {name} is the name typed, {host} the Space's display name",
       })
     : nameTaken(name, parent);
 }
@@ -340,12 +340,12 @@ export function notFoundAt(host: string, words: string | null): string {
     ? i18n._({
         id: "Not found at {host}: {words}",
         values: { host, words },
-        comment: "The Git host found no account, membership or group a write named; {host} is its display name, {words} its own words, kept whole",
+        comment: "The Space found no account, membership or group a write named; {host} is its display name, {words} its own words, kept whole",
       })
     : i18n._({
         id: "Not found at {host}",
         values: { host },
-        comment: "The Git host found nothing a write named, and gave no words of its own; {host} is its display name",
+        comment: "The Space found nothing a write named, and gave no words of its own; {host} is its display name",
       });
 }
 
@@ -356,7 +356,7 @@ export function nameTheGroup(): string {
 
 /** Refusal: a new group needs a path (git-host-15). */
 export function pathTheGroup(): string {
-  return i18n._({ id: "Give the group a path", comment: "Refusal of a new group whose path at the Git host is blank" });
+  return i18n._({ id: "Give the group a path", comment: "Refusal of a new group whose path at the Space is blank; Path is the editor's field" });
 }
 
 /** Refusal: a rename that names neither a name nor a path
@@ -371,7 +371,7 @@ export function groupNotEmpty(group: string): string {
   return i18n._({
     id: "{group} is not empty",
     values: { group },
-    comment: "Refusal of a group's deletion: it still holds a spex repository or a group; {group} is the group's path in the instance",
+    comment: "Refusal of a group's deletion: it still holds a project's records or a group; {group} is the group's path at the Space",
   });
 }
 
@@ -381,7 +381,7 @@ export function takenIn(name: string, group: string): string {
   return i18n._({
     id: "{group} already holds {name}",
     values: { name, group },
-    comment: "Refusal of a spex repository's move: the group it was to move into holds one of that name; {group} is that group's path in the instance, {name} the repository's name",
+    comment: "Refusal of moving a project's records into a group that holds records of that name; {group} is that group's path at the Space, {name} the name",
   });
 }
 
@@ -391,7 +391,7 @@ export function nameTheLogin(host: string): string {
   return i18n._({
     id: "Name the account's login at {host}",
     values: { host },
-    comment: "Refusal of a share or a removal whose login is blank; {host} is the Git host's display name",
+    comment: "Refusal of a share or a removal whose login is blank; {host} is the Space's display name",
   });
 }
 
@@ -401,7 +401,7 @@ export function notARole(role: string, host: string): string {
   return i18n._({
     id: "{role} is not one of the roles {host} grants",
     values: { role, host },
-    comment: "Refusal of a share at a role the Git host does not list; {role} is the role named, {host} the host's display name",
+    comment: "Refusal of a share at a role the Space does not list; {role} is the role named, {host} the Space's display name",
   });
 }
 
@@ -409,8 +409,8 @@ export function notARole(role: string, host: string): string {
  * (space-29). */
 export function nameOneTarget(): string {
   return i18n._({
-    id: "Name one group or one spex repository",
-    comment: "Refusal of a members, share or removal command naming neither or both a group and a spex repository",
+    id: "Name one group or one project",
+    comment: "Refusal of a members, share or removal command naming neither or both a group and a project's records",
   });
 }
 
@@ -420,7 +420,7 @@ export function groupNotListed(group: string, host: string): string {
   return i18n._({
     id: "{host} listed no group {group}",
     values: { group, host },
-    comment: "Refusal naming a group the Git host's last read did not list; {group} is the group's id as sent, {host} the host's display name",
+    comment: "Refusal naming a group the Space's last read did not list; {group} is the group's id as sent, {host} the Space's display name",
   });
 }
 
@@ -438,10 +438,10 @@ export function relayHostError(error: unknown, host: string): string {
   switch (error.kind) {
     case "pending":
       return error.words
-        ? i18n._({ id: "Waiting: {words}", values: { words: error.words }, comment: "A step the Git host left waiting; {words} are its own words" })
-        : i18n._({ id: "Waiting", comment: "A step the Git host left waiting, with no words of its own" });
+        ? i18n._({ id: "Waiting: {words}", values: { words: error.words }, comment: "A step the Space left waiting; {words} are its own words" })
+        : i18n._({ id: "Waiting", comment: "A step the Space left waiting, with no words of its own" });
     case "name_taken":
-      return i18n._({ id: "The name is taken", comment: "The Git host reports the name of a new spex repository taken" });
+      return i18n._({ id: "The name is taken", comment: "The Space reports the name of new records taken" });
     case "host_refused":
     case "bad_request":
       return hostRefused(host, error.words);
@@ -450,8 +450,8 @@ export function relayHostError(error: unknown, host: string): string {
     case "rate_limited": {
       const seconds = retryAfterSeconds(error.retryAfter);
       return seconds !== null
-        ? i18n._({ id: "{host} asks to wait {seconds, plural, one {# second} other {# seconds}}", values: { host, seconds }, comment: "The Git host's rate limit; {seconds} is how long it asks to wait, read from its Retry-After" })
-        : i18n._({ id: "{host} asks to wait a moment", values: { host }, comment: "The Git host's rate limit, with no time of its own to wait" });
+        ? i18n._({ id: "{host} asks to wait {seconds, plural, one {# second} other {# seconds}}", values: { host, seconds }, comment: "The Space's rate limit; {host} is its display name, {seconds} how long it asks to wait, read from its Retry-After" })
+        : i18n._({ id: "{host} asks to wait a moment", values: { host }, comment: "The Space's rate limit, with no time of its own to wait; {host} is its display name" });
     }
     case "reauth":
       return signInAgain();
@@ -470,17 +470,17 @@ export function signInFailure(error: unknown, host: string): { cause: "denied" |
     case "stopped":
       return null;
     case "denied":
-      return { cause, message: i18n._({ id: "The sign-in was denied at {host}", values: { host }, comment: "A sign-in that ended because the person denied it at the Git host" }) };
+      return { cause, message: i18n._({ id: "The sign-in was denied at {host}", values: { host }, comment: "A sign-in that ended because the person denied it at the Space; {host} is its display name" }) };
     case "expired":
       return { cause, message: i18n._({ id: "The sign-in expired before it was approved", comment: "A sign-in that ended because nobody approved it in time" }) };
     case "unreachable":
       return { cause, message: couldNotReach(host) };
     case "account":
-      return { cause: "refused", message: i18n._({ id: "{host} signed you in as another account; this device uses @{login} there", values: { host, login: words ?? "" },
-        comment: "A sign-in refused, nothing stored: the person signed in at an instance the home lists as another account than the one it lists there; {host} is the instance's display name, {login} the listed account's login" }) };
+      return { cause: "refused", message: i18n._({ id: "{host} signed you in as another account — sign in as @{login}", values: { host, login: words ?? "" },
+        comment: "A sign-in refused, nothing stored: the person signed in at a Space this computer already signs in to as another account; {host} is the Space's display name, {login} the login this computer signs in with there" }) };
     case "person":
-      return { cause: "refused", message: i18n._({ id: "{host} signed you in as @{login}; this seat is another member's", values: { host, login: words ?? "" },
-        comment: "A sign-in on a team server's seat refused, nothing stored: the account approved at the instance is not the member the seat was opened for; {host} is the instance's display name, {login} the login of the account that signed in" }) };
+      return { cause: "refused", message: i18n._({ id: "{host} signed you in as @{login} — sign in as this server's member", values: { host, login: words ?? "" },
+        comment: "A sign-in on a team server refused, nothing stored: the account approved at the Space is not the member the server was opened for; {host} is the Space's display name, {login} the login of the account that signed in" }) };
     case "state":
     case "refused":
     default:
@@ -493,11 +493,11 @@ export function signInFailure(error: unknown, host: string): { cause: "denied" |
  * code lives. */
 export function repositoryDescription(input: { kind: "project"; name: string; code: string | null } | { kind: "group"; group: string }): string {
   if (input.kind === "group") {
-    return i18n._({ id: "Spex records of the group {group}", values: { group: input.group }, comment: "A group's new spex repository's description on the Git host" });
+    return i18n._({ id: "Spex records of the group {group}", values: { group: input.group }, comment: "The description a group's new records carry at the Space" });
   }
   return input.code
-    ? i18n._({ id: "Spex records of {name}; its code is at {code}", values: { name: input.name, code: input.code }, comment: "A project's new spex repository's description on the Git host; {code} is the code's remote URL" })
-    : i18n._({ id: "Spex records of {name}", values: { name: input.name }, comment: "A project's new spex repository's description on the Git host, its code on no remote" });
+    ? i18n._({ id: "Spex records of {name}; its code is at {code}", values: { name: input.name, code: input.code }, comment: "The description a project's new records carry at the Space; {code} is the code's remote URL" })
+    : i18n._({ id: "Spex records of {name}", values: { name: input.name }, comment: "The description a project's new records carry at the Space, its code on no remote" });
 }
 
 /** The page the loopback answers the browser with (git-host-2), in the

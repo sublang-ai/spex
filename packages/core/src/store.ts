@@ -465,14 +465,14 @@ export function spexRepository(key: string, dir: string): SpexRepository {
 }
 
 const unpairedReason = (name: string): string =>
-  i18n._({ id: "{name} has no folder on this device", comment: "Repair row: the project is registered, but nothing here holds it",
+  i18n._({ id: "{name} has no folder on this computer", comment: "Repair row: the project's records are here, but no project folder on this computer holds it",
     values: { name } });
 const missingCloneReason = (path: string): string =>
-  i18n._({ id: "the spex repository of {path} is missing on this device",
-    comment: "Repair row: a working folder is paired with a spex repository whose clone is gone", values: { path } });
+  i18n._({ id: "the records of {path} are missing on this computer",
+    comment: "Repair row: a project folder whose records are gone from this computer; {path} is the folder", values: { path } });
 const deferredDestinationTaken = (key: string): string =>
-  i18n._({ id: "taken, so {key} cannot move here under its instance's folder; move it aside",
-    comment: "Storage diagnostic on a folder under workspace/: the clone {key} waits to move to this path under its instance's folder, which something else holds; the clone stays where it is until the folder is moved aside", values: { key } });
+  i18n._({ id: "taken, so {key} cannot move here under its Space's folder; move it aside",
+    comment: "Storage diagnostic on a folder under workspace/: the records {key} wait to move to this path under their Space's folder, which something else holds; they stay where they are until the folder is moved aside", values: { key } });
 
 export class Store {
   /** The home this store serves. */
@@ -815,8 +815,8 @@ export class Store {
 
   private requireRepository(key: string): SpexRepository {
     const repository = this.repository(key);
-    if (!repository) throw new StorageFormatError(join("workspace", key), i18n._({ id: "no spex repository {key} on this device",
-      comment: "Refusal: the key names no clone under workspace/", values: { key } }));
+    if (!repository) throw new StorageFormatError(join("workspace", key), i18n._({ id: "no records {key} on this computer",
+      comment: "Refusal: the key names no project's or group's records under workspace/; {key} is their path", values: { key } }));
     return repository;
   }
 

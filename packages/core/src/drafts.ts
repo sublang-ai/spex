@@ -668,8 +668,8 @@ export class DraftStore {
   create(id: string, now: number, location: AuthoringLocation, fields: NewPackageFields, homeLanguage: string): StoredDraft {
     if (location.workingFolder === null) {
       throw new StorageFormatError(join("authoring", `${id}.json`), i18n._({
-        id: "{projectId} has no working folder on this device",
-        comment: "Refusal: an authoring session belongs to a project whose working folder is on this device",
+        id: "{projectId} has no project folder on this computer",
+        comment: "Refusal: an authoring session belongs to a project whose folder is on this computer",
         values: { projectId: location.key },
       }));
     }
@@ -817,8 +817,8 @@ export class DraftStore {
     const path = this.sourcePath(id);
     if (path === null) {
       throw new StorageFormatError(join("authoring", `${id}.json`), i18n._({
-        id: "{projectId} has no working folder on this device",
-        comment: "Refusal: an authoring session belongs to a project whose working folder is on this device",
+        id: "{projectId} has no project folder on this computer",
+        comment: "Refusal: an authoring session belongs to a project whose folder is on this computer",
         values: { projectId: this.projectOf(id) ?? id },
       }));
     }
