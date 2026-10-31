@@ -27,11 +27,17 @@ if (!source) throw new Error("Windows build requires the Microsoft x64 CRT redis
 const target = join(desktop, "build/windows-runtime");
 mkdirSync(target, { recursive: true });
 const manifest = [];
+// A pwsh -> npm/cmd -> Node -> powershell.exe chain otherwise passes
+// PowerShell 7's incompatible modules to Windows PowerShell 5.1.
+// Let this child reconstruct its own default module search path.
+const signatureEnv = Object.fromEntries(
+  Object.entries(process.env).filter(([key]) => key.toUpperCase() !== "PSMODULEPATH"),
+);
 for (const name of ["vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll"]) {
   const file = join(source, name);
   const signature = JSON.parse(execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command",
-    "$s=Get-AuthenticodeSignature -LiteralPath $env:SPEX_CRT_SIGNATURE_FILE; @{status=$s.Status.ToString();subject=$s.SignerCertificate.Subject}|ConvertTo-Json -Compress"],
-  { encoding: "utf8", env: { ...process.env, SPEX_CRT_SIGNATURE_FILE: file } }));
+    "$ErrorActionPreference='Stop'; $s=Get-AuthenticodeSignature -LiteralPath $env:SPEX_CRT_SIGNATURE_FILE; @{status=$s.Status.ToString();subject=$s.SignerCertificate.Subject}|ConvertTo-Json -Compress"],
+  { encoding: "utf8", env: { ...signatureEnv, SPEX_CRT_SIGNATURE_FILE: file } }));
   if (signature.status !== "Valid" || !signature.subject?.includes("Microsoft")) {
     throw new Error(`${name}: Microsoft signature verification failed`);
   }
