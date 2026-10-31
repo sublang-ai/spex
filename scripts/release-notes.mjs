@@ -151,7 +151,7 @@ export function releaseNotes({ changelog, release, repository }) {
     `Agent sign-in, GitHub, and playbook-compile prerequisites are in the [README](${blob}/README.md).\n`,
     beta
       ? "\n" +
-        "This beta ran CI, the smoke and the live smoke; the regression and the manual checklist run before the regular release " +
+        "Beta preparation requires CI, the smoke and the live smoke; the regression and the manual checklist run before the regular release " +
         `([DR-087](${blob}/specs/decisions/087-beta-app-releases.md)).\n`
       : "",
   ].join("");

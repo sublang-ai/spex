@@ -188,7 +188,7 @@ test("release-28: a beta tag takes [Unreleased] under its line, and names the ga
   assert.match(body, /releases\/download\/app-v1\.3\.0-beta\.2\/Spex-1\.3\.0-beta\.2-win-x64\.exe/);
   assert.match(
     body,
-    /\n\nThis beta ran CI, the smoke and the live smoke; the regression and the manual checklist run before the regular release \(\[DR-087\]\(https:\/\/github\.com\/sublang-ai\/spex\/blob\/app-v1\.3\.0-beta\.2\/specs\/decisions\/087-beta-app-releases\.md\)\)\.\n$/,
+    /\n\nBeta preparation requires CI, the smoke and the live smoke; the regression and the manual checklist run before the regular release \(\[DR-087\]\(https:\/\/github\.com\/sublang-ai\/spex\/blob\/app-v1\.3\.0-beta\.2\/specs\/decisions\/087-beta-app-releases\.md\)\)\.\n$/,
   );
 });
 
