@@ -14,7 +14,8 @@
 // it (DR-127): the instance names itself and its verdict on the bearer
 // in the relay headers, so one registry stands behind several instances,
 // honouring each one's tokens, and a scripted refusal answers one
-// instance's tokens alone.
+// instance's tokens alone. A scripted hold keeps one download waiting
+// until released, so a test can interrupt an install mid-download.
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync, writeFileSync, chmodSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
@@ -118,6 +119,10 @@ export interface StandinRegistryScript {
   delayOrgs(ms: number): void;
   /** Answer the next `count` requests 500, as an outage. */
   unavailable(count: number): void;
+  /** Hold the next download — a release archive or a raw file — until
+   * `release` is called: `reached` resolves with its path once the
+   * request arrives. */
+  holdDownload(): { reached: Promise<string>; release(): void };
   /** Every request as `<METHOD> <path>`, in order. */
   readonly requests: string[];
   /** Every request with the instance that relayed it and the account it
@@ -177,6 +182,16 @@ export async function startStandinRegistry(options: { dir: string }): Promise<St
   const requests: string[] = [];
   const received: StandinRegistryRequest[] = [];
   let outages = 0;
+  let hold: { reach(path: string): void; released: Promise<void> } | null = null;
+
+  /** Wait while a scripted hold keeps this download. */
+  async function held(path: string): Promise<void> {
+    const current = hold;
+    if (current === null) return;
+    hold = null;
+    current.reach(path);
+    await current.released;
+  }
 
   /** Keep a release; a publish also holds it to the fields the
    * registry requires, which a release already served may lack. */
@@ -396,6 +411,7 @@ export async function startStandinRegistry(options: { dir: string }): Promise<St
       if (tail === undefined && segments.length === 6) { sendJson(res, 200, versionResource(stored)); return; }
       if (tail === "download" && segments.length === 7) {
         if (stored.suppressed) { sendError(res, 410, "suppressed", `${name} ${version} is suppressed`); return; }
+        await held(url.pathname);
         res.writeHead(200, { "content-type": "application/gzip" });
         res.end(Buffer.from(stored.tgz));
         return;
@@ -410,6 +426,7 @@ export async function startStandinRegistry(options: { dir: string }): Promise<St
       if (stored?.suppressed) { sendError(res, 410, "suppressed", `${org}/${pkg} ${version} is suppressed`); return; }
       const bytes = stored?.data.get(segments.slice(3).join("/"));
       if (!bytes) { sendError(res, 404, "not_found", "not found"); return; }
+      await held(url.pathname);
       res.writeHead(200, { "content-type": "application/octet-stream" });
       res.end(Buffer.from(bytes));
       return;
@@ -445,6 +462,14 @@ export async function startStandinRegistry(options: { dir: string }): Promise<St
       },
       delayOrgs: (ms) => { orgsDelay = ms; },
       unavailable: (count) => { outages = count; },
+      holdDownload: () => {
+        let reach!: (path: string) => void;
+        let release!: () => void;
+        const reached = new Promise<string>((resolve) => { reach = resolve; });
+        const released = new Promise<void>((resolve) => { release = resolve; });
+        hold = { reach, released };
+        return { reached, release };
+      },
       requests,
       received,
       clearRequests: () => { requests.length = 0; received.length = 0; },

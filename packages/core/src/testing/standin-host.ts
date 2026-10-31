@@ -33,7 +33,7 @@
 
 import { execFile, execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { dirname, join } from "node:path";
@@ -191,6 +191,8 @@ export interface StandinScript {
    * in arrival order, with the instance that issued it; one list for the
    * instances over one Git backend (DR-127). */
   transportCredentials: StandinTransportCredential[];
+  /** Hold an authenticated LFS download at its arrival, for Stop tests. */
+  beforeLfsDownload?: (oid: string) => Promise<void>;
   /** How `/login/app` answers a well-formed request. */
   browser: "approve" | "deny" | "hold";
   /** The device flow's announced polling interval, in seconds. */
@@ -1809,6 +1811,27 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
     if (!repo) {
       res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
       res.end("The project you were looking for could not be found.\n");
+      return;
+    }
+    const lfsPrefix = `/${storagePathOn(backend, repo.group)}/${repo.path}.git/info/lfs/objects`;
+    const object = (oid: string): string => join(repo.bare, "lfs", "objects", oid.slice(0, 2), oid.slice(2, 4), oid);
+    if (pathInfo === `${lfsPrefix}/batch` && req.method === "POST") {
+      const chunks: Buffer[] = [];
+      for await (const chunk of req) chunks.push(Buffer.from(chunk));
+      const body = JSON.parse(Buffer.concat(chunks).toString()) as { operation: string; objects: { oid: string; size: number }[] };
+      if (body.operation !== "download" || !Array.isArray(body.objects)) return json(res, 400, { message: "Only fixture downloads are supported" });
+      return json(res, 200, { transfer: "basic", objects: body.objects.map(({ oid, size }) => ({ oid, size,
+        ...(/^[a-f0-9]{64}$/.test(oid) && existsSync(object(oid))
+          ? { actions: { download: { href: `${gitOrigin}${lfsPrefix}/${oid}` } } }
+          : { error: { code: 404, message: "Object missing" } }),
+      })) });
+    }
+    if (pathInfo.startsWith(`${lfsPrefix}/`) && req.method === "GET") {
+      const oid = pathInfo.slice(lfsPrefix.length + 1);
+      if (!/^[a-f0-9]{64}$/.test(oid) || !existsSync(object(oid))) { res.writeHead(404).end(); return; }
+      await script.beforeLfsDownload?.(oid);
+      const bytes = readFileSync(object(oid));
+      res.writeHead(200, { "content-type": "application/octet-stream", "content-length": bytes.length }).end(bytes);
       return;
     }
     const receive = target.searchParams.get("service") === "git-receive-pack" || pathInfo.endsWith("/git-receive-pack");

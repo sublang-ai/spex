@@ -447,6 +447,7 @@ When the user activates Check host on a spex repository, the core shall fetch ea
 - a placement holding no `spex` branch reads "The host holds no records yet; Sync will send these";
 - a placement of unrelated history reads "Unrelated history" with "Merge histories…" on its line [[space-13](#space-13)] and lists nothing;
 - a failed transport reports per [[space-15](#space-15)].
+- Where the fetched tree uses LFS, Check also fetches that tree's LFS objects with the placement's credential [[git-host-9](git-host.md#git-host-9)], within the same stoppable transport step [[space-16](#space-16)], without path exclusions or fetching unrelated recent refs; a tree using no LFS requires no LFS executable.
 
 #### space-9
 
@@ -596,6 +597,7 @@ When every conflict has a choice and the user activates Apply, the surface shall
 
 When a sync's Apply step runs at a placement, the core shall build the candidate as `select` does [[storage-21](storage.md#storage-21)] — the tree of its base, `spex` as it stands when that placement's Apply begins, with each unit taken whole from its selected side — validate it complete in a private copy before any file is written [[storage-12](storage.md#storage-12)], write each unit whose selected bytes differ from the base's by a versioned replacement naming the base's bytes [[storage-14](storage.md#storage-14)], and, with no Git merge pending, record the candidate's tree as the merge commit with `spex` and that placement's `spex` as parents, or move `spex` to that placement's commit where that tree equals its tree ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
 
+- The selected files are the filtered bytes validated in the private copy; LFS uses local objects fetched by Check [[space-8](#space-8)], a missing object refusing before live writes, with no download during Apply or its repair [[space-16](#space-16)].
 - a unit is every file of it on disk — root, replay descriptor or legacy records, chunks and assets, one added since its base among them — each read as Git reads its path, filters applied, and its write is one versioned write at its instant [[storage-14](storage.md#storage-14)], made only while the clone's folder and its `.git` are the ones the apply began in, every file of the unit holds the base's bytes or the selected ones, a session's management lease is taken, and no turn this core runs for an authoring session instance [[core-service-96](core-service.md#core-service-96)] owns an authoring unit's current recorded instance, a turn its transcript records unfinished refusing nothing, and otherwise refused with no folder made; a file already holding the selected bytes is left as it is;
 - live unit reads, replacements, deletions and hint cleanup obey selection's destination-parent checks [[storage-21](storage.md#storage-21)];
 - a unit whose selected bytes equal the base's is neither written nor leased, so a session held elsewhere stops no write but its own;
@@ -988,6 +990,7 @@ The core shall build each `space.tree` level by reading one directory of the clo
 
 When an integration suite starts a real core with substitute agents on a scratch home against the stand-in Git host with an isolated Git configuration, it shall drive sign-in, the first push and the account's set-up over the protocol and assert:
 
+- an incoming LFS file absent from the local cache is fetched with the brokered credential during Check despite configured path exclusions, then Apply writes the exact payload and makes no transport request; Stop during a held LFS download ends at Check without Apply or incoming file writes [[space-8](#space-8)] [[space-16](#space-16)] [[space-19](#space-19)];
 - `space.get` reads no instance, the default instance the stand-in's origin, and your own group alone under this device's user name, and reads the `git` guidance on a `PATH` without `git` [[space-1](#space-1)] [[space-3](#space-3)] [[space-30](#space-30)];
 - a full read held after Refresh replies accepted broadcasts the instance's `read.phase: running`, preserving the last complete view and time; its failure broadcasts `failed` with the existing sanitized host message, including on a signed-in startup with only local-only rows; retry success clears the failure, sign-out reads idle, and a new sign-in accepted during a held older Refresh or direct read stays running until its own fresh read settles [[space-1](#space-1)] [[space-29](#space-29)] [[space-30](#space-30)];
 - a working folder added before any sign-in pairs with a local-only spex repository under your own group [[space-61](#space-61)];
