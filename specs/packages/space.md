@@ -22,7 +22,7 @@ While the app is connected, the Space surface — reached from the sidebar's Spa
 | --- | --- |
 | sign-in | while the home lists no instance, the sign-in card [[space-3](#space-3)] |
 | refresh | while any instance is signed in, Refresh, which reads every signed-in instance [[git-host-5](git-host.md#git-host-5)] |
-| issues | present while any repair or diagnostic stands, reading "⚠ <n> to fix", <n> being the count the core carries — the repairs this device's reader has not answered [[space-49](#space-49)] and every diagnostic no repair folds [[core-service-86](core-service.md#core-service-86)] — without its number where that count is none, and opening the issues list in place [[space-55](#space-55)] |
+| issues | present while any repair or diagnostic stands, reading "⚠ <n> to fix", <n> being the count the core carries — the repairs this device's reader has not answered [[space-49](#space-49)] and every diagnostic no repair folds [[core-service-86](core-service.md#core-service-86)] — and "⚠" alone, titled "Nothing to fix", where that count is none, opening the issues list in place [[space-55](#space-55)] |
 | Git | "Git is not installed" with install guidance, replacing every other field, where no `git` runs |
 
 | An instance's heading, while it is | Carries |
@@ -249,7 +249,7 @@ When the reader opens, at this place [[space-111](#space-111)], a spex repositor
 
 - a group's own spex repository, holding no `project.json`, asks for the working folder its sessions run in on this device; the folder is paired through the same command a repair uses [[space-47](#space-47)];
 - a host id the instance's last read lacks is looked up in a fresh read of that instance before the open is refused `not_found`, so a project shared since that read opens without a Refresh ([DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md));
-- the join runs at its Check step while the spex repository clones and at its Code step, its line reading "Cloning code…", while the code clones, offering Stop at neither, and ends only once the code is cloned and paired or its clone has failed [[space-61](#space-61)];
+- the join runs at its Check step while the spex repository clones and at its Code step, its line reading "Downloading code…", while the code clones, offering Stop at neither, and ends only once the code is cloned and paired or its clone has failed [[space-61](#space-61)];
 - the spex repository clones into a private folder beside its place and moves there only where nothing stands at that instant; a join finding its place taken — another join's clone — stops, leaving that clone as it stands, and every join removes its own private folder alone;
 - a code clone that fails stops the join at its Code step with the host's failure classified at the Git origin of the instance that brokered it and Git's words at any other, no URL under any listed instance's reported Git origin shown [[space-15](#space-15)], leaving the spex repository cloned and the row offering "Choose folder…" to pair it later, or, on a seat, "Try again" [[space-103](#space-103)].
 
@@ -465,7 +465,7 @@ When a sync is admitted, the core shall save, then run the other steps for each 
 
 | Outcome, per placement | State afterwards |
 | --- | --- |
-| synced | its `spex` equals the clone's; its line reads "Synced just now · N sent · M received", or "Everything is in sync" when nothing moved; a read-only placement's reads "Brought M; nothing sent" |
+| synced | its `spex` equals the clone's; its line reads "Synced just now · N sent · M received", or "Everything is in sync" when nothing moved; a read-only placement's reads "M received; nothing sent" |
 | behind | the sync leaves its `spex` behind the clone's; its line reads "Behind — Sync again" |
 | choices needed | its merge not made, every merge and push before it standing, no operation running once the sync ends [[space-14](#space-14)] |
 | stopped | the step, cause and way forward on its line [[space-15](#space-15)] |
@@ -630,7 +630,7 @@ While a spex repository's Explore tab is shown, the Space surface shall present 
 
 | Annotation | Content |
 | --- | --- |
-| what it is | the catalog family's description — session manifest, session records, session chunks, provider hints, intent, intent attachments, authoring session, spec package requests, spec package lock, spec package, settings, code remote, placement, installed spec packages, exported skills, sync rules, lease, Git data — or "Not a Spex file" |
+| what it is | the surface's word for the catalog family, a file the reader may touch named by its file name — session file, session transcript, session history, provider hints, intent, intent attachments, authoring session, `spex.yaml`, `spex.lock`, package, Settings, where the code is, where the records sync, installed packages, skills for agents, sync rules, in-use file, Git data — or "Not a Spex file" ([DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)) |
 | sharing | "Shared" (tracked and committed), "Not yet shared" (a tracked kind, uncommitted), "Stays here" (ignored), "Git data" |
 | size | the file size, or a directory's entry count |
 | owner | the session's title, or the intent's title, where the family belongs to one |
@@ -689,7 +689,7 @@ The Space surface shall fit its pane at every width down to the 320-pixel floor 
 
 - while an instance is listed and Git runs, the existing Refresh and issues controls share the surface title row, wrapping within its width; the first sign-in and missing-Git cards keep their full row;
 - below 28rem a group heading keeps its own row above its actions, so the actions never squeeze the group name between them;
-- below 20rem the header's fields and an instance heading's stack with the primary control last and full-width;
+- below 20rem the header's fields stack with the primary control last and full-width, and an instance heading's stack with its primary control full-width and its overflow after it, as in every width ([DR-172](../decisions/172-surfaces-a-fresh-user-reads.md));
 - in each repository row and change row the label owns the slack and truncates with its title, the code glyph and detail hiding below 28rem, the row's control keeping its accessible name;
 - the tree and preview stand side by side from 42rem and stack below it, the preview under the tree; the preview's box scrolls inside itself and the diff box scrolls sideways as a canvas;
 - every control reads at most 14 characters, its busy form included: Sign in, Sign in again, Signing in…, Sign out, Signing out…, Sync now, Syncing…, Check, Checking…, Stop, Open here, Opening…, Show, More, Connect, Disconnect, Resolve, Combine…, Members, Retry, Retrying…, Apply, Applying…, Cancel, Save, Saving…, Adding…, Choose folder…, Open folder…, Open project, View diff, Hide diff, All here, Open session, Show in Finder, Show in folder, Copy path, Refresh, Dismiss, New group, Share, Create, Creating…, Add, Keep, Add a Space…; a menu's entries and the acts a decision fixes as whole phrases — "Add to a group…", "Remove from this list", "Not on this computer", "Use <folder>", "Use this folder", "Open on <server>", "Show on <server>", "Keep this computer's", "Take <display name>'s", "All <display name>'s" — stand outside the budget and wrap within their row ([DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md));
@@ -1271,7 +1271,7 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 
 Where the harness boots the served shell signed in on a home whose spex repository a peer home has pushed to — the peer holding a differing configuration, the same session changed and an intent it queued — the test suite shall assert the daily sync with conflicts through the page:
 
-- Check lists the peer's session, Settings and intent under "From <display name> (3)" with the conflicts marked and the row reading behind [[space-8](#space-8)];
+- Check lists the peer's session, Settings and intent under "From <display name> (3)" with the conflicts marked, the line's title reading one behind and the row its last sync [[space-8](#space-8)] [[space-120](#space-120)];
 - Sync ends "Needs your choice" with Apply disabled reading "0 of 2 chosen"; "Take <display name>'s" for the session and "Keep this computer's" for Settings by keyboard enable Apply; Apply's confirm names one replaced unit with Cancel focused, Escape keeps the choices, and confirming ends synced [[space-9](#space-9)] [[space-14](#space-14)] [[space-17](#space-17)] [[space-18](#space-18)];
 - View diff on the Settings row shows this computer's side headed "Changes on this computer" and the stand-in's headed "Changes at <display name>" [[space-10](#space-10)];
 - the session's tab shows the host's turns and Settings shows this device's configuration [[space-20](#space-20)];
