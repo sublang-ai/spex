@@ -84,7 +84,9 @@ try {
     try {
       await Promise.race([
         app.close(),
-        new Promise((_, reject) => { deadline = setTimeout(() => reject(new Error("Desktop close timed out")), 10_000); }),
+        // Core shutdown permits ten seconds to settle and five more to
+        // reap children (core-service-39); leave time for Electron to exit.
+        new Promise((_, reject) => { deadline = setTimeout(() => reject(new Error("Desktop close timed out")), 20_000); }),
       ]);
     } finally {
       clearTimeout(deadline);
