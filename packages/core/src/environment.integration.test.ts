@@ -734,11 +734,11 @@ test("environments-21: a path source is used in place per working folder, missin
   // A changed path-source manifest and a missing selected artifact mark the lock stale.
   await local(first, "0.2.0", "bumped");
   const bumped = await installAsOnDisk({ ...base, pathRoot: first });
-  assert.ok(bumped.stale?.some((reason) => /changed version from 0\.1\.0 to 0\.2\.0/.test(reason)), JSON.stringify(bumped));
+  assert.ok(bumped.stale?.some((reason) => /^acme\/local changed in tools\/local: version 0\.1\.0 is now 0\.2\.0$/.test(reason)), JSON.stringify(bumped));
   rmSync(join(first, "tools", "local"), { recursive: true, force: true });
   await local(first, "0.1.0", "", false);
   const lacking = await installAsOnDisk({ ...base, pathRoot: first });
-  assert.ok(lacking.stale?.some((reason) => /no longer holds the selected artifact tidy/.test(reason)), JSON.stringify(lacking));
+  assert.ok(lacking.stale?.some((reason) => /^acme\/local changed in tools\/local: it no longer has tidy$/.test(reason)), JSON.stringify(lacking));
 });
 
 // ---------------------------------------------------------------------------
@@ -947,9 +947,11 @@ test("environments-21: a private namespace installs with the device's app token 
     (error: unknown) => error instanceof InstallError && error.packageName === "vault/secrets" && /vault\/secrets/.test(error.message));
   await assert.rejects(resolveText(other.clone, text, { through: stranger }),
     (error: unknown) => error instanceof RegistryError && error.kind === "forbidden" && error.packageName === "vault/secrets");
-  const unseen = await resolveText(other.clone, text, { through: anonymous });
-  assert.equal(unseen.ok, false);
-  if (!unseen.ok) assert.equal(unseen.conflicts[0]!.name, "vault/secrets");
+  // One the registry does not list to a reader is its answer, never a
+  // conflict of versions (environments-5).
+  await assert.rejects(resolveText(other.clone, text, { through: anonymous }),
+    (error: unknown) => error instanceof RegistryError && error.kind === "not_found" && error.packageName === "vault/secrets",
+    "[environments-5] the registry's answer naming the package");
   // An outage is reported naming what could not be read.
   registry.script.unavailable(1);
   await assert.rejects(resolveText(other.clone, text, { through: member }),

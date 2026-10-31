@@ -499,9 +499,9 @@ describe("CLI integration", () => {
   // to do and no usage dump.
   it("an unknown command or option is refused on one line naming spex --help", () => {
     for (const [args, line] of [
-      [["bogus"], "unknown command: bogus \u2014 spex --help\n"],
-      [["help", "bogus"], "unknown command: bogus \u2014 spex --help\n"],
-      [["--bogus"], "unknown option --bogus \u2014 spex --help\n"],
+      [["bogus"], "spex: unknown command bogus \u2014 spex --help\n"],
+      [["help", "bogus"], "spex: unknown command bogus \u2014 spex --help\n"],
+      [["--bogus"], "spex: unknown option --bogus \u2014 spex --help\n"],
     ] as const) {
       const result = run([...args]);
       assert.equal(result.exitCode, 1, `[cli-13] spex ${args.join(" ")} exits 1`);
@@ -570,17 +570,17 @@ describe("CLI integration", () => {
   // cli-13: a command called wrongly names the cause in the CLI's words,
   // never Node's, then its one-line usage, and writes nothing.
   it("an option or argument a command does not take is refused in the CLI's words with its one-line usage", () => {
-    const addUsage = "usage: spex add <org>/<pkg>[@<version>] | <org>/<pkg> --path <folder>";
+    const addUsage = "Usage: spex add <org>/<pkg>[@<version>] | <org>/<pkg> --path <folder>";
     for (const [args, cause] of [
-      [["install", "--bogus"], "spex install: unknown option --bogus\nusage: spex install"],
+      [["install", "--bogus"], "spex install: unknown option --bogus\nUsage: spex install"],
       [["add", "demo/tool", "--path"], `spex add: --path needs a folder\n${addUsage}`],
       [["add", "demo/tool", "--path="], `spex add: --path needs a folder\n${addUsage}`],
       [["add"], `spex add: missing <org>/<pkg>\n${addUsage}`],
-      [["rm", "demo/tool", "demo/other"], "spex rm: unexpected argument demo/other\nusage: spex remove <org>/<pkg>"],
-      [["update", "extra"], "spex update: unexpected argument extra\nusage: spex update"],
-      [["publish", "--dry-run=yes"], "spex publish: --dry-run takes no value\nusage: spex publish [<org>/<pkg>] [--dry-run]"],
-      [["whoami", "stray"], "spex whoami: unexpected argument stray\nusage: spex whoami [--registry <url> | --space <url>]"],
-      [["login", "--registry"], "spex login: --registry needs a URL\nusage: spex login [--registry <url> | --space <url>] [--force]"],
+      [["rm", "demo/tool", "demo/other"], "spex rm: unexpected argument demo/other\nUsage: spex remove <org>/<pkg>"],
+      [["update", "extra"], "spex update: unexpected argument extra\nUsage: spex update"],
+      [["publish", "--dry-run=yes"], "spex publish: --dry-run takes no value\nUsage: spex publish [<org>/<pkg>] [--dry-run]"],
+      [["whoami", "stray"], "spex whoami: unexpected argument stray\nUsage: spex whoami [--registry <url> | --space <url>]"],
+      [["login", "--registry"], "spex login: --registry needs a URL\nUsage: spex login [--registry <url> | --space <url>] [--force]"],
     ] as const) {
       quietly([...args], (result) => {
         assert.equal(result.exitCode, 1, `[cli-13] spex ${args.join(" ")} exits 1`);

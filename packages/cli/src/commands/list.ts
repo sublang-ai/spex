@@ -7,9 +7,11 @@
 // with its version or folder; each package installed, with its version,
 // where it comes from, the packages it came for and whether its files
 // stand; each skill with the agent folders it is placed in; and, where
-// `spex.lock` is missing or stale, the command that installs it.
+// `spex.lock` is missing or stale, or a package is not installed, the
+// command to run: `spex update` for a stale lock, as the Packages tab's
+// chip offers Update, else `spex install`.
 
-import { isGitRequest, isPathRequest, type Request } from "../lib/environment/index.js";
+import { BUILTIN_PACKAGE_NAME, isGitRequest, isPathRequest, isPathSource, type Request } from "../lib/environment/index.js";
 import { Environment } from "./environment.js";
 import { gitLabel, gitLocators, packageStates, placeText, skillPlaces, sourceLabel, staleReasons, table, unnamedText, versionOf } from "./settle.js";
 import { parsed, type Command } from "./run.js";
@@ -22,10 +24,13 @@ function addedLabel(request: Request): string {
   return request.version;
 }
 
-/** The last line of a stale lock: what changed, and what installs it. */
+/** The last line of a stale lock: what changed, and what to do — a
+ * folder package's `meta.yaml` that cannot be read fixed first. */
 function staleLine(reasons: string[]): string {
   if (reasons.includes("spex.yaml is missing")) return "spex.yaml is missing — spex add <org>/<pkg>";
-  return `${reasons.join("; ")} — spex install`;
+  const unreadable = reasons.map((reason) => / changed in (.+): its meta\.yaml cannot be read: /.exec(reason)?.[1]).filter((path) => path !== undefined);
+  if (unreadable.length > 0) return `${reasons.join("; ")} — fix ${unreadable.map((path) => `${path}/meta.yaml`).join(", ")}, then spex update`;
+  return `${reasons.join("; ")} — spex update`;
 }
 
 export const list: Command = async (args) => {
@@ -64,5 +69,9 @@ export const list: Command = async (args) => {
   if (skills.length > 0) lines.push("Skills for agents", ...table(skills));
   const stale = staleReasons(env.root, lock, read?.text ?? null);
   if (stale !== null) lines.push(staleLine(stale));
+  // A lock that stands with files an install places not in place, as
+  // after a clone; the built-in waits for the Spex app (cli-4), and a
+  // folder package's files are its folder's.
+  else if (names.some((name) => name !== BUILTIN_PACKAGE_NAME && !isPathSource(lock.packages[name]!.source) && states.get(name) !== "installed")) lines.push("Not installed yet — spex install");
   console.log(unnamedText(lines.join("\n"), locators));
 };

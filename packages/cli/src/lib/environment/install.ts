@@ -56,7 +56,7 @@ import { BUILTIN_PACKAGE_NAME, writeExcludeBlock } from "./exports.js";
 import { listReleaseFiles, parseManifestText, portablePathIssues, sha256Hex, type Manifest } from "./format.js";
 import type { GitCredential, GitSource } from "./git-source.js";
 import { isGitSource, isPathSource, isRegistrySource, lockStaleness, sourceValue, type Lock, type LockedFile, type RegistrySourceLock, type Resolution } from "./lock.js";
-import { ownFolderIssue, ownPathIssue, ownPathMessage } from "./own-paths.js";
+import { ownFolderIssue, ownPathIssue, ownPathMessage, type OwnPathIssue } from "./own-paths.js";
 import { readVersionResource, RegistryError, registryHost, type RegistrySource, type VersionResource } from "./registry.js";
 import { isVersion } from "./semver.js";
 import { DigestError, type ContentStore } from "./store.js";
@@ -143,7 +143,14 @@ export interface InstallReport {
 }
 
 export class InstallError extends Error {
-  constructor(readonly packageName: string | undefined, message: string, readonly cause?: unknown) {
+  constructor(
+    readonly packageName: string | undefined,
+    message: string,
+    readonly cause?: unknown,
+    /** The folder your own group's clone refuses, with its reason, for a
+     * host to phrase (environments-32). */
+    readonly confined?: { path: string; issue: OwnPathIssue },
+  ) {
     super(message);
     this.name = "InstallError";
   }
@@ -555,7 +562,7 @@ async function assertConfined(lock: Lock, pathRoot: string): Promise<void> {
     if (!existsSync(join(folder, "meta.yaml"))) continue;
     const issue = ownPathIssue(pathRoot, source.path)
       ?? ownFolderIssue(pathRoot, source.path, (await listReleaseFiles(folder)).files.map((file) => file.path));
-    if (issue) throw new InstallError(name, ownPathMessage(name, source.path, issue));
+    if (issue) throw new InstallError(name, ownPathMessage(name, source.path, issue), undefined, { path: source.path, issue });
   }
 }
 

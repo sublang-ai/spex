@@ -34,7 +34,7 @@ export function readHome(dir: string): HomeFile | null {
     const file = homeFilePath(dir);
     // A layout this Spex does not read is a newer Spex's: update Spex.
     const next = /unsupported format/.test(reason) ? "update Spex" : "fix the file, then retry";
-    throw new Refusal(`${reason.startsWith(file) ? `${file} does not read${reason.slice(file.length)}` : `${file} does not read: ${reason}`} — ${next}`);
+    throw new Refusal(`${reason.startsWith(file) ? `${file} cannot be read${reason.slice(file.length)}` : `${file} cannot be read: ${reason}`} — ${next}`);
   }
 }
 
@@ -131,10 +131,15 @@ export function clientOf(origin: string, credentials: CredentialStore, onSignedO
 }
 
 /** A host's answer in the CLI's words (git-host-11, cli-13): what the
- * Space or registry said where it said something, and what to do,
- * never a secret. */
-export function hostCause(error: unknown, name: string): string {
-  if (!(error instanceof HostError)) return error instanceof Error ? error.message : String(error);
+ * Space or registry said, its own words as the detail, and what to do —
+ * `again`, the command that tries once more — never a secret. An answer
+ * of no known kind, such as a page that is not there, comes from an
+ * address that is no Space or registry. */
+export function hostCause(error: unknown, name: string, again = "retry"): string {
+  if (!(error instanceof HostError)) {
+    const message = error instanceof Error ? error.message : String(error);
+    return / — /.test(message) ? message : `${message} — ${again}`;
+  }
   switch (error.kind) {
     case "unreachable": return `${name} could not be reached — check the connection, then retry`;
     case "rate_limited": {
@@ -142,8 +147,8 @@ export function hostCause(error: unknown, name: string): string {
       return `${name} asked to wait${seconds === null ? "" : ` ${seconds} seconds`} — retry then`;
     }
     case "reauth": return `sign-in expired at ${name} — spex login`;
-    case "host_refused": return `${name} refused: ${error.words ?? error.code ?? "no reason given"}`;
-    default: return `${name} answered ${error.code ?? error.kind}${error.words ? `: ${error.words}` : ""}`;
+    case "host_refused": return `${name} refused (${error.words ?? error.code ?? "no reason given"}) — ${again}`;
+    default: return `${name} gave no answer Spex reads (${error.code ?? error.kind}${error.words ? `: ${error.words}` : ""}) — check the address, then retry`;
   }
 }
 

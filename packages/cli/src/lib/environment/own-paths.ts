@@ -146,18 +146,20 @@ export function ownFolderIssue(clone: string, path: string, files: readonly stri
 }
 
 /** A path your own group's clone refuses, in the library's words
- * (environments-32), after the spec package's name. */
+ * (environments-32), after the spec package's name: your own group is
+ * Personal and its clone your Personal records on every surface
+ * (DR-172); a host phrases the reason with what to do from the issue. */
 export function ownPathMessage(name: string, path: string, issue: OwnPathIssue): string {
   switch (issue.reason) {
-    case "root": return `${name}: ${path} is not a folder below your own group's clone's root`;
-    case "spex": return `${name}: ${path} is a path Spex keeps in your own group's clone`;
-    case "ignored": return `${name}: ${path} is a path the clone's Git rules ignore, so it would not sync`;
-    case "link": return `${name}: ${path} is reached through a link, which the clone's sync does not carry`;
-    case "repository": return `${name}: ${path}: ${issue.entry} is a Git repository of its own, which the clone's sync does not carry`;
-    case "ignored_file": return `${name}: ${path} holds ${issue.file}, which the clone's Git rules ignore, so it would not sync`;
-    case "unshared_file": return `${name}: ${path} holds ${issue.file}, which the clone's sync refuses to share`;
-    case "link_entry": return `${name}: ${path}: ${issue.entry} is a link, which the clone's sync does not carry`;
-    case "special": return `${name}: ${path}: ${issue.entry} is no regular file or folder, so the clone's sync does not carry it`;
-    case "unreadable": return `${name}: ${path}: ${issue.entry} cannot be inspected to confirm it syncs with the clone`;
+    case "root": return `${name}: ${path} is not a folder inside your Personal records`;
+    case "spex": return `${name}: ${path} is a folder Spex keeps in your Personal records`;
+    case "ignored": return `${name}: ${path} is ignored by Git in your Personal records, so it would not sync`;
+    case "link": return `${name}: ${path} is reached through a link, which your Personal records do not sync`;
+    case "repository": return `${name}: ${path}: ${issue.entry} is a Git repository of its own, which your Personal records do not sync`;
+    case "ignored_file": return `${name}: ${path} holds ${issue.file}, which Git ignores in your Personal records, so it would not sync`;
+    case "unshared_file": return `${name}: ${path} holds ${issue.file}, which your Personal records never share`;
+    case "link_entry": return `${name}: ${path}: ${issue.entry} is a link, which your Personal records do not sync`;
+    case "special": return `${name}: ${path}: ${issue.entry} is no regular file or folder, so your Personal records do not sync it`;
+    case "unreadable": return `${name}: ${path}: ${issue.entry} cannot be read to confirm it syncs with your Personal records`;
   }
 }

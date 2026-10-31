@@ -4012,15 +4012,15 @@ export class CoreService {
     }
     if (!this.store.repository(project) || this.environments.workingFolder(project) === null) {
       throw new CoreError("not_found", i18n._({
-        id: "project {project} has no working folder on this device",
-        comment: "Refusal: an applet reads the project's working folder, and none is paired here",
-        values: { project },
+        id: "{name} has no project folder on this computer — Open here first",
+        comment: "Refusal: package work in a project not opened on this computer, so its spex.yaml has no folder here; 'Open here' is the project's control on the Space surface",
+        values: { name: splitKey(project).name.replace(/-spex$/, "") },
       }));
     }
     if (!installed.present) {
       throw new CoreError("invalid_request", i18n._({
-        id: "the files of applet {applet} are not on this device",
-        comment: "Refusal: the applet is in the lock, but its installed or path-source folder is missing here",
+        id: "The files of the applet {applet} are not on this computer — Install in Packages",
+        comment: "Refusal: the applet's package is in spex.lock, but its installed files or its folder are missing here; Install is the Packages tab's control",
         values: { applet },
       }));
     }
@@ -4346,9 +4346,9 @@ export class CoreService {
     const repository = this.store.repository(projectId);
     if (!project || !repository) {
       throw new CoreError("invalid_request", i18n._({
-        id: "{projectId} has no working folder on this device",
-        comment: "Refusal: an authoring session belongs to a project whose working folder is on this device",
-        values: { projectId },
+        id: "{name} has no project folder on this computer — Open here first",
+        comment: "Refusal: package work in a project not opened on this computer, so its spex.yaml has no folder here; 'Open here' is the project's control on the Space surface",
+        values: { name: splitKey(projectId).name.replace(/-spex$/, "") },
       }));
     }
     return { project, repository };

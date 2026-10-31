@@ -26,6 +26,7 @@ import {
   environmentInstance,
   environmentRegistry,
   type EnvironmentRegistry,
+  FormatError,
   gitSource,
   installRegistryOrder,
   LockError,
@@ -75,7 +76,7 @@ function within(outer: string, inner: string): boolean {
 export function refusedRoot(dir: string, home: string): string | null {
   const at = actualPath(dir);
   const spexHome = actualPath(home);
-  if (at === actualPath(homedir())) return "is your home folder, whose agent folders are your own";
+  if (at === actualPath(homedir())) return "is your home folder, where spex manages no packages";
   if (within(spexHome, at) && !(within(join(spexHome, "projects"), at) && at !== join(spexHome, "projects"))) {
     return `lies in the Spex home ${home}, which the app keeps`;
   }
@@ -174,13 +175,16 @@ export class Environment {
       return { requests: parseRequests(text), text, version };
     } catch (error) {
       if (error instanceof RequestsError && error.newerFormat !== undefined) throw new Refusal("spex.yaml is from a newer Spex — update Spex");
+      // The same words as the Packages tab's (DR-172).
       throw new Refusal(`${(error as Error).message} — fix the file, then retry`);
     }
   }
 
   /** `spex.lock` as it stands, null where absent; one from a newer Spex,
    * or one that does not read, refuses the command saying what to do
-   * (environments-3, cli-13). */
+   * (environments-3, cli-13): `spex update` writes it again, where the
+   * Packages tab, whose Update refuses a lock that does not read, says
+   * to remove it first. */
   readLock(): ReadLock | null {
     const read = this.readLockForUpdate();
     if (read !== null && read.lock === null) throw new Refusal(`${read.cause} — spex update rewrites it`);
@@ -245,13 +249,19 @@ export class Environment {
    * the sign-in state, a 403 by the operation refused. */
   async registryRefusal(error: unknown, context: { origin: string; scope: AuthScope; operation?: "read" | "publish"; version?: string }): Promise<Refusal> {
     if (error instanceof Refusal) return error;
-    if (!(error instanceof RegistryError)) return new Refusal(error instanceof Error ? error.message : String(error));
+    if (error instanceof FormatError) {
+      const issues = error.issues.map((issue) => (issue.path ? `${issue.path}: ${issue.message}` : issue.message)).join("; ");
+      return new Refusal(`the package is not ready: ${issues} — fix its meta.yaml, then retry`);
+    }
+    if (!(error instanceof RegistryError)) return new Refusal(`${error instanceof Error ? error.message : String(error)} — retry`);
     let origin = context.origin;
     try { if (error.registry !== undefined) origin = canonicalOrigin(error.registry); } catch { /* the registry asked */ }
     const name = await this.registryName(origin);
     const pkg = error.packageName;
     // `spex login` here signs in at this folder's registry for packages
-    // (cli-10); another registry, or a Space's sign-in, is named.
+    // (cli-10); another registry, or a Space's sign-in — what a
+    // `spex.yaml` naming no `registry` reads with (environments-38) — is
+    // named.
     const login = context.scope === "space" ? `spex login --space ${origin}` : origin === context.origin ? "spex login" : `spex login --registry ${origin}`;
     const about = pkg ? `${pkg}: ` : "";
     switch (error.kind) {
@@ -273,13 +283,16 @@ export class Environment {
         return new Refusal(`sign-in expired at ${name} — ${login}`);
       case "unavailable":
         if (error.code === "unreachable") return new Refusal(`${name} could not be reached — check the connection, then retry`);
+        // A registry the lock names by no address is never asked.
+        if (error.code === "unasked") return new Refusal(`${about}spex.lock names no registry address for it — spex update writes spex.lock again`);
         if (error.status !== undefined && error.status >= 500) return new Refusal(`${name} is down (${error.status}) — retry later`);
         if (error.status !== undefined) return new Refusal(`${name} answered ${error.status} — retry later`);
-        return new Refusal(error.message);
+        // No sign-in to present: its cause, which says what to do.
+        return new Refusal(/ — /.test(error.message) ? error.message : `${error.message} — retry later`);
       case "rejected": {
         const release = pkg && context.version ? `${pkg}@${context.version}` : pkg ?? "the package";
         if (error.status === 409) return new Refusal(`${release} is already at ${name} — raise the version in meta.yaml, then retry`);
-        if (error.status === 413) return new Refusal(`${release} is too large for ${name}`);
+        if (error.status === 413) return new Refusal(`${release} is too large for ${name} — leave out what it does not need, then retry`);
         const details = (error.details ?? []).map((detail) => typeof detail === "object" && detail !== null && "message" in detail ? String((detail as { message: unknown }).message) : JSON.stringify(detail));
         return new Refusal(`${name} refused ${release}${details.length > 0 ? `: ${details.join("; ")}` : ""} — fix the package, then retry`);
       }

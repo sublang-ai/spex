@@ -27,6 +27,7 @@ import {
 import { randomBytes } from "node:crypto";
 import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 
+import { packageNameRefusal } from "../lib/environment/index.js";
 import { settleAndTell, writeRequest } from "./add.js";
 import { actualPath, Environment } from "./environment.js";
 import { exportedIn, projectFolders } from "./settle.js";
@@ -100,7 +101,7 @@ function parseInit(args: string[]): InitOptions {
   if (words.length > 1) throw misuse("new", `unexpected argument ${words[1]}`);
   const parts = words[0]!.split("/");
   if (parts.length !== 2 || !isName(parts[0]!) || !isName(parts[1]!))
-    refuse(`"${words[0]}" is not a package name — use <org>/<pkg>, each part lowercase letters, digits and single hyphens, at most 64 characters`);
+    refuse(packageNameRefusal(words[0]!));
   const language = single.language ?? "en";
   if (!LANGTAG.test(language) || language.length > 64) refuse(`--language ${JSON.stringify(language)} is not a language tag — use one like en or zh-Hans`);
   if (single.description !== undefined && CONTROL.test(single.description.replace(/[\n\t]/g, " "))) refuse("--description holds control characters — remove them");
@@ -408,12 +409,12 @@ export const newPackage: Command = async (args) => {
   await settleAndTell(env);
 
   // A skill moved from an agent folder of the root stands there again,
-  // now as Spex's export.
+  // now placed there by Spex.
   if (options.move) {
     for (const skill of skills) {
       for (const { folder: agentFolder } of projectFolders()) {
         if (actualPath(resolve(root, ...agentFolder.split("/"), skill.id)) === actualPath(skill.folder) && exportedIn(root, agentFolder).includes(skill.id)) {
-          console.log(`The skill ${skill.id} moved from ${agentFolder}/${skill.id}/ now stands there as Spex's export.`);
+          console.log(`The skill ${skill.id} now stands in ${agentFolder}/${skill.id}/, placed there by Spex.`);
         }
       }
     }

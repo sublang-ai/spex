@@ -287,7 +287,7 @@ test("captain must resolve an adapter", async () => {
 
 test("core-service-2: a skills list in your own file is refused at the top, on the Captain and on a player (DR-123)", async () => {
   const refused = (path: string) =>
-    new RegExp(`^${path.replace(/\./g, "\\.")} is not allowed: skills reach agents from the environments that install their spec packages$`);
+    new RegExp(`^${path.replace(/\./g, "\\.")} is not allowed: skills reach agents from the packages spex\\.yaml adds$`);
   const block = (value: unknown): Record<string, unknown> =>
     typeof value === "string" ? { adapter: value } : (value as Record<string, unknown>);
   const shared = baseConfig();

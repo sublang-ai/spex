@@ -706,7 +706,7 @@ test("environments-24: a playbook authored in a project compiles, is requested b
   }
   rmSync(impostor, { recursive: true, force: true });
   await core.client.expectError("environment.publish", { repository: project.id, name: `${ORG}/absent`, dryRun: true },
-    "invalid_request", new RegExp(`^No folder for ${ORG}/absent at spex-packages/${ORG}/absent — spex new ${ORG}/absent starts one$`));
+    "invalid_request", new RegExp(`^No folder for ${ORG}/absent at spex-packages/${ORG}/absent — npx @sublang/spex new ${ORG}/absent starts one$`));
   assert.deepEqual(registry.script.requests.filter((request) => request.startsWith("PUT ")), [], "nothing was uploaded");
 
   // The dry run names what would go, then the upload.
@@ -1013,8 +1013,8 @@ test("environments-33 through real cores: a skill your own group requests by a p
   writeFileSync(helper, "a backup the sync drops");
   await a.client.expectOk("environment.install", { repository: ownKey });
   const failed = await settled(a.client, (s) => s.error !== null);
-  // The library's own words name the file; the core carries them.
-  assert.match(failed.error!, /mine\/notes\/skills\/en\/notes\/helper\.bak/, "[environments-32] the install refuses the folder [environments-14]");
+  // Said as when the package was added, with what to do.
+  assert.match(failed.error!, /^mine\/notes holds mine\/notes\/skills\/en\/notes\/helper\.bak, which Git ignores in your Personal records, so it would not sync — remove it, or pick another folder$/, "[environments-32] the install refuses the folder [environments-14]");
   for (const folder of [".claude", ".agents"]) assert.equal(existsSync(join(userA, folder, "skills", "notes", "helper.bak")), false, `[environments-32] ${folder}: nothing of it exported`);
   rmSync(helper);
   await a.client.expectOk("environment.install", { repository: ownKey });
@@ -1059,8 +1059,7 @@ test("environments-33 through real cores: a skill your own group requests by a p
   const kept = /is a folder Spex keeps in your Personal records — pick another folder$/;
   const refusals: [string, RegExp][] = [
     [".", /^\. is not a folder inside your Personal records — pick a folder inside them$/],
-    // The library's own words, carried as they are.
-    ["../elsewhere", /is not a relative folder inside the /],
+    ["../elsewhere", /^\.\.\/elsewhere is outside your Personal records — pick a folder inside them$/],
     ...["config", "sessions", "intents", "authoring", "placements", ".spex", "packages", "skills", "local", ".git", ".spex-uploads", "spex.yaml", "spex.lock", "project.json", ".gitignore", ".gitattributes", ".spex-apply.json", ".lockfoo"]
       .map((first): [string, RegExp] => [`${first}/notes`, kept]),
     // Compared without case after compatibility normalization.
@@ -1106,8 +1105,7 @@ test("environments-33 through real cores: a skill your own group requests by a p
   await skillRelease("mine/later", "later", { "skills/en/later/draft.tmp": "scratch" });
   await a.client.expectOk("environment.resolve", { repository: ownKey });
   const refused = await settled(a.client, (s) => s.error !== null && /draft\.tmp/.test(s.error));
-  // The library's own words name the file; the core carries them.
-  assert.match(refused.error!, /mine\/later\/skills\/en\/later\/draft\.tmp/, "[environments-32] the resolution refuses the folder [environments-5]");
+  assert.match(refused.error!, /^mine\/later holds mine\/later\/skills\/en\/later\/draft\.tmp, which Git ignores in your Personal records, so it would not sync — remove it, or pick another folder$/, "[environments-32] the resolution refuses the folder [environments-5]");
   assert.ok(readFileSync(join(cloneA, "spex.lock")).equals(lockBytes), "[environments-5] spex.lock keeps its bytes");
   await a.client.expectOk("environment.remove", { repository: ownKey, name: `${OWN}/later` });
   await settled(a.client, (s) => s.error === null && !(`${OWN}/later` in s.requests) && holds(s));
@@ -1183,8 +1181,7 @@ test("environments-33: a nonignored unreadable subtree refuses request, resoluti
     from = client.mark();
     await client.expectOk(type, { repository: key });
     const failed = await client.environment(key, from, (state) => state.busy === null && state.error !== null);
-    // The library's own words, carried as the cause.
-    assert.match(failed.error!, /mine\/notes\/node_modules/, `[environments-32] ${type} names the unreadable subtree`);
+    assert.match(failed.error!, unreadable, `[environments-32] ${type} names the unreadable subtree`);
     assert.deepEqual(readFileSync(requestsFile), requested);
     assert.deepEqual(readFileSync(lockFile), locked);
     assert.deepEqual(readFileSync(exported), exportedBefore, "[environments-7] the last export stays");
@@ -1200,7 +1197,7 @@ test("environments-33: a nonignored unreadable subtree refuses request, resoluti
   from = client.mark();
   await client.expectOk("environment.request", { repository: key, name: `${OWN}/later`, request: { kind: "path", path: "mine/later" } });
   const missing = await client.environment(key, from, (state) => state.busy === null && state.error !== null);
-  assert.match(missing.error!, /mine\/later is missing/);
+  assert.match(missing.error!, new RegExp(`^${OWN}/later: no folder at mine/later — put the folder back, or Remove ${OWN}/later$`), "[core-service-145] what happened and what to do");
   assert.doesNotMatch(missing.error!, /cannot be inspected/);
 });
 
@@ -1380,7 +1377,7 @@ test("environments-25: every environment command replies and refuses as its tabl
   await client.expectError("environment.publish", { repository: key, name: "acme/none" }, "invalid_request",
     new RegExp(`^Sign in to ${new URL(registry.url).host.replace(/\./g, "\\.")} to publish$`));
   await client.expectError("environment.publish", { repository: key, name: "acme/none", dryRun: true }, "invalid_request", /^spex-packages\/acme\/none is not a package Spex can publish: .+ — fix them, then Retry$/);
-  await client.expectError("environment.publish", { repository: key, name: "acme/absent", dryRun: true }, "invalid_request", /^No folder for acme\/absent at spex-packages\/acme\/absent — spex new acme\/absent starts one$/);
+  await client.expectError("environment.publish", { repository: key, name: "acme/absent", dryRun: true }, "invalid_request", /^No folder for acme\/absent at spex-packages\/acme\/absent — npx @sublang\/spex new acme\/absent starts one$/);
   await client.expectError("environment.publish", { repository: key, name: "none", dryRun: true }, "invalid_request", /^none is not a package name — name it like acme\/triage$/);
 
   // The playbooks both environments export, with where each is enabled.
@@ -1884,7 +1881,7 @@ test("environments-25: a request is admitted while another's resolution is held,
     await until(held.reached, 30_000, "the held unsolvable resolution");
     mark = client.mark();
     await client.expectOk("environment.request", { repository: key, name: "acme/local", request: { kind: "path", path: "missing-kit" } });
-    const failed = await client.environment(key, mark, (state) => /missing-kit is missing/.test(state.error ?? "") && state.busy === "resolving");
+    const failed = await client.environment(key, mark, (state) => /no folder at missing-kit/.test(state.error ?? "") && state.busy === "resolving");
     mark = client.mark();
     held.release();
     const kept = await client.environment(key, mark, (state) => state.busy === null);
@@ -2566,7 +2563,8 @@ test("environments-36: terminal waits retain their own conflict beside immediate
   gate.release();
   const first = await pending;
   assert.ok(!first.ok && first.error.code === "conflict", JSON.stringify(first));
-  await core.client.environment(key, mark, (state) => state.busy === null && state.conflicts !== null);
+  // A package the registry does not list is its answer, never a conflict.
+  await core.client.environment(key, mark, (state) => state.busy === null && state.error !== null && /acme\/missing/.test(state.error));
   assert.deepEqual(await core.client.expectOk("environment.remove", { repository: key, name: "acme/missing", wait: true }), { completed: true });
   assert.deepEqual(await core.client.expectOk("environment.install", { repository: key, wait: true }), { completed: true });
   assert.deepEqual(await core.client.expectOk("environment.resolve", { repository: key, wait: true }), { completed: true });

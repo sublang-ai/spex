@@ -54,7 +54,7 @@ export class RequestsError extends Error {
   constructor(readonly issues: Issue[], newerFormat?: number) {
     super(newerFormat !== undefined
       ? `spex.yaml is from a newer Spex (format ${newerFormat})`
-      : `spex.yaml does not read: ${issues.map((issue) => issue.message).join("; ")}`);
+      : `spex.yaml cannot be read: ${issues.map((issue) => issue.message).join("; ")}`);
     this.name = "RequestsError";
     if (newerFormat !== undefined) this.newerFormat = newerFormat;
   }
@@ -76,6 +76,12 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** Why a name is no package name, with the rule, one wording wherever a
+ * name is refused. */
+export function packageNameRefusal(name: string): string {
+  return `${JSON.stringify(name)} is not a package name — use <org>/<pkg>, each part lowercase letters, digits and single hyphens, at most 64 characters, like acme/tool`;
+}
+
 /** Whether a request path stays inside the working folder. */
 export function isInsidePath(path: string): boolean {
   if (path === "" || isAbsolute(path) || path.includes("\\") || /^[a-zA-Z]:/.test(path)) return false;
@@ -92,7 +98,7 @@ const REQUEST_FIELDS = new Set(["version", "path", "git", "rev", "select", "alia
 export function requestIssues(name: string, request: unknown): Issue[] {
   const at = `packages.${name}`;
   const issues: Issue[] = [];
-  if (!isPackageName(name)) issues.push({ path: at, rule: "name", message: `"${name}" is not a package name: use <org>/<pkg>, like acme/tool` });
+  if (!isPackageName(name)) issues.push({ path: at, rule: "name", message: packageNameRefusal(name) });
   if (!isPlainObject(request)) return [...issues, { path: at, rule: "request", message: `${name} is not a mapping` }];
   for (const key of Object.keys(request)) {
     if (!REQUEST_FIELDS.has(key) && !key.startsWith("x-")) issues.push({ path: at, rule: "field", message: `${name} has an unknown field "${key}"` });
@@ -105,7 +111,7 @@ export function requestIssues(name: string, request: unknown): Issue[] {
   if (sources.length !== 1) {
     issues.push({ path: at, rule: "source", message: `${name} needs exactly one of version, path, or git with rev` });
   } else if (sources[0] === "registry") {
-    if (!isRequirement(request.version)) issues.push({ path: at, rule: "version", message: `${JSON.stringify(request.version)} is not a version: use 1.2.3, ^1.2.3 or ~1.2.3` });
+    if (!isRequirement(request.version)) issues.push({ path: at, rule: "version", message: `${JSON.stringify(request.version)} is not a version — use 1.2.3, ^1.2.3 or ~1.2.3` });
     if (request.rev !== undefined || request.path !== undefined) issues.push({ path: at, rule: "source", message: `${name} needs exactly one of version, path, or git with rev` });
   } else if (sources[0] === "path") {
     if (typeof request.path !== "string" || !isInsidePath(request.path)) {
@@ -164,7 +170,7 @@ function toRequest(value: Record<string, unknown>): Request {
 /** Read a parsed `spex.yaml` value as requests, or throw. */
 export function parseRequestsValue(raw: unknown): Requests {
   const issues: Issue[] = [];
-  if (!isPlainObject(raw)) throw new RequestsError([{ rule: "requests", message: "spex.yaml is not a mapping" }]);
+  if (!isPlainObject(raw)) throw new RequestsError([{ rule: "requests", message: "it is not a mapping" }]);
   if (typeof raw.format === "number" && Number.isInteger(raw.format) && raw.format > 1) {
     throw new RequestsError([{ rule: "format", message: `spex.yaml is from a newer Spex (format ${raw.format})` }], raw.format);
   }

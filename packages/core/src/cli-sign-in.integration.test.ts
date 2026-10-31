@@ -130,7 +130,7 @@ test("cli-17, cli-18: login, whoami and logout at two stand-in instances, with n
   // --help names the three commands under Sign-in (cli-21).
   const help = await spex(["--help"]).done;
   assert.equal(help.code, 0);
-  assert.ok(help.stdout.includes("Sign-in\n  login [--registry <url> | --space <url>]              Sign in with a code in your browser\n  logout, whoami\n"), help.stdout);
+  assert.ok(help.stdout.includes("Sign-in\n  login [--registry <url> | --space <url>]              Sign in with a code in your browser\n  logout [--registry <url> | --space <url>]             Sign out\n  whoami [--registry <url> | --space <url>]             Who you are signed in as, and where\n"), help.stdout);
 
   // A fresh home lists no instance: whoami says none is signed in and
   // where login goes, and writes nothing (cli-12).
@@ -199,7 +199,7 @@ test("cli-17, cli-18: login, whoami and logout at two stand-in instances, with n
   const requests = first.script.deviceRequests.length;
   const again = await spex(["login", "--space", first.url]).done;
   assert.equal(again.code, 0, again.stderr);
-  assert.equal(again.stdout, "Already signed in at First as @ada — spex login --force signs in again\n");
+  assert.equal(again.stdout, `Already signed in at First as @ada — spex login --space ${first.url} --force signs in again\n`, "[cli-10] the command that signs in again names the Space given");
   assert.equal(first.script.deviceRequests.length, requests, "no device request made");
 
   // --force signs in again: a new token in place of the former, whose
@@ -258,7 +258,7 @@ test("cli-17, cli-18: login, whoami and logout at two stand-in instances, with n
   // (cli-11).
   const unlisted = await spex(["logout", "--space", "http://127.0.0.1:9"]).done;
   assert.equal(unlisted.code, 1);
-  assert.equal(unlisted.stderr, "spex logout: 127.0.0.1:9: not signed in here — spex whoami\n");
+  assert.equal(unlisted.stderr, "spex logout: 127.0.0.1:9: not signed in on this computer — spex whoami\n");
 
   // An interrupt while a login waits on a pending code exits 130 with
   // the cause on standard error, nothing recorded (cli-13, cli-18).
@@ -283,7 +283,7 @@ test("cli-17, cli-18: login, whoami and logout at two stand-in instances, with n
   const unrecordedDone = await unrecorded.done;
   writeFileSync(homeFile(), homeStood);
   assert.equal(unrecordedDone.code, 1);
-  assert.match(unrecordedDone.stderr, /^spex login: not signed in: .*home\.yaml.*; nothing recorded\n$/);
+  assert.match(unrecordedDone.stderr, /^spex login: not signed in, nothing recorded: .*home\.yaml: unsupported format 99.* — update Spex, then spex login again\n$/, "[cli-13] what happened and what to do");
   assert.deepEqual(readCredentials().hosts[first.url], pairStood, "the former token is kept");
 
   // On another fresh home, made with the first instance's origin, the

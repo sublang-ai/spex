@@ -383,7 +383,7 @@ test("environments-34, environments-5, environments-12, environments-3, environm
   await home.client.expectOk("environment.resolve", { repository: local });
   state = await environmentOf(home, local, (candidate) => candidate.error !== null);
   // The library's own words name the value; the core says what to do.
-  const unreadable = /^spex\.yaml cannot be read: space "http:\/\/example\.com" is not an? .+ — fix the file, then Retry$/;
+  const unreadable = /^spex\.yaml cannot be read: space "http:\/\/example\.com" is not a Space address: .+ — fix the file, then Retry$/;
   assert.match(state.error ?? "", unreadable, "[core-service-145]");
   // Its environment then names no instance: a search and a publish are
   // refused with that reason, never sent to the default instance's

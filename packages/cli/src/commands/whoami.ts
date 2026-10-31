@@ -23,7 +23,7 @@ async function registryLine(dir: string, origin: string): Promise<{ row: string[
   const client = clientOf(origin, credentialsOf(dir, origin, "registry"), undefined, "registry");
   let held: boolean;
   try { held = await client.signedIn(); }
-  catch (error) { return { row: ["Registry", name, "sign-in unreadable"], cause: `your sign-in at ${name} does not read: ${(error as Error).message} — spex logout, then spex login` }; }
+  catch (error) { return { row: ["Registry", name, "sign-in unreadable"], cause: `your sign-in at ${name} cannot be read: ${(error as Error).message} — spex logout, then spex login` }; }
   if (!held) return { row: ["Registry", name, "signed out"] };
   try {
     return { row: ["Registry", name, `@${(await client.me()).login}`] };

@@ -5,11 +5,11 @@
 // publish a package's folder — the folder `spex.yaml` adds that name
 // from, else `spex-packages/<org>/<pkg>/` under the root, and with no
 // name the one package under `spex-packages/` — to this folder's
-// registry as the account signed in there for publishing. The
-// destination is printed as the registry's name (cli-22) with
-// `<org>/<pkg>@<version>`; a dry run lists the declared files and
-// uploads nothing; a publish prints the package's page at the registry.
-// Every refusal comes before any upload.
+// registry as the account signed in there for publishing. It says what
+// it publishes to which registry, by the registry's name (cli-22); a dry
+// run lists the declared files and publishes nothing; a publish prints
+// the package's page at the registry. Every refusal comes before
+// anything is sent.
 
 import { readdirSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
@@ -18,6 +18,7 @@ import {
   FormatError,
   isPackageName,
   isPathRequest,
+  packageNameRefusal,
   publishIssues,
   publishRelease,
   readRelease,
@@ -57,7 +58,7 @@ export const publish: Command = async (args) => {
     if (found.length > 1) throw new Refusal(`spex-packages/ holds ${found.length} packages: ${found.join(", ")} — name one: spex publish <org>/<pkg>`);
     name = found[0]!;
   }
-  if (!isPackageName(name)) throw new Refusal(`"${name}" is not a package name — use <org>/<pkg>, like acme/tool`);
+  if (!isPackageName(name)) throw new Refusal(packageNameRefusal(name));
 
   // The folder: the one spex.yaml adds that name from, else
   // spex-packages/<org>/<pkg>/ under the root (environments-10).
@@ -66,18 +67,18 @@ export const publish: Command = async (args) => {
   const folder = resolve(env.root, path);
   const inside = relative(env.root, folder);
   if (inside === "" || isAbsolute(inside) || inside.split(sep).includes("..")) throw new Refusal(`${path} lies outside this project folder, ${env.root} — keep the package inside it`);
-  if (!isDirectory(folder)) throw new Refusal(`${name} has no folder here: ${path} is not there — spex new ${name} makes one`);
+  if (!isDirectory(folder)) throw new Refusal(`no folder for ${name} at ${path} — spex new ${name} starts one`);
 
-  // The destination: this folder's registry, as the account signed in
+  // The registry: this folder's, as the account signed in
   // there for publishing (environments-10, DR-168), named by its own
   // display name, never a Space entry's (cli-22).
   const target = env.registryOf(read?.requests ?? null);
   const instance = target.origin;
-  const destination = await env.registryName(instance);
+  const registryName = await env.registryName(instance);
   if (!dryRun && (await env.tokenAt(instance, "registry").catch(() => "")) === null) {
     // `spex login` from this folder signs in at its registry for
     // publishing (cli-10).
-    throw new Refusal(`not signed in at ${destination} to publish — spex login, then retry`);
+    throw new Refusal(`not signed in at ${registryName} to publish — spex login, then retry`);
   }
   let manifest: Manifest;
   let files: string[];
@@ -94,9 +95,9 @@ export const publish: Command = async (args) => {
   const missing = publishIssues(manifest);
   if (missing.length > 0) throw new Refusal(`${path} cannot be published: ${issuesText(missing)} — add it to its meta.yaml`);
 
-  console.log(`Destination: ${destination}, ${held}@${manifest.version}`);
+  console.log(`Publishing ${held}@${manifest.version} to ${registryName}`);
   if (dryRun) {
-    console.log(["Files (dry run, nothing uploaded):", ...files.map((file) => `  ${file}`)].join("\n"));
+    console.log(["Files (dry run, nothing published):", ...files.map((file) => `  ${file}`)].join("\n"));
     return;
   }
   const registry = env.registryAt(instance, "registry");

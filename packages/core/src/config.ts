@@ -817,13 +817,13 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 /** The refusal of the launcher's `skills` (DR-123): skills reach agents
- * from the environments that install them, never from a path in a
- * shared file (core-service-2, DR-104). */
+ * from the packages a project's spex.yaml adds, never from a path in a
+ * shared file (core-service-2, DR-104, DR-172). */
 function skillsRefusal(path: string): string {
   return i18n._({
-    id: "{path} is not allowed: skills reach agents from the environments that install their spec packages",
+    id: "{path} is not allowed: skills reach agents from the packages spex.yaml adds",
     comment:
-      "Config error; `skills` is the config file's own field name, refused because skills come from environments",
+      "Config error; `skills` is the config file's own field name, refused because skills come from the packages a project adds in its spex.yaml",
     values: { path },
   });
 }

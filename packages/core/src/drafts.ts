@@ -50,6 +50,10 @@ import type {
   TmuxPlayRecord,
 } from "./protocol.js";
 
+/** A project's name as every surface shows it: its key's last segment
+ * without the records' `-spex` suffix (DR-172). */
+const shownProject = (key: string): string => key.slice(key.lastIndexOf("/") + 1).replace(/-spex$/, "");
+
 /** The last compile, as `draft.json` keeps it (storage-23). */
 export interface StoredDraftCompile {
   at: number;
@@ -668,9 +672,9 @@ export class DraftStore {
   create(id: string, now: number, location: AuthoringLocation, fields: NewPackageFields, homeLanguage: string): StoredDraft {
     if (location.workingFolder === null) {
       throw new StorageFormatError(join("authoring", `${id}.json`), i18n._({
-        id: "{projectId} has no working folder on this device",
-        comment: "Refusal: an authoring session belongs to a project whose working folder is on this device",
-        values: { projectId: location.key },
+        id: "{name} has no project folder on this computer — Open here first",
+        comment: "Refusal: package work in a project not opened on this computer, so its spex.yaml has no folder here; 'Open here' is the project's control on the Space surface",
+        values: { name: shownProject(location.key) },
       }));
     }
     const file = join(location.authoringDir, `${id}.json`);
@@ -817,9 +821,9 @@ export class DraftStore {
     const path = this.sourcePath(id);
     if (path === null) {
       throw new StorageFormatError(join("authoring", `${id}.json`), i18n._({
-        id: "{projectId} has no working folder on this device",
-        comment: "Refusal: an authoring session belongs to a project whose working folder is on this device",
-        values: { projectId: this.projectOf(id) ?? id },
+        id: "{name} has no project folder on this computer — Open here first",
+        comment: "Refusal: package work in a project not opened on this computer, so its spex.yaml has no folder here; 'Open here' is the project's control on the Space surface",
+        values: { name: shownProject(this.projectOf(id) ?? id) },
       }));
     }
     mkdirSync(dirname(path), { recursive: true });

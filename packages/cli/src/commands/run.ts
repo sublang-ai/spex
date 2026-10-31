@@ -35,10 +35,12 @@ Your packages
 
 Sign-in
   login [--registry <url> | --space <url>]              Sign in with a code in your browser
-  logout, whoami
+  logout [--registry <url> | --space <url>]             Sign out
+  whoami [--registry <url> | --space <url>]             Who you are signed in as, and where
 
 Specs
-  scaffold, lint
+  scaffold [<path> | --update]                          Start specs/ and point your agents at it
+  lint [<path>]                                         Check specs/ for structure, IDs and citations
 
 spex --version · spex <command> --help · Home: $SPEX_HOME or ~/.spex`;
 
@@ -47,10 +49,8 @@ spex --version · spex <command> --help · Home: $SPEX_HOME or ~/.spex`;
 type Option = readonly [label: string, text: string, needs?: string];
 
 interface Help {
-  /** The one-line usage, without the leading "usage: ". */
+  /** The one-line usage, without the leading "Usage: ". */
   usage: string;
-  /** What the command does, where its lines of the usage do not say. */
-  about?: string;
   /** The words it takes, as a refusal names one missing. */
   words?: string;
   options: readonly Option[];
@@ -101,7 +101,6 @@ const HELP: Readonly<Record<string, Help>> = {
   },
   logout: {
     usage: "spex logout [--registry <url> | --space <url>]",
-    about: "Sign out at this folder's registry, or at the one given",
     options: [
       ["--registry <url>", "Sign out at this registry, not this folder's", "a URL"],
       ["--space <url>", "Sign out at this Space", "a URL"],
@@ -109,7 +108,6 @@ const HELP: Readonly<Record<string, Help>> = {
   },
   whoami: {
     usage: "spex whoami [--registry <url> | --space <url>]",
-    about: "Who you are signed in as at the registry and at each Space",
     options: [
       ["--registry <url>", "Show this registry alone", "a URL"],
       ["--space <url>", "Show this Space alone", "a URL"],
@@ -117,7 +115,6 @@ const HELP: Readonly<Record<string, Help>> = {
   },
   scaffold: {
     usage: "spex scaffold [<path> | --update] [--lang <code>] [--agents <names>]",
-    about: "Create specs/ with its templates, and point your agents at it",
     options: [
       ["<path>", "The folder to create it in (the Git repository's top level by default)"],
       ["--update", "Refresh the templates of this repository's specs/"],
@@ -127,7 +124,6 @@ const HELP: Readonly<Record<string, Help>> = {
   },
   lint: {
     usage: "spex lint [<path>]",
-    about: "Check specs/ for structure, item IDs and citations",
     options: [["<path>", "The folder holding specs/ (the Git repository's top level by default)"]],
   },
 };
@@ -179,7 +175,6 @@ export function commandHelp(word: string): string | undefined {
   const width = Math.max(...rows.map(([label]) => label.length)) + 2;
   return [
     `Usage: ${help.usage}`,
-    ...(help.about === undefined ? [] : [help.about]),
     "",
     ...usageLinesOf(name),
     "",
@@ -192,7 +187,7 @@ export function commandHelp(word: string): string | undefined {
  * command's one-line usage (cli-13, cli-21). */
 export function misuse(name: string, cause: string): Refusal {
   const command = commandNamed(name);
-  return new Refusal(command === undefined ? cause : `${cause}\nusage: ${HELP[command]!.usage}`);
+  return new Refusal(command === undefined ? cause : `${cause}\nUsage: ${HELP[command]!.usage}`);
 }
 
 type Spec = NonNullable<ParseArgsConfig["options"]>;

@@ -84,6 +84,8 @@ test("real CLI and shared clients isolate registry purpose at the same origin", 
     assert.equal(again.code, 0, again.out);
     assert.equal(again.out, "Already signed in at Registry as @reader — spex login --force signs in again\n", "[cli-10] an existing sign-in reported");
     assert.deepEqual(await registry.read(), firstGrant, "existing grant is retained without force");
+    const named = await cli(home, work, "login", "--registry", origin);
+    assert.equal(named.out, `Already signed in at Registry as @reader — spex login --registry ${origin} --force signs in again\n`, "[cli-10] the command that signs in again names the registry given");
     const forced = await cli(home, work, "login", "--force");
     assert.equal(forced.code, 0, forced.out);
     assert.notDeepEqual(await registry.read(), firstGrant);
@@ -130,7 +132,7 @@ test("real CLI and shared clients isolate registry purpose at the same origin", 
     assert.equal(logout.out, "Signed out at Registry.\n", "[cli-11] one line, the registry by its name");
     const unlisted = await cli(home, work, "logout", "--space", "http://127.0.0.1:9");
     assert.equal(unlisted.code, 1);
-    assert.equal(unlisted.out, "spex logout: 127.0.0.1:9: not signed in here — spex whoami\n", "[cli-11] a Space not signed in here refused, naming whoami");
+    assert.equal(unlisted.out, "spex logout: 127.0.0.1:9: not signed in on this computer — spex whoami\n", "[cli-11] a Space not signed in here refused, naming whoami");
     assert.equal((await cli(home, work, "whoami")).out, "Registry  Registry  signed out\nSpace     Space     @reader (default)\n", "[cli-12] the registry signed out, the Space's sign-in kept");
     assert.equal(await registry.read(), null);
     assert.deepEqual(await space.read(), spacePair);

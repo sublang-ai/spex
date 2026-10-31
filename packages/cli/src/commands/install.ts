@@ -6,8 +6,8 @@
 // lock first where it is missing or `spex.yaml` changed, and print each
 // package installed with its version and where each of its skills went.
 // A lock installing as it stands rewrites no file. The app's built-in
-// package that no seed and no registry serves is named as installed by
-// Spex later.
+// package that no seed and no registry serves is named as the Spex
+// app's to install.
 
 import { isPathSource } from "../lib/environment/index.js";
 import { Environment } from "./environment.js";
@@ -34,7 +34,7 @@ export const install: Command = async (args) => {
       lines.push(leftToAppLine(name, version));
       continue;
     } else {
-      lines.push(report.installed.includes(name) ? `Installed ${name} ${version}` : `Up to date ${name} ${version}`);
+      lines.push(report.installed.includes(name) ? `Installed ${name} ${version}` : `Already installed ${name} ${version}`);
     }
     lines.push(...skillLines(env.root, lock, name, states.get(name)!));
   }
