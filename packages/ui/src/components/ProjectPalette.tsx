@@ -16,11 +16,14 @@
 // project added here lands at (run-view-168). Every place lists the
 // projects of the member's groups it lacks, under "From your groups" for
 // this computer and "From your groups on <server>" for each seat
-// (run-view-168, DR-159): one on this computer is opened into the
-// folder the act's own picker takes — the shell's picker, else a path
-// named in place — as its Space row's Join is (space-63); one at a seat
-// with no folder picked or typed, its core allocating the folder
-// (run-view-169, space-103).
+// (run-view-168, DR-159, DR-172), each row reading the project's name and
+// its group — "Personal" for the person's own — and never the records'
+// key: one on this computer is opened into the folder the act's own
+// picker takes — the shell's picker, else a path named in place — as its
+// Space row's "Open here" is (space-63); one at a team server with no
+// folder picked or typed, its core allocating the folder (run-view-169,
+// space-103). A row reads "Opening…" while its open runs and offers "Try
+// again" once it stopped.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
@@ -46,7 +49,7 @@ import {
   signedInInstances,
 } from "../lib/instances.js";
 import { waitingOf } from "../lib/placements.js";
-import { awaitsFolder, projectName } from "../lib/space.js";
+import { awaitsFolder, isGroupRepository, projectName } from "../lib/space.js";
 import { Icon } from "./Icon.js";
 import { GroupPicker } from "./SpaceGroups.js";
 
@@ -90,22 +93,24 @@ export interface PalettePlace {
   onReadGroups?: () => void;
 }
 
-/** A spex repository a place may open (run-view-168): one a signed-in
- * instance of that place lists in the member's groups, with no join of
- * it running — with no clone there, as its Join row stands (space-61),
- * or, at a seat, cloned there with its code clone failed, joined again
- * as its row's "Join again" is (space-103). This computer's clone whose
- * code found no folder is paired from its Space row instead (space-63),
- * a second join of it being refused there. */
+/** A project a place may open (run-view-168): records a signed-in Space
+ * of that place lists in the member's groups — with no clone there, as
+ * its "Open here" row stands (space-61), or, at a team server, cloned
+ * there with its code clone failed, opened again (space-103). This
+ * computer's clone whose code found no folder is paired from its Space
+ * row instead (space-63), a second open of it being refused there. */
 interface PaletteJoin {
-  /** The seat it opens at; absent on this computer. */
+  /** The team server it opens at; absent on this computer. */
   seat?: PalettePlace;
-  /** The origin of the instance whose heading lists it (space-29). */
+  /** The origin of the Space whose heading lists it (space-29). */
   instance: string;
   group: InstanceGroupState;
   repo: RepositoryState;
-  /** Joined there before, its code clone failed: joined again. */
+  /** Its open stopped, or, at a team server, its code clone failed:
+   * "Try again" sends it again. */
   again: boolean;
+  /** Its open runs at that place: the row reads "Opening…". */
+  opening: boolean;
 }
 
 function joinable(groups: GroupsState | undefined, seat?: PalettePlace): PaletteJoin[] {
@@ -113,15 +118,36 @@ function joinable(groups: GroupsState | undefined, seat?: PalettePlace): Palette
   return signedInInstances(groups).flatMap((instance) =>
     entriesOf(instance).flatMap((group) =>
       group.repositories
-        .filter(
-          (repo) =>
-            repo.id !== null &&
-            repo.sync.phase !== "running" &&
-            (repo.state === "absent" || (seat !== undefined && awaitsFolder(group, repo))),
-        )
-        .map((repo) => ({ seat, instance: instance.origin, group, repo, again: repo.state !== "absent" })),
+        .filter((repo) => {
+          if (repo.id === null) return false;
+          const opening = repo.sync.phase === "running" && repo.sync.op === "join";
+          if (repo.sync.phase === "running" && !opening) return false;
+          return repo.state === "absent" || (seat !== undefined && awaitsFolder(group, repo));
+        })
+        .map((repo) => {
+          const opening = repo.sync.phase === "running" && repo.sync.op === "join";
+          const stopped = repo.sync.phase === "stopped" && repo.sync.op === "join";
+          return { seat, instance: instance.origin, group, repo, opening, again: !opening && (stopped || repo.state !== "absent") };
+        }),
     ),
   );
+}
+
+/** A row's group as the palette names it (run-view-168): "Personal" for
+ * the person's own, "Shared by @<login>" for another account's, else the
+ * group by its path at the Space. */
+function groupLabel(group: InstanceGroupState): string {
+  if (group.login !== null && group.mine) {
+    return i18n._({ id: "Personal", comment: "your own records and packages at a Space, never \"your namespace\"" });
+  }
+  if (group.login !== null) {
+    return i18n._({
+      id: "Shared by @{login}",
+      values: { login: group.login },
+      comment: "records another account keeps at a Space and shares with you; {login} is that account",
+    });
+  }
+  return group.fullPath;
 }
 
 /** A row's key: this computer's by its repository alone, a seat's
@@ -249,7 +275,7 @@ function JoinFolder({
   const submit = async (): Promise<void> => {
     const folder = path.trim();
     if (!folder) {
-      setRefusal(i18n._("Name the folder on this device."));
+      setRefusal(i18n._({ id: "Name a folder", comment: "the folder field's refusal of an empty path" }));
       fieldRef.current?.focus();
       return;
     }
@@ -305,10 +331,10 @@ function JoinFolder({
           className="shrink-0 rounded border border-brand-300 px-2 py-1 text-xs text-brand-600 disabled:opacity-40 dark:border-brand-800 dark:text-brand-300"
         >
           {busy
-            ? i18n._({ id: "Joining…", comment: "the Join control, while the join runs" })
+            ? i18n._({ id: "Opening…", comment: "a project of your groups while it opens: its records and code are downloaded" })
             : i18n._({
                 id: "Open here",
-                comment: "project palette: open a project of the member's groups on this computer, cloning it into the folder named beside",
+                comment: "project palette: open a project of the member's groups on this computer, downloading its records and code into the folder named beside",
               })}
         </button>
         <button
@@ -608,7 +634,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
    * picker, else a path named in place beneath the row (space-63); at a
    * seat at once. A refusal stands in the palette. */
   async function runJoin(entry: PaletteJoin): Promise<void> {
-    if (busy || entry.repo.id === null) return;
+    if (busy || entry.opening || entry.repo.id === null) return;
     let folder: string | undefined;
     if (!entry.seat) {
       if (!props.onPickFolder) {
@@ -1052,7 +1078,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                   ? i18n._({
                       id: "From your groups on {place}",
                       values: { place: seat.label },
-                      comment: "project palette: heading over the spex repositories of the member's groups a team server can open; {place} is the server's name",
+                      comment: "project palette: heading over the projects of the member's groups a team server can open; {place} is the server's name",
                     })
                   : i18n._({
                       id: "From your groups",
@@ -1071,8 +1097,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                       }}
                       type="button"
                       data-testid={entry.again ? `palette-join-again-${key}` : `palette-join-${key}`}
-                      disabled={busy}
-                      title={entry.repo.key}
+                      disabled={busy || entry.opening}
                       aria-expanded={seat || props.onPickFolder ? undefined : asking === key}
                       onClick={() => void runJoin(entry)}
                       className={`flex w-full items-center gap-2 px-4 py-2 text-left text-sm hover:bg-neutral-50 disabled:opacity-60 dark:hover:bg-neutral-800 ${
@@ -1082,19 +1107,19 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                       <Icon name="plus" className="h-3.5 w-3.5 text-neutral-500" />
                       <span className="truncate">{projectNameOf(entry.repo)}</span>
                       <span className="min-w-0 shrink truncate text-xs text-neutral-500">
-                        {entry.group.login ?? entry.group.fullPath}
+                        {groupLabel(entry.group)}
                       </span>
-                      {joining === key ? (
+                      {joining === key || entry.opening ? (
                         <span className="ml-auto shrink-0 text-xs text-neutral-500">
-                          {i18n._({ id: "Joining…", comment: "the Join control, while the join runs" })}
+                          {i18n._({ id: "Opening…", comment: "a project of your groups while it opens: its records and code are downloaded" })}
                         </span>
                       ) : entry.again ? (
-                        // Cloned there, its code clone failed: the seat's
-                        // row offers the same (space-103).
+                        // Its open stopped, or, at a team server, its code
+                        // clone failed: the row sends it again (space-103).
                         <span className="ml-auto shrink-0 text-xs text-neutral-500">
                           {i18n._({
-                            id: "Join again",
-                            comment: "on a team server's project whose code clone failed: join it again, cloning its code into the folder the server allocated",
+                            id: "Try again",
+                            comment: "on a project of your groups whose open stopped: open it again",
                           })}
                         </span>
                       ) : null}
@@ -1103,9 +1128,9 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                       <JoinFolder
                         testId={`palette-join-folder-${key}`}
                         label={
-                          entry.repo.code
-                            ? i18n._("Folder for its code on this device")
-                            : i18n._("Folder its sessions run in on this device")
+                          isGroupRepository(entry.group, entry.repo)
+                            ? i18n._({ id: "Folder its sessions run in", comment: "the folder field of a group's own records opened on this computer: where the group's sessions run" })
+                            : i18n._({ id: "Project folder", comment: "the folder field of a project opened on this computer: where its code is downloaded" })
                         }
                         onSubmit={(folder) => sendJoin(entry, folder)}
                         onCancel={() => {
@@ -1121,14 +1146,14 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                 <div data-testid={`palette-groups-note-${place}`} className="px-4 py-1 text-xs text-neutral-500">
                   {seat?.signingIn !== undefined
                     ? i18n._({
-                        id: "Signing in to {instance}…",
-                        values: { instance: seat.signingIn },
-                        comment: "project palette: under a team server's groups while the seat signs in at the instance, before which it lists nothing; {instance} is the instance's name",
+                        id: "Signing in to {space}…",
+                        values: { space: seat.signingIn },
+                        comment: "project palette: under a team server's groups while the server signs in at the Space, before which it lists nothing; {space} is the Space's display name",
                       })
                     : groups
                       ? i18n._({
                           id: "Nothing more to open from your groups",
-                          comment: "project palette: a place's groups list no spex repository it lacks",
+                          comment: "project palette: a place's groups list no project it lacks",
                         })
                       : i18n._("Reading your groups…")}
                 </div>

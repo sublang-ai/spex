@@ -1,36 +1,45 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Signing in to an instance from the Groups surface (space-3, DR-103,
-// DR-127): while the home lists no instance, the header is one card
-// with the field captioned "Instance", holding the default instance's
-// origin until the reader edits it, Sign in starting the sign-in at the
-// origin it holds; while it lists any, "Add instance…" at the list's
-// foot opens the same card in its place, and a signed-out instance's
-// heading starts it again at its own origin (SpaceInstance). Wherever
-// it started, the flow in flight reads there: on the desktop the
-// browser flow opens the instance's page through the native bridge
-// (app-shell-37), offering it again; where no bridge opened it, and on
-// the served page's device flow, it links the page to finish at — the
-// device flow's link carries the code, which is never shown — named by
-// the host name of the origin being signed in to. The outcome is state:
-// the surface reads `signIn` and the instances as the core sends them
-// and keeps only the start's reply, which state does not carry.
+// Signing in to a Space from the Space surface (space-3, space-115,
+// DR-127, DR-172): while the home lists no Space, the header is one
+// card titled by its act, "Sign in to a Space" — the chooser of the
+// directory's Spaces with "Other Space…" revealing "Space address"
+// (SpaceDirectory), Sign in its one primary control, and no sentence;
+// while it lists any, "Add a Space…" at the list's foot opens the same
+// card in its place, and a signed-out Space's heading starts it again at
+// its own origin (SpaceInstance). Wherever it started, the flow in
+// flight reads there as "Continue in your browser" with the link "Open
+// <Space>" — the sign-in page on the desktop, which the bridge opened
+// (app-shell-37), or the device flow's verification page, whose URL
+// carries the code, which is never shown — and a flow that ended without
+// an account reads the core's cause. The outcome is state: the surface
+// reads `signIn` and the Spaces as the core sends them and keeps only
+// the start's reply, which state does not carry. A team server's Space
+// reads the same card.
 
-import { SpaceDirectory } from "./SpaceDirectory.js";
-import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { CommandResults, GroupsState } from "@sublang/spex-core/protocol";
 
 import { usePlaceStore } from "../state/place-context.js";
 import { i18n } from "../i18n.js";
-import { hostNameOf, instanceOf, originOf } from "../lib/instances.js";
-import { openExternalBridge, seatName } from "../lib/space.js";
+import { instanceOf, originOf } from "../lib/instances.js";
+import { openExternalBridge } from "../lib/space.js";
+import {
+  SpaceChooser,
+  resolveChoice,
+  spaceNameOf,
+  useSpaceDirectory,
+  type Directory,
+  type ResolvedChoice,
+  type SpaceChoice,
+} from "./SpaceDirectory.js";
 import { PRIMARY, SECONDARY, type Note } from "./SpaceSurface.js";
 
 type StartReply = CommandResults["space.signin.start"];
 
 /** Where a sign-in reads (space-3): the card, or the heading of the
- * instance at that origin. */
+ * Space at that origin. */
 export type SignInAt = "card" | string;
 
 /** The sign-in as the surface draws it: what the core's state says,
@@ -38,7 +47,7 @@ export type SignInAt = "card" | string;
 export interface SignInFlow {
   /** Where the flow starting, running or failed reads: where this page
    * started it; for one another client started, the heading of the
-   * instance it names where the home lists it, else the card. Undefined
+   * Space it names where the home lists it, else the card. Undefined
    * while none starts, runs or stands failed. */
   at: SignInAt | undefined;
   /** The origin being signed in to, or the one whose sign-in failed. */
@@ -54,14 +63,14 @@ export interface SignInFlow {
   failure?: string;
   /** The failure is the start's refusal: no flow ran (space-3). */
   refused: boolean;
-  /** Start the sign-in at the instance the URL names (space-29), its
-   * flow reading at `at`; resolves whether a flow started. */
+  /** Start the sign-in at the Space the URL names (space-29), its flow
+   * reading at `at`; resolves whether a flow started. */
   start(url: string, at?: SignInAt): Promise<boolean>;
   cancel(): void;
 }
 
 /** The one sign-in of the surface (space-3, git-host-2): at most one
- * runs, whichever instance it names. */
+ * runs, whichever Space it names. */
 export function useSignIn(groups: GroupsState | undefined, onNote: Note): SignInFlow {
   const store = usePlaceStore();
   const spaceSignIn = store((state) => state.spaceSignIn);
@@ -92,8 +101,8 @@ export function useSignIn(groups: GroupsState | undefined, onNote: Note): SignIn
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
-  // An instance newly signed in ends the one flow there is; the flow's
-  // controls are gone with it, so focus lands on that instance heading's
+  // A Space newly signed in ends the one flow there is; the flow's
+  // controls are gone with it, so focus lands on that Space heading's
   // Sign out rather than stranding (DR-010 §6). Nothing lands while the
   // state is first read.
   const signedInAt = groups?.instances.filter((entry) => entry.signedIn).map((entry) => entry.origin) ?? [];
@@ -129,12 +138,12 @@ export function useSignIn(groups: GroupsState | undefined, onNote: Note): SignIn
       try {
         const reply = await spaceSignIn(url);
         if (reply?.flow !== "browser" && reply?.flow !== "device") {
-          throw new Error(i18n._("The sign-in did not start"));
+          throw new Error(i18n._({ id: "The sign-in did not start", comment: "the sign-in card: the core answered the start with no flow" }));
         }
         if (reply.flow === "browser") {
-          // The desktop opens the instance's page in the system
-          // browser; a page with no bridge, or one the shell refused,
-          // shows the URL as a link instead (app-shell-37).
+          // The desktop opens the Space's page in the system browser; a
+          // page with no bridge, or one the shell refused, offers the
+          // link alone (app-shell-37).
           const open = openExternalBridge();
           let opened = false;
           if (open) {
@@ -150,8 +159,8 @@ export function useSignIn(groups: GroupsState | undefined, onNote: Note): SignIn
         }
         return true;
       } catch (cause) {
-        // A URL the origin rule refuses, or a sign-in already running,
-        // starts no flow (space-3, git-host-2): its cause stands.
+        // An address the origin rule refuses, or a sign-in already
+        // running, starts no flow (space-3, git-host-2): its cause stands.
         const message = (cause as Error).message;
         setError(message);
         onNote(message);
@@ -205,139 +214,151 @@ export function useSignIn(groups: GroupsState | undefined, onNote: Note): SignIn
 }
 
 const LINK_CLASS = "text-brand-600 hover:underline dark:text-brand-300";
-const FIELD =
-  "min-w-0 flex-1 rounded border border-neutral-300 bg-white px-1.5 py-0.5 text-sm read-only:text-neutral-500 dark:border-neutral-700 dark:bg-neutral-900";
+
+/** The card's title, which names its act (space-3). */
+export const signInTitle = (): string =>
+  i18n._({ id: "Sign in to a Space", comment: "the sign-in card's title: its act, wherever the card stands" });
+
+/** The words of Sign in (space-3). */
+export const signInLabel = (): string =>
+  i18n._({ id: "Sign in", comment: "sign in to the Space chosen, or to a registry" });
 
 /** The words of "Sign in again" wherever it stands (space-3): a failed
- * flow's control, and a signed-out instance's heading's. */
+ * flow's control, and a signed-out Space's heading's. */
 export const signInAgainLabel = (): string =>
   i18n._({
     id: "Sign in again",
-    comment: "the sign-in control on a signed-out instance's heading, and the card's after a sign-in failed",
+    comment: "the sign-in control on a signed-out Space's heading, and the card's after a sign-in failed",
   });
 
 /** The words of a sign-in control while its flow runs (space-3). */
 export const signingInLabel = (): string =>
   i18n._({ id: "Signing in…", comment: "the Sign in control, while the sign-in runs" });
 
-/** What the sign-in reads where its flow stands (space-3): on the
- * desktop, that the browser is open at the host name, with "Open it
- * again" through the bridge; where no bridge opened it, and in the
- * device flow, the page to finish at as a link — the device flow's URL
- * carries the code, so nothing is typed (git-host-3); a flow that ended
- * without an account, or a start the core refused, its cause as one
- * sentence. Null while no flow starts, runs or stands failed. `site` is
- * the host name of the origin being signed in to. */
-export function signInLines(signIn: SignInFlow, site: string): ReactNode {
-  const running = signIn.running;
-  const finish = i18n._("Sign in there and approve; you return here signed in.");
-  if (running?.flow === "browser" && (running.opened || !running.url)) {
-    const link = running.url;
-    return (
-      <p data-testid="space-signin-opened">
-        {i18n._("Your browser is open at {site}: sign in there and approve; you return here signed in.", { site })}{" "}
-        {link ? (
+/** What a sign-in control's title says it does (space-3, DR-172): the
+ * consequence, as a phrase. */
+export const opensInBrowser = (space: string): string =>
+  i18n._({
+    id: "Opens {space} in your browser",
+    values: { space },
+    comment: "the title of Sign in and Sign in again: the sign-in continues in the browser; {space} is the Space's display name",
+  });
+
+/** A cause as a phrase (DR-069): the core's words, without a final
+ * stop. */
+export const causePhrase = (cause: string): string => cause.replace(/[.。]\s*$/, "");
+
+/** "Continue in your browser" with the link "Open <Space>" (space-3):
+ * the sign-in page on the desktop, opened through the bridge as the
+ * start opened it (app-shell-37), or the device flow's verification page
+ * in a new tab, whose URL carries the code — never shown. A flow another
+ * client runs links nothing it does not know. */
+export function ContinueInBrowser({
+  link,
+  space,
+  bridge,
+  testId = "space-signin",
+}: {
+  link: string | undefined;
+  space: string;
+  /** The link opens through the bridge where it exists (a browser
+   * flow's page). */
+  bridge: boolean;
+  testId?: string;
+}) {
+  return (
+    <p data-testid={`${testId}-finish`} className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+      <span>{i18n._({ id: "Continue in your browser", comment: "a sign-in in flight: it continues on the Space's page in the browser" })}</span>
+      {link ? (
+        <>
+          <span aria-hidden>·</span>
           <a
-            data-testid="space-signin-link"
+            data-testid={`${testId}-link`}
             href={link}
             target="_blank"
             rel="noreferrer"
             className={LINK_CLASS}
             onClick={(event) => {
-              // The system browser again, as the start opened it
-              // (app-shell-37); the link's own target where no bridge.
+              if (!bridge) return;
               const open = openExternalBridge();
               if (!open) return;
               event.preventDefault();
-              void open(link);
+              void open(link).catch(() => false);
             }}
           >
-            {i18n._("Open it again")}
+            {i18n._({
+              id: "Open {space}",
+              values: { space },
+              comment: "a sign-in in flight: the link to the Space's page where the sign-in continues; {space} is the Space's display name",
+            })}
           </a>
-        ) : null}
-      </p>
-    );
-  }
+        </>
+      ) : null}
+    </p>
+  );
+}
+
+/** What the sign-in reads where its flow stands (space-3): "Continue in
+ * your browser" with "Open <Space>" while it runs; a flow that ended
+ * without an account, or a start the core refused, its cause as a
+ * phrase. Null while no flow starts, runs or stands failed. `space` is
+ * the Space being signed in to, by its display name. */
+export function signInLines(signIn: SignInFlow, space: string): ReactNode {
+  const running = signIn.running;
   if (running) {
     const link = running.flow === "browser" ? running.url : running.verificationUri;
-    return (
-      <>
-        <p data-testid="space-signin-finish">{i18n._("Continue in your browser:")}</p>
-        {link ? (
-          <a data-testid="space-signin-link" href={link} target="_blank" rel="noreferrer" className={LINK_CLASS}>
-            {i18n._("Open {site} to sign in", { site })}
-          </a>
-        ) : null}
-        <p>{finish}</p>
-      </>
-    );
+    return <ContinueInBrowser link={link} space={space} bridge={running.flow === "browser"} />;
   }
   if (signIn.failure !== undefined) {
     return (
       <p data-testid="space-signin-error" role="alert" className="text-red-600 dark:text-red-400">
-        {i18n._({
-          id: "{cause}.",
-          values: { cause: signIn.failure.replace(/[.。]\s*$/, "") },
-          comment: "the sign-in's cause, a phrase the core sends without its final stop, as one sentence",
-        })}
+        {causePhrase(signIn.failure)}
       </p>
     );
   }
   return null;
 }
 
-/** The sign-in card's field captioned "Instance" (space-3): the URL of
- * the instance to sign in to, Enter starting the sign-in. Wherever the
- * card stands — the header, or the list's foot in place of "Add
- * instance…" — the field reads the same. */
-export function InstanceField({
-  inputRef,
-  value,
-  onChange,
-  onEnter,
-  readOnly,
-}: {
-  inputRef: RefObject<HTMLInputElement | null>;
-  value: string;
-  onChange(value: string): void;
-  onEnter(): void;
-  readOnly: boolean;
-}) {
-  return (
-    <label className="flex min-w-0 flex-col gap-1 text-sm @xs:flex-row @xs:items-center @xs:gap-x-2">
-      <span className="shrink-0 text-xs text-neutral-500">
-        {i18n._({
-          id: "Instance",
-          comment: "the sign-in card's field caption: the URL of the instance to sign in to, held by its origin (https://spex.sublang.ai)",
-        })}
-      </span>
-      <input
-        ref={inputRef}
-        data-testid="space-signin-instance"
-        type="url"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") onEnter();
-        }}
-        readOnly={readOnly}
-        spellCheck={false}
-        autoComplete="off"
-        autoCapitalize="off"
-        className={FIELD}
-      />
-    </label>
-  );
+/** Focus the first field of the card standing at `card`: its chooser,
+ * else its address. */
+export function focusCardField(card: string): void {
+  document
+    .querySelector<HTMLElement>(
+      `[data-testid="${card}"] [data-testid="space-signin-chooser"], [data-testid="${card}"] [data-testid="space-signin-address"]`,
+    )
+    ?.focus();
 }
 
-/** The header while the home lists no instance (space-3): one card
- * saying what signing in brings, or the flow in flight, or why it ended;
- * the field captioned "Instance", holding the default instance's origin
- * until the reader edits it, and Sign in, starting the sign-in at the
- * origin it holds, with Cancel beside it and Escape cancelling while a
- * flow runs. A start the core refuses — a URL the origin rule refuses,
- * or a sign-in already running — reads its cause as one sentence, the
- * field keeping its text and focus. */
+/** The card's chooser state (space-115): what the reader picked and
+ * typed, read against the directory and the origin that stands until
+ * they choose — the default Space's, or the one a flow names. */
+export function useChoice(origin: string): {
+  directory: Directory;
+  resolved: ResolvedChoice;
+  choice: SpaceChoice;
+  pick(picked: string): void;
+  type(typed: string): void;
+  reset(): void;
+} {
+  const directory = useSpaceDirectory();
+  const [choice, setChoice] = useState<SpaceChoice>({});
+  const resolved = resolveChoice(choice, directory, origin);
+  return {
+    directory,
+    resolved,
+    choice,
+    pick: (picked) => setChoice({ picked }),
+    type: (typed) => setChoice((was) => ({ ...was, picked: resolved.picked, typed })),
+    reset: () => setChoice({}),
+  };
+}
+
+/** The header while the home lists no Space (space-3): the card "Sign
+ * in to a Space" — the chooser (space-115), the flow in flight or why it
+ * ended, and Sign in, with Cancel beside it and Escape cancelling while a
+ * flow runs. A start the core refuses — an address the origin rule
+ * refuses, or a sign-in already running — reads its cause, the field
+ * keeping its text and focus. */
 export function SignInCard({
   groups,
   signIn,
@@ -347,12 +368,10 @@ export function SignInCard({
   signIn: SignInFlow;
   connected: boolean;
 }) {
-  // What the reader typed; until then the field holds the default
-  // instance's origin (space-3, storage-2).
-  const [typed, setTyped] = useState<string>();
-  const field = typed ?? groups.defaultInstance;
-  const url = field.trim();
+  const { directory, resolved, pick, type } = useChoice(groups.defaultInstance);
+  const url = resolved.url;
   const fieldRef = useRef<HTMLInputElement>(null);
+  const chooserRef = useRef<HTMLSelectElement>(null);
   const signInRef = useRef<HTMLButtonElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
   const running = signIn.running;
@@ -376,53 +395,24 @@ export function SignInCard({
   const begin = () => {
     if (!connected || flowing || !url) return;
     void signIn.start(url, "card").then((started) => {
-      if (!started) fieldRef.current?.focus();
+      if (!started) (fieldRef.current ?? chooserRef.current)?.focus();
     });
   };
 
-  // The page the flow opens is named by the host name of the origin
-  // being signed in to (space-3).
-  // At a seat's place, the server is named where this device would be
-  // (space-112).
-  const seat = seatName(usePlaceStore().place);
-  const body = signInLines(signIn, hostNameOf(signIn.instance ?? url)) ?? (
-    seat === undefined ? (
-      <>
-        <p data-testid="space-signin-caption">
-          {i18n._("Sign in to see your groups and share each project's records with the people in them.")}
-        </p>
-        <p>{i18n._("Until you sign in to this Space, your records stay on this device.")}</p>
-      </>
-    ) : (
-      <>
-        <p data-testid="space-signin-caption">
-          {i18n._({
-            id: "Sign in to see your groups and open their projects on {server}.",
-            values: { server: seat },
-            comment: "the sign-in card on a team server's Space: what signing in brings there; {server} is the server's name",
-          })}
-        </p>
-        <p>
-          {i18n._({
-            id: "Package registry access is separate from this Space sign-in.",
-            comment: "the sign-in card on a team server: registry access uses an independent grant",
-          })}
-        </p>
-      </>
-    )
-  );
+  // The page the flow opens is named as the reader knows the Space being
+  // signed in to (space-3).
+  const space = spaceNameOf(signIn.instance ?? url, groups, directory);
+  const lines = signInLines(signIn, space);
 
   // A flow that ended failed offers the sign-in again; a start the core
   // refused ran none (space-3).
-  const label = flowing
-    ? signingInLabel()
-    : signIn.failure !== undefined && !signIn.refused
-      ? signInAgainLabel()
-      : i18n._({ id: "Sign in", comment: "sign in to an instance" });
+  const label = flowing ? signingInLabel() : signIn.failure !== undefined && !signIn.refused ? signInAgainLabel() : signInLabel();
 
   return (
     <div
       data-testid="space-signin-card"
+      role="group"
+      aria-label={signInTitle()}
       className="flex min-w-0 flex-col gap-2"
       onKeyDown={(event) => {
         // Escape cancels the flow in flight (space-3).
@@ -431,19 +421,22 @@ export function SignInCard({
         signIn.cancel();
       }}
     >
-      <h2 className="text-sm font-medium">{i18n._("Not signed in")}</h2>
-      <div data-testid="space-signin-body" className="flex min-w-0 flex-col gap-1 break-words text-sm text-neutral-600 dark:text-neutral-300">
-        {body}
-      </div>
-      <SpaceDirectory onChoose={setTyped} />
-      <InstanceField
-        inputRef={fieldRef}
-        value={field}
-        onChange={setTyped}
+      <h2 className="text-sm font-medium">{signInTitle()}</h2>
+      <SpaceChooser
+        resolved={resolved}
+        onPick={pick}
+        onType={type}
         onEnter={begin}
-        // The origin being signed in to stands while the flow runs.
-        readOnly={flowing}
+        // The Space being signed in to stands while the flow runs.
+        locked={flowing}
+        chooserRef={chooserRef}
+        fieldRef={fieldRef}
       />
+      {lines ? (
+        <div data-testid="space-signin-body" className="flex min-w-0 flex-col gap-1 break-words text-sm text-neutral-600 dark:text-neutral-300">
+          {lines}
+        </div>
+      ) : null}
       <div className="flex min-w-0 flex-col gap-1 @xs:flex-row @xs:items-center @xs:gap-x-3">
         {running ? (
           <button
@@ -462,7 +455,7 @@ export function SignInCard({
           data-testid="space-signin"
           className={`${PRIMARY} w-full @xs:w-auto`}
           disabled={!connected || flowing || !url}
-          title={url ? i18n._("Signs in to {host}", { host: hostNameOf(url) }) : undefined}
+          title={url ? opensInBrowser(spaceNameOf(url, groups, directory)) : undefined}
           onClick={begin}
         >
           {label}
