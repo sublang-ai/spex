@@ -1,13 +1,6 @@
 name: App Release
 
-# The app channel (DR-040): an app-v* tag releases the desktop and
-# server shells as source — a GitHub release carrying the changelog
-# notes and the run-from-source instructions, no build artifacts.
-# A beta (DR-087) is tagged app-vMAJOR.MINOR.PATCH-beta.N and released
-# as a pre-release whose notes are the changelog's [Unreleased] section
-# at the tag; a tag with any other pre-release identifier or build
-# metadata is refused.
-
+# App tags build native desktop downloads; publish only when both platforms pass.
 on:
   push:
     tags:
@@ -15,9 +8,9 @@ on:
 
 permissions: {}
 
-env:
-  # Nothing here launches Electron: the release is source only.
-  ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+concurrency:
+  group: app-release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   require-ci-green:
@@ -53,52 +46,111 @@ jobs:
           echo "::error::Timed out waiting for CI to complete for $SHA; refusing to release."
           exit 1
 
-  release:
+  prepare:
     needs: require-ci-green
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-
+      contents: read
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      title: ${{ steps.version.outputs.title }}
+      beta: ${{ steps.version.outputs.beta }}
     steps:
-      # Full history: the CLI's file-history guard, part of npm test,
-      # audits every committed manifest version.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-
-      # The tag's form and both manifests' versions (release-19,
-      # release-27, app-shell-14): scripts/release-notes.mjs, tested by
-      # release-notes.test.mjs (release-28, app-shell-36). Built-ins
-      # only, before npm ci.
       - name: Verify version matches tag
         id: version
         run: node scripts/release-notes.mjs check --tag="$GITHUB_REF_NAME"
-
-      - run: npm ci
-      - run: npm run build
-
-      - name: Tests
-        run: npm test
-
-      # A regular release's notes are its version's section of the app
-      # changelog; a beta's are [Unreleased] as it stands at the tag,
-      # under a line naming the beta (DR-087). Then the way to run this
-      # release from source, and for a beta the gates it skipped.
       - name: Extract release notes
         run: >-
           node scripts/release-notes.mjs notes
           --tag="$GITHUB_REF_NAME"
           --repository="$GITHUB_REPOSITORY"
-          --out=/tmp/release-notes.md
+          --out=release-notes.md
+      - run: npm ci
+      - run: npm run build
+      - name: Tests
+        run: npm test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-release-notes
+          path: release-notes.md
+          if-no-files-found: error
 
-      - name: Create GitHub release
+  package:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            script: package:mac
+            asset: mac-arm64.zip
+          - os: windows-2022
+            script: package:windows
+            asset: win-x64.exe
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Build native desktop package
+        run: npm run ${{ matrix.script }} -w apps/desktop
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.asset }}
+          path: apps/desktop/release/Spex-${{ needs.prepare.outputs.version }}-${{ matrix.asset }}
+          if-no-files-found: error
+
+  release:
+    needs: [prepare, package]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: app-release-notes
+          path: notes
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*
+          merge-multiple: true
+          path: artifacts
+      - name: Verify both downloads and write checksums
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        working-directory: artifacts
+        run: |
+          set -euo pipefail
+          test -s "Spex-$VERSION-mac-arm64.zip"
+          test -s "Spex-$VERSION-win-x64.exe"
+          sha256sum "Spex-$VERSION-mac-arm64.zip" "Spex-$VERSION-win-x64.exe" > SHA256SUMS
+      - name: Create GitHub release with both native downloads
         uses: softprops/action-gh-release@v2
         with:
-          name: ${{ steps.version.outputs.title }}
-          body_path: /tmp/release-notes.md
-          prerelease: ${{ steps.version.outputs.beta == 'true' }}
+          name: ${{ needs.prepare.outputs.title }}
+          body_path: notes/release-notes.md
+          prerelease: ${{ needs.prepare.outputs.beta == 'true' }}
+          fail_on_unmatched_files: true
+          files: |
+            artifacts/*.zip
+            artifacts/*.exe
+            artifacts/SHA256SUMS
