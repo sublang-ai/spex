@@ -10,6 +10,7 @@ Amends [DR-002](002-desktop-app-architecture.md) (distribution: GitHub Releases 
 Floor raised by [DR-079](079-the-core-speaks-the-homes-language.md): Node 22 or later for every package.
 Amended by [DR-086](086-tests-in-tiers.md) in how a tag is prepared: the hermetic smoke installs the release from a fresh clone instead of re-running the checks, the regression joins the regular release's gates, and the manual checklist keeps only its residue.
 Amended by [DR-087](087-beta-app-releases.md): the app channel gains the pre-release form `app-vX.Y.Z-beta.N`, gated on CI, the smoke and the live smoke, its notes taken from `[Unreleased]`.
+Amended by [DR-176](176-native-desktop-tag-packages.md) for distribution: app tags now attach native macOS and Windows downloads after both builds pass; source instructions and existing gates remain.
 
 ## Context
 

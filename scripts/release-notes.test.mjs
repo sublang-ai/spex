@@ -136,6 +136,12 @@ test("release-28: a regular tag checks both manifests and takes its version's se
   assert.match(body, /\[README\]\(https:\/\/github\.com\/sublang-ai\/spex\/blob\/app-v1\.2\.3\/README\.md\)/);
   assert.match(body, /\[an external page\]\(https:\/\/example\.com\/specs\/x\)/);
   assert.doesNotMatch(body, /^Beta /m);
+  assert.match(body, /releases\/download\/app-v1\.2\.3\/Spex-1\.2\.3-mac-arm64\.zip/);
+  assert.match(body, /releases\/download\/app-v1\.2\.3\/Spex-1\.2\.3-win-x64\.exe/);
+  assert.match(body, /releases\/download\/app-v1\.2\.3\/SHA256SUMS/);
+  assert.match(body, /unsigned.*not notarized/);
+  assert.match(body, /native Windows with Node\.js/);
+  assert.doesNotMatch(body, /ships no binaries|Storage requires private POSIX permissions\./);
 });
 
 test("app-shell-36: a regular release's notes end with the run-from-source instructions at the root manifest's floor", (t) => {
@@ -178,6 +184,8 @@ test("release-28: a beta tag takes [Unreleased] under its line, and names the ga
   assert.match(body, /A beta feature, recorded in \[DR-087\]\(https:\/\/github\.com\/sublang-ai\/spex\/blob\/app-v1\.3\.0-beta\.2\/specs\/decisions\/087-beta-app-releases\.md\)/);
   assert.doesNotMatch(body, /A fix described in/);
   assert.match(body, /git checkout app-v1\.3\.0-beta\.2\n/);
+  assert.match(body, /releases\/download\/app-v1\.3\.0-beta\.2\/Spex-1\.3\.0-beta\.2-mac-arm64\.zip/);
+  assert.match(body, /releases\/download\/app-v1\.3\.0-beta\.2\/Spex-1\.3\.0-beta\.2-win-x64\.exe/);
   assert.match(
     body,
     /\n\nThis beta ran CI, the smoke and the live smoke; the regression and the manual checklist run before the regular release \(\[DR-087\]\(https:\/\/github\.com\/sublang-ai\/spex\/blob\/app-v1\.3\.0-beta\.2\/specs\/decisions\/087-beta-app-releases\.md\)\)\.\n$/,
