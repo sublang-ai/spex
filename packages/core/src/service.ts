@@ -4005,9 +4005,9 @@ export class CoreService {
     const installed = this.environments.applet(repository, applet);
     if (!installed) {
       throw new CoreError("not_found", i18n._({
-        id: "the environment of {repository} installs no applet {applet}",
-        comment: "Refusal: an applet tab asked for an applet the spex repository's environment does not install",
-        values: { repository, applet },
+        id: "The applet {applet} is not installed here — add its package in Packages",
+        comment: "Refusal: an applet tab asked for an applet this project's packages do not install; Packages is the project's tab that adds a package",
+        values: { applet },
       }));
     }
     if (!this.store.repository(project) || this.environments.workingFolder(project) === null) {
@@ -4223,13 +4223,12 @@ export class CoreService {
     if (targetFolder === null || relativePath === undefined || relativePath === "" || relativePath.startsWith("..") || isAbsolute(relativePath)) {
       throw new CoreError("invalid_request", targetKey === own
         ? i18n._({
-          id: "your own group's environment can request this spec package by path only from inside its clone; enable it in the project, or publish it and add it from the registry",
-          comment: "Refusal: your own group's request by path names a folder inside its spex repository's clone (environments-2), and this spec package lies elsewhere",
+          id: "This package's folder is outside your Personal records — enable it in the project, or publish it and add it from the registry",
+          comment: "Refusal of Enable: a Personal package is added from a folder only inside what Spex keeps for you alone (environments-2), and this package lies elsewhere",
         })
         : i18n._({
-          id: "the environment of {repository} can request this spec package by path only from inside its own working folder; enable it in the project, or publish it and add it from the registry",
-          comment: "Refusal: a request by path names a folder inside the repository's working folder (environments-2)",
-          values: { repository: targetKey },
+          id: "This package's folder is outside the project folder — enable it in that project, or publish it and add it from the registry",
+          comment: "Refusal of Enable: a project's package is added from a folder only inside its project folder (environments-2), and this package lies elsewhere",
         }));
     }
     const packagePath = relativePath.split(sep).join("/");
@@ -4287,14 +4286,14 @@ export class CoreService {
       // config names its playbook (playbook-library-69, environments-15).
       const requested = await this.environments.ensureRequested(targetKey, name, { path: packagePath });
       if (requested) {
-        done.push(i18n._({ id: "{name} requested in spex.yaml", comment: "A completed step of an enabling: the spec package's request written", values: { name } }));
+        done.push(i18n._({ id: "{name} added to spex.yaml", comment: "A completed step of an enabling: the package written into spex.yaml", values: { name } }));
       }
       const progress = { lockWritten: false, installed: false };
       try {
         await this.environments.installNow(targetKey, requested, progress);
       } finally {
-        if (progress.lockWritten) done.push(i18n._({ id: "spex.lock resolved", comment: "A completed step of an enabling: the environment's lock written" }));
-        if (progress.installed) done.push(i18n._({ id: "environment packages installed", comment: "A completed step of an enabling: the environment's installed spec packages replaced, the requested one's dependencies among them" }));
+        if (progress.lockWritten) done.push(i18n._({ id: "spex.lock written", comment: "A completed step of an enabling: spex.lock written with the versions chosen" }));
+        if (progress.installed) done.push(i18n._({ id: "packages installed", comment: "A completed step of an enabling: the project's installed packages replaced, those the added package needs among them" }));
       }
 
       // Lanes the bindings name but the roster lacks are created first,

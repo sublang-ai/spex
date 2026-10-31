@@ -346,13 +346,13 @@ test("storage-25: divergent partial destination blocks only its environment, pre
   const installedBefore = inodes(join(folder, ".spex"));
   home = await startHome("divergent-migration", { dataDir: home.dataDir, project: false });
   for (const command of ["environment.resolve", "environment.install"] as const) {
-    await home.client.expectError(command, { repository: project.key, wait: true }, "conflict", /migration is incomplete/);
+    await home.client.expectError(command, { repository: project.key, wait: true }, "conflict", /Moving spex\.yaml and spex\.lock into the project folder did not finish — restore the two files, then restart Spex/);
   }
-  await home.client.expectError("environment.registry.set", { repository: project.key, origin: "https://other.example" }, "conflict", /migration is incomplete/);
+  await home.client.expectError("environment.registry.set", { repository: project.key, origin: "https://other.example" }, "conflict", /Moving spex\.yaml and spex\.lock into the project folder did not finish — restore the two files, then restart Spex/);
   await home.client.expectError("environment.request", { repository: project.key, name: "acme/kit", request: { kind: "registry", version: "1.0.0" }, wait: true }, "conflict");
   await home.client.expectOk("environment.install", { repository: other.key, wait: true });
   const blocked = await home.client.expectOk("environment.get", { repository: project.key });
-  assert.match(blocked.error!, /migration is incomplete/);
+  assert.match(blocked.error!, /Moving spex\.yaml and spex\.lock into the project folder did not finish — restore the two files, then restart Spex/);
   assert.equal(readFileSync(join(folder, "spex.yaml"), "utf8"), divergent);
   assert.equal(existsSync(join(folder, "spex.lock")), false, "no implicit resolve filled the interrupted lock");
   assert.deepEqual(inodes(join(folder, ".spex")), installedBefore, "blocked environment's installed files and exports stand");
@@ -384,7 +384,7 @@ test("storage-25: an interrupted own-group plan cannot be bootstrapped before re
   home = await startHome("own-pending-bootstrap", { dataDir: home.dataDir, project: false });
   assert.equal(readFileSync(join(clone, "spex.yaml"), "utf8"), plannedYaml, "Store did not add a built-in request to the pending pair");
   assert.equal(readFileSync(join(clone, "spex.lock"), "utf8"), divergentLock);
-  await home.client.expectError("environment.resolve", { repository: OWN_KEY, wait: true }, "conflict", /migration is incomplete/);
+  await home.client.expectError("environment.resolve", { repository: OWN_KEY, wait: true }, "conflict", /Moving spex\.yaml and spex\.lock into the project folder did not finish — restore the two files, then restart Spex/);
   await home.stop();
   writeFileSync(join(clone, "spex.lock"), lock);
   const migrations = join(home.dataDir, "local", "migrations");
@@ -395,7 +395,7 @@ test("storage-25: an interrupted own-group plan cannot be bootstrapped before re
     home = await startHome("own-pending-bootstrap", { dataDir: home.dataDir, project: false });
     assert.equal(readFileSync(join(clone, "spex.yaml"), "utf8"), plannedYaml);
     assert.equal(readFileSync(join(clone, "spex.lock"), "utf8"), lock);
-    await home.client.expectError("environment.install", { repository: OWN_KEY, wait: true }, "conflict", /migration is incomplete/);
+    await home.client.expectError("environment.install", { repository: OWN_KEY, wait: true }, "conflict", /Moving spex\.yaml and spex\.lock into the project folder did not finish — restore the two files, then restart Spex/);
     await home.stop();
   }
   writeFileSync(receiptFile, "{invalid-json");
