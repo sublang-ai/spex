@@ -8,7 +8,8 @@
 // ends; Git runs with `-c credential.helper=` resetting the device's own
 // helpers and then naming the app's helper script on the app's own
 // runtime, so the brokered secret is neither looked up in nor stored to
-// any other helper. A transport to any other origin uses none of this.
+// any other helper. A brokered credential carries its permitted origin,
+// which the helper matches on every get, including LFS endpoint requests.
 //
 // On a seat the same script serves in its member mode too, named by the
 // seat account's own Git configuration (core-service-125): it answers
@@ -78,7 +79,7 @@ export function memberHelperCommand(
 }
 
 export async function withGitCredential(
-  credential: { username: string; secret: string },
+  credential: { username: string; secret: string; origin?: string },
   runtime: { execPath: string; electron: boolean },
   options: { helperPath?: string } = {},
 ): Promise<GitCredentialHandle> {
@@ -87,10 +88,16 @@ export async function withGitCredential(
   if (UNSAFE_FOR_PROTOCOL.test(credential.username) || UNSAFE_FOR_PROTOCOL.test(credential.secret)) {
     throw new Error("The Git host returned a credential Git cannot carry");
   }
+  let scope = "";
+  if (credential.origin !== undefined) {
+    const origin = new URL(credential.origin);
+    if (!["http:", "https:"].includes(origin.protocol) || origin.username || origin.password) throw new Error("Invalid Git credential origin");
+    scope = `origin=${origin.origin}\n`;
+  }
   const dir = await mkdtemp(join(tmpdir(), "spex-git-credential-"));
   const file = join(dir, "credential");
   try {
-    await writeFile(file, `username=${credential.username}\npassword=${credential.secret}\n`, { mode: 0o600, flag: "wx" });
+    await writeFile(file, `${scope}username=${credential.username}\npassword=${credential.secret}\n`, { mode: 0o600, flag: "wx" });
   } catch (error) {
     await rm(dir, { recursive: true, force: true });
     throw error;

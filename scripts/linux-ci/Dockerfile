@@ -9,7 +9,7 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl gnupg software-properties-common tmux python3 make g++ rsync \
   && add-apt-repository -y ppa:git-core/ppa \
   && apt-get update \
-  && apt-get install -y --no-install-recommends git \
+  && apt-get install -y --no-install-recommends git git-lfs \
   && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
   && apt-get install -y --no-install-recommends nodejs \
   && rm -rf /var/lib/apt/lists/*

@@ -107,6 +107,10 @@ jobs:
       - run: npm ci
       - run: npm run build
 
+      - name: Require Git LFS for real transport and local Apply coverage
+        if: runner.os != 'Windows'
+        run: git lfs version
+
       - name: Complete app and scaffold tests
         if: runner.os != 'Windows'
         run: npm test

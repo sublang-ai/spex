@@ -831,6 +831,11 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Fixed
 
+- Sync downloads incoming LFS content during authenticated, stoppable Check.
+  Apply and local merge selection write the validated filtered bytes and refuse
+  missing or corrupt cached content before changing files. Brokered Git
+  credentials are confined to the permitted origin, including LFS requests.
+
 - Space Refresh keeps completed work through repeated rate limits within
   a fixed two-minute recovery deadline for each eligible read, and stays
   busy until started requests settle. Full views leave member counts
