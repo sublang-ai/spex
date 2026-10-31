@@ -12,7 +12,7 @@ const root = resolve(import.meta.dirname, "..");
 const workflow = parse(readFileSync(join(root, ".github/workflows/ci.yml"), "utf8"));
 const laneWorkflow = parse(readFileSync(join(root, ".github/workflows/hub-lane.yml"), "utf8"));
 
-/** The jobs a pull request's run holds (release-34): the required checks (release-29). */
+/** The check names the merge rule requires (release-29): what the suites report on a pull request, and what the stand-in reports for documentation alone (release-34). */
 const PULL_REQUEST_CHECKS = [
   "changes",
   "test (ubuntu-latest, 22)", "test (ubuntu-latest, 24)", "test (windows-latest, 22)",
@@ -20,6 +20,8 @@ const PULL_REQUEST_CHECKS = [
 ];
 /** The suites run only where the classifier succeeded and found more than documentation (release-34). */
 const SUITE_CONDITION = "needs.changes.result == 'success' && needs.changes.outputs.docs-only != 'true'";
+/** The stand-in runs only where the classifier succeeded and found documentation alone (release-34, DR-169). */
+const STAND_IN_CONDITION = "needs.changes.result == 'success' && needs.changes.outputs.docs-only == 'true'";
 
 test("release-33: one run per pull-request head, cancelled by its next push and never for main (release-30)", () => {
   assert.equal(workflow.concurrency.group, "ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}");
@@ -47,14 +49,15 @@ test("release-33: a pull request runs the reduced matrix, main and the nightly t
     assert.deepEqual(os.pullRequest, ["ubuntu-latest"], name);
     assert.deepEqual(os.other, ["ubuntu-latest", "macos-latest"], name);
   }
-  // Every job the matrix runs on a pull request is a required check, and nothing else is.
+  // Every name the suites report on a pull request is a required check, and nothing else is.
   const excluded = new Set(exclude.pullRequest.map((row) => `${row.os}:${row["node-version"]}`));
   const onPullRequest = [];
   for (const os of test.strategy.matrix.os) for (const node of test.strategy.matrix["node-version"]) {
     if (excluded.has(`${os}:${node}`)) continue;
     onPullRequest.push(`test (${os}, ${node})`);
   }
-  onPullRequest.push("changes", "journeys (ubuntu-latest)", "desktop-browser (ubuntu-latest)");
+  for (const name of ["journeys", "desktop-browser"]) for (const os of byEvent(workflow.jobs[name].strategy.matrix.os).pullRequest) onPullRequest.push(`${name} (${os})`);
+  onPullRequest.push("changes");
   assert.deepEqual(PULL_REQUEST_CHECKS.slice().sort(), onPullRequest.sort());
 });
 
@@ -73,7 +76,21 @@ test("release-33: documentation alone keeps the spec gates and skips the suites 
   for (const name of ["test", "journeys", "desktop-browser"]) {
     assert.equal(workflow.jobs[name].needs, "changes", `${name} waits for the classifier`);
     assert.equal(workflow.jobs[name].if, SUITE_CONDITION, `${name} runs past the classifier alone`);
+    assert.equal(workflow.jobs[name].name, undefined, `${name} reports under its job id and matrix values`);
   }
+});
+
+test("release-33: documentation alone reports success under each of the suites' required names through a stand-in, and under no other condition (release-34)", () => {
+  const standIn = workflow.jobs["documentation-alone"];
+  assert.ok(standIn, "a stand-in job");
+  assert.equal(standIn.needs, "changes", "the stand-in waits for the classifier");
+  assert.equal(standIn.if, STAND_IN_CONDITION, "documentation alone and nothing else");
+  assert.equal(standIn.name, "${{ matrix.check }}", "each row reports under the name it carries");
+  assert.equal(standIn["runs-on"], "ubuntu-latest");
+  assert.deepEqual(standIn.strategy.matrix.check.slice().sort(), PULL_REQUEST_CHECKS.filter((name) => name !== "changes").sort(), "exactly the suites' required names");
+  assert.equal(standIn.steps.length, 1, "one step");
+  assert.equal(standIn.steps[0].uses, undefined, "no action runs");
+  assert.match(standIn.steps[0].run.trim(), /^echo "[^"\n]*"$/, "one echo line, nothing of the suites");
 });
 
 test("release-33: the hub lane runs nightly, on a push to main touching the hub, on a pull request changing its workflow and on request, as root, keeping its output (release-36)", () => {

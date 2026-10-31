@@ -27,10 +27,10 @@ jobs:
   # What a pull request changed (release-34, DR-166): documentation
   # alone -- docs/, specs/ and Markdown -- keeps the spec gates here,
   # the CLI's own tests and the spec lint, and the suites below are
-  # skipped and report skipped; any other change runs them. A push to
-  # main and the nightly run run everything. This job is a required
-  # check, so a failure here blocks the merge rather than skipping the
-  # suites past it.
+  # skipped, a stand-in reporting their required names (DR-169); any
+  # other change runs them. A push to main and the nightly schedule run
+  # everything. This job is a required check, so a failure here blocks
+  # the merge rather than skipping the suites past it.
   changes:
     runs-on: ubuntu-latest
     outputs:
@@ -72,6 +72,31 @@ jobs:
           npm run build -w packages/cli
           npm test -w packages/cli
           node packages/cli/dist/cli.js lint
+
+  # Documentation alone, continued (release-34, DR-169): a suite skipped
+  # by its job-level condition is skipped before its matrix expands, so
+  # it reports under its bare job id and never under the name main
+  # requires. This stand-in reports success under each suite's required
+  # name instead, so the merge rule sees every required check. It runs
+  # nothing of the suites; the classifier's gates stand for them.
+  documentation-alone:
+    needs: changes
+    if: needs.changes.result == 'success' && needs.changes.outputs.docs-only == 'true'
+    strategy:
+      matrix:
+        # The names the suites report on a pull request, kept equal to
+        # them by the workflow audit.
+        check:
+          - test (ubuntu-latest, 22)
+          - test (ubuntu-latest, 24)
+          - test (windows-latest, 22)
+          - journeys (ubuntu-latest)
+          - desktop-browser (ubuntu-latest)
+    name: ${{ matrix.check }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "Documentation alone: ${{ matrix.check }} does not run; the classifier ran the CLI's tests and the spec lint (DR-166)."
 
   test:
     needs: changes
