@@ -319,7 +319,11 @@ export interface SeedExampleOptions {
 
 /** The staged Academy corpus (DR-015): built from the repo demo/. */
 export function academyCorpusDir(): string {
-  return fileURLToPath(new URL("../assets/academy", import.meta.url));
+  const corpus = fileURLToPath(new URL("../assets/academy", import.meta.url));
+  // Recursive copy uses the native filesystem, so packaged assets must be
+  // addressed through their physical asar-unpacked directory (app-shell-13).
+  const unpacked = corpus.replace(/\.asar(?=[\\/]|$)/, ".asar.unpacked");
+  return unpacked !== corpus && existsSync(unpacked) ? unpacked : corpus;
 }
 
 const ACADEMY_SEED_COMMIT = "chore: seed the Academy example";

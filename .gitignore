@@ -17,3 +17,4 @@ playwright-report/
 
 # Isolated homes, repositories, and raw evidence for workshop simulations.
 .workshop-*/
+/.acceptance-local/

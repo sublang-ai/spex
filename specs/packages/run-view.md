@@ -410,6 +410,7 @@ While no local project is registered, the local Projects surface shall show a we
 While the Captain home is shown, when the user submits composer text, the run view shall act by whether the workspace has a current project:
 
 - a current project — the run view creates a session for that project, dispatches the text as the session's first Boss turn, and switches to the new session's tab;
+- session creation keeps its original request in flight until the core answers, without a UI reply deadline or automatic resend; a connection closing or a core refusal still rejects the pending start ([DR-168](../decisions/174-owned-session-start-wait.md));
 - no project chosen while projects exist — the workspace opens the project palette instead of dispatching, keeping the draft intact;
 - the send control's tooltip says how to send — Enter, with Shift+Enter for a new line — and, with no project, what to do first, naming the palette's binding the platform's way [[run-view-49](#run-view-49)].
 
@@ -1689,3 +1690,7 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 #### run-view-175
 
 Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell beside a stand-in instance listing one server, a stand-in hub relaying to a further core standing for its seat — signed in at the same instance and holding no project — when the journey connects the seat from its server's line on the Space surface [[run-view-170](#run-view-170)] and activates the server's heading in the sidebar [[run-view-168](#run-view-168)], the test suite shall assert through the page, in English and in Chinese: the server welcome page naming the server, with no local-folder action and no Academy action, fitting the desktop and the 320px sidebar floor; its secondary action showing the Space surface with the selector naming the server, the server's heading showing the welcome page again [[run-view-168](#run-view-168)]; and its primary action opening the palette, which lists a spex repository of the member's group at that place, and opening it there sending that place's core a join with no folder [[run-view-169](#run-view-169)] [[run-view-174](#run-view-174)], the project then that place's current one, its task start and its row under the server's heading, selected, replacing the welcome page once that core lists it — the journey standing in for the seat's allocation of the code's folder [[run-view-168](#run-view-168)].
+
+#### run-view-195
+
+Where the protocol client talks to a real loopback WebSocket peer with a controlled clock, integration verification shall hold one session-creation reply beyond two minutes, answer it and assert one request and the returned session identity, while an ordinary reply times out at its existing bound; it shall also assert an explicitly selected observation deadline, continued default waiting beyond ten minutes, and a connection closing reject without automatic resends [[run-view-26](#run-view-26)] [session-start-timeout.integration.test.ts](../../packages/ui/src/lib/session-start-timeout.integration.test.ts).

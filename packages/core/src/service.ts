@@ -8,6 +8,7 @@
 // (CORE-13), and record channels filtered by visibility at this
 // boundary (CORE-8/14).
 
+import { prepareWindowsStorageDirectory } from "@sublang/spex/files";
 import { canonicalOrigin } from "@sublang/spex/instance";
 import { AppletServer, isAppletPath } from "./applets.js";
 import { ApprovalBroker } from "./approvals.js";
@@ -275,7 +276,7 @@ export interface CoreServiceOptions {
    * default the processes the core started — each child process created
    * while its own work ran — with their descendants on macOS and Linux.
    * A shell that bounds its own exit — Electron's — passes none. */
-  agentProcesses?: () => number[];
+  agentProcesses?: () => number[] | Promise<number[]>;
   /** This runtime's label, stored beside the home's device at assignment
    * for display alone (DR-134): the server's name on a seat, else this
    * label, else the host name. */
@@ -1442,13 +1443,16 @@ export class CoreService {
   }
 
   private static async boot(options: CoreServiceOptions, started: StartedProcesses): Promise<CoreService> {
-    if (process.platform !== "darwin" && process.platform !== "linux") {
+    if (process.platform !== "darwin" && process.platform !== "linux" && process.platform !== "win32") {
       throw new Error(i18n._({
-        id: "Spex desktop and server require macOS or Linux with private POSIX file permissions. On Windows, use the scaffold CLI or connect to a Spex server in your browser.",
+        id: "Spex desktop and server require macOS, Linux, or Windows with verified private storage permissions.",
         comment: "Startup refusal shown in the shell's dialog on an unsupported host",
       }));
     }
-    if (options.dataDir) ApplicationMedia.assertStagingParents(options.dataDir);
+    if (options.dataDir) {
+      await prepareWindowsStorageDirectory(options.dataDir);
+      ApplicationMedia.assertStagingParents(options.dataDir);
+    }
     // A seat's facts are checked before anything opens (core-service-125).
     if (options.seat) options = { ...options, seat: checkSeat(options.seat) };
     const env = options.env ?? process.env;

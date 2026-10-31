@@ -1,0 +1,15 @@
+--- a/dist/adapters/codex.js
++++ b/dist/adapters/codex.js
+@@ -214,6 +214,12 @@
+             ? CODEX_WORKSPACE_EXTRA_WRITES_PROFILE
+             : defaultPermissions,
+         ...(policy.mode === 'auto' ? { approvals_reviewer: 'auto_review' } : {}),
++        ...(process.platform === 'win32' && defaultPermissions !== ':danger-full-access'
++            ? {
++                features: { prefer_mxc: true },
++                developer_instructions: "Native Windows command execution (only when allowed by the declared permission policy): use exec_command with shell=\"C:/Windows/System32/cmd.exe\" and login=false, using cmd.exe syntax. Windows PowerShell 5.1 may fail to initialize in the native sandbox. Read files using cmd built-ins or an available Node.js runtime. Keep the declared filesystem and network permissions; do not request escalation or change sandbox settings. A failed command is not evidence of an empty file.",
++            }
++            : {}),
+     };
+     const codexCliConfigOverrides = writablePaths && defaultPermissions === ':workspace'
+         ? [codexWorkspaceExtraWritesProfileConfigOverride(writablePaths.paths)]

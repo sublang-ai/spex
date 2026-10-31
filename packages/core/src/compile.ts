@@ -77,12 +77,12 @@ export function provisionEngineLinks(dir: string, modulePaths: string[] = bundle
     let stat;
     try { stat = lstatSync(link); } catch { stat = undefined; }
     if (stat?.isSymbolicLink()) {
-      if (readlinkSync(link) === target) { provisioned.push(link); continue; }
+      if (readlinkSync(link) === target || (process.platform === "win32" && realpathSync(link) === realpathSync(target))) { provisioned.push(link); continue; }
       rmSync(link);
     } else if (stat) {
       continue;
     }
-    symlinkSync(target, link, "dir");
+    symlinkSync(target, link, process.platform === "win32" ? "junction" : "dir");
     provisioned.push(link);
   }
   return provisioned;
