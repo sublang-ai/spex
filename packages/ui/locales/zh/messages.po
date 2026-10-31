@@ -7561,10 +7561,10 @@ msgstr "未解析"
 msgid "Until you sign in to this Space, your records stay on this device."
 msgstr "在你登录此空间之前，你的记录会保留在此设备上。"
 
-#. the sign-in card on a team server's Space; {server} is the server's name
+#. the sign-in card on a team server: registry access uses an independent grant
 #: src/components/SpaceSignIn.tsx
-msgid "Until you do, nothing on {server} is contacted."
-msgstr "在此之前，{server} 上不会联系任何服务。"
+msgid "Package registry access is separate from this Space sign-in."
+msgstr "规约包注册中心的访问权限与此空间登录相互独立。"
 
 #. a session with no title of its own
 #: src/components/SpaceExplorer.tsx
