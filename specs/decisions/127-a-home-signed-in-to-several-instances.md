@@ -22,6 +22,8 @@ Amended by [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) in
 
 Amended by [DR-168](168-independent-package-registry.md) for independent registry selection, account authority and credentials; Space collaboration and server admission remain unchanged.
 
+Extended by [DR-171](171-personal-names-are-space-logins.md) in personal attribution: the selected account's login supplies every new commit and intent author name; historical attribution is preserved.
+
 ## Context
 
 - A home records one instance when it is created and uses it alone thereafter; the credential store already keeps one app token per instance URL.

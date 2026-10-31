@@ -262,6 +262,9 @@ describe("GROUPS: each act where the host's read says (space-1, space-62, space-
     expect(within(a).getByTestId(`space-share-${at(A_SPEX)}`).textContent).toBe("Share");
     // jane comes through acme: "via acme", and no Remove here.
     const jane = within(a).getByTestId("space-member-jane");
+    expect(within(jane).getByText("jane").getAttribute("title")).toBe("jane");
+    expect(within(jane).queryByText("Jane")).toBeNull();
+    expect(within(jane).getAllByText("jane")).toHaveLength(1);
     expect(within(jane).getByTestId("space-member-via-jane").textContent).toBe("via acme");
     expect(jane.textContent).toContain("Owner");
     expect(within(jane).queryByRole("button")).toBeNull();
@@ -961,7 +964,7 @@ describe("GROUPS: the new controls fit (space-28)", () => {
     expect(members.querySelector("svg")?.getAttribute("class")).toContain("@md:hidden");
     expect(members.querySelector("span")?.className).toContain("@md:inline");
     expect(list.className.split(/\s+/)).toContain("@container");
-    const name = within(within(list).getByTestId("space-member-jane")).getByText("Jane");
+    const name = within(within(list).getByTestId("space-member-jane")).getByText("jane");
     expect(name.className).toContain("min-w-0");
     expect(name.className).toContain("truncate");
   });

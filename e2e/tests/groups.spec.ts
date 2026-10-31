@@ -754,7 +754,8 @@ test.describe("organizing", () => {
     await expect(editor).toBeHidden();
     await expect(members.getByTestId(`space-members-outcome-${PANEL}`)).toHaveText(`@${MEMBER.login} added as Maintainer`);
     const row = members.getByTestId(`space-member-${MEMBER.login}`);
-    await expect(row).toContainText(MEMBER.displayName!);
+    await expect(row).toContainText(MEMBER.login);
+    await expect(row).not.toContainText(MEMBER.displayName!);
     await expect(row).toContainText("Maintainer");
     expect(standinMembers(SUBGROUP)).toContain(`${MEMBER.login}:Maintainer`);
 
@@ -2343,9 +2344,9 @@ test.describe("daily sync", () => {
     const line = placementLine(page, TEAM_KEY, host);
     await line.getByTestId("space-line-members").click();
     const members = line.getByTestId(`space-members-${TEAM_KEY}@${host.url}`);
-    await expect(members.getByTestId(`space-member-${HOST_LOGIN}`)).toContainText("Ada Lovelace");
+    await expect(members.getByTestId(`space-member-${HOST_LOGIN}`)).toContainText(HOST_LOGIN);
     await expect(members.getByTestId(`space-member-${HOST_LOGIN}`)).toContainText("Owner");
-    await expect(members.getByTestId(`space-member-${PEER_MEMBER.login}`)).toContainText(PEER_MEMBER.displayName);
+    await expect(members.getByTestId(`space-member-${PEER_MEMBER.login}`)).toContainText(PEER_MEMBER.login);
     await expect(members.getByTestId(`space-member-${PEER_MEMBER.login}`)).toContainText("Developer");
     await expect(members.locator("a")).toHaveCount(0);
     await scanVocabulary(page, "members", words);

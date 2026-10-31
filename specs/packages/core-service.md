@@ -361,7 +361,7 @@ When the core follows a spex repository's clone to a new address, the core shall
 
 When a client sends `intent.queue` for a registered project ([DR-006](../decisions/006-projects-and-forge.md)), the core service shall store a new open intent as one file of its project's spex repository [[storage-4](storage.md#storage-4)] — the request's exact text and optional ordered attachment references [[media-5](media.md#media-5)], its optional source (kind, reference, URL, and labels), its optional author, and its capture time — reply with the stored intent, and announce the write [[core-service-51](#core-service-51)] ([DR-035](../decisions/035-intent-ledger.md), [DR-103](../decisions/103-the-home-and-its-groups.md)):
 
-- its author is the account the home is signed in as [[storage-2](storage.md#storage-2)] at the instance of its project's spex repository [[storage-31](storage.md#storage-31)], and none where that repository has no instance or the home is not signed in there ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md));
+- its author records the login as both `login` and `displayName` of the account the home is signed in as [[storage-2](storage.md#storage-2)] at the instance of its project's spex repository [[storage-31](storage.md#storage-31)], and none where that repository has no instance or the home is not signed in there ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-171](../decisions/171-personal-names-are-space-logins.md));
 - its runtime is this one, written at capture [[storage-4](storage.md#storage-4)] with this runtime's label, so the intent runs here and nowhere else ([DR-134](../decisions/134-execution-ownership.md));
 - an intent holds no place of its own: the project's queue is its queued intents oldest first, and the next to run is the oldest;
 - where the source kind is issue, PR, or record and the project already holds an open intent with the same source kind and reference, the request is rejected with a `conflict` error naming that intent and stores nothing — at most one open intent per source artifact per project;
@@ -1123,7 +1123,7 @@ Where two intents are captured a moment apart and a third arrives through a sync
 
 #### core-service-123
 
-Where a real core on a scratch home is signed in to two stand-in instances as two accounts and pairs a project at each and a local-only project, the test suite shall queue an intent in each project over the protocol and assert that each stored intent file carries as its author [[core-service-52](#core-service-52)] the account signed in at its project's instance, the local-only project's carrying none, and that once one instance signs out a further intent of its project carries none while the other's still carries its account [[core-service-42](#core-service-42)].
+Where a real core on a scratch home is signed in to two stand-in instances as two accounts and pairs a project at each and a local-only project, the test suite shall queue an intent in each project over the protocol and assert that each stored intent file carries as its author [[core-service-52](#core-service-52)] the login in both author fields of the account signed in at its project's instance despite a stored personal display name, the local-only project's carrying none, and that once one instance signs out a further intent of its project carries none while the other's still carries its login in both author fields [[core-service-42](#core-service-42)].
 
 #### core-service-57
 

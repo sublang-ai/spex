@@ -1109,7 +1109,7 @@ test("storage-34, storage-31: a clone's placements are its remotes in the order 
   writeFileSync(join(own, "notes.txt"), "kept at the second\n");
   const synced = await home.client.settle("space.sync", { repository: HOST_OWN }, 30_000);
   assert.equal(synced.sync.phase, "done", JSON.stringify(synced.sync));
-  assert.equal(git(own, "log", "-1", "--format=%an <%ae>"), "Bob <bob@users.noreply.127.0.0.1>");
+  assert.equal(git(own, "log", "-1", "--format=%an <%ae>"), "bob <bob@users.noreply.127.0.0.1>");
   assert.equal(git(second.bareOf(notesPath), "rev-parse", "spex"), git(own, "rev-parse", "spex"));
   assert.ok(existsSync(join(own, ".git")), "its folder is kept");
 });
@@ -1424,11 +1424,11 @@ test("git-host-24, space-83, git-host-6, git-host-9, git-host-15, git-host-16, g
   assert.equal(git(bareOf(second, gammaKey), "rev-parse", "spex"), git(gammaClone, "rev-parse", "spex"));
   assert.ok(transportsOf(second, `${STANDIN_STORAGE}/acme/gamma-spex`, true).length > 0, "pushed");
   assert.deepEqual([...new Set(transportsOf(second, `${STANDIN_STORAGE}/acme/gamma-spex`).map((entry) => entry.instance))], [second.url], "with credentials the second issued");
-  assert.equal(git(gammaClone, "log", "-1", "--format=%an <%ae>"), `${bob.displayName} <${bob.login}@users.noreply.127.0.0.1>`);
+  assert.equal(git(gammaClone, "log", "-1", "--format=%an <%ae>|%cn <%ce>"), `${bob.login} <${bob.login}@users.noreply.127.0.0.1>|${bob.login} <${bob.login}@users.noreply.127.0.0.1>`);
   // Its intents' author is the account at its instance; a local-only
   // project's has none (core-service-42).
   const queued = await home.client.expectOk("intent.queue", { projectId: gammaKey, text: "At the second" });
-  assert.deepEqual(queued.author, { login: bob.login, displayName: bob.displayName });
+  assert.deepEqual(queued.author, { login: bob.login, displayName: bob.login });
   const { key: elsewhere } = await addFolder(home, gitFolder("elsewhere"));
   assert.equal((await home.client.expectOk("intent.queue", { projectId: elsewhere, text: "Here alone" })).author, undefined);
 
@@ -1521,7 +1521,7 @@ test("git-host-24, space-83, git-host-6, git-host-9, git-host-15, git-host-16, g
   assert.equal((await home.client.expectOk("intent.queue", { projectId: gammaKey, text: "Signed out there" })).author, undefined);
 });
 
-test("core-service-123, core-service-42: signed in at the first as ada and at the second as bob, an intent queued in a project picked into each namespace stores the account at its own project's instance, a local-only project's storing none; signed out of the second, a further intent of its project stores none while the first's still stores ada", async (t) => {
+test("core-service-123, core-service-42: signed in at the first as ada and at the second as bob, an intent queued in each namespace records its account's login despite a stored display name, a local-only project's storing none; signed out of the second, historical attribution survives edit and close, new intents there have no author and the first's still records ada", async (t) => {
   const { bob, first, second, home } = await twoInstances("author-by-instance");
   t.after(() => home.stop());
   const ada = first.script.person;
@@ -1555,17 +1555,36 @@ test("core-service-123, core-service-42: signed in at the first as ada and at th
     return stored.author;
   };
 
+  // Accounts saved by an older client may retain personal display names.
+  // New attribution still uses the Space login (core-service-42).
+  assert.equal(Home.load(home.dataDir).account(first.url)?.displayName, ada.displayName);
+  assert.notEqual(ada.displayName, ada.login);
+  assert.equal(Home.load(home.dataDir).account(second.url)?.displayName, bob.displayName);
+  assert.notEqual(bob.displayName, bob.login);
+
   // Each records the account signed in at its project's instance; the
   // local-only project's records none (core-service-42).
-  assert.deepEqual(await authorOf(north, "At the first"), { login: ada.login, displayName: ada.displayName });
-  assert.deepEqual(await authorOf(south, "At the second"), { login: bob.login, displayName: bob.displayName });
+  assert.deepEqual(await authorOf(north, "At the first"), { login: ada.login, displayName: ada.login });
+  assert.deepEqual(await authorOf(south, "At the second"), { login: bob.login, displayName: bob.login });
   assert.equal(await authorOf(local, "Here alone"), undefined);
+
+  // A historical queued intent retains its captured attribution even
+  // when edited and closed while its Space is signed out (storage-4).
+  const historical = await home.client.expectOk("intent.queue", { projectId: south, text: "Captured by an older client" });
+  const historicalPath = join(clonePath(home.dataDir, south), "intents", `${historical.id}.json`);
+  const oldAuthor = { login: bob.login, displayName: bob.displayName };
+  const oldFile = { ...JSON.parse(readFileSync(historicalPath, "utf8")), author: oldAuthor };
+  writeFileSync(historicalPath, `${JSON.stringify(oldFile)}\n`);
 
   // Signed out of the second, a further intent of its project records
   // none, while the first's still records ada (core-service-42).
   await signOut(home, second);
+  assert.deepEqual((await home.client.expectOk("intent.edit", { intentId: historical.id, text: "Edited offline" })).author, oldAuthor);
+  assert.deepEqual(JSON.parse(readFileSync(historicalPath, "utf8")).author, oldAuthor);
+  assert.deepEqual((await home.client.expectOk("intent.close", { intentId: historical.id, as: "dropped" })).author, oldAuthor);
+  assert.ok(!existsSync(historicalPath), "dropping an undispatched intent still removes its file");
   assert.equal(await authorOf(south, "Signed out there"), undefined);
-  assert.deepEqual(await authorOf(north, "Still at the first"), { login: ada.login, displayName: ada.displayName });
+  assert.deepEqual(await authorOf(north, "Still at the first"), { login: ada.login, displayName: ada.login });
   assert.equal(await authorOf(local, "Still here alone"), undefined);
 });
 
@@ -1925,7 +1944,7 @@ test("git-host-25, space-84, space-60, storage-36, storage-5, git-host-22, git-h
   assert.ok(followed.some((entry) => entry.push), "pushed through the shared transport");
   assert.deepEqual([...new Set(followed.map((entry) => entry.instance))], [second.url], "with credentials the second issued");
   assert.equal(git(bareOf(second, followedKey), "rev-parse", "spex"), git(clone, "rev-parse", "spex"));
-  assert.equal(git(clone, "log", "-1", "--format=%an <%ae>", "spex"), `Ada Lovelace <${LOGIN}@users.noreply.127.0.0.1>`);
+  assert.equal(git(clone, "log", "-1", "--format=%an <%ae>", "spex"), `${LOGIN} <${LOGIN}@users.noreply.127.0.0.1>`);
   const after = await home.client.expectOk("space.get", {});
   assert.deepEqual(rowsUnder(after, second.url, LOGIN), [[followedKey, "reachable", second.url]]);
 

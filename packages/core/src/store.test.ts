@@ -802,7 +802,7 @@ test("storage-4: one closed file per intent; a malformed one is reported, kept a
   reopened.close();
 });
 
-test("storage-4: a capture writes format 2 with its runtime; edit, dispatch and close keep a file's format and runtime; format 3 and a misplaced runtime are malformed", () => {
+test("storage-4: a capture writes format 2 with its runtime; edit, dispatch and close keep a file's format, historical author and runtime; format 3 and a misplaced runtime are malformed", () => {
   const dir = tempRoot(); const store = new Store({ machineIdentity, dir, own: "tester" });
   const project = store.registerProject(join(tmpdir(), "spex-runtime"), "runtime", 1);
   const intents = join(dir, "workspace", "tester", "runtime-spex", "intents");
@@ -813,10 +813,12 @@ test("storage-4: a capture writes format 2 with its runtime; edit, dispatch and 
   assert.equal(store.home.device, device);
   const runtime = { device, label: "laptop" };
 
-  // A capture is written at format 2 with this home's runtime.
+  // A capture is written at format 2 with this home's runtime. A stored
+  // personal name from an older client stays part of that snapshot.
   const captured = "71000000-0000-4000-8000-000000000011";
-  store.addIntent({ id: captured, projectId: project.id, text: "Captured", createdAt: 1, runtime });
-  assert.deepEqual(read(captured), { format: 2, id: captured, text: "Captured", runtime, createdAt: 1 });
+  const author = { login: "ada", displayName: "Ada Lovelace" };
+  store.addIntent({ id: captured, projectId: project.id, text: "Captured", createdAt: 1, runtime, author });
+  assert.deepEqual(read(captured), { format: 2, id: captured, text: "Captured", runtime, author, createdAt: 1 });
   assert.deepEqual(store.getIntent(captured)?.runtime, runtime);
 
   // A format 1 file, written before runtimes were recorded, reads with none.
@@ -825,12 +827,17 @@ test("storage-4: a capture writes format 2 with its runtime; edit, dispatch and 
   assert.ok(!Object.hasOwn(store.getIntent(former)!, "runtime"));
 
   // An edit, a dispatch and a close rewrite each file whole, keeping its
-  // format and its runtime as they were.
+  // format, captured author and runtime as they were.
   const kept = (id: string, format: 1 | 2): Record<string, unknown> => {
     const file = read(id);
     assert.equal(file.format, format, id);
-    if (format === 2) assert.deepEqual(file.runtime, runtime);
-    else assert.ok(!Object.hasOwn(file, "runtime"), id);
+    if (format === 2) {
+      assert.deepEqual(file.runtime, runtime);
+      assert.deepEqual(file.author, author);
+    } else {
+      assert.ok(!Object.hasOwn(file, "runtime"), id);
+      assert.ok(!Object.hasOwn(file, "author"), id);
+    }
     return file;
   };
   for (const [id, format, turnId] of [[captured, 2, 1], [former, 1, 2]] as const) {

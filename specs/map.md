@@ -192,6 +192,8 @@ meta.md       The spec of specs
 
 | [DR-168](decisions/168-independent-package-registry.md) | 168-independent-package-registry.md | Independent registry setting and account, shared CLI and IDE package operations, public Space discovery, preserved legacy sources and private package sign-in per seat |
 
+| [DR-171](decisions/171-personal-names-are-space-logins.md) | 171-personal-names-are-space-logins.md | Personal names are Space logins: member labels and new commit and intent attribution use the login; historical attribution and compatible fields are preserved |
+
 ## Packages
 
 | File | Summary |
