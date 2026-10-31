@@ -49,9 +49,14 @@ export interface Requests {
 }
 
 export class RequestsError extends Error {
-  constructor(readonly issues: Issue[]) {
-    super(`spex.yaml refused: ${issues.map((issue) => issue.message).join("; ")}`);
+  /** The format a `spex.yaml` from a newer Spex names, where it names one. */
+  readonly newerFormat?: number;
+  constructor(readonly issues: Issue[], newerFormat?: number) {
+    super(newerFormat !== undefined
+      ? `spex.yaml is from a newer Spex (format ${newerFormat})`
+      : `spex.yaml does not read: ${issues.map((issue) => issue.message).join("; ")}`);
     this.name = "RequestsError";
+    if (newerFormat !== undefined) this.newerFormat = newerFormat;
   }
 }
 
@@ -87,10 +92,10 @@ const REQUEST_FIELDS = new Set(["version", "path", "git", "rev", "select", "alia
 export function requestIssues(name: string, request: unknown): Issue[] {
   const at = `packages.${name}`;
   const issues: Issue[] = [];
-  if (!isPackageName(name)) issues.push({ path: at, rule: "name", message: `"${name}" is not a <org>/<pkg> name` });
-  if (!isPlainObject(request)) return [...issues, { path: at, rule: "request", message: `the request for ${name} is not a mapping` }];
+  if (!isPackageName(name)) issues.push({ path: at, rule: "name", message: `"${name}" is not a package name: use <org>/<pkg>, like acme/tool` });
+  if (!isPlainObject(request)) return [...issues, { path: at, rule: "request", message: `${name} is not a mapping` }];
   for (const key of Object.keys(request)) {
-    if (!REQUEST_FIELDS.has(key) && !key.startsWith("x-")) issues.push({ path: at, rule: "field", message: `the request for ${name} has unknown field "${key}"` });
+    if (!REQUEST_FIELDS.has(key) && !key.startsWith("x-")) issues.push({ path: at, rule: "field", message: `${name} has an unknown field "${key}"` });
   }
   const sources = [
     request.version !== undefined ? "registry" : undefined,
@@ -98,18 +103,18 @@ export function requestIssues(name: string, request: unknown): Issue[] {
     request.path !== undefined && request.git === undefined ? "path" : undefined,
   ].filter(Boolean);
   if (sources.length !== 1) {
-    issues.push({ path: at, rule: "source", message: `the request for ${name} must name exactly one source: version, path, or git with rev` });
+    issues.push({ path: at, rule: "source", message: `${name} needs exactly one of version, path, or git with rev` });
   } else if (sources[0] === "registry") {
-    if (!isRequirement(request.version)) issues.push({ path: at, rule: "version", message: `${JSON.stringify(request.version)} is not a version requirement: use 1.2.3, ^1.2.3 or ~1.2.3` });
-    if (request.rev !== undefined || request.path !== undefined) issues.push({ path: at, rule: "source", message: `the request for ${name} must name exactly one source` });
+    if (!isRequirement(request.version)) issues.push({ path: at, rule: "version", message: `${JSON.stringify(request.version)} is not a version: use 1.2.3, ^1.2.3 or ~1.2.3` });
+    if (request.rev !== undefined || request.path !== undefined) issues.push({ path: at, rule: "source", message: `${name} needs exactly one of version, path, or git with rev` });
   } else if (sources[0] === "path") {
     if (typeof request.path !== "string" || !isInsidePath(request.path)) {
-      issues.push({ path: at, rule: "path", message: `path ${JSON.stringify(request.path)} is not a relative folder inside the working folder or your own group's clone` });
+      issues.push({ path: at, rule: "path", message: `path ${JSON.stringify(request.path)} is not a relative folder inside the project folder or your Personal records` });
     }
-    if (request.rev !== undefined) issues.push({ path: at, rule: "source", message: `rev belongs to a git request` });
+    if (request.rev !== undefined) issues.push({ path: at, rule: "source", message: `rev goes with git` });
   } else {
-    if (typeof request.git !== "string" || request.git.trim() === "") issues.push({ path: at, rule: "git", message: `git is not a repository` });
-    if (typeof request.rev !== "string" || request.rev.trim() === "" || request.rev.startsWith("-")) issues.push({ path: at, rule: "git", message: `a git request names a rev: a branch, tag or commit` });
+    if (typeof request.git !== "string" || request.git.trim() === "") issues.push({ path: at, rule: "git", message: `git names no repository` });
+    if (typeof request.rev !== "string" || request.rev.trim() === "" || request.rev.startsWith("-")) issues.push({ path: at, rule: "git", message: `git needs a rev: a branch, tag or commit` });
     if (request.path !== undefined && (typeof request.path !== "string" || !isInsidePath(request.path))) {
       issues.push({ path: at, rule: "path", message: `path ${JSON.stringify(request.path)} is not a relative folder inside the repository` });
     }
@@ -160,7 +165,10 @@ function toRequest(value: Record<string, unknown>): Request {
 export function parseRequestsValue(raw: unknown): Requests {
   const issues: Issue[] = [];
   if (!isPlainObject(raw)) throw new RequestsError([{ rule: "requests", message: "spex.yaml is not a mapping" }]);
-  if (raw.format !== 1) throw new RequestsError([{ rule: "format", message: `format ${JSON.stringify(raw.format ?? null)} is not the known format 1` }]);
+  if (typeof raw.format === "number" && Number.isInteger(raw.format) && raw.format > 1) {
+    throw new RequestsError([{ rule: "format", message: `spex.yaml is from a newer Spex (format ${raw.format})` }], raw.format);
+  }
+  if (raw.format !== 1) throw new RequestsError([{ rule: "format", message: `format ${JSON.stringify(raw.format ?? null)} is not format 1` }]);
   for (const key of Object.keys(raw)) {
     if (key !== "format" && key !== "language" && key !== "space" && key !== "registry" && key !== "packages" && !key.startsWith("x-")) {
       issues.push({ rule: "field", message: `unknown field "${key}"` });
@@ -175,7 +183,7 @@ export function parseRequestsValue(raw: unknown): Requests {
   }
   if (raw.registry !== undefined) {
     const refusal = spaceRefusal(raw.registry);
-    if (refusal !== null) issues.push({ rule: "registry", message: refusal.replace(/space/g, "registry") });
+    if (refusal !== null) issues.push({ rule: "registry", message: refusal.replace(/^space/, "registry").replace(/a Space address/, "a registry address") });
   }
   const packages: Record<string, Request> = {};
   const rawPackages = raw.packages ?? {};
@@ -203,14 +211,14 @@ export function parseRequestsValue(raw: unknown): Requests {
  * is named by that reason alone, never repeated, as it may hold a
  * secret. */
 function spaceRefusal(value: unknown): string | null {
-  if (typeof value !== "string") return `space ${JSON.stringify(value)} is not an instance origin`;
+  if (typeof value !== "string") return `space ${JSON.stringify(value)} is not a Space address`;
   try {
     canonicalOrigin(value);
     return null;
   } catch (error) {
     if (!(error instanceof OriginRefused)) throw error;
     const named = error.reason === "user" ? "space" : `space ${JSON.stringify(value)}`;
-    return `${named} is not an instance origin: ${error.message.replace(/^origin refused: /, "")}`;
+    return `${named} is not a Space address: ${error.message.replace(/^origin refused: /, "")}`;
   }
 }
 

@@ -1,26 +1,30 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// `spex update` (cli-5, environments-5): resolve again from `spex.yaml`,
-// install and export, and print each spec package whose version moved,
-// with both versions, or that nothing moved.
+// `spex update` (cli-5, environments-5): pick again the newest versions
+// `spex.yaml` allows, install and place the skills, and print each
+// package whose version changed, with both versions, or that everything
+// is up to date. A `spex.lock` that does not read is written anew.
 
 import { Environment } from "./environment.js";
-import { changeLine, leftOutLines, leftToAppLines, lockChanges, settle } from "./settle.js";
+import { changeLine, leftToAppLines, lockChanges, missingPathLines, settle } from "./settle.js";
 import { parsed, Refusal, type Command } from "./run.js";
 
 export const update: Command = async (args) => {
-  parsed("update", args, {}, { min: 0, max: 0, usage: "" });
+  parsed("update", args, {}, { min: 0, max: 0 });
   const env = new Environment();
-  if (env.readRequests() === null) throw new Refusal(`${env.root} holds no spex.yaml; spex add <org>/<pkg> makes one`);
+  const read = env.readRequests();
+  if (read === null) throw new Refusal(`no spex.yaml in ${env.root} — spex add <org>/<pkg>`);
   const settled = await settle(env, "resolve");
   if (settled === null) return;
-  // Each version moved, both named; a source changed at one version is
-  // no move of version (cli-5).
+  // Each version changed, both named; a source changed at one version is
+  // no change of version (cli-5).
+  const added = new Set(Object.keys(read.requests.packages));
   const lines = lockChanges(env.root, settled.before, settled.lock)
     .filter((change) => change.from !== change.to)
-    .map((change) => changeLine({ name: change.name, from: change.from, to: change.to }));
-  if (lines.length === 0) lines.push("Nothing moved.");
-  lines.push(...leftToAppLines(env.root, settled), ...leftOutLines(settled.exported));
+    .map((change) => changeLine({ name: change.name, from: change.from, to: change.to }, settled.lock, added));
+  if (settled.before === null && settled.lockWritten) lines.unshift("Wrote spex.lock");
+  else if (lines.length === 0) lines.push("Up to date");
+  lines.push(...missingPathLines(settled), ...leftToAppLines(env.root, settled));
   console.log(lines.join("\n"));
 };
