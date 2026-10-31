@@ -1580,9 +1580,10 @@ export class Store {
     mkdirSync(dir, { recursive: true, mode: 0o700 });
     writeApplicationFile(join(dir, "project.json"), { format: 1, name: name || basename(normalized), remote: folderRemote(normalized, this.env) });
     // The environment lives with the code (environments-26): written at
-    // the working folder's root where it holds neither file, a folder
-    // holding one being installed from it, never in the clone (storage-6).
-    if (!existsSync(join(normalized, "spex.yaml")) && !existsSync(join(normalized, "spex.lock"))) this.prepareRepository(dir, key, normalized);
+    // the working folder's root where it holds no `spex.yaml`, a stray
+    // lock left as it is, a folder holding one being installed from it,
+    // never in the clone (storage-6).
+    if (!existsSync(join(normalized, "spex.yaml"))) this.prepareRepository(dir, key, normalized);
     this.initializeRepository(dir);
     this.homeFile.pair(normalized, key);
     this.saveHome();

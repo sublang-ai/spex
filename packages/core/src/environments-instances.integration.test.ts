@@ -354,6 +354,7 @@ test("environments-34, environments-5, environments-12, environments-3, environm
   assert.equal(spaceOf(home, joined), second.url, "[environments-11] the pairing names the second as space");
   const rebound = await joinAt(home, second, "acme/rebound-spex");
   assert.equal(existsSync(join(clonePath(home.dataDir, rebound), "spex.yaml")), false, "a bare join requests nothing");
+  assert.equal((await home.client.expectOk("environment.get", { repository: rebound })).committed, null, "[environments-14] no working folder on this device: committed is unknown, not false");
   await home.client.expectOk("project.rebind", { projectId: rebound, path: gitFolder("rebound") });
   await environmentOf(home, rebound, (candidate) => installedFrom(candidate, BUILTIN_PACKAGE_NAME, PUBLIC_REGISTRY_ORIGIN));
   assert.equal(registryOf(lockOf(home, rebound), BUILTIN_PACKAGE_NAME), PUBLIC_REGISTRY_ORIGIN);
@@ -365,6 +366,14 @@ test("environments-34, environments-5, environments-12, environments-3, environm
   await environmentOf(home, atFirst, (candidate) => installedFrom(candidate, BUILTIN_PACKAGE_NAME, PUBLIC_REGISTRY_ORIGIN));
   assert.equal(registryOf(lockOf(home, atFirst), BUILTIN_PACKAGE_NAME), PUBLIC_REGISTRY_ORIGIN);
   assert.equal(spaceOf(home, atFirst), first.url, "a fresh independent environment records collaboration separately from its public registry");
+  // A local-only project picked into the first, the default instance,
+  // names it as space all the same (environments-11).
+  const { key: north } = await addFolder(home, gitFolder("north"));
+  assert.equal(spaceOf(home, north), undefined, "local only: no space");
+  const atDefault = await pickAt(home, north, first, "north");
+  await environmentOf(home, atDefault, () => spaceOf(home, atDefault) === first.url);
+  assert.equal(spaceOf(home, atDefault), first.url, "[environments-34] a pick into the default instance names it as space");
+  assert.equal((await home.client.expectOk("environment.get", { repository: atDefault })).instance, first.url, "[environments-2] the state names the environment's instance");
 
   // A `space` that is no instance origin is refused naming it
   // (environments-2), the files kept as they stand.
