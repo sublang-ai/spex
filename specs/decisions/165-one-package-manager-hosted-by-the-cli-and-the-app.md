@@ -17,6 +17,7 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 - [DR-161](161-an-applet-is-a-page-the-ide-serves.md) in where an installed applet's folder stands.
 
 Amended by [DR-168](168-independent-package-registry.md) for independent registry selection, account authority and credentials; Space collaboration and server admission remain unchanged.
+Amended by [DR-170](170-space-is-written-at-every-pairing.md) in that sentence: `space` is written at every pairing and pick naming the project's instance, the home's default included.
 
 ## Context
 
