@@ -83,10 +83,6 @@ export interface InstallOptions {
   /** The environment's root (environments-26): its `.spex/` holds the
    * installed files. */
   root: string;
-  /** Where `spex.yaml` and `spex.lock` stand: the root where omitted. The
-   * app's projects keep them in their spex repository's clone until
-   * their environment moves into the working folder (DR-113). */
-  filesDir?: string;
   lock: Lock;
   /** The version of `spex.lock` this lock was read as or written as —
    * null where none stands: a lock on disk at any other version by the
@@ -119,7 +115,7 @@ export interface InstallOptions {
   /** Whether `pathRoot` is your own group's clone, whose path sources
    * hold only what its sync carries (environments-32). */
   confined?: boolean;
-  /** `spex.yaml`'s text; read from `filesDir` when omitted. */
+  /** `spex.yaml`'s text; read from the root when omitted. */
   requestsText?: string | null;
   /** The host's engine; with none, nothing is prepared or linked. */
   engine?: InstallEngine;
@@ -247,18 +243,16 @@ export function installedPackages(root: string, lock: Lock): Set<string> {
   return out;
 }
 
-/** Refuse a swap the files changed under (DR-111): the root or the
- * folder of its files gone, its lock no longer at the version installed,
+/** Refuse a swap the files changed under (DR-111): the root gone, its
+ * lock no longer at the version installed,
  * or the lock no longer matching `spex.yaml` or a path source's
  * manifest. */
 function assertCurrent(options: InstallOptions): void {
   const { root, lock, pathRoot } = options;
-  const filesDir = options.filesDir ?? root;
-  const lockFile = join(filesDir, "spex.lock");
+  const lockFile = join(root, "spex.lock");
   if (!existsSync(root)) throw new VersionConflictError(root);
-  if (!existsSync(filesDir)) throw new VersionConflictError(filesDir);
   if (fileVersion(lockFile) !== options.lockVersion) throw new VersionConflictError(lockFile);
-  const requestsFile = join(filesDir, "spex.yaml");
+  const requestsFile = join(root, "spex.yaml");
   const requestsText = existsSync(requestsFile) ? readFileSync(requestsFile, "utf8") : null;
   let stale = false;
   try {
@@ -552,11 +546,10 @@ async function assertConfined(lock: Lock, pathRoot: string): Promise<void> {
 /** Install a lock's selected files (environments-7). */
 export async function install(options: InstallOptions): Promise<InstallReport> {
   const { root, lock, store, pathRoot } = options;
-  const filesDir = options.filesDir ?? root;
   const missingPaths = missingPathSources(lock, pathRoot);
   const requestsText = options.requestsText !== undefined
     ? options.requestsText
-    : existsSync(join(filesDir, "spex.yaml")) ? readFileSync(join(filesDir, "spex.yaml"), "utf8") : null;
+    : existsSync(join(root, "spex.yaml")) ? readFileSync(join(root, "spex.yaml"), "utf8") : null;
   const staleness = lockStaleness(lock, requestsText, (path) => (pathRoot === null ? null : readPathManifest(join(pathRoot, ...path.split("/")))));
   if (staleness.stale) return { installed: [], missingPaths, stale: staleness.reasons, unchanged: true, engineKept: [] };
 

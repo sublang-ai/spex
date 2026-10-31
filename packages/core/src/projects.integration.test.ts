@@ -151,18 +151,19 @@ test("projects-21: removal deletes the clone behind a second confirm naming its 
   assert.ok(existsSync(join(folder, ".claude", "skills", "code", "SKILL.md")), "the environment exported its skills into the folder");
 
   // The first confirm meets what would be lost, named by count: the
-  // session's unit, and the environment the new spex repository
-  // requests the built-in spec package in (storage-6, environments-11).
+  // session's unit alone, the environment standing in the working
+  // folder, not the clone (storage-6, environments-26).
   const refused = await client.command("project.remove", { projectId: project.id });
   assert.ok(!refused.ok);
   assert.equal(refused.error.code, "conflict");
-  assert.match(refused.error.message, /2 records have not reached the host/);
-  assert.deepEqual(refused.error.details, { units: 2 });
+  assert.match(refused.error.message, /^1 record has not reached the host/);
+  assert.deepEqual(refused.error.details, { units: 1 });
   assert.ok(existsSync(clone), "nothing is deleted before the second confirm");
 
-  // The environment's installed tree as the removal finds it: it stays
-  // with the folder byte for byte (environments-26).
-  const inSpex = ([path]: [string, string]): boolean => path === ".spex" || path.startsWith(`.spex${sep}`);
+  // The environment as the removal finds it — its two files and its
+  // installed tree — stays with the folder byte for byte
+  // (environments-26).
+  const inSpex = ([path]: [string, string]): boolean => path === ".spex" || path.startsWith(`.spex${sep}`) || path === "spex.yaml" || path === "spex.lock";
   const spexBefore = new Map([...snapshot(folder)].filter(inSpex));
   assert.ok(spexBefore.size > 1, "the installed tree stands under .spex/");
 

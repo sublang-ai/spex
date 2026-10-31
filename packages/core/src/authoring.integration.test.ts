@@ -503,7 +503,7 @@ test("playbook-library-72: a draft is authored, compiled, proposed, and register
   // clone, which does not hold this package: refused, with no config or
   // environment write (playbook-library-7).
   const ownClone = join(harness.dataDir, "workspace", "tester", "tester-spex");
-  const written = (): (string | null)[] => [configPath, projectConfig, join(clone, "spex.yaml"), join(ownClone, "spex.yaml"), join(ownClone, "spex.lock"), join(ownClone, "config", "playbook.config.yaml")]
+  const written = (): (string | null)[] => [configPath, projectConfig, join(harness.dir, "project", "spex.yaml"), join(ownClone, "spex.yaml"), join(ownClone, "spex.lock"), join(ownClone, "config", "playbook.config.yaml")]
     .map((file) => (existsSync(file) ? readFileSync(file, "utf8") : null));
   const before = written();
   const refused = await client.expectError("draft.register", {
@@ -526,9 +526,9 @@ test("playbook-library-72: a draft is authored, compiled, proposed, and register
     newPlayers: { "dev.triager": { adapter: "claude" } },
   });
   assert.equal(state.status, "valid");
-  const requests = parseYaml(readFileSync(join(clone, "spex.yaml"), "utf8")) as { packages: Record<string, unknown> };
+  const requests = parseYaml(readFileSync(join(harness.dir, "project", "spex.yaml"), "utf8")) as { packages: Record<string, unknown> };
   assert.deepEqual(requests.packages["acme/triage"], { path: "spex-packages/acme/triage" });
-  const lock = parseYaml(readFileSync(join(clone, "spex.lock"), "utf8")) as { packages: Record<string, { exports: Record<string, string>; source: Record<string, unknown> }> };
+  const lock = parseYaml(readFileSync(join(harness.dir, "project", "spex.lock"), "utf8")) as { packages: Record<string, { exports: Record<string, string>; source: Record<string, unknown> }> };
   assert.deepEqual(lock.packages["acme/triage"]?.exports, { triage: "triage" });
   assert.equal(lock.packages["acme/triage"]?.source.path, "spex-packages/acme/triage");
   const own = parseYaml(readFileSync(configPath, "utf8")) as { players: Record<string, unknown>; playbooks: Record<string, unknown> };
@@ -1248,6 +1248,12 @@ test("playbook-library-104: New playbook's defaults come from the orgs the regis
       { path: realpathSync(workingFolder(join(dir, "graph-second"))), repository: atSecond },
     ],
   }));
+  // Each working folder holds the environment its pairing wrote, naming
+  // the project's instance as its Space (environments-11,
+  // environments-26).
+  for (const [name, origin] of [["graph-first", first.url], ["graph-second", second.url]] as const) {
+    writeFileSync(join(dir, name, "spex.yaml"), `format: 1\nspace: ${origin}\npackages: {}\n`);
+  }
   const pair = (access: string) => ({ access, accessExpiresAt: Date.now() + 3_600_000, refresh: "refresh" });
   writeFileSync(join(state, "local", "credentials.yaml"), stringifyYaml({
     format: 1, hosts: { [first.url]: pair("first-token"), [second.url]: pair("second-token") },

@@ -338,18 +338,20 @@ function builtinResolution(pkg: BuiltinPackage, registryUrl: string): Lock["pack
 }
 
 /**
- * A new clone's environment (environments-11, storage-6): `spex.yaml`
- * requesting the built-in spec package where it does not — with `space`
- * naming the environment's instance where one is given, the caller
- * giving it where that is not the home's default instance — and, where
- * that is all it requests and no lock stands, its lock, so the clone's
- * first commit holds both. Returns whether `spex.yaml` was written.
+ * A new environment at its root (environments-11, storage-6): your own
+ * group's clone, or a project's working folder at its pairing.
+ * `spex.yaml` requests the built-in spec package where it does not —
+ * with `space` naming the environment's instance where one is given, the
+ * caller giving the instance its spex repository is placed at wherever
+ * it has one — and, where that is all it requests and no lock stands,
+ * its lock, so the first commit holding either holds both. Returns
+ * whether `spex.yaml` was written.
  */
-export function prepareBuiltinEnvironment(cloneDir: string, pkg: BuiltinPackage, registryUrl: string, space: string | null = null): boolean {
-  const wrote = ensureBuiltinRequest(cloneDir, pkg.version, space);
-  const lockFile = join(cloneDir, "spex.lock");
+export function prepareBuiltinEnvironment(root: string, pkg: BuiltinPackage, registryUrl: string, space: string | null = null): boolean {
+  const wrote = ensureBuiltinRequest(root, pkg.version, space);
+  const lockFile = join(root, "spex.lock");
   if (existsSync(lockFile)) return wrote;
-  const { bytes } = readVersioned(join(cloneDir, "spex.yaml"));
+  const { bytes } = readVersioned(join(root, "spex.yaml"));
   if (bytes === null) return wrote;
   const text = bytes.toString("utf8");
   let requested: string[];
@@ -360,27 +362,28 @@ export function prepareBuiltinEnvironment(cloneDir: string, pkg: BuiltinPackage,
     writeVersionedBytes(lockFile, serializeLock(builtinLock(pkg, registryUrl, text)), null);
   } catch (error) {
     // The first resolve writes it instead.
-    console.error(`spex: ${cloneDir} holds no lock yet: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(`spex: ${root} holds no lock yet: ${error instanceof Error ? error.message : String(error)}`);
   }
   return wrote;
 }
 
 /**
- * Move a clone's built-in lock to `registryUrl` where its environment is
+ * Move an environment's built-in lock to `registryUrl` where it is
  * still the one a pairing prepared (environments-11, DR-127): `spex.yaml`
  * requesting the built-in spec package alone, and `spex.lock` exactly
- * the built-in lock at the registry it records, another than
- * `registryUrl`. A lock holding anything else — another release, another
- * package, a resolution of the reader's — is left as it is. Where
- * `space` is given — the instance placed at is not the home's default —
- * `spex.yaml` names it first, and the lock follows its bytes (DR-165).
+ * the built-in lock at the registry it records — another than
+ * `registryUrl`, or that one while `spex.yaml` does not name `space`.
+ * A lock holding anything else — another release, another package, a
+ * resolution of the reader's — is left as it is. Where `space` is given
+ * — the instance placed at — `spex.yaml` names it first, and the lock
+ * follows its bytes (DR-165).
  * Written under the versions read, a file changed meanwhile left
  * standing (DR-111). Returns whether it wrote.
  */
-export function rehomeBuiltinLock(cloneDir: string, pkg: BuiltinPackage, registryUrl: string, space: string | null = null): boolean {
+export function rehomeBuiltinLock(root: string, pkg: BuiltinPackage, registryUrl: string, space: string | null = null): boolean {
   const target = registryUrl.replace(/\/+$/, "");
-  const lockFile = join(cloneDir, "spex.lock");
-  const requests = readVersioned(join(cloneDir, "spex.yaml"));
+  const lockFile = join(root, "spex.lock");
+  const requests = readVersioned(join(root, "spex.yaml"));
   const locked = readVersioned(lockFile);
   if (requests.bytes === null || locked.bytes === null) return false;
   const text = requests.bytes.toString("utf8");
@@ -394,15 +397,19 @@ export function rehomeBuiltinLock(cloneDir: string, pkg: BuiltinPackage, registr
     return false;
   }
   const source = lock.packages[BUILTIN_PACKAGE_NAME]?.source;
-  if (Object.keys(lock.packages).length !== 1 || !source || !isRegistrySource(source) || source.registry === target) return false;
+  if (Object.keys(lock.packages).length !== 1 || !source || !isRegistrySource(source)) return false;
+  // Nothing to move where the lock records the target already and
+  // `spex.yaml` names the instance placed at, or none is given.
+  const naming = space !== null && parseRequests(text).space !== space;
+  if (source.registry === target && !naming) return false;
   if (current !== serializeLock(builtinLock(pkg, source.registry, text))) return false;
   let next = text;
-  if (space !== null && parseRequests(text).space !== space) {
+  if (naming) {
     const doc = parseDocument(text);
     setSpaceIn(doc, space);
     next = doc.toString({ lineWidth: 0 });
     parseRequests(next);
-    try { writeVersionedBytes(join(cloneDir, "spex.yaml"), next, requests.version); }
+    try { writeVersionedBytes(join(root, "spex.yaml"), next, requests.version); }
     catch (error) {
       if (error instanceof VersionConflictError) return false;
       throw error;
@@ -418,19 +425,19 @@ export function rehomeBuiltinLock(cloneDir: string, pkg: BuiltinPackage, registr
 }
 
 /**
- * Request the built-in spec package at a caret requirement in a spex
- * repository's `spex.yaml` where it is not requested (environments-11,
- * storage-6): written synchronously, so a clone's first commit already
- * holds it; comments and key order of an existing file are kept, and the
- * file is written under the version read, so a file changed meanwhile is
- * refused as a conflict (DR-111). Where `space` is given and the file
+ * Request the built-in spec package at a caret requirement in an
+ * environment's `spex.yaml` at its root where it is not requested
+ * (environments-11, storage-6): written synchronously, so a clone's
+ * first commit already holds it; comments and key order of an existing
+ * file are kept, and the file is written under the version read, so a
+ * file changed meanwhile is refused as a conflict (DR-111). Where `space` is given and the file
  * names none, the request names it as the environment's instance
  * (environments-2, DR-165). A file that does not read is left as it is.
  * Returns whether it wrote.
  */
-export function ensureBuiltinRequest(cloneDir: string, version: string, space: string | null = null): boolean {
-  const file = join(cloneDir, "spex.yaml");
-  mkdirSync(cloneDir, { recursive: true });
+export function ensureBuiltinRequest(root: string, version: string, space: string | null = null): boolean {
+  const file = join(root, "spex.yaml");
+  mkdirSync(root, { recursive: true });
   const read = readVersioned(file);
   const text = read.bytes === null ? "" : read.bytes.toString("utf8");
   if (read.bytes !== null) {

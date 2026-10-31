@@ -28,7 +28,7 @@ import { encodePlacementFile, PLACEMENTS_DIR } from "./placements.js";
 import type { GroupsState, RepositoryState } from "./protocol.js";
 import type { SpaceStepEvent } from "./space.js";
 import type { StandinHost } from "./testing/standin-host.js";
-import { bareOf, clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, placementOf, repositoryOf, rowsOf, syncRecordsOf, remoteNamesOf } from "./testing/space-harness.js";
+import { bareOf, clonePath, createSpaceHarness, environmentRoot, hostFolder, hostKey, instanceOf, placementOf, repositoryOf, rowsOf, syncRecordsOf, remoteNamesOf } from "./testing/space-harness.js";
 
 const fixture = createSpaceHarness();
 const { scratch, git, gitFolder, addFolder, peerClone, peerPush, runTurn, sleep, startHome, startHost, signIn, signOut } = fixture;
@@ -370,11 +370,12 @@ test("space-93, space-99, space-90, space-87, space-29, space-61, space-62, spac
   assert.ok(existsSync(clonePath(three.dataDir, movedKey)) && !existsSync(threeClone), "the clone moved under the first's new group");
 });
 
-/** A clone's `spex.lock`, as written, the registry it records for the
- * built-in spec package (environments-11). */
+/** An environment's `spex.lock` at its root (environments-26), as
+ * written, the registry it records for the built-in spec package
+ * (environments-11). */
 function builtinRegistryOf(home: Device, key: string): string | null {
   try {
-    const lock = parseLock(readFileSync(join(clonePath(home.dataDir, key), "spex.lock"), "utf8"));
+    const lock = parseLock(readFileSync(join(environmentRoot(home.dataDir, key), "spex.lock"), "utf8"));
     const source = lock.packages[BUILTIN_PACKAGE_NAME]?.source as RegistrySourceLock | undefined;
     return source && "registry" in source ? source.registry : null;
   } catch { return null; }

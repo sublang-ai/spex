@@ -1727,8 +1727,10 @@ test("space-73, storage-5, space-5, space-98, space-61, space-11, space-12: a pa
   assert.ok(prefsOf(home.dataDir)[`sync:${moved}:${folder}:last`], "its last sync recorded");
 
   // Leaving that placement, the clone's last, stops first for every
-  // record unit it holds — its environment — none remaining to receive
-  // it, nothing dropped (space-98).
+  // record unit it holds — a note of the project's, its environment
+  // standing in the working folder (environments-26) — none remaining
+  // to receive it, nothing dropped (space-98).
+  writeFileSync(join(movedClone, "notes.md"), "a record of the project's\n");
   const atHost = git(bareOf(host, moved), "rev-parse", "spex");
   const unconfirmed = await home.client.settle("space.leave", { repository: moved, instance: host.url }, 30_000);
   assert.deepEqual(unconfirmed.sync, { phase: "stopped", op: "leave", step: "check", cause: "unreceived", message: "1 record has reached no other placement", guidance: "Confirm to remove it anyway.", retry: true, count: 1 });
@@ -1746,6 +1748,7 @@ test("space-73, storage-5, space-5, space-98, space-61, space-11, space-12: a pa
   const localClone = clonePath(home.dataDir, local);
   assert.deepEqual([left.sync, left.state, left.instance, left.id, left.placements], [{ phase: "idle" }, "local-only", null, null, []], JSON.stringify(left));
   assert.ok(existsSync(join(localClone, ".git")) && !existsSync(movedClone), "moved under your own group's folder");
+  assert.equal(readFileSync(join(localClone, "notes.md"), "utf8"), "a record of the project's\n", "its records kept");
   assert.equal(Home.load(home.dataDir).keyForFolder(code), local, "its pair follows it");
   assert.deepEqual(remotesOf(localClone), []);
   assert.equal(spawnSync("git", ["-C", localClone, "config", "--get-regexp", "^remote\\."]).status, 1, "no remote, id or creation mark stays");
@@ -2986,8 +2989,9 @@ test("space-110: reported sign-in owns its completion and matched cancellation",
   const home = await startHome("reported-signin", { host, extra: { signIn: "browser" } });
   t.after(() => home.stop());
   const hello = home.client.messages.find((message) => message.type === "hello");
-  // The hello carries the protocol version alone, no client marker (core-service-1).
-  assert.ok(hello?.type === "hello" && hello.protocolVersion === PROTOCOL_VERSION && !Object.hasOwn(hello, "attachedCliVersion"));
+  // The hello names the current protocol version and no client
+  // (core-service-1, core-service-141).
+  assert.ok(hello?.type === "hello" && hello.protocolVersion === PROTOCOL_VERSION && !Object.hasOwn(hello, "attachedCliVersion"), "[core-service-141] the hello names the current protocol version and no client");
   const begin = async (target: typeof home) => {
     const from = target.client.mark();
     const start = await target.client.expectOk("space.signin.start", { url: host.url, reportCompletion: true });

@@ -12,6 +12,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import { tmpdir } from "node:os";
 import { basename, join, relative } from "node:path";
 import { WebSocket } from "ws";
+import { parse as parseYaml } from "yaml";
 import { CoreService, type CoreServiceOptions } from "../service.js";
 import type { SpaceStepEvent } from "../space.js";
 import { fakeAdapterImports } from "./fake-adapter.js";
@@ -454,6 +455,19 @@ export function ownClone(dataDir: string): string {
 /** A project's clone in a scratch home. */
 export function clonePath(dataDir: string, key: string): string {
   return join(dataDir, "workspace", ...key.split("/"));
+}
+
+/** Where a spex repository's environment stands in a scratch home
+ * (environments-26): your own group's clone, else the working folder
+ * `home.yaml` pairs with the key, which holds a project's `spex.yaml`
+ * and `spex.lock`. */
+export function environmentRoot(dataDir: string, key: string): string {
+  const clone = clonePath(dataDir, key);
+  if (clone === ownClone(dataDir)) return clone;
+  const home = parseYaml(readFileSync(join(dataDir, "home.yaml"), "utf8")) as { folders?: { path: string; repository: string }[] };
+  const folder = home.folders?.find((entry) => entry.repository === key)?.path;
+  assert.ok(folder, `${key} has a working folder`);
+  return folder;
 }
 
 /** A scratch home's preferences file, as written. */

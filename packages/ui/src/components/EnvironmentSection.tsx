@@ -10,7 +10,8 @@
 // the conflict report, Resolve again and Install where they apply, the
 // built-in release this app ships where the lock runs an older one with
 // Update resolving again, what the last export left out with Export
-// again installing, and Remove behind the inline confirm. The heading
+// again installing, a project's environment not committed with its code
+// said so, and Remove behind the inline confirm. The heading
 // names whose environment it is — the project by its name, or your own
 // group — never the spex repository behind it (DR-159). The ways to add
 // a spec package — from the registry, a folder or Git — stand directly
@@ -347,6 +348,14 @@ export function EnvironmentSection({
                 : i18n._({ id: "Update", comment: "resolve the environment again to run the built-in playbooks this app ships" })}
             </button>
           </div>
+        ) : null}
+        {state.committed === false ? (
+          <p data-testid="environment-uncommitted" className="text-xs text-neutral-500">
+            {i18n._({
+              id: "Not committed with the code",
+              comment: "a project's spex.yaml and spex.lock are not both in its code's HEAD, so its environment is this device's alone",
+            })}
+          </p>
         ) : null}
         {state.unexported ? (
           <div data-testid="environment-unexported" className={`${NOTICE} flex flex-col gap-1 [overflow-wrap:anywhere]`}>

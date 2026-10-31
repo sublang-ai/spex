@@ -19,6 +19,8 @@ import type { Captain } from "@sublang/cligent/tmux-play";
 
 import { academyCorpusDir } from "../forge.js";
 import { Store } from "../store.js";
+import { builtinPackage } from "../builtins.js";
+import { prepareBuiltinEnvironment } from "@sublang/spex/environment";
 import { fakeAdapterImports, type FakeScript } from "./fake-adapter.js";
 import { createScriptedCaptain, type CaptainTurnScript } from "./scripted-captain.js";
 
@@ -93,7 +95,14 @@ export async function seedDemoHistory(
   // for will read (storage-26): the harness's scratch home, not the
   // developer's.
   const machineIdentity = await resolveMachineIdentity(identity);
-  const store = await Store.open({ dir: dataDir, machineIdentity, ...(own ? { own } : {}) });
+  // The pairing writes the project's environment at its working
+  // folder's root as the core's own registration does (storage-6,
+  // environments-11, environments-26).
+  const builtin = builtinPackage();
+  const store = await Store.open({
+    dir: dataDir, machineIdentity, ...(own ? { own } : {}),
+    prepareRepository: (root, _key, registryOrigin, space) => { prepareBuiltinEnvironment(root, builtin, registryOrigin, space); },
+  });
   try {
     const project = store.registerProject(projectDir, "demo-project", 1);
     const sessionId = randomUUID();
