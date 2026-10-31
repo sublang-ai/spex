@@ -240,10 +240,10 @@ msgstr "{host} refused this computer's access"
 msgid "{host} refused: {words}"
 msgstr "{host} refused: {words}"
 
-#. A sign-in on a team server refused, nothing stored: the account approved at the Space is not the member the server was opened for; {host} is the Space's display name, {login} the login of the account that signed in
+#. A sign-in on a team server refused, nothing stored: the account approved at the Space is not the member the server was opened for, whose login the server does not know; {host} is the Space's display name, {login} the login of the account that signed in
 #: src/space-groups.ts
-msgid "{host} signed you in as @{login} — sign in as this server's member"
-msgstr "{host} signed you in as @{login} — sign in as this server's member"
+msgid "{host} signed you in as @{login} — sign in with your own account"
+msgstr "{host} signed you in as @{login} — sign in with your own account"
 
 #. A sign-in refused, nothing stored: the person signed in at a Space this computer already signs in to as another account; {host} is the Space's display name, {login} the login this computer signs in with there
 #: src/space-groups.ts
@@ -273,8 +273,8 @@ msgstr "{key} has no project folder on this computer"
 
 #. Refusal: a choice was sent for a change both sides agree on; {label} is the change's own label; Check is the Sync tab's control
 #: src/space.ts
-msgid "{label} needs no choice — Check again"
-msgstr "{label} needs no choice — Check again"
+msgid "{label} needs no choice — Check, then choose again"
+msgstr "{label} needs no choice — Check, then choose again"
 
 #. Refusal of Add to a group…: the project's records belong to one Space, and the pick named a group at another; {name} is the project, {host} its Space's display name
 #: src/space.ts
@@ -306,16 +306,6 @@ msgstr "{name} has no folder on this computer"
 msgid "{name} has no records at {host} to attach — Refresh, then Retry"
 msgstr "{name} has no records at {host} to attach — Refresh, then Retry"
 
-#. Refusal of sharing records at another Space: they are a group's own (or your Personal records), which stay at their one Space; {name} names them
-#: src/space.ts
-msgid "{name} holds a group's records, which stay at one Space"
-msgstr "{name} holds a group's records, which stay at one Space"
-
-#. Refusal of removing records from a Space: they are a group's own or your Personal records, which stay where they are; {name} names them
-#: src/space.ts
-msgid "{name} holds a group's records, which stay at their Space"
-msgstr "{name} holds a group's records, which stay at their Space"
-
 #. Refusal: a package added by its folder's path needs the project folder here; {name} is the package
 #: src/environments.ts
 msgid "{name} is added by path, which needs a project folder on this computer"
@@ -338,8 +328,8 @@ msgstr "{name} is in use elsewhere in {project}"
 
 #. Refusal: the act names a change the current comparison does not hold; {name} is the change's file or folder; Check is the Sync tab's control
 #: src/space.ts
-msgid "{name} is not among the changes — Check again"
-msgstr "{name} is not among the changes — Check again"
+msgid "{name} is not among the changes — Check, then choose again"
+msgstr "{name} is not among the changes — Check, then choose again"
 
 #. Refusal: a publish names its spec package as org/pkg, both lowercase kebab-case; {name} is what it named
 #: src/environments.ts
@@ -385,6 +375,12 @@ msgstr "{name} is taken in {group}; choose another name"
 #: src/service.ts
 msgid "{name} requested in spex.yaml"
 msgstr "{name} requested in spex.yaml"
+
+#. Refusal of sharing records at another Space, or of removing them from one: they are a group's own or your Personal records, which stay at their one Space; {name} names them
+#. Refusal of sharing records at another Space, or of removing them from one: they are a group's own or your Personal records, which stay at their one Space; {name} names them
+#: src/space.ts
+msgid "{name} stays at its one Space"
+msgstr "{name} stays at its one Space"
 
 #. A stopped sync: the Space renamed or moved the project's records, and the folder on this computer they would move to is taken; {path} is that folder
 #: src/space.ts
@@ -971,10 +967,10 @@ msgstr "act targets unknown intent {intentId}"
 msgid "Add it to a group first"
 msgstr "Add it to a group first"
 
-#. Guidance where an SSH remote refused access; the host key is SSH's own term for the server's key
+#. Guidance where an SSH remote refused access; the host key is SSH's own term for the server's key, asked on a first connection
 #: src/space-git.ts
-msgid "Add this computer's SSH key to an account that can see it; on a first connection, accept the host key in a terminal. Then Retry."
-msgstr "Add this computer's SSH key to an account that can see it; on a first connection, accept the host key in a terminal. Then Retry."
+msgid "Add this computer's SSH key to your account, accept a new host key in a terminal, then Retry"
+msgstr "Add this computer's SSH key to your account, accept a new host key in a terminal, then Retry"
 
 #. Refusal on a team server of opening another team server from it: a server opens no server of its own; the person opens it from their own computer
 #: src/service.ts
@@ -1089,30 +1085,35 @@ msgstr "Check the network or the remote URL, then try again."
 msgid "Check the network, then Retry."
 msgstr "Check the network, then Retry."
 
-#. Guidance where a local-path remote holds no repository this computer can see
+#. Guidance where a local-path remote holds no repository this computer can see: it may be absent or unreadable
 #: src/space-git.ts
-msgid "Check the path, create the repository if it is not there yet, or make sure this user can read the folder. Then Retry."
-msgstr "Check the path, create the repository if it is not there yet, or make sure this user can read the folder. Then Retry."
+msgid "Check the path, create the repository, or let this user read the folder, then Retry"
+msgstr "Check the path, create the repository, or let this user read the folder, then Retry"
 
-#. Guidance where an SSH remote holds no repository this computer can see
+#. Guidance where an SSH remote holds no repository this computer can see: it may be absent or private
 #: src/space-git.ts
-msgid "Check the URL, create the repository if it is not there yet, or add this computer's SSH key to an account that can see it. Then Retry."
-msgstr "Check the URL, create the repository if it is not there yet, or add this computer's SSH key to an account that can see it. Then Retry."
+msgid "Check the URL, create the repository, or add this computer's SSH key to your account, then Retry"
+msgstr "Check the URL, create the repository, or add this computer's SSH key to your account, then Retry"
 
-#. Guidance where a remote of an unread form holds no repository this computer can see
+#. Guidance where a GitHub remote holds no repository this computer can see: it may be absent or private; gh auth status is a terminal command and stays as it is
 #: src/space-git.ts
-msgid "Check the URL, create the repository if it is not there yet, or give this computer access to it. Then Retry."
-msgstr "Check the URL, create the repository if it is not there yet, or give this computer access to it. Then Retry."
+msgid "Check the URL, create the repository, or check your GitHub account with gh auth status, then Retry"
+msgstr "Check the URL, create the repository, or check your GitHub account with gh auth status, then Retry"
 
-#. Guidance where a GitHub remote holds no repository this computer can see; gh auth status and gh auth login are commands and stay as they are
+#. Guidance where a remote of an unread form holds no repository this computer can see: it may be absent or private
 #: src/space-git.ts
-msgid "Check the URL, create the repository if it is not there yet, or in a terminal run gh auth status to see which GitHub account this computer uses and gh auth login to change it. Then Retry."
-msgstr "Check the URL, create the repository if it is not there yet, or in a terminal run gh auth status to see which GitHub account this computer uses and gh auth login to change it. Then Retry."
+msgid "Check the URL, create the repository, or give this computer access, then Retry"
+msgstr "Check the URL, create the repository, or give this computer access, then Retry"
 
-#. Guidance where an http(s) remote holds no repository this computer can see; {host} is the remote's host name, such as gitlab.example.com
+#. Guidance where an http(s) remote holds no repository this computer can see: it may be absent or private; {host} is the remote's host name, such as gitlab.example.com
 #: src/space-git.ts
-msgid "Check the URL, create the repository if it is not there yet, or sign this computer in at {host} as an account that can see it. Then Retry."
-msgstr "Check the URL, create the repository if it is not there yet, or sign this computer in at {host} as an account that can see it. Then Retry."
+msgid "Check the URL, create the repository, or sign this computer in at {host}, then Retry"
+msgstr "Check the URL, create the repository, or sign this computer in at {host}, then Retry"
+
+#. Guidance where a GitHub remote refused access; gh auth status and gh auth login are terminal commands and stay as they are
+#: src/space-git.ts
+msgid "Check your GitHub account with gh auth status, switch with gh auth login, then Retry"
+msgstr "Check your GitHub account with gh auth status, switch with gh auth login, then Retry"
 
 #. Guidance where the side chosen for a change failed validation
 #: src/space.ts
@@ -1387,10 +1388,10 @@ msgstr "filename must be an intent UUID"
 msgid "Finish or abort the merge in your terminal"
 msgstr "Finish or abort the merge in your terminal"
 
-#. Storage diagnostic: one folder appears in two pairs
+#. Storage diagnostic: one folder appears in two pairs of home.yaml; {path} is the folder
 #: src/home.ts
-msgid "folder {path} is paired twice"
-msgstr "folder {path} is paired twice"
+msgid "folder {path} belongs to two projects"
+msgstr "folder {path} belongs to two projects"
 
 #. Storage diagnostic: home.yaml is still in the layout before it listed several Spaces, which a one-time migration rewrites; the file is left as it is
 #: src/i18n.ts
@@ -1484,18 +1485,13 @@ msgstr "Give the group a path"
 
 #. Guidance where a remote of an unread form refused access
 #: src/space-git.ts
-msgid "Give this computer access to it. Then Retry."
-msgstr "Give this computer access to it. Then Retry."
+msgid "Give this computer access, then Retry"
+msgstr "Give this computer access, then Retry"
 
 #. Spec notice; `H1` is the markdown top heading and both names are the file's own
 #: src/specs.ts
 msgid "H1 identifier \"{identifier}\" disagrees with basename \"{basename}\""
 msgstr "H1 identifier \"{identifier}\" disagrees with basename \"{basename}\""
-
-#. Guidance where a GitHub remote refused access; gh auth status and gh auth login are commands and stay as they are
-#: src/space-git.ts
-msgid "In a terminal run gh auth status to see which GitHub account this computer uses and gh auth login to change it. Then Retry."
-msgstr "In a terminal run gh auth status to see which GitHub account this computer uses and gh auth login to change it. Then Retry."
 
 #. The toolchain's guidance when Node itself is missing; `slc` is the compiler's command
 #: src/compile.ts
@@ -1710,11 +1706,6 @@ msgstr "Issues and PRs come from GitHub · Code: {space}"
 msgid "It is asked again at the next sync."
 msgstr "It is asked again at the next sync."
 
-#. Guidance under a save that refused to share a file of a kind that never leaves this computer
-#: src/space.ts
-msgid "It stays on this computer; check the sync rules. Nothing was saved."
-msgstr "It stays on this computer; check the sync rules. Nothing was saved."
-
 #. Spec notice; `##` is the markdown heading level and stays as it is
 #: src/specs.ts
 msgid "item {item} appears before any ## section"
@@ -1745,6 +1736,11 @@ msgstr "its retired path {retired} is already occupied"
 msgid "legacy specs/iterations/ records coexist with specs/intents/; run `spex scaffold --update` for the migration prompt an agent applies"
 msgstr "legacy specs/iterations/ records coexist with specs/intents/; run `spex scaffold --update` for the migration prompt an agent applies"
 
+#. Guidance where a local-path remote refused access
+#: src/space-git.ts
+msgid "Let this user read the folder, then Retry"
+msgstr "Let this user read the folder, then Retry"
+
 #. compile phase: slc links the machine
 #: src/authoring.ts
 msgid "Link"
@@ -1754,11 +1750,6 @@ msgstr "Link"
 #: src/authoring.ts
 msgid "Machine"
 msgstr "Machine"
-
-#. Guidance where a local-path remote refused access
-#: src/space-git.ts
-msgid "Make sure this user can read the folder. Then Retry."
-msgstr "Make sure this user can read the folder. Then Retry."
 
 #. Why the explorer offers no preview of a file that may hold a provider's secret
 #: src/space.ts
@@ -1836,6 +1827,16 @@ msgstr "no compile is running for {playbookId}"
 #: src/service.ts
 msgid "no configured playbook {playbookId}"
 msgstr "no configured playbook {playbookId}"
+
+#. Refusal of a remote URL carrying a user and a secret
+#: src/space-git.ts
+msgid "No credential in the URL — remove the user and secret, then use an SSH key or this computer's credential helper"
+msgstr "No credential in the URL — remove the user and secret, then use an SSH key or this computer's credential helper"
+
+#. Refusal of a remote URL carrying a user before its host name
+#: src/space-git.ts
+msgid "No credential in the URL — remove the user, then use an SSH key or this computer's credential helper"
+msgstr "No credential in the URL — remove the user, then use an SSH key or this computer's credential helper"
 
 #. Refusal: no playbook draft of this id is open
 #. Refusal: no playbook draft of this id is open
@@ -2252,8 +2253,8 @@ msgstr "Publishing stopped: {cause}"
 
 #. Storage diagnostic: one project's or group's records appear in two pairs of home.yaml; {key} is their path
 #: src/home.ts
-msgid "records {key} are paired twice"
-msgstr "records {key} are paired twice"
+msgid "records {key} belong to two project folders"
+msgstr "records {key} belong to two project folders"
 
 #. A stopped sync's message: the project's records were written to twice under the sync
 #: src/space.ts
@@ -2267,8 +2268,8 @@ msgstr "Records sent to {host} since the last sync may be left behind"
 
 #. Guidance where Spex must read a Space before a project's records can move to where that Space keeps them; Refresh is the Space surface's control
 #: src/space.ts
-msgid "Refresh, then Retry."
-msgstr "Refresh, then Retry."
+msgid "Refresh, then Retry"
+msgstr "Refresh, then Retry"
 
 #. A stopped save's message: a staged file belongs to a family the home never shares; {leak} is its path
 #: src/space.ts
@@ -2304,6 +2305,11 @@ msgstr "Restore the interrupted turn first"
 msgid "Restore the reported path to its expected file or folder, then Retry. Refresh is deferred; written records and existing repair evidence are kept."
 msgstr "Restore the reported path to its expected file or folder, then Retry. Refresh is deferred; written records and existing repair evidence are kept."
 
+#. Guidance under a transfer the Space answered with an error no other message reads: the error is the Space's, so a later retry may pass
+#: src/space-git.ts
+msgid "Retry later"
+msgstr "Retry later"
+
 #. Guidance where the Space asked to wait: Retry waits out the time it asked for before running the step
 #: src/space.ts
 msgid "Retry waits, then runs the step."
@@ -2323,11 +2329,6 @@ msgstr "Retry; if it fails again, run the same step in a terminal for detail."
 #: src/space.ts
 msgid "Retry; if it fails again, run the step in a terminal for detail."
 msgstr "Retry; if it fails again, run the step in a terminal for detail."
-
-#. Guidance under a transfer the Space answered with an error no other message reads; {host} is the Space's display name
-#: src/space-git.ts
-msgid "Retry; if it fails again, the error stands at {host} for now."
-msgstr "Retry; if it fails again, the error stands at {host} for now."
 
 #. Why an intent cannot run on a team server's seat: it names no runtime, captured before runtimes were recorded or by the Playbook CLI, and a seat runs only what is assigned to it
 #: src/session.ts
@@ -2374,10 +2375,10 @@ msgstr "session {sessionId} has no agent \"{agentId}\""
 msgid "session checkpoint and replay disagree"
 msgstr "session checkpoint and replay disagree"
 
-#. Why a session cannot continue here: another host is writing it
+#. Why a session cannot continue here: another computer is writing it
 #: src/store.ts
-msgid "Session is active in another host"
-msgstr "Session is active in another host"
+msgid "Session is open on another computer"
+msgstr "Session is open on another computer"
 
 #. Why a session cannot continue here: its lease cannot be read
 #: src/store.ts
@@ -2460,8 +2461,8 @@ msgstr "Sign out of {host} first"
 
 #. Guidance where an http(s) remote refused access; {host} is the remote's host name, such as gitlab.example.com
 #: src/space-git.ts
-msgid "Sign this computer in at {host} as an account that can see it. Then Retry."
-msgstr "Sign this computer in at {host} as an account that can see it. Then Retry."
+msgid "Sign this computer in at {host} with an account that can see it, then Retry"
+msgstr "Sign this computer in at {host} with an account that can see it, then Retry"
 
 #. The browser page's title once a sign-in completed
 #: src/space-groups.ts
@@ -2669,16 +2670,6 @@ msgstr "the agent ended with status {status}"
 #: src/code-credentials.ts
 msgid "the agent entry {name} is malformed; preserved unchanged"
 msgstr "the agent entry {name} is malformed; preserved unchanged"
-
-#. Refusal of a remote URL carrying a user and a secret
-#: src/space-git.ts
-msgid "The app stores no credential: remove the user and secret from the URL and use an SSH key or this computer's credential helper instead."
-msgstr "The app stores no credential: remove the user and secret from the URL and use an SSH key or this computer's credential helper instead."
-
-#. Refusal of a remote URL carrying a user before its host name
-#: src/space-git.ts
-msgid "The app stores no credential: remove the user from the URL and use an SSH key or this computer's credential helper instead."
-msgstr "The app stores no credential: remove the user from the URL and use an SSH key or this computer's credential helper instead."
 
 #. The toolchain's guidance when the shipped compiler and the app disagree on the playbook engine; the values read like `ABI 1, schemas 3` or `unreadable`; `@sublang/slc` and `@sublang/playbook` are package names, as they are
 #: src/compile.ts
@@ -2988,6 +2979,11 @@ msgstr "this conversation is waiting for your reply; answer it first"
 msgid "This decision was not offered by the agent."
 msgstr "This decision was not offered by the agent."
 
+#. Guidance under a save that refused to share a file of a kind that never leaves this computer; the sync rules say which
+#: src/space.ts
+msgid "This file never syncs — nothing was saved"
+msgstr "This file never syncs — nothing was saved"
+
 #. Create recovery for an existing unborn repository; Add is the palette action
 #: src/forge.ts
 msgid "This folder already contains a Git repository without an initial commit. Finish the initial commit in your terminal, then use Add."
@@ -3044,10 +3040,10 @@ msgstr "This session offers no way to end its run."
 msgid "this session ran in {cwd}; continue it on the computer whose folder it ran in"
 msgstr "this session ran in {cwd}; continue it on the computer whose folder it ran in"
 
-#. Refusal of a sign-in carrying a team server's admission on a computer of one's own: only a team server signs in that way; the person signs in from the Space surface's card
+#. Refusal of a sign-in carrying a team server's admission on a computer of one's own: only a team server signs in that way; the person signs in from the card on the Space surface, which the rail names Space
 #: src/service.ts
-msgid "This sign-in is for a server only — sign in from the Space surface"
-msgstr "This sign-in is for a server only — sign in from the Space surface"
+msgid "This sign-in is for a server only — sign in on Space"
+msgstr "This sign-in is for a server only — sign in on Space"
 
 #. Live tool approval refusal
 #: src/approvals.ts

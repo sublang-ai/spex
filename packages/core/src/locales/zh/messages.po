@@ -160,7 +160,7 @@ msgstr "{group} 中已有 {name}"
 #. Refusal of Open here or Add to a group…: the group's path is your login's, so its records can have no folder of their own on this computer; {group} is the group's path
 #: src/space-groups.ts
 msgid "{group} is a group named like your login"
-msgstr "{group} 是一个与你的用户名同名的群组"
+msgstr "{group} 是一个与你的登录名同名的群组"
 
 #. Refusal of a group's deletion: it still holds a project's records or a group; {group} is the group's path at the Space
 #: src/space-groups.ts
@@ -240,10 +240,10 @@ msgstr "{host} 拒绝了本机的访问"
 msgid "{host} refused: {words}"
 msgstr "{host} 拒绝了：{words}"
 
-#. A sign-in on a team server refused, nothing stored: the account approved at the Space is not the member the server was opened for; {host} is the Space's display name, {login} the login of the account that signed in
+#. A sign-in on a team server refused, nothing stored: the account approved at the Space is not the member the server was opened for, whose login the server does not know; {host} is the Space's display name, {login} the login of the account that signed in
 #: src/space-groups.ts
-msgid "{host} signed you in as @{login} — sign in as this server's member"
-msgstr "{host} 以 @{login} 的身份登录 — 请以此服务器的成员身份登录"
+msgid "{host} signed you in as @{login} — sign in with your own account"
+msgstr "{host} 以 @{login} 的身份登录 — 请用你自己的账户登录"
 
 #. A sign-in refused, nothing stored: the person signed in at a Space this computer already signs in to as another account; {host} is the Space's display name, {login} the login this computer signs in with there
 #: src/space-groups.ts
@@ -273,8 +273,8 @@ msgstr "{key} 在本机没有项目文件夹"
 
 #. Refusal: a choice was sent for a change both sides agree on; {label} is the change's own label; Check is the Sync tab's control
 #: src/space.ts
-msgid "{label} needs no choice — Check again"
-msgstr "{label} 无需选择 — 请再次检查"
+msgid "{label} needs no choice — Check, then choose again"
+msgstr "{label} 无需选择 — 请先检查，再重新选择"
 
 #. Refusal of Add to a group…: the project's records belong to one Space, and the pick named a group at another; {name} is the project, {host} its Space's display name
 #: src/space.ts
@@ -306,16 +306,6 @@ msgstr "{name} 在本机没有文件夹"
 msgid "{name} has no records at {host} to attach — Refresh, then Retry"
 msgstr "{name} 在 {host} 没有可关联的记录 — 请刷新，然后重试"
 
-#. Refusal of sharing records at another Space: they are a group's own (or your Personal records), which stay at their one Space; {name} names them
-#: src/space.ts
-msgid "{name} holds a group's records, which stay at one Space"
-msgstr "{name} 存放的是群组的记录，只留在一个 Space"
-
-#. Refusal of removing records from a Space: they are a group's own or your Personal records, which stay where they are; {name} names them
-#: src/space.ts
-msgid "{name} holds a group's records, which stay at their Space"
-msgstr "{name} 存放的是群组的记录，留在其所在的 Space"
-
 #. Refusal: a package added by its folder's path needs the project folder here; {name} is the package
 #: src/environments.ts
 msgid "{name} is added by path, which needs a project folder on this computer"
@@ -338,8 +328,8 @@ msgstr "{project} 中的 {name} 正在别处使用"
 
 #. Refusal: the act names a change the current comparison does not hold; {name} is the change's file or folder; Check is the Sync tab's control
 #: src/space.ts
-msgid "{name} is not among the changes — Check again"
-msgstr "{name} 不在这些更改中 — 请再次检查"
+msgid "{name} is not among the changes — Check, then choose again"
+msgstr "{name} 不在这些更改中 — 请先检查，再重新选择"
 
 #. Refusal: a publish names its spec package as org/pkg, both lowercase kebab-case; {name} is what it named
 #: src/environments.ts
@@ -385,6 +375,12 @@ msgstr "{name} 在 {group} 中已被占用；请另选一个名称"
 #: src/service.ts
 msgid "{name} requested in spex.yaml"
 msgstr "{name} 已在 spex.yaml 中请求"
+
+#. Refusal of sharing records at another Space, or of removing them from one: they are a group's own or your Personal records, which stay at their one Space; {name} names them
+#. Refusal of sharing records at another Space, or of removing them from one: they are a group's own or your Personal records, which stay at their one Space; {name} names them
+#: src/space.ts
+msgid "{name} stays at its one Space"
+msgstr "{name} 只留在它所在的一个 Space"
 
 #. A stopped sync: the Space renamed or moved the project's records, and the folder on this computer they would move to is taken; {path} is that folder
 #: src/space.ts
@@ -889,7 +885,7 @@ msgstr "Git 合并尚未结束；请先在终端完成或中止，再进行同�
 #. Why a project's records are unreachable: their group's path is your login's, so they can have no folder of their own on this computer; read after 'Unreachable: '
 #: src/space-groups.ts
 msgid "a group named like your login"
-msgstr "一个与你的用户名同名的群组"
+msgstr "一个与你的登录名同名的群组"
 
 #. Storage diagnostic: the seat's credentials file holds a code host's entry under a key that is no host name, which is not repeated
 #: src/code-credentials.ts
@@ -971,10 +967,10 @@ msgstr "动作指向未知的意图 {intentId}"
 msgid "Add it to a group first"
 msgstr "请先把它加入群组"
 
-#. Guidance where an SSH remote refused access; the host key is SSH's own term for the server's key
+#. Guidance where an SSH remote refused access; the host key is SSH's own term for the server's key, asked on a first connection
 #: src/space-git.ts
-msgid "Add this computer's SSH key to an account that can see it; on a first connection, accept the host key in a terminal. Then Retry."
-msgstr "把本机的 SSH 密钥添加到有权访问它的账户；首次连接时，请在终端中接受主机密钥。然后重试。"
+msgid "Add this computer's SSH key to your account, accept a new host key in a terminal, then Retry"
+msgstr "把本机的 SSH 密钥添加到你的账户，在终端中接受新的主机密钥，然后重试"
 
 #. Refusal on a team server of opening another team server from it: a server opens no server of its own; the person opens it from their own computer
 #: src/service.ts
@@ -1089,30 +1085,35 @@ msgstr "请检查网络或远程仓库 URL，然后重试。"
 msgid "Check the network, then Retry."
 msgstr "请检查网络，然后重试。"
 
-#. Guidance where a local-path remote holds no repository this computer can see
+#. Guidance where a local-path remote holds no repository this computer can see: it may be absent or unreadable
 #: src/space-git.ts
-msgid "Check the path, create the repository if it is not there yet, or make sure this user can read the folder. Then Retry."
-msgstr "请检查路径，若仓库尚不存在请先创建，或者确保当前用户可以读取该文件夹。然后重试。"
+msgid "Check the path, create the repository, or let this user read the folder, then Retry"
+msgstr "检查路径、创建该仓库，或让此用户能读取该文件夹，然后重试"
 
-#. Guidance where an SSH remote holds no repository this computer can see
+#. Guidance where an SSH remote holds no repository this computer can see: it may be absent or private
 #: src/space-git.ts
-msgid "Check the URL, create the repository if it is not there yet, or add this computer's SSH key to an account that can see it. Then Retry."
-msgstr "请检查 URL，若仓库尚不存在请先创建，或者把本机的 SSH 密钥添加到有权访问它的账户。然后重试。"
+msgid "Check the URL, create the repository, or add this computer's SSH key to your account, then Retry"
+msgstr "检查 URL、创建该仓库，或把本机的 SSH 密钥添加到你的账户，然后重试"
 
-#. Guidance where a remote of an unread form holds no repository this computer can see
+#. Guidance where a GitHub remote holds no repository this computer can see: it may be absent or private; gh auth status is a terminal command and stays as it is
 #: src/space-git.ts
-msgid "Check the URL, create the repository if it is not there yet, or give this computer access to it. Then Retry."
-msgstr "请检查 URL，若仓库尚不存在请先创建，或者让本机获得它的访问权限。然后重试。"
+msgid "Check the URL, create the repository, or check your GitHub account with gh auth status, then Retry"
+msgstr "检查 URL、创建该仓库，或用 gh auth status 检查你的 GitHub 账户，然后重试"
 
-#. Guidance where a GitHub remote holds no repository this computer can see; gh auth status and gh auth login are commands and stay as they are
+#. Guidance where a remote of an unread form holds no repository this computer can see: it may be absent or private
 #: src/space-git.ts
-msgid "Check the URL, create the repository if it is not there yet, or in a terminal run gh auth status to see which GitHub account this computer uses and gh auth login to change it. Then Retry."
-msgstr "请检查 URL，若仓库尚不存在请先创建，或者在终端运行 gh auth status 查看本机使用的 GitHub 账户，运行 gh auth login 更换账户。然后重试。"
+msgid "Check the URL, create the repository, or give this computer access, then Retry"
+msgstr "检查 URL、创建该仓库，或给本机访问权限，然后重试"
 
-#. Guidance where an http(s) remote holds no repository this computer can see; {host} is the remote's host name, such as gitlab.example.com
+#. Guidance where an http(s) remote holds no repository this computer can see: it may be absent or private; {host} is the remote's host name, such as gitlab.example.com
 #: src/space-git.ts
-msgid "Check the URL, create the repository if it is not there yet, or sign this computer in at {host} as an account that can see it. Then Retry."
-msgstr "请检查 URL，若仓库尚不存在请先创建，或者在 {host} 上用有权访问它的账户为本机登录。然后重试。"
+msgid "Check the URL, create the repository, or sign this computer in at {host}, then Retry"
+msgstr "检查 URL、创建该仓库，或让本机登录 {host}，然后重试"
+
+#. Guidance where a GitHub remote refused access; gh auth status and gh auth login are terminal commands and stay as they are
+#: src/space-git.ts
+msgid "Check your GitHub account with gh auth status, switch with gh auth login, then Retry"
+msgstr "用 gh auth status 检查你的 GitHub 账户，用 gh auth login 切换，然后重试"
 
 #. Guidance where the side chosen for a change failed validation
 #: src/space.ts
@@ -1387,10 +1388,10 @@ msgstr "文件名必须是意图的 UUID"
 msgid "Finish or abort the merge in your terminal"
 msgstr "请在终端完成或中止合并"
 
-#. Storage diagnostic: one folder appears in two pairs
+#. Storage diagnostic: one folder appears in two pairs of home.yaml; {path} is the folder
 #: src/home.ts
-msgid "folder {path} is paired twice"
-msgstr "文件夹 {path} 被配对了两次"
+msgid "folder {path} belongs to two projects"
+msgstr "文件夹 {path} 属于两个项目"
 
 #. Storage diagnostic: home.yaml is still in the layout before it listed several Spaces, which a one-time migration rewrites; the file is left as it is
 #: src/i18n.ts
@@ -1484,18 +1485,13 @@ msgstr "请为群组填写路径"
 
 #. Guidance where a remote of an unread form refused access
 #: src/space-git.ts
-msgid "Give this computer access to it. Then Retry."
-msgstr "让本机获得它的访问权限。然后重试。"
+msgid "Give this computer access, then Retry"
+msgstr "给本机访问权限，然后重试"
 
 #. Spec notice; `H1` is the markdown top heading and both names are the file's own
 #: src/specs.ts
 msgid "H1 identifier \"{identifier}\" disagrees with basename \"{basename}\""
 msgstr "H1 标识符“{identifier}”与文件名“{basename}”不一致"
-
-#. Guidance where a GitHub remote refused access; gh auth status and gh auth login are commands and stay as they are
-#: src/space-git.ts
-msgid "In a terminal run gh auth status to see which GitHub account this computer uses and gh auth login to change it. Then Retry."
-msgstr "在终端运行 gh auth status 查看本机使用的 GitHub 账户，运行 gh auth login 更换账户。然后重试。"
 
 #. The toolchain's guidance when Node itself is missing; `slc` is the compiler's command
 #: src/compile.ts
@@ -1710,11 +1706,6 @@ msgstr "Issue 和 PR 来自 GitHub · 代码：{space}"
 msgid "It is asked again at the next sync."
 msgstr "下次同步时会再次请求。"
 
-#. Guidance under a save that refused to share a file of a kind that never leaves this computer
-#: src/space.ts
-msgid "It stays on this computer; check the sync rules. Nothing was saved."
-msgstr "它只留在本机；请检查同步规则。未保存任何内容。"
-
 #. Spec notice; `##` is the markdown heading level and stays as it is
 #: src/specs.ts
 msgid "item {item} appears before any ## section"
@@ -1745,6 +1736,11 @@ msgstr "其退役路径 {retired} 已被占用"
 msgid "legacy specs/iterations/ records coexist with specs/intents/; run `spex scaffold --update` for the migration prompt an agent applies"
 msgstr "旧的 specs/iterations/ 记录与 specs/intents/ 并存；运行 `spex scaffold --update` 获取供智能体执行的迁移提示词"
 
+#. Guidance where a local-path remote refused access
+#: src/space-git.ts
+msgid "Let this user read the folder, then Retry"
+msgstr "让此用户能读取该文件夹，然后重试"
+
 #. compile phase: slc links the machine
 #: src/authoring.ts
 msgid "Link"
@@ -1754,11 +1750,6 @@ msgstr "链接"
 #: src/authoring.ts
 msgid "Machine"
 msgstr "状态机"
-
-#. Guidance where a local-path remote refused access
-#: src/space-git.ts
-msgid "Make sure this user can read the folder. Then Retry."
-msgstr "请确保当前用户可以读取该文件夹。然后重试。"
 
 #. Why the explorer offers no preview of a file that may hold a provider's secret
 #: src/space.ts
@@ -1836,6 +1827,16 @@ msgstr "{playbookId} 没有正在进行的编译"
 #: src/service.ts
 msgid "no configured playbook {playbookId}"
 msgstr "配置中没有规程 {playbookId}"
+
+#. Refusal of a remote URL carrying a user and a secret
+#: src/space-git.ts
+msgid "No credential in the URL — remove the user and secret, then use an SSH key or this computer's credential helper"
+msgstr "URL 中不能有凭据 — 删去用户名和密钥，改用 SSH 密钥或本机的凭据助手"
+
+#. Refusal of a remote URL carrying a user before its host name
+#: src/space-git.ts
+msgid "No credential in the URL — remove the user, then use an SSH key or this computer's credential helper"
+msgstr "URL 中不能有凭据 — 删去用户名，改用 SSH 密钥或本机的凭据助手"
 
 #. Refusal: no playbook draft of this id is open
 #. Refusal: no playbook draft of this id is open
@@ -2252,8 +2253,8 @@ msgstr "发布已停止：{cause}"
 
 #. Storage diagnostic: one project's or group's records appear in two pairs of home.yaml; {key} is their path
 #: src/home.ts
-msgid "records {key} are paired twice"
-msgstr "记录 {key} 被配对了两次"
+msgid "records {key} belong to two project folders"
+msgstr "记录 {key} 属于两个项目文件夹"
 
 #. A stopped sync's message: the project's records were written to twice under the sync
 #: src/space.ts
@@ -2267,8 +2268,8 @@ msgstr "上次同步后发送到 {host} 的记录可能会被遗漏"
 
 #. Guidance where Spex must read a Space before a project's records can move to where that Space keeps them; Refresh is the Space surface's control
 #: src/space.ts
-msgid "Refresh, then Retry."
-msgstr "请刷新，然后重试。"
+msgid "Refresh, then Retry"
+msgstr "请刷新，然后重试"
 
 #. A stopped save's message: a staged file belongs to a family the home never shares; {leak} is its path
 #: src/space.ts
@@ -2304,6 +2305,11 @@ msgstr "请先“恢复”中断的轮次"
 msgid "Restore the reported path to its expected file or folder, then Retry. Refresh is deferred; written records and existing repair evidence are kept."
 msgstr "请将报告的路径恢复为预期的文件或文件夹，然后重试。刷新已暂缓；已写入的记录和现有修复凭据均保留。"
 
+#. Guidance under a transfer the Space answered with an error no other message reads: the error is the Space's, so a later retry may pass
+#: src/space-git.ts
+msgid "Retry later"
+msgstr "稍后重试"
+
 #. Guidance where the Space asked to wait: Retry waits out the time it asked for before running the step
 #: src/space.ts
 msgid "Retry waits, then runs the step."
@@ -2323,11 +2329,6 @@ msgstr "请重试；若再次失败，在终端中执行同一步骤查看详情
 #: src/space.ts
 msgid "Retry; if it fails again, run the step in a terminal for detail."
 msgstr "请重试；若再次失败，在终端中执行该步骤查看详情。"
-
-#. Guidance under a transfer the Space answered with an error no other message reads; {host} is the Space's display name
-#: src/space-git.ts
-msgid "Retry; if it fails again, the error stands at {host} for now."
-msgstr "请重试；若再次失败，说明 {host} 的错误暂时仍在。"
 
 #. Why an intent cannot run on a team server's seat: it names no runtime, captured before runtimes were recorded or by the Playbook CLI, and a seat runs only what is assigned to it
 #: src/session.ts
@@ -2374,10 +2375,10 @@ msgstr "会话 {sessionId} 中没有智能体“{agentId}”"
 msgid "session checkpoint and replay disagree"
 msgstr "会话检查点与重放结果不一致"
 
-#. Why a session cannot continue here: another host is writing it
+#. Why a session cannot continue here: another computer is writing it
 #: src/store.ts
-msgid "Session is active in another host"
-msgstr "会话正在另一台主机上使用中"
+msgid "Session is open on another computer"
+msgstr "会话正在另一台电脑上使用"
 
 #. Why a session cannot continue here: its lease cannot be read
 #: src/store.ts
@@ -2460,8 +2461,8 @@ msgstr "请先退出登录 {host}"
 
 #. Guidance where an http(s) remote refused access; {host} is the remote's host name, such as gitlab.example.com
 #: src/space-git.ts
-msgid "Sign this computer in at {host} as an account that can see it. Then Retry."
-msgstr "在 {host} 上用有权访问它的账户为本机登录。然后重试。"
+msgid "Sign this computer in at {host} with an account that can see it, then Retry"
+msgstr "让本机以能看到它的账户登录 {host}，然后重试"
 
 #. The browser page's title once a sign-in completed
 #: src/space-groups.ts
@@ -2669,16 +2670,6 @@ msgstr "智能体以状态 {status} 结束"
 #: src/code-credentials.ts
 msgid "the agent entry {name} is malformed; preserved unchanged"
 msgstr "智能体条目 {name} 格式有误；已原样保留"
-
-#. Refusal of a remote URL carrying a user and a secret
-#: src/space-git.ts
-msgid "The app stores no credential: remove the user and secret from the URL and use an SSH key or this computer's credential helper instead."
-msgstr "应用不保存任何凭据：请从 URL 中删去用户名和密钥，改用 SSH 密钥或本机的凭据助手。"
-
-#. Refusal of a remote URL carrying a user before its host name
-#: src/space-git.ts
-msgid "The app stores no credential: remove the user from the URL and use an SSH key or this computer's credential helper instead."
-msgstr "应用不保存任何凭据：请从 URL 中删去用户名，改用 SSH 密钥或本机的凭据助手。"
 
 #. The toolchain's guidance when the shipped compiler and the app disagree on the playbook engine; the values read like `ABI 1, schemas 3` or `unreadable`; `@sublang/slc` and `@sublang/playbook` are package names, as they are
 #: src/compile.ts
@@ -2988,6 +2979,11 @@ msgstr "该会话正在等待你的回复；请先回复"
 msgid "This decision was not offered by the agent."
 msgstr "智能体未提供此答复选项。"
 
+#. Guidance under a save that refused to share a file of a kind that never leaves this computer; the sync rules say which
+#: src/space.ts
+msgid "This file never syncs — nothing was saved"
+msgstr "此文件从不同步 — 未保存任何内容"
+
 #. Create recovery for an existing unborn repository; Add is the palette action
 #: src/forge.ts
 msgid "This folder already contains a Git repository without an initial commit. Finish the initial commit in your terminal, then use Add."
@@ -3044,10 +3040,10 @@ msgstr "此会话没有可用来结束其运行的方式。"
 msgid "this session ran in {cwd}; continue it on the computer whose folder it ran in"
 msgstr "此会话在 {cwd} 中运行；请在该文件夹所在的电脑上继续"
 
-#. Refusal of a sign-in carrying a team server's admission on a computer of one's own: only a team server signs in that way; the person signs in from the Space surface's card
+#. Refusal of a sign-in carrying a team server's admission on a computer of one's own: only a team server signs in that way; the person signs in from the card on the Space surface, which the rail names Space
 #: src/service.ts
-msgid "This sign-in is for a server only — sign in from the Space surface"
-msgstr "这种登录仅用于服务器 — 请在 Space 页面登录"
+msgid "This sign-in is for a server only — sign in on Space"
+msgstr "这种登录仅用于服务器 — 请在 Space 中登录"
 
 #. Live tool approval refusal
 #: src/approvals.ts

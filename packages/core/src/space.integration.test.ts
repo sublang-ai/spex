@@ -555,7 +555,7 @@ test("space-39: local changes of every unit kind list in order, incoming units a
   await home.client.expectError("space.diff", { repository: key, unit: `sessions/${sessionId}`, path: `sessions/${sessionId}.json`, side: "mine" }, "invalid_request", /no text diff/);
   await home.client.expectError("space.diff", { repository: key, unit: `intents/${intent.id}`, path: `intents/${intent.id}.json`, side: "mine" }, "invalid_request", /no text diff/);
   await home.client.expectError("space.diff", { repository: key, unit: "config/playbook.config.yaml", path: "other", side: "mine" }, "invalid_request", /^other is not part of config\/playbook\.config\.yaml$/);
-  await home.client.expectError("space.diff", { repository: key, unit: "nope", path: "nope", side: "mine" }, "invalid_request", /^nope is not among the changes — Check again$/);
+  await home.client.expectError("space.diff", { repository: key, unit: "nope", path: "nope", side: "mine" }, "invalid_request", /^nope is not among the changes — Check, then choose again$/);
   const empty = bareRepo();
   await home.client.expectOk("space.remote.set", { repository: key, url: empty });
   const vacant = await home.client.settle("space.fetch", { repository: key });

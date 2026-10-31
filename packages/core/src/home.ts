@@ -110,11 +110,11 @@ function checkPairs(folders: readonly unknown[], file: string): void {
       (folder.aliases === undefined || Array.isArray(folder.aliases) && folder.aliases.every(isRecordedPath) && new Set(folder.aliases).size === folder.aliases.length),
       file, i18n._({ id: "invalid working folder pair", comment: "Storage diagnostic: a working folder or its spex repository's key is malformed" }));
     for (const path of [folder.path, ...(folder.aliases as string[] | undefined ?? [])]) {
-      need(!paths.has(path), file, i18n._({ id: "folder {path} is paired twice", comment: "Storage diagnostic: one folder appears in two pairs",
+      need(!paths.has(path), file, i18n._({ id: "folder {path} belongs to two projects", comment: "Storage diagnostic: one folder appears in two pairs of home.yaml; {path} is the folder",
         values: { path } }));
       paths.add(path);
     }
-    need(!keys.has(folder.repository), file, i18n._({ id: "records {key} are paired twice",
+    need(!keys.has(folder.repository), file, i18n._({ id: "records {key} belong to two project folders",
       comment: "Storage diagnostic: one project's or group's records appear in two pairs of home.yaml; {key} is their path", values: { key: folder.repository } }));
     keys.add(folder.repository);
   }

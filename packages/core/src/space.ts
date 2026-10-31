@@ -445,9 +445,9 @@ const noSuchGroup = (host: string): string => i18n._({ id: "{host} lists no such
  * group's, and of an Attach of a group's own (space-29, space-88,
  * space-87): a project's alone is placed by the reader. */
 const groupRecordsStay = (name: string): string => i18n._({
-  id: "{name} holds a group's records, which stay at one Space",
+  id: "{name} stays at its one Space",
   values: { name: projectName(name) },
-  comment: "Refusal of sharing records at another Space: they are a group's own (or your Personal records), which stay at their one Space; {name} names them",
+  comment: "Refusal of sharing records at another Space, or of removing them from one: they are a group's own or your Personal records, which stay at their one Space; {name} names them",
 });
 
 /** The refusal of a Place or an Attach at an instance the clone holds a
@@ -495,9 +495,9 @@ const mayNotManageEvery = (name: string): string => i18n._({
 /** The refusal of a Leave of a group's own spex repository or your own
  * group's (space-29, space-89): a project's placement alone is left. */
 const groupRecordsKept = (name: string): string => i18n._({
-  id: "{name} holds a group's records, which stay at their Space",
+  id: "{name} stays at its one Space",
   values: { name: projectName(name) },
-  comment: "Refusal of removing records from a Space: they are a group's own or your Personal records, which stay where they are; {name} names them",
+  comment: "Refusal of sharing records at another Space, or of removing them from one: they are a group's own or your Personal records, which stay at their one Space; {name} names them",
 });
 
 /** A Leave stopped, unconfirmed, for records of the placement left or
@@ -662,7 +662,7 @@ function nextUnread(host: string): SpaceStopped {
       values: { host },
       comment: "A stopped sync: the project's records stop syncing with one Space and move to where the next Space it syncs with keeps them, at {host} (its display name), which Spex has not read since it started",
     }),
-    guidance: i18n._({ id: "Refresh, then Retry.", comment: "Guidance where Spex must read a Space before a project's records can move to where that Space keeps them; Refresh is the Space surface's control" }),
+    guidance: i18n._({ id: "Refresh, then Retry", comment: "Guidance where Spex must read a Space before a project's records can move to where that Space keeps them; Refresh is the Space surface's control" }),
     retry: true,
   }, false);
 }
@@ -1149,7 +1149,7 @@ const archivedReason = (): string => i18n._({ id: "Archived", comment: "Why a pr
 
 /** The refusal an act naming a unit no plan holds meets. */
 const unknownUnit = (unit: string): string => i18n._({
-  id: "{name} is not among the changes — Check again",
+  id: "{name} is not among the changes — Check, then choose again",
   comment: "Refusal: the act names a change the current comparison does not hold; {name} is the change's file or folder; Check is the Sync tab's control",
   values: { name: unit },
 });
@@ -2901,7 +2901,7 @@ class RepositorySync {
         if (unit.choice !== "conflict") {
           const label = [...(run?.lists.local ?? []), ...(run?.lists.incoming ?? [])].find((u) => u.unit === name)?.label ?? name;
           throw new CoreError("invalid_request", i18n._({
-            id: "{label} needs no choice — Check again",
+            id: "{label} needs no choice — Check, then choose again",
             values: { label },
             comment: "Refusal: a choice was sent for a change both sides agree on; {label} is the change's own label; Check is the Sync tab's control",
           }));
@@ -3550,8 +3550,8 @@ class RepositorySync {
           comment: "A stopped save's message: a staged file belongs to a family the home never shares; {leak} is its path",
         }),
         i18n._({
-          id: "It stays on this computer; check the sync rules. Nothing was saved.",
-          comment: "Guidance under a save that refused to share a file of a kind that never leaves this computer",
+          id: "This file never syncs — nothing was saved",
+          comment: "Guidance under a save that refused to share a file of a kind that never leaves this computer; the sync rules say which",
         }),
       );
     }

@@ -119,28 +119,28 @@ function refusedGuidance(remote: string | null): string {
   switch (accessAct(remote)) {
     case "folder":
       return i18n._({
-        id: "Make sure this user can read the folder. Then Retry.",
+        id: "Let this user read the folder, then Retry",
         comment: "Guidance where a local-path remote refused access",
       });
     case "github":
       return i18n._({
-        id: "In a terminal run gh auth status to see which GitHub account this computer uses and gh auth login to change it. Then Retry.",
-        comment: "Guidance where a GitHub remote refused access; gh auth status and gh auth login are commands and stay as they are",
+        id: "Check your GitHub account with gh auth status, switch with gh auth login, then Retry",
+        comment: "Guidance where a GitHub remote refused access; gh auth status and gh auth login are terminal commands and stay as they are",
       });
     case "web":
       return i18n._({
-        id: "Sign this computer in at {host} as an account that can see it. Then Retry.",
+        id: "Sign this computer in at {host} with an account that can see it, then Retry",
         values: { host: remoteHost(remote) },
         comment: "Guidance where an http(s) remote refused access; {host} is the remote's host name, such as gitlab.example.com",
       });
     case "ssh":
       return i18n._({
-        id: "Add this computer's SSH key to an account that can see it; on a first connection, accept the host key in a terminal. Then Retry.",
-        comment: "Guidance where an SSH remote refused access; the host key is SSH's own term for the server's key",
+        id: "Add this computer's SSH key to your account, accept a new host key in a terminal, then Retry",
+        comment: "Guidance where an SSH remote refused access; the host key is SSH's own term for the server's key, asked on a first connection",
       });
     default:
       return i18n._({
-        id: "Give this computer access to it. Then Retry.",
+        id: "Give this computer access, then Retry",
         comment: "Guidance where a remote of an unread form refused access",
       });
   }
@@ -154,29 +154,29 @@ function goneGuidance(remote: string | null): string {
   switch (accessAct(remote)) {
     case "folder":
       return i18n._({
-        id: "Check the path, create the repository if it is not there yet, or make sure this user can read the folder. Then Retry.",
-        comment: "Guidance where a local-path remote holds no repository this computer can see",
+        id: "Check the path, create the repository, or let this user read the folder, then Retry",
+        comment: "Guidance where a local-path remote holds no repository this computer can see: it may be absent or unreadable",
       });
     case "github":
       return i18n._({
-        id: "Check the URL, create the repository if it is not there yet, or in a terminal run gh auth status to see which GitHub account this computer uses and gh auth login to change it. Then Retry.",
-        comment: "Guidance where a GitHub remote holds no repository this computer can see; gh auth status and gh auth login are commands and stay as they are",
+        id: "Check the URL, create the repository, or check your GitHub account with gh auth status, then Retry",
+        comment: "Guidance where a GitHub remote holds no repository this computer can see: it may be absent or private; gh auth status is a terminal command and stays as it is",
       });
     case "web":
       return i18n._({
-        id: "Check the URL, create the repository if it is not there yet, or sign this computer in at {host} as an account that can see it. Then Retry.",
+        id: "Check the URL, create the repository, or sign this computer in at {host}, then Retry",
         values: { host: remoteHost(remote) },
-        comment: "Guidance where an http(s) remote holds no repository this computer can see; {host} is the remote's host name, such as gitlab.example.com",
+        comment: "Guidance where an http(s) remote holds no repository this computer can see: it may be absent or private; {host} is the remote's host name, such as gitlab.example.com",
       });
     case "ssh":
       return i18n._({
-        id: "Check the URL, create the repository if it is not there yet, or add this computer's SSH key to an account that can see it. Then Retry.",
-        comment: "Guidance where an SSH remote holds no repository this computer can see",
+        id: "Check the URL, create the repository, or add this computer's SSH key to your account, then Retry",
+        comment: "Guidance where an SSH remote holds no repository this computer can see: it may be absent or private",
       });
     default:
       return i18n._({
-        id: "Check the URL, create the repository if it is not there yet, or give this computer access to it. Then Retry.",
-        comment: "Guidance where a remote of an unread form holds no repository this computer can see",
+        id: "Check the URL, create the repository, or give this computer access, then Retry",
+        comment: "Guidance where a remote of an unread form holds no repository this computer can see: it may be absent or private",
       });
   }
 }
@@ -199,13 +199,13 @@ export function validateRemoteUrl(url: string): { ok: true } | { ok: false; reas
   }
   if (/^https?:\/\/[^/]*@/i.test(url)) {
     return { ok: false, reason: i18n._({
-      id: "The app stores no credential: remove the user from the URL and use an SSH key or this computer's credential helper instead.",
+      id: "No credential in the URL — remove the user, then use an SSH key or this computer's credential helper",
       comment: "Refusal of a remote URL carrying a user before its host name",
     }) };
   }
   if (/^[a-z][a-z0-9+.-]*:\/\/[^/@]*:[^/@]*@/i.test(url)) {
     return { ok: false, reason: i18n._({
-      id: "The app stores no credential: remove the user and secret from the URL and use an SSH key or this computer's credential helper instead.",
+      id: "No credential in the URL — remove the user and secret, then use an SSH key or this computer's credential helper",
       comment: "Refusal of a remote URL carrying a user and a secret",
     }) };
   }
@@ -487,9 +487,8 @@ export function classifyHostTransportFailure(run: GitRun, host: string): GitFail
         comment: "A stopped transfer: the Space answered with an HTTP error no other message reads; {host} is its display name, {status} the HTTP status Git printed",
       }),
       guidance: i18n._({
-        id: "Retry; if it fails again, the error stands at {host} for now.",
-        values: { host },
-        comment: "Guidance under a transfer the Space answered with an error no other message reads; {host} is the Space's display name",
+        id: "Retry later",
+        comment: "Guidance under a transfer the Space answered with an error no other message reads: the error is the Space's, so a later retry may pass",
       }),
       retry: true,
     };

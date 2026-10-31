@@ -448,7 +448,7 @@ test("space-92, space-14, space-9, space-17, space-18, space-29: a conflict at t
   // Choices are validated against the placement they are for (space-29).
   await home.client.expectError("space.sync", { repository: key, placement: "http://127.0.0.1:9", choices: { "both.md": "mine" } }, "invalid_request", /^atlas does not sync there$/);
   await home.client.expectError("space.sync", { repository: key, placement: null, choices: { "both.md": "mine" } }, "invalid_request", /^atlas does not sync there$/);
-  await home.client.expectError("space.sync", { repository: key, placement: first.url, choices: { "both.md": "mine" } }, "invalid_request", /needs no choice — Check again$|is not among the changes — Check again$/);
+  await home.client.expectError("space.sync", { repository: key, placement: first.url, choices: { "both.md": "mine" } }, "invalid_request", /needs no choice — Check, then choose again$|is not among the changes — Check, then choose again$/);
 
   // Sent with them, the sync runs from Save, the first already equal
   // passing as a fast-forward — no merge made there — and the second

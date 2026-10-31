@@ -73,7 +73,7 @@ test("git-host-27, git-host-28: a seat's start naming a ticket carries it in the
   const member = await startHome("seat-ticket-member", { host, project: false });
   t.after(() => member.stop());
   const asked = host.script.requests.length;
-  await member.client.expectError("space.signin.start", { url: host.url, ticket: "spext_presented" }, "invalid_request", /^This sign-in is for a server only — sign in from the Space surface$/);
+  await member.client.expectError("space.signin.start", { url: host.url, ticket: "spext_presented" }, "invalid_request", /^This sign-in is for a server only — sign in on Space$/);
   assert.equal(host.script.requests.length, asked, "nothing is asked of the instance");
   assert.equal(host.script.deviceRequests.length, 1);
 });
@@ -186,7 +186,7 @@ test("core-service-127, git-host-27: on a seat a sign-in as another account, and
   const refused = await home.client.waitSpace(from, (state) => state.signIn.phase === "failed", 30_000);
   assert.ok(refused.signIn.phase === "failed");
   assert.equal(refused.signIn.cause, "refused");
-  assert.match(refused.signIn.message, /signed you in as @bob — sign in as this server's member$/);
+  assert.match(refused.signIn.message, /signed you in as @bob — sign in with your own account$/);
   assert.equal(existsSync(credentialsPath(home.dataDir)), false, "no token is stored");
   assert.equal(Home.load(home.dataDir).instance(host.url)?.account, undefined, "no account is written");
   assert.notEqual(instanceOf(refused, host.url)?.signedIn, true);

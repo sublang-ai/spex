@@ -479,8 +479,8 @@ export function signInFailure(error: unknown, host: string): { cause: "denied" |
       return { cause: "refused", message: i18n._({ id: "{host} signed you in as another account — sign in as @{login}", values: { host, login: words ?? "" },
         comment: "A sign-in refused, nothing stored: the person signed in at a Space this computer already signs in to as another account; {host} is the Space's display name, {login} the login this computer signs in with there" }) };
     case "person":
-      return { cause: "refused", message: i18n._({ id: "{host} signed you in as @{login} — sign in as this server's member", values: { host, login: words ?? "" },
-        comment: "A sign-in on a team server refused, nothing stored: the account approved at the Space is not the member the server was opened for; {host} is the Space's display name, {login} the login of the account that signed in" }) };
+      return { cause: "refused", message: i18n._({ id: "{host} signed you in as @{login} — sign in with your own account", values: { host, login: words ?? "" },
+        comment: "A sign-in on a team server refused, nothing stored: the account approved at the Space is not the member the server was opened for, whose login the server does not know; {host} is the Space's display name, {login} the login of the account that signed in" }) };
     case "state":
     case "refused":
     default:

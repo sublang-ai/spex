@@ -530,7 +530,7 @@ test("space-101, space-98, space-15, space-31, storage-38, space-7, space-29: fo
   // spex repository (space-29).
   await home.client.expectError("space.leave", { repository: key, instance: second.url }, "invalid_request", /^atlas does not sync there$/);
   await home.client.expectError("space.leave", { repository: key, instance: "https://unlisted.example" }, "not_found");
-  await home.client.expectError("space.leave", { repository: HOST_OWN, instance: first.url }, "invalid_request", /^ada holds a group's records, which stay at their Space$/);
+  await home.client.expectError("space.leave", { repository: HOST_OWN, instance: first.url }, "invalid_request", /^ada stays at its one Space$/);
 
   // The third left: fetched first, the record it holds that no remaining
   // placement holds stops the leave, naming the count, nothing dropped

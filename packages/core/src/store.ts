@@ -244,8 +244,8 @@ function sessionInfo(
       : meta.externalWriter
       ? {continuationReason: meta.externalWriter === "active"
           ? i18n._({
-              id: "Session is active in another host",
-              comment: "Why a session cannot continue here: another host is writing it",
+              id: "Session is open on another computer",
+              comment: "Why a session cannot continue here: another computer is writing it",
             })
           : i18n._({
               id: "Session ownership cannot be verified",

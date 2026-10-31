@@ -530,7 +530,7 @@ test("space-29, space-61, space-87, space-90, space-62, git-host-5: Attach refus
   assert.deepEqual([standing?.key, standing?.state], [hostKey(second, "acme/other-spex"), "absent"]);
   assert.ok(!secondAcme.placed.some((line) => line.key === groupKey), "no line names the group's row");
   before = asked();
-  await home.client.expectError("space.attach", { repository: groupKey, instance: second.url, noticed: true }, "invalid_request", /^acme holds a group's records, which stay at one Space$/);
+  await home.client.expectError("space.attach", { repository: groupKey, instance: second.url, noticed: true }, "invalid_request", /^acme stays at its one Space$/);
   assert.deepEqual(asked(), before, "no request reached either stand-in");
   assert.deepEqual(remoteNamesOf(groupClone), [firstFolder]);
 

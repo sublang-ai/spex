@@ -2257,7 +2257,7 @@ test("space-38, space-52: the stand-in's 401 stops reauth, its refusal names onl
   // project.json is written (space-5).
   const leaky = gitFolder("leaky");
   git(leaky, "remote", "add", "origin", "https://user:token@example.com/leaky.git");
-  await home.client.expectError("project.register", { path: leaky }, "invalid_request", /stores no credential/);
+  await home.client.expectError("project.register", { path: leaky }, "invalid_request", /^No credential in the URL/);
   assert.ok(!existsSync(clonePath(home.dataDir, `${OWN}/leaky-spex`)));
   const from = home.client.mark();
   await signIn(home, host);

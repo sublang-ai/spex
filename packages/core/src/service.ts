@@ -341,8 +341,8 @@ const credentialsOffSeat = (): CoreError => new CoreError("invalid_request", i18
 /** The refusal off a seat of a sign-in naming a ticket (git-host-27):
  * only a seat's device request carries one. */
 const ticketOffSeat = (): CoreError => new CoreError("invalid_request", i18n._({
-  id: "This sign-in is for a server only — sign in from the Space surface",
-  comment: "Refusal of a sign-in carrying a team server's admission on a computer of one's own: only a team server signs in that way; the person signs in from the Space surface's card",
+  id: "This sign-in is for a server only — sign in on Space",
+  comment: "Refusal of a sign-in carrying a team server's admission on a computer of one's own: only a team server signs in that way; the person signs in from the card on the Space surface, which the rail names Space",
 }));
 
 // A credential command's fields, each checked before anything is written

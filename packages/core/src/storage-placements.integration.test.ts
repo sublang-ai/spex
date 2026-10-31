@@ -877,7 +877,7 @@ test("storage-39, storage-36, storage-34, storage-1, storage-31, storage-6, stor
   await again.client.expectOk("space.get", {});
   await again.client.waitSpace(mark, (state) => (instanceOf(state, first.url)?.readAt ?? null) !== null && instanceOf(state, first.url)?.read.phase === "idle" && instanceOf(state, second.url)?.read.phase === "failed", 30_000);
   const unread = await again.client.settle("space.leave", { repository: key, instance: first.url }, 30_000);
-  assert.deepEqual(unread.sync, { phase: "stopped", op: "leave", step: "check", cause: "unreachable", message: `${SECOND_NAME} is not read yet, so these records cannot move there`, guidance: "Refresh, then Retry.", retry: true });
+  assert.deepEqual(unread.sync, { phase: "stopped", op: "leave", step: "check", cause: "unreachable", message: `${SECOND_NAME} is not read yet, so these records cannot move there`, guidance: "Refresh, then Retry", retry: true });
   standing("the second unread");
 
   // The second read, the first placement left: dropped with its records

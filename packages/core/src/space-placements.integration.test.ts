@@ -558,7 +558,7 @@ test("space-100, space-97, space-88, space-29, space-57, space-64, space-13, spa
   // name (space-29, space-88).
   const secondAsked = second.script.requests.length;
   await refused(loose, atSecond, "invalid_request", /^Add it to a group first$/);
-  await refused(HOST_OWN, atSecond, "invalid_request", /^ada holds a group's records, which stay at one Space$/);
+  await refused(HOST_OWN, atSecond, "invalid_request", /^ada stays at its one Space$/);
   await refused(atlas, { ...atSecond, instance: first.url }, "invalid_request", new RegExp(`^atlas is at ${HOST_NAME} already$`));
   await refused(atlas, { ...atSecond, instance: "http://127.0.0.1:9" }, "not_found", /has not signed in/);
   await refused(atlas, { ...atSecond, groupId: "9999" }, "not_found", new RegExp(`^${SECOND_NAME} lists no such group — Refresh, then pick again$`));
@@ -784,8 +784,8 @@ test("space-94, space-4, space-65, space-57, space-29, space-1, space-82, space-
   // space.place and space.leave naming your own group's own repository
   // are each refused, nothing changed and nothing asked (space-29).
   const asked = [first, second, third].map((host) => host.script.requests.length);
-  await home.client.expectError("space.place", { repository: HOST_OWN, choice: { kind: "create", instance: second.url, groupId: null, name: LOGIN } }, "invalid_request", new RegExp(`^${LOGIN} holds a group's records, which stay at one Space$`));
-  await home.client.expectError("space.leave", { repository: HOST_OWN, instance: third.url }, "invalid_request", new RegExp(`^${LOGIN} holds a group's records, which stay at their Space$`));
+  await home.client.expectError("space.place", { repository: HOST_OWN, choice: { kind: "create", instance: second.url, groupId: null, name: LOGIN } }, "invalid_request", new RegExp(`^${LOGIN} stays at its one Space$`));
+  await home.client.expectError("space.leave", { repository: HOST_OWN, instance: third.url }, "invalid_request", new RegExp(`^${LOGIN} stays at its one Space$`));
   assert.deepEqual(remoteNamesOf(own), [hostFolder(first), hostFolder(third)]);
   assert.deepEqual([first, second, third].map((host) => host.script.requests.length), asked);
 
