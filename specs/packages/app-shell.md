@@ -173,11 +173,13 @@ Where the app is packaged, the packaged app shall ship its complete `node_module
 
 #### app-shell-14
 
-When a tag matching `app-v*` is pushed, the app release workflow shall create a GitHub release for that tag carrying the version's notes from the app changelog and the run-from-source instructions, attaching no build artifacts ([DR-040](../decisions/040-source-only-app-releases.md)):
+When a valid tag matching `app-v*` is pushed, the app release workflow shall create a GitHub release for that tag carrying the version's notes from the app changelog, the run-from-source instructions and both native desktop downloads ([DR-170](../decisions/176-native-desktop-tag-packages.md)):
 
 - the workflow confirms the CI workflow concluded `success` for the tagged commit, verifies the tag's version against both shells' `package.json`, and builds and tests the tree before creating the release — empty notes or a mismatch fail it without a release;
 - the release names Node.js 22.19 or later and, from a checkout of its tag, `npm ci`, `npm start` for the desktop, and `npm run start:server` for the server shell as the way to run it;
 - the desktop package names its Electron version exactly, never as a range: the local packager (`npm run package -w apps/desktop`, electron-builder [[3]]) downloads the platform binaries of one release and refuses a range outright;
+- the downloads are a macOS Apple Silicon ZIP and a Windows x64 per-user NSIS installer, named with version, platform and architecture, with SHA-256 checksums and notes identifying unsigned and non-notarized status;
+- native runners build both downloads with the shipped physical dependency tree [[app-shell-13](#app-shell-13)], and the workflow publishes only after both packaging jobs succeed [[release-37](release.md#release-37)];
 - the workflow does not publish to npm and does not run for CLI tags, keeping the release channels disjoint [[release-19](release.md#release-19)].
 
 ### App Data
@@ -292,6 +294,7 @@ When the desktop's test suite starts a real core through the shell's own option 
 When the app release workflow's tag check and notes assembly run, as the workflow runs them, over a checkout holding a changelog and both shell manifests for an `app-vMAJOR.MINOR.PATCH` tag, the test suite shall assert the regular release's checks and instructions:
 
 - the notes end with the run-from-source instructions, which name Node.js 22.19 — the root manifest's engine floor — or later and check out that tag before `npm ci`, `npm start` and `npm run start:server` [[app-shell-14](#app-shell-14)];
+- the notes link both versioned native downloads and their checksums, identify unsigned and non-notarized status, and include native Windows in the source instructions [[app-shell-14](#app-shell-14)];
 - either shell's manifest off the tag's version refuses the release [[app-shell-14](#app-shell-14)];
 - a version with no changelog section is refused as empty notes [[app-shell-14](#app-shell-14)].
 
