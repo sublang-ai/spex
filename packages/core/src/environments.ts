@@ -1321,9 +1321,11 @@ export class EnvironmentManager {
 
   /** A working folder was paired with a clone this device holds
    * (environments-31, storage-6): the environment the clone still holds
-   * moves into the folder (storage-24); a folder then holding neither
-   * file is written the new environment requesting the built-in spec
-   * package, locked at its environment's registry (environments-11),
+   * moves into the folder (storage-24); a folder then holding no
+   * `spex.yaml` is written the new environment requesting the built-in
+   * spec package, locked at its environment's registry where no lock
+   * stands, a stray lock left to the reader — stale, resolved again on
+   * request; unreadable, refused until removed (environments-11),
    * while one holding its own is installed from it, nothing but `.spex/`
    * written (environments-26); its environment is then exported into the
    * folder as an install does (environments-7), its state broadcast. */
@@ -1334,7 +1336,7 @@ export class EnvironmentManager {
     const root = this.rootOf(key);
     if (root === null) return Promise.resolve();
     let wrote = false;
-    if (!existsSync(join(root, "spex.yaml")) && !existsSync(join(root, "spex.lock"))) {
+    if (!existsSync(join(root, "spex.yaml"))) {
       try { wrote = this.prepare(root, key); }
       catch (error) { console.error(`spex: ${key} does not request the built-in spec package: ${error instanceof Error ? error.message : String(error)}`); }
     }
@@ -1753,8 +1755,10 @@ export class EnvironmentManager {
       pathRoot,
       instance,
       ...(registry ? { registry } : {}),
-      // A project's files travel with the code once both are committed.
-      committed: this.isOwn(key) ? null : envRoot !== null && committedWithCode(envRoot),
+      // A project's files travel with the code once both are committed;
+      // null where this device holds no working folder to read, as for
+      // your own group's (environments-14).
+      committed: this.isOwn(key) || envRoot === null ? null : committedWithCode(envRoot),
       ...(builtinUpdate ? { builtinUpdate } : {}),
       ...(unexported ? { unexported } : {}),
     };

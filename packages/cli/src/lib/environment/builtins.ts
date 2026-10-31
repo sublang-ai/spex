@@ -8,7 +8,7 @@
 // registry source that needs no network. Several seeded versions stand
 // side by side, so a lock pinning an older one keeps installing it.
 
-import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, readFileSync } from "node:fs";
 import { mkdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { Document, isMap, parseDocument } from "yaml";
@@ -434,12 +434,13 @@ export function rehomeBuiltinLock(root: string, pkg: BuiltinPackage, registryUrl
  * file are kept, and the file is written under the version read, so a
  * file changed meanwhile is refused as a conflict (DR-111). Where `space` is given and the file
  * names none, the request names it as the environment's instance
- * (environments-2, DR-165). A file that does not read is left as it is.
- * Returns whether it wrote.
+ * (environments-2, DR-165). A file that does not read, or a root that
+ * does not exist — a working folder removed meanwhile — is left as it
+ * is, nothing created. Returns whether it wrote.
  */
 export function ensureBuiltinRequest(root: string, version: string, space: string | null = null): boolean {
+  if (!existsSync(root)) return false;
   const file = join(root, "spex.yaml");
-  mkdirSync(root, { recursive: true });
   const read = readVersioned(file);
   const text = read.bytes === null ? "" : read.bytes.toString("utf8");
   if (read.bytes !== null) {

@@ -157,6 +157,9 @@ test("registry manifests preserve legacy sources and new CLI manifests explicitl
     writeFileSync(join(legacy, "spex.yaml"), "format: 1\nspace: https://private.example\npackages: {}\n");
     ensureBuiltinRequest(legacy, "1.0.0");
     assert.equal(parse(readFileSync(join(legacy, "spex.yaml"), "utf8")).registry, undefined);
+    const gone = join(scratch, "gone");
+    assert.equal(ensureBuiltinRequest(gone, "1.0.0"), false, "a root that does not exist is left as it is");
+    assert.equal(existsSync(gone), false, "nothing created");
   } finally { rmSync(scratch, { recursive: true, force: true }); }
 });
 

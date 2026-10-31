@@ -14,6 +14,7 @@ import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { parse as parseYaml } from "yaml";
+import { requestsDigest, serializeLock } from "@sublang/spex/environment";
 import { WebSocket } from "ws";
 
 import { CoreService } from "./service.js";
@@ -116,6 +117,46 @@ async function boot(dataDir: string, home: string): Promise<{ service: CoreServi
   await client.open();
   return { service, client };
 }
+
+test("storage-6, environments-11, environments-26: a folder holding a stray spex.lock and no spex.yaml is paired with spex.yaml written at its root requesting the built-in spec package, nothing in the clone, the lock left as it was and read as stale", async () => {
+  const scratch = scratchDir("spex-project-stray-lock-");
+  const dataDir = join(scratch, "home");
+  const home = join(scratch, "user");
+  mkdirSync(join(home, ".claude"), { recursive: true });
+  const config = join(dataDir, "workspace", "tester", "tester-spex", "config");
+  mkdirSync(config, { recursive: true });
+  writeFileSync(join(config, "playbook.config.yaml"), CONFIG);
+  const folder = join(scratch, "fixture");
+  mkdirSync(folder);
+  git(folder, "init", "-q");
+  writeFileSync(join(folder, "README.md"), "# Fixture\n");
+  // A lock left behind by a manifest since removed: valid, resolved from
+  // requests that no longer exist, no spex.yaml beside it.
+  const stray = serializeLock({ format: 1, requests: requestsDigest("format: 1\npackages: {}\n"), packages: {} });
+  writeFileSync(join(folder, "spex.lock"), stray);
+  git(folder, "add", "-A");
+  git(folder, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "fixture");
+
+  const { service, client } = await boot(dataDir, home);
+  const project = await client.ok("project.register", { path: folder });
+  assert.ok(existsSync(join(folder, "spex.yaml")), "[storage-6] spex.yaml written at the folder's root, a stray lock notwithstanding");
+  const manifest = parseYaml(readFileSync(join(folder, "spex.yaml"), "utf8")) as { packages: Record<string, unknown> };
+  assert.ok(manifest.packages["sublang/playbooks"], "[environments-11] the built-in spec package requested at the folder's root");
+  assert.ok(!existsSync(join(dataDir, "workspace", "tester", "fixture-spex", "spex.yaml")), "[environments-26] nothing of the environment in the clone");
+  // The stray lock is the reader's: left as it is, read as stale against
+  // the new requests for the reader to resolve, never rewritten unasked.
+  let state = await client.ok("environment.get", { repository: project.id });
+  for (let i = 0; i < 2400 && state.busy !== null; i += 1) {
+    await new Promise((r) => setTimeout(r, 25));
+    state = await client.ok("environment.get", { repository: project.id });
+  }
+  assert.equal(state.error, null, "the environment settles");
+  assert.ok(state.stale !== null && state.stale.length > 0, "[environments-11] the stray lock reads stale against the request written");
+  assert.equal(readFileSync(join(folder, "spex.lock"), "utf8"), stray, "[storage-6] the lock stands as it was");
+  assert.ok(JSON.stringify(state.requests).includes("sublang/playbooks"), "[environments-11] the built-in spec package requested");
+  client.close();
+  await service.stop();
+});
 
 test("projects-21: removal deletes the clone behind a second confirm naming its one unit, and the folder stays untouched", async () => {
   const scratch = scratchDir("spex-project-removal-");
