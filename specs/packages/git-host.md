@@ -34,7 +34,7 @@ When a client sends `space.signin.start` on the desktop naming an instance's URL
 
 - a callback carrying `error=access_denied`, a wrong `state`, a refused exchange, or a person the instance does not return ends the sign-in `failed` with its cause and stores nothing; ten minutes without a callback, or `space.signin.cancel`, ends it `expired` or `stopped` and closes the listener;
 - a sign-in that ends before its token is stored stores nothing, and one that finds its starting pair changed or removed ends `stopped`, storing nothing;
-- a URL the origin rule refuses [[storage-2](storage.md#storage-2)] is refused `invalid_request` naming the rule before anything listens, storing nothing;
+- a URL the origin rule refuses [[storage-2](storage.md#storage-2)] is refused `invalid_request` with the one phrase core-service names [[core-service-145](core-service.md#core-service-145)] before anything listens, storing nothing;
 - at most one sign-in runs at a time, whichever instance it names; a second start is `busy`.
 
 #### git-host-3
@@ -67,11 +67,11 @@ When an instance is signed in and a read of it is due — at its sign-in, on Ref
 - the view holds each group by the instance and the group's id, and your namespace there — the listed group of kind `user` under that instance's account's login — and another account's — one under another login in which it lists a spex repository — by the instance and the login;
 - a listed spex repository's key is that instance's folder joined to its group's path and its own name [[storage-1](storage.md#storage-1)], a placement of a clone here [[storage-34](storage.md#storage-34)] taking that clone's key and your own group's own repository keeping its key, and none where that group is held as colliding — one of kind `group` whose path equals, ignoring case, your login at that instance or another login under which it lists a spex repository, or lies beneath one — so a group collides within its own instance alone ([DR-120](../decisions/120-the-instance-is-the-space.md));
 - a listed spex repository is one host repository by that instance's Git origin and its id, matched to a placement of a clone, whatever instance the clone is keyed under, where the id recorded beside one of the clone's remotes [[storage-34](storage.md#storage-34)] is that id and that remote lies under that Git origin, else where that remote is its remote URL, and otherwise to the clone whose placement file names that instance and id [[storage-36](storage.md#storage-36)] as a placement not on this device [[space-87](space.md#space-87)], never by name alone;
-- a host repository more than one signed-in instance lists, all reporting one Git origin, is one placement, whose instance — the one its remote is named by [[storage-34](storage.md#storage-34)] — while signed in, alone governs its path and moves, its read-only state, its unlisting, its members, what the person may do on it, and Share, every other instance's listing only withholding Join [[space-63](space.md#space-63)] and Attach [[space-90](space.md#space-90)]; while that instance is signed out, the earliest signed-in instance in the home's list that lists it governs it, and the placement follows that one at its next sync [[space-60](space.md#space-60)];
+- a host repository more than one signed-in instance lists, all reporting one Git origin, is one placement, whose instance — the one its remote is named by [[storage-34](storage.md#storage-34)] — while signed in, alone governs its path and moves, its read-only state, its unlisting, its members, what the person may do on it, and Share, every other instance's listing only withholding Join [[space-63](space.md#space-63)] and Attach; while that instance is signed out, the earliest signed-in instance in the home's list that lists it governs it, and the placement follows that one at its next sync [[space-60](space.md#space-60)];
 - a placement at that instance whose host repository it no longer lists is marked unreachable with the cause, the clone's files untouched;
 - a spex repository the core attaches a clone to, after creating it [[git-host-6](#git-host-6)] or from the view's own listing, and a group the core creates [[git-host-15](#git-host-15)], count as listed in their instance's view — each as that answer gave it, a created repository without its `spex` branch — until a read of that instance begun after the attachment or the creation is held, and a read begun before either is made again before it is held;
 - a group the core renames or deletes and a spex repository it moves [[git-host-18](#git-host-18)] [[git-host-19](#git-host-19)] [[git-host-20](#git-host-20)] stand in their instance's view as its answer left them — renamed, with every group and spex repository inside it under its new path; gone; or in its new group — until a read of that instance begun after the change is held, and a read begun before the change is made again before it is held;
-- the `project.json` the instance returns for each listed repository is kept for the pickers [[space-58](space.md#space-58)] [[space-88](space.md#space-88)], and its archived flag and the role of that instance's account, as the instance reports them, decide read-only [[space-61](space.md#space-61)];
+- the `project.json` the instance returns for each listed repository is kept for the pickers [[space-58](space.md#space-58)], and its archived flag and the role of that instance's account, as the instance reports them, decide read-only [[space-61](space.md#space-61)];
 - the full-view catalog and repository-detail pass enumerates no repository members and holds each listed repository with an unknown members' count, retaining its complete catalog and repository-detail authority; a catalog or repository-detail failure fails that instance's whole read;
 - the read due at the first `space.get` is begun once per instance, however many clients ask, and that reply answers the state as it stands, never waiting for any read, whose outcome the core announces as any host read's [[space-2](space.md#space-2)];
 - each instance's full read, including the surrounding account setup accepted by Refresh, publishes its running state until all its tracked work settles and then its success or failure through that instance's part of the public Space state [[space-1](space.md#space-1)], separately from its sign-in and its last complete view's time; after a failure, it starts no queued repository detail, drains work already begun and retains the first observed failure; a failed catalog read retains that view and time and reports the existing sanitized host message even where no remote-backed row exists; a setup failure is also reported through this lifecycle without discarding a completed catalog view, using the existing host message for classified host errors and a translated generic Refresh failure for unexpected local errors; that instance's sign-out clears its read lifecycle;
@@ -147,7 +147,7 @@ When a client sends `space.unshare` [[space-72](space.md#space-72)], the core sh
 
 #### git-host-18
 
-When a client sends `space.group.rename` [[space-76](space.md#space-76)], the core shall ask the instance that lists the named group to give it the name, the path segment, or both, that the command carries, and shall act on the answer ([DR-120](../decisions/120-the-instance-is-the-space.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
+When a client sends `space.group.rename`, the core shall ask the instance that lists the named group to give it the name, the path segment, or both, that the command carries, and shall act on the answer ([DR-120](../decisions/120-the-instance-is-the-space.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
 
 | Answer | The core |
 | --- | --- |
@@ -161,7 +161,7 @@ When a client sends `space.group.rename` [[space-76](space.md#space-76)], the co
 
 #### git-host-19
 
-When a client sends `space.group.delete` [[space-77](space.md#space-77)], the core shall ask the instance that lists the named group to delete it and shall act on the answer ([DR-120](../decisions/120-the-instance-is-the-space.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
+When a client sends `space.group.delete`, the core shall ask the instance that lists the named group to delete it and shall act on the answer ([DR-120](../decisions/120-the-instance-is-the-space.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
 
 | Answer | The core |
 | --- | --- |
@@ -175,7 +175,7 @@ When a client sends `space.group.delete` [[space-77](space.md#space-77)], the co
 
 #### git-host-20
 
-When a client sends `space.repository.move` [[space-78](space.md#space-78)], the core shall ask the instance governing the named placement of the spex repository [[git-host-5](#git-host-5)] to move that host repository into the named group of that instance, or into your namespace there where the command names none, and shall act on the answer ([DR-120](../decisions/120-the-instance-is-the-space.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
+When a client sends `space.repository.move`, the core shall ask the instance governing the named placement of the spex repository [[git-host-5](#git-host-5)] to move that host repository into the named group of that instance, or into your namespace there where the command names none, and shall act on the answer ([DR-120](../decisions/120-the-instance-is-the-space.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
 
 | Answer | The core |
 | --- | --- |

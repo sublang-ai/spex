@@ -5,7 +5,7 @@
 
 ## Intent
 
-This package defines the Space surface under [DR-103](../decisions/103-the-home-and-its-groups.md), named Space by [DR-150](../decisions/150-spex-space-product-and-destination.md), with the placements of [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md): where the reader signs in to each instance, sees their groups at each with the spex repositories in each and where their code lives, syncs each spex repository's `spex` branch with every instance it is placed at between Boss turns, places it at another instance or removes it from one, reads each placement's members, repairs a project whose folder is missing on this device, and reads a clone as an annotated tree.
+This package defines the Space surface under [DR-103](../decisions/103-the-home-and-its-groups.md), named Space by [DR-150](../decisions/150-spex-space-product-and-destination.md), with the placements of [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md) and the words of [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md): where the reader signs in to each instance, sees their groups at each with the spex repositories in each and where their code lives, syncs each spex repository's `spex` branch with every instance it is placed at between Boss turns, reads each placement's members, repairs a project whose folder is missing on this device, and reads a clone as an annotated tree, while placing a spex repository at another instance, removing it from one and attaching a placement another device added stay commands of the core the surface does not offer.
 An **instance** is a Git host the home has signed in to, listed in `home.yaml` by its origin with its account, its display name and its sign-out mark, the first it lists, or the origin the home was created with while it lists none, being the home's **default instance** [[storage-2](storage.md#storage-2)] ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)); your **namespace** at an instance is where it lists spex repositories under your login there, and another account's where it lists them under theirs.
 A **spex repository** holds one project's or one group's records on its `spex` branch and is known by its key, the clone's path under `workspace/` [[storage-1](storage.md#storage-1)], `@<host>/<its path in the instance>` at an instance and `<own>/<name>-spex` in your own group's folder, and its **instance** is the one whose folder its key lies in, else the one the instances migration's receipt names for it, else the one its first placement's remote names [[storage-31](storage.md#storage-31)]; a **placement** of it is a host repository holding it at one instance, or the one remote the reader names, which has no instance, its clone holding each as a remote in the order added [[storage-34](storage.md#storage-34)], the first with an instance being its **key placement**, or **first placement**; the **host** of a placement, a group or a namespace is its instance, and of a sign-in or a command the instance it names; a **unit** is one whole-unit selection subject — a session bundle, an intent with its attachments, an authoring session, a group's own environment's two files, the configuration, `project.json`, or one other tracked file [[storage-11](storage.md#storage-11)]; a **choice** takes a unit whole from this device or from a placement's host; a **local** unit is one this device changed and an **incoming** unit one a placement's copy changed, each against their common ancestor with that placement.
 The core performs every Git operation and every call to an instance; the surface renders the core's state and runs neither itself.
@@ -16,48 +16,64 @@ The core performs every Git operation and every call to an instance; the surface
 
 #### space-1
 
-While the app is connected, the Space surface — reached from the sidebar's Space entry [[run-view-67](run-view.md#run-view-67)] — shall present the home in one header and one groups list holding a heading for each instance the home lists [[storage-2](storage.md#storage-2)] ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
+While the app is connected, the Space surface — reached from the sidebar's Space entry [[run-view-67](run-view.md#run-view-67)] — shall present the home in one header and one groups list holding a heading for each instance the home lists [[storage-2](storage.md#storage-2)] ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)):
 
 | Field | Content |
 | --- | --- |
 | sign-in | while the home lists no instance, the sign-in card [[space-3](#space-3)] |
 | refresh | while any instance is signed in, Refresh, which reads every signed-in instance [[git-host-5](git-host.md#git-host-5)] |
-| issues | present while any repair or diagnostic stands, reading the count the core carries — the repairs this device's reader has not answered [[space-49](#space-49)] and every diagnostic no repair folds [[core-service-86](core-service.md#core-service-86)] — without a number where that count is none, and opening the issues list in place |
+| issues | present while any repair or diagnostic stands, reading "⚠ <n> to fix", <n> being the count the core carries — the repairs this device's reader has not answered [[space-49](#space-49)] and every diagnostic no repair folds [[core-service-86](core-service.md#core-service-86)] — without its number where that count is none, and opening the issues list in place [[space-55](#space-55)] |
 | Git | "Git is not installed" with install guidance, replacing every other field, where no `git` runs |
 
 | An instance's heading, while it is | Carries |
 | --- | --- |
-| signed in | its display name, its host name until one is read; "Signed in as @<login>", <login> being the account's there, with Sign out [[space-6](#space-6)]; "New group" where its read says the person may create a group there [[space-68](#space-68)], and where it says not, the phrase "Groups are made by the people who run <display name>", with no link and no control, neither before a read is held ([DR-120](../decisions/120-the-instance-is-the-space.md)); the time its last read was held, "Not read yet" until a read since the core started is held — on a signed-in start, the one the first `space.get` begins [[git-host-5](git-host.md#git-host-5)] |
-| signed out | its display name as last read, its host name where none was; "Sign in again" [[space-3](#space-3)] and Forget [[space-82](#space-82)] |
+| signed in | its display name, its host name until one is read, beside "@<login>", <login> being the account's there; "New group" [[space-68](#space-68)] where its read says the person may create a group there, disabled and titled "Made by the people who run <display name>" where it says not, and neither before a read is held ([DR-120](../decisions/120-the-instance-is-the-space.md)); Sign out [[space-6](#space-6)]; one overflow control, "More", holding "Remove from this list", disabled [[space-82](#space-82)] |
+| signed out | its display name as last read, its host name where none was; "Sign in again" [[space-3](#space-3)]; the overflow holding "Remove from this list" [[space-82](#space-82)] |
 
-- while a full read of any instance, or the surrounding account setup accepted by Refresh, is running, Refresh reads "Reading…" and stays disabled until every such read's actual outcome; a failed read shows the core's sanitized message on its instance's heading, Refresh offering the same ordinary retry even when only local-only rows exist; neither state replaces that instance's last complete view or its time, and one instance's failure leaves every other's view [[git-host-5](git-host.md#git-host-5)];
-- the groups list stands beneath the header: your own group first, headed "Only you" beside "named after your login at sign-in" while the home lists no instance and its folder still bears this device's user name [[storage-2](storage.md#storage-2)], as `own.named` says [[space-30](#space-30)], and beside "@<login>", your login at its instance, otherwise; then each instance's heading in the order the home lists them [[storage-2](storage.md#storage-2)], followed by every group that instance lists as a tree in the order of their paths — a subgroup within its group, each headed by its name beside its member count where the last read holds one [[git-host-5](git-host.md#git-host-5)] — then by your namespace there, headed "Only you" and standing only while it lists a spex repository other than your own group's, and by every other account's login under which it lists a spex repository, headed "Shared by @<login>"; under each, one row per spex repository [[space-61](#space-61)], the group's own repository first; while the home lists no instance the list holds your own group alone with its repositories, and while it lists any, "Add instance…", bearing "Another instance" as its title and accessible name, stands at the list's foot, opening the sign-in card in its place [[space-3](#space-3)] ([DR-120](../decisions/120-the-instance-is-the-space.md), [DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md));
-- a row stands under the group that the instance governing its key placement [[git-host-5](git-host.md#git-host-5)] last named for it, and under its key's group only where that instance lists nothing for it, so a clone the host moved stands under its new heading, and one whose instance is signed out under the instance its next sync follows, its key unchanged until that sync moves it [[space-60](#space-60)]; every other group whose listing holds a placement of it, or a host repository a placement file of its clone names [[storage-36](storage.md#storage-36)], shows one line naming the row and the group it stands under, with no control ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)); a host repository several signed-in instances list is one row, which, with no clone here, stands under the earliest of them in the home's list; your own group's own repository stands under your own group alone, and no group or namespace an instance lists displaces your own group or takes its rows;
-- a row's members panel [[space-62](#space-62)] and its Sync's refusal before the first step [[space-11](#space-11)] read the instance governing its spex repository as `governing` names it [[space-30](#space-30)]: the panel that instance's roles and host name, offered only while one governs, and the refusal, while none does, "Sign in to <display name> first" with its own instance's;
+- beneath each instance's heading stands its registry line [[space-119](#space-119)];
+- while a full read of any instance, or the surrounding account setup accepted by Refresh, is running, Refresh reads "Reading…" and stays disabled until every such read's actual outcome; a failed read shows the core's sanitized message on its instance's heading, Refresh offering the same ordinary retry even when only local-only rows exist; neither state replaces that instance's last complete view, and one instance's failure leaves every other's view [[git-host-5](git-host.md#git-host-5)];
+- the groups list stands beneath the header: each instance's heading in the order the home lists them [[storage-2](storage.md#storage-2)], followed by "Personal" — your namespace there — standing while it holds a row or a line, then by every group that instance lists as a tree in the order of their paths — a group inside a group nested within it, each headed by its name beside its member count where the last read holds one [[git-host-5](git-host.md#git-host-5)] — and by every other account's login under which it lists a spex repository, headed "Shared by @<login>"; then by "This computer", holding your own group's rows but its own repository while that holds a placement with an instance, and standing while it holds any; under each heading one row per spex repository [[space-61](#space-61)], a group's own repository first and your own group's own first; while the home lists no instance the list holds "This computer" alone, and while it lists any, "Add a Space…" stands at the list's foot, opening the sign-in card in its place [[space-3](#space-3)] ([DR-120](../decisions/120-the-instance-is-the-space.md), [DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md));
+- a row stands under the group that the instance governing its key placement [[git-host-5](git-host.md#git-host-5)] last named for it, and under its key's group only where that instance lists nothing for it, so a clone the host moved stands under its new heading, and one whose instance is signed out under the instance its next sync follows, its key unchanged until that sync moves it [[space-60](#space-60)]; every other group whose listing holds a placement of it, or a host repository a placement file of its clone names [[storage-36](storage.md#storage-36)], shows one line naming the row and the group it stands under, with no control ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)); a host repository several signed-in instances list is one row, which, with no clone here, stands under the earliest of them in the home's list; your own group's own repository, while it holds a placement with an instance, stands under "Personal" at the instance governing it, else at its first placement's, and no group an instance lists takes your own group's rows;
+- a row's members panel [[space-62](#space-62)] and its Sync's refusal before the first step [[space-11](#space-11)] read the instance governing its spex repository as `governing` names it [[space-30](#space-30)]: the panel that instance's roles and display name, offered only while one governs, and the refusal, while none does, "Sign in to <display name> first" with its own instance's;
 - what stands beside a heading's name follows the separator " · " in the surface's secondary tone;
-- the heading of a group an instance lists carries one overflow control, "More", holding Members, opening its members panel [[space-62](#space-62)], and "New subgroup", "Rename" and "Delete" where its instance's view says the person may create a subgroup in it, rename it and delete it [[git-host-5](git-host.md#git-host-5)] [[space-68](#space-68)] [[space-76](#space-76)] [[space-77](#space-77)], "Delete" only while the list holds no spex repository or placement under that group and no group inside it ([DR-120](../decisions/120-the-instance-is-the-space.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)) — Share standing in the members panel alone, where the view says the person may add a member [[space-69](#space-69)], nothing else shown for an act the host does not let this person take, and the headings of your own group, of your namespace and of another account's login carrying none of them ([DR-114](../decisions/114-groups-and-sharing-from-spex.md)); beneath a group's heading, before its rows, one line per team server of that group the instance lists, the server's name beside "Connected" while a seat is open there [[run-view-170](run-view.md#run-view-170)] ([DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md));
-- a spex repository's row carries its name — the repository's with its `-spex` dropped, a group's own reading "Group sessions" and your own group's own "Your sessions" — where its code lives — a project's code remote as read below, "Code not on a remote" for a project's whose `project.json` names none, nothing for a group's own — "Here" while it is open at this place and "On <server>" for each seat it is open at [[run-view-168](run-view.md#run-view-168)], one phrase for its records' standing [[space-61](#space-61)], its local-changes count [[space-7](#space-7)] where any, its primary control — Open, offering a place per entry [[space-111](#space-111)], or the control its state offers [[space-61](#space-61)] — and one overflow control, "More", holding "Sync now", titled as sending what is here and bringing back anything new, Members [[space-62](#space-62)], "Explore records", and, on a project's, "Move…" [[space-78](#space-78)], "Place at…" [[space-88](#space-88)], while its clone holds a placement with an instance, "Leave…" [[space-89](#space-89)], and Attach for each placement not on this device [[space-90](#space-90)] — a group's own staying in its group ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md), [DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md));
-- a remote a project's `project.json` names reads "Code on a remote" until the default instance and every instance the home lists have reported their Git origin [[git-host-5](git-host.md#git-host-5)], then "Code on this instance" where it lies under the Git origin of the row's instance — the default instance's for a local-only row — "Code on a remote" where it lies under another listed instance's, and the remote as the reader set it only where it lies under none of them ([DR-120](../decisions/120-the-instance-is-the-space.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md));
+- the heading of a group an instance lists carries one overflow control, "More", holding Members, opening its members panel [[space-62](#space-62)] — Share standing in the members panel alone, where the view says the person may add a member [[space-69](#space-69)] — and the headings of "Personal", of "This computer" and of another account's login carry none ([DR-114](../decisions/114-groups-and-sharing-from-spex.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)); beneath a group's heading, before its rows, one line per team server of that group the instance lists, the server's name beside "Connected" while a seat is open there [[run-view-170](run-view.md#run-view-170)] ([DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md));
+- a spex repository's row carries its name — the repository's with its `-spex` dropped, a group's own reading "Group sessions" and your own group's own "Your sessions" — a project's code glyph, "Here" while it is open at this place and "On <server>" for each seat it is open at [[run-view-168](run-view.md#run-view-168)], its one standing phrase [[space-120](#space-120)], its primary control — the first entry of [[space-111](#space-111)] it offers, "Open here", titled as downloading the records and the code to this computer, "Open on <server>" or "Show", with its other places' entries offered beside it — or the control its state offers [[space-61](#space-61)], and one overflow control, "More", holding "Sync now", titled as sending what is here and bringing back anything new, Members [[space-62](#space-62)], "Explore records" and, where its state offers it there, "Add to a group…" [[space-61](#space-61)] ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md));
+- a project's code glyph is titled "Code: <where>", <where> being the display name of the listed instance under whose reported Git origin the remote its `project.json` names lies — the row's or another's — else that remote's host as the reader set it, or the remote itself where it names no host, standing only once the default instance and every instance the home lists have reported their Git origin [[git-host-5](git-host.md#git-host-5)]; a project whose `project.json` names no remote reads "⚠ Code: no remote" in its place, and a group's own carries none ([DR-120](../decisions/120-the-instance-is-the-space.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md));
 - activating a row's name opens that spex repository's Sync and Explore tabs beneath the list, as "Explore records" opens its Explore tab, the Sync tab carrying its placements' lines [[space-87](#space-87)];
-- while any instance is signed in, the surface ends in one quiet line, "Spex keeps this device's files in <home>", the home's absolute path `~`-shortened under the user's home directory, selectable, with the full path in its title and no control;
+- while any instance is signed in, the surface ends in one quiet line, "Spex keeps this computer's files in <home>", the home's absolute path `~`-shortened under the user's home directory, selectable, with the full path in its title and no control;
 - the surface links no page but the sign-in's [[space-3](#space-3)] and prints no URL but an instance's origin, and a code remote or the path placement's remote outside the default instance's and every listed instance's reported Git origin, the code remote as the reader set it and the path placement's as a report reads it [[space-15](#space-15)] ([DR-120](../decisions/120-the-instance-is-the-space.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)).
 
 #### space-87
 
-While a spex repository's clone holds a placement, a placement file of it names a host repository a signed-in instance lists [[storage-36](storage.md#storage-36)], or a creation for it waits at an instance [[space-64](#space-64)], its Sync tab shall carry one line per placement — those its clone holds in the order added [[storage-34](storage.md#storage-34)], then each a file names that a signed-in instance lists and no remote here holds, then each instance a creation waits at — naming its instance's display name and its path there, or the path placement's remote as a report reads it [[space-15](#space-15)], with its own state [[space-61](#space-61)] and these, the row's one phrase reading the first line's in this table's order that any placement holds ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md), [DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md)):
+While a spex repository's clone holds a placement, a placement file of it names a host repository a signed-in instance lists [[storage-36](storage.md#storage-36)], or a creation for it waits at an instance [[space-64](#space-64)], its Sync tab shall carry one line per placement — those its clone holds in the order added [[storage-34](storage.md#storage-34)], then each a file names that a signed-in instance lists and no remote here holds, then each instance a creation waits at — naming its instance's display name and its path there, or the path placement's remote as a report reads it [[space-15](#space-15)], with its own state [[space-61](#space-61)] and these ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md), [DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)):
 
 | The line carries | While |
 | --- | --- |
 | the step in flight [[space-12](#space-12)] | a sync runs its turn |
-| the outcome the last sync left there [[space-12](#space-12)] — "Changed here and at <display name>" with Resolve [[space-14](#space-14)], "Unrelated history" with "Merge histories…" [[space-13](#space-13)], "Waiting for you to continue" with Continue [[space-57](#space-57)], or the stopped step's cause with Retry [[space-15](#space-15)] | until the next operation or Dismiss |
-| "Not on this device" with Attach [[space-90](#space-90)] | a placement file names it and no remote here holds it |
+| the outcome the last sync left there [[space-12](#space-12)] — "Changed here and at <display name>" with Resolve [[space-14](#space-14)], "Started separately at <display name>" with "Combine…" [[space-13](#space-13)], "Waiting for you to continue" with the sharing confirm [[space-57](#space-57)], or the stopped step's cause with Retry [[space-15](#space-15)] | until the next operation or Dismiss |
+| "Not on this computer" | a placement file names it and no remote here holds it |
 | its last sync [[space-61](#space-61)] | it is reachable or read-only |
 | Members [[space-62](#space-62)] | it is reachable and has an instance |
-| "Move…", bearing "Move to another group" [[space-78](#space-78)] | the view says the person may move it to another group, on a project's |
 
-- a host repository a placement file of a clone here names stands as a line of that clone's row and as no row of its own, offering no Open, so an Open of one placement leaves each other one its files name offered as Attach, and one a remote here holds under another instance's name is followed to the file's instance instead [[space-60](#space-60)] [[space-91](#space-91)];
+- a host repository a placement file of a clone here names stands as a line of that clone's row and as no row of its own, offering no Open, and one a remote here holds under another instance's name is followed to the file's instance instead [[space-60](#space-60)] [[space-91](#space-91)];
 - a group's own spex repository stays in its group at one instance, so a placement file of it naming a host repository its clone does not hold names no line and no placement not on this device, the host repository it names standing as any its instance lists [[space-61](#space-61)] ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md));
 - a waiting creation or branch preparation at a placement [[space-64](#space-64)] shows its phrase on that line in place of the state's.
+
+#### space-120
+
+The Space surface shall give each spex repository's row one standing phrase, the first of these that its state [[space-61](#space-61)] and its placements' lines [[space-87](#space-87)] hold, a row under "This computer" [[space-1](#space-1)] reading none ([DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)):
+
+1. the step in flight [[space-12](#space-12)], or "Opening…" while its join runs [[space-63](#space-63)];
+2. "<n> to send", <n> being the count of its local units [[space-7](#space-7)];
+3. "Changed here and at <display name>" with Resolve [[space-14](#space-14)];
+4. "Started separately at <display name>" with "Combine…" [[space-13](#space-13)];
+5. "Waiting for you to continue" with the sharing confirm [[space-57](#space-57)], or a stopped step's cause with Retry [[space-15](#space-15)];
+6. "Read-only: <the host's reason>";
+7. "Unreachable: <cause>";
+8. "Signed out of <display name>";
+9. its last sync — "Synced <age>", "Not synced since <moment>" or "Never synced".
+
+- <display name> is that of the instance of the first placement, in the lines' order, holding the phrase.
 
 #### space-2
 
@@ -65,24 +81,32 @@ The Space surface shall re-read the core's state only on an event, never on a ti
 
 #### space-106
 
-When a reply carrying Space state arrives, the UI shall apply it only if no newer state request or `space.state` broadcast has superseded its request, including replies to Sign out, Forget and declining a repair.
+When a reply carrying Space state arrives, the UI shall apply it only if no newer state request or `space.state` broadcast has superseded its request, including replies to Sign out, "Remove from this list" and declining a repair.
+
+#### space-119
+
+The Space surface shall show beneath each instance's heading, where the directory lists that instance as a registry or could not be read [[environments-39](environments.md#environments-39)], one line for the registry at that instance's origin [[core-service-143](core-service.md#core-service-143)] — "Registry · signed in as @<login>" while the person is signed in to that registry, <login> being their account there, and otherwise "Registry" with Sign in, titled "For publishing and private packages", starting that registry's sign-in [[core-service-143](core-service.md#core-service-143)] — its sign-in reading on that line as the card's reads [[space-3](#space-3)], and the surface managing no package ([DR-168](../decisions/168-independent-package-registry.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)).
 
 ### Signing In
 
 #### space-3
 
-The Space surface shall offer the sign-in at an instance in one card holding a field captioned "Instance", which holds the default instance's origin [[storage-2](storage.md#storage-2)] until the reader edits it, and Sign in as its one primary control, starting the sign-in at the origin the field holds — the card standing as the header while the home lists no instance, titled "Not signed in" and reading "Sign in to see your groups and share each project's records with the people in them." and "Until you sign in to this Space, your records stay on this device.", and in place of "Add instance…" once the reader activates it [[space-1](#space-1)], with Cancel beside Sign in and Escape cancelling ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
+The Space surface shall offer the sign-in at an instance in one card titled "Sign in to a Space", holding the chooser of Spaces [[space-115](#space-115)] and Sign in as its one primary control, starting the sign-in at the origin chosen, and no sentence — the card standing as the header while the home lists no instance, and in place of "Add a Space…" once the reader activates it [[space-1](#space-1)], with Cancel beside Sign in and Escape cancelling ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)):
 
 - "Sign in again" on a signed-out instance's heading starts the sign-in at that instance's origin, its flow reading on that heading as on the card;
-- the card opened from "Add instance…" also reads "Your own group's records will be kept there too." ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md));
-- on the desktop, Sign in starts the browser flow [[git-host-2](git-host.md#git-host-2)], and the card reads "Your browser is open at <host name>: sign in there and approve; you return here signed in." with the link "Open it again" to the sign-in URL; where the shell did not open the browser, the card reads as the device flow's with the sign-in URL as its link;
-- in a browser client of the server shell, Sign in starts the device flow [[git-host-3](git-host.md#git-host-3)], and the card reads "Continue in your browser:", the link "Open <host name> to sign in" to the verification URL in a new tab, and "Sign in there and approve; you return here signed in.", showing no code;
-- <host name> is the host name of the origin being signed in to: the page the person opens says how to sign in there, and the surface names no account elsewhere;
-- while a flow runs, Sign in reads "Signing in…", disabled, beside Cancel, and no row or heading offers a sign-in control, "Add instance…" disabled;
-- a URL the core refuses by the origin rule [[git-host-2](git-host.md#git-host-2)] starts no flow, the card reading the core's cause as one sentence with the field kept;
-- a denial, an expiry or a refusal — a sign-in at a listed instance as another account among them [[git-host-2](git-host.md#git-host-2)] — ends the flow, the card reading the core's cause as one sentence and the control "Sign in again";
-- while no flow runs or stands failed and the core reports that an instance signed this device out [[git-host-4](git-host.md#git-host-4)], that instance's heading reads "<host name> signed this device out. Sign in again to continue as @<login>.", <login> being the account's there, beside its "Sign in again";
-- while the home lists no instance, your own group's own spex repository reads "On this computer only — synced once you sign in" with no control and the others are local only [[space-61](#space-61)]; a placement at a signed-out instance is unreachable with "Sign in again" unless a signed-in instance lists its host repository [[space-61](#space-61)], and the surface never contacts an instance that is not signed in.
+- Sign in starts the browser flow on the desktop [[git-host-2](git-host.md#git-host-2)] and the device flow in a browser client of the server shell [[git-host-3](git-host.md#git-host-3)], the card reading in either "Continue in your browser" with the link "Open <Space>" — to the sign-in URL, or to the verification URL in a new tab — and showing no code;
+- <Space> is the display name the directory or the home gives the origin being signed in to, else its host name: the page the person opens says how to sign in there, and the surface names no account elsewhere;
+- while a flow runs, Sign in reads "Signing in…", disabled, beside Cancel, and no row or heading offers a sign-in control, "Add a Space…" disabled;
+- a URL the core refuses by the origin rule [[git-host-2](git-host.md#git-host-2)] starts no flow, the card reading the core's cause with the field kept;
+- a denial, an expiry or a refusal — a sign-in at a listed instance as another account among them [[git-host-2](git-host.md#git-host-2)] — ends the flow, the card reading the core's cause and the control "Sign in again";
+- while no flow runs or stands failed and the core reports that an instance signed this device out [[git-host-4](git-host.md#git-host-4)], that instance's heading reads "<display name> · signed out · @<login>", <login> being the account's there, beside its "Sign in again";
+- while the home lists no instance, every spex repository is local only [[space-61](#space-61)]; a placement at a signed-out instance reads "Signed out of <display name>" unless a signed-in instance lists its host repository [[space-61](#space-61)], and the surface never contacts an instance that is not signed in.
+
+#### space-115
+
+When the reader opens the sign-in card [[space-3](#space-3)], the surface shall offer one chooser listing each Space of the public registry's directory [[environments-39](environments.md#environments-39)] by its display name, its sign-in providers as icons titled with their names, then a last entry "Other Space…" revealing in its place a field captioned "Space address", preselecting the default instance's entry [[storage-2](storage.md#storage-2)], or "Other Space…" with the field holding that instance's origin where the directory lists none such, and standing as the field alone, holding that origin, where the directory cannot be read, no directory entry establishing credential trust ([DR-168](../decisions/168-independent-package-registry.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)):
+
+- the reader's own pick of "Other Space…" shows the field empty with the placeholder `https://…`.
 
 #### space-4
 
@@ -90,7 +114,7 @@ When a sign-in completes [[git-host-2](git-host.md#git-host-2)] [[git-host-3](gi
 
 1. rename your own group's folder and its spex repository after the account's login there where the folder still bears this device's user name [[space-59](#space-59)];
 2. read that instance [[git-host-5](git-host.md#git-host-5)];
-3. where your own group's own repository holds no placement at that instance and none whose host repository that instance lists [[git-host-5](git-host.md#git-host-5)] — your own group being placed at every instance the home signs in to — create `<login>-spex` in your namespace there where it lists none — a group named like your login never counting as it [[git-host-5](git-host.md#git-host-5)] — and push it [[space-65](#space-65)], and where one exists, join it as a placement as any two histories join [[space-13](#space-13)], the first push there following the sharing notice [[space-57](#space-57)]; where it holds one, create and join nothing for it;
+3. where your own group's own repository holds no placement at that instance and none whose host repository that instance lists [[git-host-5](git-host.md#git-host-5)] — your own group being placed at every instance the home signs in to — create `<login>-spex` in your namespace there where it lists none — a group named like your login never counting as it [[git-host-5](git-host.md#git-host-5)] — and push it [[space-65](#space-65)], and where one exists, join it as a placement as any two histories join [[space-13](#space-13)], the first push there following the sharing confirm [[space-57](#space-57)]; where it holds one, create and join nothing for it;
 4. list every local-only spex repository of a project with its "Add to a group…" control [[space-58](#space-58)], creating nothing for them unasked.
 
 - a session lease standing beneath a clone the rename would move refuses the whole rename [[space-59](#space-59)], the sign-in standing complete with the rename retried on the next read;
@@ -111,41 +135,42 @@ When a working folder's remote is read for `project.json` [[storage-3](storage.m
 
 #### space-6
 
-When the reader activates Sign out on a signed-in instance's heading, the core shall revoke this device at that instance and forget its credential [[git-host-10](git-host.md#git-host-10)], and the surface shall keep that instance's heading, signed out [[space-1](#space-1)], every placement at it turning unreachable with "Sign in again" unless a signed-in instance lists its host repository, a spex repository reading unreachable only where every placement it holds does [[space-61](#space-61)], their records and clones kept ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)).
+When the reader activates Sign out on a signed-in instance's heading, the core shall revoke this device at that instance and forget its credential [[git-host-10](git-host.md#git-host-10)], and the surface shall keep that instance's heading, signed out [[space-1](#space-1)], every placement at it turning unreachable with "Signed out of <display name>" unless a signed-in instance lists its host repository, a spex repository reading unreachable only where every placement it holds does [[space-61](#space-61)], their records and clones kept ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)).
 
 #### space-82
 
-When the reader activates Forget on a signed-out instance's heading, the core shall remove that instance from the home in this order ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
+When the reader activates "Remove from this list" in a signed-out instance's heading's overflow [[space-1](#space-1)], the core shall remove that instance from the home in this order ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)):
 
 1. make each placement at that instance follow a signed-in instance listing its host repository [[git-host-5](git-host.md#git-host-5)], as a sync's follow makes it follow [[space-60](#space-60)], rewriting its placement file [[storage-36](storage.md#storage-36)];
-2. where a clone other than your own group's own repository still has it as its instance [[storage-31](storage.md#storage-31)], or a placement of one is still at it — listed by no signed-in instance, or its follow refused by a session lease — refuse, naming beneath the heading each such spex repository or that session, the instance kept with every follow already made;
+2. where a clone other than your own group's own repository still has it as its instance [[storage-31](storage.md#storage-31)], or a placement of one is still at it — listed by no signed-in instance, or its follow refused by a session lease — refuse, reading beneath the heading "Still syncing: <projects> — stop them first", <projects> naming each such project, or naming the session that refused its follow, the instance kept with every follow already made;
 3. rename your own group's own repository's remote there to the folder of a signed-in instance listing the same host repository [[git-host-5](git-host.md#git-host-5)], rewriting its placement file [[storage-36](storage.md#storage-36)], else drop that remote [[space-5](#space-5)], leaving its file;
 4. remove the instance's entry from `home.yaml` [[storage-2](storage.md#storage-2)].
 
-- a Forget leaving the home with no instance leaves it as before any sign-in [[space-1](#space-1)], your own group's own repository local only until a sign-in creates or joins it [[space-4](#space-4)].
+- a removal leaving the home with no instance leaves it as before any sign-in [[space-1](#space-1)], your own group's own repository local only until a sign-in creates or joins it [[space-4](#space-4)].
 
 ### Groups and Spex Repositories
 
 #### space-57
 
-While a placement's host repository has other members, or the placement is your own group's own repository's at an instance other than its first placement's [[space-4](#space-4)], and it has never been pushed from this device, when a sync reaching that placement, or a pick [[space-58](#space-58)] or a Place [[space-88](#space-88)] joining it, is admitted, the surface shall first say once for that placement that every session goes there whole — hidden parts and attachments included — that nothing recalls what others downloaded, and, where the repository is public, that its records are public, with Continue and Cancel, Cancel focused and Escape cancelling ([DR-010](../decisions/010-interface-craft.md) §4) ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
+While a placement's host repository has other members, or the placement is your own group's own repository's at an instance other than its first placement's [[space-4](#space-4)], and it has never been pushed from this device, when a sync reaching that placement, or a pick [[space-58](#space-58)] joining it, is admitted, the surface shall first ask once for that placement with the sharing confirm — titled "Share with <group> at <display name>?" over the phrases "Every session, whole, attachments included", "Past and future records" and "Members keep what they download", and "Public: anyone can read" where the repository is public — with Share and Cancel, Cancel focused and Escape cancelling ([DR-010](../decisions/010-interface-craft.md) §4) ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)):
 
-- a sync reads afresh, for admission, only the placements whose notice may be owed, and rechecks the notice at each one's Check before branch or transport effects [[git-host-22](git-host.md#git-host-22)], a failed read stopping that placement alone, as unreachable, and refusing the sync only where no placement could run; a placement whose notice is owed reads "Waiting for you to continue" with Continue on its line while the others sync [[space-87](#space-87)], a pick's notice standing in the picker beneath the spex repository picked [[space-58](#space-58)] and a Place's in its picker [[space-88](#space-88)];
-- Continue records that this device's reader has seen it for that placement [[storage-5](storage.md#storage-5)] and starts the sync, the pick or the Place with `noticed`; Cancel starts nothing, focus returning to the control that asked;
+- <group> is the name of the group the placement is in, "Personal" for your namespace, and <display name> that of its instance;
+- a sync reads afresh, for admission, only the placements whose confirm may be owed, and rechecks it at each one's Check before branch or transport effects [[git-host-22](git-host.md#git-host-22)], a failed read stopping that placement alone, as unreachable, and refusing the sync only where no placement could run; a placement whose confirm is owed reads "Waiting for you to continue" with the confirm on its line while the others sync [[space-87](#space-87)], a pick's confirm standing in the picker beneath the spex repository picked [[space-58](#space-58)];
+- Share records that this device's reader has seen it for that placement [[storage-5](storage.md#storage-5)] and starts the sync or the pick with `noticed`; Cancel starts nothing, focus returning to the control that asked;
 - the members of the clone's other placements are not asked;
-- the path placement [[space-5](#space-5)] owes no notice;
-- a placement whose only member is the account says nothing, your own group's at a later instance excepted, and one whose members' count the host's last read lacks [[git-host-5](git-host.md#git-host-5)] is taken to have other members.
+- the path placement [[space-5](#space-5)] owes no confirm;
+- a placement whose only member is the account asks nothing, your own group's at a later instance excepted, and one whose members' count the host's last read lacks [[git-host-5](git-host.md#git-host-5)] is taken to have other members.
 
 #### space-58
 
-When a working folder is added while any instance is signed in [[storage-6](storage.md#storage-6)], or the reader activates "Add to a group…" on a spex repository whose clone holds no placement with an instance [[space-61](#space-61)], the surface shall offer, in one picker, under each signed-in instance's display name — its clone's instance alone where its key lies under one [[storage-31](storage.md#storage-31)] — the spex repositories that instance lists whose `project.json` names the folder's remote, each with its group, read as the list reads it [[space-1](#space-1)], and its members' count where known, omitted where the full read leaves it unknown [[git-host-5](git-host.md#git-host-5)], and, below them, your namespace there, reading "Only you", and each group it lists, since only the host knows where the account may create, the folder's name as the new repository's name in an editable field followed by `-spex` ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md), [DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md)):
+When a working folder is added while any instance is signed in [[storage-6](storage.md#storage-6)], or the reader activates "Add to a group…" on a spex repository whose clone holds no placement with an instance [[space-61](#space-61)], the surface shall offer one picker holding, under each signed-in instance's display name — its clone's instance alone where its key lies under one [[storage-31](storage.md#storage-31)] — "Join the records already in", listing the spex repositories that instance lists whose `project.json` names the folder's remote, each with its group, read as the list reads it [[space-1](#space-1)], and its members' count where known, omitted where the full read leaves it unknown [[git-host-5](git-host.md#git-host-5)], and "Share into", listing "Personal", your namespace there, first and then each group it lists, since only the host knows where the account may create, with no field naming the new repository ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md), [DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)):
 
-- picking a listed spex repository clones it and pairs it with the folder — on a seat, the folder the core allocates [[space-103](#space-103)] — or, for a local-only one, joins its history with the clone's as any two [[space-13](#space-13)], once the sharing notice is seen where that repository may have other members [[space-57](#space-57)];
-- picking a group or your namespace creates `<name>-spex` there, at that instance [[git-host-6](git-host.md#git-host-6)], the pick naming a group by its host id and your namespace by none, and pushes the local branch; a name the host reports taken is refused in place and the field asks for another;
+- picking a listed spex repository clones it and pairs it with the folder — on a seat, the folder the core allocates [[space-103](#space-103)] — or, for a local-only one, joins its history with the clone's as any two [[space-13](#space-13)], once the sharing confirm is answered where that repository may have other members [[space-57](#space-57)];
+- picking "Personal" or a group creates `<name>-spex` there, <name> being the folder's name, at that instance [[git-host-6](git-host.md#git-host-6)], the pick naming a group by its host id and your namespace by none, and pushes the local branch; a name the host reports taken is refused in place;
 - a pick of a clone under your own group's folder moves it under that instance's folder at the repository's path there as the creation or the join lands [[storage-35](storage.md#storage-35)];
 - a creation the host refuses for the account's rights leaves the repository local only, where its clone lies, with "Waiting for a member who can create it in <group>" on that instance's line [[space-64](#space-64)];
 - Cancel leaves the repository local only, where its clone lies, with "Add to a group…" offered again;
-- under each instance, your namespace reads "Only you" and each group by its name with its path in the instance after it where the path differs, as the list reads them [[space-1](#space-1)], never another account's login.
+- under "Share into", each group reads by its name with its path in the instance after it where the path differs, as the list reads them [[space-1](#space-1)], never another account's login.
 
 #### space-59
 
@@ -168,15 +193,15 @@ When a sync of a spex repository reaches a placement's Check step [[space-12](#s
 
 #### space-61
 
-The Space surface shall show each spex repository, and each of its placements, in exactly one of these states, a placement's read from the last answer of the instance governing it [[git-host-5](git-host.md#git-host-5)] and this device's files, and a clone holding a placement reading reachable where any placement it holds does, read-only where none does and one is read-only, and unreachable where every one it holds is ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
+The Space surface shall show each spex repository, and each of its placements, in exactly one of these states, a placement's read from the last answer of the instance governing it [[git-host-5](git-host.md#git-host-5)] and this device's files, and a clone holding a placement reading reachable where any placement it holds does, read-only where none does and one is read-only, and unreachable where every one it holds is ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)):
 
 | State | Holds while | Row reads | Control |
 | --- | --- | --- | --- |
-| local only | the clone holds no placement [[storage-34](storage.md#storage-34)] | "On this computer only", your own group's own repository reading "On this computer only — synced once you sign in" [[space-4](#space-4)] | "Add to a group…" [[space-58](#space-58)] while an instance it would offer is signed in, none on your own group's own repository |
-| reachable | the latest full or selected-target read of the instance governing it lists it [[git-host-5](git-host.md#git-host-5)] [[git-host-22](git-host.md#git-host-22)] and the clone is here, no join of it running [[space-63](#space-63)], or it is the path placement this device can reach | its last sync, or the outcome a placement's line holds [[space-87](#space-87)] | Open [[space-111](#space-111)], "Sync now" in its overflow, and "Add to a group…" [[space-58](#space-58)] while the clone holds no placement with an instance and an instance it would offer is signed in |
+| local only | the clone holds no placement [[storage-34](storage.md#storage-34)] | nothing [[space-120](#space-120)] | "Add to a group…" [[space-58](#space-58)], disabled and titled "Sign in to a Space first" while no instance it would offer is signed in; none on your own group's own repository |
+| reachable | the latest full or selected-target read of the instance governing it lists it [[git-host-5](git-host.md#git-host-5)] [[git-host-22](git-host.md#git-host-22)] and the clone is here, no join of it running [[space-63](#space-63)], or it is the path placement this device can reach | its standing phrase [[space-120](#space-120)] | Open [[space-111](#space-111)], with "Sync now" in its overflow and, while the clone holds no placement with an instance and an instance it would offer is signed in, "Add to a group…" [[space-58](#space-58)] |
 | read-only | the host listed it archived, or with the account below the role that may push, or refused the push other than for an explicit content-size limit [[space-15](#space-15)] | "Read-only: <the host's reason>"; new sessions reach only the placements that take pushes, said so | Open [[space-111](#space-111)], "Sync now" in its overflow bringing only |
-| unreachable | the host stopped listing it, refused the read, the device is offline, or its instance is signed out while no signed-in instance lists its host repository | "Unreachable: <cause>" | Retry, none while its instance is signed out |
-| not on this device | an instance listed it and no clone is here, or its join still runs [[space-63](#space-63)], or a placement file of a clone here names it | nothing, the row carrying no "Here" [[space-1](#space-1)]; "Opening…" while its join runs | Open [[space-111](#space-111)], or Attach in its clone's row's overflow [[space-90](#space-90)] |
+| unreachable | the host stopped listing it, refused the read, the device is offline, or its instance is signed out while no signed-in instance lists its host repository | "Unreachable: <cause>", or "Signed out of <display name>" while its instance is signed out | Retry, none while its instance is signed out |
+| not on this device | an instance listed it and no clone is here, or its join still runs [[space-63](#space-63)], or a placement file of a clone here names it | nothing, the row carrying no "Here" [[space-1](#space-1)]; "Opening…" while its join runs | Open [[space-111](#space-111)] |
 
 - a reachable placement's last sync is read from this device's last completed sync with it [[space-22](#space-22)] as "Synced <age>", or, where none is recorded, from the last one its clone holds ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)): "Synced <age>" at `spex`'s commit time where `spex` equals that placement's `spex` as the clone last fetched or pushed it, "Not synced since <moment>" at their common ancestor's commit time where the two differ, and "Never synced" where the clone holds no `spex` of it sharing its history;
 - nothing on this device is deleted because the host refused or stopped listing;
@@ -193,17 +218,17 @@ When the reader activates Members on the heading of a group an instance lists or
 
 #### space-68
 
-When the reader activates "New group" on an instance's heading, or "New subgroup" on a group's heading, the surface shall open an inline editor in that place with a field captioned "Group name", a field captioned "Path" that follows the name as the host derives it — lower-cased, each run outside letters, digits, `.`, `_` and `-` one `-`, leading and trailing `-` and `.` dropped — until the reader edits it, Create and Cancel, Escape cancelling ([DR-010](../decisions/010-interface-craft.md) §6), and on Create shall send `space.group.create` with that instance, or the group's, the name, the path and, from a group, that group as the parent, a group from an instance's heading being made at that instance's root [[git-host-15](git-host.md#git-host-15)] ([DR-114](../decisions/114-groups-and-sharing-from-spex.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
+When the reader activates "New group" on an instance's heading, the surface shall open an inline editor in that place with a field captioned "Group name", a field captioned "Path" that follows the name as the host derives it — lower-cased, each run outside letters, digits, `.`, `_` and `-` one `-`, leading and trailing `-` and `.` dropped — until the reader edits it, Create and Cancel, Escape cancelling ([DR-010](../decisions/010-interface-craft.md) §6), and on Create shall send `space.group.create` with that instance, the name, the path and no parent, the group being made at that instance's root [[git-host-15](git-host.md#git-host-15)] ([DR-114](../decisions/114-groups-and-sharing-from-spex.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)):
 
 - Create reads "Creating…" and the editor refuses a second submission while the command runs;
 - a name that derives no path — one in Chinese, say — leaves the path field empty for the reader to fill, and an empty path disables Create;
-- a success closes the editor, the group already standing in the list with its full path, after its parent where it has one, as the core holds it [[git-host-15](git-host.md#git-host-15)] until a read begun after the creation is held [[git-host-5](git-host.md#git-host-5)];
+- a success closes the editor, the group already standing in the list with its full path, as the core holds it [[git-host-15](git-host.md#git-host-15)] until a read begun after the creation is held [[git-host-5](git-host.md#git-host-5)];
 - a refusal — the name taken there, the host's words, or that the host could not be reached [[git-host-11](git-host.md#git-host-11)] — shows in the editor with the name kept;
 - an empty name disables Create.
 
 #### space-69
 
-When the reader activates Share — on a group of the host, or in a placement's members panel [[space-62](#space-62)] — the surface shall open an inline editor there with a field captioned "Login at <host name>", a listbox of the host's roles in its order preselecting the least that may push [[git-host-16](git-host.md#git-host-16)], Add and Cancel, Escape cancelling ([DR-010](../decisions/010-interface-craft.md) §6), and on Add shall send `space.share` naming that group, or that spex repository with the placement's instance, the login and the role ([DR-114](../decisions/114-groups-and-sharing-from-spex.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
+When the reader activates Share in a members panel [[space-62](#space-62)] — a group's or a placement's — the surface shall open an inline editor there with a field captioned "Login at <display name>", <display name> being that of the instance the panel reads, a listbox of the host's roles in its order preselecting the least that may push [[git-host-16](git-host.md#git-host-16)], Add and Cancel, Escape cancelling ([DR-010](../decisions/010-interface-craft.md) §6), and on Add shall send `space.share` naming that group, or that spex repository with the placement's instance, the login and the role ([DR-114](../decisions/114-groups-and-sharing-from-spex.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)):
 
 - Add reads "Adding…" and the editor refuses a second submission while the command runs;
 - a success closes the editor and says in one line "@<login> added as <role>", a members panel standing open listing the members the reply carries;
@@ -217,30 +242,6 @@ When the reader activates Remove on a member in a members panel [[space-62](#spa
 - the row reads "Removing…" until the reply;
 - a success lists the members the reply carries and says in one line "@<login> removed";
 - a refusal — the host's words — shows on the row with the member kept.
-
-#### space-76
-
-When the reader activates "Rename" on a group's heading [[space-1](#space-1)], the surface shall open there the inline editor of [[space-68](#space-68)], its "Group name" field holding the group's name and its "Path" field the group's own path segment, which no longer follows the name, with Save and Cancel, Escape cancelling, and on Save shall send `space.group.rename` naming that group with the name and the path where each differs from the group's [[git-host-18](git-host.md#git-host-18)] ([DR-120](../decisions/120-the-instance-is-the-space.md)):
-
-- Save is disabled while neither differs or either is empty, and reads "Saving…" while the command runs, the editor refusing a second submission;
-- a success closes the editor, the group standing in the list under its new name and path, and every group inside it under its new path, as the core holds it [[git-host-18](git-host.md#git-host-18)];
-- a refusal — the path taken there, the host's words, or that the host could not be reached [[git-host-11](git-host.md#git-host-11)] — shows in the editor with the name kept.
-
-#### space-77
-
-When the reader activates "Delete" on a group's heading [[space-1](#space-1)], the surface shall ask with the inline confirm — "Delete <the group's path>?", "Delete" and "Keep", Keep focused, Escape keeping ([DR-010](../decisions/010-interface-craft.md) §4) — and on Delete shall send `space.group.delete` naming that group [[git-host-19](git-host.md#git-host-19)] ([DR-120](../decisions/120-the-instance-is-the-space.md)):
-
-- the heading's control reads "Deleting…" until the reply;
-- a success leaves the list without the group, as the core holds it [[git-host-19](git-host.md#git-host-19)];
-- a refusal — the host's words, or that the host could not be reached [[git-host-11](git-host.md#git-host-11)] — shows beneath the heading with the group kept.
-
-#### space-78
-
-When the reader activates "Move to another group" on a placement's line of a project's spex repository [[space-87](#space-87)], the surface shall open beneath the line a picker of groups as in [[space-58](#space-58)] — of that placement's instance alone, your namespace there first, read by your login there, then each group it lists, each read by its name with its path in the instance after it where the path differs, as the list reads it [[space-1](#space-1)], never another account's login, the group that placement stands in left out — with Cancel, Escape cancelling, and on a pick shall send `space.repository.move` naming the spex repository, the placement's instance and that group, or none for your namespace [[git-host-20](git-host.md#git-host-20)] ([DR-120](../decisions/120-the-instance-is-the-space.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
-
-- the line's control reads "Moving…" and the picker refuses a second pick while the command runs;
-- a success closes the picker, the placement standing in its new group at once — the row under it where it is the key placement — with the key unchanged, as the core holds it [[git-host-20](git-host.md#git-host-20)], the clone moving on its next sync only for the key placement [[space-60](#space-60)];
-- a refusal — the name taken in that group, a group named like your login, the host's words, or that the host could not be reached [[git-host-11](git-host.md#git-host-11)] — shows in the picker with the placement kept where it stood.
 
 #### space-63
 
@@ -260,30 +261,15 @@ When a step at the host — creating a spex repository [[git-host-6](git-host.md
 
 #### space-65
 
-When the first session of a group starts in the working folder paired with that group [[storage-6](storage.md#storage-6)], or a sign-in finds your own group's own repository with no placement at that instance and none in your namespace there [[space-4](#space-4)], the core shall create `<group>-spex` in that group at its instance, or, for your own group, `<login>-spex` in your namespace at that sign-in's instance [[git-host-6](git-host.md#git-host-6)], prepare its branch [[git-host-7](git-host.md#git-host-7)] and push the local clone, following the sharing notice [[space-57](#space-57)], its remote named by that instance's folder [[space-5](#space-5)] ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
+When the first session of a group starts in the working folder paired with that group [[storage-6](storage.md#storage-6)], or a sign-in finds your own group's own repository with no placement at that instance and none in your namespace there [[space-4](#space-4)], the core shall create `<group>-spex` in that group at its instance, or, for your own group, `<login>-spex` in your namespace at that sign-in's instance [[git-host-6](git-host.md#git-host-6)], prepare its branch [[git-host-7](git-host.md#git-host-7)] and push the local clone, following the sharing confirm [[space-57](#space-57)], its remote named by that instance's folder [[space-5](#space-5)] ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
 
 - a refused creation leaves the clone without that placement — local only where it holds none — and the session running [[space-64](#space-64)].
-
-#### space-88
-
-While a project's spex repository holds a placement with an instance, its clone holds none at some signed-in instance, and the view says the person may manage the members of every placement it holds with an instance [[git-host-5](git-host.md#git-host-5)], its row shall offer "Place at…" — titled and named "Also place at <display name>" where one instance is offered, and otherwise opening the choice of them, each so named — whose instance chosen opens the picker of [[space-58](#space-58)] for that instance alone, listing the spex repositories there whose `project.json` names the folder's remote and whose members the view says the person may manage, then your namespace and each group there, and on a pick shall send `space.place` naming it [[space-97](#space-97)] ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
-
-- the sharing notice is seen first, in the picker, where that repository may have other members [[space-57](#space-57)];
-- a name taken is refused in the picker, and Cancel changes nothing;
-- a group's own spex repository, which stays at its group's instance, and your own group's own, which each sign-in places [[space-4](#space-4)], offer none, and one whose clone holds no placement with an instance offers "Add to a group…" instead [[space-61](#space-61)].
 
 #### space-97
 
 When a client sends `space.place` [[space-29](#space-29)], the core shall, as an operation of the clone's machine [[space-31](#space-31)], join the listed spex repository it names as a placement, its history joined with the clone's as any two [[space-13](#space-13)], or create `<name>-spex` in the group or the namespace it names [[git-host-6](git-host.md#git-host-6)], then sync the clone, that placement among its placements [[space-12](#space-12)] ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
 
 - a creation the host leaves pending adds no placement, its wait standing on that instance's line [[space-64](#space-64)] while the clone syncs its other placements.
-
-#### space-89
-
-While a project's clone holds a placement with an instance, when the reader activates "Leave…" on its row — titled and named "Remove from <display name>" where its clone holds one placement with an instance, and otherwise opening the choice of them, each so named — the surface shall ask with the inline confirm, "Remove" and "Keep", Keep focused, Escape keeping ([DR-010](../decisions/010-interface-craft.md) §4), and on Remove shall send `space.leave` naming that placement's instance [[space-98](#space-98)] ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
-
-- a leave stopped for records no remaining placement received asks the confirm again, naming the count, and one stopped for a placement it could not read says that records pushed to <display name> since the last sync may be left behind, each sending `space.leave` with `confirmed` on that second Remove;
-- the rows of your own group's own repository and of a group's own offer no "Leave…".
 
 #### space-98
 
@@ -298,15 +284,6 @@ When a client sends `space.leave` [[space-29](#space-29)], the core shall, as an
 
 - the file's deletion is a local change the clone's next sync carries to its remaining placements [[space-7](#space-7)].
 
-#### space-90
-
-When the reader activates Attach, in the row's overflow [[space-1](#space-1)] or on a line naming a placement not yet on this device [[space-87](#space-87)] — a host repository a placement file of the clone names [[storage-36](storage.md#storage-36)] that the signed-in instance it names lists [[git-host-5](git-host.md#git-host-5)] — the surface shall show the sharing notice [[space-57](#space-57)] for that placement on its line, naming its instance's display name and its path there whatever its members, and on Continue shall send `space.attach` with `noticed` [[space-99](#space-99)] ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md), [DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md)):
-
-- Continue records that this device's reader has seen it for that placement [[storage-5](storage.md#storage-5)];
-- Cancel attaches nothing, the line offering Attach again;
-- a file whoever can push wrote is offered alike, whether or not its writer may manage members, and no device carries records to a placement before its reader continues;
-- a group's own spex repository, which stays in its group at one instance, carries no such line and offers no Attach [[space-87](#space-87)].
-
 #### space-99
 
 When a client sends `space.attach` with `noticed` [[space-29](#space-29)], the core shall, as an operation of the clone's machine [[space-31](#space-31)], add that placement's remote, named by its instance's folder with the host's id beside it [[storage-34](storage.md#storage-34)], and sync the clone, that placement among its placements [[space-12](#space-12)] ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
@@ -315,7 +292,7 @@ When a client sends `space.attach` with `noticed` [[space-29](#space-29)], the c
 
 #### space-111
 
-When the reader activates Open on a spex repository's row — or "Open here" where this computer is the only place — and picks a place [[run-view-168](run-view.md#run-view-168)], the surface shall open that spex repository at that place ([DR-133](../decisions/133-one-desktop-over-several-cores.md), [DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md)):
+When the reader activates a spex repository's primary control [[space-1](#space-1)], or picks another place it offers [[run-view-168](run-view.md#run-view-168)], the surface shall open that spex repository at that place ([DR-133](../decisions/133-one-desktop-over-several-cores.md), [DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md)):
 
 | The entry | Reads | On activation |
 | --- | --- | --- |
@@ -329,9 +306,7 @@ When the reader activates Open on a spex repository's row — or "Open here" whe
 
 #### space-112
 
-Where the surface shows a seat's place [[run-view-168](run-view.md#run-view-168)], every phrase of this package naming this device or this computer shall name the server instead — "Not on <server>", "Keep what's on <server>", "Spex keeps <server>'s files in <home>" among them — so that a member reading a seat's Space is never told that the server is their own device ([DR-133](../decisions/133-one-desktop-over-several-cores.md), [DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md)):
-
-- the sign-in card on a seat reads "Sign in to see your groups and open their projects on <server>." and "Package registry access is separate from this Space sign-in." [[hub-12](hub.md#hub-12)]; the "Add instance…" card there says nothing of your own group's records, which a seat places at no instance [[space-102](#space-102)].
+Where the surface shows a seat's place [[run-view-168](run-view.md#run-view-168)], every phrase of this package naming this computer shall name the server instead — "Not on <server>", "Keep <server>'s", "Spex keeps <server>'s files in <home>" among them — so that a member reading a seat's Space is never told that the server is their own computer ([DR-133](../decisions/133-one-desktop-over-several-cores.md), [DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)).
 
 ### Repairs
 
@@ -341,7 +316,7 @@ When the core reports the home's diagnostics, it shall fold every diagnostic a f
 
 | Repair | Raised by | Named by |
 | --- | --- | --- |
-| a spex repository with no working folder here | a clone under `workspace/` that no pair names [[storage-2](storage.md#storage-2)] | the project — the spex repository's name with its `-spex` dropped — with its group, "<project> in <group>: its folder on this computer is missing", the folder it last ran in secondary ([DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md)) |
+| a spex repository with no working folder here | a clone under `workspace/` that no pair names [[storage-2](storage.md#storage-2)] | the project — the spex repository's name with its `-spex` dropped — with its group, "<project> · <group> — Folder missing on this computer", the folder it last ran in secondary ([DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)) |
 | a working folder whose clone is missing | a pair naming a clone that is not under `workspace/` | the folder's path |
 
 - one spex repository's repair resolves every session it holds, however many sessions ran there;
@@ -350,23 +325,23 @@ When the core reports the home's diagnostics, it shall fold every diagnostic a f
 
 #### space-47
 
-When the user pairs a repair's spex repository with the folder proposed [[space-53](#space-53)] or with one he names, or declines to, the Space surface shall settle that repair in place ([DR-065](../decisions/065-repairs-the-reader-answers.md)):
+When the user pairs a repair's spex repository with the folder proposed [[space-53](#space-53)] or with one he names, or declines to, the Space surface shall settle that repair in place, its row offering "Use <folder>", <folder> being the folder proposed, where one is, "Choose folder…" and "Not on this computer" ([DR-065](../decisions/065-repairs-the-reader-answers.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)):
 
 - pairing a folder the home already pairs with that spex repository sets that pair's folder, carrying the repair's recorded directories as aliases so every session recorded under them may continue [[storage-6](storage.md#storage-6)];
 - pairing a folder the home pairs with nothing writes the pair [[storage-6](storage.md#storage-6)], and where that folder is not one the repair records, attaches those recorded directories to it as aliases;
-- naming a different folder opens the row as an in-place editor over the proposed or recorded path, with Add project, Cancel, Escape cancelling, and an Open folder… control where the running deployment offers a directory picker;
+- naming a different folder, through "Choose folder…", opens the row as an in-place editor over the proposed or recorded path, with Use this folder, Cancel, Escape cancelling, and an Open folder… control where the running deployment offers a directory picker;
 - the editor says that where a project lives is recorded on this device alone and never syncs [[storage-1](storage.md#storage-1)];
 - a refusal shows in the row with the path kept and the control offered again: a folder inside another working folder, a folder already another spex repository's, and a spex repository whose turn is still running;
-- a sync of that spex repository running meanwhile disables no repair control and refuses no rebind [[space-21](#space-21)].
-- at a remote place [[run-view-169](run-view.md#run-view-169)] a repair offers neither a folder nor its proposal's "Add project": a seat's core allocates every folder itself [[space-103](#space-103)].
+- a sync of that spex repository running meanwhile disables no repair control and refuses no rebind [[space-21](#space-21)];
+- at a remote place [[run-view-169](run-view.md#run-view-169)] a repair offers neither a folder nor "Use <folder>": a seat's core allocates every folder itself [[space-103](#space-103)].
 
 #### space-48
 
 When pairing a repair's spex repository succeeds with every recorded folder attached [[space-47](#space-47)], the Space surface shall replace that row with its outcome in the row's own place, keeping the reader on the surface ([DR-009](../decisions/009-at-hand-interaction.md)) ([DR-063](../decisions/063-space-setup-and-repair.md)):
 
 - the outcome names the project and the folder it is now a project at, with the count of sessions listed where any ran there, and offers Open project, which is the only control here that leaves the surface;
-- the core no longer reports the repair, so the issues count leaves it out [[space-1](#space-1)], and the live region says how many issues are left as that count reads — declined repairs not among them [[space-49](#space-49)] — or that every issue is resolved where none is;
-- focus moves to the first control of the next unanswered repair below it, wrapping to the list's top — its Add project where it proposes a folder, else its Choose folder… — or, where no unanswered repair remains, to the outcome's Open project;
+- the core no longer reports the repair, so the issues count leaves it out [[space-1](#space-1)], and the live region says "<n> left to fix." as that count reads — declined repairs not among them [[space-49](#space-49)] — or "Nothing left to fix." where none is ([DR-172](../decisions/172-surfaces-a-fresh-user-reads.md));
+- focus moves to the first control of the next unanswered repair below it, wrapping to the list's top — its "Use <folder>" where it proposes a folder, else its "Choose folder…" — or, where no unanswered repair remains, to the outcome's Open project;
 - the outcome holds that place, the issues list standing with it though the core reports no diagnostic, until the reader's own Refresh [[space-2](#space-2)] or his leaving the Sync tab, when it leaves the list.
 
 #### space-49
@@ -410,11 +385,11 @@ While the issues list stands, the Space surface shall tell a repair's three cond
 
 | Condition | Mark | Row |
 | --- | --- | --- |
-| unanswered | a filled dot | the spex repository's name and group, where its sessions ran, what the core found, and its controls |
-| declined | a hollow dot | "not added" after the fact, in the surface's secondary tone, its controls kept |
+| unanswered | a filled dot | the project and its group, where its sessions ran, what the core found, and its controls |
+| declined | a hollow dot | "set aside" after the fact, in the surface's secondary tone, its controls kept |
 | resolved | a check | the project, the folder it is now a project at and the sessions listed, with Open project [[space-48](#space-48)] |
 
-- the list's heading counts the unanswered repairs and names how many stand not added;
+- the list's heading reads "To fix (<n>)", <n> counting the unanswered repairs, followed by " · <m> set aside" while <m> declined ones stand ([DR-172](../decisions/172-surfaces-a-fresh-user-reads.md));
 - the issues list and the header's control wear the surface's attention colour only while a repair stands unanswered, reading as settled — and staying reachable — once none does;
 - a declined row holds its place until the reader's own Refresh [[space-2](#space-2)] or his leaving the Sync tab, then standing after the unanswered repairs [[space-46](#space-46)].
 
@@ -422,7 +397,7 @@ While the issues list stands, the Space surface shall tell a repair's three cond
 
 #### space-7
 
-While a spex repository's Sync tab is shown, it shall list the local units — those whose working-tree bytes differ from their common ancestor with some placement's `spex` branch while that placement's do not, or from the last commit where no placement has been checked [[space-33](#space-33)] — grouped by kind in this order with these labels, never a raw diff of a session ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
+While a spex repository's Sync tab is shown, it shall list the local units — those whose working-tree bytes differ from their common ancestor with some placement's `spex` branch while that placement's do not, or from the last commit where no placement has been checked [[space-33](#space-33)] — grouped by kind in this order with these labels under the heading "To send (<n>)", <n> being their count, never a raw diff of a session ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)):
 
 | Kind | Unit | Label | Detail |
 | --- | --- | --- | --- |
@@ -436,26 +411,26 @@ While a spex repository's Sync tab is shown, it shall list the local units — t
 | Other | a spec package's folder with every file under it [[storage-11](storage.md#storage-11)], or any other tracked path | the folder, ending `/`, or the path | new, updated or deleted |
 
 - a session row carries Open session, which opens the session as a tab [[run-view-68](run-view.md#run-view-68)];
-- with no local unit the list reads "Nothing to send from this device".
+- with no local unit the list reads "Nothing to send from this computer".
 
 #### space-8
 
-When the user activates Check host on a spex repository, the core shall fetch each placement's `spex` branch in the order added without merging, and the Sync tab shall list each placement's incoming units [[space-33](#space-33)] under its instance's display name, with the labels of [[space-7](#space-7)], each marked new, updated or deleted against the common ancestor with that placement and marked as a choice to make where this device changed it too ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
+When the user activates Check on a spex repository, the core shall fetch each placement's `spex` branch in the order added without merging, and the Sync tab shall list each placement's incoming units [[space-33](#space-33)] under the heading "From <display name> (<n>)", <display name> being its instance's and <n> the count of its incoming units, with the labels of [[space-7](#space-7)], each marked new, updated or deleted against the common ancestor with that placement and marked as a choice to make where this device changed it too ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)):
 
 - the control reads "Checking…" in flight and offers Stop [[space-16](#space-16)];
 - ahead, behind and the check time update on the placement's line in the Sync tab [[space-87](#space-87)], the row's one phrase following it ([DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md));
-- a placement holding no `spex` branch reads "The host holds no records yet; Sync will send these";
-- a placement of unrelated history reads "Unrelated history" with "Merge histories…" on its line [[space-13](#space-13)] and lists nothing;
-- a failed transport reports per [[space-15](#space-15)].
-- Where the fetched tree uses LFS, Check also fetches that tree's LFS objects with the placement's credential [[git-host-9](git-host.md#git-host-9)], within the same stoppable transport step [[space-16](#space-16)], without path exclusions or fetching unrelated recent refs; a tree using no LFS requires no LFS executable.
+- a placement holding no `spex` branch reads "<display name> holds no records yet; Sync will send these";
+- a placement of unrelated history reads "Started separately at <display name>" with "Combine…" on its line [[space-13](#space-13)] and lists nothing;
+- a failed transport reports per [[space-15](#space-15)];
+- where the fetched tree uses LFS, Check also fetches that tree's LFS objects with the placement's credential [[git-host-9](git-host.md#git-host-9)], within the same stoppable transport step [[space-16](#space-16)], without path exclusions or fetching unrelated recent refs; a tree using no LFS requires no LFS executable.
 
 #### space-9
 
-While a sync has ended in choices needed at a placement, the Sync tab shall show the incoming list of the first placement in order so ended above the conflict picker [[space-17](#space-17)], with the step line reading "Needs your choice" and the caption "Your changes are saved; nothing is pushed to <display name> yet", <display name> being that placement's instance's ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)).
+While a sync has ended in choices needed at a placement, the Sync tab shall show the incoming list of the first placement in order so ended above the conflict picker [[space-17](#space-17)], with the step line reading "Needs your choice" and the caption "Your changes are saved; nothing is sent to <display name> yet", <display name> being that placement's instance's ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)).
 
 #### space-10
 
-When the user activates View diff on an Environment, Settings, Code, Sync rules or Other row, the surface shall show that unit's line diff in place — this device's version against the common ancestor for a local row, the host's version against it for an incoming row, either side on a conflict row — additions and removals marked in text as well as color, and Hide diff removing it; a session, intent or authoring row offers no diff.
+When the user activates View diff on an Environment, Settings, Code, Sync rules or Other row, the surface shall show that unit's line diff in place — this device's version against the common ancestor for a local row, headed "Changes on this computer", the placement's version against it for an incoming row, headed "Changes at <display name>", either side under its heading on a conflict row — additions and removals marked in text as well as color, and Hide diff removing it; a session, intent or authoring row offers no diff ([DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)).
 
 ### Syncing
 
@@ -465,7 +440,7 @@ When the user activates Sync on a spex repository, the core shall admit it only 
 
 | Condition | Refusal shown |
 | --- | --- |
-| some placement can run: its instance signed in, or a signed-in instance listing its host repository — the sync then following it [[space-60](#space-60)] — or the path placement, which this device can reach | "Sign in to <display name> first", <display name> the first placement's instance's as last read, else its host name, and "Add to a group first" for a clone with no placement ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md), [DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md)) |
+| some placement can run: its instance signed in, or a signed-in instance listing its host repository — the sync then following it [[space-60](#space-60)] — or the path placement, which this device can reach | "Sign in to <display name> first", <display name> the first placement's instance's as last read, else its host name, and "Add it to a group first" for a clone with no placement ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md), [DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)) |
 | the spex repository is reachable or read-only [[space-61](#space-61)] | the state's phrase |
 | no Git merge is pending from a terminal in the clone | "Finish or abort the merge in your terminal" |
 | no blocking storage diagnostic stands for a file inside its clone or for a home file outside `workspace/` [[core-service-86](core-service.md#core-service-86)], a refresh's finding aside [[space-20](#space-20)] and, while its repair marker stands, every diagnostic of a file inside its clone, the repair's own finding among them [[space-67](#space-67)] | the file and reason |
@@ -480,13 +455,13 @@ When a sync is admitted, the core shall save, then run the other steps for each 
 
 | Step | The core | The line reads |
 | --- | --- | --- |
-| 1 Save | refresh the managed rules [[storage-17](storage.md#storage-17)], stage the catalog files, refuse a staged ignored-family path, validate the staged tree in a private copy [[storage-12](storage.md#storage-12)], commit that tree, where it differs from `HEAD`'s, on the `HEAD` it was staged against by a conditional ref update | "Saving changes…" |
-| 2 Check | read the fresh catalog of the placement's instance and its repository alone [[git-host-22](git-host.md#git-host-22)], prepare its branch where the first push is ahead [[git-host-7](git-host.md#git-host-7)], and fetch its `spex` branch with that instance's brokered credential [[git-host-9](git-host.md#git-host-9)], the path placement fetched with no read | "Checking host…" |
+| 1 Save | refresh the managed rules [[storage-17](storage.md#storage-17)], stage the catalog files, refuse a staged ignored-family path, validate the staged tree in a private copy [[storage-12](storage.md#storage-12)], commit that tree, where it differs from `HEAD`'s, on the `HEAD` it was staged against by a conditional ref update | "Saving…" |
+| 2 Check | read the fresh catalog of the placement's instance and its repository alone [[git-host-22](git-host.md#git-host-22)], prepare its branch where the first push is ahead [[git-host-7](git-host.md#git-host-7)], and fetch its `spex` branch with that instance's brokered credential [[git-host-9](git-host.md#git-host-9)], the path placement fetched with no read | "Checking <display name>…" |
 | 3 Compare | plan every unit against the common ancestor of `spex` and that placement's [[storage-11](storage.md#storage-11)] [[space-33](#space-33)]; nothing incoming skips to Push | "Comparing…" |
-| 4 Apply | write the selection and one merge commit, or fast-forward [[space-19](#space-19)], then reconcile the clone's placements with their files [[space-91](#space-91)] | "Applying…" |
-| 5 Refresh | re-validate and re-index [[space-20](#space-20)] | "Refreshing…" |
-| 6 Push | push `spex` to that placement, setting the upstream once at the first placement; skipped for a read-only placement | "Pushing…" |
-| 7 Catch up | push `spex` once more, a fast-forward, to each placement a later merge left behind; one rejected runs that placement once more from Check | "Pushing…" |
+| 4 Apply | write the selection and one merge commit, or fast-forward [[space-19](#space-19)], then reconcile the clone's placements with their files [[space-91](#space-91)] | "Merging…" |
+| 5 Refresh | re-validate and re-index [[space-20](#space-20)] | "Reloading…" |
+| 6 Push | push `spex` to that placement, setting the upstream once at the first placement; skipped for a read-only placement | "Sending…" |
+| 7 Catch up | push `spex` once more, a fast-forward, to each placement a later merge left behind; one rejected runs that placement once more from Check | "Sending…" |
 
 | Outcome, per placement | State afterwards |
 | --- | --- |
@@ -496,7 +471,8 @@ When a sync is admitted, the core shall save, then run the other steps for each 
 | stopped | the step, cause and way forward on its line [[space-15](#space-15)] |
 
 - where the repair marker an interrupted Apply left stands, the sync first runs its repair, before Save [[space-67](#space-67)];
-- a placement's instance is the one its remote is named by, or the one a follow makes it follow [[space-60](#space-60)] ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)).
+- a placement's instance is the one its remote is named by, or the one a follow makes it follow [[space-60](#space-60)] ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md));
+- <display name> in a line is that of the placement's instance, or the path placement's remote as a report reads it [[space-15](#space-15)] ([DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)).
 
 #### space-91
 
@@ -505,7 +481,7 @@ When a placement's merge in a sync changes the clone's placement files [[storage
 | The merge left | The core |
 | --- | --- |
 | a placement's file removed while another file names its host repository at an instance signed in on this device that lists it [[git-host-5](git-host.md#git-host-5)] | renames that placement's remote to that instance's folder as a follow does [[space-60](#space-60)], dropping nothing |
-| a placement's file removed otherwise, or changed to name another host repository | drops that placement's remote, the clone's records kept, moving the clone where it is the first placement [[storage-38](storage.md#storage-38)], and offers Attach for the host repository a changed file names [[space-90](#space-90)] |
+| a placement's file removed otherwise, or changed to name another host repository | drops that placement's remote, the clone's records kept, moving the clone where it is the first placement [[storage-38](storage.md#storage-38)], and lists the host repository a changed file names as a placement not on this device [[space-87](#space-87)] |
 | two files naming one host repository, by the Git origins and ids the core read [[git-host-5](git-host.md#git-host-5)] | deletes every such file but that of the instance the clone holds it under after any such rename, or, where it holds it under none, of the instance governing it [[git-host-5](git-host.md#git-host-5)], a local change the next sync carries |
 | a placement with no file, the path placement among them | drops nothing |
 | a file that does not read as its encoding | drops and offers nothing |
@@ -516,10 +492,10 @@ When a placement's merge in a sync changes the clone's placement files [[storage
 
 #### space-13
 
-Where the clone's `spex` and a placement's `spex` share no common ancestor, when a sync compares at that placement, the core shall stop that placement with "Unrelated history" unless the sync was started as a join of it, whereupon it shall compare against the empty tree [[storage-11](storage.md#storage-11)] — a unit present on one side only taken, a unit present on both sides with different bytes a choice [[space-17](#space-17)] except at a sign-in's join of a clone holding nothing of its own, where the host's side is taken [[space-59](#space-59)] ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
+Where the clone's `spex` and a placement's `spex` share no common ancestor, when a sync compares at that placement, the core shall stop that placement with "Started separately at <display name>", <display name> being its instance's, unless the sync was started as a join of it, whereupon it shall compare against the empty tree [[storage-11](storage.md#storage-11)] — a unit present on one side only taken, a unit present on both sides with different bytes a choice [[space-17](#space-17)] except at a sign-in's join of a clone holding nothing of its own, where the host's side is taken [[space-59](#space-59)] ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)):
 
-- "Merge histories…" confirms inline, naming that both histories become one and that a unit present on both sides differently will ask for a choice ([DR-010](../decisions/010-interface-craft.md) §4, [DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md));
-- a join a sign-in [[space-59](#space-59)], a pick [[space-58](#space-58)], a Place [[space-88](#space-88)] or an Attach [[space-90](#space-90)] starts needs no second confirmation, those acts having said so.
+- "Combine…" confirms inline, naming that both sets of records become one and that a unit present on both sides differently will ask for a choice ([DR-010](../decisions/010-interface-craft.md) §4, [DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md));
+- a join a sign-in [[space-59](#space-59)], a pick [[space-58](#space-58)], `space.place` [[space-97](#space-97)] or `space.attach` [[space-99](#space-99)] starts needs no second confirmation, those acts having said so.
 
 #### space-14
 
@@ -533,26 +509,26 @@ When a sync or check step fails, the core shall stop — the placement alone for
 | --- | --- | --- | --- |
 | Save | a staged path of an ignored family, or validation refusing a file | index reset, no commit, files untouched | the path or file and reason; "Nothing was saved" |
 | Save | `spex` moved while the Save validated — a commit from a terminal | no commit; that commit and every file stand | Git's cause-preserving summary; Retry |
-| Check, Push | the host unreachable, or the device offline | commits stand | "Could not reach <host>"; check the network; Retry |
-| Check, Push | the host asking to wait — its rate limit [[git-host-11](git-host.md#git-host-11)] | commits stand | "<host> asks to wait N seconds" (or "a moment"); "Retry waits, then runs the step."; Retry, which waits the time out before the step [[git-host-21](git-host.md#git-host-21)] |
-| Check, Push | Stop while a call of the step waits out the host's rate limit [[git-host-21](git-host.md#git-host-21)] | commits stand | "Stopped while waiting for <host>"; "Retry waits, then runs the step."; Retry |
+| Check, Push | the host unreachable, or the device offline | commits stand | "Could not reach <display name>"; check the network; Retry |
+| Check, Push | the host asking to wait — its rate limit [[git-host-11](git-host.md#git-host-11)] | commits stand | "<display name> asks to wait N seconds" (or "a moment"); "Retry waits, then runs the step."; Retry, which waits the time out before the step [[git-host-21](git-host.md#git-host-21)] |
+| Check, Push | Stop while a call of the step waits out the host's rate limit [[git-host-21](git-host.md#git-host-21)] | commits stand | "Stopped while waiting for <display name>"; "Retry waits, then runs the step."; Retry |
 | Check, Push | the host answering that this device must sign in again [[git-host-4](git-host.md#git-host-4)] | commits stand | "Sign in again"; that instance's heading's "Sign in again" [[space-3](#space-3)]; Retry after |
-| Push | the host explicitly rejecting content above a size limit | commits and the existing access state stand | cause `size_limit`; "<host> refused content above its size limit", carrying the reported limit where unambiguously readable; saved commits remain on this device; address the content limit, then Retry, with no automatic retry ([DR-129](../decisions/129-content-size-is-not-permission.md)) |
-| Check, Push | the host refusing with its words — the repository read-only, the push rejected by a rule other than explicit content-size rejection, the account's role too low | commits stand | "<host> refused: <the host's words>" [[space-50](#space-50)]; the placement turns read-only |
+| Push | the host explicitly rejecting content above a size limit | commits and the existing access state stand | cause `size_limit`; "<display name> refused content above its size limit", carrying the reported limit where unambiguously readable; saved commits remain on this device; address the content limit, then Retry, with no automatic retry ([DR-129](../decisions/129-content-size-is-not-permission.md)) |
+| Check, Push | the host refusing with its words — the repository read-only, the push rejected by a rule other than explicit content-size rejection, the account's role too low | commits stand | "<display name> refused: <the host's words>" [[space-50](#space-50)]; the placement turns read-only |
 | Check, Push | the host no longer listing the repository | commits stand | "No longer shared with you"; the placement turns unreachable; nothing deleted |
-| Check, Push | no answer within the transport limit, or Stop | commits stand | "No answer from <host>"; Retry |
-| Check, Push | the host answering its transport with an HTTP status no row above reads | commits stand | "<host> answered with an error (HTTP <status>)"; Retry |
-| Compare | unrelated history | unchanged | "Merge histories…" [[space-13](#space-13)] |
+| Check, Push | no answer within the transport limit, or Stop | commits stand | "No answer from <display name>"; Retry |
+| Check, Push | the host answering its transport with an HTTP status no row above reads | commits stand | "<display name> answered with an error (HTTP <status>)"; Retry |
+| Compare | unrelated history | unchanged | "Combine…" [[space-13](#space-13)] |
 | Apply | a chosen unit refused by validation | nothing written; its base stands [[space-19](#space-19)] | the unit and reason; the picker stays with the unit marked; Retry |
 | Check | a session lease beneath a clone its move would move, a deferred migration move among them [[space-60](#space-60)] | commits stand; the clone where it was, nothing fetched | the session and reason; Retry |
 | Apply | a written session's lease held elsewhere, or a written authoring session's turn running [[space-19](#space-19)] | no merge commit; its base stands, the units written before it kept with the repair marker | the session and reason; Retry, whose repair finishes the selection [[space-67](#space-67)] |
-| Apply | a written unit changed since its base on the second cycle [[space-19](#space-19)] | no merge commit; its base stands, the units written before it left as local changes | "The space changed twice while syncing"; Retry |
+| Apply | a written unit changed since its base on the second cycle [[space-19](#space-19)] | no merge commit; its base stands, the units written before it left as local changes | "Records changed twice while syncing"; Retry |
 | Refresh | a diagnostic | the merge stands committed | the file and reason under issues |
-| Push | rejected as not fast-forward | merge committed, ahead shown | one automatic cycle from Check; a second rejection reads "The host changed again"; Retry |
+| Push | rejected as not fast-forward | merge committed, ahead shown | one automatic cycle from Check; a second rejection reads "<display name> changed again"; Retry |
 | any | Git's own error, or a failing system call such as a clone removed meanwhile, otherwise | that step's row | its cause-preserving summary; Retry |
 
 - a generic Git failure summary keeps at most three nonempty lines: the first line containing `fatal:` or `error:` (case-insensitive), else the first line, followed by the final two other distinct lines in their original order; wrapping an already summarized failure preserves that cause and advice;
-- a report naming the host prints the display name of the placement's instance [[space-12](#space-12)], and a remote URL never with a credential ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md));
+- <display name> in a report is that of the placement's instance [[space-12](#space-12)], and a remote URL is never printed with a credential ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md));
 - no line a report carries — Git's summary and the host's `remote:` words alike — holds a URL under any listed instance's reported Git origin: every placement's remote, with or without `.git` and a trailing `/`, reads as its path in its instance, and any other URL under such an origin as the display name of the instance reporting that origin, the placement's where several do, the path placement's remote reading as itself with any embedded user removed, a code clone's lines naming the code's remote as the reader set it only outside all of them [[space-63](#space-63)] ([DR-120](../decisions/120-the-instance-is-the-space.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md));
 - an explicit content-size rejection carries only the instance, the size cause and a reported limit where readable, never its raw transport words, backing-system names or links ([DR-129](../decisions/129-content-size-is-not-permission.md));
 - the report stands until the next operation or Dismiss.
@@ -573,7 +549,7 @@ Where a failure could turn on what the host let this account do — the host ref
 
 #### space-17
 
-While conflicting units stand, the picker shall present each as one row — its label [[space-7](#space-7)] and two exclusive choices, "Keep what's here" and "Take <display name>'s", each carrying its side's summary, the host's naming the instance of the placement the choices are for [[space-9](#space-9)] — with nothing preselected and Apply disabled with "N of M chosen" until every row has a choice ([DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md)):
+While conflicting units stand, the picker shall present each as one row — its label [[space-7](#space-7)] and two exclusive choices, "Keep this computer's" and "Take <display name>'s", each carrying its side's summary, the host's naming the instance of the placement the choices are for [[space-9](#space-9)] — with nothing preselected and Apply disabled with "N of M chosen" until every row has a choice ([DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)):
 
 | Unit | Side summary |
 | --- | --- |
@@ -620,11 +596,11 @@ When a sync's Apply step has changed the working tree — by merge or fast-forwa
 
 #### space-21
 
-While a sync, check, join, move, Place, Leave or Attach of a spex repository is running, the core shall refuse no command and no operation because it runs ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
+While a sync, check, join, move, place, leave or attach of a spex repository is running, the core shall refuse no command and no operation because it runs ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
 
 - every write beneath the clone lands or is refused at its own instant — a file changed since its writer read it as "changed meanwhile; retry", a session's lease as that session's refusal — and the runtime's own admission of messages stays;
 - each of the core's own writes beneath the clone resolves the clone's address at that write, never at an earlier read, so no write lands where a moved or removed clone stood and no folder is made there again;
-- the clone's own operations run one at a time on its machine [[space-31](#space-31)]: a second Sync asked while a sync runs, or a Check asked while a sync or a check runs, joins that operation, a Sync asked while a check runs follows it, making no Save until that check has ended, and a Place, a Leave or an Attach asked while a sync runs follows it as a Sync follows a check; no other command waits for any of them;
+- the clone's own operations run one at a time on its machine [[space-31](#space-31)]: a second Sync asked while a sync runs, or a Check asked while a sync or a check runs, joins that operation, a Sync asked while a check runs follows it, making no Save until that check has ended, and a place, a leave or an attach asked while a sync runs follows it as a Sync follows a check; no other command waits for any of them;
 - a remote or recorded host id the core writes is written only while the clone's remotes still read what the core read before awaiting the host, and refused as changed meanwhile otherwise;
 - an operation's progress is its own, ended by it alone, and what it shows is no reason to wait.
 
@@ -679,16 +655,16 @@ When an entry is selected in the tree, the preview pane shall show it by type:
 
 #### space-25
 
-While the Explore tab is shown, the Space surface shall present a "Stays on this device" panel listing every ignored family of the catalog [[storage-1](storage.md#storage-1)] with one plain reason each:
+While the Explore tab is shown, the Space surface shall present a "Stays on this computer" panel listing every ignored family of the catalog [[storage-1](storage.md#storage-1)] with one plain reason each ([DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)):
 
 | Family | Reason |
 | --- | --- |
-| provider hints | resume tokens for this machine's agent conversations; they work nowhere else |
+| provider hints | resume tokens for this computer's agent conversations; they work nowhere else |
 | leases and locks | which process is writing right now |
-| installed spec packages and exported skills | copies installed from the lock; every device installs its own |
-| where projects live | where your working folders are on this machine, in the home file |
+| installed spec packages and exported skills | copies installed from spex.lock; every computer installs its own |
+| where projects live | where your project folders are on this computer, in the home file |
 | preferences | where you last stopped reading in each session |
-| credentials | this device's sign-in to each instance |
+| credentials | this computer's sign-in to each Space |
 | migration receipts and inputs | original files kept from an upgrade |
 | temporary files | copies made while writing |
 
@@ -705,7 +681,7 @@ When the user activates a reveal control — beside a spex repository's row, or 
 
 #### space-27
 
-User-facing copy on the surface shall say "mine" and "the host's", or "this device" and the display name of the placement's instance [[space-12](#space-12)], for a sync's sides and plain step names, never `ours`, `theirs`, `HEAD`, a remote-tracking branch such as `origin/spex` or `@<host>/spex`, `MERGE_HEAD` or a Git command as primary copy — the raw term surviving in a tooltip ([DR-010](../decisions/010-interface-craft.md) §2) — and shall say "instance" for an instance, "spex repository" and "group" for its things, and never "namespace", "remote" or "space" for those objects — Space naming this IDE destination and Spex Space the hosted product ([DR-150](../decisions/150-spex-space-product-and-destination.md)) ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)).
+User-facing copy on the surface shall name a sync's sides "this computer" and the display name of the placement's instance [[space-12](#space-12)], never `ours`, `theirs`, `HEAD`, a remote-tracking branch such as `origin/spex` or `@<host>/spex`, `MERGE_HEAD` or a Git command as primary copy — the raw term surviving in a tooltip ([DR-010](../decisions/010-interface-craft.md) §2) — and shall name an instance by its display name, its things "group", "Personal", "project", "records" and "server", and this device "this computer", never "instance", "host", "site", "origin", "subgroup", "namespace", "spex repository", "clone", `-spex`, "unit", "placement", "device", "machine", "seat" or "ticket" for those objects — "Space" naming this surface and an instance not yet named, and "Spex Space" the hosted product ([DR-150](../decisions/150-spex-space-product-and-destination.md)) ([DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)).
 
 #### space-28
 
@@ -713,10 +689,10 @@ The Space surface shall fit its pane at every width down to the 320-pixel floor 
 
 - while an instance is listed and Git runs, the existing Refresh and issues controls share the surface title row, wrapping within its width; the first sign-in and missing-Git cards keep their full row;
 - below 28rem a group heading keeps its own row above its actions, so the actions never squeeze the group name between them;
-- below 42rem an instance heading's at-a-glance read time yields, and below 20rem the header's fields and an instance heading's stack with the primary control last and full-width;
-- in each repository row and change row the label owns the slack and truncates with its title, the code remote and detail hiding below 28rem, the row's control keeping its accessible name;
+- below 20rem the header's fields and an instance heading's stack with the primary control last and full-width;
+- in each repository row and change row the label owns the slack and truncates with its title, the code glyph and detail hiding below 28rem, the row's control keeping its accessible name;
 - the tree and preview stand side by side from 42rem and stack below it, the preview under the tree; the preview's box scrolls inside itself and the diff box scrolls sideways as a canvas;
-- every control reads at most 14 characters, its busy form included: Sign in, Sign in again, Signing in…, Sign out, Signing out…, Sync now, Syncing…, Check host, Checking…, Stop, Open here, Opening…, Show, More, Connect, Disconnect, Resolve, Members, Retry, Retrying…, Apply, Applying…, Cancel, Continue, Save, Saving…, Add project, Adding…, Choose folder…, Open folder…, Open project, View diff, Hide diff, All here, Open session, Show in Finder, Show in folder, Copy path, Refresh, Dismiss, New group, New subgroup, Share, Create, Creating…, Add, Rename, Delete, Deleting…, Keep, Move…, Moving…, Forget, Add instance…, Place at…, Placing…, Leave…, Leaving…, Attach, Attaching…, "Move…" bearing "Move to another group", "Add instance…" bearing "Another instance", and "Place at…" bearing "Also place at <display name>" and "Leave…" bearing "Remove from <display name>" where one instance is offered, each as its title and accessible name; a menu's entries and the acts a decision fixes as whole phrases — "Add to a group…", "Merge histories…", "Not on this computer", "Open on <server>", "Show on <server>", "Keep what's here", "Take <display name>'s", "All <display name>'s" — stand outside the budget and wrap within their row ([DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md));
+- every control reads at most 14 characters, its busy form included: Sign in, Sign in again, Signing in…, Sign out, Signing out…, Sync now, Syncing…, Check, Checking…, Stop, Open here, Opening…, Show, More, Connect, Disconnect, Resolve, Combine…, Members, Retry, Retrying…, Apply, Applying…, Cancel, Save, Saving…, Use this folder, Adding…, Choose folder…, Open folder…, Open project, View diff, Hide diff, All here, Open session, Show in Finder, Show in folder, Copy path, Refresh, Dismiss, New group, Share, Create, Creating…, Add, Keep, Add a Space…; a menu's entries and the acts a decision fixes as whole phrases — "Add to a group…", "Remove from this list", "Not on this computer", "Use <folder>", "Open on <server>", "Show on <server>", "Keep this computer's", "Take <display name>'s", "All <display name>'s" — stand outside the budget and wrap within their row ([DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md));
 - the surface scrolls inside its own box and the page never scrolls.
 
 ### On a Seat
@@ -802,7 +778,7 @@ The core shall shape `GroupsState` as:
 interface GroupsState {
   home: string;
   git: { ok: true; version: string } | { ok: false; guidance: string };
-  defaultInstance: string;   // the default instance's origin, which the sign-in card holds (space-3)
+  defaultInstance: string;   // the default instance's origin, which the sign-in card's chooser preselects (space-115)
   signIn: { phase: "idle" }
     | { phase: "running"; instance: string; flow: "browser" | "device"; userCode?: string; verificationUri?: string; since: number }   // instance: the origin being signed in to
     | { phase: "failed"; instance: string; cause: "denied" | "expired" | "refused" | "unreachable"; message: string };
@@ -982,10 +958,6 @@ The core shall build each `space.tree` level by reading one directory of the clo
 - a path in an ignored family of the catalog is marked ignored whatever Git reports [[storage-1](storage.md#storage-1)];
 - `space.read` refuses a path resolving outside the clone or through a symlink, withholds provider hints, and caps text at 256 KB or 2,000 lines on complete lines.
 
-#### space-115
-
-When the reader opens a Space sign-in card, the surface shall offer the public registry's directory of Spaces by display name, origin and sign-in kinds [[environments-39](environments.md#environments-39)] beside the editable custom URL, with directory failure leaving custom sign-in available and no discovery entry establishing credential trust ([DR-168](../decisions/168-independent-package-registry.md)).
-
 #### space-117
 
 When a project's placement selects a Space, the core shall name that Space as the environment's collaboration and Git-broker preference while preserving its explicit registry selection [[environments-38](environments.md#environments-38)] and all existing locked package pins and source provenance, advancing only a lock digest that matched the manifest before this Space-only edit and leaving an already-stale, malformed or unreadable lock unchanged ([DR-168](../decisions/168-independent-package-registry.md)).
@@ -996,11 +968,9 @@ When a project's placement selects a Space, the core shall name that Space as th
 
 When a real-core integration suite places a fresh project at a second signed-in Space, the suite shall assert the environment reports and records that Space for brokerage while retaining its public registry origin and every package pin, a previously current lock changing only its requests digest without a stale hint, and a previously stale lock remaining byte-identical and stale, and a malformed lock remaining byte-identical without blocking the Space binding [[space-117](#space-117)].
 
-
 #### space-116
 
-When a browser journey opens Add instance, it shall verify directory choices fill the ordinary sign-in URL, custom URLs remain editable, and a failed directory read still permits custom sign-in without any backend locator on the page [[space-115](#space-115)].
-
+When a browser journey opens "Add a Space…", it shall verify that the chooser lists the directory's Spaces by display name with no field beside a chosen one, a directory choice starting the sign-in at that Space's origin, that "Other Space…" reveals the field "Space address" whose typed origin starts it, and that a failed directory read leaves the field alone holding the default instance's origin, with no sentence and no backend locator on the page [[space-115](#space-115)].
 
 ### Core Coverage
 
@@ -1018,7 +988,7 @@ When an integration suite starts a real core with substitute agents on a scratch
 - the first `space.sync` into a repository the stand-in lists with other members is refused until `noticed`, then pushes and records `sync:<repository>:<placement>:last` and the notice [[space-57](#space-57)] [[space-12](#space-12)] [[space-22](#space-22)];
 - with the stand-in failing every members route, a pick joining a repository whose only member is the account, and the first `space.sync` into another, are each refused until `noticed` [[space-57](#space-57)];
 - `space.join` with a folder, while the suite holds the code's clone, reads the row not on this device with the join running at its Code step and no Stop and the folder without the code, then, the clone released, reachable with the code in the folder and the folder paired, no reading before it reachable [[space-63](#space-63)] [[space-61](#space-61)]; a join naming a host id the last read lacks, the stand-in having listed it since, reads the instance afresh and runs, and one the fresh read lacks too is refused `not_found` [[space-63](#space-63)];
-- a join clones private code served by the stand-in's real HTTP Git transport at its reported Git origin, keeping the remote unchanged while its listed and joined rows read "Code on this instance" in each offered language, and after a restart no initial state carries that remote before the host's read [[space-1](#space-1)], and code at another origin through that device's own credentials; a code transport refused, a brokered credential refused, and a nonempty destination each stop at Code with no Git-origin URL shown, the spex clone kept, no folder paired and existing files unchanged [[space-63](#space-63)];
+- a join clones private code served by the stand-in's real HTTP Git transport at its reported Git origin, keeping the remote unchanged while the code glyph of its listed and joined rows reads "Code: <display name>" in each offered language, and after a restart no initial state carries that remote before the host's read [[space-1](#space-1)], and code at another origin through that device's own credentials; a code transport refused, a brokered credential refused, and a nonempty destination each stop at Code with no Git-origin URL shown, the spex clone kept, no folder paired and existing files unchanged [[space-63](#space-63)];
 - a core restarted on that home reads the same instance and account, no read time but the same last sync, and that `space.get` begins a read whose state lands with a read time [[space-1](#space-1)];
 - a core restarted on a signed-in home whose own group's clone holds its pushed `spex` with no `sync:<repository>:<placement>:last` recorded reads that row's placement line with no last sync but its `branch.agreed` current at `spex`'s commit time, then, after a commit on `spex` alone, not current at the same time, while a project's clone the host's `spex` never reached carries none [[space-61](#space-61)] [[space-30](#space-30)];
 - every long command replies `accepted` before its outcome lands as `space.state`, and each reply and broadcast carries the `GroupsState` fields and phases [[space-29](#space-29)] [[space-30](#space-30)];
@@ -1139,17 +1109,17 @@ When an integration suite signs a real core in at the stand-in Git host, whose r
 
 When an integration suite starts a real core on a scratch home against two stand-in Git hosts run as two instances on separate Git backends, each holding a group `acme` with a project's spex repository, the first's `acme` also holding `c-spex`, whose `project.json` names code at the second's Git origin, the person signed in as `ada` at the first and `bob` at the second, it shall drive both over the protocol and assert ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
 
-- a sign-in at the first, then one through `space.signin.start` naming the second's origin, lists both instances in that order, each with its account, display name, read state and groups, your own group's folder bearing `ada` and its own repository created as `ada-spex` in the first's namespace with its remote named by the first's folder, the second's sign-in renaming nothing and placing it as `bob-spex` in the second's namespace, its push there waiting for Continue [[space-30](#space-30)] [[space-4](#space-4)] [[space-59](#space-59)] [[space-65](#space-65)] [[space-5](#space-5)] [[space-57](#space-57)];
+- a sign-in at the first, then one through `space.signin.start` naming the second's origin, lists both instances in that order, each with its account, display name, read state and groups, your own group's folder bearing `ada` and its own repository created as `ada-spex` in the first's namespace with its remote named by the first's folder, the second's sign-in renaming nothing and placing it as `bob-spex` in the second's namespace, its push there waiting for the sharing confirm [[space-30](#space-30)] [[space-4](#space-4)] [[space-59](#space-59)] [[space-65](#space-65)] [[space-5](#space-5)] [[space-57](#space-57)];
 - Join of each `acme` project's repository but `c-spex` clones it under its own instance's folder at `acme/`, the two under distinct keys, each row standing under its own instance's `acme` [[space-63](#space-63)] [[space-1](#space-1)];
-- `c-spex` reads "Code on a remote" on its row, listed and joined, and its Join's code clone, presenting no credential of the app's and refused by the second's transport, stops at Code with no URL under either instance's Git origin shown [[space-1](#space-1)] [[space-63](#space-63)] [[space-15](#space-15)];
+- `c-spex`'s code glyph reads "Code: <display name>" with the second's display name, listed and joined, and its Join's code clone, presenting no credential of the app's and refused by the second's transport, stops at Code with no URL under either instance's Git origin shown [[space-1](#space-1)] [[space-63](#space-63)] [[space-15](#space-15)];
 - a local-only project picked into the second's `acme` is created at the second alone, its clone moved under the second's folder with its pair and sync preferences re-keyed, pushed with the second's credential, its Save commit bearing the second's login despite a stored personal display name [[space-58](#space-58)] [[space-32](#space-32)]; a pick of a clone keyed under the first naming the second is refused [[space-29](#space-29)];
 - a pick while a session beneath the clone stands under a lease taken out of band leaves the clone under your own group's folder with its remote at the second, and, the lease released, its next sync moves it under the second's folder and pushes [[space-58](#space-58)] [[space-60](#space-60)];
 - a group `ada` at each instance's root collides at the first alone, its repository there reading "Unreachable: a group named like your login" under a key naming the first's folder, while the second's `ada` lists its repository with Join [[space-61](#space-61)] [[space-30](#space-30)];
 - a core restarted on that home with the second answering 503 reads the first's view with a read time and the second's read failed with its last view kept [[space-1](#space-1)];
 - `space.signout` of the first lists it signed out, its rows unreachable and a Sync of one refused "Sign in to <display name> first" with the first's display name, while the second's stay reachable and sync [[space-6](#space-6)] [[space-61](#space-61)] [[space-11](#space-11)];
 - `space.forget` of the first is refused naming each of its `acme` repositories, whose clones stay keyed under it, and of the second, still signed in, is refused [[space-82](#space-82)] [[space-29](#space-29)];
-- on another scratch home signed in at the first alone and holding no other clone, `space.forget` after its sign-out drops your own group's own repository's remote, the state listing no instance and that row reading "On this device only — shared once you sign in", and a sign-in then at the second creates `bob-spex` in the second's namespace for it and pushes it, its folder keeping `ada` [[space-82](#space-82)] [[space-61](#space-61)] [[space-4](#space-4)] [[space-59](#space-59)];
-- on another scratch home, `own.named` reads true before any sign-in, false once a sign-in at the first named the folder after `ada`, and false still after its sign-out and Forget, and on one whose account at its stand-in is this device's user name, which names nothing, true still after its sign-out and Forget [[space-30](#space-30)] [[space-1](#space-1)];
+- on another scratch home signed in at the first alone and holding no other clone, `space.forget` after its sign-out drops your own group's own repository's remote, the state listing no instance and that row local only, and a sign-in then at the second creates `bob-spex` in the second's namespace for it and pushes it, its folder keeping `ada` [[space-82](#space-82)] [[space-61](#space-61)] [[space-4](#space-4)] [[space-59](#space-59)];
+- on another scratch home, `own.named` reads true before any sign-in, false once a sign-in at the first named the folder after `ada`, and false still after its sign-out and `space.forget`, and on one whose account at its stand-in is this device's user name, which names nothing, true still after its sign-out and `space.forget` [[space-30](#space-30)] [[space-1](#space-1)];
 - on another scratch home of the former format with one instance, migrated at the core's start while a session beneath one clone stands under a lease taken out of band, that clone lists under its instance's heading by its old key, and its Sync stops at Check naming the session with nothing fetched, then, the lease released, moves it at Check, before any fetch or push, under the instance's folder and syncs [[space-60](#space-60)] [[space-15](#space-15)] [[space-1](#space-1)];
 - no reply or broadcast holds a string under either stand-in's URL but that URL itself, or one naming `gitlab` [[space-30](#space-30)] [[space-1](#space-1)].
 
@@ -1184,14 +1154,14 @@ When an integration suite runs a real core on a scratch home signed in to two st
 
 When an integration suite runs a real core on a scratch home signed in to two stand-in instances on separate Git backends, holding two projects' spex repositories in the first's `acme`, the first project placed in the second's `workshop`, it shall drive a placement's failures over the protocol and assert ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
 
-- the first answering 503 at Check reads its line unreachable while the second syncs, the row reachable; the first signed out reads its line unreachable with "Sign in again", and both signed out refuse the Sync naming the first's display name [[space-15](#space-15)] [[space-61](#space-61)] [[space-6](#space-6)] [[space-11](#space-11)];
+- the first answering 503 at Check reads its line unreachable while the second syncs, the row reachable; the first signed out reads its line unreachable, its instance signed out, and both signed out refuse the Sync naming the first's display name [[space-15](#space-15)] [[space-61](#space-61)] [[space-6](#space-6)] [[space-11](#space-11)];
 - `space.place` of the second project creating in a group of the second that refuses it for the account's rights shows its waiting phrase on the second's line while the first syncs, its state carrying the wait on that placement [[space-97](#space-97)] [[space-64](#space-64)] [[space-87](#space-87)] [[space-30](#space-30)]; one naming a name taken there, and one naming the first, at which the clone holds a placement, are each refused [[space-29](#space-29)];
 - Stop during the first's Check ends the sync with the second not run [[space-15](#space-15)] [[space-16](#space-16)];
 - a chosen unit refused by validation at the first's Apply, and a stale lock on the first's remote-tracking ref failing its fetch with Git's own error, each end the sync with the second not run, the lock diagnostic naming the affected ref or file and its file-exists cause before recovery after removing the lock [[space-15](#space-15)] [[space-31](#space-31)];
 - a real Git failure nested through its command wrapper retains its primary cause and final advice within three nonempty lines, with the synthetic credential and instance's Git URL in the command context removed from the public summary [[space-15](#space-15)];
 - a file another process leaves invalid during the first's Apply stands as the refresh's finding while the first pushes and the second syncs [[space-15](#space-15)] [[space-20](#space-20)] [[space-31](#space-31)];
 - a repair marker planted with a half-written selection at the second, on the first's merge commit as its base, is finished by the next admission into the recorded merge [[space-67](#space-67)] [[space-19](#space-19)];
-- a placement whose `spex` shares no ancestor stops "Unrelated history" alone, and `space.sync` with `join` for it joins from the empty tree with every unit on both sides a choice [[space-13](#space-13)];
+- a placement whose `spex` shares no ancestor stops unrelated alone, and `space.sync` with `join` for it joins from the empty tree with every unit on both sides a choice [[space-13](#space-13)];
 - no reply or broadcast holds a string under either stand-in's URL but that URL itself [[space-30](#space-30)] [[space-1](#space-1)].
 
 #### space-93
@@ -1200,24 +1170,24 @@ When an integration suite runs real cores on three scratch homes against two sta
 
 - the second home's Join at the second writes nothing new to the placement files, its row naming no placement it cannot reach and its members panel saying the records are also placed at the first's host name, an instance that home does not list [[space-63](#space-63)] [[space-87](#space-87)] [[space-62](#space-62)];
 - a session the second home syncs to the second reaches the first's `spex` once the first home syncs, and an intent the first home queues reaches the second home [[space-12](#space-12)];
-- the third home's Join at the first lists the second's placement from its file as "Not on this device" with Attach and no row of its own, `space.join` of it refused; `space.attach` without `noticed` is refused, and with it attaches and syncs that placement, its line synced [[space-87](#space-87)] [[space-29](#space-29)] [[space-99](#space-99)] [[space-61](#space-61)];
-- a placement file a member who may not manage members pushes stays unattached on every home until a reader continues [[space-90](#space-90)];
+- the third home's Join at the first lists the second's placement from its file, not attached, and no row of its own, `space.join` of it refused; `space.attach` without `noticed` is refused, and with it attaches and syncs that placement, its line synced [[space-87](#space-87)] [[space-29](#space-29)] [[space-99](#space-99)] [[space-61](#space-61)];
+- a placement file a member who may not manage members pushes stays unattached on every home until `space.attach` names it there [[space-99](#space-99)];
 - the first home's `space.leave` of the second deletes the file, and the third home's next Sync drops its remote there with the clone's records kept; a Leave asked while that sync runs follows it [[space-98](#space-98)] [[space-91](#space-91)] [[space-21](#space-21)];
-- the first and third homes each placing at the second at once meet as one choice of the file, the home whose side is not chosen dropping its remote at its next sync, the unchosen repository left at the stand-in, and offered Attach for the chosen one [[space-91](#space-91)] [[space-90](#space-90)];
-- `space.members`, `space.share`, `space.unshare` and `space.repository.move` naming the second placement act at the second alone, the move leaving the clone's key, while a move of the first moves the clone at its next sync [[space-62](#space-62)] [[space-69](#space-69)] [[space-72](#space-72)] [[space-78](#space-78)] [[space-60](#space-60)] [[space-29](#space-29)].
+- the first and third homes each placing at the second at once meet as one choice of the file, the home whose side is not chosen dropping its remote at its next sync, the unchosen repository left at the stand-in, and listing the chosen one not attached [[space-91](#space-91)];
+- `space.members`, `space.share`, `space.unshare` and `space.repository.move` naming the second placement act at the second alone, the move leaving the clone's key, while a move of the first moves the clone at its next sync [[space-62](#space-62)] [[space-69](#space-69)] [[space-72](#space-72)] [[space-60](#space-60)] [[space-29](#space-29)].
 
 #### space-94
 
 When an integration suite runs a real core on a scratch home against three stand-in instances, the first two over one Git backend and the third on another, it shall assert your own group's placements and one host repository listed through two instances ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
 
-- a sign-in at the first creates your own group's own repository there; one at the third creates `<login there>-spex` as its second placement, its first push waiting for Continue; one at the second, which lists the first's repository, adds no placement [[space-4](#space-4)] [[space-65](#space-65)] [[space-57](#space-57)];
+- a sign-in at the first creates your own group's own repository there; one at the third creates `<login there>-spex` as its second placement, its first push waiting for the sharing confirm; one at the second, which lists the first's repository, adds no placement [[space-4](#space-4)] [[space-65](#space-65)] [[space-57](#space-57)];
 - `space.place` and `space.leave` naming your own group's own repository are each refused [[space-29](#space-29)];
 - for a project placed at the first, a peer's commit adding a file for the second naming the same host repository leaves only the first's file after the next Sync's merge, the Sync after pushing that deletion [[space-91](#space-91)]; a peer's commit then replacing the first's file by the second's renames the clone's remote to the second's folder at that merge, dropping nothing and keeping its last sync [[space-91](#space-91)] [[space-60](#space-60)] [[space-5](#space-5)];
 - the first signed out and forgotten, your own group's placement follows the second, its remote renamed with its last sync kept and its file rewritten to the second's with the first's deleted, and the third receives that change at the next sync [[space-82](#space-82)] [[space-60](#space-60)] [[space-5](#space-5)].
 
 #### space-101
 
-When an integration suite runs a real core on a scratch home signed in to three stand-in instances, the first two over one Git backend and the third on another, it shall drive "Leave…" over the protocol and assert ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
+When an integration suite runs a real core on a scratch home signed in to three stand-in instances, the first two over one Git backend and the third on another, it shall drive `space.leave` over the protocol and assert ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
 
 - for a project placed at the first and the third, the first lacking records the third holds: `space.leave` of the third stops `unreceived` naming the count, the placement kept; of the first, while a lease taken out of band stands beneath, is refused whole naming the session, and once it is released moves the clone under the third's folder with its pair re-keyed; and of the third, the last, sent `confirmed` after it stops naming every unit, moves the clone under your own group's folder, local only [[space-98](#space-98)] [[space-15](#space-15)];
 - for a project placed at the first and the third, a peer's commit at the third deleting the first's placement file drops nothing at the next Sync while a lease taken out of band stands beneath the clone, syncing nothing with the first, and the Sync after the release drops it and moves the clone under the third's folder [[space-91](#space-91)];
@@ -1228,62 +1198,58 @@ When an integration suite runs a real core on a scratch home signed in to three 
 
 #### space-107
 
-Where the Space surface uses the production store over a controlled command connection, when Sign out, Forget or declining a repair returns an older running-state reply after a completed-state broadcast, the test suite shall assert that the displayed completion is retained and an unsuperseded reply to each action still applies (verifying [[space-106](#space-106)]).
+Where the Space surface uses the production store over a controlled command connection, when Sign out, "Remove from this list" or declining a repair returns an older running-state reply after a completed-state broadcast, the test suite shall assert that the displayed completion is retained and an unsuperseded reply to each action still applies (verifying [[space-106](#space-106)]).
 
 #### space-56
 
-Where the Space surface renders over a home whose issues list holds three unanswered repairs, each proposing its recorded folder, when the reader declines the first, adds the third, lets the core deliver a re-read, activates Refresh, adds the second and then the declined first, the core reporting after each act what then remains, the test suite shall assert through the surface:
+Where the Space surface renders over a home whose issues list holds three unanswered repairs, each proposing its recorded folder, when the reader declines the first, activates the third's "Use <folder>", lets the core deliver a re-read, activates Refresh, then the second's "Use <folder>" and then the declined first's, the core reporting after each act what then remains, the test suite shall assert through the surface:
 
-- the declined row keeps the first place, reading "not added", and the header's count falls to two issues [[space-55](#space-55)] [[space-49](#space-49)];
-- the third row gives way in its own place to an outcome naming the project, the folder it is now a project at and the sessions listed, the header's count reading one issue and the live region "1 issue left." [[space-48](#space-48)];
-- focus rests on the second repair's Add project, wrapping past the declined row [[space-48](#space-48)];
+- the declined row keeps the first place, reading "set aside", the list headed "To fix (2) · 1 set aside" and the header's control reading "⚠ 2 to fix" [[space-55](#space-55)] [[space-49](#space-49)] [[space-1](#space-1)];
+- the third row gives way in its own place to an outcome naming the project, the folder it is now a project at and the sessions listed, the header's control reading "⚠ 1 to fix" and the live region "1 left to fix." [[space-48](#space-48)];
+- focus rests on the second repair's "Use <folder>", wrapping past the declined row [[space-48](#space-48)];
 - the core's re-read leaves the three rows in their places [[space-48](#space-48)] [[space-55](#space-55)];
 - after Refresh the outcome is gone and the declined row stands after the second [[space-48](#space-48)] [[space-55](#space-55)];
-- the second's add leaves the live region reading "All issues resolved." and focus on its outcome's Open project, which opens that project [[space-48](#space-48)];
-- the declined repair's add leaves both outcomes in their places with the core reporting no diagnostic, focus on the new outcome's Open project, until Refresh closes the list [[space-48](#space-48)].
+- the second's "Use <folder>" leaves the live region reading "Nothing left to fix." and focus on its outcome's Open project, which opens that project [[space-48](#space-48)];
+- the declined repair's "Use <folder>" leaves both outcomes in their places with the core reporting no diagnostic, focus on the new outcome's Open project, until Refresh closes the list [[space-48](#space-48)].
 
 #### space-70
 
-Where the Space surface renders over a signed-in home whose host read says the person may create a group, may create a subgroup in a group `acme`, add members to it, rename it and delete it, may do none of these in a group `other` named "Other team", may rename and delete an empty group `empty`, and may add members to the repository `a-spex` and move it but do neither on `b-spex`, with the host's five roles of which Developer upward may push, the test suite shall assert through the surface:
+Where the Space surface renders over a signed-in home whose host read says the person may create a group, may add members to a group `acme`, create a subgroup in it, rename it and delete it, may do none of these in a group `other` named "Other team", and may add members to the repository `a-spex` and move it but do neither on `b-spex`, with the host's five roles of which Developer upward may push, the test suite shall assert through the surface:
 
-- "New group" stands on the instance's heading, `acme`'s heading's "More" holds Members and "New subgroup", `other`'s Members alone, your own group's and your namespace's neither, and no heading carries Share; `acme`'s members panel, read on activation, carries Share and Remove on each of its own members and links no page, `other`'s lists its members with neither; `a-spex`'s members panel carries Share and Remove on its own members, a member held through `acme` reading "via acme" with no Remove, each member labelled by login alone despite a received personal display name, while `b-spex`'s carries neither [[space-1](#space-1)] [[space-62](#space-62)] [[space-72](#space-72)];
-- rendered again over a read that says the person may not create a group, the instance's heading holds no "New group" but the phrase "Groups are made by the people who run <display name>", in English and in Chinese, with no link and no control, and neither before a read is held [[space-1](#space-1)];
-- "New subgroup" opens the inline editor with the fields "Group name" and "Path", the path following the name as "lumen-labs" follows "Lumen Labs" and staying empty for "华芯智造", Create disabled until both hold text, Escape closing it; Create sends `space.group.create` with the name, the path and `acme` as the parent and reads "Creating…" until the reply, a refusal "taken" standing in the editor with the name kept, and a success closing it, the group the core's state carries standing after `acme` with its full path [[space-68](#space-68)];
-- Share on `acme` opens the editor with "Login at <host name>", the five roles in the host's order with Developer preselected, Add disabled until a login is typed; Add sends `space.share` naming the group, the login and the role and reads "Adding…", a `not_found` reply standing in the editor with the login kept, and a success closing it and saying "@<login> added as Maintainer" [[space-69](#space-69)];
+- "New group" stands on the instance's heading, the "More" of `acme`'s heading and of `other`'s holds Members alone, "Personal"'s heading holds none, and no heading carries Share, "New subgroup", "Rename" or "Delete"; `acme`'s members panel, read on activation, carries Share and Remove on each of its own members and links no page, `other`'s lists its members with neither; `a-spex`'s members panel carries Share and Remove on its own members, a member held through `acme` reading "via acme" with no Remove, each member labelled by login alone despite a received personal display name, while `b-spex`'s carries neither [[space-1](#space-1)] [[space-62](#space-62)] [[space-72](#space-72)];
+- rendered again over a read that says the person may not create a group, the instance's heading holds "New group" disabled and titled "Made by the people who run <display name>", in English and in Chinese, and before a read is held no "New group" [[space-1](#space-1)];
+- "New group" opens the inline editor with the fields "Group name" and "Path", the path following the name as "lumen-labs" follows "Lumen Labs" and staying empty for "华芯智造", Create disabled until both hold text, Escape closing it; Create sends `space.group.create` with the name, the path and no parent and reads "Creating…" until the reply, a refusal "taken" standing in the editor with the name kept, and a success closing it, the group the core's state carries standing with its full path [[space-68](#space-68)];
+- Share in `acme`'s members panel opens the editor with "Login at <display name>", the five roles in the host's order with Developer preselected, Add disabled until a login is typed; Add sends `space.share` naming the group, the login and the role and reads "Adding…", a `not_found` reply standing in the editor with the login kept, and a success closing it and saying "@<login> added as Maintainer" [[space-69](#space-69)];
 - Share in `a-spex`'s members panel sends `space.share` naming the repository and lists the members the reply carries [[space-69](#space-69)] [[space-62](#space-62)];
-- `acme`'s "More" holds "Rename" and no "Delete", `a-spex` standing under it, `empty`'s holds both, `other`'s, your own group's and your namespace's neither, and `a-spex`'s overflow carries "Move…" named "Move to another group" while `b-spex`'s carries none, nor does your own group's own spex repository's, which the host lets the person move [[space-1](#space-1)] [[space-87](#space-87)];
-- "Rename" on `acme` opens the editor holding "acme" and its path, Save disabled until either changes and the path not following the name; Save sends `space.group.rename` naming `acme` with only what changed and reads "Saving…" until the reply, a refusal standing in the editor with the name kept, and a success closing it [[space-76](#space-76)];
-- "Delete" on `empty` asks "Delete empty?" with Keep focused, Escape keeping and sending nothing; Delete sends `space.group.delete` naming `empty` and reads "Deleting…" until the reply, a refusal standing beneath the heading with the group kept [[space-77](#space-77)];
-- "Move…" on `a-spex` opens the picker with your login first and then every group but `acme`, `other` as "Other team · other" and `empty` by its name once, an option's accessible name holding the name before the path, Escape closing it; a pick sends `space.repository.move` naming `a-spex` and that group, or none for your own, the control reading "Moving…" until the reply, a refusal standing in the picker, and a success closing it [[space-78](#space-78)];
+- the overflows of `a-spex` and of `b-spex` each hold "Sync now", Members and "Explore records" alone, neither holding "Move…" [[space-1](#space-1)];
 - every new control reads at most 14 characters at the 320-pixel floor [[space-28](#space-28)].
 
 #### space-66
 
-Where the Space surface renders over a signed-out home, when the reader signs in through each flow, the test suite shall assert through the surface:
+Where the Space surface renders over a signed-out home holding a local-only project, when the reader signs in through each flow, the test suite shall assert through the surface:
 
-- signed out, the header is the "Not signed in" card with its two sentences, its "Instance" field holding the default instance's origin, and Sign in, showing no home path, Copy path, read time or Refresh, and your own group is headed "Only you · named after your login at sign-in" with no path, its row reading "On this computer only — synced once you sign in" with no control [[space-3](#space-3)] [[space-1](#space-1)];
-- in the device flow, the card reads "Continue in your browser:", the link "Open <host name> to sign in" whose href is the verification URL opening a new tab, and "Sign in there and approve; you return here signed in.", with no code shown; Sign in reads "Signing in…" disabled beside Cancel and no row carries a sign-in control [[space-3](#space-3)];
-- in the browser flow opened through the bridge, the card reads that the browser is open at the host name with "Open it again" linking to the sign-in URL; where the bridge refused, it reads as the device flow's [[space-3](#space-3)];
-- Cancel brings back the two sentences and Sign in; a denial reads the core's cause as one sentence with "Sign in again" [[space-3](#space-3)];
-- where the core reports that an instance signed this device out, its heading reads "<host name> signed this device out. Sign in again to continue as @<login>." beside "Sign in again" and Forget, in English and in Chinese, while a heading signed out by the reader carries the two controls alone [[space-3](#space-3)] [[space-1](#space-1)];
-- signed in, the instance's heading reads its host name until a read names its display name, and then its display name, "Signed in as @<login>" with Sign out and its read time, the header holds Refresh, "Add instance…" stands at the list's foot named "Another instance", and the surface ends in "Spex keeps this device's files in <home>" with the full path in its title and no control [[space-1](#space-1)];
-- signed in, your own group is headed "Only you · @<login>", a group whose name differs from its full path "<name> · <full path>", and one whose name is its full path by its name once [[space-1](#space-1)];
-- signed in, "Add to a group…" on a local-only row offers, under the instance's display name, your namespace as "Only you", a group whose name differs from its full path as "<name> · <full path>", and one whose name is its full path by its name once, each option's accessible name holding the name before the path, and a listed spex repository's group reads the same way [[space-58](#space-58)];
-- a group's own repository reads "Group sessions" and your own group's own "Your sessions", a project's with no code remote "Code not on a remote", and a local-only one "On this computer only" [[space-1](#space-1)] [[space-61](#space-61)];
-- a reachable row's phrase, and its placement's line in the Sync tab [[space-87](#space-87)], read "Synced <age>" from its recorded sync, and with none recorded, from its clone: "Synced <age>" where the clone's `spex` is the host's, "Not synced since <moment>" where it is not, and "Never synced" where the clone holds no host's `spex` [[space-61](#space-61)].
+- signed out, the header is the card titled "Sign in to a Space" with no sentence, its chooser preselecting the default instance, and Sign in, showing no home path, Copy path or Refresh, and the list holds "This computer" alone, its "Your sessions" row reading no phrase and carrying no control and the project's "Add to a group…" disabled and titled "Sign in to a Space first" [[space-3](#space-3)] [[space-115](#space-115)] [[space-1](#space-1)] [[space-61](#space-61)];
+- in the device flow, the card reads "Continue in your browser" and the link "Open <Space>", whose href is the verification URL opening a new tab, with no code shown; Sign in reads "Signing in…" disabled beside Cancel and no row carries a sign-in control [[space-3](#space-3)];
+- in the browser flow opened through the bridge, the card reads the same with "Open <Space>" linking to the sign-in URL, and the same where the bridge refused [[space-3](#space-3)];
+- Cancel brings back the chooser and Sign in; a denial reads the core's cause with "Sign in again" [[space-3](#space-3)];
+- where the core reports that an instance signed this device out, its heading reads "<display name> · signed out · @<login>" beside "Sign in again" and its overflow's "Remove from this list", in English and in Chinese, while a heading signed out by the reader reads its display name with the same controls [[space-3](#space-3)] [[space-1](#space-1)];
+- signed in, the instance's heading reads its host name until a read names its display name, and then its display name, beside "@<login>", with Sign out and its overflow's "Remove from this list" disabled, the header holds Refresh, "Add a Space…" stands at the list's foot, and the surface ends in "Spex keeps this computer's files in <home>" with the full path in its title and no control [[space-1](#space-1)];
+- signed in, "Your sessions" stands under "Personal" beneath the instance's heading and the project under "This computer", a group whose name differs from its full path is headed "<name> · <full path>", and one whose name is its full path by its name once [[space-1](#space-1)];
+- signed in, "Add to a group…" on the project offers, under the instance's display name, "Join the records already in" and "Share into", the latter listing "Personal" first, a group whose name differs from its full path as "<name> · <full path>" and one whose name is its full path by its name once, each option's accessible name holding the name before the path, and a listed spex repository's group reading the same way [[space-58](#space-58)];
+- a group's own repository reads "Group sessions" and your own group's own "Your sessions", a project's with no code remote "⚠ Code: no remote", and a local-only one no phrase [[space-1](#space-1)] [[space-61](#space-61)];
+- a reachable row's phrase, and its placement's line in the Sync tab [[space-87](#space-87)], read "Synced <age>" from its recorded sync, and with none recorded, from its clone: "Synced <age>" where the clone's `spex` is the host's, "Not synced since <moment>" where it is not, and "Never synced" where the clone holds no host's `spex` [[space-61](#space-61)] [[space-120](#space-120)].
 
 #### space-95
 
-Where the Space surface renders over a home signed in to two instances, with a project placed at each, a project at the first alone whose placement file names a repository the second lists, a local-only project, and your own group placed at both, the test suite shall assert through the surface ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
+Where the Space surface renders over a home signed in to two instances, with a project placed at each, a project at the first alone whose placement file names a repository the second lists, a local-only project, and your own group placed at both, the test suite shall assert through the surface ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)):
 
-- each row lists one line per placement with its instance's display name, its path, its state and its last sync, the named one reading "Not on this device" with Attach, and Members and "Move…" on the lines the view allows [[space-87](#space-87)];
-- "Place at…" stands in the overflow of the project at one instance titled "Also place at <display name>", and in neither your own group's, a group's own nor the local-only project's, which offers "Add to a group…"; "Leave…" is titled "Remove from <display name>" on that project, opens a choice on the placed project, and stands on neither your own group's nor the local-only project's [[space-88](#space-88)] [[space-89](#space-89)];
-- Remove sends `space.leave` naming that placement's instance, and a leave stopped for unreceived records asks the confirm again naming the count, its Remove sending `confirmed` [[space-89](#space-89)];
-- Attach shows the notice on its line naming the second's display name and path, Cancel attaching nothing and Continue sending `space.attach` with `noticed` [[space-90](#space-90)];
-- a placement owing its notice reads "Waiting for you to continue" with Continue on its line [[space-57](#space-57)];
-- the second's group holding a placement shows one line naming the row with no control, and no "Delete" [[space-1](#space-1)];
+- each row's Sync tab lists one line per placement with its instance's display name, its path, its state and its last sync, the named one reading "Not on this computer" with no control, and Members on the lines the view allows [[space-87](#space-87)];
+- no row's overflow holds "Place at…", "Leave…", Attach or "Move…", each holding "Sync now", Members and "Explore records", and the local-only project offers "Add to a group…" [[space-1](#space-1)] [[space-61](#space-61)];
+- a placement owing its confirm reads "Waiting for you to continue" with the sharing confirm on its line, titled "Share with <group> at <display name>?" over its three phrases, with Share and Cancel [[space-57](#space-57)];
+- the second's group holding a placement shows one line naming the row with no control [[space-1](#space-1)];
+- "Your sessions" stands under the first's "Personal", and the second's "Personal" shows one line naming it [[space-1](#space-1)];
 - each placement's members panel says the records are also placed at the other's display name [[space-62](#space-62)];
-- the card opened from "Add instance…" reads "Your own group's records will be kept there too." [[space-3](#space-3)];
+- the card opened from "Add a Space…" reads no sentence [[space-3](#space-3)];
 - every new control reads at most 14 characters at the 320-pixel floor [[space-28](#space-28)].
 
 ### Browser Journeys
@@ -1292,24 +1258,25 @@ Where the Space surface renders over a home signed in to two instances, with a p
 
 Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell on an empty home against a stand-in Git host whose device-flow approvals the harness scripts, the test suite shall assert the first start and the first sign-in through the page alone:
 
-- Space reads the "Not signed in" card with its two sentences, its "Instance" field holding the stand-in's origin, and Sign in as its one primary control, no home path, read time or Refresh, and your own group alone beneath it headed "Only you · named after your login at sign-in", its row reading "On this computer only — synced once you sign in" with no control [[space-1](#space-1)] [[space-3](#space-3)];
-- a project added from the palette lists under "Only you" as "On this computer only" with no control [[space-61](#space-61)];
-- Sign in shows "Open <host name> to sign in" linking to the verification URL that carries the code, and no code, the control reading "Signing in…" disabled until the harness approves the code the link carries; the instance's heading then reads the account and the header Refresh, your own group bears its login, and the surface ends in the line naming where this device's files are kept [[space-3](#space-3)] [[space-4](#space-4)] [[space-1](#space-1)];
-- "Add to a group…" on the project's row offers the stand-in's groups, and picking one turns the row reachable with a sync time, the stand-in holding `<name>-spex` on its `spex` branch [[space-58](#space-58)] [[space-12](#space-12)];
-- a session then run from the Captain home appears under the repository's local changes by its title, its Open session control opens its tab, and Sync sends it [[space-7](#space-7)] [[space-12](#space-12)];
-- an intent queued while Space is shown lists under local changes with Refresh never activated, and the instance's heading reads the time of the read [[space-2](#space-2)] [[space-1](#space-1)].
+- Space reads the card titled "Sign in to a Space" with no sentence, its chooser preselecting the default instance, the stand-in's origin, and Sign in as its one primary control, no home path or Refresh, and "This computer" alone beneath it, its "Your sessions" row reading no phrase and carrying no control [[space-1](#space-1)] [[space-3](#space-3)] [[space-115](#space-115)];
+- a project added from the palette lists under "This computer" with no phrase and "Add to a group…" disabled and titled "Sign in to a Space first" [[space-61](#space-61)];
+- Sign in shows "Continue in your browser" and "Open <Space>" linking to the verification URL that carries the code, and no code, the control reading "Signing in…" disabled until the harness approves the code the link carries; the instance's heading then reads the account's login and the header Refresh, "Your sessions" stands under "Personal", and the surface ends in the line naming where this computer's files are kept [[space-3](#space-3)] [[space-4](#space-4)] [[space-1](#space-1)];
+- "Add to a group…" on the project's row offers the stand-in's groups under "Share into", and picking one turns the row reachable with a sync time, the stand-in holding `<name>-spex` on its `spex` branch [[space-58](#space-58)] [[space-12](#space-12)];
+- a session then run from the Captain home appears under the repository's "To send (1)" by its title, its Open session control opens its tab, and Sync sends it [[space-7](#space-7)] [[space-12](#space-12)];
+- an intent queued while Space is shown lists under "To send (1)" with Refresh never activated, the row reading "1 to send" [[space-2](#space-2)] [[space-120](#space-120)].
 
 #### space-41
 
 Where the harness boots the served shell signed in on a home whose spex repository a peer home has pushed to — the peer holding a differing configuration and the same session changed — the test suite shall assert the daily sync with conflicts through the page:
 
-- Check host lists the peer's session and Settings as incoming with the conflict marked and the row reading behind [[space-8](#space-8)];
-- Sync ends "Needs your choice" with Apply disabled reading "0 of 2 chosen"; "Take host's" for the session and "Keep mine" for Settings by keyboard enable Apply; Apply's confirm names one replaced unit with Cancel focused, Escape keeps the choices, and confirming ends synced [[space-9](#space-9)] [[space-14](#space-14)] [[space-17](#space-17)] [[space-18](#space-18)];
+- Check lists the peer's session and Settings under "From <display name> (2)" with the conflict marked and the row reading behind [[space-8](#space-8)];
+- Sync ends "Needs your choice" with Apply disabled reading "0 of 2 chosen"; "Take <display name>'s" for the session and "Keep this computer's" for Settings by keyboard enable Apply; Apply's confirm names one replaced unit with Cancel focused, Escape keeps the choices, and confirming ends synced [[space-9](#space-9)] [[space-14](#space-14)] [[space-17](#space-17)] [[space-18](#space-18)];
+- View diff on the Settings row shows this computer's side headed "Changes on this computer" and the stand-in's headed "Changes at <display name>" [[space-10](#space-10)];
 - the session's tab shows the host's turns and Settings shows this device's configuration [[space-20](#space-20)];
-- with the peer's `spex` moved after the check, Sync ends "changed again" with the ahead count on the row, and a second Sync pushes [[space-15](#space-15)];
+- with the peer's `spex` moved after the check, Sync ends "<display name> changed again" with the ahead count on the row, and a second Sync pushes [[space-15](#space-15)];
 - Stop during a check against a sleeping transport ends the check with its stopped state and Retry [[space-16](#space-16)];
 - Members lists the stand-in's members with their role names and no link [[space-62](#space-62)];
-- no visible text on the surface contains `ours`, `theirs`, `HEAD`, `origin/spex`, `@<host>/spex`, `namespace`, with Space reserved for the destination or hosted product [[space-27](#space-27)].
+- no visible text on the surface contains `ours`, `theirs`, `HEAD`, `origin/spex`, `@<host>/spex` or `-spex`, or the words instance, host, namespace, device or spex repository [[space-27](#space-27)].
 
 #### space-42
 
@@ -1317,56 +1284,35 @@ Where the harness boots the served shell with the demo project registered and a 
 
 - the Explore tab lists the session's node titled by its first turn with its manifest "Shared", its hints file "Stays here" and its records offering Open session; selecting the manifest previews pretty-printed JSON and selecting the hints file reads withheld [[space-23](#space-23)] [[space-24](#space-24)];
 - an empty directory of a tracked kind — `intents/` before any queued intent — reads "Not yet shared", never "Stays here" [[space-23](#space-23)];
-- "Stays on this device" names the eight families with their reasons [[space-25](#space-25)];
+- "Stays on this computer" names the eight families with their reasons [[space-25](#space-25)];
 - the served page offers Copy path beside the repository and no reveal control, and acknowledges the copy [[space-26](#space-26)].
 
 #### space-81
 
 Where the harness boots the served shell signed in at the stand-in host holding in `acme` a project's spex repository a peer pushed with `bob` as its other member, when a folder holding the same code is added and Space picks that repository on the folder's row, once with the stand-in able to read members and once with it failing every members route, the test suite shall assert through the page in each case:
 
-- the picker lists the repository with its group read as "Acme · acme", and with no member count after the full read [[space-58](#space-58)];
-- picking it says the notice in the picker beneath it with Cancel focused, and Escape closes the notice alone, the repository still local only and focus back on it [[space-57](#space-57)];
-- Continue closes the picker, and the row stands reachable in `acme` with a sync time, its notice recorded, its clone holding the peer's session and agreeing with the stand-in's `spex` [[space-57](#space-57)] [[space-58](#space-58)] [[space-13](#space-13)].
+- the picker lists the repository under "Join the records already in" with its group read as "Acme · acme", and with no member count after the full read [[space-58](#space-58)];
+- picking it shows the sharing confirm in the picker beneath it, titled "Share with Acme at <display name>?", with Cancel focused, and Escape closes the confirm alone, the repository still local only and focus back on it [[space-57](#space-57)];
+- Share closes the picker, and the row stands reachable in `acme` with a sync time, its confirm recorded, its clone holding the peer's session and agreeing with the stand-in's `spex` [[space-57](#space-57)] [[space-58](#space-58)] [[space-13](#space-13)].
 
 #### space-71
 
-Where the harness boots the served shell signed in at the stand-in host, which by default lets the person create groups, and subgroups in `acme`, and add and remove members there, the test suite shall assert the organizer's journey through the page: a group created from the instance's heading and a subgroup under `acme`, each listed with its full path as Create closes its editor [[space-68](#space-68)] [[space-1](#space-1)]; a project added from the palette offered your login and then every group, each by its name with its path after it where the two differ, and picked into the new subgroup, the stand-in then holding `<name>-spex` there on its `spex` branch [[space-58](#space-58)]; a member added to the subgroup by login at Maintainer, the line "@<login> added as Maintainer" shown and the stand-in's members then listing them [[space-69](#space-69)]; a second addition of the same login refused in place with the stand-in's words, and a login the stand-in knows no account for refused naming it [[space-69](#space-69)]; the new controls fitting at the 320-pixel floor [[space-28](#space-28)]; and the member removed after the confirm, the stand-in's members then not listing them [[space-72](#space-72)].
+Where the harness boots the served shell signed in at the stand-in host, which by default lets the person create groups and add and remove members there, the test suite shall assert the organizer's journey through the page: a group created from the instance's heading, listed with its full path as Create closes its editor [[space-68](#space-68)] [[space-1](#space-1)]; a project added from the palette offered, under "Share into", "Personal" and then every group, each by its name with its path after it where the two differ, and shared into the new group, the stand-in then holding `<name>-spex` there on its `spex` branch [[space-58](#space-58)]; a member added to the new group from its members panel by login at Maintainer, the line "@<login> added as Maintainer" shown and the stand-in's members then listing them [[space-69](#space-69)]; a second addition of the same login refused in place with the stand-in's words, and a login the stand-in knows no account for refused naming it [[space-69](#space-69)]; the new controls fitting at the 320-pixel floor [[space-28](#space-28)]; and the member removed after the confirm, the stand-in's members then not listing them [[space-72](#space-72)].
 
 #### space-75
 
 Where the harness boots the served shell signed in at the stand-in host, whose remote URLs lie under its Git origin, with a project's spex repository synced in `acme` and another account's spex repository listed under `bob`, when the journey shows Space with that project's members panel open, first in English and then in Chinese, the test suite shall assert that the Space surface holds no link, and no text, title or accessible name holding a URL under the stand-in's URL or naming `gitlab`, while `bob`'s heading carries no control [[space-1](#space-1)] [[space-62](#space-62)].
 
-#### space-80
-
-Where the harness boots the served shell signed in at the stand-in host, whose remote URLs lie under its Git origin, with a project's spex repository synced in `acme`, the test suite shall assert the undo through the page ([DR-120](../decisions/120-the-instance-is-the-space.md)):
-
-- a group created from the instance's heading and renamed through its heading's "Rename" stands under its new name and path, and a rename the stand-in refuses stands in the editor with its words and the name kept [[space-76](#space-76)];
-- `acme`, holding the project, carries no "Delete", while the new group's "Delete" asks with Keep focused, a deletion the stand-in refuses stands beneath the heading with its words, and a second "Delete" leaves the list and the stand-in without the group [[space-1](#space-1)] [[space-77](#space-77)];
-- the project's "Move…" offers your login and every group but `acme`, each by its name with its path after it where the two differ; a move the stand-in refuses stands in the picker with its words, and a move into `acme/research` lists the row under it at once with its key unchanged, the row's Sync then moving the clone under `workspace/@<host>/acme/research/` [[space-78](#space-78)];
-- with the editor, the confirm and the picker each open, and in Chinese with the picker open, the surface holds no link and no text, title or accessible name holding a URL under the stand-in's URL or naming `gitlab` [[space-1](#space-1)];
-- the new controls fit at the 320-pixel floor [[space-28](#space-28)].
-
 #### space-85
 
-Where the harness boots the served shell signed in at one stand-in instance with a project's spex repository synced in `acme`, beside a second stand-in instance on another Git backend that holds a group `acme` and whose read says the person may not create a group, and with a local-only project registered, the test suite shall assert the second instance's journey through the page ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
+Where the harness boots the served shell signed in at one stand-in instance with a project's spex repository synced in `acme`, beside a second stand-in instance on another Git backend that holds a group `acme` and whose read says the person may not create a group, and with a local-only project registered, the test suite shall assert the second instance's journey through the page ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)):
 
-- "Add instance…" at the list's foot, named "Another instance", opens the card in its place with "Instance" holding the first's origin, and Escape closes the card, "Add instance…" standing again; an origin with a path is refused in the card with the field kept, and the second's origin signs in through the device flow the harness approves [[space-3](#space-3)] [[space-1](#space-1)];
-- each instance stands under a heading of its display name with "Signed in as @<login>", Sign out and its read time, the first's carrying "New group" and the second's "Groups are made by the people who run <display name>", each `acme` beneath its own instance [[space-1](#space-1)];
-- "Pick a group" on the local-only row offers each instance's namespace and groups under its display name, and picking the second's `acme` turns the row reachable under it, the second holding `<name>-spex` there on its `spex` branch, and the row's Sync then pushes to the second [[space-58](#space-58)] [[space-12](#space-12)];
-- "Move…" on that row's placement line offers the second's groups alone [[space-78](#space-78)];
-- Sign out on the first's heading leaves it with "Sign in again" and Forget, its project reading unreachable and the second's reachable, and Forget is refused naming the first's project, the heading kept, while its "Sign in again" signs it in through the device flow, "Add instance…" disabled until that flow ends, its project reachable again [[space-6](#space-6)] [[space-82](#space-82)] [[space-61](#space-61)] [[space-3](#space-3)];
+- "Add a Space…" at the list's foot opens the card in its place, its chooser preselecting the default instance, the first's origin, and Escape closes the card, "Add a Space…" standing again; an origin with a path entered under "Other Space…" is refused in the card with the field kept, and the second's origin signs in through the device flow the harness approves [[space-3](#space-3)] [[space-115](#space-115)] [[space-1](#space-1)];
+- each instance stands under a heading of its display name beside "@<login>", with Sign out and its overflow, the first's carrying "New group" and the second's "New group" disabled and titled "Made by the people who run <display name>", each `acme` beneath its own instance [[space-1](#space-1)];
+- "Add to a group…" on the local-only row offers each instance's "Personal" and groups under its display name, and picking the second's `acme` turns the row reachable under it, the second holding `<name>-spex` there on its `spex` branch, and the row's Sync then pushes to the second [[space-58](#space-58)] [[space-12](#space-12)];
+- Sign out on the first's heading leaves it with "Sign in again" and its overflow's "Remove from this list", its project reading "Signed out of <display name>" with the first's display name and the second's reachable, and "Remove from this list" is refused reading "Still syncing: <project> — stop them first" with the first's project, the heading kept, while its "Sign in again" signs it in through the device flow, "Add a Space…" disabled until that flow ends, its project reachable again [[space-6](#space-6)] [[space-82](#space-82)] [[space-61](#space-61)] [[space-120](#space-120)] [[space-3](#space-3)];
 - in English and in Chinese, the surface holds no link and no text, title or accessible name holding a URL under either stand-in's URL but its origin, or naming `gitlab` [[space-1](#space-1)];
 - the new controls fit at the 320-pixel floor [[space-28](#space-28)].
-
-#### space-96
-
-Where the harness boots the served shell for two homes against two stand-in instances on separate Git backends, each home signed in to both through device flows the harness approves, the first holding a project synced in the first's `acme`, the test suite shall assert through the pages alone that a project placed at two stand-in instances syncs through a device holding both and that a second device attaches from the placement's file ([DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md)):
-
-- on the first page, "Place at…" on the project's row places it in the second's `workshop`, Continue on the notice pushing there, the row naming both placements [[space-88](#space-88)] [[space-57](#space-57)] [[space-87](#space-87)];
-- a session run on the first page and synced lands on both stand-ins' `spex` branches [[space-12](#space-12)];
-- on the second page, the project joined from the first's `acme` names the second's placement with Attach; Attach shows the notice naming the second's display name and path, and Continue attaches it, its line reading synced [[space-90](#space-90)] [[space-87](#space-87)];
-- a session run on the second page and synced reaches both stand-ins, and the first page's Sync brings it [[space-12](#space-12)];
-- no visible text contains `@<host>/spex`, `remote` or `namespace`, and the new controls fit at the 320-pixel floor [[space-27](#space-27)] [[space-28](#space-28)].
 
 #### space-43
 
@@ -1403,16 +1349,17 @@ When real protocol clients exercise reported sign-in completion against a contro
 
 #### space-113
 
-Where the Space surface renders over a signed-in home whose instance lists a group `acme` holding a subgroup `acme/research`, a project repository `alpha-spex` cloned here, one `beta-spex` not on this device, `acme-spex` as the group's own, one server `lab-1` of `acme`, a repository under another login `bob`, and your namespace holding your own group's repository alone, with one seat open at `lab-1` holding `beta-spex`, the test suite shall assert through the surface, in English and in Chinese:
+Where the Space surface renders over a signed-in home whose instance lists a group `acme` holding a group `acme/research`, a project repository `alpha-spex` cloned here, one `beta-spex` not on this device, `acme-spex` as the group's own, one server `lab-1` of `acme`, a repository under another login `bob`, and your namespace holding your own group's repository alone, with one seat open at `lab-1` holding `beta-spex`, the test suite shall assert through the surface, in English and in Chinese:
 
-- the list heads your own group "Only you · @ada", `acme` by its name beside its member count with "Research" nested within it, no heading for your namespace, and "Shared by @bob" for the other login's rows [[space-1](#space-1)];
-- `acme`'s heading carries one "More" control holding Members, "New subgroup", "Rename" and no "Delete", and beneath it one line "lab-1 · Connected" with Disconnect in its overflow, reading "lab-1" with Connect once the seat is closed [[space-1](#space-1)];
-- the rows read "alpha", "beta" and "Group sessions", never `-spex`, `alpha`'s carrying "Here" and `beta`'s "On lab-1", `alpha`'s one phrase its last sync and its "More" holding "Sync now", Members, "Explore records", "Move…", "Place at…" and "Leave…", no line of a placement on the row and its lines in the Sync tab the row's name opens [[space-1](#space-1)] [[space-87](#space-87)];
-- `alpha`'s Open offers "Show" for this computer and "Open on lab-1", `beta`'s "Open here" and "Show on lab-1", and `acme-spex`'s "Open here" asking for the folder its sessions run in; "Open here" on `beta` sends `space.join` with the folder the picker returns, "Open on lab-1" on `alpha` sends that seat's client `space.join` with no folder once the seat's `signIn` reads `signedIn`, the row reading "Opening on lab-1…" meanwhile, and nothing while it reads `running` [[space-111](#space-111)] [[space-63](#space-63)];
-- a local-only project under "Only you" reads "On this computer only" with "Add to a group…", whose picker lists "Only you" first and then `acme` and "Research" [[space-61](#space-61)] [[space-58](#space-58)];
-- a placement ended in choices needed reads "Changed here and at <display name>" with Resolve on `alpha`'s row, Resolve showing the picker beneath the row with "Keep what's here", "Take <display name>'s", "All here" and "All <display name>'s", and the unrelated-history outcome "Merge histories…" with its confirmation [[space-14](#space-14)] [[space-17](#space-17)] [[space-13](#space-13)];
-- a repair row reads "<project> in acme: its folder on this computer is missing" with the folder beneath it, "Choose folder…" and "Not on this computer", declining sending `space.repair.decline` [[space-46](#space-46)] [[space-49](#space-49)];
-- shown at the seat's place, the same surface reads "Not on lab-1", "Keep what's on lab-1", "Spex keeps lab-1's files in <home>" and the seat's sign-in card's two sentences naming lab-1, its "Add instance…" card saying nothing of your own group's records [[space-112](#space-112)];
+- the instance's heading reads its display name beside "@ada" with "New group", Sign out and one "More" holding "Remove from this list" disabled, and the list then heads "Personal", holding "Your sessions", `acme` by its name beside its member count with "Research" nested within it, and "Shared by @bob" for the other login's rows, with no "This computer" while no row is local only [[space-1](#space-1)];
+- beneath the instance's heading the registry line reads "Registry" with Sign in, titled "For publishing and private packages", which starts the registry's sign-in at the instance's origin, and "Registry · signed in as @ada" once that registry account reads signed in, the instance's heading unchanged and the surface carrying no package control [[space-119](#space-119)];
+- `acme`'s heading carries one "More" control holding Members alone, and beneath it one line "lab-1 · Connected" with Disconnect in its overflow, reading "lab-1" with Connect once the seat is closed [[space-1](#space-1)];
+- the rows read "alpha", "beta" and "Group sessions", never `-spex`, `alpha`'s carrying "Here" and `beta`'s "On lab-1", `alpha`'s one phrase its last sync and its "More" holding "Sync now", Members and "Explore records" alone, no line of a placement on the row and its lines in the Sync tab the row's name opens [[space-1](#space-1)] [[space-87](#space-87)];
+- `alpha`'s primary control reads "Show", offering "Open on lab-1" beside it, `beta`'s "Open here", offering "Show on lab-1", and `acme-spex`'s "Open here" asking for the folder its sessions run in; "Open here" on `beta` sends `space.join` with the folder the picker returns, "Open on lab-1" on `alpha` sends that seat's client `space.join` with no folder once the seat's `signIn` reads `signedIn`, the row reading "Opening on lab-1…" meanwhile, and nothing while it reads `running` [[space-111](#space-111)] [[space-63](#space-63)];
+- a local-only project, once added, stands under "This computer" with no phrase and "Add to a group…", whose picker's "Share into" lists "Personal" first and then `acme` and "Research" [[space-61](#space-61)] [[space-58](#space-58)];
+- over a placement ended in choices needed, `alpha` reads "1 to send" while it holds a local unit and otherwise "Changed here and at <display name>" with Resolve, Resolve showing the picker beneath the row with "Keep this computer's", "Take <display name>'s", "All here" and "All <display name>'s", while a placement started separately reads "Started separately at <display name>" with "Combine…" and its confirmation [[space-120](#space-120)] [[space-14](#space-14)] [[space-17](#space-17)] [[space-13](#space-13)];
+- a repair row reads "<project> · acme — Folder missing on this computer" with the folder beneath it, "Use <folder>" where it proposes one, "Choose folder…" and "Not on this computer", declining sending `space.repair.decline` [[space-46](#space-46)] [[space-47](#space-47)] [[space-49](#space-49)];
+- shown at the seat's place, the same surface reads "Not on lab-1", "Keep lab-1's" and "Spex keeps lab-1's files in <home>" [[space-112](#space-112)];
 - every new control reads at most 14 characters at the 320-pixel floor [[space-28](#space-28)].
 
 #### space-114

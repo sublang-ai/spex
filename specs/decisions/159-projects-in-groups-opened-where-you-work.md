@@ -7,6 +7,7 @@
 
 Accepted (2026-10-28) on the owner's direction: a member signs in to a space once, finds a project in one of their groups and opens it where they want to work — on this computer or on one of the group's servers — in one act; the records' Git, the seats and the sync stay beneath the surfaces, reached from a row and shown on none.
 Amended by [DR-164](164-the-seat-signs-in-on-its-ticket.md) in "A seat opens when needed": the open hands the ticket it presented to the seat's sign-in, and the approval page is opened only where the space still asks for it; the declined item on the ticket's consent is decided there.
+Amended by [DR-172](172-surfaces-a-fresh-user-reads.md) in the headings, the rows and the acts offered.
 Amends, under [DR-046](046-decision-record-evolution.md):
 
 - [DR-057](057-space-surface.md) and [DR-103](103-the-home-and-its-groups.md) in the Space surface's rows: a row is a project, named as its code is, never a spex repository named `<name>-spex`; a group's own repository reads as the group's own sessions; the Git of the records is reached from a row's overflow and shown on no row.

@@ -55,7 +55,11 @@ Each package that composes text for the reader — the UI bundle, the desktop sh
 - an entry's `msgid` is the English text as the source states it, its references name the source files that use it, and a comment carries the author's note for the translator where the English alone is ambiguous;
 - the `zh` entry's `msgstr` is the translation, edited in place by a human or an agent; an empty `msgstr` is a missing translation;
 - entries are ordered by message, and extraction removes entries no source uses;
-- a glossary beside the UI bundle's catalogs fixes the Chinese term for each product noun and keeps the role names Playbook defines as authored, and every translation follows it.
+- a glossary beside the UI bundle's catalogs fixes the Chinese term for each product noun, and every translation follows it ([DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)):
+  - the role names Playbook defines, and Space, stay as authored;
+  - group is 群组, Personal 个人, project 项目, records 记录, this computer 本机, server 服务器, package and spec package 规约包, and registry 注册中心;
+  - the acts Update, Install, Add, Remove, Publish, Sync, Resolve and Combine are 更新, 安装, 添加, 移除, 发布, 同步, 解决 and 合并;
+  - 实例, 托管平台, 注册表, 软件包, 放置 and 此设备 are no translation's term.
 
 #### localization-7
 
@@ -67,13 +71,13 @@ When a speaking package builds, the build shall fail when a catalog is out of st
 
 #### localization-8
 
-Where a speaking package's catalogs stand beside its source, when the package's test suite runs, the test suite shall run the package's catalog checks and assert that the `en` and `zh` catalogs list every message the source uses and no other [[localization-6](#localization-6)], that every `zh` entry carries a translation and every message compiles [[localization-7](#localization-7)].
+Where a speaking package's catalogs stand beside its source, when the package's test suite runs, the test suite shall run the package's catalog checks and assert that the `en` and `zh` catalogs list every message the source uses and no other [[localization-6](#localization-6)], that every `zh` entry carries a translation and every message compiles [[localization-7](#localization-7)], and that no `zh` entry uses a term the glossary retires [[localization-6](#localization-6)].
 
 ### Rendering Coverage
 
 #### localization-9
 
-Where the UI renders against fixture state with `zh` resolved, the test suite shall assert that the navigation rail, the Dashboard and the Settings surface read their Chinese labels [[localization-4](#localization-4)], that the quick-start card, the slash menu and the Playbooks surface show each built-in playbook's intent — as the installed Playbook's registry entry carries it — in Chinese while a team's own playbook's intent reads as given [[localization-4](#localization-4)], that the document's language attribute reads `zh` [[localization-3](#localization-3)], that a count's phrase takes the Chinese plural form and a clock time formats for `zh` [[localization-5](#localization-5)], and that with no stored choice the browser languages `zh-CN`, `zh-Hans-SG` and `["fr", "zh-CN"]` resolve to `zh` while `zh-TW`, `fr` and `["en-GB", "zh-CN"]` resolve to `en` [[localization-2](#localization-2)].
+Where the UI renders against fixture state with `zh` resolved, the test suite shall assert that the navigation rail, the Dashboard and the Settings surface read their Chinese labels [[localization-4](#localization-4)], that the quick-start card, the slash menu and a project's Playbooks tab show each built-in playbook's intent — as the installed Playbook's registry entry carries it — in Chinese while a team's own playbook's intent reads as given [[localization-4](#localization-4)], that the document's language attribute reads `zh` [[localization-3](#localization-3)], that a count's phrase takes the Chinese plural form and a clock time formats for `zh` [[localization-5](#localization-5)], and that with no stored choice the browser languages `zh-CN`, `zh-Hans-SG` and `["fr", "zh-CN"]` resolve to `zh` while `zh-TW`, `fr` and `["en-GB", "zh-CN"]` resolve to `en` [[localization-2](#localization-2)].
 
 ### Browser Journeys
 

@@ -6,6 +6,7 @@
 ## Status
 
 Accepted (2026-09-18) on the owner's request for a Simplified Chinese interface on both shells, kept simple and open for a human to review and adjust every translation.
+Amended by [DR-172](172-surfaces-a-fresh-user-reads.md) in the glossary.
 Amends [DR-010](010-interface-craft.md) with an eleventh principle.
 Amends [DR-041](041-chrome-that-fits.md) in scope: a character budget counts the English text, and its translation fits the control the English text fits; every other fit rule stands.
 Amends [DR-013](013-sublang-brand.md) in scope: each type stack names the platforms' Simplified Chinese faces after its Latin faces; the brand faces stand.

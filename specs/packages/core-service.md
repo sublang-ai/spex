@@ -273,7 +273,7 @@ While a session is not live, when a client submits Boss text for it, the core se
 | Unsupported recovery, no checkpoint, incomplete stream or digest mismatch | `invalid_request`, history-only with the failing condition |
 | Uncertain work | `invalid_request`, restore it first [[core-service-82](#core-service-82)] |
 | The session is assigned to another runtime [[storage-43](storage.md#storage-43)] | `invalid_request`, "Runs on <label>", with `runsOn` in its details, so a client acts without parsing the words ([DR-134](../decisions/134-execution-ownership.md)) |
-| The spex repository's working folder is not paired on this device, or the session's recorded working directory is not that folder [[storage-6](storage.md#storage-6)] — an alias keeps the session's history readable, while Playbook's relocation rule refuses to continue it until the folder is the recorded one | `invalid_request`, continue it on the device whose folder it ran in ([DR-103](../decisions/103-the-home-and-its-groups.md)) |
+| The spex repository's working folder is not paired on this device, or the session's recorded working directory is not that folder [[storage-6](storage.md#storage-6)] — an alias keeps the session's history readable, while Playbook's relocation rule refuses to continue it until the folder is the recorded one | `invalid_request`, continue it on the computer whose folder it ran in ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)) |
 | Changed checkpoint repository/module paths | `invalid_request`, relocation unsupported; history remains readable |
 | Missing or invalid config | `invalid_config`, as for creation |
 | Structural or runtime mismatch | `invalid_config`, naming each changed field and offering a new session [[core-service-92](#core-service-92)] |
@@ -627,6 +627,17 @@ When the core service composes text for the reader — a refusal's message, a co
 - what a finished operation composed — a storage diagnostic its store raised at load, a Space stop's message and guidance — keeps its language until that operation runs again, and a start speaks the stored choice, read from the preference file, before the store loads, so nothing it composes begins in another language than the home's ([DR-083](../decisions/083-a-finished-operations-words-keep-their-language.md));
 - a fact a page acts on travels beside the words, never in them: a refusal carries it as a detail of its reply, a state as a field of its own.
 
+#### core-service-145
+
+When the core service composes text for the reader [[core-service-111](#core-service-111)], it shall say each case as one whole phrase in the person's words, one name per thing as every surface names it ([DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)):
+
+- a Space is named by its display name wherever the phrase would say the host or the instance, this computer wherever it would say the device or the machine, and records wherever it would say the spex repository or the clone;
+- no phrase says seat, ticket, home, placement, origin or unit;
+- a step to take is named as its control is, as in "Add it to a group first" and "Open here again";
+- a failure says what happened and what to do, as in "spex.yaml cannot be read: <cause> — fix the file, then Retry" and "Another Spex is writing these files — wait, then Retry", what a tool or a file said travelling beside the phrase as its detail;
+- a Space's address the sign-in refuses by the origin rule [[git-host-2](git-host.md#git-host-2)] is answered "Enter just the Space's address, like https://spex.sublang.ai";
+- each case is one message of the catalog, never assembled from fragments, so its word order follows each language.
+
 ### Seat Mode
 
 #### core-service-125
@@ -637,7 +648,7 @@ Where the core runs as a seat — started with a server's id and name, the admit
 - your own group is placed at no instance [[space-102](space.md#space-102)];
 - every command naming a working folder path — `project.register`, `project.rebind`, `project.create`, and a join naming a folder — is refused `invalid_request`, "Projects on a server are opened from their group"; a join names no folder, the core allocating it [[space-103](space.md#space-103)];
 - intents without a runtime are run nowhere here [[core-service-107](#core-service-107)];
-- `server.open` is refused `invalid_request`, "A seat opens no server": a seat holds no seats of its own [[core-service-128](#core-service-128)];
+- `server.open` is refused `invalid_request`, "Already on a server — open it from your computer": a seat holds no seats of its own [[core-service-128](#core-service-128)] ([DR-172](../decisions/172-surfaces-a-fresh-user-reads.md));
 - the seat account's own Git configuration names the app's credential helper in its member mode, so the pushes agents make from a work tree carry the member's token [[git-host-9](git-host.md#git-host-9)];
 - the runtime's label is the server's name [[core-service-4](#core-service-4)].
 
@@ -1046,6 +1057,10 @@ Where a core service runs on a scratch state root with two clients connected, wh
 #### core-service-112
 
 Where a core service runs with a config carrying an error and an adapter that is not ready, when a client sets the interface language to `zh`, the test suite shall assert that the config error and the readiness requirement the client then reads are the catalog's Chinese phrases, broadcast without a further request, that a refusal's message reads Chinese, that setting none returns each to English, and that a start on a home storing `zh` with a damaged forge cache reports that cache's diagnostic in Chinese before any client speaks [[core-service-111](#core-service-111)] [[core-service-109](#core-service-109)].
+
+#### core-service-146
+
+When the core's test suite runs, the test suite shall assert that no message of the core's English catalog says seat, ticket, home, placement, origin, unit, device or spex repository as a word, and that `space.signin.start` naming `https://spex.sublang.ai/path` is refused with "Enter just the Space's address, like https://spex.sublang.ai", writing nothing [[core-service-145](#core-service-145)].
 
 ### Intent Ledger Coverage
 

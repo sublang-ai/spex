@@ -7,6 +7,7 @@
 
 This spec covers the Settings workspace surface of the Spex desktop app — its externally visible behavior, the implementation requirements behind it, and the integration coverage that verifies both.
 The Settings surface is an editor over the shared playbook config file at `${SPEX_HOME:-$HOME/.spex}/config/playbook.config.yaml`, which stays the source of truth shared with the playbook CLI.
+Signing in to a Space or a registry has no page here: Settings holds no accounts or registries page ([DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)).
 The inline agent block (adapter, optional model, optional reasoning effort, optional adapter-scoped fast mode, permissions), the adapter names known to the embedded runtime (`claude`, `codex`, `gemini`, `kimi`, `opencode`), the config's top-level entries (`captain`, `layout`, `notifications`, `theme`), and the fail-closed validation rules are those of the playbook launcher that shares this file.
 Behind the surface, the implementation requires one validation module shared with core config loading, comment-preserving YAML writing, launcher-equivalent readiness checks, and the protocol boundary between the Settings UI and the core service.
 Integration coverage is exercised through the core service's WebSocket protocol against real shared config files in fixture config directories, so that Settings behavior and the launcher's config contract are verified together.
@@ -204,9 +205,9 @@ Where the app starts on a machine whose own group holds no config file, while th
 
 #### settings-46
 
-While a project's config file names, for a role, a player your own group's file lacks [[core-service-2](core-service.md#core-service-2)], the Settings surface shall show that player in the roster as "Named by <project>, not set up here" with an Add control that creates it from the neutral block, so every member names players and each person picks their own models ([DR-103](../decisions/103-the-home-and-its-groups.md)):
+While a project's config file names, for a role, a player your own group's file lacks [[core-service-2](core-service.md#core-service-2)], the Settings surface shall show that player in the roster as "Named by <project>, not set up here" with an Add control that creates it from the neutral block, so every member names players and each person picks their own models ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)):
 
-- the Settings surface shows the file it writes — your own group's — by its spex repository, and names no project file as editable here: a project's playbooks and role bindings are edited in the Playbooks surface [[playbook-library-1](playbook-library.md#playbook-library-1)].
+- the Settings surface shows the file it writes — your own group's — by its path [[settings-54](#settings-54)], naming no spex repository, and names no project file as editable here: a project's playbooks and role bindings are edited in the project's Playbooks tab [[playbook-library-1](playbook-library.md#playbook-library-1)].
 
 ### Guidance
 
@@ -430,7 +431,7 @@ Where the UI holds a seat's store over a fake client, the test suite shall asser
 
 #### settings-47
 
-Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell on a home whose project's config names a player your own group's roster lacks, when the journey opens Settings through the page, the test suite shall assert that the roster shows the player as named by that project and not set up here, that Add creates it from the neutral block so the row leaves the missing list, and that the surface names your own group's spex repository as the file it writes [[settings-46](#settings-46)].
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell on a home whose project's config names a player your own group's roster lacks, when the journey opens Settings through the page, the test suite shall assert that the roster shows the player as named by that project and not set up here, that Add creates it from the neutral block so the row leaves the missing list, and that the surface names the file it writes by its path and no spex repository [[settings-46](#settings-46)].
 
 #### settings-29
 
