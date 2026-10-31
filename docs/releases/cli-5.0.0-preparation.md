@@ -25,6 +25,8 @@ Private installation and publishing require the registry grant on the machine pe
 The package-manager implementation was verified on `0a58d44d02b5eee5469fab40a8d4c1b12f4e165b`.
 Its CLI, scaffold, migration driver, legacy fixture, root package manifest and lock are byte-identical through candidate `2b8dabc7f779b29f865dfbb87c9a31897b25a228`.
 Later runtime `5bf0b6f2` changes only Core/interface namespace loading; the final candidate adds only one integration-fixture/spec correction to it.
+The later CLI help correction changes only the entrypoint's static `USAGE` text: publishing names the registry, authentication names the selected purpose and registry default, and legacy-source compatibility is explicit.
+The entrypoint outside that text and the lint/scaffold modules, bundled migration prompt and legacy fixture remain unchanged from the successful real-agent migration.
 
 | Gate | Evidence |
 | --- | --- |

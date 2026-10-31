@@ -5,7 +5,7 @@
 
 ## Intent
 
-This package defines the package commands of the published `spex` executable under [DR-165](../decisions/165-one-package-manager-hosted-by-the-cli-and-the-app.md): the environment of the current folder read and changed with `add`, `remove`, `install`, `update`, `list` and `search`, a package made with `new` and published with `publish`, and a device signed in at a Space with `login`, `logout` and `whoami`.
+This package defines the package commands of the published `spex` executable under [DR-165](../decisions/165-one-package-manager-hosted-by-the-cli-and-the-app.md): the environment of the current folder read and changed with `add`, `remove`, `install`, `update`, `list` and `search`, a package made with `new` and published with `publish`, and a device independently signed in to a package registry or Space with `login`, `logout` and `whoami` ([DR-168](../decisions/168-independent-package-registry.md)).
 The commands run the same package-manager library the app's core hosts, on the home `SPEX_HOME` names or `~/.spex` [[storage-1](storage.md#storage-1)], and need no running app.
 Scaffolding and linting keep their own contracts.
 

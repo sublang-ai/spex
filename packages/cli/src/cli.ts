@@ -25,20 +25,23 @@ spex.yaml, else the Git work tree's top level, else this folder.
   remove <org>/<pkg> (rm)                                         Drop a request and install what remains
   install (i)                                                     Install the lock, resolving it first where missing or stale
   update                                                          Resolve again from spex.yaml and install
-  list (ls)                                                       Show the Space, the requests, the lock and the exports
+  list (ls)                                                       Show the registry, Space, requests, lock and exports
   search <query>                                                  Search the environment's registry
   new <org>/<pkg> [--skill <folder>]... [--spec <file>]           Make spex-packages/<org>/<pkg>/, request it by path, install it
-  publish [<org>/<pkg>] [--dry-run]                               Publish that package's folder to the environment's Space
-  login [--registry <origin> | --space <origin>] [--force]                              Sign this device in at a Space by the device flow
-  logout [--registry <origin> | --space <origin>]                                       Sign this device out of a Space
-  whoami [--registry <origin> | --space <origin>]                                       Say who is signed in at each Space, the default marked
+  publish [<org>/<pkg>] [--dry-run]                               Publish that package's folder to its registry
+  login [--registry <origin> | --space <origin>] [--force]       Sign in to a registry or Space by the device flow
+  logout [--registry <origin> | --space <origin>]                Sign out of the selected registry or Space
+  whoami [--registry <origin> | --space <origin>]                Show the selected registry or Space sign-in
   scaffold [--update] [--lang <code>] [--agents <names>] [<path>] Create the specs structure; --update refreshes its templates
   lint [<path>]                                                   Check the specs tree's structure, item IDs and citations
 
 new also takes --language <tag>, --description <text>, --license <id> and --move.
 Agent names: claude, codex, gemini, kimi, opencode, or all
-A Space is named by its origin, e.g. https://spex.sublang.ai; the default is
-the first one signed in to. The home is SPEX_HOME, else ~/.spex.`;
+Registry and Space sign-ins are independent, even at one origin.
+login, logout and whoami default to the environment's registry.
+New manifests select https://spex.sublang.ai; existing manifests without registry
+keep their former package source until explicitly migrated.
+The home is SPEX_HOME, else ~/.spex.`;
 
 /** The commands run with the shared runner (cli-13): exit 0 on success,
  * 1 with the cause on standard error, 130 on an interrupt. */
