@@ -8,11 +8,12 @@ system should work and how to check it. A playbook coordinates AI work
 and review through a workflow written in plain language.
 
 A **spec package** shares a spec and related skills or playbooks as a
-versioned package. Find and publish packages on
-[Spex Registry](https://spex.sublang.ai); install them from the IDE or the
-`spex` command line. Public packages need no account to browse or install.
-Publishing and private packages require a separate registry sign-in with
-access. Project-record sync is optional.
+versioned package. Packages come from a registry, and
+[Spex Space](https://spex.sublang.ai) is the public one: find and publish
+packages there, and add them from a project's **Packages** tab or the
+`spex` command line. Public packages need no account to browse or
+install. Publishing and private packages need a registry sign-in,
+separate from any Space sign-in. Syncing a project's records is optional.
 
 ## Open the IDE and a project
 
@@ -42,92 +43,113 @@ coordinates; players inspect files, implement, and review through playbooks.
 
 ## Install and use a package
 
-1. In **Playbooks**, select your project's side, then **Add from registry**.
-2. Search for a public package, choose a version, and select **Add**. Spex resolves
-   and installs it. Use **Install** if files are missing, or **Resolve
-   again** if requests changed.
-3. Find an installed playbook under **Not enabled**, choose a player for
-   every role, and select **Enable**. Start a new task and type `/` to find
-   its command. Installing a package alone does not enable it.
+A project's packages come from the registry its `spex.yaml` names; a new
+project's is Spex Space. The project's **Packages** tab shows it at the
+top as **Registry: Spex Space**, with your sign-in there beside it.
 
-Private packages never appear in search. In **Playbooks → Package registry**,
-choose **Sign in to registry** with access, then select
-**Add from registry → Add by name**, and enter the known `org/name` and
-an explicit version or range, such as `1.2.3`, `^1.2.3`, or `~1.2.3`, then
-**Add**. This also works for known public packages. **Requested** confirms
-the request was accepted; the environment shows installation or an error.
+1. **Find a package.** On the project's **Packages** tab, choose
+   **Add…** and search on **Registry**. On the command line, run
+   `spex search <words>` in the project's folder.
+2. **Add it.** Pick a version — "1.2.0 and newer 1.x" takes later fixes
+   and features, "1.2.0 exactly" stays put — and choose **Add**. On the
+   command line, `spex add <org>/<pkg>` adds the newest. Spex writes the
+   package into `spex.yaml` and its exact version into `spex.lock`, and
+   installs it. Commit both files with your code so everyone on the
+   project installs the same packages; until you do, the tab shows
+   **spex.yaml, spex.lock not committed**.
+3. **Enable its playbooks.** Adding a package installs it but enables
+   nothing. Open the **Playbooks** tab, find the playbook under
+   **Available**, choose a player for each role and select **Enable**.
+   **Enable** also stands on the receipt after **Add** and on the
+   playbook's line in the package's row. Start a new task and type `/`
+   to find its command.
+4. **Publish your own.** See
+   [Publish specs, skills, and playbooks](#publish-specs-skills-and-playbooks).
 
-Skills need no role binding. Selected skills, and specs wrapped as skills,
-are exported to `.claude/skills/` for Claude Code and `.agents/skills/` for
-Codex, Gemini CLI, Kimi Code, and OpenCode. Use them through the native agent's
-own skill discovery. A spec-only or skill-only package has no playbook to
-enable. Generated playbook-launch skills are exported for Claude Code;
-run enabled playbooks through Spex's `/` menu with other agents.
+Skills and specs need no enabling. Spex places them in `.claude/skills/`
+for Claude Code and `.agents/skills/` for Codex, Gemini CLI, Kimi Code,
+and OpenCode, a spec as a skill that holds it, so each agent finds them
+its own way. A package of only specs or skills has no playbook to
+enable. Playbook launch skills are placed for Claude Code alone; with
+other agents, run enabled playbooks from Spex's `/` menu.
 
-**Add from folder** lets you try an existing
-package inside the project before publishing it.
+Private packages never appear in search. Choose **Sign in** beside the
+registry and approve in your browser, or run `spex login`, which signs
+you in with a code in your browser. Then type the package's `org/name`
+on **Add… → Registry**: its row reads "not listed publicly". Enter a
+version such as `1.2.3`, `^1.2.3` or `~1.2.3` and choose **Add**, or run
+`spex add <org>/<pkg>@<version>`. This also works for known public
+packages. A package the registry would not give you reads
+**Not installed · private**, with **Sign in**.
+
+When `spex.yaml` changes — after a pull, or an edit by hand — the tab
+shows **spex.yaml changed** with **Update**, which moves to the newest
+versions `spex.yaml` allows and installs them; `spex update` does the
+same. A row reading **Files missing** offers **Install**, which puts
+back what `spex.lock` records, as `spex install` does after a clone.
+**Remove** stands in a package row's overflow. The built-in playbooks
+stand as one quiet line, **Built-in playbooks** with their version: they
+come with Spex, are never removed, and offer **Update to ⟨version⟩**
+when the app ships a newer release.
+
+**Add… → Folder** adds a package folder inside the project, such as
+`spex-packages/<org>/<pkg>`, used in place, so you can try a package
+before you publish it; `spex add <org>/<pkg> --path <folder>` does the
+same.
 
 ## Use the CLI
 
-The Spex CLI runs independently with Node.js 22 or later and shares its
-package-manager library and environment files with the IDE. Run it in your
-project's folder; it needs no running app or project registration. You can
-also put `npx @sublang/spex` in place of `spex`:
+The `spex` command line is the **Packages** tab without the app: the
+same verbs on the same files. It needs Node.js 22 or later and no
+running app. Run it in your project's folder, or put `npx @sublang/spex`
+in place of `spex`:
 
 ```sh
 npm install -g @sublang/spex
 cd /absolute/path/to/project
 spex search toolkit
-spex add my-org/toolkit@^1.0.0
-spex install
-spex update
+spex add my-org/toolkit
 spex list
 ```
 
-Replace the example package name with a real one. Commit `spex.yaml` and
-`spex.lock`; installed files under `.spex/` are ignored. A new manifest explicitly
-selects the public registry as `registry: https://spex.sublang.ai`, independently
-of an optional `space` binding for project records. Existing manifests without
-`registry` keep their prior package source until you explicitly migrate them.
-The lock retains each package's exact origin, version and checksum.
+Replace the example name with a real one. `spex list` shows what is
+added, installed, and placed for your agents. Open the same folder in
+the IDE and its **Packages** tab shows the same packages; what either
+changes, the other reads.
 
 Public packages need no sign-in. For private packages or publishing:
 
 ```sh
-spex login --registry https://spex.sublang.ai
-spex whoami --registry https://spex.sublang.ai
+spex login
+spex whoami
 ```
 
-Follow the verification URL and code. `--space <origin>` signs in to a Space
-separately; it cannot be combined with `--registry`. Signing out of either
-keeps the other signed in. For a package of your own, `spex new org/pkg --skill
-<folder>` makes `spex-packages/org/pkg/`, requests it by path and installs it.
-Run `spex publish org/pkg --dry-run` to inspect its destination and files,
-then omit `--dry-run` to publish. Enable and run playbooks in the IDE as above.
-After a clone, `spex install` installs what the lock records. Open that folder
-in the IDE and **Playbooks** shows the same environment; what either host
-changes, the other reads. See the [CLI guide](../packages/cli/README.md) for
-all commands, separate registry/Space sign-in and exit codes.
+`spex login` signs in to the project's registry with a code in your
+browser: open the address it prints and enter the code. `--space <url>`
+signs in to a Space instead. The two sign-ins are separate, and signing
+out of one keeps the other. See the [CLI guide](../packages/cli/README.md)
+for every command, sign-in and exit codes.
 
 ## Open a project on a team server
 
-In **Space**, choose a server under your group and read its contract before
-opening a seat. Whoever runs the server can act with credentials you place
-there. Admission signs that seat in to its Space only; your computer's registry
-credentials and the administrator's shared agent sign-ins grant it no registry
-access.
+On **Space**, a project of your group offers **Open on ⟨server⟩**. The
+first time, Spex lists the server's terms — among them that whoever runs
+the server can act with credentials you put there — and opens it once
+you choose **I understand**. The server is signed in to the Space and
+nothing more: your registry sign-in on this computer, and the agent
+sign-ins its administrator shares, give it no registry access.
 
-Public packages install without a registry sign-in. For private packages or
-publishing, select the server's place in the IDE, then open **Playbooks → Package
-registry → Sign in to registry**. Approve that seat's own sign-in. Its registry
-credential stays on that server until removed or expired, independently of your
-Space grant and execution lease. Sign out of the registry on that seat when you
-want to remove that grant.
+Public packages install there without a registry sign-in. For private
+packages or publishing, open the project's **Packages** tab on that
+server, choose **Sign in** beside its registry, and approve with the code
+in your browser. That sign-in stays on the server, apart from your Space
+sign-in, until you sign out there or it expires.
 
 ## Try a spec-first task
 
-The bundled `sublang/playbooks` package supplies starter workflows. Open
-**Specs** to read your project, then describe your goal or use a command:
+The built-in playbooks, `sublang/playbooks`, come with Spex and supply
+starter workflows. Open **Specs** to read your project, then describe
+your goal or use a command:
 
 ```text
 /decide Define a small local task list's behavior and acceptance checks.
@@ -138,32 +160,31 @@ implementing with `/code`. See [Approvals](approvals.md) for permissions.
 
 ## Publish specs, skills, and playbooks
 
-Publishing needs a registry namespace you may publish to. Manage claims on
-[Your orgs](https://spex.sublang.ai/account/orgs) after signing in to the
-registry. Choose a namespace your registry account may claim; no Space group
-or membership is required. Choose **Private** on a new claim when the
-packages should be private.
+Publishing needs an org that is yours at the registry. Sign in to the
+registry, then claim one on [Your orgs](https://spex.sublang.ai/account/orgs)
+at Spex Space: any name your registry account may claim, with no Space
+group needed. Choose **Private** on a new claim when its packages should
+be private.
 
 ### Publish a spec or skill package
 
 To publish a skill you already have, such as one Claude Code keeps under
-`.claude/skills/`, sign in to the registry you publish to, then make a
-package folder from the skill in your project's root. Use an org you can
-publish to:
+`.claude/skills/`, sign in to the registry, then start a package from the
+skill in your project's folder, under an org of yours:
 
 ```sh
 npx @sublang/spex login
 npx @sublang/spex new my-org/my-skill --skill .claude/skills/my-skill --move
 ```
 
-`spex login` prints a URL and a code: open the URL, enter the code and
-approve. `spex new` writes `spex-packages/my-org/my-skill/` with a
-manifest, a README and your project's license, requests it by path in
-`spex.yaml`, and installs it. `--move` hands the skill to the package;
-Spex exports it back to `.claude/skills/` from there. For a spec, pass
-`--spec specs/packages/<name>.md` and name the package `<org>/<name>`;
-`--description` and `--license` override what it reads. To write a
-folder by hand, follow the
+`spex login` signs in with a code in your browser: open the address it
+prints, enter the code and approve. `spex new` writes
+`spex-packages/my-org/my-skill/` with its `meta.yaml`, a README and your
+project's license, adds it to `spex.yaml`, and installs it. `--move`
+hands the skill to the package; Spex places it back in `.claude/skills/`
+from there. For a spec, pass `--spec specs/packages/<name>.md` and name
+the package `<org>/<name>`; `--description` and `--license` override what
+it reads. To write a folder by hand, follow the
 [package format](../specs/packages/environments.md#environments-1).
 
 Check what will be published, then publish it:
@@ -173,59 +194,61 @@ npx @sublang/spex publish my-org/my-skill --dry-run
 npx @sublang/spex publish my-org/my-skill
 ```
 
-The dry run shows the destination, name, version and files, and uploads
-nothing. The publish prints the package's page at the registry.
+The dry run shows the registry, the name, the version and the files, and
+uploads nothing. The publish prints the package's page at the registry.
 
-Or publish from the IDE. A folder `spex new` made is already requested,
-so its row is in **Playbooks**. For a folder you made another way, use
-**Playbooks → Add from folder**, enter its `org/name` and
-`spex-packages/<org>/<name>`, then **Add**. Sign in through
-**Playbooks → Package registry** to the publishing registry. On the local package's row, select **Publish**,
-review the destination, name, version, and upload files, then confirm
-**Publish**. This uses your registry sign-in; no playbook,
-compilation, or separate API token is needed.
+Or publish from the IDE. A folder `spex new` made is already on the
+**Packages** tab. For one you made another way, choose **Add… → Folder**
+and pick `spex-packages/<org>/<name>`; Spex reads its name and version
+from its `meta.yaml`. Open the package row's overflow and choose
+**Publish**, which reads **Sign in to publish** while you are signed out.
+Review "Publish ⟨org⟩/⟨name⟩ ⟨version⟩ to Spex Space", the files it will
+upload and the account, then confirm **Publish**. No playbook, compile or
+API token is needed.
 
 ### Publish a playbook
 
-1. Open **Playbooks → New playbook**. Enter a lowercase id, **Org**, and
-   **License**.
+1. On the **Playbooks** tab, choose **New playbook**. Enter a lowercase
+   id, **Org**, and **License**.
 2. Describe what the workflow does, who does what, and when it is done.
    Inspect **Source**, or supply text with **Source → Paste → Use as source**.
 3. Select the answering agent in the conversation header, then **Compile**.
-   Its configured agent also runs the compiler unless the host overrides
-   that choice. Check the phases, **Gears**, and **Machine**.
-4. On **Enable**, choose the command and a player per role, then enable it
-   for the project. Try its command in a new task and review its work.
-5. Sign in through **Playbooks → Package registry**. Return to the
-   author's **Enable** tab and select **Publish**. Review the destination,
-   package name, version, and upload files, then confirm **Publish**. Success
-   shows the published version and package-page link.
+   The same agent runs the compiler, unless Spex was started with
+   `SLC_AGENT`, `SLC_MODEL`, `SLC_EFFORT` or `SLC_FAST_MODE` set. Check
+   the phases, **Gears**, and **Machine**.
+4. On **Enable**, choose the command and a player per role, then enable
+   it for the project. Try its command in a new task and review its work.
+5. Still on **Enable**, choose **Publish**, which reads **Sign in to
+   publish** while you are signed out. Review the registry, the package's
+   name and version, the files and the account, then confirm **Publish**.
+   Success shows the published version and a link to its page; **Its
+   package** opens its row on the **Packages** tab.
 
-Only declared package artifacts are published; your whole project and its
-`specs/` directory are not uploaded automatically. Keep the authored package
-with your code. Another project can find a public release through **Add
-from registry**, then enable its playbooks or use its exported skills.
-The [HTTP publishing guide](https://spex.sublang.ai/llms.txt) is also
-available for automation.
+Only what `meta.yaml` declares is published; your project and its
+`specs/` directory are not uploaded. Keep the package folder with your
+code. Another project finds a public release through **Add…** on its
+**Packages** tab, then enables its playbooks or uses its skills. The
+[HTTP publishing guide](https://spex.sublang.ai/llms.txt) serves
+automation.
 
 ## Show a page with an applet
 
 A package can carry an applet: a small static web page at
 `applets/<id>/index.html` with its scripts and styles beside it. Once the
 package is installed, the project shows a tab named `<id>` with the page
-in it, after Start, Specs and Overview. From the page, `./~/<path>` reads
-one file of the project folder and `./~/<folder>/` lists a folder as JSON,
-read-only, so a playbook can write a report into the project and the
-applet can show it. The page runs in a sandbox: it reaches neither the
-network nor Spex itself, and its frame stays at Spex's own address. Add
-the folder and its `{ kind: applet }` entry in `meta.yaml` by hand;
-`spex new` does not add applets.
+in it, after Specs, Playbooks, Packages and Overview. From the page,
+`./~/<path>` reads one file of the project folder and `./~/<folder>/`
+lists a folder as JSON, read-only, so a playbook can write a report into
+the project and the applet can show it. The page runs in a sandbox: it
+reaches neither the network nor Spex itself, and its frame stays at
+Spex's own address. Add the folder and its `{ kind: applet }` entry in
+`meta.yaml` by hand; `spex new` does not add applets.
 
 ## Optionally sync project records
 
-Package installation does not require placing project records in a group.
-Before sharing records, check the address on **Space** and read the sharing
-notice: group members can see records, including session attachments.
-Current source defaults to `https://spex.sublang.ai`; older releases may
-differ, and existing homes retain their saved addresses.
-See [groups](groups.md) and [storage and sync](storage.md).
+Packages need no group: a project's records sync only once you choose
+**Add to a group…** on its row on **Space**. Before you share, check the
+Space's name there and read the sharing notice: the group's members see
+the records, session attachments included. Sign-in offers Spex Space,
+`https://spex.sublang.ai`, by default; a Space an earlier release saved
+stays as saved. See [groups](groups.md) and [storage and sync](storage.md).
