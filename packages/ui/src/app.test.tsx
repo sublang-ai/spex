@@ -941,7 +941,7 @@ describe("run-view-58, projects-4: the Overview tab pins the project's group", (
           issues: [],
           prs: [],
           guidance:
-            "No GitHub origin remote — add one to list issues and PRs here.",
+            "No GitHub remote — run git remote add origin … to see issues and PRs",
         };
       }
       if (type === "specs.get") {
@@ -989,16 +989,32 @@ describe("run-view-58, projects-4: the Overview tab pins the project's group", (
     // dashboard-8), so the Dashboard and the Overview show one thing.
     expect(
       within(overview).getByTestId("sources-guidance-p1").textContent,
-    ).toContain("No GitHub origin remote");
+    ).toContain("No GitHub remote");
   });
 
-  test("projects-4, space-61: the header's records field names the spex repository with its group and its state, a waiting creation's phrase standing in place of it", async () => {
-    const row = (state: "local-only", extra: Parameters<typeof repositoryRow>[1] = {}) =>
+  test("projects-4, space-61: the header's records field reads 'Records · <group> · <standing>', the group left out while the records are in none, a waiting creation's phrase standing for their standing, never the records' key", async () => {
+    const row = (state: "local-only" | "reachable", extra: Parameters<typeof repositoryRow>[1] = {}) =>
       repositoryRow("p1", { name: "alpha-spex", folder: "/tmp/alpha", state, ...extra });
-    const groups = (repository: ReturnType<typeof row>) => groupsState({ own: { name: "me", named: true, repositories: [repository] } });
+    const SPEX = "https://host.test";
+    // Your own group's rows stand in no group (space-1).
+    const local = (repository: ReturnType<typeof row>) => groupsState({ own: { name: "me", named: true, repositories: [repository] } });
+    // A Space holding the records in Personal, or in a group.
+    const at = (repository: ReturnType<typeof row>, where: "personal" | "acme") =>
+      groupsState({
+        own: { name: "me", named: false, repositories: [] },
+        instances: [
+          instanceState(SPEX, {
+            displayName: "Host",
+            groups:
+              where === "personal"
+                ? [namespace("me", [repository])]
+                : [namespace("me"), { id: "30", login: null, mine: false, fullPath: "acme/research", name: "Research", can: { createSubgroup: false, manageMembers: false, rename: false, delete: false }, placed: [], repositories: [repository] }],
+          }),
+        ],
+      });
     commandMock.mockImplementation(async (type: string) =>
       type === "space.get"
-        ? groups(row("local-only"))
+        ? local(row("local-only"))
         : type === "ledger.get"
           ? LEDGER
           : type === "ledger.history"
@@ -1009,27 +1025,67 @@ describe("run-view-58, projects-4: the Overview tab pins the project's group", (
     render(<App />);
     const records = await screen.findByTestId("overview-records");
 
-    // Unread, the name with its group; the Groups state is asked for,
-    // and its row's state is worded as that surface words it
-    // (projects-4, space-61).
-    expect(records.textContent).toContain("alpha-spex in me");
-    await vi.waitFor(() =>
-      expect(screen.getByTestId("overview-records-state").textContent).toBe("On this computer only"),
-    );
-    expect(commandMock).toHaveBeenCalledWith("space.get", {});
+    // The Space state is asked for; records in no group read the field's
+    // name alone — no group, no phrase (projects-4, space-61, space-120).
+    await vi.waitFor(() => expect(commandMock).toHaveBeenCalledWith("space.get", {}));
+    await vi.waitFor(() => expect(records.textContent).toBe("Records"));
+    expect(records.textContent).not.toContain("alpha-spex");
+    expect(records.hasAttribute("title")).toBe(false);
 
-    // The Groups broadcast moves it: a waiting creation reads its phrase,
-    // which the Groups surface carries on its placement's line alone
-    // (space-64).
+    // A waiting creation reads its phrase, which the Space surface
+    // carries on its line alone (space-64).
     act(() => {
       deliverServerMessageForTests({
         type: "space.state",
-        state: groups(row("local-only", { waiting: { step: "create", group: "acme", message: "" } })),
+        state: local(row("local-only", { waiting: { step: "create", group: "acme", message: "" } })),
       });
     });
     expect(screen.getByTestId("overview-records-state").textContent).toBe(
       "Waiting for a member who can create it in acme",
     );
+    expect(screen.queryByTestId("overview-records-group")).toBeNull();
+
+    // In Personal at a Space, its group reads "Personal" and its standing
+    // follows (projects-4).
+    act(() => {
+      deliverServerMessageForTests({ type: "space.state", state: at(row("reachable", { instance: SPEX, governing: SPEX, id: "9", branch: null }), "personal") });
+    });
+    expect(screen.getByTestId("overview-records-group").textContent).toBe("Personal");
+    expect(records.textContent).toMatch(/^Records · Personal · /);
+
+    // In a group, the group by its name, its path in the title.
+    act(() => {
+      deliverServerMessageForTests({ type: "space.state", state: at(row("reachable", { instance: SPEX, governing: SPEX, id: "9", branch: null }), "acme") });
+    });
+    expect(screen.getByTestId("overview-records-group").textContent).toBe("Research");
+    expect(records.title).toBe("acme/research");
+    expect(records.textContent).not.toMatch(/spex|@host/);
+  });
+
+  test("projects-9: records that never reached a Space ask a second confirmation counting them", async () => {
+    const { SpexCommandError } = await import("./lib/client.js");
+    commandMock.mockImplementation(async (type: string, fields?: { confirm?: boolean }) => {
+      if (type === "project.remove" && !fields?.confirm) {
+        throw new SpexCommandError("conflict", "2 records have not reached a Space", { units: 2 });
+      }
+      return type === "ledger.get"
+        ? LEDGER
+        : type === "ledger.history"
+          ? { intents: [], more: false }
+          : defaultReply(type);
+    });
+    // No turn of the project runs, so its removal is offered (projects-9).
+    useAppStore.setState({ workspaceTabs: { p1: "overview" }, sessions: SESSIONS.map((entry) => ({ ...entry, live: false })) });
+    render(<App />);
+    const overview = await screen.findByTestId("overview-tab");
+    fireEvent.click(within(overview).getByRole("button", { name: "Remove project" }));
+    await act(async () => {
+      fireEvent.click(within(overview).getByRole("button", { name: "Remove" }));
+    });
+    // The count rides the question, in the reader's words (projects-9).
+    const second = await screen.findByTestId("remove-project-unsent");
+    expect(second.textContent).toContain("2 records never reached a Space. Remove anyway?");
+    expect(second.textContent).not.toContain("have not reached");
   });
 
   test("a remembered 'repo' tab lands on the Overview, and the cycle walks it", () => {

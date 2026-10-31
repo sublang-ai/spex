@@ -9,7 +9,7 @@ import { join } from "node:path";
 import type { Page } from "@playwright/test";
 import { seedDemoProject } from "@sublang/spex-core/testing";
 
-import { test, expect, open, openTranslated, nav, git, clonePath, surfaceEntry } from "../src/harness";
+import { test, expect, open, openTranslated, nav, git, clonePath, spaceAddress, spaceChooser, surfaceEntry } from "../src/harness";
 import { expectOnboardingFit } from "../src/fit";
 
 test.use({ appOptions: { config: "none" } });
@@ -42,7 +42,8 @@ const ONBOARDING = [
     lang: "zh",
     headline: "写清规约，按规程开发。",
     addProject: "添加本地项目",
-    signIn: "登录你的空间",
+    // Space stays as authored in Chinese (localization-6).
+    signIn: "登录你的 Space",
     chooseFolder: "选择项目文件夹…",
     newFolder: "新文件夹路径",
     guidance: "说说你的目标。AI 帮你把系统该做什么、怎样检查结果写成规约，再按规程开发和审阅。",
@@ -154,12 +155,16 @@ test("run-view-97: signed in nowhere, the welcome page's Sign in to your Space s
 }) => {
   await open(page, app);
   const welcome = page.getByTestId("welcome-home");
-  // [run-view-172] the sign-in card of the Space surface (space-3).
+  // [run-view-172] the sign-in card of the Space surface, titled "Sign
+  // in to a Space", with its chooser of Spaces — or, where the directory
+  // cannot be read, the field "Space address" alone — and Sign in
+  // (space-3, space-115).
   await welcome.getByTestId("home-sign-in").click();
   await expect(surfaceEntry(page, "Space")).toHaveAttribute("aria-current", "page");
   const card = page.getByTestId("space-signin-card");
-  await expect(card.getByRole("heading", { level: 2 })).toHaveText("Not signed in");
-  await expect(card.getByTestId("space-signin-instance")).toBeVisible();
+  await expect(card.getByRole("heading", { name: "Sign in to a Space", exact: true })).toBeVisible();
+  await expect(spaceChooser(card).or(spaceAddress(card)).first()).toBeVisible();
+  await expect(card.getByTestId("space-signin")).toHaveText("Sign in");
 });
 
 test("run-view-42, projects-42: the browser add form keeps paths distinct and owns its keys", async ({
@@ -241,21 +246,22 @@ test("projects-28: the palette adds, refuses, switches, and the Overview removes
   const overview = page.getByTestId("overview-tab");
   await expect(overview).toContainText(git(app.projectDir, "symbolic-ref", "--short", "HEAD"));
   await expect(overview.getByText(/GitHub/).first()).toBeVisible();
-  await expect(overview.getByText(/no github origin remote/i).first()).toBeVisible();
+  await expect(overview.getByText(/no github remote/i).first()).toBeVisible();
   await expect(page.getByText(/\bforge\b/i)).toHaveCount(0);
 
-  // Removal confirms with Remove and Keep; the clone holds a record that
-  // never reached the host — an intent queued here, its environment
+  // Removal confirms with Remove and Keep; the clone holds records that
+  // never reached a Space — an intent queued here, its environment
   // standing in the working folder (environments-26) — so a second
-  // confirm names their count; then the project leaves the sidebar, its
-  // clone is deleted, and the working folder stays (projects-9).
+  // confirm reads "<count> records never reached a Space. Remove
+  // anyway?"; then the project leaves the sidebar, its clone is deleted,
+  // and the working folder stays (projects-9).
   await app.core.command("intent.queue", { projectId: key, text: "Keep the demo tidy" });
   await overview.getByRole("button", { name: "Remove project" }).click();
   await expect(overview).toContainText("Remove from Spex? The repo stays on disk.");
   await expect(overview.getByRole("button", { name: "Keep", exact: true })).toBeVisible();
   await overview.getByRole("button", { name: "Remove", exact: true }).click();
   const unsent = overview.getByTestId("remove-project-unsent");
-  await expect(unsent).toContainText(/[1-9]\d* records? (has|have) not reached the host and would be lost; confirm to remove anyway Remove anyway\?/);
+  await expect(unsent).toContainText(/[1-9]\d* records? never reached a Space\. Remove anyway\?/);
   await expect(tree).toContainText("demo-project");
   await unsent.getByRole("button", { name: "Remove", exact: true }).click();
   await expect(tree).not.toContainText("demo-project");
@@ -265,18 +271,21 @@ test("projects-28: the palette adds, refuses, switches, and the Overview removes
   await expect(page.getByTestId("projects-empty")).toBeVisible();
 });
 
-test("projects-28: the Overview names the project's spex repository and its state", async ({
+test("projects-28: the Overview's records line reads Records with their standing and names no spex repository", async ({
   page,
   app,
 }) => {
-  // The Overview's repository header carries the records field — the
-  // spex repository's name with its group, and its state (projects-4,
-  // space-61).
+  // The Overview's repository header carries the records line, "Records
+  // · <group> · <standing>": records in no group name none, and no line
+  // names the records' `-spex` (projects-4, space-61).
   seedDemoProject(app.projectDir);
   await app.core.command("project.register", { path: app.projectDir });
   await open(page, app);
   await page.getByRole("tab", { name: "Overview" }).click();
   const overview = page.getByTestId("overview-tab");
-  await expect(overview).toContainText("demo-project-spex", { timeout: 5_000 });
-  await expect(overview).toContainText("On this computer only", { timeout: 5_000 });
+  const records = overview.getByTestId("overview-records");
+  await expect(records).toHaveText(/^Records\b/, { timeout: 5_000 });
+  await expect(overview).not.toContainText("-spex");
+  await expect(records).not.toContainText("On this computer only");
+  await expect(records).not.toContainText("Personal");
 });

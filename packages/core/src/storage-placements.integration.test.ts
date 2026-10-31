@@ -201,7 +201,7 @@ test("storage-41, storage-12: a placement file that does not read as its encodin
     diagnostics.filter((diagnostic) => diagnostic.file.startsWith(join(clone, "placements"))).map((diagnostic) => [relative(clone, diagnostic.file), diagnostic.reason, diagnostic.blocking]),
     [
       [join("placements", "@junk.example.yaml"), "does not read as format: 1, instance and id, one line each", false],
-      [join("placements", "@nowhere.example.yaml"), "its name is not the folder of the instance it names", false],
+      [join("placements", "@nowhere.example.yaml"), "its name is not the folder of the Space it names", false],
     ],
   );
 
@@ -320,7 +320,7 @@ test("storage-42, storage-36, storage-34, storage-5, space-57, space-60: two ins
   from = home.client.mark();
   await home.client.expectOk("space.join", { instance: first.url, hostId: team.id });
   await home.client.waitRepository(from, key, (repository) => repository.state === "reachable" && repository.sync.phase === "idle", 30_000);
-  await home.client.expectError("space.sync", { repository: key }, "invalid_request", /sharing notice/);
+  await home.client.expectError("space.sync", { repository: key }, "invalid_request", /^Confirm sharing before/);
   const once = await home.client.settle("space.sync", { repository: key, placement: first.url, noticed: true }, 30_000);
   const onceLine = placementOf(once, first.url);
   assert.deepEqual([once.sync.phase, onceLine.noticed], ["done", true], JSON.stringify(once.sync));
@@ -877,7 +877,7 @@ test("storage-39, storage-36, storage-34, storage-1, storage-31, storage-6, stor
   await again.client.expectOk("space.get", {});
   await again.client.waitSpace(mark, (state) => (instanceOf(state, first.url)?.readAt ?? null) !== null && instanceOf(state, first.url)?.read.phase === "idle" && instanceOf(state, second.url)?.read.phase === "failed", 30_000);
   const unread = await again.client.settle("space.leave", { repository: key, instance: first.url }, 30_000);
-  assert.deepEqual(unread.sync, { phase: "stopped", op: "leave", step: "check", cause: "unreachable", message: `${SECOND_NAME} is not read yet, so the clone cannot move to its path there`, guidance: "Refresh, then Retry.", retry: true });
+  assert.deepEqual(unread.sync, { phase: "stopped", op: "leave", step: "check", cause: "unreachable", message: `${SECOND_NAME} is not read yet, so these records cannot move there`, guidance: "Refresh, then Retry", retry: true });
   standing("the second unread");
 
   // The second read, the first placement left: dropped with its records

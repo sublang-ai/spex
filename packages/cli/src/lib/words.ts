@@ -30,7 +30,7 @@ export interface LibraryWords {
   changedMeanwhile(file: string): string;
   /** `home.yaml`'s own fields are malformed. */
   invalidHome(): string;
-  /** A host URL is not an instance's origin written canonically. */
+  /** A URL is not a Space's address written canonically. */
   notAnOrigin(url: string): string;
   /** `home.yaml` still holds the layout before the instances migration. */
   homeBeforeInstances(): string;
@@ -47,10 +47,10 @@ const ENGLISH: LibraryWords = {
   unsupportedFormat: (format) => `unsupported format ${format}; preserved unchanged`,
   unsupportedUnnamedFormat: () => "unsupported format; preserved unchanged",
   changedMeanwhile: (file) => `${file} changed meanwhile; retry`,
-  invalidHome: () => "invalid home file",
-  notAnOrigin: (url) => `${url} is not an instance's origin`,
-  homeBeforeInstances: () => "format 1: the instances migration has not run; preserved unchanged",
-  instancesShareFolder: (first, second, folder) => `instances ${first} and ${second} share the folder ${folder}`,
+  invalidHome: () => "invalid fields",
+  notAnOrigin: (url) => `${url} is not a Space's address`,
+  homeBeforeInstances: () => "format 1: the migration to several Spaces has not run; preserved unchanged",
+  instancesShareFolder: (first, second, folder) => `Spaces ${first} and ${second} share the folder ${folder}`,
 };
 
 let current: LibraryWords = ENGLISH;

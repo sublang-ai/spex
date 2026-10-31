@@ -378,7 +378,7 @@ test("storage-38, space-91: a first placement's drop a merge brings is refused, 
   const taken = await home.client.settle("space.sync", { repository: key }, 30_000);
   assert.equal(taken.sync.phase, "done", JSON.stringify(taken.sync));
   const refused = placementOf(taken, first.url).outcome;
-  assert.ok(refused?.kind === "stopped" && refused.message === `workspace/${movedKey} already exists, so the clone cannot follow the host there`, JSON.stringify(refused));
+  assert.ok(refused?.kind === "stopped" && refused.message === `workspace/${movedKey} already exists, so these records cannot move there`, JSON.stringify(refused));
   assert.equal(placementOf(taken, second.url).outcome?.kind, "synced");
   assert.deepEqual(remoteNamesOf(clone), [firstFolder, secondFolder]);
   assert.equal(readFileSync(movedClone, "utf8"), "taken\n");
@@ -395,7 +395,7 @@ test("storage-38, space-91: a first placement's drop a merge brings is refused, 
   const unread = await again.client.waitRepository(mark, key, (repository) => repository.sync.phase !== "running" && repository.sync.phase !== "idle", 30_000);
   assert.equal(unread.sync.phase, "done", JSON.stringify(unread.sync));
   const named = placementOf(unread, first.url).outcome;
-  assert.ok(named?.kind === "stopped" && named.message === `${SECOND_NAME} is not read yet, so the clone cannot move to its path there`, JSON.stringify(named));
+  assert.ok(named?.kind === "stopped" && named.message === `${SECOND_NAME} is not read yet, so these records cannot move there`, JSON.stringify(named));
   assert.equal(placementOf(unread, second.url).outcome?.kind, "synced");
   assert.deepEqual(remoteNamesOf(clone), [firstFolder, secondFolder]);
   assert.equal(git(firstBare, "rev-parse", "spex"), atFirst, "nothing synced with the first");
@@ -528,15 +528,15 @@ test("space-101, space-98, space-15, space-31, storage-38, space-7, space-29: fo
   // Refused before anything runs: an instance the clone holds no
   // placement at, one the home does not list, and your own group's own
   // spex repository (space-29).
-  await home.client.expectError("space.leave", { repository: key, instance: second.url }, "invalid_request", /^atlas-spex holds no such placement$/);
+  await home.client.expectError("space.leave", { repository: key, instance: second.url }, "invalid_request", /^atlas does not sync there$/);
   await home.client.expectError("space.leave", { repository: key, instance: "https://unlisted.example" }, "not_found");
-  await home.client.expectError("space.leave", { repository: HOST_OWN, instance: first.url }, "invalid_request", /^ada-spex holds a group's records/);
+  await home.client.expectError("space.leave", { repository: HOST_OWN, instance: first.url }, "invalid_request", /^ada stays at its one Space$/);
 
   // The third left: fetched first, the record it holds that no remaining
   // placement holds stops the leave, naming the count, nothing dropped
   // (space-98).
   const unreceived = await home.client.settle("space.leave", { repository: key, instance: third.url }, 30_000);
-  assert.deepEqual(unreceived.sync, { phase: "stopped", op: "leave", step: "check", cause: "unreceived", message: "1 record has reached no other placement", guidance: "Confirm to remove it anyway.", retry: true, count: 1 });
+  assert.deepEqual(unreceived.sync, { phase: "stopped", op: "leave", step: "check", cause: "unreceived", message: "1 record has reached no other Space", guidance: "Confirm to remove it anyway.", retry: true, count: 1 });
   assert.equal(git(clone, "rev-parse", `refs/remotes/${thirdFolder}/spex`), atThird, "the third fetched first");
   assert.deepEqual(remoteNamesOf(clone), [firstFolder, thirdFolder]);
   assert.ok(existsSync(join(clone, thirdFile)), "its file kept");
@@ -586,7 +586,7 @@ test("space-101, space-98, space-15, space-31, storage-38, space-7, space-29: fo
   // moves under your own group's folder, local only, its records kept
   // (space-98, storage-38).
   const every = await home.client.settle("space.leave", { repository: movedKey, instance: third.url }, 30_000);
-  assert.deepEqual(every.sync, { phase: "stopped", op: "leave", step: "check", cause: "unreceived", message: "2 records have reached no other placement", guidance: "Confirm to remove it anyway.", retry: true, count: 2 });
+  assert.deepEqual(every.sync, { phase: "stopped", op: "leave", step: "check", cause: "unreceived", message: "2 records have reached no other Space", guidance: "Confirm to remove it anyway.", retry: true, count: 2 });
   assert.deepEqual(remoteNamesOf(movedClone), [thirdFolder]);
   const localKey = `${LOGIN}/atlas-spex`;
   const localClone = clonePath(home.dataDir, localKey);
@@ -664,7 +664,7 @@ test("space-101, space-98, space-60, space-61, storage-36, storage-38: with the 
   // dropped; sent confirmed, it is dropped, the clone moving to its path
   // at the second (space-98, storage-38).
   const unread = await home.client.settle("space.leave", { repository: atlas, instance: first.url }, 30_000);
-  assert.deepEqual(unread.sync, { phase: "stopped", op: "leave", step: "check", cause: "reauth", message: `Records pushed to ${FIRST_NAME} since the last sync may be left behind`, guidance: "Confirm to remove it anyway.", retry: true });
+  assert.deepEqual(unread.sync, { phase: "stopped", op: "leave", step: "check", cause: "reauth", message: `Records sent to ${FIRST_NAME} since the last sync may be left behind`, guidance: "Confirm to remove it anyway.", retry: true });
   assert.deepEqual(remoteNamesOf(atlasClone), [firstFolder, secondFolder]);
   const atSecond = hostKey(second, "acme/atlas-spex");
   const atSecondClone = clonePath(home.dataDir, atSecond);

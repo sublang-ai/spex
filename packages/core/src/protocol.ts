@@ -2112,6 +2112,9 @@ export type SpaceSyncPhase =
 
 /** One spex repository as the Space surface reads it (space-30,
  * space-61, DR-128): one row per clone, with a line per placement. */
+/** What a project row's code phrase says (space-1, core-service-145). */
+export type CodeKind = "space" | "elsewhere" | "none" | "unknown";
+
 export interface RepositoryState {
   /** The clone's path under `workspace/`, beginning with its instance's
    * folder where it lies at an instance (`@spex.sublang.ai/acme/a-spex`,
@@ -2140,8 +2143,21 @@ export interface RepositoryState {
   id: string | null;
   /** Your own group's spex repository. */
   own: boolean;
-  /** The code's remote its `project.json` names, or null. */
+  /** Where a project's code is, as its row's code glyph is titled
+   * (space-1, core-service-145): "Code: <where>", <where> the display
+   * name of the listed instance under whose reported Git origin the
+   * remote its `project.json` names lies, else that remote's host as the
+   * reader set it, or the remote itself where it names no host; "Code:
+   * no remote" where `project.json` names none; null while the default
+   * instance or an instance the home lists has not reported its Git
+   * origin, and for a repository with no `project.json` — a group's own,
+   * your own group's own. */
   code: string | null;
+  /** What `code` says, for the glyph a client draws (space-1):
+   * "space" under a listed instance's reported Git origin, "elsewhere"
+   * outside all of them, "none" where `project.json` names no remote —
+   * a warning — and "unknown" where `code` is null, which draws nothing. */
+  codeKind: CodeKind;
   /** The working folder paired with it on this device, or null. */
   folder: string | null;
   /** The row's state (space-61). */

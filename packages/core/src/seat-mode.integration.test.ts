@@ -32,8 +32,8 @@ const SEAT = { serverId: "srv_7f3a", serverName: "lab-1", personId: "1001" };
 const LOGIN = "ada";
 const HOST_OWN = `${LOGIN}/${LOGIN}-spex`;
 const PATH_REFUSAL = /^Projects on a server are opened from their group$/;
-const OPEN_REFUSAL = /^A seat opens no server$/;
-const OWN_REFUSAL = /^Your own group stays on this server$/;
+const OPEN_REFUSAL = /^Already on a server — open it from your computer$/;
+const OWN_REFUSAL = /^Personal records stay on this server$/;
 
 /** Your own group's own row in a state. */
 function ownRow(state: GroupsState) {
@@ -73,7 +73,7 @@ test("git-host-27, git-host-28: a seat's start naming a ticket carries it in the
   const member = await startHome("seat-ticket-member", { host, project: false });
   t.after(() => member.stop());
   const asked = host.script.requests.length;
-  await member.client.expectError("space.signin.start", { url: host.url, ticket: "spext_presented" }, "invalid_request", /^A ticket is taken only on a server's seat$/);
+  await member.client.expectError("space.signin.start", { url: host.url, ticket: "spext_presented" }, "invalid_request", /^This sign-in is for a server only — sign in on Space$/);
   assert.equal(host.script.requests.length, asked, "nothing is asked of the instance");
   assert.equal(host.script.deviceRequests.length, 1);
 });
@@ -186,7 +186,7 @@ test("core-service-127, git-host-27: on a seat a sign-in as another account, and
   const refused = await home.client.waitSpace(from, (state) => state.signIn.phase === "failed", 30_000);
   assert.ok(refused.signIn.phase === "failed");
   assert.equal(refused.signIn.cause, "refused");
-  assert.match(refused.signIn.message, /signed you in as @bob; this seat is another member's$/);
+  assert.match(refused.signIn.message, /signed you in as @bob — sign in with your own account$/);
   assert.equal(existsSync(credentialsPath(home.dataDir)), false, "no token is stored");
   assert.equal(Home.load(home.dataDir).instance(host.url)?.account, undefined, "no account is written");
   assert.notEqual(instanceOf(refused, host.url)?.signedIn, true);
@@ -269,7 +269,7 @@ test("core-service-125: on a seat server.open is refused with the phrase before 
   assert.equal(existsSync(seatsPath(home.dataDir)), false, "no seat is written");
   // server.list and server.close stay as they are.
   assert.deepEqual(await home.client.expectOk("server.list", {}), { servers: [{ instance: host.url, id: "srv_lab9", name: "lab-9", group: "acme", open: false }], failures: [] });
-  await home.client.expectError("server.close", { instance: host.url, serverId: "srv_lab9" }, "not_found", /^No seat is open on this server$/);
+  await home.client.expectError("server.close", { instance: host.url, serverId: "srv_lab9" }, "not_found", /^Not connected to this server$/);
 });
 
 test("core-service-125: a core without a seat names neither a server nor a person, under this machine's name", async (t) => {

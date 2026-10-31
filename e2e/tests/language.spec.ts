@@ -30,7 +30,7 @@ const RAIL_ZH: [SurfaceName, string][] = [
   ["Dashboard", "仪表盘"],
   ["Workspace", "项目"],
   ["Playbooks", "规程"],
-  ["Space", "空间"],
+  ["Space", "Space"],
   ["Settings", "设置"],
 ];
 
@@ -224,9 +224,9 @@ test.describe("the language choice with a project draft", () => {
  * GitHub origin (`src/forge.ts`), in the English the source authors
  * and in the `msgstr` the core's own `zh` catalog carries. */
 const GUIDANCE_EN =
-  "No GitHub origin remote. Add one (git remote add origin …) to see issues and PRs.";
+  "No GitHub remote — run git remote add origin … to see issues and PRs";
 const GUIDANCE_ZH =
-  "没有 GitHub origin 远程仓库。添加一个（git remote add origin …）即可查看 Issue 与 PR。";
+  "没有 GitHub 远程仓库 — 运行 git remote add origin … 即可查看 Issue 和 PR";
 
 test.describe("prose the core composed for the page", () => {
   // The demo project is a plain `git init` with no remote, and the

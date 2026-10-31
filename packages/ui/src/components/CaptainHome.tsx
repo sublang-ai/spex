@@ -429,9 +429,9 @@ export function CaptainHome(props: CaptainHomeProps) {
             <p data-testid="home-seat-signin">
               <Rich
                 text={i18n._({
-                  id: "Signing in to {instance}… <0>approve Spex on {server} in your browser</0>",
-                  values: { instance: instanceNameAt(localGroups, seat.instance), server },
-                  comment: "the welcome page at a team server while the seat signs in at the instance; the tagged run links the instance's page where the person approves the device named \"Spex on <server>\"; {instance} is the instance's name, {server} the server's",
+                  id: "Signing in to {space}… <0>approve Spex on {server} in your browser</0>",
+                  values: { space: instanceNameAt(localGroups, seat.instance), server },
+                  comment: "the welcome page at a team server while the server signs in at the Space; the tagged run links the Space's page where the person approves \"Spex on <server>\"; {space} is the Space's display name, {server} the server's name",
                 })}
                 components={[<ApprovalLink key="approve" href={signingIn.verificationUri} testId="home-seat-approve" />]}
               />
@@ -457,23 +457,21 @@ export function CaptainHome(props: CaptainHomeProps) {
             : [
                 {
                   label: i18n._({
-                    id: "Space",
-                    comment: "label of the first step on the welcome page at a team server: your groups on the Git host, whose spex repositories are the projects there",
+                    id: "Groups",
+                    comment: "label of the first step on the welcome page at a team server: your groups at the Space, whose projects open there",
                   }),
                   text: i18n._({
-                    id: "Your projects here come from the spex repositories of your groups",
-                    comment: "the first step on the welcome page at a team server, beside its label Space; \"here\" is that server",
+                    id: "Projects here come from your groups",
+                    comment: "the first step on the welcome page at a team server, beside its label Groups; \"here\" is that server",
                   }),
                 },
                 {
-                  label: i18n._({
-                    id: "Seat",
-                    comment: "label of the second step on the welcome page at a team server: your seat, the place your agents run on that server",
-                  }),
+                  // The second step is labelled by the server's own name
+                  // (run-view-174).
+                  label: server,
                   text: i18n._({
-                    id: "Agents run on {server} as you, in folders the server allocates",
-                    values: { server },
-                    comment: "the second step on the welcome page at a team server, beside its label Seat; {server} is the server's name",
+                    id: "Agents run here as you",
+                    comment: "the second step on the welcome page at a team server, beside its label, the server's name; \"here\" is that server",
                   }),
                 },
                 delivery,
@@ -525,7 +523,7 @@ export function CaptainHome(props: CaptainHomeProps) {
                 >
                   {i18n._({
                     id: "Sign in to your Space",
-                    comment: "welcome page action while this computer is signed in to no instance: shows the Space surface, where the sign-in is",
+                    comment: "welcome page action while this computer is signed in to no Space: shows the Space surface, where the sign-in is",
                   })}
                 </button>
               )}

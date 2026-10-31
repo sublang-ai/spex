@@ -468,12 +468,12 @@ test("storage-11, storage-12, storage-41: a placement file is one unit chosen wh
     write("placements/@d.example.yaml", "format: 1\n");
     const reported = async (): Promise<unknown[]> => (await validateStorageTree(clone)).filter((d) => d.file.startsWith("placements")).map((d) => [d.file, d.reason, d.blocking]);
     assert.deepEqual(await reported(), [
-      ["placements/@b.example.yaml", "its name is not the folder of the instance it names", false],
+      ["placements/@b.example.yaml", "its name is not the folder of the Space it names", false],
       ["placements/@d.example.yaml", "does not read as format: 1, instance and id, one line each", false],
     ]);
     rmSync(join(clone, "placements"), { recursive: true });
     writeFileSync(join(clone, "placements"), "not a folder");
-    assert.deepEqual(await reported(), [["placements", "not a folder of placement files", false]]);
+    assert.deepEqual(await reported(), [["placements", "not a folder, so no file in it is read", false]]);
   } finally { dispose(); }
 });
 

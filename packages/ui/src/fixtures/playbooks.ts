@@ -92,6 +92,7 @@ export function repository(over: RowOver = {}): RepositoryState {
     own: false,
     remote: "/tmp/origin.git",
     code: null,
+    codeKind: "unknown",
     folder: PROJECT.path,
     state: "reachable",
     reason: null,

@@ -237,8 +237,8 @@ test("core-service-130, storage-45: server.open asks nothing without consent; wi
   await seatsAfter(() => home.client.messages, 0, (seats) => seats.length === 0);
 
   // Without consent: refused, and nothing asked of the instance or the hub.
-  await home.client.expectError("server.open", { instance: host.url, serverId: SERVER }, "invalid_request", /^Read and accept the server's contract before opening a seat$/);
-  await home.client.expectError("server.open", { instance: host.url, serverId: SERVER, consented: false }, "invalid_request", /contract/);
+  await home.client.expectError("server.open", { instance: host.url, serverId: SERVER }, "invalid_request", /^Accept the server's terms before connecting$/);
+  await home.client.expectError("server.open", { instance: host.url, serverId: SERVER, consented: false }, "invalid_request", /^Accept the server.s terms before connecting$/);
   assert.equal(host.script.serverCalls.length, 0, "no listing and no ticket was asked");
   assert.equal(host.script.tickets.length, 0);
   assert.equal(hub.admissions.length, 0);
@@ -283,7 +283,7 @@ test("core-service-130, storage-45: server.open asks nothing without consent; wi
   assert.equal(existsSync(file), false, "the file goes with its last seat");
   await seatsAfter(() => home.client.messages, closing, (state) => state.length === 0);
   assert.equal((await home.client.expectOk("server.list", {})).servers[0]?.open, false);
-  await home.client.expectError("server.close", { instance: host.url, serverId: SERVER }, "not_found", /^No seat is open on this server$/);
+  await home.client.expectError("server.close", { instance: host.url, serverId: SERVER }, "not_found", /^Not connected to this server$/);
   assert.equal(hub.admissions.length, 1, "closing asks nothing of the hub");
 
   // No reply or event to the client carried the bearer, the endpoint or
@@ -391,9 +391,9 @@ test("core-service-128: a refusal of the listing, the ticket or the admission is
 
   // The hub's refusals, with their cause (hub-2).
   hub.refuse(1, 401, "ticket_invalid", "The ticket is not valid.");
-  await home.client.expectError("server.open", open, "invalid_request", /^lab-1 refused the seat: The ticket is not valid\.$/);
+  await home.client.expectError("server.open", open, "invalid_request", /^lab-1 refused to connect you: The ticket is not valid\.$/);
   hub.refuse(1, 503, "seat_unavailable", "seat 1001 did not start within 30 seconds");
-  await home.client.expectError("server.open", open, "invalid_request", /^lab-1 could not start your seat: seat 1001 did not start within 30 seconds$/);
+  await home.client.expectError("server.open", open, "invalid_request", /^lab-1 could not start Spex for you: seat 1001 did not start within 30 seconds$/);
   hub.refuse(1, 502, "instance_unreachable", "the instance did not answer");
   await home.client.expectError("server.open", open, "invalid_request", /^lab-1 could not reach Stand-in Git host$/);
 
@@ -768,7 +768,7 @@ test("core-service-128, core-service-129: an admission whose endpoint or bearer 
   ];
   for (const alter of unusable) {
     hub.misanswer(1, alter);
-    await first.client.expectError("server.open", open, "invalid_request", /^lab-1 answered no seat$/);
+    await first.client.expectError("server.open", open, "invalid_request", /^lab-1 answered without connecting you$/);
     assert.equal(existsSync(file), false, "an unusable admission writes no seat");
   }
   assert.equal(hub.admissions.length, unusable.length);
@@ -952,7 +952,7 @@ test("core-service-130, core-service-142: the open starts the seat's sign-in wit
   await seatsAfter(() => home.client.messages, anew, (seats) => seats[0]?.signIn.state === "signedIn");
   assert.equal(host.script.deviceRequests.length, requests + 1, "no flow for a seat signed in");
   // A place with no seat open is refused.
-  await home.client.expectError("server.signin", { instance: host.url, serverId: "srv_none" }, "not_found", /^No seat is open on this server$/);
+  await home.client.expectError("server.signin", { instance: host.url, serverId: "srv_none" }, "not_found", /^Not connected to this server$/);
 
   // Nothing of the seat's app token nor the ticket reached the client:
   // the four states alone.

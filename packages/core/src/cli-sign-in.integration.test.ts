@@ -144,7 +144,7 @@ test("cli-17, cli-18: login, whoami and logout at two stand-in instances, with n
   const refused = await spex(["login", "--space", "http://example.com"]).done;
   assert.equal(refused.code, 1);
   assert.equal(refused.stdout, "");
-  assert.match(refused.stderr, /^spex login: --space: http:\/\/example\.com is not an instance's origin: origin refused: http on a host that is not loopback\n$/);
+  assert.match(refused.stderr, /^spex login: --space: http:\/\/example\.com is not a Space's address: origin refused: http on a host that is not loopback\n$/);
   assert.equal(existsSync(HOME), false, "a refused login writes no home");
 
   // The first login at the default instance: the URL and the code

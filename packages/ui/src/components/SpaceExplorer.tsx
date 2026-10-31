@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// A spex repository's Explore tab (DR-057, DR-103): its clone as one
+// Records' Explore tab (DR-057, DR-103, DR-172): their folder as one
 // read-only ARIA tree with a single focus stop and arrow keys, every
-// entry annotated from the
-// catalog (space-23); a preview pane by type beside it (space-24); the
-// "Stays on this device" panel with one reason per ignored family
-// (space-25); reveal and copy for the selected entry (space-26). The
-// tree and preview stand side by side from 42rem behind a persisted
-// divider (DR-030) and stack below it (space-28).
+// entry annotated from the catalog in the reader's words — `spex.yaml`
+// and `spex.lock` by their file names, the file naming a Space the
+// records are kept at as "kept at <Space>" (space-23, space-27); a
+// preview pane by type beside it (space-24); the "Stays on this
+// computer" panel with one reason per ignored family (space-25); reveal
+// and copy for the selected entry (space-26). The tree and preview
+// stand side by side from 42rem behind a persisted divider (DR-030) and
+// stack below it (space-28).
 
 import {
   useCallback,
@@ -18,7 +20,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
-import type { RepositoryState, SpaceEntry, SpaceReadResult } from "@sublang/spex-core/protocol";
+import type { GroupsState, RepositoryState, SpaceEntry, SpaceReadResult } from "@sublang/spex-core/protocol";
 
 import {
   SPACE_SPLIT_DEFAULT,
@@ -26,6 +28,7 @@ import {
   SPACE_SPLIT_MIN,
 } from "../state/store.js";
 import { usePlaceStore } from "../state/place-context.js";
+import { instanceName } from "../lib/instances.js";
 import {
   SHARING_LABELS,
   absolutePath,
@@ -148,13 +151,43 @@ function SharingChip({ sync }: { sync: SpaceEntry["sync"] }) {
   );
 }
 
-function entryAnnotation(entry: SpaceEntry): string {
+/** An entry's annotation in the reader's words (space-23, space-27,
+ * DR-172): the core names the entry's family in its own closed
+ * vocabulary, and the word the row reads is this interface's own — the
+ * two environment files by their file names, and a file naming a Space
+ * the records are kept at by that Space's display name, its folder as
+ * where the records are kept. */
+function entryAnnotation(entry: SpaceEntry, groups?: GroupsState): string {
   if (entry.kind === "git") {
     return i18n._({ id: "Git data", comment: "entry mark: the repository's own files" });
   }
-  // The core names the entry's family in its own closed vocabulary;
-  // the word the row reads is this interface's own (space-23).
-  return familyName(entry.family);
+  switch (entry.family) {
+    case "spec package requests":
+      return "spex.yaml";
+    case "spec package lock":
+      return "spex.lock";
+    case "placement": {
+      if (entry.kind === "dir") {
+        return i18n._({ id: "where these records are kept", comment: "the Explore tab's annotation of the folder naming each Space these records are kept at" });
+      }
+      // The file is named by its Space's folder, `@<host>.yaml`.
+      const host = entry.name.replace(/^@/, "").replace(/\.ya?ml$/i, "");
+      const listed = groups?.instances.find((instance) => instance.host === host);
+      return i18n._({
+        id: "kept at {space}",
+        values: { space: listed ? instanceName(listed) : host },
+        comment: "the Explore tab's annotation of a file naming a Space these records are kept at; {space} is its display name",
+      });
+    }
+    default:
+      return familyName(entry.family);
+  }
+}
+
+/** The annotation of an entry, read against the place's Spaces. */
+function useAnnotate(): (entry: SpaceEntry) => string {
+  const groups = usePlaceStore()((state) => state.space);
+  return (entry) => entryAnnotation(entry, groups);
 }
 
 function entrySize(entry: SpaceEntry): string | undefined {
@@ -166,9 +199,9 @@ function entrySize(entry: SpaceEntry): string | undefined {
   return entry.size !== undefined ? formatSize(entry.size) : undefined;
 }
 
-/** The "Stays on this device" panel (space-25): every ignored family
- * with its reason, the server named at a seat's place (space-112);
- * folded state is chrome preference (DR-030). */
+/** The "Stays on this computer" panel (space-25): every ignored family
+ * with its reason, the server named at a team server's place
+ * (space-112); folded state is chrome preference (DR-030). */
 function PrivacyPanel() {
   const store = usePlaceStore();
   const collapsed = store((state) => state.spacePrivacyCollapsed);
@@ -190,10 +223,10 @@ function PrivacyPanel() {
       >
         <Icon name={collapsed ? "caretRight" : "caretDown"} className="h-3.5 w-3.5" />
         {seat === undefined
-          ? i18n._("Stays on this device ({count} kinds)", { count: families.length })
+          ? i18n._({ id: "Stays on this computer", comment: "the Explore tab's panel of what never syncs" })
           : i18n._({
-              id: "Stays on {place} ({count} kinds)",
-              values: { place: seat, count: families.length },
+              id: "Stays on {place}",
+              values: { place: seat },
               comment: "the Explore tab's panel of what never syncs, on a team server's Space; {place} is the server's name",
             })}
       </button>
@@ -290,10 +323,11 @@ function PreviewBody({
   error?: string;
   onOpenSession(sessionId: string): void;
 }) {
+  const annotate = useAnnotate();
   if (entry.kind === "git") {
     return (
       <p className="text-sm text-neutral-500">
-        {i18n._("Git data — the repository's own files; not shown.")}
+        {i18n._({ id: "Git data · not shown", comment: "the Explore tab's preview of the records' own Git folder, which it never opens" })}
       </p>
     );
   }
@@ -303,10 +337,10 @@ function PreviewBody({
         {entry.count !== undefined
           ? i18n._({
               id: "{annotation} · {count, plural, one {# entry} other {# entries}}",
-              values: { annotation: entryAnnotation(entry), count: entry.count },
+              values: { annotation: annotate(entry), count: entry.count },
               comment: "{annotation} is the core's word for the directory",
             })
-          : entryAnnotation(entry)}
+          : annotate(entry)}
       </p>
     );
   }
@@ -327,7 +361,7 @@ function PreviewBody({
     );
   }
   if (entry.preview === "none") {
-    return <p className="text-sm text-neutral-500">{i18n._("No preview for this file.")}</p>;
+    return <p className="text-sm text-neutral-500">{i18n._({ id: "No preview", comment: "the Explore tab's preview of a file it does not show" })}</p>;
   }
   if (error) {
     return (
@@ -358,8 +392,10 @@ function PreviewBody({
   const kind = previewKindOf(entry.name);
   const cut = result.truncated ? (
     <p className="text-xs text-neutral-500">
-      {i18n._("Showing the first {lines} lines; the file is longer.", {
-        lines: result.lines.toLocaleString(currentLocale()),
+      {i18n._({
+        id: "First {lines} lines shown",
+        values: { lines: result.lines.toLocaleString(currentLocale()) },
+        comment: "the Explore tab's preview of a long file: only its first lines stand",
       })}
     </p>
   ) : null;
@@ -443,6 +479,7 @@ export function ExploreTab({
   onNote: Note;
 }) {
   const store = usePlaceStore();
+  const annotate = useAnnotate();
   const spaceTree = store((state) => state.spaceTree);
   const spaceRead = store((state) => state.spaceRead);
   const split = store((state) => state.spaceSplit);
@@ -665,7 +702,7 @@ export function ExploreTab({
                     {node.kind === "session" ? null : (
                       <>
                         <span className="hidden shrink-0 text-xs text-neutral-500 @md:inline">
-                          {entryAnnotation(node.entry)}
+                          {annotate(node.entry)}
                         </span>
                         <SharingChip sync={node.entry.sync} />
                         {entrySize(node.entry) ? (
@@ -704,7 +741,7 @@ export function ExploreTab({
               onNote={onNote}
             />
           ) : (
-            <p className="text-sm text-neutral-500">{i18n._("Select an entry to preview it.")}</p>
+            <p className="text-sm text-neutral-500">{i18n._({ id: "Select an entry to preview", comment: "the Explore tab's preview pane before an entry is selected" })}</p>
           )}
         </div>
       </div>
@@ -727,9 +764,10 @@ function PreviewPane({
   onOpenSession(sessionId: string): void;
   onNote: Note;
 }) {
-  // At a seat's place the server is named where this device would be
-  // (space-112).
+  // At a team server's place the server is named where this computer
+  // would be (space-112).
   const seat = seatName(usePlaceStore().place);
+  const annotate = useAnnotate();
   const { node } = row;
   if (node.kind === "session") {
     return (
@@ -738,7 +776,7 @@ function PreviewPane({
           title={sessionTitle(node)}
           path={node.path}
           home={home}
-          annotation={i18n._({ id: "Session", comment: "one unit's kind: a session" })}
+          annotation={i18n._({ id: "Session", comment: "an entry's kind in the Explore tab: a session" })}
           onNote={onNote}
           controls={
             <button
@@ -753,12 +791,13 @@ function PreviewPane({
         />
         <p className="text-sm text-neutral-500">
           {seat === undefined
-            ? i18n._(
-                "{count, plural, one {# file} other {# files}} — the manifest, the records and, where this device ran it, its provider hints.",
-                { count: node.children.length },
-              )
+            ? i18n._({
+                id: "{count, plural, one {# file} other {# files}} · the session's file, its transcript and, where this computer ran it, provider hints",
+                values: { count: node.children.length },
+                comment: "a session's node in the Explore tab: the files it holds",
+              })
             : i18n._({
-                id: "{count, plural, one {# file} other {# files}} — the manifest, the records and, where {place} ran it, its provider hints.",
+                id: "{count, plural, one {# file} other {# files}} · the session's file, its transcript and, where {place} ran it, provider hints",
                 values: { count: node.children.length, place: seat },
                 comment: "a session's node in the Explore tab on a team server's Space; {place} is the server's name",
               })}
@@ -777,7 +816,7 @@ function PreviewPane({
         title={entry.name}
         path={entry.path}
         home={home}
-        annotation={entryAnnotation(entry)}
+        annotation={annotate(entry)}
         chip={<SharingChip sync={entry.sync} />}
         size={size}
         owner={owner}

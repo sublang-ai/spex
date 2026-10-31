@@ -1,20 +1,24 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The Groups surface's words and groupings (DR-057, DR-103): the
-// home's path in the reader's shorthand, a remote with no user in it,
-// a spex repository's clone and the state its row reads (space-61),
-// the kinds' order and labels (space-7), the sync steps' names
-// (space-12), the catalog's sharing marks, each entry's family word,
-// and the families that stay on this device (space-23, space-25).
-// Pure functions; the surface renders them.
+// The Space surface's words and groupings (DR-057, DR-103, DR-172): the
+// home's path in the reader's shorthand, a spex repository's clone, the
+// one phrase its row reads (space-120) and the glyph naming where its
+// code is (space-1), the kinds' order and labels (space-7), the sync
+// steps' names (space-12), the catalog's sharing marks, each entry's
+// family word, and the families that stay on this computer (space-23,
+// space-25). Every phrase names a Space by its display name and this
+// place "this computer" (space-27). Pure functions; the surface renders
+// them.
 //
 // Every word here is a message of the catalog (localization-4), so a
 // table of phrases holds thunks read at render — a table of strings
 // would freeze the language this module was imported in.
 
 import type {
+  CodeKind,
   GroupsState,
+  InstanceState,
   PlacementBranch,
   PlacementState,
   RepositoryState,
@@ -26,7 +30,7 @@ import type {
 
 import { i18n } from "../i18n.js";
 import { isLocalPlace, type Place } from "../state/store.js";
-import { keyPlacement, placementLastSync, waitingOf } from "./placements.js";
+import { instanceNameAt, keyPlacement, placementLastSync, placementName, waitingOf } from "./placements.js";
 import { absoluteTitle, relativeAge, shortMoment } from "./time.js";
 
 /** The home's path with the user's home directory as `~` (space-1):
@@ -36,18 +40,9 @@ export function tildify(path: string): string {
   return path.replace(/^(\/Users\/[^/]+|\/home\/[^/]+)(?=\/|$)/, "~");
 }
 
-/** The `origin` URL as set, with an `http(s)` user removed (space-1):
- * `https://user@host/…` loses its user part, while an SSH form's user is
- * the transport's own (space-5) and stays, so the URL reads back as the
- * one to compare and fix; anything else is shown as stored. */
-export function displayRemote(url: string): string {
-  const embedded = /^(https?:\/\/)([^/@]*@)(.*)$/i.exec(url);
-  return embedded ? `${embedded[1]}${embedded[3]}` : url;
-}
-
-/** Whether a spex repository's clone is on this device (space-61): it
+/** Whether a spex repository's clone is on this computer (space-61): it
  * is local only or holds a placement; a row the host lists that this
- * device lacks, or one in a group named like a login, which takes no
+ * computer lacks, or one in a group named like a login, which takes no
  * folder, holds none (space-30). */
 export function cloneHere(repo: RepositoryState): boolean {
   return repo.state === "local-only" || repo.placements.some((placement) => placement.attached);
@@ -69,7 +64,7 @@ export function waitingPhrase(waiting: NonNullable<PlacementState["waiting"]>): 
 }
 
 /** A spex repository's last sync (space-61), its key placement's: this
- * device's last completed sync with it, else the last one its clone
+ * computer's last completed sync with it, else the last one its clone
  * holds — current where the clone's `spex` is still that placement's —
  * else none. */
 export function lastSyncOf(repo: RepositoryState): { at: number; current: boolean } | null {
@@ -85,12 +80,12 @@ function lastSyncPhrase(last: { at: number; current: boolean } | null, now: numb
     ? i18n._({
         id: "Synced {age}",
         values: { age: relativeAge(last.at, now) },
-        comment: "a spex repository's row: when it last synced",
+        comment: "a project's row: when its records last synced",
       })
     : i18n._({
         id: "Not synced since {moment}",
         values: { moment: shortMoment(last.at) },
-        comment: "a spex repository's row: this device and the host have differed since that moment, when they last agreed",
+        comment: "a project's row: this computer and the Space have differed since that moment, when they last agreed",
       });
 }
 
@@ -111,42 +106,54 @@ function hostStatePhrase(state: "read-only" | "unreachable", reason: string | nu
   if (state === "read-only") {
     return reason
       ? i18n._("Read-only: {reason}", { reason })
-      : i18n._({ id: "Read-only", comment: "a spex repository's state: the host lets this account only read it" });
+      : i18n._({ id: "Read-only", comment: "a project's records: the Space lets this account only read them" });
   }
   return reason
     ? i18n._("Unreachable: {reason}", { reason })
-    : i18n._({ id: "Unreachable", comment: "a spex repository's state: the host cannot be read for it" });
+    : i18n._({ id: "Unreachable", comment: "a project's records: the Space cannot be read for them" });
+}
+
+/** "Signed out of <display name>" (space-3, space-6, space-61): records
+ * at a Space this computer is signed out of, which no signed-in Space
+ * listing them makes reachable. */
+export function signedOutPhrase(name: string): string {
+  return i18n._({
+    id: "Signed out of {name}",
+    values: { name },
+    comment: "a project's row or placement line: this computer is signed out of the Space its records are at; {name} is the Space's display name",
+  });
 }
 
 /** The server whose Space the surface shows at a seat's place, which
- * every phrase naming this device names instead (space-112); none at
+ * every phrase naming this computer names instead (space-112); none at
  * this computer. */
 export function seatName(place: Place): string | undefined {
   return isLocalPlace(place) ? undefined : (place.name ?? place.key);
 }
 
-/** "Not on this device", or at a seat's place "Not on <server>"
+/** "Not on this computer", or at a seat's place "Not on <server>"
  * (space-87, space-112): `seat` names the server where the surface shows
  * a seat's place. */
 export function notHerePhrase(seat?: string): string {
   return seat === undefined
-    ? i18n._("Not on this device")
+    ? i18n._({ id: "Not on this computer", comment: "a project's records, or a copy of them at a Space, not on this computer" })
     : i18n._({
         id: "Not on {place}",
         values: { place: seat },
-        comment: "a spex repository or placement not at the team server whose Space is shown; {place} is the server's name",
+        comment: "a project's records, or a copy of them at a Space, not on the team server whose Space is shown; {place} is the server's name",
       });
 }
 
-/** What a spex repository's row reads for its state (space-61): the
- * core's aggregate over its placements, a reachable row reading its key
- * placement's last sync; a waiting step reads on its placement's line
- * instead (space-64, space-87). `seat` names the server where the
- * surface shows a seat's place (space-112). */
+/** What a spex repository's records read for their state (space-61): the
+ * core's aggregate over its placements, a reachable one reading its key
+ * placement's last sync, one local only reading nothing (space-120); a
+ * waiting step reads on its placement's line instead (space-64,
+ * space-87). `seat` names the server where the surface shows a seat's
+ * place (space-112). */
 export function repositoryStatePhrase(repo: RepositoryState, now: number, seat?: string): string {
   switch (repo.state) {
     case "local-only":
-      return i18n._({ id: "On this computer only", comment: "a project's records kept here alone, in no group" });
+      return "";
     case "reachable":
       return lastSyncPhrase(lastSyncOf(repo), now);
     case "read-only":
@@ -161,8 +168,8 @@ export function repositoryStatePhrase(repo: RepositoryState, now: number, seat?:
 }
 
 /** What the project's records line reads (projects-4): a placement's
- * waiting step where one waits, which no row of the Groups surface
- * carries but its line (space-64), else the row's own state. */
+ * waiting step where one waits, which no row of the Space surface
+ * carries but its line (space-64), else the records' own state. */
 export function recordsStatePhrase(repo: RepositoryState, now: number): string {
   const waiting = waitingOf(repo)?.waiting;
   return waiting ? waitingPhrase(waiting) : repositoryStatePhrase(repo, now);
@@ -175,6 +182,37 @@ export interface LinePhrase {
   text: string;
   title: string;
   tone: "idle" | "running" | "attention" | "stopped";
+}
+
+/** How the phrases of one spex repository name its placements
+ * (space-12, space-120): an instance by its display name, the path
+ * placement by its remote; whether a line reads "Signed out of <display
+ * name>"; and the server a seat's place shows (space-112). */
+export interface PhraseNames {
+  /** A placement by its instance's origin, null naming the path
+   * placement. */
+  nameAt(origin: string | null): string;
+  /** Whether the line is unreachable because this computer is signed out
+   * of its instance (space-61). */
+  signedOut(line: PlacementState): boolean;
+  seat?: string;
+}
+
+/** The names a spex repository's phrases read (space-12, space-61): a
+ * line by its instance's display name as the home last read it, else its
+ * host name, the path placement by its remote; a line signed out while it
+ * reads unreachable and its instance is signed out. */
+export function phraseNames(groups: GroupsState, repo: RepositoryState, seat?: string): PhraseNames {
+  const instanceAt = (origin: string): InstanceState | undefined => groups.instances.find((instance) => instance.origin === origin);
+  return {
+    nameAt: (origin) => {
+      const line = repo.placements.find((placement) => placement.instance === origin);
+      if (line) return placementName(groups, line);
+      return origin === null ? "" : instanceNameAt(groups, origin);
+    },
+    signedOut: (line) => line.state === "unreachable" && line.instance !== null && instanceAt(line.instance)?.signedIn === false,
+    seat,
+  };
 }
 
 /** The outcome a placement's line carries (space-87, space-12): the one
@@ -192,16 +230,25 @@ export function lineOutcome(
   return putAway && (outcome.kind === "synced" || outcome.kind === "behind" || outcome.kind === "stopped") ? null : outcome;
 }
 
+/** "Waiting for you to continue" (space-57, space-87): a placement's
+ * first send waiting on the sharing confirm. */
+export function waitingForYouPhrase(): string {
+  return i18n._({
+    id: "Waiting for you to continue",
+    comment: "a project's row or placement line: its first send to a Space waits for the sharing confirm; Continue stands beside it",
+  });
+}
+
 /** A placement's line (space-87), the first that applies: the step in
  * flight at it (space-12); a waiting step at the host (space-64); the
  * outcome the last sync left there until the next operation, the ones
  * that need nothing of the reader put away by Dismiss — `dismissed`
  * being the sync phase the reader dismissed (space-12, space-15); else
- * its state, a reachable one reading its last sync (space-61) and a
- * read-only one carrying it beside the host's reason, one a placement
- * file names "Not on this device" — at a seat's place "Not on
- * <server>" (space-112). `nameOf` names a line's instance, which a
- * choice's phrase reads. Where its last check counted them, its own
+ * its state, a reachable one reading its last sync (space-61), a
+ * read-only one carrying it beside the host's reason, one at a Space
+ * this computer is signed out of "Signed out of <display name>", one a
+ * placement file names "Not on this computer" — at a seat's place "Not
+ * on <server>" (space-112). Where its last check counted them, its own
  * ahead and behind ride the title of a sync's outcome and of its state
  * (space-8). */
 export function placementPhrase(
@@ -209,14 +256,14 @@ export function placementPhrase(
   line: PlacementState,
   now: number,
   dismissed: string | undefined,
-  nameOf: (line: PlacementState) => string,
-  seat?: string,
+  names: PhraseNames,
 ): LinePhrase {
   const counts = countsTitle(line.branch);
   const counted = (title: string): string => (counts ? `${title} · ${counts}` : title);
+  const name = names.nameAt(line.instance);
   const sync = repo.sync;
   if (sync.phase === "running" && sync.placement === line.instance) {
-    const text = STEP_LINES[sync.step]();
+    const text = STEP_LINES[sync.step](name);
     return { text, title: text, tone: "running" };
   }
   if (line.waiting) return { text: waitingPhrase(line.waiting), title: line.waiting.message, tone: "attention" };
@@ -227,7 +274,11 @@ export function placementPhrase(
         const at = line.lastSync?.at ?? (sync.phase === "done" ? sync.at : now);
         const text =
           line.state === "read-only"
-            ? i18n._("Brought {received}; nothing sent", { received: outcome.received })
+            ? i18n._({
+                id: "{received} received; nothing sent",
+                values: { received: outcome.received },
+                comment: "a read-only placement's line after a sync: how many records came back; nothing was sent, the Space letting this account only read",
+              })
             : outcome.sent + outcome.received === 0
               ? i18n._("Everything is in sync")
               : i18n._("Synced {age} · {sent} sent · {received} received", {
@@ -240,32 +291,25 @@ export function placementPhrase(
       case "behind": {
         const text = i18n._({
           id: "Behind — Sync again",
-          comment: "a placement's line: the sync left its copy behind this device's; another Sync carries it",
+          comment: "a placement's line: the sync left the Space's copy behind this computer's; another Sync carries it",
         });
         return { text, title: counted(text), tone: "attention" };
       }
       case "choices": {
-        const text = changedOnBoth(nameOf(line));
+        const text = changedOnBoth(name);
         return { text, title: text, tone: "attention" };
       }
       case "unrelated": {
-        const text = i18n._("Unrelated history");
+        const text = startedSeparately(name);
         return { text, title: text, tone: "attention" };
       }
       case "waiting": {
-        const text = i18n._({
-          id: "Waiting for you to continue",
-          comment: "a placement's line: its first push waits for the sharing notice to be seen; Continue stands beside it",
-        });
+        const text = waitingForYouPhrase();
         return { text, title: text, tone: "attention" };
       }
       case "stopped": {
-        const text = i18n._({
-          id: "{step} stopped — {message}",
-          values: { step: STEP_NAMES[outcome.step](), message: outcome.message },
-          comment: "{step} is the sync step's name; {message} is the cause the host gave",
-        });
-        return { text, title: outcome.guidance || text, tone: outcome.cause === "rejected" ? "attention" : "stopped" };
+        const text = stoppedPhrase(outcome.step, outcome.message);
+        return { text, title: counted(outcome.guidance || text), tone: outcome.cause === "rejected" ? "attention" : "stopped" };
       }
     }
   }
@@ -277,6 +321,10 @@ export function placementPhrase(
     }
     case "read-only":
     case "unreachable": {
+      if (names.signedOut(line)) {
+        const text = signedOutPhrase(name);
+        return { text, title: text, tone: "idle" };
+      }
       const state = hostStatePhrase(line.state, line.reason);
       // A read-only line carries its last sync as a reachable one does —
       // its age while the clone's `spex` is still the one it shared, the
@@ -292,11 +340,11 @@ export function placementPhrase(
       return {
         text,
         title: counted(last ? i18n._("{state} · last synced {at}", { state, at: absoluteTitle(last.at) }) : state),
-        tone: "idle",
+        tone: line.state === "unreachable" ? "attention" : "idle",
       };
     }
     case "absent": {
-      const text = notHerePhrase(seat);
+      const text = notHerePhrase(names.seat);
       return { text, title: text, tone: "idle" };
     }
     default:
@@ -305,14 +353,25 @@ export function placementPhrase(
   }
 }
 
-/** "Changed here and at <display name>" (space-14, space-87): units
- * changed on both sides, choices owed for the placement at the instance
+/** "Changed here and at <display name>" (space-14, space-87): records
+ * changed on both sides, choices owed for the placement at the Space
  * named. */
 export function changedOnBoth(name: string): string {
   return i18n._({
     id: "Changed here and at {name}",
     values: { name },
-    comment: "a project's row or placement line: a sync found units changed both here and at that instance, choices owed; {name} is the instance's display name; Resolve stands beside it",
+    comment: "a project's row or placement line: a sync found records changed both on this computer and at that Space, choices owed; {name} is the Space's display name; Resolve stands beside it",
+  });
+}
+
+/** "Started separately at <display name>" (space-13, space-87): this
+ * computer's records and the Space's share no history; "Combine…"
+ * stands beside it. */
+export function startedSeparately(name: string): string {
+  return i18n._({
+    id: "Started separately at {name}",
+    values: { name },
+    comment: "a project's row, placement line or card: this computer's records and the Space's were started apart and share no history; {name} is the Space's display name; Combine… stands beside it",
   });
 }
 
@@ -321,99 +380,165 @@ export function stoppedPhrase(step: SyncStep, message: string): string {
   return i18n._({
     id: "{step} stopped — {message}",
     values: { step: STEP_NAMES[step](), message },
-    comment: "{step} is the sync step's name; {message} is the cause the host gave",
+    comment: "{step} is the sync step's name, as Sending; {message} is the cause, in the Space's words where it gave any",
   });
 }
 
-/** The phrase a row reads (space-61, space-87, DR-159): its words, the
- * fuller reading for its title, its tone, and the way forward beside it
- * — Resolve for choices owed, "Merge histories…" for an unrelated
- * history — with the placement it is for. */
-export interface RowPhrase extends LinePhrase {
-  act?: { kind: "resolve" | "merge"; placement: string | null };
+/** "<n> to send" (space-120): the records this computer changed that no
+ * Space holds yet, its title naming them by kind. */
+export function toSendPhrase(units: readonly SpaceUnit[]): { text: string; title: string } {
+  return {
+    text: i18n._({
+      id: "{count} to send",
+      values: { count: units.length },
+      comment: "a project's row: how many of its records this computer changed that are not sent yet; Sync now in its overflow sends them",
+    }),
+    title: groupUnits(units)
+      .map(({ kind, units: those }) =>
+        i18n._({
+          id: "{kind} ({count})",
+          values: { kind: KIND_LABELS[kind](), count: those.length },
+          comment: "one kind of records waiting to be sent, in a project's title: {kind} is the kind's heading, as Sessions; {count} how many",
+        }),
+      )
+      .join(" · "),
+  };
 }
 
-/** A row's one phrase (space-87): the first in this order that any of
- * its placements holds — the step in flight, "Opening…" while its join
- * runs (space-61); the outcome the last sync left on a line — choices
- * owed, an unrelated history, the notice owed, a stop — or, where no
- * line carries it, on the row (space-15); then its state, a row not on
- * this device reading nothing, a step waiting at the host reading on its
- * line alone (space-61, space-64).
- * Outcomes the reader dismissed and those that need nothing of him —
- * synced, behind — leave the state's phrase. `nameOf` names an
- * instance by its origin, the path placement's by null; `seat` names
- * the server at a seat's place (space-112). */
+/** The phrase a row reads (space-120, DR-159): its words, the fuller
+ * reading for its title, its tone, and the way forward beside it —
+ * Resolve for choices owed, "Combine…" for records started separately,
+ * Continue for a first send waiting on the sharing confirm, Retry for a
+ * stop retrying can help — with the placement it is for. */
+export interface RowPhrase extends LinePhrase {
+  act?: { kind: "resolve" | "combine" | "continue" | "retry"; placement: string | null };
+}
+
+const NO_PHRASE: RowPhrase = { text: "", title: "", tone: "idle" };
+
+/** A row's one standing phrase (space-120): the first of these its state
+ * and its placements' lines hold, a placement's display name being that
+ * of the first line, in the lines' order, holding the phrase —
+ *
+ * 1. the step in flight, or "Opening…" while its join runs (space-63);
+ * 2. "<n> to send", its local units;
+ * 3. "Changed here and at <display name>" with Resolve (space-14);
+ * 4. "Started separately at <display name>" with "Combine…" (space-13);
+ * 5. "Waiting for you to continue" with the sharing confirm (space-57),
+ *    or a stopped step's cause with Retry (space-15);
+ * 6. "Read-only: <the host's reason>", the records read-only;
+ * 7. "Unreachable: <cause>", the records unreachable;
+ * 8. "Signed out of <display name>", unreachable because this computer
+ *    is signed out of every Space they are at;
+ * 9. its last sync — "Synced <age>", "Not synced since <moment>" or
+ *    "Never synced".
+ *
+ * A row under "This computer" (`quiet`), local only, or not on this
+ * computer reads none but the join running on it. Outcomes the reader
+ * dismissed and those that need nothing of him — synced, behind — leave
+ * the state's phrase. */
 export function rowPhrase(
   repo: RepositoryState,
   now: number,
   dismissed: string | undefined,
-  nameOf: (origin: string | null) => string,
-  seat?: string,
+  names: PhraseNames,
+  quiet = false,
 ): RowPhrase {
   const sync = repo.sync;
   if (sync.phase === "running") {
-    const text =
-      sync.op === "join"
-        ? i18n._({ id: "Opening…", comment: "a project's row while it is opened here: its records and code clone" })
-        : STEP_LINES[sync.step]();
+    if (sync.op === "join") {
+      const text = i18n._({ id: "Opening…", comment: "a project's row while it is opened here: its records and code are downloaded" });
+      return { text, title: text, tone: "running" };
+    }
+    if (quiet) return NO_PHRASE;
+    const text = STEP_LINES[sync.step](sync.placement === undefined ? undefined : names.nameAt(sync.placement));
     return { text, title: text, tone: "running" };
   }
-  for (const line of repo.placements) {
-    if (!line.attached) continue;
-    const outcome = lineOutcome(repo, line, dismissed);
-    // A join of an unrelated history that ended in choices owes them
-    // (space-13, space-14).
-    if (outcome?.kind === "choices" || (sync.phase === "choices" && sync.placement === line.instance)) {
-      const text = changedOnBoth(nameOf(line.instance));
-      return { text, title: text, tone: "attention", act: { kind: "resolve", placement: line.instance } };
-    }
-    if (outcome?.kind === "unrelated" || (outcome === null && line.branch?.unrelated === true)) {
-      const text = i18n._("Unrelated history");
-      return { text, title: text, tone: "attention", act: { kind: "merge", placement: line.instance } };
-    }
+  if (quiet || repo.state === "local-only" || repo.state === "absent") return NO_PHRASE;
+  if (repo.local.length > 0) {
+    const { text, title } = toSendPhrase(repo.local);
+    return { text, title, tone: "idle" };
+  }
+  const lines = repo.placements.filter((line) => line.attached);
+  const outcomes = lines.map((line) => ({ line, outcome: lineOutcome(repo, line, dismissed) }));
+  // A join of records started separately that ended in choices owes them
+  // (space-13, space-14).
+  const choices = outcomes.find(({ line, outcome }) => outcome?.kind === "choices" || (sync.phase === "choices" && sync.placement === line.instance));
+  const choicesAt = choices ? choices.line.instance : sync.phase === "choices" ? sync.placement : undefined;
+  if (choicesAt !== undefined) {
+    const text = changedOnBoth(names.nameAt(choicesAt));
+    return { text, title: text, tone: "attention", act: { kind: "resolve", placement: choicesAt } };
+  }
+  const apart = outcomes.find(({ line, outcome }) => outcome?.kind === "unrelated" || (outcome === null && line.branch?.unrelated === true));
+  const apartAt = apart ? apart.line.instance : sync.phase === "unrelated" ? sync.placement : undefined;
+  if (apartAt !== undefined) {
+    const text = startedSeparately(names.nameAt(apartAt));
+    return { text, title: text, tone: "attention", act: { kind: "combine", placement: apartAt } };
+  }
+  for (const { line, outcome } of outcomes) {
     if (outcome?.kind === "waiting") {
-      const text = i18n._({
-        id: "Waiting for you to continue",
-        comment: "a placement's line: its first push waits for the sharing notice to be seen; Continue stands beside it",
-      });
-      return { text, title: text, tone: "attention" };
+      const text = waitingForYouPhrase();
+      return { text, title: text, tone: "attention", act: { kind: "continue", placement: line.instance } };
     }
     if (outcome?.kind === "stopped") {
       const text = stoppedPhrase(outcome.step, outcome.message);
-      return { text, title: outcome.guidance || text, tone: outcome.cause === "rejected" ? "attention" : "stopped" };
+      return {
+        text,
+        title: outcome.guidance || text,
+        tone: outcome.cause === "rejected" ? "attention" : "stopped",
+        ...(outcome.retry ? { act: { kind: "retry" as const, placement: line.instance } } : {}),
+      };
     }
-  }
-  if (sync.phase === "choices") {
-    const text = changedOnBoth(nameOf(sync.placement));
-    return { text, title: text, tone: "attention", act: { kind: "resolve", placement: sync.placement } };
-  }
-  if (sync.phase === "unrelated") {
-    const text = i18n._("Unrelated history");
-    return { text, title: text, tone: "attention", act: { kind: "merge", placement: sync.placement } };
   }
   if (sync.phase === "stopped" && dismissed !== JSON.stringify(sync)) {
     const text = stoppedPhrase(sync.step, sync.message);
-    return { text, title: sync.guidance || text, tone: sync.cause === "rejected" ? "attention" : "stopped" };
+    return {
+      text,
+      title: sync.guidance || text,
+      tone: sync.cause === "rejected" ? "attention" : "stopped",
+      ...(sync.retry ? { act: { kind: "retry" as const, placement: null } } : {}),
+    };
   }
-  if (repo.state === "absent") return { text: "", title: "", tone: "idle" };
-  const text = repositoryStatePhrase(repo, now);
-  const last = lastSyncOf(repo);
-  const title =
-    repo.state === "read-only"
-      ? seat === undefined
-        ? i18n._("{state} · new sessions stay on this device", { state: text })
+  // The records' own state (space-61): read-only where no placement is
+  // reachable and one is read-only, unreachable where every one is —
+  // signed out where that is why, naming the first line's Space so.
+  if (repo.state === "read-only") {
+    const text = hostStatePhrase("read-only", repo.reason ?? lines.find((line) => line.state === "read-only")?.reason ?? null);
+    const title =
+      names.seat === undefined
+        ? i18n._({
+            id: "{state} · new sessions stay on this computer",
+            values: { state: text },
+            comment: "a read-only project's title: the sessions started from now on are not sent",
+          })
         : i18n._({
             id: "{state} · new sessions stay on {place}",
-            values: { state: text, place: seat },
+            values: { state: text, place: names.seat },
             comment: "a read-only row's title on a team server's Space: new sessions stay on the server; {place} is the server's name",
-          })
-      : last && repo.state !== "reachable"
-        ? i18n._("{state} · last synced {at}", { state: text, at: absoluteTitle(last.at) })
-        : last
-          ? absoluteTitle(last.at)
-          : text;
-  return { text, title, tone: "idle" };
+          });
+    return { text, title, tone: "idle" };
+  }
+  if (repo.state === "unreachable") {
+    const signedOut = lines.find((line) => names.signedOut(line));
+    if (signedOut && !lines.some((line) => line.state === "unreachable" && !names.signedOut(line))) {
+      const text = signedOutPhrase(names.nameAt(signedOut.instance));
+      return { text, title: text, tone: "idle" };
+    }
+    const text = hostStatePhrase("unreachable", repo.reason ?? lines.find((line) => line.state === "unreachable")?.reason ?? null);
+    return { text, title: text, tone: "attention" };
+  }
+  const last = lastSyncOf(repo);
+  const text = lastSyncPhrase(last, now);
+  return { text, title: last ? absoluteTitle(last.at) : text, tone: "idle" };
+}
+
+/** A project's code glyph (space-1, DR-172): the core's phrase, "Code:
+ * <where>" or "Code: no remote", with what it says of the remote — at a
+ * Space, elsewhere, or none, a warning; nothing while the core does not
+ * know yet or the records hold no `project.json`. */
+export function codeOf(repo: RepositoryState): { kind: Exclude<CodeKind, "unknown">; phrase: string } | null {
+  if (repo.codeKind === "unknown" || repo.code === null) return null;
+  return { kind: repo.codeKind, phrase: repo.code };
 }
 
 /** A project's name from its spex repository's (space-1, space-46):
@@ -467,6 +592,18 @@ export function openingAt(state: GroupsState | undefined, id: string | undefined
   return openingOf(rowsOf(state).find((repo) => repo.key === id));
 }
 
+/** "Personal" (space-1, DR-172): your own records and your namespace
+ * at a Space, as a heading, a picker's first choice and a group the
+ * sharing confirm names. */
+export const personalLabel = (): string =>
+  i18n._({ id: "Personal", comment: "your own records at a Space, apart from any group: a heading, a picker's choice and where records are shared into" });
+
+/** "This computer" (space-1, DR-172): the heading of what stands in no
+ * group — your sessions before any sign-in, and each project not yet
+ * shared. */
+export const thisComputerLabel = (): string =>
+  i18n._({ id: "This computer", comment: "the heading of the projects and sessions kept on this computer alone, in no group at any Space" });
+
 /** A row's name (space-1, DR-159): the spex repository's with its
  * `-spex` dropped, a group's own reading "Group sessions" and your own
  * group's own "Your sessions". */
@@ -497,17 +634,20 @@ export function awaitsFolder(group: { fullPath: string }, repo: RepositoryState)
   return cloneHere(repo) && !isGroupRepository(group, repo) && repo.folder === null && repo.state !== "local-only";
 }
 
-/** Two code remotes name the same repository (space-58): compared as
- * the reader reads them, with no user part, no `.git` and no trailing
- * slash, the host's name in any case. */
-export function sameRemote(a: string, b: string): boolean {
-  const norm = (url: string) =>
-    displayRemote(url.trim())
-      .replace(/\/+$/, "")
-      .replace(/\.git$/i, "")
-      .replace(/^([a-z+]+:\/\/)?([^/:@]+@)?([^/:]+)/i, (_, scheme = "", user = "", host: string) =>
-        `${scheme}${user}${host.toLowerCase()}`);
-  return norm(a) === norm(b);
+/** Whether a spex repository a Space lists may hold the records of a
+ * project here (space-58): its code read alike — the core names where a
+ * project's code is, never its remote (space-1) — at a Space or
+ * elsewhere, and the same project name, compared as the reader reads
+ * them. */
+export function sameCode(listed: RepositoryState, local: RepositoryState): boolean {
+  const known = (repo: RepositoryState) => repo.code !== null && (repo.codeKind === "space" || repo.codeKind === "elsewhere");
+  return (
+    known(listed) &&
+    known(local) &&
+    listed.codeKind === local.codeKind &&
+    listed.code === local.code &&
+    projectName(listed.name).toLowerCase() === projectName(local.name).toLowerCase()
+  );
 }
 
 /** A path's last segment: a working folder's name, the default name
@@ -530,9 +670,9 @@ export const KIND_ORDER: readonly SpaceUnitKind[] = [
 
 export const KIND_LABELS: Record<SpaceUnitKind, () => string> = {
   session: () => i18n._("Sessions"),
-  intent: () => i18n._({ id: "Intents", comment: "heading over a spex repository's changed intents" }),
-  authoring: () => i18n._({ id: "Authoring", comment: "heading over a spex repository's changed authoring sessions" }),
-  environment: () => i18n._({ id: "Environment", comment: "heading over a spex repository's spec package requests and lock" }),
+  intent: () => i18n._({ id: "Intents", comment: "heading over a project's changed intents" }),
+  authoring: () => i18n._({ id: "Authoring", comment: "heading over a project's changed authoring sessions" }),
+  environment: () => i18n._({ id: "Packages", comment: "heading over a project's changed spex.yaml and spex.lock: the packages it adds" }),
   settings: () => i18n._("Settings"),
   code: () => i18n._({ id: "Code", comment: "heading over the file naming where a project's code lives" }),
   rules: () => i18n._("Sync rules"),
@@ -545,7 +685,7 @@ export const KIND_SINGULAR: Record<SpaceUnitKind, () => string> = {
   session: () => i18n._({ id: "Session", comment: "one unit's kind: a session" }),
   intent: () => i18n._({ id: "Intent", comment: "one unit's kind: an intent with its attachments" }),
   authoring: () => i18n._({ id: "Authoring session", comment: "one unit's kind: an authoring session" }),
-  environment: () => i18n._({ id: "unit.environment", message: "Environment", comment: "one unit's kind: the spec package requests and lock" }),
+  environment: () => i18n._({ id: "unit.packages", message: "Packages", comment: "one record's kind: the project's spex.yaml and spex.lock, the packages it adds" }),
   settings: () => i18n._({ id: "Setting", comment: "one unit's kind: the settings file" }),
   code: () => i18n._({ id: "unit.code", message: "Code", comment: "one unit's kind: the file naming where the code lives" }),
   rules: () => i18n._({ id: "Sync rule", comment: "one unit's kind: a sync rule file" }),
@@ -572,27 +712,33 @@ export const STEP_ORDER: readonly SyncStep[] = [
   "push",
 ];
 
-/** A step's name on the rail. */
+/** A step's name on the rail and in a stop, "Sending stopped — …"
+ * (space-12, space-15). */
 export const STEP_NAMES: Record<SyncStep, () => string> = {
-  save: () => i18n._({ id: "Save", comment: "sync step: saving this device's changes" }),
-  check: () => i18n._({ id: "Check", comment: "sync step: checking the host" }),
-  compare: () => i18n._({ id: "Compare", comment: "sync step: comparing both sides" }),
-  apply: () => i18n._({ id: "Apply", comment: "sync step: applying the chosen versions" }),
-  refresh: () => i18n._({ id: "Refresh", comment: "sync step: re-reading the spex repository" }),
-  push: () => i18n._({ id: "Push", comment: "sync step: sending to the host" }),
+  save: () => i18n._({ id: "Saving", comment: "sync step's name: saving this computer's changes to the records" }),
+  check: () => i18n._({ id: "Checking", comment: "sync step's name: reading what the Space holds" }),
+  compare: () => i18n._({ id: "Comparing", comment: "sync step's name: comparing both sides" }),
+  apply: () => i18n._({ id: "Merging", comment: "sync step's name: bringing both sides' records together" }),
+  refresh: () => i18n._({ id: "Reloading", comment: "sync step's name: reading the records again" }),
+  push: () => i18n._({ id: "Sending", comment: "sync step's name: sending the records to the Space" }),
   // A join's step while its code clones (space-63).
-  code: () => i18n._({ id: "Code", comment: "join step: cloning the project's code" }),
+  code: () => i18n._({ id: "Downloading code", comment: "a project's open, step's name: downloading the project's code into its folder" }),
 };
 
-/** What the step line reads while a step runs (space-12, space-63). */
-export const STEP_LINES: Record<SyncStep, () => string> = {
-  save: () => i18n._("Saving changes…"),
-  check: () => i18n._("Checking host…"),
+/** What the step line reads while a step runs (space-12, space-63),
+ * Check naming the Space it reads where `name` is given — the
+ * placement's display name, or the path placement's remote. */
+export const STEP_LINES: Record<SyncStep, (name?: string) => string> = {
+  save: () => i18n._({ id: "Saving…", comment: "sync step running: saving this computer's changes to the records" }),
+  check: (name) =>
+    name
+      ? i18n._({ id: "Checking {name}…", values: { name }, comment: "sync step running: reading what the Space holds; {name} is the Space's display name" })
+      : i18n._({ id: "Checking…", comment: "sync step running: reading what the Space holds" }),
   compare: () => i18n._({ id: "Comparing…", comment: "sync step running: comparing both sides" }),
-  apply: () => i18n._({ id: "Applying…", comment: "sync step running: applying the chosen versions" }),
-  refresh: () => i18n._({ id: "Refreshing…", comment: "sync step running: re-reading the spex repository" }),
-  push: () => i18n._({ id: "Pushing…", comment: "sync step running: sending to the host" }),
-  code: () => i18n._({ id: "Cloning code…", comment: "join step running: cloning the project's code into its folder" }),
+  apply: () => i18n._({ id: "Merging…", comment: "sync step running: bringing both sides' records together" }),
+  refresh: () => i18n._({ id: "Reloading…", comment: "sync step running: reading the records again" }),
+  push: () => i18n._({ id: "Sending…", comment: "sync step running: sending the records to the Space" }),
+  code: () => i18n._({ id: "Downloading code…", comment: "a project's open, step running: downloading the project's code into its folder" }),
 };
 
 /** A byte count in the reader's units: "312 B", "4.1 KB", "2.3 MB". */
@@ -621,7 +767,7 @@ export function formatSize(bytes: number): string {
 export const SHARING_LABELS: Record<SpaceEntry["sync"], () => string> = {
   shared: () => i18n._({ id: "Shared", comment: "entry mark: this file syncs and is already sent" }),
   pending: () => i18n._("Not yet shared"),
-  local: () => i18n._({ id: "Stays here", comment: "entry mark: this file never leaves the device" }),
+  local: () => i18n._({ id: "Stays here", comment: "entry mark: this file never leaves this computer" }),
   git: () => i18n._({ id: "Git data", comment: "entry mark: the repository's own files" }),
 };
 
@@ -634,36 +780,36 @@ export const SHARING_LABELS: Record<SpaceEntry["sync"], () => string> = {
  * was imported in. */
 export const FAMILY_LABELS: Record<string, () => string> = {
   "Git data": () => i18n._({ id: "Git data", comment: "entry mark: the repository's own files" }),
-  lease: () => i18n._({ id: "lease", comment: "catalog family: the lock naming the process writing now" }),
-  "temporary write": () => i18n._({ id: "temporary write", comment: "catalog family: a copy made while writing" }),
-  "config backup": () => i18n._({ id: "config backup", comment: "catalog family: a copy of the config kept before a write" }),
-  "sync repair marker": () => i18n._({ id: "sync repair marker", comment: "catalog family: the mark of a repair this device acknowledged" }),
-  "session bundles": () => i18n._({ id: "session bundles", comment: "catalog family: the folder holding every session's files" }),
-  "session manifest": () => i18n._({ id: "session manifest", comment: "catalog family: one session's manifest file" }),
-  "session records": () => i18n._({ id: "session records", comment: "catalog family: one session's record stream" }),
-  "session chunks": () => i18n._({ id: "session chunks", comment: "catalog family: immutable pieces of one session's state and replay" }),
-  "session attachments": () => i18n._({ id: "session attachments", comment: "catalog family: the files attached to one session's turns" }),
-  "provider hints": () => i18n._({ id: "provider hints", comment: "a file family that stays on this device" }),
-  "legacy session sidecar": () => i18n._({ id: "legacy session sidecar", comment: "catalog family: a session file an earlier release wrote" }),
-  intents: () => i18n._({ id: "intents", comment: "catalog family: the folder holding every intent's file" }),
-  intent: () => i18n._({ id: "intent", comment: "catalog family: one intent's file" }),
-  "intent attachments": () => i18n._({ id: "intent attachments", comment: "catalog family: the files attached to one intent" }),
-  "authoring sessions": () => i18n._({ id: "authoring sessions", comment: "catalog family: the folder holding every authoring session" }),
-  "authoring session": () => i18n._({ id: "authoring session", comment: "catalog family: one authoring session's files" }),
-  "authoring records": () => i18n._({ id: "authoring records", comment: "catalog family: one authoring session's record stream" }),
-  "authoring attachments": () => i18n._({ id: "authoring attachments", comment: "catalog family: the files attached to one authoring session" }),
-  "spec package requests": () => i18n._({ id: "spec package requests", comment: "catalog family: the spec packages the environment asks for" }),
-  "spec package lock": () => i18n._({ id: "spec package lock", comment: "catalog family: the exact spec packages the environment resolved" }),
-  "spec package": () => i18n._({ id: "spec package", comment: "catalog family: a spec package's folder kept in the clone, synced whole, or a file in it" }),
-  "upload staging": () => i18n._({ id: "upload staging", comment: "catalog family: files uploaded and not yet attached" }),
-  Settings: () => i18n._({ id: "Settings", comment: "catalog family: the shared config the Settings surface edits" }),
-  "code remote": () => i18n._({ id: "code remote", comment: "catalog family: the file naming where a project's code lives" }),
-  placement: () => i18n._({ id: "placement", comment: "catalog family: a file naming one instance these records are kept at, or the folder holding those files" }),
-  "installed spec packages": () => i18n._({ id: "installed spec packages", comment: "catalog family: spec packages installed on this device from the lock" }),
-  "exported skills": () => i18n._({ id: "exported skills", comment: "catalog family: skills exported from the installed spec packages" }),
-  "sync rules": () => i18n._({ id: "sync rules", comment: "catalog family: the files saying what syncs" }),
-  "Not a Spex folder": () => i18n._({ id: "Not a Spex folder", comment: "catalog family: a folder Spex did not write" }),
-  "Not a Spex file": () => i18n._({ id: "Not a Spex file", comment: "catalog family: a file Spex did not write" }),
+  lease: () => i18n._({ id: "in-use file", comment: "what a file is, in the records' tree: it marks which Spex is writing the records right now" }),
+  "temporary write": () => i18n._({ id: "temporary copy", comment: "what a file is, in the records' tree: a copy made while writing" }),
+  "config backup": () => i18n._({ id: "Settings backup", comment: "what a file is, in the records' tree: a copy of the settings kept before a write" }),
+  "sync repair marker": () => i18n._({ id: "interrupted sync", comment: "what a file is, in the records' tree: it marks a sync that stopped midway, which the next sync finishes" }),
+  "session bundles": () => i18n._({ id: "sessions", comment: "what a folder is, in the records' tree: every session's files" }),
+  "session manifest": () => i18n._({ id: "session file", comment: "what a file is, in the records' tree: one session's own file" }),
+  "session records": () => i18n._({ id: "session transcript", comment: "what a file is, in the records' tree: one session's transcript, every turn as it happened" }),
+  "session chunks": () => i18n._({ id: "session history", comment: "what a folder is, in the records' tree: the saved pieces of one session's history" }),
+  "session attachments": () => i18n._({ id: "session attachments", comment: "what a folder is, in the records' tree: the files attached to one session's turns" }),
+  "provider hints": () => i18n._({ id: "provider hints", comment: "a file family that stays on this computer" }),
+  "legacy session sidecar": () => i18n._({ id: "older session file", comment: "what a file is, in the records' tree: a session file an earlier release wrote" }),
+  intents: () => i18n._({ id: "intents", comment: "what a folder is, in the records' tree: every intent's file" }),
+  intent: () => i18n._({ id: "intent", comment: "what a file is, in the records' tree: one intent's file" }),
+  "intent attachments": () => i18n._({ id: "intent attachments", comment: "what a folder is, in the records' tree: the files attached to one intent" }),
+  "authoring sessions": () => i18n._({ id: "authoring sessions", comment: "what a folder is, in the records' tree: every playbook being written" }),
+  "authoring session": () => i18n._({ id: "authoring session", comment: "what a file is, in the records' tree: one playbook being written" }),
+  "authoring records": () => i18n._({ id: "authoring transcript", comment: "what a file is, in the records' tree: the transcript of one playbook being written" }),
+  "authoring attachments": () => i18n._({ id: "authoring attachments", comment: "what a folder is, in the records' tree: the files attached to one playbook being written" }),
+  "spec package requests": () => "spex.yaml",
+  "spec package lock": () => "spex.lock",
+  "spec package": () => i18n._({ id: "package", comment: "what a folder or file is, in the records' tree: a package kept in the records, or a file in it" }),
+  "upload staging": () => i18n._({ id: "uploads not yet attached", comment: "what a folder is, in the records' tree: files uploaded and not yet attached to a turn" }),
+  Settings: () => i18n._({ id: "Settings", comment: "what a file is, in the records' tree: the shared settings the Settings surface edits" }),
+  "code remote": () => i18n._({ id: "where the code is", comment: "what a file is, in the records' tree: it names where a project's code is" }),
+  placement: () => i18n._({ id: "where the records sync", comment: "what a file is, in the records' tree: it names a Space these records sync with" }),
+  "installed spec packages": () => i18n._({ id: "installed packages", comment: "what a folder is, in the records' tree: packages installed on this computer from spex.lock" }),
+  "exported skills": () => i18n._({ id: "skills for agents", comment: "what a folder is, in the records' tree: the installed packages' skills, placed where the agents read them" }),
+  "sync rules": () => i18n._({ id: "sync rules", comment: "what a file is, in the records' tree: it says what syncs" }),
+  "Not a Spex folder": () => i18n._({ id: "Not a Spex folder", comment: "what a folder is, in the records' tree: Spex did not write it" }),
+  "Not a Spex file": () => i18n._({ id: "Not a Spex file", comment: "what a file is, in the records' tree: Spex did not write it" }),
 };
 
 /** The word an entry's family reads as; a family this interface does
@@ -674,15 +820,15 @@ export function familyName(family: string): string {
 }
 
 /** Every ignored family with its one plain reason (space-25), the
- * server named where this machine would be at a seat's place
+ * server named where this computer would be at a seat's place
  * (space-112); read at render, never at module load. */
 export function staysHere(seat?: string): readonly { family: string; reason: string }[] {
   return [
     {
-      family: i18n._({ id: "provider hints", comment: "a file family that stays on this device" }),
+      family: i18n._({ id: "provider hints", comment: "a file family that stays on this computer" }),
       reason:
         seat === undefined
-          ? i18n._("resume tokens for this machine's agent conversations; they work nowhere else")
+          ? i18n._("resume tokens for this computer's agent conversations; they work nowhere else")
           : i18n._({
               id: "resume tokens for {place}'s agent conversations; they work nowhere else",
               values: { place: seat },
@@ -690,38 +836,45 @@ export function staysHere(seat?: string): readonly { family: string; reason: str
             }),
     },
     {
-      family: i18n._({ id: "leases and locks", comment: "a file family that stays on this device" }),
+      family: i18n._({ id: "in-use files", comment: "a file family that stays on this computer: the files marking which Spex is writing now" }),
       reason: i18n._("which process is writing right now"),
     },
     {
       family: i18n._({
-        id: "installed spec packages and exported skills",
-        comment: "a file family that stays on this device",
+        id: "installed packages and skills for agents",
+        comment: "a file family that stays on this computer",
       }),
-      reason: i18n._("copies installed from the lock; every device installs its own"),
-    },
-    {
-      family: i18n._({ id: "where projects live", comment: "a file family that stays on this device" }),
       reason:
         seat === undefined
-          ? i18n._("where your working folders are on this machine, in the home file")
+          ? i18n._("copies installed from spex.lock; every computer installs its own")
           : i18n._({
-              id: "where your working folders are on {place}, in the home file",
+              id: "copies installed from spex.lock; {place} installs its own",
+              values: { place: seat },
+              comment: "why installed packages stay on a team server's seat; {place} is the server's name",
+            }),
+    },
+    {
+      family: i18n._({ id: "where projects live", comment: "a file family that stays on this computer" }),
+      reason:
+        seat === undefined
+          ? i18n._("where your project folders are on this computer, in the home file")
+          : i18n._({
+              id: "where your project folders are on {place}, in the home file",
               values: { place: seat },
               comment: "why where projects live stays on a team server's seat; {place} is the server's name",
             }),
     },
     {
-      family: i18n._({ id: "preferences", comment: "a file family that stays on this device" }),
+      family: i18n._({ id: "preferences", comment: "a file family that stays on this computer" }),
       reason: i18n._("where you last stopped reading in each session"),
     },
     {
-      family: i18n._({ id: "credentials", comment: "a file family that stays on this device" }),
+      family: i18n._({ id: "credentials", comment: "a file family that stays on this computer" }),
       reason:
         seat === undefined
-          ? i18n._("this device's sign-in to each instance")
+          ? i18n._("this computer's sign-in to each Space")
           : i18n._({
-              id: "{place}'s sign-in to each instance",
+              id: "{place}'s sign-in to each Space",
               values: { place: seat },
               comment: "why credentials stay on a team server's seat; {place} is the server's name",
             }),
@@ -729,14 +882,14 @@ export function staysHere(seat?: string): readonly { family: string; reason: str
     {
       family: i18n._({
         id: "migration receipts and inputs",
-        comment: "a file family that stays on this device",
+        comment: "a file family that stays on this computer",
       }),
       reason: i18n._("original files kept from an upgrade"),
     },
     {
       family: i18n._({
         id: "temporary files",
-        comment: "a file family that stays on this device",
+        comment: "a file family that stays on this computer",
       }),
       reason: i18n._("copies made while writing"),
     },
@@ -749,11 +902,11 @@ export function staysHere(seat?: string): readonly { family: string; reason: str
 export function sessionPartName(entry: SpaceEntry): string {
   switch (entry.family) {
     case "session manifest":
-      return i18n._({ id: "manifest", comment: "a session's part: its manifest file" });
+      return i18n._({ id: "file", comment: "a session's part, under its node in the records' tree: the session's own file" });
     case "session records":
-      return i18n._({ id: "records", comment: "a session's part: its record file" });
+      return i18n._({ id: "transcript", comment: "a session's part, under its node in the records' tree: its transcript, every turn as it happened" });
     case "provider hints":
-      return i18n._({ id: "provider hints", comment: "a file family that stays on this device" });
+      return i18n._({ id: "provider hints", comment: "a file family that stays on this computer" });
     default:
       return entry.name;
   }

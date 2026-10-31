@@ -1,18 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Groups and sharing on the Groups surface (DR-114, DR-127): a group
-// created on an instance's heading or a subgroup on a group's heading
-// (space-68), or renamed there (space-76, DR-120), and a group's or a
-// spex repository placement's members panel (space-62) with Share
-// (space-69) and Remove (space-72), each at the instance that lists it
-// or governs the placement (DR-128); a placement's panel names the other
-// instances its records are kept at.
-// An act stands exactly where the
-// host's last read says the person may take it; the host is asked
-// whatever the view said, and its refusal stands in place with its
-// words. Nothing is retried, derived or cached: the members are read on
-// opening, on Refresh, and come back with each share and removal.
+// Groups and members on the Space surface (DR-114, DR-127, DR-172): a
+// group created on a Space's heading (space-68), and a group's or a
+// project's members panel (space-62) with Share (space-69) and Remove
+// (space-72), each at the Space that lists the group or governs the
+// records (DR-128); a project's panel names the other Spaces its records
+// are kept at. An act stands exactly where the Space's last read says
+// the person may take it; the Space is asked whatever the view said, and
+// its refusal stands in place with its words. Members are named by their
+// logins, the Space's own role names beside them (DR-171). Nothing is
+// retried, derived or cached: the members are read on opening, on
+// Refresh, and come back with each share and removal.
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import type { HostMemberInfo, InstanceState } from "@sublang/spex-core/protocol";
@@ -20,6 +19,7 @@ import type { HostMemberInfo, InstanceState } from "@sublang/spex-core/protocol"
 import { type SpaceMembersReply, type SpaceMembersTarget } from "../state/store.js";
 import { usePlaceStore } from "../state/place-context.js";
 import { i18n } from "../i18n.js";
+import { instanceName } from "../lib/instances.js";
 import { nameList } from "../lib/placements.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { SECONDARY, type Note } from "./SpaceSurface.js";
@@ -35,7 +35,7 @@ function focusLater(ref: { current: HTMLElement | null }): void {
   setTimeout(() => ref.current?.focus(), 0);
 }
 
-/** A group's path as the host derives it from its name (space-68):
+/** A group's path as the Space derives it from its name (space-68):
  * lower-cased, each run outside letters, digits, `.`, `_` and `-` one
  * `-`, leading and trailing `-` and `.` dropped — empty for a name in
  * Chinese, say. */
@@ -47,32 +47,25 @@ function derivedGroupPath(name: string): string {
 }
 
 /** A group's name and path, asked in place (space-68): "Group name",
- * "Path" following the name as the host derives it until the reader
+ * "Path" following the name as the Space derives it until the reader
  * edits it, Create and Cancel, Escape cancelling. Create stays disabled
- * while either is empty, reads "Creating…" while the host is asked and
+ * while either is empty, reads "Creating…" while the Space is asked and
  * takes no second submission; a refusal stands in the editor with the
  * name kept. The group already stands in the list when the reply closes
- * the editor: the core holds it as listed and announces it first.
- * Renaming (space-76), the fields hold the group's name and its own
- * path segment, the path no longer follows the name, and Save sends
- * only what differs, disabled while nothing does. */
+ * the editor: the core holds it as listed and announces it first. */
 export function GroupNameEditor({
   testId,
   instance,
   parent,
-  rename,
   connected,
   onClose,
   onNote,
 }: {
   testId: string;
-  /** The instance, by its origin, the group is made or renamed at
-   * (space-68, space-76). */
+  /** The Space, by its origin, the group is made at (space-68). */
   instance: string;
-  /** The parent group's host id; null creates at the instance's root. */
+  /** The parent group's id at the Space; null creates at its root. */
   parent: string | null;
-  /** The group renamed: its host id, its name and its own path segment. */
-  rename?: { group: string; name: string; path: string };
   connected: boolean;
   /** Close the editor; the caller returns focus to its control. */
   onClose(): void;
@@ -80,12 +73,10 @@ export function GroupNameEditor({
 }) {
   const store = usePlaceStore();
   const spaceGroupCreate = store((state) => state.spaceGroupCreate);
-  const spaceGroupRename = store((state) => state.spaceGroupRename);
-  const [name, setName] = useState(rename?.name ?? "");
-  const [path, setPath] = useState(rename?.path ?? "");
-  // The path follows the name until the reader edits it; a group's own
-  // path never follows a new name.
-  const [pathEdited, setPathEdited] = useState(rename !== undefined);
+  const [name, setName] = useState("");
+  const [path, setPath] = useState("");
+  // The path follows the name until the reader edits it.
+  const [pathEdited, setPathEdited] = useState(false);
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string>();
   const fieldRef = useRef<HTMLInputElement>(null);
@@ -96,22 +87,13 @@ export function GroupNameEditor({
 
   const chosen = name.trim();
   const chosenPath = path.trim();
-  // What a rename changes: the name, the path, or both.
-  const change = rename
-    ? {
-        ...(chosen !== rename.name ? { name: chosen } : {}),
-        ...(chosenPath !== rename.path ? { path: chosenPath } : {}),
-      }
-    : {};
-  const unchanged = rename !== undefined && Object.keys(change).length === 0;
   const submit = async () => {
-    if (!chosen || !chosenPath || unchanged || inFlight.current) return;
+    if (!chosen || !chosenPath || inFlight.current) return;
     inFlight.current = true;
     setBusy(true);
     setRefusal(undefined);
     try {
-      if (rename) await spaceGroupRename(instance, rename.group, change);
-      else await spaceGroupCreate(instance, chosen, chosenPath, parent);
+      await spaceGroupCreate(instance, chosen, chosenPath, parent);
       onClose();
     } catch (cause) {
       const message = (cause as Error).message;
@@ -136,7 +118,7 @@ export function GroupNameEditor({
     >
       <label className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
         <span className="shrink-0 text-neutral-500">
-          {i18n._({ id: "Group name", comment: "the field naming a new group on the Git host" })}
+          {i18n._({ id: "Group name", comment: "the field naming a new group at the Space" })}
         </span>
         <input
           ref={fieldRef}
@@ -149,7 +131,7 @@ export function GroupNameEditor({
           onKeyDown={(event) => {
             if (event.key === "Enter") void submit();
           }}
-          // The field stays focusable while the host is asked, so a
+          // The field stays focusable while the Space is asked, so a
           // refusal can bring the reader back to it.
           readOnly={busy}
           spellCheck={false}
@@ -159,7 +141,7 @@ export function GroupNameEditor({
       </label>
       <label className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
         <span className="shrink-0 text-neutral-500">
-          {i18n._({ id: "Path", comment: "the field holding a new group's path on the Git host, the last segment of its address" })}
+          {i18n._({ id: "Path", comment: "the field holding a new group's path at the Space, the last segment of its address" })}
         </span>
         <input
           data-testid={`${testId}-path`}
@@ -181,18 +163,14 @@ export function GroupNameEditor({
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
-          data-testid={`${testId}-${rename ? "save" : "create"}`}
+          data-testid={`${testId}-create`}
           className={SECONDARY}
-          disabled={!connected || busy || !chosen || !chosenPath || unchanged}
+          disabled={!connected || busy || !chosen || !chosenPath}
           onClick={() => void submit()}
         >
-          {rename
-            ? busy
-              ? i18n._({ id: "Saving…", comment: "the Save control, while the host renames the group" })
-              : i18n._({ id: "Save", comment: "rename the group as the fields say on the Git host" })
-            : busy
-              ? i18n._({ id: "Creating…", comment: "the Create control, while the host creates the group" })
-              : i18n._({ id: "Create", comment: "create the group named in the field on the Git host" })}
+          {busy
+            ? i18n._({ id: "Creating…", comment: "the Create control, while the Space creates the group" })
+            : i18n._({ id: "Create", comment: "create the group named in the field at the Space" })}
         </button>
         <button type="button" data-testid={`${testId}-cancel`} className={SECONDARY} disabled={busy} onClick={onClose}>
           {i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}
@@ -207,14 +185,14 @@ export function GroupNameEditor({
   );
 }
 
-/** A group's or a spex repository placement's members as its instance
- * lists them (space-62): read when the panel opens and on each Refresh,
- * and as each share and removal answers, held nowhere else. Each member
- * reads its name, the host's own role name and, where the membership
- * comes through a group, "via <group>"; where the host's last read says
- * the person may manage the members, Share stands in the panel and
- * Remove on each member held directly. A placement's panel says which
- * other instances the records are also placed at, linking none. */
+/** A group's or a project's members as its Space lists them
+ * (space-62): read when the panel opens and on each Refresh, and as each
+ * share and removal answers, held nowhere else. Each member reads its
+ * login, the Space's own role name and, where the membership comes
+ * through a group, "via <group>"; where the Space's last read says the
+ * person may manage the members, Share stands in the panel and Remove on
+ * each member held directly. A project's panel says which other Spaces
+ * its records are also kept at, linking none. */
 export function MembersPanel({
   instance,
   target,
@@ -227,8 +205,8 @@ export function MembersPanel({
   onClose,
   onNote,
 }: {
-  /** The instance that lists the group or governs the placement: its
-   * roles and its host name (space-69). */
+  /** The Space that lists the group or governs the records: its roles
+   * and its display name (space-69). */
   instance: InstanceState;
   target: SpaceMembersTarget;
   /** What the panel's test ids carry: a placement's
@@ -236,11 +214,11 @@ export function MembersPanel({
   id: string;
   /** The group's full path or the repository's name. */
   name: string;
-  /** What the host's last read says: the person may manage these
+  /** What the Space's last read says: the person may manage these
    * members. */
   canManage: boolean;
-  /** The display names of the other instances the clone's placement
-   * files name (space-62); none for a group or a lone placement. */
+  /** The display names of the other Spaces the records are kept at
+   * (space-62); none for a group or records kept at one. */
   alsoPlacedAt?: string[];
   connected: boolean;
   refreshes: number;
@@ -302,12 +280,12 @@ export function MembersPanel({
       }}
     >
       {alsoPlacedAt.length > 0 ? (
-        // Every placement's members see that the records are kept
-        // elsewhere too (DR-128); the instances are named, never linked.
+        // Every Space's members see that the records are kept elsewhere
+        // too (DR-128); the Spaces are named, never linked.
         <p data-testid="space-members-also" className="min-w-0 text-xs text-neutral-500">
           {i18n._({
             id: "These records are also placed at {names}",
-            comment: "a placement's members panel; {names} lists the other instances the records are kept at, by display name",
+            comment: "a project's members panel; {names} lists the other Spaces the records are kept at, by display name",
             values: { names: nameList(alsoPlacedAt) },
           })}
         </p>
@@ -354,7 +332,7 @@ export function MembersPanel({
                 disabled={!connected}
                 onClick={() => setSharing((was) => !was)}
               >
-                {i18n._({ id: "Share", comment: "add a person on the Git host to a group or a spex repository" })}
+                {i18n._({ id: "Share", comment: "add a person at the Space to a group or a project's records" })}
               </button>
             ) : null}
           </div>
@@ -383,7 +361,7 @@ export function MembersPanel({
 }
 
 /** One member (space-62): name, login, "via <group>" where inherited,
- * the host's role name, and Remove on a member held directly where the
+ * the Space's role name, and Remove on a member held directly where the
  * person may manage them (space-72) — asked with the inline confirm,
  * Keep focused, the row reading "Removing…" until the reply and a
  * refusal standing on it with the member kept. */
@@ -464,7 +442,7 @@ function MemberRow({
           >
             {busy
               ? i18n._({ id: "Removing…", comment: "the removal is in flight" })
-              : i18n._({ id: "Remove", comment: "take a member out of a group or a spex repository on the Git host" })}
+              : i18n._({ id: "Remove", comment: "take a member out of a group or a project's records at the Space" })}
           </button>
         ) : null}
       </div>
@@ -472,7 +450,7 @@ function MemberRow({
         <div data-testid={`space-member-confirm-${member.login}`}>
           <InlineConfirm
             question={i18n._("Remove @{login} from {place}?", { login: member.login, place })}
-            confirmLabel={i18n._({ id: "Remove", comment: "confirm: take the member out on the Git host" })}
+            confirmLabel={i18n._({ id: "Remove", comment: "confirm: take the member out at the Space" })}
             cancelLabel={i18n._({ id: "Keep", comment: "cancel a removal: leave it as it is" })}
             onConfirm={() => void remove()}
             onCancel={() => {
@@ -491,12 +469,11 @@ function MemberRow({
   );
 }
 
-/** Share, asked in place (space-69): the login at the host, a listbox
- * of the host's own roles in its order — the least that may push
- * chosen — Add and Cancel, Escape cancelling. Add stays disabled while
- * the login is empty, reads "Adding…" while the host is asked and
- * takes no second submission; a refusal stands in the editor with the
- * login kept. */
+/** Share, asked in place (space-69): "Login at <Space>", a listbox of
+ * the Space's own roles in its order — the least that may push chosen —
+ * Add and Cancel, Escape cancelling. Add stays disabled while the login
+ * is empty, reads "Adding…" while the Space is asked and takes no second
+ * submission; a refusal stands in the editor with the login kept. */
 function ShareEditor({
   instance,
   target,
@@ -527,7 +504,7 @@ function ShareEditor({
     fieldRef.current?.focus();
   }, []);
 
-  // A login is the host's, typed as the reader knows it; a leading "@"
+  // A login is the Space's, typed as the reader knows it; a leading "@"
   // is how the surface writes one, not part of it.
   const chosen = login.trim().replace(/^@/, "");
   const submit = async () => {
@@ -563,9 +540,9 @@ function ShareEditor({
       <label className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
         <span className="shrink-0 text-neutral-500">
           {i18n._({
-            id: "Login at {host}",
-            comment: "the field for a person's login on the Git host, named by its host name",
-            values: { host: instance.host },
+            id: "Login at {space}",
+            comment: "the field for a person's login at the Space, named by the Space's display name",
+            values: { space: instanceName(instance) },
           })}
         </span>
         <input
@@ -585,8 +562,8 @@ function ShareEditor({
       </label>
       <select
         data-testid={`space-share-${id}-role`}
-        aria-label={i18n._({ id: "Role", comment: "the host's role a person is added at" })}
-        // A listbox: every role the host grants stands in view.
+        aria-label={i18n._({ id: "Role", comment: "the Space's role a person is added at" })}
+        // A listbox: every role the Space grants stands in view.
         size={Math.max(roles.length, 2)}
         value={role}
         onChange={(event) => setRole(event.target.value)}
@@ -608,8 +585,8 @@ function ShareEditor({
           onClick={() => void submit()}
         >
           {busy
-            ? i18n._({ id: "Adding…", comment: "the Add control, while the host adds the person" })
-            : i18n._({ id: "Add", comment: "add the person at the chosen role on the Git host" })}
+            ? i18n._({ id: "Adding…", comment: "the Add control, while the Space adds the person" })
+            : i18n._({ id: "Add", comment: "add the person at the chosen role at the Space" })}
         </button>
         <button type="button" data-testid={`space-share-${id}-cancel`} className={SECONDARY} disabled={busy} onClick={onClose}>
           {i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}

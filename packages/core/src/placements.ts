@@ -269,12 +269,12 @@ const notEncoded = (): string => i18n._({
   comment: "Storage diagnostic: a placement file under placements/ holds something other than its three lines, so it names no placement",
 });
 const misnamed = (): string => i18n._({
-  id: "its name is not the folder of the instance it names",
-  comment: "Storage diagnostic: a placement file under placements/ is named for another instance than the one it records, so it names no placement",
+  id: "its name is not the folder of the Space it names",
+  comment: "Storage diagnostic on a file under placements/ in a project's records: it is named for another Space than the one it records, so it is not read",
 });
 const notAFolder = (): string => i18n._({
-  id: "not a folder of placement files",
-  comment: "Storage diagnostic: the clone's placements/ is a file or a link, so no placement file in it is read",
+  id: "not a folder, so no file in it is read",
+  comment: "Storage diagnostic on placements/ in a project's records: it is a file or a link, so none of the files naming the Spaces the records are kept at is read",
 });
 
 /**

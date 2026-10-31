@@ -336,7 +336,7 @@ describe("run-view-171: a project opened from the palette is current while it op
     expect(row.textContent).toContain("gamma");
     expect(row.textContent).not.toContain("gamma-spex");
     expect(row.textContent).toContain("Opening…");
-    expect(row.getAttribute("title")).toBe("Cloning code…");
+    expect(row.getAttribute("title")).toBe("Downloading code…");
     expect(row.getAttribute("aria-selected")).toBe("true");
     expect(row.compareDocumentPosition(within(home).getByTestId("sidebar-project-p1")) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
     expect(within(home).getByTestId("sidebar-project-p1").getAttribute("aria-selected")).toBe("false");
@@ -345,7 +345,7 @@ describe("run-view-171: a project opened from the palette is current while it op
     // no task start and no greeting.
     const opening = screen.getByTestId("project-opening");
     expect(opening.textContent).toContain("gamma");
-    expect(screen.getByTestId("project-opening-step").textContent).toBe("Cloning code…");
+    expect(screen.getByTestId("project-opening-step").textContent).toBe("Downloading code…");
     expect(screen.queryByTestId("project-task-start")).toBeNull();
     expect(screen.queryByTestId("welcome-home")).toBeNull();
     // Neither its specs nor its config are read before the core lists it.
@@ -369,7 +369,7 @@ describe("run-view-171: a project opened from the palette is current while it op
     // [run-view-168] the cause in the row's own words, and the way to
     // its row.
     expect(screen.getByTestId("project-opening").textContent).toContain("gamma");
-    expect(screen.getByTestId("project-opening-step").textContent).toBe("Code stopped — the code host refused the clone");
+    expect(screen.getByTestId("project-opening-step").textContent).toBe("Downloading code stopped — the code host refused the clone");
     fireEvent.click(screen.getByTestId("project-opening-space"));
     expect(screen.getByTestId("space-surface")).toBeTruthy();
     expect(screen.queryByTestId("project-opening")).toBeNull();

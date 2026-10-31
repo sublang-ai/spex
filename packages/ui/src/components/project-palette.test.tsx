@@ -426,7 +426,9 @@ describe("projects-1, space-58: a folder added while signed in asks for its grou
     expect(onPick).toHaveBeenCalledWith(ADDED.id);
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.queryByTestId("palette-path")).toBeNull();
-    expect((screen.getByTestId(`space-pick-name-${ADDED.id}`) as HTMLInputElement).value).toBe("gamma");
+    // No field names the new records: they take the folder's name
+    // (space-58, DR-172).
+    expect(screen.queryByTestId(`space-pick-name-${ADDED.id}`)).toBeNull();
     fireEvent.click(screen.getByTestId("space-pick-group-acme"));
     await vi.waitFor(() =>
       expect(spacePick).toHaveBeenCalledWith(ADDED.id, { kind: "create", instance: HOST, groupId: "20", name: "gamma" }),
@@ -476,9 +478,9 @@ describe("projects-1, space-58: a folder added while signed in asks for its grou
     const sections = within(picker).getAllByTestId(/^space-pick-instance-/);
     expect(sections.map((section) => section.dataset.testid)).toEqual([`space-pick-instance-${HOST}`, `space-pick-instance-${SECOND}`]);
     expect(sections.map((section) => within(section).getByRole("heading", { level: 3 }).textContent)).toEqual(["Host", "Second"]);
-    // Your namespace reads "Only you", first (space-58, DR-159).
+    // Personal first (space-58, DR-172).
     for (const section of sections) {
-      expect(within(section).getAllByTestId(/^space-pick-group-/).map((option) => option.textContent)).toEqual(["Only you", "acme"]);
+      expect(within(section).getAllByTestId(/^space-pick-group-/).map((option) => option.textContent)).toEqual(["Personal", "acme"]);
     }
     // Picking the second's acme creates there, by its id at the second.
     fireEvent.click(within(sections[1]!).getByTestId("space-pick-group-acme"));
@@ -516,6 +518,10 @@ describe("projects-1, space-58: a folder added while signed in asks for its grou
 describe("run-view-168: this computer's From your groups", () => {
   const SPEX = "https://spex.pub";
   const ABSENT = repositoryRow("@spex.pub/acme/gamma-spex", { instance: SPEX, governing: SPEX, id: "301", state: "absent", branch: null });
+  /** A project in your own records at the Space, and one another account
+   * shares, neither on this computer. */
+  const MINE = repositoryRow("@spex.pub/me/notes-spex", { instance: SPEX, governing: SPEX, id: "302", state: "absent", branch: null });
+  const BOBS = repositoryRow("@spex.pub/bob/demo-spex", { instance: SPEX, governing: SPEX, id: "303", state: "absent", branch: null });
   const acme = (repositories: RepositoryState[]) => ({
     id: "7", login: null, mine: false, fullPath: "acme", name: "acme", can: NO_CAN, placed: [], repositories,
   });
@@ -563,6 +569,50 @@ describe("run-view-168: this computer's From your groups", () => {
     expect(document.activeElement).toBe(field);
     fireEvent.change(field, { target: { value: "/work/gamma" } });
     fireEvent.keyDown(field, { key: "Enter" });
+    await vi.waitFor(() => expect(spaceJoin).toHaveBeenCalledWith(SPEX, "301", "/work/gamma"));
+  });
+
+  test("a row reads the project's name and its group — Personal for your own — never the records' key; it reads Opening… while its open runs and offers Try again once it stopped", async () => {
+    const spaceJoin = vi.fn(async () => {});
+    const groups = (rows: RepositoryState[]) =>
+      groupsState({
+        instances: [
+          instanceState(SPEX, {
+            groups: [namespace("me", rows.filter((row) => row.key.includes("/me/"))), acme(rows.filter((row) => row.key.includes("/acme/"))), namespace("bob", rows.filter((row) => row.key.includes("/bob/")), false)],
+          }),
+        ],
+      });
+    useAppStore.setState({ connection: "open", space: groups([ABSENT, MINE, BOBS]), spaceJoin });
+    renderPalette();
+    const row = (key: string) => screen.getByTestId(`palette-join-${key}`);
+    // Name and group, no tooltip of the records' key (run-view-168).
+    expect(row(ABSENT.key).textContent).toBe("gammaacme");
+    expect(row(MINE.key).textContent).toBe("notesPersonal");
+    expect(row(BOBS.key).textContent).toBe("demoShared by @bob");
+    for (const key of [ABSENT.key, MINE.key, BOBS.key]) {
+      expect(row(key).hasAttribute("title")).toBe(false);
+      expect(row(key).textContent).not.toContain("-spex");
+    }
+    cleanup();
+
+    // While its open runs, the row reads "Opening…" and opens nothing
+    // again; once it stopped, "Try again" sends it again (run-view-168).
+    const opening = { ...ABSENT, sync: { phase: "running" as const, op: "join" as const, step: "check" as const, since: 1, cancelable: false } };
+    useAppStore.setState({ space: groups([opening]) });
+    renderPalette({ onPickFolder: vi.fn(async () => "/work/gamma") });
+    expect(row(ABSENT.key).textContent).toBe("gammaacmeOpening…");
+    expect((row(ABSENT.key) as HTMLButtonElement).disabled).toBe(true);
+    cleanup();
+    const stopped = {
+      ...ABSENT,
+      sync: { phase: "stopped" as const, op: "join" as const, step: "check" as const, cause: "unreachable" as const, message: "Could not reach spex.pub", guidance: "", retry: true },
+    };
+    useAppStore.setState({ space: groups([stopped]) });
+    const onPickFolder = vi.fn(async () => "/work/gamma");
+    renderPalette({ onPickFolder });
+    const again = screen.getByTestId(`palette-join-again-${ABSENT.key}`);
+    expect(again.textContent).toBe("gammaacmeTry again");
+    fireEvent.click(again);
     await vi.waitFor(() => expect(spaceJoin).toHaveBeenCalledWith(SPEX, "301", "/work/gamma"));
   });
 

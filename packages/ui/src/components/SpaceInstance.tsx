@@ -1,38 +1,50 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// An instance's section of the groups list (space-1, DR-127): its
-// heading, then its groups, your namespace there and every other
-// account's login beneath it. Signed in, the heading reads the
-// instance's display name — its host name until a read names one —
-// beside "Signed in as @<login>", with Sign out (space-6), "New group"
-// where its read says the person may create one there (space-68) and
-// the phrase naming who makes groups where it says not, with no link
-// and no control (DR-120), and the time its last read was held, which
-// yields first below 42rem (space-28); a failed read stands on this
-// heading alone (git-host-5). Signed out, the heading keeps the name it
-// last read with "Sign in again", whose flow reads on it, and Forget,
-// which removes the instance from the home (space-82), and, where the
-// instance signed this device out, says so with the login to continue
-// as (space-3). Below 20rem the heading stacks, its last control
-// full-width. While the home lists any instance, "Add instance…" stands
-// at the list's foot, bearing "Another instance" as its title and
-// accessible name, and opens the sign-in card in its place (space-1,
+// A Space's section of the groups list (space-1, DR-127, DR-172): its
+// heading, its registry line, then its groups, Personal and every other
+// account's login beneath it. Signed in, the heading reads the Space's
+// display name — its host name until a read names one — beside
+// "@<login>", with "New group" where its read is held (space-68),
+// disabled and titled "Made by the people who run <Space>" where the
+// read says the person may not create one (DR-120), one overflow "More"
+// holding "Remove from this list", disabled, and Sign out (space-6) as
+// its last control; a failed read stands on this heading alone
+// (git-host-5). Signed out, the heading keeps the name it last read —
+// "<Space> · signed out · @<login>" where the Space signed this computer
+// out (space-3) — with "Sign in again", whose flow reads on it, and the
+// overflow's "Remove from this list", which removes the Space from this
+// list (space-82). Beneath each heading one line names the Space's
+// registry and the person's sign-in there (space-119), the surface
+// managing no package. Below 20rem the heading stacks, its last control
+// full-width. While the home lists any Space, "Add a Space…" stands at
+// the list's foot and opens the sign-in card in its place (space-1,
 // space-3). Every act is a command whose outcome arrives as state
 // (space-29).
 
-import { SpaceDirectory } from "./SpaceDirectory.js";
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import type { GroupsState, InstanceState } from "@sublang/spex-core/protocol";
+import type { GroupsState, InstanceState, RegistryState } from "@sublang/spex-core/protocol";
 
 import { usePlaceStore } from "../state/place-context.js";
-import { isLocalPlace } from "../state/store.js";
 import { i18n } from "../i18n.js";
-import { hostNameOf, instanceName, instanceOf, originOf } from "../lib/instances.js";
-import { seatName } from "../lib/space.js";
-import { absoluteTitle, relativeAge } from "../lib/time.js";
+import { instanceName, instanceOf, originOf } from "../lib/instances.js";
+import { openExternalBridge, seatName } from "../lib/space.js";
+import { directoryOffers, spaceNameOf, SpaceChooser, useSpaceDirectory } from "./SpaceDirectory.js";
+import { MoreMenu } from "./SpaceMenu.js";
 import { GroupNameEditor } from "./SpaceMembers.js";
-import { InstanceField, signInAgainLabel, signInLines, signingInLabel, type SignInFlow } from "./SpaceSignIn.js";
+import {
+  ContinueInBrowser,
+  causePhrase,
+  focusCardField,
+  opensInBrowser,
+  signInAgainLabel,
+  signInLabel,
+  signInLines,
+  signInTitle,
+  signingInLabel,
+  useChoice,
+  type SignInFlow,
+} from "./SpaceSignIn.js";
 import { PRIMARY, SECONDARY, type Note } from "./SpaceSurface.js";
 
 /** The heading's fields: stacked below 20rem, a wrapping row above it
@@ -53,18 +65,19 @@ function stranded(disabledOn?: HTMLElement | null): boolean {
   );
 }
 
-/** One instance the home lists (space-1): its heading over what it
- * lists, the caller's entries in the order the heading lists them. */
+/** One Space the home lists (space-1): its heading and its registry line
+ * over what it lists, the caller's entries in the order the heading lists
+ * them. */
 export function InstanceSection({
   instance,
-  now,
   connected,
   signIn,
   onNote,
   children,
 }: {
   instance: InstanceState;
-  now: number;
+  /** The clock the surface reads by; the heading carries no time. */
+  now?: number;
   connected: boolean;
   signIn: SignInFlow;
   onNote: Note;
@@ -78,24 +91,26 @@ export function InstanceSection({
       data-signed-in={instance.signedIn ? "1" : "0"}
       className="@container flex min-w-0 flex-col gap-3 border-t border-neutral-200 pt-3 dark:border-neutral-800"
     >
-      <InstanceHeading instance={instance} now={now} connected={connected} signIn={signIn} onNote={onNote} />
+      <div className="flex min-w-0 flex-col gap-1">
+        <InstanceHeading instance={instance} connected={connected} signIn={signIn} onNote={onNote} />
+        <RegistryLine instance={instance} connected={connected} onNote={onNote} />
+      </div>
       {children}
     </div>
   );
 }
 
-/** An instance's heading (space-1, space-3, space-6, space-82,
- * space-28): what it carries signed in, or signed out, with the sign-in
- * that runs or failed here, or Forget's refusal, reading beneath it. */
+/** A Space's heading (space-1, space-3, space-6, space-82, space-28):
+ * what it carries signed in, or signed out, with the sign-in that runs or
+ * failed here, or the refusal of "Remove from this list", reading beneath
+ * it. */
 function InstanceHeading({
   instance,
-  now,
   connected,
   signIn,
   onNote,
 }: {
   instance: InstanceState;
-  now: number;
   connected: boolean;
   signIn: SignInFlow;
   onNote: Note;
@@ -105,16 +120,16 @@ function InstanceHeading({
   const spaceForget = store((state) => state.spaceForget);
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState<string>();
-  const [forgetting, setForgetting] = useState(false);
-  const [forgetError, setForgetError] = useState<string>();
+  const [removing, setRemoving] = useState(false);
+  const [removeError, setRemoveError] = useState<string>();
   const [creating, setCreating] = useState(false);
   const againRef = useRef<HTMLButtonElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
   const newGroupRef = useRef<HTMLButtonElement>(null);
-  const forgetRef = useRef<HTMLButtonElement>(null);
+  const moreRef = useRef<HTMLButtonElement>(null);
   const origin = instance.origin;
   const name = instanceName(instance);
-  // At most one sign-in runs, whichever instance it names (git-host-2):
+  // At most one sign-in runs, whichever Space it names (git-host-2):
   // while one starts or runs, no other heading offers its own.
   const flowing = signIn.running !== null || signIn.starting;
   const here = signIn.at === origin;
@@ -132,12 +147,16 @@ function InstanceHeading({
     else againRef.current?.focus();
   }, [runningHere]);
 
-  // Forget's refusal speaks of this sign-out: signed in again, it goes.
+  // The refusal speaks of this sign-out: signed in again, it goes.
   useEffect(() => {
-    if (instance.signedIn) setForgetError(undefined);
+    if (instance.signedIn) setRemoveError(undefined);
   }, [instance.signedIn]);
 
-  /** Sign out of this instance (space-6): the reply is the state, the
+  // At a seat's place the server is named where this computer would be
+  // (space-112).
+  const seat = seatName(store.place);
+
+  /** Sign out of this Space (space-6): the reply is the state, the
    * heading kept, signed out, and focus moves to its "Sign in again". */
   const signOut = async () => {
     setSigningOut(true);
@@ -146,9 +165,9 @@ function InstanceHeading({
       await spaceSignOut(origin);
       onNote(
         i18n._({
-          id: "Signed out of {host}",
-          values: { host: name },
-          comment: "the live note once Sign out signed this device out of one instance; {host} is its display name, or its host name before any read",
+          id: "Signed out of {name}",
+          values: { name },
+          comment: "the live note once Sign out signed this computer out of one Space; {name} is its display name, or its host name before any read",
         }),
       );
       setTimeout(() => {
@@ -163,71 +182,107 @@ function InstanceHeading({
     }
   };
 
-  /** Forget this signed-out instance (space-82): the reply is the state,
-   * which lists it no more, so its heading leaves the list — nothing at
-   * the instance changes and every record stays, so nothing is asked
-   * first. Focus, whose control is gone with the heading, moves to "Add
-   * instance…" — the field of its card where the reader opened it — or,
-   * where no instance remains and the header is the sign-in card again,
-   * to that card's field (DR-010 §6). Refused — a spex repository still
-   * kept under it, or a session refusing its follow — the core's words
-   * stand beneath the heading, which stays. */
-  const forget = async () => {
-    if (!connected || forgetting || (here && flowing)) return;
-    setForgetting(true);
-    setForgetError(undefined);
+  /** Remove this signed-out Space from this list (space-82): the reply is
+   * the state, which lists it no more, so its heading leaves the list —
+   * nothing at the Space changes and every record stays, so nothing is
+   * asked first. Focus, whose control is gone with the heading, moves to
+   * "Add a Space…" — the chooser of its card where the reader opened it —
+   * or, where no Space remains and the header is the sign-in card again,
+   * to that card's chooser (DR-010 §6). Refused — "Still syncing:
+   * <projects> — stop them first" — the core's words stand beneath the
+   * heading, which stays. */
+  const remove = async () => {
+    if (!connected || removing || instance.signedIn || (here && flowing)) return;
+    setRemoving(true);
+    setRemoveError(undefined);
     try {
       await spaceForget(origin);
       onNote(
         i18n._({
-          id: "Forgot {host}",
-          values: { host: name },
-          comment: "the live note once Forget removed the instance from this home; {host} is its display name, or its host name before any read",
+          id: "Removed {space} from this list",
+          values: { space: name },
+          comment: "the live note once \"Remove from this list\" removed a signed-out Space; {space} is its display name, or its host name before any read",
         }),
       );
       setTimeout(() => {
         if (!stranded()) return;
-        document
-          .querySelector<HTMLElement>(
-            [
-              '[data-testid="space-signin-card"] [data-testid="space-signin-instance"]',
-              '[data-testid="space-add-instance"]',
-              '[data-testid="space-add-card"] [data-testid="space-signin-instance"]',
-            ].join(", "),
-          )
-          ?.focus();
+        const add = document.querySelector<HTMLElement>('[data-testid="space-add-space"]');
+        if (add) add.focus();
+        else {
+          focusCardField("space-signin-card");
+          if (stranded()) focusCardField("space-add-card");
+        }
       }, 0);
     } catch (cause) {
-      const message = (cause as Error).message;
-      setForgetError(message);
+      const message = causePhrase((cause as Error).message);
+      setRemoveError(message);
       onNote(message);
-      // Forget, disabled while it ran, takes focus back.
       setTimeout(() => {
-        if (stranded()) forgetRef.current?.focus();
+        if (stranded()) moreRef.current?.focus();
       }, 0);
     } finally {
-      setForgetting(false);
+      setRemoving(false);
     }
   };
 
-  /** Sign in again at this instance's origin (space-3), its flow reading
+  /** Sign in again at this Space's origin (space-3), its flow reading
    * here. */
   const again = () => {
-    if (!connected || flowing || forgetting) return;
+    if (!connected || flowing || removing) return;
     void signIn.start(origin, origin);
   };
 
-  // The flow that runs, or failed, here: named by the host name of the
-  // origin being signed in to (space-3).
-  const lines = here ? signInLines(signIn, hostNameOf(signIn.instance ?? origin)) : null;
-  // The instance signed this device out (git-host-4): said while no flow
-  // runs or stands failed (space-3).
+  // The flow that runs, or failed, here: named as the reader knows the
+  // Space (space-3).
+  const lines = here ? signInLines(signIn, name) : null;
+  // The Space signed this computer out (git-host-4): said on the heading
+  // while no flow runs or stands failed (space-3).
   const byHost = !instance.signedIn && instance.hostSignedOut && !flowing && signIn.failure === undefined;
-  const readAt = instance.readAt;
-  const signedInAs = i18n._("Signed in as @{login}", { login: instance.account.login });
-  // At a seat's place the server is named where this device would be
-  // (space-112).
-  const seat = seatName(store.place);
+  const login = instance.account.login;
+  const account = instance.signedIn
+    ? `@${login}`
+    : byHost
+      ? i18n._({
+          id: "signed out · @{login}",
+          values: { login },
+          comment: "on a Space's heading, after its name: the Space signed this computer out; {login} is the account to sign in again as",
+        })
+      : undefined;
+  // The read the heading's New group follows (space-1): held, the Space
+  // says whether the person may create a group there.
+  const readHeld = instance.readAt !== null;
+  const madeBy = i18n._({
+    id: "Made by the people who run {space}",
+    values: { space: name },
+    comment: "the title of a disabled New group where the Space says the person may not create a group there; {space} is its display name",
+  });
+  const removeEntry = {
+    label: i18n._({
+      id: "Remove from this list",
+      comment: "a Space heading's overflow entry: removes a signed-out Space from this list; nothing at the Space changes and every record stays",
+    }),
+    testId: "space-instance-remove",
+    disabled: instance.signedIn || removing || (here && flowing) || !connected,
+    hint: instance.signedIn
+      ? i18n._({ id: "Sign out first", comment: "why \"Remove from this list\" is not offered while signed in to that Space" })
+      : undefined,
+    title: !instance.signedIn
+      ? seat === undefined
+        ? i18n._({
+            id: "Every record stays on this computer",
+            comment: "the title of \"Remove from this list\": nothing is deleted",
+          })
+        : i18n._({
+            id: "Every record stays on {place}",
+            values: { place: seat },
+            comment: "the title of \"Remove from this list\" on a team server's Space; {place} is the server's name",
+          })
+      : undefined,
+    onSelect: () => void remove(),
+  };
+  const more = (
+    <MoreMenu key="more" of={name} testId="space-instance-more" buttonRef={moreRef} entries={[removeEntry]} />
+  );
 
   return (
     <div
@@ -248,11 +303,11 @@ function InstanceHeading({
           <span className="min-w-0 truncate" title={name}>
             {name}
           </span>
-          {instance.signedIn ? " " : null}
-          {instance.signedIn ? (
-            <span data-testid="space-account" className="min-w-0 truncate text-xs font-normal text-neutral-500" title={signedInAs}>
+          {account ? " " : null}
+          {account ? (
+            <span data-testid="space-account" className="min-w-0 truncate text-xs font-normal text-neutral-500" title={account}>
               <span aria-hidden>· </span>
-              {signedInAs}
+              {account}
             </span>
           ) : null}
         </h2>
@@ -261,23 +316,7 @@ function InstanceHeading({
             to another. */}
         {instance.signedIn ? (
           <>
-            {/* The read time is the first at-a-glance word to yield
-                (space-28); its full moment rides the title. */}
-            <span
-              key="read-at"
-              data-testid="space-read-at"
-              title={readAt !== null ? absoluteTitle(readAt) : undefined}
-              className="hidden min-w-0 shrink-0 truncate text-xs text-neutral-500 @2xl:inline"
-            >
-              {readAt !== null
-                ? i18n._({
-                    id: "Read {age}",
-                    values: { age: relativeAge(readAt, now) },
-                    comment: "on a signed-in instance's heading: when its last read was held; {age} is relative, such as '5m ago'",
-                  })
-                : i18n._("Not read yet")}
-            </span>
-            {instance.account.canCreateGroup ? (
+            {readHeld ? (
               <button
                 key="new-group"
                 ref={newGroupRef}
@@ -285,10 +324,11 @@ function InstanceHeading({
                 data-testid="space-new-group"
                 aria-expanded={creating}
                 className={`${SECONDARY} self-start whitespace-nowrap @xs:self-auto`}
-                disabled={!connected}
+                disabled={!connected || !instance.account.canCreateGroup}
+                title={instance.account.canCreateGroup ? undefined : madeBy}
                 onClick={() => setCreating((was) => !was)}
               >
-                {i18n._({ id: "New group", comment: "create a group at the root of the instance whose heading carries it" })}
+                {i18n._({ id: "New group", comment: "create a group at the root of the Space whose heading carries it" })}
               </button>
             ) : null}
             <button
@@ -299,53 +339,28 @@ function InstanceHeading({
               disabled={!connected || signingOut}
               title={
                 seat === undefined
-                  ? i18n._("Signs this device out of {host}; every record stays here", { host: name })
+                  ? i18n._({
+                      id: "Signs this computer out of {space}; every record stays here",
+                      values: { space: name },
+                      comment: "Sign out's title on a Space's heading; {space} is its display name",
+                    })
                   : i18n._({
-                      id: "Signs {place} out of {host}; every record stays there",
-                      values: { place: seat, host: name },
-                      comment: "Sign out's title on a team server's Space; {place} is the server's name, {host} the instance's display name",
+                      id: "Signs {place} out of {space}; every record stays there",
+                      values: { place: seat, space: name },
+                      comment: "Sign out's title on a team server's Space; {place} is the server's name, {space} the Space's display name",
                     })
               }
               onClick={() => void signOut()}
             >
               {signingOut
                 ? i18n._({ id: "Signing out…", comment: "the Sign out control, while signing out" })
-                : i18n._({ id: "Sign out", comment: "sign this device out of the instance whose heading carries it" })}
+                : i18n._({ id: "Sign out", comment: "sign this computer out of the Space whose heading carries it" })}
             </button>
+            {/* The overflow comes last, after Sign out (space-1). */}
+            {more}
           </>
         ) : (
           <>
-            {/* Forget removes the instance from the home, nothing at it
-                changing (space-82): no busy form (space-28) and no
-                confirm, the control disabled while it runs and while a
-                sign-in runs here. */}
-            <button
-              key="forget"
-              ref={forgetRef}
-              type="button"
-              data-testid="space-forget"
-              className={`${SECONDARY} self-start whitespace-nowrap @xs:self-auto`}
-              disabled={!connected || forgetting || (here && flowing)}
-              title={
-                seat === undefined
-                  ? i18n._({
-                      id: "Forgets {host} on this device; every record stays here",
-                      values: { host: name },
-                      comment: "Forget's title on a signed-out instance's heading; {host} is the instance's display name, or its host name before any read",
-                    })
-                  : i18n._({
-                      id: "Forgets {host} on {place}; every record stays there",
-                      values: { host: name, place: seat },
-                      comment: "Forget's title on a team server's Space; {host} is the instance's display name, {place} the server's name",
-                    })
-              }
-              onClick={() => void forget()}
-            >
-              {i18n._({
-                id: "Forget",
-                comment: "on a signed-out instance's heading: remove the instance from this home; nothing at it changes and every record stays",
-              })}
-            </button>
             {runningHere ? (
               <button
                 key="cancel"
@@ -364,24 +379,16 @@ function InstanceHeading({
               type="button"
               data-testid="space-signin-again"
               className={`${SECONDARY} w-full whitespace-nowrap @xs:w-auto`}
-              disabled={!connected || flowing || forgetting}
-              title={i18n._("Signs in to {host}", { host: instance.host })}
+              disabled={!connected || flowing || removing}
+              title={opensInBrowser(name)}
               onClick={again}
             >
               {here && flowing ? signingInLabel() : signInAgainLabel()}
             </button>
+            {more}
           </>
         )}
       </div>
-      {instance.signedIn && !instance.account.canCreateGroup && readAt !== null ? (
-        <p data-testid="space-groups-made-by" className="min-w-0 text-xs text-neutral-500">
-          {i18n._({
-            id: "Groups are made by the people who run {name}",
-            comment: "on an instance's heading where the person may not create a group there; {name} is the instance's display name; no link, no control",
-            values: { name },
-          })}
-        </p>
-      ) : null}
       {instance.signedIn && instance.read.phase === "failed" ? (
         <p data-testid="space-read-error" role="alert" className={ALERT}>
           {instance.read.message}
@@ -392,9 +399,9 @@ function InstanceHeading({
           {signOutError}
         </p>
       ) : null}
-      {forgetError && !instance.signedIn ? (
-        <p data-testid="space-forget-refusal" role="alert" className={`${ALERT} break-words`}>
-          {forgetError}
+      {removeError && !instance.signedIn ? (
+        <p data-testid="space-remove-refusal" role="alert" className={`${ALERT} break-words`}>
+          {removeError}
         </p>
       ) : null}
       {lines ? (
@@ -404,20 +411,6 @@ function InstanceHeading({
         >
           {lines}
         </div>
-      ) : null}
-      {byHost ? (
-        <p data-testid="space-signed-out-by-host" className="min-w-0 break-words text-sm text-neutral-600 dark:text-neutral-300">
-          {seat === undefined
-            ? i18n._("{site} signed this device out. Sign in again to continue as @{login}.", {
-                site: instance.host,
-                login: instance.account.login,
-              })
-            : i18n._({
-                id: "{site} signed {place} out. Sign in again to continue as @{login}.",
-                values: { site: instance.host, place: seat, login: instance.account.login },
-                comment: "a signed-out instance's heading on a team server's Space; {site} is its host name, {place} the server's name",
-              })}
-        </p>
       ) : null}
       {creating && instance.signedIn ? (
         <GroupNameEditor
@@ -437,28 +430,173 @@ function InstanceHeading({
   );
 }
 
-/** The name "Add instance…" bears as its title and accessible name, and
- * the card it opens (space-1, space-28). */
-const anotherInstance = (): string =>
-  i18n._({
-    id: "Another instance",
-    comment: "the title and accessible name of \"Add instance…\" at the groups list's foot, and the name of the sign-in card it opens",
-  });
+/** A registry sign-in in flight, as the start replied it. */
+type RegistryFlow = { flow: "browser"; url: string } | { flow: "device"; verificationUri: string };
 
-/** The groups list's foot while the home lists any instance (space-1,
- * space-3): "Add instance…", disabled while any sign-in starts or runs,
- * which opens the sign-in card in its place — its field captioned
- * "Instance" holding the default instance's origin, focused and
- * selected, with Sign in and Cancel, and saying that your own group's
- * records will be kept there too, as the sign-in places your own group
- * at every instance (space-4). The card's flow reads in it, as do
- * a start the core refuses, the field keeping its text, and a flow that
- * ended without an account, with "Sign in again"; a flow another client
- * runs at an instance the home does not list opens it too. Escape or
- * Cancel stops the flow the card runs and closes it, focus back on "Add
- * instance…"; the flow ending signed in closes it — at an instance
- * signed in already too, which signs its entry in again (git-host-2) —
- * focus landing on that instance heading's Sign out (DR-010 §6). */
+/** The registry line beneath a Space's heading (space-119, DR-168): where
+ * the directory lists the Space, or could not be read, one line for the
+ * registry at its origin — "Registry · signed in as @<login>" while the
+ * person is signed in there, else "Registry" with Sign in, titled "For
+ * publishing and private packages", its sign-in reading on the line as
+ * the card's reads. The registry sign-in is its own grant: it signs in
+ * to no Space, and the surface manages no package. */
+function RegistryLine({ instance, connected, onNote }: { instance: InstanceState; connected: boolean; onNote: Note }) {
+  const store = usePlaceStore();
+  const directory = useSpaceDirectory();
+  const origin = instance.origin;
+  const offered = directoryOffers(directory, origin);
+  const broadcast = store((state) => state.registryAccounts?.[origin]);
+  const [read, setRead] = useState<RegistryState>();
+  const [started, setStarted] = useState<RegistryFlow>();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+
+  // Read once the line stands: the account there, without credentials
+  // (core-service-143); the core's broadcast keeps it current.
+  useEffect(() => {
+    if (!offered || !connected) return;
+    let active = true;
+    void Promise.resolve()
+      .then(() => store.getClient().command("registry.get", { origin }))
+      .then((reply) => {
+        if (active) setRead(reply as RegistryState);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [offered, connected, origin, store]);
+
+  const state = broadcast ?? read;
+  const login = state?.account?.login;
+  const phase = state?.signIn?.phase;
+  // A flow the state stops — signed in, cancelled or failed — ends the
+  // one this line started.
+  const lastPhase = useRef(phase);
+  useEffect(() => {
+    if (lastPhase.current === "running" && phase !== "running") setStarted(undefined);
+    lastPhase.current = phase;
+  }, [phase]);
+  useEffect(() => {
+    if (login) setStarted(undefined);
+  }, [login]);
+
+  if (!offered) return null;
+  const registryName = state?.displayName || spaceNameOf(origin, undefined, directory);
+  const fromState = state?.signIn?.phase === "running" ? state.signIn : undefined;
+  const running: RegistryFlow | undefined = fromState
+    ? fromState.flow === "browser"
+      ? { flow: "browser", url: fromState.url }
+      : { flow: "device", verificationUri: fromState.verificationUri }
+    : login
+      ? undefined
+      : started;
+  const label = i18n._({ id: "Registry", comment: "the line beneath a Space's heading naming its registry, where packages are published and read" });
+
+  const start = async () => {
+    if (!connected || busy) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      const reply = (await store.getClient().command("registry.signin.start", { origin })) as
+        | { flow: "browser"; url: string }
+        | { flow: "device"; verificationUri: string };
+      if (reply?.flow === "browser") {
+        setStarted({ flow: "browser", url: reply.url });
+        await openExternalBridge()?.(reply.url).catch(() => false);
+      } else if (reply?.flow === "device") {
+        setStarted({ flow: "device", verificationUri: reply.verificationUri });
+      }
+    } catch (cause) {
+      const message = causePhrase((cause as Error).message);
+      setError(message);
+      onNote(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const cancel = async () => {
+    setStarted(undefined);
+    try {
+      await store.getClient().command("registry.signin.cancel", { origin });
+    } catch (cause) {
+      onNote((cause as Error).message);
+    }
+  };
+
+  const failure = error ?? (state?.error ? causePhrase(state.error) : undefined);
+  return (
+    <div data-testid="space-registry" className="flex min-w-0 flex-col gap-1 text-xs text-neutral-500">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+        {login ? (
+          <span data-testid="space-registry-account" className="min-w-0 truncate">
+            {i18n._({
+              id: "Registry · signed in as @{login}",
+              values: { login },
+              comment: "the registry line beneath a Space's heading while the person is signed in to that registry; {login} is their account there",
+            })}
+          </span>
+        ) : (
+          <>
+            <span className="min-w-0 truncate">{label}</span>
+            {running ? (
+              <button
+                type="button"
+                data-testid="space-registry-cancel"
+                className={`${SECONDARY} shrink-0`}
+                onClick={() => void cancel()}
+              >
+                {i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              data-testid="space-registry-signin"
+              className={`${SECONDARY} shrink-0 whitespace-nowrap`}
+              disabled={!connected || busy || running !== undefined}
+              title={i18n._({
+                id: "For publishing and private packages",
+                comment: "the title of Sign in on a Space's registry line: what signing in to the registry is for",
+              })}
+              onClick={() => void start()}
+            >
+              {running || busy ? signingInLabel() : signInLabel()}
+            </button>
+          </>
+        )}
+      </div>
+      {running ? (
+        <div className="text-sm text-neutral-600 dark:text-neutral-300">
+          <ContinueInBrowser
+            testId="space-registry-signin"
+            link={running.flow === "browser" ? running.url : running.verificationUri}
+            space={registryName}
+            bridge={running.flow === "browser"}
+          />
+        </div>
+      ) : null}
+      {failure && !login && !running ? (
+        <p role="alert" data-testid="space-registry-error" className={ALERT}>
+          {failure}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** The groups list's foot while the home lists any Space (space-1,
+ * space-3): "Add a Space…", disabled while any sign-in starts or runs,
+ * which opens the sign-in card "Sign in to a Space" in its place — its
+ * chooser preselecting the default Space (space-115), focused, with Sign
+ * in and Cancel. The card's flow reads in it, as do a start the core
+ * refuses, the field keeping its text, and a flow that ended without an
+ * account, with "Sign in again"; a flow another client runs at a Space
+ * the home does not list opens it too. Escape or Cancel stops the flow
+ * the card runs and closes it, focus back on "Add a Space…"; the flow
+ * ending signed in closes it — at a Space signed in already too, which
+ * signs its entry in again (git-host-2) — focus landing on that Space
+ * heading's Sign out (DR-010 §6). */
 export function AddInstance({
   groups,
   connected,
@@ -469,16 +607,11 @@ export function AddInstance({
   signIn: SignInFlow;
 }) {
   const [open, setOpen] = useState(false);
-  // A seat's place places your own group nowhere (space-102).
-  const remote = !isLocalPlace(usePlaceStore().place);
-  // What the reader typed since the card opened; until then the field
-  // holds the default instance's origin (space-3, storage-2).
-  const [typed, setTyped] = useState<string>();
-  // The instance the card's flow signs in to, and whether it was signed
-  // in when the flow started: its sign-in landing closes the card.
+  // The Space the card's flow signs in to, and whether it was signed in
+  // when the flow started: its sign-in landing closes the card.
   const [target, setTarget] = useState<{ origin: string; was: boolean }>();
-  // The card's own flow ended with no failure: at an instance signed in
-  // when it started, that is its landing.
+  // The card's own flow ended with no failure: at a Space signed in when
+  // it started, that is its landing.
   const [ended, setEnded] = useState(false);
   // A failure that already stood when the card opened belongs to an
   // earlier card: a fresh card reads none.
@@ -487,23 +620,32 @@ export function AddInstance({
   const [dismissed, setDismissed] = useState(false);
   const addRef = useRef<HTMLButtonElement>(null);
   const fieldRef = useRef<HTMLInputElement>(null);
+  const chooserRef = useRef<HTMLSelectElement>(null);
   const signInRef = useRef<HTMLButtonElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
   const focusField = useRef(false);
   const focusAdd = useRef(false);
   const titleId = useId();
-  const ownId = useId();
 
-  // At most one sign-in runs, whichever instance it names (git-host-2).
+  // At most one sign-in runs, whichever Space it names (git-host-2).
   const flowing = signIn.running !== null || signIn.starting;
   const here = signIn.at === "card";
   const runningHere = here && signIn.running !== null;
   const landed = target !== undefined && (!target.was || ended) && instanceOf(groups, target.origin)?.signedIn === true;
   // A flow reading on the card opens it, whoever started it — but not
-  // one whose instance is signed in already: that flow has landed, the
+  // one whose Space is signed in already: that flow has landed, the
   // header's card giving way as it does.
   const placed = runningHere && !dismissed && instanceOf(groups, signIn.instance)?.signedIn !== true;
   const show = (open || placed) && !landed;
+
+  // What the card's own flow reads (space-3): its lines while it runs, a
+  // start refused or a flow ended without an account as its cause, none
+  // of a flow reading elsewhere. Until the reader chooses, the chooser
+  // holds the origin that flow names, else the default Space's.
+  const failure = here && signIn.failure !== stale ? signIn.failure : undefined;
+  const named = runningHere || failure !== undefined ? signIn.instance : undefined;
+  const { directory, resolved, pick, type, reset } = useChoice(named ?? groups.defaultInstance);
+  const url = resolved.url;
 
   const remember = (origin: string) => {
     setTarget({ origin, was: instanceOf(groups, origin)?.signedIn === true });
@@ -516,20 +658,21 @@ export function AddInstance({
     if (!placed || open) return;
     setOpen(true);
     setStale(undefined);
+    reset();
     if (signIn.instance) remember(signIn.instance);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [placed, runningHere]);
 
   // Signed in, the card's work is done: it closes, and focus, whose
-  // control is gone with the card, lands on that instance heading's Sign
-  // out (DR-010 §6) — useSignIn moves it there for an instance newly
-  // signed in, and here for one signed in again.
+  // control is gone with the card, lands on that Space heading's Sign
+  // out (DR-010 §6) — useSignIn moves it there for a Space newly signed
+  // in, and here for one signed in again.
   useEffect(() => {
     if (!landed || !target) return;
     const origin = target.origin;
     setOpen(false);
     setTarget(undefined);
-    setTyped(undefined);
+    reset();
     setEnded(false);
     setTimeout(() => {
       if (!stranded()) return;
@@ -538,16 +681,19 @@ export function AddInstance({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [landed]);
 
-  // Focus follows what the reader did (DR-010 §6): opened, the field,
-  // its text selected; closed, "Add instance…" again, once the flow the
-  // card stopped has ended and it takes focus — unless the reader put
-  // focus elsewhere meanwhile.
+  // Focus follows what the reader did (DR-010 §6): opened, the chooser
+  // — the field where it stands alone, its text selected; closed, "Add a
+  // Space…" again, once the flow the card stopped has ended and it takes
+  // focus — unless the reader put focus elsewhere meanwhile.
   const addDisabled = !connected || flowing;
   useEffect(() => {
     if (show && focusField.current) {
       focusField.current = false;
-      fieldRef.current?.focus();
-      fieldRef.current?.select();
+      if (chooserRef.current) chooserRef.current.focus();
+      else {
+        fieldRef.current?.focus();
+        fieldRef.current?.select();
+      }
     }
     if (show) focusAdd.current = false;
     if (!show && focusAdd.current && !addDisabled) {
@@ -564,7 +710,7 @@ export function AddInstance({
     if (wasRunning.current === runningHere) return;
     wasRunning.current = runningHere;
     // Its flow ended with no cause standing: a landing wherever its
-    // instance reads signed in (space-3).
+    // Space reads signed in (space-3).
     if (!runningHere && signIn.failure === undefined) setEnded(true);
     if (!stranded(signInRef.current)) return;
     if (runningHere) cancelRef.current?.focus();
@@ -572,19 +718,10 @@ export function AddInstance({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runningHere]);
 
-  // What the card's own flow reads (space-3): its lines while it runs, a
-  // start refused or a flow ended without an account as its cause, none
-  // of a flow reading elsewhere. Until the reader types, the field holds
-  // the origin that flow names, else the default instance's.
-  const failure = here && signIn.failure !== stale ? signIn.failure : undefined;
-  const named = runningHere || failure !== undefined ? signIn.instance : undefined;
-  const field = typed ?? named ?? groups.defaultInstance;
-  const url = field.trim();
-
   const openCard = () => {
     if (!connected || flowing) return;
     focusField.current = true;
-    setTyped(undefined);
+    reset();
     setTarget(undefined);
     setEnded(false);
     setStale(signIn.failure);
@@ -592,7 +729,7 @@ export function AddInstance({
   };
 
   /** Close the card (space-3): the flow it runs stopped, focus back on
-   * "Add instance…". */
+   * "Add a Space…". */
   const close = () => {
     if (runningHere) {
       signIn.cancel();
@@ -601,7 +738,7 @@ export function AddInstance({
     focusAdd.current = true;
     setOpen(false);
     setTarget(undefined);
-    setTyped(undefined);
+    reset();
     setEnded(false);
   };
 
@@ -610,7 +747,7 @@ export function AddInstance({
     setStale(undefined);
     remember(originOf(url));
     void signIn.start(url, "card").then((started) => {
-      if (!started) fieldRef.current?.focus();
+      if (!started) (fieldRef.current ?? chooserRef.current)?.focus();
     });
   };
 
@@ -619,39 +756,28 @@ export function AddInstance({
       <button
         ref={addRef}
         type="button"
-        data-testid="space-add-instance"
-        // The long name is its title and its accessible name; the label
-        // keeps to the budget (space-28, DR-041).
-        aria-label={anotherInstance()}
-        title={anotherInstance()}
+        data-testid="space-add-space"
         className={`${SECONDARY} self-start whitespace-nowrap`}
         disabled={addDisabled}
         onClick={openCard}
       >
         {i18n._({
-          id: "Add instance…",
-          comment: "at the groups list's foot: opens the sign-in card for another instance; its title and accessible name are \"Another instance\"",
+          id: "Add a Space…",
+          comment: "at the groups list's foot: opens the card \"Sign in to a Space\" for another Space",
         })}
       </button>
     );
   }
 
-  const lines = signInLines(
-    { ...signIn, running: here ? signIn.running : null, failure },
-    hostNameOf(signIn.instance ?? url),
-  );
+  const space = spaceNameOf(signIn.instance ?? url, groups, directory);
+  const lines = signInLines({ ...signIn, running: here ? signIn.running : null, failure }, space);
   const flowingHere = here && flowing;
-  const label = flowingHere
-    ? signingInLabel()
-    : failure !== undefined && !signIn.refused
-      ? signInAgainLabel()
-      : i18n._({ id: "Sign in", comment: "sign in to an instance" });
+  const label = flowingHere ? signingInLabel() : failure !== undefined && !signIn.refused ? signInAgainLabel() : signInLabel();
 
   return (
     <div
       role="group"
       aria-labelledby={titleId}
-      aria-describedby={remote ? undefined : ownId}
       data-testid="space-add-card"
       className="flex min-w-0 flex-col gap-2"
       onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
@@ -662,25 +788,18 @@ export function AddInstance({
       }}
     >
       <h2 id={titleId} className="text-sm font-medium">
-        {anotherInstance()}
+        {signInTitle()}
       </h2>
-      {/* Your own group is placed at every instance the home signs in
-          to (space-4, DR-128): the card for another instance says so
-          before its sign-in, whatever its flow reads (space-3). The
-          header's card, the first sign-in, does not, nor does a seat's,
-          which places your own group nowhere (space-102, space-112). */}
-      {remote ? null : (
-        <p
-          id={ownId}
-          data-testid="space-add-own"
-          className="min-w-0 break-words text-sm text-neutral-600 dark:text-neutral-300"
-        >
-          {i18n._({
-            id: "Your own group's records will be kept there too.",
-            comment: "the sign-in card opened from \"Add instance…\": your own group's records are kept at every instance the home signs in to, this one included",
-          })}
-        </p>
-      )}
+      <SpaceChooser
+        resolved={resolved}
+        onPick={pick}
+        onType={type}
+        onEnter={begin}
+        // The Space being signed in to stands while the card's flow runs.
+        locked={flowingHere}
+        chooserRef={chooserRef}
+        fieldRef={fieldRef}
+      />
       {lines ? (
         <div
           data-testid="space-signin-body"
@@ -689,16 +808,6 @@ export function AddInstance({
           {lines}
         </div>
       ) : null}
-      <SpaceDirectory onChoose={setTyped} />
-      <InstanceField
-        inputRef={fieldRef}
-        value={field}
-        onChange={setTyped}
-        onEnter={begin}
-        // The origin being signed in to stands while the card's flow
-        // runs.
-        readOnly={flowingHere}
-      />
       <div className={ROW}>
         <button
           ref={cancelRef}
@@ -715,7 +824,7 @@ export function AddInstance({
           data-testid="space-signin"
           className={`${PRIMARY} w-full @xs:w-auto`}
           disabled={!connected || flowing || !url}
-          title={url ? i18n._("Signs in to {host}", { host: hostNameOf(url) }) : undefined}
+          title={url ? opensInBrowser(spaceNameOf(url, groups, directory)) : undefined}
           onClick={begin}
         >
           {label}

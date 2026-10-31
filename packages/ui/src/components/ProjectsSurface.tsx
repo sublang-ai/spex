@@ -14,7 +14,7 @@ import type { ProjectMeta } from "../state/store.js";
 import { usePlaceStore } from "../state/place-context.js";
 import { i18n } from "../i18n.js";
 import { recordsStatePhrase } from "../lib/space.js";
-import { allRepositories } from "../lib/instances.js";
+import { allRepositories, standingOf } from "../lib/instances.js";
 import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import {
@@ -97,11 +97,13 @@ function GitHubLine({ meta, projectId }: { meta?: ProjectMeta; projectId: string
   );
 }
 
-/** Where the project's records live (projects-4): its spex repository's
- * name with its group, and its state worded as the Groups surface
- * words its row (space-61), or a placement's waiting step where one
- * waits (space-64) — read from the Groups state, which this line asks
- * for when nothing has read it yet. */
+/** Where the project's records are (projects-4, DR-172): "Records ·
+ * <group> · <standing>" — the group holding them as the Space surface
+ * heads it, "Personal" for the person's own and left out while they are
+ * in none, and their standing as the Space surface words it (space-61),
+ * or a waiting step where one waits (space-64) — read from the Space
+ * state, which this line asks for when nothing has read it yet. No
+ * records' key or repository name is named. */
 function RecordsLine({ project, now }: { project: ProjectInfo; now: number }) {
   const store = usePlaceStore();
   const space = store((state) => state.space);
@@ -110,20 +112,37 @@ function RecordsLine({ project, now }: { project: ProjectInfo; now: number }) {
   useEffect(() => {
     if (connected && !store.getState().space) void loadSpace().catch(() => {});
   }, [connected, loadSpace]);
-  const { key, name, group } = project.repository;
+  const { key } = project.repository;
   const row = space ? allRepositories(space).find((repository) => repository.key === key) : undefined;
-  const state = row ? recordsStatePhrase(row, now) : undefined;
+  const standing = space && row ? standingOf(space, key) : undefined;
+  // The group the records stand under (space-1): none while they are in
+  // no group — your own group's rows stand under "This computer".
+  const entry = standing && !standing.own ? standing.group : undefined;
+  const group = !entry
+    ? undefined
+    : entry.login !== null && entry.mine
+      ? i18n._({ id: "Personal", comment: "your own records and packages at a Space, never \"your namespace\"" })
+      : entry.login !== null
+        ? i18n._({
+            id: "Shared by @{login}",
+            values: { login: entry.login },
+            comment: "records another account keeps at a Space and shares with you; {login} is that account",
+          })
+        : entry.name;
+  const state = row ? recordsStatePhrase(row, now) : "";
   return (
     <div
       data-testid="overview-records"
       className="truncate text-xs text-neutral-500"
-      title={i18n._("The project's spex repository: {repository}", { repository: key })}
+      title={entry && entry.login === null && entry.fullPath !== entry.name ? entry.fullPath : undefined}
     >
-      {i18n._({
-        id: "{name} in {group}",
-        values: { name, group },
-        comment: "the Overview's records field: a spex repository's name, then the group holding it",
-      })}
+      {i18n._({ id: "Records", comment: "the Overview's field naming where the project's records are: its group and their standing follow" })}
+      {group ? (
+        <>
+          <span aria-hidden> · </span>
+          <span data-testid="overview-records-group">{group}</span>
+        </>
+      ) : null}
       {state ? (
         <>
           <span aria-hidden> · </span>
@@ -171,9 +190,10 @@ export function OverviewTab({
   const [error, setError] = useState<string>();
   const [confirmRemove, setConfirmRemove] = useState(false);
   // The second confirm (projects-9): the core refused the first with
-  // `conflict`, naming what has not reached the host; its words ride
-  // the question so the reader sees what would be lost.
-  const [unsent, setUnsent] = useState<string>();
+  // `conflict`, counting the records that never reached a Space; the
+  // count rides the question so the reader sees what would be lost, the
+  // core's words where it carries none.
+  const [unsent, setUnsent] = useState<{ count?: number; reason: string }>();
   const removeRef = useRef<HTMLButtonElement>(null);
   const returnToRemove = useRef(false);
   // Keep — or a failed removal — hands focus back to the control the
@@ -185,9 +205,9 @@ export function OverviewTab({
     }
   }, [confirmRemove, unsent, error]);
 
-  /** Remove, the second time with `confirm` (projects-9): a clone
-   * holding what has not reached the host is refused `conflict` the
-   * first time, and the second confirm asks again with the count. */
+  /** Remove, the second time with `confirm` (projects-9): records that
+   * never reached a Space are refused `conflict` the first time, and the
+   * second confirm asks again with their count. */
   const remove = (confirm: boolean) => {
     if (!project) return;
     removeProject(project.id, confirm)
@@ -195,9 +215,10 @@ export function OverviewTab({
         onRemoved();
         focusDashboardEntry();
       })
-      .catch((cause: Error & { code?: string }) => {
+      .catch((cause: Error & { code?: string; details?: Record<string, unknown> }) => {
         if (!confirm && cause.code === "conflict") {
-          setUnsent(cause.message);
+          const units = cause.details?.units;
+          setUnsent({ reason: cause.message, ...(typeof units === "number" ? { count: units } : {}) });
           return;
         }
         returnToRemove.current = true;
@@ -264,7 +285,15 @@ export function OverviewTab({
         {unsent !== undefined ? (
           <span data-testid="remove-project-unsent">
             <InlineConfirm
-              question={i18n._("{reason} Remove anyway?", { reason: unsent })}
+              question={
+                unsent.count !== undefined
+                  ? i18n._({
+                      id: "{count, plural, one {# record never reached a Space. Remove anyway?} other {# records never reached a Space. Remove anyway?}}",
+                      values: { count: unsent.count },
+                      comment: "the Overview's second confirm of a removal: how many of the project's records were never sent to any Space",
+                    })
+                  : i18n._("{reason} Remove anyway?", { reason: unsent.reason })
+              }
               confirmLabel={i18n._({
                 id: "Remove",
                 comment: "confirm: forget this project, leaving the repo on disk",

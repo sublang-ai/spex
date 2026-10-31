@@ -393,7 +393,7 @@ describe("run-view-172: beside the two ways in, the member's groups", () => {
     try {
       useAppStore.setState({ space: groupsState(), loadSpace: vi.fn(async () => {}) });
       renderHome({ hasProject: false, hasProjects: false });
-      expect(screen.getByTestId("home-sign-in").textContent).toBe("登录你的空间");
+      expect(screen.getByTestId("home-sign-in").textContent).toBe("登录你的 Space");
       cleanup();
       useAppStore.setState({ space: groupsState({ instances: [instanceState("https://spex.pub")] }) });
       renderHome({ hasProject: false, hasProjects: false });

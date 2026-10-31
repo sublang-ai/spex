@@ -14,7 +14,7 @@
 // first Connect on this device shows the instance's contract and sends
 // `server.open` with consent only on "I understand", a later Connect
 // sending it at once; while the open runs the line says so, and past
-// ten seconds that a seat's first start can take a minute; a seat whose
+// ten seconds its title says the first connection can take a minute; a seat whose
 // sign-in runs reads the approval's link, the desktop asked to open it
 // once per flow, and one whose sign-in failed reads its cause with
 // "Sign in again", sending `server.signin`; Disconnect sends
@@ -428,8 +428,24 @@ function disconnect(place: string): void {
   fireEvent.click(screen.getByTestId(`space-server-disconnect-${place}`));
 }
 
-const CONTRACT =
-  "Opening a seat places your Space sign-in on lab-box. Whoever runs lab-box can act as you: in your spaces, in your records, and with the account you sign in to spex.pub with, wherever it reaches. Private packages require a separate registry sign-in on this seat. Agents on lab-box run on the sign-ins its administrator set up, unless you set your own. A credential you place on lab-box stays there until you remove it. Retiring the server or revoking the seat under Devices stops new use; a credential already on the server lasts until it expires.";
+/** The Space's terms for lab-box, as bullets in the words its record
+ * fixes, naming no seat or ticket (run-view-170, DR-172). */
+const TERMS = [
+  "Connecting puts your Space sign-in on lab-box",
+  "Whoever runs lab-box can act as you: in your groups, in your records, and with your spex.pub account, wherever it reaches",
+  "Private packages need a separate registry sign-in on lab-box",
+  "Agents on lab-box run on the sign-ins its administrator set up, unless you set your own",
+  "A credential you place on lab-box stays there until you remove it",
+  "Removing lab-box, or revoking its access at spex.pub, stops new use; a credential already there lasts until it expires",
+];
+
+/** The terms stand as bullets, no paragraph, and say no seat or ticket
+ * (run-view-170). */
+function expectTerms(contract: HTMLElement): void {
+  expect(within(contract).getAllByRole("listitem").map((item) => item.textContent)).toEqual(TERMS);
+  expect(contract.querySelector("p")).toBeNull();
+  expect(contract.textContent).not.toMatch(/\b(seats?|tickets?)\b/i);
+}
 
 describe("run-view-168: a new playbook asked for at a seat", () => {
   test("the Captain home's New playbook opens Playbooks at the seat shown, its field focused", async () => {
@@ -470,7 +486,9 @@ describe("run-view-170: the servers under each group's heading", () => {
     // its group, within the instance's section.
     const infra = within(instance).getByTestId("space-group-acme/infra");
     const lab = within(instance).getByTestId("space-group-acme/lab");
-    expect(within(infra).getByRole("heading", { level: 3 }).textContent).toBe("infra");
+    // A group named apart from its path reads its path beside its name
+    // (space-1, space-66).
+    expect(within(infra).getByRole("heading", { level: 3 }).textContent).toBe("infra · acme/infra");
     expect(
       within(within(infra).getByTestId("space-group-servers-acme/infra"))
         .getAllByRole("listitem")
@@ -537,7 +555,7 @@ describe("run-view-170: the servers under each group's heading", () => {
     // [run-view-171] the first Connect shows the instance's contract, in
     // the words its record fixes, and sends nothing.
     const contract = screen.getByTestId(`space-server-contract-${LAB_BOX}`);
-    expect(within(contract).getByText(CONTRACT)).toBeTruthy();
+    expectTerms(contract);
     expect(callsOf(local, "server.open")).toEqual([]);
     // [run-view-171] Cancel sends nothing and remembers nothing.
     fireEvent.click(within(contract).getByRole("button", { name: "Cancel" }));
@@ -547,7 +565,7 @@ describe("run-view-170: the servers under each group's heading", () => {
     expect([...kept.keys()].filter((key) => key.includes(LAB_BOX))).toEqual([]);
     fireEvent.click(control(LAB_BOX));
     const again = screen.getByTestId(`space-server-contract-${LAB_BOX}`);
-    expect(within(again).getByText(CONTRACT)).toBeTruthy();
+    expectTerms(again);
     expect(callsOf(local, "server.open")).toEqual([]);
 
     // [run-view-171] "I understand" sends server.open with consent, to
@@ -592,9 +610,9 @@ describe("run-view-170: the servers under each group's heading", () => {
     fireEvent.click(control(LAB_BOX));
     const contract = screen.getByTestId(`space-server-contract-${LAB_BOX}`);
     // [run-view-170] the record's words, in the page's language.
-    expect(contract.textContent).toContain("打开席位会把你的 Space 登录放到 lab-box 上。");
-    expect(contract.textContent).toContain("使用私有规约包需要在这个席位上单独登录注册中心。");
-    expect(contract.textContent).toContain("凭你登录 spex.pub 所用的账号");
+    expect(contract.textContent).toContain("连接会把你的 Space 登录放到 lab-box 上");
+    expect(contract.textContent).toContain("使用私有规约包需要在 lab-box 上单独登录注册中心");
+    expect(contract.textContent).not.toContain("席位");
     fireEvent.click(within(contract).getByRole("button", { name: "我已了解" }));
     await settle();
     // [run-view-171] the consent is the same act in every language.
@@ -638,11 +656,11 @@ describe("run-view-170: the servers under each group's heading", () => {
     expect(callsOf(local, "server.list")).toHaveLength(1);
     // A refused close reads its cause in place as well.
     local.answers["server.close"] = () => {
-      throw new SpexCommandError("not_found", "No seat is open on this server");
+      throw new SpexCommandError("not_found", "Not connected to this server");
     };
     disconnect(ALPHA.place);
     await settle();
-    expect(within(row(ALPHA.place)).getByRole("alert").textContent).toBe("No seat is open on this server");
+    expect(within(row(ALPHA.place)).getByRole("alert").textContent).toBe("Not connected to this server");
   });
 });
 
@@ -656,7 +674,7 @@ function serverState(...seats: SeatState[]): void {
 }
 
 describe("run-view-170: a server's line while its seat opens and signs in", () => {
-  test("while server.open runs the line reads Connecting to <server>…, and past ten seconds that the seat's first start can take a minute", async () => {
+  test("while server.open runs the line reads Connecting to <server>…, titled past ten seconds that the first connection can take a minute", async () => {
     await openGroups();
     // Understood on this device before: Connect sends at once.
     kept.set(`spex.serverContract:${LAB_BOX}`, "1");
@@ -670,15 +688,19 @@ describe("run-view-170: a server's line while its seat opens and signs in", () =
         await Promise.resolve();
       });
       // [run-view-170] the open runs: the line says so, Connect waits.
-      const line = (): string => screen.getByTestId(`space-server-connecting-${LAB_BOX}`).textContent ?? "";
+      const connecting = (): HTMLElement => screen.getByTestId(`space-server-connecting-${LAB_BOX}`);
+      const line = (): string => connecting().textContent ?? "";
       expect(line()).toBe("Connecting to lab-box…");
+      expect(connecting().getAttribute("title")).toBeNull();
       expect(control(LAB_BOX).disabled).toBe(true);
       act(() => vi.advanceTimersByTime(9_999));
       expect(line()).toBe("Connecting to lab-box…");
-      // [run-view-170] past ten seconds, a seat's first start can take a
-      // minute.
+      expect(connecting().getAttribute("title")).toBeNull();
+      // [run-view-170] past ten seconds, the line's title says the first
+      // connection can take a minute, its words unchanged.
       act(() => vi.advanceTimersByTime(1));
-      expect(line()).toBe("Connecting to lab-box… the first start of your seat can take a minute");
+      expect(line()).toBe("Connecting to lab-box…");
+      expect(connecting().getAttribute("title")).toBe("The first connection can take a minute");
       answer({ place: LAB_BOX, leaseExpiresAt: Date.now() + 3_600_000 });
       await act(async () => {
         for (let tick = 0; tick < 20; tick += 1) await Promise.resolve();
@@ -759,7 +781,7 @@ describe("run-view-170: a server's line while its seat opens and signs in", () =
     await openGroups();
     serverState({ ...ALPHA, signIn: { state: "failed", cause: "The sign-in was denied at spex.pub" } }, BETA);
     // [run-view-170] the seat's cause, as one sentence, beside Sign in again.
-    expect(screen.getByTestId(`space-server-signin-error-${ALPHA.place}`).textContent).toBe("The sign-in was denied at spex.pub.");
+    expect(screen.getByTestId(`space-server-signin-error-${ALPHA.place}`).textContent).toBe("The sign-in was denied at spex.pub");
     expect(screen.queryByTestId(`space-server-connected-${ALPHA.place}`)).toBeNull();
     const again = screen.getByTestId(`space-server-signin-${ALPHA.place}`);
     expect(again.textContent).toBe("Sign in again");
@@ -782,22 +804,23 @@ const joinsOf = (fake: Fake): unknown[] => callsOf(fake, "space.join");
 /** The notes row's phrase on this computer's Space (space-87). */
 const notesPhrase = (): string => screen.getByTestId(`space-repo-state-${NOTES_KEY}`).textContent ?? "";
 
-/** Open the notes row's Open menu and read its entries (space-111). */
+/** Open the menu of the notes row's other places, beside its primary
+ * control, and read its entries (space-1, space-111). */
 function openMenu(): HTMLElement {
-  fireEvent.click(screen.getByTestId(`space-row-open-${NOTES_KEY}`));
-  return screen.getByTestId(`space-row-open-${NOTES_KEY}-menu`);
+  fireEvent.click(screen.getByTestId(`space-row-places-${NOTES_KEY}`));
+  return screen.getByTestId(`space-row-places-${NOTES_KEY}-menu`);
 }
 
 describe("run-view-171: Open on <server> on a row of this computer's Space", () => {
   test("a seat open and signed in: no seat is opened, that seat's core is sent the join with no folder, and the row reads Opening on <server>… until the seat lists the project", async () => {
     await openGroups();
-    // [space-111] the row's Open offers this computer first, then each
-    // server of the instance the member may open.
+    // [space-111] the row's primary control is this computer's, each
+    // server of the instance the member may open beside it.
     const open = screen.getByTestId(`space-row-open-${NOTES_KEY}`);
-    expect(open.getAttribute("aria-label")).toBe("Open notes");
+    expect(open.textContent).toBe("Open here");
+    expect(screen.getByTestId(`space-row-places-${NOTES_KEY}`).getAttribute("aria-label")).toBe("More ways to open notes");
     const menu = openMenu();
     expect(within(menu).getAllByRole("menuitem").map((item) => item.textContent)).toEqual([
-      "Open here",
       "Open on build-box",
       "Open on gpu-box",
       "Open on lab-box",
@@ -867,7 +890,7 @@ describe("run-view-171: Open on <server> on a row of this computer's Space", () 
     serverState({ ...ALPHA, signIn: { state: "failed", cause: "The sign-in was denied at spex.pub" } }, BETA);
     await settle();
     // [space-111] the open is undone, the cause read on the line.
-    expect(screen.getByTestId(`space-server-signin-error-${ALPHA.place}`).textContent).toBe("The sign-in was denied at spex.pub.");
+    expect(screen.getByTestId(`space-server-signin-error-${ALPHA.place}`).textContent).toBe("The sign-in was denied at spex.pub");
     expect(notesPhrase()).toBe("");
     serverState({ ...ALPHA, signIn: { state: "signedIn" } }, BETA);
     await settle();
@@ -885,7 +908,7 @@ describe("run-view-171: Open on <server> on a row of this computer's Space", () 
     await settle();
     const contract = screen.getByTestId(`space-server-contract-${LAB_BOX}`);
     expect(row(LAB_BOX).contains(contract)).toBe(true);
-    expect(within(contract).getByText(CONTRACT)).toBeTruthy();
+    expectTerms(contract);
     expect(callsOf(local, "server.open")).toEqual([]);
     expect(notesPhrase()).toBe("Opening on lab-box…");
     fireEvent.click(within(contract).getByRole("button", { name: "Cancel" }));

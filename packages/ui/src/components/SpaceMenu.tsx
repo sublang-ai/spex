@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The Space surface's menus (space-1, space-111, run-view-170, DR-159):
-// a row's and a group heading's one overflow control, "More", and a
-// row's Open where it offers more than one place. One trigger opens a
-// menu of acts anchored beneath it through the house popover idiom
-// (usePopover): focus moves into the menu, ↑/↓ walk it, Escape, Tab and
+// The Space surface's menus (space-1, space-111, run-view-170, DR-159,
+// DR-172): a row's and a group heading's one overflow control, "More",
+// and beside a row's primary control the other places it may be opened
+// at. One trigger opens a menu of acts anchored beneath it through the
+// house popover idiom (usePopover): focus moves into the menu, ↑/↓ walk it, Escape, Tab and
 // a click outside close it, focus going back to the trigger. An entry
 // the state does not offer now stands disabled with its reason beside
 // its words; an entry whose words are short of its full name carries

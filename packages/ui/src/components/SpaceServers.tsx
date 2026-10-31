@@ -1,28 +1,29 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The team servers an instance lists (run-view-170, core-service-128,
-// DR-133, DR-159): on this computer's Space surface, each server stands
-// as one line beneath the heading of its group, before that group's
-// rows — its name, then "Connected" with Disconnect in its overflow
-// where a seat is open at it, and Connect otherwise. Connect, and "Open
-// on <server>" on any row (space-111), run one flow per server
-// (state/server-opens): the first open on this device shows the
-// instance's contract in the words its record fixes (Spex Space
-// DR-029), rendered in the page's language, "I understand" sending
-// `server.open` with consent and remembered on this device, so a later
-// open sends it at once. While the open runs the line says so, and past
-// ten seconds that a seat's first start can take a minute; once the
-// seat is open and until its sign-in at the instance completes
-// (core-service-142), the line reads "Signing in to <instance>…" and,
-// where the instance asks for its page, links that page where the person
-// approves it, the desktop having opened it, and a sign-in that failed
-// reads its cause with "Sign in again" (DR-164). A refusal reads the core's relayed cause
-// on the line. A server whose group the instance's read does not list
-// stands at the foot of the instance's section, as does a listing's
-// failure. The listing is read as the surface opens, again after an open
-// or a close lands and whenever the open seats change; the seat's
-// endpoint and bearer stay in the local core.
+// The team servers a Space lists (run-view-170, core-service-128,
+// DR-133, DR-159, DR-172): on this computer's Space surface, each server
+// stands as one line beneath the heading of its group, before that
+// group's rows — its name, then "Connected" with Disconnect in its
+// overflow while this computer is connected to it, and Connect
+// otherwise. Connect, and "Open on <server>" on any row (space-111), run
+// one flow per server (state/server-opens): the first connection from
+// this computer shows the Space's terms as bullets in the words its
+// record fixes (Spex Space DR-029), rendered in the page's language, "I
+// understand" sending `server.open` with consent and remembered here, so
+// a later connection sends it at once. While it connects the line says
+// so, and past ten seconds its title says the first connection can take
+// a minute;
+// once connected and until the server's sign-in at the Space completes
+// (core-service-142), the line reads "Signing in to <Space>…" and, where
+// the Space asks for its page, links that page where the person approves
+// it, the desktop having opened it, and a sign-in that failed reads its
+// cause with "Sign in again" (DR-164). A refusal reads the core's
+// relayed cause on the line. A server whose group the Space's read does
+// not list stands at the foot of the Space's section, as does a
+// listing's failure. The listing is read as the surface opens, again
+// after a connection opens or closes; what reaches the server stays in
+// the local core. No line names a seat or a ticket.
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { InstanceState, ServerInfo, ServerListing } from "@sublang/spex-core/protocol";
@@ -32,17 +33,17 @@ import { instanceName } from "../lib/instances.js";
 import { openExternalBridge } from "../lib/space.js";
 import { usePlaceStore } from "../state/place-context.js";
 import { answerContract, connectServer, sendServerAct, serverPlace, useServerOpens } from "../state/server-opens.js";
-import { signInAgainLabel } from "./SpaceSignIn.js";
+import { causePhrase, signInAgainLabel } from "./SpaceSignIn.js";
 import { MoreMenu } from "./SpaceMenu.js";
 import { PRIMARY, SECONDARY, type Note } from "./SpaceSurface.js";
 
-/** How long an open runs before the line says a seat's first start can
- * take a minute (run-view-170). */
+/** How long a connection runs before the line's title says the first
+ * one can take a minute (run-view-170). */
 const SLOW_OPEN_MS = 10_000;
 
 const LINK_CLASS = "text-brand-600 hover:underline dark:text-brand-300";
 
-/** The line that links the page where the person approves a seat's
+/** The line that links the page where the person approves a server's
  * sign-in (run-view-170, run-view-174): on the desktop it opens through
  * the bridge, as the shell opened it (app-shell-37); on the served page
  * the link's own target. */
@@ -66,12 +67,53 @@ export function ApprovalLink({ href, testId, children }: { href: string; testId:
   );
 }
 
+/** The Space's terms for a server, as bullets in the words its record
+ * fixes (run-view-170, Spex Space DR-029): what connecting places there,
+ * who may act as you, the separate registry sign-in for private packages
+ * (core-service-143), whose sign-ins agents run on, how long a credential
+ * stays, and what stops its use. Read at render, in the page's language;
+ * `space` is the Space's display name. */
+function contractTerms(server: string, space: string): string[] {
+  return [
+    i18n._({
+      id: "Connecting puts your Space sign-in on {server}",
+      values: { server },
+      comment: "a term shown before the first connection to a team server; {server} is its name",
+    }),
+    i18n._({
+      id: "Whoever runs {server} can act as you: in your groups, in your records, and with your {space} account, wherever it reaches",
+      values: { server, space },
+      comment: "a term shown before the first connection to a team server; {server} is its name, {space} the Space's display name",
+    }),
+    i18n._({
+      id: "Private packages need a separate registry sign-in on {server}",
+      values: { server },
+      comment: "a term shown before the first connection to a team server: the registry sign-in is its own grant; {server} is its name",
+    }),
+    i18n._({
+      id: "Agents on {server} run on the sign-ins its administrator set up, unless you set your own",
+      values: { server },
+      comment: "a term shown before the first connection to a team server; {server} is its name",
+    }),
+    i18n._({
+      id: "A credential you place on {server} stays there until you remove it",
+      values: { server },
+      comment: "a term shown before the first connection to a team server; {server} is its name",
+    }),
+    i18n._({
+      id: "Removing {server}, or revoking its access at {space}, stops new use; a credential already there lasts until it expires",
+      values: { server, space },
+      comment: "a term shown before the first connection to a team server; {server} is its name, {space} the Space's display name",
+    }),
+  ];
+}
+
 /** "Approve Spex on <server> in your browser" (run-view-170). */
 export const approveLabel = (server: string): string =>
   i18n._({
     id: "Approve Spex on {server} in your browser",
     values: { server },
-    comment: "a team server's line while its seat signs in at the instance: links the instance's page where the person approves the device named \"Spex on <server>\"; {server} is the server's name",
+    comment: "a team server's line while it signs in at the Space: links the Space's page where the person approves \"Spex on <server>\"; {server} is the server's name",
   });
 
 /** The servers listing the Space surface shows (core-service-128). */
@@ -174,7 +216,7 @@ export function InstanceServers({
   );
   const failure = (listing.failures ?? []).find((entry) => entry.instance === instance.origin);
   if (servers.length === 0 && !failure) return null;
-  const title = i18n._({ id: "Servers", comment: "the team servers an instance lets the person open a seat on" });
+  const title = i18n._({ id: "Servers", comment: "the team servers of a Space this computer can connect to" });
   return (
     <section data-testid={`space-servers-${instance.origin}`} aria-label={title} className="flex min-w-0 flex-col gap-1">
       {failure ? (
@@ -182,7 +224,7 @@ export function InstanceServers({
           {i18n._({
             id: "Couldn't read the servers: {reason}",
             values: { reason: failure.message },
-            comment: "the instance's servers listing failed; {reason} is the core's relayed cause",
+            comment: "a Space's servers listing failed; {reason} is the core's relayed cause",
           })}
         </p>
       ) : null}
@@ -229,8 +271,8 @@ function ServerLine({
   const controlRef = useRef<HTMLButtonElement>(null);
   const moreRef = useRef<HTMLButtonElement>(null);
 
-  // An open still running past ten seconds says a seat's first start
-  // can take a minute (run-view-170).
+  // A connection still running past ten seconds says in its title that
+  // the first one can take a minute (run-view-170).
   useEffect(() => {
     setSlow(false);
     if (acting !== "open") return;
@@ -277,18 +319,24 @@ function ServerLine({
   let status: ReactNode = null;
   if (acting === "open") {
     status = (
-      <span data-testid={`space-server-connecting-${place}`} role="status" className="min-w-0 text-xs text-neutral-500">
-        {slow
-          ? i18n._({
-              id: "Connecting to {server}… the first start of your seat can take a minute",
-              values: { server: name },
-              comment: "a team server's line while its seat opens, past ten seconds; {server} is the server's name",
-            })
-          : i18n._({
-              id: "Connecting to {server}…",
-              values: { server: name },
-              comment: "a team server's line while its seat opens; {server} is the server's name",
-            })}
+      <span
+        data-testid={`space-server-connecting-${place}`}
+        role="status"
+        className="min-w-0 text-xs text-neutral-500"
+        title={
+          slow
+            ? i18n._({
+                id: "The first connection can take a minute",
+                comment: "the title of a team server's line while this computer connects to it, past ten seconds",
+              })
+            : undefined
+        }
+      >
+        {i18n._({
+          id: "Connecting to {server}…",
+          values: { server: name },
+          comment: "a team server's line while this computer connects to it; {server} is the server's name",
+        })}
       </span>
     );
   } else if (signIn?.state === "running") {
@@ -303,9 +351,9 @@ function ServerLine({
     status = (
       <span data-testid={`space-server-signing-${place}`} role="status" className="min-w-0 text-xs text-neutral-500">
         {i18n._({
-          id: "Signing in to {instance}…",
-          values: { instance: host },
-          comment: "a team server's line while its seat signs in at the instance, before any page asks the person to approve it; {instance} is the instance's name",
+          id: "Signing in to {space}…",
+          values: { space: host },
+          comment: "a team server's line while it signs in at the Space, before any page asks the person to approve it; {space} is the Space's display name",
         })}
       </span>
     );
@@ -314,7 +362,7 @@ function ServerLine({
       <span className="min-w-0 truncate text-xs text-neutral-500">
         <span aria-hidden>· </span>
         <span data-testid={`space-server-connected-${place}`}>
-          {i18n._({ id: "Connected", comment: "a team server's line where a seat is open at it" })}
+          {i18n._({ id: "Connected", comment: "a team server's line while this computer is connected to it" })}
         </span>
       </span>
     );
@@ -342,7 +390,7 @@ function ServerLine({
               disabled={!connected || busy}
               entries={[
                 {
-                  label: i18n._({ id: "Disconnect", comment: "close the seat open on a team server" }),
+                  label: i18n._({ id: "Disconnect", comment: "a team server's overflow entry: end this computer's connection to it" }),
                   testId: `space-server-disconnect-${place}`,
                   onSelect: () => void sendServerAct(store, server, "close"),
                 },
@@ -357,21 +405,17 @@ function ServerLine({
               disabled={!connected || busy || asking}
               onClick={() => connectServer(store, server)}
             >
-              {i18n._({ id: "Connect", comment: "open a seat on a team server" })}
+              {i18n._({ id: "Connect", comment: "connect this computer to a team server, where projects open and agents run as you" })}
             </button>
           )}
         </span>
       </div>
       {signIn?.state === "failed" ? (
-        // The seat's sign-in failed: its cause, as the seat said it, and
-        // the sign-in started afresh (run-view-170, core-service-142).
+        // The server's sign-in failed: its cause, as the server said it,
+        // and the sign-in started afresh (run-view-170, core-service-142).
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 pl-3.5">
           <p role="alert" data-testid={`space-server-signin-error-${place}`} className="min-w-0 text-xs text-red-600 dark:text-red-400">
-            {i18n._({
-              id: "{cause}.",
-              values: { cause: signIn.cause.replace(/[.。]\s*$/, "") },
-              comment: "the sign-in's cause, a phrase the core sends without its final stop, as one sentence",
-            })}
+            {causePhrase(signIn.cause)}
           </p>
           <button
             type="button"
@@ -395,13 +439,11 @@ function ServerLine({
             }
           }}
         >
-          <p className="text-xs">
-            {i18n._({
-              id: "Opening a seat places your Space sign-in on {server}. Whoever runs {server} can act as you: in your spaces, in your records, and with the account you sign in to {instance} with, wherever it reaches. Private packages require a separate registry sign-in on this seat. Agents on {server} run on the sign-ins its administrator set up, unless you set your own. A credential you place on {server} stays there until you remove it. Retiring the server or revoking the seat under Devices stops new use; a credential already on the server lasts until it expires.",
-              values: { server: name, instance: host },
-              comment: "the instance's contract, in the words its record fixes, shown before a seat's first open on this device; {server} is the server's name, {instance} the instance's; Devices is the instance's page of devices",
-            })}
-          </p>
+          <ul data-testid={`space-server-terms-${place}`} className="ml-4 list-disc text-xs">
+            {contractTerms(name, host).map((term) => (
+              <li key={term}>{term}</li>
+            ))}
+          </ul>
           <div className="flex flex-wrap items-center gap-1">
             <button
               type="button"
@@ -409,7 +451,7 @@ function ServerLine({
               className={PRIMARY}
               onClick={() => answer(true)}
             >
-              {i18n._({ id: "I understand", comment: "accepting a team server's contract, which opens the seat" })}
+              {i18n._({ id: "I understand", comment: "accepting a team server's terms, which connects this computer to it" })}
             </button>
             <button
               type="button"

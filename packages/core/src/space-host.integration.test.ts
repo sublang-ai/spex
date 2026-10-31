@@ -62,7 +62,7 @@ function listed(state: GroupsState, host: Pick<StandinHost, "url">): unknown {
  * yet — before its first sign-in there (space-29). */
 function unlisted(host: Pick<StandinHost, "url">): RegExp {
   const origin = host.url.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`^This device has not signed in to ${origin}$`);
+  return new RegExp(`^This computer has not signed in to ${origin} — sign in there first$`);
 }
 
 /** The remotes a clone holds, by name. */
@@ -132,7 +132,7 @@ test("space-37: the browser sign-in renames your own group after the login, push
   const before = await home.client.expectOk("space.get", {});
   assert.deepEqual([before.own.name, before.instances], [OWN, []], "your own group alone, no instance listed");
   assert.equal(repositoryOf(before, key).state, "local-only");
-  await home.client.expectError("space.refresh", {}, "invalid_request", /Sign in first/);
+  await home.client.expectError("space.refresh", {}, "invalid_request", /^Sign in to a Space first$/);
   // The browser flow's URL names the loopback, an S256 challenge and the
   // public client (git-host-2).
   const from = home.client.mark();
@@ -502,7 +502,7 @@ test("space-37: Pick a group creates <name>-spex there and pushes, its placement
   // Your own group's id names no group of the instance: refused before
   // the stand-in is asked to create anything (git-host-6).
   const asked = creationsAsked(host).length;
-  await home.client.expectError("space.pick", { repository: local, choice: { kind: "create", instance: host.url, groupId: "2001", name: "alpha" } }, "not_found", /The host lists no such group/);
+  await home.client.expectError("space.pick", { repository: local, choice: { kind: "create", instance: host.url, groupId: "2001", name: "alpha" } }, "not_found", new RegExp(`^${HOST_NAME} lists no such group — Refresh, then pick again$`));
   assert.equal(creationsAsked(host).length, asked);
   // A group picked: `<name>-spex` created there, the clone following it
   // under `workspace/acme/`, its `spex` pushed (space-58, space-60).
@@ -526,7 +526,7 @@ test("space-37: Pick a group creates <name>-spex there and pushes, its placement
   // The account commits, at the host's no-reply address (space-32).
   assert.equal(git(clone, "log", "-1", "--format=%an <%ae>"), "ada <ada@users.noreply.127.0.0.1>");
   // The host's own URLs are its to hand over (space-5).
-  await home.client.expectError("space.remote.set", { repository: hostKey(host, "acme/alpha-spex"), url: `${host.gitOrigin}/acme/other-spex.git` }, "invalid_request", /used as the host gives them/);
+  await home.client.expectError("space.remote.set", { repository: hostKey(host, "acme/alpha-spex"), url: `${host.gitOrigin}/acme/other-spex.git` }, "invalid_request", /^That address is a Space's own — Add it to a group instead$/);
   // A name the host reports taken is refused in place (space-58).
   host.script.addRepository({ group: "acme", name: "beta-spex" });
   const fromBeta = home.client.mark();
@@ -818,7 +818,9 @@ test("space-37, space-92, storage-5: a repository listed with no clone here read
   t.after(() => home.stop());
   const signed = await signIn(home, host);
   const absent = repositoryOf(signed, hostKey(host, "acme/team-spex"));
-  assert.deepEqual([absent.state, absent.id, absent.code, absent.folder], ["absent", team.id, code, null]);
+  // A local remote names no host, so the glyph names the remote itself
+  // (space-1).
+  assert.deepEqual([absent.state, absent.id, absent.code, absent.codeKind, absent.folder], ["absent", team.id, `Code: ${code}`, "elsewhere", null]);
   // Its one listed placement, on no clone here: attached to no remote,
   // not on this device, with its count unknown (space-30, space-92).
   assert.equal(absent.placements.length, 1, JSON.stringify(absent.placements));
@@ -847,11 +849,11 @@ test("space-37, space-92, storage-5: a repository listed with no clone here read
   assert.ok(existsSync(join(folder, "README.md")), "the code is cloned");
   assert.equal(git(folder, "remote", "get-url", "origin"), code);
   assert.equal(git(clonePath(home.dataDir, hostKey(host, "acme/team-spex")), "symbolic-ref", "--short", "HEAD"), "spex");
-  await home.client.expectError("space.join", { instance: host.url, hostId: team.id }, "invalid_request", /on this device already/);
+  await home.client.expectError("space.join", { instance: host.url, hostId: team.id }, "invalid_request", /^team is on this computer already — Show it instead$/);
   // Its first sync waits for the notice, then pushes and records both
   // (space-57, space-12, space-22).
   await runTurn(home, hostKey(host, "acme/team-spex"), "For the team");
-  await home.client.expectError("space.sync", { repository: hostKey(host, "acme/team-spex") }, "invalid_request", /sharing notice/);
+  await home.client.expectError("space.sync", { repository: hostKey(host, "acme/team-spex") }, "invalid_request", /^Confirm sharing before/);
   const done = await home.client.settle("space.sync", { repository: hostKey(host, "acme/team-spex"), placement: host.url, noticed: true });
   assert.ok(done.sync.phase === "done" && done.sync.pushed, JSON.stringify(done.sync));
   const doneLine = placementOf(done, host.url);
@@ -862,7 +864,7 @@ test("space-37, space-92, storage-5: a repository listed with no clone here read
   assert.equal(git(bareOf(host, hostKey(host, "acme/team-spex")), "rev-parse", "spex"), git(clonePath(home.dataDir, hostKey(host, "acme/team-spex")), "rev-parse", "spex"));
   // A pick joining a repository with other members waits for it too.
   const mine = await addFolder(home, gitFolder("pal"));
-  await home.client.expectError("space.pick", { repository: mine.key, choice: { kind: "join", instance: host.url, hostId: pal.id } }, "invalid_request", /sharing notice/);
+  await home.client.expectError("space.pick", { repository: mine.key, choice: { kind: "join", instance: host.url, hostId: pal.id } }, "invalid_request", /^Confirm sharing before/);
   const fromPal = home.client.mark();
   await home.client.expectOk("space.pick", { repository: mine.key, choice: { kind: "join", instance: host.url, hostId: pal.id }, noticed: true });
   const palJoined = await home.client.waitRepository(fromPal, hostKey(host, "acme/pal-spex"), (repository) => repository.sync.phase === "done");
@@ -924,12 +926,12 @@ test("git-host-14, space-37: with every members route failing at the stand-in, a
   const joined = await home.client.waitRepository(fromJoin, hostKey(host, "acme/solo-spex"), (repository) => repository.state !== "absent" && repository.folder !== null && repository.sync.phase === "idle", 30_000);
   assert.equal(joined.state, "reachable");
   assert.equal(placementOf(joined, host.url).members, null);
-  await home.client.expectError("space.sync", { repository: hostKey(host, "acme/solo-spex") }, "invalid_request", /sharing notice/);
+  await home.client.expectError("space.sync", { repository: hostKey(host, "acme/solo-spex") }, "invalid_request", /^Confirm sharing before/);
   const noticed = await home.client.settle("space.sync", { repository: hostKey(host, "acme/solo-spex"), placement: host.url, noticed: true });
   assert.equal(noticed.sync.phase, "done", JSON.stringify(noticed.sync));
   // And a pick joining one waits for it too.
   const mine = await addFolder(home, gitFolder("pal"));
-  await home.client.expectError("space.pick", { repository: mine.key, choice: { kind: "join", instance: host.url, hostId: pal.id } }, "invalid_request", /sharing notice/);
+  await home.client.expectError("space.pick", { repository: mine.key, choice: { kind: "join", instance: host.url, hostId: pal.id } }, "invalid_request", /^Confirm sharing before/);
 });
 
 test("space-37: a join reads not on this device, running at its Code step, until its code is cloned into the folder", async (t) => {
@@ -1092,7 +1094,7 @@ test("space-37: Sign out revokes this device and keeps every clone, its reposito
   // A Sync names the instance to sign in to, by its display name as last
   // read (space-11).
   await home.client.expectError("space.sync", { repository: HOST_OWN }, "invalid_request", new RegExp(`^Sign in to ${HOST_NAME} first$`));
-  await home.client.expectError("space.refresh", {}, "invalid_request", /Sign in first/);
+  await home.client.expectError("space.refresh", {}, "invalid_request", /^Sign in to a Space first$/);
   const fromAgain = home.client.mark();
   await signIn(home, host);
   const back = await home.client.waitRepository(fromAgain, HOST_OWN, (repository) => repository.state === "reachable");
@@ -1147,7 +1149,7 @@ test("space-30, space-29: the state names the default instance, your own group a
   assert.ok(acme.members.some((member) => member.login === LOGIN), JSON.stringify(acme));
   const asked = host.script.requests.length;
   const elsewhere = "https://elsewhere.test";
-  await home.client.expectError("space.members", { instance: elsewhere, group: "2002" }, "not_found", /This device has not signed in to https:\/\/elsewhere\.test/);
+  await home.client.expectError("space.members", { instance: elsewhere, group: "2002" }, "not_found", /This computer has not signed in to https:\/\/elsewhere\.test/);
   await home.client.expectError("space.group.create", { instance: elsewhere, name: "Elsewhere", path: "elsewhere", parent: null }, "not_found");
   await home.client.expectError("space.pick", { repository: moved, choice: { kind: "create", instance: elsewhere, groupId: "2002", name: "x" } }, "not_found");
   const hidden = await home.client.expectError("space.join", { instance: "https://ada:secret@elsewhere.test", hostId: "1" }, "not_found");
@@ -1193,7 +1195,7 @@ test("git-host-2: a sign-in at a listed instance as another account ends failed 
     assert.equal(state.signIn.phase, "failed");
     if (state.signIn.phase !== "failed") return;
     assert.equal(state.signIn.cause, "refused");
-    assert.match(state.signIn.message, /signed you in as another account; this device uses @ada there/, "naming the entry's login");
+    assert.match(state.signIn.message, /signed you in as another account — sign in as @ada$/, "naming the entry's login");
   };
   const entries = (): unknown[] => Home.load(home.dataDir).file.instances.map((entry) => [entry.origin, entry.account?.id, entry.account?.login, entry.signedOut]);
 
@@ -1248,11 +1250,14 @@ test("git-host-13, git-host-2, git-host-3: space.signin.start naming a URL the o
       assert.deepEqual(ran, [], `no sign-in ran for ${url}`);
       assert.deepEqual((await home.client.expectOk("space.get", {})).signIn, { phase: "idle" });
     };
-    await refused(`${host.url}/login`, /An instance's URL names no path, only its scheme, host and port/);
-    await refused(`${host.url}/?next=1`, /An instance's URL carries no query/);
-    await refused(`http://ada:secret@127.0.0.1:${port}`, /An instance's URL carries no user or password/);
-    await refused("http://spex.test", /An instance's URL uses https:\/\/; http:\/\/ only on this device/);
-    await refused("https://spex_pub.test", /An instance's host holds only letters, digits, inner hyphens and single dots/);
+    // One phrase, whichever part of the rule the URL breaks
+    // (core-service-145).
+    const addressOnly = /^Enter just the Space's address, like https:\/\/spex\.sublang\.ai$/;
+    await refused(`${host.url}/login`, addressOnly);
+    await refused(`${host.url}/?next=1`, addressOnly);
+    await refused(`http://ada:secret@127.0.0.1:${port}`, addressOnly);
+    await refused("http://spex.test", addressOnly);
+    await refused("https://spex_pub.test", addressOnly);
     assert.equal(existsSync(join(home.dataDir, "local", "credentials.yaml")), false, "nothing is stored");
     assert.deepEqual(Home.load(home.dataDir).instances(), [], "no instance is listed");
     // Nothing holds the one sign-in: the stand-in's origin signs in.
@@ -1261,7 +1266,7 @@ test("git-host-13, git-host-2, git-host-3: space.signin.start naming a URL the o
     await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
     // Listed, its host and port under another scheme is refused naming
     // the instance this device signs in to there.
-    await refused(`https://127.0.0.1:${port}`, new RegExp(`This device already signs in to ${host.url.replace(/[.:/]/g, "\\$&")}, at the same host and port`));
+    await refused(`https://127.0.0.1:${port}`, new RegExp(`^Already signed in to ${host.url.replace(/[.:/]/g, "\\$&")} — sign in at that address$`));
     // Its origin in another spelling is the same entry, signed in again:
     // a new pair stored in place of the one that stood, no second entry.
     const credentials = fileCredentialStore(home.dataDir, host.url);
@@ -1628,7 +1633,7 @@ test("space-58, storage-35: a clone under your own group's folder holding only t
   assert.deepEqual(picked.placements.map((line) => [line.instance, line.path, line.attached]), [[host.url, "acme/path-only-spex", true], [null, path, true]]);
   // Holding a placement with an instance now, it is picked no more
   // (space-29).
-  await home.client.expectError("space.pick", { repository: key, choice: { kind: "create", instance: host.url, groupId: "2002", name: "again" } }, "invalid_request", /is on the host already$/);
+  await home.client.expectError("space.pick", { repository: key, choice: { kind: "create", instance: host.url, groupId: "2002", name: "again" } }, "invalid_request", /^path-only is in a group already$/);
 });
 
 test("space-73, storage-5, space-5, space-98, space-61, space-11, space-12: a path remote named through space.remote.set stands as origin beside the placement's remote, which keeps its id, its spex and this device's record under its name, and goes alone; a repository the host moved keeps them through its next Sync, which moves the clone; leaving that placement stops for the record unit no remaining placement holds and, confirmed, takes its remote, id, spex, last sync and notice with it, the clone local only under your own group's folder; a bare repository then named syncs with no catalog read and goes; and a group then picked reads no last sync until its first", async (t) => {
@@ -1733,7 +1738,7 @@ test("space-73, storage-5, space-5, space-98, space-61, space-11, space-12: a pa
   writeFileSync(join(movedClone, "notes.md"), "a record of the project's\n");
   const atHost = git(bareOf(host, moved), "rev-parse", "spex");
   const unconfirmed = await home.client.settle("space.leave", { repository: moved, instance: host.url }, 30_000);
-  assert.deepEqual(unconfirmed.sync, { phase: "stopped", op: "leave", step: "check", cause: "unreceived", message: "1 record has reached no other placement", guidance: "Confirm to remove it anyway.", retry: true, count: 1 });
+  assert.deepEqual(unconfirmed.sync, { phase: "stopped", op: "leave", step: "check", cause: "unreceived", message: "1 record has reached no other Space", guidance: "Confirm to remove it anyway.", retry: true, count: 1 });
   assert.deepEqual(remotesOf(movedClone), [folder]);
   assert.ok(existsSync(join(movedClone, "placements", `${folder}.yaml`)), "its file kept");
   // Confirmed, it takes its remote with its id, the `spex` the clone
@@ -2192,13 +2197,13 @@ test("space-38: a second home joins a project from the stand-in with its code; a
   const ownB = await b.client.waitRepository(fromB, HOST_OWN, (repository) => repository.sync.phase !== "running" && repository.sync.phase !== "idle");
   assert.equal(ownB.sync.phase, "done", JSON.stringify(ownB.sync));
   const absent = repositoryOf(await b.client.expectOk("space.get", {}), key);
-  assert.deepEqual([absent.state, absent.id, absent.code], ["absent", id, code]);
+  assert.deepEqual([absent.state, absent.id, absent.code, absent.codeKind], ["absent", id, `Code: ${code}`, "elsewhere"]);
   // Join: the spex repository and the code, paired, the first home's
   // session served with its history (space-63, space-20).
   const folderB = join(mkdtempSync(join(scratch, "b-code-")), "shared");
   await b.client.expectOk("space.join", { instance: host.url, hostId: id, folder: folderB });
   const joined = await b.client.waitRepository(fromB, key, (repository) => repository.state === "reachable" && repository.folder === folderB && repository.sync.phase === "idle");
-  assert.equal(joined.code, code);
+  assert.deepEqual([joined.code, joined.codeKind], [`Code: ${code}`, "elsewhere"]);
   assert.ok(existsSync(join(folderB, "README.md")));
   assert.ok((await b.client.expectOk("session.list", {})).some((session) => session.id === sessionA && session.projectId === key));
   const history = await b.client.expectOk("history.get", { sessionId: sessionA });
@@ -2252,7 +2257,7 @@ test("space-38, space-52: the stand-in's 401 stops reauth, its refusal names onl
   // project.json is written (space-5).
   const leaky = gitFolder("leaky");
   git(leaky, "remote", "add", "origin", "https://user:token@example.com/leaky.git");
-  await home.client.expectError("project.register", { path: leaky }, "invalid_request", /stores no credential/);
+  await home.client.expectError("project.register", { path: leaky }, "invalid_request", /^No credential in the URL/);
   assert.ok(!existsSync(clonePath(home.dataDir, `${OWN}/leaky-spex`)));
   const from = home.client.mark();
   await signIn(home, host);
@@ -2261,7 +2266,7 @@ test("space-38, space-52: the stand-in's 401 stops reauth, its refusal names onl
   host.script.unauthorizeTransport(true);
   const reauth = await home.client.settle("space.fetch", { repository: HOST_OWN });
   assert.ok(reauth.sync.phase === "stopped" && reauth.sync.cause === "reauth" && reauth.sync.message === "Sign in again", JSON.stringify(reauth.sync));
-  assert.match(reauth.sync.guidance, /Sign in from the header/);
+  assert.match(reauth.sync.guidance, /^Sign in again, then Retry\.$/);
   host.script.unauthorizeTransport(false);
   // A refusal names the host's own words and Share, claims no role and
   // offers no act the host did not name (space-50).
@@ -2962,15 +2967,15 @@ test("git-host-8, git-host-16, git-host-17: a group's members with their source;
   const quiet = host.script.requests.length;
   await home.client.expectError("space.share", { instance: host.url, group: "2002", login: "bob", role: "admin" }, "invalid_request", new RegExp(`^admin is not one of the roles ${HOST_NAME} grants$`));
   await home.client.expectError("space.share", { instance: host.url, group: "2002", login: "  ", role: "developer" }, "invalid_request", new RegExp(`^Name the account's login at ${HOST_NAME}$`));
-  await home.client.expectError("space.share", { login: "bob", role: "developer" }, "invalid_request", /^Name one group or one spex repository$/);
-  await home.client.expectError("space.share", { instance: host.url, group: "2002", repository: hostKey(host, "acme/team-spex"), login: "bob", role: "developer" }, "invalid_request", /^Name one group or one spex repository$/);
+  await home.client.expectError("space.share", { login: "bob", role: "developer" }, "invalid_request", /^Name one group or one project$/);
+  await home.client.expectError("space.share", { instance: host.url, group: "2002", repository: hostKey(host, "acme/team-spex"), login: "bob", role: "developer" }, "invalid_request", /^Name one group or one project$/);
   await home.client.expectError("space.share", { instance: host.url, group: "9999", login: "bob", role: "developer" }, "not_found", new RegExp(`^${HOST_NAME} listed no group 9999$`));
   await home.client.expectError("space.share", { repository: hostKey(host, "acme/nowhere-spex"), login: "bob", role: "developer" }, "not_found");
   await home.client.expectError("space.unshare", { instance: host.url, group: "2002", login: " " }, "invalid_request", /^Name the account's login/);
   await home.client.expectError("space.unshare", { instance: host.url, group: "9999", login: "bob" }, "not_found");
-  await home.client.expectError("space.unshare", { login: "bob" }, "invalid_request", /^Name one group or one spex repository$/);
+  await home.client.expectError("space.unshare", { login: "bob" }, "invalid_request", /^Name one group or one project$/);
   await home.client.expectError("space.members", { instance: host.url, group: "9999" }, "not_found");
-  await home.client.expectError("space.members", {}, "invalid_request", /^Name one group or one spex repository$/);
+  await home.client.expectError("space.members", {}, "invalid_request", /^Name one group or one project$/);
   assert.deepEqual(apiRequests(host, quiet), []);
 
   // In Chinese, the stand-in's words kept whole (git-host-11).

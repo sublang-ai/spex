@@ -1923,7 +1923,7 @@ test("PROJ: work-tree validation, create flow, forge states, removal", async () 
   const noOrigin = await unbound();
   assert.equal(
     noOrigin.guidance,
-    "No GitHub origin remote. Add one (git remote add origin …) to see issues and PRs.",
+    "No GitHub remote — run git remote add origin … to see issues and PRs",
   );
   assert.deepEqual([noOrigin.issues, noOrigin.prs], [[], []]);
   execFileSync("git", [
@@ -1937,7 +1937,7 @@ test("PROJ: work-tree validation, create flow, forge states, removal", async () 
   const elsewhere = await unbound();
   assert.equal(
     elsewhere.guidance,
-    "Issues and PRs come from GitHub; this project's code is on a remote.",
+    "Issues and PRs come from GitHub",
   );
   assert.deepEqual([elsewhere.issues, elsewhere.prs], [[], []]);
   assert.equal(
@@ -2817,7 +2817,7 @@ test("core-service-63: a second core service on a held root refuses naming the h
   writeFileSync(identityFile, "nonsense\n", { mode: 0o600 });
   const brokenDataDir = join(dir, "broken-state");
   await assert.rejects(CoreService.start({ ...options, home: brokenHome, dataDir: brokenDataDir }), (error: Error) => {
-    assert.match(error.message, /^Spex cannot identify this machine: /);
+    assert.match(error.message, /^Spex cannot identify this computer: /);
     assert.ok(error.message.includes(identityFile));
     return true;
   });
@@ -3567,16 +3567,16 @@ test("core-service-85: a rebind keeps the clone's sessions listed, and a recorde
     assert.equal(kept?.projectId, project.id);
     assert.equal(kept?.projectPath, relocated);
     assert.equal(kept?.continuable, undefined);
-    assert.match(kept?.continuationReason ?? "", /continue it on the device whose folder it ran in/);
+    assert.match(kept?.continuationReason ?? "", /continue it on the computer whose folder it ran in/);
     assert.ok(client.messages.some((message) => message.type === "session.state" && message.session.id === session.id &&
       message.session.projectPath === relocated && !message.session.continuable &&
-      /continue it on the device whose folder it ran in/.test(message.session.continuationReason ?? "")));
+      /continue it on the computer whose folder it ran in/.test(message.session.continuationReason ?? "")));
     assert.deepEqual(await client.expectOk("history.get", { sessionId: session.id }), history);
     // ...but it ran in a directory that is neither the folder nor an
     // alias, so it cannot continue here (core-service-73).
     const refused = await client.command("turn.submit", { sessionId: session.id, text: "second" });
     assert.ok(!refused.ok && refused.error.code === "invalid_request", JSON.stringify(refused));
-    assert.match(refused.error.message, /continue it on the device whose folder it ran in/);
+    assert.match(refused.error.message, /continue it on the computer whose folder it ran in/);
     assert.deepEqual(paths.map((path) => existsSync(path) ? readFileSync(path) : undefined), before);
 
     // The recorded path as an alias passes the folder rule
@@ -3589,7 +3589,7 @@ test("core-service-85: a rebind keeps the clone's sessions listed, and a recorde
     assert.match(aliasReading?.continuationReason ?? "", /relocation is unsupported/);
     const relocation = await client.command("turn.submit", { sessionId: session.id, text: "second" });
     assert.ok(!relocation.ok && relocation.error.code === "invalid_request", JSON.stringify(relocation));
-    assert.doesNotMatch(relocation.error.message, /continue it on the device whose folder it ran in/);
+    assert.doesNotMatch(relocation.error.message, /continue it on the computer whose folder it ran in/);
     assert.match(relocation.error.message, /relocation is unsupported/);
     assert.deepEqual(await client.expectOk("history.get", { sessionId: session.id }), history);
     assert.equal((await client.expectOk("session.list", {})).find((entry) => entry.id === session.id)?.projectId, project.id);
@@ -3606,7 +3606,7 @@ test("core-service-85: a rebind keeps the clone's sessions listed, and a recorde
     const edited = (await client.expectOk("session.list", {})).find((entry) => entry.id === session.id);
     assert.equal(edited?.projectPath, relocated);
     assert.equal(edited?.continuable, undefined);
-    assert.match(edited?.continuationReason ?? "", /continue it on the device whose folder it ran in/);
+    assert.match(edited?.continuationReason ?? "", /continue it on the computer whose folder it ran in/);
     writeFileSync(homePath, homeBytes);
     assert.equal((await client.expectOk("session.list", {})).find((entry) => entry.id === session.id)?.continuable, true);
   } finally {

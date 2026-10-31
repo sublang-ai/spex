@@ -73,7 +73,11 @@ Product names and the role names Playbook defines stay as authored; everything e
 | Code: <where> | 代码：<where> | where a project's code is: a Space by its display name, a host such as github.com, or "no remote" |
 | Sync / synced / changes | 同步 / 已同步 / 更改 | a project's records: "2 to send", "Synced 3 min ago"; never push or units |
 | Resolve / Combine | 解决 / 合并 | Resolve: changed here and at a Space; Combine: records started separately at a Space; never 解析 |
+| Started separately at <Space> | 在 <Space> 上各自开始 | records this computer and a Space began apart; Combine… stands beside it |
+| Saving / Checking / Comparing / Merging / Reloading / Sending | 保存 / 检查 / 比对 / 整合 / 重新加载 / 发送 | a sync's steps; a running step adds 中…, as 整合中…; Merging is 整合, apart from Combine's 合并 |
+| Downloading code | 下载代码 | a project's open fetching its code; never clone or 克隆 |
 | To fix | 待处理 | what needs an answer: "To fix (2)" |
+| set aside | 暂不处理 | a repair the reader answered "Not on this computer": "To fix (2) · 1 set aside"; not 搁置, which is a parked run |
 | verdict | 裁定 | done or dropped |
 | parked, waiting | 搁置, 等待 | a run holding for the Boss |
 | failed / stopped / done / dropped | 失败 / 已停止 / 完成 / 已放弃 | verdict and life words |
@@ -103,6 +107,7 @@ Product names and the role names Playbook defines stay as authored; everything e
 | token (a provider token) | 令牌 | `tok` as a usage unit stays Latin |
 | Working… (a control's busy form) / working (a state) | 执行中… / 工作中 | |
 | Sign in / Signing in… / Sign in again / Sign out | 登录 / 登录中… / 重新登录 / 退出登录 | signing in to a Space or a registry |
+| login | 登录名 | a person's account name at a Space, shown as @login; never 用户名, which is Git's user name |
 | Members | 成员 | a project's or a group's overflow entry |
 | Waiting for you to continue | 等待你继续 | the first send of a project's records waiting on the sharing confirm |
 | authoring (session) | 编写（会话） | a playbook being written in a draft |

@@ -234,7 +234,7 @@ test("git-host-14: a rename carries the groups and repositories inside to the ne
   await home.client.expectError("space.group.delete", { instance: host.url, group: "2002" }, "invalid_request", /^acme is not empty$/);
   await home.client.expectError("space.group.delete", { instance: host.url, group: "2001" }, "not_found");
   await home.client.expectError("space.group.delete", { instance: host.url, group: "9999" }, "not_found");
-  await home.client.expectError("space.repository.move", { repository: local, groupId: "2002" }, "invalid_request", /^On this device only$/);
+  await home.client.expectError("space.repository.move", { repository: local, groupId: "2002" }, "invalid_request", /^Add it to a group first$/);
   await home.client.expectError("space.repository.move", { repository: hostKey(host, "acme/nowhere-spex"), groupId: "2002" }, "not_found");
   await home.client.expectError("space.repository.move", { repository: key, groupId: "9999" }, "not_found", new RegExp(`^${HOST_NAME} listed no group 9999$`));
   await home.client.expectError("space.repository.move", { repository: key, groupId: "2100" }, "invalid_request", /named like your login/);

@@ -138,8 +138,8 @@ test("space-8, space-31, space-33, space-7, space-15, space-10, space-29: Check 
   assert.match(theirs.patch, /^\+theirs$/m);
   const atTheFirst = await home.client.expectOk("space.diff", { repository: key, unit: "both.md", path: "both.md", side: "remote" });
   assert.equal(atTheFirst.patch, "", "the first holds no both.md");
-  await home.client.expectError("space.diff", { repository: key, unit: "both.md", path: "both.md", side: "remote", placement: null }, "invalid_request", /^atlas-spex holds no such placement$/);
-  await home.client.expectError("space.diff", { repository: key, unit: "both.md", path: "both.md", side: "remote", placement: "http://127.0.0.1:9" }, "invalid_request", /^atlas-spex holds no such placement$/);
+  await home.client.expectError("space.diff", { repository: key, unit: "both.md", path: "both.md", side: "remote", placement: null }, "invalid_request", /^atlas does not sync there$/);
+  await home.client.expectError("space.diff", { repository: key, unit: "both.md", path: "both.md", side: "remote", placement: "http://127.0.0.1:9" }, "invalid_request", /^atlas does not sync there$/);
 
   // The first's transport answering 503 stops its check alone: its list
   // stands as its last check left it, and the second is still checked,
@@ -232,7 +232,7 @@ test("space-29, git-host-20, space-60, space-61: space.repository.move naming th
   const { key: solo } = await addFolder(home, gitFolder("solo"));
   await home.client.expectOk("space.remote.set", { repository: solo, url: bareRepo() });
   for (const host of [first, second]) {
-    await home.client.expectError("space.repository.move", { repository: solo, instance: host.url, groupId: "2003" }, "invalid_request", /^solo-spex holds no such placement$/);
+    await home.client.expectError("space.repository.move", { repository: solo, instance: host.url, groupId: "2003" }, "invalid_request", /^solo does not sync there$/);
   }
   await home.client.expectError("space.repository.move", { repository: key, instance: "http://127.0.0.1:9", groupId: "2003" }, "not_found");
   assert.equal(second.script.repositories.find((repository) => repository.id === placed.id)?.group.fullPath, "acme/research", "nothing more moved");
@@ -260,7 +260,7 @@ test("storage-34, space-5, space-29: a clone placed at the second holds one remo
 
   // A remote the reader names at that instance's Git origin is refused,
   // nothing written (space-5, space-29).
-  await home.client.expectError("space.remote.set", { repository: key, url: spareUrl }, "invalid_request", /used as the host gives them/);
+  await home.client.expectError("space.remote.set", { repository: key, url: spareUrl }, "invalid_request", /^That address is a Space's own — Add it to a group instead$/);
   assert.ok(!remoteNamesOf(clone).includes("origin"), "no path placement written");
 });
 
@@ -446,9 +446,9 @@ test("space-92, space-14, space-9, space-17, space-18, space-29: a conflict at t
   assert.equal(readFileSync(join(clone, "both.md"), "utf8"), "mine\n");
 
   // Choices are validated against the placement they are for (space-29).
-  await home.client.expectError("space.sync", { repository: key, placement: "http://127.0.0.1:9", choices: { "both.md": "mine" } }, "invalid_request", /^atlas-spex holds no such placement$/);
-  await home.client.expectError("space.sync", { repository: key, placement: null, choices: { "both.md": "mine" } }, "invalid_request", /^atlas-spex holds no such placement$/);
-  await home.client.expectError("space.sync", { repository: key, placement: first.url, choices: { "both.md": "mine" } }, "invalid_request", /no divergent change|unknown unit/);
+  await home.client.expectError("space.sync", { repository: key, placement: "http://127.0.0.1:9", choices: { "both.md": "mine" } }, "invalid_request", /^atlas does not sync there$/);
+  await home.client.expectError("space.sync", { repository: key, placement: null, choices: { "both.md": "mine" } }, "invalid_request", /^atlas does not sync there$/);
+  await home.client.expectError("space.sync", { repository: key, placement: first.url, choices: { "both.md": "mine" } }, "invalid_request", /needs no choice — Check, then choose again$|is not among the changes — Check, then choose again$/);
 
   // Sent with them, the sync runs from Save, the first already equal
   // passing as a fast-forward — no merge made there — and the second
@@ -570,7 +570,7 @@ test("space-15, space-100, git-host-22: a sign-out at the second while its Check
   // changed meanwhile, nothing sent there (space-15, git-host-22).
   assert.equal(ended.sync.phase, "done", JSON.stringify(ended.sync));
   assert.deepEqual(placementOf(ended, second.url).outcome, {
-    kind: "stopped", step: "check", cause: "reauth", message: "The sign-in changed meanwhile; try again", guidance: "Sign in from the header, then Retry.", retry: true,
+    kind: "stopped", step: "check", cause: "reauth", message: "The sign-in changed meanwhile; try again", guidance: "Sign in again, then Retry.", retry: true,
   });
   assert.deepEqual([placementOf(ended, second.url).state, placementOf(ended, second.url).reason], ["unreachable", "Sign in again"]);
   assert.equal(git(secondBare, "rev-parse", "spex"), secondLeft, "nothing is pushed to the second");
@@ -830,7 +830,7 @@ test("space-57, git-host-22, space-87, space-12, space-11, space-29, storage-5: 
   const refused = await home.client.command("space.sync", { repository: key });
   assert.ok(!refused.ok);
   assert.equal(refused.error.code, "invalid_request");
-  assert.match(refused.error.message, /^Read the sharing notice before the first sync of atlas-spex$/);
+  assert.match(refused.error.message, /^Confirm sharing before the first sync of atlas$/);
   assert.deepEqual((refused.error as { details?: unknown }).details, { notice: true, members: 2, visibility: "private", placement: canonicalOrigin(second.url) });
 
   // Continue for the second: its notice recorded under its remote, the
@@ -1024,7 +1024,7 @@ test("space-98, space-12: a Leave not confirmed counts the units a remaining pla
   let mark = home.client.mark();
   assert.deepEqual(await home.client.expectOk("space.leave", { repository: key, instance: first.url }), { accepted: true });
   const stopped = await home.client.waitRepository(mark, key, (row) => row.sync.phase === "stopped", 30_000);
-  assert.deepEqual(stopped.sync, { phase: "stopped", op: "leave", step: "check", cause: "unreceived", message: "1 record has reached no other placement", guidance: "Confirm to remove it anyway.", retry: true, count: 1 });
+  assert.deepEqual(stopped.sync, { phase: "stopped", op: "leave", step: "check", cause: "unreceived", message: "1 record has reached no other Space", guidance: "Confirm to remove it anyway.", retry: true, count: 1 });
   assert.deepEqual(stopped.placements.map((line) => [line.instance, line.attached]), [[canonicalOrigin(first.url), true], [canonicalOrigin(second.url), true]]);
   assert.deepEqual(remoteNamesOf(clone), [firstFolder, placed.folder]);
   assert.ok(existsSync(join(clone, firstFile)), "its file kept");

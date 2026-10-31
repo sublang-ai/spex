@@ -95,7 +95,7 @@ export function remoteHost(url: string | null): string {
   return url;
 }
 
-/** Which act gives this machine access to a remote (space-50), read
+/** Which act gives this computer access to a remote (space-50), read
  * from the URL alone — the app runs no probe, and none answers what the
  * transport already did. */
 type AccessAct = "folder" | "github" | "web" | "ssh" | "any";
@@ -110,75 +110,75 @@ function accessAct(remote: string | null): AccessAct {
   return "any";
 }
 
-/** The act the reader performs, with the command where one serves it,
- * inside a sentence of the guidance (space-15). Its opening form is
- * separate, because a sentence's first word is the language's own
- * business, never a transform applied to a phrase (DR-079). */
-export function remoteAccess(remote: string | null): string {
+/** The guidance under a remote that refused this computer's access
+ * (space-15, space-50): the act its form gives access by, each case one
+ * whole message, never a frame assembled around a fragment
+ * (core-service-145); an SSH form alone can stop on a host key it has
+ * never seen. */
+function refusedGuidance(remote: string | null): string {
   switch (accessAct(remote)) {
     case "folder":
       return i18n._({
-        id: "make sure this user can read the folder",
-        comment: "The act that gives access to a local-path remote, inside a sentence",
+        id: "Let this user read the folder, then Retry",
+        comment: "Guidance where a local-path remote refused access",
       });
     case "github":
       return i18n._({
-        id: "in a terminal run gh auth status to see which GitHub account this machine uses and gh auth login to change it",
-        comment: "The act that gives access to a GitHub remote, inside a sentence; gh auth status and gh auth login are commands and stay as they are",
+        id: "Check your GitHub account with gh auth status, switch with gh auth login, then Retry",
+        comment: "Guidance where a GitHub remote refused access; gh auth status and gh auth login are terminal commands and stay as they are",
       });
     case "web":
       return i18n._({
-        id: "sign this machine in at that host as an account that can see it",
-        comment: "The act that gives access to an http(s) remote, inside a sentence",
+        id: "Sign this computer in at {host} with an account that can see it, then Retry",
+        values: { host: remoteHost(remote) },
+        comment: "Guidance where an http(s) remote refused access; {host} is the remote's host name, such as gitlab.example.com",
       });
     case "ssh":
       return i18n._({
-        id: "add this machine's SSH key to an account that can see it",
-        comment: "The act that gives access to an SSH remote, inside a sentence",
+        id: "Add this computer's SSH key to your account, accept a new host key in a terminal, then Retry",
+        comment: "Guidance where an SSH remote refused access; the host key is SSH's own term for the server's key, asked on a first connection",
       });
     default:
       return i18n._({
-        id: "give this machine access to it",
-        comment: "The act that gives access to a remote of an unread form, inside a sentence",
+        id: "Give this computer access, then Retry",
+        comment: "Guidance where a remote of an unread form refused access",
       });
   }
 }
 
-/** The same act, opening its own sentence; a language that cases no
- * differently writes it exactly as [[remoteAccess]]. */
-function remoteAccessOpening(remote: string | null): string {
+/** The guidance under a remote holding no repository this computer can
+ * see (space-15, space-50): the remedies for an absent and a private one
+ * alike, the access one named as the remote's form gives it, each case
+ * one whole message (core-service-145). */
+function goneGuidance(remote: string | null): string {
   switch (accessAct(remote)) {
     case "folder":
       return i18n._({
-        id: "Make sure this user can read the folder",
-        comment: "The act that gives access to a local-path remote, opening a sentence",
+        id: "Check the path, create the repository, or let this user read the folder, then Retry",
+        comment: "Guidance where a local-path remote holds no repository this computer can see: it may be absent or unreadable",
       });
     case "github":
       return i18n._({
-        id: "In a terminal run gh auth status to see which GitHub account this machine uses and gh auth login to change it",
-        comment: "The act that gives access to a GitHub remote, opening a sentence; gh auth status and gh auth login are commands and stay as they are",
+        id: "Check the URL, create the repository, or check your GitHub account with gh auth status, then Retry",
+        comment: "Guidance where a GitHub remote holds no repository this computer can see: it may be absent or private; gh auth status is a terminal command and stays as it is",
       });
     case "web":
       return i18n._({
-        id: "Sign this machine in at that host as an account that can see it",
-        comment: "The act that gives access to an http(s) remote, opening a sentence",
+        id: "Check the URL, create the repository, or sign this computer in at {host}, then Retry",
+        values: { host: remoteHost(remote) },
+        comment: "Guidance where an http(s) remote holds no repository this computer can see: it may be absent or private; {host} is the remote's host name, such as gitlab.example.com",
       });
     case "ssh":
       return i18n._({
-        id: "Add this machine's SSH key to an account that can see it",
-        comment: "The act that gives access to an SSH remote, opening a sentence",
+        id: "Check the URL, create the repository, or add this computer's SSH key to your account, then Retry",
+        comment: "Guidance where an SSH remote holds no repository this computer can see: it may be absent or private",
       });
     default:
       return i18n._({
-        id: "Give this machine access to it",
-        comment: "The act that gives access to a remote of an unread form, opening a sentence",
+        id: "Check the URL, create the repository, or give this computer access, then Retry",
+        comment: "Guidance where a remote of an unread form holds no repository this computer can see: it may be absent or private",
       });
   }
-}
-
-/** An SSH form, which alone can stop on an unknown host key. */
-function isSsh(remote: string | null): boolean {
-  return remote !== null && (/^ssh:\/\//i.test(remote) || /^[^@/:\s]+@[^/:\s]+:/.test(remote));
 }
 
 /** The remote URL as the reader set it, with an `http(s)` user removed
@@ -199,13 +199,13 @@ export function validateRemoteUrl(url: string): { ok: true } | { ok: false; reas
   }
   if (/^https?:\/\/[^/]*@/i.test(url)) {
     return { ok: false, reason: i18n._({
-      id: "The app stores no credential: remove everything before the host from the URL and use an SSH key or the machine's credential helper instead.",
-      comment: "Refusal of a remote URL carrying a user before the host",
+      id: "No credential in the URL — remove the user, then use an SSH key or this computer's credential helper",
+      comment: "Refusal of a remote URL carrying a user before its host name",
     }) };
   }
   if (/^[a-z][a-z0-9+.-]*:\/\/[^/@]*:[^/@]*@/i.test(url)) {
     return { ok: false, reason: i18n._({
-      id: "The app stores no credential: remove the user and secret from the URL and use an SSH key or the machine's credential helper instead.",
+      id: "No credential in the URL — remove the user and secret, then use an SSH key or this computer's credential helper",
       comment: "Refusal of a remote URL carrying a user and a secret",
     }) };
   }
@@ -260,56 +260,30 @@ export function classifyTransportFailure(run: GitRun, remote: string | null): Gi
   }
   const refused = /Permission denied|protected branch|pre-receive hook declined|You are not allowed|returned error: 403|HTTP 403/i.test(text);
   if (refused || /Authentication failed|could not read Username|terminal prompts disabled|Host key verification failed|returned error: 401|HTTP 401/i.test(text)) {
-    // The act that gives access is the remote form's (space-50), and an
-    // SSH form alone can stop on a host key it has never seen. Each
-    // guidance is one whole sentence carrying the act, never a frame
-    // assembled around a fragment (DR-079).
-    const act = remoteAccessOpening(remote);
     return {
       cause: refused ? "refused" : "reauth",
       message: i18n._({
-        id: "{host} refused this machine's access",
+        id: "{host} refused this computer's access",
         values: { host },
-        comment: "A stopped transfer's message; {host} is the remote's host",
+        comment: "A stopped transfer's message; {host} is the remote's host name",
       }),
-      guidance: isSsh(remote)
-        ? i18n._({
-            id: "{act}; on a first connection, accept the host key in a terminal. Then Retry.",
-            values: { act },
-            comment: "Guidance where an SSH remote refused access; {act} is the act that gives this machine access, already opening the sentence",
-          })
-        : i18n._({
-            id: "{act}. Then Retry.",
-            values: { act },
-            comment: "Guidance where the remote refused access; {act} is the act that gives this machine access, already opening the sentence",
-          }),
+      guidance: refusedGuidance(remote),
       retry: true,
     };
   }
   if (/Repository not found|does not appear to be a git repository|repository '[^']*' not found/i.test(text)) {
-    // The host answers alike for a repository that is absent and for a
-    // private one this machine may not see (space-15), so the guidance is
-    // the remedies for both — every one outside the app, hence Retry —
+    // The remote answers alike for a repository that is absent and for a
+    // private one this computer may not see (space-15), so the guidance
+    // is the remedies for both — every one outside the app, hence Retry —
     // the access one named as this remote's form gives it (space-50).
-    const act = remoteAccess(remote);
     return {
       cause: "gone",
       message: i18n._({
-        id: "No repository this machine can see at {target}",
+        id: "No repository this computer can see at {target}",
         values: { target: remote ? displayRemote(remote) : host },
-        comment: "A stopped transfer's message; {target} is the remote URL, or its host where no URL is known",
+        comment: "A stopped transfer's message; {target} is the remote URL, or its host name where no URL is known",
       }),
-      guidance: remote && /^\//.test(remote)
-        ? i18n._({
-            id: "Check the path, create the repository if it is not there yet, or {act}. Then Retry.",
-            values: { act },
-            comment: "Guidance where a local-path remote holds no repository this machine can see; {act} is the act that gives this machine access",
-          })
-        : i18n._({
-            id: "Check the URL, create the repository if it is not there yet, or {act}. Then Retry.",
-            values: { act },
-            comment: "Guidance where the remote holds no repository this machine can see; {act} is the act that gives this machine access",
-          }),
+      guidance: goneGuidance(remote),
       retry: true,
     };
   }
@@ -317,12 +291,14 @@ export function classifyTransportFailure(run: GitRun, remote: string | null): Gi
     return {
       cause: "rejected",
       message: i18n._({
-        id: "The host changed again",
-        comment: "A stopped transfer's message: the host's branch moved while this machine was sending",
+        id: "{host} changed again",
+        values: { host },
+        comment: "A stopped sync's message: the records moved again at the remote while this computer was sending; {host} is the remote's host name, or a local remote as written",
       }),
       guidance: i18n._({
-        id: "Sync again to merge what the host received meanwhile.",
-        comment: "Guidance where the remote rejected the push",
+        id: "Sync again to merge what {host} received meanwhile.",
+        values: { host },
+        comment: "Guidance where the remote rejected the push; {host} is the remote's host name, or a local remote as written",
       }),
       retry: true,
     };
@@ -361,7 +337,7 @@ export function hostWords(stderr: string): string | null {
 export function noLongerShared(): string {
   return i18n._({
     id: "No longer shared with you",
-    comment: "A spex repository's state or a stopped transfer: the Git host no longer lists it for this account",
+    comment: "A spex repository's state or a stopped transfer: the Space no longer lists it for this account",
   });
 }
 
@@ -371,12 +347,12 @@ export function hostRefused(host: string, words: string | null): string {
     ? i18n._({
         id: "{host} refused: {words}",
         values: { host, words },
-        comment: "A refusal relayed from the Git host; {host} is its display name, {words} its own words, kept whole",
+        comment: "A refusal relayed from the Space; {host} is its display name, {words} its own words, kept whole",
       })
     : i18n._({
         id: "{host} refused",
         values: { host },
-        comment: "A refusal relayed from the Git host that carried no words; {host} is its display name",
+        comment: "A refusal relayed from the Space that carried no words; {host} is its display name",
       });
 }
 
@@ -386,7 +362,7 @@ export function hostRefused(host: string, words: string | null): string {
 export function membersDecide(): string {
   return i18n._({
     id: "Membership decides who may send here: use Share, or ask a member who may share it.",
-    comment: "Guidance under a transfer the Git host refused; Share is the control in the members panel; it claims no role",
+    comment: "Guidance under a transfer the Space refused; Share is the control in the members panel; it claims no role",
   });
 }
 
@@ -411,15 +387,15 @@ function contentSizeFailure(stderr: string, host: string): GitFailure | null {
       ? i18n._({
           id: "{host} refused content above its size limit ({limit})",
           values: { host, limit },
-          comment: "A content-size rejection, naming only the instance and its reported limit, not the storage system or raw transport words",
+          comment: "A content-size rejection, naming only the Space and its reported limit, not the storage system or raw transport words",
         })
       : i18n._({
           id: "{host} refused content above its size limit",
           values: { host },
-          comment: "An explicit content-size rejection whose numeric limit is absent or ambiguous; host is the instance display name",
+          comment: "An explicit content-size rejection whose numeric limit is absent or ambiguous; host is the Space's display name",
         }),
     guidance: i18n._({
-      id: "Your saved commits remain on this device. Address the content limit, then Retry.",
+      id: "Your saved commits remain on this computer. Address the content limit, then Retry.",
       comment: "A content-size rejection keeps access unchanged; no membership, sign-in, deletion or history-rewrite advice is implied",
     }),
     retry: true,
@@ -430,7 +406,7 @@ function contentSizeFailure(stderr: string, host: string): GitFailure | null {
 export function signInAgain(): string {
   return i18n._({
     id: "Sign in again",
-    comment: "A state or a stopped transfer: the Git host asks this device to sign in again",
+    comment: "A state or a stopped transfer: the Space asks this computer to sign in again",
   });
 }
 
@@ -462,8 +438,8 @@ export function classifyHostTransportFailure(run: GitRun, host: string): GitFail
       cause: run.killed,
       message: i18n._({ id: "No answer from {host}", values: { host }, comment: "A stopped transfer's message; {host} is the remote's host" }),
       guidance: run.killed === "stopped"
-        ? i18n._({ id: "You stopped the transfer; your commits stand.", comment: "Guidance after the reader stopped a transfer to the Git host" })
-        : i18n._({ id: "Check the connection, then Retry.", comment: "Guidance after a transfer to the Git host ran past its time limit" }),
+        ? i18n._({ id: "You stopped the transfer; your commits stand.", comment: "Guidance after the reader stopped a transfer to the Space" })
+        : i18n._({ id: "Check the connection, then Retry.", comment: "Guidance after a transfer to the Space ran past its time limit" }),
       retry: true,
     };
   }
@@ -471,7 +447,7 @@ export function classifyHostTransportFailure(run: GitRun, host: string): GitFail
     return {
       cause: "unreachable",
       message: i18n._({ id: "Could not reach {host}", values: { host }, comment: "A stopped transfer's message; {host} is the remote's host" }),
-      guidance: i18n._({ id: "Check the network, then Retry.", comment: "Guidance where the Git host could not be reached" }),
+      guidance: i18n._({ id: "Check the network, then Retry.", comment: "Guidance where the Space could not be reached" }),
       retry: true,
     };
   }
@@ -479,7 +455,7 @@ export function classifyHostTransportFailure(run: GitRun, host: string): GitFail
     return {
       cause: "reauth",
       message: signInAgain(),
-      guidance: i18n._({ id: "Sign in from the header, then Retry.", comment: "Guidance where the Git host asked this device to sign in again" }),
+      guidance: i18n._({ id: "Sign in again, then Retry.", comment: "Guidance where the Space asked this computer to sign in again; Sign in again is the control on the Space's heading" }),
       retry: true,
     };
   }
@@ -487,7 +463,7 @@ export function classifyHostTransportFailure(run: GitRun, host: string): GitFail
     return {
       cause: "gone",
       message: noLongerShared(),
-      guidance: i18n._({ id: "Nothing on this device was deleted.", comment: "Guidance where the Git host no longer lists a spex repository for this account" }),
+      guidance: i18n._({ id: "Nothing on this computer was deleted.", comment: "Guidance where the Space no longer lists a project's records for this account" }),
       retry: true,
     };
   }
@@ -508,11 +484,11 @@ export function classifyHostTransportFailure(run: GitRun, host: string): GitFail
       message: i18n._({
         id: "{host} answered with an error (HTTP {status})",
         values: { host, status },
-        comment: "A stopped transfer: the Git host answered with an HTTP error no other message reads; {host} is its display name, {status} the HTTP status Git printed",
+        comment: "A stopped transfer: the Space answered with an HTTP error no other message reads; {host} is its display name, {status} the HTTP status Git printed",
       }),
       guidance: i18n._({
-        id: "Retry; if it fails again, the host's error stands for now.",
-        comment: "Guidance under a transfer the Git host answered with an error",
+        id: "Retry later",
+        comment: "Guidance under a transfer the Space answered with an error no other message reads: the error is the Space's, so a later retry may pass",
       }),
       retry: true,
     };

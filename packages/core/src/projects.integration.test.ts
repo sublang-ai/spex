@@ -197,7 +197,7 @@ test("projects-21: removal deletes the clone behind a second confirm naming its 
   const refused = await client.command("project.remove", { projectId: project.id });
   assert.ok(!refused.ok);
   assert.equal(refused.error.code, "conflict");
-  assert.match(refused.error.message, /^1 record has not reached the host/);
+  assert.equal(refused.error.message, "1 record never reached a Space.");
   assert.deepEqual(refused.error.details, { units: 1 });
   assert.ok(existsSync(clone), "nothing is deleted before the second confirm");
 
@@ -300,7 +300,7 @@ test("projects-40, projects-9: a project placed at two stand-in instances, while
   const refused = await home.client.command("project.remove", { projectId: key });
   assert.ok(!refused.ok, "the first confirm is refused");
   assert.equal(refused.error.code, "conflict");
-  assert.match(refused.error.message, /^1 record has not reached the host/);
+  assert.equal(refused.error.message, "1 record never reached a Space.");
   assert.deepEqual((refused.error as { details?: unknown }).details, { units: 1 });
   assert.ok(existsSync(join(clone, ".git")), "nothing is deleted before the second confirm");
 

@@ -199,7 +199,8 @@ export function repo(over: RowOver = {}): RepositoryState {
     own: false,
     // A remote at the host reads as its path in the instance (space-30).
     remote: "jane/academy-spex",
-    code: "https://jane@github.com/jane/academy.git",
+    code: "Code: github.com",
+    codeKind: "elsewhere",
     folder: "/Users/jane/code/academy",
     state: "reachable",
     reason: null,
@@ -230,6 +231,7 @@ export function ownRepo(over: RowOver = {}): RepositoryState {
     own: true,
     remote: OWN,
     code: null,
+    codeKind: "unknown",
     folder: null,
     branch: null,
     lastSync: { at: NOW - 3 * HOUR, sent: 1, received: 0 },

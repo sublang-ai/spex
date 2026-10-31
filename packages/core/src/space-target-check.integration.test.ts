@@ -140,7 +140,7 @@ test("git-host-23: fresh unknown target members require notice despite a cached 
   core.store.deletePref(`sync:${OWN}:${hostFolder(host)}:last`);
   core.store.deletePref(`sync:${OWN}:${hostFolder(host)}:noticed`);
   host.script.failMembers(true);
-  await home.client.expectError("space.sync", { repository: OWN }, "invalid_request", /sharing notice/);
+  await home.client.expectError("space.sync", { repository: OWN }, "invalid_request", /^Confirm sharing before/);
   assert.equal(placementOf(await home.client.repository(OWN), host.url).members, null);
   const row = await home.client.settle("space.sync", { repository: OWN, placement: host.url, noticed: true });
   assert.deepEqual([row.sync.phase, row.state, placementOf(row, host.url).noticed], ["done", "reachable", true]);
@@ -377,7 +377,7 @@ test("git-host-23: one failed fresh notice read refuses before Save and cannot f
   assert.ok(!host.script.requests.slice(from).some((request) => request.path.endsWith("git-receive-pack")));
   // A new user gesture now gets the healthy sharing notice, never an
   // implicit acknowledgment inherited from the failed read.
-  await home.client.expectError("space.sync", { repository: OWN }, "invalid_request", /sharing notice/);
+  await home.client.expectError("space.sync", { repository: OWN }, "invalid_request", /^Confirm sharing before/);
   assert.equal(placementOf(await home.client.repository(OWN), host.url).noticed, false);
   assert.equal(core.store.getPref(`sync:${OWN}:${hostFolder(host)}:last`), undefined);
 });
@@ -400,12 +400,12 @@ test("git-host-23: solo membership becoming shared at Check stops before transpo
   assert.equal(row.sync.phase, "stopped");
   if (row.sync.phase === "stopped") {
     assert.equal(row.sync.step, "check");
-    assert.match(row.sync.message, /sharing notice/);
+    assert.match(row.sync.message, /^Confirm sharing before/);
   }
   const line = placementOf(row, host.url);
   assert.deepEqual([line.members, line.noticed, line.lastSync], [2, false, null]);
   assert.ok(!host.script.requests.slice(from).some((request) => request.path.includes(".git/") || request.path.endsWith("/credential") || request.path.endsWith("/spex-branch")), "no branch preparation or Git transport");
-  await home.client.expectError("space.sync", { repository: OWN }, "invalid_request", /sharing notice/);
+  await home.client.expectError("space.sync", { repository: OWN }, "invalid_request", /^Confirm sharing before/);
   assert.equal(core.store.getPref(`sync:${OWN}:${hostFolder(host)}:noticed`), undefined);
   const seen = await home.client.settle("space.sync", { repository: OWN, placement: host.url, noticed: true });
   assert.deepEqual([seen.sync.phase, placementOf(seen, host.url).noticed], ["done", true]);
@@ -430,7 +430,7 @@ test("git-host-23, space-57, space-58: a sync the core starts after a pick owes 
   home.hooks.beforeStep = undefined;
   assert.ok(waiting.sync.phase === "stopped", JSON.stringify(waiting.sync));
   assert.deepEqual([waiting.sync.op, waiting.sync.step, waiting.sync.cause], ["sync", "check", "refused"]);
-  assert.match(waiting.sync.message, /^Read the sharing notice before the first sync of pick-notice-spex$/);
+  assert.match(waiting.sync.message, /^Confirm sharing before the first sync of pick-notice$/);
   const [line] = waiting.placements;
   assert.deepEqual([line.outcome, line.members, line.noticed, line.lastSync], [{ kind: "waiting", sent: 0, received: 0 }, 2, false, null]);
   assert.ok(!host.script.requests.slice(from).some((request) => request.path.includes(".git/") || request.path.endsWith("/credential") || request.path.endsWith("/spex-branch")), "no branch preparation or Git transport");

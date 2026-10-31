@@ -155,13 +155,17 @@ test("run-view-173: one desktop opens two seats and reads its places, its joined
   await expect(controlOne).toHaveText("Connect");
   await expect(controlTwo).toHaveText("Connect");
 
-  // [run-view-173] [run-view-170] the first Connect shows the contract in
-  // the record's words and asks nothing yet; "I understand" sends
+  // [run-view-173] [run-view-170] the first Connect shows the terms as
+  // bullets — the Space sign-in placed on the server, private packages
+  // needing a separate registry sign-in there — naming neither seat nor
+  // ticket (DR-172), and asks nothing yet; "I understand" sends
   // `server.open` with consent.
   await controlOne.click();
   const contract = page.getByTestId(`space-server-contract-${one.place}`);
-  await expect(contract).toContainText("Opening a seat places your Space sign-in on lab-1.");
-  await expect(contract).toContainText("Private packages require a separate registry sign-in on this seat.");
+  await expect(contract.getByRole("listitem").first()).toBeVisible();
+  await expect(contract).toContainText("Space sign-in on lab-1");
+  await expect(contract).toContainText("separate registry sign-in on lab-1");
+  await expect(contract).not.toContainText(/\b(seats?|tickets?)\b/i);
   expect(opensSent(tap.sent)).toEqual([]);
   expect(one.hub.admissions).toEqual([]);
   await page.getByTestId(`space-server-consent-${one.place}`).getByText("I understand").click();
@@ -176,11 +180,11 @@ test("run-view-173: one desktop opens two seats and reads its places, its joined
   await expect(page.getByTestId(`space-server-connected-${one.place}`)).toHaveText("Connected", { timeout: 30_000 });
   await expect(page.getByTestId(`space-server-approve-${one.place}`)).toHaveCount(0);
 
-  // The second server's first Connect on this device shows its own
-  // contract (run-view-170): understood, it opens too.
+  // The second server's first Connect on this computer shows its own
+  // terms (run-view-170): understood, it opens too.
   await controlTwo.click();
-  await expect(page.getByTestId(`space-server-contract-${two.place}`)).toContainText("Opening a seat places your Space sign-in on lab-2.");
-  await expect(page.getByTestId(`space-server-contract-${two.place}`)).toContainText("Private packages require a separate registry sign-in on this seat.");
+  await expect(page.getByTestId(`space-server-contract-${two.place}`)).toContainText("Space sign-in on lab-2");
+  await expect(page.getByTestId(`space-server-contract-${two.place}`)).toContainText("separate registry sign-in on lab-2");
   await page.getByTestId(`space-server-consent-${two.place}`).click();
   await expect(moreTwo).toBeVisible({ timeout: 30_000 });
   await expect.poll(() => opensSent(tap.sent).at(-1)).toEqual({ instance: host.url, serverId: two.server.id, consented: true });
@@ -274,7 +278,7 @@ test("run-view-173: one desktop opens two seats and reads its places, its joined
   await expect(groupOf("lab-1")).toHaveCount(0);
   expect(await dial(app, `/seats/${encodeURIComponent(one.place)}`)).toBe(401);
   // [run-view-173] [run-view-170] a later Connect of that server on this
-  // device sends `server.open` at once, with no contract shown.
+  // computer sends `server.open` at once, with no terms shown.
   const opens = opensSent(tap.sent).length;
   await controlOne.click();
   await expect(page.getByTestId(`space-server-contract-${one.place}`)).toHaveCount(0);

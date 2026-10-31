@@ -132,9 +132,22 @@ export function governingOf(state: GroupsState, repo: RepositoryState): Instance
   return instanceOf(state, repo.governing) ?? instanceOf(state, repo.instance);
 }
 
-/** Whether your own group's heading reads "named after your login at
- * sign-in" (space-1): while the home lists no instance and its folder
- * still bears this device's user name, as the core says (space-30). */
-export function ownBeside(state: GroupsState): boolean {
-  return state.instances.length === 0 && state.own.named;
+/** The instance whose "Personal" holds your own group's own repository
+ * (space-1): while it holds a placement with an instance, the instance
+ * governing it, else its first such placement's, either among those the
+ * home lists; none otherwise, the row standing under "This computer". */
+export function ownPersonalAt(state: GroupsState): InstanceState | undefined {
+  const own = state.own.repositories.find((repository) => repository.own);
+  // Local only while its clone holds no placement (space-61).
+  if (!own || own.state === "local-only") return undefined;
+  const first = own.placements.find((placement) => placement.instance !== null);
+  if (!first) return undefined;
+  return instanceOf(state, own.governing) ?? instanceOf(state, first.instance);
+}
+
+/** The rows "This computer" holds (space-1): your own group's, but its
+ * own repository while it stands under "Personal" at an instance. */
+export function thisComputerRows(state: GroupsState): RepositoryState[] {
+  const personal = ownPersonalAt(state) !== undefined;
+  return state.own.repositories.filter((repository) => !(personal && repository.own));
 }

@@ -29,7 +29,9 @@ test.after(() => fixture.dispose());
 
 const HOST_OWN = "ada/ada-spex";
 const HOST_NAME = "Stand-in Git host";
-const PAIR_GUIDANCE = "The spex repository is here; choose a folder for its code to pair it.";
+const PAIR_GUIDANCE = "The records are here — Choose folder… for the code";
+/** The row's code phrase in each offered language (space-1). */
+const codeAt = (where: string): [string, string][] => [["en", `Code: ${where}`], ["zh", `代码：${where}`]];
 
 function privateCode(host: StandinHost, name: string): { remote: string; bare: string } {
   const code = host.script.addRepository({ group: "acme", name });
@@ -57,9 +59,10 @@ test("space-37, projects-20, git-host-14: joining private code uses the brokered
   const fromSignIn = home.client.mark();
   await signIn(home, host);
   await home.client.waitRepository(fromSignIn, HOST_OWN, (repository) => repository.sync.phase === "done");
-  for (const [language, label] of [["en", "Code on this instance"], ["zh", "此实例上的代码"]] as const) {
-    await home.client.expectOk("language.set", { language });
-    assert.equal(repositoryOf(await home.client.expectOk("space.get", {}), privateKey).code, label, "the listed row hides the transport URL in both languages");
+  for (const [language, label] of codeAt(HOST_NAME)) {
+    await home.client.expectOk("language.set", { language: language as "en" | "zh" });
+    const row = repositoryOf(await home.client.expectOk("space.get", {}), privateKey);
+    assert.deepEqual([row.code, row.codeKind], [label, "space"], "the listed row names the Space, never the transport URL, in both languages");
   }
   await home.client.expectOk("language.set", { language: "en" });
 
@@ -77,9 +80,10 @@ test("space-37, projects-20, git-host-14: joining private code uses the brokered
   assert.deepEqual([joined.state, joined.folder, joined.sync.phase], ["reachable", folder, "idle"], JSON.stringify(joined.sync));
   assert.equal(git(folder, "rev-parse", "HEAD"), git(code.bare, "rev-parse", "main"));
   assert.equal(git(folder, "remote", "get-url", "origin"), code.remote);
-  for (const [language, label] of [["en", "Code on this instance"], ["zh", "此实例上的代码"]] as const) {
-    await home.client.expectOk("language.set", { language });
-    assert.equal(repositoryOf(await home.client.expectOk("space.get", {}), privateKey).code, label, "the joined row hides the transport URL in both languages");
+  for (const [language, label] of codeAt(HOST_NAME)) {
+    await home.client.expectOk("language.set", { language: language as "en" | "zh" });
+    const row = repositoryOf(await home.client.expectOk("space.get", {}), privateKey);
+    assert.deepEqual([row.code, row.codeKind], [label, "space"], "the joined row names the Space, never the transport URL, in both languages");
   }
   await home.client.expectOk("language.set", { language: "en" });
   assert.equal(credentialRequests(host) - before, 2, "records and code each ask the broker");
@@ -92,7 +96,7 @@ test("space-37, projects-20, git-host-14: joining private code uses the brokered
   assert.equal(status.branch, "main");
   assert.equal(status.originUrl, undefined, "local status does not expose the instance's Git URL");
   const forge = await home.client.expectOk("forge.items", { projectId: privateKey, refresh: true });
-  const instanceGuidance = "Issues and PRs come from GitHub; this project's code is on this instance.";
+  const instanceGuidance = `Issues and PRs come from GitHub · Code: ${HOST_NAME}`;
   assert.equal(forge.guidance, instanceGuidance);
   // A cache written by an earlier app may hold its old raw guidance.
   const core = home.service as unknown as { store: Store };
@@ -114,14 +118,15 @@ test("space-37, projects-20, git-host-14: joining private code uses the brokered
   const initialStatus = await again.client.expectOk("project.status", { projectId: privateKey });
   const initialForge = await again.client.expectOk("forge.items", { projectId: privateKey });
   assert.equal(initialStatus.originUrl, undefined);
-  assert.deepEqual([initialForge.guidance, initialForge.at], ["Issues and PRs come from GitHub; this project's code is on a remote.", cachedAt]);
+  assert.deepEqual([initialForge.guidance, initialForge.at], ["Issues and PRs come from GitHub", cachedAt]);
   assert.equal(host.script.requests.length, beforeLocal, "local status and cached forge guidance trigger no host read");
   const reread = again.client.mark();
   const initial = again.client.expectOk("space.get", {});
   await description.reached;
-  assert.equal(repositoryOf(await initial, privateKey).code, "Code on a remote", "the initial reply withholds the remote before the description arrives");
+  const unread = repositoryOf(await initial, privateKey);
+  assert.deepEqual([unread.code, unread.codeKind], [null, "unknown"], "the initial reply withholds the code before the description arrives");
   description.release();
-  await again.client.waitRepository(reread, privateKey, (repository) => repository.code === "Code on this instance");
+  await again.client.waitRepository(reread, privateKey, (repository) => repository.code === `Code: ${HOST_NAME}` && repository.codeKind === "space");
   const afterRead = await again.client.expectOk("forge.items", { projectId: privateKey });
   assert.deepEqual([afterRead.guidance, afterRead.at], [instanceGuidance, cachedAt], "the same cache follows the newly reported origin");
 });
@@ -161,7 +166,7 @@ test("space-37: joining code at another origin keeps that device's credentials a
   assert.deepEqual([joined.state, joined.folder, joined.sync.phase], ["reachable", folder, "idle"], JSON.stringify(joined.sync));
   assert.equal(git(folder, "remote", "get-url", "origin"), remote);
   assert.equal((await home.client.expectOk("project.status", { projectId: otherKey })).originUrl, remote);
-  assert.equal((await home.client.expectOk("forge.items", { projectId: otherKey })).guidance, "Issues and PRs come from GitHub; this project's origin is at 127.0.0.1.");
+  assert.equal((await home.client.expectOk("forge.items", { projectId: otherKey })).guidance, "Issues and PRs come from GitHub · Code: 127.0.0.1");
   assert.equal(credentialRequests(host) - before, 1, "only the records clone asks the broker");
   assert.ok(observed && observed.credential === undefined, "the code child's device helper is preserved");
 });
@@ -220,8 +225,8 @@ type Home = Awaited<ReturnType<typeof startHome>>;
 
 const BOB = { id: "1002", login: "bob", displayName: "Bob" };
 const SECOND_NAME = "Second stand-in";
-const INSTANCE_GUIDANCE = "Issues and PRs come from GitHub; this project's code is on this instance.";
-const REMOTE_GUIDANCE = "Issues and PRs come from GitHub; this project's code is on a remote.";
+const INSTANCE_GUIDANCE = `Issues and PRs come from GitHub · Code: ${HOST_NAME}`;
+const REMOTE_GUIDANCE = "Issues and PRs come from GitHub";
 
 /** A home signed in at the first stand-in instance as `ada`, your own
  * group's repository pushed there, then at the second, on a Git backend
@@ -259,7 +264,7 @@ function broadcasts(messages: ServerMessage[]): GroupsState[] {
   return messages.flatMap((message) => message.type === "space.state" ? [{ ...message.state, signIn: { phase: "idle" as const } }] : []);
 }
 
-test("projects-39, projects-37, space-83, space-1, space-63, space-15: signed in to two instances on Git backends of their own, the first listing a project whose code is private at the first's Git origin and c-spex whose code is private at the second's, Join with this device's Git holding no credential clones the first's code with a credential the first brokered, while the second's is brokered by neither, refused by the second's transport and stopped at Code with no code cloned and no URL under either Git origin said; c-spex reads Code on a remote, listed and joined", async (t) => {
+test("projects-39, projects-37, space-83, space-1, space-63, space-15: signed in to two instances on Git backends of their own, the first listing a project whose code is private at the first's Git origin and c-spex whose code is private at the second's, Join with this device's Git holding no credential clones the first's code with a credential the first brokered, while the second's is brokered by neither, refused by the second's transport and stopped at Code with no code cloned and no URL under either Git origin said; c-spex's code reads the second's display name, listed and joined", async (t) => {
   const { first, second, home } = await twoInstances("code-by-instance");
   t.after(() => home.stop());
   // Each instance serves private code through its real transport; both
@@ -272,15 +277,16 @@ test("projects-39, projects-37, space-83, space-1, space-63, space-15: signed in
   const cKey = hostKey(first, "acme/c-spex");
   const codePath = (remote: string): string => new URL(remote).pathname;
 
-  // Both instances reported, the first's code reads on this instance and
-  // c-spex's on a remote, never as its URL (space-1).
+  // Both instances reported, each code reads the display name of the
+  // instance under whose Git origin it lies, never as its URL (space-1,
+  // space-83).
   const listed = await readEach(home);
-  const rowOf = (state: GroupsState, key: string): [string, string | null, string | null] => {
+  const rowOf = (state: GroupsState, key: string): [string, string | null, string | null, string] => {
     const row = repositoryOf(state, key);
-    return [row.state, row.instance, row.code];
+    return [row.state, row.instance, row.code, row.codeKind];
   };
-  assert.deepEqual(rowOf(listed, alphaKey), ["absent", first.url, "Code on this instance"]);
-  assert.deepEqual(rowOf(listed, cKey), ["absent", first.url, "Code on a remote"]);
+  assert.deepEqual(rowOf(listed, alphaKey), ["absent", first.url, `Code: ${HOST_NAME}`, "space"]);
+  assert.deepEqual(rowOf(listed, cKey), ["absent", first.url, `Code: ${SECOND_NAME}`, "space"]);
 
   const codeChildren: { remote: string; credential: boolean }[] = [];
   const run = SpaceGit.prototype.run;
@@ -332,11 +338,11 @@ test("projects-39, projects-37, space-83, space-1, space-63, space-15: signed in
   const said = `${stopped.sync.message} ${stopped.sync.guidance}`;
   for (const host of [first, second]) assert.ok(!said.includes(host.gitOrigin) && !said.includes(`${host.url}/`), said);
 
-  // Joined, c-spex still reads Code on a remote, and nothing behind
-  // either instance was said (space-1, space-83).
+  // Joined, c-spex still reads the second's display name, and nothing
+  // behind either instance was said (space-1, space-83).
   const after = await home.client.expectOk("space.get", {});
-  assert.deepEqual(rowOf(after, cKey), ["reachable", first.url, "Code on a remote"]);
-  assert.deepEqual(rowOf(after, alphaKey), ["reachable", first.url, "Code on this instance"]);
+  assert.deepEqual(rowOf(after, cKey), ["reachable", first.url, `Code: ${SECOND_NAME}`, "space"]);
+  assert.deepEqual(rowOf(after, alphaKey), ["reachable", first.url, `Code: ${HOST_NAME}`, "space"]);
   assert.deepEqual(leaks([first, second], [...broadcasts(home.client.messages), after]), []);
 });
 
@@ -427,7 +433,7 @@ test("projects-38, projects-7, projects-36: signed in to two instances on Git ba
   assert.deepEqual(await read(home, true), {
     first: [INSTANCE_GUIDANCE, null],
     second: [REMOTE_GUIDANCE, null],
-    other: ["Issues and PRs come from GitHub; this project's origin is at code.example.test.", "https://code.example.test/team/three.git"],
+    other: ["Issues and PRs come from GitHub · Code: code.example.test", "https://code.example.test/team/three.git"],
     local: [INSTANCE_GUIDANCE, null],
   });
 

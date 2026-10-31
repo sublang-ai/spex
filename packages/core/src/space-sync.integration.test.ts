@@ -61,8 +61,8 @@ test("space-38: your own group's repository joins with one Settings choice, and 
   assert.equal(conflict.remote.change, "new");
   assert.ok(conflict.mine.diff && conflict.remote.diff);
   assert.ok(typeof conflict.mine.at === "number" && typeof conflict.remote.at === "number");
-  await b.client.expectError("space.sync", { repository: OWN_KEY, placement: null, choices: { "sessions/nope": "mine" }, join: true }, "invalid_request", /unknown unit/);
-  await b.client.expectError("space.sync", { repository: OWN_KEY, placement: null, choices: { ".gitignore": "mine" }, join: true }, "invalid_request", /no divergent change/);
+  await b.client.expectError("space.sync", { repository: OWN_KEY, placement: null, choices: { "sessions/nope": "mine" }, join: true }, "invalid_request", /^sessions\/nope is not among the changes — Check, then choose again$/);
+  await b.client.expectError("space.sync", { repository: OWN_KEY, placement: null, choices: { ".gitignore": "mine" }, join: true }, "invalid_request", /needs no choice — Check, then choose again$/);
   const mineBytes = readFileSync(b.configPath);
   const joined = await b.client.settle("space.sync", { repository: OWN_KEY, placement: null, choices: { "config/playbook.config.yaml": "mine" }, join: true });
   assert.equal(joined.sync.phase, "done", JSON.stringify(joined.sync));
@@ -659,11 +659,11 @@ test("space-38: a missing repository, an unreachable host and a sleeping transpo
   };
   // The host answers alike for absent and for unreadable, so the report
   // names both causes, claims neither, and keeps Retry.
-  await expectStop(join(scratch, "nonexistent", "path"), "gone", /No repository this machine can see at/, true);
+  await expectStop(join(scratch, "nonexistent", "path"), "gone", /No repository this computer can see at/, true);
   const localStop = await home.client.repository(key);
   // A local path has a folder to read, no account (space-50).
   assert.ok(
-    localStop.sync.phase === "stopped" && /Check the path,.*make sure this user can read the folder/.test(localStop.sync.guidance),
+    localStop.sync.phase === "stopped" && /Check the path,.*let this user read the folder/.test(localStop.sync.guidance),
     JSON.stringify(localStop.sync),
   );
   const start = Date.now();
@@ -684,7 +684,7 @@ test("space-38: a missing repository, an unreachable host and a sleeping transpo
   // Nothing stands before the host on http(s), with or without a colon,
   // so a bare token never reaches .git/config or the screen (space-5).
   for (const url of ["https://user:secret@example.com/x.git", "https://ghp_0123456789abcdef@example.com/x.git"]) {
-    await plain.client.expectError("space.remote.set", { repository: plainKey, url }, "invalid_request", /stores no credential/);
+    await plain.client.expectError("space.remote.set", { repository: plainKey, url }, "invalid_request", /^No credential in the URL/);
   }
   // An SSH form's user is the transport's own, not a credential; a
   // network failure turns on no identity, so its guidance names no act
@@ -692,7 +692,7 @@ test("space-38: a missing repository, an unreachable host and a sleeping transpo
   await plain.client.expectOk("space.remote.set", { repository: plainKey, url: "ssh://git@127.0.0.1:1/x" });
   const sshStop = await plain.client.settle("space.fetch", { repository: plainKey });
   assert.ok(sshStop.sync.phase === "stopped" && sshStop.sync.cause === "unreachable", JSON.stringify(sshStop.sync));
-  assert.ok(!/SSH key|gh auth|sign this machine in/.test(sshStop.sync.phase === "stopped" ? sshStop.sync.guidance : ""), JSON.stringify(sshStop.sync));
+  assert.ok(!/SSH key|gh auth|[Ss]ign this computer in/.test(sshStop.sync.phase === "stopped" ? sshStop.sync.guidance : ""), JSON.stringify(sshStop.sync));
 });
 
 test("space-38: Save refuses orphan bounded replay and chunks before committing or pushing", async (t) => {

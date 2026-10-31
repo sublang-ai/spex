@@ -231,7 +231,7 @@ const GROUP_ENTRY_KEYS = ["can", "fullPath", "id", "login", "mine", "name", "pla
 
 /** A row's fields (space-30): what each placement holds is on its line
  * alone. */
-const REPOSITORY_KEYS = ["code", "conflicts", "folder", "governing", "id", "instance", "key", "local", "mergePending", "name", "own", "placedAt", "placements", "reason", "state", "sync"];
+const REPOSITORY_KEYS = ["code", "codeKind", "conflicts", "folder", "governing", "id", "instance", "key", "local", "mergePending", "name", "own", "placedAt", "placements", "reason", "state", "sync"];
 
 /** A placement's line's fields (space-30). */
 const PLACEMENT_KEYS = ["attached", "branch", "can", "conflicts", "id", "incoming", "instance", "lastSync", "members", "noticed", "outcome", "path", "reason", "state", "visibility", "waiting"];
@@ -398,6 +398,10 @@ export function assertGroupsState(state: GroupsState): void {
  * row's id is its first placement's. */
 function assertPlacements(row: RepositoryState): void {
   assert.equal(typeof row.mergePending, "boolean", JSON.stringify(row.mergePending));
+  // The code phrase and its kind travel together (space-1): nothing
+  // while unknown, a phrase for every other kind.
+  assert.ok(["space", "elsewhere", "none", "unknown"].includes(row.codeKind), JSON.stringify(row.codeKind));
+  assert.equal(row.code === null, row.codeKind === "unknown", `${row.key}: code ${JSON.stringify(row.code)} as ${row.codeKind}`);
   assert.ok(Array.isArray(row.placedAt) && row.placedAt.every((origin) => typeof origin === "string"), JSON.stringify(row.placedAt));
   assert.ok(Array.isArray(row.placements), JSON.stringify(row.placements));
   for (const line of row.placements) {
