@@ -53,7 +53,18 @@ export class RegistryManager {
     }
     return client;
   }
+  /** A registry's name in what Spex says of it (core-service-145,
+   * DR-172): the display name its descriptor gave when last read, else
+   * its host. */
   name(origin: string): string { return this.metadata.get(canonicalOrigin(origin))?.displayName ?? new URL(origin).host; }
+  /** A registry that gave no answer, with what to do. */
+  private unreachable(origin: string): string {
+    return i18n._({ id: "{registry} could not be reached — check the connection, then Retry", comment: "The registry did not answer; {registry} is the registry's display name as last read, else its host", values: { registry: this.name(origin) } });
+  }
+  /** A sign-in that ended without one, with what to do. */
+  private unfinished(origin: string): string {
+    return i18n._({ id: "Sign-in to {registry} did not finish — Sign in again", comment: "A sign-in at the registry was cancelled, denied, expired or interrupted; {registry} is the registry's display name", values: { registry: this.name(origin) } });
+  }
   snapshot(origin: string): RegistryState {
     origin = canonicalOrigin(origin);
     const info = this.metadata.get(origin);
@@ -75,14 +86,16 @@ export class RegistryManager {
     } catch {
       // Never expose a transport's raw response (which may name backend
       // resources), and never turn an outage into a Space sign-out.
-      if (generation === this.generations.get(origin)) this.failures.set(origin, i18n._("The registry could not be read. Try again."));
+      if (generation === this.generations.get(origin)) this.failures.set(origin, this.unreachable(origin));
     }
     const state = this.snapshot(origin); this.publish(origin); return state;
   }
   async start(origin: string): Promise<{ flow: "browser"; url: string } | { flow: "device"; userCode: string; verificationUri: string; expiresAt: number; interval: number }> {
     origin = canonicalOrigin(origin);
-    if (this.stopped) throw new CoreError("aborted", i18n._("Registry sign-in did not complete. Try again."));
-    if (this.flows.has(origin) || this.starting.has(origin)) throw new CoreError("busy", i18n._("A registry sign-in is already running."));
+    if (this.stopped) throw new CoreError("aborted", this.unfinished(origin));
+    if (this.flows.has(origin) || this.starting.has(origin)) {
+      throw new CoreError("busy", i18n._({ id: "A sign-in to {registry} is already running — finish it in the browser, or Cancel", comment: "Refusal: a second sign-in at the registry while one waits for the browser; {registry} is the registry's display name", values: { registry: this.name(origin) } }));
+    }
     let finish!: () => void;
     const pending: PendingSignIn = { cancelled: false, done: new Promise<void>((resolve) => { finish = resolve; }), finish: () => finish() };
     this.starting.set(origin, pending);
@@ -94,7 +107,7 @@ export class RegistryManager {
       if (pending.cancelled || this.stopped || generation !== this.generations.get(origin)) {
         flow.cancel();
         await flow.done.catch(() => {});
-        throw new CoreError("aborted", i18n._("Registry sign-in did not complete. Try again."));
+        throw new CoreError("aborted", this.unfinished(origin));
       }
       this.flows.set(origin, flow);
       this.failures.delete(origin);
@@ -106,7 +119,7 @@ export class RegistryManager {
         this.metadata.set(origin, info);
         this.save();
       }).catch(() => {
-        if (generation === this.generations.get(origin)) this.failures.set(origin, i18n._("Registry sign-in did not complete. Try again."));
+        if (generation === this.generations.get(origin)) this.failures.set(origin, this.unfinished(origin));
       }).finally(() => {
         if (this.flows.get(origin) === flow) this.flows.delete(origin);
         this.publish(origin);
@@ -116,7 +129,7 @@ export class RegistryManager {
       return "url" in flow ? { flow: "browser", url: flow.url } : { flow: "device", userCode: flow.userCode, verificationUri: flow.verificationUri, expiresAt: flow.expiresAt, interval: flow.interval };
     } catch (error) {
       if (error instanceof CoreError) throw error;
-      const message = i18n._("Registry sign-in did not complete. Try again.");
+      const message = this.unfinished(origin);
       if (generation === this.generations.get(origin)) this.failures.set(origin, message);
       this.publish(origin);
       throw new CoreError("invalid_request", message);
@@ -154,12 +167,12 @@ export class RegistryManager {
       this.save();
     }
     this.publish(origin);
-    if (failed) throw new CoreError("invalid_request", i18n._("The registry could not be read. Try again."));
+    if (failed) throw new CoreError("invalid_request", i18n._({ id: "Sign-out at {registry} did not finish — check the connection, then Sign out again", comment: "The registry did not take this computer's sign-out, so its sign-in may still stand; {registry} is the registry's display name", values: { registry: this.name(origin) } }));
     return this.snapshot(origin);
   }
   async directory(origin = PUBLIC_REGISTRY_ORIGIN): Promise<{ spaces: { origin: string; displayName: string; signIn: string[] }[] }> {
     try { return { spaces: await new RegistryClient({ url: origin, ...(this.options.fetch ? { fetch: this.options.fetch } : {}) }).spaces() }; }
-    catch { throw new CoreError("invalid_request", i18n._("The registry could not be read. Try again.")); }
+    catch { throw new CoreError("invalid_request", i18n._({ id: "The Spaces {registry} lists could not be read — check the connection, then Retry", comment: "The registry's list of Spaces to sign in to did not answer or did not read; {registry} is the registry's display name", values: { registry: this.name(origin) } })); }
   }
   async stop(): Promise<void> {
     this.stopped = true;

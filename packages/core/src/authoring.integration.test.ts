@@ -515,7 +515,7 @@ test("playbook-library-72: a draft is authored, compiled, proposed, and register
     bindings: { Triager: "dev.triager", Verifier: "dev.coder" },
     newPlayers: { "dev.triager": { adapter: "claude" } },
   }, "invalid_request");
-  assert.match(refused.message, /your own group's environment can request this spec package by path only from inside its clone/, "[playbook-library-7] your own group only where its clone holds the package");
+  assert.match(refused.message, /^This package's folder is outside your Personal records — /, "[playbook-library-7] your own group only where its clone holds the package");
   assert.deepEqual(written(), before, "[playbook-library-7] no config or environment write");
   const state = await client.expectOk("draft.register", {
     projectId,

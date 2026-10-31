@@ -79,25 +79,40 @@ msgstr "“{title}”正在使用中"
 msgid "(unknown)"
 msgstr "（未知）"
 
+#. Guidance where an SSH remote refused access; {act} is the act that gives this machine access, already opening the sentence
+#: src/space-git.ts
+msgid "{act}; on a first connection, accept the host key in a terminal. Then Retry."
+msgstr "{act}；首次连接时，请在终端中接受主机密钥。然后重试。"
+
+#. Guidance where the remote refused access; {act} is the act that gives this machine access, already opening the sentence
+#: src/space-git.ts
+msgid "{act}. Then Retry."
+msgstr "{act}。然后重试。"
+
 #. Refusal of an agent's credential on a team server's seat: a variable's name is none of the agent's forms; `adapter` is the agent's name and `forms` lists the variables' names, both as they are
 #: src/service.ts
 msgid "{adapter} takes only {forms}"
 msgstr "{adapter} 只接受 {forms}"
+
+#. Refusal of Install: spex.lock no longer matches what it was written from, so nothing installs until Update; {changes} is the stale report, such as "spex.yaml changed"
+#: src/environments.ts
+msgid "{changes} — Update first"
+msgstr "{changes} — 请先更新"
 
 #. Project creation refusal; command and its output are verbatim
 #: src/forge.ts
 msgid "{command} failed: {output}"
 msgstr "{command} 失败：{output}"
 
-#. A stopped removal of a project's records from one Space: that many records, of that Space or of this computer, reached none of the other Spaces the project syncs with, as this computer last saw them; a second confirmation removes them anyway
-#: src/space.ts
-msgid "{count, plural, one {# record has} other {# records have}} reached no other Space"
-msgstr "{count, plural, other {# 条记录未到达其他任何 Space}}"
-
-#. Refusal asking a second confirmation of removing a project, which the Overview reads before its own "Remove anyway?": removing it deletes its records from this computer, and that many were never sent to any Space
+#. Refusal asking a second confirmation: removing the project deletes its spex repository's clone, whose records were never sent
 #: src/service.ts
-msgid "{count, plural, one {# record never reached a Space.} other {# records never reached a Space.}}"
-msgstr "{count, plural, other {# 条记录从未到达任何 Space。}}"
+msgid "{count, plural, one {# record has} other {# records have}} not reached the host and would be lost; confirm to remove anyway"
+msgstr "{count, plural, other {# 条记录}}尚未送达托管平台，移除将丢失这些记录；仍要移除请再次确认"
+
+#. A stopped Leave: that many records, of the placement being removed or of this device, are held by none of the spex repository's other placements, as this device last fetched or pushed them; a second confirmation removes it anyway
+#: src/space.ts
+msgid "{count, plural, one {# record has} other {# records have}} reached no other placement"
+msgstr "{count, plural, other {# 条记录}}尚未到达其他任何放置"
 
 #. A session unit's detail: how many turns it holds
 #: src/space.ts
@@ -152,17 +167,17 @@ msgstr "{file}：{reason}"
 msgid "{file}: damaged transcript after record {seq}"
 msgstr "{file}：记录 {seq} 之后的对话记录已损坏"
 
-#. Refusal of moving a project's records into a group that holds records of that name; {group} is that group's path at the Space, {name} the name
+#. Refusal of a spex repository's move: the group it was to move into holds one of that name; {group} is that group's path in the instance, {name} the repository's name
 #: src/space-groups.ts
 msgid "{group} already holds {name}"
 msgstr "{group} 中已有 {name}"
 
-#. Refusal of Open here or Add to a group…: the group's path is your login's, so its records can have no folder of their own on this computer; {group} is the group's path
+#. Refusal of a join or a pick: the group's path is your login's, so its records can have no folder of their own on this device; {group} is the group's path
 #: src/space-groups.ts
 msgid "{group} is a group named like your login"
-msgstr "{group} 是一个与你的登录名同名的群组"
+msgstr "{group} 是一个与你的用户名同名的群组"
 
-#. Refusal of a group's deletion: it still holds a project's records or a group; {group} is the group's path at the Space
+#. Refusal of a group's deletion: it still holds a spex repository or a group; {group} is the group's path in the instance
 #: src/space-groups.ts
 msgid "{group} is not empty"
 msgstr "{group} 不为空"
@@ -172,270 +187,282 @@ msgstr "{group} 不为空"
 msgid "{host} answered with an error"
 msgstr "{host} 返回了错误"
 
-#. A stopped transfer: the Space answered with an HTTP error no other message reads; {host} is its display name, {status} the HTTP status Git printed
+#. A stopped transfer: the Git host answered with an HTTP error no other message reads; {host} is its display name, {status} the HTTP status Git printed
 #: src/space-git.ts
 #: src/space.ts
 msgid "{host} answered with an error (HTTP {status})"
 msgstr "{host} 返回了错误（HTTP {status}）"
 
-#. The Space's rate limit; {host} is its display name, {seconds} how long it asks to wait, read from its Retry-After
+#. The Git host's rate limit; {seconds} is how long it asks to wait, read from its Retry-After
 #: src/space-groups.ts
 msgid "{host} asks to wait {seconds, plural, one {# second} other {# seconds}}"
 msgstr "{host} 要求等待 {seconds, plural, other {# 秒}}"
 
-#. The Space's rate limit, with no time of its own to wait; {host} is its display name
+#. The Git host's rate limit, with no time of its own to wait
 #: src/space-groups.ts
 msgid "{host} asks to wait a moment"
 msgstr "{host} 要求稍候片刻"
 
-#. A stopped sync's message: the Space's records moved again while this computer was sending; {host} is the Space's display name, or the remote the reader named as a report reads it
-#. A stopped sync's message: the records moved again at the remote while this computer was sending; {host} is the remote's host name, or a local remote as written
-#: src/space-git.ts
-#: src/space.ts
-msgid "{host} changed again"
-msgstr "{host} 又有了新的更改"
-
-#. A stopped sync: the project's records at the Space are empty, so their spex branch waits for the default branch; {host} is the Space's display name
+#. A stopped sync: the host's repository is empty, so spex waits for its default branch; {host} is its display name
 #: src/space.ts
 msgid "{host} holds no default branch for it yet"
 msgstr "{host} 上它还没有默认分支"
 
-#. A stopped sync: the project's records stop syncing with one Space and move to where the next Space it syncs with keeps them, at {host} (its display name), which Spex has not read since it started
+#. A stopped sync: a placement of a spex repository is dropped, which moves its clone to the path of its next placement, at the instance {host} (its display name), which the core has not read since it started
 #: src/space.ts
-msgid "{host} is not read yet, so these records cannot move there"
-msgstr "尚未读取 {host}，这些记录还不能移过去"
+msgid "{host} is not read yet, so the clone cannot move to its path there"
+msgstr "尚未读取 {host}，克隆无法移到它在那里的路径"
 
-#. Refusal naming a group the Space's last read did not list; {group} is the group's id as sent, {host} the Space's display name
+#. Refusal naming a group the Git host's last read did not list; {group} is the group's id as sent, {host} the host's display name
 #: src/space-groups.ts
 msgid "{host} listed no group {group}"
 msgstr "{host} 未列出群组 {group}"
 
-#. Refusal of a pick naming a group the Space does not list; {host} is its display name; Refresh is the Space surface's control
-#: src/space.ts
-msgid "{host} lists no such group — Refresh, then pick again"
-msgstr "{host} 中没有这个群组 — 请刷新，然后重新选择"
-
-#. A refusal relayed from the Space that carried no words; {host} is its display name
+#. A refusal relayed from the Git host that carried no words; {host} is its display name
 #: src/space-git.ts
 msgid "{host} refused"
 msgstr "{host} 拒绝了"
 
-#. An explicit content-size rejection whose numeric limit is absent or ambiguous; host is the Space's display name
+#. An explicit content-size rejection whose numeric limit is absent or ambiguous; host is the instance display name
 #: src/space-git.ts
 msgid "{host} refused content above its size limit"
 msgstr "{host} 拒绝了超出其大小限制的内容"
 
-#. A content-size rejection, naming only the Space and its reported limit, not the storage system or raw transport words
+#. A content-size rejection, naming only the instance and its reported limit, not the storage system or raw transport words
 #: src/space-git.ts
 msgid "{host} refused content above its size limit ({limit})"
 msgstr "{host} 拒绝了超出其大小限制（{limit}）的内容"
 
-#. A stopped transfer's message; {host} is the remote's host name
+#. A stopped transfer's message; {host} is the remote's host
 #: src/space-git.ts
-msgid "{host} refused this computer's access"
+msgid "{host} refused this machine's access"
 msgstr "{host} 拒绝了本机的访问"
 
-#. A refusal relayed from the Space; {host} is its display name, {words} its own words, kept whole
+#. A refusal relayed from the Git host; {host} is its display name, {words} its own words, kept whole
 #: src/space-git.ts
 msgid "{host} refused: {words}"
 msgstr "{host} 拒绝了：{words}"
 
-#. A sign-in on a team server refused, nothing stored: the account approved at the Space is not the member the server was opened for, whose login the server does not know; {host} is the Space's display name, {login} the login of the account that signed in
+#. A sign-in on a team server's seat refused, nothing stored: the account approved at the instance is not the member the seat was opened for; {host} is the instance's display name, {login} the login of the account that signed in
 #: src/space-groups.ts
-msgid "{host} signed you in as @{login} — sign in with your own account"
-msgstr "{host} 以 @{login} 的身份登录 — 请用你自己的账户登录"
+msgid "{host} signed you in as @{login}; this seat is another member's"
+msgstr "{host} 登录的是 @{login}；这个席位属于另一位成员"
 
-#. A sign-in refused, nothing stored: the person signed in at a Space this computer already signs in to as another account; {host} is the Space's display name, {login} the login this computer signs in with there
+#. A sign-in refused, nothing stored: the person signed in at an instance the home lists as another account than the one it lists there; {host} is the instance's display name, {login} the listed account's login
 #: src/space-groups.ts
-msgid "{host} signed you in as another account — sign in as @{login}"
-msgstr "{host} 以另一个账户登录 — 请以 @{login} 登录"
+msgid "{host} signed you in as another account; this device uses @{login} there"
+msgstr "{host} 登录的是另一个账户；本设备在那里使用 @{login}"
 
 #. Refusal: the authoring session's file changed, or another session took its id, since the page read it
 #: src/authoring.ts
 msgid "{id} changed meanwhile; retry"
 msgstr "{id} 期间已更改，请重试"
 
-#. Refusal: the id offered for a new playbook is one an installed spec package exports
+#. Refusal: the id offered for a new playbook is one an installed package exports, in this project or among the packages Spex keeps for you alone
 #: src/authoring.ts
-msgid "{id} is already a playbook of this project's or your own environment; pick another id"
-msgstr "{id} 已是本项目或你自己的环境中的规程；请换一个 id"
+msgid "{id} is already a playbook of this project or of your Personal packages — pick another id"
+msgstr "{id} 已是本项目或你的个人规约包中的规程 — 请换一个 id"
 
 #. Refusal: the id offered for a new playbook is another project's authoring session
 #: src/service.ts
 msgid "{id} is already an authoring session of another project; pick another id"
 msgstr "{id} 已是另一个项目的编写会话；请换一个 id"
 
-#. Refusal: publishing reads a folder inside the project folder; {key} is the records' path
-#. Refusal: the installed packages stand in the project folder, which this computer does not hold; {key} is the records' path
+#. Refusal: a choice was sent for a unit the two sides agree on; {label} is the unit's own label
+#: src/space.ts
+msgid "{label} has no divergent change"
+msgstr "{label} 两端没有分歧的更改"
+
+#. Refusal of Publish: the registry holds this version already and never takes it twice; {registry} is the registry's display name
 #: src/environments.ts
-msgid "{key} has no project folder on this computer"
-msgstr "{key} 在本机没有项目文件夹"
+msgid "{name} {version} is already at {registry} — raise its version in meta.yaml, then Retry"
+msgstr "{name} {version} 已在 {registry} 上 — 请在 meta.yaml 中提高其版本，然后重试"
 
-#. Refusal: a choice was sent for a change both sides agree on; {label} is the change's own label; Check is the Sync tab's control
-#: src/space.ts
-msgid "{label} needs no choice — Check, then choose again"
-msgstr "{label} 无需选择 — 请先检查，再重新选择"
-
-#. Refusal of Add to a group…: the project's records belong to one Space, and the pick named a group at another; {name} is the project, {host} its Space's display name
-#: src/space.ts
-msgid "{name} belongs to {host} — pick a group there"
-msgstr "{name} 属于 {host} — 请在那里选择群组"
-
-#. Refusal of Open here: a file of the project {project}, on this computer, names the records {name} a Space lists as records of {project}, so they open with it and not on their own
-#: src/space.ts
-msgid "{name} belongs to {project} on this computer — open {project} instead"
-msgstr "{name} 在本机属于 {project} — 请改为打开 {project}"
-
-#. A spec package requested by path changed its manifest since the lock was written
+#. Refusal of Publish: the package is larger than the registry takes; {registry} is the registry's display name
 #: src/environments.ts
-msgid "{name} changed in {path}; resolve again to install"
-msgstr "{name} 在 {path} 中已更改；请重新解析后再安装"
+msgid "{name} {version} is too large for {registry} — leave out what it does not need, then Retry"
+msgstr "{name} {version} 超出 {registry} 接受的大小 — 请去掉不需要的内容，然后重试"
 
-#. Refusal: the command names a Space, or a remote the reader named, that the project's records {name} do not sync with
-#: src/space.ts
-msgid "{name} does not sync there"
-msgstr "{name} 不与那里同步"
+#. A completed step of an enabling: the package written into spex.yaml
+#: src/service.ts
+msgid "{name} added to spex.yaml"
+msgstr "已将 {name} 添加到 spex.yaml"
 
-#. Repair row: the project's records are here, but no project folder on this computer holds it
+#. The stale report: a package added from a folder changed its meta.yaml since spex.lock was written; {path} is that folder. Shown beside the Packages tab's Update control
+#: src/environments.ts
+msgid "{name} changed in {path}"
+msgstr "{name} 在 {path} 中已更改"
+
+#. Repair row: the project is registered, but nothing here holds it
 #: src/store.ts
-msgid "{name} has no folder on this computer"
-msgstr "{name} 在本机没有文件夹"
+msgid "{name} has no folder on this device"
+msgstr "{name} 在本设备上没有文件夹"
 
-#. Refusal of attaching a project's records at a Space: no file of the project names records that Space lists for this account; {name} is the project, {host} the Space's display name
-#: src/space.ts
-msgid "{name} has no records at {host} to attach — Refresh, then Retry"
-msgstr "{name} 在 {host} 没有可关联的记录 — 请刷新，然后重试"
-
-#. Refusal: a package added by its folder's path needs the project folder here; {name} is the package
+#. Refusal: package work in a project not opened on this computer, so its spex.yaml has no folder here; 'Open here' is the project's control on the Space surface
 #: src/environments.ts
-msgid "{name} is added by path, which needs a project folder on this computer"
-msgstr "{name} 按路径添加，需要本机上有项目文件夹"
+msgid "{name} has no project folder on this computer — Open here first"
+msgstr "{name} 在本机没有项目文件夹 — 请先“在此打开”"
 
-#. Refusal of sharing a project's records at a Space they already sync with; {name} is the project, {host} the Space's display name
+#. Refusal of Place or Attach: the spex repository is a group's own (or, for Place, your own group's), which stays at its one instance; {name} is the repository's name
 #: src/space.ts
-msgid "{name} is at {host} already"
-msgstr "{name} 已在 {host}"
+msgid "{name} holds a group's records; only a project's are placed at another instance"
+msgstr "{name} 存放的是群组的记录；只有项目的记录才能放置到另一个实例"
 
-#. Refusal of Add to a group…: the project's records already sync with a Space; {name} is the project
+#. Refusal of Leave: the spex repository is a group's own or your own group's, whose placements Leave does not remove; {name} is the repository's name
 #: src/space.ts
-msgid "{name} is in a group already"
-msgstr "{name} 已在一个群组中"
+msgid "{name} holds a group's records; only a project's are removed from an instance"
+msgstr "{name} 存放的是群组的记录；只有项目的记录才能从实例移除"
+
+#. Refusal: the command names a placement — an instance, or the remote the reader named — that the spex repository {name} does not hold
+#: src/space.ts
+msgid "{name} holds no such placement"
+msgstr "{name} 没有这个放置"
+
+#. Refusal of a join: a placement file of the spex repository {repository}, on this device, names the spex repository {name} listed at an instance; it stands as a line of {repository}'s row, to attach there, not as a repository of its own
+#: src/space.ts
+msgid "{name} is a placement of {repository} not on this device yet"
+msgstr "{name} 是 {repository} 尚未在本设备上的放置"
 
 #. Refusal: another host holds this project's conversation
 #: src/session.ts
 msgid "{name} is in use elsewhere in {project}"
 msgstr "{project} 中的 {name} 正在别处使用"
 
-#. Refusal: the act names a change the current comparison does not hold; {name} is the change's file or folder; Check is the Sync tab's control
+#. Refusal of a pick: the spex repository's folder lies under one instance, and the pick named a group at another; {name} is the repository's name, {host} its instance's display name
 #: src/space.ts
-msgid "{name} is not among the changes — Check, then choose again"
-msgstr "{name} 不在这些更改中 — 请先检查，再重新选择"
+msgid "{name} is kept under {host}; pick a group there"
+msgstr "{name} 位于 {host} 之下；请在那里选择一个群组"
 
-#. Refusal: a publish names its spec package as org/pkg, both lowercase kebab-case; {name} is what it named
+#. Refusal of Publish: a package name is an org and a name joined by a slash, both lowercase words joined by hyphens, as acme/triage is; {name} is what was given
 #: src/environments.ts
-msgid "{name} is not an org/pkg name"
-msgstr "{name} 不是 org/pkg 形式的名称"
+msgid "{name} is not a package name — name it like acme/triage"
+msgstr "{name} 不是规约包名称 — 请写成 acme/triage 这样的形式"
 
-#. Refusal: the command names a project's or a group's records that this computer does not hold; {name} names them; Refresh is the Space surface's control
-#: src/space.ts
-msgid "{name} is not on this computer — Refresh, then Retry"
-msgstr "{name} 不在本机 — 请刷新，然后重试"
-
-#. Refusal: removing a spec package this environment does not request
+#. A package the registry does not show this signed-in account, either never published or private to others; {registry} is the registry's display name
 #: src/environments.ts
-msgid "{name} is not requested here"
-msgstr "此处未请求 {name}"
+msgid "{name} is not at {registry}, or not shared with you — check the name, or ask its owner"
+msgstr "{name} 不在 {registry} 上，或未与你共享 — 请检查名称，或询问其所有者"
 
-#. Refusal of Open here: the project's records are on this computer already; {name} is the project; Show is the row's control once a project is open here
-#: src/space.ts
-msgid "{name} is on this computer already — Show it instead"
-msgstr "{name} 已在本机 — 请改为显示它"
+#. Refusal of Remove: the package is not one spex.yaml adds here, such as one another package requires
+#: src/environments.ts
+msgid "{name} is not in spex.yaml here"
+msgstr "此处的 spex.yaml 中没有 {name}"
 
-#. Refusal of joining records a Space lists, {name}, that this computer already holds: the project {project} syncs with them
+#. A private package this account may not read at the registry; {registry} is the registry's display name
+#: src/environments.ts
+msgid "{name} is not shared with you at {registry} — ask its owner"
+msgstr "{name} 在 {registry} 上未与你共享 — 请询问其所有者"
+
+#. Refusal of a pick: the spex repository is not local only
 #: src/space.ts
-msgid "{name} is on this computer already, syncing with {project}"
-msgstr "{name} 已在本机，与 {project} 同步"
+msgid "{name} is on the host already"
+msgstr "{name} 已在托管平台上"
+
+#. Refusal of a join: the spex repository has a clone here
+#. Refusal of a join: the spex repository has a clone here
+#: src/space.ts
+msgid "{name} is on this device already"
+msgstr "{name} 已在本设备上"
+
+#. Refusal of a pick, Place or Attach that joins the spex repository {name} listed at an instance, already held on this device by the spex repository {repository}, which syncs with it
+#: src/space.ts
+msgid "{name} is on this device already, as a placement of {repository}"
+msgstr "{name} 已作为 {repository} 的放置在本设备上"
+
+#. Refusal of Place or Attach: the spex repository already has a placement at that instance; {name} is the repository's name, {host} the instance's display name
+#: src/space.ts
+msgid "{name} is placed at {host} already"
+msgstr "{name} 已放置在 {host}"
+
+#. A package the registry does not show while signed out there, either private or never published; {registry} is the registry's display name
+#: src/environments.ts
+msgid "{name} is private or not at {registry}: sign in to {registry}"
+msgstr "{name} 是私有的，或不在 {registry} 上：请登录 {registry}"
+
+#. A package the registry keeps private, asked while signed out there; {registry} is the registry's display name
+#: src/environments.ts
+msgid "{name} is private: sign in to {registry}"
+msgstr "{name} 是私有的：请登录 {registry}"
 
 #. Refusal: one working turn per project
 #: src/session.ts
 msgid "{name} is still working in {project} — wait for it to finish, or abort it"
 msgstr "{name} 仍在 {project} 中工作 — 请等待它完成，或中止它"
 
-#. Refusal of a new top-level group's name; {name} is the name typed, {host} the Space's display name
+#. Refusal of a new top-level group's name; {name} is the name typed, {host} the Git host's display name
 #: src/space-groups.ts
 msgid "{name} is taken at {host}; choose another name"
 msgstr "{name} 在 {host} 上已被占用；请另选一个名称"
 
-#. Refusal of a name in a group: the Space reports it taken there; {name} is the name, {group} the group's full path
+#. Refusal of a new spex repository's name; {name} is the whole name, {group} the group's full path
 #: src/space-groups.ts
 msgid "{name} is taken in {group}; choose another name"
 msgstr "{name} 在 {group} 中已被占用；请另选一个名称"
 
-#. A completed step of an enabling: the spec package's request written
-#: src/service.ts
-msgid "{name} requested in spex.yaml"
-msgstr "{name} 已在 spex.yaml 中请求"
+#. The registry did not answer when asked for the package {name}; {registry} is the registry's display name as last read, else its host
+#: src/environments.ts
+msgid "{name}: {registry} could not be reached — check the connection, then Retry"
+msgstr "{name}：无法连接 {registry} — 请检查网络连接，然后重试"
 
-#. Refusal of sharing records at another Space, or of removing them from one: they are a group's own or your Personal records, which stay at their one Space; {name} names them
-#. Refusal of sharing records at another Space, or of removing them from one: they are a group's own or your Personal records, which stay at their one Space; {name} names them
+#. The registry answered that it cannot serve the package {name} now; {registry} is its display name, {status} the HTTP status it answered, such as 503
+#: src/environments.ts
+msgid "{name}: {registry} is down ({status}) — Retry later"
+msgstr "{name}：{registry} 暂时无法服务（{status}）— 请稍后重试"
+
+#. Refusal of Publish: the registry refuses this account the package's org, a package name's first half; {registry} is the registry's display name
+#: src/environments.ts
+msgid "{org} is not yours to publish to at {registry} — claim it there, or publish under one of your orgs"
+msgstr "你不能在 {registry} 上发布到 {org} — 请在那里认领它，或发布到你自己的 org 下"
+
+#. A stopped sync: the folder a renamed spex repository moves to is taken
 #: src/space.ts
-msgid "{name} stays at its one Space"
-msgstr "{name} 只留在它所在的一个 Space"
+msgid "{path} already exists, so the clone cannot follow the host there"
+msgstr "{path} 已存在，克隆无法随托管平台移到那里"
 
-#. A stopped sync: the Space renamed or moved the project's records, and the folder on this computer they would move to is taken; {path} is that folder
+#. Refusal of Publish: the package's meta.yaml lacks a field the registry requires, such as description or license; {issues} name each field in the checks' own words
+#: src/environments.ts
+msgid "{path} cannot be published: {issues} — add them to meta.yaml, then Retry"
+msgstr "{path} 无法发布：{issues} — 请将其补入 meta.yaml，然后重试"
+
+#. Refusal of a join: the host's names hold characters a folder under the home cannot
 #: src/space.ts
-msgid "{path} already exists, so these records cannot move there"
-msgstr "{path} 已存在，这些记录无法移过去"
+msgid "{path} cannot stand as a folder on this device"
+msgstr "{path} 无法作为本设备上的文件夹"
 
-#. Refusal of Open here: the names the Space gives the records hold characters a folder on this computer cannot; {path} is their path at the Space
-#: src/space.ts
-msgid "{path} cannot be a folder on this computer — rename it at its Space"
-msgstr "{path} 无法作为本机上的文件夹 — 请在其 Space 中重命名"
-
-#. Refusal: the manifest lacks a field the registry requires to publish; {issues} name each field in the checks' own words
+#. Refusal: adding a Personal package from a folder names a folder holding a file the records' Git ignores; {file} is that file's path in the records
 #: src/environments.ts
-msgid "{path} cannot be published: {issues}"
-msgstr "{path} 无法发布：{issues}"
+msgid "{path} holds {file}, which Git ignores in your Personal records, so it would not sync — remove it, or pick another folder"
+msgstr "{path} 含有 {file}，Git 在你的个人记录中会忽略它，因此它不会同步 — 请移除它，或选择其他文件夹"
 
-#. Refusal: a request by path in your own group's environment names a folder holding a file the clone's sync rules drop; {file} is that file's path in the clone
+#. Refusal: adding a Personal package from a folder names a folder holding a tracked file of a kind that stays on this computer, such as a *.tmp file forced into Git; {file} is that file's path in the records
 #: src/environments.ts
-msgid "{path} holds {file}, which the clone's Git rules ignore, so it would not sync"
-msgstr "{path} 含有 {file}，克隆的 Git 规则会忽略该文件，因此它不会被同步"
+msgid "{path} holds {file}, which your Personal records never share — remove it, or pick another folder"
+msgstr "{path} 含有 {file}，你的个人记录从不共享这类文件 — 请移除它，或选择其他文件夹"
 
-#. Refusal: a request by path in your own group's environment names a folder holding a tracked file of a family that stays on the device, such as a *.tmp file forced into Git; {file} is that file's path in the clone
+#. Refusal of Publish: the folder a publish of {name} reads holds another package, {held}, by its meta.yaml
 #: src/environments.ts
-msgid "{path} holds {file}, which the clone's sync refuses to share"
-msgstr "{path} 含有 {file}，克隆的同步拒绝共享该文件"
+msgid "{path} holds {held}, not {name} — fix its meta.yaml, or publish {held}"
+msgstr "{path} 中是 {held}，不是 {name} — 请修正其 meta.yaml，或发布 {held}"
 
-#. Refusal: the folder a publish of {name} reads holds another spec package, {held}, by its meta.yaml
+#. Refusal: adding a Personal package from a folder names a folder Spex itself keeps, such as sessions/ or skills/
 #: src/environments.ts
-msgid "{path} holds {held}, not {name}"
-msgstr "{path} 中是 {held}，不是 {name}"
-
-#. Refusal: a request by path in your own group's environment names a folder under Spex's own paths, such as sessions/ or skills/
-#: src/environments.ts
-msgid "{path} is a path Spex keeps in your own group's clone"
-msgstr "{path} 是 Spex 在你自己的群组的克隆中保留的路径"
-
-#. Refusal: a request by path in your own group's environment names a folder the clone's sync rules drop, such as one named *.tmp
-#: src/environments.ts
-msgid "{path} is a path the clone's Git rules ignore, so it would not sync"
-msgstr "{path} 是克隆的 Git 规则忽略的路径，因此不会被同步"
+msgid "{path} is a folder Spex keeps in your Personal records — pick another folder"
+msgstr "{path} 是 Spex 在你的个人记录中自留的文件夹 — 请选择其他文件夹"
 
 #. Refusal: a project already holds this folder
 #: src/service.ts
 msgid "{path} is already registered"
 msgstr "{path} 已注册"
 
-#. Refusal of Open here: the folder chosen is another project's already; {path} is the folder
+#. Refusal of a join: the folder named is paired already
 #: src/space.ts
-msgid "{path} is another project's folder — choose another"
-msgstr "{path} 是另一个项目的文件夹 — 请另选一个"
+msgid "{path} is another project's working folder"
+msgstr "{path} 是另一个项目的工作文件夹"
 
-#. A stopped sync: the folder the project's records move to, after the Space renamed or moved them, is where the records of the project {other}, left at their former place by an upgrade, move at their own next sync; {path} is that folder
-#: src/space.ts
-msgid "{path} is kept for {other}, so these records cannot move there"
-msgstr "{path} 已留给 {other}，这些记录无法移过去"
+#. Refusal: adding a Personal package from a folder names a folder the records' Git ignores, such as one named *.tmp
+#: src/environments.ts
+msgid "{path} is ignored by Git in your Personal records, so it would not sync — pick another folder"
+msgstr "{path} 在你的个人记录中被 Git 忽略，因此不会同步 — 请选择其他文件夹"
 
 #. Config error: a role is bound to a malformed player id
 #: src/config.ts
@@ -468,45 +495,40 @@ msgstr "{path} 不是文件"
 msgid "{path} is not a folder"
 msgstr "{path} 不是文件夹"
 
-#. Refusal: a request by path in your own group's environment names its clone's root
+#. Refusal: adding a Personal package from a folder names the Personal records' own top folder; 'Personal records' are what Spex keeps for you alone
 #: src/environments.ts
-msgid "{path} is not a folder below your own group's clone's root"
-msgstr "{path} 不是你自己的群组的克隆根目录下的文件夹"
+msgid "{path} is not a folder inside your Personal records — pick a folder inside them"
+msgstr "{path} 不是你的个人记录内的文件夹 — 请选择其中的文件夹"
 
-#. Refusal: the folder fails the core's release checks; {issues} are the checks' own words
+#. Refusal of Publish: the folder fails the checks a package's meta.yaml and files must pass; {issues} are the checks' own words
 #: src/environments.ts
-msgid "{path} is not a spec package release: {issues}"
-msgstr "{path} 不是规约包发布版本：{issues}"
+msgid "{path} is not a package Spex can publish: {issues} — fix them, then Retry"
+msgstr "{path} 不是 Spex 可以发布的规约包：{issues} — 请修正后重试"
 
 #. Config error; `skills` is the config file's own field name, refused because skills come from environments
 #: src/config.ts
 msgid "{path} is not allowed: skills reach agents from the environments that install their spec packages"
 msgstr "不允许使用 {path}：技能来自安装其规约包的环境"
 
-#. Refusal: the diff names a path the change does not hold; {name} is the change's file or folder
-#: src/space.ts
-msgid "{path} is not part of {name}"
-msgstr "{path} 不属于 {name}"
-
 #. Refusal: the folder offered for rebinding is no git repository
 #: src/service.ts
 msgid "{path} is not the root of a git work tree"
 msgstr "{path} 不是 git 工作树的根目录"
 
-#. Refusal: a request by path names a folder outside the repository's working folder
+#. Refusal: a package added or published from a folder names one outside the project folder
 #: src/environments.ts
-msgid "{path} is outside the working folder"
-msgstr "{path} 不在工作文件夹内"
+msgid "{path} is outside the project folder — pick a folder inside it"
+msgstr "{path} 不在项目文件夹内 — 请选择其中的文件夹"
 
-#. Refusal: a request by path in your own group's environment names a folder outside its spex repository's clone
+#. Refusal: a Personal package added or published from a folder names one outside what Spex keeps for you alone
 #: src/environments.ts
-msgid "{path} is outside your own group's clone"
-msgstr "{path} 不在你自己的群组的克隆内"
+msgid "{path} is outside your Personal records — pick a folder inside them"
+msgstr "{path} 不在你的个人记录内 — 请选择其中的文件夹"
 
-#. Refusal: a request by path in your own group's environment names a folder that is, or lies under, a link
+#. Refusal: adding a Personal package from a folder names a folder that is, or lies under, a link
 #: src/environments.ts
-msgid "{path} is reached through a link, which the clone's sync does not carry"
-msgstr "{path} 需经由链接访问，而克隆的同步不会携带链接"
+msgid "{path} is reached through a link, which your Personal records do not sync — pick the folder itself"
+msgstr "{path} 需经由链接访问，而你的个人记录不同步链接 — 请选择文件夹本身"
 
 #. Spec notice; `intents/` is a directory name and stays as it is
 #: src/specs.ts
@@ -579,25 +601,30 @@ msgstr "{path} 必须解析出一个适配器"
 msgid "{path} names absent session player \"{playerId}\""
 msgstr "{path} 指向不存在的会话 Player“{playerId}”"
 
-#. Refusal: a nonignored subtree of your own group's path source cannot be read; {entry} is its path in the clone
-#: src/environments.ts
-msgid "{path}: {entry} cannot be inspected to confirm it syncs with the clone"
-msgstr "{path}：无法检查 {entry}，因而不能确认它会随克隆同步"
+#. A stopped sync: the folder a renamed spex repository moves to is where another clone, {other}, which the instances migration left at its former place, moves at its own next sync
+#: src/space.ts
+msgid "{path} waits for {other}, so the clone cannot follow the host there"
+msgstr "{path} 留给了等待移入的 {other}，克隆无法随托管平台移到那里"
 
-#. Refusal: a request by path in your own group's environment names a folder that is, lies in or holds a folder holding .git; {entry} is that folder's path in the clone
+#. Refusal: a folder inside a Personal package's folder, which Git does not ignore, cannot be read; {entry} is its path in the records
 #: src/environments.ts
-msgid "{path}: {entry} is a Git repository of its own, which the clone's sync does not carry"
-msgstr "{path}：{entry} 是一个独立的 Git 仓库，而克隆的同步不会携带它"
+msgid "{path}: {entry} cannot be read to confirm it syncs with your Personal records — check its permissions, then Retry"
+msgstr "{path}：无法读取 {entry}，因而不能确认它会随你的个人记录同步 — 请检查其权限，然后重试"
 
-#. Refusal: a request by path in your own group's environment names a folder holding a link the clone's Git rules do not ignore; {entry} is the link's path in the clone
+#. Refusal: adding a Personal package from a folder names a folder that is, lies in or holds a folder holding .git; {entry} is that folder's path in the records
 #: src/environments.ts
-msgid "{path}: {entry} is a link, which the clone's sync does not carry"
-msgstr "{path}：{entry} 是一个链接，而克隆的同步不会携带链接"
+msgid "{path}: {entry} is a Git repository of its own, which your Personal records do not sync — move it out, or pick another folder"
+msgstr "{path}：{entry} 是一个独立的 Git 仓库，你的个人记录不同步它 — 请将其移出，或选择其他文件夹"
 
-#. Refusal: a request by path in your own group's environment names a folder holding a special file, such as a pipe or a socket; {entry} is its path in the clone
+#. Refusal: adding a Personal package from a folder names a folder holding a link Git does not ignore; {entry} is the link's path in the records
 #: src/environments.ts
-msgid "{path}: {entry} is no regular file or folder, so the clone's sync does not carry it"
-msgstr "{path}：{entry} 既不是普通文件也不是文件夹，因此克隆的同步不会携带它"
+msgid "{path}: {entry} is a link, which your Personal records do not sync — replace it with what it links to, or pick another folder"
+msgstr "{path}：{entry} 是一个链接，你的个人记录不同步链接 — 请换成它指向的内容，或选择其他文件夹"
+
+#. Refusal: adding a Personal package from a folder names a folder holding a special file, such as a pipe or a socket; {entry} is its path in the records
+#: src/environments.ts
+msgid "{path}: {entry} is no regular file or folder, so your Personal records do not sync it — remove it, or pick another folder"
+msgstr "{path}：{entry} 既不是普通文件也不是文件夹，因此你的个人记录不同步它 — 请移除它，或选择其他文件夹"
 
 #. Config error; the key and `adapter`/`permissions`/`instruction`/`workspace` are the config file's own field names
 #: src/config.ts
@@ -685,52 +712,60 @@ msgstr "{path}.subagentModel 不受“{adapter}”适配器支持"
 msgid "{path}.subagentModel must be a nonblank string"
 msgstr "{path}.subagentModel 必须是非空字符串"
 
-#. Refusal: an applet reads the project's folder, and none is paired on this computer; {project} is the project
-#. Refusal: an authoring session belongs to a project whose folder is on this computer, and this one has none here; {project} is the project
-#: src/service.ts
-msgid "{project} has no project folder on this computer"
-msgstr "{project} 在本机没有项目文件夹"
-
-#. Refusal: an authoring session belongs to a project whose folder is on this computer
-#. Refusal: an authoring session belongs to a project whose folder is on this computer
+#. Refusal: an authoring session belongs to a project whose working folder is on this device
+#. Refusal: an authoring session belongs to a project whose working folder is on this device
+#. Refusal: an authoring session belongs to a project whose working folder is on this device
 #: src/drafts.ts
-msgid "{projectId} has no project folder on this computer"
-msgstr "{projectId} 在本机没有项目文件夹"
+#: src/service.ts
+msgid "{projectId} has no working folder on this device"
+msgstr "{projectId} 在本设备上没有工作文件夹"
 
-#. Refusal of a share at a role the Space does not list; {role} is the role named, {host} the Space's display name
+#. The registry did not answer; {registry} is the registry's display name as last read, else its host
+#. The registry did not answer; {registry} is the registry's display name as last read, else its host
+#: src/environments.ts
+#: src/registry.ts
+msgid "{registry} could not be reached — check the connection, then Retry"
+msgstr "无法连接 {registry} — 请检查网络连接，然后重试"
+
+#. The registry answered that it cannot serve now; {registry} is its display name, {status} the HTTP status it answered, such as 503
+#: src/environments.ts
+msgid "{registry} is down ({status}) — Retry later"
+msgstr "{registry} 暂时无法服务（{status}）— 请稍后重试"
+
+#. Refusal of a share at a role the Git host does not list; {role} is the role named, {host} the host's display name
 #: src/space-groups.ts
 msgid "{role} is not one of the roles {host} grants"
 msgstr "{role} 不是 {host} 授予的角色之一"
 
-#. Connect failed: the team server answered with nothing that connects the person; {server} is the server's name
+#. A seat's opening failed: the team server answered its admission with nothing that opens a seat; {server} is the server's name
 #: src/places.ts
-msgid "{server} answered without connecting you"
-msgstr "{server} 已回应，但没有为你建立连接"
+msgid "{server} answered no seat"
+msgstr "{server} 没有给出席位"
 
 #. A seat's opening failed: the team server could not reach the instance to redeem the ticket; {server} is the server's name, {host} the instance's display name
 #: src/places.ts
 msgid "{server} could not reach {host}"
 msgstr "{server} 无法连接 {host}"
 
-#. Connect failed: the team server did not start the person's own Spex there and said no more; {server} is the server's name
+#. A seat's opening failed: the team server did not start the person's seat and said no more; {server} is the server's name
 #: src/places.ts
-msgid "{server} could not start Spex for you"
-msgstr "{server} 无法为你启动 Spex"
+msgid "{server} could not start your seat"
+msgstr "{server} 无法启动你的席位"
 
-#. Connect failed: the team server did not start the person's own Spex there; {server} is the server's name, {words} its own words, kept whole
+#. A seat's opening failed: the team server did not start the person's seat; {server} is the server's name, {words} its own words, kept whole
 #: src/places.ts
-msgid "{server} could not start Spex for you: {words}"
-msgstr "{server} 无法为你启动 Spex：{words}"
+msgid "{server} could not start your seat: {words}"
+msgstr "{server} 无法启动你的席位：{words}"
 
-#. Connect refused by the team server with no words of its own; {server} is the server's name
+#. A seat's opening refused by the team server with no words of its own; {server} is the server's name
 #: src/places.ts
-msgid "{server} refused to connect you"
-msgstr "{server} 拒绝为你建立连接"
+msgid "{server} refused the seat"
+msgstr "{server} 拒绝了这个席位"
 
-#. Connect refused by the team server, its refusal relayed from it or from the Space; {server} is the server's name, {words} its own words, kept whole
+#. A seat's opening refused by the team server, its refusal relayed from it or from the instance; {server} is the server's name, {words} its own words, kept whole
 #: src/places.ts
-msgid "{server} refused to connect you: {words}"
-msgstr "{server} 拒绝为你建立连接：{words}"
+msgid "{server} refused the seat: {words}"
+msgstr "{server} 拒绝了这个席位：{words}"
 
 #. A seat's opening failed: the team server's TLS certificate did not verify against the trusted certificate authorities, so nothing was sent to it; {server} is the server's name
 #: src/places.ts
@@ -742,13 +777,16 @@ msgstr "无法验证 {server} 的证书"
 msgid "{target} is not empty; the example seeds only a new or empty directory"
 msgstr "{target} 不是空目录；示例只能填充新建或空的目录"
 
-#. Storage diagnostic: a URL is not a Space's address written canonically — http or https (http on localhost or 127.x alone), a lowercase host of DNS labels (letters, digits and inner hyphens) joined by single dots, and a port from 1 to 65535 other than the scheme's default, nothing else; the URL is shown with any user info as …
+#. Storage diagnostic: a host URL is not an instance's origin written canonically — http or https (http on localhost or 127.x alone), a lowercase host of DNS labels (letters, digits and inner hyphens) joined by single dots, and a port from 1 to 65535 other than the scheme's default, nothing else; the URL is shown with any user info as …
 #: src/i18n.ts
-msgid "{url} is not a Space's address"
-msgstr "{url} 不是 Space 的地址"
+msgid "{url} is not an instance's origin"
+msgstr "{url} 不是实例的源地址"
 
 #. Refusal of a write: the file it would replace changed since it was read; {what} names the file or folder
+#. Refusal of a write: the file it would replace changed since it was read; {what} names the file or folder
+#. Refusal of a write: the file it would replace changed since it was read; {what} names the file or folder
 #: src/service.ts
+#: src/space.ts
 msgid "{what} changed meanwhile; retry"
 msgstr "{what} 已在此期间更改；请重试"
 
@@ -882,10 +920,10 @@ msgstr "已派发的意图无法再修改文本"
 msgid "a Git merge is pending; finish or abort it in a terminal before syncing"
 msgstr "Git 合并尚未结束；请先在终端完成或中止，再进行同步"
 
-#. Why a project's records are unreachable: their group's path is your login's, so they can have no folder of their own on this computer; read after 'Unreachable: '
+#. Why a spex repository is unreachable: its group's path is your login's, so it can have no folder of its own on this device; read after 'Unreachable: '
 #: src/space-groups.ts
 msgid "a group named like your login"
-msgstr "一个与你的登录名同名的群组"
+msgstr "一个与你的用户名同名的群组"
 
 #. Storage diagnostic: the seat's credentials file holds a code host's entry under a key that is no host name, which is not repeated
 #: src/code-credentials.ts
@@ -902,14 +940,15 @@ msgstr "新规程需要一行许可证，例如 Apache-2.0"
 msgid "a project's settings name only the playbooks they enable and the player each role uses; edit the rest in your own settings"
 msgstr "项目的设置只能列出它启用的规程及每个角色使用的 Player；其余内容请在你自己的设置中编辑"
 
-#: src/registry.ts
-msgid "A registry sign-in is already running."
-msgstr "注册表登录正在进行。"
-
 #. Media transfer refusal
 #: src/media-transfers.ts
 msgid "A retried upload chunk contains different bytes."
 msgstr "重试上传的数据块与已接收的内容不同。"
+
+#. Refusal on a team server's seat of opening a seat on a team server: a team server's seat holds no seats of its own
+#: src/service.ts
+msgid "A seat opens no server"
+msgstr "席位不能打开服务器"
 
 #. Stands in for the title of a session that has none
 #: src/session.ts
@@ -930,6 +969,16 @@ msgstr "会话、意图和编写会话不提供文本差异"
 #: src/space.ts
 msgid "A sign-in is already running"
 msgstr "已有一个登录正在进行"
+
+#. Refusal: a second sign-in at the registry while one waits for the browser; {registry} is the registry's display name
+#: src/registry.ts
+msgid "A sign-in to {registry} is already running — finish it in the browser, or Cancel"
+msgstr "{registry} 的登录正在进行 — 请在浏览器中完成，或取消"
+
+#. Refusal of a sign-in naming a team server's ticket on a machine of one's own: only a team server's seat signs in with the ticket its member's client presented
+#: src/service.ts
+msgid "A ticket is taken only on a server's seat"
+msgstr "只有服务器上的席位才接受票据"
 
 #. Refusal: an authoring transcript with no session file holds the id a new playbook asked for
 #: src/drafts.ts
@@ -952,35 +1001,20 @@ msgstr "此会话已有一轮正在运行。"
 msgid "a turn is being submitted in this session"
 msgstr "此会话中已有一轮正在提交"
 
-#. Refusal of Connect sent without the person's acceptance of the terms the Space fixes for team servers, which the server's line shows before the first connection
-#: src/places.ts
-msgid "Accept the server's terms before connecting"
-msgstr "连接前请先接受服务器的条款"
-
 #. Storage diagnostic: an act names an intent no queue act created
 #: src/app-storage.ts
 msgid "act targets unknown intent {intentId}"
 msgstr "动作指向未知的意图 {intentId}"
 
-#. Refusal: the project's records are on this computer only; Add to a group… is the row's control
-#: src/space.ts
-msgid "Add it to a group first"
-msgstr "请先把它加入群组"
-
-#. Guidance where an SSH remote refused access; the host key is SSH's own term for the server's key, asked on a first connection
+#. The act that gives access to an SSH remote, inside a sentence
 #: src/space-git.ts
-msgid "Add this computer's SSH key to your account, accept a new host key in a terminal, then Retry"
-msgstr "把本机的 SSH 密钥添加到你的账户，在终端中接受新的主机密钥，然后重试"
+msgid "add this machine's SSH key to an account that can see it"
+msgstr "把本机的 SSH 密钥添加到有权访问它的账户"
 
-#. Refusal on a team server of opening another team server from it: a server opens no server of its own; the person opens it from their own computer
-#: src/service.ts
-msgid "Already on a server — open it from your computer"
-msgstr "已在服务器上 — 请从你的电脑打开"
-
-#. Refusal of a sign-in: the address names the host and port of a Space this computer already signs in to, under another scheme; {listed} is that Space's address
-#: src/space.ts
-msgid "Already signed in to {listed} — sign in at that address"
-msgstr "已登录 {listed} — 请在该地址登录"
+#. The act that gives access to an SSH remote, opening a sentence
+#: src/space-git.ts
+msgid "Add this machine's SSH key to an account that can see it"
+msgstr "把本机的 SSH 密钥添加到有权访问它的账户"
 
 #. Storage diagnostic: the seat's credentials file holds an agent's entry under a key that is no agent's name, which is not repeated
 #: src/code-credentials.ts
@@ -997,6 +1031,46 @@ msgstr "智能体的凭据不能包含 NUL 字符"
 msgid "an attachment the intent names is missing"
 msgstr "意图引用的附件缺失"
 
+#. Refusal of a sign-in: the URL's host holds a character outside DNS labels, such as an underscore, or is an IPv6 literal
+#: src/space.ts
+msgid "An instance's host holds only letters, digits, inner hyphens and single dots"
+msgstr "实例的主机名只能包含字母、数字、内部连字符和单个点"
+
+#. Refusal of a sign-in: the URL names port 0
+#: src/space.ts
+msgid "An instance's port is from 1 to 65535"
+msgstr "实例的端口应在 1 到 65535 之间"
+
+#. Refusal of a sign-in: the URL's scheme is neither https nor http; http is allowed for an instance on this device alone (localhost or 127.x)
+#: src/space.ts
+msgid "An instance's URL begins with https://, or http:// on this device"
+msgstr "实例的 URL 以 https:// 开头，本机上的实例也可用 http://"
+
+#. Refusal of a sign-in: the URL carries a fragment; an instance is known by its origin alone
+#: src/space.ts
+msgid "An instance's URL carries no fragment, only its scheme, host and port"
+msgstr "实例的 URL 不含片段，只含协议、主机和端口"
+
+#. Refusal of a sign-in: the URL carries a query; an instance is known by its origin alone
+#: src/space.ts
+msgid "An instance's URL carries no query, only its scheme, host and port"
+msgstr "实例的 URL 不含查询参数，只含协议、主机和端口"
+
+#. Refusal of a sign-in: the URL carries user info before its host
+#: src/space.ts
+msgid "An instance's URL carries no user or password"
+msgstr "实例的 URL 不含用户名或密码"
+
+#. Refusal of a sign-in: the URL names a path after its host; an instance is known by its origin alone
+#: src/space.ts
+msgid "An instance's URL names no path, only its scheme, host and port"
+msgstr "实例的 URL 不含路径，只含协议、主机和端口"
+
+#. Refusal of a sign-in: the URL is http on a host that is not this device (localhost or 127.x)
+#: src/space.ts
+msgid "An instance's URL uses https://; http:// only on this device"
+msgstr "实例的 URL 使用 https://；只有本机上的实例才可用 http://"
+
 #. A diagnostic's reason, read after the file it names; {cause} is the failure's own text, relayed
 #: src/space.ts
 msgid "an interrupted sync could not be repaired: {cause}"
@@ -1012,17 +1086,17 @@ msgstr "已有未结意图占用此来源：“{title}”"
 msgid "an unknown runtime"
 msgstr "未知运行时"
 
-#. Guidance under a sync another writer — another Spex, or the command line — keeps restarting
+#. Guidance under a sync another writer keeps restarting
 #: src/space.ts
-msgid "Another Spex is writing these files — wait, then Retry"
-msgstr "另一个 Spex 正在写入这些文件 — 请稍候，然后重试"
+msgid "Another process is writing to the home; wait for it to finish, then Retry."
+msgstr "另一个进程正在写入空间；请等待它完成，然后重试。"
 
 #. Why a state-root lock cannot be verified
 #: src/root-lease.ts
 msgid "another writer published while this one was retrying"
 msgstr "本写入者重试期间，另一写入者已发布"
 
-#. Why a project's records are read-only where the Space gave no words for its archive; read after 'Read-only: '
+#. A spex repository's read-only reason where the host gave no words for its archive
 #: src/space.ts
 msgid "Archived"
 msgstr "已归档"
@@ -1062,88 +1136,68 @@ msgstr "无法读取文件：{message}"
 msgid "captain must resolve an adapter"
 msgstr "captain 必须解析出一个适配器"
 
-#. Refusal: the Space's side of a change was asked for before Check read it; Check is the Sync tab's control
-#: src/space.ts
-msgid "Check first, then view the diff"
-msgstr "请先检查，再查看差异"
-
-#. Guidance after a transfer to the Space ran past its time limit
+#. Guidance after a transfer to the Git host ran past its time limit
 #: src/space-git.ts
 #: src/space.ts
 msgid "Check the connection, then Retry."
 msgstr "请检查网络连接，然后重试。"
+
+#. Refusal: the remote's side was asked for before the remote was checked
+#: src/space.ts
+msgid "Check the host first"
+msgstr "请先检查托管平台"
 
 #. Guidance where the remote's host could not be reached
 #: src/space-git.ts
 msgid "Check the network or the remote URL, then try again."
 msgstr "请检查网络或远程仓库 URL，然后重试。"
 
-#. Guidance where the Space could not be reached
-#. Guidance where the Space could not be reached
+#. Guidance where the Git host could not be reached
+#. Guidance where the Git host could not be reached
 #: src/space-git.ts
 #: src/space.ts
 msgid "Check the network, then Retry."
 msgstr "请检查网络，然后重试。"
 
-#. Guidance where a local-path remote holds no repository this computer can see: it may be absent or unreadable
+#. Guidance where a local-path remote holds no repository this machine can see; {act} is the act that gives this machine access
 #: src/space-git.ts
-msgid "Check the path, create the repository, or let this user read the folder, then Retry"
-msgstr "检查路径、创建该仓库，或让此用户能读取该文件夹，然后重试"
+msgid "Check the path, create the repository if it is not there yet, or {act}. Then Retry."
+msgstr "请检查路径，若仓库尚不存在请先创建，或者{act}。然后重试。"
 
-#. Guidance where an SSH remote holds no repository this computer can see: it may be absent or private
+#. Guidance where the remote holds no repository this machine can see; {act} is the act that gives this machine access
 #: src/space-git.ts
-msgid "Check the URL, create the repository, or add this computer's SSH key to your account, then Retry"
-msgstr "检查 URL、创建该仓库，或把本机的 SSH 密钥添加到你的账户，然后重试"
+msgid "Check the URL, create the repository if it is not there yet, or {act}. Then Retry."
+msgstr "请检查 URL，若仓库尚不存在请先创建，或者{act}。然后重试。"
 
-#. Guidance where a GitHub remote holds no repository this computer can see: it may be absent or private; gh auth status is a terminal command and stays as it is
-#: src/space-git.ts
-msgid "Check the URL, create the repository, or check your GitHub account with gh auth status, then Retry"
-msgstr "检查 URL、创建该仓库，或用 gh auth status 检查你的 GitHub 账户，然后重试"
-
-#. Guidance where a remote of an unread form holds no repository this computer can see: it may be absent or private
-#: src/space-git.ts
-msgid "Check the URL, create the repository, or give this computer access, then Retry"
-msgstr "检查 URL、创建该仓库，或给本机访问权限，然后重试"
-
-#. Guidance where an http(s) remote holds no repository this computer can see: it may be absent or private; {host} is the remote's host name, such as gitlab.example.com
-#: src/space-git.ts
-msgid "Check the URL, create the repository, or sign this computer in at {host}, then Retry"
-msgstr "检查 URL、创建该仓库，或让本机登录 {host}，然后重试"
-
-#. Guidance where a GitHub remote refused access; gh auth status and gh auth login are terminal commands and stay as they are
-#: src/space-git.ts
-msgid "Check your GitHub account with gh auth status, switch with gh auth login, then Retry"
-msgstr "用 gh auth status 检查你的 GitHub 账户，用 gh auth login 切换，然后重试"
-
-#. Guidance where the side chosen for a change failed validation
+#. Guidance where the selected side of a unit failed validation
 #: src/space.ts
-msgid "Choose the other side or fix the file, then Retry."
-msgstr "请选择另一方或修复该文件，然后重试。"
+msgid "Choose the other side for this unit or fix the file, then Retry."
+msgstr "请为该单元改选另一个版本，或修好该文件，然后重试。"
 
-#. Opening a project on a team server could not download its code: the member set no token for the code's host, which is no signed-in Space's; {host} is the code host's name as the Credentials section in Settings takes it
+#. A project's code clone failed on a team server's seat where the member placed no token for the code's host, which is no signed-in instance's; {host} is the code host's name as the Credentials section in Settings takes it
 #: src/space.ts
-msgid "Code not downloaded: {host} needs your credential — add it in Settings"
-msgstr "代码未下载：{host} 需要你的凭据 — 请在设置中添加"
+msgid "Code not cloned: {host} needs a credential of yours. Add one under Settings."
+msgstr "代码未克隆：{host} 需要你自己的凭据。请在“设置”中添加一个。"
 
-#. Opening a project on a team server could not download its code: the member's token for the code's host, which is no signed-in Space's, cannot be read from the server's credentials file; {host} is the code host's name as the Credentials section in Settings takes it
+#. A project's code clone failed on a team server's seat where the member's token for the code's host, which is no signed-in instance's, cannot be read from the server's credentials file, its entry or the file malformed; {host} is the code host's name as the Credentials section in Settings takes it
 #: src/space.ts
-msgid "Code not downloaded: your credential for {host} cannot be read — set it again in Settings"
-msgstr "代码未下载：无法读取你在 {host} 的凭据 — 请在设置中重新设置"
+msgid "Code not cloned: your credential for {host} cannot be read"
+msgstr "代码未克隆：无法读取你为 {host} 设置的凭据"
+
+#. Where a project's code lives before every instance has reported its Git origin, or when its remote lies under another instance's; the actual remote is withheld
+#: src/space.ts
+msgid "Code on a remote"
+msgstr "远程代码"
+
+#. Where a project's code lives when its remote is under the instance's reported Git origin; the Git system behind the instance is never named
+#: src/space.ts
+msgid "Code on this instance"
+msgstr "此实例上的代码"
 
 #. The project file's unit label: the remote of the code changed
 #: src/space.ts
 msgid "Code remote changed"
 msgstr "代码远程仓库有更改"
-
-#. The title of a project's code glyph on its row: where its code is — {where} is a Space's display name, or the host of the code's remote as the reader set it (such as github.com), or a local remote as written
-#: src/space.ts
-msgid "Code: {where}"
-msgstr "代码：{where}"
-
-#. The title of a warning glyph on a project's row: no remote is set for the project's code
-#: src/space.ts
-msgid "Code: no remote"
-msgstr "代码：无远程仓库"
 
 #. Refusal: the compile the Boss awaited was canceled
 #. The outcome of a compile the reader stopped
@@ -1211,31 +1265,12 @@ msgstr "配置无效：{errors}"
 msgid "config must be a YAML mapping"
 msgstr "配置必须是 YAML 映射"
 
-#. Refusal of attaching a project's records at a Space until the reader has answered the sharing confirm: every record reaches its members there; {name} is the project
-#: src/space.ts
-msgid "Confirm sharing before attaching {name}"
-msgstr "关联 {name} 前请先确认共享"
-
-#. Refusal of joining a project's records that other members share until the reader has answered the sharing confirm; {name} is the project
-#: src/space.ts
-msgid "Confirm sharing before joining {name}"
-msgstr "加入 {name} 前请先确认共享"
-
-#. Refusal of the first send of a project's records to a Space where other members share them, until the reader has answered the sharing confirm; {name} is the project
-#: src/space.ts
-msgid "Confirm sharing before the first sync of {name}"
-msgstr "首次同步 {name} 前请先确认共享"
-
-#. Guidance under a stopped removal of a project's records from one Space: confirming again removes them there whatever they hold
+#. Guidance under a stopped Leave: confirming again removes the placement whatever it holds
 #: src/space.ts
 msgid "Confirm to remove it anyway."
 msgstr "仍要移除请再次确认。"
 
-#: src/environments.ts
-msgid "Could not load registry namespaces. Try again."
-msgstr "无法加载注册表命名空间。请重试。"
-
-#. A stopped transfer's message; {host} is the Space's display name, or the remote's host
+#. A stopped transfer's message; {host} is the remote's host
 #. A stopped transfer's message; {host} is the remote's host
 #. A stopped transfer's message; {host} is the remote's host
 #: src/space-git.ts
@@ -1248,10 +1283,10 @@ msgstr "无法连接 {host}"
 msgid "Could not refresh groups; try again"
 msgstr "无法刷新群组，请重试"
 
-#. Refusal of a credentials command on a computer of one's own: Spex keeps a member's code-host and agent credentials only on a team server
+#. Refusal of a credentials command on a machine of one's own: Spex keeps a member's code-host and agent credentials only on a team server's seat
 #: src/service.ts
-msgid "Credentials are set on a server only"
-msgstr "凭据只能在服务器上设置"
+msgid "Credentials are kept on a server's seat"
+msgstr "凭据只保存在服务器的席位上"
 
 #. Storage diagnostic; Delete is the control's own name on the draft's row
 #: src/authoring.ts
@@ -1334,21 +1369,6 @@ msgstr "编辑被拒绝"
 msgid "enabling stopped after {done}: {error}"
 msgstr "启用在完成 {done} 后停止：{error}"
 
-#. Refusal of a sign-in: what the reader entered is not a Space's address alone — not a URL, a scheme other than https (or http on this computer), a user or password, a path, a query, a fragment, a host outside letters, digits, hyphens and dots, or port 0; https://spex.sublang.ai is an example address and stays as it is
-#: src/space.ts
-msgid "Enter just the Space's address, like https://spex.sublang.ai"
-msgstr "只需输入 Space 的地址，例如 https://spex.sublang.ai"
-
-#. Package operation refused while its manifest and lock migration needs recovery
-#: src/environments.ts
-msgid "Environment migration is incomplete; restore the original or planned files and restart to recover."
-msgstr "环境迁移尚未完成；请恢复原始或计划的文件，然后重新启动以恢复迁移。"
-
-#. A completed step of an enabling: the environment's installed spec packages replaced, the requested one's dependencies among them
-#: src/service.ts
-msgid "environment packages installed"
-msgstr "环境中的规约包已安装"
-
 #. Diagnostic for a damaged file: its top level is not an object
 #. Storage diagnostic: a record in the file is not an object
 #. Storage diagnostic: a record in the file is not an object
@@ -1383,20 +1403,25 @@ msgstr "应包含字段 {required}{optional}"
 msgid "filename must be an intent UUID"
 msgstr "文件名必须是意图的 UUID"
 
-#. Refusal: a Git merge is pending in the project's records
+#. Refusal: a Git merge is pending in the home
 #: src/space.ts
 msgid "Finish or abort the merge in your terminal"
 msgstr "请在终端完成或中止合并"
 
-#. Storage diagnostic: one folder appears in two pairs of home.yaml; {path} is the folder
+#. Storage diagnostic: one folder appears in two pairs
 #: src/home.ts
-msgid "folder {path} belongs to two projects"
-msgstr "文件夹 {path} 属于两个项目"
+msgid "folder {path} is paired twice"
+msgstr "文件夹 {path} 被配对了两次"
 
-#. Storage diagnostic: home.yaml is still in the layout before it listed several Spaces, which a one-time migration rewrites; the file is left as it is
+#. Storage diagnostic: home.yaml is still in the layout before a home recorded several instances, which the one-time instances migration rewrites; the file is left as it is
 #: src/i18n.ts
-msgid "format 1: the migration to several Spaces has not run; preserved unchanged"
-msgstr "格式 1：尚未迁移到多个 Space 的布局；已原样保留"
+msgid "format 1: the instances migration has not run; preserved unchanged"
+msgstr "格式 1：实例迁移尚未运行；已原样保留"
+
+#. A join's stop where git failed to clone the code and printed nothing
+#: src/space.ts
+msgid "Git could not clone the code"
+msgstr "Git 无法克隆代码"
 
 #. A stopped save's message where git failed and printed nothing
 #: src/space.ts
@@ -1407,11 +1432,6 @@ msgstr "Git 无法提交"
 #: src/space.ts
 msgid "Git could not diff"
 msgstr "Git 无法比较差异"
-
-#. Open here stopped where git failed to clone the project's code and printed nothing
-#: src/space.ts
-msgid "Git could not download the code"
-msgstr "Git 无法下载代码"
 
 #. Project creation refusal: Git signs commits and has no signing key; Git's own output is shown beneath, and Add is the palette action
 #: src/forge.ts
@@ -1456,7 +1476,7 @@ msgstr "git 被信号终止"
 #. Guidance where the git command cannot be run at all
 #: src/space-git.ts
 msgid "Git is not installed. Install Git, then reopen Space."
-msgstr "未安装 Git。请安装 Git，然后重新打开 Space。"
+msgstr "未安装 Git。请安装 Git，然后重新打开空间。"
 
 #. Guidance after a transfer ran past its time limit
 #: src/space-git.ts
@@ -1478,20 +1498,40 @@ msgstr "GitHub CLI 尚未登录。请运行 `gh auth login`。"
 msgid "Give the group a new name or path"
 msgstr "请为群组提供新的名称或路径"
 
-#. Refusal of a new group whose path at the Space is blank; Path is the editor's field
+#. Refusal of a new group whose path at the Git host is blank
 #: src/space-groups.ts
 msgid "Give the group a path"
 msgstr "请为群组填写路径"
 
-#. Guidance where a remote of an unread form refused access
+#. The act that gives access to a remote of an unread form, inside a sentence
 #: src/space-git.ts
-msgid "Give this computer access, then Retry"
-msgstr "给本机访问权限，然后重试"
+msgid "give this machine access to it"
+msgstr "让本机获得它的访问权限"
+
+#. The act that gives access to a remote of an unread form, opening a sentence
+#: src/space-git.ts
+msgid "Give this machine access to it"
+msgstr "让本机获得它的访问权限"
 
 #. Spec notice; `H1` is the markdown top heading and both names are the file's own
 #: src/specs.ts
 msgid "H1 identifier \"{identifier}\" disagrees with basename \"{basename}\""
 msgstr "H1 标识符“{identifier}”与文件名“{basename}”不一致"
+
+#. The act that gives access to a GitHub remote, inside a sentence; gh auth status and gh auth login are commands and stay as they are
+#: src/space-git.ts
+msgid "in a terminal run gh auth status to see which GitHub account this machine uses and gh auth login to change it"
+msgstr "在终端运行 gh auth status 查看本机使用的 GitHub 账户，运行 gh auth login 更换账户"
+
+#. The act that gives access to a GitHub remote, opening a sentence; gh auth status and gh auth login are commands and stay as they are
+#: src/space-git.ts
+msgid "In a terminal run gh auth status to see which GitHub account this machine uses and gh auth login to change it"
+msgstr "在终端运行 gh auth status 查看本机使用的 GitHub 账户，运行 gh auth login 更换账户"
+
+#. Refusal: the home is not a Git repository yet
+#: src/space.ts
+msgid "Initialize the repository first"
+msgstr "请先初始化仓库"
 
 #. The toolchain's guidance when Node itself is missing; `slc` is the compiler's command
 #: src/compile.ts
@@ -1502,6 +1542,11 @@ msgstr "请先安装 Node >= 23.6；slc 依赖它运行。"
 #: src/environments.ts
 msgid "Installing stopped; the last files stay: {cause}"
 msgstr "安装已停止，上次安装的文件保持不变：{cause}"
+
+#. Storage diagnostic: two instances home.yaml lists, or one listed twice, would hold their spex repositories in one folder under workspace/
+#: src/i18n.ts
+msgid "instances {first} and {second} share the folder {folder}"
+msgstr "实例 {first} 与 {second} 共用文件夹 {folder}"
 
 #. Attachment transfer or storage diagnostic
 #: src/app-storage.ts
@@ -1568,10 +1613,10 @@ msgstr "{intentId} 的派发记录无效"
 msgid "invalid failure count"
 msgstr "失败次数无效"
 
-#. Storage diagnostic on home.yaml: its own fields are malformed
+#. Storage diagnostic: home.yaml's own fields are malformed
 #: src/i18n.ts
-msgid "invalid fields"
-msgstr "字段无效"
+msgid "invalid home file"
+msgstr "主目录文件无效"
 
 #. Diagnostic for a damaged authoring file: the identity it records will not read
 #: src/drafts.ts
@@ -1686,22 +1731,27 @@ msgstr "已读标记 {key} 无效"
 msgid "invalid working folder pair"
 msgstr "工作文件夹配对无效"
 
-#. Forge setup guidance before every Space has reported where it keeps code, or for code at another Space; the actual remote and hostname stay internal
+#. Forge setup guidance before every instance has reported its Git origin, or for code under another instance's; the actual remote and hostname stay internal
 #: src/service.ts
-msgid "Issues and PRs come from GitHub"
-msgstr "Issue 和 PR 来自 GitHub"
+msgid "Issues and PRs come from GitHub; this project's code is on a remote."
+msgstr "Issue 与 PR 来自 GitHub；本项目的代码位于远程仓库。"
 
-#. Forge guidance where the project's code remote is not on GitHub; {host} is that remote's host name, such as gitlab.com, or a local remote as written
+#. Forge setup guidance for code on the reported Git origin of the project's instance, whose underlying Git system is never named
+#: src/service.ts
+msgid "Issues and PRs come from GitHub; this project's code is on this instance."
+msgstr "Issue 与 PR 来自 GitHub；本项目的代码位于此实例上。"
+
+#. Forge guidance where the project's origin remote is not on GitHub; {host} is that remote's host name, or a local remote as written
 #: src/forge.ts
-msgid "Issues and PRs come from GitHub · Code: {host}"
-msgstr "Issue 和 PR 来自 GitHub · 代码：{host}"
+msgid "Issues and PRs come from GitHub; this project's origin is at {host}."
+msgstr "Issue 与 PR 来自 GitHub；本项目的 origin 位于 {host}。"
 
-#. Forge setup guidance for code at the project's own Space, whose underlying Git system is never named; {space} is that Space's display name; the · separates two key phrases
-#: src/service.ts
-msgid "Issues and PRs come from GitHub · Code: {space}"
-msgstr "Issue 和 PR 来自 GitHub · 代码：{space}"
+#. Guidance under a save that refused to share a file
+#: src/space.ts
+msgid "It belongs to a family that stays on this device; check the sync rules. Nothing was saved."
+msgstr "它属于仅留在本设备的文件类别；请检查同步规则。未保存任何内容。"
 
-#. Guidance under a sync stopped because a step at the Space waits for a member with the rights
+#. Guidance under a sync stopped because a step at the Git host waits for a member with the rights
 #: src/space.ts
 msgid "It is asked again at the next sync."
 msgstr "下次同步时会再次请求。"
@@ -1721,10 +1771,10 @@ msgstr "条目 ID 前缀“{prefix}”与文件名“{basename}”不一致"
 msgid "items under unexpected section \"{section}\""
 msgstr "规约条目位于非预期的章节“{section}”下"
 
-#. Storage diagnostic on a file under placements/ in a project's records: it is named for another Space than the one it records, so it is not read
+#. Storage diagnostic: a placement file under placements/ is named for another instance than the one it records, so it names no placement
 #: src/placements.ts
-msgid "its name is not the folder of the Space it names"
-msgstr "文件名不是其所记 Space 的文件夹名"
+msgid "its name is not the folder of the instance it names"
+msgstr "文件名不是其所记实例的文件夹名"
 
 #. Why a state-root lock cannot be verified; the path stays as it is
 #: src/root-lease.ts
@@ -1736,11 +1786,6 @@ msgstr "其退役路径 {retired} 已被占用"
 msgid "legacy specs/iterations/ records coexist with specs/intents/; run `spex scaffold --update` for the migration prompt an agent applies"
 msgstr "旧的 specs/iterations/ 记录与 specs/intents/ 并存；运行 `spex scaffold --update` 获取供智能体执行的迁移提示词"
 
-#. Guidance where a local-path remote refused access
-#: src/space-git.ts
-msgid "Let this user read the folder, then Retry"
-msgstr "让此用户能读取该文件夹，然后重试"
-
 #. compile phase: slc links the machine
 #: src/authoring.ts
 msgid "Link"
@@ -1750,6 +1795,16 @@ msgstr "链接"
 #: src/authoring.ts
 msgid "Machine"
 msgstr "状态机"
+
+#. The act that gives access to a local-path remote, inside a sentence
+#: src/space-git.ts
+msgid "make sure this user can read the folder"
+msgstr "确保当前用户有权读取该文件夹"
+
+#. The act that gives access to a local-path remote, opening a sentence
+#: src/space-git.ts
+msgid "Make sure this user can read the folder"
+msgstr "确保当前用户有权读取该文件夹"
 
 #. Why the explorer offers no preview of a file that may hold a provider's secret
 #: src/space.ts
@@ -1768,7 +1823,7 @@ msgstr "媒体读取的起始位置超出文件长度。"
 msgid "Media storage has stopped."
 msgstr "媒体存储服务已停止。"
 
-#. Guidance under a transfer the Space refused; Share is the control in the members panel; it claims no role
+#. Guidance under a transfer the Git host refused; Share is the control in the members panel; it claims no role
 #: src/space-git.ts
 msgid "Membership decides who may send here: use Share, or ask a member who may share it."
 msgstr "谁可以向这里发送由成员身份决定：使用“共享”，或请一位可以共享它的成员帮忙。"
@@ -1787,22 +1842,27 @@ msgstr "迁移目标已变动；已原样保留"
 msgid "migration output verification failed"
 msgstr "迁移输出校验失败"
 
-#. Guidance where the folder a project's records move to is taken
+#. Guidance where a renamed spex repository's new folder is taken
 #: src/space.ts
 msgid "Move that folder aside, then Retry."
 msgstr "请将该文件夹移开，然后重试。"
+
+#. Package work refused while the one-time move of a project's spex.yaml and spex.lock from its records into its project folder stopped part way; restoring them as they were before, or as the move planned, and restarting Spex finishes it
+#: src/environments.ts
+msgid "Moving spex.yaml and spex.lock into the project folder did not finish — restore the two files, then restart Spex"
+msgstr "将 spex.yaml 和 spex.lock 移入项目文件夹未完成 — 请恢复这两个文件，然后重启 Spex"
 
 #. Refusal: a draft deletion names exactly one of the two
 #: src/service.ts
 msgid "name either the session's instance or its file's version"
 msgstr "请指明会话的实例或其文件的版本，二者择一"
 
-#. Refusal of a members, share or removal command naming neither or both a group and a project's records
+#. Refusal of a members, share or removal command naming neither or both a group and a spex repository
 #: src/space-groups.ts
-msgid "Name one group or one project"
-msgstr "请指定一个群组或一个项目"
+msgid "Name one group or one spex repository"
+msgstr "请指明一个群组或一个 spex 仓库"
 
-#. Refusal of a share or a removal whose login is blank; {host} is the Space's display name
+#. Refusal of a share or a removal whose login is blank; {host} is the Git host's display name
 #: src/space-groups.ts
 msgid "Name the account's login at {host}"
 msgstr "请填写该账户在 {host} 上的登录名"
@@ -1811,6 +1871,11 @@ msgstr "请填写该账户在 {host} 上的登录名"
 #: src/space-groups.ts
 msgid "Name the group"
 msgstr "请为群组命名"
+
+#. Refusal of a sign-in: what the reader gave does not read as a URL at all
+#: src/space.ts
+msgid "Name the instance by its URL, such as https://spex.sublang.ai"
+msgstr "请用实例的 URL 指明它，例如 https://spex.sublang.ai"
 
 #. A stopped transfer's message; {host} is the remote's host
 #. A stopped transfer's message; {host} is the remote's host
@@ -1827,16 +1892,6 @@ msgstr "{playbookId} 没有正在进行的编译"
 #: src/service.ts
 msgid "no configured playbook {playbookId}"
 msgstr "配置中没有规程 {playbookId}"
-
-#. Refusal of a remote URL carrying a user and a secret
-#: src/space-git.ts
-msgid "No credential in the URL — remove the user and secret, then use an SSH key or this computer's credential helper"
-msgstr "URL 中不能有凭据 — 删去用户名和密钥，改用 SSH 密钥或本机的凭据助手"
-
-#. Refusal of a remote URL carrying a user before its host name
-#: src/space-git.ts
-msgid "No credential in the URL — remove the user, then use an SSH key or this computer's credential helper"
-msgstr "URL 中不能有凭据 — 删去用户名，改用 SSH 密钥或本机的凭据助手"
 
 #. Refusal: no playbook draft of this id is open
 #. Refusal: no playbook draft of this id is open
@@ -1860,15 +1915,15 @@ msgstr "{path} 处没有文件"
 msgid "no folder at {path}"
 msgstr "{path} 处没有文件夹"
 
-#. Refusal: a publish names a spec package with no folder; {path} is where its folder would stand, its request's path or spex-packages/<org>/<pkg>
+#. Refusal of Publish: the package has no folder; {path} is where it would stand, the folder spex.yaml adds it from or spex-packages/<org>/<pkg>. 'spex new' is the command line's command that starts a package's folder
 #: src/environments.ts
-msgid "No folder holds {name}: {path} is not there"
-msgstr "没有文件夹存放 {name}：{path} 不存在"
+msgid "No folder for {name} at {path} — spex new {name} starts one"
+msgstr "{path} 处没有 {name} 的文件夹 — 运行 spex new {name} 来创建"
 
-#. Forge guidance where the project has no code remote; {command} is the Git command that adds one, which stays as it is
+#. Forge guidance where the project has no origin remote; the command stays as it is
 #: src/forge.ts
-msgid "No GitHub remote — run {command} to see issues and PRs"
-msgstr "没有 GitHub 远程仓库 — 运行 {command} 即可查看 Issue 和 PR"
+msgid "No GitHub origin remote. Add one (git remote add origin …) to see issues and PRs."
+msgstr "没有 GitHub origin 远程仓库。添加一个（git remote add origin …）即可查看 Issue 与 PR。"
 
 #. Refusal: no intent of this id is in the ledger
 #. Refusal: no intent of this id is in the ledger
@@ -1883,7 +1938,7 @@ msgstr "没有意图 {intentId}"
 msgid "no live session {sessionId}"
 msgstr "会话 {sessionId} 当前没有运行时"
 
-#. A spex repository's state or a stopped transfer: the Space no longer lists it for this account
+#. A spex repository's state or a stopped transfer: the Git host no longer lists it for this account
 #: src/space-git.ts
 msgid "No longer shared with you"
 msgstr "已不再与你共享"
@@ -1893,6 +1948,11 @@ msgstr "已不再与你共享"
 msgid "no one"
 msgstr "无人"
 
+#. Refusal of Attach: none of the spex repository's placement files names a spex repository that the instance lists for this account; {name} is the repository's name, {host} the instance's display name
+#: src/space.ts
+msgid "No placement file of {name} names a spex repository {host} lists"
+msgstr "{name} 的放置文件中没有 {host} 列出的 spex 仓库"
+
 #. Refusal: no project of this id is registered
 #. Refusal: no project of this id is registered
 #: src/service.ts
@@ -1900,21 +1960,14 @@ msgstr "无人"
 msgid "no project {projectId}"
 msgstr "没有项目 {projectId}"
 
-#. Refusal: the key names no project's or group's records under workspace/; {key} is their path
-#. Refusal: the key names no project's or group's records under workspace/; {key} is their path
-#: src/environments.ts
-#: src/store.ts
-msgid "no records {key} on this computer"
-msgstr "本机没有记录 {key}"
-
 #. Refusal: the answer names a repair the core does not report; {repair} is its key
 #: src/space.ts
 msgid "no repair named {repair} stands"
 msgstr "不存在名为 {repair} 的修复项"
 
-#. A stopped transfer's message; {target} is the remote URL, or its host name where no URL is known
+#. A stopped transfer's message; {target} is the remote URL, or its host where no URL is known
 #: src/space-git.ts
-msgid "No repository this computer can see at {target}"
+msgid "No repository this machine can see at {target}"
 msgstr "本机在 {target} 找不到可访问的仓库"
 
 #. Refusal: the config's roster holds no player with that id
@@ -1922,17 +1975,17 @@ msgstr "本机在 {target} 找不到可访问的仓库"
 msgid "no roster player {playerId}"
 msgstr "名单中没有 Player {playerId}"
 
+#. Refusal of a seat's closing: this device holds no seat on the server named
+#: src/places.ts
+msgid "No seat is open on this server"
+msgstr "这台服务器上没有打开的席位"
+
 #. Refusal: no session of this id is known
 #. Refusal: no session of this id is known
 #: src/service.ts
 #: src/session.ts
 msgid "no session {sessionId}"
 msgstr "没有会话 {sessionId}"
-
-#. Refusal: resolution found no solution; {conflicts} names each spec package with the requirements in conflict
-#: src/environments.ts
-msgid "No set of versions meets every requirement: {conflicts}"
-msgstr "没有一组版本能满足所有要求：{conflicts}"
 
 #. Why a compile cannot start: the draft has no source file written yet
 #: src/authoring.ts
@@ -1944,32 +1997,40 @@ msgstr "尚无源文"
 msgid "no spec file at specs/{path}"
 msgstr "specs/{path} 处没有规约文件"
 
+#. Refusal: the key names no clone under workspace/
+#. Refusal: the key names no clone under workspace/
+#. Refusal: the key names no clone under workspace/
+#: src/space.ts
+#: src/store.ts
+msgid "no spex repository {key} on this device"
+msgstr "本设备上没有 spex 仓库 {key}"
+
+#. Refusal of Add, Remove or Update: no versions satisfy every requirement; {conflicts} names each package with what asks for which versions, such as "acme/kit (spex.yaml: ^2.0.0, acme/app: ^1.0.0)"
+#: src/environments.ts
+msgid "No version fits every package: {conflicts} — change or remove one"
+msgstr "没有能满足所有规约包的版本：{conflicts} — 请修改或移除其中一个"
+
 #. compile phase: slc normalizes the source
 #: src/authoring.ts
 msgid "Normalize"
 msgstr "规范化"
 
-#. Storage diagnostic on placements/ in a project's records: it is a file or a link, so none of the files naming the Spaces the records are kept at is read
+#. Storage diagnostic: the clone's placements/ is a file or a link, so no placement file in it is read
 #: src/placements.ts
-msgid "not a folder, so no file in it is read"
-msgstr "不是文件夹，因此不读取其中的任何文件"
+msgid "not a folder of placement files"
+msgstr "不是存放放置文件的文件夹"
 
-#. Refusal of Disconnect or of a server's sign-in: this computer is not connected to the server named
-#: src/places.ts
-msgid "Not connected to this server"
-msgstr "未连接到此服务器"
-
-#. The Space found nothing a write named, and gave no words of its own; {host} is its display name
+#. The Git host found nothing a write named, and gave no words of its own; {host} is its display name
 #: src/space-groups.ts
 msgid "Not found at {host}"
 msgstr "在 {host} 上未找到"
 
-#. The Space found no account, membership or group a write named; {host} is its display name, {words} its own words, kept whole
+#. The Git host found no account, membership or group a write named; {host} is its display name, {words} its own words, kept whole
 #: src/space-groups.ts
 msgid "Not found at {host}: {words}"
 msgstr "在 {host} 上未找到：{words}"
 
-#. Refusal: the project's records name no Git branch; spex is the branch's own name
+#. Refusal: the clone's HEAD names no branch; spex is the branch's own name
 #: src/space.ts
 msgid "Not on a branch; check out spex in a terminal"
 msgstr "当前不在任何分支上；请在终端中切换到 spex"
@@ -1984,12 +2045,12 @@ msgstr "未登录"
 msgid "not valid YAML; preserved unchanged"
 msgstr "不是有效的 YAML；已原样保留"
 
-#. Guidance where the Space no longer lists a project's records for this account
-#. Guidance where the Space no longer lists a project's records for this account
+#. Guidance where the Git host no longer lists a spex repository for this account
+#. Guidance where the Git host no longer lists a spex repository for this account
 #: src/space-git.ts
 #: src/space.ts
-msgid "Nothing on this computer was deleted."
-msgstr "本机上的内容均未删除。"
+msgid "Nothing on this device was deleted."
+msgstr "本设备上的内容均未删除。"
 
 #. Guidance where a file under the home failed validation before the save
 #. Guidance where a file under the home failed validation before the save
@@ -2002,10 +2063,15 @@ msgstr "未保存任何内容。请修复或移除该文件，然后重新同步
 msgid "Nothing was saved. Fix the sync rules file, then sync again."
 msgstr "未保存任何内容。请修复同步规则文件，然后重新同步。"
 
-#. Refusal: the project's records sit on another Git branch; spex is the branch's own name
+#. Refusal: the clone sits on another branch; spex is the branch's own name
 #: src/space.ts
 msgid "On {branch}; check out spex in a terminal"
 msgstr "当前在 {branch} 分支上；请在终端中切换到 spex"
+
+#. A spex repository's state: it has no remote on the Git host
+#: src/space.ts
+msgid "On this device only"
+msgstr "仅在此设备上"
 
 #. Refusal; `.md` is the markdown file extension and stays as it is
 #: src/specs.ts
@@ -2036,6 +2102,11 @@ msgstr "org {org} 不合规则：只能用小写字母、数字和单个连字�
 #: src/authoring.ts
 msgid "Package"
 msgstr "打包"
+
+#. A completed step of an enabling: the project's installed packages replaced, those the added package needs among them
+#: src/service.ts
+msgid "packages installed"
+msgstr "规约包已安装"
 
 #. Spec file error: the parser's own reason follows
 #: src/specs.ts
@@ -2068,10 +2139,15 @@ msgstr "该路径或别名已属于其他项目"
 msgid "path resolves outside the project"
 msgstr "路径解析后位于项目之外"
 
-#. Refusal on a team server of adding your Personal records to a group or naming a remote for them: they stay on the server and reach no Space
+#. Refusal: the spex repository is only on this device; a group must be picked for it
 #: src/space.ts
-msgid "Personal records stay on this server"
-msgstr "个人记录留在此服务器上"
+msgid "Pick a group first"
+msgstr "请先选择一个群组"
+
+#. Refusal of Place: the person may not manage the members of every placement the spex repository holds, and placing it shares its records with more people; {name} is the repository's name
+#: src/space.ts
+msgid "Placing {name} elsewhere needs the right to manage the members of each of its placements"
+msgstr "要将 {name} 放置到别处，你需要有权管理它每个放置的成员"
 
 #. One settings drift: a stored playbook left the config
 #: src/session.ts
@@ -2226,6 +2302,11 @@ msgstr "前缀"
 msgid "profiles is retired (playbook 3.0): agents carry their settings inline"
 msgstr "profiles 已废弃（playbook 3.0）：智能体的设置改为内联携带"
 
+#. Refusal: an applet reads the project's working folder, and none is paired here
+#: src/service.ts
+msgid "project {project} has no working folder on this device"
+msgstr "项目 {project} 在本设备上没有工作文件夹"
+
 #. Refusal: the project's own folder is not on this device
 #: src/specs.ts
 msgid "project directory is missing"
@@ -2251,44 +2332,40 @@ msgstr "已保存文件的长度与上传声明不符。"
 msgid "Publishing stopped: {cause}"
 msgstr "发布已停止：{cause}"
 
-#. Storage diagnostic: one project's or group's records appear in two pairs of home.yaml; {key} is their path
-#: src/home.ts
-msgid "records {key} belong to two project folders"
-msgstr "记录 {key} 属于两个项目文件夹"
+#. Refusal of a seat's opening sent without the person's consent to the contract the instance's record fixes for team servers
+#: src/places.ts
+msgid "Read and accept the server's contract before opening a seat"
+msgstr "请先阅读并接受服务器的约定，再打开席位"
 
-#. A stopped sync's message: the project's records were written to twice under the sync
+#. Refusal of Attach until the reader has seen the privacy notice for that placement: every record reaches its members; {name} is the spex repository's name at that instance
 #: src/space.ts
-msgid "Records changed twice while syncing"
-msgstr "同步期间记录被更改了两次"
+msgid "Read the sharing notice before attaching {name}"
+msgstr "关联 {name} 之前，请先阅读共享说明"
 
-#. A stopped removal of a project's records from the Space {host} (its display name), which could not be read: records others sent there since this computer's last sync would not reach this computer; a second confirmation removes them anyway
+#. Refusal of a pick joining a spex repository with other members until the reader has seen the privacy notice
 #: src/space.ts
-msgid "Records sent to {host} since the last sync may be left behind"
-msgstr "上次同步后发送到 {host} 的记录可能会被遗漏"
+msgid "Read the sharing notice before joining {name}"
+msgstr "加入 {name} 之前，请先阅读共享说明"
 
-#. Guidance where Spex must read a Space before a project's records can move to where that Space keeps them; Refresh is the Space surface's control
+#. Refusal of a first push into a spex repository with other members until the reader has seen the privacy notice
 #: src/space.ts
-msgid "Refresh, then Retry"
-msgstr "请刷新，然后重试"
+msgid "Read the sharing notice before the first sync of {name}"
+msgstr "首次同步 {name} 之前，请先阅读共享说明"
+
+#. A stopped Leave: the placement being removed, at the instance {host} (its display name), could not be read, so records others pushed there since this device's last sync with it would not reach this device; a second confirmation removes it anyway
+#: src/space.ts
+msgid "Records pushed to {host} since the last sync may be left behind"
+msgstr "自上次同步以来推送到 {host} 的记录可能会被遗漏"
+
+#. Guidance where the core must read an instance before a spex repository's clone can move to its path there
+#: src/space.ts
+msgid "Refresh, then Retry."
+msgstr "请刷新，然后重试。"
 
 #. A stopped save's message: a staged file belongs to a family the home never shares; {leak} is its path
 #: src/space.ts
 msgid "Refusing to share {leak}"
 msgstr "拒绝共享 {leak}"
-
-#: src/registry.ts
-msgid "Registry sign-in did not complete. Try again."
-msgstr "注册表登录未完成。请重试。"
-
-#. The lock no longer matches spex.yaml; the last installed files stay in use
-#: src/environments.ts
-msgid "Requests changed; resolve again to install"
-msgstr "请求已更改；请重新解析后再安装"
-
-#. An environment's resolution failed; {cause} is the library's or the registry's own words
-#: src/environments.ts
-msgid "Resolving stopped: {cause}"
-msgstr "解析已停止：{cause}"
 
 #. Refusal; Restore is the control the interface offers for interrupted work
 #. Refusal; Restore is the control the interface offers for interrupted work
@@ -2305,20 +2382,15 @@ msgstr "请先“恢复”中断的轮次"
 msgid "Restore the reported path to its expected file or folder, then Retry. Refresh is deferred; written records and existing repair evidence are kept."
 msgstr "请将报告的路径恢复为预期的文件或文件夹，然后重试。刷新已暂缓；已写入的记录和现有修复凭据均保留。"
 
-#. Guidance under a transfer the Space answered with an error no other message reads: the error is the Space's, so a later retry may pass
-#: src/space-git.ts
-msgid "Retry later"
-msgstr "稍后重试"
-
-#. Guidance where the Space asked to wait: Retry waits out the time it asked for before running the step
+#. Guidance where the Git host asked to wait: Retry waits out the time it asked for before running the step
 #: src/space.ts
 msgid "Retry waits, then runs the step."
 msgstr "重试会先等待，再执行该步骤。"
 
 #. Guidance under a commit git failed; git commit is the command's own name
 #: src/space.ts
-msgid "Retry; if it fails again, run git commit in a terminal for detail."
-msgstr "请重试；若再次失败，在终端中运行 git commit 查看详情。"
+msgid "Retry; if it fails again, run git commit in the home from a terminal for detail."
+msgstr "请重试；若再次失败，在终端中对空间目录运行 git commit 查看详情。"
 
 #. Guidance under a step git failed for a reason the app does not classify
 #: src/space-git.ts
@@ -2329,6 +2401,11 @@ msgstr "请重试；若再次失败，在终端中执行同一步骤查看详情
 #: src/space.ts
 msgid "Retry; if it fails again, run the step in a terminal for detail."
 msgstr "请重试；若再次失败，在终端中执行该步骤查看详情。"
+
+#. Guidance under a transfer the Git host answered with an error
+#: src/space-git.ts
+msgid "Retry; if it fails again, the host's error stands for now."
+msgstr "请重试；若再次失败，说明托管平台的错误暂时仍在。"
 
 #. Why an intent cannot run on a team server's seat: it names no runtime, captured before runtimes were recorded or by the Playbook CLI, and a seat runs only what is assigned to it
 #: src/session.ts
@@ -2350,15 +2427,15 @@ msgstr "执行 {command} 时 scaffold 失败（应用未提供自带的 scaffold
 msgid "scaffold failed running {command}: {output}"
 msgstr "执行 {command} 时 scaffold 失败：{output}"
 
+#. A search of the registry's packages failed; {registry} is its display name, {cause} the library's or the registry's own words
+#: src/environments.ts
+msgid "Searching {registry} stopped: {cause}"
+msgstr "搜索 {registry} 已停止：{cause}"
+
 #. Refusal: a source write must carry one of the two, not both and not neither
 #: src/authoring.ts
 msgid "send either the source text or a file path"
 msgstr "请提供源文文本或文件路径其中之一"
-
-#. A session with no title, named by the head of its identifier, as one name in a list
-#: src/space.ts
-msgid "Session {id}"
-msgstr "会话 {id}"
 
 #. A stopped sync's message: a session is held elsewhere, named by the head of its identifier
 #: src/space.ts
@@ -2375,10 +2452,10 @@ msgstr "会话 {sessionId} 中没有智能体“{agentId}”"
 msgid "session checkpoint and replay disagree"
 msgstr "会话检查点与重放结果不一致"
 
-#. Why a session cannot continue here: another computer is writing it
+#. Why a session cannot continue here: another host is writing it
 #: src/store.ts
-msgid "Session is open on another computer"
-msgstr "会话正在另一台电脑上使用"
+msgid "Session is active in another host"
+msgstr "会话正在另一台主机上使用中"
 
 #. Why a session cannot continue here: its lease cannot be read
 #: src/store.ts
@@ -2400,22 +2477,10 @@ msgstr "设置有更改"
 msgid "Settings changed since this session started: {changes}. Start a new session for the new settings, or change them back."
 msgstr "本会话开始后设置已更改：{changes}。要使用新设置请新建会话，或把设置改回原样。"
 
-#. Refusal of sharing a project's records at another Space: the person may not manage their members at every Space they sync with, and sharing reaches more people; {name} is the project
-#: src/space.ts
-msgid "Sharing {name} at another Space needs the right to manage its members everywhere it syncs"
-msgstr "在另一个 Space 共享 {name}，需要在它同步的每处都有管理成员的权限"
-
-#. A state or a stopped transfer: the Space asks this computer to sign in again
+#. A state or a stopped transfer: the Git host asks this device to sign in again
 #: src/space-git.ts
 msgid "Sign in again"
 msgstr "请重新登录"
-
-#. Guidance where the Space asked this computer to sign in again; Sign in again is the control on the Space's heading
-#. Guidance where the Space asked this computer to sign in again; Sign in again is the control on the Space's heading
-#: src/space-git.ts
-#: src/space.ts
-msgid "Sign in again, then Retry."
-msgstr "请重新登录，然后重试。"
 
 #: src/config.ts
 msgid "sign in by running claude in a terminal, or set ANTHROPIC_API_KEY"
@@ -2431,38 +2496,67 @@ msgstr "在终端运行 codex 登录，或设置 OPENAI_API_KEY"
 msgid "sign in by setting your own credential for {adapter} in the Credentials section"
 msgstr "在“凭据”部分为 {adapter} 设置你自己的凭据以登录"
 
-#. Refusal of a sync: the Space holding the project's records is signed out; {host} is that Space's display name, or its host name before any read
+#. Refusal: the act needs the Git host, and the home is not signed in
+#: src/space.ts
+msgid "Sign in first"
+msgstr "请先登录"
+
+#. Guidance where the Git host asked this device to sign in again
+#. Guidance where the Git host asked this device to sign in again
+#: src/space-git.ts
+#: src/space.ts
+msgid "Sign in from the header, then Retry."
+msgstr "请从页头登录，然后重试。"
+
+#. Refusal of a sync: the spex repository's instance is signed out; {host} is that instance's display name, or its host name before any read
 #: src/space.ts
 msgid "Sign in to {host} first"
 msgstr "请先登录 {host}"
 
-#. Refusal: the act needs a Space, and this computer is signed in to none it names; Sign in is the Space surface's control
-#: src/space.ts
-msgid "Sign in to a Space first"
-msgstr "请先登录一个 Space"
-
+#. Refusal of Publish: publishing needs a sign-in at the registry the package goes to; {registry} is its display name as last read, else its host name
 #: src/environments.ts
-msgid "Sign in to registry to load publishing namespaces."
-msgstr "请登录注册表以加载可发布的命名空间。"
+msgid "Sign in to {registry} to publish"
+msgstr "登录 {registry} 以发布"
 
-#. Refusal: publishing needs the home signed in at the instance the publish goes to; {name} is that instance's display name as last read, else its host name
+#. No version fits every package while signed out at the registry, whose private versions Spex cannot see; {registry} is its display name
 #: src/environments.ts
-msgid "Sign in to registry to publish at {name}"
-msgstr "登录注册表以发布到 {name}"
+msgid "Sign in to {registry} to see private versions"
+msgstr "登录 {registry} 以查看私有版本"
 
+#. Refusal: listing the orgs this account may publish to needs a sign-in at the registry; {registry} is its display name. An org is a package name's first half
 #: src/environments.ts
-msgid "Sign in to registry to use private packages."
-msgstr "登录注册表以使用私有软件包。"
+msgid "Sign in to {registry} to see your orgs"
+msgstr "登录 {registry} 以查看你的 org"
 
-#. Refusal of Remove from this list: the Space is still signed in; {host} is its display name, or its host name before any read
+#. Refusal of Forget: the instance is still signed in; {host} is its display name, or its host name before any read
 #: src/space.ts
 msgid "Sign out of {host} first"
 msgstr "请先退出登录 {host}"
 
-#. Guidance where an http(s) remote refused access; {host} is the remote's host name, such as gitlab.example.com
+#. The act that gives access to an http(s) remote, inside a sentence
 #: src/space-git.ts
-msgid "Sign this computer in at {host} with an account that can see it, then Retry"
-msgstr "让本机以能看到它的账户登录 {host}，然后重试"
+msgid "sign this machine in at that host as an account that can see it"
+msgstr "在该主机上用有权访问它的账户为本机登录"
+
+#. The act that gives access to an http(s) remote, opening a sentence
+#: src/space-git.ts
+msgid "Sign this machine in at that host as an account that can see it"
+msgstr "在该主机上用有权访问它的账户为本机登录"
+
+#. A sign-in at the registry was cancelled, denied, expired or interrupted; {registry} is the registry's display name
+#: src/registry.ts
+msgid "Sign-in to {registry} did not finish — Sign in again"
+msgstr "{registry} 的登录未完成 — 请重新登录"
+
+#. The registry no longer accepts this computer's sign-in, so Spex signed out there; {registry} is the registry's display name
+#: src/environments.ts
+msgid "Sign-in to {registry} expired — Sign in again"
+msgstr "{registry} 的登录已过期 — 请重新登录"
+
+#. The registry did not take this computer's sign-out, so its sign-in may still stand; {registry} is the registry's display name
+#: src/registry.ts
+msgid "Sign-out at {registry} did not finish — check the connection, then Sign out again"
+msgstr "在 {registry} 退出登录未完成 — 请检查网络连接，然后再次退出登录"
 
 #. The browser page's title once a sign-in completed
 #: src/space-groups.ts
@@ -2484,11 +2578,6 @@ msgstr "已跳过越出项目的符号链接：{path}"
 msgid "Some forge data could not be loaded from gh."
 msgstr "部分 GitHub 数据未能通过 gh 加载。"
 
-#. Storage diagnostic: two Spaces home.yaml lists, or one listed twice, would hold their records in one folder under workspace/; {first} and {second} are their addresses
-#: src/i18n.ts
-msgid "Spaces {first} and {second} share the folder {folder}"
-msgstr "Space {first} 与 {second} 共用文件夹 {folder}"
-
 #. compile phase: slc derives the spec items
 #: src/authoring.ts
 msgid "Spec items"
@@ -2501,7 +2590,7 @@ msgstr "规约包有更改"
 
 #. Startup refusal the shell shows in a dialog; the reason names Playbook's machine identity file
 #: src/service.ts
-msgid "Spex cannot identify this computer: {reason}"
+msgid "Spex cannot identify this machine: {reason}"
 msgstr "Spex 无法识别本机：{reason}"
 
 #. Startup refusal shown in the shell's dialog on an unsupported host
@@ -2524,20 +2613,25 @@ msgstr "Spex 正在打包 {folder}；请在它结束后重试"
 msgid "Spex is signed in. You may close this browser window."
 msgstr "Spex 已登录。你可以关闭此浏览器窗口。"
 
-#. The description a project's new records carry at the Space, its code on no remote
+#. A project's new spex repository's description on the Git host, its code on no remote
 #: src/space-groups.ts
 msgid "Spex records of {name}"
 msgstr "{name} 的 Spex 记录"
 
-#. The description a project's new records carry at the Space; {code} is the code's remote URL
+#. A project's new spex repository's description on the Git host; {code} is the code's remote URL
 #: src/space-groups.ts
 msgid "Spex records of {name}; its code is at {code}"
 msgstr "{name} 的 Spex 记录；其代码位于 {code}"
 
-#. The description a group's new records carry at the Space
+#. A group's new spex repository's description on the Git host
 #: src/space-groups.ts
 msgid "Spex records of the group {group}"
 msgstr "群组 {group} 的 Spex 记录"
+
+#. Storage diagnostic: one spex repository appears in two pairs
+#: src/home.ts
+msgid "spex repository {key} is paired twice"
+msgstr "spex 仓库 {key} 被配对了两次"
 
 #. Draft thread line for a turn Spex started; {kind} is the directive's code word (compile, register or spex), and keep the `Spex: ` opening
 #: src/authoring.ts
@@ -2554,15 +2648,35 @@ msgstr "Spex: 编译在“{where}”阶段失败 — 正在请智能体修正源
 msgid "Spex: the compile succeeded — asking for a registration proposal"
 msgstr "Spex: 编译成功 — 正在请求注册方案"
 
-#. A completed step of an enabling: the environment's lock written
-#: src/service.ts
-msgid "spex.lock resolved"
-msgstr "spex.lock 已解析"
-
-#. Refusal: a search or publish needs the environment's instance, and its spex.yaml does not read; {cause} is the library's own words, such as a space that is no instance origin
+#. spex.lock does not parse; {cause} is the library's own words. Update is the Packages tab's control that writes spex.lock again
 #: src/environments.ts
-msgid "spex.yaml does not read: {cause}"
-msgstr "无法读取 spex.yaml：{cause}"
+msgid "spex.lock cannot be read: {cause} — remove it, then Update"
+msgstr "无法读取 spex.lock：{cause} — 请删除它，然后更新"
+
+#. spex.lock names a format a newer Spex writes; {format} is its number. 'update Spex' means install the newer Spex
+#: src/environments.ts
+msgid "spex.lock is from a newer Spex (format {format}) — update Spex"
+msgstr "spex.lock 来自更新版本的 Spex（格式 {format}）— 请更新 Spex"
+
+#. A completed step of an enabling: spex.lock written with the versions chosen
+#: src/service.ts
+msgid "spex.lock written"
+msgstr "已写入 spex.lock"
+
+#. spex.yaml does not parse or holds a value Spex refuses; {cause} is the library's own words
+#: src/environments.ts
+msgid "spex.yaml cannot be read: {cause} — fix the file, then Retry"
+msgstr "无法读取 spex.yaml：{cause} — 请修正该文件，然后重试"
+
+#. The stale report: spex.yaml no longer matches spex.lock, the last installed files staying in use until Update; the Packages tab's chip reads it beside its Update control
+#: src/environments.ts
+msgid "spex.yaml changed"
+msgstr "spex.yaml 已更改"
+
+#. spex.yaml names a format a newer Spex writes; {format} is its number. 'update Spex' means install the newer Spex
+#: src/environments.ts
+msgid "spex.yaml is from a newer Spex (format {format}) — update Spex"
+msgstr "spex.yaml 来自更新版本的 Spex（格式 {format}）— 请更新 Spex"
 
 #. Startup refusal the shell shows in a dialog; the paths, the identity and the decision's id stay as they are
 #: src/root-lease.ts
@@ -2585,46 +2699,46 @@ msgstr "状态根目录 {dir} 在 {lock} 处已被本机进程 {pid} 占用；�
 msgid "state root {dir} lock at {lock} cannot be verified: {reason}; stop every Spex writer before removing it (DR-108)"
 msgstr "状态根目录 {dir} 在 {lock} 处的锁无法核实：{reason}；请先停止所有 Spex 写入者，再移除它（DR-108）"
 
-#. Refusal of Remove from this list on a Space's heading: these projects' records still sync with that Space, no other signed-in Space holding them, or a session beneath them is in use; {projects} names each project, or a session by its title, as a list
+#. Refusal of Forget: spex repositories whose clones are still kept under the instance, no signed-in instance listing them; {host} is the instance's display name, {names} the repositories' names as a list
 #: src/space.ts
-msgid "Still syncing: {projects} — stop them first"
-msgstr "仍在同步：{projects} — 请先停止它们"
+msgid "Still kept under {host}: {names}"
+msgstr "仍位于 {host} 之下：{names}"
 
-#. A stopped step's message: the reader stopped it while the Space's rate limit held its call; {host} is the Space's display name
+#. Refusal of Forget: spex repositories kept under another instance that are still placed at this one too, no signed-in instance listing that placement; {host} is the instance's display name, {names} the repositories' names as a list
+#: src/space.ts
+msgid "Still placed at {host}: {names}"
+msgstr "仍放置在 {host}：{names}"
+
+#. A stopped step's message: the reader stopped it while the Git host's rate limit held its call; {host} is the host's display name
 #: src/space.ts
 msgid "Stopped while waiting for {host}"
 msgstr "在等待 {host} 时已停止"
 
-#. Guidance where the folder a project's records move to is kept for the project {other}'s records
+#. Guidance where a renamed spex repository's new folder is another clone's destination
 #: src/space.ts
 msgid "Sync {other} first, then Retry."
 msgstr "请先同步 {other}，然后重试。"
 
-#. Guidance where the remote rejected the push; {host} is the remote's host name, or a local remote as written
+#. Guidance where the remote rejected the push
 #: src/space-git.ts
-msgid "Sync again to merge what {host} received meanwhile."
-msgstr "请再次同步，以合并 {host} 这期间收到的内容。"
+msgid "Sync again to merge what the host received meanwhile."
+msgstr "请再次同步，以合并托管平台这期间收到的内容。"
 
 #. The sync-rules unit's label
 #: src/space.ts
 msgid "Sync rules updated"
 msgstr "同步规则已更新"
 
-#. Storage diagnostic on a folder under workspace/: the records {key} wait to move to this path under their Space's folder, which something else holds; they stay where they are until the folder is moved aside
+#. Storage diagnostic on a folder under workspace/: the clone {key} waits to move to this path under its instance's folder, which something else holds; the clone stays where it is until the folder is moved aside
 #: src/store.ts
-msgid "taken, so {key} cannot move here under its Space's folder; move it aside"
-msgstr "已被占用，{key} 无法移到其 Space 文件夹下的这里；请将它移开"
+msgid "taken, so {key} cannot move here under its instance's folder; move it aside"
+msgstr "已被占用，{key} 无法移到其实例文件夹下的这里；请将它移开"
 
 #. Attachment transfer or storage diagnostic
 #. Attachment transfer or storage diagnostic
 #: src/service.ts
 msgid "Text or an attachment is required."
 msgstr "请输入文字或添加附件。"
-
-#. Refusal of a remote the reader named for a project's records that lies at a Space, which hands its own addresses over itself; Add to a group… is the row's control
-#: src/space.ts
-msgid "That address is a Space's own — Add it to a group instead"
-msgstr "该地址属于某个 Space — 请改为加入群组"
 
 #. Refusal of a code host's credential on a team server's seat: the name given is not a DNS host name with an optional port
 #: src/service.ts
@@ -2671,6 +2785,16 @@ msgstr "智能体以状态 {status} 结束"
 msgid "the agent entry {name} is malformed; preserved unchanged"
 msgstr "智能体条目 {name} 格式有误；已原样保留"
 
+#. Refusal of a remote URL carrying a user before the host
+#: src/space-git.ts
+msgid "The app stores no credential: remove everything before the host from the URL and use an SSH key or the machine's credential helper instead."
+msgstr "应用不保存任何凭据：请从 URL 中删去主机之前的全部内容，改用 SSH 密钥或本机的凭据助手。"
+
+#. Refusal of a remote URL carrying a user and a secret
+#: src/space-git.ts
+msgid "The app stores no credential: remove the user and secret from the URL and use an SSH key or the machine's credential helper instead."
+msgstr "应用不保存任何凭据：请从 URL 中删去用户名和密钥，改用 SSH 密钥或本机的凭据助手。"
+
 #. The toolchain's guidance when the shipped compiler and the app disagree on the playbook engine; the values read like `ABI 1, schemas 3` or `unreadable`; `@sublang/slc` and `@sublang/playbook` are package names, as they are
 #: src/compile.ts
 msgid "The app's compiler targets playbook engine {compiler} while the app runs {app}; update @sublang/slc and @sublang/playbook together."
@@ -2680,6 +2804,11 @@ msgstr "应用自带的编译器面向 Playbook 引擎 {compiler}，而应用运
 #: src/compile.ts
 msgid "The app's own copy of @sublang/slc is missing; run npm ci in the Spex checkout to restore it."
 msgstr "应用自带的 @sublang/slc 副本缺失；请在 Spex 源码目录中运行 npm ci 以恢复。"
+
+#. Refusal: an applet tab asked for an applet this project's packages do not install; Packages is the project's tab that adds a package
+#: src/service.ts
+msgid "The applet {applet} is not installed here — add its package in Packages"
+msgstr "此处未安装小应用 {applet} — 请在“规约包”中添加它所在的规约包"
 
 #. Attachment transfer or storage diagnostic
 #: src/session.ts
@@ -2713,30 +2842,47 @@ msgstr "配置无效；请先在设置中修复，智能体才能作答"
 msgid "The core is stopping."
 msgstr "核心服务正在停止。"
 
-#. Refusal: a request by path names a folder inside the repository's working folder (environments-2)
-#: src/service.ts
-msgid "the environment of {repository} can request this spec package by path only from inside its own working folder; enable it in the project, or publish it and add it from the registry"
-msgstr "{repository} 的环境只能按路径请求它自己工作文件夹内的规约包；请在项目中启用它，或发布后从注册中心添加"
-
-#. Refusal: an applet tab asked for an applet the spex repository's environment does not install
-#: src/service.ts
-msgid "the environment of {repository} installs no applet {applet}"
-msgstr "{repository} 的环境未安装小应用 {applet}"
-
 #. Media transfer refusal
 #: src/media-transfers.ts
 msgid "The file has not finished uploading."
 msgstr "文件尚未上传完成。"
 
-#. Refusal: the applet is in spex.lock, but its installed or source folder is missing on this computer
+#. Refusal: the applet is in the lock, but its installed or path-source folder is missing here
 #: src/service.ts
-msgid "the files of applet {applet} are not on this computer"
-msgstr "小应用 {applet} 的文件不在本机"
+msgid "the files of applet {applet} are not on this device"
+msgstr "小应用 {applet} 的文件不在本设备上"
+
+#. Refusal: package work in a project whose project folder is gone from where Spex last found it; {name} is the project's name, {path} that folder
+#: src/environments.ts
+msgid "The folder of {name} is missing at {path} — choose its folder, then Retry"
+msgstr "{name} 的文件夹不在 {path} — 请选择它的文件夹，然后重试"
+
+#. Refusal of a remote the reader named under the Git host's own origin
+#: src/space.ts
+msgid "The Git host's own URLs are used as the host gives them; pick a group instead."
+msgstr "托管平台自己的 URL 按平台给出的原样使用；请改为选择一个群组。"
+
+#. Refusal: the home itself is no folder
+#: src/space.ts
+msgid "the home is not a folder"
+msgstr "空间目录不是一个文件夹"
+
+#. A stopped sync's message: the host's branch moved while this machine was sending
+#. A stopped transfer's message: the host's branch moved while this machine was sending
+#: src/space-git.ts
+#: src/space.ts
+msgid "The host changed again"
+msgstr "托管平台再次发生变化"
 
 #. Storage diagnostic: a code host's entry in the seat's credentials file will not read; {name} is its host name as the file keys it
 #: src/code-credentials.ts
 msgid "the host entry {name} is malformed; preserved unchanged"
 msgstr "主机条目 {name} 格式有误；已原样保留"
+
+#. Refusal of a pick naming a group the Git host does not list
+#: src/space.ts
+msgid "The host lists no such group"
+msgstr "托管平台没有列出这个群组"
 
 #. Refusal: the work named is not this session's project's
 #: src/service.ts
@@ -2763,12 +2909,12 @@ msgstr "无法检查该锁（{code}）"
 msgid "the moved owner's token changed"
 msgstr "移走的所有者令牌已改变"
 
-#. The Space reports the name of new records taken
+#. The Git host reports the name of a new spex repository taken
 #: src/space-groups.ts
 msgid "The name is taken"
 msgstr "该名称已被占用"
 
-#. Refusal of a name for new records with nothing of a name in it
+#. Refusal of a new spex repository's name with nothing of a name in it
 #: src/space.ts
 msgid "The name must hold a letter or a digit"
 msgstr "名称中须含有字母或数字"
@@ -2793,6 +2939,11 @@ msgstr "所有者记录格式错误"
 msgid "the owner's machine identity {value} is unverifiable"
 msgstr "所有者的机器身份 {value} 无法核实"
 
+#. Refusal: the explorer was given a path leading outside the home
+#: src/space.ts
+msgid "the path escapes the home"
+msgstr "路径越出了空间目录"
+
 #. Refusal: a storage validation read would follow a link
 #. Refusal: the explorer follows no symbolic link
 #: src/space.ts
@@ -2800,46 +2951,15 @@ msgstr "所有者的机器身份 {value} 无法核实"
 msgid "the path goes through a symbolic link"
 msgstr "路径中包含符号链接"
 
-#. Refusal: the explorer was given a path leading outside the records it shows
-#: src/space.ts
-msgid "the path leads outside these records"
-msgstr "该路径指向这些记录之外"
-
 #. Refusal: the explorer was given an absolute path
 #: src/space.ts
-msgid "the path must be relative to these records"
-msgstr "路径必须相对于这些记录"
+msgid "the path must be relative to the home"
+msgstr "路径必须相对于空间目录"
 
-#. Guidance after Open here downloaded a project's records but not its code; Choose folder… is the row's control that pairs the records with a folder holding the code
-#: src/space.ts
-msgid "The records are here — Choose folder… for the code"
-msgstr "记录已在这里 — 请为代码选择文件夹…"
-
-#. Guidance after opening a project on a team server downloaded its records but not its code, the server choosing the code's folder: Open here again downloads the code there; Open here is the row's control
-#: src/space.ts
-msgid "The records are here — Open here again to download the code"
-msgstr "记录已在这里 — 再次点击“在这里打开”以下载代码"
-
-#. A stopped step: the project's records changed between Spex's read and its write — moved, or their remote set from a terminal; {name} is the project; its guidance says Retry
-#: src/space.ts
-msgid "The records of {name} changed meanwhile"
-msgstr "{name} 的记录已在此期间更改"
-
-#. Refusal: the project's records changed between Spex's read and its write — moved, or their remote set from a terminal; {name} is the project
-#. Refusal: the project's records changed between Spex's read and its write — moved, or their remote set from a terminal; {name} is the project
-#: src/service.ts
-#: src/space.ts
-msgid "The records of {name} changed meanwhile — Retry"
-msgstr "{name} 的记录已在此期间更改 — 请重试"
-
-#. Repair row: a project folder whose records are gone from this computer; {path} is the folder
-#: src/store.ts
-msgid "the records of {path} are missing on this computer"
-msgstr "{path} 的记录在本机缺失"
-
-#: src/registry.ts
-msgid "The registry could not be read. Try again."
-msgstr "无法读取注册表。请重试。"
+#. Refusal: package work asked of a project whose records Spex does not hold here; {name} is the project's name. 'Open here' is the project's control on the Space surface
+#: src/environments.ts
+msgid "The records of {name} are not on this computer — Open here first"
+msgstr "{name} 的记录不在本机 — 请先“在此打开”"
 
 #. Stands where a message names the remote's host and no URL says which
 #: src/space-git.ts
@@ -2861,10 +2981,20 @@ msgstr "远程仓库地址格式有误：请使用 ssh://、git@host:path、http
 msgid "the repair marker is malformed"
 msgstr "修复标记文件格式有误"
 
+#. Refusal: the home's repository holds no commit to sync
+#: src/space.ts
+msgid "The repository holds no commit yet; initialize it again"
+msgstr "该仓库还没有任何提交；请重新初始化"
+
 #. Refusal: ending the parked run did not settle it
 #: src/service.ts
 msgid "the run is still parked, so the intent stays open"
 msgstr "该运行仍处于搁置状态，因此意图保持未结束"
+
+#. Refusal of a seat's opening or closing: the seats file changed between the core's read and its write
+#: src/places.ts
+msgid "The seats changed meanwhile; try again"
+msgstr "席位在此期间已更改；请重试"
 
 #. Refusal: the session is held, so it cannot be discarded now
 #. Refusal: the session is held, so it cannot be discarded now
@@ -2892,7 +3022,7 @@ msgstr "登录在此期间已更改；请重试"
 msgid "The sign-in expired before it was approved"
 msgstr "登录在获批之前已过期"
 
-#. A sign-in that ended because the person denied it at the Space; {host} is its display name
+#. A sign-in that ended because the person denied it at the Git host
 #: src/space-groups.ts
 msgid "The sign-in was denied at {host}"
 msgstr "登录在 {host} 被拒绝"
@@ -2902,11 +3032,36 @@ msgstr "登录在 {host} 被拒绝"
 msgid "the source is empty; nothing was written"
 msgstr "源文为空；未写入任何内容"
 
+#. A stopped sync's message: the home was written to twice under the sync
+#: src/space.ts
+msgid "The space changed twice while syncing"
+msgstr "同步期间空间被改动了两次"
+
+#. The registry's list of Spaces to sign in to did not answer or did not read; {registry} is the registry's display name
+#: src/registry.ts
+msgid "The Spaces {registry} lists could not be read — check the connection, then Retry"
+msgstr "无法读取 {registry} 列出的 Space — 请检查网络连接，然后重试"
+
 #. Refusal: the authoring session's spec package folder is not on this device
 #. Refusal: the authoring session's spec package folder is not on this device
 #: src/authoring.ts
 msgid "the spec package of {id} is missing from the working folder"
 msgstr "工作文件夹中缺少 {id} 的规约包"
+
+#. Guidance after a join's code clone failed
+#: src/space.ts
+msgid "The spex repository is here; choose a folder for its code to pair it."
+msgstr "spex 仓库已在本设备上；请为其代码选择一个文件夹以完成配对。"
+
+#. Guidance after a project's code clone failed on a team server's seat, where the server allocates the code's folder: joining the repository again clones its code there
+#: src/space.ts
+msgid "The spex repository is here; join it again to clone its code."
+msgstr "spex 仓库已在本设备上；再次加入即可克隆其代码。"
+
+#. Repair row: a working folder is paired with a spex repository whose clone is gone
+#: src/store.ts
+msgid "the spex repository of {path} is missing on this device"
+msgstr "{path} 的 spex 仓库在本设备上缺失"
 
 #. Live tool approval refusal
 #. Live tool approval refusal
@@ -2939,21 +3094,6 @@ msgstr "上传数据块超出声明的文件长度。"
 msgid "The upload service has stopped."
 msgstr "上传服务已停止。"
 
-#. Refusal: the records the explorer shows are no folder
-#: src/space.ts
-msgid "these records are not a folder"
-msgstr "这些记录不是文件夹"
-
-#. Refusal: the folder holding a project's or a group's records holds no Git repository of its own, or it was removed meanwhile; Refresh is the Space surface's control
-#: src/space.ts
-msgid "These records are not a Git repository — Refresh, then Retry"
-msgstr "这些记录不是 Git 仓库 — 请刷新，然后重试"
-
-#. Refusal: the Git repository holding the project's records has no commit to sync; Refresh is the Space surface's control
-#: src/space.ts
-msgid "These records hold no commit yet — Refresh, then Retry"
-msgstr "这些记录还没有提交 — 请刷新，然后重试"
-
 #. Live tool approval refusal
 #: src/approvals.ts
 msgid "This approval belongs to a previous core connection."
@@ -2963,11 +3103,6 @@ msgstr "此审批请求属于之前的核心服务连接。"
 #: src/approvals.ts
 msgid "This approval has already received a different answer."
 msgstr "此审批请求已收到不同的答复。"
-
-#. Refusal: a command names a Space, by its address, that this computer lists no sign-in for — never signed in to there, or removed from the list since
-#: src/space.ts
-msgid "This computer has not signed in to {address} — sign in there first"
-msgstr "本机尚未登录 {address} — 请先在那里登录"
 
 #. Refusal: queued work cannot start while a run of this conversation waits on the Boss's answer to its question
 #: src/service.ts
@@ -2979,10 +3114,15 @@ msgstr "该会话正在等待你的回复；请先回复"
 msgid "This decision was not offered by the agent."
 msgstr "智能体未提供此答复选项。"
 
-#. Guidance under a save that refused to share a file of a kind that never leaves this computer; the sync rules say which
+#. Refusal of a sign-in: the URL names the host and port of an instance this device already lists, under another scheme; {listed} is that instance's origin
 #: src/space.ts
-msgid "This file never syncs — nothing was saved"
-msgstr "此文件从不同步 — 未保存任何内容"
+msgid "This device already signs in to {listed}, at the same host and port"
+msgstr "此设备已登录同一主机和端口上的 {listed}"
+
+#. Refusal: a command names an instance, by its address, that this device lists no entry for — never signed in to there, or forgotten since
+#: src/space.ts
+msgid "This device has not signed in to {instance}"
+msgstr "此设备尚未登录 {instance}"
 
 #. Create recovery for an existing unborn repository; Add is the palette action
 #: src/forge.ts
@@ -2993,6 +3133,16 @@ msgstr "此文件夹已包含 Git 仓库，但尚无初始提交。请在终端�
 #: src/forge.ts
 msgid "This folder already contains a Git repository. Use Add to register it."
 msgstr "此文件夹已包含 Git 仓库。请使用“添加”注册该仓库。"
+
+#. Refusal of Enable: a project's package is added from a folder only inside its project folder (environments-2), and this package lies elsewhere
+#: src/service.ts
+msgid "This package's folder is outside the project folder — enable it in that project, or publish it and add it from the registry"
+msgstr "此规约包的文件夹不在项目文件夹内 — 请在那个项目中启用它，或发布后从注册中心添加"
+
+#. Refusal of Enable: a Personal package is added from a folder only inside what Spex keeps for you alone (environments-2), and this package lies elsewhere
+#: src/service.ts
+msgid "This package's folder is outside your Personal records — enable it in the project, or publish it and add it from the registry"
+msgstr "此规约包的文件夹不在你的个人记录内 — 请在项目中启用它，或发布后从注册中心添加"
 
 #. Refusal: the recovery the reader activated is no longer advertised; the id is the runtime's own
 #: src/session.ts
@@ -3034,16 +3184,11 @@ msgstr "此会话不再提供“{actionId}”来结束其运行。"
 msgid "This session offers no way to end its run."
 msgstr "此会话没有可用来结束其运行的方式。"
 
-#. Refusal: the session's recorded working directory is not the project's folder on this computer
-#. Refusal: the session's recorded working directory is not the project's folder on this computer
+#. Refusal: the session's recorded working directory is not the project's working folder on this device
+#. Refusal: the session's recorded working directory is not the project's working folder on this device
 #: src/service.ts
-msgid "this session ran in {cwd}; continue it on the computer whose folder it ran in"
-msgstr "此会话在 {cwd} 中运行；请在该文件夹所在的电脑上继续"
-
-#. Refusal of a sign-in carrying a team server's admission on a computer of one's own: only a team server signs in that way; the person signs in from the card on the Space surface, which the rail names Space
-#: src/service.ts
-msgid "This sign-in is for a server only — sign in on Space"
-msgstr "这种登录仅用于服务器 — 请在 Space 中登录"
+msgid "this session ran in {cwd}; continue it on the device whose folder it ran in"
+msgstr "该会话运行于 {cwd}；请在其运行文件夹所在的设备上继续"
 
 #. Live tool approval refusal
 #: src/approvals.ts
@@ -3087,6 +3232,16 @@ msgstr "未知的配置字段 {field}"
 #: src/specs.ts
 msgid "unknown entries under specs/: {entries}"
 msgstr "specs/ 下存在未知条目：{entries}"
+
+#. Refusal: the diff names a path the unit does not hold
+#: src/space.ts
+msgid "unknown path {path} in {unit}"
+msgstr "{unit} 中没有路径 {path}"
+
+#. Refusal: the act names a unit the current plan does not hold
+#: src/space.ts
+msgid "unknown unit {unit}"
+msgstr "未知单元 {unit}"
 
 #. Storage diagnostic; `cause` is the read failure's own words
 #: src/store.ts
@@ -3147,6 +3302,11 @@ msgstr "未命名编写会话"
 msgid "untitled session"
 msgstr "未命名会话"
 
+#. Choosing the versions spex.yaml allows and writing spex.lock failed, after Add, Remove or Update; {cause} is the library's or the registry's own words
+#: src/environments.ts
+msgid "Updating stopped: {cause}"
+msgstr "更新已停止：{cause}"
+
 #. Media transfer refusal
 #: src/media-transfers.ts
 msgid "Upload ID already identifies a different file."
@@ -3184,37 +3344,37 @@ msgstr "请先等待正在进行的轮次结束或将其中止，再执行删除
 msgid "Wait for the session to finish, then Retry."
 msgstr "请等待该会话结束，然后重试。"
 
-#. A step the Space left waiting, with no words of its own
+#. A step the Git host left waiting, with no words of its own
 #: src/space-groups.ts
 msgid "Waiting"
 msgstr "等待中"
 
-#. A project's line while creating its records at a Space waits for a member with the right; {group} is the group's full path
+#. A spex repository's row while its creation waits; {group} is the group's full path
 #: src/space-groups.ts
 msgid "Waiting for a member who can create it in {group}"
 msgstr "等待在 {group} 中有权创建它的成员"
 
-#. A project's line while creating its records at a Space waits for a member with the right; {group} is the group's full path, {words} the Space's own words
+#. A spex repository's row while its creation waits; {group} is the group's full path, {words} the host's own words
 #: src/space-groups.ts
 msgid "Waiting for a member who can create it in {group}: {words}"
 msgstr "等待在 {group} 中有权创建它的成员：{words}"
 
-#. A project's line while preparing its records' Git branch at a Space waits for a member with the right; {group} is the group's full path
+#. A spex repository's row while its branch preparation waits; {group} is the group's full path
 #: src/space-groups.ts
 msgid "Waiting for a member who can prepare its branch in {group}"
 msgstr "等待在 {group} 中有权准备其分支的成员"
 
-#. A project's line while preparing its records' Git branch at a Space waits for a member with the right; {group} is the group's full path, {words} the Space's own words
+#. A spex repository's row while its branch preparation waits; {group} is the group's full path, {words} the host's own words
 #: src/space-groups.ts
 msgid "Waiting for a member who can prepare its branch in {group}: {words}"
 msgstr "等待在 {group} 中有权准备其分支的成员：{words}"
 
-#. A step the Space left waiting; {words} are its own words
+#. A step the Git host left waiting; {words} are its own words
 #: src/space-groups.ts
 msgid "Waiting: {words}"
 msgstr "等待中：{words}"
 
-#. Guidance after the reader stopped a transfer to the Space
+#. Guidance after the reader stopped a transfer to the Git host
 #: src/space-git.ts
 msgid "You stopped the transfer; your commits stand."
 msgstr "你停止了传输；你的提交仍然保留。"
@@ -3224,10 +3384,15 @@ msgstr "你停止了传输；你的提交仍然保留。"
 msgid "You stopped the transfer; your commits stand. Git runs without prompts, so a helper that prompts fails instead of hanging."
 msgstr "你已停止传输；你的提交仍然有效。Git 以无交互方式运行，因此需要交互的凭据助手会直接失败，而不会一直挂起。"
 
-#. Guidance under a send the Space refused twice because its records moved meanwhile
+#. Guidance under a push the remote rejected twice
 #: src/space.ts
-msgid "Your merge is saved on this computer — Retry to send it"
-msgstr "你的合并已保存在本机 — 重试以发送"
+msgid "Your merge is saved locally; Retry to send it once the host settles."
+msgstr "合并已保存在本地；待托管平台稳定后重试即可发送。"
+
+#. Refusal: the registry gave no answer listing the orgs this account may publish to; {registry} is its display name
+#: src/environments.ts
+msgid "Your orgs at {registry} could not be read — check the connection, then Retry"
+msgstr "无法读取你在 {registry} 上的 org — 请检查网络连接，然后重试"
 
 #. Readiness on a team server's seat: the agent runs on a credential the member placed in Settings
 #: src/seat-credentials.ts
@@ -3239,17 +3404,12 @@ msgstr "你自己的凭据"
 msgid "Your own credential has expired"
 msgstr "你自己的凭据已过期"
 
-#. Refusal: your own group's request by path names a folder inside its spex repository's clone (environments-2), and this spec package lies elsewhere
-#: src/service.ts
-msgid "your own group's environment can request this spec package by path only from inside its clone; enable it in the project, or publish it and add it from the registry"
-msgstr "你自己的群组的环境只能按路径请求其克隆内的规约包；请在项目中启用它，或发布后从注册中心添加"
+#. Refusal on a team server's seat of a pick or a remote for your own group: its records stay on the server and are placed at no instance
+#: src/space.ts
+msgid "Your own group stays on this server"
+msgstr "你自己的群组只留在这台服务器上"
 
 #. A content-size rejection keeps access unchanged; no membership, sign-in, deletion or history-rewrite advice is implied
 #: src/space-git.ts
-msgid "Your saved commits remain on this computer. Address the content limit, then Retry."
-msgstr "已保存的提交仍保留在本机。请先解决内容大小限制问题，然后重试。"
-
-#. Refusal of Connect or Disconnect: the record of this computer's server connections changed between the core's read and its write
-#: src/places.ts
-msgid "Your server connections changed meanwhile — try again"
-msgstr "你的服务器连接在此期间已更改 — 请重试"
+msgid "Your saved commits remain on this device. Address the content limit, then Retry."
+msgstr "已保存的提交仍保留在此设备上。请先解决内容大小限制问题，然后重试。"

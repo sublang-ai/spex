@@ -34,7 +34,7 @@ test("environments-28: explicit registry namespaces survive the suggestion timeo
   const repository = "tester/tester-spex";
   await home.client.expectOk("environment.registry.set", { repository, origin: host.url });
   const unsigned = await home.client.command("registry.orgs", { repository });
-  assert.equal(unsigned.ok, false);if (!unsigned.ok) assert.match(unsigned.error.message, /Sign in to registry/);
+  assert.equal(unsigned.ok, false);if (!unsigned.ok) assert.match(unsigned.error.message, new RegExp(`^Sign in to ${new URL(host.url).host.replaceAll(".", "\\.")} to see your orgs$`));
   await registrySignIn(home, host.url, host);
   const orgs = [{ name: "alpha", path: "alpha", role: "Owner" }, { name: "zeta", path: "zeta", role: "Owner" }];
   registry.script.setOrgs(host.url, orgs);
@@ -45,7 +45,7 @@ test("environments-28: explicit registry namespaces survive the suggestion timeo
   registry.script.delayOrgs(0);
   unavailable = true;
   const refused = await home.client.command("registry.orgs", { repository });
-  assert.equal(refused.ok, false);if (!refused.ok) assert.match(refused.error.message, /Could not load registry namespaces/);
+  assert.equal(refused.ok, false);if (!refused.ok) assert.match(refused.error.message, /^Your orgs at .+ could not be read — check the connection, then Retry$/);
   unavailable = false;
   registry.script.setOrgs(host.url, []);
   assert.deepEqual((await home.client.expectOk("registry.orgs", { repository })).orgs, []);
@@ -126,7 +126,8 @@ test("core-service-144/hub-13: a self-managed Space seat installs canonical publ
   const state = await seat.client.expectOk("registry.get", { repository: own });assert.equal(state.account, null);
   const publicInstall = await seat.client.expectOk("environment.request", { repository: own, name: "public/guide", request: { kind: "registry", version: "^1.0.0" }, wait: true });assert.ok(publicInstall);
   const denied = await seat.client.command("environment.request", { repository: own, name: "private/guide", request: { kind: "registry", version: "^1.0.0" }, wait: true });assert.equal(denied.ok, false);
-  assert.match((await seat.client.expectOk("environment.get", { repository: own })).error ?? "", /Sign in to registry/);
+  // [core-service-145] the registry by its descriptor's display name, with what to do.
+  assert.equal((await seat.client.expectOk("environment.get", { repository: own })).error, "Sign in to Public registry to see private versions");
   assert.equal(await fileCredentialStore(seat.dataDir, PUBLIC_REGISTRY_ORIGIN, "registry").read(), null);
   await registrySignIn(seat, PUBLIC_REGISTRY_ORIGIN, publicHost);
   assert.equal(publicHost.script.deviceRequests.at(-1)?.serverId, null, "registry sign-in inherits no seat grant");
