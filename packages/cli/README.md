@@ -10,9 +10,9 @@
 *The essential spec layer AI agents need to build software reliably.*
 
 Scaffolds a `specs/` directory so AI coding agents can read and follow
-your project's requirements and design. It makes a spec package folder from
-a skill or a spec you already have, and attaches to the running Spex app for
-project, Space sign-in and package operations.
+your project's requirements and design. It is also the package manager for
+spec packages: it adds, installs and publishes specs, skills and playbooks
+in a folder, with no running app.
 
 ## Install
 
@@ -26,106 +26,226 @@ Or run once without installing:
 npx @sublang/spex scaffold
 ```
 
-## Make a package folder
+## Quick start
 
-`spex package init` turns a skill folder or a spec file you already have into
-a spec package folder ready to add and publish. It needs no running app.
-From your project's root:
+The package commands act on the folder you run them in. They need no
+running Spex app and no project registered anywhere.
+
+Make a package from a skill you already have, then publish it:
 
 ```sh
-spex package init my-org/my-skill --skill .claude/skills/my-skill --move
-spex package init my-org/my-spec --spec specs/packages/my-spec.md
+spex login
+spex new my-org/my-skill --skill .claude/skills/my-skill --move
+spex publish my-org/my-skill --dry-run
+spex publish my-org/my-skill
 ```
 
-It writes `spex-packages/<name>/` holding `meta.yaml` (format 2, version
-`0.1.0`), a `README.md`, the project's `LICENSE` where there is one, each
-`--skill` folder under `skills/<language>/<id>/` — `<id>` being the `name`
-its `SKILL.md` declares — and the `--spec` file under
-`specs/<language>/<name>.md`. Give `--skill` once per skill; a package holds
-at most one spec, whose file must be named `<name>.md`.
-`--move` moves the skill folders instead of copying them: once the package is
-added, Spex exports the skills back to your agents.
+`spex login` signs this device in at a Space. Open the URL it prints and
+enter the code it shows. `spex new` makes `spex-packages/my-org/my-skill/`
+from the skill, requests it in `spex.yaml` and installs it. `--move` moves
+the skill into the package, and Spex exports it back to
+`.claude/skills/`. The dry run shows the destination, the version and the
+files, and uploads nothing. Publishing needs an org you may publish to at
+that Space.
 
-| Option | Default |
+Use published packages in a project:
+
+```sh
+cd my-project
+spex search toolkit
+spex add my-org/toolkit
+spex list
+git add spex.yaml spex.lock
+```
+
+`spex add` requests the newest release as `^<version>`. To choose the
+requirement, write it after the name: `spex add my-org/toolkit@~1.2.0`.
+After a clone, `spex install` installs what `spex.lock` records. Public
+packages need no sign-in; private ones need `spex login` first. Put real
+names in place of the examples.
+
+## The environment
+
+A folder's environment is its `spex.yaml`, its `spex.lock` and its
+`.spex/` folder. Each package command acts on the environment whose root
+is the nearest folder holding `spex.yaml`, the current one included,
+else the top level of the Git work tree, else the current folder.
+
+| Path at the root | Holds | In Git |
+| --- | --- | --- |
+| `spex.yaml` | the packages you request | commit it |
+| `spex.lock` | the exact versions, sources and file digests resolved | commit it |
+| `.spex/` | the installed files, the generated skills and the install record | ignored by its own `.gitignore` |
+| `spex-packages/<org>/<pkg>/` | each package you develop here | commit it |
+| `.claude/skills/`, `.agents/skills/` | the exported skills | ignored through `.git/info/exclude` |
+
+A `spex.yaml` looks like this:
+
+```yaml
+format: 1
+space: https://spex.sublang.ai
+language: en
+packages:
+  my-org/toolkit:
+    version: ^1.2.0
+  my-org/my-skill:
+    path: spex-packages/my-org/my-skill
+```
+
+- `space` names the Space the environment resolves at, by its origin.
+  Its registry serves the packages, and `spex publish` publishes there.
+  Without `space`, the environment uses your default Space. `spex add`
+  and `spex new` write it, naming your default Space, when they make the
+  file.
+- `language`, optional, picks each artifact's language where the package
+  has it, else its original.
+- Each request has one source: `version` from the registry, `path` for a
+  folder inside the root, used in place, or `git` with `rev` and an
+  optional `path` for a Git repository.
+- A version requirement is exact (`1.2.3`), caret (`^1.2.3`) or tilde
+  (`~1.2.3`).
+
+`spex install` installs the lock as it stands, so every clone installs
+the same files. It resolves first only where the lock is missing or
+stale: `spex.yaml` changed since it was resolved, or a path package's
+`meta.yaml` no longer matches it. `spex update` resolves again on
+purpose. Downloaded files are checked against the lock's digests and
+kept once in the home's `store/`, then linked or copied into
+`.spex/packages/`.
+
+Installed skills reach every agent. Each one is exported to
+`.claude/skills/<name>/` for Claude Code and `.agents/skills/<name>/` for
+Codex, Gemini CLI, Kimi Code and OpenCode. A spec is exported as a skill
+named `<org>-<pkg>` that holds the spec file. A playbook's launch skill
+goes to `.claude/skills/` only. A folder of yours under an exported name
+stays as it is, and the command says the export left it out.
+
+The Spex app reads the same files. Open the folder as a project in the
+app, before or after you use the CLI, and its Playbooks surface shows
+the same environment. What one writes, the other reads at its next use.
+Only the app:
+
+- enables a playbook, by choosing a player for each role, and runs it
+  in a session;
+- prepares each installed playbook to run on its engine;
+- installs its built-in package, `sublang/playbooks`. `spex install`
+  leaves that one to the app and says so.
+
+## Commands
+
+| Command | What it does | Options |
+| --- | --- | --- |
+| `spex add <org>/<pkg>[@<requirement>]` | Request a package from the registry at the requirement, else at `^` its newest release; then resolve, install and export | |
+| `spex add <org>/<pkg> --path <folder>` | Request a folder inside the root, used in place; then resolve, install and export | `--path <folder>` |
+| `spex remove <org>/<pkg>`, alias `rm` | Drop a request, then install what remains | |
+| `spex install`, alias `i` | Install the lock and export, resolving first where the lock is missing or stale | |
+| `spex update` | Resolve again from `spex.yaml`, install and export, and print each version that moved | |
+| `spex list`, alias `ls` | Show the Space, the requests, each locked package with its state, the exported skills and what the export left out | |
+| `spex search <query>` | Search the environment's registry, and print each match with its versions, newest first | |
+| `spex new <org>/<pkg>` | Make `spex-packages/<org>/<pkg>/` from skills and a spec, request it by path and install it | `--skill <folder>` (once per skill), `--spec <file>`, `--language <tag>`, `--description <text>`, `--license <id>`, `--move` |
+| `spex publish [<org>/<pkg>]` | Publish the package's folder to the environment's Space | `--dry-run` |
+| `spex login` | Sign this device in at a Space | `--space <origin>`, `--force` |
+| `spex logout` | Sign this device out of a Space | `--space <origin>` |
+| `spex whoami` | Show who is signed in at each Space, the default marked | `--space <origin>` |
+
+`scaffold` and `lint` are described under [Usage](#usage) and
+[Linting](#linting). `spex --help` lists every command.
+
+### `spex new`
+
+- `<org>` and `<pkg>` are lowercase letters, digits and single hyphens,
+  at most 64 characters each.
+- Each `--skill` folder needs a `SKILL.md` whose frontmatter `name` is an
+  Agent Skills name. It lands at `skills/<language>/<name>/`.
+- The `--spec` file must be named `<pkg>.md`. It lands at
+  `specs/<language>/<pkg>.md`. A package holds at most one spec.
+- `<language>` is `--language`, else `en`.
+- The manifest, `meta.yaml`, starts at version `0.1.0`. Its description
+  is `--description`, else the first skill's `description`, else the
+  spec's first paragraph under its Intent heading. Its license is
+  `--license`, else `MIT` where the root's `LICENSE` begins with
+  "MIT License", else `Apache-2.0`. The root's `LICENSE` is copied in.
+- `--move` moves the skill folders instead of copying them. A skill moved
+  out of `.claude/skills/` comes back there as Spex's export. Without
+  `--move`, your own folder stays, and the export leaves it alone.
+- Every rule is checked before anything is written. A refusal writes
+  nothing.
+
+### `spex publish`
+
+- With a name, it publishes the folder `spex.yaml` requests that name by,
+  else `spex-packages/<org>/<pkg>/`. With no name, it publishes the one
+  package under `spex-packages/`, and lists them where there are several.
+- It publishes to the environment's Space, as the account signed in
+  there. Signed out there, it refuses and names `spex login`.
+- The manifest needs a `description` and a `license`.
+- `--dry-run` prints the destination, `<org>/<pkg>@<version>` and the
+  files, and uploads nothing. A publish prints the package's page at the
+  Space.
+- A release never changes. Raise `version` in `meta.yaml` before you
+  publish again.
+
+## Signing in
+
+A Space is a deployment of Spex Space, named by its origin, such as
+`https://spex.sublang.ai`.
+
+```sh
+spex login
+spex login --space https://spex.example.com
+spex whoami
+spex logout --space https://spex.example.com
+```
+
+- `spex login` signs this device in by the device flow. It prints a URL
+  and a code. Open the URL, enter the code and approve. The command waits
+  until the Space confirms or the code expires. Ctrl-C stops it, and
+  nothing is recorded.
+- Without `--space`, `spex login` and `spex logout` use your default
+  Space, and `spex whoami` lists every Space. The first Space you sign in
+  to becomes the default. Before any sign-in, the default is
+  `https://spex.sublang.ai`.
+- An origin is `https://<host>`, with a port where it is not the default;
+  `http` is accepted only on a loopback host.
+- At a Space where you are signed in, `spex login` says so. `--force`
+  signs in again and revokes the token it replaces.
+- `spex whoami` reads the home alone. It lists each Space by its host and
+  name, the login signed in there or "signed out", and marks the default.
+- `spex logout` revokes this device at the Space and removes its token.
+  The Space stays listed, as signed out.
+- The home is `SPEX_HOME`, else `~/.spex`. It records each Space in
+  `home.yaml`, and keeps each token in `local/credentials.yaml`, readable
+  by you alone. No command prints a token.
+
+## Exit codes
+
+The package commands exit with these codes. `scaffold` and `lint` keep
+their own.
+
+| Code | Meaning |
 | --- | --- |
-| `--language <tag>` | `en` |
-| `--description <text>` | the first skill's `SKILL.md` description, else the first paragraph under the spec's Intent heading |
-| `--license <id>` | `MIT` where `./LICENSE` begins with "MIT License", else `Apache-2.0` |
+| `0` | the command succeeded |
+| `1` | a refusal or a failure, its cause on standard error after `spex <command>:` |
+| `130` | interrupted, as by Ctrl-C |
 
-Every rule is checked before anything is written; a refusal writes nothing
-and names the rule. It ends with the next steps: in the app, **Playbooks →
-Add from folder** with the name and `spex-packages/<name>`, then **Publish**
-on its row; or with the CLI, as below,
-`spex package add <org>/<name> --path spex-packages/<name>` and
-`spex package publish spex-packages/<name> --dry-run`.
+A cause names what refused: the registry, the Space or a file. Where
+there is one thing to do, it says what. An interrupted install leaves the
+last installed files and lock in place. An interrupted publish cannot
+take back an upload the registry already accepted.
 
-## Use the running Spex app
+## Limits
 
-These commands require Node.js 22 or later and the Spex app from
-0.9.0-beta.18 or later — the desktop app or the server shell — with attached
-CLI version 1 support and a matching protocol.
-Keep the app running on this computer: the CLI finds it through the
-`local/endpoint.json` file the app keeps in its home, `SPEX_HOME` or
-`~/.spex`, while it serves on a loopback address. Pass
-`--server <access-url>` or set `SPEX_SERVER_URL` only to use another
-server; either wins over the file. App 0.9.0-beta.18 keeps no such file and
-needs that URL, which its server shell started with `npm run start:server`
-prints. Keep the URL private: it grants access to that server's home.
-The CLI connects only to literal loopback addresses; it starts no server and
-stores no separate credentials or package state. Without a running app it
-says so and exits 1.
-
-```sh
-spex project add /absolute/path/to/project
-cd /absolute/path/to/project
-spex project list
-spex auth login --instance https://spex.sublang.ai
-spex auth status
-spex package search toolkit
-spex package status
-```
-
-Open the displayed sign-in URL and approve with the displayed code when asked.
-The CLI waits for that sign-in's result. Sign-in success does not mean the
-later catalog read or records Sync succeeded.
-Package commands select the registered project at the exact current working
-directory; run from its root, or pass `--project <registered-folder>`.
-An unmatched folder is an error, never an implicit project registration.
-
-```sh
-spex package add my-org/toolkit --version '^1.0.0'
-spex package install
-spex package resolve
-spex package remove my-org/toolkit
-```
-
-`install` uses the existing lock. `resolve` selects versions again and installs.
-For a package you are authoring inside the project, such as one
-`spex package init` made, request its relative folder:
-
-```sh
-spex package add my-org/toolkit --path spex-packages/toolkit
-spex package publish spex-packages/toolkit --dry-run
-spex package publish spex-packages/toolkit
-```
-
-`add` requires exactly one of `--version` or `--path`. Core validates package
-folders and performs resolution, installation and native exports.
-Publishing requires the server's Space sign-in and an eligible claimed org.
-The dry run shows the actual destination, identity, version and declared files
-without uploading; a later direct publish performs its own current checks.
-The explicit publish command uploads without an interactive confirmation.
-It reports the server's actual publication receipt.
-
-Commands wait for their own terminal result, normally for up to ten minutes.
-Use `--timeout <positive-seconds>` to change that observation limit.
-A rejection exits 1. A lost connection or timeout after dispatch exits 2 with
-an unknown result: the operation may still complete. Inspect its state before
-manually retrying; the CLI never reconnects or resends mutations.
-Ctrl+C exits 130: package work may continue, while sign-in requests cancellation
-of its own attempt where still connected. Neither promises rollback.
-Use `spex --help` for command forms. Scaffold, lint and `package init` remain
-usable without a server.
+- The CLI acts on a folder's environment. Your own group's environment
+  is the app's alone.
+- `spex update` resolves the whole environment again. It takes no
+  package name.
+- No command adds a Git source. A `git` request you write in `spex.yaml`
+  by hand is resolved and installed as written, fetched with this
+  device's Git alone. A private repository needs Git access on this
+  device.
+- The built-in package `sublang/playbooks` is the app's. `spex install`
+  installs it from the copy the app keeps in the same home, where there
+  is one, else leaves it to the app.
 
 ## Usage
 
@@ -233,6 +353,39 @@ Review the changes with
 The command prints a per-file indicator for every framework and seed path, plus a copy-paste-ready prompt for your AI agent to reconcile citations and local extensions with the refreshed law.
 
 ## Upgrading from an earlier release
+
+### From 4.x
+
+Spex 5.0 replaces the commands that attached to a running app with
+top-level commands that need no app:
+
+| 4.x | 5.0 |
+| --- | --- |
+| `spex package init <org>/<name> ...` | `spex new <org>/<pkg> ...`, writing `spex-packages/<org>/<pkg>/` |
+| `spex package add <org>/<pkg> --version <requirement>` | `spex add <org>/<pkg>@<requirement>` |
+| `spex package add <org>/<pkg> --path <folder>` | `spex add <org>/<pkg> --path <folder>` |
+| `spex package install` | `spex install` |
+| `spex package resolve` | `spex update` |
+| `spex package remove <org>/<pkg>` | `spex remove <org>/<pkg>` |
+| `spex package search <query>` | `spex search <query>` |
+| `spex package status` | `spex list` |
+| `spex package publish <folder> [--dry-run]` | `spex publish <org>/<pkg> [--dry-run]` |
+| `spex auth login --instance <origin>` | `spex login --space <origin>` |
+| `spex auth status` | `spex whoami` |
+| none | `spex logout` |
+| `spex project add <folder>`, `spex project list` | none: no project registration is needed |
+| `--server`, `SPEX_SERVER_URL`, `--project`, `--timeout` | none: no app is needed |
+
+The package manager now runs inside the CLI on the folder's own files,
+and the Spex app runs the same code. An environment's files stand at the
+folder's root, with the installed files under `.spex/`; an environment
+an earlier app kept in the project's records moves into the working
+folder at the app's next start.
+
+A folder `spex package init` made at `spex-packages/<name>/` still
+publishes by name while `spex.yaml` requests it by that path. Exit code
+`2` is gone. Deep imports such as `@sublang/spex/dist/cli.js` no longer
+resolve; the package's `exports` name its modules.
 
 ### From 2.x
 

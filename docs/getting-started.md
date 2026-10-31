@@ -9,9 +9,10 @@ and review through a workflow written in plain language.
 
 A **spec package** shares a spec and related skills or playbooks as a
 versioned package. Find and publish packages on
-[Spex Space](https://spex.sublang.ai); install them from the IDE. Public
-packages need no account to browse or install. Publishing and private
-packages require access. Project-record sync is optional.
+[Spex Space](https://spex.sublang.ai); install them from the IDE or the
+`spex` command line. Public packages need no account to browse or
+install. Publishing and private packages require access. Project-record
+sync is optional.
 
 ## Open the IDE and a project
 
@@ -65,39 +66,32 @@ run enabled playbooks through Spex's `/` menu with other agents.
 **Add from folder** lets you try an existing
 package inside the project before publishing it.
 
-## Use the package CLI
+## Use the CLI
 
-With Spex CLI 4.1 or later and app beta.18 or later, you can do the same
-package operations from a terminal. Keep the Spex app running on this
-computer — the desktop app, or the server shell started with
-`npm run start:server`. Releases after those two find the app by
-themselves; with CLI 4.1 or app beta.18, set `SPEX_SERVER_URL` to the
-server shell's printed access URL, which you keep private. In another
-terminal, select your project:
+The `spex` command line manages the same packages from a terminal. It
+needs Node.js 22 or later and no running app. Install it once, or put
+`npx @sublang/spex` in place of `spex`. Run it in your project's folder:
 
 ```sh
 npm install -g @sublang/spex
-spex project add /absolute/path/to/project
-cd /absolute/path/to/project
-spex package search toolkit
-spex package add my-org/toolkit --version '^1.0.0'
-spex package status
+cd /path/to/project
+spex search toolkit
+spex add my-org/toolkit
+spex list
 ```
 
-Pass `--server <access-url>` or set `SPEX_SERVER_URL` only to use another
-server.
-For private packages or publishing, run
-`spex auth login --instance https://spex.sublang.ai` and follow its browser
-instructions; use your team's instance address when it differs.
-For your own package, run
-`spex package publish spex-packages/toolkit --dry-run` to inspect the
-destination and files, then omit `--dry-run` to publish.
-Only use the placeholder package name after replacing it with a real one.
-If a command loses its connection, inspect the result before retrying:
-work may still finish.
-Enable and run playbooks in the IDE as described above.
-See the [CLI guide](../packages/cli/README.md) for local-folder packages,
-locked installation, resolution and observation limits.
+`spex add` records the request in `spex.yaml` at the project's root,
+writes the exact versions to `spex.lock`, installs the files under
+`.spex/` and exports the skills. Commit `spex.yaml` and `spex.lock` with
+your code; Git ignores `.spex/`. After a clone, `spex install` installs
+what the lock records. For private packages, run `spex login` first.
+Replace the placeholder package name with a real one.
+
+The IDE reads the same files. Open the folder as a project, and
+**Playbooks** shows what the CLI installed; what the IDE changes, the CLI
+reads too. Enable and run playbooks in the IDE as described above. See
+the [CLI guide](../packages/cli/README.md) for every command, signing in
+at another Space, and exit codes.
 
 ## Try a spec-first task
 
@@ -126,34 +120,43 @@ on a new claim when the packages should be private.
 ### Publish a spec or skill package
 
 To publish a skill you already have, such as one Claude Code keeps under
-`.claude/skills/`, make a package folder from it in your project's root,
-using an org you can publish to:
+`.claude/skills/`, sign in at the Space you publish to, then make a
+package folder from the skill in your project's root. Use an org you can
+publish to:
 
 ```sh
-npx @sublang/spex package init my-org/my-skill --skill .claude/skills/my-skill --move
+npx @sublang/spex login
+npx @sublang/spex new my-org/my-skill --skill .claude/skills/my-skill --move
 ```
 
-It writes `spex-packages/my-skill/` with a manifest, README and your
-project's license, and needs no running app. `--move` hands the skill to the
-package; once the package is added, Spex exports it back to your agents.
-For a spec, pass `--spec specs/packages/<name>.md` and name the package
-`<org>/<name>`; `--description` and `--license` override what it reads.
-To write a folder by hand, follow the
+`spex login` prints a URL and a code: open the URL, enter the code and
+approve. `spex new` writes `spex-packages/my-org/my-skill/` with a
+manifest, a README and your project's license, requests it by path in
+`spex.yaml`, and installs it. `--move` hands the skill to the package;
+Spex exports it back to `.claude/skills/` from there. For a spec, pass
+`--spec specs/packages/<name>.md` and name the package `<org>/<name>`;
+`--description` and `--license` override what it reads. To write a
+folder by hand, follow the
 [package format](../specs/packages/environments.md#environments-1).
 
-In **Playbooks → Add from folder**, enter its `org/name` and
-`spex-packages/my-skill`, then **Add**. Sign in through **Space** to the
-publishing instance. On the local package's row, select **Publish**, review
-the destination, name, version, and upload files, then confirm **Publish**.
-This uses your existing app sign-in; no playbook, compilation, or separate
-API token is needed. With the app running, the CLI does the same:
+Check what will be published, then publish it:
 
 ```sh
-spex package add my-org/my-skill --path spex-packages/my-skill
-spex package publish spex-packages/my-skill --dry-run
+npx @sublang/spex publish my-org/my-skill --dry-run
+npx @sublang/spex publish my-org/my-skill
 ```
 
-Then run the publish command again without `--dry-run`.
+The dry run shows the destination, name, version and files, and uploads
+nothing. The publish prints the package's page at the Space.
+
+Or publish from the IDE. A folder `spex new` made is already requested,
+so its row is in **Playbooks**. For a folder you made another way, use
+**Playbooks → Add from folder**, enter its `org/name` and
+`spex-packages/<org>/<name>`, then **Add**. Sign in through **Space** to
+the publishing instance. On the local package's row, select **Publish**,
+review the destination, name, version, and upload files, then confirm
+**Publish**. This uses your existing app sign-in; no playbook,
+compilation, or separate API token is needed.
 
 ### Publish a playbook
 
@@ -189,7 +192,7 @@ read-only, so a playbook can write a report into the project and the
 applet can show it. The page runs in a sandbox: it reaches neither the
 network nor Spex itself, and its frame stays at Spex's own address. Add
 the folder and its `{ kind: applet }` entry in `meta.yaml` by hand;
-`spex package init` does not add applets.
+`spex new` does not add applets.
 
 ## Optionally sync project records
 

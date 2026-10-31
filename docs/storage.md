@@ -26,7 +26,7 @@ Ignored files can contain durable local state.
 | `<clone>/project.json` | The project's name and its code's remote URL. | Tracked |
 | `<clone>/placements/<folder>.yaml` | One placement of the spex repository at an instance, named by that instance's folder: the instance's origin and the host's id for the repository there. | Tracked |
 | `<clone>/config/playbook.config.yaml` | Your own group's Captain, player and playbook settings; in a project's clone, only the playbooks it enables and the player each role uses. | Tracked |
-| `<clone>/spex.yaml`, `<clone>/spex.lock` | The environment's requests and lock. | Tracked, one unit |
+| `<clone>/spex.yaml`, `<clone>/spex.lock` | A group's own environment's requests and lock. A project's stand at its working folder's root, committed with its code; the app moves them there from a project's clone once. | Tracked, one unit |
 | `<clone>/intents/<id>.json` | One intent: text, capture time, attachments, source, dispatch and close. | Tracked |
 | `<clone>/intents/<id>.assets/` | Immutable uploaded files retained by that intent. | Tracked with its intent |
 | `<clone>/sessions/<id>.json` | Schema-8 storage root with identity, `cwd`, state, timestamps and a reference to the logical schema-7 manifest. | Tracked |
@@ -35,7 +35,7 @@ Ignored files can contain durable local state.
 | `<clone>/sessions/<id>.assets/` | Immutable accepted input, observed media and deferred tool details. | Tracked with its session bundle |
 | `<clone>/authoring/<id>.json`, `.records.jsonl`, `.assets/` | An authoring session: its queue, compile state, transcript and owned files. | Tracked, one unit |
 | `<clone>/sessions/<id>.hints.json` | Provider resume tokens for the current checkpoint. | Ignored |
-| `<clone>/packages/`, `<clone>/skills/` | The environment's installed spec packages and the skills exported from them, rebuilt from `spex.lock`. | Ignored |
+| `<clone>/.spex/` | A group's own environment's installed spec packages, generated skills and install record, rebuilt from `spex.lock`. A project's stand under its working folder's `.spex/`, which Git ignores. | Ignored |
 | `<clone>/.spex-apply.json`, `<clone>/.spex-uploads/` | An interrupted in-app sync's marker; private upload staging. | Ignored |
 | `store/`, `cache/` | Spec package files by content digest, shared by every environment on the device, and rebuildable caches such as fetched Git sources. | Outside any clone |
 | `playbooks/<id>/` | A former home's library, kept until spec packages replace it. | Outside any clone |
