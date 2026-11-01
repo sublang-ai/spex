@@ -106,7 +106,7 @@ When a client sends `config.batch {ops, revision}` — one or more `captain.set`
 4. The result is one versioned write, refused `conflict` where the file changed since the read ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)).
 5. The reply is the config state the files stand at after the write, as a Settings save's is.
 
-- Another operation kind or an empty list is refused `invalid_request`; a batch names no repository and writes your own group's file alone.
+- A batch holding another operation kind or none is a malformed command and changes nothing; a batch names no repository and writes your own group's file alone.
 
 #### core-service-45
 
@@ -1240,7 +1240,7 @@ Where your own group's commented config holds a Captain and players on `claude` 
 | one operation giving an effort outside its adapter's vocabulary | `invalid_config`, a violation with its rule, its field and that operation's index [[core-service-44](#core-service-44)] |
 | one operation setting a player's subagent model Off and another giving a binding of that player a subagent effort, each valid alone [[core-service-16](#core-service-16)] | `invalid_config`, a violation with its rule, its field and both operations' indexes [[core-service-44](#core-service-44)] |
 | the file changed by another writer while the batch composes | `conflict` [[core-service-44](#core-service-44)] |
-| an operation of another kind, or no operation | `invalid_request` [[core-service-44](#core-service-44)] |
+| an operation of another kind, or no operation | refused as malformed [[core-service-44](#core-service-44)] |
 
 #### core-service-149
 
