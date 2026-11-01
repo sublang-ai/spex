@@ -148,9 +148,9 @@ jobs:
         if: runner.os == 'Windows'
         run: npm test -w packages/ui
 
-      - name: Windows native host refusal
+      - name: Windows native storage and unsupported-host refusal
         if: runner.os == 'Windows'
-        run: node --test packages/core/dist/platform.integration.test.js
+        run: node --test packages/core/dist/platform.integration.test.js packages/core/dist/windows-storage.integration.test.js
 
   # The browser journeys (DR-039): the served UI driven in Chromium
   # against a real core with substitute agents, on Linux and on macOS,

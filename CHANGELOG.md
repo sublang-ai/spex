@@ -9,12 +9,20 @@ CLI keeps its own changelog under `packages/cli`.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-App releases ship as source under `app-v*` tags; run them with `npm ci`
-and `npm start` (desktop) or `npm run start:server` (server).
+App releases use `app-v*` tags and include native desktop downloads and
+source; run source with `npm ci` and `npm start` (desktop) or
+`npm run start:server` (server).
 
 ## [Unreleased]
 
 ### Added
+
+- Fork verification build rebased onto upstream `82961686`, preserving
+  native Windows execution and tag-built macOS arm64 / Windows x64
+  installers together with the upstream package-install and Playbooks UI.
+  DR-180 names the Windows Git-source long-path decision independently
+  from upstream DR-173. See [the rebase record](docs/releases/0.9.0-beta.22-fork-rebase.md).
+
 
 - Independent package registries ([DR-168](specs/decisions/168-independent-package-registry.md)).
   Library offers a registry setting and separate registry sign-in; the
@@ -25,6 +33,12 @@ and `npm start` (desktop) or `npm run start:server` (server).
   A server seat needs its own registry sign-in for private packages.
   Existing manifests and lock sources remain preserved until explicitly
   changed.
+- App tags build a macOS Apple Silicon DMG and a Windows x64 per-user
+  installer on native runners. Both builds must succeed before the
+  release publishes both downloads and SHA-256 checksums; source
+  instructions remain available. Builds are unsigned and the macOS app
+  is not notarized ([DR-176](specs/decisions/176-native-desktop-tag-packages.md)).
+
 - Applets in the IDE ([DR-161](specs/decisions/161-an-applet-is-a-page-the-ide-serves.md)).
   A spec package's applet is a static web page entered at
   `applets/<id>/index.html`; a folder without that entry is refused.

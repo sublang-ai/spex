@@ -2634,8 +2634,8 @@ msgstr "Spex 无法识别本机：{reason}"
 
 #. Startup refusal shown in the shell's dialog on an unsupported host
 #: src/service.ts
-msgid "Spex desktop and server require macOS or Linux with private POSIX file permissions. On Windows, use the scaffold CLI or connect to a Spex server in your browser."
-msgstr "Spex 桌面端与服务端需要支持私有 POSIX 文件权限的 macOS 或 Linux。在 Windows 上，请使用 scaffold 命令行，或在浏览器中连接到 Spex 服务器。"
+msgid "Spex desktop and server require macOS, Linux, or Windows with verified private storage permissions."
+msgstr "Spex 桌面端和服务端需要 macOS、Linux 或 Windows，并且必须能够验证私有存储权限。"
 
 #. The browser page once a sign-in failed
 #: src/space-groups.ts

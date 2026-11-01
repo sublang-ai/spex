@@ -80,11 +80,24 @@ When a release tag is pushed, the release workflow shall confirm the CI workflow
 Where the repo hosts multiple release channels ([DR-002](../decisions/002-desktop-app-architecture.md)), release tags shall use disjoint namespaces per channel ([DR-056](../decisions/056-release-naming.md)):
 
 - tags matching `cli-vMAJOR.MINOR.PATCH` release only the `@sublang/spex` package from `packages/cli`;
-- tags matching `app-vMAJOR.MINOR.PATCH` release the app — the desktop and server shells — as source ([DR-040](../decisions/040-source-only-app-releases.md));
-- tags matching `app-vMAJOR.MINOR.PATCH-beta.N`, `N` counting from 1 within one version, release a beta of the app — the same source release, marked pre-release ([DR-087](../decisions/087-beta-app-releases.md)); a tag carrying any other pre-release identifier is refused;
+- tags matching `app-vMAJOR.MINOR.PATCH` release the app — source instructions for both shells and native desktop downloads [[release-39](#release-39)] ([DR-176](../decisions/176-native-desktop-tag-packages.md));
+- tags matching `app-vMAJOR.MINOR.PATCH-beta.N`, `N` counting from 1 within one version, release a beta of the app with the same downloads and source instructions, marked pre-release ([DR-087](../decisions/087-beta-app-releases.md)); a tag carrying any other pre-release identifier is refused;
 - historical `vMAJOR.MINOR.PATCH` CLI tags remain valid release-history evidence; published tags and their URLs are preserved when titles are normalized.
 
+#### release-39
+
+When an app tag passes the existing CI, version, changelog and build/test gates [[release-18](#release-18)] [[release-8](#release-8)], the app release workflow shall publish a macOS Apple Silicon DMG and a Windows x64 per-user NSIS installer ([DR-177](../decisions/177-native-desktop-installers.md)) only after both native packaging jobs succeed ([DR-176](../decisions/176-native-desktop-tag-packages.md)):
+
+- each job installs the tagged tree's locked dependencies, builds it on the target OS and uploads its exact versioned download, failing on a missing file;
+- packaging commands do not publish; only the final job has release-write permission;
+- the final job requires both downloads and writes their SHA-256 checksums before attaching all three files to the same release;
+- a failed or missing platform build prevents release publication.
+
 ### Package Hygiene
+
+#### release-41
+
+Before installing app-tag build dependencies, the release workflow shall require one checksum-locked public npm registry installation each of Cligent and Playbook, refusing local file, vendor, Git or other source dependencies for those runtimes in the app manifests and lockfile ([DR-176](../decisions/176-native-desktop-tag-packages.md)).
 
 #### release-12
 
@@ -134,11 +147,11 @@ When preparing a release tag, the developer/agent shall run the automated smoke 
 
 #### release-21
 
-When preparing a regular app release tag, the developer/agent shall complete the manual smoke checklist (`docs/release-smoke.md`) — the residue no automation sees: the native notification and the dock badge of a settled turn, the desktop releasing the home on `Ctrl+C` in `npm start` [[app-shell-39](app-shell.md#app-shell-39)], and the packaged app as a local option ([DR-040](../decisions/040-source-only-app-releases.md)) — with a failing step blocking the tag until resolved:
+When preparing a regular app release tag, the developer/agent shall complete the manual smoke checklist (`docs/release-smoke.md`) — the residue no automation sees: the native notification and the dock badge of a settled turn, the desktop releasing the home on `Ctrl+C` in `npm start` [[app-shell-39](app-shell.md#app-shell-39)], and the packaged app as a local option ([DR-176](../decisions/176-native-desktop-tag-packages.md)) — with a failing step blocking the tag until resolved:
 
 - a CLI release tag is not gated on it: the checklist's only CLI step is the tarball inspection that [[release-17](#release-17)] already requires and [[release-23](#release-23)] verifies;
 - a beta app release tag is not gated on it ([DR-087](../decisions/087-beta-app-releases.md));
-- the checklist's packaging pass is a local option, not a gate: an app release ships no binaries.
+- the checklist's local packaging pass is optional; both native packaging jobs remain publication gates [[release-39](#release-39)].
 
 #### release-22
 
@@ -252,6 +265,14 @@ When the dependency integration suite checks the installed app and isolated inst
 When a release candidate tarball is inspected via `npm pack --dry-run`, the inspection shall find no test files and no source files that are not required at runtime in the file list, asserting the runtime-files hygiene of the `files` field [[release-12](#release-12)] and the workflow's package validation [[release-13](#release-13)].
 
 ### Release Workflow
+
+#### release-40
+
+When the repository-system audit reads the app release workflow and desktop packaging commands, the test suite shall assert the tag-only trigger, unchanged CI-green prerequisite, native macOS and Windows jobs installing and building the tagged tree, versioned artifact names and missing-file failures, non-publishing package commands and the final release's dependency on both builds, required files, checksums and exclusive release-write permission [[release-39](#release-39)] [[release-19](#release-19)].
+
+#### release-42
+
+When the dependency audit runs over isolated lockfile and manifest fixtures, the test suite shall verify that app releases accept checksum-locked public registry runtimes and refuse local archives, Git sources, alternate hosts, absent checksums and local manifest overrides before installation [[release-41](#release-41)].
 
 #### release-28
 

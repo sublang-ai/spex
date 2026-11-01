@@ -54,7 +54,10 @@ export class GitSourceError extends Error {
 
 export const defaultRunGit: RunGit = (args, options = {}) =>
   new Promise<GitRun>((resolve, reject) => {
-    const child = spawn("git", args, {
+    // Git for Windows otherwise rejects pack/ref files below long cache roots.
+    // Keep this on the command, never in the user's or mirror's configuration.
+    const commandArgs = process.platform === "win32" ? ["-c", "core.longpaths=true", ...args] : args;
+    const child = spawn("git", commandArgs, {
       env: {
         ...process.env,
         GIT_TERMINAL_PROMPT: "0",
@@ -116,7 +119,9 @@ export function gitSource(cacheDir: string, options: GitSourceOptions = {}): Git
   async function exportTree(repo: string, mirror: string, commit: string): Promise<string> {
     const dir = join(trees, commit);
     if (existsSync(dir)) return dir;
-    const tar = await git(repo, ["-C", mirror, "archive", "--format=tar", commit]);
+    // A release is the committed bytes, independent of the device's checkout
+    // newline preference (notably Git for Windows' core.autocrlf default).
+    const tar = await git(repo, ["-c", "core.autocrlf=false", "-C", mirror, "archive", "--format=tar", commit]);
     const staging = join(trees, `.${commit}.${randomUUID()}`);
     mkdirSync(staging, { recursive: true });
     try {

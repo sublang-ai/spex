@@ -6,6 +6,7 @@
 ## Status
 
 Accepted (2026-09-05).
+Amended by [DR-178](178-native-windows-private-storage.md) for native Windows hosting and private-storage admission.
 Amends [DR-002](002-desktop-app-architecture.md) for supported host platforms.
 
 ## Context

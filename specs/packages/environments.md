@@ -260,6 +260,8 @@ When the core resolves or installs a Git source, it shall fetch the repository a
 
 - a `rev` naming a branch or tag resolves to its commit at resolution and the lock holds the commit alone;
 - a repository at the Git origin of no instance the home is signed in to, a signed-out instance's included, is fetched with this device's own Git, so a public one still installs and a private one reports Git's refusal.
+- On Windows, Git-source commands select Git's `core.longpaths=true` for that command only, so the mirror's pack and reference files remain usable below long cache roots without changing system, user or repository configuration ([DR-180](../decisions/180-windows-git-source-long-paths.md)).
+- A Git-source archive disables ambient automatic line-ending conversion for that command only, so a device's checkout preference does not rewrite the release bytes ([DR-180](../decisions/180-windows-git-source-long-paths.md)).
 
 ### Listing
 
@@ -470,6 +472,10 @@ When a real package-library integration uses an HTTP fixture with separate grant
 #### environments-43
 
 When an integration suite installs, into a scratch project holding a scaffolded `specs/`, a stand-in registry package providing a spec whose release cites a second package's spec and a third's by address, it shall assert: the spec placed at `specs/packages/<pkg>.md` with the second's citation as a relative link once the second is installed too, and the third's removed with the install reporting the third and one link waiting [[environments-41](#environments-41)]; a hand-edited copy left standing and reported edited across an update to a newer release, whose file stands under `.spex/` [[environments-41](#environments-41)]; a project file of the same basename blocking the placement, reported [[environments-41](#environments-41)]; a removal taking an unedited copy and keeping an edited one, reported [[environments-41](#environments-41)]; a root without `specs/` reporting `spex scaffold` and placing no spec [[environments-41](#environments-41)]; two selected packages of one `<pkg>`, the first by `<org>` placed and the second reported blocked [[environments-41](#environments-41)]; the placed file opening with the marker line naming the package and version [[environments-41](#environments-41)]; a second scratch clone holding the committed copy, `spex.yaml` and `spex.lock`, whose first install rewrites nothing and records the copy as the package's, and a copy committed at a newer release's version read as the package's, not edited, on a device whose record held the older hash [[environments-41](#environments-41)]; a citation of `meta.md` kept as it is in both directions [[environments-41](#environments-41)] [[environments-42](#environments-42)]; a release listing `provides: [skill]`, and one whose playbook is `from` its spec, placing no spec and no support skill [[environments-1](#environments-1)] [[environments-6](#environments-6)]; your own group's environment writing the generated skill instead [[environments-8](#environments-8)]; and a project's spec file built into a release with its same-file citation kept, an installed package's spec cited by address, a local spec's citation removed and a decision record's link reduced to its text, each reported, the project's file unchanged [[environments-42](#environments-42)].
+
+#### environments-44
+
+When the Windows integration suite fetches and reuses a real Git source below a cache root whose mirror pack paths exceed the legacy Windows path bound, it shall assert the expected commit and exported file bytes, with the source repository's configuration unchanged [[environments-13](#environments-13)].
 
 ## References
 

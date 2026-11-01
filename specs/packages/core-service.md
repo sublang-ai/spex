@@ -16,7 +16,9 @@ A **runtime** is one core on one home, named by the home's `device` [[storage-2]
 
 #### core-service-89
 
-When started on a native platform other than macOS or Linux, the core service shall refuse before creating or migrating config or storage, naming the supported hosts and Windows' scaffold CLI and browser alternatives ([DR-049](../decisions/049-supported-app-hosts.md)):
+When started on a native platform other than macOS, Linux or Windows, the core service shall refuse before creating or migrating config or storage, naming the supported hosts ([DR-178](../decisions/178-native-windows-private-storage.md)):
+
+- Windows storage admission verifies the private-storage policy before config or storage is created or migrated.
 
 - Supported hosts require a filesystem that enforces the shared store's private permissions [[1]].
 
@@ -1222,7 +1224,7 @@ Where the core service runs with the scripted fake adapter and a compile spawner
 
 #### core-service-90
 
-Where CI runs on Windows, the integration suite shall invoke core startup in a native Node process and assert the platform refusal leaves its absent config and data paths uncreated [[core-service-89](#core-service-89)].
+Where CI runs on Windows, the integration suite shall exercise real Windows private storage and assert unsafe existing permissions refuse without creating config or migrating data [[core-service-89](#core-service-89)].
 
 #### core-service-38
 

@@ -6,6 +6,7 @@
 // common ancestor, the validated application of a selection, the
 // managed Git rules, and a clone's first commit.
 
+import { makePrivateDirectory } from "@sublang/spex/files";
 import { execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
@@ -167,7 +168,7 @@ export function resolveStorageChoices(units: StorageMergeUnit[], choices: Record
  * live, foreign, or unverifiable one refuses with the lease path and the
  * reason. */
 export function reserveStorageHome(home: string, machineIdentity: string): () => void {
-  mkdirSync(home, { recursive: true, mode: 0o700 });
+  makePrivateDirectory(home);
   let lease;
   try { lease = acquireRootLease(home, { machineIdentity }); }
   catch (error) { throw new Error(`stop the Spex core before changing stored data; ${error instanceof Error ? error.message : String(error)}`); }

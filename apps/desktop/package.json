@@ -1,6 +1,6 @@
 {
   "name": "spex-desktop",
-  "version": "0.9.0-beta.19",
+  "version": "0.9.0-beta.22",
   "private": true,
   "description": "Spex — the desktop app for running playbooks",
   "author": {
@@ -20,18 +20,23 @@
     "test": "npm run i18n:check && node --test dist/*.test.js",
     "i18n:extract": "lingui extract --clean",
     "i18n:check": "node ../../scripts/i18n-check.mjs",
-    "package": "npm run build && npm run rebuild:electron && electron-builder --mac zip --arm64",
+    "package": "npm run package:mac",
     "rebuild:electron": "node scripts/rebuild-native.mjs electron",
-    "rebuild:node": "node scripts/rebuild-native.mjs node"
+    "rebuild:node": "node scripts/rebuild-native.mjs node",
+    "package:windows": "npm run build && npm run stage:windows-runtime && npm run rebuild:electron && electron-builder --win nsis --x64 --publish never",
+    "stage:windows-runtime": "node scripts/stage-windows-runtime.mjs",
+    "package:mac": "npm run build && npm run rebuild:electron && electron-builder --mac dmg --arm64 --publish never"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "*",
     "@lingui/core": "^6.7.0",
     "@openai/codex-sdk": "*",
     "@opencode-ai/sdk": "*",
-    "@sublang/playbook": "^18.1.0",
+    "@sublang/playbook": "file:../../vendor/playbook/sublang-playbook-18.1.0-windows.20261030.tgz",
     "@sublang/slc": "^0.20.0",
-    "@sublang/spex-core": "*"
+    "@sublang/spex": "*",
+    "@sublang/spex-core": "*",
+    "dugite": "3.3.2"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.2.0",
@@ -58,7 +63,7 @@
     "mac": {
       "target": [
         {
-          "target": "zip",
+          "target": "dmg",
           "arch": [
             "arm64"
           ]
@@ -66,10 +71,36 @@
       ],
       "icon": "build/icon.icns",
       "identity": null,
-      "category": "public.app-category.developer-tools"
+      "category": "public.app-category.developer-tools",
+      "artifactName": "Spex-${version}-mac-${arch}.${ext}"
     },
     "asarUnpack": [
       "node_modules/**/*"
-    ]
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon-512.png",
+      "extraFiles": [
+        {
+          "from": "build/windows-runtime",
+          "to": ".",
+          "filter": [
+            "*.dll"
+          ]
+        }
+      ],
+      "artifactName": "Spex-${version}-win-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false
+    }
   }
 }

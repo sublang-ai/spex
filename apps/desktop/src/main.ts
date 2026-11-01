@@ -107,6 +107,7 @@ if (!singleInstance) {
   // as a dialog naming the cause.
   void main().catch((error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
+    console.error("Spex could not start:", message);
     const i18n = reader();
     dialog.showErrorBox(i18n._("Spex could not start"), message);
     app.exit(1);
@@ -171,6 +172,16 @@ async function main(): Promise<void> {
   // any adapter readiness check (SHELL-12, DR-004).
   const captured = await captureLoginShellEnv();
   mergeEnv(process.env, captured);
+  if (process.platform === "win32") {
+    const { setupEnvironment } = await import("dugite");
+    const { env, gitLocation } = setupEnvironment({});
+    const { dirname, delimiter } = await import("node:path");
+    Object.assign(process.env, env);
+    const pathKey = Object.keys(process.env).find(key => key.toLowerCase() === "path") ?? "PATH";
+    // MinGit ships POSIX command helpers at the Git root, outside ucrt64.
+    const gitHelpers = join(dirname(dirname(gitLocation)), "usr", "bin");
+    process.env[pathKey] = `${dirname(process.execPath)}${delimiter}${dirname(gitLocation)}${delimiter}${gitHelpers}${delimiter}${process.env[pathKey] ?? ""}`;
+  }
 
   // The shared state root (DR-036, SHELL-15): plain files under
   // ${SPEX_HOME:-~/.spex}; userData keeps only the renderer profile.

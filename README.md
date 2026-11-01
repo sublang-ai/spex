@@ -93,10 +93,15 @@ implement an intent under review, or compile your own workflow from prose
 in the IDE with the [`slc`](https://github.com/sublang-ai/slc) it ships.
 
 **3. Work in the Spex IDE**, where specs, playbook runs and compilation, and
-the intent Dashboard live together. Desktop and server hosts require macOS
-or Linux and a filesystem that enforces private POSIX permissions. Windows
-supports the scaffold CLI and browser access to a Spex server.
-Run the app from source:
+the intent Dashboard live together. Desktop downloads are available on
+[GitHub Releases](https://github.com/sublang-ai/spex/releases): a macOS
+M-series DMG (open it and drag Spex.app to Applications) and a Windows
+x86-64 per-user installer for 64-bit Intel/AMD PCs (no WSL required).
+Each release includes SHA-256 checksums. These builds are unsigned and the macOS app is not notarized;
+the operating system may require approval before opening.
+Desktop and server hosts require a filesystem with private POSIX
+permissions or supported private Windows ACLs.
+To run from source:
 
 ```sh
 git clone https://github.com/sublang-ai/spex.git
@@ -110,7 +115,7 @@ Electron binary, so the first run needs the network. `npm start` builds
 the workspaces, rebuilds the `better-sqlite3` native module for Electron
 from source, and launches the desktop app; the rebuild needs a C/C++
 toolchain — the Xcode Command Line Tools on macOS, Python 3, `make` and
-`g++` on Linux.
+`g++` on Linux. Native Windows uses bundled Node SQLite and skips that ABI rebuild.
 Real playbook runs need a ready coding-agent adapter: Claude Code signed
 in (run `claude` once in a terminal, or set `ANTHROPIC_API_KEY`) or Codex
 signed in (`codex`, or `OPENAI_API_KEY`); the SDKs in this checkout do
@@ -193,8 +198,10 @@ never through a remote URL, and this computer's sign-in stays in
 [DR-103](specs/decisions/103-the-home-and-its-groups.md)).
 
 App releases on [GitHub Releases](https://github.com/sublang-ai/spex/releases)
-(`app-v*` tags) ship as source with a changelog: check out the tag and run
-the commands above. The clone commands above follow current `main`;
+(`app-v*` tags) build both native desktop downloads from the tagged source;
+a failed platform build prevents publication. Source remains available:
+check out the tag and run the commands above.
+The clone commands above follow current `main`;
 release tags keep their tagged behavior. In particular,
 `app-v0.9.0-beta.16` predates the current Space address default, so check
 the Space's address before signing in. Existing homes keep their saved
