@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   adds nothing to `spex.yaml`. A first export writes `meta.yaml` with
   `provides` listing the kinds given; run again, it keeps `meta.yaml`
   and refreshes the spec from `specs/` and each skill from the agent
-  folders. The spec's citations are rewritten for the release: another
+  folders. The spec's citations are rewritten for the package: another
   package's spec by its address, a spec of no package dropped and a
   decision record's link reduced to its text, each with a warning.
 - `meta.yaml` takes `provides`, the kinds a package offers a project —
@@ -40,8 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `spex list` says beneath each package where its spec stands in
   `specs/` — placed, edited and left as yours, kept out by a file of
   yours, or waiting for `spex scaffold` — and each package its links
-  wait for, with `spex add <org>/<pkg>`; `spex add` and `spex install`
-  say the same of what they placed.
+  wait for, with `spex add <org>/<pkg>`; `spex add`, `spex install` and
+  `spex update` say the same of what they placed.
 
 ### Changed
 

@@ -8,15 +8,12 @@ system should work and how to check it. A playbook coordinates AI work
 and review through a workflow written in plain language.
 
 A **spec package** shares a spec and related skills or playbooks as a
-versioned package. The `provides` list in its `meta.yaml` decides what
-it offers a project; a playbook's source spec, or a skill the playbook
-requires, is installed with it but placed nowhere. Packages come from a
-registry, and [Spex Space](https://spex.sublang.ai) is the public one:
-find and publish packages there, and add them from a project's
-**Packages** tab or the `spex` command line. Public packages need no
-account to browse or install. Publishing and private packages need a
-registry sign-in, separate from any Space sign-in. Syncing a project's
-records is optional.
+versioned package. Packages come from a registry, and
+[Spex Space](https://spex.sublang.ai) is the public one: find and publish
+packages there, and add them from a project's **Packages** tab or the
+`spex` command line. Public packages need no account to browse or
+install. Publishing and private packages need a registry sign-in,
+separate from any Space sign-in. Syncing a project's records is optional.
 
 ## Open the IDE and a project
 
@@ -192,7 +189,7 @@ for your agent; it adds nothing to `spex.yaml`. After you edit the skill,
 run `spex export my-org/my-skill` again to refresh the copy. For a spec,
 pass `--spec specs/packages/<name>.md` and name the package
 `<org>/<name>`: a citation of another package's spec becomes its
-address, and one the release cannot carry is dropped with a warning.
+address, and one the package cannot carry is dropped with a warning.
 `--description` and `--license` override what it reads. To write a
 folder by hand, follow the
 [package format](../specs/packages/environments.md#environments-1).

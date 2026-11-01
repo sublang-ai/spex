@@ -59,14 +59,17 @@ describe("provides", () => {
     assert.deepEqual(issues, [{ path: "meta.yaml", rule: "provides", message: "provides is an empty list — list the kinds the package provides, or leave it out" }]);
   });
 
-  it("refuses a non-list, an unknown kind and a duplicate, naming the rule", () => {
+  it("reads a kind listed twice once: still a nonempty list of the five kinds", () => {
+    assert.deepEqual(parsed(manifestOf(PLAYBOOK_AND_SKILL, { provides: ["skill", "playbook", "skill"] })).provides, ["skill", "playbook"]);
+  });
+
+  it("refuses a non-list and an unknown kind, naming the rule", () => {
     const cases: { label: string; provides: unknown; message: RegExp }[] = [
       { label: "a kind alone", provides: "spec", message: /provides is not a list of artifact kinds/ },
       { label: "a mapping", provides: { spec: true }, message: /provides is not a list of artifact kinds/ },
       { label: "an empty value", provides: null, message: /provides is not a list of artifact kinds/ },
       { label: "an unknown kind", provides: ["spec", "widget"], message: /provides kind "widget" is not one of source, spec, skill, playbook, applet/ },
       { label: "a kind that is no string", provides: [3], message: /provides kind 3 is not one of/ },
-      { label: "a duplicate", provides: ["skill", "skill"], message: /provides lists skill twice/ },
     ];
     for (const { label, provides, message } of cases) {
       const { manifest, issues } = parseManifest(manifestOf(PLAYBOOK_AND_SKILL, { provides }));

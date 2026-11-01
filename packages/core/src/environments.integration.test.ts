@@ -296,7 +296,8 @@ test("environments-23: a fresh home with no registry reachable seeds the built-i
   }
   // The built-ins' skills are exported where claude reads them.
   assert.ok(existsSync(join(dir, "project", ".claude", "skills", "code", "SKILL.md")));
-  assert.ok(existsSync(join(dir, "user", ".claude", "skills", "review", "SKILL.md")));
+  assert.ok(existsSync(join(dir, "project", ".claude", "skills", "review", "SKILL.md")), "[environments-1] a playbook a playbook requires is a peer, its skill placed");
+  assert.ok(existsSync(join(dir, "user", ".claude", "skills", "review", "SKILL.md")), "[environments-1] a playbook a playbook requires is a peer, its skill placed");
 
   // A newer built-in release seeds beside the older; neither lock moves.
   const locks = [ownClone, projectRoot].map((root) => readFileSync(join(root, "spex.lock"), "utf8"));
@@ -752,7 +753,7 @@ test("environments-24: a playbook authored in a project compiles, is requested b
 /** The command line this checkout builds, which scaffolds a `specs/`. */
 const SPEX_CLI = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "cli", "dist", "cli.js");
 
-test("environments-22 through a real core: a spec-only spec package requested from the registry places its spec in a project's specs/ and in no agent folder, your own group's as a skill in the user home, and leaves once removed", { timeout: 180_000 }, async (t) => {
+test("environments-22 through a real core: a spec-only spec package requested from the registry places its spec in the project's specs/ and into no agent folder, your own group's as a generated skill in the user home, and leaves once removed", { timeout: 180_000 }, async (t) => {
   const registry = await startStandinRegistry({ dir: scratchDir("spex-env-spec-registry-") });
   t.after(() => registry.close());
   const spec = "# trip-split: Trip Split\n\n## Intent\n\nSplit a trip's costs.\n\n## External Behavior\n\n### trip-split-1\n\nThe splitter shall divide each cost among the travellers who shared it.\n\n## Verification\n\n### trip-split-2\n\nWhen a cost is shared, the suite shall assert its division [[trip-split-1](#trip-split-1)].\n";
@@ -767,9 +768,10 @@ test("environments-22 through a real core: a spec-only spec package requested fr
   const core = await startCore(dir, { hostUrl: registry.url });
   t.after(() => core.stop());
   const { client } = core;
+  // A project whose working folder holds specs/, as one scaffolded.
   const working = gitFolder(join(dir, "project"));
-  // The working folder holds `specs/`, where a project's provided spec
-  // is placed (environments-41).
+  // The working folder holds `specs/`, as one scaffolded, where a
+  // project's provided spec is placed (environments-41).
   execFileSync(process.execPath, [SPEX_CLI, "scaffold", working], { stdio: "ignore" });
   assert.ok(existsSync(join(working, "specs", "meta.md")), "the working folder holds a scaffolded specs/");
   const { id: key } = await client.expectOk("project.register", { path: working });
@@ -783,19 +785,22 @@ test("environments-22 through a real core: a spec-only spec package requested fr
   const request = { kind: "registry", version: "^1.0.0" } as const;
   const holds = (state: EnvironmentState): boolean => state.packages.some((pkg) => pkg.name === "acme/trip-split" && pkg.installed);
 
-  // Requested in the project: the spec stands in its specs/, opening
-  // with the marker line, the release's file after it — its one
-  // citation a same-file one, which stays — and in no agent folder.
+  // Requested in the project: the spec placed in its specs/ under the
+  // marker line, the release's file after it — its one citation a
+  // same-file one, which stays — and into no agent folder.
   let mark = client.mark();
   await client.expectOk("environment.request", { repository: key, name: "acme/trip-split", request });
   const requested = await client.environment(key, mark, (state) => state.busy === null && holds(state));
+  // The lock still names the spec's skill name (environments-6); the
+  // core's state of the placement under specs/ follows in its change.
   assert.deepEqual(requested.packages.find((pkg) => pkg.name === "acme/trip-split")?.exports, [{ name: "acme-trip-split", artifact: "trip-split" }]);
   assert.equal(readFileSync(placed, "utf8"), `<!-- Placed by Spex from acme/trip-split 1.0.0; an edit makes this file yours. -->\n\n${spec}`,
-    "the placed spec is the marker line, a blank line, then the release's file");
-  for (const folder of [exported, shared]) assert.equal(existsSync(folder), false, `no skill for the spec at ${folder}`);
-  assert.doesNotMatch(exclude(), /acme-trip-split/);
+    "[environments-41] the marker line, a blank line, then the release's spec");
+  assert.equal((JSON.parse(readFileSync(join(working, ".spex", "placed.json"), "utf8")) as { specs: Record<string, { version: string }> }).specs["acme/trip-split"]?.version, "1.0.0", "[environments-41] recorded with the release's version");
+  for (const folder of [exported, shared]) assert.equal(existsSync(folder), false, `[environments-8] into no agent folder: ${folder}`);
+  assert.doesNotMatch(exclude(), /acme-trip-split|specs/, "[environments-41] nothing of it in Git's exclude");
   assert.equal(execFileSync("git", ["-C", working, "status", "--porcelain", "--untracked-files=all", "--", "specs/packages/trip-split.md"], { encoding: "utf8" }),
-    "?? specs/packages/trip-split.md\n", "the placed spec is the reader's to commit, not ignored");
+    "?? specs/packages/trip-split.md\n", "[environments-41] the placed spec left for the reader to commit, not ignored");
   assert.equal(existsSync(atHome), false, "a project's spec stays in its working folder");
 
   // Requested in your own group's environment: your agents' home folder holds it.
@@ -824,8 +829,10 @@ test("environments-22 through a real core: a spec-only spec package requested fr
   mark = client.mark();
   await client.expectOk("environment.remove", { repository: key, name: "acme/trip-split" });
   await client.environment(key, mark, (state) => state.busy === null && !holds(state));
-  assert.equal(existsSync(placed), false, "the removed spec package's placed spec is gone");
+  assert.equal(existsSync(placed), false, "[environments-41] the unedited placed spec is gone");
   assert.ok(existsSync(join(working, "specs", "meta.md")), "and the project's own specs stand");
+  assert.equal(existsSync(exported), false);
+  assert.equal(existsSync(shared), false);
   mark = client.mark();
   await client.expectOk("environment.remove", { repository: own, name: "acme/trip-split" });
   await client.environment(own, mark, (state) => state.busy === null && !holds(state));
@@ -2215,8 +2222,10 @@ test("environments-21 through a real core: an install whose lock or requests cha
     const root = join(dir, "project");
     await settledProject(client, key);
     const installedVersion = (): string => (parseYaml(readFileSync(join(root, ".spex", "packages", "acme", "kit", "meta.yaml"), "utf8")) as { version: string }).version;
+    // An install's download, not the manifest a resolution reads for
+    // what the release provides (environments-6).
     const download = (version: string) => (path: string): boolean =>
-      path === `/api/v1/packages/acme/kit/${version}/download` || path.startsWith(`/acme/kit/${version}/`);
+      path === `/api/v1/packages/acme/kit/${version}/download` || (path.startsWith(`/acme/kit/${version}/`) && path !== `/acme/kit/${version}/meta.yaml`);
     const kitOf = (state: EnvironmentState) => state.packages.find((pkg) => pkg.name === "acme/kit");
 
     let mark = client.mark();

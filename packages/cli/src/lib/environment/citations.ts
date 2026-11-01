@@ -14,10 +14,13 @@
 // warning naming the citing item. Placing a release's spec in a tree
 // turns each address whose package's spec stands there into the
 // relative link to it and removes the rest, counted per package they
-// wait for, a plain link to one keeping its text, so `specs/` holds no
-// address; a relative link, `meta.md`'s among them, stays. A removal
-// takes the citation's brackets and one space directly before them, the
-// phrase kept; the text outside each edit is left byte for byte.
+// wait for, a plain link to one keeping its text, and removes alike a
+// `spex:` link that is no address, so `specs/` holds no `spex:` link; a
+// relative link, `meta.md`'s among them, stays. A removal takes the
+// citation's brackets and one space beside them — the one before, or,
+// where a citation follows directly or the citation opens its line, the
+// one after where one stands — so the phrase keeps its own spacing; the
+// text outside each edit is left byte for byte.
 
 import { posix } from "node:path";
 import type { Heading, Link, Node } from "mdast";
@@ -159,8 +162,10 @@ export function rewriteForRelease(
  * becomes the relative link to that file's anchor, and one whose
  * package's does not is removed, counted under that package in
  * `waiting`. So `specs/` holds no address, a plain link to one is
- * treated alike, keeping its text where it waits. A same-file citation,
- * a relative one — `meta.md`'s among them — and every other link stay.
+ * treated alike, keeping its text where it waits, and a `spex:` link
+ * that is no address, which resolves nowhere, is removed alike, counted
+ * under no package. A same-file citation, a relative one — `meta.md`'s
+ * among them — and every other link stay.
  */
 export function rewriteForTree(
   text: string,
@@ -171,8 +176,12 @@ export function rewriteForTree(
   const edits: TextEdit[] = [];
   const waiting: Record<string, number> = {};
   for (const site of linkSites(text)) {
+    if (!site.url.startsWith(ADDRESS_SCHEME)) continue;
     const address = parseAddress(site.url);
-    if (address === null) continue;
+    if (address === null) {
+      edits.push(site.enclosed ? removal(text, site) : labelOnly(text, site));
+      continue;
+    }
     const placed = ctx.placedPathOf(address.name);
     if (placed === null) {
       edits.push(site.enclosed ? removal(text, site) : labelOnly(text, site));
@@ -279,11 +288,20 @@ function labelOnly(text: string, site: LinkSite): TextEdit {
   return { start: site.start, end: site.end, replacement: text.slice(site.start + 1, site.labelEnd) };
 }
 
-/** Remove an enclosed citation's `[[…](…)]` with one space directly before it. */
+/**
+ * Remove an enclosed citation's `[[…](…)]` with one space beside it, so
+ * the phrase keeps its own spacing: the space before it, unless another
+ * citation follows directly, which keeps that space; else, where the
+ * citation opens its line, the space after it.
+ */
 function removal(text: string, site: LinkSite): TextEdit {
   const open = site.start - 1;
-  const start = text.charAt(open - 1) === " " ? open - 1 : open;
-  return { start, end: site.end + 1, replacement: "" };
+  const close = site.end + 1;
+  const before = text.charAt(open - 1);
+  const after = text.charAt(close);
+  if (before === " " && after !== "[") return { start: open - 1, end: close, replacement: "" };
+  const opensLine = open === 0 || before === "\n";
+  return { start: open, end: opensLine && after === " " ? close + 1 : close, replacement: "" };
 }
 
 /**

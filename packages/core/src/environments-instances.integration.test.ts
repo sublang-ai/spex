@@ -286,6 +286,8 @@ test("environments-34, environments-5, environments-12, environments-3, environm
   assert.deepEqual(receivedFor(R2, two, "team/kit"), [
     ["/api/v1/packages/team/kit", second.url, LOGIN, true],
     ["/api/v1/packages/team/kit/1.0.0", second.url, LOGIN, true],
+    // The release's manifest, for what it provides (environments-6).
+    ["/team/kit/1.0.0/meta.yaml", second.url, LOGIN, true],
     ["/api/v1/packages/team/kit/1.0.0", second.url, LOGIN, true],
     ["/api/v1/packages/team/kit/1.0.0/download", second.url, LOGIN, true],
   ]);
@@ -323,6 +325,7 @@ test("environments-34, environments-5, environments-12, environments-3, environm
   assert.deepEqual(receivedFor(R2, two, "team/kit").map(([path, instance]) => [path, instance]), [
     ["/api/v1/packages/team/kit", second.url],
     ["/api/v1/packages/team/kit/1.0.0", second.url],
+    ["/team/kit/1.0.0/meta.yaml", second.url],
   ]);
   assert.deepEqual(receivedFor(R1, one, "team/kit"), []);
 

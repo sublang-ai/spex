@@ -143,7 +143,7 @@ test("citations: a file two packages claim is a spec of no package, its warning 
   ]);
 });
 
-test("citations: a removal takes its brackets and one space before them, wherever the citation stands", () => {
+test("citations: a removal takes its brackets and one space beside them, the phrase keeping its own spacing wherever the citation stands", () => {
   const source = [
     "### tools-1",
     "",
@@ -168,13 +168,13 @@ test("citations: a removal takes its brackets and one space before them, whereve
   assert.equal(text, [
     "### tools-1",
     "",
-    " opens the line.",
+    "opens the line.",
     "",
     "One phrase.",
     "",
     "A mixed phrase [[other-1](spex:acme/other#other-1)].",
     "",
-    "Run together[[other-2](spex:acme/other#other-2)].",
+    "Run together [[other-2](spex:acme/other#other-2)].",
     "",
     "| Case | Outcome |",
     "| --- | --- |",
@@ -213,7 +213,9 @@ test("citations: a placed spec links each placed package's spec relatively and d
     "",
     "- [[deep-1](spex:acme/deep#deep-1)] and [[gone-1](spex:acme/gone#gone-1)] [[self-1](spex:acme/tools#tools-1)]",
     "",
-    "Left as written: [[local-1](local.md#local-1)], [[bad](spex:acme#x)] and [site](https://example.com).",
+    "Left as written: [[local-1](local.md#local-1)] and [site](https://example.com).",
+    "",
+    "A malformed [[bad](spex:acme#x)] and [plain bad](spex:Bad_Org/kit) go.",
     "",
     "A plain [link](spex:acme/other#other-1) and [one waiting](spex:acme/absent#absent-3).",
     "",
@@ -232,12 +234,14 @@ test("citations: a placed spec links each placed package's spec relatively and d
     "",
     "- [[deep-1](lib/deep.md#deep-1)] and [[self-1](#tools-1)]",
     "",
-    "Left as written: [[local-1](local.md#local-1)], [[bad](spex:acme#x)] and [site](https://example.com).",
+    "Left as written: [[local-1](local.md#local-1)] and [site](https://example.com).",
+    "",
+    "A malformed and plain bad go.",
     "",
     "A plain [link](other.md#other-1) and one waiting.",
     "",
   ].join("\n"));
-  assert.deepEqual(waiting, { "acme/absent": 3, "acme/gone": 1 }, "specs/ holds no address, a plain link's included");
+  assert.deepEqual(waiting, { "acme/absent": 3, "acme/gone": 1 }, "specs/ holds no address, a plain link's included, and no spex: link that is none, counted under no package");
 });
 
 test("citations: a release placed back with every package placed gives the project's own links again", () => {

@@ -37,9 +37,7 @@ import { basename, dirname, join, posix, relative, resolve, sep } from "node:pat
 import { parseDocument } from "yaml";
 
 import {
-  installedDir,
   packageNameRefusal,
-  packageRoot,
   parseManifestText,
   providedArtifacts,
   readPlacedRecord,
@@ -47,7 +45,6 @@ import {
   serializeManifest,
   type ArtifactKind,
   type CitationWarning,
-  type Lock,
   type Manifest,
 } from "../lib/environment/index.js";
 import { Environment, isDirectory } from "./environment.js";
@@ -359,13 +356,11 @@ function developedNames(root: string): string[] {
  * placed that very file, by the placed specs' record; else, by the
  * file's basename `<pkg>.md`, the one package under development at
  * `spex-packages/<org>/<pkg>/` providing its spec, or, where two or more
- * do, their claims, which leave the file no package's; else a package
- * the environment's lock installs providing and selecting it — read
- * from its manifest where its files stand, else from the files the lock
- * selects — first in name order. A file outside `specs/` is no
- * package's.
+ * do, their claims, which leave the file no package's. Any other file —
+ * the project's own, though an installed package's spec shares its
+ * basename, or one outside `specs/` — is no package's.
  */
-function specOwners(root: string, lock: Lock | null): (specsPath: string) => string | { claims: string[] } | null {
+function specOwners(root: string): (specsPath: string) => string | { claims: string[] } | null {
   const placed = new Map<string, string>();
   for (const [name, spec] of Object.entries(readPlacedRecord(root)?.specs ?? {})) placed.set(posix.normalize(spec.path), name);
   // Each basename with the packages claiming it, in name order.
@@ -375,15 +370,6 @@ function specOwners(root: string, lock: Lock | null): (specsPath: string) => str
     if (manifest === null || `${manifest.org}/${manifest.name}` !== name || !providesSpec(manifest)) continue;
     const file = `${manifest.name}.md`;
     byFile.set(file, [...(byFile.get(file) ?? []), name]);
-  }
-  for (const [name, resolution] of Object.entries(lock?.packages ?? {}).sort(([a], [b]) => a.localeCompare(b))) {
-    const pkg = name.split("/")[1]!;
-    if (byFile.has(`${pkg}.md`) || resolution.artifacts[pkg] === undefined) continue;
-    const manifest = manifestIn(packageRoot(name, resolution, installedDir(root), root));
-    const provided = manifest !== null
-      ? manifest.name === pkg && providesSpec(manifest)
-      : resolution.files.some((file) => /^specs\/[^/]+\/[^/]+$/.test(file.path) && file.path.endsWith(`/${pkg}.md`));
-    if (provided) byFile.set(`${pkg}.md`, [name]);
   }
   return (specsPath) => {
     const path = posix.normalize(specsPath);
@@ -399,10 +385,10 @@ function specOwners(root: string, lock: Lock | null): (specsPath: string) => str
 /** A warning of the rewrite as a reader reads it (cli-23): the citing
  * item and what it cited, with the packages claiming it alike. */
 function warningLine(warning: CitationWarning): string {
-  if (warning.kind === "record") return `Warning: ${warning.item} links ${warning.target} — the release keeps its text, not the link`;
+  if (warning.kind === "record") return `Warning: ${warning.item} links ${warning.target} — the package keeps its text, not the link`;
   const target = posix.normalize(`specs/${warning.target}`);
-  if (warning.claims !== undefined) return `Warning: ${warning.item} cites ${target}, which ${claimants(warning.claims)} claim — left out of the release, its phrase kept`;
-  return `Warning: ${warning.item} cites ${target}, a spec of no package — left out of the release, its phrase kept`;
+  if (warning.claims !== undefined) return `Warning: ${warning.item} cites ${target}, which ${claimants(warning.claims)} claim — left out of the package, its phrase kept`;
+  return `Warning: ${warning.item} cites ${target}, a spec of no package — left out of the package, its phrase kept`;
 }
 
 /** "a and b both", or "a, b and c all". */
@@ -467,11 +453,10 @@ export const exportPackage: Command = async (args) => {
   const { org, name } = options;
   const pkg = `${org}/${name}`;
 
-  // The environment's root, and the packages its lock installs, for the
-  // spec's citations; nothing is requested of it.
+  // The environment's root, whose placed specs the spec's citations may
+  // name; nothing is requested of it.
   const env = new Environment(cwd);
   const root = env.root;
-  const lock = env.readLock()?.lock ?? null;
 
   // The org is a folder, as npm's scopes are, so two orgs' packages of
   // one name stand apart (environments-10, DR-165).
@@ -519,7 +504,7 @@ export const exportPackage: Command = async (args) => {
   let specFile: string | null = null;
   if (options.spec !== undefined) {
     specFile = resolve(cwd, options.spec);
-    if (!isFile(specFile)) refuse(`--spec ${options.spec} is not a file`);
+    if (!isFile(specFile)) refuse(`--spec ${options.spec} is not a file — give your spec file, ${name}.md under specs/`);
     if (basename(specFile) !== `${name}.md`) refuse(`the spec file must be named ${name}.md, as its items are ${name}-<N> — rename it or the package`);
   }
 
@@ -577,7 +562,7 @@ export const exportPackage: Command = async (args) => {
   let releaseSpec: string | null = null;
   if (specFile !== null && specText !== null) {
     const selfPath = relative(join(root, "specs"), specFile).split(sep).join("/");
-    const rewritten = rewriteForRelease(specText, { selfPath, packageOf: specOwners(root, lock) });
+    const rewritten = rewriteForRelease(specText, { selfPath, packageOf: specOwners(root) });
     releaseSpec = rewritten.text;
     warnings = rewritten.warnings;
   }

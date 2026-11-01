@@ -368,15 +368,20 @@ export function skillPlaces(root: string, lock: Lock, name: string, state: Packa
   const dir = packageRoot(name, resolution, installedDir(root), root);
   let manifest: Manifest | null = null;
   try { manifest = dir === null ? null : pathManifest(dir, "."); } catch { manifest = null; }
-  // A skill for the agents of what the release provides alone, a
-  // provided spec never one: the root is a project's, whose
-  // `specs/packages/` it stands in, or nowhere while the root holds no
-  // `specs/` (environments-6, environments-8, environments-41); a
-  // release not here is read as its lock names it.
+  // A skill for the agents of what the release provides alone, and
+  // never a provided spec's: the command line's root is a project's,
+  // where a spec stands in `specs/packages/` or nowhere (environments-6,
+  // environments-8); a release not here is read as its lock names it,
+  // its spec by the file the lock selects, or a folder's by its id
+  // `<pkg>` (environments-1).
   const provided = manifest === null ? null : providedArtifacts(manifest);
+  const pkg = name.slice(name.indexOf("/") + 1);
+  const lockedSpec = (id: string): boolean => (isPathSource(resolution.source)
+    ? id === pkg
+    : resolution.files.some((file) => file.path.startsWith("specs/") && file.path.endsWith(`/${id}.md`)));
   const skills = Object.keys(resolution.exports).sort().filter((skill) => {
     const id = resolution.exports[skill]!;
-    if (manifest === null || provided === null) return true;
+    if (manifest === null || provided === null) return !lockedSpec(id);
     return provided.has(id) && manifest.artifacts[id]?.kind !== "spec";
   });
   const folders = projectFolders().map((entry) => ({ ...entry, skills: new Set(exportedIn(root, entry.folder)) }));

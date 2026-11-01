@@ -274,7 +274,7 @@ export function parseManifest(raw: unknown): { manifest: Manifest | null; issues
     }
   }
   // The kinds the project is offered (environments-1, DR-174): a
-  // nonempty list of the five kinds, each once.
+  // nonempty list of the five kinds, a kind listed twice read once.
   let provides: ArtifactKind[] | undefined;
   if (raw.provides !== undefined) {
     if (!Array.isArray(raw.provides)) {
@@ -286,9 +286,7 @@ export function parseManifest(raw: unknown): { manifest: Manifest | null; issues
       for (const kind of raw.provides as unknown[]) {
         if (typeof kind !== "string" || !(ARTIFACT_KINDS as readonly string[]).includes(kind)) {
           issues.push({ path: at, rule: "provides", message: `provides kind ${JSON.stringify(kind ?? null)} is not one of ${ARTIFACT_KINDS.join(", ")}` });
-        } else if (provides.includes(kind as ArtifactKind)) {
-          issues.push({ path: at, rule: "provides", message: `provides lists ${kind} twice` });
-        } else {
+        } else if (!provides.includes(kind as ArtifactKind)) {
           provides.push(kind as ArtifactKind);
         }
       }
