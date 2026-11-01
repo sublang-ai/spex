@@ -7,12 +7,15 @@
 // project's `specs/` holds plain relative links. Building a release's
 // spec from a project's file turns a relative citation into that file
 // into a same-file citation and one into a package's spec into that
-// package's address, removes one into a spec of no package and reduces
-// a decision record's link to its text, each reported as a warning
-// naming the citing item. Placing a release's spec in a tree turns each
-// address whose package's spec stands there into the relative link to
-// it and removes the rest, counted per package they wait for, a plain
-// link to one keeping its text, so `specs/` holds no address. A removal
+// package's address, keeps one of `meta.md` at the specs root, which
+// the scaffold puts in every tree, removes one into a spec of no
+// package or into a file two packages claim, and reduces a decision
+// record's link to its text, each removal and reduction reported as a
+// warning naming the citing item. Placing a release's spec in a tree
+// turns each address whose package's spec stands there into the
+// relative link to it and removes the rest, counted per package they
+// wait for, a plain link to one keeping its text, so `specs/` holds no
+// address; a relative link, `meta.md`'s among them, stays. A removal
 // takes the citation's brackets and one space directly before them, the
 // phrase kept; the text outside each edit is left byte for byte.
 
@@ -35,21 +38,28 @@ export type Address = { name: string; anchor: string };
 
 /**
  * What building a release's spec could not carry: a citation of a spec
- * of no package, removed, or a decision record's link, reduced to its
- * text — with the item citing it, or "intent" before any item.
+ * of no package, or of a file two packages claim, removed, or a decision
+ * record's link, reduced to its text — with the item citing it, or
+ * "intent" before any item.
  */
 export type CitationWarning = {
   kind: "citation" | "record";
   item: string;
   /** The cited file's specs-relative path and anchor, or the record's id. */
   target: string;
+  /** For a citation of a file two or more packages claim, those packages, in name order. */
+  claims?: string[];
 };
 
 export type ReleaseContext = {
   /** The specs-relative path of the file being built, e.g. "packages/tools.md". */
   selfPath: string;
-  /** The package `<org>/<pkg>` whose provided spec that specs-relative file is, or null. */
-  packageOf: (specsRelativePath: string) => string | null;
+  /**
+   * The package `<org>/<pkg>` whose provided spec that specs-relative
+   * file is; the packages claiming it alike, where two or more do; or
+   * null.
+   */
+  packageOf: (specsRelativePath: string) => string | { claims: string[] } | null;
 };
 
 export type TreeContext = {
@@ -60,6 +70,9 @@ export type TreeContext = {
 };
 
 const ADDRESS_SCHEME = "spex:";
+// The spec of specs at the specs root, which the scaffold puts in every
+// tree (meta-1).
+const META_PATH = "meta.md";
 const SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
 // Item headings: lowercase <pack>-<N> (meta-11).
 const ITEM_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*-[1-9][0-9]*$/;
@@ -96,8 +109,10 @@ export function isCitationUrl(url: string): boolean {
  * Rewrite a project's spec file for a release (environments-42): a
  * relative citation into `selfPath` becomes a same-file citation, one
  * into a package's spec that package's address, and one into a spec of
- * no package is removed; a decision record's link keeps its text alone.
- * A same-file citation, an address and every other link stay.
+ * no package or into a file two packages claim is removed; a decision
+ * record's link keeps its text alone. A citation of `meta.md` at the
+ * specs root, a same-file citation, an address and every other link
+ * stay.
  */
 export function rewriteForRelease(
   text: string,
@@ -121,13 +136,19 @@ export function rewriteForRelease(
       edits.push(destinationEdit(text, site, `#${target.anchor}`));
       continue;
     }
-    const name = ctx.packageOf(resolved);
-    if (name !== null) {
-      edits.push(destinationEdit(text, site, formatAddress(name, target.anchor)));
+    if (resolved === META_PATH) continue;
+    const owner = ctx.packageOf(resolved);
+    if (typeof owner === "string") {
+      edits.push(destinationEdit(text, site, formatAddress(owner, target.anchor)));
       continue;
     }
     edits.push(removal(text, site));
-    warnings.push({ kind: "citation", item: site.item, target: `${resolved}#${target.anchor}` });
+    warnings.push({
+      kind: "citation",
+      item: site.item,
+      target: `${resolved}#${target.anchor}`,
+      ...(owner !== null ? { claims: owner.claims } : {}),
+    });
   }
   return { text: applyEdits(text, edits), warnings };
 }
@@ -138,8 +159,8 @@ export function rewriteForRelease(
  * becomes the relative link to that file's anchor, and one whose
  * package's does not is removed, counted under that package in
  * `waiting`. So `specs/` holds no address, a plain link to one is
- * treated alike, keeping its text where it waits. A same-file citation
- * and every other link stay.
+ * treated alike, keeping its text where it waits. A same-file citation,
+ * a relative one — `meta.md`'s among them — and every other link stay.
  */
 export function rewriteForTree(
   text: string,

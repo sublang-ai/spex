@@ -800,6 +800,24 @@ test("cli-15: export builds spex-packages/<org>/<pkg>/ by copying the project's 
   assert.match(missing, /^ {2}skill greet {2}not found in \.agents\/skills or \.claude\/skills — left as it was$/m, "[cli-23] a skill found nowhere reported");
   assert.equal(readFileSync(join(folder, "skills", "en", "greet", "SKILL.md"), "utf8"), `${GREET_MD}Wave too.\n`, "[cli-23] and left as it was");
   renameSync(join(dir, ".claude/greet-aside"), join(dir, ".claude/skills/greet"));
+
+  // A second package under development, of another org, providing a
+  // spec tools.md too: the file two packages claim is no package's, its
+  // citation removed and the warning naming both (environments-42).
+  await ok(dir, "export", "other/tools", "--spec", "specs/packages/tools.md");
+  assert.deepEqual(readYaml(join(dir, "spex-packages/other/tools/meta.yaml")).provides, ["spec"]);
+  const claimed = await spex(dir, "export", "acme/hello");
+  assert.equal(claimed.code, 0, `${claimed.stdout}${claimed.stderr}`);
+  assert.equal(readFileSync(join(folder, "specs", "en", "hello.md"), "utf8"),
+    `${RELEASED_MD.replace(" [[tools-1](spex:acme/tools#tools-1)]", "")}A line added later.\n`,
+    "[cli-23] the citation two packages claim left out of the release, its phrase kept");
+  assert.equal(claimed.stderr, [
+    "Warning: hello-1 cites specs/packages/tools.md#tools-1, which acme/tools and other/tools both claim — left out of the release, its phrase kept",
+    "Warning: hello-1 cites specs/packages/local.md#local-1, a spec of no package — left out of the release, its phrase kept",
+    "Warning: hello-1 links DR-012 — the release keeps its text, not the link",
+    "",
+  ].join("\n"), "[cli-23] the warning naming the item, the target and both packages");
+  assert.equal(readFileSync(join(dir, "specs/packages/hello.md"), "utf8"), `${CITING_MD}A line added later.\n`, "[cli-23] the project's spec as written");
 });
 
 test("cli-15: a first export reads its description and license from the project, and --language names its folders", async () => {
