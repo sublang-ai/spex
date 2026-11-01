@@ -17,6 +17,46 @@ const json = (path) => JSON.parse(readFileSync(path, "utf8"));
 const portable = (path) => path.replaceAll("\\", "/");
 const ownsPackage = (path, name) => path === `node_modules/${name}` || path.endsWith(`/node_modules/${name}`);
 
+/** Release tags consume published runtime packages, never developer snapshots.
+ * This lock-only check runs before npm ci; npm verifies the actual integrity. */
+export function checkPublishedRuntimes(root) {
+  const lock = json(join(root, "package-lock.json"));
+  if (!lock.packages || lock.lockfileVersion < 2) throw new Error("published runtimes: lockfile needs a packages table");
+  const errors = [];
+  const versions = {};
+  for (const name of ["@sublang/cligent", "@sublang/playbook"]) {
+    const entries = Object.entries(lock.packages).filter(([path]) => ownsPackage(path, name));
+    if (entries.length !== 1) errors.push(`${name}: expected one locked registry package; found ${entries.length}`);
+    for (const [path, entry] of entries) {
+      let published = false;
+      try {
+        const url = new URL(entry.resolved);
+        const archive = `${name}/-/${name.split("/").at(-1)}-${entry.version}.tgz`;
+        published = url.protocol === "https:" && url.host === "registry.npmjs.org" &&
+          !url.username && !url.password && !url.search && !url.hash &&
+          decodeURIComponent(url.pathname) === `/${archive}`;
+      } catch {}
+      if (!published || entry.link || !/^sha(?:256|384|512)-[A-Za-z0-9+/]+={0,2}$/.test(entry.integrity ?? "")) {
+        errors.push(`${path}: release requires a checksum-locked npm registry package, not ${entry.resolved ?? "an unresolved dependency"}`);
+      }
+      versions[name] = entry.version;
+    }
+    for (const path of ["", "packages/core", "packages/cli", "apps/desktop", "apps/server"]) {
+      const manifestPath = join(root, path, "package.json");
+      if (!existsSync(manifestPath)) continue;
+      const manifest = json(manifestPath);
+      for (const field of ["dependencies", "devDependencies", "optionalDependencies"]) {
+        const value = manifest[field]?.[name];
+        if (typeof value === "string" && (value.includes(":") || /^[./\\]/.test(value))) {
+          errors.push(`${path || "."}: ${field}.${name} must select a published npm version, not ${value}`);
+        }
+      }
+    }
+  }
+  if (errors.length) throw new Error(`published runtimes:\n${errors.map((error) => `- ${error}`).join("\n")}`);
+  return versions;
+}
+
 /** Node's ESM resolver needs this flag to accept an explicit parent on
  * every supported Node. Batch queries so the build starts two children,
  * and honor import-only exports (Cligent has no require entry). */
@@ -190,8 +230,10 @@ export function checkDependencyClosure(root) {
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
-    const versions = checkDependencyClosure(resolve(dirname(fileURLToPath(import.meta.url)), ".."));
-    console.log(`dependency closure: one shared installation (${Object.entries(versions).map(([name, version]) => `${name}@${version}`).join(", ")})`);
+    const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+    const publishedOnly = process.argv.includes("--registry-only");
+    const versions = publishedOnly ? checkPublishedRuntimes(root) : checkDependencyClosure(root);
+    console.log(`${publishedOnly ? "published runtimes" : "dependency closure: one shared installation"} (${Object.entries(versions).map(([name, version]) => `${name}@${version}`).join(", ")})`);
   } catch (error) {
     console.error(error.message);
     process.exitCode = 1;
