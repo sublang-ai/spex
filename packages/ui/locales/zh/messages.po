@@ -3523,6 +3523,11 @@ msgstr "来自 {name}（{count}）"
 msgid "from {name} {version}"
 msgstr "来自 {name} {version}"
 
+#. a placed spec's package node, where its Edit control would stand: {name} is the spec package it came from, as org/pkg, {version} that package's version
+#: src/components/SpecView.tsx
+msgid "From {name} {version} · placed by Spex"
+msgstr "来自 {name} {version} · 由 Spex 放入"
+
 #. a playbook row: the package and version it comes from, e.g. from acme/triage 1.2.0
 #: src/components/PlaybooksTab.tsx
 msgid "from {package}"
@@ -8024,6 +8029,11 @@ msgstr "正在写回复"
 #: src/components/DraftSourceTab.tsx
 msgid "Writing…"
 msgstr "写入中…"
+
+#. tooltip on a placed spec's provenance: Spex wrote the file from the spec package {name} (org/pkg) at {version}, and editing the file makes it the project's own
+#: src/components/SpecView.tsx
+msgid "Written by Spex from {name} {version} — an edit makes it yours"
+msgstr "由 Spex 根据 {name} {version} 写入——编辑后即归你所有"
 
 #. the choices note; {name} is that placement's Space's display name, or the path placement's remote
 #: src/components/SpaceSync.tsx
