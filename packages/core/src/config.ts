@@ -1514,9 +1514,9 @@ export async function composeConfig(
       throw new RegistryError(
         "unavailable",
         i18n._({
-          id: "playbooks.{id} is enabled, but the environment of {repository} exports no playbook {id}",
+          id: "playbooks.{id} is enabled, but the environment of {repository} places no playbook {id}",
           comment:
-            "Config error: no environment of the session installs the enabled playbook; {repository} is the spex repository's key",
+            "Config error: no environment of the session places the enabled playbook; {repository} is the spex repository's key",
           values: { id, repository: modules.repository },
         }),
       );

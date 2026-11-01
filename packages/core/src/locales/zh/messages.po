@@ -1972,10 +1972,10 @@ msgstr "{path} 处没有文件"
 msgid "no folder at {path}"
 msgstr "{path} 处没有文件夹"
 
-#. Refusal of Publish: the package has no folder; {path} is where it would stand, the folder spex.yaml adds it from or spex-packages/<org>/<pkg>. 'npx @sublang/spex new' runs the command line's command that starts a package's folder
+#. Refusal of Publish: the package has no folder; {path} is where it would stand, the folder spex.yaml adds it from or spex-packages/<org>/<pkg>. 'npx @sublang/spex export' runs the command line's command that builds a package's folder from the project's own spec file or skill folder; '<file>' and '<folder>' are the command's placeholders, kept as they are
 #: src/environments.ts
-msgid "No folder for {name} at {path} — npx @sublang/spex new {name} starts one"
-msgstr "{path} 处没有 {name} 的文件夹 — 运行 npx @sublang/spex new {name} 来创建"
+msgid "No folder for {name} at {path} — npx @sublang/spex export {name} --spec <file> | --skill <folder> builds one"
+msgstr "{path} 处没有 {name} 的文件夹 — 运行 npx @sublang/spex export {name} --spec <file> | --skill <folder> 来构建"
 
 #. Forge guidance where the project has no code remote; {command} is the Git command that adds one, which stays as it is
 #: src/forge.ts
@@ -2224,10 +2224,10 @@ msgstr "playbooks 必须是一个对象"
 msgid "playbooks must enable at least one playbook"
 msgstr "playbooks 必须至少启用一个规程"
 
-#. Config error: no environment of the session installs the enabled playbook; {repository} is the spex repository's key
+#. Config error: no environment of the session places the enabled playbook; {repository} is the spex repository's key
 #: src/config.ts
-msgid "playbooks.{id} is enabled, but the environment of {repository} exports no playbook {id}"
-msgstr "playbooks.{id} 已启用，但 {repository} 的环境没有导出规程 {id}"
+msgid "playbooks.{id} is enabled, but the environment of {repository} places no playbook {id}"
+msgstr "playbooks.{id} 已启用，但 {repository} 的环境没有放入规程 {id}"
 
 #. Config error: the key enabling a playbook differs from the id its module declares
 #: src/config.ts

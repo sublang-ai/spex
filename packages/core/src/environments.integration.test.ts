@@ -585,7 +585,7 @@ test("environments-22 through a real core: retained files of another lock are no
   assert.equal(after.error, null);
   assert.equal((await core.client.expectOk("config.get", {})).status, "valid", "a successful resolve repairs config without restarting the core");
   assert.equal(configBefore.status, "invalid");
-  assert.match(JSON.stringify(configBefore), /exports no playbook code/);
+  assert.match(JSON.stringify(configBefore), /places no playbook code/);
   assert.equal(importedBefore, 0, "no retained registry was imported while its package was uninstalled");
   assert.ok(loaded.length > 0, "the installed registries were imported after recovery");
 
@@ -706,7 +706,7 @@ test("environments-24: a playbook authored in a project compiles, is requested b
   }
   rmSync(impostor, { recursive: true, force: true });
   await core.client.expectError("environment.publish", { repository: project.id, name: `${ORG}/absent`, dryRun: true },
-    "invalid_request", new RegExp(`^No folder for ${ORG}/absent at spex-packages/${ORG}/absent — npx @sublang/spex new ${ORG}/absent starts one$`));
+    "invalid_request", new RegExp(`^No folder for ${ORG}/absent at spex-packages/${ORG}/absent — npx @sublang/spex export ${ORG}/absent --spec <file> \\| --skill <folder> builds one$`));
   assert.deepEqual(registry.script.requests.filter((request) => request.startsWith("PUT ")), [], "nothing was uploaded");
 
   // The dry run names what would go, then the upload.
@@ -1427,7 +1427,7 @@ test("environments-25: every environment command replies and refuses as its tabl
   await client.expectError("environment.publish", { repository: key, name: "acme/none" }, "invalid_request",
     new RegExp(`^Sign in to ${new URL(registry.url).host.replace(/\./g, "\\.")} to publish$`));
   await client.expectError("environment.publish", { repository: key, name: "acme/none", dryRun: true }, "invalid_request", /^spex-packages\/acme\/none is not a package Spex can publish: .+ — fix them, then Retry$/);
-  await client.expectError("environment.publish", { repository: key, name: "acme/absent", dryRun: true }, "invalid_request", /^No folder for acme\/absent at spex-packages\/acme\/absent — npx @sublang\/spex new acme\/absent starts one$/);
+  await client.expectError("environment.publish", { repository: key, name: "acme/absent", dryRun: true }, "invalid_request", /^No folder for acme\/absent at spex-packages\/acme\/absent — npx @sublang\/spex export acme\/absent --spec <file> \| --skill <folder> builds one$/);
   await client.expectError("environment.publish", { repository: key, name: "none", dryRun: true }, "invalid_request", /^none is not a package name — name it like acme\/triage$/);
 
   // The playbooks both environments export, with where each is enabled.

@@ -682,8 +682,8 @@ const DEFECT_CONFIGS: { name: string; pattern: RegExp; config: string }[] = [
     config: VALID_CONFIG.replace("    model: claude-test\nplaybooks:", "    model: claude-test\n    skills: [./team-guide]\nplaybooks:"),
   },
   {
-    name: "a playbook no environment of the session exports",
-    pattern: /playbooks\.triage is enabled, but the environment of tester\/tester-spex exports no playbook triage/,
+    name: "a playbook no environment of the session places",
+    pattern: /playbooks\.triage is enabled, but the environment of tester\/tester-spex places no playbook triage/,
     config: VALID_CONFIG.replace('  code:\n', "  triage:\n"),
   },
   {
