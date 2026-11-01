@@ -77,7 +77,7 @@ function folderRefusal(root: string, path: string, given: string, name: string):
   const dir = join(root, ...path.split("/"));
   if (!existsSync(dir)) throw new Refusal(`--path ${given}: no folder there — give the folder holding the package's meta.yaml`);
   const file = join(dir, "meta.yaml");
-  if (!existsSync(file)) throw new Refusal(`--path ${given} has no meta.yaml, so it is no package — spex new ${name} starts one`);
+  if (!existsSync(file)) throw new Refusal(`--path ${given} has no meta.yaml, so it is no package — spex export ${name} --spec <file> | --skill <folder> builds one`);
   const { manifest, issues } = parseManifestText(readFileSync(file, "utf8"));
   if (!manifest) throw new Refusal(`--path ${given}: its meta.yaml cannot be read: ${issues.map((issue) => issue.message).join("; ")} — fix it, then retry`);
   const found = `${manifest.org}/${manifest.name}`;

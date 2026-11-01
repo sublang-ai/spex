@@ -7,10 +7,10 @@ import { readFileSync } from "node:fs";
 import { lint } from "./lint.js";
 import { scaffold } from "./scaffold.js";
 import { add } from "./commands/add.js";
+import { exportPackage } from "./commands/export.js";
 import { install } from "./commands/install.js";
 import { list } from "./commands/list.js";
 import { login } from "./commands/login.js";
-import { newPackage } from "./commands/new.js";
 import { publish } from "./commands/publish.js";
 import { logout } from "./commands/logout.js";
 import { remove } from "./commands/remove.js";
@@ -22,7 +22,7 @@ import { commandHelp, commandNamed, runCommand, USAGE, type Command } from "./co
 /** The commands run with the shared runner (cli-13): exit 0 on success,
  * 1 with the cause on standard error, 130 on an interrupt. */
 const COMMANDS: Record<string, Command> = {
-  add, remove, rm: remove, install, i: install, update, list, ls: list, search, new: newPackage, publish,
+  add, remove, rm: remove, install, i: install, update, list, ls: list, search, export: exportPackage, publish,
   login, logout, whoami,
 };
 

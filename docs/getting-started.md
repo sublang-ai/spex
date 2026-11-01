@@ -169,22 +169,25 @@ be private.
 ### Publish a spec or skill package
 
 To publish a skill you already have, such as one Claude Code keeps under
-`.claude/skills/`, sign in to the registry, then start a package from the
+`.claude/skills/`, sign in to the registry, then build a package from the
 skill in your project's folder, under an org of yours:
 
 ```sh
 npx @sublang/spex login
-npx @sublang/spex new my-org/my-skill --skill .claude/skills/my-skill --move
+npx @sublang/spex export my-org/my-skill --skill .claude/skills/my-skill
 ```
 
 `spex login` signs in with a code in your browser: open the address it
-prints, enter the code and approve. `spex new` writes
+prints, enter the code and approve. `spex export` writes
 `spex-packages/my-org/my-skill/` with its `meta.yaml`, a README and your
-project's license, adds it to `spex.yaml`, and installs it. `--move`
-hands the skill to the package; Spex places it back in `.claude/skills/`
-from there. For a spec, pass `--spec specs/packages/<name>.md` and name
-the package `<org>/<name>`; `--description` and `--license` override what
-it reads. To write a folder by hand, follow the
+project's license, copying the skill, which stays in `.claude/skills/`
+for your agent; it adds nothing to `spex.yaml`. After you edit the skill,
+run `spex export my-org/my-skill` again to refresh the copy. For a spec,
+pass `--spec specs/packages/<name>.md` and name the package
+`<org>/<name>`: a citation of another package's spec becomes its
+address, and one the release cannot carry is dropped with a warning.
+`--description` and `--license` override what it reads. To write a
+folder by hand, follow the
 [package format](../specs/packages/environments.md#environments-1).
 
 Check what will be published, then publish it:
@@ -197,10 +200,10 @@ npx @sublang/spex publish my-org/my-skill
 The dry run shows the registry, the name, the version and the files, and
 publishes nothing. The publish prints the package's page at the registry.
 
-Or publish from the IDE. A folder `spex new` made is already on the
-**Packages** tab. For one you made another way, choose **Add… → Folder**
-and pick `spex-packages/<org>/<name>`; Spex reads its name and version
-from its `meta.yaml`. Open the package row's overflow and choose
+Or publish from the IDE. On the **Packages** tab, choose **Add… →
+Folder** and pick `spex-packages/<org>/<name>`, the folder `spex export`
+built or one you made another way; Spex reads its name and version from
+its `meta.yaml`. Open the package row's overflow and choose
 **Publish**, which reads **Sign in to publish** while you are signed out.
 Review "Publish ⟨org⟩/⟨name⟩ ⟨version⟩ to Spex Space", the files it will
 publish and the account, then confirm **Publish**. No playbook, compile or
@@ -242,7 +245,8 @@ lists a folder as JSON, read-only, so a playbook can write a report into
 the project and the applet can show it. The page runs in a sandbox: it
 reaches neither the network nor Spex itself, and its frame stays at
 Spex's own address. Add the folder and its `{ kind: applet }` entry in
-`meta.yaml` by hand; `spex new` does not add applets.
+`meta.yaml` by hand; `spex export` does not add applets, and leaves them
+as they are.
 
 ## Optionally sync project records
 
