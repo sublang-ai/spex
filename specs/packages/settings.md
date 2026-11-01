@@ -197,13 +197,13 @@ Where your own group's config is valid, the `claude` card and the `codex` card [
 
 When the reader chooses Apply on a card's one-model control [[settings-57](#settings-57)], the Settings surface shall ask for confirmation listing the agents it changes and the roles whose binding names a model of its own, which it leaves, and on confirmation submit the changes as one `config.batch` [[core-service-44](core-service.md#core-service-44)] carrying the revision of the config state the surface shows [[core-service-45](core-service.md#core-service-45)], then say it is done, listing the roles it left again ([DR-174](../decisions/174-workshop-agents-in-one-pass.md)):
 
-- a batch refused `conflict` changes nothing and asks the reader to retry over the config now shown; a refused violation names the agent and the rule [[settings-12](#settings-12)], and changes nothing;
+- a batch refused `conflict` changes nothing, reads your own group's config and each project's composition shown again, and asks the reader to retry over them; a refused violation names the agent and the rule [[settings-12](#settings-12)], and changes nothing;
 - an effort the new model does not support stays, shown as requiring correction [[settings-34](#settings-34)];
 - where the `claude` base URL is `third-party` [[settings-14](#settings-14)] and discovery failed or reported no `defaultModel` [[settings-35](#settings-35)], Apply is disabled while Provider default is chosen, beside "The default model can't be read right now: retry, or choose a specific model" and a Retry rediscovering the models, while a specific model applies as ever.
 
 #### settings-59
 
-While the `claude` readiness entry's base URL is `third-party` [[settings-14](#settings-14)], the `claude` card shall list every role whose effective model is an official model name — the Captain by its own `model`; a role of your own group's config or of a project's composition [[core-service-2](core-service.md#core-service-2)] by its binding's own model, in whichever file it stands, a specific model or Provider default alike, else by its player's `model` — saying "These roles still name an official model and may bypass the model you chose" with the control "Set all to Provider default", the list recomputed from the newest config state ([DR-174](../decisions/174-workshop-agents-in-one-pass.md)):
+While the `claude` readiness entry's base URL is `third-party` [[settings-14](#settings-14)], the `claude` card shall list every role whose effective model is an official model name — the Captain by its own `model`; a role of your own group's config or of a project's composition [[core-service-2](core-service.md#core-service-2)] by its binding's own model, a specific model or Provider default alike, else by its player's `model`, a project's file binding players by name alone — saying "These roles still name an official model and may bypass the model you chose" with the control "Set all to Provider default", the list recomputed from the newest config state ([DR-174](../decisions/174-workshop-agents-in-one-pass.md)):
 
 - an official model name begins with `claude-`, or is `opus`, `sonnet`, `haiku` or `fable`, each optionally followed by `[1m]`, ignoring case;
 - under any other base-URL state the card shows neither the list nor the control.
@@ -217,10 +217,9 @@ When the reader chooses "Set all to Provider default" [[settings-59](#settings-5
 | the Captain | the Captain's `model` removed |
 | a player, its role's binding naming no model of its own | that player's `model` removed |
 | a binding in your own group's file | `model: false` on that binding — Provider default, never inheriting the player |
-| a binding in a project's file | nothing: the confirmation lists it as "Change it in the project's Playbooks tab" |
 
 - once written, the card recomputes the list from the newest config state and lists every role still naming an official model, saying all were set only where none remains;
-- a batch refused `conflict` changes nothing and asks the reader to retry over the config now shown;
+- a batch refused `conflict` changes nothing, reads your own group's config and each project's composition shown again, and asks the reader to retry over them;
 - where discovery failed or reported no `defaultModel`, the control is disabled beside "The default model can't be read right now" and a Retry rediscovering the models.
 
 #### settings-61
@@ -332,7 +331,7 @@ The Settings surface's header shall name the place shown — "This computer", or
 
 #### settings-48
 
-Where the core runs as a seat [[core-service-125](core-service.md#core-service-125)], the Settings surface shall show a Credentials section taking a code host's token — the host name and the token — and, per agent, a credential of the member's own by the agent's forms [[settings-49](#settings-49)], each sent as `credential.set {kind: 'host' | 'agent', name, values}`, removed with `credential.remove {kind, name}`, and listed by `credential.list` as the hosts and agents set with no secret echoed ([DR-132](../decisions/132-team-servers.md)):
+Where the core runs as a seat [[core-service-125](core-service.md#core-service-125)], the Settings surface shall show, in its full form and in its broken-config form [[settings-24](#settings-24)] alike, a Credentials section taking a code host's token — the host name and the token — and, per agent, a credential of the member's own by the agent's forms [[settings-49](#settings-49)], each sent as `credential.set {kind: 'host' | 'agent', name, values}`, removed with `credential.remove {kind, name}`, and listed by `credential.list` as the hosts and agents set with no secret echoed ([DR-132](../decisions/132-team-servers.md)):
 
 - the core keeps them under `local/` [[storage-44](storage.md#storage-44)], applies an agent's to its runs as its environment [[core-service-126](core-service.md#core-service-126)] and a host's to every transport to that host [[git-host-9](git-host.md#git-host-9)];
 - the section says "A credential you place here stays on this server until you remove it", and names a host whose clone failed for want of one [[space-103](space.md#space-103)];
@@ -534,7 +533,7 @@ Where the Settings surface renders a not-ready `claude` card and an unused `code
 
 #### settings-65
 
-Where the Settings surface renders with the config missing and again invalid, the test suite shall assert that the `claude` and `codex` cards still show their readiness and configuration steps beside the broken-config notice, with no one-model control and no "Set all to Provider default" [[settings-5](#settings-5)] [[settings-57](#settings-57)] [[settings-59](#settings-59)].
+Where the Settings surface renders with the config missing and again invalid, the test suite shall assert that the `claude` and `codex` cards still show their readiness and configuration steps beside the broken-config notice, with no one-model control and no "Set all to Provider default" [[settings-5](#settings-5)] [[settings-57](#settings-57)] [[settings-59](#settings-59)], and that on a seat the Credentials section their steps point to stands too [[settings-48](#settings-48)].
 
 #### settings-66
 
@@ -542,17 +541,17 @@ Where the Settings surface renders a config whose Captain and two players run on
 
 - the confirmation lists the Captain and the two players, and the role it leaves for its own model [[settings-58](#settings-58)];
 - confirming sends one `config.batch` with the shown state's revision, a `captain.set` and a `player.set` per player whose patch sets `model`, or with Provider default removes it, and nothing for the `codex` player or the binding [[settings-57](#settings-57)] [[settings-58](#settings-58)];
-- the done notice lists the left role again, and a refused `conflict` says to retry [[settings-58](#settings-58)];
+- the done notice lists the left role again, and a refused `conflict` says to retry, reads the config again, and the next confirmation lists a player the file gained and sends its revision [[settings-58](#settings-58)];
 - with the base URL `third-party` and a catalog reporting no `defaultModel`, Apply is disabled while Provider default is chosen, with its line and a Retry that rediscovers, and enabled for a specific model [[settings-58](#settings-58)].
 
 #### settings-67
 
-Where the Settings surface renders a `third-party` base URL over a config whose Captain names an official model, whose roles cross official and third-party names on the player and on the binding, one binding in your own group's file naming an official model, and a project's composition binding one, the test suite shall assert:
+Where the Settings surface renders a `third-party` base URL over a config whose Captain names an official model, whose roles cross official and third-party names on the player and on the binding, one binding in your own group's file naming an official model, and a project's composition binding a role to an official-named player your own roles leave unbound, the test suite shall assert:
 
 - a role on an official-named player whose binding names a third-party model is not listed, and one on a third-party player whose binding names an official model is [[settings-59](#settings-59)];
-- the confirmation lists each role with its model and the target, and the project's binding as changed in the project's Playbooks tab [[settings-60](#settings-60)];
-- confirming sends one `config.batch` with the shown revision removing the Captain's and the official-named player's `model` and writing `model: false` on your own group's binding [[settings-60](#settings-60)];
-- once a project's composition binds a further official name after the confirmation, the done notice lists it and the project's binding and never says all were set [[settings-60](#settings-60)];
+- the confirmation lists each role with its model and the target, the project's role by its project among them [[settings-60](#settings-60)];
+- confirming sends one `config.batch` with the shown revision removing the Captain's and each official-named player's `model`, the project's included, and writing `model: false` on your own group's binding [[settings-60](#settings-60)];
+- once a project's composition binds a further official-named player after the confirmation, the done notice lists that role alone and never says all were set [[settings-60](#settings-60)];
 - with no `defaultModel`, the control is disabled with its line and a Retry that rediscovers [[settings-60](#settings-60)].
 
 ### Browser Journeys

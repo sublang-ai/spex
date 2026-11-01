@@ -38,17 +38,17 @@ Amends [DR-024](024-app-supplied-agent-runtimes.md) in how a runtime fault is re
 - An agent card offers one model for the Captain and every player on that adapter, Provider default included, written as the removal of each `model` key.
 - A role binding's own model is never changed by it, only listed before and after the change, since a binding's model is a deliberate choice for that role.
 - The change is one `config.batch`: its operations validated together and written in one versioned write, or none of them.
-  It carries the revision of your own group's config the reader saw, so a config changed meanwhile — a player added, a binding given a model — is refused as a conflict before anything is composed, and the reader confirms the recomputed list.
-- A violation of the whole batch names the rule, the field and every operation that touched what it covers, since operations valid one by one can violate a rule together.
+  It carries the revision of your own group's config the reader saw, so a config changed meanwhile — a player added, a binding given a model — is refused as a conflict before anything is composed; the card then reads the config again and the reader confirms the recomputed list.
+- A violation of the whole batch names the rule, the field and every operation that touched what it covers, since operations valid one by one can violate a rule together; the check that raises it states its rule and field, since words in the reader's language name no field reliably.
 - `config.batch` takes only `captain.set`, `player.set` and `playbook.role.bind`, and only your own group's file: one file is one versioned write.
 
 ### A third-party model service
 
 - Only Claude is judged, by its base URL's state alone: a default model says nothing about where requests go.
-- A role is judged by the model it runs — its binding's own model where one stands, in any file, else its player's — and the Captain by its own.
+- A role is judged by the model it runs — its binding's own model where one stands, else its player's — and the Captain by its own.
+  A project's file binds players by name alone, so a role of a project runs a model your own group's file names, and every official name is fixed there.
   An official name is one beginning with `claude-`, or the aliases `opus`, `sonnet`, `haiku` and `fable`, optionally with `[1m]`: Anthropic's own naming, with no table of any provider's mapping.
 - Fixing them writes Provider default where the official name stands: the Captain's or a player's `model` removed, and a binding in your own group's file set to `model: false`, never cleared to inherit a player the reader may have chosen on purpose.
-  A binding in a project's file is outside the one write and is listed to be changed in that project's Playbooks tab.
 - What remains after the write is recomputed from the newest config, never assumed from what was confirmed.
 - Where the third-party service's default model cannot be read, nothing writes Provider default from the card and the field does not recommend it, since nobody could say which model would then run; a specific model stays available.
 

@@ -102,7 +102,7 @@ When a client sends `config.batch {ops, revision}` — one or more `captain.set`
 
 1. The file is read; where its revision differs from `revision`, the batch is refused `conflict` and nothing is composed or written.
 2. The operations apply in order, each as a Settings save applies it — a merge patch altering only the keys it provides and preserving comments, key order and hand-written fields — and the result is validated once, as a whole, by the shared rule set [[core-service-16](#core-service-16)].
-3. A violation refuses the whole batch `invalid_config`, each violation carrying its rule identifier and field location, as a refused Settings save's do, and the indexes of the operations touching what it covers — one, several or none — an operation touching the block it edits and, through a player it edits, every binding naming that player.
+3. A violation refuses the whole batch `invalid_config`, each violation carrying its rule — a row of the shared rule set [[core-service-16](#core-service-16)] by its name in kebab case, or `structure`, `adapter` or `registry` for a field's shape, an agent's adapter or a playbook's module entry — and the field it names as a dotted path in the file, absent only where the file's top level is at fault, as the check raising it states them, never read back from its words, and the indexes of the operations touching that field — one, several or none — an operation touching the block it edits and, through a player it edits, every binding naming that player.
 4. The result is one versioned write, refused `conflict` where the file changed since the read ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)).
 5. The reply is the config state the files stand at after the write, as a Settings save's is.
 
