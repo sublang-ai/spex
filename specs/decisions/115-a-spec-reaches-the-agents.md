@@ -7,6 +7,7 @@
 
 Accepted (2026-10-11).
 Amends [DR-104](104-spec-package-format-and-client-environments.md) in its exports: a selected spec is exported as a generated skill beside the skills and the playbooks' skills, and `alias` names a spec's id as well.
+Amended by [DR-174](174-what-a-package-provides-is-placed.md) in where a spec reaches the agents: in a project it stands in `specs/packages/`, read as any spec of the project; the generated skill stays the form for an environment whose root holds no `specs/`.
 
 ## Context
 

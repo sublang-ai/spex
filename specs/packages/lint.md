@@ -92,7 +92,7 @@ Where reference markers, records, and the map are linted, the linter shall repor
 - an error for a `[[N]]` marker without a matching numbered definition, and a warning for a numbered definition that is never cited [[meta-19](../meta.md#meta-19)];
 - an error for a numbered definition sitting outside `## References` or targeting a spec file — the marker mechanism cannot smuggle an item citation [[meta-19](../meta.md#meta-19)];
 - a warning for a DR missing a section of [[meta-4](../meta.md#meta-4)] or an IR missing a section of [[meta-5](../meta.md#meta-5)];
-- a warning for a `packages/` or `decisions/` file not linked from `specs/map.md`, the two kinds the map indexes ([DR-000](../decisions/000-spec-structure-format.md)).
+- a warning for a `packages/` or `decisions/` file not linked from `specs/map.md`, the two kinds the map indexes ([DR-000](../decisions/000-spec-structure-format.md)), except a `packages/` file the install record under the root's `.spex/` lists as a placed spec ([DR-174](../decisions/174-what-a-package-provides-is-placed.md)).
 
 #### lint-14
 
