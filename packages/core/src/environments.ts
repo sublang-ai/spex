@@ -2051,6 +2051,7 @@ export class EnvironmentManager {
           kind: kindOf(id),
           language: resolution.artifacts[id]!.language,
           fallback: resolution.artifacts[id]!.fallback,
+          provided: true,
         })),
         exports: Object.keys(resolution.exports).sort().map((exported) => ({ name: exported, artifact: resolution.exports[exported]! })),
         installed,
