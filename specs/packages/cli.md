@@ -37,8 +37,8 @@ Packages in this folder (spex.yaml, spex.lock, .spex/)
   search <query>                   Find packages at the registry
 
 Your packages
-  new <org>/<pkg> [--skill <folder>]… [--spec <file>]   Start a package in spex-packages/<org>/<pkg>/
-  publish [<org>/<pkg>] [--dry-run]                     Publish it to the registry
+  export <org>/<pkg> [--spec <file>] [--skill <folder>]…   Build it in spex-packages/<org>/<pkg>/ from your files
+  publish [<org>/<pkg>] [--dry-run]                         Publish it to the registry
 
 Sign-in
   login [--registry <url> | --space <url>]              Sign in with a code in your browser
