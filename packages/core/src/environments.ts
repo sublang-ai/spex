@@ -1785,8 +1785,8 @@ export class EnvironmentManager {
     // reported with its cause, rather than reading as signed out.
     if (!isDirectory(folder)) {
       throw new CoreError("invalid_request", i18n._({
-        id: "No folder for {name} at {path} — npx @sublang/spex new {name} starts one",
-        comment: "Refusal of Publish: the package has no folder; {path} is where it would stand, the folder spex.yaml adds it from or spex-packages/<org>/<pkg>. 'npx @sublang/spex new' runs the command line's command that starts a package's folder",
+        id: "No folder for {name} at {path} — npx @sublang/spex export {name} --spec <file> | --skill <folder> builds one",
+        comment: "Refusal of Publish: the package has no folder; {path} is where it would stand, the folder spex.yaml adds it from or spex-packages/<org>/<pkg>. 'npx @sublang/spex export' runs the command line's command that builds a package's folder from the project's own spec file or skill folder; '<file>' and '<folder>' are the command's placeholders, kept as they are",
         values: { name, path },
       }));
     }
@@ -2051,6 +2051,7 @@ export class EnvironmentManager {
           kind: kindOf(id),
           language: resolution.artifacts[id]!.language,
           fallback: resolution.artifacts[id]!.fallback,
+          provided: true,
         })),
         exports: Object.keys(resolution.exports).sort().map((exported) => ({ name: exported, artifact: resolution.exports[exported]! })),
         installed,

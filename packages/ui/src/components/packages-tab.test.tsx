@@ -9,8 +9,10 @@
 // provides and its standing, the required package under the one
 // requiring it; the built-in playbooks as one line; the chips with
 // Update and Place skills again; Remove in the overflow; a row expanding
-// to its artifacts, a playbook's Enable writing that heading's config in
-// place (playbook-library-3); Add…'s Registry,
+// to what its release provides, a support artifact unlisted, a
+// playbook's Enable writing that heading's config in place
+// (playbook-library-3), the spec's line saying where it stands under
+// specs/ with each waiting link's Add; Add…'s Registry,
 // Folder and Git tabs with the receipt; Publish from a folder package's
 // overflow; every control standing while that spex repository syncs and
 // while the core installs, every command naming that heading's spex
@@ -20,7 +22,7 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import type { CommandResults, EnvironmentState, RegistryState } from "@sublang/spex-core/protocol";
+import type { CommandResults, EnvironmentPackage, EnvironmentState, RegistryState } from "@sublang/spex-core/protocol";
 
 import { PackagesTab } from "./PackagesTab.js";
 import { instanceState } from "../fixtures/groups-state.js";
@@ -569,7 +571,7 @@ describe("playbook-library-94: a row's artifacts", () => {
         specPackage({
           name: "acme/notes",
           version: "0.2.0",
-          artifacts: [{ id: "note", kind: "playbook", language: "en", fallback: false }],
+          artifacts: [{ id: "note", kind: "playbook", language: "en", fallback: false, provided: true }],
           exports: [{ name: "note", artifact: "note" }],
         }),
       ],
@@ -632,11 +634,11 @@ describe("playbook-library-94: a row's artifacts", () => {
         specPackage({
           name: "acme/kit",
           artifacts: [
-            { id: "greet", kind: "skill", language: "en", fallback: false },
-            { id: "kit", kind: "spec", language: "en", fallback: false },
-            { id: "report", kind: "applet", language: null, fallback: false },
-            { id: "review", kind: "skill", language: "en", fallback: true },
-            { id: "notes", kind: "source", language: "en", fallback: false },
+            { id: "greet", kind: "skill", language: "en", fallback: false, provided: true },
+            { id: "kit", kind: "spec", language: "en", fallback: false, provided: true },
+            { id: "report", kind: "applet", language: null, fallback: false, provided: true },
+            { id: "review", kind: "skill", language: "en", fallback: true, provided: true },
+            { id: "notes", kind: "source", language: "en", fallback: false, provided: true },
           ],
           exports: [
             { name: "acme-kit", artifact: "kit" },
@@ -647,8 +649,8 @@ describe("playbook-library-94: a row's artifacts", () => {
         specPackage({
           name: "acme/away",
           artifacts: [
-            { id: "away", kind: "skill", language: "en", fallback: false },
-            { id: "board", kind: "applet", language: null, fallback: false },
+            { id: "away", kind: "skill", language: "en", fallback: false, provided: true },
+            { id: "board", kind: "applet", language: null, fallback: false, provided: true },
           ],
           exports: [{ name: "away", artifact: "away" }],
           installed: false,
@@ -692,6 +694,182 @@ describe("playbook-library-94: a row's artifacts", () => {
     expect(within(away).getByTestId("env-skills-unplaced-acme/away").textContent).toBe("skill: away · not placed");
     expect(within(away).getByTestId("env-artifact-acme/away-board").textContent).toBe("board");
     expect(within(away).queryByRole("button", { name: "Open board" })).toBeNull();
+  });
+
+  test("under Packages the spec's line says where it stands in specs/, its waiting links each with Add requesting that package; a support skill is unlisted and uncounted; under Personal the spec reads placed as a skill", async () => {
+    // A spec package whose skill is its spec's support, not provided
+    // (environments-6), its spec placed with links waiting for two
+    // packages this specs/ lacks (environments-41).
+    const glossary = (over: Partial<EnvironmentPackage> = {}) =>
+      specPackage({
+        name: "acme/glossary",
+        artifacts: [
+          { id: "glossary", kind: "spec", language: "en", fallback: false, provided: true },
+          { id: "define", kind: "skill", language: "en", fallback: false, provided: false },
+        ],
+        exports: [{ name: "acme-glossary", artifact: "glossary" }],
+        ...over,
+      });
+    const placement = (spec: NonNullable<NonNullable<EnvironmentPackage["placement"]>["spec"]>) => {
+      update(PROJECT_ID, {
+        ...environments[PROJECT_ID]!,
+        packages: environments[PROJECT_ID]!.packages.map((pkg) => (pkg.name === "acme/glossary" ? glossary({ placement: { spec } }) : pkg)),
+      });
+    };
+    environments[PROJECT_ID] = {
+      ...environments[PROJECT_ID]!,
+      requests: { ...PROJECT_ENVIRONMENT.requests, "acme/glossary": { kind: "registry", version: "^1.0.0" } },
+      packages: [
+        ...PROJECT_ENVIRONMENT.packages,
+        glossary({
+          placement: {
+            spec: {
+              state: "placed",
+              path: "specs/packages/glossary.md",
+              waiting: [
+                { name: "acme/tidy", count: 1 },
+                { name: "acme/terms", count: 3 },
+              ],
+            },
+          },
+        }),
+      ],
+    };
+    // Your own group's environment requests it too: its spec is placed
+    // as a skill, the state naming no placement under specs/.
+    environments[OWN_KEY] = {
+      ...environments[OWN_KEY]!,
+      requests: { ...OWN_ENVIRONMENT.requests, "acme/glossary": { kind: "registry", version: "^1.0.0" } },
+      packages: [...OWN_ENVIRONMENT.packages, glossary()],
+    };
+    // The request a waiting link's Add sends runs until the test lets it.
+    let finish: () => void = () => {};
+    const base = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) => {
+      if (type === "environment.request") return new Promise((resolve) => (finish = () => resolve({ accepted: true })));
+      return base(type, params);
+    });
+    await renderTab();
+    const row = projectSection().getByTestId("env-package-acme/glossary");
+    // [playbook-library-92] what it provides counts the spec alone: its
+    // spec's support skill is not counted.
+    expect(within(row).getByTestId("env-provides-acme/glossary").textContent).toBe("1 spec");
+    fireEvent.click(within(row).getByRole("button", { name: "What acme/glossary provides" }));
+    const lines = within(row).getByTestId("env-artifacts-acme/glossary");
+    // [playbook-library-92] the spec's line reads its path under specs/;
+    // the support skill has no line.
+    const spec = within(lines).getByTestId("env-artifact-acme/glossary-glossary");
+    expect(spec.getAttribute("data-kind")).toBe("spec");
+    expect(spec.textContent).toBe("spec · in specs/packages/glossary.md");
+    expect(within(lines).queryByTestId("env-skills-placed-acme/glossary")).toBeNull();
+    expect(within(lines).queryByTestId("env-skills-unplaced-acme/glossary")).toBeNull();
+    expect(within(lines).queryByText(/define/)).toBeNull();
+    // [playbook-library-92] a line per package its links wait for, after
+    // the spec's, one link and several read in their own words.
+    expect(within(lines).getAllByRole("listitem").map((item) => item.getAttribute("data-testid"))).toEqual([
+      "env-artifact-acme/glossary-glossary",
+      "env-waiting-acme/glossary-acme/tidy",
+      "env-waiting-acme/glossary-acme/terms",
+    ]);
+    expect(within(lines).getByTestId("env-waiting-acme/glossary-acme/tidy").textContent).toBe("1 link waits for acme/tidy·Add");
+    expect(within(lines).getByTestId("env-waiting-acme/glossary-acme/terms").textContent).toBe("3 links wait for acme/terms·Add");
+
+    // [playbook-library-92] Add requests the package as Add…'s registry
+    // tab does: found by name, at the requirement its result stands at
+    // first, reading as running until the request returns, and the
+    // receipt reads what it added.
+    const add = within(lines).getByTestId("env-waiting-add-acme/glossary-acme/tidy") as HTMLButtonElement;
+    expect(add.title).toBe("Adds acme/tidy to spex.yaml and installs it");
+    fireEvent.click(add);
+    await vi.waitFor(() =>
+      expect(commandMock).toHaveBeenCalledWith("environment.request", {
+        repository: PROJECT_ID,
+        name: "acme/tidy",
+        request: { kind: "registry", version: "^0.3.0" },
+      }),
+    );
+    expect(commandMock).toHaveBeenCalledWith("environment.search", { repository: PROJECT_ID, query: "acme/tidy" });
+    expect(add.textContent).toBe("Adding…");
+    expect(add.disabled).toBe(true);
+    await act(async () => finish());
+    expect(add.textContent).toBe("Add");
+    expect(add.disabled).toBe(false);
+    expect(projectSection().getByTestId("add-note").textContent).toBe("Added acme/tidy");
+    // [playbook-library-92] the receipt counts what the package provides
+    // once the lock holds it, its support skill uncounted.
+    update(PROJECT_ID, {
+      ...environments[PROJECT_ID]!,
+      requests: { ...environments[PROJECT_ID]!.requests, "acme/tidy": { kind: "registry", version: "^0.3.0" } },
+      packages: [
+        ...environments[PROJECT_ID]!.packages,
+        specPackage({
+          name: "acme/tidy",
+          version: "0.3.0",
+          artifacts: [
+            { id: "tidy", kind: "spec", language: "en", fallback: false, provided: true },
+            { id: "sort", kind: "skill", language: "en", fallback: false, provided: false },
+          ],
+        }),
+      ],
+    });
+    expect(projectSection().getByTestId("add-note").textContent).toBe("Added acme/tidy 0.3.0 · 1 spec");
+    // A package the registry's search does not list is not requested:
+    // it reads so in place, Add… taking a version for it.
+    commandMock.mockClear();
+    fireEvent.click(within(lines).getByTestId("env-waiting-add-acme/glossary-acme/terms"));
+    expect((await within(lines).findByTestId("env-waiting-error-acme/glossary-acme/terms")).textContent).toBe(
+      "acme/terms · not listed publicly",
+    );
+    expect(writes()).toEqual([]);
+
+    // [playbook-library-92] the spec's line as the state reads each other
+    // placement, no link waiting.
+    placement({ state: "edited", path: "specs/packages/glossary.md", waiting: [] });
+    expect(spec.textContent).toBe("spec · edited in specs/ — left as yours");
+    expect(within(lines).queryByTestId("env-waiting-acme/glossary-acme/tidy")).toBeNull();
+    placement({ state: "edited", path: "specs/packages/glossary.md", waiting: [], waitingVersion: "1.1.0" });
+    expect(spec.textContent).toBe("spec · edited in specs/ — left as yours · 1.1.0 waiting");
+    placement({ state: "blocked", path: "specs/terms/glossary.md", waiting: [] });
+    expect(spec.textContent).toBe("spec · not placed — specs/ holds glossary.md already");
+    placement({ state: "no-specs", path: "specs/packages/glossary.md", waiting: [] });
+    expect(spec.textContent).toBe("spec · needs specs/ — scaffold first");
+    expect(within(lines).getAllByRole("listitem")).toHaveLength(1);
+
+    // [playbook-library-92] under Personal, the spec placed as a skill,
+    // the support skill again unlisted and uncounted.
+    const own = personalSection().getByTestId("env-package-acme/glossary");
+    expect(within(own).getByTestId("env-provides-acme/glossary").textContent).toBe("1 spec");
+    fireEvent.click(within(own).getByRole("button", { name: "What acme/glossary provides" }));
+    const ownLines = within(own).getByTestId("env-artifacts-acme/glossary");
+    expect(within(ownLines).getByTestId("env-artifact-acme/glossary-glossary").textContent).toBe("spec · placed as a skill");
+    expect(within(ownLines).getAllByRole("listitem")).toHaveLength(1);
+  });
+
+  test("a core that says nothing of what a release provides has every artifact read as provided", async () => {
+    // An older core sends no `provided` flag (environments-1).
+    const unflagged = (id: string, kind: EnvironmentPackage["artifacts"][number]["kind"]) =>
+      ({ id, kind, language: "en", fallback: false }) as EnvironmentPackage["artifacts"][number];
+    environments[PROJECT_ID] = {
+      ...environments[PROJECT_ID]!,
+      requests: { ...PROJECT_ENVIRONMENT.requests, "acme/old": { kind: "registry", version: "^1.0.0" } },
+      packages: [
+        ...PROJECT_ENVIRONMENT.packages,
+        specPackage({
+          name: "acme/old",
+          artifacts: [unflagged("old", "spec"), unflagged("help", "skill")],
+          exports: [{ name: "help", artifact: "help" }],
+        }),
+      ],
+    };
+    await renderTab();
+    const row = projectSection().getByTestId("env-package-acme/old");
+    expect(within(row).getByTestId("env-provides-acme/old").textContent).toBe("1 spec · 1 skill");
+    fireEvent.click(within(row).getByRole("button", { name: "What acme/old provides" }));
+    const lines = within(row).getByTestId("env-artifacts-acme/old");
+    expect(within(lines).getByTestId("env-skills-placed-acme/old").textContent).toBe("skill: help · placed for your agents");
+    // Nor does it say where the spec stands under specs/: the line reads
+    // as before.
+    expect(within(lines).getByTestId("env-artifact-acme/old-old").textContent).toBe("spec · not placed");
   });
 });
 
@@ -783,7 +961,7 @@ describe("playbook-library-94: Add…", () => {
     update(PROJECT_ID, {
       ...environments[PROJECT_ID]!,
       requests: { ...environments[PROJECT_ID]!.requests, "acme/tidy": { kind: "registry", version: "^0.3.0" } },
-      packages: [...environments[PROJECT_ID]!.packages, specPackage({ name: "acme/tidy", version: "0.3.0", artifacts: [{ id: "tidy", kind: "skill", language: "en", fallback: false }] })],
+      packages: [...environments[PROJECT_ID]!.packages, specPackage({ name: "acme/tidy", version: "0.3.0", artifacts: [{ id: "tidy", kind: "skill", language: "en", fallback: false, provided: true }] })],
     });
     expect(projectSection().getByTestId("add-note").textContent).toBe("Added acme/tidy 0.3.0 · 1 skill");
     // No playbook, no Enable.
@@ -812,8 +990,8 @@ describe("playbook-library-94: Add…", () => {
           name: "acme/tidy",
           version: "0.3.0",
           artifacts: [
-            { id: "sort", kind: "playbook", language: "en", fallback: false },
-            { id: "sweep", kind: "playbook", language: "en", fallback: false },
+            { id: "sort", kind: "playbook", language: "en", fallback: false, provided: true },
+            { id: "sweep", kind: "playbook", language: "en", fallback: false, provided: true },
           ],
         }),
       ],

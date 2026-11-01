@@ -202,6 +202,11 @@ msgstr "{count, plural, other {# 个文件}} · 会话文件、对话记录，�
 msgid "{count, plural, one {# item} other {# items}}"
 msgstr "{count} 个条目"
 
+#. beneath a package's spec line on the Packages tab: the placed spec's links to another package's spec, dropped until that package is added; {name} is that package, such as acme/glossary
+#: src/components/PackageArtifacts.tsx
+msgid "{count, plural, one {# link waits} other {# links wait}} for {name}"
+msgstr "{count, plural, other {# 个链接}}等待 {name}"
+
 #: src/components/SpecView.tsx
 msgid "{count, plural, one {# match} other {# matches}}"
 msgstr "{count, plural, other {# 个匹配}}"
@@ -482,8 +487,8 @@ msgstr "{name} · 在 {space} 的 {group} 中"
 msgid "{name} · in Personal at {space}"
 msgstr "{name} · 在 {space} 的个人中"
 
-#. Add…'s registry tab: a package name typed in full that the registry's search does not list, as for a private package
-#: src/components/EnvironmentSection.tsx
+#. a package name in full that the registry's search does not list, as for a private package: Add…'s registry tab, or a spec's waiting links whose Add found no such package
+#: src/lib/environments.ts
 msgid "{name} · not listed publicly"
 msgstr "{name} · 未公开列出"
 
@@ -1056,10 +1061,10 @@ msgstr "适配器选项；模型支持未验证。"
 #. create this player in your own roster
 #. register the typed path as an existing repository
 #. register the typed path as an existing repository
-#: src/components/EnvironmentSection.tsx
 #: src/components/ProjectPalette.tsx
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceMembers.tsx
+#: src/lib/environments.ts
 msgid "Add"
 msgstr "添加"
 
@@ -1178,16 +1183,16 @@ msgstr "已加入“接下来” — 见项目概览。"
 #. the Use this folder control, while the folder is paired
 #. the package is being added to spex.yaml
 #. the request is being written
-#: src/components/EnvironmentSection.tsx
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceMembers.tsx
 #: src/components/SpaceRepairs.tsx
+#: src/lib/environments.ts
 msgid "Adding…"
 msgstr "添加中…"
 
 #. the title of Add in Add…'s registry tab: its consequence; {name} is the package
-#: src/components/EnvironmentSection.tsx
+#: src/lib/environments.ts
 msgid "Adds {name} to spex.yaml and installs it"
 msgstr "将 {name} 添加到 spex.yaml 并安装"
 
@@ -3522,6 +3527,11 @@ msgstr "来自 {name}（{count}）"
 #: src/components/AppletTab.tsx
 msgid "from {name} {version}"
 msgstr "来自 {name} {version}"
+
+#. a placed spec's package node, where its Edit control would stand: {name} is the spec package it came from, as org/pkg, {version} that package's version
+#: src/components/SpecView.tsx
+msgid "From {name} {version} · placed by Spex"
+msgstr "来自 {name} {version} · 由 Spex 放入"
 
 #. a playbook row: the package and version it comes from, e.g. from acme/triage 1.2.0
 #: src/components/PlaybooksTab.tsx
@@ -6794,10 +6804,35 @@ msgstr "Space"
 msgid "Space address"
 msgstr "Space 地址"
 
+#. a package's spec line on the Packages tab: its placed copy in specs/ was edited, so installs leave it as the project's own; keep specs/ as it is
+#: src/components/PackageArtifacts.tsx
+msgid "spec · edited in specs/ — left as yours"
+msgstr "规约 · 已在 specs/ 中编辑 — 归你所有"
+
+#. a package's spec line on the Packages tab: its placed copy in specs/ was edited, so installs leave it as the project's own; {version} is the package's newer release, waiting for someone to merge it into that file; keep specs/ as it is
+#: src/components/PackageArtifacts.tsx
+msgid "spec · edited in specs/ — left as yours · {version} waiting"
+msgstr "规约 · 已在 specs/ 中编辑 — 归你所有 · {version} 待合并"
+
+#. a package's spec line on the Packages tab: an install placed its spec in the project's specs/ at {path}, such as specs/packages/glossary.md; keep the path as it is
+#: src/components/PackageArtifacts.tsx
+msgid "spec · in {path}"
+msgstr "规约 · 位于 {path}"
+
+#. a package's spec line on the Packages tab: the project has no specs/ folder to place its spec in, and scaffolding the project's specs makes one; keep specs/ as it is
+#: src/components/PackageArtifacts.tsx
+msgid "spec · needs specs/ — scaffold first"
+msgstr "规约 · 需要 specs/ — 请先生成"
+
 #. a package's spec line on the Packages tab: its spec is not in the agents' folders
 #: src/components/PackageArtifacts.tsx
 msgid "spec · not placed"
 msgstr "规约 · 未放入"
+
+#. a package's spec line on the Packages tab: its spec is not placed because a file of the same name, {file} such as glossary.md, already stands in the project's specs/; keep specs/ and the file name as they are
+#: src/components/PackageArtifacts.tsx
+msgid "spec · not placed — specs/ holds {file} already"
+msgstr "规约 · 未放入 — specs/ 中已有 {file}"
 
 #. a package's spec line on the Packages tab: its spec stands in the agents' folders as a skill
 #: src/components/PackageArtifacts.tsx
@@ -8024,6 +8059,11 @@ msgstr "正在写回复"
 #: src/components/DraftSourceTab.tsx
 msgid "Writing…"
 msgstr "写入中…"
+
+#. tooltip on a placed spec's provenance: Spex wrote the file from the spec package {name} (org/pkg) at {version}, and editing the file makes it the project's own
+#: src/components/SpecView.tsx
+msgid "Written by Spex from {name} {version} — an edit makes it yours"
+msgstr "由 Spex 根据 {name} {version} 写入——编辑后即归你所有"
 
 #. the choices note; {name} is that placement's Space's display name, or the path placement's remote
 #: src/components/SpaceSync.tsx

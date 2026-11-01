@@ -3,7 +3,7 @@
 
 // The project's Packages and Playbooks tabs' reading of environments
 // (DR-104, DR-172): your own group's spex repository, where a publish
-// goes, the words for sources, version requirements, what a package
+// goes, the words for sources, version requirements, Add, what a package
 // provides and the core's busy states, the built-in package, lists joined
 // in the reader's language, and the two name rules the tabs check in place.
 // Pure functions; the components render them. Every phrase is read when
@@ -164,6 +164,38 @@ export function requirementChoices(version: string): { requirement: string; labe
   return choices;
 }
 
+/** The requirement a registry search result stands at before the reader
+ * picks another (playbook-library-92): the first its first version
+ * offers, or undefined where it lists none. */
+export function firstRequirement(versions: readonly string[]): string | undefined {
+  const first = versions[0];
+  return first === undefined ? undefined : requirementChoices(first)[0]?.requirement;
+}
+
+/** Add's tooltip, wherever a package is added by name: Add…'s tabs and
+ * a spec's waiting links (playbook-library-92). */
+export const addsTitle = (name: string): string =>
+  i18n._({
+    id: "Adds {name} to spex.yaml and installs it",
+    comment: "the title of Add in Add…'s registry tab: its consequence; {name} is the package",
+    values: { name },
+  });
+
+/** A package the registry's search does not list, as Add…'s Registry
+ * tab and a waiting link's Add name it (playbook-library-92, DR-152). */
+export const notListedPhrase = (name: string): string =>
+  i18n._({
+    id: "{name} · not listed publicly",
+    comment: "a package name in full that the registry's search does not list, as for a private package: Add…'s registry tab, or a spec's waiting links whose Add found no such package",
+    values: { name },
+  });
+
+/** Add, or "Adding…" while its request runs. */
+export const addLabel = (busy: boolean): string =>
+  busy
+    ? i18n._({ id: "Adding…", comment: "the package is being added to spex.yaml" })
+    : i18n._({ id: "Add", comment: "add this package to spex.yaml and install it" });
+
 /** Where a package comes from, as its source glyph's tooltip reads it
  * (playbook-library-92, environments-29): the request's own words for a
  * package spex.yaml names, the lock's for one another package
@@ -214,12 +246,21 @@ export function sourceTooltip(
   }
 }
 
+/** Whether a package's release provides the artifact (environments-1):
+ * one it does not is a sibling's support, installed and placed nowhere
+ * (environments-6), and the tab neither lists nor counts it
+ * (playbook-library-92). A core older than `provided` sends no flag, and
+ * every artifact it reports reads as provided. */
+export function isProvided(artifact: { provided?: boolean }): boolean {
+  return artifact.provided !== false;
+}
+
 /** What a package provides, in one phrase (playbook-library-92): "1 spec
- * · 2 skills · 1 playbook", each kind with an act of its own counted, in
- * that order; empty where it holds none. */
+ * · 2 skills · 1 playbook", each kind its release provides with an act
+ * of its own counted, in that order; empty where it provides none. */
 export function providesPhrase(artifacts: readonly EnvironmentPackage["artifacts"][number][]): string {
   const count = (kind: EnvironmentPackage["artifacts"][number]["kind"]): number =>
-    artifacts.filter((artifact) => artifact.kind === kind).length;
+    artifacts.filter((artifact) => artifact.kind === kind && isProvided(artifact)).length;
   const parts: string[] = [];
   const specs = count("spec");
   if (specs > 0) {

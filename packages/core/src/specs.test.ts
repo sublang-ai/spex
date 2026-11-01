@@ -2,13 +2,15 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // SPECV coverage: fixture spec trees in the packages-only layout
-// (DR-012, DR-000) driving parseSpecTree, path confinement for
+// (DR-012, DR-000) driving parseSpecTree, placed specs told by their
+// marker and the install record (spec-view-67), path confinement for
 // specs.read and specs.write, the digest-token write (spec-view-47),
 // an end-to-end parse of the staged Academy corpus, and one protocol
 // round-trip through the service.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import {
   chmodSync,
   existsSync,
@@ -743,6 +745,87 @@ posixTest("a symlink escaping the project is skipped with a notice", () => {
     ),
     JSON.stringify(tree.notices),
   );
+});
+
+// ---------------------------------------------------------------------------
+// Placed specs (spec-view-10, DR-174)
+// ---------------------------------------------------------------------------
+
+test("spec-view-67: a placed spec is told by its marker and the install record's hash", () => {
+  const placed = [
+    "<!-- Placed by Spex from acme/tools 1.2.0; an edit makes this file yours. -->",
+    "",
+    "# tools: Tools",
+    "",
+    "## External Behavior",
+    "",
+    "### tools-1",
+    "",
+    "The tool shall run.",
+    "",
+  ].join("\n");
+  const dir = fixture({
+    "specs/packages/tools.md": placed,
+    "specs/packages/auth.md":
+      "# auth: A\n\n## External Behavior\n\n### auth-1\n\nOne.\n",
+  });
+  const record = (specs: Record<string, unknown>): void => {
+    mkdirSync(join(dir, ".spex"), { recursive: true });
+    writeFileSync(
+      join(dir, ".spex", "placed.json"),
+      JSON.stringify({ format: 1, specs }),
+    );
+  };
+  const tools = (sha256: string) => ({
+    "acme/tools": { path: "specs/packages/tools.md", sha256, waiting: {} },
+  });
+  const marked = { name: "acme/tools", version: "1.2.0" };
+
+  // No install record, as on a fresh clone: the marker alone tells,
+  // and the file parses as it would without it.
+  let tree = parseSpecTree(dir);
+  assert.deepEqual(file(tree, "tools").placed, marked);
+  assert.equal(file(tree, "tools").title, "Tools");
+  assert.deepEqual(file(tree, "tools").items.map((entry) => entry.id), ["tools-1"]);
+  // A file without the marker is the project's own.
+  assert.equal(file(tree, "auth").placed, undefined);
+
+  // A record holding the file's hash: the package's copy.
+  record(tools(createHash("sha256").update(placed).digest("hex")));
+  tree = parseSpecTree(dir);
+  assert.deepEqual(file(tree, "tools").placed, marked);
+  assert.equal(file(tree, "auth").placed, undefined);
+
+  // A record holding another hash: an edited copy, marked nothing.
+  record(tools("0".repeat(64)));
+  tree = parseSpecTree(dir);
+  assert.equal(file(tree, "tools").placed, undefined);
+  assert.deepEqual(file(tree, "tools").items.map((entry) => entry.id), ["tools-1"]);
+
+  // A record listing only other files, or none that reads, leaves the
+  // marker to tell.
+  record({
+    "acme/other": { path: "specs/packages/other.md", sha256: "0".repeat(64), waiting: {} },
+  });
+  assert.deepEqual(file(parseSpecTree(dir), "tools").placed, marked);
+  writeFileSync(join(dir, ".spex", "placed.json"), "{");
+  assert.deepEqual(file(parseSpecTree(dir), "tools").placed, marked);
+});
+
+test("only the exact marker on the first line marks a file placed", () => {
+  const marker =
+    "<!-- Placed by Spex from acme/tools 1.2.0; an edit makes this file yours. -->";
+  const body = "# tools: Tools\n\n## External Behavior\n\n### tools-1\n\nOne.\n";
+  const placed = (text: string) => parseSpecFileText(text, "tools").placed;
+  // A byte order mark and CRLF line ends are no difference.
+  assert.deepEqual(placed(`﻿${marker}\r\n\r\n${body}`), {
+    name: "acme/tools",
+    version: "1.2.0",
+  });
+  assert.equal(placed(`\n${marker}\n\n${body}`), undefined);
+  assert.equal(placed(`${marker.replace("1.2.0", "latest")}\n\n${body}`), undefined);
+  assert.equal(placed(`${marker.replace("acme/tools", "tools")}\n\n${body}`), undefined);
+  assert.equal(placed(`${marker.replace("yours.", "yours")}\n\n${body}`), undefined);
 });
 
 // ---------------------------------------------------------------------------
