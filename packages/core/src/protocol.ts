@@ -406,11 +406,50 @@ export interface EnvironmentPackage {
   source: { kind: "registry" | "path" | "git" | "builtin"; detail: string };
   direct: boolean;
   requiredBy: string[];
-  artifacts: { id: string; kind: "source" | "spec" | "skill" | "playbook" | "applet"; language: string | null; fallback: boolean }[];
+  artifacts: {
+    id: string;
+    kind: "source" | "spec" | "skill" | "playbook" | "applet";
+    language: string | null;
+    fallback: boolean;
+    /** The release provides it — its `provides` absent or listing its
+     * kind, and no sibling naming it in `from` or `requires`
+     * (environments-1); one not provided is its sibling's support,
+     * installed and placed nowhere (environments-6). */
+    provided: boolean;
+  }[];
   exports: { name: string; artifact: string }[];
   installed: boolean;
   /** A path source absent on this device: its path, else null. */
   missingPath: string | null;
+  /** Where the package's provided spec stands in a project's environment
+   * (environments-14); absent where it provides no spec, and in your own
+   * group's environment, whose spec is placed as a skill named in
+   * `exports` (environments-8). */
+  placement?: {
+    /** The provided spec's placement under `specs/` (environments-41). */
+    spec?: {
+      /** "placed": the package's copy stands at `path`; "edited": the
+       * file at `path` is neither the derivation nor the copy last
+       * recorded, so it is left standing as the reader's; "blocked": a
+       * file of its basename under `specs/` that is not this package's
+       * copy — or the copy of an earlier `<org>` placing the same `<pkg>`
+       * — holds the place; "no-specs": the root holds no `specs/`, so
+       * nothing is placed until it is scaffolded (environments-41). */
+      state: "placed" | "edited" | "blocked" | "no-specs";
+      /** Relative to the environment's root: the copy's
+       * `specs/packages/<pkg>.md` while placed or edited, the blocking
+       * file while blocked, and the path it would take while the root
+       * holds no `specs/` (environments-41). */
+      path: string;
+      /** Each package, `<org>/<pkg>`, whose spec the derivation's removed
+       * links wait for, with the count of links waiting for it; empty
+       * where none wait (environments-41). */
+      waiting: { name: string; count: number }[];
+      /** While edited, the version of the newer release waiting under
+       * `.spex/` to be merged; absent where none waits (environments-14). */
+      waitingVersion?: string;
+    };
+  };
 }
 
 /** A playbook an environment exports, as the Playbooks surface lists it
@@ -1925,6 +1964,12 @@ export interface SpecFileInfo {
   notices: string[];
   /** Parse-failure notice; items may be partial when set. */
   error?: string;
+  /** A spec an install placed: the package, `<org>/<pkg>`, and version
+   * the marker on its first line names, where its bytes carry the hash
+   * the install record under `.spex/` holds for it or no record lists
+   * it; absent for an edited copy and every other file, so the view
+   * offers it no Edit (spec-view-10, DR-174). */
+  placed?: { name: string; version: string };
 }
 
 export interface SpecRecordInfo {
