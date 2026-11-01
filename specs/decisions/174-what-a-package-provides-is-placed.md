@@ -29,7 +29,7 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 
 ### The author declares what the package provides
 
-- `meta.yaml` gains `provides`, a list of artifact kinds the project is offered: `[spec]` for a spec package, `[skill]` for a skill, `[playbook, skill]` for a playbook also callable through a skill of its own. Absent, every kind the package holds.
+- `meta.yaml` gains `provides`, a list of artifact kinds the project is offered: `[spec]` for a spec package, `[skill]` for a skill, `[playbook, skill]` for a playbook also callable through a skill of its own. Absent, every kind the package holds; an empty list is refused.
 - An artifact a sibling names in `from` or `requires` is that sibling's support and is never offered, whatever `provides` says: a playbook's source spec stays its source, a skill a playbook requires stays the playbook's.
 - Kinds, not ids: `provides` reads as the package's nature; `requires` already gives per-artifact precision where it is needed.
 
@@ -37,7 +37,7 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 
 | Kind, when provided | Where an install places it |
 | --- | --- |
-| spec | `specs/packages/<pkg>.md` under a root holding `specs/`; under a root holding none — your own group's — the generated skill of DR-115, in the user-level agent folders |
+| spec | in a project, `specs/packages/<pkg>.md` under a root holding `specs/`; in your own group's environment, whose root holds none, the generated skill of DR-115 in the user-level agent folders |
 | skill | the agent folders, as today |
 | playbook | available to enable, with its generated skill, as today |
 | applet | its tab, as today |
@@ -47,17 +47,17 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 
 ### A placed spec is Spex's copy, derived once per install
 
-- It is written from the release's spec file in its chosen language with its citations rewritten (below), its hash recorded in the install record, and committed with the code by the reader like `spex.yaml` and `spex.lock`, so a fresh clone installs to no diff and a version move shows the adopted spec's change in review.
-- An install never overwrites a copy whose bytes differ from what it recorded: the copy stands, the newer version waits, and the install reports it — the moment a person or an agent merges.
+- It is written from the release's spec file in its chosen language, opening with one comment line — `<!-- Placed by Spex from <org>/<pkg> <version>; an edit makes this file yours. -->` — so a reader, an agent, the linter and a fresh clone know the file without `.spex/`, its citations rewritten (below), its path, package, version and hash recorded in the install record, and committed with the code by the reader like `spex.yaml` and `spex.lock`, so a fresh clone installs to no diff and a version move shows the adopted spec's change in review.
+- A file whose bytes equal the derivation is the package's copy, record or no record; one equal to the hash last recorded is rewritten when the derivation moves; any other is edited: the install leaves it standing, places nothing over it and reports it, naming the version that waits — the moment a person or an agent merges.
 - The copy leaves when the package is removed or no longer provides its spec, unless edited: then it is the project's own, and that is how a project forks a spec.
 - A file of that basename already in `specs/` that is not this package's copy blocks the placement, reported; of two packages of one `<pkg>`, the second is not placed. No alias renames a placed spec: its basename is its identity.
-- A root without `specs/` places no spec and reports it, naming `spex scaffold`.
+- A project's root without `specs/` places no spec and reports it, naming `spex scaffold`.
 
 ### A citation crosses a release's boundary by rewrite, in both directions
 
 - An address `spex:<org>/<pkg>#<id>` cites another release's spec item and exists only inside a release: `spex-packages/`, the registry, `.spex/`. `specs/` holds plain relative links, always.
-- `export`, tree to release: a relative citation whose target is the spec of a published or exported package becomes its address; one whose target is a local spec of no package is removed, the phrase kept, with a warning naming the item and the target; a decision record's link keeps its text and loses its link, warned the same way. A citation never carries its meaning [[meta-15](../meta.md#meta-15)], so what is lost is the claim of a binding, which the author may restate in the item's own words.
-- Place, release to tree: an address whose package's spec stands in this `specs/` becomes a relative link; one whose package does not is removed, the phrase kept, with a warning naming the package and `spex add <org>/<pkg>` to link them. Placed specs are derived again whenever the set of placed specs changes, so adding the cited package later makes its links appear.
+- `export`, tree to release: a relative citation whose target is the spec of a published or exported package becomes its address; one whose target is a local spec of no package is removed, the phrase kept, with a warning naming the item and the target; one whose target a `<pkg>.md` two packages under development claim is removed the same way, the warning naming both; one whose target is `meta.md` at the specs root, which the scaffold puts in every tree, is kept as it is; a decision record's link keeps its text and loses its link, warned the same way. A citation never carries its meaning [[meta-15](../meta.md#meta-15)], so what is lost is the claim of a binding, which the author may restate in the item's own words.
+- Place, release to tree: an address whose package's spec stands in this `specs/` becomes a relative link; one whose package does not is removed, the phrase kept, with a warning naming the package and `spex add <org>/<pkg>` to link them; a relative link to `meta.md` is kept as it is. Placed specs are derived again whenever the set of placed specs changes, so adding the cited package later makes its links appear.
 - A publish uploads the folder as it is; the registry reads no prose.
 
 ### `spex export` builds the package from the project; `spex new` retires
@@ -80,5 +80,5 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 - Three implementation changes follow, each merged on green: the library and the command line; the core's state and the IDE's two tabs with their catalogs; the journeys.
 - A manifest without `provides` offers every kind it holds: a spec-only package's spec lands in each consumer's `specs/` at their next install, which is the change intended; a playbook compiled `from` its spec keeps that spec as its source.
 - In a project, the generated spec skill of DR-115 is no longer written; your own group's environment keeps it, so a spec added for yourself still reaches every session on this device.
-- A linter run on a project reads the install record under `.spex/` where one stands, so a placed spec unlisted in `map.md` draws no warning and the project's own files draw it as before.
+- The linter knows a placed spec by its first line, so a placed spec unlisted in `map.md` draws no warning on any checkout, and the project's own files draw it as before.
 - The registry checks a manifest's fields and refuses one it does not know, so its own check accepts `provides` in a change of its own before a manifest naming the field is published there; the stand-in registry shares the library's check and needs nothing.

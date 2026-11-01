@@ -37,8 +37,8 @@ Packages in this folder (spex.yaml, spex.lock, .spex/)
   search <query>                   Find packages at the registry
 
 Your packages
-  export <org>/<pkg> [--spec <file>] [--skill <folder>]…   Build it in spex-packages/<org>/<pkg>/ from your files
-  publish [<org>/<pkg>] [--dry-run]                         Publish it to the registry
+  new <org>/<pkg> [--skill <folder>]… [--spec <file>]   Start a package in spex-packages/<org>/<pkg>/
+  publish [<org>/<pkg>] [--dry-run]                     Publish it to the registry
 
 Sign-in
   login [--registry <url> | --space <url>]              Sign in with a code in your browser
@@ -75,7 +75,7 @@ When `spex remove <org>/<pkg>` or its alias `spex rm` runs, the CLI shall drop t
 
 #### cli-4
 
-When `spex install` or its alias `spex i` runs, the CLI shall install the lock [[environments-7](environments.md#environments-7)] and place [[environments-8](environments.md#environments-8)], resolving first [[environments-5](environments.md#environments-5)] where the lock is missing or stale, and print each package installed with its version, each placement written and what the placement left out:
+When `spex install` or its alias `spex i` runs, the CLI shall install the lock [[environments-7](environments.md#environments-7)] and place [[environments-8](environments.md#environments-8)], resolving first [[environments-5](environments.md#environments-5)] where the lock is missing or stale, and print each package installed with its version, what was placed for your agents and into `specs/` and what was left out:
 
 - a root holding no `spex.yaml` is refused naming the folder and `spex add`;
 - a lock installing as it stands resolves nothing and rewrites no file;
@@ -93,7 +93,7 @@ When `spex list` or its alias `spex ls` runs, the CLI shall print the environmen
 | --- | --- |
 | head | `Folder <root>` and `Registry <registry>`, the environment's registry named as [[cli-22](#cli-22)] names it |
 | `Added` | each request with its version requirement or folder |
-| `Installed` | each package of the lock with its version, its source — `from the registry`, `from folder <path>`, `from Git <repository> at <rev>` or `built in` — the packages requiring it, and `installed`, `not installed` or `files missing`; beneath a package providing a spec, its placement [[environments-41](environments.md#environments-41)] as `spec in specs/packages/<pkg>.md`, `spec edited in specs/packages/<pkg>.md — left as yours`, `spec not placed — specs/ holds <pkg>.md already` or `spec needs specs/ — spex scaffold`, then one line `<n> links wait for <org>/<pkg> — spex add <org>/<pkg>` per package its links wait for |
+| `Installed` | each package of the lock with its version, its source — `from the registry`, `from folder <path>`, `from Git <repository> at <rev>` or `built in` — the packages requiring it, and `installed`, `not installed` or `files missing`; beneath a package providing a spec, its placement [[environments-41](environments.md#environments-41)] as `spec in specs/packages/<pkg>.md`, `spec edited in specs/ — left as yours`, `, <version> waiting` appended where a newer release waits, `spec not placed — specs/ holds <pkg>.md already` or `spec needs specs/ — spex scaffold`, then one line `<n> links wait for <org>/<pkg> — spex add <org>/<pkg>`, `1 link waits` for one, per package its links wait for |
 | `Skills for agents` | each placed skill with the agent folders it is placed in, or `not placed` with why |
 | a root holding neither `spex.yaml` nor `spex.lock` | the one line `No packages in <root> yet — spex add <org>/<pkg>` |
 
@@ -107,7 +107,7 @@ When `spex search <query>` runs, the CLI shall ask the environment's registry, p
 
 #### cli-23
 
-When `spex export <org>/<pkg>` runs, with `--spec <file>` and `--skill <folder>` once or more naming the project's own files, and optionally `--language <tag>`, `--description <text>` and `--license <id>`, the CLI shall build `spex-packages/<org>/<pkg>/` under the root as a release folder [[environments-1](environments.md#environments-1)] from those files by copying, so the project's files stay where they are, requesting nothing from the environment ([DR-174](../decisions/174-what-a-package-provides-is-placed.md)):
+When `spex export <org>/<pkg>` runs — `--spec <file>` and `--skill <folder>`, once or more, naming the project's own files on a first export and wherever an artifact is added, and optionally `--language <tag>`, `--description <text>` and `--license <id>` — the CLI shall build `spex-packages/<org>/<pkg>/` under the root as a release folder [[environments-1](environments.md#environments-1)] from those files by copying, so the project's files stay where they are, requesting nothing from the environment ([DR-174](../decisions/174-what-a-package-provides-is-placed.md)):
 
 | Written | Content |
 | --- | --- |
@@ -193,12 +193,12 @@ The published `@sublang/spex` package shall export the package-manager library �
 
 #### cli-15
 
-When the packed CLI, installed into a scratch prefix from `npm pack`, runs with a scratch home against the library's stand-in registry in a scratch Git working folder, with no core running, the integration suite shall assert:
+When the packed CLI, installed into a scratch prefix from `npm pack`, runs with a scratch home against the library's stand-in registry in a scratch Git working folder holding a scaffolded `specs/`, with no core running, the integration suite shall assert:
 
 - `spex --help` prints the usage as [[cli-21](#cli-21)] writes it, `spex add --help` and `spex scaffold --help` print that command's lines and options, and `spex --version` prints the installed version, each exiting `0` and writing nothing [[cli-21](#cli-21)];
 - `spex export acme/hello --skill .claude/skills/greet --spec specs/packages/hello.md` writes `spex-packages/acme/hello/` with its `meta.yaml` carrying `provides: [skill, spec]`, README, LICENSE, skill and spec — the spec's citation of an installed package's spec written as an address and its citation of another project spec removed with a warning naming both — writes no request, leaves the project's two files as they were, and ends naming the folder and the two publish commands; a second `spex export acme/hello` after an edit to the project's spec refreshes the release's copy; each refusal of the list writes nothing [[cli-23](#cli-23)];
-- `spex add demo/tool@^1.0.0` and `spex add demo/other` from the stand-in registry write the requirement given and `^` at the newest listed non-prerelease version, resolve, install under `.spex/packages/` and place, with `.spex/.gitignore` ignoring everything, and each refusal of the list writes nothing [[cli-2](#cli-2)]; `spex add demo/spec`, a package providing a spec citing `demo/other` and `demo/absent` by address, prints its spec placed at `specs/packages/spec.md` with the one link to `demo/other` relative and `1 links wait for demo/absent — spex add demo/absent` [[cli-2](#cli-2)];
-- `spex list` heads with `Folder` and `Registry` naming the stand-in registry's display name, lists both requests under `Added`, each package under `Installed` with its version, `from the registry` and `installed`, `demo/spec` with `spec in specs/packages/spec.md` and its waiting line, then `spec edited in specs/packages/spec.md — left as yours` after a hand edit, each placed skill under `Skills for agents` with its folders, a stale lock last with what changed and `spex update`, the committed files alone last with `Not installed yet — spex install`, and, in a folder holding neither file, prints `No packages in <folder> yet — spex add <org>/<pkg>` alone [[cli-6](#cli-6)]; `spex search tool` lists the registry's match with its versions newest first [[cli-7](#cli-7)];
+- `spex add demo/tool@^1.0.0` and `spex add demo/other` from the stand-in registry write the requirement given and `^` at the newest listed non-prerelease version, resolve, install under `.spex/packages/` and place, with `.spex/.gitignore` ignoring everything, and each refusal of the list writes nothing [[cli-2](#cli-2)]; `spex add demo/spec`, a package providing a spec citing `demo/other` and `demo/absent` by address, prints its spec placed at `specs/packages/spec.md` with the one link to `demo/other` relative and `1 link waits for demo/absent — spex add demo/absent` [[cli-2](#cli-2)];
+- `spex list` heads with `Folder` and `Registry` naming the stand-in registry's display name, lists both requests under `Added`, each package under `Installed` with its version, `from the registry` and `installed`, `demo/spec` with `spec in specs/packages/spec.md` and its waiting line, then `spec edited in specs/ — left as yours` after a hand edit, each placed skill under `Skills for agents` with its folders, a stale lock last with what changed and `spex update`, the committed files alone last with `Not installed yet — spex install`, and, in a folder holding neither file, prints `No packages in <folder> yet — spex add <org>/<pkg>` alone [[cli-6](#cli-6)]; `spex search tool` lists the registry's match with its versions newest first [[cli-7](#cli-7)];
 - a second scratch folder holding the committed `spex.yaml` and `spex.lock` alone, `spex install` there resolves nothing and yields byte-identical `.spex/packages/` and placements, and a second `spex install` rewrites nothing; with `spex.yaml` alone, it resolves first; with neither, it is refused naming `spex add` [[cli-4](#cli-4)];
 - a lock recording the app's built-in package at a checksum no registry serves installs the rest and marks the built-in `built in`, and `spex list` reads it `built in` and `not installed` [[cli-4](#cli-4)] [[cli-6](#cli-6)];
 - once the registry publishes `demo/tool` 1.1.0, `spex update` moves the lock and prints both versions, and prints that nothing moved when run again [[cli-5](#cli-5)];
