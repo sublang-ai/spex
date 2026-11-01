@@ -15,7 +15,7 @@
 // registry offers "Sign in to publish" in Publish's place (DR-172).
 
 import type { Locator, Page } from "@playwright/test";
-import { cpSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
 import { AUTHORING_SOURCE } from "@sublang/spex-core/testing";
@@ -348,11 +348,12 @@ test("playbook-library-114: a local spec-and-skill package publishes without a p
     await expect(packageSource(installed, name)).toHaveAttribute("title", /^From the registry · /);
     await expect(installed).toContainText("1 spec · 1 skill");
     await expect(installed.getByTestId(`env-installed-${name}`)).toHaveText("Installed");
-    // Expanded, the row lists the installed spec and skill, each placed
-    // for the agents (playbook-library-92).
+    // Expanded, the row lists the installed spec, placed in the
+    // project's scaffolded specs/, and the skill, placed for the agents
+    // (playbook-library-92, DR-174).
     await installed.getByRole("button", { name: `What ${name} provides` }).click();
     const lines = installed.getByTestId(`env-artifacts-${name}`);
-    await expect(lines.getByTestId(`env-artifact-${name}-${id}`)).toHaveText("spec · placed as a skill");
+    await expect(lines.getByTestId(`env-artifact-${name}-${id}`)).toHaveText(`spec · in specs/packages/${id}.md`);
     await expect(lines.getByTestId(`env-skills-placed-${name}`)).toHaveText("skill: notes-summary · placed for your agents");
     await expect(lines.getByTestId(`env-skills-unplaced-${name}`)).toHaveCount(0);
     const acts = await rowMenu(installed);
@@ -361,7 +362,8 @@ test("playbook-library-114: a local spec-and-skill package publishes without a p
     await page.keyboard.press("Escape");
     await expect(installed.getByTestId("publish")).toHaveCount(0);
     expect(readFileSync(join(other.projectDir, ".agents", "skills", "notes-summary", "SKILL.md"), "utf8")).toBe(skill);
-    expect(readFileSync(join(other.projectDir, ".agents", "skills", `${HOST_LOGIN}-${id}`, `${id}.md`), "utf8")).toBe(spec);
+    expect(readFileSync(join(other.projectDir, "specs", "packages", `${id}.md`), "utf8")).toBe(`<!-- Placed by Spex from ${name} 0.1.0; an edit makes this file yours. -->\n\n${spec}`);
+    expect(existsSync(join(other.projectDir, ".agents", "skills", `${HOST_LOGIN}-${id}`))).toBe(false);
   } finally { await other.close(); }
 
   // Signed out of the second Space, the row still publishes; signed out
