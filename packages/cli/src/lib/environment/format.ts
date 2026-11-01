@@ -7,7 +7,9 @@
 // and `playbooks/` by language, `applets/` without one. The core reads
 // a release from the registry, a Git commit, a path inside a working
 // folder or the app's built-in spec package through these checks, and
-// refuses any other with every reason it finds.
+// refuses any other with every reason it finds. The manifest's
+// `provides` says which of its artifacts the release offers the project
+// (DR-174).
 
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
@@ -38,6 +40,9 @@ export interface Manifest {
   license?: string;
   repository?: string;
   dependencies: Record<string, string>;
+  /** The artifact kinds the project is offered, as the manifest's
+   * `provides` lists them; absent where it has none (environments-1). */
+  provides?: ArtifactKind[];
   artifacts: Record<string, Artifact>;
 }
 
@@ -183,7 +188,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-const MANIFEST_FIELDS = new Set(["format", "org", "name", "version", "description", "license", "repository", "dependencies", "artifacts"]);
+const MANIFEST_FIELDS = new Set(["format", "org", "name", "version", "description", "license", "repository", "dependencies", "provides", "artifacts"]);
 const ARTIFACT_FIELDS = new Set(["kind", "language", "from", "requires", "generated-by"]);
 
 function isExtension(key: string): boolean {
@@ -268,6 +273,25 @@ export function parseManifest(raw: unknown): { manifest: Manifest | null; issues
       };
     }
   }
+  // The kinds the project is offered (environments-1, DR-174): a list
+  // of the five kinds, each once.
+  let provides: ArtifactKind[] | undefined;
+  if (raw.provides !== undefined) {
+    if (!Array.isArray(raw.provides)) {
+      issues.push({ path: at, rule: "provides", message: "provides is not a list of artifact kinds" });
+    } else {
+      provides = [];
+      for (const kind of raw.provides as unknown[]) {
+        if (typeof kind !== "string" || !(ARTIFACT_KINDS as readonly string[]).includes(kind)) {
+          issues.push({ path: at, rule: "provides", message: `provides kind ${JSON.stringify(kind ?? null)} is not one of ${ARTIFACT_KINDS.join(", ")}` });
+        } else if (provides.includes(kind as ArtifactKind)) {
+          issues.push({ path: at, rule: "provides", message: `provides lists ${kind} twice` });
+        } else {
+          provides.push(kind as ArtifactKind);
+        }
+      }
+    }
+  }
   if (issues.length > 0) return { manifest: null, issues };
   return {
     manifest: {
@@ -279,6 +303,7 @@ export function parseManifest(raw: unknown): { manifest: Manifest | null; issues
       ...(typeof raw.license === "string" ? { license: raw.license } : {}),
       ...(typeof raw.repository === "string" ? { repository: raw.repository } : {}),
       dependencies,
+      ...(provides !== undefined ? { provides } : {}),
       artifacts,
     },
     issues,
@@ -315,8 +340,27 @@ export function serializeManifest(manifest: Manifest): string {
     ...(manifest.license !== undefined ? { license: manifest.license } : {}),
     ...(manifest.repository !== undefined ? { repository: manifest.repository } : {}),
     ...(Object.keys(manifest.dependencies).length > 0 ? { dependencies: manifest.dependencies } : {}),
+    ...(manifest.provides !== undefined ? { provides: manifest.provides } : {}),
     artifacts,
   }, { lineWidth: 0 });
+}
+
+/** The ids of the artifacts a release provides (environments-1,
+ * DR-174): each whose kind `provides` lists — every kind where it lists
+ * none — save one a sibling names in `from` or `requires`, which is
+ * that sibling's support whatever `provides` lists. */
+export function providedArtifacts(manifest: Manifest): Set<string> {
+  const kinds = manifest.provides !== undefined && manifest.provides.length > 0 ? new Set<ArtifactKind>(manifest.provides) : null;
+  const support = new Set<string>();
+  for (const [id, artifact] of Object.entries(manifest.artifacts)) {
+    if (artifact.from !== undefined && artifact.from !== id) support.add(artifact.from);
+    for (const required of artifact.requires) if (required !== id) support.add(required);
+  }
+  const provided = new Set<string>();
+  for (const [id, artifact] of Object.entries(manifest.artifacts)) {
+    if ((kinds === null || kinds.has(artifact.kind)) && !support.has(id)) provided.add(id);
+  }
+  return provided;
 }
 
 /** Where a release path lies: a root file, an artifact's folder (with

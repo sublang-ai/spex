@@ -47,22 +47,23 @@ After a clone, `spex install` installs what `spex.lock` records. Public
 packages need no sign-in; private ones need `spex login` first. Put real
 names in place of the examples.
 
-Start a package from a skill you already have, then publish it:
+Build a package from a skill you already have, then publish it:
 
 ```sh
 spex login
-spex new my-org/my-skill --skill .claude/skills/my-skill --move
+spex export my-org/my-skill --skill .claude/skills/my-skill
 spex publish my-org/my-skill --dry-run
 spex publish my-org/my-skill
 ```
 
 `spex login` signs you in to the registry with a code in your browser:
-open the address it prints and enter the code it shows. `spex new`
-starts `spex-packages/my-org/my-skill/` from the skill, adds it to
-`spex.yaml` and installs it. `--move` moves the skill into the package,
-and Spex places it back in `.claude/skills/` for your agent. The dry run
-shows the registry, the version and the files, and publishes nothing.
-Publishing needs an org that is yours at that registry.
+open the address it prints and enter the code it shows. `spex export`
+builds `spex-packages/my-org/my-skill/` by copying the skill, which
+stays in `.claude/skills/` for your agent; it adds nothing to
+`spex.yaml`. After you edit the skill, `spex export my-org/my-skill`
+refreshes the copy. The dry run shows the registry, the version and the
+files, and publishes nothing. Publishing needs an org that is yours at
+that registry.
 
 ## spex.yaml and spex.lock
 
@@ -155,7 +156,7 @@ installed version.
 
 | Command | What it does |
 | --- | --- |
-| `spex new <org>/<pkg> [--skill <folder>]… [--spec <file>]` | Start a package in `spex-packages/<org>/<pkg>/` |
+| `spex export <org>/<pkg> [--spec <file>] [--skill <folder>]…` | Build it in `spex-packages/<org>/<pkg>/` from your files |
 | `spex publish [<org>/<pkg>] [--dry-run]` | Publish it to the registry |
 
 ### Sign-in
@@ -199,24 +200,34 @@ them in full.
   package changed. In a folder with no packages, it says so and names
   `spex add`.
 
-### `spex new`
+### `spex export`
 
 - `<org>` and `<pkg>` are lowercase letters, digits and single hyphens,
   at most 64 characters each.
+- It copies: your skill folders and your spec stay where they are, and
+  nothing is added to `spex.yaml`.
 - Each `--skill` folder needs a `SKILL.md` whose frontmatter `name` is an
   Agent Skills name. It lands at `skills/<language>/<name>/`.
 - The `--spec` file must be named `<pkg>.md`. It lands at
   `specs/<language>/<pkg>.md`. A package holds at most one spec.
+- The spec's citations are rewritten for the release: one of the spec of
+  a package in `spex-packages/`, or of one this folder installs, becomes
+  its address, `spex:<org>/<pkg>#<id>`; one of a spec of no package is
+  dropped, its words kept; a decision record's link keeps its text. Each
+  citation dropped or reduced is printed as a warning.
 - `--language <tag>` sets `<language>`, else `en`.
-- `meta.yaml` starts at version `0.1.0`. Its description is
-  `--description <text>`, else the first skill's `description`, else the
-  spec's first paragraph under its Intent heading. Its license is
-  `--license <id>`, else `MIT` where the folder's `LICENSE` begins with
-  "MIT License", else `Apache-2.0`. The folder's `LICENSE` is copied in.
-- `--move` moves the skill folders instead of copying them. A skill moved
-  out of `.claude/skills/` comes back there, placed by Spex. Without
-  `--move`, your own folder stays and Spex leaves it alone; the skill's
-  line reads `not .claude/skills (yours is there)`.
+- A first export writes `meta.yaml` at version `0.1.0`, with `provides`
+  listing the kinds you gave. Its description is `--description <text>`,
+  else the first skill's `description`, else the spec's first paragraph
+  under its Intent heading. Its license is `--license <id>`, else `MIT`
+  where the folder's `LICENSE` begins with "MIT License", else
+  `Apache-2.0`. The folder's `LICENSE` is copied in, and a README made.
+- Run again, it refreshes each artifact from your files: the spec
+  `<pkg>.md` wherever it stands under `specs/`, and each skill from a
+  folder of its name in `.claude/skills/` or `.agents/skills/` that Spex
+  did not place. `meta.yaml` stays as you left it; a `--skill` or
+  `--spec` naming something new adds its entry. A playbook stays as it
+  is, and anything not found is reported and left as it was.
 - Every rule is checked before anything is written. A refusal writes
   nothing.
 
@@ -432,6 +443,14 @@ Review the changes with
 The command prints a per-file indicator for every framework and seed path, plus a copy-paste-ready prompt for your AI agent to reconcile citations and local extensions with the refreshed law.
 
 ## Upgrading from an earlier release
+
+### From 5.0
+
+`spex new` is gone. `spex export <org>/<pkg>` builds the folder in its
+place by copying your files, and can be run again to refresh it; it
+adds nothing to `spex.yaml` and has no `--move`. A folder `spex new`
+made keeps working; a skill `--move` took into it is edited there, since
+`spex export` refreshes a skill only from a folder of yours.
 
 ### From 4.x
 
