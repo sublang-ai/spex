@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-174: Owned Session Start Wait
+# DR-181: Owned Session Start Wait
 
 ## Status
 
