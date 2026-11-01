@@ -185,7 +185,7 @@ for your agent; it adds nothing to `spex.yaml`. After you edit the skill,
 run `spex export my-org/my-skill` again to refresh the copy. For a spec,
 pass `--spec specs/packages/<name>.md` and name the package
 `<org>/<name>`: a citation of another package's spec becomes its
-address, and one the release cannot carry is dropped with a warning.
+address, and one the package cannot carry is dropped with a warning.
 `--description` and `--license` override what it reads. To write a
 folder by hand, follow the
 [package format](../specs/packages/environments.md#environments-1).

@@ -78,6 +78,7 @@ the top level of the Git work tree, else the current folder.
 | `spex.lock` | the exact version, source and file digests of every package installed | commit it |
 | `.spex/` | the installed files and the skills made for your agents | ignored by its own `.gitignore` |
 | `spex-packages/<org>/<pkg>/` | each package you develop here | commit it |
+| `specs/packages/<pkg>.md` | the spec a package provides, placed in your `specs/` | commit it |
 | `.claude/skills/`, `.agents/skills/` | the skills placed for your agents | ignored through `.git/info/exclude` |
 
 A `spex.yaml` looks like this:
@@ -117,10 +118,16 @@ checked against the digests in `spex.lock` and kept once in the home's
 
 Installed skills reach every agent. Each one is placed in
 `.claude/skills/<name>/` for Claude Code and `.agents/skills/<name>/` for
-Codex, Gemini CLI, Kimi Code and OpenCode. A spec is placed as a skill
-named `<org>-<pkg>` that holds the spec file. A playbook's launch skill
+Codex, Gemini CLI, Kimi Code and OpenCode. A playbook's launch skill
 goes to `.claude/skills/` only. A folder of yours under the same name
 stays as it is, and the command says it left that skill out.
+
+A package's spec is placed in your `specs/` as
+`specs/packages/<pkg>.md`, its first line naming the package and
+version, for you to commit with your code. Edit it and it is yours: Spex
+leaves it standing and says which newer version waits. A file of that
+name of your own keeps the spec out, and a folder without `specs/` gets
+none until you run `spex scaffold`.
 
 The Spex app reads the same files. Open the folder as a project in the
 app, before or after you use the CLI, and its **Packages** tab shows the
@@ -210,11 +217,11 @@ them in full.
   Agent Skills name. It lands at `skills/<language>/<name>/`.
 - The `--spec` file must be named `<pkg>.md`. It lands at
   `specs/<language>/<pkg>.md`. A package holds at most one spec.
-- The spec's citations are rewritten for the release: one of the spec of
-  a package in `spex-packages/`, or of one this folder installs, becomes
-  its address, `spex:<org>/<pkg>#<id>`; one of a spec of no package is
-  dropped, its words kept; a decision record's link keeps its text. Each
-  citation dropped or reduced is printed as a warning.
+- The spec's citations are rewritten for the package: one of the spec of
+  a package in `spex-packages/`, or of a spec this folder's install
+  placed, becomes its address, `spex:<org>/<pkg>#<id>`; one of a spec of
+  no package is dropped, its words kept; a decision record's link keeps
+  its text. Each citation dropped or reduced is printed as a warning.
 - `--language <tag>` sets `<language>`, else `en`.
 - A first export writes `meta.yaml` at version `0.1.0`, with `provides`
   listing the kinds you gave. Its description is `--description <text>`,
@@ -222,10 +229,10 @@ them in full.
   under its Intent heading. Its license is `--license <id>`, else `MIT`
   where the folder's `LICENSE` begins with "MIT License", else
   `Apache-2.0`. The folder's `LICENSE` is copied in, and a README made.
-- Run again, it refreshes each artifact from your files: the spec
-  `<pkg>.md` wherever it stands under `specs/`, and each skill from a
-  folder of its name in `.claude/skills/` or `.agents/skills/` that Spex
-  did not place. `meta.yaml` stays as you left it; a `--skill` or
+- Run again, it refreshes the spec and each skill from your files: the
+  spec `<pkg>.md` wherever it stands under `specs/`, and each skill from
+  a folder of its name in `.claude/skills/` or `.agents/skills/` that
+  Spex did not place. `meta.yaml` stays as you left it; a `--skill` or
   `--spec` naming something new adds its entry. A playbook stays as it
   is, and anything not found is reported and left as it was.
 - Every rule is checked before anything is written. A refusal writes
@@ -459,7 +466,7 @@ top-level commands that need no app:
 
 | 4.x | 5.0 |
 | --- | --- |
-| `spex package init <org>/<name> ...` | `spex new <org>/<pkg> ...`, writing `spex-packages/<org>/<pkg>/` |
+| `spex package init <org>/<name> ...` | `spex export <org>/<pkg> ...`, building `spex-packages/<org>/<pkg>/` from your files |
 | `spex package add <org>/<pkg> --version <requirement>` | `spex add <org>/<pkg>@<version>` |
 | `spex package add <org>/<pkg> --path <folder>` | `spex add <org>/<pkg> --path <folder>` |
 | `spex package install` | `spex install` |
