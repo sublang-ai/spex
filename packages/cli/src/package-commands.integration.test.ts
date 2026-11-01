@@ -546,13 +546,18 @@ test("cli-15: a package's spec is placed in specs/ under its marker line, its li
   const edited = `${readFileSync(placed, "utf8")}\nOur own note.\n`;
   writeFileSync(placed, edited);
   const installed = await ok(dir, "install");
-  assert.match(installed, /^Already installed demo\/spec 1\.0\.0\n {2}spec edited in specs\/ — left as yours$/m, "[cli-4] the edited copy reported, no version waiting");
+  assert.match(installed, /^Already installed demo\/spec 1\.0\.0\n {2}spec edited in specs\/ — left as yours$/m, "[cli-4] beneath the package, the spec's line as list reads it: the edited copy, no version waiting");
   assert.equal(readFileSync(placed, "utf8"), edited, "[cli-4] and left as it stands");
   assert.match(await ok(dir, "list"), /^ {2}demo\/spec +1\.0\.0 +from the registry +installed\n {4}spec edited in specs\/ — left as yours\n/m, "[cli-6] read edited");
 
+  // A newer release: beneath the moved package, its spec's line, the
+  // newer version waiting.
+  await publish("demo/spec", "1.1.0", { spec: { kind: "spec", language: "en" } }, { "specs/en/spec.md": DEMO_SPEC_MD });
+  assert.match(await ok(dir, "update"), /^Updated demo\/spec 1\.0\.0 → 1\.1\.0\n {2}spec edited in specs\/ — left as yours, 1\.1\.0 waiting$/m, "[cli-5] both versions, then the spec's line as list reads it");
+
   // Removed: the edited copy left as the project's own, an unedited one gone.
   const removed = await ok(dir, "remove", "demo/spec");
-  assert.match(removed, /^Removed demo\/spec 1\.0\.0\n {2}spec edited in specs\/ — left as yours$/m, "[cli-3] the edited copy reported in the same words");
+  assert.match(removed, /^Removed demo\/spec 1\.1\.0\n {2}spec edited in specs\/ — left as yours$/m, "[cli-3] the edited copy reported in the same words");
   assert.equal(readFileSync(placed, "utf8"), edited, "[cli-3] the edited copy stays");
   assert.deepEqual(Object.keys(readPlacedRecord(dir)?.specs ?? {}), ["demo/other"], "[cli-3] no longer Spex's copy");
   await ok(dir, "remove", "demo/other");
