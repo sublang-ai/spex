@@ -245,7 +245,8 @@ function PackageRow({
   const entries: MenuEntry[] = [];
   if (direct && publishable) {
     // Signed out at the registry, the entry reads "Sign in to publish" in
-    // Publish's place and starts that sign-in (playbook-library-93).
+    // Publish's place and starts that sign-in (playbook-library-93); until
+    // the account there is read it reads Publish (playbook-library-113).
     entries.push({
       label:
         target?.signedIn === false

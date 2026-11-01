@@ -1369,6 +1369,64 @@ describe("playbook-library-113: Publish a folder package from its row", () => {
     await vi.waitFor(() => expect(commandMock).toHaveBeenCalledWith("registry.signin.start", { origin: "https://second.test" }));
   });
 
+  test.each([
+    { lands: "signed in", reply: () => account(true) },
+    { lands: "signed out", reply: () => account(false) },
+    { lands: "as a failure", reply: () => new Error("Spex Example could not be reached.") },
+  ])("until the account at the registry is read, Publish waits as Checking… and nothing judges it; the read landing $lands decides", async ({ lands, reply }) => {
+    environments[PROJECT_ID] = local();
+    publishingReplies();
+    // The core answers each read of the account once released, its state
+    // broadcast first as the core sends it, or the read failing.
+    const reads: (() => void)[] = [];
+    const base = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation((type: string, params?: Record<string, unknown>) =>
+      type === "registry.get" && params?.origin === REGISTRY
+        ? new Promise((resolve, reject) =>
+            reads.push(() => {
+              const answer = reply();
+              if (answer instanceof Error) return reject(answer);
+              deliverServerMessageForTests({ type: "registry.state", state: answer });
+              resolve(answer);
+            }),
+          )
+        : base(type, params));
+    await renderTab({ registryAccounts: {} });
+    fireEvent.click(projectSection().getByTestId(`env-more-${NAME}`));
+    const entry = projectSection().getByTestId(`env-publish-${NAME}`);
+    expect(entry.textContent).toBe("Publish");
+    fireEvent.click(entry);
+    const waiting = row().getByTestId("publish-button") as HTMLButtonElement;
+    expect(waiting.textContent).toBe("Checking…");
+    expect(waiting.disabled).toBe(true);
+    expect(row().queryByTestId("publish-signin")).toBeNull();
+    expect(commandMock.mock.calls.some(([type]) => type === "environment.publish" || type === "registry.signin.start")).toBe(false);
+
+    await vi.waitFor(() => expect(reads.length).toBeGreaterThan(0));
+    await act(async () => {
+      for (const land of reads.splice(0)) land();
+    });
+    const dryRuns = () => commandMock.mock.calls.filter(([type, params]) => type === "environment.publish" && params?.dryRun);
+    if (lands === "signed in") {
+      // One ask for the preview, its summary in the button's place.
+      await row().findByTestId("publish-summary");
+      expect(row().queryByTestId("publish-button")).toBeNull();
+      expect(dryRuns()).toHaveLength(1);
+      expect(commandMock).not.toHaveBeenCalledWith("registry.signin.start", expect.anything());
+      return;
+    }
+    // Sign in to publish in Publish's place, its sign-in started only
+    // when chosen, nothing previewed.
+    const signIn = await row().findByTestId("publish-signin");
+    expect(signIn.textContent).toBe("Sign in to publish");
+    expect(row().queryByTestId("publish-button")).toBeNull();
+    if (lands === "as a failure") expect(row().getByTestId("publish-signin-error").textContent).toBe("Spex Example could not be reached");
+    expect(commandMock).not.toHaveBeenCalledWith("registry.signin.start", expect.anything());
+    expect(dryRuns()).toHaveLength(0);
+    fireEvent.click(signIn);
+    await vi.waitFor(() => expect(commandMock).toHaveBeenCalledWith("registry.signin.start", { origin: REGISTRY }));
+  });
+
   test("signed out at the registry, the overflow reads Sign in to publish in Publish's place and starts the sign-in", async () => {
     environments[PROJECT_ID] = local();
     await renderTab();
