@@ -260,8 +260,8 @@ When the core resolves or installs a Git source, it shall fetch the repository a
 
 - a `rev` naming a branch or tag resolves to its commit at resolution and the lock holds the commit alone;
 - a repository at the Git origin of no instance the home is signed in to, a signed-out instance's included, is fetched with this device's own Git, so a public one still installs and a private one reports Git's refusal.
-- On Windows, Git-source commands select Git's `core.longpaths=true` for that command only, so the mirror's pack and reference files remain usable below long cache roots without changing system, user or repository configuration ([DR-173](../decisions/173-windows-git-source-long-paths.md)).
-- A Git-source archive disables ambient automatic line-ending conversion for that command only, so a device's checkout preference does not rewrite the release bytes ([DR-173](../decisions/173-windows-git-source-long-paths.md)).
+- On Windows, Git-source commands select Git's `core.longpaths=true` for that command only, so the mirror's pack and reference files remain usable below long cache roots without changing system, user or repository configuration ([DR-180](../decisions/180-windows-git-source-long-paths.md)).
+- A Git-source archive disables ambient automatic line-ending conversion for that command only, so a device's checkout preference does not rewrite the release bytes ([DR-180](../decisions/180-windows-git-source-long-paths.md)).
 
 ### Listing
 

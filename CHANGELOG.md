@@ -17,12 +17,11 @@ source; run source with `npm ci` and `npm start` (desktop) or
 
 ### Added
 
-- Fork verification build rebased onto upstream `17657081`, retaining
-  native Windows private storage, the supplied Agent runtimes and tag-built
-  macOS arm64 / Windows x64 installers. This beta's local acceptance scope
-  is a clean reinstall and one real built-in inspection per platform;
-  Windows uses the owner's Mac ChatGPT login and Mac network proxy.
-  See [the rebase record](docs/releases/0.9.0-beta.21-fork-rebase.md).
+- Fork verification build rebased onto upstream `82961686`, preserving
+  native Windows execution and tag-built macOS arm64 / Windows x64
+  installers together with the upstream package-install and Playbooks UI.
+  DR-180 names the Windows Git-source long-path decision independently
+  from upstream DR-173. See [the rebase record](docs/releases/0.9.0-beta.22-fork-rebase.md).
 
 
 - Independent package registries ([DR-168](specs/decisions/168-independent-package-registry.md)).
