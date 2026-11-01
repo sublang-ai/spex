@@ -159,7 +159,7 @@ test("playbook-library-95: Publish from a project at the second instance reads t
   await expect(summary.getByRole("button", { name: "Publish", exact: true })).toBeVisible();
   await summary.getByTestId("publish-confirm").click();
   const done = publish.getByTestId("publish-done");
-  await expect(done).toContainText(new RegExp(`Published (${PACKAGE} )?0\\.1\\.0`), { timeout: 30_000 });
+  await expect(done).toHaveText("Published 0.1.0", { timeout: 30_000 });
   await expect(done.getByTestId("publish-link")).toHaveAttribute("href", `${second.url}/${PACKAGE}`);
   expect((await fetch(`${secondRegistry.url}/api/v1/packages/${PACKAGE}/0.1.0`)).status).toBe(200);
   expect(secondRegistry.script.received.filter((request) => request.method === "PUT")).toEqual([
@@ -189,7 +189,8 @@ test("playbook-library-95: Publish from a project at the second instance reads t
     await result.getByTestId(`registry-add-${PACKAGE}`).click();
     const receipt = packages.getByTestId("add-receipt");
     await expect(receipt.getByTestId("add-note")).toHaveText(`Added ${PACKAGE} 0.1.0 · 1 playbook`, { timeout: 30_000 });
-    await expect(receipt.getByRole("button", { name: "Enable", exact: true })).toBeVisible();
+    // The receipt's Enable is the playbook's own, in place (playbook-library-92).
+    await expect(receipt.getByRole("button", { name: `Enable /${ID}` })).toHaveText("Enable");
     const added = packageRow(packages, PACKAGE);
     await expect(added.getByTestId(`env-version-${PACKAGE}`)).toHaveText("0.1.0", { timeout: 30_000 });
     await expect(packageSource(added, PACKAGE)).toHaveAttribute("title", /^From the registry · /);
@@ -211,6 +212,9 @@ test("playbook-library-95: Publish from a project at the second instance reads t
     await enable.click();
     await expect(line.getByTestId(`env-enabled-${PACKAGE}-${ID}`)).toHaveText(`Enabled in ${PROJECT}`);
     await expect(enable).toHaveCount(0);
+    // The receipt reads where it is enabled too, its Enable gone.
+    await expect(receipt.getByTestId("add-note-enabled")).toHaveText(`Enabled in ${PROJECT}`);
+    await expect(receipt.getByTestId("add-note-enable")).toHaveCount(0);
     await expect
       .poll(() => (parse(other.readProjectConfig()) as { playbooks?: Record<string, { roles: Record<string, string> }> | null }).playbooks?.[ID]?.roles)
       .toEqual({ Triager: "dev.triager", Verifier: "dev.verifier" });
@@ -309,7 +313,7 @@ test("playbook-library-114: a local spec-and-skill package publishes without a p
   publish = await publishFromRow(row);
   await expect(publish.getByTestId("publish-target")).toHaveText(`Publish ${name} 0.1.0 to ${SECOND_HOST_NAME}`);
   await publish.getByTestId("publish-confirm").click();
-  await expect(publish.getByTestId("publish-done")).toContainText(new RegExp(`Published (${name} )?0\\.1\\.0`));
+  await expect(publish.getByTestId("publish-done")).toHaveText("Published 0.1.0");
   await expect(publish.getByTestId("publish-link")).toHaveAttribute("href", `${second.url}/${name}`);
   expect(registry.script.received.filter((request) => request.method === "PUT").map(({ instance, account, path }) => [instance, account, path])).toEqual([[second.url, HOST_LOGIN, `/api/v1/packages/${name}/0.1.0`]]);
   expect(firstRegistry.script.received.filter((request) => request.method === "PUT")).toEqual([]);

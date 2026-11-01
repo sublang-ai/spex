@@ -52,6 +52,22 @@ test("playbook-library-120/space-116: independent same-origin registry account, 
   const signIn = packages.getByTestId("registry-signin");
   await expect(signIn).toHaveText("Sign in");
   await expect(signIn).toHaveAttribute("title", "For publishing and private packages");
+  // A registry the directory lists, chosen by its display name, is
+  // written as the registry of the project's spex.yaml; the public
+  // registry typed through "Other…" then takes its place.
+  const initial = (await app.core.command("environment.get", { repository: key })).registry?.origin;
+  expect(initial).not.toBe(host.url);
+  // The public registry here answers as the stand-in, so two entries
+  // read alike: the directory's is picked by its own origin.
+  expect(await registryEntries(packages)).toContain("Stand-in Git host");
+  const listed = packages.getByTestId(`registry-choice-${host.url}`);
+  await expect(listed).toHaveText("Stand-in Git host");
+  await expect(listed).toHaveAttribute("aria-checked", "false");
+  await listed.click();
+  await expect.poll(async () => (await app.core.command("environment.get", { repository: key })).registry?.origin).toBe(host.url);
+  await expect.poll(() => chosenEntry(chooser)).toContain("Stand-in Git host");
+  await chooseRegistry(packages, "Other…", initial);
+  await expect.poll(async () => (await app.core.command("environment.get", { repository: key })).registry?.origin).toBe(initial);
   // The Space's origin chosen through "Other…" is written as the
   // registry of the project's spex.yaml, and the chooser reads its
   // display name.
@@ -69,14 +85,23 @@ test("playbook-library-120/space-116: independent same-origin registry account, 
   const signOut = packages.getByTestId("registry-signout");
   await expect(signOut).toHaveText("Sign out");
   await expect(packages.getByTestId("registry-login")).toHaveText(`@${HOST_LOGIN}`);
-  // New playbook's one Org field on the Playbooks tab suggests the
-  // orgs that account may publish to; a typed org outside them wears
-  // "not yours to publish to", the typed name standing as typed
-  // (playbook-library-121).
+  // New playbook's one Org field on the Playbooks tab reads "Loading…"
+  // while that account's orgs are read, a failed read says so with
+  // Retry, and then suggests the orgs that account may publish to; a
+  // typed org outside them wears "not yours to publish to", the typed
+  // name standing as typed (playbook-library-121).
+  app.registry!.script.delayOrgs(1_500);
+  app.registry!.script.unavailable(1);
   await projectTab(page, "Playbooks");
   const form = page.getByTestId("new-playbook");
   const org = page.getByTestId("new-playbook-org");
+  const note = page.getByTestId("new-playbook-org-note");
+  const retry = page.getByTestId("new-playbook-orgs-retry");
+  await expect(retry).toBeVisible();
+  await retry.click();
+  await expect(note).toHaveText("Loading…");
   await expect.poll(() => orgSuggestions(page)).toEqual(["acme", "other"]);
+  app.registry!.script.delayOrgs(0);
   await org.fill("other");
   await expect(form).not.toContainText("not yours to publish to");
   await org.fill("elsewhere");
