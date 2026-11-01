@@ -33,7 +33,7 @@ test("release-40: only app tags enter CI-gated preparation, with version and not
   const commands = prepare.steps.filter((s) => s.run).map((s) => s.run);
   assert.match(commands[0], /release-notes\.mjs check --tag="\$GITHUB_REF_NAME"/);
   assert.match(commands[1], /release-notes\.mjs notes/);
-  assert.deepEqual(commands.slice(2), ["npm ci", "npm run build", "npm test"]);
+  assert.deepEqual(commands.slice(2), ["node scripts/dependency-closure.mjs --registry-only", "npm ci", "npm run build", "npm test"]);
   assert.equal(prepare.steps.find((s) => s.uses?.startsWith("actions/checkout@")).with["fetch-depth"], 0);
 });
 

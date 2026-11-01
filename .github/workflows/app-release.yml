@@ -74,6 +74,8 @@ jobs:
           --tag="$GITHUB_REF_NAME"
           --repository="$GITHUB_REPOSITORY"
           --out=release-notes.md
+      - name: Require published runtime dependencies
+        run: node scripts/dependency-closure.mjs --registry-only
       - run: npm ci
       - run: npm run build
       - name: Tests

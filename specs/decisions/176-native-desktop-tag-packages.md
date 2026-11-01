@@ -22,6 +22,7 @@ Signing credentials have not been configured.
 - Both builds must succeed before the workflow creates the GitHub release with both downloads and SHA-256 checksums.
 - Existing CI-green, version-match, test, changelog and beta gates remain; the CLI channel is unchanged.
 - Packaging never publishes independently of the final release job.
+- Release tags consume checksum-locked Cligent and Playbook versions from the public npm registry; temporary file, vendor and Git snapshots are not release inputs.
 - Downloads identify their version, platform and architecture, and release notes disclose unsigned and non-notarized status without claiming configured signing.
 - Source instructions remain available, including native Windows subject to its private-storage admission.
 
