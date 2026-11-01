@@ -856,6 +856,11 @@ msgstr "<0>{id}</0> — 不在规约树中"
 msgid "<0>{player}</0> is waiting. Answer or ask Captain to explain."
 msgstr "<0>{player}</0> 正在等待。请回答，或请 Captain 解释。"
 
+#. Readiness guidance; the variable name stays as it is
+#: src/lib/agent-cards.ts
+msgid "<0>ANTHROPIC_BASE_URL</0> is not recognized: check the address, then set its credential"
+msgstr "<0>ANTHROPIC_BASE_URL</0> 无法识别，请检查地址是否写对，再设置对应的凭据"
+
 #. a span shorter than one second
 #: src/lib/time.ts
 msgid "<1s"
@@ -1124,6 +1129,20 @@ msgstr "添加 Player"
 msgid "Add starter specs when creating"
 msgstr "创建时添加规约模板"
 
+#. Manual step for bash; the file name stays as it is
+#: src/lib/agent-cards.ts
+msgid "Add these lines to <0>~/.bash_profile</0>:"
+msgstr "把这几行加到 <0>~/.bash_profile</0>："
+
+#. Manual step for zsh; the file name stays as it is
+#: src/lib/agent-cards.ts
+msgid "Add these lines to <0>~/.zshrc</0>:"
+msgstr "把这几行加到 <0>~/.zshrc</0>："
+
+#: src/lib/agent-cards.ts
+msgid "Add these lines to your shell's login configuration file:"
+msgstr "把这几行加到你的 shell 登录配置文件里："
+
 #: src/components/ProjectPalette.tsx
 msgid "Add this project"
 msgstr "添加此项目"
@@ -1240,6 +1259,7 @@ msgstr "智能体错误"
 msgid "Agent session {session}"
 msgstr "智能体会话 {session}"
 
+#: src/components/AgentCards.tsx
 #: src/components/SettingsSurface.tsx
 msgid "Agents"
 msgstr "智能体"
@@ -1347,6 +1367,11 @@ msgstr "答复智能体"
 msgid "Answers {positions}"
 msgstr "担任 {positions}"
 
+#. Claude's requests go to Anthropic's own service
+#: src/lib/agent-cards.ts
+msgid "Anthropic official"
+msgstr "Anthropic 官方"
+
 #. a package's version requirement admitting a series of versions, such as any 1.x; {series} is that series
 #: src/lib/environments.ts
 msgid "any {series}"
@@ -1384,6 +1409,8 @@ msgstr "来自 {name} {version} 的小应用"
 
 #. confirm: apply the chosen versions
 #. confirm: apply the chosen versions
+#. give every agent of the adapter the chosen model
+#: src/components/AgentCards.tsx
 #: src/components/SpaceSync.tsx
 msgid "Apply"
 msgstr "应用"
@@ -1690,6 +1717,7 @@ msgstr "无法连接 {endpoint} 上的 Spex 核心 — 每秒重试中。网页�
 
 #. default cancel button: back out of the act
 #. default cancel button: back out of the act
+#. default cancel button: back out of the act
 #. leave an editor without saving
 #. leave an editor without saving
 #. leave an editor without saving
@@ -1709,6 +1737,7 @@ msgstr "无法连接 {endpoint} 上的 Spex 核心 — 每秒重试中。网页�
 #. leave the editor without changing anything
 #. leave the editor without changing anything
 #. stop the running compile
+#: src/components/AgentCards.tsx
 #: src/components/AgentEditor.tsx
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
@@ -1753,10 +1782,13 @@ msgstr "正在取消浏览器设置…"
 #. the session's controlling agent, by name
 #. the session's controlling agent, by name
 #. the session's controlling agent, by name
+#. the session's controlling agent, by name
+#: src/components/AgentCards.tsx
 #: src/components/CaptainPane.tsx
 #: src/components/DraftConversation.tsx
 #: src/components/RunView.tsx
 #: src/components/SettingsSurface.tsx
+#: src/lib/agent-cards.ts
 #: src/lib/session-agents.ts
 msgid "Captain"
 msgstr "Captain"
@@ -1782,10 +1814,18 @@ msgstr "Captain 工作中…"
 msgid "Change {agent} in Settings"
 msgstr "在设置中修改 {agent}"
 
+#: src/components/AgentCards.tsx
+msgid "Change it in the project's Playbooks tab"
+msgstr "需在项目的规程页修改"
+
 #. draft state chip, at most 14 characters: the source changed after the last compile
 #: src/lib/drafts.ts
 msgid "Changed"
 msgstr "已更改"
+
+#: src/components/AgentCards.tsx
+msgid "Changed a key and still not ready? Quit Spex completely and open it again."
+msgstr "改了 key 后仍未就绪，请彻底退出并重新打开 Spex。"
 
 #. an agent's setting departs from the configured one, for this session only
 #: src/components/AgentSettings.tsx
@@ -2086,6 +2126,10 @@ msgstr "代码"
 msgid "Code hosts"
 msgstr "代码托管平台"
 
+#: src/components/AgentCards.tsx
+msgid "Codex needs an official OpenAI key."
+msgstr "Codex 需要 OpenAI 官方 key。"
+
 #: src/components/SpecGraph.tsx
 msgid "Collapse {name}'s citation list"
 msgstr "收起 {name} 的引用列表"
@@ -2302,8 +2346,10 @@ msgid "Configure the Captain agent"
 msgstr "配置 Captain 智能体"
 
 #. default confirm button: go ahead with the act
+#. default confirm button: go ahead with the act
 #. verdict control: accept the delivered work
 #. verdict control: accept the delivered work
+#: src/components/AgentCards.tsx
 #: src/components/DashboardSurface.tsx
 #: src/components/DeliveryCard.tsx
 #: src/components/InlineConfirm.tsx
@@ -2637,6 +2683,10 @@ msgstr "决策记录"
 msgid "decision records {count}"
 msgstr "决策记录 {count}"
 
+#: src/components/AgentCards.tsx
+msgid "Default model: {model}"
+msgstr "默认模型：{model}"
+
 #. confirm: delete this session for good
 #. confirm: remove the authoring session for good
 #. remove the authoring session for good
@@ -2828,6 +2878,10 @@ msgstr "功能"
 #: src/lib/status-words.ts
 msgid "done"
 msgstr "已完成"
+
+#: src/components/AgentCards.tsx
+msgid "Done."
+msgstr "已完成。"
 
 #: src/components/TrustedMedia.tsx
 msgid "Download {name}"
@@ -3154,6 +3208,10 @@ msgstr "Enter 发送 · Shift+Enter 换行"
 msgid "error"
 msgstr "错误"
 
+#: src/components/AgentCards.tsx
+msgid "Every agent on {name} uses:"
+msgstr "所有使用 {name} 的角色统一用："
+
 #. the title of "Remove from this list" on a team server's Space; {place} is the server's name
 #: src/components/SpaceInstance.tsx
 msgid "Every record stays on {place}"
@@ -3163,6 +3221,10 @@ msgstr "所有记录仍保留在 {place}"
 #: src/components/SpaceInstance.tsx
 msgid "Every record stays on this computer"
 msgstr "所有记录仍保留在本机"
+
+#: src/components/AgentCards.tsx
+msgid "Every role now uses Provider default."
+msgstr "所有角色都已改为服务商默认。"
 
 #. the sharing confirm: what goes to the group
 #: src/components/SpacePlacements.tsx
@@ -3712,6 +3774,10 @@ msgstr "主机名"
 #: src/lib/spec-view-model.ts
 msgid "How the package behaves inside, hidden from its users"
 msgstr "使用者看不到的实现行为"
+
+#: src/components/AgentCards.tsx
+msgid "How to configure"
+msgstr "如何配置"
 
 #. accepting a team server's terms, which connects this computer to it
 #: src/components/SpaceServers.tsx
@@ -4298,6 +4364,10 @@ msgstr "模型 ID"
 msgid "Model list unavailable: {reason}"
 msgstr "模型列表不可用：{reason}"
 
+#: src/components/AgentCards.tsx
+msgid "Model service: {service}"
+msgstr "模型服务：{service}"
+
 #: src/components/ModelDiscoveryStatus.tsx
 msgid "Models reported by the installed runtime."
 msgstr "由已安装的运行时报告的模型。"
@@ -4461,10 +4531,6 @@ msgstr "还没有 <0>specs/</0> 目录 — 它存放规约包以及决策记录�
 msgid "No adapter named \"{adapter}\" — check the config"
 msgstr "没有名为“{adapter}”的适配器 — 请检查配置"
 
-#: src/components/SettingsSurface.tsx
-msgid "No adapters in use yet — assign agents to the Captain or a playbook role and their readiness shows here."
-msgstr "尚未使用任何适配器 — 为 Captain 或某个规程角色指定智能体后，其就绪状态会显示在这里。"
-
 #: src/components/AgentChip.tsx
 msgid "no automatic check for this adapter — verify sign-in yourself"
 msgstr "此适配器无自动检查 — 请自行确认登录状态"
@@ -4573,6 +4639,10 @@ msgstr "还没有项目 — 在<0>项目</0>中注册一个仓库，其工作就
 #: src/components/FailureCard.tsx
 msgid "No reason was reported"
 msgstr "未报告原因"
+
+#: src/components/AgentCards.tsx
+msgid "No role uses {name} yet."
+msgstr "还没有角色使用 {name}。"
 
 #. draft state chip, at most 14 characters: nothing written to the draft's source file yet
 #: src/lib/drafts.ts
@@ -4827,6 +4897,10 @@ msgstr "本机没有要发送的内容"
 #: src/components/SpaceSync.tsx
 msgid "Nothing to stop"
 msgstr "没有可停止的操作"
+
+#: src/components/AgentCards.tsx
+msgid "Nothing was written: {message} — {named}"
+msgstr "未写入任何内容：{message} — {named}"
 
 #: src/components/SettingsSurface.tsx
 msgid "Notifications"
@@ -5120,6 +5194,11 @@ msgstr "优化"
 #: src/components/ProjectPalette.tsx
 msgid "Or enter an existing Git repository path"
 msgstr "或手动输入已有 Git 仓库路径"
+
+#. configuration step: the manual way, after the setup script
+#: src/components/AgentCards.tsx
+msgid "Or set it by hand."
+msgstr "或者手动设置。"
 
 #. field of New playbook: the registry org its spec package is published under
 #: src/components/PlaybooksTab.tsx
@@ -5588,6 +5667,10 @@ msgstr "排队提交失败：{reason}"
 msgid "Queuing…"
 msgstr "排队中…"
 
+#: src/components/AgentCards.tsx
+msgid "Quit Spex completely and open it again."
+msgstr "彻底退出并重新打开 Spex。"
+
 #: src/components/SpecGraph.tsx
 msgid "Raise the threshold"
 msgstr "提高门槛"
@@ -5597,7 +5680,7 @@ msgstr "提高门槛"
 msgid "Re-check"
 msgstr "重新检查"
 
-#: src/components/SettingsSurface.tsx
+#: src/components/AgentCards.tsx
 msgid "Re-check readiness"
 msgstr "重新检查就绪状态"
 
@@ -5605,7 +5688,7 @@ msgstr "重新检查就绪状态"
 msgid "Re-read the specs/ tree"
 msgstr "重新读取 specs/ 目录树"
 
-#: src/components/SettingsSurface.tsx
+#: src/components/AgentCards.tsx
 msgid "Re-run adapter readiness checks (e.g. after signing in)"
 msgstr "重新检查适配器就绪状态（例如登录之后）"
 
@@ -5691,6 +5774,11 @@ msgstr "就绪"
 #: src/components/AgentEditor.tsx
 msgid "Reasoning effort"
 msgstr "推理强度"
+
+#. model choice mark: Provider default is the one to choose here
+#: src/components/ModelField.tsx
+msgid "Recommended"
+msgstr "推荐"
 
 #: src/components/ApprovalInbox.tsx
 msgid "Reconnect to answer these requests."
@@ -6077,8 +6165,11 @@ msgstr "本机智能体对话的续接令牌；在别处无效"
 #. take the failed read again
 #. take the failed read again
 #. try creating the config file again
+#. try creating the config file again
+#. try creating the config file again
 #. try the failed save again
 #: src/App.tsx
+#: src/components/AgentCards.tsx
 #: src/components/ComposerAttachments.tsx
 #: src/components/DashboardSurface.tsx
 #: src/components/PlaybooksTab.tsx
@@ -6166,6 +6257,20 @@ msgstr "角色"
 #: src/components/CompileBand.tsx
 msgid "roles: {roles}"
 msgstr "角色：{roles}"
+
+#. Readiness guidance; `codex login` is the command and the variable name stays as it is
+#: src/lib/agent-cards.ts
+msgid "Run codex login, or set <0>OPENAI_API_KEY</0> (an official OpenAI key)"
+msgstr "运行 codex login，或设置 <0>OPENAI_API_KEY</0>（需要 OpenAI 官方 key）"
+
+#. Readiness guidance: the Workshop's setup script, outside Spex
+#: src/lib/agent-cards.ts
+msgid "Run the setup script to configure it again"
+msgstr "运行配置脚本重新配置"
+
+#: src/components/AgentCards.tsx
+msgid "Run the Workshop setup script, as the Workshop materials describe."
+msgstr "按 Workshop 材料运行配置脚本。"
 
 #. a status word: at work now
 #. a status word: at work now
@@ -6469,10 +6574,24 @@ msgstr "会话"
 msgid "Sessions and project views"
 msgstr "会话与项目视图"
 
+#. Readiness guidance; the variable names stay as they are
+#: src/lib/agent-cards.ts
+msgid "Set <0>ANTHROPIC_AUTH_TOKEN</0> and <1>ANTHROPIC_BASE_URL</1>"
+msgstr "设置 <0>ANTHROPIC_AUTH_TOKEN</0> 和 <1>ANTHROPIC_BASE_URL</1>"
+
+#: src/components/AgentCards.tsx
+msgid "Set all to Provider default"
+msgstr "全部改为服务商默认"
+
 #. a repair's condition, for assistive technology: the reader answered that it is not kept here
 #: src/components/SpaceRepairs.tsx
 msgid "Set aside"
 msgstr "暂不处理"
+
+#. Manual step on Windows; `setx` is the command's name
+#: src/lib/agent-cards.ts
+msgid "Set each as a user environment variable — in a terminal with setx, or in the system settings:"
+msgstr "把每一项设为用户环境变量（在终端里用 setx，或在系统设置里）："
 
 #. an agent chip's title: the model and effort the agent is set to run, then the specific model its runtime reported running
 #: src/components/AgentSettings.tsx
@@ -6490,6 +6609,10 @@ msgstr "先设置智能体，再开始任务。"
 #: src/components/BrowserControl.tsx
 msgid "Set up browser"
 msgstr "设置浏览器"
+
+#: src/components/AgentCards.tsx
+msgid "Set your own credential for this agent in the Credentials section below."
+msgstr "在下方的凭据区为这个智能体设置你自己的凭据。"
 
 #. one unit's kind: the settings file
 #: src/lib/space.ts
@@ -6642,6 +6765,11 @@ msgstr "重新登录"
 #: src/lib/labels.ts
 msgid "Sign in again with that agent's CLI"
 msgstr "用该智能体的 CLI 重新登录"
+
+#. Readiness guidance; `claude` is the command and the variable name stays as it is
+#: src/lib/agent-cards.ts
+msgid "Sign in by running claude in a terminal, or set <0>ANTHROPIC_API_KEY</0>"
+msgstr "在终端运行 claude 登录，或设置 <0>ANTHROPIC_API_KEY</0>"
 
 #. beside a disabled Sync now: the project's Space is signed out; {name} its display name, or its host name before any read
 #: src/components/SpaceGroups.tsx
@@ -7249,9 +7377,21 @@ msgstr "上次编译得到的状态机"
 msgid "The compiled XState machine that drives the players"
 msgstr "驱动各 Player 的已编译 XState 状态机"
 
+#: src/components/AgentCards.tsx
+msgid "The config changed meanwhile and nothing was written: check the list and try again."
+msgstr "配置在此期间已被改动，什么都没有写入：请核对列表后重试。"
+
 #: src/state/store.ts
 msgid "The conversation could not be loaded: {reason}"
 msgstr "无法加载对话：{reason}"
+
+#: src/components/AgentCards.tsx
+msgid "The default model can't be read right now: retry, or choose a specific model."
+msgstr "暂时读不到默认模型，请重试或选一个具体模型。"
+
+#: src/components/AgentCards.tsx
+msgid "The default model can't be read right now."
+msgstr "暂时读不到默认模型。"
 
 #: src/components/SpaceSync.tsx
 msgid "The diff is cut here; the file is longer."
@@ -7374,10 +7514,30 @@ msgstr "规程编译所用的工作流 markdown"
 msgid "The workflow was aborted"
 msgstr "流程已中止"
 
+#: src/components/AgentCards.tsx
+msgid "Then quit Spex completely and open it again — see How to configure."
+msgstr "然后彻底退出并重新打开 Spex，详见「如何配置」。"
+
+#: src/components/AgentCards.tsx
+msgid "These agents change:"
+msgstr "将要修改的智能体："
+
 #. a project's members panel; {names} lists the other Spaces the records are kept at, by display name
 #: src/components/SpaceMembers.tsx
 msgid "These records are also placed at {names}"
 msgstr "这些记录也放在 {names}"
+
+#: src/components/AgentCards.tsx
+msgid "These roles name a model of their own and are left as they are:"
+msgstr "这些角色在绑定里单独指定了模型，不会修改："
+
+#: src/components/AgentCards.tsx
+msgid "These roles still name a model of their own:"
+msgstr "这些角色仍在绑定里单独指定模型："
+
+#: src/components/AgentCards.tsx
+msgid "These roles still name an official model and may bypass the model you chose:"
+msgstr "这些角色仍指定官方模型名，可能绕过你选的模型："
 
 #. stands where a project name would, for sessions with no folder
 #: src/components/SpaceRepairs.tsx
@@ -7393,6 +7553,11 @@ msgstr "思考过程"
 #: src/components/PlayerPane.tsx
 msgid "Thinking…"
 msgstr "思考中…"
+
+#. Claude's requests go to another provider; the host name stays as it is
+#: src/lib/agent-cards.ts
+msgid "Third party {host}"
+msgstr "第三方 {host}"
 
 #: src/lib/useBrowserTools.ts
 msgid "This agent cannot ask for tool approval in this conversation."
@@ -7613,6 +7778,11 @@ msgstr "就地调整 Captain 智能体"
 msgid "Type <0>/</0> in the task box to see {count, plural, one {# playbook} other {# playbooks}}"
 msgstr "在输入框输入 <0>/</0>，查看 {count} 个规程"
 
+#. the runtime reported no default model
+#: src/components/AgentCards.tsx
+msgid "Unavailable"
+msgstr "不可用"
+
 #. a required role no player answers yet
 #: src/components/PlaybooksTab.tsx
 msgid "unbound"
@@ -7670,6 +7840,11 @@ msgstr "未读轮次"
 msgid "Unreadable draft — delete it, or repair the file and restart Spex"
 msgstr "草稿无法读取 — 请删除，或修好文件后重启 Spex"
 
+#. ANTHROPIC_BASE_URL holds no address Spex can read
+#: src/lib/agent-cards.ts
+msgid "Unrecognized"
+msgstr "无法识别"
+
 #. this citation names an item absent from the tree
 #. this citation names an item absent from the tree
 #: src/components/CitationPreview.tsx
@@ -7683,7 +7858,7 @@ msgid "untitled session"
 msgstr "未命名会话"
 
 #. readiness badge: no automatic check exists for this adapter
-#: src/components/SettingsSurface.tsx
+#: src/components/AgentCards.tsx
 msgid "unverified"
 msgstr "未验证"
 
@@ -7797,6 +7972,11 @@ msgstr "使用 org/name：由连字符连接的小写单词"
 #: src/components/SpaceRepairs.tsx
 msgid "Use this folder"
 msgstr "使用此文件夹"
+
+#. the positions an agent card's adapter serves follow
+#: src/components/AgentCards.tsx
+msgid "Used by"
+msgstr "使用者："
 
 #. the accessible name of a version choice in Add…; {name} is the package
 #. the accessible name of a version choice in Add…; {name} is the package
@@ -7952,6 +8132,10 @@ msgstr "你的项目文件夹在 {place} 上的位置，记在主目录文件中
 msgid "where your project folders are on this computer, in the home file"
 msgstr "你的项目文件夹在本机的位置，记在主目录文件中"
 
+#: src/components/AgentCards.tsx
+msgid "Whether the connection works is checked on your first task"
+msgstr "连接是否有效，会在第一个任务里验证"
+
 #: src/lib/space.ts
 msgid "which process is writing right now"
 msgstr "当前正在写入的进程"
@@ -8024,6 +8208,10 @@ msgstr "正在写回复"
 #: src/components/DraftSourceTab.tsx
 msgid "Writing…"
 msgstr "写入中…"
+
+#: src/components/AgentCards.tsx
+msgid "Written, but these roles still name an official model:"
+msgstr "已写入，但这些角色仍指定官方模型名："
 
 #. the choices note; {name} is that placement's Space's display name, or the path placement's remote
 #: src/components/SpaceSync.tsx

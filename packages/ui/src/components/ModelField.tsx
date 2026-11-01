@@ -52,6 +52,8 @@ interface Choice {
   /** The row's second line: the runtime's description, or the model
    * it runs by default — its words, never ours. */
   detail?: string;
+  /** A mark beside the row's name: Provider default as recommended. */
+  mark?: string;
 }
 
 /** A text read on each render, never at module load, so the words
@@ -90,6 +92,7 @@ export function ModelField({
   allowDefault = true,
   subagent,
   off,
+  recommended = false,
 }: {
   value: string;
   models: readonly AgentModelOption[];
@@ -110,6 +113,9 @@ export function ModelField({
   /** A subagent model's configured `false`, offered as "Off" only while
    * it stands (settings-34); `selected` while the field holds it. */
   off?: { selected: boolean; onSelect(): void };
+  /** Behind a third-party service whose default model is read, the
+   * provider's default is the one to choose (settings-34, DR-174). */
+  recommended?: boolean;
 }) {
   const [custom, setCustom] = useState(false);
   const [open, setOpen] = useState(false);
@@ -139,6 +145,7 @@ export function ModelField({
       key: "provider-default",
       value: "",
       line: { text: providerDefault.name },
+      ...(recommended ? { mark: i18n._({ id: "Recommended", comment: "model choice mark: Provider default is the one to choose here" }) } : {}),
       ...("specific" in providerDefault && providerDefault.specific !== undefined ? { detail: providerDefault.specific } : {}),
     });
   }
@@ -404,7 +411,12 @@ function ModelListbox({
                 {selected ? <Icon name="check" className="h-3.5 w-3.5" /> : null}
               </span>
               <span className="flex min-w-0 flex-1 flex-col">
-                <LineView line={choice.line} id={nameId} />
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <LineView line={choice.line} id={nameId} />
+                  {choice.mark !== undefined ? (
+                    <span data-testid={`${testId}-mark`} className="shrink-0 rounded bg-emerald-100 px-1 text-[11px] text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">{choice.mark}</span>
+                  ) : null}
+                </span>
                 {choice.detail !== undefined ? (
                   <span id={detailId} className={`block min-w-0 truncate text-xs ${mutedClass}`}>
                     {choice.detail}

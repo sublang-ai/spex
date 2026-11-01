@@ -213,21 +213,21 @@ describe("SET: the Captain's row and its agent editor", () => {
 });
 
 describe("SET: adapter readiness panel", () => {
-  test("one row per adapter, with requirement and the positions it serves", () => {
+  test("a standing card per agent, with its requirement and the positions it serves", () => {
     renderSettings();
-    const claude = screen.getByTestId("agent-row-claude");
-    expect(claude.textContent).toContain("claude");
+    const claude = screen.getByTestId("agent-card-claude");
+    expect(claude.textContent).toContain("Claude");
     // Positions render per DR-019: the Captain and each playbook role.
     expect(claude.textContent).toMatch(/Captain/i);
     expect(claude.textContent).toMatch(/coder/i);
 
-    const codex = screen.getByTestId("agent-row-codex");
+    const codex = screen.getByTestId("agent-card-codex");
     expect(codex.textContent).toContain(
       "set OPENAI_API_KEY or sign in with the Codex CLI",
     );
     expect(codex.textContent).toMatch(/reviewer/i);
-    // Deduped: no third row for an adapter used twice.
-    expect(screen.queryAllByTestId(/^agent-row-/)).toHaveLength(2);
+    // Deduped: no other entry for an adapter used twice.
+    expect(screen.queryAllByTestId(/^agent-row-/)).toHaveLength(0);
   });
 
   test("re-check triggers a readiness refresh", () => {

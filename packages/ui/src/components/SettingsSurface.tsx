@@ -47,7 +47,8 @@ import {
   keyLabel,
   modKey,
 } from "../lib/shortcuts.js";
-import { AgentChip, noCheckNote, readinessWord } from "./AgentChip.js";
+import { AgentChip } from "./AgentChip.js";
+import { AgentCards } from "./AgentCards.js";
 import { AgentEditor } from "./AgentEditor.js";
 import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
@@ -257,47 +258,6 @@ function RowEditor({
     onCancel();
   };
   return <div onKeyDown={onKeyDown}>{children}</div>;
-}
-
-function ReadinessBadge({ entry }: { entry?: ReadinessEntry }) {
-  if (!entry) return null;
-  if (entry.ready === true) {
-    return (
-      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-        {readinessWord(true)}
-      </span>
-    );
-  }
-  if (entry.ready === false) {
-    // What the adapter requires is the core's own sentence.
-    return (
-      <span
-        className="rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-700 dark:bg-red-950 dark:text-red-300"
-        title={entry.requirement}
-      >
-        {readinessWord(false)}
-      </span>
-    );
-  }
-  return (
-    <span
-      className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-500 dark:bg-neutral-800"
-      title={entry.requirement ?? noCheckNote()}
-    >
-      {i18n._({ id: "unverified", comment: "readiness badge: no automatic check exists for this adapter" })}
-    </span>
-  );
-}
-
-/** "captain", or a player id trailing the roles it answers, as
- * `dev.coder (code.coder, fix.coder)` → chip copy (DR-010 §2). The
- * chip shows the lane; the whole string stays in its title. */
-function positionLabel(position: string): string {
-  if (position === "captain") {
-    return i18n._({ id: "Captain", comment: "the session's controlling agent, by name" });
-  }
-  const paren = position.indexOf(" (");
-  return paren === -1 ? position : position.slice(0, paren);
 }
 
 function ThemeInput({
@@ -1001,7 +961,6 @@ export function SettingsSurface({
   const seat = !isLocalPlace(store.place);
   const configState = store((state) => state.configState);
   const readiness = store((state) => state.readiness);
-  const refreshReadiness = store((state) => state.refreshReadiness);
   const refresh = store((state) => state.refresh);
   const [error, setError] = useState<string>();
   const [copied, setCopied] = useState(false);
@@ -1104,6 +1063,10 @@ export function SettingsSurface({
             </>
           ) : null}
           {error ? <p className="mt-2 text-xs">{error}</p> : null}
+        </div>
+        {/* Readiness stands without a config (settings-5). */}
+        <div className="mt-5">
+          <AgentCards />
         </div>
       </div>
     );
@@ -1231,50 +1194,7 @@ export function SettingsSurface({
         rows={rows}
       />
 
-      <section data-testid="agents-section" className="flex flex-col gap-2">
-        <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold text-neutral-500">{i18n._("Agents")}</h2>
-          <button
-            type="button"
-            title={i18n._("Re-run adapter readiness checks (e.g. after signing in)")}
-            onClick={() => void refreshReadiness()}
-            className="rounded-md border border-neutral-300 px-2 py-0.5 text-xs text-neutral-500 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800"
-          >
-            {i18n._("Re-check readiness")}
-          </button>
-        </div>
-        {readiness.map((entry) => (
-          <div
-            key={entry.adapter}
-            data-testid={`agent-row-${entry.adapter}`}
-            className="flex flex-wrap items-center gap-2 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm dark:border-neutral-800 dark:bg-neutral-900"
-          >
-            <span className="font-mono font-medium">{entry.adapter}</span>
-            <ReadinessBadge entry={entry} />
-            {entry.ready === false && entry.requirement ? (
-              <span className="min-w-0 flex-1 text-xs text-neutral-500">
-                {entry.requirement}
-              </span>
-            ) : null}
-            <span className="ml-auto flex flex-wrap gap-1">
-              {entry.usedBy.map((position) => (
-                <span
-                  key={position}
-                  title={position}
-                  className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
-                >
-                  {positionLabel(position)}
-                </span>
-              ))}
-            </span>
-          </div>
-        ))}
-        {readiness.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-neutral-300 px-4 py-3 text-xs text-neutral-500 dark:border-neutral-700">
-            {i18n._("No adapters in use yet — assign agents to the Captain or a playbook role and their readiness shows here.")}
-          </div>
-        ) : null}
-      </section>
+      <AgentCards />
 
       {seat ? <CredentialsSection ask={credentialHost} onAskShown={onCredentialHostShown} /> : null}
 

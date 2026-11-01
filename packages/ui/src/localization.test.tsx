@@ -469,7 +469,7 @@ describe("localization-4: the Settings surface reads the resolved language", () 
         [
           "智能体", // Agents
           "重新检查就绪状态", // Re-check readiness
-          "尚未使用任何适配器 — 为 Captain 或某个规程角色指定智能体后，其就绪状态会显示在这里。",
+          "改了 key 后仍未就绪，请彻底退出并重新打开 Spex。", // Changed a key and still not ready?
         ],
       ],
       [

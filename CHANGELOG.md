@@ -16,6 +16,15 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Added
 
+- Agents configured for a Workshop in one pass ([DR-174](specs/decisions/174-workshop-agents-in-one-pass.md)).
+  Settings always shows a Claude and a Codex card with readiness,
+  model service, default model and how to configure each on this
+  computer; readiness takes every credential form Playbook takes and
+  says whether the runtime or the credential is missing. A card gives
+  every agent on its adapter one model in one validated write, and
+  behind a third-party Claude service lists the roles still naming an
+  official model and sets them to Provider default. While the Workshop
+  switch is on, adapter choices are Claude and Codex. Protocol 32.
 - Independent package registries ([DR-168](specs/decisions/168-independent-package-registry.md)).
   Library offers a registry setting and separate registry sign-in; the
   public registry lists available Spaces beside the custom Space URL.
