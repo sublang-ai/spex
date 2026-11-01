@@ -905,10 +905,23 @@ test("environments-14, environments-41 through a real core: environment.get says
     "[environments-14] edited, the newer release's version waiting");
   assert.ok(readFileSync(copy).equals(edited), "the edited copy stands");
 
+  // Rewritten without its marker line, the copy the record names is
+  // still the package's: edited, not blocked (environments-41).
+  const ours = "# fare: Our Own Fare Rules\n\n## Intent\n\nOurs.\n";
+  writeFileSync(copy, ours);
+  assert.deepEqual((await fareOf(key))?.placement, { spec: { state: "edited", path: "specs/packages/fare.md", waiting: [], waitingVersion: "1.1.0" } },
+    "[environments-14] the recorded copy read edited, the newer release's version waiting");
+
   // A project file of that name that is not the copy holds the place.
-  writeFileSync(copy, "# fare: Our Own Fare Rules\n\n## Intent\n\nOurs.\n");
-  assert.deepEqual((await fareOf(key))?.placement, { spec: { state: "blocked", path: "specs/packages/fare.md", waiting: [] } },
+  const owned = gitFolder(join(dir, "owned"));
+  execFileSync(process.execPath, [SPEX_CLI, "scaffold", owned], { stdio: "ignore" });
+  const theirs = join(owned, "specs", "packages", "fare.md");
+  writeFileSync(theirs, ours);
+  const { id: ownedKey } = await client.expectOk("project.register", { path: owned });
+  await client.expectOk("environment.request", { repository: ownedKey, name: "acme/fare", request, wait: true });
+  assert.deepEqual((await fareOf(ownedKey))?.placement, { spec: { state: "blocked", path: "specs/packages/fare.md", waiting: [] } },
     "[environments-14] blocked by a file of its name");
+  assert.equal(readFileSync(theirs, "utf8"), ours, "the project's file as it was");
 
   // A working folder holding no specs/ waits for one; none is made.
   const bare = gitFolder(join(dir, "bare"));
