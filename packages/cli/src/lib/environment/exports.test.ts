@@ -10,14 +10,16 @@
 // tree, recorded with its version, and derived again when the set of
 // placed specs changes; an edited copy left standing, the newer
 // release's version waiting; a removal taking an unedited copy and
-// keeping an edited one; a file of the name blocking the placement where
-// it is neither the derivation nor the package's copy by the record or
-// its marker line, the second package of one `<pkg>` included; a
-// committed copy holding the derivation adopted on a fresh clone, and
-// one at a newer release's version on a device whose record held the
-// older hash; a root without `specs/` falling back to the generated
-// skill and reporting it; your own group's writing the skill alone; and
-// each state read back from the files.
+// keeping an edited one; a file of the basename anywhere under `specs/`
+// blocking the placement where it is neither the derivation nor the
+// package's copy by the record or its marker line, the second package
+// of one `<pkg>` included, and a recorded copy whose marker line the
+// reader removed read as edited; a committed copy holding the
+// derivation adopted on a fresh clone, one at a newer release's version
+// on a device whose record held the older hash, and one of a package
+// whose files are not here standing for the links citing it; a project
+// without `specs/` placing no spec and reporting it; your own group's
+// writing the generated skill; and each state read back from the files.
 
 import { after, test } from "node:test";
 import assert from "node:assert/strict";
@@ -161,6 +163,58 @@ test("environments-41: an edited copy stands across a re-placement, reported edi
   assert.equal(read(root, "specs/packages/tools.md"), edited);
 });
 
+test("environments-41: a recorded copy whose marker line the reader removed is edited, not blocked, its record kept", async () => {
+  const root = scratchRoot(true);
+  await place(root, { "acme/tools": specRelease(root, "acme/tools", "1.0.0") });
+  const recorded = readPlacedRecord(root);
+  const unmarked = `${read(root, "specs/packages/tools.md").split("\n").slice(2).join("\n")}\nOur note.\n`;
+  writeFileSync(join(root, "specs", "packages", "tools.md"), unmarked);
+  const lock = { "acme/tools": specRelease(root, "acme/tools", "1.1.0", [], " Now newer.") };
+  const expected = [placement("acme/tools", "edited", [], "1.1.0")];
+  assert.deepEqual(readSpecPlacements(root, lockOf(lock)), expected, "[environments-14] read edited, the record vouching for the path, the newer version waiting by the record");
+  assert.deepEqual((await place(root, lock)).specs, expected, "[environments-41] the package's copy by the record: edited, not blocked");
+  assert.equal(read(root, "specs/packages/tools.md"), unmarked, "[environments-41] left standing");
+  assert.deepEqual(readPlacedRecord(root), recorded, "[environments-41] its record kept, so the install still knows the file as this package's");
+});
+
+test("environments-41: a file of the basename in a collection under specs/ blocks the placement, nothing written at specs/packages/", async () => {
+  const root = scratchRoot(true);
+  mkdirSync(join(root, "specs", "packages", "core"), { recursive: true });
+  writeFileSync(join(root, "specs", "packages", "core", "tools.md"), "# tools: the project's own\n");
+  const lock = { "acme/tools": specRelease(root, "acme/tools", "1.0.0") };
+  assert.deepEqual(readSpecPlacements(root, lockOf(lock)), [placement("acme/tools", "blocked")], "[environments-14] read blocked");
+  const report = await place(root, lock);
+  assert.deepEqual(report.specs, [placement("acme/tools", "blocked")], "[environments-41] blocked, reported");
+  assert.equal(existsSync(join(root, "specs", "packages", "tools.md")), false, "[environments-41] no second file of one basename under specs/");
+  assert.equal(read(root, "specs/packages/core/tools.md"), "# tools: the project's own\n", "[environments-41] the project's file as it was");
+  assert.equal(existsSync(placedRecordPath(root)), false, "[environments-41] nothing recorded");
+});
+
+test("environments-41: on a fresh clone a committed copy of a package whose files are not here stands for the links citing it", async () => {
+  const root = scratchRoot(true);
+  const other = specRelease(root, "acme/other", "1.0.0", ["acme/tools"]);
+  // A folder package whose folder this clone lacks.
+  const tools: Resolution = {
+    source: { path: "kits/tools", version: "1.0.0", dependencies: {}, requires: {} },
+    requiredBy: [],
+    artifacts: { tools: { language: "en", fallback: false } },
+    files: [],
+    exports: { "acme-tools": "tools" },
+  };
+  const committedTools = placedText("acme/tools", "1.0.0", specText("tools"));
+  const committedOther = placedText("acme/other", "1.0.0", specText("other").replace("shall stand.", "shall stand [[tools-1](tools.md#tools-1)]."));
+  writeFileSync(join(root, "specs", "packages", "tools.md"), committedTools);
+  writeFileSync(join(root, "specs", "packages", "other.md"), committedOther);
+  const lock = { "acme/other": other, "acme/tools": tools };
+  assert.deepEqual(readSpecPlacements(root, lockOf(lock)), [placement("acme/other", "placed")], "[environments-14] read placed, its link's package standing by its marker line");
+  const stamps = [stamp(join(root, "specs", "packages", "tools.md")), stamp(join(root, "specs", "packages", "other.md"))];
+  const report = await place(root, lock);
+  assert.deepEqual(report.specs, [placement("acme/other", "placed")], "[environments-41] the copy citing it is the derivation, not edited");
+  assert.deepEqual(report.missing, ["acme/tools"], "[environments-8] the folder package reported missing");
+  assert.deepEqual([stamp(join(root, "specs", "packages", "tools.md")), stamp(join(root, "specs", "packages", "other.md"))], stamps, "[environments-41] nothing rewritten, as on the device that committed them");
+  assert.deepEqual(Object.keys(readPlacedRecord(root)?.specs ?? {}), ["acme/other"], "[environments-41] the copy whose files are not here recorded by no derivation");
+});
+
 test("environments-41: a copy is the package's by its marker line — a committed copy edited under it is edited, not blocked — and a file without it, or naming another package, blocks", async () => {
   // A fresh clone: committed copies, no record.
   const root = scratchRoot(true);
@@ -278,13 +332,14 @@ test("environments-43: a copy committed at a newer release's version reads as th
   assert.notEqual(entry.sha256, olderHash);
 });
 
-test("environments-8: a root without specs/ places the spec as its generated skill and reports it, and your own group's writes the skill alone", async () => {
+test("environments-8: a project without specs/ places its spec nowhere and reports it, and your own group's writes the generated skill", async () => {
   const project = scratchRoot(false);
   const release = specText("tools");
   const report = await place(project, { "acme/tools": specRelease(project, "acme/tools", "1.0.0") });
   assert.deepEqual(report.specs, [placement("acme/tools", "no-specs")], "[environments-41] reported waiting for specs/");
-  for (const folder of [".claude", ".agents"]) {
-    assert.equal(read(project, `${folder}/skills/acme-tools/tools.md`), release, `[environments-8] the generated skill in ${folder}/skills, the spec byte for byte`);
+  assert.deepEqual(report.skills, [], "[environments-8] no generated skill in a project");
+  for (const folder of [".claude", ".agents", ".spex"]) {
+    assert.equal(existsSync(join(project, folder, "skills", "acme-tools")), false, `[environments-8] nothing in ${folder}/skills`);
   }
   assert.equal(existsSync(join(project, "specs")), false, "[environments-41] no specs/ made");
   assert.equal(existsSync(placedRecordPath(project)), false, "[environments-41] nothing recorded");
@@ -326,6 +381,8 @@ test("environments-6: a support skill is not copied, a peer playbook gets its sk
   assert.equal(existsSync(join(root, "specs", "packages", "widgets.md")), false, "[environments-6] a playbook's source spec is not placed");
   assert.equal(existsSync(join(root, "specs", "packages", "tips.md")), false, "[environments-6] a spec of a kind provides does not list is not placed");
   assert.deepEqual(report.specs, [], "[environments-41] no spec placement to report");
-  assert.equal(JSON.stringify(lock), exportsBefore, "[environments-6] the lock's names as resolved");
+  // The lock names every selected artifact, as a Spex resolving before
+  // `provides` wrote it: a name no release provides is placed nowhere.
+  assert.equal(JSON.stringify(lock), exportsBefore, "[environments-6] an older lock placed as it stands, never rewritten by a placement");
   assert.ok(existsSync(join(root, ".spex", "packages", "acme", "widgets", "skills", "en", "lint", "SKILL.md")), "[environments-6] installed with the rest");
 });

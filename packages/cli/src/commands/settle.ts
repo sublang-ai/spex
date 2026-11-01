@@ -16,7 +16,7 @@
 // package providing a spec where that spec stands in `specs/` with the
 // packages its links wait for (cli-6, environments-41, DR-174).
 
-import { existsSync, lstatSync, readFileSync, statSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync } from "node:fs";
 import { isAbsolute, join, posix } from "node:path";
 
 import {
@@ -357,12 +357,6 @@ function standing(path: string): boolean {
   try { lstatSync(path); return true; } catch { return false; }
 }
 
-/** Whether the root holds `specs/`, where a provided spec stands as a
- * file rather than a skill (environments-8). */
-function holdsSpecs(root: string): boolean {
-  try { return statSync(join(root, "specs")).isDirectory(); } catch { return false; }
-}
-
 /** Where one exported skill of a package stands, read from the files:
  * the agent folders holding it as Spex's export, those a folder of the
  * reader's keeps it out of, and why it is placed nowhere (environments-8). */
@@ -374,16 +368,21 @@ export function skillPlaces(root: string, lock: Lock, name: string, state: Packa
   const dir = packageRoot(name, resolution, installedDir(root), root);
   let manifest: Manifest | null = null;
   try { manifest = dir === null ? null : pathManifest(dir, "."); } catch { manifest = null; }
-  // A skill for the agents of what the release provides alone, a
-  // provided spec one only where the root holds no `specs/`, whose
-  // `specs/packages/` it stands in otherwise (environments-6,
-  // environments-8); a release not here is read as its lock names it.
+  // A skill for the agents of what the release provides alone, and
+  // never a provided spec's: the command line's root is a project's,
+  // where a spec stands in `specs/packages/` or nowhere (environments-6,
+  // environments-8); a release not here is read as its lock names it,
+  // its spec by the file the lock selects, or a folder's by its id
+  // `<pkg>` (environments-1).
   const provided = manifest === null ? null : providedArtifacts(manifest);
-  const specsHere = holdsSpecs(root);
+  const pkg = name.slice(name.indexOf("/") + 1);
+  const lockedSpec = (id: string): boolean => (isPathSource(resolution.source)
+    ? id === pkg
+    : resolution.files.some((file) => file.path.startsWith("specs/") && file.path.endsWith(`/${id}.md`)));
   const skills = Object.keys(resolution.exports).sort().filter((skill) => {
     const id = resolution.exports[skill]!;
-    if (manifest === null || provided === null) return true;
-    return provided.has(id) && !(specsHere && manifest.artifacts[id]?.kind === "spec");
+    if (manifest === null || provided === null) return !lockedSpec(id);
+    return provided.has(id) && manifest.artifacts[id]?.kind !== "spec";
   });
   const folders = projectFolders().map((entry) => ({ ...entry, skills: new Set(exportedIn(root, entry.folder)) }));
   return skills.map((skill) => {

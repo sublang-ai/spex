@@ -24,11 +24,12 @@
 // and the file left for the reader to commit: a copy holding the
 // derivation is the package's, record or no record; one holding the
 // bytes recorded follows its release; one edited since, its marker line
-// still naming the package, stands as the reader's; one whose package no
-// longer places it leaves unless edited; and a file of its name that is
-// none of these blocks it. Under a root holding no `specs/` — a project
-// not scaffolded yet, or your own group's clone — a generated skill
-// holds the spec file instead.
+// or one the record names at its path, stands as the reader's; one
+// whose package no longer places it leaves unless edited; and a file of
+// its basename anywhere under `specs/` that is none of these blocks it.
+// A project not scaffolded yet, its root holding no `specs/`, places no
+// spec and reports it; your own group's clone, which is no project, has
+// a generated skill hold the spec file instead.
 // Playbooks go to the launcher as module locations at launch, bound to
 // the environment whose lock exported them.
 
@@ -96,10 +97,11 @@ export interface ExportOptions {
 
 /** Where a provided spec stands under a project's `specs/`
  * (environments-41, environments-14): placed at its path; edited there,
- * its marker line still naming its package, so left as the reader's — as
- * is an edited copy its package no longer places, the project's own now;
- * blocked by a file of its name that is neither the derivation nor the
- * package's copy; or waiting for `specs/` where the root holds none. */
+ * the package's copy by its marker line or the record, so left as the
+ * reader's — as is an edited copy its package no longer places, the
+ * project's own now; blocked by a file of its basename under `specs/`
+ * that is neither the derivation nor the package's copy; or waiting for
+ * `specs/` where the root holds none, placed nowhere. */
 export type SpecState = "placed" | "edited" | "blocked" | "no-specs";
 
 export interface SpecPlacement {
@@ -501,6 +503,27 @@ function standingDigest(root: string, path: string): string | null {
   }
 }
 
+/** Every regular file under a root's `specs/` by its basename, each
+ * with its paths from the root, in a walk of sorted entries that follows
+ * no link: what a spec's basename, unique across the tree (meta-10),
+ * meets wherever a collection holds it (environments-41). */
+function specsByBasename(root: string): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  const walk = (relativeDir: string): void => {
+    let entries: string[];
+    try { entries = readdirSync(join(root, ...relativeDir.split("/"))).sort(); } catch { return; }
+    for (const entry of entries) {
+      const path = `${relativeDir}/${entry}`;
+      let stat;
+      try { stat = lstatSync(join(root, ...path.split("/"))); } catch { continue; }
+      if (stat.isDirectory()) walk(path);
+      else if (stat.isFile()) out.set(entry, [...(out.get(entry) ?? []), path]);
+    }
+  };
+  walk(SPECS);
+  return out;
+}
+
 /** A record's waiting counts as a report lists them. */
 function waitingList(waiting: Record<string, number>): { name: string; count: number }[] {
   return Object.keys(waiting).sort().map((name) => ({ name, count: waiting[name]! }));
@@ -508,9 +531,9 @@ function waitingList(waiting: Record<string, number>): { name: string; count: nu
 
 /** How an environment's provided specs are placed (environments-8): as
  * files under `specs/packages/` where the root is the working folder
- * and holds `specs/`; as generated skills in a working folder holding
- * none, each reported waiting for `specs/`; and as generated skills
- * alone where the root is no working folder — your own group's clone. */
+ * and holds `specs/`; nowhere in a working folder holding none, each
+ * reported waiting for `specs/`; and as generated skills where the root
+ * is no working folder — your own group's clone. */
 type SpecMode = "files" | "no-specs" | "skills";
 
 function specMode(root: string, workingFolder: string | null): SpecMode {
@@ -566,24 +589,27 @@ interface SpecPlan {
  *
  * 1. each spec claims `specs/packages/<pkg>.md`, the first in name order
  *    taking it and a later one blocked, as is one whose path a copy of a
- *    package whose files are not here holds by the record;
+ *    package whose files are not here holds — by the record, or by the
+ *    marker line of the copy standing there, as on a fresh clone;
  * 2. a recorded copy its package no longer places there — removed, no
  *    longer providing its spec, or now blocked — leaves through `remove`
  *    while it holds the bytes recorded, else stays as the project's own,
  *    reported edited where its package places no spec now;
- * 3. a claimed spec is blocked by a file at its path holding neither the
- *    bytes recorded nor a marker line naming its package: the derivation
- *    opens with that line, so such a file is never the derivation,
- *    whatever specs stand — which specs stand is known before any is
- *    derived, and no copy differs only for another's presumed standing;
+ * 3. a claimed spec is blocked by a file at its path the record does not
+ *    name for it and whose marker line names another package or none, or
+ *    by a file of its basename elsewhere under `specs/` whose marker line
+ *    does not name its package: the derivation opens with that line, so
+ *    such a file is never the derivation, whatever specs stand — which
+ *    specs stand is known before any is derived, and no copy differs
+ *    only for another's presumed standing;
  * 4. each spec not blocked is derived for the specs standing — those not
- *    blocked, and the recorded copies of packages whose files are not
- *    here — and is placed where the file holds the derivation, recorded
+ *    blocked, and the copies of packages whose files are not here that
+ *    hold their paths — and is placed where the file holds the derivation, recorded
  *    with or without an earlier record, as on a fresh clone; written
  *    where no file stands or the file holds the bytes recorded; and
- *    otherwise edited, its marker line naming its package: left
- *    standing, its record kept as it was, the release's version waiting
- *    where the marker names another.
+ *    otherwise edited, the package's by its marker line or its record:
+ *    left standing, its record kept as it was, the release's version
+ *    waiting where the marker, else the record, names another.
  */
 function planSpecs(root: string, sources: SpecSource[], unread: ReadonlySet<string>, remove: (path: string, digest: string) => boolean): SpecPlan {
   const previous = readPlacedRecord(root)?.specs ?? {};
@@ -604,6 +630,14 @@ function planSpecs(root: string, sources: SpecSource[], unread: ReadonlySet<stri
     if (!unread.has(name) || names.has(name)) continue;
     record[name] = previous[name]!;
     held.set(previous[name]!.path, name);
+  }
+  // So does a committed copy its marker line names it in, record or no
+  // record, as a fresh clone finds it: it stands for the links citing
+  // it, and nothing is recorded of bytes no derivation here vouches for.
+  for (const name of [...unread].sort()) {
+    if (names.has(name) || record[name] !== undefined) continue;
+    const path = placedSpecPath(name.slice(name.indexOf("/") + 1));
+    if (!held.has(path) && standingMarker(root, path)?.name === name) held.set(path, name);
   }
 
   // 1. The basename's claim: the first in name order.
@@ -630,14 +664,18 @@ function planSpecs(root: string, sources: SpecSource[], unread: ReadonlySet<stri
   const candidates = new Map([...claims].map(([path, source]) => {
     const entry = previous[source.name];
     const found = {
+      path,
       digest: digestOf(path),
       recorded: entry !== undefined && entry.path === path ? entry : null,
       marker: gone.has(path) ? null : standingMarker(root, path),
     };
     return [source.name, found] as const;
   }));
-  for (const [name, { digest, recorded, marker }] of candidates) {
-    if (digest !== null && digest !== recorded?.sha256 && marker?.name !== name) blocked.add(name);
+  const elsewhere = specsByBasename(root);
+  for (const [name, { path, digest, recorded, marker }] of candidates) {
+    if (digest === NOT_A_FILE || (digest !== null && recorded === null && marker?.name !== name)) blocked.add(name);
+    const others = (elsewhere.get(basename(path)) ?? []).filter((other) => other !== path && !gone.has(other));
+    if (others.some((other) => standingMarker(root, other)?.name !== name)) blocked.add(name);
   }
 
   // 4. Each derived for the specs standing: placed, written or edited.
@@ -656,7 +694,8 @@ function planSpecs(root: string, sources: SpecSource[], unread: ReadonlySet<stri
     if (digest !== null && digest !== spec.sha256 && digest !== recorded?.sha256) {
       // Edited since it was placed: the reader's to merge.
       if (recorded !== null) record[source.name] = recorded;
-      const waiting = marker !== null && marker.version !== source.version ? { waitingVersion: source.version } : {};
+      const known = marker?.name === source.name ? marker.version : recorded?.version;
+      const waiting = known !== undefined && known !== source.version ? { waitingVersion: source.version } : {};
       placements.push({ name: source.name, path, state: "edited", waiting: [], ...waiting });
       continue;
     }
@@ -799,12 +838,12 @@ export async function exportEnvironment(options: ExportOptions): Promise<ExportR
           const file = join(root, "specs", language, `${id}.md`);
           if (!existsSync(file)) { if (!report.missing.includes(name)) report.missing.push(name); unread.add(name); continue; }
           // In a project's `specs/`, a file placed after the skills
-          // (environments-41); else a generated skill, the spec file in
-          // its chosen language byte for byte beside a SKILL.md saying
-          // what spec package it is (DR-115), a project's reported
-          // waiting for `specs/`.
+          // (environments-41); in a project holding no `specs/`, nowhere,
+          // reported waiting for it; else, your own group's, a generated
+          // skill, the spec file in its chosen language byte for byte
+          // beside a SKILL.md saying what spec package it is (DR-115).
           if (mode === "files") { specSources.push({ name, id, version, file }); continue; }
-          if (mode === "no-specs") report.specs.push({ name, path: placedSpecPath(id), state: "no-specs", waiting: [] });
+          if (mode === "no-specs") { report.specs.push({ name, path: placedSpecPath(id), state: "no-specs", waiting: [] }); continue; }
           mkdirSync(target, { recursive: true });
           copyFileSync(file, join(target, `${id}.md`));
           chmodSync(join(target, `${id}.md`), 0o644);
