@@ -96,6 +96,24 @@ Where the shared config path is the default one and holds nothing, when the core
 - A former file inside the home is removed once the canonical file is published, and its directory with it when that leaves the directory empty; the XDG file is left in place.
 - A former file whose path-shaped `playbooks.<id>.from` or relative `sessions` locator would resolve to a different target from the shared path's directory is left where it is and reported, since moving it would retarget the locator; the shared config path is your own group's clone's [[storage-1](storage.md#storage-1)].
 
+#### core-service-44
+
+When a client sends `config.batch {ops, revision}` — one or more `captain.set`, `player.set` or `playbook.role.bind` operations over your own group's file and the revision of the config state the client saw [[core-service-45](#core-service-45)] — the core service shall apply them all or none ([DR-174](../decisions/174-workshop-agents-in-one-pass.md)):
+
+1. The file is read; where its revision differs from `revision`, the batch is refused `conflict` and nothing is composed or written.
+2. The operations apply in order, each as a Settings save applies it — a merge patch altering only the keys it provides and preserving comments, key order and hand-written fields — and the result is validated once, as a whole, by the shared rule set [[core-service-16](#core-service-16)].
+3. A violation refuses the whole batch `invalid_config`, each violation carrying its rule identifier and field location, as a refused Settings save's do, and the indexes of the operations touching what it covers — one, several or none — an operation touching the block it edits and, through a player it edits, every binding naming that player.
+4. The result is one versioned write, refused `conflict` where the file changed since the read ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)).
+5. The reply is the config state the files stand at after the write, as a Settings save's is.
+
+- Another operation kind or an empty list is refused `invalid_request`; a batch names no repository and writes your own group's file alone.
+
+#### core-service-45
+
+Where your own group's config is valid, its config state shall carry a `revision` — the digest of the bytes of your own group's config file the state was composed from — the same value for the same state in the reply to `config.get`, in the `config.state` broadcast and in the reply to a successful `config.edit` or `config.batch` [[core-service-44](#core-service-44)] ([DR-174](../decisions/174-workshop-agents-in-one-pass.md)):
+
+- any writer's change to the file's bytes changes the revision of the state composed after it.
+
 ### Sessions
 
 #### core-service-4
@@ -533,9 +551,13 @@ When serving a stored session, the core service shall resolve its immutable part
 
 #### core-service-9
 
-When a client requests adapter readiness, the core service shall report one deduplicated entry per adapter the active config references, each entry naming the positions using that adapter — `captain`, and each session player as `<player>` followed by the `<playbook>.<role>` bindings it answers ([DR-032](../decisions/032-session-players.md)) — and carrying a readiness status derived from the same adapter readiness rules as the playbook launcher — the runtime half and the credential half together ([DR-024](../decisions/024-app-supplied-agent-runtimes.md), [DR-004](../decisions/004-config-and-persistence.md)) — naming the unmet requirement for each adapter that is not ready and reporting null readiness with verify-yourself guidance for an adapter with no preflight rule:
+When a client requests adapter readiness, the core service shall report an entry for `claude` and one for `codex` always and one deduplicated entry per other adapter the active config references, each entry naming the positions using that adapter — `captain`, and each session player as `<player>` followed by the `<playbook>.<role>` bindings it answers ([DR-032](../decisions/032-session-players.md)), none where no position does — and carrying a readiness status derived from the same adapter readiness rules as the playbook launcher — the runtime half and the credential half together ([DR-024](../decisions/024-app-supplied-agent-runtimes.md), [DR-004](../decisions/004-config-and-persistence.md), [DR-174](../decisions/174-workshop-agents-in-one-pass.md)) — naming the unmet requirement for each adapter that is not ready and reporting null readiness with verify-yourself guidance for an adapter with no preflight rule:
 
 - The runtime half is cligent's availability probe, which confirms the native executable a bundled SDK spawns as well as the SDK itself; when the probe fails and no published runtime target is at fault, the unmet requirement for `claude` or `codex` comes from cligent's executable lookup — a missing platform package, named with its platform and architecture and the repair of running `npm ci` in the checkout or reinstalling the app, or a host the SDK publishes no executable for, named with no repair — and otherwise states that the runtime failed to load ([DR-090](../decisions/090-readiness-names-what-cligent-finds-missing.md)).
+- While the config is missing or invalid, the `claude` and `codex` entries are the only ones, with no positions: no earlier config's positions carry over.
+- Each entry lists its faults, each of kind `runtime` or `credential` with its own requirement, and keeps the requirement string joining them.
+- The `claude` entry carries its base URL's state: `unset` where `ANTHROPIC_BASE_URL` is unset or names the host `api.anthropic.com`, `third-party` with the host name alone — no scheme, path or secret — where it names another host, `unknown` where it does not parse as a URL with a host, and `hidden` on a seat.
+- Every entry carries the core's platform and the file name of the environment's `SHELL`, where set.
 - When the active config changes, refreshed readiness is broadcast to connected clients; a reload superseded by a newer one — before committing, or while its runtime probes are in flight — commits and broadcasts nothing, so the state and readiness clients hold always correspond to the newest configuration read.
 
 ### Persistence
@@ -706,7 +728,7 @@ While a seat is open [[core-service-128](#core-service-128)], the core service s
 
 ### core-service-143
 
-The core service shall expose independent registry commands `registry.get`, `registry.signin.start`, `registry.signin.cancel`, `registry.signout`, `registry.directory` and `registry.orgs`, plus `environment.registry.set`, using protocol version 31 and broadcasting `registry.state` for account changes ([DR-168](../decisions/168-independent-package-registry.md)):
+The core service shall expose independent registry commands `registry.get`, `registry.signin.start`, `registry.signin.cancel`, `registry.signout`, `registry.directory` and `registry.orgs`, plus `environment.registry.set`, using protocol version 32 and broadcasting `registry.state` for account changes ([DR-168](../decisions/168-independent-package-registry.md)):
 
 - `registry.get` names an origin or an environment, defaulting to the public registry, and reports its origin, display name, account without credentials, sign-in progress and read error;
 - sign-in uses the shell's existing browser or device flow with registry purpose, no seat ticket, and stores no Space entry or placement;
@@ -823,7 +845,7 @@ The core package shall run each `compile.run` as its own toolchain process with 
 
 #### core-service-26
 
-The readiness report of [[core-service-9](#core-service-9)] shall be keyed by adapter: the core package shall resolve every configured position — the captain and each referenced session player, whether an inline agent block or a scalar adapter id, under the same resolution rule as the launcher [[core-service-16](#core-service-16)] — to its adapter and emit exactly one entry per distinct adapter listing those positions, so that no referenced adapter's unmet requirement is hidden by deduplication and a hand-written scalar still surfaces its adapter's requirements before the first turn fails.
+The readiness report of [[core-service-9](#core-service-9)] shall be keyed by adapter: the core package shall resolve every configured position — the captain and each referenced session player, whether an inline agent block or a scalar adapter id, under the same resolution rule as the launcher [[core-service-16](#core-service-16)] — to its adapter and emit exactly one entry per distinct adapter listing those positions, `claude` and `codex` always among them [[core-service-9](#core-service-9)], so that no referenced adapter's unmet requirement is hidden by deduplication and a hand-written scalar still surfaces its adapter's requirements before the first turn fails.
 
 ## Verification
 
@@ -1188,7 +1210,7 @@ Where a session finishes a turn bound to no intent, the test suite shall assert 
 
 #### core-service-23
 
-Where the config's agent blocks reference both an adapter whose readiness requirements are satisfied and one whose requirements are not (via controlled environment variables and home-directory fixtures), the test suite shall assert that readiness reporting marks each adapter's entry accordingly and names the unmet requirement for the not-ready adapter [[core-service-9](#core-service-9)].
+Where the config's agent blocks reference both an adapter whose readiness requirements are satisfied and one whose requirements are not (via controlled environment variables and home-directory fixtures), the test suite shall assert that readiness reporting marks each adapter's entry accordingly, names the unmet requirement for the not-ready adapter with its faults by kind, and reports `claude` and `codex` both, an unreferenced one with no positions [[core-service-9](#core-service-9)]; and that with the config missing, and again invalid, readiness holds the `claude` and `codex` entries alone, with no positions [[core-service-9](#core-service-9)].
 
 #### core-service-113
 
@@ -1200,6 +1222,29 @@ Where readiness is evaluated for the `claude` and `codex` adapters with credenti
 | unavailable | an unsupported host | not ready, naming the host with no repair [[core-service-9](#core-service-9)] |
 | unavailable | no SDK, or the executable present | not ready, stating that the runtime failed to load [[core-service-9](#core-service-9)] |
 | available | any | ready [[core-service-9](#core-service-9)] |
+
+### Batch Edit Coverage
+
+#### core-service-147
+
+Where a client reads your own group's valid config, edits it with `config.edit` and then with `config.batch`, and another writer then changes the file, the test suite shall assert that `config.get`'s reply, the `config.state` broadcast after each write and each write's reply carry one revision for one state, a new one after each write, and that the revision read after the outside write differs from the one before it [[core-service-45](#core-service-45)].
+
+#### core-service-148
+
+Where your own group's commented config holds a Captain and players on `claude` and `codex`, the test suite shall submit `config.batch` for each case below and assert its refusal, with the file's bytes unchanged in every case:
+
+| Case | Refusal |
+| --- | --- |
+| a revision read before another writer added a player on `claude` | `conflict` [[core-service-44](#core-service-44)] |
+| a revision read before another writer gave a role's binding a model of its own | `conflict` [[core-service-44](#core-service-44)] |
+| one operation giving an effort outside its adapter's vocabulary | `invalid_config`, a violation with its rule, its field and that operation's index [[core-service-44](#core-service-44)] |
+| one operation setting a player's subagent model Off and another giving a binding of that player a subagent effort, each valid alone [[core-service-16](#core-service-16)] | `invalid_config`, a violation with its rule, its field and both operations' indexes [[core-service-44](#core-service-44)] |
+| the file changed by another writer while the batch composes | `conflict` [[core-service-44](#core-service-44)] |
+| an operation of another kind, or no operation | `invalid_request` [[core-service-44](#core-service-44)] |
+
+#### core-service-149
+
+Where your own group's real config carries comments and hand-written fields, when one `config.batch` holds a `captain.set` and a `player.set` removing each `model` and a `playbook.role.bind` writing `model: false`, the test suite shall assert that the three `model` fields changed as asked with every comment and hand-written field kept, that the reply carries the reloaded state, and that the reloaded config resolves the Captain's and each role's model to Provider default [[core-service-44](#core-service-44)].
 
 ### Compile Lifecycle Coverage
 
@@ -1237,7 +1282,7 @@ Where the core service attaches to a test-supplied HTTP server [[core-service-1]
 
 #### core-service-28
 
-Where the config references one adapter from several positions — as the captain and as a session player, including a hand-written scalar adapter id — the test suite shall assert that readiness reporting includes exactly one entry for that adapter [[core-service-26](#core-service-26)], naming each referencing position, marked per the adapter readiness rules with the unmet requirement named when the adapter is not ready [[core-service-9](#core-service-9)].
+Where the config references one adapter from several positions — as the captain and as a session player, including a hand-written scalar adapter id — the test suite shall assert that readiness reporting includes exactly one entry for that adapter, `claude` and `codex` among the entries [[core-service-26](#core-service-26)], naming each referencing position, marked per the adapter readiness rules with the unmet requirement named when the adapter is not ready [[core-service-9](#core-service-9)].
 
 #### core-service-81
 

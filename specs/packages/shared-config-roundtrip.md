@@ -12,7 +12,7 @@ Settings edits it, the core service loads and revalidates it, the Library regist
 
 ### shared-config-roundtrip-1
 
-Where any Spex surface writes the shared config — a Settings save or a Library registration — the core service shall land the write only on the bytes the edit was applied to, and once it lands shall observe the change and revalidate it [[core-service-2](core-service.md#core-service-2)] with the same fail-closed rule set that gated the write, so a config that one package accepted is never rejected by another:
+Where any Spex surface writes the shared config — a Settings save, a Settings batch of edits [[core-service-44](core-service.md#core-service-44)] or a Library registration — the core service shall land the write only on the bytes the edit was applied to, and once it lands shall observe the change and revalidate it [[core-service-2](core-service.md#core-service-2)] with the same fail-closed rule set that gated the write, so a config that one package accepted is never rejected by another:
 
 - the file's version is checked at the instant before the write; a file changed meanwhile — while the candidate composed — is refused `conflict`, changed meanwhile, retry, and keeps its newer bytes ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)).
 
@@ -30,10 +30,12 @@ Where any Spex surface submits a shared-config change that violates the shared f
 
 Where a commented fixture config is edited through the Settings protocol commands, then extended by a stub-compiled playbook registration, the integration suite shall assert that the core service reloads each intermediate config without a validation failure [[shared-config-roundtrip-1](#shared-config-roundtrip-1)], and that the fixture's comments survive the Settings save and the registration write alike [[shared-config-roundtrip-2](#shared-config-roundtrip-2)] — one rule set, observed at every seam:
 
-- with the candidate's composition held, a config edit whose file another writer changes meanwhile is refused `conflict` and the other writer's bytes stand [[shared-config-roundtrip-1](#shared-config-roundtrip-1)].
+- with the candidate's composition held, a config edit whose file another writer changes meanwhile is refused `conflict` and the other writer's bytes stand [[shared-config-roundtrip-1](#shared-config-roundtrip-1)];
+- one `config.batch` holding a `captain.set`, a `player.set` and a `playbook.role.bind` lands as one write the core reloads without a validation failure, the fixture's comments kept [[shared-config-roundtrip-1](#shared-config-roundtrip-1)] [[shared-config-roundtrip-2](#shared-config-roundtrip-2)], and a batch carrying a revision another writer outdated is refused `conflict` with the bytes unchanged [[shared-config-roundtrip-1](#shared-config-roundtrip-1)].
 
 ### shared-config-roundtrip-4
 
 Where a client submits a config edit that violates a shared-config rule, the integration suite shall assert the receiving surface rejects it naming the rule while the config file remains unchanged [[shared-config-roundtrip-5](#shared-config-roundtrip-5)]; and where a playbook registration violates the same rule, the suite shall assert the registration is rejected naming it, with the config bytes unchanged [[shared-config-roundtrip-5](#shared-config-roundtrip-5)] — the same fail-closed rule set answers at every surface:
 
+- a `config.batch` whose operations, each valid alone, together violate a rule is refused naming the rule, with the config bytes unchanged [[shared-config-roundtrip-5](#shared-config-roundtrip-5)].
 - Captain and player writable-path edits cover every refusal class, retain prior bytes on rejection, and reload accepted paths with the same canonical runtime value [[shared-config-roundtrip-1](#shared-config-roundtrip-1)], [[shared-config-roundtrip-5](#shared-config-roundtrip-5)].
