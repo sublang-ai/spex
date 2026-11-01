@@ -2025,14 +2025,18 @@ export async function rowAct(row: Locator, words: string): Promise<Locator> {
  * overflow's Publish — or the publish control's own Publish where an
  * earlier attempt left it standing beneath the row — up to the inline
  * preview, and return the row's publish control holding it.
+ *
+ * The overflow's Publish asks for the preview itself: its control shows
+ * Publish, then "Checking…", until the summary replaces the button. The
+ * button is clicked only where it stood before this call, never after
+ * the overflow's choice, whose own ask would take it away mid-click.
  */
 export async function publishFromRow(row: Locator): Promise<Locator> {
   const publish = row.getByTestId("publish");
   const summary = publish.getByTestId("publish-summary");
   const button = publish.getByTestId("publish-button");
-  if (!(await button.isVisible())) await (await rowAct(row, "Publish")).click();
-  await expect(summary.or(button).first()).toBeVisible();
-  if (!(await summary.isVisible())) await button.click();
+  if (await button.isVisible()) await button.click();
+  else await (await rowAct(row, "Publish")).click();
   await expect(summary).toBeVisible();
   return publish;
 }
