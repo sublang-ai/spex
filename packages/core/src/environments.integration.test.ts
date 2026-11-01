@@ -15,7 +15,7 @@ import { appendFileSync, chmodSync, cpSync, existsSync, lstatSync, mkdirSync, re
 import { createServer, request as httpRequest } from "node:http";
 import type { AddressInfo } from "node:net";
 import { dirname, isAbsolute, join } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { WebSocket } from "ws";
 import { parse as parseYaml, parseDocument, stringify as stringifyYaml } from "yaml";
 
@@ -828,6 +828,99 @@ test("environments-22 through a real core: a spec-only spec package requested fr
   await client.environment(own, mark, (state) => state.busy === null && !holds(state));
   assert.equal(existsSync(atHome), false, "your own group's copy is gone");
   assert.equal(existsSync(sharedAtHome), false, "and so is its copy in the shared user folder");
+});
+
+/** The command line this checkout builds, which scaffolds a `specs/`. */
+const SPEX_CLI = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "cli", "dist", "cli.js");
+
+test("environments-14, environments-41 through a real core: environment.get says which artifacts a release provides and where its spec stands in a project's specs/ — placed with the links waiting for a package it cites, edited by a hand edit with the newer release waiting, blocked by a project file of its name, waiting for specs/ in a folder holding none — and gives your own group's environment no placement", { timeout: 180_000 }, async (t) => {
+  const registry = await startStandinRegistry({ dir: scratchDir("spex-env-place-registry-") });
+  t.after(() => registry.close());
+  // The spec cites twice a package no environment here requests, by its
+  // address inside the release (environments-42).
+  const spec = "# fare: Fare Split\n\n## Intent\n\nSplit a fare.\n\n## External Behavior\n\n### fare-1\n\nThe splitter shall round each share as the ledger rounds [[ledger-1](spex:acme/ledger#ledger-1)].\n\n### fare-2\n\nThe splitter shall post each share to the ledger [[ledger-2](spex:acme/ledger#ledger-2)].\n\n## Verification\n\n### fare-3\n\nWhen a fare is split, the suite shall assert each share's rounding [[fare-1](#fare-1)] and posting [[fare-2](#fare-2)].\n";
+  const publishFare = async (version: string): Promise<void> => {
+    const releaseDir = await makeRelease(join(scratchDir("spex-env-place-release-"), "fare"), {
+      format: 2, org: "acme", name: "fare", version, description: "Split a fare", license: "Apache-2.0",
+      // The spec is what the package offers; its skill is support,
+      // installed and placed nowhere (environments-1, environments-6).
+      provides: ["spec"],
+      artifacts: { fare: { kind: "spec", language: "en" }, "fare-notes": { kind: "skill", language: "en" } },
+    }, {
+      "specs/en/fare.md": spec,
+      "skills/en/fare-notes/SKILL.md": "---\nname: fare-notes\ndescription: Notes on splitting a fare.\n---\n\nRound each share down.\n",
+    });
+    await publishRelease(new RegistryClient({ url: registry.url }), releaseDir);
+  };
+  await publishFare("1.0.0");
+
+  const dir = scratchDir("spex-env-place-");
+  const core = await startCore(dir, { hostUrl: registry.url });
+  t.after(() => core.stop());
+  const { client } = core;
+  const working = gitFolder(join(dir, "project"));
+  execFileSync(process.execPath, [SPEX_CLI, "scaffold", working], { stdio: "ignore" });
+  assert.ok(existsSync(join(working, "specs", "meta.md")), "the working folder holds a scaffolded specs/");
+  const { id: key } = await client.expectOk("project.register", { path: working });
+  const request = { kind: "registry", version: "^1.0.0" } as const;
+  const fareOf = async (repository: string) => (await client.expectOk("environment.get", { repository })).packages.find((pkg) => pkg.name === "acme/fare");
+  const provision = (pkg: Awaited<ReturnType<typeof fareOf>>) => pkg?.artifacts.map(({ id, kind, provided }) => ({ id, kind, provided }));
+  const offered = [{ id: "fare", kind: "spec", provided: true }, { id: "fare-notes", kind: "skill", provided: false }];
+  const copy = join(working, "specs", "packages", "fare.md");
+
+  // Installed in the project: the spec stands in its specs/, placed
+  // from the working folder as the environment's root, with no skill
+  // for it or for its support (environments-8, environments-41).
+  await client.expectOk("environment.request", { repository: key, name: "acme/fare", request, wait: true });
+  const placed = await fareOf(key);
+  assert.equal(placed?.installed, true);
+  assert.deepEqual(provision(placed), offered, "[environments-14] the spec provided, its support skill not");
+  assert.deepEqual(placed?.placement, { spec: { state: "placed", path: "specs/packages/fare.md", waiting: [{ name: "acme/ledger", count: 2 }] } },
+    "[environments-14] placed at its path, two links waiting for the package it cites");
+  assert.match(readFileSync(copy, "utf8"), /^<!-- Placed by Spex from acme\/fare 1\.0\.0; an edit makes this file yours\. -->\n\n# fare: Fare Split\n/);
+  for (const folder of [".claude/skills", ".agents/skills"]) {
+    for (const name of ["acme-fare", "fare-notes"]) assert.equal(existsSync(join(working, folder, name)), false, `${folder}/${name}`);
+  }
+
+  // A hand edit makes the copy the reader's: read edited at once, with
+  // no install (environments-14).
+  appendFileSync(copy, "\nA note of ours.\n");
+  assert.deepEqual((await fareOf(key))?.placement, { spec: { state: "edited", path: "specs/packages/fare.md", waiting: [] } },
+    "[environments-14] edited, no newer release waiting");
+  // A newer release resolved and installed leaves the edited copy
+  // standing, its version waiting under .spex/ (environments-41).
+  const edited = readFileSync(copy);
+  await publishFare("1.1.0");
+  await client.expectOk("environment.resolve", { repository: key, wait: true });
+  const newer = await fareOf(key);
+  assert.equal(newer?.version, "1.1.0");
+  assert.deepEqual(newer?.placement, { spec: { state: "edited", path: "specs/packages/fare.md", waiting: [], waitingVersion: "1.1.0" } },
+    "[environments-14] edited, the newer release's version waiting");
+  assert.ok(readFileSync(copy).equals(edited), "the edited copy stands");
+
+  // A project file of that name that is not the copy holds the place.
+  writeFileSync(copy, "# fare: Our Own Fare Rules\n\n## Intent\n\nOurs.\n");
+  assert.deepEqual((await fareOf(key))?.placement, { spec: { state: "blocked", path: "specs/packages/fare.md", waiting: [] } },
+    "[environments-14] blocked by a file of its name");
+
+  // A working folder holding no specs/ waits for one; none is made.
+  const bare = gitFolder(join(dir, "bare"));
+  const { id: bareKey } = await client.expectOk("project.register", { path: bare });
+  await client.expectOk("environment.request", { repository: bareKey, name: "acme/fare", request, wait: true });
+  const waiting = await fareOf(bareKey);
+  assert.equal(waiting?.installed, true);
+  assert.deepEqual(waiting?.placement, { spec: { state: "no-specs", path: "specs/packages/fare.md", waiting: [] } },
+    "[environments-14] waiting for specs/");
+  assert.equal(existsSync(join(bare, "specs")), false, "no specs/ is made");
+
+  // Your own group's environment places its spec as a skill: what it
+  // provides is said, and no placement under specs/ (environments-8).
+  const own = `${OWN}/${OWN}-spex`;
+  await client.expectOk("environment.request", { repository: own, name: "acme/fare", request, wait: true });
+  const ownFare = await fareOf(own);
+  assert.equal(ownFare?.installed, true);
+  assert.deepEqual(provision(ownFare), offered, "[environments-14] your own group's: the spec provided, its support skill not");
+  assert.equal(ownFare?.placement, undefined, "[environments-14] no placement in your own group's environment");
 });
 
 test("environments-22 through a real core: a project rebound to a second working folder is exported there, and its state names what the export left out until an install exports it", { timeout: 180_000 }, async (t) => {
