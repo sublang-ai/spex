@@ -224,7 +224,7 @@ test("environments-8: a root without specs/ places the spec as its generated ski
   assert.equal(existsSync(join(clone, "specs", "packages", "tools.md")), false, "[environments-8] nothing in its specs/");
 });
 
-test("environments-6: a support skill is not copied, a support playbook gets no skill, and a spec a release does not provide is not placed", async () => {
+test("environments-6: a support skill is not copied, a peer playbook gets its skill, and a spec a release does not provide is not placed", async () => {
   const root = scratchRoot(true);
   const widgets = installRelease(root, "acme/widgets", "1.0.0", {
     widgets: { kind: "spec" },
@@ -244,9 +244,9 @@ test("environments-6: a support skill is not copied, a support playbook gets no 
   const lock = { "acme/tips": tips, "acme/widgets": widgets };
   const exportsBefore = JSON.stringify(lock);
   const report = await place(root, lock);
-  assert.deepEqual(report.skills, ["make", "tip"], "[environments-6] the provided playbook's and skill's alone");
+  assert.deepEqual(report.skills, ["check", "make", "tip"], "[environments-6] the provided playbooks' and skill's alone");
   assert.equal(existsSync(join(root, ".spex", "skills", "lint")), false, "[environments-6] a skill a playbook requires is not copied");
-  assert.equal(existsSync(join(root, ".spex", "skills", "check")), false, "[environments-6] a playbook a playbook requires gets no skill");
+  assert.ok(existsSync(join(root, ".spex", "skills", "check", "SKILL.md")), "[environments-6] a playbook a playbook requires is a peer, its skill placed");
   assert.equal(existsSync(join(root, ".claude", "skills", "lint")), false);
   assert.equal(existsSync(join(root, "specs", "packages", "widgets.md")), false, "[environments-6] a playbook's source spec is not placed");
   assert.equal(existsSync(join(root, "specs", "packages", "tips.md")), false, "[environments-6] a spec of a kind provides does not list is not placed");
