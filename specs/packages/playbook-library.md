@@ -295,7 +295,7 @@ While an authoring session's last compile succeeded and the home holds a registr
 
 - a refusal from the core's checks or the registry shows its issues in place; success reads the published version with a link to its page at the registry;
 - a retained receipt from a previous publish does not establish success of a later attempt, and a later settled refusal remains visible even when its text repeats an earlier refusal ([DR-151](../decisions/151-publish-local-spec-packages.md));
-- a home without that registry grant shows one button "Sign in to publish" in place of Publish, starting the registry sign-in in place [[playbook-library-119](#playbook-library-119)], the grant judged only once the account there is read, "Loading registry…" standing until then.
+- a home without that registry grant shows one button "Sign in to publish" in place of Publish, starting the registry sign-in in place [[playbook-library-119](#playbook-library-119)], the grant judged only once the account there is read, "Loading registry…" standing until then and a failed read standing as no grant with its cause.
 
 ### Pipeline Artifacts
 
@@ -843,6 +843,8 @@ Where the Enable tab renders a compiled authoring session with an explicit regis
 | signed in | signed in or signed out | Publish |
 | signed out | signed in or signed out | "Sign in to publish", starting the registry sign-in in place without navigating to Space |
 | registry state absent | any | Loading registry…, with no publication authority borrowed from Space |
+| not yet read | any | Loading registry…, with neither Publish nor "Sign in to publish", until the read lands |
+| read failed | any | "Sign in to publish" with the read's cause |
 
 - with Publish standing for a session already enabled, "Its package" beside it opens the package's row on the Packages tab [[playbook-library-93](#playbook-library-93)].
 
