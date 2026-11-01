@@ -534,11 +534,16 @@ export function rowPhrase(
 
 /** A project's code glyph (space-1, DR-172): the core's phrase, "Code:
  * <where>" or "Code: no remote", with what it says of the remote — at a
- * Space, elsewhere, or none, a warning; nothing while the core does not
- * know yet or the records hold no `project.json`. */
-export function codeOf(repo: RepositoryState): { kind: Exclude<CodeKind, "unknown">; phrase: string } | null {
-  if (repo.codeKind === "unknown" || repo.code === null) return null;
-  return { kind: repo.codeKind, phrase: repo.code };
+ * Space, elsewhere, or none, a warning in the attention tone; nothing
+ * while the core does not know yet, the records hold no `project.json`,
+ * or the row stands under "This computer" (`local`), which nobody shares
+ * yet. */
+export function codeOf(
+  repo: RepositoryState,
+  local: boolean,
+): { kind: Exclude<CodeKind, "unknown">; phrase: string; tone: "idle" | "attention" } | null {
+  if (local || repo.codeKind === "unknown" || repo.code === null) return null;
+  return { kind: repo.codeKind, phrase: repo.code, tone: repo.codeKind === "none" ? "attention" : "idle" };
 }
 
 /** A project's name from its spex repository's (space-1, space-46):

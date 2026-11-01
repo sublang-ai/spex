@@ -219,20 +219,23 @@ function placedAtTwo(
 }
 
 describe("GROUPS: a line per placement (space-87, space-61, space-12, space-15, space-28)", () => {
-  test("space-87: each row lists one line per placement in the state's order — held, file-named, waiting — each with its instance's display name, its path and its state; the path placement by its remote; no line on a row with no clone", async () => {
+  test("space-87: each row lists one line per placement in the state's order — held, file-named, waiting — each with its instance's display name, its group's path and its state; the path placement by its remote; no line on a row with no clone", async () => {
     await renderGroups(twoPlacementsHome(), { open: false });
     // The project placed at both: its key placement's line, then the
-    // second's, each by its instance's display name and its path there.
+    // second's, each by its instance's display name and the path there
+    // of the group it is in — none in your namespace, never the
+    // records' own name.
     expect(linesOf(KEY).map((line) => line.dataset.testid)).toEqual([`space-line-${ORIGIN}`, `space-line-${SECOND}`]);
-    expect(reading(lineOf(KEY, ORIGIN))).toEqual({ name: "Spex Example", at: "jane/academy-spex", state: "Synced 5m ago" });
-    expect(reading(lineOf(KEY, SECOND))).toEqual({ name: "Second Example", at: "workshop/academy-spex", state: "Synced 1h ago" });
+    expect(reading(lineOf(KEY, ORIGIN))).toEqual({ name: "Spex Example", at: null, state: "Synced 5m ago" });
+    expect(reading(lineOf(KEY, SECOND))).toEqual({ name: "Second Example", at: "workshop", state: "Synced 1h ago" });
+    for (const line of document.querySelectorAll('[data-testid^="space-line-"]')) expect(line.textContent).not.toContain("-spex");
     expect(lineOf(KEY, SECOND).dataset.state).toBe("reachable");
     expect(lineOf(KEY, SECOND).dataset.attached).toBe("true");
     // The project at the first alone: the repository its placement file
     // names at the second stands as its line, not on this device, and
     // as no row of its own.
     expect(linesOf(BETA).map((line) => line.dataset.testid)).toEqual([`space-line-${ORIGIN}`, `space-line-${SECOND}`]);
-    expect(reading(lineOf(BETA, SECOND))).toEqual({ name: "Second Example", at: "workshop/beta-spex", state: "Not on this computer" });
+    expect(reading(lineOf(BETA, SECOND))).toEqual({ name: "Second Example", at: "workshop", state: "Not on this computer" });
     // Attaching it is not offered here (DR-172).
     expect(within(lineOf(BETA, SECOND)).queryAllByRole("button")).toEqual([]);
     expect(lineOf(BETA, SECOND).dataset.state).toBe("absent");
@@ -242,12 +245,12 @@ describe("GROUPS: a line per placement (space-87, space-61, space-12, space-15, 
     // Sync tab and none on its row under Personal; a group's own at its
     // one instance (DR-159).
     expect(linesOf(OWN).map(reading)).toEqual([
-      { name: "Spex Example", at: OWN, state: "Synced 3h ago" },
-      { name: "Second Example", at: "jada/jada-spex", state: "Synced 3h ago" },
+      { name: "Spex Example", at: null, state: "Synced 3h ago" },
+      { name: "Second Example", at: null, state: "Synced 3h ago" },
     ]);
     expect(screen.getByTestId("space-repository").contains(screen.getByTestId(`space-lines-${OWN}`))).toBe(true);
     expect(within(screen.getByTestId("space-group-@jane")).queryByTestId(`space-lines-${OWN}`)).toBeNull();
-    expect(linesOf(ACME).map(reading)).toEqual([{ name: "Spex Example", at: "acme/acme-spex", state: "Synced 4h ago" }]);
+    expect(linesOf(ACME).map(reading)).toEqual([{ name: "Spex Example", at: "acme", state: "Synced 4h ago" }]);
     // A local-only project holds no placement and carries no line.
     expect(screen.getByTestId(`space-row-${GAMMA}`)).toBeTruthy();
     openRow(GAMMA);
@@ -285,10 +288,10 @@ describe("GROUPS: a line per placement (space-87, space-61, space-12, space-15, 
       `space-line-${THIRD}`,
     ]);
     expect(linesOf(KEY).map(reading)).toEqual([
-      { name: "Spex Example", at: "jane/academy-spex", state: "Synced 5m ago" },
+      { name: "Spex Example", at: null, state: "Synced 5m ago" },
       { name: "/srv/academy-spex.git", at: null, state: "Never synced" },
-      { name: "Second Example", at: "workshop/academy-spex", state: "Not on this computer" },
-      { name: "third.example", at: "lab/academy-spex", state: "Waiting for a member who can create it in lab" },
+      { name: "Second Example", at: "workshop", state: "Not on this computer" },
+      { name: "third.example", at: "lab", state: "Waiting for a member who can create it in lab" },
     ]);
     expect(linesOf(KEY).map((line) => [line.dataset.state, line.dataset.attached])).toEqual([
       ["reachable", "true"],
@@ -622,10 +625,10 @@ describe("GROUPS: a line per placement (space-87, space-61, space-12, space-15, 
     const name = within(line).getByTestId("space-line-instance");
     for (const token of ["min-w-0", "flex-1", "truncate"]) expect(name.className.split(/\s+/)).toContain(token);
     expect(name.getAttribute("title")).toBe("Second Example");
-    // The path yields below @md (28rem), its title kept.
+    // The group's path yields below @md (28rem), its title kept.
     const at = within(line).getByTestId("space-line-at");
     for (const token of ["hidden", "@md:inline", "truncate", "min-w-0"]) expect(at.className.split(/\s+/)).toContain(token);
-    expect(at.getAttribute("title")).toBe("workshop/academy-spex");
+    expect(at.getAttribute("title")).toBe("workshop");
     // The phrase shrinks and truncates, its title kept.
     const phrase = within(line).getByTestId("space-line-state");
     for (const token of ["truncate", "min-w-0", "shrink"]) expect(phrase.className.split(/\s+/)).toContain(token);
@@ -1710,12 +1713,13 @@ describe("GROUPS: the placements surface at the floor (space-95, space-28, DR-17
     expect(within(personalLine).queryAllByRole("button")).toEqual([]);
 
     // Each row lists one line per placement in its Sync tab, by its
-    // Space's display name and its path there, its state, and its last
-    // sync; the one its file names reads "Not on this computer" with no
-    // control; Members stands on each reachable line (space-87).
+    // Space's display name and the path there of its group — none in
+    // your namespace —, its state, and its last sync; the one its file
+    // names reads "Not on this computer" with no control; Members stands
+    // on each reachable line (space-87).
     expect(linesOf(KEY).map(reading)).toEqual([
-      { name: "Spex Example", at: "jane/academy-spex", state: "Synced 5m ago" },
-      { name: "Second Example", at: "workshop/academy-spex", state: "Synced 1h ago" },
+      { name: "Spex Example", at: null, state: "Synced 5m ago" },
+      { name: "Second Example", at: "workshop", state: "Synced 1h ago" },
     ]);
     expect(lineControls(lineOf(KEY, ORIGIN))).toEqual(["space-line-members"]);
     expect(lineControls(lineOf(KEY, SECOND))).toEqual(["space-line-members"]);
@@ -1725,15 +1729,15 @@ describe("GROUPS: the placements surface at the floor (space-95, space-28, DR-17
       [`space-line-${SECOND}`, "absent", "false"],
     ]);
     expect(linesOf(BETA).map(reading)).toEqual([
-      { name: "Spex Example", at: "jane/beta-spex", state: "Synced 2h ago" },
-      { name: "Second Example", at: "workshop/beta-spex", state: "Not on this computer" },
+      { name: "Spex Example", at: null, state: "Synced 2h ago" },
+      { name: "Second Example", at: "workshop", state: "Not on this computer" },
     ]);
     expect(lineControls(lineOf(BETA, SECOND))).toEqual([]);
     expect(linesOf(OWN).map(reading)).toEqual([
-      { name: "Spex Example", at: OWN, state: "Synced 3h ago" },
-      { name: "Second Example", at: "jada/jada-spex", state: "Synced 3h ago" },
+      { name: "Spex Example", at: null, state: "Synced 3h ago" },
+      { name: "Second Example", at: null, state: "Synced 3h ago" },
     ]);
-    expect(linesOf(ACME).map(reading)).toEqual([{ name: "Spex Example", at: "acme/acme-spex", state: "Synced 4h ago" }]);
+    expect(linesOf(ACME).map(reading)).toEqual([{ name: "Spex Example", at: "acme", state: "Synced 4h ago" }]);
     openRow(GAMMA);
     expect(screen.queryByTestId(`space-lines-${GAMMA}`)).toBeNull();
 

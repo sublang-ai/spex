@@ -126,9 +126,9 @@ function localProject(over: HomeOver = {}): GroupsState {
 }
 
 /** A home that lists no instance: your own group alone, its
- * repositories local. */
-function signedOut(over: HomeOver = {}): GroupsState {
-  return noInstance(over, [repo({ state: "local-only", remote: null, id: null, code: CODE, branch: null, members: null })]);
+ * repositories local, as a test says otherwise of the project's row. */
+function signedOut(over: HomeOver = {}, row: Partial<RepositoryState> = {}): GroupsState {
+  return noInstance(over, [repo({ state: "local-only", remote: null, id: null, code: CODE, branch: null, members: null, ...row })]);
 }
 
 describe("GROUPS: the header (space-1, space-2)", () => {
@@ -260,8 +260,9 @@ describe("GROUPS: the header (space-1, space-2)", () => {
     expect(screen.queryByRole("button", { name: "Sign out" })).toBeNull();
     // "This computer" alone, never named after this computer's user:
     // "Your sessions" reads no phrase and carries no control; the
-    // project reads none, its "Add to a group…" disabled and titled
-    // "Sign in to a Space first" (space-1, space-61, space-66).
+    // project reads none and carries no code glyph, nobody sharing it
+    // yet, its "Add to a group…" disabled and titled "Sign in to a Space
+    // first" (space-1, space-61, space-66).
     const groups = within(screen.getByTestId("space-groups")).getAllByRole("group");
     expect(groups.map((group) => group.getAttribute("aria-label"))).toEqual(["This computer"]);
     expect(within(groups[0]!).getByRole("heading", { level: 2 }).textContent).toBe("This computer");
@@ -270,6 +271,8 @@ describe("GROUPS: the header (space-1, space-2)", () => {
     expect(screen.getByTestId(`space-repo-state-${OWN}`).textContent).toBe("");
     expect(rowControls(OWN)).toEqual([]);
     expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("");
+    expect(screen.queryByTestId(`space-repo-code-${KEY}`)).toBeNull();
+    expect(screen.getByTestId(`space-repo-${KEY}`).getAttribute("aria-describedby") ?? "").not.toContain(`space-repo-code-${KEY}`);
     const add = screen.getByTestId(`space-row-pick-${KEY}`) as HTMLButtonElement;
     expect(add.textContent).toBe("Add to a group…");
     expect(add.disabled).toBe(true);
@@ -784,13 +787,30 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
     expect(shortMoment(since)).toMatch(/月/);
   });
 
-  test("space-1: a project naming no code remote reads ⚠ Code: no remote; one at a Space a glyph titled by its display name; none before the core knows", async () => {
+  test("space-1: a project in a group naming no code remote reads ⚠ Code: no remote in the attention tone; one at a Space a glyph titled by its display name; none before the core knows, nor under This computer", async () => {
     await renderGroups(base({}, [repo({ code: "Code: no remote", codeKind: "none" })]), { open: false });
     const none = screen.getByTestId(`space-repo-code-${KEY}`);
     expect(none.textContent).toBe("⚠ Code: no remote");
     expect(none.dataset.kind).toBe("none");
     expect(none.getAttribute("title")).toBe("Code: no remote");
+    // The warning wears the attention tone, the row's phrase's own, not
+    // a stop's red.
+    expect(none.dataset.tone).toBe("attention");
+    expect(none.className).toContain("text-amber-700");
+    expect(none.className).not.toMatch(/text-red-/);
     cleanup();
+    // Under "This computer" nobody shares the project yet: no glyph,
+    // whatever the core says of its code, signed in or not.
+    for (const [kind, code] of [["none", "Code: no remote"], ["elsewhere", CODE]] as const) {
+      const localRow = repo({ state: "local-only", remote: null, id: null, code, codeKind: kind, branch: null, members: null });
+      await renderGroups(base({ own: { name: "jane", named: false, repositories: [OWN_REPO, localRow] } }, []), { open: false });
+      expect(within(screen.getByTestId("space-own")).getByTestId(`space-row-${KEY}`)).toBeTruthy();
+      expect(screen.queryByTestId(`space-repo-code-${KEY}`), kind).toBeNull();
+      cleanup();
+      await renderGroups(signedOut({}, { code, codeKind: kind }), { open: false });
+      expect(screen.queryByTestId(`space-repo-code-${KEY}`), kind).toBeNull();
+      cleanup();
+    }
     await renderGroups(base({}, [repo({ code: "Code: Spex Example", codeKind: "space" })]), { open: false });
     const space = screen.getByTestId(`space-repo-code-${KEY}`);
     expect(space.getAttribute("title")).toBe("Code: Spex Example");
@@ -850,7 +870,9 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
       const line = within(screen.getByTestId("space-lines-@spex.example/acme/team/team-spex")).getByTestId(`space-line-${ORIGIN}`);
       expect(line.dataset.attached).toBe("false");
       expect(within(line).getByTestId("space-line-instance").textContent).toBe("Spex Example");
-      expect(within(line).getByTestId("space-line-at").textContent).toBe("acme/team/team-spex");
+      // The line names the group's path alone, never the records' own
+      // name (space-87).
+      expect(within(line).getByTestId("space-line-at").textContent).toBe("acme/team");
       const state = within(line).getByTestId("space-line-state");
       expect(state.textContent).toBe(phrase);
       expect(state.getAttribute("title")).toBe("403 Forbidden: you need at least the Maintainer role");
