@@ -14,7 +14,8 @@
 // "spec · not placed — specs/ holds <pkg>.md already" or "spec · needs
 // specs/ — scaffold first" — followed by "<n> links wait for <org/pkg> ·
 // Add" for each package its links wait for, Add requesting it as Add…'s
-// registry tab does; else, as your own group's environment and an older
+// registry tab does, a version asked in place for one it does not list;
+// else, as your own group's environment and an older
 // core read it, "spec · placed as a skill" or "· not placed"; an applet
 // "<id> · its page", opening its tab (applets-1). An artifact read in
 // another language than the one wanted is marked with the language it is
@@ -23,6 +24,7 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import type {
   EnvironmentPackage,
+  EnvironmentRequest,
   EnvironmentState,
   PlaybookAvailability,
 } from "@sublang/spex-core/protocol";
@@ -43,6 +45,8 @@ const LINK =
   "min-h-6 shrink-0 whitespace-nowrap rounded px-1 text-xs text-brand-600 hover:underline dark:text-brand-300";
 const ERROR =
   "rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700 [overflow-wrap:anywhere] dark:border-red-900 dark:bg-red-950 dark:text-red-300";
+const INPUT =
+  "min-w-0 rounded border border-neutral-300 bg-white px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-950";
 const LINE = "flex flex-wrap items-center gap-x-1.5 gap-y-1 [overflow-wrap:anywhere]";
 
 /** The lines an expanded row shows (playbook-library-92): the playbooks,
@@ -330,12 +334,75 @@ function placementPhrase(placement: SpecPlacement): string {
   }
 }
 
+/** A typed `org/name` the registry does not list (playbook-library-92,
+ * DR-152): one row "<name> · not listed publicly" with a version taking
+ * an exact, caret or tilde requirement, added as typed; the core checks
+ * the requirement and the access. Add…'s Registry tab and a waiting
+ * link's Add show it alike, `testId` naming its parts. */
+export function UnlistedRequest({
+  name,
+  onAdd,
+  testId = "known-package",
+  autoFocus = false,
+}: {
+  name: string;
+  onAdd: (name: string, request: EnvironmentRequest) => Promise<void>;
+  testId?: string;
+  /** Focus the version field once shown, where an act brought it up. */
+  autoFocus?: boolean;
+}) {
+  const [version, setVersion] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const ready = version.trim().length > 0;
+  return (
+    <form
+      data-testid={`${testId}-request`}
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (busy || !ready) return;
+        setBusy(true);
+        setError(undefined);
+        void onAdd(name, { kind: "registry", version: version.trim() })
+          .catch((cause: Error) => setError(cause.message))
+          .finally(() => setBusy(false));
+      }}
+      className="flex flex-col gap-1 border-t border-neutral-200 pt-2 text-xs dark:border-neutral-800"
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <span data-testid={`${testId}-name`} className="min-w-0 flex-1 truncate">
+          {notListedPhrase(name)}
+        </span>
+        <input
+          data-testid={`${testId}-version`}
+          value={version}
+          onChange={(event) => setVersion(event.target.value)}
+          aria-label={i18n._({ id: "Version of {name}", comment: "the accessible name of a version choice in Add…; {name} is the package", values: { name } })}
+          placeholder={i18n._({ id: "1.2.3, ^1.2.3, ~1.2.3", comment: "examples of exact, caret and tilde registry requirements; preserve the syntax" })}
+          spellCheck={false}
+          autoFocus={autoFocus}
+          className={`${INPUT} w-36 font-mono`}
+        />
+        <button type="submit" data-testid={`${testId}-request-submit`} disabled={busy || !ready} title={addsTitle(name)} className={PRIMARY}>
+          {addLabel(busy)}
+        </button>
+      </div>
+      {error ? (
+        <p role="alert" data-testid={`${testId}-request-error`} className={ERROR}>
+          {error}
+        </p>
+      ) : null}
+    </form>
+  );
+}
+
 /** "<n> links wait for <org/pkg> · Add" (playbook-library-92): links the
  * placed spec lost because the package they cite has no spec in this
  * `specs/` (environments-41), and Add requesting that package as Add…'s
  * registry tab does, at the requirement its search result stands at
  * first — so the links appear once its spec is placed. A package the
- * search does not list reads so in place, Add… taking a version for it. */
+ * search does not list reads in place as Add… reads a typed name it does
+ * not list, a version taking its requirement and Add requesting it. */
 function WaitingLine({
   name,
   waited,
@@ -355,6 +422,8 @@ function WaitingLine({
   const request = store((current) => current.requestSpecPackage);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  // The search listed no such package: a version is asked in place.
+  const [unlisted, setUnlisted] = useState(false);
 
   async function add(): Promise<void> {
     setBusy(true);
@@ -363,9 +432,10 @@ function WaitingLine({
       const found = (await search(repository, waited)).find((result) => result.name === waited);
       const requirement = found ? firstRequirement(found.versions) : undefined;
       if (requirement === undefined) {
-        setError(notListedPhrase(waited));
+        setUnlisted(true);
         return;
       }
+      setUnlisted(false);
       await request(repository, waited, { kind: "registry", version: requirement });
       onAdded?.(waited);
     } catch (cause) {
@@ -373,6 +443,11 @@ function WaitingLine({
     } finally {
       setBusy(false);
     }
+  }
+
+  async function addUnlisted(added: string, requested: EnvironmentRequest): Promise<void> {
+    await request(repository, added, requested);
+    onAdded?.(added);
   }
 
   return (
@@ -399,6 +474,7 @@ function WaitingLine({
           {addLabel(busy)}
         </button>
       </span>
+      {unlisted ? <UnlistedRequest name={waited} onAdd={addUnlisted} testId={`env-waiting-${name}-${waited}`} autoFocus /> : null}
       {error ? (
         <p role="alert" data-testid={`env-waiting-error-${name}-${waited}`} className={ERROR}>
           {error}

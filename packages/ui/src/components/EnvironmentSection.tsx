@@ -39,7 +39,6 @@ import {
   isBuiltinPackage,
   isProvided,
   listOf,
-  notListedPhrase,
   providesPhrase,
   publishTargetOf,
   relativeInside,
@@ -56,7 +55,7 @@ import { PublishControl } from "./PublishControl.js";
 import { RegistryAccount, registrySignInTitle, useRegistrySignIn } from "./RegistryAccount.js";
 import { MoreMenu, type MenuEntry } from "./SpaceMenu.js";
 import { signingInLabel } from "./SpaceSignIn.js";
-import { PackageArtifacts, PlaybookEnableAct, hasArtifactLines, usePlaybookEnable } from "./PackageArtifacts.js";
+import { PackageArtifacts, PlaybookEnableAct, UnlistedRequest, hasArtifactLines, usePlaybookEnable } from "./PackageArtifacts.js";
 
 const BUTTON =
   "min-h-6 shrink-0 whitespace-nowrap rounded-md border border-neutral-300 px-2 py-0.5 text-xs text-neutral-700 hover:bg-neutral-100 disabled:opacity-40 disabled:hover:bg-transparent dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800";
@@ -1149,7 +1148,7 @@ function RegistryTab({
           ))}
         </ul>
       ) : null}
-      {unlisted ? <UnlistedRow key={typed} name={typed} onAdd={onAdd} /> : null}
+      {unlisted ? <UnlistedRequest key={typed} name={typed} onAdd={onAdd} /> : null}
     </div>
   );
 }
@@ -1214,61 +1213,6 @@ function RegistryResultRow({
         </p>
       ) : null}
     </li>
-  );
-}
-
-/** A typed `org/name` the registry does not list (playbook-library-92,
- * DR-152): one row "<name> · not listed publicly" with a version taking
- * an exact, caret or tilde requirement, added as typed; the core checks
- * the requirement and the access. */
-function UnlistedRow({
-  name,
-  onAdd,
-}: {
-  name: string;
-  onAdd: (name: string, request: EnvironmentRequest) => Promise<void>;
-}) {
-  const [version, setVersion] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string>();
-  const ready = version.trim().length > 0;
-  return (
-    <form
-      data-testid="known-package-request"
-      onSubmit={(event) => {
-        event.preventDefault();
-        if (busy || !ready) return;
-        setBusy(true);
-        setError(undefined);
-        void onAdd(name, { kind: "registry", version: version.trim() })
-          .catch((cause: Error) => setError(cause.message))
-          .finally(() => setBusy(false));
-      }}
-      className="flex flex-col gap-1 border-t border-neutral-200 pt-2 text-xs dark:border-neutral-800"
-    >
-      <div className="flex flex-wrap items-center gap-2">
-        <span data-testid="known-package-name" className="min-w-0 flex-1 truncate">
-          {notListedPhrase(name)}
-        </span>
-        <input
-          data-testid="known-package-version"
-          value={version}
-          onChange={(event) => setVersion(event.target.value)}
-          aria-label={i18n._({ id: "Version of {name}", comment: "the accessible name of a version choice in Add…; {name} is the package", values: { name } })}
-          placeholder={i18n._({ id: "1.2.3, ^1.2.3, ~1.2.3", comment: "examples of exact, caret and tilde registry requirements; preserve the syntax" })}
-          spellCheck={false}
-          className={`${INPUT} w-36 font-mono`}
-        />
-        <button type="submit" data-testid="known-package-request-submit" disabled={busy || !ready} title={addsTitle(name)} className={PRIMARY}>
-          {addLabel(busy)}
-        </button>
-      </div>
-      {error ? (
-        <p role="alert" data-testid="known-package-request-error" className={ERROR}>
-          {error}
-        </p>
-      ) : null}
-    </form>
   );
 }
 

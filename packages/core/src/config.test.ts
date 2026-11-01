@@ -861,7 +861,7 @@ test("environments-9: an enabled playbook comes from the environments' modules, 
   await assert.rejects(compose(unknown, stubLoader, undefined, { modules: lacking }), (error: Error) => {
     assert.ok(error instanceof RegistryError);
     assert.equal(error.kind, "unavailable");
-    assert.equal(error.message, "playbooks.triage is enabled, but the environment of acme/app-spex places no playbook triage");
+    assert.equal(error.message, "playbooks.triage is enabled, but no package of acme/app-spex places a playbook triage");
     return true;
   });
 });

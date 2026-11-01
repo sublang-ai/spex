@@ -1974,8 +1974,8 @@ msgstr "no folder at {path}"
 
 #. Refusal of Publish: the package has no folder; {path} is where it would stand, the folder spex.yaml adds it from or spex-packages/<org>/<pkg>. 'npx @sublang/spex export' runs the command line's command that builds a package's folder from the project's own spec file or skill folder; '<file>' and '<folder>' are the command's placeholders, kept as they are
 #: src/environments.ts
-msgid "No folder for {name} at {path} — npx @sublang/spex export {name} --spec <file> | --skill <folder> builds one"
-msgstr "No folder for {name} at {path} — npx @sublang/spex export {name} --spec <file> | --skill <folder> builds one"
+msgid "No folder for {name} at {path} — npx @sublang/spex export {name} [--spec <file>] [--skill <folder>]… builds one"
+msgstr "No folder for {name} at {path} — npx @sublang/spex export {name} [--spec <file>] [--skill <folder>]… builds one"
 
 #. Forge guidance where the project has no code remote; {command} is the Git command that adds one, which stays as it is
 #: src/forge.ts
@@ -2226,8 +2226,8 @@ msgstr "playbooks must enable at least one playbook"
 
 #. Config error: no environment of the session places the enabled playbook; {repository} is the spex repository's key
 #: src/config.ts
-msgid "playbooks.{id} is enabled, but the environment of {repository} places no playbook {id}"
-msgstr "playbooks.{id} is enabled, but the environment of {repository} places no playbook {id}"
+msgid "playbooks.{id} is enabled, but no package of {repository} places a playbook {id}"
+msgstr "playbooks.{id} is enabled, but no package of {repository} places a playbook {id}"
 
 #. Config error: the key enabling a playbook differs from the id its module declares
 #: src/config.ts

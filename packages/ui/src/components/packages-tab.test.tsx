@@ -813,14 +813,33 @@ describe("playbook-library-94: a row's artifacts", () => {
       ],
     });
     expect(projectSection().getByTestId("add-note").textContent).toBe("Added acme/tidy 0.3.0 · 1 spec");
-    // A package the registry's search does not list is not requested:
-    // it reads so in place, Add… taking a version for it.
+    // [playbook-library-92] a package the registry's search does not
+    // list is not requested at once: it reads in place as Add… reads a
+    // typed name it does not list, a version taking its requirement and
+    // Add requesting it as typed, the heading's receipt following.
     commandMock.mockClear();
     fireEvent.click(within(lines).getByTestId("env-waiting-add-acme/glossary-acme/terms"));
-    expect((await within(lines).findByTestId("env-waiting-error-acme/glossary-acme/terms")).textContent).toBe(
+    const unlisted = await within(lines).findByTestId("env-waiting-acme/glossary-acme/terms-request");
+    expect(within(unlisted).getByTestId("env-waiting-acme/glossary-acme/terms-name").textContent).toBe(
       "acme/terms · not listed publicly",
     );
+    expect(within(lines).queryByTestId("env-waiting-error-acme/glossary-acme/terms")).toBeNull();
     expect(writes()).toEqual([]);
+    const version = within(unlisted).getByTestId("env-waiting-acme/glossary-acme/terms-version");
+    expect(document.activeElement).toBe(version);
+    const submit = within(unlisted).getByTestId("env-waiting-acme/glossary-acme/terms-request-submit") as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    fireEvent.change(version, { target: { value: " ^2.0.0 " } });
+    fireEvent.click(submit);
+    await vi.waitFor(() =>
+      expect(commandMock).toHaveBeenCalledWith("environment.request", {
+        repository: PROJECT_ID,
+        name: "acme/terms",
+        request: { kind: "registry", version: "^2.0.0" },
+      }),
+    );
+    await act(async () => finish());
+    expect(projectSection().getByTestId("add-note").textContent).toBe("Added acme/terms");
 
     // [playbook-library-92] the spec's line as the state reads each other
     // placement, no link waiting.

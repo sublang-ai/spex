@@ -2,9 +2,9 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The applet tabs' reading of environments (applets-1, applets-2): one
-// tab per installed applet whose files stand, the project's first, two
-// environments' applets of one id apart, and the frame's origin from
-// the WebSocket endpoint.
+// tab per provided, installed applet whose files stand, the project's
+// first, two environments' applets of one id apart, and the frame's
+// origin from the WebSocket endpoint.
 
 import type { EnvironmentPackage, EnvironmentState } from "@sublang/spex-core/protocol";
 import { describe, expect, test } from "vitest";
@@ -48,6 +48,13 @@ describe("appletTabs", () => {
     expect(tabs.every((tab) => isAppletTab(tab.tab))).toBe(true);
     expect(isAppletTab("overview")).toBe(false);
     expect(appletTabId("me/me-spex", "report")).toBe("applet:me/me-spex:report");
+  });
+
+  test("an applet its release does not provide has no tab beside one it provides", () => {
+    const project = environment("me/demo-spex", [
+      pkg("acme/board-kit", [{ ...applet("board"), provided: false }, applet("report")]),
+    ]);
+    expect(appletTabs([project]).map((tab) => tab.tab)).toEqual(["applet:me/demo-spex:report"]);
   });
 });
 

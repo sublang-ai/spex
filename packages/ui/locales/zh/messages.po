@@ -906,7 +906,7 @@ msgid "✗ failed"
 msgstr "✗ 失败"
 
 #. examples of exact, caret and tilde registry requirements; preserve the syntax
-#: src/components/EnvironmentSection.tsx
+#: src/components/PackageArtifacts.tsx
 msgid "1.2.3, ^1.2.3, ~1.2.3"
 msgstr "1.2.3, ^1.2.3, ~1.2.3"
 
@@ -6812,7 +6812,7 @@ msgstr "规约 · 已在 specs/ 中编辑 — 归你所有"
 #. a package's spec line on the Packages tab: its placed copy in specs/ was edited, so installs leave it as the project's own; {version} is the package's newer release, waiting for someone to merge it into that file; keep specs/ as it is
 #: src/components/PackageArtifacts.tsx
 msgid "spec · edited in specs/ — left as yours · {version} waiting"
-msgstr "规约 · 已在 specs/ 中编辑 — 归你所有 · {version} 待合并"
+msgstr "规约 · 已在 specs/ 中编辑 — 归你所有 · {version} 等待中"
 
 #. a package's spec line on the Packages tab: an install placed its spec in the project's specs/ at {path}, such as specs/packages/glossary.md; keep the path as it is
 #: src/components/PackageArtifacts.tsx
@@ -6822,7 +6822,7 @@ msgstr "规约 · 位于 {path}"
 #. a package's spec line on the Packages tab: the project has no specs/ folder to place its spec in, and scaffolding the project's specs makes one; keep specs/ as it is
 #: src/components/PackageArtifacts.tsx
 msgid "spec · needs specs/ — scaffold first"
-msgstr "规约 · 需要 specs/ — 请先生成"
+msgstr "规约 · 需要 specs/ — 先运行 spex scaffold"
 
 #. a package's spec line on the Packages tab: its spec is not in the agents' folders
 #: src/components/PackageArtifacts.tsx
@@ -7836,6 +7836,7 @@ msgstr "使用此文件夹"
 #. the accessible name of a version choice in Add…; {name} is the package
 #. the accessible name of a version choice in Add…; {name} is the package
 #: src/components/EnvironmentSection.tsx
+#: src/components/PackageArtifacts.tsx
 msgid "Version of {name}"
 msgstr "{name} 的版本"
 
@@ -8063,7 +8064,7 @@ msgstr "写入中…"
 #. tooltip on a placed spec's provenance: Spex wrote the file from the spec package {name} (org/pkg) at {version}, and editing the file makes it the project's own
 #: src/components/SpecView.tsx
 msgid "Written by Spex from {name} {version} — an edit makes it yours"
-msgstr "由 Spex 根据 {name} {version} 写入——编辑后即归你所有"
+msgstr "由 Spex 根据 {name} {version} 写入 — 编辑后即归你所有"
 
 #. the choices note; {name} is that placement's Space's display name, or the path placement's remote
 #: src/components/SpaceSync.tsx

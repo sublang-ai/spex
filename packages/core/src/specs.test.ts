@@ -777,7 +777,7 @@ test("spec-view-67: a placed spec is told by its marker and the install record's
     );
   };
   const tools = (sha256: string) => ({
-    "acme/tools": { path: "specs/packages/tools.md", sha256, waiting: {} },
+    "acme/tools": { path: "specs/packages/tools.md", version: "1.2.0", sha256, waiting: {} },
   });
   const marked = { name: "acme/tools", version: "1.2.0" };
 
@@ -805,10 +805,21 @@ test("spec-view-67: a placed spec is told by its marker and the install record's
   // A record listing only other files, or none that reads, leaves the
   // marker to tell.
   record({
-    "acme/other": { path: "specs/packages/other.md", sha256: "0".repeat(64), waiting: {} },
+    "acme/other": { path: "specs/packages/other.md", version: "1.0.0", sha256: "0".repeat(64), waiting: {} },
   });
   assert.deepEqual(file(parseSpecTree(dir), "tools").placed, marked);
   writeFileSync(join(dir, ".spex", "placed.json"), "{");
+  assert.deepEqual(file(parseSpecTree(dir), "tools").placed, marked);
+  // A record any entry of which is of another shape — here one with no
+  // version, and one whose waiting count is no count — vouches for
+  // nothing, as the linter and an install read it: the marker tells.
+  record({
+    "acme/tools": { path: "specs/packages/tools.md", sha256: "0".repeat(64), waiting: {} },
+  });
+  assert.deepEqual(file(parseSpecTree(dir), "tools").placed, marked);
+  record({
+    "acme/tools": { ...tools("0".repeat(64))["acme/tools"], waiting: { "acme/terms": -1 } },
+  });
   assert.deepEqual(file(parseSpecTree(dir), "tools").placed, marked);
 });
 
