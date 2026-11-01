@@ -9,7 +9,7 @@
 // your namespace holding your own group's repository alone, with one
 // seat open at `lab-1` holding `beta-spex` — a second instance signed in
 // beside it. The test reads, through the surface, in English and in
-// Chinese: the instance's heading and its registry line, the headings,
+// Chinese: the instance's heading, the headings,
 // the group's overflow and its server's line, the rows' names, marks,
 // phrase and overflow, each Open and what it sends, a project in no
 // group and its picker, the choices owed and records started
@@ -22,7 +22,6 @@ import type {
   GroupsState,
   InstanceGroupState,
   ProjectInfo,
-  RegistryState,
   RepositoryState,
   SeatState,
   ServerListing,
@@ -36,7 +35,7 @@ import { activateLanguage } from "../i18n.js";
 import { PlaceStoreContext } from "../state/place-context.js";
 import { usePlaces } from "../state/places.js";
 import { useServerOpens } from "../state/server-opens.js";
-import { createAppStore, deliverServerMessageForTests, setClientForTests, useAppStore, type AppStore } from "../state/store.js";
+import { createAppStore, setClientForTests, useAppStore, type AppStore } from "../state/store.js";
 
 const NOW = Date.now();
 const MIN = 60_000;
@@ -103,10 +102,6 @@ const WORDS = {
     newGroup: "New group",
     signOut: "Sign out",
     removeFromList: "Remove from this list",
-    registry: "Registry",
-    signIn: "Sign in",
-    registryTitle: "For publishing and private packages",
-    registrySignedIn: "Registry · signed in as @ada",
     toSend: "1 to send",
     use: "Use ~/code/delta",
     exempt: ["Add to a group…"],
@@ -160,10 +155,6 @@ const WORDS = {
     newGroup: "新建群组",
     signOut: "退出登录",
     removeFromList: "从列表中移除",
-    registry: "注册中心",
-    signIn: "登录",
-    registryTitle: "用于发布和私有规约包",
-    registrySignedIn: "注册中心 · 已登录为 @ada",
     toSend: "1 项待发送",
     use: "使用 ~/code/delta",
     exempt: ["加入群组…"],
@@ -385,34 +376,12 @@ function pick(trigger: string, entry: string): void {
 
 const phrase = (key: string): string => screen.getByTestId(`space-repo-state-${key}`).textContent ?? "";
 
-/** The registry at the instance, as the core reports it
- * (core-service-143). */
-function registry(over: Partial<RegistryState> = {}): RegistryState {
-  return { origin: ORIGIN, displayName: "Spex Example", account: null, signIn: { phase: "idle" }, error: null, ...over };
-}
-
 describe.each(["en", "zh"] as const)("space-113: the Space surface reads as projects in groups (%s)", (language: Language) => {
   const words = WORDS[language];
   beforeEach(() => activateLanguage(language));
 
-  test("the instance's heading and its registry line; no This computer while no row is local only", async () => {
+  test("the instance's heading; no This computer while no row is local only", async () => {
     state = home({ gamma: false });
-    local = fakeClient({
-      "space.get": () => state,
-      "server.list": () => listing(),
-      "registry.directory": () => {
-        throw new Error("unreadable");
-      },
-      "registry.get": (fields?: Record<string, unknown>) => registry({ origin: fields?.origin as string }),
-      "registry.signin.start": (fields?: Record<string, unknown>) => ({
-        flow: "device",
-        userCode: "QRST-UVWX",
-        verificationUri: `${fields?.origin as string}/login/device?user_code=QRST-UVWX`,
-        expiresAt: NOW + 15 * MIN,
-        interval: 5,
-      }),
-    });
-    setClientForTests(local.client);
     await renderHere();
     const instance = within(screen.getByTestId(`space-instance-${ORIGIN}`));
     // [space-1] its display name beside "@ada", New group, Sign out and
@@ -431,22 +400,6 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
     // no "This computer" stands.
     expect(within(screen.getByTestId("space-group-@ada")).getByTestId(`space-repo-${OWN_KEY}`).textContent).toBe(words.yourSessions);
     expect(screen.queryByTestId("space-own")).toBeNull();
-    // [space-119] beneath the heading, "Registry" with Sign in, titled
-    // for what it is for, starting the registry's sign-in at the
-    // instance's origin.
-    const line = await instance.findByTestId("space-registry");
-    await waitFor(() => expect(line.textContent).toBe(`${words.registry}${words.signIn}`));
-    const signIn = within(line).getByTestId("space-registry-signin") as HTMLButtonElement;
-    expect(signIn.title).toBe(words.registryTitle);
-    fireEvent.click(signIn);
-    await waitFor(() => expect(callsOf(local, "registry.signin.start")).toEqual([{ origin: ORIGIN }]));
-    // Signed in there, "Registry · signed in as @ada", the heading
-    // unchanged and no package control on the surface.
-    act(() => deliverServerMessageForTests({ type: "registry.state", state: registry({ account: { id: "7", login: "ada" } }) }));
-    await waitFor(() => expect(instance.getByTestId("space-registry").textContent).toBe(words.registrySignedIn));
-    expect(within(instance.getByTestId("space-registry")).queryAllByRole("button")).toEqual([]);
-    expect(instance.getByRole("heading", { level: 2 }).textContent).toBe(words.heading);
-    expect(screen.queryAllByRole("button").filter((button) => /package|Publish|规约包|发布/i.test(button.textContent ?? ""))).toEqual([]);
   });
 
   test("the headings, the group's overflow and its server's line", async () => {

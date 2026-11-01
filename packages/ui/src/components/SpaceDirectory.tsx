@@ -3,8 +3,7 @@
 
 // The Spaces the sign-in card chooses from (space-115, environments-39,
 // DR-168, DR-172): the public registry's directory, read once per core
-// connection and shared by the card and each Space's registry line
-// (space-119). A choice stands before a field: one chooser lists each
+// connection. A choice stands before a field: one chooser lists each
 // Space by its display name, the chosen one's sign-in providers beside
 // it as icons titled with their names, and a last entry "Other Space…"
 // reveals the field "Space address"; where no directory can be read the
@@ -124,13 +123,6 @@ export function spaceNameOf(origin: string, groups?: GroupsState, directory?: Di
   if (listed?.displayName) return listed.displayName;
   const entry = directory?.status === "read" ? directory.spaces.find((space) => space.origin === origin) : undefined;
   return entry?.displayName ?? listed?.host ?? hostNameOf(origin);
-}
-
-/** Whether the directory names the Space at `origin`, or could not be
- * read — where a Space's registry line stands (space-119). */
-export function directoryOffers(directory: Directory, origin: string): boolean {
-  if (directory.status === "failed") return true;
-  return directory.status === "read" && directory.spaces.some((space) => space.origin === origin);
 }
 
 /** The chooser's last entry, revealing the field (space-115). */
