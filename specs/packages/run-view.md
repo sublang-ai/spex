@@ -410,7 +410,7 @@ While no local project is registered, the local Projects surface shall show a we
 While the Captain home is shown, when the user submits composer text, the run view shall act by whether the workspace has a current project:
 
 - a current project — the run view creates a session for that project, dispatches the text as the session's first Boss turn, and switches to the new session's tab;
-- session creation keeps its original request in flight until the core answers, without a UI reply deadline or automatic resend; a connection closing or a core refusal still rejects the pending start ([DR-174](../decisions/174-owned-session-start-wait.md));
+- session creation keeps its original request in flight until the core answers, without a UI reply deadline or automatic resend; a connection closing or a core refusal still rejects the pending start ([DR-181](../decisions/181-owned-session-start-wait.md));
 - no project chosen while projects exist — the workspace opens the project palette instead of dispatching, keeping the draft intact;
 - the send control's tooltip says how to send — Enter, with Shift+Enter for a new line — and, with no project, what to do first, naming the palette's binding the platform's way [[run-view-49](#run-view-49)].
 

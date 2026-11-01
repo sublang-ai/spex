@@ -6,7 +6,7 @@
 ## Status
 
 Accepted, 2026-10-31.
-The two-minute UI observation deadline is superseded by [DR-174](174-owned-session-start-wait.md); the single-request, unchanged-admission and disconnect boundaries remain.
+The two-minute UI observation deadline is superseded by [DR-181](181-owned-session-start-wait.md); the single-request, unchanged-admission and disconnect boundaries remain.
 
 ## Context
 

@@ -206,6 +206,7 @@ meta.md       The spec of specs
 | [DR-178](decisions/178-native-windows-private-storage.md) | 178-native-windows-private-storage.md | Native Windows private storage through fs-safe; fail-closed admission, privileged principals, coordinated storage dependency, launch environment and installation responsibilities |
 | [DR-179](decisions/179-session-creation-waits-for-initialization.md) | 179-session-creation-waits-for-initialization.md | Session creation awaits its initialization for two minutes through the existing command-class reply bound |
 | [DR-180](decisions/180-windows-git-source-long-paths.md) | 180-windows-git-source-long-paths.md | Command-scoped Git for Windows long paths for package mirrors without changing user configuration |
+| [DR-181](decisions/181-owned-session-start-wait.md) | 181-owned-session-start-wait.md | Observe the single owned session creation through initialization without a false UI deadline or automatic resend |
 
 ## Packages
 
