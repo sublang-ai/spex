@@ -591,8 +591,10 @@ describe("playbook-library-94: a row's artifacts", () => {
     const row = personalSection().getByTestId("env-package-acme/notes");
     fireEvent.click(within(row).getByRole("button", { name: "What acme/notes provides" }));
     const line = within(row).getByTestId("env-artifact-acme/notes-note");
-    // The playbook reads by its command.
+    // The playbook reads by its command, the line starting with it, so
+    // its Enable reads bare.
     const enable = await within(line).findByRole("button", { name: "Enable /jot" });
+    expect(enable.textContent).toBe("Enable");
     expect(enable.title).toBe("For you, in every project of yours");
     fireEvent.click(enable);
     // [playbook-library-92] a refusal shows its cause in place, Enable standing.
@@ -711,7 +713,12 @@ describe("playbook-library-94: Add…", () => {
       expect(commandMock).toHaveBeenCalledWith("environment.search", { repository: PROJECT_ID, query: "tri" }),
     );
     const result = await projectSection().findByTestId("registry-result-acme/triage");
-    expect(result.textContent).toContain("Sort issues into labels");
+    // The description stands on its own line beneath the name, clamped,
+    // its whole text the title.
+    const description = within(result).getByTitle("Sort issues into labels");
+    expect(description.textContent).toBe("Sort issues into labels");
+    expect(description.parentElement).toBe(result);
+    expect(description.className).toContain("line-clamp-2");
     const versions = within(result).getByTestId("registry-version-acme/triage") as HTMLSelectElement;
     expect([...versions.options].map((option) => [option.value, option.textContent])).toEqual([
       ["^1.2.3", "1.2.3 and newer 1.x"],
@@ -737,9 +744,10 @@ describe("playbook-library-94: Add…", () => {
     // [playbook-library-92] it provides one playbook: the receipt's
     // Enable enables it in place in the project's config, the write its
     // row's line makes (playbook-library-3), and then reads where it is
-    // enabled, focus moving there; no tab opens.
+    // enabled, focus moving there; no tab opens. Its label names the
+    // command, no line before it doing so.
     const receiptEnable = await projectSection().findByTestId("add-note-enable");
-    expect(receiptEnable.textContent).toBe("Enable");
+    expect(receiptEnable.textContent).toBe("Enable /triage");
     expect(receiptEnable.getAttribute("aria-label")).toBe("Enable /triage");
     expect(receiptEnable.title).toBe("For you and every member of demo");
     fireEvent.click(receiptEnable);

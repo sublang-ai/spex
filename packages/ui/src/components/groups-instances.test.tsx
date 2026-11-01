@@ -581,9 +581,9 @@ describe("SPACE: the card 'Sign in to a Space' (space-3, space-115, space-66)", 
     // No field beside a chosen Space (space-115).
     expect(within(card()).queryByRole("textbox")).toBeNull();
     const icons = () => within(card()).getAllByRole("img").map((icon) => icon.getAttribute("title"));
-    expect(icons()).toEqual(["Sign in with GitHub", "Sign in with GitLab"]);
+    expect(icons()).toEqual(["Accepts GitHub accounts", "Accepts GitLab accounts"]);
     fireEvent.change(chooser, { target: { value: SECOND } });
-    expect(icons()).toEqual(["Sign in with GitLab"]);
+    expect(icons()).toEqual(["Accepts GitLab accounts"]);
     const signIn = within(card()).getByTestId("space-signin") as HTMLButtonElement;
     expect(signIn.title).toBe("Opens Second Example in your browser");
     fireEvent.click(signIn);

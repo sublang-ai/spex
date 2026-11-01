@@ -224,7 +224,6 @@ msgid "{count, plural, one {# package} other {# packages}} sharing citations wit
 msgstr "{count, plural, one {# package} other {# packages}} sharing citations with {name}"
 
 #. what a package provides: its count of playbooks
-#: src/App.tsx
 #: src/lib/environments.ts
 msgid "{count, plural, one {# playbook} other {# playbooks}}"
 msgstr "{count, plural, one {# playbook} other {# playbooks}}"
@@ -1019,6 +1018,11 @@ msgstr "Aborted at {step}"
 #: src/components/DraftConversation.tsx
 msgid "Aborting…"
 msgstr "Aborting…"
+
+#. the title of a sign-in provider's icon beside a Space in the sign-in card's chooser, an icon and not a button: the Space takes accounts of that provider; {provider} is its name, such as GitHub
+#: src/components/SpaceDirectory.tsx
+msgid "Accepts {provider} accounts"
+msgstr "Accepts {provider} accounts"
 
 #: src/components/ProjectGroup.tsx
 msgid "Actions for {title}"
@@ -4566,9 +4570,10 @@ msgstr "No project specs yet"
 msgid "No projects here yet"
 msgstr "No projects here yet"
 
+#. the Dashboard's Projects band with no project: the link opens Projects, where a project is added
 #: src/components/DashboardSurface.tsx
-msgid "No projects yet — register a repository in the <0>Projects</0> to put its work here."
-msgstr "No projects yet — register a repository in the <0>Projects</0> to put its work here."
+msgid "No projects yet · <0>Add a project</0>"
+msgstr "No projects yet · <0>Add a project</0>"
 
 #: src/components/FailureCard.tsx
 msgid "No reason was reported"
@@ -6673,11 +6678,6 @@ msgstr "Sign in to publish"
 #: src/components/CaptainHome.tsx
 msgid "Sign in to your Space"
 msgstr "Sign in to your Space"
-
-#. the title of a sign-in provider's icon beside a Space in the sign-in card's chooser; {provider} is its name, such as GitHub
-#: src/components/SpaceDirectory.tsx
-msgid "Sign in with {provider}"
-msgstr "Sign in with {provider}"
 
 #. sign out of a Space or a registry
 #. sign this computer out of the Space whose heading carries it

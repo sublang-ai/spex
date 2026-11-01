@@ -224,7 +224,6 @@ msgid "{count, plural, one {# package} other {# packages}} sharing citations wit
 msgstr "与 {name} 有引用关系的 {count} 个规约包"
 
 #. what a package provides: its count of playbooks
-#: src/App.tsx
 #: src/lib/environments.ts
 msgid "{count, plural, one {# playbook} other {# playbooks}}"
 msgstr "{count, plural, other {# 个规程}}"
@@ -1019,6 +1018,11 @@ msgstr "在 {step} 中止"
 #: src/components/DraftConversation.tsx
 msgid "Aborting…"
 msgstr "中止中…"
+
+#. the title of a sign-in provider's icon beside a Space in the sign-in card's chooser, an icon and not a button: the Space takes accounts of that provider; {provider} is its name, such as GitHub
+#: src/components/SpaceDirectory.tsx
+msgid "Accepts {provider} accounts"
+msgstr "支持 {provider} 账户"
 
 #: src/components/ProjectGroup.tsx
 msgid "Actions for {title}"
@@ -4566,9 +4570,10 @@ msgstr "尚无项目规约"
 msgid "No projects here yet"
 msgstr "这里还没有项目"
 
+#. the Dashboard's Projects band with no project: the link opens Projects, where a project is added
 #: src/components/DashboardSurface.tsx
-msgid "No projects yet — register a repository in the <0>Projects</0> to put its work here."
-msgstr "还没有项目 — 在<0>项目</0>中注册一个仓库，其工作就会出现在这里。"
+msgid "No projects yet · <0>Add a project</0>"
+msgstr "还没有项目 · <0>添加项目</0>"
 
 #: src/components/FailureCard.tsx
 msgid "No reason was reported"
@@ -6673,11 +6678,6 @@ msgstr "登录以发布"
 #: src/components/CaptainHome.tsx
 msgid "Sign in to your Space"
 msgstr "登录你的 Space"
-
-#. the title of a sign-in provider's icon beside a Space in the sign-in card's chooser; {provider} is its name, such as GitHub
-#: src/components/SpaceDirectory.tsx
-msgid "Sign in with {provider}"
-msgstr "使用 {provider} 登录"
 
 #. sign out of a Space or a registry
 #. sign this computer out of the Space whose heading carries it
