@@ -19,6 +19,7 @@ import {
   plainHeadingText,
   visit,
 } from "./markdown.js";
+import { readPlacedRecord } from "./lib/environment/placed-record.js";
 import { resolveBase } from "./resolve-base.js";
 
 export type LintSeverity = "error" | "warning";
@@ -1347,10 +1348,26 @@ function lintMap(ctx: LintContext): void {
     listed.add(posix.normalize(posix.join("specs", url.split("#")[0])));
   }
 
+  // A spec an install placed is listed by the install record under the
+  // root's `.spex/`, not by the map (DR-174): its path there, from the
+  // root, is the file's under `specs/`.
+  const placed = new Set<string>();
+  for (const spec of Object.values(readPlacedRecord(ctx.basePath)?.specs ?? {})) {
+    if (spec.path.startsWith("specs/")) {
+      placed.add(posix.normalize(spec.path.slice("specs/".length)));
+    }
+  }
+
   for (const file of ctx.files.values()) {
     // The map indexes decisions and packages (DR-000), so both are
     // checked; intent records are outside it (meta-18).
     if (!isUnder(file.relPath, "packages") && !isUnder(file.relPath, "decisions")) {
+      continue;
+    }
+    if (
+      isUnder(file.relPath, "packages") &&
+      placed.has(posix.relative("specs", file.relPath))
+    ) {
       continue;
     }
     if (!listed.has(file.relPath)) {
