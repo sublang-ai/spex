@@ -1,18 +1,26 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// A package row's expanded lines (playbook-library-92, DR-172): one line
-// per selected artifact with its one act, so installing a package is
-// never mistaken for enabling it — a playbook "/<command> · Enable",
-// enabled in place in the config of the heading's spex repository by the
-// Playbooks tab's own write (playbook-library-3) and reading "Enabled in
-// <project>" or "Enabled · Personal" after; the skills "skills: <ids> ·
-// placed for your agents" or "· not placed"; the spec "spec · placed as
-// a skill"; an applet "<id> · its page", opening its tab (applets-1). An
-// artifact read in another language than the one wanted is marked with
-// the language it is shown in.
+// A package row's expanded lines (playbook-library-92, DR-172, DR-174):
+// one line per artifact its release provides with its one act, a
+// sibling's support unlisted, so installing a package is never mistaken
+// for enabling it — a playbook "/<command> · Enable", enabled in place in
+// the config of the heading's spex repository by the Playbooks tab's own
+// write (playbook-library-3) and reading "Enabled in <project>" or
+// "Enabled · Personal" after; the skills "skills: <ids> · placed for your
+// agents" or "· not placed"; the spec where the state reads it under
+// `specs/` (environments-14, environments-41) — "spec · in <path>",
+// "spec · edited in specs/ — left as yours" with the version waiting,
+// "spec · not placed — specs/ holds <pkg>.md already" or "spec · needs
+// specs/ — scaffold first" — followed by "<n> links wait for <org/pkg> ·
+// Add" for each package its links wait for, Add requesting it as Add…'s
+// registry tab does; else, as your own group's environment and an older
+// core read it, "spec · placed as a skill" or "· not placed"; an applet
+// "<id> · its page", opening its tab (applets-1). An artifact read in
+// another language than the one wanted is marked with the language it is
+// shown in.
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import type {
   EnvironmentPackage,
   EnvironmentState,
@@ -23,10 +31,11 @@ import { isLocalPlace } from "../state/store.js";
 import { usePlaceStore } from "../state/place-context.js";
 import { appletTabId } from "../lib/applets.js";
 import { enablePlaybook } from "../lib/enable-playbook.js";
-import { listOf } from "../lib/environments.js";
+import { addLabel, addsTitle, firstRequirement, isProvided, listOf, notListedPhrase } from "../lib/environments.js";
 import { currentLocale, i18n } from "../i18n.js";
 
 type Artifact = EnvironmentPackage["artifacts"][number];
+type SpecPlacement = NonNullable<NonNullable<EnvironmentPackage["placement"]>["spec"]>;
 
 const PRIMARY =
   "min-h-6 shrink-0 whitespace-nowrap rounded-md border border-brand-300 px-2 py-0.5 text-xs font-medium text-brand-600 hover:bg-brand-50 disabled:opacity-40 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950";
@@ -36,11 +45,11 @@ const ERROR =
   "rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700 [overflow-wrap:anywhere] dark:border-red-900 dark:bg-red-950 dark:text-red-300";
 const LINE = "flex flex-wrap items-center gap-x-1.5 gap-y-1 [overflow-wrap:anywhere]";
 
-/** The lines an expanded row shows (playbook-library-92): its playbooks,
- * its skills, its spec and its applets; a source has no act of its own
- * and no line. */
+/** The lines an expanded row shows (playbook-library-92): the playbooks,
+ * the skills, the spec and the applets its release provides; a source
+ * has no act of its own and no line, nor has a sibling's support. */
 export function hasArtifactLines(pkg: EnvironmentPackage | undefined): boolean {
-  return pkg !== undefined && pkg.artifacts.some((artifact) => artifact.kind !== "source");
+  return pkg !== undefined && pkg.artifacts.some((artifact) => artifact.kind !== "source" && isProvided(artifact));
 }
 
 /** Whether an artifact's export stands in the agents' folders: its
@@ -283,6 +292,122 @@ function PlaybookLine({
   );
 }
 
+/** A provided spec's line where the state reads its placement under
+ * `specs/` (playbook-library-92, environments-41): the copy's path, an
+ * edited copy left standing with the newer release that waits for a
+ * merge, a file of its name holding the place, or a root to scaffold. */
+function placementPhrase(placement: SpecPlacement): string {
+  switch (placement.state) {
+    case "placed":
+      return i18n._({
+        id: "spec · in {path}",
+        comment: "a package's spec line on the Packages tab: an install placed its spec in the project's specs/ at {path}, such as specs/packages/glossary.md; keep the path as it is",
+        values: { path: placement.path },
+      });
+    case "edited":
+      return placement.waitingVersion
+        ? i18n._({
+            id: "spec · edited in specs/ — left as yours · {version} waiting",
+            comment: "a package's spec line on the Packages tab: its placed copy in specs/ was edited, so installs leave it as the project's own; {version} is the package's newer release, waiting for someone to merge it into that file; keep specs/ as it is",
+            values: { version: placement.waitingVersion },
+          })
+        : i18n._({
+            id: "spec · edited in specs/ — left as yours",
+            comment: "a package's spec line on the Packages tab: its placed copy in specs/ was edited, so installs leave it as the project's own; keep specs/ as it is",
+          });
+    case "blocked":
+      // The blocking file bears the spec's basename, <pkg>.md.
+      return i18n._({
+        id: "spec · not placed — specs/ holds {file} already",
+        comment: "a package's spec line on the Packages tab: its spec is not placed because a file of the same name, {file} such as glossary.md, already stands in the project's specs/; keep specs/ and the file name as they are",
+        values: { file: placement.path.slice(placement.path.lastIndexOf("/") + 1) },
+      });
+    case "no-specs":
+      return i18n._({
+        id: "spec · needs specs/ — scaffold first",
+        comment: "a package's spec line on the Packages tab: the project has no specs/ folder to place its spec in, and scaffolding the project's specs makes one; keep specs/ as it is",
+      });
+  }
+}
+
+/** "<n> links wait for <org/pkg> · Add" (playbook-library-92): links the
+ * placed spec lost because the package they cite has no spec in this
+ * `specs/` (environments-41), and Add requesting that package as Add…'s
+ * registry tab does, at the requirement its search result stands at
+ * first — so the links appear once its spec is placed. A package the
+ * search does not list reads so in place, Add… taking a version for it. */
+function WaitingLine({
+  name,
+  waited,
+  count,
+  repository,
+  onAdded,
+}: {
+  name: string;
+  /** The package the links wait for, `<org>/<pkg>`. */
+  waited: string;
+  count: number;
+  repository: string;
+  onAdded?: (name: string) => void;
+}) {
+  const store = usePlaceStore();
+  const search = store((current) => current.searchRegistry);
+  const request = store((current) => current.requestSpecPackage);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+
+  async function add(): Promise<void> {
+    setBusy(true);
+    setError(undefined);
+    try {
+      const found = (await search(repository, waited)).find((result) => result.name === waited);
+      const requirement = found ? firstRequirement(found.versions) : undefined;
+      if (requirement === undefined) {
+        setError(notListedPhrase(waited));
+        return;
+      }
+      await request(repository, waited, { kind: "registry", version: requirement });
+      onAdded?.(waited);
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <li data-testid={`env-waiting-${name}-${waited}`} className="flex flex-col gap-1">
+      <span className={LINE}>
+        <span>
+          {i18n._({
+            id: "{count, plural, one {# link waits} other {# links wait}} for {name}",
+            comment: "beneath a package's spec line on the Packages tab: the placed spec's links to another package's spec, dropped until that package is added; {name} is that package, such as acme/glossary",
+            values: { count, name: waited },
+          })}
+        </span>
+        <span aria-hidden className="text-neutral-400">
+          ·
+        </span>
+        <button
+          type="button"
+          data-testid={`env-waiting-add-${name}-${waited}`}
+          disabled={busy}
+          title={addsTitle(waited)}
+          onClick={() => void add()}
+          className={PRIMARY}
+        >
+          {addLabel(busy)}
+        </button>
+      </span>
+      {error ? (
+        <p role="alert" data-testid={`env-waiting-error-${name}-${waited}`} className={ERROR}>
+          {error}
+        </p>
+      ) : null}
+    </li>
+  );
+}
+
 /** A package's expanded lines (playbook-library-92), under the row that
  * discloses them. */
 export function PackageArtifacts({
@@ -294,18 +419,22 @@ export function PackageArtifacts({
   projectId,
   projectName,
   personal,
+  onAdded,
 }: {
   /** The list's element id, which the row's disclosure controls. */
   id: string;
   name: string;
   pkg: EnvironmentPackage;
   state: EnvironmentState;
-  /** The heading's spex repository, whose config an Enable writes. */
+  /** The heading's spex repository, whose config an Enable writes and
+   * whose spex.yaml a waiting link's Add writes. */
   repository: string;
   projectId: string;
   projectName: string;
   /** The heading is "Personal": your own group's config. */
   personal: boolean;
+  /** A package a waiting link's Add requested, for the heading's receipt. */
+  onAdded?: (name: string) => void;
 }) {
   const store = usePlaceStore();
   const readLists = store((current) => current.playbookLists);
@@ -320,10 +449,16 @@ export function PackageArtifacts({
   const fallbackOf = (artifact: Artifact): ReactNode =>
     artifact.fallback ? <FallbackMark testId={`env-fallback-${name}-${artifact.id}`} shown={artifact.language} wanted={state.language} /> : null;
 
-  const playbooks = pkg.artifacts.filter((artifact) => artifact.kind === "playbook");
-  const skills = pkg.artifacts.filter((artifact) => artifact.kind === "skill");
-  const specs = pkg.artifacts.filter((artifact) => artifact.kind === "spec");
-  const applets = pkg.artifacts.filter((artifact) => artifact.kind === "applet");
+  // What the release provides has a line; a sibling's support has none
+  // (environments-6).
+  const provided = pkg.artifacts.filter(isProvided);
+  const playbooks = provided.filter((artifact) => artifact.kind === "playbook");
+  const skills = provided.filter((artifact) => artifact.kind === "skill");
+  const specs = provided.filter((artifact) => artifact.kind === "spec");
+  const applets = provided.filter((artifact) => artifact.kind === "applet");
+  // Where the spec stands under `specs/`, in a project's environment read
+  // by a core that says so (environments-14).
+  const placement = pkg.placement?.spec;
   const placedSkills = skills.filter((artifact) => placed(pkg, artifact, state));
   const unplacedSkills = skills.filter((artifact) => !placed(pkg, artifact, state));
 
@@ -375,14 +510,28 @@ export function PackageArtifacts({
       {skillLine(placedSkills, true)}
       {skillLine(unplacedSkills, false)}
       {specs.map((artifact) => (
-        <li key={`spec:${artifact.id}`} data-testid={`env-artifact-${name}-${artifact.id}`} data-kind="spec" className={LINE}>
-          <span>
-            {placed(pkg, artifact, state)
-              ? i18n._({ id: "spec · placed as a skill", comment: "a package's spec line on the Packages tab: its spec stands in the agents' folders as a skill" })
-              : i18n._({ id: "spec · not placed", comment: "a package's spec line on the Packages tab: its spec is not in the agents' folders" })}
-          </span>
-          {fallbackOf(artifact)}
-        </li>
+        <Fragment key={`spec:${artifact.id}`}>
+          <li data-testid={`env-artifact-${name}-${artifact.id}`} data-kind="spec" className={LINE}>
+            <span>
+              {placement
+                ? placementPhrase(placement)
+                : placed(pkg, artifact, state)
+                  ? i18n._({ id: "spec · placed as a skill", comment: "a package's spec line on the Packages tab: its spec stands in the agents' folders as a skill" })
+                  : i18n._({ id: "spec · not placed", comment: "a package's spec line on the Packages tab: its spec is not in the agents' folders" })}
+            </span>
+            {fallbackOf(artifact)}
+          </li>
+          {(placement?.waiting ?? []).map((entry) => (
+            <WaitingLine
+              key={`waiting:${entry.name}`}
+              name={name}
+              waited={entry.name}
+              count={entry.count}
+              repository={repository}
+              onAdded={onAdded}
+            />
+          ))}
+        </Fragment>
       ))}
       {applets.map((artifact) => (
         <li key={`applet:${artifact.id}`} data-testid={`env-artifact-${name}-${artifact.id}`} data-kind="applet" className={LINE}>
