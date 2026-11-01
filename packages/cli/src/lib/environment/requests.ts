@@ -268,10 +268,16 @@ export function parseRequests(text: string): Requests {
   return parseRequestsValue(doc.toJS() ?? {});
 }
 
-/** The lock's `requests` field: the SHA-256 of the file's bytes. */
+/** The lock's `requests` field: the SHA-256 of the file's text with
+ * CRLF line endings read as LF (environments-3), so a checkout whose
+ * Git converts line endings — Windows by default — leaves a committed
+ * lock standing. */
 export function requestsDigest(text: string | Uint8Array): string {
-  return sha256Hex(text);
+  return sha256Hex(lfText(text));
 }
+
+const lfText = (text: string | Uint8Array): string =>
+  (typeof text === "string" ? text : Buffer.from(text).toString("utf8")).replace(/\r\n/g, "\n");
 
 export async function readRequests(file: string): Promise<Requests> {
   return parseRequests(await readFile(file, "utf8"));

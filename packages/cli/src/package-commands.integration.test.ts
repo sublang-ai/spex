@@ -324,12 +324,14 @@ test("cli-15: list heads with the folder and the registry's name, then what is a
 });
 
 test("cli-15: install from the committed files alone writes no spex.lock and installs byte for byte; again it rewrites nothing", async () => {
-  // A second clone of the committed environment and placed spec.
+  // A second clone of the committed environment and placed spec, checked
+  // out with CRLF line endings as Git for Windows does by default.
   git(WORK, "add", "spex.yaml", "spex.lock", "specs");
   git(WORK, "commit", "--quiet", "-m", "Add the environment");
   const second = join(SCRATCH, "second");
-  git(SCRATCH, "clone", "--quiet", WORK, second);
+  git(SCRATCH, "-c", "core.autocrlf=true", "clone", "--quiet", WORK, second);
   const lockBytes = readFileSync(join(second, "spex.lock"), "utf8");
+  assert.ok(lockBytes.includes("\r\n") && readFileSync(join(second, "spex.yaml"), "utf8").includes("\r\n"), "the clone checked the two files out with CRLF");
   const committed = stamps(join(second, "specs"));
   registry.script.clearRequests();
   const installed = await ok(second, "install");
@@ -339,7 +341,7 @@ test("cli-15: install from the committed files alone writes no spex.lock and ins
   assert.match(installed, /^Installed demo\/base 1\.0\.0\n {2}spec in specs\/packages\/base\.md$/m, "[cli-4] the committed copy read as the package's");
   assert.deepEqual(stamps(join(second, "specs")), committed, "[environments-41] the first install rewrites nothing in specs/");
   const base = join(second, "specs", "packages", "base.md");
-  assert.deepEqual(readPlacedRecord(second)?.specs["demo/base"], { path: "specs/packages/base.md", version: "1.0.0", sha256: createHash("sha256").update(readFileSync(base)).digest("hex"), waiting: {} }, "[environments-41] the committed copy recorded as the package's");
+  assert.deepEqual(readPlacedRecord(second)?.specs["demo/base"], { path: "specs/packages/base.md", version: "1.0.0", sha256: createHash("sha256").update(readFileSync(base, "utf8").replace(/\r\n/g, "\n")).digest("hex"), waiting: {} }, "[environments-41] the committed copy recorded as the package's, its line endings as the checkout wrote them");
   assert.deepEqual(snapshot(join(second, ".spex", "packages")), snapshot(join(WORK, ".spex", "packages")), "[cli-4] byte-identical .spex/packages/");
   for (const folder of [".claude", ".agents"]) {
     assert.deepEqual(snapshot(join(second, folder, "skills")), snapshot(join(WORK, folder, "skills")), `[cli-4] byte-identical exports in ${folder}/skills`);
@@ -362,7 +364,7 @@ test("cli-15: install from the committed files alone writes no spex.lock and ins
   assert.match(resolved, /^Installed demo\/base 1\.0\.0\n {2}spec needs specs\/ — spex scaffold$/m, "[cli-4] a folder holding no specs/ places no spec, naming spex scaffold");
   for (const folder of [".claude", ".agents"]) assert.equal(existsSync(join(third, folder, "skills", "demo-base")), false, `[environments-41] and no spec skill in ${folder}/skills`);
   assert.equal(existsSync(join(third, "specs")), false, "[environments-41] no specs/ made");
-  assert.equal(readFileSync(join(third, "spex.lock"), "utf8"), lockBytes, "[cli-4] the same lock");
+  assert.equal(readFileSync(join(third, "spex.lock"), "utf8"), lockBytes.replace(/\r\n/g, "\n"), "[cli-4] the same lock, line endings aside");
   assert.deepEqual(snapshot(join(third, ".spex", "packages")), snapshot(join(WORK, ".spex", "packages")));
 
   // With neither, refused naming the folder and spex add.

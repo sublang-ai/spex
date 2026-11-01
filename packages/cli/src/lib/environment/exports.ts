@@ -491,13 +491,15 @@ function isDirectory(path: string): boolean {
 const NOT_A_FILE = "not a file";
 
 /** What stands at a root's path, as a digest: the SHA-256 of a file's
- * bytes; null where nothing stands; and NOT_A_FILE where something else
- * stands — a folder, a link, or a path under a file. */
+ * text with CRLF line endings read as LF, so a copy a checkout
+ * converted — Windows by default — still equals its derivation
+ * (environments-41); null where nothing stands; and NOT_A_FILE where
+ * something else stands — a folder, a link, or a path under a file. */
 function standingDigest(root: string, path: string): string | null {
   const file = join(root, ...path.split("/"));
   try {
     if (!lstatSync(file).isFile()) return NOT_A_FILE;
-    return sha256(readFileSync(file));
+    return sha256(readFileSync(file, "utf8").replace(/\r\n/g, "\n"));
   } catch (error) {
     return (error as NodeJS.ErrnoException).code === "ENOENT" ? null : NOT_A_FILE;
   }

@@ -80,6 +80,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Breaking:** `spex new` and its `--move`, replaced by `spex export`.
 
+### Fixed
+
+- A checkout that converts line endings — Git for Windows by default —
+  keeps a committed `spex.lock` standing and reads a placed spec as its
+  package's copy: the lock's digest of `spex.yaml` and the comparison of
+  a placed copy with its derivation read CRLF as LF.
+
 ## [5.0.0] - 2026-10-31
 
 ### Added
