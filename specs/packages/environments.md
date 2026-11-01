@@ -187,7 +187,7 @@ When an install runs in a project's environment, the core shall place each provi
 - an address `spex:<org>/<pkg>#<id>` [[environments-42](#environments-42)] whose package's spec stands in this `specs/` becomes the relative link to that file's anchor; one whose package's spec does not is removed with its brackets, the phrase it annotated kept, and the install reports each such package with the count of links waiting for it; a same-file citation and a relative link to `meta.md` stay; the placed files are derived again whenever the set of placed specs changes, so a package added later makes its links appear;
 - a file at that path whose bytes equal the derivation is this package's copy, recorded as such with or without an earlier record, so a fresh clone installs to no diff; one whose bytes equal the hash last recorded is rewritten by the derivation; any other is edited: the install leaves it standing, places nothing over it and reports it with the newer release's version waiting under `.spex/`;
 - a copy whose package the lock no longer holds, or whose release no longer provides its spec, leaves, unless edited, when it stays as the project's own and the install reports so;
-- a file of that basename under `specs/` that is neither the derivation nor this package's copy by the record or its marker line blocks the placement, reported naming the file; of two selected packages of one `<pkg>`, the first by `<org>` is placed and the second reported blocked;
+- a file of that basename under `specs/` that is neither the derivation nor this package's copy by the record or its marker line blocks the placement, reported naming the file; of two selected packages of one `<pkg>`, the one whose copy stands there is placed, else the first by `<org>`, and the other reported blocked;
 - a root holding no `specs/` places no spec, reported naming `spex scaffold`;
 - `specs/` holds no address: a placed file's links are relative or absent, as the project's own files' are.
 
@@ -198,7 +198,7 @@ When the library builds a release's spec from a project's spec file [[cli-23](cl
 - a relative citation into the same file becomes a same-file citation, `[[<id>](#<id>)]`;
 - a relative citation whose target file is `<pkg>.md` of exactly one package under development at `spex-packages/`, or the placed spec of a package installed by this environment by the placement record [[environments-41](#environments-41)], becomes `[[<id>](spex:<org>/<pkg>#<id>)]`, that package's; one `<pkg>.md` two packages under development claim is removed as below, the warning naming both;
 - a relative citation whose target is a spec of no package is removed with its brackets, the phrase kept, and reported as a warning naming the citing item and the target;
-- a relative citation whose target is `meta.md` at the specs root is kept as it is, since the scaffold puts that file in every tree;
+- a relative citation whose target is `meta.md` at the specs root is kept, written as the link from `specs/packages/`, where the placed spec stands [[environments-41](#environments-41)], since the scaffold puts that file in every tree;
 - a decision record's link keeps its text and loses its link, reported as a warning naming the citing item and the record;
 - nothing else in the file changes, and the project's own file is not written.
 

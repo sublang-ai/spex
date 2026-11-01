@@ -95,7 +95,7 @@ test("citations: a release keeps same-file citations, writes a package's spec as
     "the package is asked of the cited file's path from the specs root, normalized");
 });
 
-test("citations: a citation of meta.md at the specs root is kept as it is in both directions; a meta.md elsewhere is a spec of no package", () => {
+test("citations: a citation of meta.md at the specs root is kept in both directions, written as the link from specs/packages/; a meta.md elsewhere is a spec of no package", () => {
   const source = [
     "### tools-1",
     "",
@@ -119,9 +119,12 @@ test("citations: a citation of meta.md at the specs root is kept as it is in bot
   const claimed = rewriteForRelease(source, { ...release, packageOf: () => "acme/meta" });
   assert.equal(claimed.text, source.replace("(meta.md#meta-2)", "(spex:acme/meta#meta-2)"), "no claim reaches the specs root's meta.md");
 
-  const deep = "### deep-1\n\nIt shall hold [[meta-15](../../meta.md#meta-15)].\n";
-  assert.deepEqual(rewriteForRelease(deep, { ...release, selfPath: "packages/lib/deep.md" }), { text: deep, warnings: [] });
-  for (const [text, selfPath] of [[built.text, "packages/tools.md"], [deep, "packages/lib/deep.md"]] as const) {
+  // A source nested below specs/packages/: its link rebased to the one
+  // a placed spec carries from specs/packages/.
+  const deep = "### deep-1\n\nIt shall hold [[meta-15](../../meta.md#meta-15)] and [[meta-1](<../../meta.md#meta-1> \"Meta\")].\n";
+  const rebased = deep.replace("../../meta.md#meta-15", "../meta.md#meta-15").replace("<../../meta.md#meta-1>", "../meta.md#meta-1");
+  assert.deepEqual(rewriteForRelease(deep, { ...release, selfPath: "packages/lib/deep.md" }), { text: rebased, warnings: [] }, "a nested source's meta.md link written from specs/packages/");
+  for (const [text, selfPath] of [[built.text, "packages/tools.md"], [rebased, "packages/deep.md"]] as const) {
     assert.deepEqual(rewriteForTree(text, { ...tree, selfPath }), { text, waiting: {} }, "a placed spec keeps its meta.md citations byte for byte");
   }
 });
