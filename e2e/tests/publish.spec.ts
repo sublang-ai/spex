@@ -222,7 +222,7 @@ test("playbook-library-95: Publish from a project at the second instance reads t
     // The Playbooks tab lists it among the enabled, "in <project>", from
     // the registry source (playbook-library-1, playbook-library-34).
     await projectTab(page, "Playbooks");
-    const enabled = playbookCard(page.getByTestId("playbooks-enabled"), ID, "project");
+    const enabled = playbookCard(page.getByTestId("playbooks-enabled"), ID);
     await expect(enabled).toContainText(`/${ID}`);
     await expect(enabled.getByTestId(`playbook-enabled-${ID}`)).toHaveText(`in ${PROJECT}`);
     await expect(enabled.getByTestId(`playbook-from-${ID}`)).toHaveText(new RegExp(`^from\\s*${PACKAGE} 0\\.1\\.0$`));

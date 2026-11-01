@@ -1890,18 +1890,15 @@ export async function projectTab(page: Page, name: ProjectTabName): Promise<Loca
   return page.getByTestId(`${name.toLowerCase()}-tab`);
 }
 
-/** Where a row of the Playbooks tab comes from: the project's
- * environment, or your own group's, which the tab calls Personal
- * (playbook-library-1). */
-export type PlaybookOrigin = "project" | "personal";
+/** Whose packages a half of the Packages tab holds: the project's
+ * environment's, or your own group's, which the tab calls Personal
+ * (playbook-library-92). */
+export type PackagesHalf = "project" | "personal";
 
-/** A playbook's row on the Playbooks tab from one environment: a
- * playbook both environments export is listed once per environment,
- * each row naming its origin (playbook-library-1). The row carries its
- * origin as the config it writes, `project` or `own`. */
-export function playbookCard(scope: Page | Locator, id: string, origin: PlaybookOrigin): Locator {
-  const config = origin === "personal" ? "own" : "project";
-  return scope.locator(`[data-testid="playbook-card-${id}"][data-origin="${config}"]`);
+/** A playbook's one row on the Playbooks tab: a playbook both
+ * environments export is listed once by its id (playbook-library-1). */
+export function playbookCard(scope: Page | Locator, id: string): Locator {
+  return scope.getByTestId(`playbook-card-${id}`);
 }
 
 /** One heading's half of the Packages tab: the project's packages under
@@ -1909,7 +1906,7 @@ export function playbookCard(scope: Page | Locator, id: string, origin: Playbook
  * "Personal" (playbook-library-92). Each half holds its heading line —
  * "Registry: <registry>" with the account there and one "Add…"
  * (playbook-library-119) — its chips, its rows and its built-in line. */
-export function packagesSection(page: Page, whose: PlaybookOrigin): Locator {
+export function packagesSection(page: Page, whose: PackagesHalf): Locator {
   return page.getByTestId(`packages-${whose}`);
 }
 

@@ -647,7 +647,7 @@ describe("playbook-library-105: New playbook's Org and License, and the commit l
       lists = playbookLists([
         available({ id: "triage", package: "acme/triage", version: "0.1.0", source: "path", repository: PROJECT_ID, roles: ["Triager"], enabled: ["project"] }),
       ]);
-      seed({ drafts: { triage: draftInfo({ state: "enabled", packagePath: "spex-packages/acme/triage" }) }, revealPlaybook: { id: "triage", origin: "project" } });
+      seed({ drafts: { triage: draftInfo({ state: "enabled", packagePath: "spex-packages/acme/triage" }) }, revealPlaybook: "triage" });
       render(<PlaybooksTab project={PROJECT} />);
       const card = await screen.findByTestId("playbook-card-triage");
       const line = await within(card).findByTestId("enabled-commit");
@@ -1557,7 +1557,7 @@ describe("playbook-library-61: the Enable tab", () => {
     expect(within(screen.getByTestId("draft-row-triage")).getByTestId("draft-chip").textContent).toBe("Enabled");
   });
 
-  test("[playbook-library-88] the spex repository defaults to the project and offers your own group, the list revealing the row of the one enabled in", async () => {
+  test("[playbook-library-88] the spex repository defaults to the project and offers your own group, the list revealing the playbook's one row", async () => {
     renderWorkspace(
       { ...COMPILED, proposal: { command: "triage", intent: "Triage a new issue", players: { Triager: "dev.coder", Verifier: "dev.reviewer" } } },
       { view: foldView(THREAD) },
@@ -1586,17 +1586,15 @@ describe("playbook-library-61: the Enable tab", () => {
       expect(commandMock).toHaveBeenCalledWith("draft.register", expect.objectContaining({ repository: OWN_KEY })),
     );
     await vi.waitFor(() => expect(screen.queryByTestId("authoring-workspace")).toBeNull());
-    // No switch: the list stands whole, your own group's row the one
-    // revealed with its success line (playbook-library-61).
+    // No switch: the list stands whole, the playbook both environments
+    // export listed once, that row revealed with its success line
+    // (playbook-library-1, playbook-library-61).
     expect(screen.queryByTestId("playbooks-switch")).toBeNull();
-    await vi.waitFor(() => expect(screen.getAllByTestId("playbook-card-triage")).toHaveLength(2));
-    const [projectCard, ownCard] = screen.getAllByTestId("playbook-card-triage");
-    expect(projectCard!.dataset.origin).toBe("project");
-    expect(ownCard!.dataset.origin).toBe("own");
-    expect(ownCard!.className).toContain("ring-2");
-    expect(projectCard!.className).not.toContain("ring-2");
-    expect(within(ownCard!).getByTestId("enabled-commit")).toBeTruthy();
-    expect(within(projectCard!).queryByTestId("enabled-commit")).toBeNull();
+    await vi.waitFor(() => expect(screen.getByTestId("playbook-card-triage").className).toContain("ring-2"));
+    expect(screen.getAllByTestId("playbook-card-triage")).toHaveLength(1);
+    const card = screen.getByTestId("playbook-card-triage");
+    expect(within(card).getByTestId("playbook-enabled-triage").textContent).toBe("Personal");
+    expect(within(card).getByTestId("enabled-commit")).toBeTruthy();
   });
 
   test("a refusal names the rule inline and leaves the form standing; a working session enables all the same", async () => {

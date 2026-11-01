@@ -610,11 +610,6 @@ msgstr "{playbookId} 状态机，当前处于 {state}"
 msgid "{player} · {step} · {span}"
 msgstr "{player} · {step} · {span}"
 
-#. tooltip of a playbook row's origin glyph: the project's packages list it; {project} is the project's name
-#: src/components/PlaybooksTab.tsx
-msgid "{project}'s packages"
-msgstr "{project} 的规约包"
-
 #: src/components/ProjectsSurface.tsx
 msgid "{reason} Remove anyway?"
 msgstr "{reason}仍要移除吗？"
@@ -2763,6 +2758,11 @@ msgstr "停用 {id}"
 msgid "Disable /{command}"
 msgstr "停用 /{command}"
 
+#. in a playbook's overflow: stop offering it from your Personal config, in every project of yours
+#: src/components/PlaybooksTab.tsx
+msgid "Disable for Personal"
+msgstr "为个人停用"
+
 #. the disable request is in flight
 #. the disable request is in flight
 #: src/components/PlaybooksTab.tsx
@@ -3071,10 +3071,15 @@ msgstr "为 {project} 启用 /{command}"
 msgid "Enable for"
 msgstr "启用于"
 
-#. on a playbook enabled for you alone: enable it in the project's config too; {project} is the project's name
+#. on a playbook your Personal packages list too: enable it in the project's config, for every member; {project} is the project's name
 #: src/components/PlaybooksTab.tsx
 msgid "Enable for {project}"
 msgstr "为 {project} 启用"
+
+#. in a playbook's overflow: enable it in your Personal config, for every project of yours
+#: src/components/PlaybooksTab.tsx
+msgid "Enable for Personal"
+msgstr "为个人启用"
 
 #. authoring state chip, at most 14 characters: the compiled playbook is enabled in a config
 #. section heading: the playbooks the project's config or your own group's enables
@@ -3473,6 +3478,7 @@ msgstr "仅限本对话，从下一条消息起生效"
 msgid "For you and every member of {project}"
 msgstr "供你和 {project} 的所有成员使用"
 
+#. tooltip of Enable on a playbook your Personal packages list: it is written to your Personal config
 #. tooltip of Enable on a playbook your Personal packages list: it is written to your Personal config
 #. tooltip of Enable on a playbook your Personal packages list: it is written to your Personal config
 #: src/components/PackageArtifacts.tsx
@@ -5261,11 +5267,6 @@ msgstr "个人"
 msgid "Personal (every project of yours)"
 msgstr "个人（你的所有项目）"
 
-#. tooltip of a playbook row's origin glyph: your Personal packages, available in every project, list it
-#: src/components/PlaybooksTab.tsx
-msgid "Personal packages"
-msgstr "个人规约包"
-
 #: src/components/CaptainHome.tsx
 msgid "Pick a project first ({keys})"
 msgstr "请先选择项目（{keys}）"
@@ -7020,6 +7021,7 @@ msgstr "停止中…"
 msgid "Stops /{command} for every member of {project}; the package stays"
 msgstr "为 {project} 的所有成员停用 /{command}；规约包保留"
 
+#. tooltip of Disable on a playbook your Personal config enables
 #. tooltip of Disable on a playbook your Personal config enables
 #: src/components/PlaybooksTab.tsx
 msgid "Stops /{command} in every project of yours; the package stays"

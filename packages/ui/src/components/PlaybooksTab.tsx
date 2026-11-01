@@ -4,11 +4,14 @@
 // A project's Playbooks tab (playbook-library-1, DR-104, DR-172): what
 // a session in the project can run, read from the environments of the
 // project and your own group together — no switch between them — each
-// playbook listed once per environment exporting it, with its spec
-// package and version, its roles bound to session players, and where
-// it is enabled. Enabling writes the config of the row's own
-// environment with a player per role; a project's entry names players
-// alone, your own group's may tune each role. The project's authoring
+// playbook listed once by its id, with its spec package and version,
+// its roles bound to session players as the config a session runs it
+// with binds them, and where it is enabled. A row's primary act writes
+// the project's config — or, where one environment alone exports the
+// playbook, that environment's — and a playbook both export carries
+// your own group's act in its overflow; enabling names a player per
+// role, a project's entry naming players alone, your own group's
+// tuning each role. The project's authoring
 // sessions follow the playbooks; the example closes the tab. An
 // authoring session of the project opened here replaces the list with
 // its workspace. The packages themselves stand on the project's
@@ -29,7 +32,6 @@ import {
   type SessionPlayerSummary,
 } from "@sublang/spex-core/protocol";
 
-import type { PlaybookOrigin } from "../state/store.js";
 import { usePlaceStore } from "../state/place-context.js";
 import { SLC_DEMO } from "../examples/slc-demo.js";
 import {
@@ -57,6 +59,7 @@ import { AuthoringWorkspace, DraftStateChip } from "./AuthoringWorkspace.js";
 import { BindingEditorPopover } from "./BindingEditor.js";
 import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
+import { MoreMenu, type MenuEntry } from "./SpaceMenu.js";
 import { Markdown } from "./Markdown.js";
 import { Rich } from "./Rich.js";
 import { AgentChip } from "./AgentChip.js";
@@ -82,6 +85,13 @@ const ERROR =
   "rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700 [overflow-wrap:anywhere] dark:border-red-900 dark:bg-red-950 dark:text-red-300";
 const GEAR =
   "flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200";
+
+/** A config a row reads or writes: the project's or your own group's,
+ * by its spex repository (playbook-library-1). */
+interface Target {
+  config: "project" | "own";
+  repository: string;
+}
 
 /** A listed playbook's pipeline (playbook-library-22/23): the stage
  * row is permanent, and the artifacts arrive on the card's first open
@@ -206,20 +216,10 @@ function withCode(phrase: (slot: string) => string, value: string): ReactNode {
   );
 }
 
-/** Where a row's playbook comes from (playbook-library-1): "from
- * <package> <version>", or "built in" for the built-in playbooks, the
- * source in its tooltip, and the row's origin — the project's packages
- * or your Personal ones — as a glyph whose tooltip names it, so the two
- * rows of a playbook both environments export read apart (DR-172). */
-function FromLabel({ entry, origin, project }: { entry: PlaybookAvailability; origin: PlaybookOrigin; project: string }) {
-  const originName =
-    origin === "project"
-      ? i18n._({
-          id: "{project}'s packages",
-          comment: "tooltip of a playbook row's origin glyph: the project's packages list it; {project} is the project's name",
-          values: { project },
-        })
-      : i18n._({ id: "Personal packages", comment: "tooltip of a playbook row's origin glyph: your Personal packages, available in every project, list it" });
+/** Where a row's playbook comes from (playbook-library-1,
+ * playbook-library-29): "from <package> <version>", or "built in" for
+ * the built-in playbooks, the source in its tooltip. */
+function FromLabel({ entry }: { entry: PlaybookAvailability }) {
   // The source in the Packages tab's words (playbook-library-92).
   const source =
     entry.source === "builtin"
@@ -235,15 +235,6 @@ function FromLabel({ entry, origin, project }: { entry: PlaybookAvailability; or
           : i18n._({ id: "From the registry", comment: "tooltip: a package taken from the registry" });
   return (
     <span className="flex min-w-0 items-center gap-1 text-xs text-neutral-500">
-      <span
-        role="img"
-        data-testid={`playbook-origin-${entry.id}`}
-        aria-label={originName}
-        title={originName}
-        className="shrink-0"
-      >
-        <Icon name={origin === "project" ? "folder" : "home"} className="h-3.5 w-3.5" />
-      </span>
       <span data-testid={`playbook-from-${entry.id}`} title={source} className="min-w-0 truncate">
         {entry.source === "builtin"
           ? i18n._({ id: "built in", comment: "a playbook row: it comes with Spex, from no package of yours" })
@@ -261,9 +252,10 @@ function FromLabel({ entry, origin, project }: { entry: PlaybookAvailability; or
   );
 }
 
-/** One role of a playbook its row's config enables: the player bound
- * to it, what that binding runs, whether the lane is shared, and the
- * binding editor (playbook-library-1, playbook-library-4,
+/** One role of an enabled playbook, as the config a session in the
+ * project runs it with binds it: the player bound to it, what that
+ * binding runs, whether the lane is shared, and the binding editor,
+ * writing that config (playbook-library-1, playbook-library-4,
  * playbook-library-38). */
 function BoundRole({
   entry,
@@ -271,7 +263,7 @@ function BoundRole({
   binding,
   roster,
   readiness,
-  origin,
+  config,
   repository,
 }: {
   entry: PlaybookAvailability;
@@ -279,7 +271,8 @@ function BoundRole({
   binding: RoleBindingSummary | undefined;
   roster: SessionPlayerSummary[];
   readiness: ReadinessEntry[];
-  origin: PlaybookOrigin;
+  /** Whose config holds the binding: a project's names the player alone. */
+  config: Target["config"];
   repository: string;
 }) {
   const store = usePlaceStore();
@@ -358,7 +351,7 @@ function BoundRole({
           position={`${entry.id}.${role}`}
           binding={binding ?? { playerId: roster[0]?.id ?? "", display: "" }}
           players={roster}
-          playerOnly={origin === "project"}
+          playerOnly={config === "project"}
           anchorRef={gearRef}
           onSave={(next) =>
             bindRole(entry.id, role, next, repository, store.getClient()).then((result) => {
@@ -373,7 +366,7 @@ function BoundRole({
   );
 }
 
-/** One role of a playbook its row's config does not enable yet: the player
+/** One role of a playbook neither config enables yet: the player
  * the enabling would name, `dev.<role>` by default and editable, and —
  * for a player your own roster lacks — the agent block it is written
  * with (playbook-library-34). */
@@ -467,17 +460,20 @@ function commitPhrase(folder: string): ReactNode {
   );
 }
 
-/** One listed playbook (playbook-library-1): its command and intent,
- * where it is enabled, its spec package, its roles — bound where its
- * environment's config enables it, proposed where it does not — Enable
- * or Disable for that config, its hints, and its stage row. */
+/** One listed playbook (playbook-library-1), once by its id: its
+ * command and intent, where it is enabled, its spec package, its roles
+ * — bound as the config a session in the project runs it with binds
+ * them, proposed while neither config enables it — the primary act on
+ * the project's config, or on the one config whose environment alone
+ * exports it, and, for a playbook both environments export, your own
+ * group's act in its overflow; its hints, and its stage row. */
 function PlaybookRow({
   entry,
-  origin,
-  repository,
+  bound,
+  primary,
+  personal,
   project,
   invalid,
-  bindings,
   roster,
   readiness,
   captain,
@@ -486,16 +482,22 @@ function PlaybookRow({
   hints,
   onChanged,
 }: {
+  /** The playbook as a session in the project runs it, its `enabled`
+   * naming every config that enables it. */
   entry: PlaybookAvailability;
-  /** Whose environment lists this row: the project's or your own
-   * group's (playbook-library-1). */
-  origin: PlaybookOrigin;
-  /** The spex repository whose config this row writes: its origin's. */
-  repository: string;
+  /** The config a session in the project runs it with, and that
+   * config's bindings: the project's where it is enabled there, else
+   * your own group's; absent while neither enables it. */
+  bound?: Target & { roles: Record<string, RoleBindingSummary> | undefined };
+  /** The config the primary act writes. */
+  primary: Target;
+  /** Your own group's spex repository, where both environments export
+   * the playbook: the overflow's act writes its config. */
+  personal?: string;
   /** The project's name, as the row's phrases name it. */
   project: string;
-  invalid?: string;
-  bindings: Record<string, RoleBindingSummary> | undefined;
+  /** Each failure of an entry this row writes (playbook-library-2). */
+  invalid: readonly string[];
   roster: SessionPlayerSummary[];
   readiness: ReadinessEntry[];
   captain?: AgentSummary;
@@ -509,75 +511,120 @@ function PlaybookRow({
   onChanged: () => void;
 }) {
   const store = usePlaceStore();
-  const enabledHere = entry.enabled.includes(origin);
-  // A playbook enabled for you alone offers the project's row "Enable
-  // for <project>" (playbook-library-3).
-  const forProject = origin === "project" && entry.enabled.includes("own");
+  const primaryOn = entry.enabled.includes(primary.config);
+  const personalOn = entry.enabled.includes("own");
+  // Where both environments export it, the primary act names the
+  // project whose config it writes (playbook-library-1).
+  const named = personal !== undefined;
   const where = whereEnabled(entry.enabled, project);
   const [players, setPlayers] = useState<Record<string, string>>({});
   const [blocks, setBlocks] = useState<Record<string, AgentBlockInput>>({});
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<"primary" | "personal">();
   const [error, setError] = useState<string>();
   const command = entry.command ?? entry.id;
   // A built-in's intent in the reader's language (localization-4).
   const intent = playbookIntent(entry.intent);
-  const laneFor = (role: string): string => rolePlayer(role, players);
-  const badLane = entry.roles.find((role) => !playerIdSchema.safeParse(laneFor(role)).success);
+  // Enabling it in the other config names the players the bound config
+  // names, so a session gets the same lanes either way; while neither
+  // enables it, the proposed ones (playbook-library-34).
+  const chosen: Record<string, string> = bound
+    ? Object.fromEntries(
+        entry.roles.flatMap((role) => {
+          const playerId = bound.roles?.[role]?.playerId;
+          return playerId ? [[role, playerId]] : [];
+        }),
+      )
+    : players;
+  const badLane = entry.roles.find((role) => !playerIdSchema.safeParse(rolePlayer(role, chosen)).success);
+  const badLaneReason =
+    badLane !== undefined
+      ? i18n._("{role} needs a player id: lowercase segments joined by dots", { role: badLane })
+      : undefined;
 
-  async function enable(): Promise<void> {
-    if (badLane !== undefined) return;
-    setBusy(true);
+  async function write(act: "primary" | "personal", run: () => Promise<unknown>): Promise<void> {
+    setBusy(act);
     setError(undefined);
-    // The one write behind Enable (playbook-library-3): a player the
-    // roster lacks is written to your own roster first, carrying the
-    // block chosen for its role, so no binding is written dangling.
     try {
-      await enablePlaybook(store.getClient(), {
+      await run();
+      onChanged();
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setBusy(undefined);
+    }
+  }
+
+  // The one write behind Enable (playbook-library-3): a player the
+  // roster lacks is written to your own roster first, carrying the
+  // block chosen for its role, so no binding is written dangling.
+  function enable(act: "primary" | "personal", repository: string): void {
+    if (badLane !== undefined) return;
+    void write(act, () =>
+      enablePlaybook(store.getClient(), {
         repository,
         playbookId: entry.id,
         roles: entry.roles,
         roster,
-        players,
+        players: chosen,
         blocks,
-      });
-      onChanged();
-    } catch (cause) {
-      setError((cause as Error).message);
-    } finally {
-      setBusy(false);
-    }
+      }),
+    );
   }
 
-  async function disable(): Promise<void> {
-    setBusy(true);
-    setError(undefined);
-    try {
-      await store.getClient().command("config.edit", {
+  function disable(act: "primary" | "personal", repository: string): void {
+    void write(act, () =>
+      store.getClient().command("config.edit", {
         repository,
         op: { kind: "playbook.delete", playbookId: entry.id },
-      });
-      onChanged();
-    } catch (cause) {
-      setError((cause as Error).message);
-    } finally {
-      setBusy(false);
-    }
+      }),
+    );
   }
+
+  // Your own group's act on a playbook both environments export
+  // (playbook-library-1).
+  const personalAct: MenuEntry | undefined =
+    personal === undefined
+      ? undefined
+      : personalOn
+        ? {
+            label: i18n._({
+              id: "Disable for Personal",
+              comment: "in a playbook's overflow: stop offering it from your Personal config, in every project of yours",
+            }),
+            title: i18n._({
+              id: "Stops /{command} in every project of yours; the package stays",
+              comment: "tooltip of Disable on a playbook your Personal config enables",
+              values: { command },
+            }),
+            testId: `playbook-disable-personal-${entry.id}`,
+            onSelect: () => disable("personal", personal),
+          }
+        : {
+            label: i18n._({
+              id: "Enable for Personal",
+              comment: "in a playbook's overflow: enable it in your Personal config, for every project of yours",
+            }),
+            title: i18n._({
+              id: "For you, in every project of yours",
+              comment: "tooltip of Enable on a playbook your Personal packages list: it is written to your Personal config",
+            }),
+            hint: badLaneReason,
+            disabled: badLane !== undefined,
+            testId: `playbook-enable-personal-${entry.id}`,
+            onSelect: () => enable("personal", personal),
+          };
 
   return (
     <div
-      id={`playbook-card-${origin}-${entry.id}`}
+      id={`playbook-card-${entry.id}`}
       data-testid={`playbook-card-${entry.id}`}
-      // A playbook both environments export is listed once per
-      // environment (playbook-library-1): the row says whose it is.
-      data-origin={origin}
       className={`flex flex-col gap-2 rounded-lg border bg-white px-4 py-3 dark:bg-neutral-900 ${
-        enabledHere ? "border-neutral-200 dark:border-neutral-800" : "border-dashed border-neutral-300 dark:border-neutral-700"
+        entry.enabled.length > 0 ? "border-neutral-200 dark:border-neutral-800" : "border-dashed border-neutral-300 dark:border-neutral-700"
       } ${revealed ? "ring-2 ring-brand-400 dark:ring-brand-500" : ""}`}
     >
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-mono text-sm font-semibold">/{command}</span>
-        <FromLabel entry={entry} origin={origin} project={project} />
+        <FromLabel entry={entry} />
         <span className="min-w-0 flex-1 basis-24 truncate text-xs text-neutral-500" title={intent ?? undefined}>
           {intent}
         </span>
@@ -589,13 +636,13 @@ function PlaybookRow({
             {where}
           </span>
         ) : null}
-        {enabledHere ? (
+        {primaryOn ? (
           <button
             type="button"
             data-testid={`playbook-disable-${entry.id}`}
-            disabled={busy}
+            disabled={busy !== undefined}
             title={
-              origin === "project"
+              primary.config === "project"
                 ? i18n._({
                     id: "Stops /{command} for every member of {project}; the package stays",
                     comment: "tooltip of Disable on a playbook the project's config enables",
@@ -608,10 +655,10 @@ function PlaybookRow({
                   })
             }
             aria-label={i18n._("Disable /{command}", { command })}
-            onClick={() => void disable()}
+            onClick={() => disable("primary", primary.repository)}
             className={SECONDARY}
           >
-            {busy
+            {busy === "primary"
               ? i18n._({ id: "Disabling…", comment: "the disable request is in flight" })
               : i18n._({ id: "Disable", comment: "stop offering this playbook in this config" })}
           </button>
@@ -619,29 +666,28 @@ function PlaybookRow({
           <button
             type="button"
             data-testid={`playbook-enable-${entry.id}`}
-            disabled={busy || badLane !== undefined}
+            disabled={busy !== undefined || badLane !== undefined}
             title={
-              badLane !== undefined
-                ? i18n._("{role} needs a player id: lowercase segments joined by dots", { role: badLane })
-                : origin === "project"
-                  ? forProject
-                    ? i18n._({
-                        id: "Members of {project} get it too",
-                        comment: "tooltip of Enable for <project> on a playbook enabled for you alone",
-                        values: { project },
-                      })
-                    : i18n._({
-                        id: "For you and every member of {project}",
-                        comment: "tooltip of Enable on a playbook the project's packages list: it is written to the project's config",
-                        values: { project },
-                      })
-                  : i18n._({
-                      id: "For you, in every project of yours",
-                      comment: "tooltip of Enable on a playbook your Personal packages list: it is written to your Personal config",
+              badLaneReason ??
+              (primary.config === "project"
+                ? named && personalOn
+                  ? i18n._({
+                      id: "Members of {project} get it too",
+                      comment: "tooltip of Enable for <project> on a playbook enabled for you alone",
+                      values: { project },
                     })
+                  : i18n._({
+                      id: "For you and every member of {project}",
+                      comment: "tooltip of Enable on a playbook the project's packages list: it is written to the project's config",
+                      values: { project },
+                    })
+                : i18n._({
+                    id: "For you, in every project of yours",
+                    comment: "tooltip of Enable on a playbook your Personal packages list: it is written to your Personal config",
+                  }))
             }
             aria-label={
-              forProject
+              named
                 ? i18n._({
                     id: "Enable /{command} for {project}",
                     comment: "accessible name of Enable for <project>",
@@ -649,24 +695,36 @@ function PlaybookRow({
                   })
                 : i18n._("Enable /{command}", { command })
             }
-            onClick={() => void enable()}
+            onClick={() => enable("primary", primary.repository)}
             className={PRIMARY}
           >
-            {busy
+            {busy === "primary"
               ? i18n._({ id: "Enabling…", comment: "the enable request is in flight" })
-              : forProject
+              : named
                 ? i18n._({
                     id: "Enable for {project}",
-                    comment: "on a playbook enabled for you alone: enable it in the project's config too; {project} is the project's name",
+                    comment: "on a playbook your Personal packages list too: enable it in the project's config, for every member; {project} is the project's name",
                     values: { project },
                   })
                 : i18n._({ id: "Enable", comment: "enable this playbook in this config" })}
           </button>
         )}
+        {personalAct ? (
+          <MoreMenu
+            of={`/${command}`}
+            testId={`playbook-personal-${entry.id}`}
+            entries={[personalAct]}
+            disabled={busy !== undefined}
+          />
+        ) : null}
       </div>
-      {invalid ? (
+      {invalid.length > 0 ? (
         <p data-testid={`playbook-invalid-${entry.id}`} className="text-xs text-red-600 [overflow-wrap:anywhere] dark:text-red-400">
-          {i18n._("Invalid: {reason}", { reason: invalid })}
+          {invalid.map((reason) => (
+            <span key={reason} className="block">
+              {i18n._("Invalid: {reason}", { reason })}
+            </span>
+          ))}
         </p>
       ) : null}
       {!entry.present ? (
@@ -687,16 +745,16 @@ function PlaybookRow({
       ) : null}
       <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-600 dark:text-neutral-400">
         {entry.roles.map((role) =>
-          enabledHere ? (
+          bound ? (
             <BoundRole
               key={role}
               entry={entry}
               role={role}
-              binding={bindings?.[role]}
+              binding={bound.roles?.[role]}
               roster={roster}
               readiness={readiness}
-              origin={origin}
-              repository={repository}
+              config={bound.config}
+              repository={bound.repository}
             />
           ) : (
             <ProposedRole
@@ -1275,13 +1333,29 @@ function announcementFor(previous: DraftInfo | undefined, next: DraftInfo): stri
   }
 }
 
-/** One listed row: the playbook as its environment exports it, whose
- * environment that is, and the spex repository whose config the row
- * writes (playbook-library-1). */
+/** One listed row, one per playbook id (playbook-library-1): the
+ * playbook as a session in the project runs it, the config whose
+ * bindings it shows, the config its primary act writes and, where both
+ * environments export it, your own group's for its overflow. */
 interface ListedRow {
   entry: PlaybookAvailability;
-  origin: PlaybookOrigin;
-  repository: string;
+  bound?: Target & { roles: Record<string, RoleBindingSummary> | undefined };
+  primary: Target;
+  personal?: string;
+  /** The configs the row's acts write, whose failures it carries
+   * (playbook-library-2). */
+  writes: Target["config"][];
+}
+
+/** An environment's export of a playbook by its id, as a session finds
+ * it (environments-9): the export by that name, else any of that id,
+ * one present on this device first. */
+function exportOf(list: readonly PlaybookAvailability[], id: string): PlaybookAvailability | undefined {
+  return (
+    list.find((entry) => entry.name === id && entry.present) ??
+    list.find((entry) => entry.id === id && entry.present) ??
+    list.find((entry) => entry.id === id)
+  );
 }
 
 /** The playbooks the tab lists, sectioned by what a session in the
@@ -1339,10 +1413,10 @@ export function PlaybooksTab({
   const registryAccounts = store((current) => current.registryAccounts);
   const environments = store((current) => current.environments);
   const [newLicense, setNewLicense] = useState("");
-  const [revealed, setRevealed] = useState<{ id: string; origin: PlaybookOrigin }>();
+  const [revealed, setRevealed] = useState<string>();
   // The card an enabling revealed keeps its success line until the
   // tab is left, its highlight fading sooner (playbook-library-61).
-  const [enabledNote, setEnabledNote] = useState<{ id: string; origin: PlaybookOrigin }>();
+  const [enabledNote, setEnabledNote] = useState<string>();
   const [liveNote, setLiveNote] = useState("");
   const [deletedNote, setDeletedNote] = useState<string>();
   const previousDrafts = useRef<Record<string, DraftInfo>>({});
@@ -1438,16 +1512,16 @@ export function PlaybooksTab({
   }, [newPlaybookRequested, consumeNewPlaybookRequest]);
 
   // An enabling brings its card into view (playbook-library-61): the
-  // row of the environment whose config it was enabled in.
+  // playbook's one row, whichever config it was enabled in.
   useEffect(() => {
     if (revealPlaybook === undefined) return;
     const reveal = consumeRevealPlaybook();
-    if (!reveal) return;
+    if (reveal === undefined) return;
     setRevealed(reveal);
     setEnabledNote(reveal);
-    const listed = [...(lists?.project ?? []), ...(lists?.own ?? [])].find((entry) => entry.id === reveal.id);
-    setLiveNote(i18n._("Enabled /{command}", { command: listed?.command ?? reveal.id }));
-    document.getElementById(`playbook-card-${reveal.origin}-${reveal.id}`)?.scrollIntoView?.({ block: "center" });
+    const listed = [...(lists?.project ?? []), ...(lists?.own ?? [])].find((entry) => entry.id === reveal);
+    setLiveNote(i18n._("Enabled /{command}", { command: listed?.command ?? reveal }));
+    document.getElementById(`playbook-card-${reveal}`)?.scrollIntoView?.({ block: "center" });
   }, [revealPlaybook, consumeRevealPlaybook, lists]);
   useEffect(() => {
     if (revealed === undefined) return;
@@ -1533,22 +1607,45 @@ export function PlaybooksTab({
     );
   }
 
-  // Both environments' playbooks, the project's first, each row writing
-  // the config of its own environment (playbook-library-1).
-  const repositoryOf = (origin: PlaybookOrigin): string | undefined => (origin === "project" ? projectId : ownKey);
-  const rows: ListedRow[] = [
-    ...(lists?.project ?? []).map((entry) => ({ entry, origin: "project" as const, repository: projectId })),
-    ...(lists?.own ?? []).map((entry) => ({ entry, origin: "own" as const, repository: ownKey ?? entry.repository })),
-  ];
-  const invalidOf = (origin: PlaybookOrigin) => (lists?.invalid ?? []).filter((entry) => entry.config === origin);
-  const invalidFor = {
-    project: new Map(invalidOf("project").map((entry) => [entry.playbook, entry.reason])),
-    own: new Map(invalidOf("own").map((entry) => [entry.playbook, entry.reason])),
-  };
-  // An enabled entry no row of its environment lists stands marked with
+  // Both environments' playbooks, one row per id, the project's first
+  // (playbook-library-1).
+  const projectList = lists?.project ?? [];
+  const ownList = lists?.own ?? [];
+  const repositoryOf = (config: Target["config"]): string | undefined => (config === "project" ? projectId : ownKey);
+  const ids = [...new Set([...projectList, ...ownList].map((entry) => entry.id))];
+  const rows = ids.map((id): ListedRow => {
+    const inProject = exportOf(projectList, id);
+    const inOwn = exportOf(ownList, id);
+    // The module a session in the project runs: the project's
+    // environment's, else yours (environments-9).
+    const picked = (inProject?.present ? inProject : inOwn?.present ? inOwn : inProject ?? inOwn)!;
+    const enabledIn = (["project", "own"] as const).filter(
+      (config) => inProject?.enabled.includes(config) || inOwn?.enabled.includes(config),
+    );
+    const ownRepository = ownKey ?? inOwn?.repository ?? "";
+    // The bindings of the config a session runs it with: the project's
+    // where it is enabled there, else yours.
+    const boundIn = enabledIn.includes("project") ? "project" : enabledIn.includes("own") ? "own" : undefined;
+    const rolesOf = (config: Target["config"]) =>
+      inProject?.bindings?.[config] ??
+      inOwn?.bindings?.[config] ??
+      (config === "own" ? (summary.playbooks ?? []).find((playbook) => playbook.id === id)?.roles : undefined);
+    return {
+      entry: { ...picked, enabled: [...enabledIn] },
+      ...(boundIn
+        ? { bound: { config: boundIn, repository: boundIn === "project" ? projectId : ownRepository, roles: rolesOf(boundIn) } }
+        : {}),
+      primary: inProject ? { config: "project", repository: projectId } : { config: "own", repository: ownRepository },
+      ...(inProject && inOwn ? { personal: ownRepository } : {}),
+      writes: [...(inProject ? ["project" as const] : []), ...(inOwn ? ["own" as const] : [])],
+    };
+  });
+  const invalidOf = (config: Target["config"], id: string) =>
+    (lists?.invalid ?? []).filter((entry) => entry.config === config && entry.playbook === id).map((entry) => entry.reason);
+  // An enabled entry no row writing its config lists stands marked with
   // its failure (playbook-library-2).
   const strayInvalid = (lists?.invalid ?? []).filter(
-    (entry) => !rows.some((row) => row.origin === entry.config && row.entry.id === entry.playbook),
+    (entry) => !rows.some((row) => row.entry.id === entry.playbook && row.writes.includes(entry.config)),
   );
   const { enabled, rest } = splitByEnablement(rows);
   const everyRow = rows.map((row) => row.entry);
@@ -1563,7 +1660,7 @@ export function PlaybooksTab({
   );
   const missingDelivery = ["branch", "pr"].filter((id) => !enabledIds.has(id));
   const taken = new Map<string, PlaybookAvailability>();
-  for (const row of everyRow) {
+  for (const row of [...projectList, ...ownList]) {
     taken.set(row.id, row);
     taken.set(row.name, row);
   }
@@ -1625,24 +1722,21 @@ export function PlaybooksTab({
     return notes.length > 0 ? <>{notes}</> : null;
   };
 
-  const rowFor = ({ entry, origin, repository }: ListedRow) => (
+  const rowFor = ({ entry, bound, primary, personal, writes }: ListedRow) => (
     <PlaybookRow
-      key={`${origin}:${entry.repository}:${entry.name}`}
+      key={entry.id}
       entry={entry}
-      origin={origin}
-      repository={repository}
+      bound={bound}
+      primary={primary}
+      personal={personal}
       project={project.name}
-      invalid={invalidFor[origin].get(entry.id)}
-      bindings={
-        entry.bindings?.[origin] ??
-        (origin === "own" ? (summary.playbooks ?? []).find((playbook) => playbook.id === entry.id)?.roles : undefined)
-      }
+      invalid={writes.flatMap((config) => invalidOf(config, entry.id))}
       roster={roster}
       readiness={readiness}
       captain={summary.captain}
-      revealed={revealed?.id === entry.id && revealed.origin === origin}
+      revealed={revealed === entry.id}
       enabledFolder={
-        enabledNote?.id === entry.id && enabledNote.origin === origin
+        enabledNote === entry.id
           ? drafts[entry.id] ? draftPackagePath(drafts[entry.id]!) : `spex-packages/${entry.package}`
           : undefined
       }

@@ -425,8 +425,11 @@ test("playbook-library-77: a new playbook is authored, compiled, and enabled thr
   await expect(card).toContainText("/triage");
   await expect(card.getByTestId("playbook-enabled-triage")).toHaveText("in demo-project");
   await expect(card.getByTestId("playbook-from-triage")).toHaveText(new RegExp(`^from\\s*${org}/triage 0\\.1\\.0$`));
-  // The row's origin glyph names whose packages list it (playbook-library-1).
-  await expect(card.getByTestId("playbook-origin-triage")).toHaveAttribute("title", "demo-project's packages");
+  // Listed once, the project's environment alone exporting it: its act
+  // writes the project's config, with no overflow (playbook-library-1).
+  await expect(page.getByTestId("playbook-card-triage")).toHaveCount(1);
+  await expect(card.getByTestId("playbook-disable-triage")).toHaveText("Disable");
+  await expect(card.getByTestId("playbook-personal-triage")).toHaveCount(0);
   await expect(card.getByTestId("enabled-note")).toContainText("Enabled · restart running sessions to use it");
   await expect(card.getByTestId("enabled-commit")).toHaveText("Commit spex-packages/acme/triage with your code");
   await expect(workspace).toHaveCount(0);

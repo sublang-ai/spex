@@ -118,10 +118,6 @@ export interface DraftRegisterForm {
   repository?: string;
 }
 
-/** Whose environment a listed playbook comes from: the project's, or
- * your own group's (playbook-library-1). */
-export type PlaybookOrigin = "project" | "own";
-
 /** What `environment.playbooks` answered, and for which project. */
 export type PlaybookLists = CommandResults["environment.playbooks"] & {
   projectId: string | null;
@@ -443,10 +439,11 @@ export interface AppState extends AttachmentState {
    * project's Playbooks tab focuses its id field on arrival
    * (playbook-library-51). */
   newPlaybookRequested: boolean;
-  /** A playbook the Playbooks tab should bring into view on its next
-   * render — the one an enabling just made, by the environment whose
-   * config it was enabled in (playbook-library-61). */
-  revealPlaybook?: { id: string; origin: PlaybookOrigin };
+  /** The id of a playbook the Playbooks tab should bring into view on
+   * its next render — the one an enabling just made, listed once
+   * whichever config it was enabled in (playbook-library-1,
+   * playbook-library-61). */
+  revealPlaybook?: string;
   /** Each spex repository's environment as last read or broadcast
    * (playbook-library-92), by the repository's key. */
   environments: Record<string, EnvironmentState>;
@@ -533,7 +530,7 @@ export interface AppState extends AttachmentState {
   requestNewPlaybook(): void;
   /** Take the pending request, if any; true once per request. */
   consumeNewPlaybookRequest(): boolean;
-  consumeRevealPlaybook(): { id: string; origin: PlaybookOrigin } | undefined;
+  consumeRevealPlaybook(): string | undefined;
 
   loadAgentOptions(adapter: AdapterName): Promise<AgentOptions>;
   /** One agent's settings for one conversation (DR-067, DR-068). It
@@ -3041,16 +3038,13 @@ function placeState(
         ...(input.repository ? { repository: input.repository } : {}),
       });
       // The session stays, to be worked on further and published; the
-      // list opens with the new card in view, the one of the environment
-      // enabled in (playbook-library-61).
+      // list opens with the new card in view (playbook-library-61).
       // The config it wrote is everyone's; the workspace closes only if
       // it still shows the session that enabled.
       set({ configState });
       void get().loadPlaybookLists(projectId).catch(() => {});
       if (!isShown(draftId, instance) || get().openDraftId !== draftId) return;
-      const origin: PlaybookOrigin =
-        input.repository && input.repository !== projectId ? "own" : "project";
-      set({ revealPlaybook: { id: draftId, origin }, openDraftId: undefined });
+      set({ revealPlaybook: draftId, openDraftId: undefined });
     },
 
     async setDraftPlayer(draftId, playerId): Promise<void> {
@@ -3139,7 +3133,7 @@ function placeState(
       return requested;
     },
 
-    consumeRevealPlaybook(): { id: string; origin: PlaybookOrigin } | undefined {
+    consumeRevealPlaybook(): string | undefined {
       const reveal = get().revealPlaybook;
       if (reveal !== undefined) set({ revealPlaybook: undefined });
       return reveal;

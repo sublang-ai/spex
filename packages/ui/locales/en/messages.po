@@ -610,11 +610,6 @@ msgstr "{playbookId} state machine, {state} active"
 msgid "{player} · {step} · {span}"
 msgstr "{player} · {step} · {span}"
 
-#. tooltip of a playbook row's origin glyph: the project's packages list it; {project} is the project's name
-#: src/components/PlaybooksTab.tsx
-msgid "{project}'s packages"
-msgstr "{project}'s packages"
-
 #: src/components/ProjectsSurface.tsx
 msgid "{reason} Remove anyway?"
 msgstr "{reason} Remove anyway?"
@@ -2763,6 +2758,11 @@ msgstr "Disable {id}"
 msgid "Disable /{command}"
 msgstr "Disable /{command}"
 
+#. in a playbook's overflow: stop offering it from your Personal config, in every project of yours
+#: src/components/PlaybooksTab.tsx
+msgid "Disable for Personal"
+msgstr "Disable for Personal"
+
 #. the disable request is in flight
 #. the disable request is in flight
 #: src/components/PlaybooksTab.tsx
@@ -3071,10 +3071,15 @@ msgstr "Enable /{command} for {project}"
 msgid "Enable for"
 msgstr "Enable for"
 
-#. on a playbook enabled for you alone: enable it in the project's config too; {project} is the project's name
+#. on a playbook your Personal packages list too: enable it in the project's config, for every member; {project} is the project's name
 #: src/components/PlaybooksTab.tsx
 msgid "Enable for {project}"
 msgstr "Enable for {project}"
+
+#. in a playbook's overflow: enable it in your Personal config, for every project of yours
+#: src/components/PlaybooksTab.tsx
+msgid "Enable for Personal"
+msgstr "Enable for Personal"
 
 #. authoring state chip, at most 14 characters: the compiled playbook is enabled in a config
 #. section heading: the playbooks the project's config or your own group's enables
@@ -3473,6 +3478,7 @@ msgstr "For this conversation, from the next message"
 msgid "For you and every member of {project}"
 msgstr "For you and every member of {project}"
 
+#. tooltip of Enable on a playbook your Personal packages list: it is written to your Personal config
 #. tooltip of Enable on a playbook your Personal packages list: it is written to your Personal config
 #. tooltip of Enable on a playbook your Personal packages list: it is written to your Personal config
 #: src/components/PackageArtifacts.tsx
@@ -5261,11 +5267,6 @@ msgstr "Personal"
 msgid "Personal (every project of yours)"
 msgstr "Personal (every project of yours)"
 
-#. tooltip of a playbook row's origin glyph: your Personal packages, available in every project, list it
-#: src/components/PlaybooksTab.tsx
-msgid "Personal packages"
-msgstr "Personal packages"
-
 #: src/components/CaptainHome.tsx
 msgid "Pick a project first ({keys})"
 msgstr "Pick a project first ({keys})"
@@ -7020,6 +7021,7 @@ msgstr "Stopping…"
 msgid "Stops /{command} for every member of {project}; the package stays"
 msgstr "Stops /{command} for every member of {project}; the package stays"
 
+#. tooltip of Disable on a playbook your Personal config enables
 #. tooltip of Disable on a playbook your Personal config enables
 #: src/components/PlaybooksTab.tsx
 msgid "Stops /{command} in every project of yours; the package stays"

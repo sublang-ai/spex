@@ -4,10 +4,11 @@
 // A project's Playbooks and Packages tabs as a user works them
 // (playbook-library-41, DR-104, DR-172): the Playbooks tab lists the
 // playbooks of the project's packages and your Personal ones together
-// under Enabled and Available — each naming where it is enabled, "in
-// <project>" or "Personal", a built-in reading "built in" — enables a
-// built-in in the project, opens a card's stage row and disables with no
-// confirm, and its "Manage packages" opens the Packages tab, whose
+// under Enabled and Available, each once — naming where it is enabled,
+// "in <project>" or "Personal", a built-in reading "built in" — enables
+// a built-in in the project, opens a card's stage row and disables
+// through a row's overflow with no confirm, and its "Manage packages"
+// opens the Packages tab, whose
 // "Packages" and "Personal" headings each carry one "Add…" and the
 // built-in line, a row's Remove carrying its consequence as its tooltip;
 // each change lands in the config it names; and a role's tuning saved
@@ -62,9 +63,9 @@ test.describe("runtime binding options", () => {
     await open(page, app);
     await projectTab(page, "Playbooks");
     // Your own group's entry carries each role's tuning
-    // (playbook-library-3): its row of /code, listed beside the
-    // project's (playbook-library-1).
-    const edit = playbookCard(page, "code", "personal").getByTestId("role-bind-code-coder");
+    // (playbook-library-3): /code, enabled there alone, shows its
+    // bindings on its one row (playbook-library-1).
+    const edit = playbookCard(page, "code").getByTestId("role-bind-code-coder");
     const editor = page.getByTestId("binding-editor-coder");
     await edit.click();
     // The player's model, known only through an alias's resolution,
@@ -211,16 +212,19 @@ test("playbook-library-41: both tabs' words, a built-in enabled in the project, 
   expect(await precedes("packages-project", "packages-personal")).toBe(true);
   await expect(packageRow(packages, NOTES)).toBeVisible();
 
-  // Personal rows: every enabled playbook with its command, intent, the
-  // built-in reading "built in", where it is enabled and its role
-  // bindings (playbook-library-1, playbook-library-29).
+  // Every enabled playbook once, though both environments export the
+  // built-ins: its command, intent, the built-in reading "built in",
+  // where it is enabled and the role bindings of your Personal config,
+  // which alone enables it (playbook-library-1, playbook-library-29).
   await projectTab(page, "Playbooks");
   const enabled = page.getByTestId("playbooks-enabled");
   const available = page.getByTestId("playbooks-available");
   await expect(enabled.getByRole("heading").first()).toHaveText("Enabled");
   await expect(available.getByRole("heading").first()).toHaveText("Available");
-  const code = playbookCard(enabled, "code", "personal");
-  const review = playbookCard(enabled, "review", "personal");
+  await expect(page.getByTestId("playbook-card-code")).toHaveCount(1);
+  await expect(page.getByTestId("playbook-card-review")).toHaveCount(1);
+  const code = playbookCard(enabled, "code");
+  const review = playbookCard(enabled, "review");
   await expect(code).toContainText("/code");
   await expect(code).toContainText("implement a coding intent in reviewed, one-commit phases");
   await expect(code.getByTestId("playbook-enabled-code")).toHaveText("Personal");
@@ -234,32 +238,39 @@ test("playbook-library-41: both tabs' words, a built-in enabled in the project, 
   await expect(review.getByTestId("role-binding-review-reviewer")).toHaveText("Rreviewer");
   await expect(review.getByTestId("role-binding-review-reviewer")).toHaveAttribute("title", /^dev\.reviewer · /);
 
-  // The project's rows list the same playbooks from its own packages,
-  // none enabled in its config: those your Personal config enables stand
-  // under Enabled reading "Personal", so the list never reads as empty,
-  // and the built-ins enabled in neither config beneath them under
-  // Available, each reading "built in" (playbook-library-1,
+  // Enabled for you alone, the project's config enabling none, a row's
+  // primary act is "Enable for <project>" and its overflow holds
+  // "Disable for Personal"; the list never reads as empty, and the
+  // built-ins enabled in neither config stand beneath under Available,
+  // each once and reading "built in" (playbook-library-1,
   // playbook-library-34).
-  await expect(playbookCard(enabled, "code", "project").getByTestId("playbook-enabled-code")).toHaveText("Personal");
+  await expect(code.getByTestId("playbook-enable-code")).toHaveText(`Enable for ${PROJECT}`);
+  await expect(code.getByTestId("playbook-disable-code")).toHaveCount(0);
+  await code.getByTestId("playbook-personal-code").click();
+  await expect(code.getByTestId("playbook-personal-code-menu").getByRole("menuitem")).toHaveText(["Disable for Personal"]);
+  await page.keyboard.press("Escape");
+  await expect(code.getByTestId("playbook-personal-code-menu")).toHaveCount(0);
   await expect(page.getByTestId("playbooks-empty")).toHaveCount(0);
   await expect(available.getByTestId("playbook-card-code")).toHaveCount(0);
-  const decide = playbookCard(available, "decide", "project");
+  await expect(page.getByTestId("playbook-card-decide")).toHaveCount(1);
+  const decide = playbookCard(available, "decide");
   await expect(decide.getByTestId("playbook-from-decide")).toHaveText("built in");
   await expect(decide).not.toContainText(`in ${PROJECT}`);
   await expect(decide).not.toContainText("Personal");
-  await expect(decide.getByTestId("playbook-enable-decide")).toHaveText("Enable");
-  // Enabling it writes the project's config and lists it among the
-  // enabled, reading "in <project>".
+  await expect(decide.getByTestId("playbook-enable-decide")).toHaveText(`Enable for ${PROJECT}`);
+  // Its "Enable for <project>" writes the project's config and lists it
+  // among the enabled, reading "in <project>" with Disable.
   expect(app.readProjectConfig()).not.toContain("decide:");
   await decide.getByTestId("playbook-enable-decide").click();
   await expect.poll(() => app.readProjectConfig()).toContain("decide:");
   expect(app.readConfig()).not.toMatch(/^\s{2}decide:/m);
-  const enabledDecide = playbookCard(enabled, "decide", "project");
+  const enabledDecide = playbookCard(enabled, "decide");
   await expect(enabledDecide).toBeVisible();
   await expect(enabledDecide.getByTestId("playbook-enabled-decide")).toHaveText(`in ${PROJECT}`);
+  await expect(enabledDecide.getByTestId("playbook-disable-decide")).toHaveText("Disable");
   await expect(available.getByTestId("playbook-card-decide")).toHaveCount(0);
 
-  // The stage row stands on the card — here the Personal row of /code:
+  // The stage row stands on the card — here /code's:
   // a press opens that stage, a press beside it swaps, a second press
   // closes (playbook-library-22).
   const row = code.getByTestId("stages-code");
@@ -333,13 +344,16 @@ test("playbook-library-41: both tabs' words, a built-in enabled in the project, 
   await stage("Source").click();
   await expect(pipeline).toHaveCount(0);
 
-  // Disabling asks for no confirm: your Personal config no longer names
-  // it, and it lists under Available (playbook-library-26,
+  // Disabling through the overflow's "Disable for Personal" asks for no
+  // confirm: your Personal config no longer names it, and it lists once
+  // under Available (playbook-library-1, playbook-library-26,
   // playbook-library-3).
-  await page.getByRole("button", { name: "Disable /review" }).click();
+  await review.getByTestId("playbook-personal-review").click();
+  await review.getByTestId("playbook-disable-personal-review").click();
   await expect.poll(() => app.readConfig()).not.toMatch(/^\s{2}review:/m);
-  await expect(page.getByRole("button", { name: "Disable /review" })).toHaveCount(0);
-  await expect(playbookCard(available, "review", "personal")).toBeVisible();
+  await expect(enabled.getByTestId("playbook-card-review")).toHaveCount(0);
+  await expect(page.getByTestId("playbook-card-review")).toHaveCount(1);
+  await expect(playbookCard(available, "review")).toBeVisible();
 
   // Remove in a package row's overflow carries its consequence as its
   // tooltip (playbook-library-92, playbook-library-26); Escape leaves
@@ -371,7 +385,7 @@ test("playbook-library-41: the Captain home's slash menu offers a built-in enabl
   // -34, core-service-2).
   await open(page, app);
   await projectTab(page, "Playbooks");
-  await playbookCard(page, "decide", "project").getByTestId("playbook-enable-decide").click();
+  await playbookCard(page, "decide").getByTestId("playbook-enable-decide").click();
   await expect.poll(() => app.readProjectConfig()).toContain("decide:");
   await newTaskTab(page);
   await page.getByTestId("start-composer").fill("/");
