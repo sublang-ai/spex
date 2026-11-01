@@ -3955,6 +3955,11 @@ export class CoreService {
         this.environments.use(command.repository);
         return this.environments.state(command.repository);
       case "environment.request": {
+        // A dry run replies what the request would take and writes
+        // nothing (environments-15).
+        if (command.dryRun === true) {
+          return { accepted: true, preview: await this.environments.previewRequest(command.repository, command.name, toRequest(command.request)) };
+        }
         const { done } = await this.environments.request(command.repository, command.name, toRequest(command.request), command.wait === true);
         if (command.wait) { await done; return { completed: true }; }
         void done.catch(() => {});

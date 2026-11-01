@@ -1356,6 +1356,7 @@ test("environments-25: every environment command replies and refuses as its tabl
   await client.expectOk("environment.request", { repository: key, name: "acme/lint", request: { kind: "registry", version: "^2.0.0" } });
   const conflicted = await client.environment(key, mark, (state) => state.busy === null && state.conflicts !== null);
   assert.equal(conflicted.conflicts?.[0]?.name, "acme/lint");
+  assert.equal(conflicted.refused, undefined, "a requirement no release meets is no refusal (environments-14)");
   // The report stands only while spex.yaml holds the bytes it read.
   const conflictedRequests = join(working, "spex.yaml");
   writeFileSync(conflictedRequests, `${readFileSync(conflictedRequests, "utf8")}# edited\n`);
@@ -1368,6 +1369,55 @@ test("environments-25: every environment command replies and refuses as its tabl
   const removed = await client.environment(key, mark, (state) => state.busy === null && !state.packages.some((pkg) => pkg.name === "acme/lint"));
   assert.equal(removed.conflicts, null);
   assert.ok(!existsSync(join(working, ".claude", "skills", "tidy")), "a skill the lock no longer selects leaves the folder");
+
+  // A request by path naming no package takes the name its folder's
+  // meta.yaml gives; a dry run replies that name and version and writes
+  // nothing; a folder naming none is refused, and a request from the
+  // registry names its package (environments-15).
+  await makeRelease(join(working, "vendor", "tool"), {
+    format: 2, org: "acme", name: "tool", version: "0.2.0", description: "A tool", license: "Apache-2.0",
+    artifacts: { sharpen: { kind: "skill", language: "en" } },
+  }, { "skills/en/sharpen/SKILL.md": skill("sharpen") });
+  mkdirSync(join(working, "vendor", "empty"), { recursive: true });
+  const unnamed = readFileSync(join(working, "spex.yaml"), "utf8");
+  assert.deepEqual(await client.expectOk("environment.request", { repository: key, request: { kind: "path", path: "vendor/tool" }, dryRun: true }),
+    { accepted: true, preview: { name: "acme/tool", version: "0.2.0" } });
+  assert.deepEqual(await client.expectOk("environment.request", { repository: key, name: "acme/other", request: { kind: "path", path: "vendor/tool" }, dryRun: true }),
+    { accepted: true, preview: { name: "acme/other", version: "0.2.0" } }, "a name sent is the name taken");
+  assert.deepEqual(await client.expectOk("environment.request", { repository: key, request: { kind: "path", path: "vendor/empty" }, dryRun: true }),
+    { accepted: true, preview: { name: null, version: null } });
+  await client.expectError("environment.request", { repository: key, request: { kind: "path", path: "../outside" }, dryRun: true }, "invalid_request");
+  await client.expectError("environment.request", { repository: key, request: { kind: "path", path: "vendor/empty" } }, "invalid_request", /^vendor\/empty holds no meta\.yaml naming a package$/);
+  await client.expectError("environment.request", { repository: key, request: { kind: "registry", version: "^1.0.0" } }, "invalid_request");
+  assert.equal(readFileSync(join(working, "spex.yaml"), "utf8"), unnamed, "a dry run and a refusal write nothing");
+  mark = client.mark();
+  assert.deepEqual(await client.expectOk("environment.request", { repository: key, request: { kind: "path", path: "vendor/tool" } }), { accepted: true });
+  const tooled = await client.environment(key, mark, (state) => state.busy === null && state.packages.some((pkg) => pkg.name === "acme/tool" && pkg.installed));
+  assert.deepEqual(tooled.requests["acme/tool"], { kind: "path", path: "vendor/tool" });
+  mark = client.mark();
+  await client.expectOk("environment.remove", { repository: key, name: "acme/tool" });
+  await client.environment(key, mark, (state) => state.busy === null && !state.packages.some((pkg) => pkg.name === "acme/tool"));
+
+  // A package the registry refuses for want of a grant is listed as
+  // refused while that failure stands, and no longer once it is
+  // removed (environments-14, environments-12).
+  registry.script.setPrivate("vault", ["vault-reader"]);
+  await makeRelease(join(scratchDir("spex-env-commands-vault-"), "secrets"), {
+    format: 2, org: "vault", name: "secrets", version: "1.0.0", description: "Kept skills", license: "Apache-2.0",
+    artifacts: { keep: { kind: "skill", language: "en" } },
+  }, { "skills/en/keep/SKILL.md": skill("keep") }).then(async (releaseDir) => {
+    // This test names the library's client below, so it is read anew.
+    const library = await import("@sublang/spex/environment");
+    await library.publishRelease(new library.RegistryClient({ url: registry.url, token: async () => "vault-reader" }), releaseDir);
+  });
+  mark = client.mark();
+  await client.expectOk("environment.request", { repository: key, name: "vault/secrets", request: { kind: "registry", version: "^1.0.0" } });
+  const refusedState = await client.environment(key, mark, (state) => state.busy === null && state.error !== null);
+  assert.deepEqual(refusedState.refused, ["vault/secrets"]);
+  mark = client.mark();
+  await client.expectOk("environment.remove", { repository: key, name: "vault/secrets" });
+  const unrefused = await client.environment(key, mark, (state) => state.busy === null && !Object.hasOwn(state.requests, "vault/secrets"));
+  assert.equal(unrefused.refused, undefined);
 
   // environment.publish: not signed in at the instance it publishes to
   // — the home's recorded origin, no instance listed yet, named by its

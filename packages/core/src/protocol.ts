@@ -352,6 +352,10 @@ export interface EnvironmentState {
   busy: "resolving" | "installing" | "publishing" | null;
   /** The last operation's failure, phrased for the reader; null when none. */
   error: string | null;
+  /** The registry packages that failure's registry refused — answering
+   * not found, unauthenticated or forbidden, as for want of a grant
+   * (environments-12) — present only while that failure stands. */
+  refused?: string[];
   /** The last publish from this spex repository's working folder that
    * succeeded: what the registry now holds and its page there
    * (playbook-library-93). */
@@ -450,6 +454,11 @@ export interface InvalidPlaybookEntry {
 export interface PublishDestination { origin: string; name: string }
 export interface PublishedPackage { instance: PublishDestination; name: string; version: string; url: string }
 export type EnvironmentMutationResult = { accepted: true } | { completed: true };
+/** What a dry run of `environment.request` replies (environments-15):
+ * the name the request takes — the one sent, else the one its folder's
+ * `meta.yaml` gives — and the version that `meta.yaml` gives, each null
+ * where none reads. */
+export interface RequestPreview { name: string | null; version: string | null }
 
 export interface PublishPreview {
   instance: PublishDestination;
@@ -1305,12 +1314,17 @@ export const commandSchema = z.discriminatedUnion("type", [
   // lock, installs and exports; long commands reply `accepted` at once and
   // report through `environment.state`.
   z.object({ type: z.literal("environment.get"), id, repository: repositoryKeySchema }).strict(),
+  /** `name` may be left out of a request by path, which takes the name
+   * its folder's `meta.yaml` gives; `dryRun` runs the refusals and
+   * replies the name and version the request would take, writing
+   * nothing (environments-15). */
   z.object({
     type: z.literal("environment.request"),
     id,
     wait: z.boolean().optional(),
+    dryRun: z.boolean().optional(),
     repository: repositoryKeySchema,
-    name: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*\/[a-z0-9]+(?:-[a-z0-9]+)*$/),
+    name: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*\/[a-z0-9]+(?:-[a-z0-9]+)*$/).optional(),
     request: environmentRequestSchema,
   }).strict(),
   z.object({ type: z.literal("environment.remove"), id, wait: z.boolean().optional(), repository: repositoryKeySchema, name: z.string().min(1) }).strict(),
@@ -1633,7 +1647,9 @@ export interface CommandResults {
   /** The choice after the write, as `language.state` carries it. */
   "language.set": { language: Language | null };
   "environment.get": EnvironmentState;
-  "environment.request": EnvironmentMutationResult;
+  "environment.request":
+    | { accepted: true; preview?: RequestPreview; completed?: never }
+    | { completed: true; accepted?: never; preview?: never };
   "environment.remove": EnvironmentMutationResult;
   "environment.resolve": EnvironmentMutationResult;
   "environment.install": EnvironmentMutationResult;
