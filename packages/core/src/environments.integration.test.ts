@@ -296,7 +296,8 @@ test("environments-23: a fresh home with no registry reachable seeds the built-i
   }
   // The built-ins' skills are exported where claude reads them.
   assert.ok(existsSync(join(dir, "project", ".claude", "skills", "code", "SKILL.md")));
-  assert.ok(existsSync(join(dir, "user", ".claude", "skills", "review", "SKILL.md")));
+  assert.ok(existsSync(join(dir, "project", ".claude", "skills", "review", "SKILL.md")), "[environments-1] a playbook a playbook requires is a peer, its skill placed");
+  assert.ok(existsSync(join(dir, "user", ".claude", "skills", "review", "SKILL.md")), "[environments-1] a playbook a playbook requires is a peer, its skill placed");
 
   // A newer built-in release seeds beside the older; neither lock moves.
   const locks = [ownClone, projectRoot].map((root) => readFileSync(join(root, "spex.lock"), "utf8"));
@@ -1996,8 +1997,10 @@ test("environments-21 through a real core: an install whose lock or requests cha
     const root = join(dir, "project");
     await settledProject(client, key);
     const installedVersion = (): string => (parseYaml(readFileSync(join(root, ".spex", "packages", "acme", "kit", "meta.yaml"), "utf8")) as { version: string }).version;
+    // An install's download, not the manifest a resolution reads for
+    // what the release provides (environments-6).
     const download = (version: string) => (path: string): boolean =>
-      path === `/api/v1/packages/acme/kit/${version}/download` || path.startsWith(`/acme/kit/${version}/`);
+      path === `/api/v1/packages/acme/kit/${version}/download` || (path.startsWith(`/acme/kit/${version}/`) && path !== `/acme/kit/${version}/meta.yaml`);
     const kitOf = (state: EnvironmentState) => state.packages.find((pkg) => pkg.name === "acme/kit");
 
     let mark = client.mark();

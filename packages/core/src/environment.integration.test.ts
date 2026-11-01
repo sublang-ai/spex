@@ -460,7 +460,9 @@ test("environments-20: selection chooses languages in order, takes what a playbo
   assert.ok(!chosen.files.some((file) => file.path === "skills/en/guide/SKILL.md"));
   assert.ok(chosen.files.some((file) => file.path === "playbooks/en/ship/ship.md"));
   assert.ok(chosen.files.some((file) => file.path === "meta.yaml"));
-  assert.deepEqual(chosen.exports, { guide: "guide", ship: "ship" });
+  // The skill the playbook requires is its support: selected and
+  // installed with it, placed under no name (environments-1).
+  assert.deepEqual(chosen.exports, { ship: "ship" }, "[environments-6] the provided playbook alone placed");
 
   // A select entry's language comes before the environment's.
   const named = locked(await resolveText(home.clone, requestsYaml({ "acme/docs": { version: "^1.0.0", select: [{ artifact: "guide", language: "en" }] } }, "zh-Hans")));
@@ -702,10 +704,11 @@ test("environments-21: obsolete-tree cleanup cannot fail a committed install or 
 test("environments-21: a path source is used in place per working folder, missing reported, its manifest change stale", async () => {
   await publishSimple("acme/solid", "1.0.0");
   const home = makeHome("acme/proj-spex");
+  // A skill requiring a skill, a peer, so each is placed (environments-1).
   const local = (folder: string, version: string, note: string, withTidy = true): Promise<string> => makeRelease(join(folder, "tools", "local"), manifestOf("acme/local", version, {
     pave: { kind: "playbook", language: "en" },
-    ...(withTidy ? { tidy: { kind: "skill", language: "en", requires: ["pave"] } } : {}),
-  }), { ...playbookFiles("pave"), ...(withTidy ? skillFiles("tidy", "en", note) : {}) });
+    ...(withTidy ? { tidy: { kind: "skill", language: "en", requires: ["sweep"] }, sweep: { kind: "skill", language: "en" } } : {}),
+  }), { ...playbookFiles("pave"), ...(withTidy ? { ...skillFiles("tidy", "en", note), ...skillFiles("sweep") } : {}) });
   const first = scratchDir("spex-wf-");
   const second = scratchDir("spex-wf-");
   const bare = scratchDir("spex-wf-");
@@ -713,7 +716,7 @@ test("environments-21: a path source is used in place per working folder, missin
   await local(second, "0.1.0", "the second folder's copy");
   const text = requestsYaml({ "acme/local": { path: "tools/local" }, "acme/solid": { version: "^1.0.0" } });
   const lock = locked(await resolveText(home.clone, text, { workingFolder: first }));
-  assert.deepEqual(lock.packages["acme/local"]!.source, { path: "tools/local", version: "0.1.0", dependencies: {}, requires: { tidy: ["pave"] } });
+  assert.deepEqual(lock.packages["acme/local"]!.source, { path: "tools/local", version: "0.1.0", dependencies: {}, requires: { tidy: ["sweep"] } });
   assert.deepEqual(lock.packages["acme/local"]!.files, []);
   const base = { root: home.clone, store: home.store, cache: home.cache, registry: client, git: gitSource(home.cache), lock };
 
