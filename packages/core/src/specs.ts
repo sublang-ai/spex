@@ -23,11 +23,9 @@ import {
 import type { Dirent } from "node:fs";
 import { basename, dirname, isAbsolute, join, posix, sep } from "node:path";
 
-import { isPackageName, isVersion, SPEX_DIR } from "@sublang/spex/environment";
-import { isObject } from "@sublang/spex/files";
-
 import { defaultRunCommand, type RunCommand } from "./forge.js";
 import { i18n } from "./i18n.js";
+import { readPlacedMarker, readPlacedRecord } from "./placed-specs.js";
 import type {
   SpecFileInfo,
   SpecGroup,
@@ -75,11 +73,6 @@ const FENCE = /^\s*(?:```|~~~)/;
 /** Innermost inline link, so the enclosed citation form
  * `[[<id>](<path>#<id>)]` (meta-16) captures the bare id. */
 const INLINE_LINK = /\[([^[\]]+)\]\(([^()\s]+)\)/g;
-
-/** The comment line an install writes first in a spec it placed
- * (environments-41), naming the spec package and version. */
-const PLACED_MARKER =
-  /^<!-- Placed by Spex from (\S+) (\S+); an edit makes this file yours\. -->$/;
 
 /** Known `##` sections -> filter group (DR-015; meta-30).
  * Localized scaffolds translate the section headings; the zh names
@@ -177,25 +170,14 @@ function firstSentence(body: string[]): string {
   return sentence ? sentence[1] : firstText;
 }
 
-/** The package and version the marker on a file's first line names
- * (spec-view-10), a byte order mark and a carriage return
- * disregarded; undefined for any other first line. */
-function placedMarker(text: string): SpecFileInfo["placed"] {
-  const end = text.indexOf("\n");
-  const first = (end === -1 ? text : text.slice(0, end))
-    .replace(/^\uFEFF/, "")
-    .replace(/\r$/, "");
-  const match = PLACED_MARKER.exec(first);
-  if (!match || !isPackageName(match[1]) || !isVersion(match[2])) return undefined;
-  return { name: match[1], version: match[2] };
-}
-
 /** Parse one spec file's markdown text (exported for tests). A file
  * opening with the marker is marked placed; parseSpecFile unmarks a
  * copy the install record says was edited. */
 export function parseSpecFileText(text: string, key: string): SpecFileInfo {
   const file = fileShell(key);
-  const placed = placedMarker(text);
+  // The marker an install writes first in a spec it placed
+  // (environments-41), naming its spec package and version.
+  const placed = readPlacedMarker(text);
   if (placed) file.placed = placed;
   const unexpectedSections = new Set<string>();
 
@@ -414,34 +396,15 @@ export function parseSpecFile(
 // The install record of placed specs
 // ---------------------------------------------------------------------------
 
-/** The SHA-256 the install record at `<project>/.spex/placed.json`
- * holds for each spec it placed, keyed by the spec's path from the
- * project's root (environments-41). Read tolerantly: a missing,
- * unreadable or malformed record is no record, so the marker alone
- * decides. A later change takes the library's own reader in its
- * place. */
+/** The SHA-256 the install record of placed specs under the project's
+ * `.spex/` holds for each spec it placed, keyed by the spec's path from
+ * the project's root (environments-41). A missing or unreadable record,
+ * or one any entry of which is of another shape, is no record, so the
+ * marker alone decides, as the linter and an install read it. */
 function readPlacedHashes(projectPath: string): ReadonlyMap<string, string> {
   const hashes = new Map<string, string>();
-  let record: unknown;
-  try {
-    record = JSON.parse(
-      readFileSync(join(projectPath, SPEX_DIR, "placed.json"), "utf8"),
-    );
-  } catch {
-    return hashes;
-  }
-  if (!isObject(record) || record.format !== 1 || !isObject(record.specs)) {
-    return hashes;
-  }
-  for (const entry of Object.values(record.specs)) {
-    if (
-      !isObject(entry) ||
-      typeof entry.path !== "string" ||
-      typeof entry.sha256 !== "string"
-    ) {
-      return new Map();
-    }
-    hashes.set(posix.normalize(entry.path), entry.sha256.toLowerCase());
+  for (const entry of Object.values(readPlacedRecord(projectPath)?.specs ?? {})) {
+    hashes.set(posix.normalize(entry.path), entry.sha256);
   }
   return hashes;
 }

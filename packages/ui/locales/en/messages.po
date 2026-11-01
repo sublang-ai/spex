@@ -906,7 +906,7 @@ msgid "✗ failed"
 msgstr "✗ failed"
 
 #. examples of exact, caret and tilde registry requirements; preserve the syntax
-#: src/components/EnvironmentSection.tsx
+#: src/components/PackageArtifacts.tsx
 msgid "1.2.3, ^1.2.3, ~1.2.3"
 msgstr "1.2.3, ^1.2.3, ~1.2.3"
 
@@ -7836,6 +7836,7 @@ msgstr "Use this folder"
 #. the accessible name of a version choice in Add…; {name} is the package
 #. the accessible name of a version choice in Add…; {name} is the package
 #: src/components/EnvironmentSection.tsx
+#: src/components/PackageArtifacts.tsx
 msgid "Version of {name}"
 msgstr "Version of {name}"
 

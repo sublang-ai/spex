@@ -113,6 +113,7 @@ import { shippedBuiltinPackage } from "./builtins.js";
 import { installEngine } from "./compile.js";
 import { i18n } from "./i18n.js";
 import { migrateEnvironments, type MigratedRepository } from "./migrate-environment.js";
+import { providedArtifacts, readSpecPlacements, type SpecPlacement } from "./placed-specs.js";
 import { gitEnvironment } from "./storage-git.js";
 import { splitKey } from "./home.js";
 import { canonicalOrigin } from "@sublang/spex/instance";
@@ -1785,7 +1786,7 @@ export class EnvironmentManager {
     // reported with its cause, rather than reading as signed out.
     if (!isDirectory(folder)) {
       throw new CoreError("invalid_request", i18n._({
-        id: "No folder for {name} at {path} — npx @sublang/spex export {name} --spec <file> | --skill <folder> builds one",
+        id: "No folder for {name} at {path} — npx @sublang/spex export {name} [--spec <file>] [--skill <folder>]… builds one",
         comment: "Refusal of Publish: the package has no folder; {path} is where it would stand, the folder spex.yaml adds it from or spex-packages/<org>/<pkg>. 'npx @sublang/spex export' runs the command line's command that builds a package's folder from the project's own spec file or skill folder; '<file>' and '<folder>' are the command's placeholders, kept as they are",
         values: { name, path },
       }));
@@ -2008,6 +2009,13 @@ export class EnvironmentManager {
     catch (cause) { error = unreadablePhrase("spex.lock", cause); }
     const installedNames = lock && envRoot !== null ? installedPackages(envRoot, lock) : new Set<string>();
     const conflicts = clone.conflicts !== null && clone.conflicts.requests === requestsVersion ? clone.conflicts.conflicts : null;
+    // Where each provided spec stands under a project's `specs/`, read
+    // from its files at the reply; your own group's places its spec as a
+    // skill (environments-14, environments-41, environments-8).
+    const specPlacements = new Map<string, SpecPlacement>();
+    if (lock && envRoot !== null && !this.isOwn(key)) {
+      for (const placement of readSpecPlacements(envRoot, lock, pathRoot)) specPlacements.set(placement.name, placement);
+    }
     const packages: EnvironmentPackage[] = [];
     for (const name of Object.keys(lock?.packages ?? {}).sort()) {
       const resolution = lock!.packages[name]!;
@@ -2036,6 +2044,10 @@ export class EnvironmentManager {
         return "playbook";
       };
       const builtin = name === BUILTIN_PACKAGE_NAME && isRegistrySource(source);
+      // What the release provides, read from its manifest; every artifact
+      // while its files are not here to say (environments-1).
+      const provided = manifest === null ? null : providedArtifacts(manifest);
+      const spec = specPlacements.get(name);
       packages.push({
         name,
         version: resolutionVersion(resolution) ?? manifest?.version ?? null,
@@ -2051,11 +2063,14 @@ export class EnvironmentManager {
           kind: kindOf(id),
           language: resolution.artifacts[id]!.language,
           fallback: resolution.artifacts[id]!.fallback,
-          provided: true,
+          provided: provided === null || provided.has(id),
         })),
         exports: Object.keys(resolution.exports).sort().map((exported) => ({ name: exported, artifact: resolution.exports[exported]! })),
         installed,
         missingPath: missing && pathSource ? source.path : null,
+        ...(spec
+          ? { placement: { spec: { state: spec.state, path: spec.path, waiting: spec.waiting.map((entry) => ({ ...entry })), ...(spec.waitingVersion !== undefined ? { waitingVersion: spec.waitingVersion } : {}) } } }
+          : {}),
       });
     }
     const requestMap: Record<string, EnvironmentRequestSummary> = {};

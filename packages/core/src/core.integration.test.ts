@@ -683,7 +683,7 @@ const DEFECT_CONFIGS: { name: string; pattern: RegExp; config: string }[] = [
   },
   {
     name: "a playbook no environment of the session places",
-    pattern: /playbooks\.triage is enabled, but the environment of tester\/tester-spex places no playbook triage/,
+    pattern: /playbooks\.triage is enabled, but no package of tester\/tester-spex places a playbook triage/,
     config: VALID_CONFIG.replace('  code:\n', "  triage:\n"),
   },
   {

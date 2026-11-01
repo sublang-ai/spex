@@ -412,9 +412,11 @@ export interface EnvironmentPackage {
     language: string | null;
     fallback: boolean;
     /** The release provides it — its `provides` absent or listing its
-     * kind, and no sibling naming it in `from` or `requires`
-     * (environments-1); one not provided is its sibling's support,
-     * installed and placed nowhere (environments-6). */
+     * kind, no sibling naming it in `from` and no sibling of another kind
+     * naming it in `requires` (environments-1); one not provided is its
+     * sibling's support, installed and placed nowhere (environments-6).
+     * True for every artifact while the package's manifest is not here
+     * to read. */
     provided: boolean;
   }[];
   exports: { name: string; artifact: string }[];
@@ -422,9 +424,11 @@ export interface EnvironmentPackage {
   /** A path source absent on this device: its path, else null. */
   missingPath: string | null;
   /** Where the package's provided spec stands in a project's environment
-   * (environments-14); absent where it provides no spec, and in your own
-   * group's environment, whose spec is placed as a skill named in
-   * `exports` (environments-8). */
+   * (environments-14); absent where it provides no spec, where its files
+   * are not here as the lock locks them, where no copy is written under
+   * `specs/` yet — the next install writes it — and in your own group's
+   * environment, whose spec is placed as a skill named in `exports`
+   * (environments-8). */
   placement?: {
     /** The provided spec's placement under `specs/` (environments-41). */
     spec?: {
