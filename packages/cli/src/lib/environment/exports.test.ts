@@ -15,9 +15,9 @@
 // its marker line, the second package of one `<pkg>` included; a
 // committed copy holding the derivation adopted on a fresh clone, and
 // one at a newer release's version on a device whose record held the
-// older hash; a root without `specs/` falling back to the generated
-// skill and reporting it; your own group's writing the skill alone; and
-// each state read back from the files.
+// older hash; a project root without `specs/` placing no spec, neither
+// file nor skill, and reporting it; your own group's writing the
+// generated skill alone; and each state read back from the files.
 
 import { after, test } from "node:test";
 import assert from "node:assert/strict";
@@ -278,13 +278,14 @@ test("environments-43: a copy committed at a newer release's version reads as th
   assert.notEqual(entry.sha256, olderHash);
 });
 
-test("environments-8: a root without specs/ places the spec as its generated skill and reports it, and your own group's writes the skill alone", async () => {
+test("environments-8: a project root without specs/ places no spec and reports it, and your own group's writes the generated skill alone", async () => {
   const project = scratchRoot(false);
   const release = specText("tools");
   const report = await place(project, { "acme/tools": specRelease(project, "acme/tools", "1.0.0") });
   assert.deepEqual(report.specs, [placement("acme/tools", "no-specs")], "[environments-41] reported waiting for specs/");
-  for (const folder of [".claude", ".agents"]) {
-    assert.equal(read(project, `${folder}/skills/acme-tools/tools.md`), release, `[environments-8] the generated skill in ${folder}/skills, the spec byte for byte`);
+  assert.deepEqual(report.skills, [], "[environments-41] no skill placed for the spec");
+  for (const folder of [".claude", ".agents", ".spex"]) {
+    assert.equal(existsSync(join(project, folder, "skills", "acme-tools")), false, `[environments-8] no generated skill in ${folder}/skills`);
   }
   assert.equal(existsSync(join(project, "specs")), false, "[environments-41] no specs/ made");
   assert.equal(existsSync(placedRecordPath(project)), false, "[environments-41] nothing recorded");

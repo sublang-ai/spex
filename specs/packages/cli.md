@@ -75,7 +75,7 @@ When `spex remove <org>/<pkg>` or its alias `spex rm` runs, the CLI shall drop t
 
 #### cli-4
 
-When `spex install` or its alias `spex i` runs, the CLI shall install the lock [[environments-7](environments.md#environments-7)] and place [[environments-8](environments.md#environments-8)], resolving first [[environments-5](environments.md#environments-5)] where the lock is missing or stale, and print each package installed with its version, what was placed for your agents and into `specs/` and what was left out:
+When `spex install` or its alias `spex i` runs, the CLI shall install the lock [[environments-7](environments.md#environments-7)] and place [[environments-8](environments.md#environments-8)], resolving first [[environments-5](environments.md#environments-5)] where the lock is missing or stale, and print each package installed with its version, what was placed for your agents and into `specs/` — beneath the package, a provided spec's line as [[cli-6](#cli-6)] reads it — and what was left out:
 
 - a root holding no `spex.yaml` is refused naming the folder and `spex add`;
 - a lock installing as it stands resolves nothing and rewrites no file;
@@ -83,7 +83,7 @@ When `spex install` or its alias `spex i` runs, the CLI shall install the lock [
 
 #### cli-5
 
-When `spex update` runs, the CLI shall resolve again from `spex.yaml` [[environments-5](environments.md#environments-5)], install and place [[environments-7](environments.md#environments-7)] [[environments-8](environments.md#environments-8)], and print each package whose version moved, with both versions, or that nothing moved.
+When `spex update` runs, the CLI shall resolve again from `spex.yaml` [[environments-5](environments.md#environments-5)], install and place [[environments-7](environments.md#environments-7)] [[environments-8](environments.md#environments-8)], and print each package whose version moved, with both versions and, beneath it, a provided spec's line as [[cli-6](#cli-6)] reads it, or that nothing moved.
 
 #### cli-6
 
@@ -202,6 +202,7 @@ When the packed CLI, installed into a scratch prefix from `npm pack`, runs with 
 - a second scratch folder holding the committed `spex.yaml` and `spex.lock` alone, `spex install` there resolves nothing and yields byte-identical `.spex/packages/` and placements, and a second `spex install` rewrites nothing; with `spex.yaml` alone, it resolves first; with neither, it is refused naming `spex add` [[cli-4](#cli-4)];
 - a lock recording the app's built-in package at a checksum no registry serves installs the rest and marks the built-in `built in`, and `spex list` reads it `built in` and `not installed` [[cli-4](#cli-4)] [[cli-6](#cli-6)];
 - once the registry publishes `demo/tool` 1.1.0, `spex update` moves the lock and prints both versions, and prints that nothing moved when run again [[cli-5](#cli-5)];
+- after a hand edit to `demo/spec`'s placed copy, `spex install` prints `spec edited in specs/ — left as yours` beneath `demo/spec` [[cli-4](#cli-4)], and once the registry publishes `demo/spec` 1.1.0, `spex update` prints `demo/spec` with both versions and, beneath it, `spec edited in specs/ — left as yours, 1.1.0 waiting` [[cli-5](#cli-5)];
 - `spex remove demo/other` drops the request, the files and the placement and prints the loss, a name not requested refused, and `spex remove sublang/playbooks` is refused with "sublang/playbooks comes with Spex" and nothing written [[cli-3](#cli-3)];
 - the environment root is found from a subfolder of the working folder, and from a working folder without `spex.yaml` at its Git top level [[cli-1](#cli-1)].
 

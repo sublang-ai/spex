@@ -245,8 +245,9 @@ test("cli-15: add writes the package into spex.yaml, installs under .spex/ and p
   assert.deepEqual(Object.keys(lock.packages).sort(), ["demo/base", "demo/other", "demo/tool"]);
   assert.deepEqual(lock.packages["demo/base"]["required-by"], ["demo/other"]);
   assert.equal(lock.packages["demo/tool"].source.registry, registry.url);
-  assert.ok(existsSync(join(WORK, ".claude", "skills", "demo-base", "base.md")), "[cli-2] the spec exported as a skill where the folder holds no specs/");
+  for (const folder of [".claude", ".agents"]) assert.equal(existsSync(join(WORK, folder, "skills", "demo-base")), false, `[cli-2] no spec placed in ${folder}/skills where the folder holds no specs/`);
   assert.match(other, /^Added demo\/base 1\.0\.0 for demo\/other\n {2}spec needs specs\/ — spex scaffold$/m, "[cli-2] the spec waiting for specs/, in cli-6's words");
+  assert.doesNotMatch(other, /^ {2}demo-base /m, "[cli-2] no skill line for the spec");
   // Git sees the two files and never the installed tree or the exports.
   const status = execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: WORK, encoding: "utf8" });
   assert.deepEqual(status.trim().split("\n").sort(), ["?? spex.lock", "?? spex.yaml"], "[cli-2] Git sees spex.yaml and spex.lock alone");
@@ -295,11 +296,10 @@ test("cli-15: list heads with the folder and the registry's name, then what is a
     "  demo/other  1.2.0  from the registry                  installed",
     "  demo/tool   1.0.0  from the registry                  installed",
     "Skills for agents",
-    "  demo-base  .agents/skills, .claude/skills",
-    "  other      .agents/skills, .claude/skills",
-    "  tool       .agents/skills, .claude/skills",
+    "  other  .agents/skills, .claude/skills",
+    "  tool   .agents/skills, .claude/skills",
     "",
-  ].join("\n"), "[cli-6] the folder, the registry by its display name, each package added with its version, each installed with its version, source, what it came for and its state, a spec waiting for specs/ beneath its package, each skill with its folders, and no last line while spex.lock stands");
+  ].join("\n"), "[cli-6] the folder, the registry by its display name, each package added with its version, each installed with its version, source, what it came for and its state, a spec waiting for specs/ beneath its package and no skill for it, each skill with its folders, and no last line while spex.lock stands");
   assert.ok(!listed.includes(host), "[cli-22] the registry named, never by its host while its descriptor names it");
 
   // A folder holding neither file: one line (cli-6).
@@ -546,13 +546,18 @@ test("cli-15: a package's spec is placed in specs/ under its marker line, its li
   const edited = `${readFileSync(placed, "utf8")}\nOur own note.\n`;
   writeFileSync(placed, edited);
   const installed = await ok(dir, "install");
-  assert.match(installed, /^Already installed demo\/spec 1\.0\.0\n {2}spec edited in specs\/ — left as yours$/m, "[cli-4] the edited copy reported, no version waiting");
+  assert.match(installed, /^Already installed demo\/spec 1\.0\.0\n {2}spec edited in specs\/ — left as yours$/m, "[cli-4] beneath the package, the spec's line as list reads it: the edited copy, no version waiting");
   assert.equal(readFileSync(placed, "utf8"), edited, "[cli-4] and left as it stands");
   assert.match(await ok(dir, "list"), /^ {2}demo\/spec +1\.0\.0 +from the registry +installed\n {4}spec edited in specs\/ — left as yours\n/m, "[cli-6] read edited");
 
+  // A newer release: beneath the moved package, its spec's line, the
+  // newer version waiting.
+  await publish("demo/spec", "1.1.0", { spec: { kind: "spec", language: "en" } }, { "specs/en/spec.md": DEMO_SPEC_MD });
+  assert.match(await ok(dir, "update"), /^Updated demo\/spec 1\.0\.0 → 1\.1\.0\n {2}spec edited in specs\/ — left as yours, 1\.1\.0 waiting$/m, "[cli-5] both versions, then the spec's line as list reads it");
+
   // Removed: the edited copy left as the project's own, an unedited one gone.
   const removed = await ok(dir, "remove", "demo/spec");
-  assert.match(removed, /^Removed demo\/spec 1\.0\.0\n {2}spec edited in specs\/ — left as yours$/m, "[cli-3] the edited copy reported in the same words");
+  assert.match(removed, /^Removed demo\/spec 1\.1\.0\n {2}spec edited in specs\/ — left as yours$/m, "[cli-3] the edited copy reported in the same words");
   assert.equal(readFileSync(placed, "utf8"), edited, "[cli-3] the edited copy stays");
   assert.deepEqual(Object.keys(readPlacedRecord(dir)?.specs ?? {}), ["demo/other"], "[cli-3] no longer Spex's copy");
   await ok(dir, "remove", "demo/other");
