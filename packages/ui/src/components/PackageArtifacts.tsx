@@ -163,6 +163,7 @@ export function PlaybookEnableAct({
   projectName,
   enableTestId,
   enabledTestId,
+  named = false,
 }: {
   enabling: ReturnType<typeof usePlaybookEnable>;
   command: string;
@@ -170,6 +171,9 @@ export function PlaybookEnableAct({
   projectName: string;
   enableTestId: string;
   enabledTestId: string;
+  /** The visible label names the command, "Enable /triage", where no
+   * command stands before it: the receipt after Add… (playbook-library-92). */
+  named?: boolean;
 }) {
   if (enabling.enabled) {
     return (
@@ -190,6 +194,7 @@ export function PlaybookEnableAct({
     );
   }
   if (!enabling.ready) return null;
+  const label = i18n._("Enable /{command}", { command });
   return (
     <button
       type="button"
@@ -207,13 +212,15 @@ export function PlaybookEnableAct({
               values: { project: projectName },
             })
       }
-      aria-label={i18n._("Enable /{command}", { command })}
+      aria-label={label}
       onClick={() => void enabling.enable()}
       className={PRIMARY}
     >
       {enabling.busy
         ? i18n._({ id: "Enabling…", comment: "the enable request is in flight" })
-        : i18n._({ id: "Enable", comment: "enable this playbook in this config" })}
+        : named
+          ? label
+          : i18n._({ id: "Enable", comment: "enable this playbook in this config" })}
     </button>
   );
 }

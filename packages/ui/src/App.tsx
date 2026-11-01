@@ -1782,14 +1782,10 @@ export function App() {
           i18n._("Config {status} →", { status: configState.status })
         )}
       </button>
-    ) : railCollapsed || playbookCount === undefined ? null : (
-      <span className="px-1 text-xs text-neutral-500">
-        {playbookCount === 0
-          ? i18n._("No playbooks yet")
-          : i18n._("{count, plural, one {# playbook} other {# playbooks}}", {
-              count: playbookCount,
-            })}
-      </span>
+    ) : railCollapsed || playbookCount !== 0 ? null : (
+      // No count otherwise: a surface shows the exception, not the norm,
+      // and a count here is a number with no act (DR-172).
+      <span className="px-1 text-xs text-neutral-500">{i18n._("No playbooks yet")}</span>
     );
 
   const addProjectByPath = useAppStore((state) => state.addProjectByPath);

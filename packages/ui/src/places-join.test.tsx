@@ -593,13 +593,13 @@ describe("run-view-168: a Dashboard link opens a project at its place", () => {
     expect(screen.getByTestId(`sidebar-session-s-alpha@${ALPHA.place}`).getAttribute("aria-selected")).toBe("false");
   });
 
-  test("the empty state's Projects link shows this computer's place", async () => {
+  test("the empty state's Add a project link shows this computer's place", async () => {
     useAppStore.setState({ projects: [], sessions: [], currentProjectId: undefined });
     render(<App />);
     await showSeat();
     fireEvent.click(document.querySelector<HTMLElement>('[data-surface="Dashboard"]')!);
     const empty = screen.getByTestId("projects-empty");
-    fireEvent.click(within(empty).getByRole("button", { name: "Projects" }));
+    fireEvent.click(within(empty).getByRole("button", { name: "Add a project" }));
     await settle();
     // [run-view-168] the Projects surface shows the place whose
     // projects the Dashboard lists: this computer's, with none yet.

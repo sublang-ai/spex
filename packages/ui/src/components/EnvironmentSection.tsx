@@ -575,6 +575,7 @@ function Receipt({
             projectName={projectName}
             enableTestId="add-note-enable"
             enabledTestId="add-note-enabled"
+            named
           />
         ) : playbooks.length > 1 ? (
           <button
@@ -1167,14 +1168,9 @@ function RegistryResultRow({
   return (
     <li data-testid={`registry-result-${result.name}`} className="flex flex-col gap-1 text-xs">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="min-w-0 truncate font-mono text-sm font-semibold">{result.name}</span>
-        {result.description ? (
-          <span className="min-w-0 flex-1 truncate text-neutral-500" title={result.description}>
-            {result.description}
-          </span>
-        ) : (
-          <span className="flex-1" />
-        )}
+        <span className="min-w-0 grow truncate font-mono text-sm font-semibold" title={result.name}>
+          {result.name}
+        </span>
         <select
           data-testid={`registry-version-${result.name}`}
           aria-label={i18n._({ id: "Version of {name}", comment: "the accessible name of a version choice in Add…; {name} is the package", values: { name: result.name } })}
@@ -1205,6 +1201,13 @@ function RegistryResultRow({
           {addLabel(busy)}
         </button>
       </div>
+      {/* The description on its own line, the row's full width, so the
+          popover's narrow width never cuts it to a few letters. */}
+      {result.description ? (
+        <p className="line-clamp-2 text-neutral-500 [overflow-wrap:anywhere]" title={result.description}>
+          {result.description}
+        </p>
+      ) : null}
       {error ? (
         <p role="alert" data-testid={`registry-add-error-${result.name}`} className={ERROR}>
           {error}

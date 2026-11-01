@@ -189,8 +189,9 @@ test("playbook-library-95: Publish from a project at the second instance reads t
     await result.getByTestId(`registry-add-${PACKAGE}`).click();
     const receipt = packages.getByTestId("add-receipt");
     await expect(receipt.getByTestId("add-note")).toHaveText(`Added ${PACKAGE} 0.1.0 · 1 playbook`, { timeout: 30_000 });
-    // The receipt's Enable is the playbook's own, in place (playbook-library-92).
-    await expect(receipt.getByRole("button", { name: `Enable /${ID}` })).toHaveText("Enable");
+    // The receipt's Enable is the playbook's own, in place, its label
+    // naming the command (playbook-library-92).
+    await expect(receipt.getByRole("button", { name: `Enable /${ID}` })).toHaveText(`Enable /${ID}`);
     const added = packageRow(packages, PACKAGE);
     await expect(added.getByTestId(`env-version-${PACKAGE}`)).toHaveText("0.1.0", { timeout: 30_000 });
     await expect(packageSource(added, PACKAGE)).toHaveAttribute("title", /^From the registry · /);
