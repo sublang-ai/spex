@@ -33,12 +33,12 @@ Packages in this folder (spex.yaml, spex.lock, .spex/)
   remove, rm <org>/<pkg>           Remove a package
   install, i                       Install what spex.lock records
   update                           Update to the newest versions spex.yaml allows
-  list, ls                         What is added, installed, and placed for your agents and specs/
+  list, ls                         What is added, installed, and placed for your agents
   search <query>                   Find packages at the registry
 
 Your packages
-  export <org>/<pkg> [--spec <file>] [--skill <folder>]…   Build it in spex-packages/<org>/<pkg>/ from your files
-  publish [<org>/<pkg>] [--dry-run]                         Publish it to the registry
+  new <org>/<pkg> [--skill <folder>]… [--spec <file>]   Start a package in spex-packages/<org>/<pkg>/
+  publish [<org>/<pkg>] [--dry-run]                     Publish it to the registry
 
 Sign-in
   login [--registry <url> | --space <url>]              Sign in with a code in your browser
