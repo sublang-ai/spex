@@ -4,12 +4,13 @@
 // Citations across a release's boundary (environments-41,
 // environments-42): a project's spec built into a release with its
 // same-file citations kept, its citations of a package's spec written
-// as addresses, its citations of a spec of no package removed and its
-// decision records' links reduced to their text, each warned with the
-// citing item; a release's spec placed in a tree with each address of a
-// placed spec written as a relative link and the rest removed, counted
-// per package; every other byte as it was, and the two directions
-// composing back to the project's own links.
+// as addresses, its citations of a spec of no package or of a file two
+// packages claim removed and its decision records' links reduced to
+// their text, each warned with the citing item; a release's spec placed
+// in a tree with each address of a placed spec written as a relative
+// link and the rest removed, counted per package; a citation of the
+// specs root's meta.md kept in both directions; every other byte as it
+// was, and the two directions composing back to the project's own links.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -92,6 +93,54 @@ test("citations: a release keeps same-file citations, writes a package's spec as
   ], "a heading quoted in a blockquote and a topic heading inside an item name no item");
   assert.deepEqual(asked, ["packages/local.md", "packages/other.md", "packages/local.md", "packages/third.md"],
     "the package is asked of the cited file's path from the specs root, normalized");
+});
+
+test("citations: a citation of meta.md at the specs root is kept as it is in both directions; a meta.md elsewhere is a spec of no package", () => {
+  const source = [
+    "### tools-1",
+    "",
+    "One sentence per line [[meta-25](../meta.md#meta-25)], one requirement [[meta-29](<.././meta.md#meta-29> \"Meta\")], as [[meta-2](meta.md#meta-2)] says.",
+    "",
+  ].join("\n");
+  const asked: string[] = [];
+  const built = rewriteForRelease(source, {
+    ...release,
+    packageOf: (path) => {
+      asked.push(path);
+      return release.packageOf(path);
+    },
+  });
+  assert.equal(built.text, source.replace(" [[meta-2](meta.md#meta-2)]", ""), "the specs root's meta.md kept byte for byte");
+  assert.deepEqual(built.warnings, [{ kind: "citation", item: "tools-1", target: "packages/meta.md#meta-2" }],
+    "only the meta.md beside the file warned");
+  assert.deepEqual(asked, ["packages/meta.md"], "no package is asked of the specs root's meta.md");
+  // A package `meta` claiming every meta.md by its basename: the specs
+  // root's stays the scaffold's all the same.
+  const claimed = rewriteForRelease(source, { ...release, packageOf: () => "acme/meta" });
+  assert.equal(claimed.text, source.replace("(meta.md#meta-2)", "(spex:acme/meta#meta-2)"), "no claim reaches the specs root's meta.md");
+
+  const deep = "### deep-1\n\nIt shall hold [[meta-15](../../meta.md#meta-15)].\n";
+  assert.deepEqual(rewriteForRelease(deep, { ...release, selfPath: "packages/lib/deep.md" }), { text: deep, warnings: [] });
+  for (const [text, selfPath] of [[built.text, "packages/tools.md"], [deep, "packages/lib/deep.md"]] as const) {
+    assert.deepEqual(rewriteForTree(text, { ...tree, selfPath }), { text, waiting: {} }, "a placed spec keeps its meta.md citations byte for byte");
+  }
+});
+
+test("citations: a file two packages claim is a spec of no package, its warning naming every claim", () => {
+  const source = [
+    "### tools-1",
+    "",
+    "It shall run [[twice-1](twice.md#twice-1)] and [[other-3](other.md#other-3)].",
+    "",
+  ].join("\n");
+  const { text, warnings } = rewriteForRelease(source, {
+    ...release,
+    packageOf: (path) => (path === "packages/twice.md" ? { claims: ["acme/twice", "other/twice"] } : release.packageOf(path)),
+  });
+  assert.equal(text, "### tools-1\n\nIt shall run and [[other-3](spex:acme/other#other-3)].\n", "removed with its brackets, the phrase kept");
+  assert.deepEqual(warnings, [
+    { kind: "citation", item: "tools-1", target: "packages/twice.md#twice-1", claims: ["acme/twice", "other/twice"] },
+  ]);
 });
 
 test("citations: a removal takes its brackets and one space before them, wherever the citation stands", () => {

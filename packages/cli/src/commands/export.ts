@@ -357,20 +357,24 @@ function developedNames(root: string): string[] {
  * The package whose provided spec a specs-relative file is, as building
  * a release's spec asks it (environments-42): the package whose install
  * placed that very file, by the placed specs' record; else, by the
- * file's basename `<pkg>.md`, a package under development at
- * `spex-packages/<org>/<pkg>/` providing its spec; else a package the
- * environment's lock installs providing and selecting it — read from its
- * manifest where its files stand, else from the files the lock selects
- * — each first in name order. A file outside `specs/` is no package's.
+ * file's basename `<pkg>.md`, the one package under development at
+ * `spex-packages/<org>/<pkg>/` providing its spec, or, where two or more
+ * do, their claims, which leave the file no package's; else a package
+ * the environment's lock installs providing and selecting it — read
+ * from its manifest where its files stand, else from the files the lock
+ * selects — first in name order. A file outside `specs/` is no
+ * package's.
  */
-function specOwners(root: string, lock: Lock | null): (specsPath: string) => string | null {
+function specOwners(root: string, lock: Lock | null): (specsPath: string) => string | { claims: string[] } | null {
   const placed = new Map<string, string>();
   for (const [name, spec] of Object.entries(readPlacedRecord(root)?.specs ?? {})) placed.set(posix.normalize(spec.path), name);
-  const byFile = new Map<string, string>();
+  // Each basename with the packages claiming it, in name order.
+  const byFile = new Map<string, string[]>();
   for (const name of developedNames(root)) {
     const manifest = manifestIn(join(root, "spex-packages", ...name.split("/")));
     if (manifest === null || `${manifest.org}/${manifest.name}` !== name || !providesSpec(manifest)) continue;
-    if (!byFile.has(`${manifest.name}.md`)) byFile.set(`${manifest.name}.md`, name);
+    const file = `${manifest.name}.md`;
+    byFile.set(file, [...(byFile.get(file) ?? []), name]);
   }
   for (const [name, resolution] of Object.entries(lock?.packages ?? {}).sort(([a], [b]) => a.localeCompare(b))) {
     const pkg = name.split("/")[1]!;
@@ -379,20 +383,32 @@ function specOwners(root: string, lock: Lock | null): (specsPath: string) => str
     const provided = manifest !== null
       ? manifest.name === pkg && providesSpec(manifest)
       : resolution.files.some((file) => /^specs\/[^/]+\/[^/]+$/.test(file.path) && file.path.endsWith(`/${pkg}.md`));
-    if (provided) byFile.set(`${pkg}.md`, name);
+    if (provided) byFile.set(`${pkg}.md`, [name]);
   }
   return (specsPath) => {
     const path = posix.normalize(specsPath);
     if (path === ".." || path.startsWith("../") || posix.isAbsolute(path)) return null;
-    return placed.get(`specs/${path}`) ?? byFile.get(posix.basename(path)) ?? null;
+    const recorded = placed.get(`specs/${path}`);
+    if (recorded !== undefined) return recorded;
+    const claims = byFile.get(posix.basename(path)) ?? [];
+    if (claims.length === 0) return null;
+    return claims.length === 1 ? claims[0]! : { claims };
   };
 }
 
 /** A warning of the rewrite as a reader reads it (cli-23): the citing
- * item and what it cited. */
+ * item and what it cited, with the packages claiming it alike. */
 function warningLine(warning: CitationWarning): string {
   if (warning.kind === "record") return `Warning: ${warning.item} links ${warning.target} — the release keeps its text, not the link`;
-  return `Warning: ${warning.item} cites ${posix.normalize(`specs/${warning.target}`)}, a spec of no package — left out of the release, its phrase kept`;
+  const target = posix.normalize(`specs/${warning.target}`);
+  if (warning.claims !== undefined) return `Warning: ${warning.item} cites ${target}, which ${claimants(warning.claims)} claim — left out of the release, its phrase kept`;
+  return `Warning: ${warning.item} cites ${target}, a spec of no package — left out of the release, its phrase kept`;
+}
+
+/** "a and b both", or "a, b and c all". */
+function claimants(names: string[]): string {
+  const listed = names.length === 2 ? names.join(" and ") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  return `${listed} ${names.length === 2 ? "both" : "all"}`;
 }
 
 // -- the folder ----------------------------------------------------------
