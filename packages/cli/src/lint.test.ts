@@ -741,6 +741,7 @@ describe("lintSpecs", () => {
       specs: {
         "acme/tools": {
           path: "specs/packages/tools.md",
+          version: "1.0.0",
           sha256: "0".repeat(64),
           waiting: { "acme/other": 1 },
         },

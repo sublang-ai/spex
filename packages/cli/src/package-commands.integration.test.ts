@@ -515,7 +515,7 @@ test("cli-15: list says the lock is missing or stale, and a skill a folder of yo
   assert.doesNotMatch(broken, /release/, "[cli-6] no word of the library's own");
 });
 
-test("cli-15: a package's spec is placed in specs/, its links waiting until their package is added, a hand edit left as yours and kept at the removal", async () => {
+test("cli-15: a package's spec is placed in specs/ under its marker line, its links waiting until their package is added, a hand edit left as yours, at the removal too", async () => {
   const dir = workingFolder(join(SCRATCH, "placing"));
   writeFileSync(join(dir, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages: {}\n`);
   await ok(dir, "scaffold");
@@ -524,7 +524,9 @@ test("cli-15: a package's spec is placed in specs/, its links waiting until thei
 
   // Added from the registry: placed, both cited packages waiting.
   const added = await ok(dir, "add", "demo/spec");
-  assert.match(added, /^Added demo\/spec 1\.0\.0\n {2}spec in specs\/packages\/spec\.md\n {2}1 links wait for demo\/absent — spex add demo\/absent\n {2}1 links wait for demo\/other — spex add demo\/other$/m, "[cli-2] the spec's line and one line per package its links wait for");
+  assert.match(added, /^Added demo\/spec 1\.0\.0\n {2}spec in specs\/packages\/spec\.md\n {2}1 link waits for demo\/absent — spex add demo\/absent\n {2}1 link waits for demo\/other — spex add demo\/other$/m, "[cli-2] the spec's line and one line per package its links wait for");
+  assert.ok(readFileSync(placed, "utf8").startsWith("<!-- Placed by Spex from demo/spec 1.0.0; an edit makes this file yours. -->\n\n# spec: Spec\n"), "[cli-2] the placed file opens with the marker line naming the package and version, then a blank line");
+  assert.equal(readPlacedRecord(dir)?.specs["demo/spec"]?.version, "1.0.0", "[cli-2] the release's version recorded");
   assert.match(readFileSync(placed, "utf8"), /^The spec shall build on the other and the absent\.$/m, "[cli-2] each waiting citation removed, the phrase kept");
   assert.doesNotMatch(readFileSync(placed, "utf8"), /spex:/, "[cli-2] specs/ holds no address");
   assert.equal(existsSync(join(dir, ".claude", "skills", "demo-spec")), false, "[cli-2] no spec skill where specs/ stands");
@@ -535,22 +537,22 @@ test("cli-15: a package's spec is placed in specs/, its links waiting until thei
   const other = await ok(dir, "add", "demo/other", "--path", "kits/other");
   assert.match(other, /^Added demo\/other 1\.0\.0\n {2}spec in specs\/packages\/other\.md$/m);
   assert.match(readFileSync(placed, "utf8"), /^The spec shall build on the other \[\[other-1\]\(other\.md#other-1\)\] and the absent\.$/m, "[cli-2] the citation of demo/other a relative link once its spec stands");
-  assert.equal(readFileSync(join(dir, "specs", "packages", "other.md"), "utf8"), OTHER_MD);
+  assert.equal(readFileSync(join(dir, "specs", "packages", "other.md"), "utf8"), `<!-- Placed by Spex from demo/other 1.0.0; an edit makes this file yours. -->\n\n${OTHER_MD}`);
 
   const listed = await ok(dir, "list");
-  assert.match(listed, /^Installed\n {2}demo\/other +1\.0\.0 +from folder kits\/other +installed\n {4}spec in specs\/packages\/other\.md\n {2}demo\/spec +1\.0\.0 +from the registry +installed\n {4}spec in specs\/packages\/spec\.md\n {4}1 links wait for demo\/absent — spex add demo\/absent\n/m, "[cli-6] beneath each package its spec's place, then the packages its links wait for");
+  assert.match(listed, /^Installed\n {2}demo\/other +1\.0\.0 +from folder kits\/other +installed\n {4}spec in specs\/packages\/other\.md\n {2}demo\/spec +1\.0\.0 +from the registry +installed\n {4}spec in specs\/packages\/spec\.md\n {4}1 link waits for demo\/absent — spex add demo\/absent\n/m, "[cli-6] beneath each package its spec's place, then the packages its links wait for");
 
-  // A hand edit: left standing, read as edited.
+  // A hand edit under the marker line: left standing, read as edited.
   const edited = `${readFileSync(placed, "utf8")}\nOur own note.\n`;
   writeFileSync(placed, edited);
   const installed = await ok(dir, "install");
-  assert.match(installed, /^Already installed demo\/spec 1\.0\.0\n {2}spec edited in specs\/packages\/spec\.md — left as yours$/m, "[cli-4] the edited copy reported");
+  assert.match(installed, /^Already installed demo\/spec 1\.0\.0\n {2}spec edited in specs\/ — left as yours$/m, "[cli-4] the edited copy reported, no version waiting");
   assert.equal(readFileSync(placed, "utf8"), edited, "[cli-4] and left as it stands");
-  assert.match(await ok(dir, "list"), /^ {2}demo\/spec +1\.0\.0 +from the registry +installed\n {4}spec edited in specs\/packages\/spec\.md — left as yours\n/m, "[cli-6] read edited");
+  assert.match(await ok(dir, "list"), /^ {2}demo\/spec +1\.0\.0 +from the registry +installed\n {4}spec edited in specs\/ — left as yours\n/m, "[cli-6] read edited");
 
-  // Removed: the edited copy kept as the project's own, an unedited one gone.
+  // Removed: the edited copy left as the project's own, an unedited one gone.
   const removed = await ok(dir, "remove", "demo/spec");
-  assert.match(removed, /^Removed demo\/spec 1\.0\.0\n {2}spec edited in specs\/packages\/spec\.md — kept as yours$/m, "[cli-3] the kept copy reported");
+  assert.match(removed, /^Removed demo\/spec 1\.0\.0\n {2}spec edited in specs\/ — left as yours$/m, "[cli-3] the edited copy reported in the same words");
   assert.equal(readFileSync(placed, "utf8"), edited, "[cli-3] the edited copy stays");
   assert.deepEqual(Object.keys(readPlacedRecord(dir)?.specs ?? {}), ["demo/other"], "[cli-3] no longer Spex's copy");
   await ok(dir, "remove", "demo/other");

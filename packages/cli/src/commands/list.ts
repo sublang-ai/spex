@@ -7,8 +7,9 @@
 // with its version or folder; each package installed, with its version,
 // where it comes from, the packages it came for and whether its files
 // stand, beneath one providing a spec where that spec stands in
-// `specs/` and the packages its links wait for, read from the install
-// record and the files with no placement run (environments-41); each
+// `specs/` and the packages its links wait for, read from the files,
+// their marker lines and the install record as an install would find
+// them, with no placement run (environments-41); each
 // skill with the agent folders it is placed in; and, where `spex.lock`
 // is missing or stale, or a package is not installed, the command to
 // run: `spex update` for a stale lock, as the Packages tab's chip offers
