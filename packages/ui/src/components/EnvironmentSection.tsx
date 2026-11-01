@@ -9,8 +9,10 @@
 // changed" with Update, "Not in the agents' folders" with Place skills
 // again — then one row per package spex.yaml names, each package it
 // requires under it: its name, its version, a source glyph, what it
-// provides and its standing, Remove and Publish in its overflow; the
-// built-in playbooks as one quiet line, never a removable row. Neither
+// provides and its standing, Remove and Publish in its overflow,
+// expanding to one line per artifact with its one act — a playbook's
+// Enable writing this heading's config in place; the built-in
+// playbooks as one quiet line, never a removable row. Neither
 // heading names the spex repository behind it (DR-159). A sync, an
 // update or an install running beside it refuses nothing (DR-111): its
 // progress shows by the heading, and a change the core refuses shows its
@@ -28,7 +30,6 @@ import { usePlaceStore } from "../state/place-context.js";
 import {
   PACKAGES_FOLDER,
   SPEC_PACKAGE_NAME_RULE,
-  artifactKindWord,
   busyWord,
   isBuiltinPackage,
   nameFromFolder,
@@ -48,6 +49,7 @@ import { PublishControl } from "./PublishControl.js";
 import { RegistryAccount, registrySignInTitle, useRegistrySignIn } from "./RegistryAccount.js";
 import { MoreMenu, type MenuEntry } from "./SpaceMenu.js";
 import { signingInLabel } from "./SpaceSignIn.js";
+import { PackageArtifacts, hasArtifactLines } from "./PackageArtifacts.js";
 
 const BUTTON =
   "min-h-6 shrink-0 whitespace-nowrap rounded-md border border-neutral-300 px-2 py-0.5 text-xs text-neutral-700 hover:bg-neutral-100 disabled:opacity-40 disabled:hover:bg-transparent dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800";
@@ -162,6 +164,9 @@ function PackageRow({
   depth,
   state,
   repository,
+  projectId,
+  projectName,
+  personal,
   target,
   onNavigate,
 }: {
@@ -170,10 +175,20 @@ function PackageRow({
   depth: number;
   state: EnvironmentState;
   repository: string;
+  /** The project whose tab this is, and its name as the lines say it. */
+  projectId: string;
+  projectName: string;
+  /** The heading is "Personal": its playbooks enable in your own config. */
+  personal: boolean;
   target: PublishTarget | undefined;
   onNavigate?: (surface: "Settings" | "Space") => void;
 }) {
   const store = usePlaceStore();
+  const linesId = useId();
+  // A row expands to its artifacts, one line each with its one act
+  // (playbook-library-92); it stands folded until the reader opens it.
+  const [expanded, setExpanded] = useState(false);
+  const expandable = hasArtifactLines(pkg);
   const install = store((current) => current.installEnvironment);
   const removePackage = store((current) => current.removeSpecPackage);
   const account = useRegistrySignIn(state.registry?.origin);
@@ -326,6 +341,25 @@ function PackageRow({
       className="flex flex-col gap-1 rounded-md border border-neutral-200 bg-white px-3 py-2 text-xs dark:border-neutral-800 dark:bg-neutral-900"
     >
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        {expandable ? (
+          <button
+            type="button"
+            data-testid={`env-expand-${name}`}
+            aria-expanded={expanded}
+            aria-controls={expanded ? linesId : undefined}
+            aria-label={i18n._({
+              id: "What {name} provides",
+              comment: "accessible name of a package row's disclosure on the Packages tab: it shows the package's playbooks, skills, spec and applets, each with its act; {name} is the package",
+              values: { name },
+            })}
+            onClick={() => setExpanded((current) => !current)}
+            className="-ml-1 flex h-6 w-6 shrink-0 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+          >
+            <Icon name={expanded ? "caretDown" : "caretRight"} className="h-3.5 w-3.5" />
+          </button>
+        ) : (
+          <span aria-hidden className="-ml-1 h-6 w-6 shrink-0" />
+        )}
         <span className="min-w-0 truncate font-mono text-sm font-semibold" title={name}>
           {name}
         </span>
@@ -367,37 +401,17 @@ function PackageRow({
           }}
         />
       ) : null}
-      {pkg && pkg.artifacts.length > 0 ? (
-        <ul data-testid={`env-artifacts-${name}`} className="flex flex-wrap gap-1">
-          {pkg.artifacts.map((artifact) => (
-            <li
-              key={`${artifact.kind}:${artifact.id}`}
-              data-testid={`env-artifact-${name}-${artifact.id}`}
-              className="flex items-center gap-1 rounded bg-neutral-100 px-1.5 py-0.5 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300"
-            >
-              <span className="font-mono">{artifact.id}</span>
-              <span className="text-neutral-500">{artifactKindWord(artifact.kind)}</span>
-              {artifact.language ? <span className="font-mono">{artifact.language}</span> : null}
-              {artifact.fallback ? (
-                <span
-                  data-testid={`env-fallback-${name}-${artifact.id}`}
-                  title={
-                    state.language
-                      ? i18n._({
-                          id: "No {language} text; the original stands",
-                          comment: "the title of an artifact's fallback mark: it has no text in the wanted language; {language} is that language's code",
-                          values: { language: state.language },
-                        })
-                      : i18n._({ id: "The original text stands", comment: "the title of an artifact's fallback mark: it has no text in the wanted language" })
-                  }
-                  className="rounded bg-amber-100 px-1 text-amber-800 dark:bg-amber-950 dark:text-amber-200"
-                >
-                  {i18n._({ id: "fallback", comment: "mark: this artifact's wanted language was missing, the original stands" })}
-                </span>
-              ) : null}
-            </li>
-          ))}
-        </ul>
+      {expanded && pkg && expandable ? (
+        <PackageArtifacts
+          id={linesId}
+          name={name}
+          pkg={pkg}
+          state={state}
+          repository={repository}
+          projectId={projectId}
+          projectName={projectName}
+          personal={personal}
+        />
       ) : null}
       {publishing > 0 && direct && publishable && request?.kind === "path" ? (
         <PublishControl
@@ -537,13 +551,18 @@ function Receipt({
 export function EnvironmentSection({
   repository,
   projectId,
+  projectName,
   personal = false,
   onNavigate,
 }: {
   repository: string;
-  /** The project whose tab this is: its Playbooks tab is where a
-   * package's playbook is enabled. */
+  /** The project whose tab this is: the playbook lists read for it
+   * name each row's playbooks, and the receipt's Enable opens its
+   * Playbooks tab. */
   projectId: string;
+  /** The project's name, as an enabled playbook's line says it
+   * (playbook-library-92). */
+  projectName: string;
   /** The packages added for yourself, available in every project. */
   personal?: boolean;
   onNavigate?: (surface: "Settings" | "Space") => void;
@@ -728,6 +747,9 @@ export function EnvironmentSection({
                 depth={row.depth}
                 state={state}
                 repository={repository}
+                projectId={projectId}
+                projectName={projectName}
+                personal={personal}
                 target={target}
                 onNavigate={onNavigate}
               />

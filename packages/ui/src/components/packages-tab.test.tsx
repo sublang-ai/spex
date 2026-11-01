@@ -8,7 +8,9 @@
 // there and one "Add…"; each row's name, version, source glyph, what it
 // provides and its standing, the required package under the one
 // requiring it; the built-in playbooks as one line; the chips with
-// Update and Place skills again; Remove in the overflow; Add…'s Registry,
+// Update and Place skills again; Remove in the overflow; a row expanding
+// to its artifacts, a playbook's Enable writing that heading's config in
+// place (playbook-library-3); Add…'s Registry,
 // Folder and Git tabs with the receipt; Publish from a folder package's
 // overflow; every control standing while that spex repository syncs and
 // while the core installs, every command naming that heading's spex
@@ -23,6 +25,7 @@ import type { CommandResults, EnvironmentState, RegistryState } from "@sublang/s
 import { PackagesTab } from "./PackagesTab.js";
 import { instanceState } from "../fixtures/groups-state.js";
 import { deliverServerMessageForTests, setClientForTests, useAppStore } from "../state/store.js";
+import { NEUTRAL_BLOCK } from "../lib/config-ops.js";
 import {
   CONFIG_STATE,
   OWN_ENVIRONMENT,
@@ -436,6 +439,214 @@ describe("playbook-library-94: Remove", () => {
     await vi.waitFor(() =>
       expect(commandMock).toHaveBeenCalledWith("environment.remove", { repository: PROJECT_ID, name: "acme/labels" }),
     );
+  });
+});
+
+describe("playbook-library-94: a row's artifacts", () => {
+  /** The lists the core reads again after a write: what the config
+   * enables moves with each `playbook.add` (playbook-library-3). */
+  function listsFollowEdits(lists: CommandResults["environment.playbooks"]) {
+    const base = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) => {
+      if (type === "environment.playbooks") return lists;
+      if (type === "config.edit") {
+        const op = params?.op as { kind: string; playbookId?: string };
+        if (op.kind === "playbook.add") {
+          const side = params?.repository === PROJECT_ID ? lists.project : lists.own;
+          const entry = side?.find((candidate) => candidate.id === op.playbookId);
+          if (entry) entry.enabled = [...entry.enabled, params?.repository === PROJECT_ID ? "project" : "own"];
+        }
+        return CONFIG_STATE;
+      }
+      return base(type, params);
+    });
+  }
+
+  test("a row expands to one line per artifact; a playbook's Enable writes the project's config in place and then reads Enabled in the project", async () => {
+    environments[PROJECT_ID] = {
+      ...environments[PROJECT_ID]!,
+      packages: environments[PROJECT_ID]!.packages.map((pkg) =>
+        pkg.name === "acme/triage"
+          ? { ...pkg, exports: [{ name: "triage", artifact: "triage" }, { name: "acme-triage", artifact: "triage-spec" }] }
+          : pkg,
+      ),
+    };
+    listsFollowEdits({
+      project: [available({ id: "triage", package: "acme/triage", version: "1.2.3", source: "registry", repository: PROJECT_ID })],
+      own: [available({ id: "code", roles: ["coder", "reviewer"] })],
+    });
+    await renderTab();
+    const row = projectSection().getByTestId("env-package-acme/triage");
+    // [playbook-library-92] a disclosure with its accessible name,
+    // folded at first.
+    const disclosure = within(row).getByRole("button", { name: "What acme/triage provides" });
+    expect(disclosure.getAttribute("aria-expanded")).toBe("false");
+    expect(within(row).queryByTestId("env-artifacts-acme/triage")).toBeNull();
+    fireEvent.click(disclosure);
+    expect(disclosure.getAttribute("aria-expanded")).toBe("true");
+    const lines = within(row).getByTestId("env-artifacts-acme/triage");
+    expect(disclosure.getAttribute("aria-controls")).toBe(lines.id);
+    // [playbook-library-92] one line per artifact: the playbook with
+    // Enable, the spec placed as a skill wearing its fallback mark.
+    const playbook = within(lines).getByTestId("env-artifact-acme/triage-triage");
+    expect(playbook.textContent).toBe("/triage·Enable");
+    const spec = within(lines).getByTestId("env-artifact-acme/triage-triage-spec");
+    expect(spec.textContent).toBe("spec · placed as a skillfallback");
+    expect(within(spec).getByTestId("env-fallback-acme/triage-triage-spec").title).toBe("No zh-Hans text; the original stands");
+    expect(within(playbook).queryByTestId("env-fallback-acme/triage-triage")).toBeNull();
+    // The playbook line's Enable says whom it reaches.
+    const enable = await within(playbook).findByRole("button", { name: "Enable /triage" });
+    expect(enable.title).toBe("For you and every member of demo");
+    fireEvent.click(enable);
+    // [playbook-library-3] the Playbooks tab's write, into the project's
+    // config: a player per role, none minted where the roster holds it.
+    await vi.waitFor(() =>
+      expect(commandMock).toHaveBeenCalledWith("config.edit", {
+        repository: PROJECT_ID,
+        op: { kind: "playbook.add", playbookId: "triage", roles: { coder: "dev.coder" } },
+      }),
+    );
+    expect(commandMock).not.toHaveBeenCalledWith("config.edit", expect.objectContaining({ op: expect.objectContaining({ kind: "player.set" }) }));
+    // [playbook-library-92] after: where it is enabled, focus kept on the line.
+    const enabled = await within(playbook).findByTestId("env-enabled-acme/triage-triage");
+    expect(enabled.textContent).toBe("Enabled in demo");
+    await vi.waitFor(() => expect(document.activeElement).toBe(enabled));
+    expect(within(playbook).queryByRole("button", { name: "Enable /triage" })).toBeNull();
+    // A row with nothing to show has no disclosure.
+    update(PROJECT_ID, {
+      ...environments[PROJECT_ID]!,
+      requests: { ...environments[PROJECT_ID]!.requests, "private/notes": { kind: "registry", version: "~1.2.0" } },
+    });
+    expect(within(projectSection().getByTestId("env-package-private/notes")).queryByRole("button", { name: /provides$/ })).toBeNull();
+  });
+
+  test("under Personal, Enable writes your own config, minting the player your roster lacks first, then reads Enabled · Personal; a refusal shows in place", async () => {
+    environments[OWN_KEY] = {
+      ...environments[OWN_KEY]!,
+      requests: { ...OWN_ENVIRONMENT.requests, "acme/notes": { kind: "registry", version: "^0.2.0" } },
+      packages: [
+        ...OWN_ENVIRONMENT.packages,
+        specPackage({
+          name: "acme/notes",
+          version: "0.2.0",
+          artifacts: [{ id: "note", kind: "playbook", language: "en", fallback: false }],
+          exports: [{ name: "note", artifact: "note" }],
+        }),
+      ],
+    };
+    listsFollowEdits({
+      project: [],
+      own: [available({ id: "note", command: "jot", roles: ["Writer"], package: "acme/notes", version: "0.2.0", source: "registry" })],
+    });
+    let refuse = true;
+    const followed = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) => {
+      if (type === "config.edit" && refuse && (params?.op as { kind: string }).kind === "playbook.add") {
+        refuse = false;
+        throw new Error("The config changed meanwhile — retry");
+      }
+      return followed(type, params);
+    });
+    await renderTab();
+    const row = personalSection().getByTestId("env-package-acme/notes");
+    fireEvent.click(within(row).getByRole("button", { name: "What acme/notes provides" }));
+    const line = within(row).getByTestId("env-artifact-acme/notes-note");
+    // The playbook reads by its command.
+    const enable = await within(line).findByRole("button", { name: "Enable /jot" });
+    expect(enable.title).toBe("For you, in every project of yours");
+    fireEvent.click(enable);
+    // [playbook-library-92] a refusal shows its cause in place, Enable standing.
+    expect((await within(line).findByTestId("env-enable-error-acme/notes-note")).textContent).toBe(
+      "The config changed meanwhile — retry",
+    );
+    expect(within(line).getByRole("button", { name: "Enable /jot" })).toBeTruthy();
+    commandMock.mockClear();
+    fireEvent.click(within(line).getByRole("button", { name: "Enable /jot" }));
+    // [playbook-library-3] the player your roster lacks first, then the
+    // entry in your own config.
+    await vi.waitFor(() =>
+      expect(commandMock).toHaveBeenCalledWith("config.edit", {
+        repository: OWN_KEY,
+        op: { kind: "playbook.add", playbookId: "note", roles: { Writer: "dev.writer" } },
+      }),
+    );
+    const edits = commandMock.mock.calls.filter(([type]) => type === "config.edit").map(([, params]) => params);
+    expect(edits[0]).toEqual({ op: { kind: "player.set", playerId: "dev.writer", patch: NEUTRAL_BLOCK } });
+    expect(edits).toHaveLength(2);
+    expect((await within(line).findByTestId("env-enabled-acme/notes-note")).textContent).toBe("Enabled · Personal");
+    expect(within(line).queryByTestId("env-enable-error-acme/notes-note")).toBeNull();
+  });
+
+  test("skills read placed for your agents or not placed, the spec placed as a skill, an applet its page opening its tab", async () => {
+    environments[PROJECT_ID] = {
+      ...environments[PROJECT_ID]!,
+      requests: {
+        ...PROJECT_ENVIRONMENT.requests,
+        "acme/kit": { kind: "registry", version: "^1.0.0" },
+        "acme/away": { kind: "registry", version: "^1.0.0" },
+      },
+      packages: [
+        ...PROJECT_ENVIRONMENT.packages,
+        specPackage({
+          name: "acme/kit",
+          artifacts: [
+            { id: "greet", kind: "skill", language: "en", fallback: false },
+            { id: "kit", kind: "spec", language: "en", fallback: false },
+            { id: "report", kind: "applet", language: null, fallback: false },
+            { id: "review", kind: "skill", language: "en", fallback: true },
+            { id: "notes", kind: "source", language: "en", fallback: false },
+          ],
+          exports: [
+            { name: "acme-kit", artifact: "kit" },
+            { name: "greet", artifact: "greet" },
+            { name: "review", artifact: "review" },
+          ],
+        }),
+        specPackage({
+          name: "acme/away",
+          artifacts: [
+            { id: "away", kind: "skill", language: "en", fallback: false },
+            { id: "board", kind: "applet", language: null, fallback: false },
+          ],
+          exports: [{ name: "away", artifact: "away" }],
+          installed: false,
+        }),
+      ],
+    };
+    await renderTab();
+    const kit = projectSection().getByTestId("env-package-acme/kit");
+    fireEvent.click(within(kit).getByRole("button", { name: "What acme/kit provides" }));
+    const lines = within(kit).getByTestId("env-artifacts-acme/kit");
+    // [playbook-library-92] every skill placed: one line naming them;
+    // a source has no line of its own.
+    expect(within(lines).getByTestId("env-skills-placed-acme/kit").textContent).toBe(
+      "skills: greet, review · placed for your agentsfallback",
+    );
+    expect(within(lines).queryByTestId("env-skills-unplaced-acme/kit")).toBeNull();
+    expect(within(lines).getByTestId("env-artifact-acme/kit-kit").textContent).toBe("spec · placed as a skill");
+    expect(within(lines).queryByTestId("env-artifact-acme/kit-notes")).toBeNull();
+    expect(within(lines).getAllByRole("listitem")).toHaveLength(3);
+    // [playbook-library-92] an applet's page opens its tab (applets-1).
+    const applet = within(lines).getByTestId("env-artifact-acme/kit-report");
+    expect(applet.textContent).toBe("report·its page");
+    fireEvent.click(within(applet).getByRole("button", { name: "Open report" }));
+    expect(useAppStore.getState().workspaceTabs[PROJECT_ID]).toBe(`applet:${PROJECT_ID}:report`);
+    // A skill the last placing kept out of an agent folder reads not
+    // placed beside the others; the spec's skill missed reads so too.
+    update(PROJECT_ID, {
+      ...environments[PROJECT_ID]!,
+      unexported: { skipped: [{ name: "review", folder: ".agents/skills" }, { name: "acme-kit", folder: ".claude/skills" }], missing: [] },
+    });
+    expect(within(lines).getByTestId("env-skills-placed-acme/kit").textContent).toBe("skill: greet · placed for your agents");
+    expect(within(lines).getByTestId("env-skills-unplaced-acme/kit").textContent).toBe("skill: review · not placedfallback");
+    expect(within(lines).getByTestId("env-artifact-acme/kit-kit").textContent).toBe("spec · not placed");
+    // A package whose files are not here: its skills not placed, its
+    // applet with no page to open.
+    const away = projectSection().getByTestId("env-package-acme/away");
+    fireEvent.click(within(away).getByRole("button", { name: "What acme/away provides" }));
+    expect(within(away).getByTestId("env-skills-unplaced-acme/away").textContent).toBe("skill: away · not placed");
+    expect(within(away).getByTestId("env-artifact-acme/away-board").textContent).toBe("board");
+    expect(within(away).queryByRole("button", { name: "Open board" })).toBeNull();
   });
 });
 

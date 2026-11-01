@@ -47,6 +47,7 @@ import {
   packageOrgRuleText,
 } from "../lib/drafts.js";
 import { ownRepositoryKey } from "../lib/environments.js";
+import { enablePlaybook, rolePlayer } from "../lib/enable-playbook.js";
 import { i18n } from "../i18n.js";
 import { phaseLabel } from "../lib/compile-log.js";
 import { playbookIntent } from "../lib/playbook-intent.js";
@@ -519,35 +520,24 @@ function PlaybookRow({
   const command = entry.command ?? entry.id;
   // A built-in's intent in the reader's language (localization-4).
   const intent = playbookIntent(entry.intent);
-  const laneFor = (role: string): string => (players[role] ?? newPlayerId(role)).trim();
+  const laneFor = (role: string): string => rolePlayer(role, players);
   const badLane = entry.roles.find((role) => !playerIdSchema.safeParse(laneFor(role)).success);
 
   async function enable(): Promise<void> {
     if (badLane !== undefined) return;
     setBusy(true);
     setError(undefined);
-    // A player the roster lacks is written to your own roster first,
-    // carrying the block chosen for its role, so no binding is written
-    // dangling (playbook-library-3); two roles naming one player write
-    // it once, from the first.
-    const existing = new Set(roster.map((player) => player.id));
-    const mint = entry.roles
-      .map((role) => [laneFor(role), role] as const)
-      .filter(([id], index, all) => all.findIndex(([other]) => other === id) === index)
-      .filter(([id]) => !existing.has(id));
+    // The one write behind Enable (playbook-library-3): a player the
+    // roster lacks is written to your own roster first, carrying the
+    // block chosen for its role, so no binding is written dangling.
     try {
-      for (const [playerId, role] of mint) {
-        await store.getClient().command("config.edit", {
-          op: { kind: "player.set", playerId, patch: blocks[role] ?? NEUTRAL_BLOCK },
-        });
-      }
-      await store.getClient().command("config.edit", {
+      await enablePlaybook(store.getClient(), {
         repository,
-        op: {
-          kind: "playbook.add",
-          playbookId: entry.id,
-          roles: Object.fromEntries(entry.roles.map((role) => [role, laneFor(role)])),
-        },
+        playbookId: entry.id,
+        roles: entry.roles,
+        roster,
+        players,
+        blocks,
       });
       onChanged();
     } catch (cause) {

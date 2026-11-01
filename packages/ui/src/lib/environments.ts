@@ -251,22 +251,6 @@ export function providesPhrase(artifacts: readonly EnvironmentPackage["artifacts
   return parts.join(" · ");
 }
 
-/** An artifact's kind in one word (DR-104). */
-export function artifactKindWord(kind: EnvironmentPackage["artifacts"][number]["kind"]): string {
-  switch (kind) {
-    case "source":
-      return i18n._({ id: "source", comment: "a spec package's artifact kind: source material" });
-    case "spec":
-      return i18n._({ id: "spec", comment: "a spec package's artifact kind: the spec" });
-    case "skill":
-      return i18n._({ id: "skill", comment: "a spec package's artifact kind: an Agent Skills folder" });
-    case "playbook":
-      return i18n._({ id: "playbook", comment: "a spec package's artifact kind: a playbook" });
-    case "applet":
-      return i18n._({ id: "applet", comment: "a spec package's artifact kind: a static web page the IDE shows in a tab" });
-  }
-}
-
 /** The name a package under development's folder gives it
  * (environments-10): `<org>/<pkg>` for `spex-packages/<org>/<pkg>`,
  * else undefined, where Add…'s Folder tab asks for the name. */

@@ -294,6 +294,16 @@ msgstr "{count, plural, one {Keep this computer's version? {name}'s stays in Git
 msgid "{count, plural, one {Pull-request delivery is unavailable until {names} is enabled below; /dev without a pull request still runs.} other {Pull-request delivery is unavailable until {names} are enabled below; /dev without a pull request still runs.}}"
 msgstr "{count, plural, one {Pull-request delivery is unavailable until {names} is enabled below; /dev without a pull request still runs.} other {Pull-request delivery is unavailable until {names} are enabled below; /dev without a pull request still runs.}}"
 
+#. a package's skills line on the Packages tab: its skills, by id, are not in the agents' folders; {ids} lists them
+#: src/components/PackageArtifacts.tsx
+msgid "{count, plural, one {skill: {ids} · not placed} other {skills: {ids} · not placed}}"
+msgstr "{count, plural, one {skill: {ids} · not placed} other {skills: {ids} · not placed}}"
+
+#. a package's skills line on the Packages tab: its skills, by id, stand in the agents' folders; {ids} lists them
+#: src/components/PackageArtifacts.tsx
+msgid "{count, plural, one {skill: {ids} · placed for your agents} other {skills: {ids} · placed for your agents}}"
+msgstr "{count, plural, one {skill: {ids} · placed for your agents} other {skills: {ids} · placed for your agents}}"
+
 #. Apply's confirm where some choices take the Space's side; {name} is the Space's display name, {count} how many records it replaces
 #: src/components/SpaceSync.tsx
 msgid "{count, plural, one {Take {name}'s version of # record?} other {Take {name}'s version of # records?}} The other stays in Git history; a replaced session loses its resume hints and where you stopped reading"
@@ -1364,11 +1374,6 @@ msgstr "Anything that differs asks you to choose"
 #: src/state/store.ts
 msgid "app state failed to load: {reason}"
 msgstr "app state failed to load: {reason}"
-
-#. a spec package's artifact kind: a static web page the IDE shows in a tab
-#: src/lib/environments.ts
-msgid "applet"
-msgstr "applet"
 
 #. the accessible name of the frame an applet's page shows in
 #: src/components/AppletTab.tsx
@@ -3044,13 +3049,16 @@ msgstr "Effort options apply to the adapter; support for this model is unverifie
 #. enable this playbook in this config
 #. enable this playbook in this config
 #. enable this playbook in this config
+#. enable this playbook in this config
 #: src/components/AuthoringWorkspace.tsx
 #: src/components/DraftRegisterTab.tsx
 #: src/components/EnvironmentSection.tsx
+#: src/components/PackageArtifacts.tsx
 #: src/components/PlaybooksTab.tsx
 msgid "Enable"
 msgstr "Enable"
 
+#: src/components/PackageArtifacts.tsx
 #: src/components/PlaybooksTab.tsx
 msgid "Enable /{command}"
 msgstr "Enable /{command}"
@@ -3077,6 +3085,11 @@ msgstr "Enable for {project}"
 msgid "Enabled"
 msgstr "Enabled"
 
+#. a package's playbook line on the Packages tab: enabled in your Personal config, for every project of yours
+#: src/components/PackageArtifacts.tsx
+msgid "Enabled · Personal"
+msgstr "Enabled · Personal"
+
 #. after enabling an authored playbook: sessions already running do not offer it until restarted
 #: src/components/PlaybooksTab.tsx
 msgid "Enabled · restart running sessions to use it"
@@ -3086,13 +3099,20 @@ msgstr "Enabled · restart running sessions to use it"
 msgid "Enabled /{command}"
 msgstr "Enabled /{command}"
 
+#. a package's playbook line on the Packages tab: enabled in the project's config, for every member; {project} is the project's name
+#: src/components/PackageArtifacts.tsx
+msgid "Enabled in {project}"
+msgstr "Enabled in {project}"
+
 #: src/components/DraftRegisterTab.tsx
 msgid "Enables the last compile — the source changed since."
 msgstr "Enables the last compile — the source changed since."
 
 #. the enable request is in flight
 #. the enable request is in flight
+#. the enable request is in flight
 #: src/components/DraftRegisterTab.tsx
+#: src/components/PackageArtifacts.tsx
 #: src/components/PlaybooksTab.tsx
 msgid "Enabling…"
 msgstr "Enabling…"
@@ -3273,7 +3293,7 @@ msgid "Failed workflow"
 msgstr "Failed workflow"
 
 #. mark: this artifact's wanted language was missing, the original stands
-#: src/components/EnvironmentSection.tsx
+#: src/components/PackageArtifacts.tsx
 msgid "fallback"
 msgstr "fallback"
 
@@ -3451,11 +3471,15 @@ msgid "For this conversation, from the next message"
 msgstr "For this conversation, from the next message"
 
 #. tooltip of Enable on a playbook the project's packages list: it is written to the project's config
+#. tooltip of Enable on a playbook the project's packages list: it is written to the project's config
+#: src/components/PackageArtifacts.tsx
 #: src/components/PlaybooksTab.tsx
 msgid "For you and every member of {project}"
 msgstr "For you and every member of {project}"
 
 #. tooltip of Enable on a playbook your Personal packages list: it is written to your Personal config
+#. tooltip of Enable on a playbook your Personal packages list: it is written to your Personal config
+#: src/components/PackageArtifacts.tsx
 #: src/components/PlaybooksTab.tsx
 msgid "For you, in every project of yours"
 msgstr "For you, in every project of yours"
@@ -3957,6 +3981,11 @@ msgstr "Its files are not on this computer"
 msgid "Its package"
 msgstr "Its package"
 
+#. an applet's line on the Packages tab: opens the applet's page, its tab in the project
+#: src/components/PackageArtifacts.tsx
+msgid "its page"
+msgstr "its page"
+
 #: src/components/SpecView.tsx
 msgid "Its specs/ tree holds an earlier layout's directories: the user/, dev/, test/ or items/ groups, or an interactions/ or compositions/ collection."
 msgstr "Its specs/ tree holds an earlier layout's directories: the user/, dev/, test/ or items/ groups, or an interactions/ or compositions/ collection."
@@ -4425,7 +4454,7 @@ msgid "Next tab in Projects"
 msgstr "Next tab in Projects"
 
 #. the title of an artifact's fallback mark: it has no text in the wanted language; {language} is that language's code
-#: src/components/EnvironmentSection.tsx
+#: src/components/PackageArtifacts.tsx
 msgid "No {language} text; the original stands"
 msgstr "No {language} text; the original stands"
 
@@ -4892,6 +4921,11 @@ msgstr "Only pairs with ≥ {field} {count, plural, one {citation} other {citati
 msgid "Open"
 msgstr "Open"
 
+#. accessible name of an applet's line on the Packages tab, its page: opens the applet's tab; {applet} is its id
+#: src/components/PackageArtifacts.tsx
+msgid "Open {applet}"
+msgstr "Open {applet}"
+
 #: src/components/RecordRow.tsx
 msgid "Open {id}"
 msgstr "Open {id}"
@@ -5282,11 +5316,6 @@ msgstr "Placing…"
 #: src/lib/playbook-intent.ts
 msgid "plan the development path for a request: direct implementation, or a durable decision first, delivered through a pull request when the request names a GitHub issue or asks for one"
 msgstr "plan the development path for a request: direct implementation, or a durable decision first, delivered through a pull request when the request names a GitHub issue or asks for one"
-
-#. a spec package's artifact kind: a playbook
-#: src/lib/environments.ts
-msgid "playbook"
-msgstr "playbook"
 
 #: src/components/DraftRegisterTab.tsx
 #: src/components/PlaybooksTab.tsx
@@ -6705,11 +6734,6 @@ msgstr "Signs {place} out of {space}; every record stays there"
 msgid "Signs this computer out of {space}; every record stays here"
 msgstr "Signs this computer out of {space}; every record stays here"
 
-#. a spec package's artifact kind: an Agent Skills folder
-#: src/lib/environments.ts
-msgid "skill"
-msgstr "skill"
-
 #. what a folder is, in the records' tree: the installed packages' skills, placed where the agents read them
 #: src/lib/space.ts
 msgid "skills for agents"
@@ -6722,11 +6746,6 @@ msgstr "Slash command"
 #: src/main.tsx
 msgid "Something broke in the UI"
 msgstr "Something broke in the UI"
-
-#. a spec package's artifact kind: source material
-#: src/lib/environments.ts
-msgid "source"
-msgstr "source"
 
 #. pipeline stage: the authored workflow
 #. pipeline stage: the authored workflow
@@ -6774,10 +6793,15 @@ msgstr "Space"
 msgid "Space address"
 msgstr "Space address"
 
-#. a spec package's artifact kind: the spec
-#: src/lib/environments.ts
-msgid "spec"
-msgstr "spec"
+#. a package's spec line on the Packages tab: its spec is not in the agents' folders
+#: src/components/PackageArtifacts.tsx
+msgid "spec · not placed"
+msgstr "spec · not placed"
+
+#. a package's spec line on the Packages tab: its spec stands in the agents' folders as a skill
+#: src/components/PackageArtifacts.tsx
+msgid "spec · placed as a skill"
+msgstr "spec · placed as a skill"
 
 #. compile phase: slc derives the spec items
 #: src/lib/compile-log.ts
@@ -7261,7 +7285,7 @@ msgid "The ledger could not be loaded: {reason}"
 msgstr "The ledger could not be loaded: {reason}"
 
 #. the title of an artifact's fallback mark: it has no text in the wanted language
-#: src/components/EnvironmentSection.tsx
+#: src/components/PackageArtifacts.tsx
 msgid "The original text stands"
 msgstr "The original text stands"
 
@@ -7863,6 +7887,11 @@ msgstr "waiting for your reply"
 #: src/components/NavRail.tsx
 msgid "waiting for your verdict"
 msgstr "waiting for your verdict"
+
+#. accessible name of a package row's disclosure on the Packages tab: it shows the package's playbooks, skills, spec and applets, each with its act; {name} is the package
+#: src/components/EnvironmentSection.tsx
+msgid "What {name} provides"
+msgstr "What {name} provides"
 
 #: src/components/CaptainHome.tsx
 msgid "What should change?"
