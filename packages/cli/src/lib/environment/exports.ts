@@ -26,9 +26,10 @@
 // bytes recorded follows its release; one edited since, its marker line
 // still naming the package, stands as the reader's; one whose package no
 // longer places it leaves unless edited; and a file of its name that is
-// none of these blocks it. Under a root holding no `specs/` — a project
-// not scaffolded yet, or your own group's clone — a generated skill
-// holds the spec file instead.
+// none of these blocks it. A project whose root holds no `specs/`, not
+// scaffolded yet, places no spec and reports it waiting for `specs/`;
+// your own group's clone, whose root is no working folder, places a
+// generated skill holding the spec file instead.
 // Playbooks go to the launcher as module locations at launch, bound to
 // the environment whose lock exported them.
 
@@ -508,9 +509,10 @@ function waitingList(waiting: Record<string, number>): { name: string; count: nu
 
 /** How an environment's provided specs are placed (environments-8): as
  * files under `specs/packages/` where the root is the working folder
- * and holds `specs/`; as generated skills in a working folder holding
- * none, each reported waiting for `specs/`; and as generated skills
- * alone where the root is no working folder — your own group's clone. */
+ * and holds `specs/`; nowhere in a working folder holding none, each
+ * reported waiting for `specs/` (environments-41); and as generated
+ * skills alone where the root is no working folder — your own group's
+ * clone. */
 type SpecMode = "files" | "no-specs" | "skills";
 
 function specMode(root: string, workingFolder: string | null): SpecMode {
@@ -799,12 +801,13 @@ export async function exportEnvironment(options: ExportOptions): Promise<ExportR
           const file = join(root, "specs", language, `${id}.md`);
           if (!existsSync(file)) { if (!report.missing.includes(name)) report.missing.push(name); unread.add(name); continue; }
           // In a project's `specs/`, a file placed after the skills
-          // (environments-41); else a generated skill, the spec file in
-          // its chosen language byte for byte beside a SKILL.md saying
-          // what spec package it is (DR-115), a project's reported
-          // waiting for `specs/`.
+          // (environments-41); in a project holding none, nothing, the
+          // spec reported waiting for `specs/`; else, in your own
+          // group's, a generated skill, the spec file in its chosen
+          // language byte for byte beside a SKILL.md saying what spec
+          // package it is (DR-115).
           if (mode === "files") { specSources.push({ name, id, version, file }); continue; }
-          if (mode === "no-specs") report.specs.push({ name, path: placedSpecPath(id), state: "no-specs", waiting: [] });
+          if (mode === "no-specs") { report.specs.push({ name, path: placedSpecPath(id), state: "no-specs", waiting: [] }); continue; }
           mkdirSync(target, { recursive: true });
           copyFileSync(file, join(target, `${id}.md`));
           chmodSync(join(target, `${id}.md`), 0o644);

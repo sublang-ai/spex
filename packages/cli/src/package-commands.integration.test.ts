@@ -245,8 +245,9 @@ test("cli-15: add writes the package into spex.yaml, installs under .spex/ and p
   assert.deepEqual(Object.keys(lock.packages).sort(), ["demo/base", "demo/other", "demo/tool"]);
   assert.deepEqual(lock.packages["demo/base"]["required-by"], ["demo/other"]);
   assert.equal(lock.packages["demo/tool"].source.registry, registry.url);
-  assert.ok(existsSync(join(WORK, ".claude", "skills", "demo-base", "base.md")), "[cli-2] the spec exported as a skill where the folder holds no specs/");
+  for (const folder of [".claude", ".agents"]) assert.equal(existsSync(join(WORK, folder, "skills", "demo-base")), false, `[cli-2] no spec placed in ${folder}/skills where the folder holds no specs/`);
   assert.match(other, /^Added demo\/base 1\.0\.0 for demo\/other\n {2}spec needs specs\/ — spex scaffold$/m, "[cli-2] the spec waiting for specs/, in cli-6's words");
+  assert.doesNotMatch(other, /^ {2}demo-base /m, "[cli-2] no skill line for the spec");
   // Git sees the two files and never the installed tree or the exports.
   const status = execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: WORK, encoding: "utf8" });
   assert.deepEqual(status.trim().split("\n").sort(), ["?? spex.lock", "?? spex.yaml"], "[cli-2] Git sees spex.yaml and spex.lock alone");
@@ -295,11 +296,10 @@ test("cli-15: list heads with the folder and the registry's name, then what is a
     "  demo/other  1.2.0  from the registry                  installed",
     "  demo/tool   1.0.0  from the registry                  installed",
     "Skills for agents",
-    "  demo-base  .agents/skills, .claude/skills",
-    "  other      .agents/skills, .claude/skills",
-    "  tool       .agents/skills, .claude/skills",
+    "  other  .agents/skills, .claude/skills",
+    "  tool   .agents/skills, .claude/skills",
     "",
-  ].join("\n"), "[cli-6] the folder, the registry by its display name, each package added with its version, each installed with its version, source, what it came for and its state, a spec waiting for specs/ beneath its package, each skill with its folders, and no last line while spex.lock stands");
+  ].join("\n"), "[cli-6] the folder, the registry by its display name, each package added with its version, each installed with its version, source, what it came for and its state, a spec waiting for specs/ beneath its package and no skill for it, each skill with its folders, and no last line while spex.lock stands");
   assert.ok(!listed.includes(host), "[cli-22] the registry named, never by its host while its descriptor names it");
 
   // A folder holding neither file: one line (cli-6).
