@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-10-31). Extends [DR-177]\1 in the supplied Agent runtime, without adding application business rules.
+Accepted (2026-10-31). Extends [DR-178](178-native-windows-private-storage.md) in the supplied Agent runtime, without adding application business rules.
 
 ## Context
 

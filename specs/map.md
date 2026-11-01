@@ -203,6 +203,8 @@ meta.md       The spec of specs
 | [DR-175](decisions/175-windows-bounded-codex-commands.md) | 175-windows-bounded-codex-commands.md | Native Windows bounded Codex command transport through supplied Cligent |
 | [DR-176](decisions/176-native-desktop-tag-packages.md) | 176-native-desktop-tag-packages.md | App tags build native macOS arm64 and Windows x64 packages; both builds gate one release with checksums; amends DR-040 |
 | [DR-177](decisions/177-native-desktop-installers.md) | 177-native-desktop-installers.md | macOS M-series DMG and Windows Intel/AMD x86-64 NSIS installer; amends DR-176 for the Mac download format |
+| [DR-178](decisions/178-native-windows-private-storage.md) | 178-native-windows-private-storage.md | Native Windows private storage through fs-safe; fail-closed admission, privileged principals, coordinated storage dependency, launch environment and installation responsibilities |
+| [DR-179](decisions/179-session-creation-waits-for-initialization.md) | 179-session-creation-waits-for-initialization.md | Session creation awaits its initialization for two minutes through the existing command-class reply bound |
 
 ## Packages
 
