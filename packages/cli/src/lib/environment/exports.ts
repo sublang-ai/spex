@@ -1,19 +1,30 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Exports (environments-8, environments-9, environments-16,
-// environments-30, DR-104, DR-115, DR-124). Each selected skill is
-// copied — its `name` rewritten where aliased — and one skill is
-// generated per selected playbook, and one per selected spec holding the
-// spec file, into `<root>/.spex/skills/<name>/`; those are mirrored into the
-// folder where each agent Spex drives reads project-level skills in the
-// working folder, kept out of Git there by its `.git/info/exclude`, and,
-// for your own group, into the user-level folders of the agents this
-// device has. A playbook's skill goes only where the table lets it. A
-// manifest beside them records what Spex wrote, so a re-export removes
-// only its own and a skill the reader put there stays, the export
-// reporting each name such a skill kept out; an unchanged skill is left
-// as it is, and a changed one is swapped in whole.
+// Exports (environments-6, environments-8, environments-9,
+// environments-14, environments-16, environments-30, environments-41,
+// DR-104, DR-115, DR-124, DR-174). Only what a release provides is
+// placed, a support artifact installed and placed nowhere: each provided
+// skill is copied — its `name` rewritten where aliased — and one skill
+// is generated per provided playbook, into `<root>/.spex/skills/<name>/`;
+// those are mirrored into the folder where each agent Spex drives reads
+// project-level skills in the working folder, kept out of Git there by
+// its `.git/info/exclude`, and, for your own group, into the user-level
+// folders of the agents this device has. A playbook's skill goes only
+// where the table lets it. A manifest beside them records what Spex
+// wrote, so a re-export removes only its own and a skill the reader put
+// there stays, the export reporting each name such a skill kept out; an
+// unchanged skill is left as it is, and a changed one is swapped in
+// whole.
+// A provided spec stands in a project's `specs/packages/<pkg>.md`,
+// derived from the release's file with its citations rewritten for the
+// tree whenever the set of placed specs changes, its bytes' hash kept in
+// the install record at `.spex/placed.json`, and the file left for the
+// reader to commit: a copy edited since stands as the reader's, one
+// whose package no longer places it leaves unless edited, and a file of
+// its name the record gives no copy of its own blocks it. Under a root
+// holding no `specs/` — a project not scaffolded yet, or your own
+// group's clone — a generated skill holds the spec file instead.
 // Playbooks go to the launcher as module locations at launch, bound to
 // the environment whose lock exported them.
 
@@ -36,11 +47,13 @@ import {
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { parseDocument, stringify as stringifyYaml } from "yaml";
 
-import { readVersioned, writeVersionedBytes } from "../files.js";
+import { readVersioned, sha256, writeVersionedBytes } from "../files.js";
 import { AGENT_FOLDERS } from "./agent-folders.js";
+import { rewriteForTree } from "./citations.js";
 import { ensureSpexDir, installedDir, skillsDir as generatedSkillsDir } from "./layout.js";
-import { parseManifestText, type Manifest } from "./format.js";
+import { parseManifestText, providedArtifacts, type Manifest } from "./format.js";
 import { isPathSource, resolutionVersion, type Lock, type Resolution } from "./lock.js";
+import { placedRecordPath, readPlacedRecord, serializePlacedRecord, writePlacedRecord, type PlacedSpec } from "./placed-record.js";
 
 /** The built-in spec package's name (environments-11). */
 export const BUILTIN_PACKAGE_NAME = "sublang/playbooks";
@@ -76,6 +89,25 @@ export interface ExportOptions {
   rename?: (from: string, to: string) => void;
 }
 
+/** Where a provided spec stands under a project's `specs/`
+ * (environments-41, environments-14): placed at its path; edited there
+ * since the install recorded it, so left as the reader's; blocked by a
+ * file of its name the record gives no copy of its own; waiting for
+ * `specs/` where the root holds none; or, once its package no longer
+ * places it, an edited copy kept as the project's own. */
+export type SpecState = "placed" | "edited" | "blocked" | "no-specs" | "kept";
+
+export interface SpecPlacement {
+  /** The spec package, `<org>/<pkg>`. */
+  name: string;
+  /** Its path from the root, `specs/packages/<pkg>.md`. */
+  path: string;
+  state: SpecState;
+  /** Each package the placed copy's links wait for, with their count,
+   * in name order (environments-41). */
+  waiting: { name: string; count: number }[];
+}
+
 export interface ExportReport {
   /** Every exported skill name, as it stands in `<root>/.spex/skills/`. */
   skills: string[];
@@ -90,6 +122,10 @@ export interface ExportReport {
   /** Spec packages an exported artifact of which is not here: not
    * installed, or a path source missing where its path resolves. */
   missing: string[];
+  /** Each provided spec of a project's root with where it stands, in
+   * name order (environments-41); none where the root is no working
+   * folder, as your own group's clone. */
+  specs: SpecPlacement[];
 }
 
 /** Where a spec package's files stand: its installed folder, or a path
@@ -427,13 +463,259 @@ function userFolder(userHome: string, folder: string): string {
   return isAbsolute(folder) ? folder : join(userHome, ...folder.split("/"));
 }
 
+/** A project's specs folder at its root. */
+const SPECS = "specs";
+
+/** The path from the root a spec `<pkg>` is placed at (environments-41). */
+export function placedSpecPath(id: string): string {
+  return `${SPECS}/packages/${id}.md`;
+}
+
+function isDirectory(path: string): boolean {
+  try { return statSync(path).isDirectory(); } catch { return false; }
+}
+
+/** The digest of something at a path that is no file: no file's bytes
+ * have it. */
+const NOT_A_FILE = "not a file";
+
+/** What stands at a root's path, as a digest: the SHA-256 of a file's
+ * bytes; null where nothing stands; and NOT_A_FILE where something else
+ * stands — a folder, a link, or a path under a file. */
+function standingDigest(root: string, path: string): string | null {
+  const file = join(root, ...path.split("/"));
+  try {
+    if (!lstatSync(file).isFile()) return NOT_A_FILE;
+    return sha256(readFileSync(file));
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "ENOENT" ? null : NOT_A_FILE;
+  }
+}
+
+/** A record's waiting counts as a report lists them. */
+function waitingList(waiting: Record<string, number>): { name: string; count: number }[] {
+  return Object.keys(waiting).sort().map((name) => ({ name, count: waiting[name]! }));
+}
+
+/** How an environment's provided specs are placed (environments-8): as
+ * files under `specs/packages/` where the root is the working folder
+ * and holds `specs/`; as generated skills in a working folder holding
+ * none, each reported waiting for `specs/`; and as generated skills
+ * alone where the root is no working folder — your own group's clone. */
+type SpecMode = "files" | "no-specs" | "skills";
+
+function specMode(root: string, workingFolder: string | null): SpecMode {
+  if (workingFolder === null || realLocation(resolve(workingFolder)) !== realLocation(resolve(root))) return "skills";
+  return isDirectory(join(root, SPECS)) ? "files" : "no-specs";
+}
+
+/** A provided spec found to place: its spec package, its id `<pkg>`,
+ * and the release's spec file in its chosen language. */
+interface SpecSource { name: string; id: string; file: string }
+
+/** Remove a copy only while it still holds the bytes recorded, checked
+ * at the instant before (DR-111); whether it went. */
+function removeUnchanged(root: string, path: string, digest: string): boolean {
+  if (standingDigest(root, path) !== digest) return false;
+  rmSync(join(root, ...path.split("/")), { force: true });
+  return true;
+}
+
+/**
+ * Place the provided specs of a root holding `specs/` (environments-41):
+ *
+ * 1. each spec claims `specs/packages/<pkg>.md`, the first in name order
+ *    taking it and a later one blocked, as is one whose path a copy of a
+ *    package whose files are not here holds by the record;
+ * 2. a recorded copy its package no longer places there — removed, no
+ *    longer providing its spec, or now blocked — leaves while it holds
+ *    the bytes recorded, else stays as the project's own, reported kept
+ *    where its package is gone;
+ * 3. each claimed spec is derived for the set of specs standing in
+ *    `specs/`, a file there the record gives no copy blocking it unless
+ *    it holds the derived bytes — as a clone of committed copies does —
+ *    so the set shrinks until none is left to block, a copy differing
+ *    only for another's presumed standing kept in it;
+ * 4. a spec is written where no file stands or the file holds the bytes
+ *    recorded, recorded where the file holds the derived bytes, and left
+ *    standing, its record kept, where it was edited since;
+ * 5. the record is written whole only where it changed, and removed once
+ *    it records nothing.
+ */
+function placeSpecs(root: string, sources: SpecSource[], unread: ReadonlySet<string>): SpecPlacement[] {
+  const previous = readPlacedRecord(root)?.specs ?? {};
+  const next: Record<string, PlacedSpec> = {};
+  const out: SpecPlacement[] = [];
+  const byName = (a: SpecSource, b: SpecSource): number => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+  const ordered = [...sources].sort(byName);
+  const names = new Set(ordered.map((source) => source.name));
+
+  // A package whose files are not here keeps what the record says of its
+  // copy, which still holds its path (environments-8).
+  const held = new Map<string, string>();
+  for (const name of Object.keys(previous).sort()) {
+    if (!unread.has(name) || names.has(name)) continue;
+    next[name] = previous[name]!;
+    held.set(previous[name]!.path, name);
+  }
+
+  // 1. The basename's claim: the first in name order.
+  const claims = new Map<string, SpecSource>();
+  const blocked = new Set<string>();
+  for (const source of ordered) {
+    const path = placedSpecPath(source.id);
+    if (claims.has(path) || held.has(path)) blocked.add(source.name);
+    else claims.set(path, source);
+  }
+
+  // 2. A copy no longer placed for its package leaves unless edited.
+  for (const name of Object.keys(previous).sort()) {
+    if (next[name] !== undefined) continue;
+    const entry = previous[name]!;
+    if (claims.get(entry.path)?.name === name) continue;
+    const digest = standingDigest(root, entry.path);
+    if (digest === null) continue;
+    if (digest === entry.sha256 && removeUnchanged(root, entry.path, entry.sha256)) continue;
+    if (!names.has(name)) out.push({ name, path: entry.path, state: "kept", waiting: [] });
+  }
+
+  // 3. Each claimed spec derived for the specs standing, until no file
+  // the record gives no copy blocks one more.
+  const candidates = [...claims.entries()].map(([path, source]) => {
+    const entry = previous[source.name];
+    return {
+      source,
+      path,
+      self: path.slice(SPECS.length + 1),
+      release: readFileSync(source.file, "utf8"),
+      recorded: entry !== undefined && entry.path === path ? entry : null,
+      digest: standingDigest(root, path),
+    };
+  });
+  type Candidate = (typeof candidates)[number];
+  const derive = (candidate: Candidate, standing: ReadonlyMap<string, string>) => {
+    const placedPathOf = (name: string): string | null => (name === candidate.source.name ? candidate.self : standing.get(name) ?? null);
+    const { text, waiting } = rewriteForTree(candidate.release, { placedPathOf, selfPath: candidate.self });
+    return { text, sha256: sha256(text), waiting };
+  };
+  let derived = new Map<string, ReturnType<typeof derive>>();
+  for (;;) {
+    const standing = new Map<string, string>();
+    for (const candidate of candidates) if (!blocked.has(candidate.source.name)) standing.set(candidate.source.name, candidate.self);
+    for (const [path, name] of held) if (standingDigest(root, path) !== null) standing.set(name, path.slice(SPECS.length + 1));
+    derived = new Map();
+    const mismatched: Candidate[] = [];
+    for (const candidate of candidates) {
+      if (blocked.has(candidate.source.name)) continue;
+      const spec = derive(candidate, standing);
+      derived.set(candidate.source.name, spec);
+      if (candidate.digest !== null && candidate.recorded === null && candidate.digest !== spec.sha256) mismatched.push(candidate);
+    }
+    if (mismatched.length === 0) break;
+    // A copy may differ only for another's presumed standing: a file
+    // blocks where it differs with every differing copy set aside too.
+    const aside = new Map([...standing].filter(([name]) => !mismatched.some((candidate) => candidate.source.name === name)));
+    const differing = mismatched.filter((candidate) => derive(candidate, aside).sha256 !== candidate.digest);
+    for (const candidate of differing.length > 0 ? differing : mismatched) blocked.add(candidate.source.name);
+  }
+
+  // 4. Written, recorded or left, and each reported.
+  for (const source of ordered) {
+    const path = placedSpecPath(source.id);
+    const candidate = candidates.find((entry) => entry.source.name === source.name);
+    if (candidate === undefined || blocked.has(source.name)) {
+      out.push({ name: source.name, path, state: "blocked", waiting: [] });
+      continue;
+    }
+    const spec = derived.get(source.name)!;
+    const placed: PlacedSpec = { path, sha256: spec.sha256, waiting: spec.waiting };
+    if (candidate.digest !== spec.sha256) {
+      if (candidate.digest !== null && candidate.digest !== candidate.recorded?.sha256) {
+        // Edited since the install recorded it: the reader's to merge.
+        next[source.name] = candidate.recorded!;
+        out.push({ name: source.name, path, state: "edited", waiting: [] });
+        continue;
+      }
+      const file = join(root, ...path.split("/"));
+      mkdirSync(dirname(file), { recursive: true });
+      // A project file the reader commits, written under the version
+      // read, so a hand edit meanwhile is refused (DR-111).
+      writeVersionedBytes(file, spec.text, candidate.digest, 0o644);
+    }
+    next[source.name] = placed;
+    out.push({ name: source.name, path, state: "placed", waiting: waitingList(spec.waiting) });
+  }
+
+  // 5. The record, whole, only where it changed.
+  const record = { format: 1 as const, specs: next };
+  const recordFile = placedRecordPath(root);
+  let current: string | null = null;
+  try { current = readFileSync(recordFile, "utf8"); } catch { current = null; }
+  if (Object.keys(next).length === 0) {
+    if (current !== null) rmSync(recordFile, { force: true });
+  } else if (current !== serializePlacedRecord(record)) {
+    writePlacedRecord(root, record);
+  }
+  return out.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+}
+
+/**
+ * Where each provided spec of a lock stands under a project's root, read
+ * from the files and the install record alone, placing nothing
+ * (environments-14): waiting for `specs/` where the root holds none;
+ * else, for a copy the record gives its package, placed while it holds
+ * the bytes recorded, with the links the record counts, and edited once
+ * it does not; and blocked where a file of its name stands that the
+ * record gives no copy of its own. A spec whose package's files are not
+ * here, or whose copy is not written yet, is left out.
+ */
+export function readSpecPlacements(root: string, lock: Lock, pathRoot: string | null = root): SpecPlacement[] {
+  const out: SpecPlacement[] = [];
+  const specsHere = isDirectory(join(root, SPECS));
+  const record = readPlacedRecord(root)?.specs ?? {};
+  const packagesDir = installedDir(root);
+  for (const name of Object.keys(lock.packages).sort()) {
+    const resolution = lock.packages[name]!;
+    const dir = packageRoot(name, resolution, packagesDir, pathRoot);
+    let manifest: Manifest | null = null;
+    try { manifest = dir === null ? null : readManifestAt(dir); } catch { manifest = null; }
+    if (manifest === null) continue;
+    const provided = providedArtifacts(manifest);
+    const ids = [...new Set(Object.values(resolution.exports))].sort();
+    for (const id of ids) {
+      if (manifest.artifacts[id]?.kind !== "spec" || !provided.has(id)) continue;
+      const path = placedSpecPath(id);
+      if (!specsHere) {
+        out.push({ name, path, state: "no-specs", waiting: [] });
+        continue;
+      }
+      const entry = record[name];
+      if (entry !== undefined) {
+        const digest = standingDigest(root, entry.path);
+        if (digest === null) continue;
+        out.push(digest === entry.sha256
+          ? { name, path: entry.path, state: "placed", waiting: waitingList(entry.waiting) }
+          : { name, path: entry.path, state: "edited", waiting: [] });
+        continue;
+      }
+      if (standingDigest(root, path) !== null) out.push({ name, path, state: "blocked", waiting: [] });
+    }
+  }
+  return out;
+}
+
 /** Export an installed environment (environments-8). */
 export async function exportEnvironment(options: ExportOptions): Promise<ExportReport> {
   const { root: envRoot, lock, workingFolder } = options;
   const packagesDir = installedDir(envRoot);
   const pathRoot = options.pathRoot === undefined ? workingFolder : options.pathRoot;
-  const report: ExportReport = { skills: [], folders: [], removed: [], skipped: [], missing: [] };
+  const report: ExportReport = { skills: [], folders: [], removed: [], skipped: [], missing: [], specs: [] };
   const playbookSkills = new Set<string>();
+  const mode = specMode(envRoot, workingFolder);
+  const specSources: SpecSource[] = [];
+  // Spec packages whose provided spec cannot be read here: what the
+  // record says of their copies stands.
+  const unread = new Set<string>();
   ensureSpexDir(envRoot);
   // The skills are generated whole into a folder beside `.spex/skills/`
   // and swapped in only where they differ, so an export that changes
@@ -449,14 +731,19 @@ export async function exportEnvironment(options: ExportOptions): Promise<ExportR
       const manifest = root === null ? null : readManifestAt(root);
       if (root === null || manifest === null) {
         if (Object.keys(resolution.exports).length > 0) report.missing.push(name);
+        unread.add(name);
         continue;
       }
       const version = resolutionVersion(resolution) ?? manifest.version;
+      // A support artifact, or one of a kind the release does not offer,
+      // is installed with the rest and placed nowhere; the lock's names
+      // stay as resolved (environments-6).
+      const provided = providedArtifacts(manifest);
       for (const exported of Object.keys(resolution.exports).sort()) {
         const id = resolution.exports[exported]!;
         const artifact = manifest.artifacts[id];
         const language = resolution.artifacts[id]?.language;
-        if (!artifact || !language) continue;
+        if (!artifact || !language || !provided.has(id)) continue;
         const target = join(skillsDir, exported);
         if (artifact.kind === "skill") {
           const folder = join(root, "skills", language, id);
@@ -473,10 +760,15 @@ export async function exportEnvironment(options: ExportOptions): Promise<ExportR
           writeFileSync(join(target, "SKILL.md"), playbookSkill({ name: exported, id, packageName: name, version }));
           playbookSkills.add(exported);
         } else if (artifact.kind === "spec") {
-          // The spec file in its chosen language, byte for byte, beside a
-          // SKILL.md saying what spec package it is (DR-115).
           const file = join(root, "specs", language, `${id}.md`);
-          if (!existsSync(file)) { if (!report.missing.includes(name)) report.missing.push(name); continue; }
+          if (!existsSync(file)) { if (!report.missing.includes(name)) report.missing.push(name); unread.add(name); continue; }
+          // In a project's `specs/`, a file placed after the skills
+          // (environments-41); else a generated skill, the spec file in
+          // its chosen language byte for byte beside a SKILL.md saying
+          // what spec package it is (DR-115), a project's reported
+          // waiting for `specs/`.
+          if (mode === "files") { specSources.push({ name, id, file }); continue; }
+          if (mode === "no-specs") report.specs.push({ name, path: placedSpecPath(id), state: "no-specs", waiting: [] });
           mkdirSync(target, { recursive: true });
           copyFileSync(file, join(target, `${id}.md`));
           chmodSync(join(target, `${id}.md`), 0o644);
@@ -495,7 +787,11 @@ export async function exportEnvironment(options: ExportOptions): Promise<ExportR
     rmSync(finalSkillsDir, { recursive: true, force: true });
     renameSync(skillsDir, finalSkillsDir);
   }
-  return mirrorExports(options, finalSkillsDir, report, playbookSkills);
+  const mirrored = mirrorExports(options, finalSkillsDir, report, playbookSkills);
+  // The specs after the skills, in the project's `specs/`, never listed
+  // in its Git's exclude: they are the reader's to commit.
+  if (mode === "files") mirrored.specs = placeSpecs(envRoot, specSources, unread);
+  return mirrored;
 }
 
 function mirrorExports(options: ExportOptions, skillsDir: string, report: ExportReport, playbookSkills: Set<string>): ExportReport {

@@ -6,11 +6,13 @@
 // under the root's `specs/`, by its spec package, with the path it
 // stands at, the SHA-256 of the bytes written and the packages its links
 // wait for — so an install knows its own copy from an edited one, and
-// the linter a placed spec from the project's own.
+// the linter a placed spec from the project's own. An install writes it
+// whole, atomically, as compact JSON.
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { writeApplicationBytes } from "../files.js";
 import { SPEX_DIR } from "./layout.js";
 
 /** The placed specs' record, beside the installed packages under
@@ -69,4 +71,22 @@ export function readPlacedRecord(root: string): PlacedRecord | null {
     specs.push([name, spec]);
   }
   return { format: 1, specs: Object.fromEntries(specs) };
+}
+
+/** The record's bytes as an install writes them: compact JSON, its
+ * specs in name order. */
+export function serializePlacedRecord(record: PlacedRecord): string {
+  const specs = Object.keys(record.specs).sort().map((name): [string, PlacedSpec] => {
+    const { path, sha256, waiting } = record.specs[name]!;
+    const counts = Object.keys(waiting).sort().map((other): [string, number] => [other, waiting[other]!]);
+    return [name, { path, sha256, waiting: Object.fromEntries(counts) }];
+  });
+  return JSON.stringify({ format: 1, specs: Object.fromEntries(specs) });
+}
+
+/** Write the root's record of placed specs whole, through a temporary
+ * file renamed into place, so a reader never finds it half-written.
+ * `<root>/.spex/` must stand. */
+export function writePlacedRecord(root: string, record: PlacedRecord): void {
+  writeApplicationBytes(placedRecordPath(root), serializePlacedRecord(record));
 }

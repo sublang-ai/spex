@@ -5,7 +5,8 @@
 // <folder>` (cli-2, environments-15): write the package into
 // `spex.yaml` — made explicitly naming the public registry where the
 // root holds none — then resolve, install and export, printing each
-// package added or updated and where its skills went for the agents.
+// package added or updated, where its spec stands in `specs/` with the
+// packages its links wait for, and where its skills went for the agents.
 // Every refusal comes before any write: a folder given by `--path` holds
 // the package named, its `meta.yaml` read, before `spex.yaml` is written.
 
