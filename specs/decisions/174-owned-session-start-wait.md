@@ -6,7 +6,7 @@
 ## Status
 
 Accepted, 2026-10-31.
-Partially supersedes [DR-178]\1 and amends [DR-010](010-interface-craft.md) §5 for session creation's UI observation deadline only.
+Partially supersedes [DR-179](179-session-creation-waits-for-initialization.md) and amends [DR-010](010-interface-craft.md) §5 for session creation's UI observation deadline only.
 
 ## Context
 
