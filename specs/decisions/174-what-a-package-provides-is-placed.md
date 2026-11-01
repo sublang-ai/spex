@@ -30,7 +30,7 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 ### The author declares what the package provides
 
 - `meta.yaml` gains `provides`, a list of artifact kinds the project is offered: `[spec]` for a spec package, `[skill]` for a skill, `[playbook, skill]` for a playbook also callable through a skill of its own. Absent, every kind the package holds; an empty list is refused.
-- An artifact a sibling names in `from` or `requires` is that sibling's support and is never offered, whatever `provides` says: a playbook's source spec stays its source, a skill a playbook requires stays the playbook's.
+- An artifact a sibling names in `from`, or one a sibling of another kind names in `requires`, is that sibling's support and is never offered, whatever `provides` says: a playbook's source spec stays its source, a skill a playbook requires stays the playbook's; a playbook a playbook requires is a peer, offered on its own.
 - Kinds, not ids: `provides` reads as the package's nature; `requires` already gives per-artifact precision where it is needed.
 
 ### An install places what is provided

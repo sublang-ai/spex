@@ -5,7 +5,7 @@
 // refused and written back in the format's order, a release naming it
 // read from a folder and from the archive the registry checks, and the
 // artifacts a release provides — those of the kinds it lists, every
-// kind where it lists none, never a sibling's support.
+// kind where it is absent, never a sibling's support, a peer provided.
 
 import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
@@ -51,6 +51,12 @@ describe("provides", () => {
     const manifest = parsed(manifestOf(PLAYBOOK_AND_SKILL));
     assert.equal("provides" in manifest, false);
     assert.doesNotMatch(serializeManifest(manifest), /provides/);
+  });
+
+  it("refuses an empty list, telling the author to list the kinds or leave it out", () => {
+    const { manifest, issues } = parseManifest(manifestOf(PLAYBOOK_AND_SKILL, { provides: [] }));
+    assert.equal(manifest, null);
+    assert.deepEqual(issues, [{ path: "meta.yaml", rule: "provides", message: "provides is an empty list — list the kinds the package provides, or leave it out" }]);
   });
 
   it("refuses a non-list, an unknown kind and a duplicate, naming the rule", () => {
@@ -107,6 +113,24 @@ describe("providedArtifacts", () => {
     assert.deepEqual(ids(parsed(manifestOf(artifacts, { provides: ["playbook", "skill"] }))), ["build"]);
   });
 
+  it("provides a playbook a playbook requires, a peer offered on its own", () => {
+    const artifacts = { review: { kind: "playbook", language: "en" }, code: { kind: "playbook", language: "en", requires: ["review"] } };
+    assert.deepEqual(ids(parsed(manifestOf(artifacts))), ["code", "review"]);
+    assert.deepEqual(ids(parsed(manifestOf(artifacts, { provides: ["playbook"] }))), ["code", "review"]);
+  });
+
+  it("provides a skill a skill requires, a peer offered on its own", () => {
+    const artifacts = { base: { kind: "skill", language: "en" }, tip: { kind: "skill", language: "en", requires: ["base"] } };
+    assert.deepEqual(ids(parsed(manifestOf(artifacts))), ["base", "tip"]);
+  });
+
+  it("keeps a spec a skill requires as the skill's", () => {
+    assert.deepEqual(ids(parsed(manifestOf({
+      widgets: { kind: "spec", language: "en" },
+      tip: { kind: "skill", language: "en", requires: ["widgets"] },
+    }))), ["tip"]);
+  });
+
   it("provides only the kinds an explicit provides lists", () => {
     assert.deepEqual(ids(parsed(manifestOf({
       widgets: { kind: "spec", language: "en" },
@@ -114,7 +138,7 @@ describe("providedArtifacts", () => {
     }, { provides: ["skill"] }))), ["tip"]);
   });
 
-  it("provides every kind where provides is absent or lists nothing", () => {
+  it("provides every kind where provides is absent", () => {
     const artifacts = {
       brief: { kind: "source", language: "en" },
       widgets: { kind: "spec", language: "en" },
@@ -122,8 +146,6 @@ describe("providedArtifacts", () => {
       build: { kind: "playbook", language: "en" },
       viewer: { kind: "applet" },
     };
-    const every = ["brief", "build", "tip", "viewer", "widgets"];
-    assert.deepEqual(ids(parsed(manifestOf(artifacts))), every);
-    assert.deepEqual(ids(parsed(manifestOf(artifacts, { provides: [] }))), every);
+    assert.deepEqual(ids(parsed(manifestOf(artifacts))), ["brief", "build", "tip", "viewer", "widgets"]);
   });
 });

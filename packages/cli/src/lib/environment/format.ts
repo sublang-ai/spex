@@ -273,12 +273,14 @@ export function parseManifest(raw: unknown): { manifest: Manifest | null; issues
       };
     }
   }
-  // The kinds the project is offered (environments-1, DR-174): a list
-  // of the five kinds, each once.
+  // The kinds the project is offered (environments-1, DR-174): a
+  // nonempty list of the five kinds, each once.
   let provides: ArtifactKind[] | undefined;
   if (raw.provides !== undefined) {
     if (!Array.isArray(raw.provides)) {
       issues.push({ path: at, rule: "provides", message: "provides is not a list of artifact kinds" });
+    } else if (raw.provides.length === 0) {
+      issues.push({ path: at, rule: "provides", message: "provides is an empty list — list the kinds the package provides, or leave it out" });
     } else {
       provides = [];
       for (const kind of raw.provides as unknown[]) {
@@ -346,15 +348,21 @@ export function serializeManifest(manifest: Manifest): string {
 }
 
 /** The ids of the artifacts a release provides (environments-1,
- * DR-174): each whose kind `provides` lists — every kind where it lists
- * none — save one a sibling names in `from` or `requires`, which is
- * that sibling's support whatever `provides` lists. */
+ * DR-174): each whose kind `provides` lists — every kind where it is
+ * absent — save a sibling's support, whatever `provides` lists. An
+ * artifact a sibling names in `from` is that sibling's support, and so
+ * is one a sibling of another kind names in `requires`: a playbook's
+ * skill, a skill's spec. A playbook a playbook requires, or a skill a
+ * skill requires, is a peer and stays provided. */
 export function providedArtifacts(manifest: Manifest): Set<string> {
-  const kinds = manifest.provides !== undefined && manifest.provides.length > 0 ? new Set<ArtifactKind>(manifest.provides) : null;
+  const kinds = manifest.provides !== undefined ? new Set<ArtifactKind>(manifest.provides) : null;
   const support = new Set<string>();
   for (const [id, artifact] of Object.entries(manifest.artifacts)) {
     if (artifact.from !== undefined && artifact.from !== id) support.add(artifact.from);
-    for (const required of artifact.requires) if (required !== id) support.add(required);
+    for (const required of artifact.requires) {
+      const kind = manifest.artifacts[required]?.kind;
+      if (required !== id && kind !== undefined && kind !== artifact.kind) support.add(required);
+    }
   }
   const provided = new Set<string>();
   for (const [id, artifact] of Object.entries(manifest.artifacts)) {
