@@ -43,22 +43,29 @@ export function ownRepositoryKey(
  * registry's origin and display name, and the login signed in there. */
 export interface PublishTarget {
   origin: string;
-  signedIn: boolean;
+  /** Undefined until the account there is read: nothing judges signed
+   * in or out before that read lands (playbook-library-113). */
+  signedIn: boolean | undefined;
   name: string;
   login?: string;
+}
+
+/** The publish target at `origin` as its registry state reads, unread
+ * where no state of it stands. */
+export function publishTargetAt(origin: string, account: RegistryState | undefined): PublishTarget {
+  return {
+    origin,
+    signedIn: account ? !!account.account : undefined,
+    name: account?.displayName || hostNameOf(origin),
+    ...(account?.account ? { login: account.account.login } : {}),
+  };
 }
 
 /** Package authorization is read only from its selected registry account.
  * A missing registry state never borrows a Space grant. */
 export function publishTargetOf(environment: EnvironmentState | undefined, accounts?: Record<string, RegistryState>): PublishTarget | undefined {
   if (!environment?.registry) return undefined;
-  const account = accounts?.[environment.registry.origin];
-  return {
-    origin: environment.registry.origin,
-    signedIn: !!account?.account,
-    name: account?.displayName || hostNameOf(environment.registry.origin),
-    ...(account?.account ? { login: account.account.login } : {}),
-  };
+  return publishTargetAt(environment.registry.origin, accounts?.[environment.registry.origin]);
 }
 
 /** What the core is doing to an environment, as its heading reads: the

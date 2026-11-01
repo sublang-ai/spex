@@ -1897,6 +1897,49 @@ describe("playbook-library-111: what stands beneath the Enable form by the proje
     expect(commandMock).not.toHaveBeenCalledWith("space.signin.start", expect.anything());
   });
 
+  test.each([
+    { lands: "signed in", beneath: "Publish" },
+    { lands: "as a failure", beneath: "Sign in to publish" },
+  ])("until the account at the registry is read, Loading registry… stands beneath the form; the read landing $lands shows $beneath (playbook-library-93)", async ({ lands, beneath }) => {
+    const origin = "https://spex.example";
+    const signedIn = { origin, displayName: "Spex Example", account: { id: "registry", login: "me" }, signIn: { phase: "idle" as const }, error: null };
+    // Each read of the account is held until released; the core
+    // broadcasts the state it read, or the read fails.
+    const held: (() => void)[] = [];
+    const original = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation((type, ...args) =>
+      type !== "registry.get"
+        ? original(type, ...args)
+        : new Promise((resolve, reject) =>
+            held.push(() => {
+              if (lands === "as a failure") return reject(new Error("Spex Example could not be reached."));
+              deliverServerMessageForTests({ type: "registry.state", state: signedIn });
+              resolve(signedIn);
+            }),
+          ));
+    seed({ registryAccounts: {}, drafts: { triage: COMPILED }, openDraftId: "triage", draftViews: { triage: foldView(THREAD) }, draftSources: { triage: SOURCE } });
+    render(<PlaybooksTab project={PROJECT} />);
+    await vi.waitFor(() => expect(tab("Enable").disabled).toBe(false));
+    fireEvent.click(tab("Enable"));
+    expect((await screen.findByTestId("publish")).textContent).toBe("Loading registry…");
+    expect(screen.queryByTestId("publish-button")).toBeNull();
+    expect(screen.queryByTestId("publish-signin")).toBeNull();
+    await vi.waitFor(() => expect(held.length).toBeGreaterThan(0));
+    await act(async () => {
+      for (const land of held.splice(0)) land();
+    });
+    if (lands === "signed in") {
+      expect((await screen.findByTestId("publish-button")).textContent).toBe(beneath);
+      expect(screen.queryByTestId("publish-signin")).toBeNull();
+      return;
+    }
+    // A failed read stands as no grant, its cause beside the sign-in.
+    expect((await screen.findByTestId("publish-signin")).textContent).toBe(beneath);
+    expect(screen.getByTestId("publish-signin-error").textContent).toBe("Spex Example could not be reached");
+    expect(screen.queryByTestId("publish-button")).toBeNull();
+    expect(commandMock).not.toHaveBeenCalledWith("registry.signin.start", expect.anything());
+  });
+
   test("the target is the environment's instance, not the repository's placement (playbook-library-93)", async () => {
     // Placed at Two, its spex.yaml naming no space, so the environment is
     // the default instance's, One's, where the home is signed in.

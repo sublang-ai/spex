@@ -57,6 +57,7 @@ While an environment's current requests include a direct path source and the env
 - registry and Git requests and the built-in line offer no publication of their installed copies;
 - the folder is the current request's path, not a path inferred from its displayed source or its older lock;
 - a stale lock or uncommitted source does not prevent previewing or publishing the current folder, whose validation failures remain visible;
+- until the account at the environment's registry is read, the entry reads Publish and choosing it shows "Checking…", the read then asking for the preview once where it finds a grant, and otherwise, a failed read included, leaving "Sign in to publish", whose sign-in starts only when chosen;
 - changing the repository, path or target discards an open preview before another confirmation is possible.
 
 ### Enable and Disable
@@ -294,7 +295,7 @@ While an authoring session's last compile succeeded and the home holds a registr
 
 - a refusal from the core's checks or the registry shows its issues in place; success reads the published version with a link to its page at the registry;
 - a retained receipt from a previous publish does not establish success of a later attempt, and a later settled refusal remains visible even when its text repeats an earlier refusal ([DR-151](../decisions/151-publish-local-spec-packages.md));
-- a home without that registry grant shows one button "Sign in to publish" in place of Publish, starting the registry sign-in in place [[playbook-library-119](#playbook-library-119)].
+- a home without that registry grant shows one button "Sign in to publish" in place of Publish, starting the registry sign-in in place [[playbook-library-119](#playbook-library-119)], the grant judged only once the account there is read, "Loading registry…" standing until then and a failed read standing as no grant with its cause.
 
 ### Pipeline Artifacts
 
@@ -719,6 +720,7 @@ Where a scratch home holds a project whose environment requests two spec package
 - Add…'s Registry tab searches the stand-in and requests the chosen version at the requirement its reading names, a typed name the stand-in does not list reading "⟨name⟩ · not listed publicly"; its Folder tab asks for a folder inside the path root the state names — your own group's clone under "Personal" — reads the spec package's name and version from its `meta.yaml`, asking for a name only where that names none, and requests the path there, and stands disabled while the state names none [[playbook-library-92](#playbook-library-92)];
 - after an Add the receipt reads "Added ⟨name⟩ ⟨version⟩ · ⟨what it provides⟩", its Enable enabling a package's one playbook in place and opening the row of a package of several, and an expanded row lists its artifacts with one act each, a playbook's Enable writing the config of its heading's spex repository [[playbook-library-92](#playbook-library-92)] [[playbook-library-3](#playbook-library-3)];
 - "spex.yaml changed" stands with Update while the lock is stale; the built-in line reads both versions with "Update to ⟨shipped⟩" sending `environment.resolve` only where the state names a newer built-in release; a state naming a skill and a spec package the last export left out wears "Not in the agents' folders" naming each with its reason, "Place skills again" sending `environment.install`, and no such chip once a state names nothing left out; Remove carries its consequence as its tooltip, asking Remove or Keep for the required spec package and removing the other at once; and every control stays enabled during that spex repository's sync and while the core installs, its install reading as progress [[playbook-library-92](#playbook-library-92)];
+- with the account at the registry not yet read, a folder package's overflow reads Publish, choosing it shows "Checking…" with nothing previewed and no sign-in started, and the read landing signed in asks for the preview once, its summary in the button's place, while landing signed out or failing leaves "Sign in to publish", its sign-in starting only when chosen, and a registry chosen after a failed read stands as "Loading registry…" until its own read lands [[playbook-library-113](#playbook-library-113)];
 - on the Playbooks tab, with no switch and no spec package list, a playbook both environments export lists once, one enabled in neither config under "Available" offering "Enable for ⟨project⟩" with "Enable for Personal" in its overflow, and one enabled in the project's config reading "in ⟨project⟩" and one in your own group's reading "Personal" under "Enabled", with no empty state [[playbook-library-1](#playbook-library-1)], the latter showing your own group's bindings and offering "Enable for ⟨project⟩", which writes the project's config, and "Disable for Personal" in its overflow, which writes your own group's [[playbook-library-1](#playbook-library-1)] [[playbook-library-3](#playbook-library-3)].
 
 ### Binding Coverage
@@ -841,6 +843,8 @@ Where the Enable tab renders a compiled authoring session with an explicit regis
 | signed in | signed in or signed out | Publish |
 | signed out | signed in or signed out | "Sign in to publish", starting the registry sign-in in place without navigating to Space |
 | registry state absent | any | Loading registry…, with no publication authority borrowed from Space |
+| not yet read | any | Loading registry…, with neither Publish nor "Sign in to publish", until the read lands |
+| read failed | any | "Sign in to publish" with the read's cause |
 
 - with Publish standing for a session already enabled, "Its package" beside it opens the package's row on the Packages tab [[playbook-library-93](#playbook-library-93)].
 

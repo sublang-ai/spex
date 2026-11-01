@@ -6,11 +6,12 @@
 // (playbook-library-93, -113, DR-172): "Publish <org>/<pkg> <version> to
 // <registry>", the registry by its display name with its origin in the
 // tooltip, over "<count> files" and "as @<login> in <org>", with Publish
-// and Cancel; signed out, one button "Sign in to publish"; success
-// "Published <version>" linking its page at the registry.
+// and Cancel; signed out, one button "Sign in to publish", neither
+// judged before the account there is read; success "Published <version>"
+// linking its page at the registry.
 import { useEffect, useState } from "react";
 import type { EnvironmentState, PublishPreview } from "@sublang/spex-core/protocol";
-import type { PublishTarget } from "../lib/environments.js";
+import { publishTargetAt, type PublishTarget } from "../lib/environments.js";
 import { usePlaceStore } from "../state/place-context.js";
 import { i18n } from "../i18n.js";
 import { RegistryFlowLine, registrySignInTitle, useRegistrySignIn } from "./RegistryAccount.js";
@@ -44,12 +45,13 @@ interface PublishProps {
   path: string;
   target: PublishTarget | undefined;
   /** Opened from a row's overflow (playbook-library-113): Cancel closes
-   * the control through `onClose`, and while `autoAsk` holds, the preview
-   * is asked for at once — or, signed out, the registry sign-in started —
-   * `onAutoAsked` saying it was, once per choice from the overflow, so a
-   * preview a change of folder, registry or account discarded is asked
-   * for again only by Publish. Absent, a Publish button asks for it
-   * (playbook-library-93). */
+   * the control through `onClose`, and while `autoAsk` holds, once the
+   * account at the registry is read, the preview is asked for at once —
+   * or, signed out, the registry sign-in started where the entry chosen
+   * read "Sign in to publish" — `onAutoAsked` saying it was, once per
+   * choice from the overflow, so a preview a change of folder, registry
+   * or account discarded is asked for again only by Publish. Absent, a
+   * Publish button asks for it (playbook-library-93). */
   opened?: boolean;
   autoAsk?: boolean;
   onAutoAsked?: () => void;
@@ -58,11 +60,42 @@ interface PublishProps {
 }
 
 export function PublishControl(props: PublishProps) {
+  // The overflow's entry as it read when chosen: its own "Sign in to
+  // publish" starts the sign-in at once, Publish never does.
+  const [choseSignIn] = useState(() => props.target?.signedIn === false);
+  // Each registry's account is read for itself: a failed read at one
+  // registry judges no other.
+  return <PublishRead key={props.target?.origin ?? ""} {...props} choseSignIn={choseSignIn} />;
+}
+
+function PublishRead({ choseSignIn, ...props }: PublishProps & { choseSignIn: boolean }) {
+  // Nothing judges signed in or out before the account at the registry
+  // is read (playbook-library-113): where no state of it stands, it is
+  // read here, its answer judging and a failed read standing as signed
+  // out with its cause.
+  const unread = props.target !== undefined && props.target.signedIn === undefined;
+  const read = useRegistrySignIn(props.target?.origin, { read: unread });
+  const target =
+    props.target && unread
+      ? read.state
+        ? publishTargetAt(props.target.origin, read.state)
+        : read.error
+          ? { ...props.target, signedIn: false }
+          : props.target
+      : props.target;
   // Remount synchronously when the upload destination changes, so an old
   // preview can never confirm against the new folder or account target.
-  const key = JSON.stringify([props.repository, props.name, props.path, props.target?.origin,
-    props.target?.signedIn, props.target?.name, props.target?.login]);
-  return <PublishAttempt key={key} {...props} />;
+  const key = JSON.stringify([props.repository, props.name, props.path, target?.origin,
+    target?.signedIn, target?.name, target?.login]);
+  return (
+    <PublishAttempt
+      key={key}
+      {...props}
+      target={target}
+      choseSignIn={choseSignIn}
+      readError={unread ? read.error : undefined}
+    />
+  );
 }
 
 /** Publish waits for the registry's state to be read. */
@@ -74,22 +107,21 @@ function LoadingRegistry() {
   );
 }
 
-/** "Sign in to publish" in place of Publish (playbook-library-93): it
- * starts the registry sign-in in place, its flow reading beneath it.
- * Opened by a row's own "Sign in to publish" (playbook-library-113),
- * the sign-in starts at once, once per choice. */
-function PublishSignIn({ target, autoStart, onStarted }: { target: PublishTarget; autoStart: boolean; onStarted?: () => void }) {
-  // The account there is read once where no state of it stands yet, as
-  // on a page opened after the sign-in; its broadcast settles the target.
-  const account = useRegistrySignIn(target.origin, { read: true });
+/** "Sign in to publish" in place of Publish (playbook-library-93), once
+ * the account there reads signed out: it starts the registry sign-in in
+ * place, its flow reading beneath it. Chosen as a row's own "Sign in to
+ * publish" (playbook-library-113), the sign-in starts at once, once per
+ * choice. */
+function PublishSignIn({ target, autoStart, readError }: { target: PublishTarget; autoStart: boolean; readError?: string }) {
+  const account = useRegistrySignIn(target.origin);
   useEffect(() => {
     if (!autoStart) return;
-    onStarted?.();
     void account.start();
     // Started once per mount; a change of target remounts.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  if (!account.state && !account.error && !account.running && !account.busy) return <LoadingRegistry />;
+  // A failed read of the account stands until a sign-in runs.
+  const failure = account.error ?? (account.running || account.busy ? undefined : readError);
   return (
     <div data-testid="publish" className="flex flex-col gap-1.5 border-t border-neutral-200 pt-3 dark:border-neutral-800">
       <div>
@@ -107,9 +139,9 @@ function PublishSignIn({ target, autoStart, onStarted }: { target: PublishTarget
         </button>
       </div>
       {account.running ? <RegistryFlowLine running={account.running} name={target.name} testId="publish-signin" /> : null}
-      {account.error ? (
+      {failure ? (
         <p role="alert" data-testid="publish-signin-error" className={ERROR}>
-          {account.error}
+          {failure}
         </p>
       ) : null}
     </div>
@@ -132,7 +164,9 @@ function PublishAttempt({
   autoAsk = false,
   onAutoAsked,
   onClose,
-}: PublishProps) {
+  choseSignIn = false,
+  readError,
+}: PublishProps & { choseSignIn?: boolean; readError?: string }) {
   const store = usePlaceStore();
   const environment = store((state) => state.environments[repository]);
   const previewPublish = store((state) => state.previewPublish);
@@ -145,19 +179,29 @@ function PublishAttempt({
   const [sent, setSent] = useState<{ name: string; version: string; previous: EnvironmentState["published"] }>();
 
   const signedIn = target?.signedIn === true;
-  // Opened from a row's overflow, the preview is asked for at once.
+  const judged = target?.signedIn !== undefined;
+  // Opened from a row's overflow, the choice is spent once the account
+  // is read: signed in, the preview is asked for at once.
   useEffect(() => {
-    if (!opened || !autoAsk || !signedIn) return;
+    if (!opened || !autoAsk || !judged) return;
     onAutoAsked?.();
-    void ask();
-    // Asked once per mount; a change of target remounts.
+    if (signedIn) void ask();
+    // Judged once per mount; a change of target, its read included,
+    // remounts.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (!target) return <LoadingRegistry />;
-  if (!target.signedIn) return <PublishSignIn target={target} autoStart={opened && autoAsk} onStarted={onAutoAsked} />;
+  // Publish chosen from the overflow waits for the account's read as for
+  // its checks; elsewhere the registry reads as loading.
+  const reading = !judged;
+  if (reading && !(opened && autoAsk)) return <LoadingRegistry />;
+  if (target.signedIn === false) {
+    return <PublishSignIn target={target} autoStart={opened && autoAsk && choseSignIn} readError={readError} />;
+  }
 
   const publishing = environment?.busy === "publishing";
+  const checking = pending === "preview" || reading;
   const settled = sent && pending === undefined && !publishing;
   const receipt = environment?.published;
   const published =
@@ -268,7 +312,7 @@ function PublishAttempt({
           <button
             type="button"
             data-testid="publish-button"
-            disabled={pending !== undefined || publishing}
+            disabled={checking || pending !== undefined || publishing}
             title={i18n._({
               id: "Publishes {path} to {registry}",
               comment: "the title of Publish: what it publishes and where; {path} is the package's folder, {registry} the registry's display name",
@@ -277,7 +321,7 @@ function PublishAttempt({
             onClick={() => void ask()}
             className={OUTLINE}
           >
-            {pending === "preview"
+            {checking
               ? i18n._({ id: "Checking…", comment: "the checks a publish makes are running, nothing uploads yet" })
               : publishing
                 ? publishingWord
