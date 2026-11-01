@@ -180,6 +180,8 @@ beforeEach(() => {
   catalogs.refresh.mockReset();
   commandMock.mockReset();
   setClientForTests({ command: commandMock } as never);
+  // The place's hold outlives a page; no case starts under another's.
+  useAppStore.setState({ configReread: undefined });
 });
 
 afterEach(() => setClientForTests(undefined));
@@ -505,7 +507,7 @@ describe("settings-67: official names behind a third-party service", () => {
     expect(screen.getByTestId("agent-card-claude").textContent).not.toContain("Every role now uses Provider default.");
   });
 
-  test("a conflict whose project read fails, from either control, holds every batch until read again", async () => {
+  test("a conflict holds every batch from its first reading again, a failed read across leaving the page, until read again", async () => {
     show(CROSSED, thirdParty(), { [PROJECT]: projectComposition(CROSSED) });
     let releaseOwn: (state: ConfigState) => void = () => {};
     let projectFails = true;
@@ -524,8 +526,11 @@ describe("settings-67: official names behind a third-party service", () => {
     fireEvent.click(apply());
     await act(async () => { fireEvent.click(screen.getByTestId("agent-unify-confirm-claude-confirm")); });
     // settings-58: the project's read failed, but your own is still
-    // being read — nothing is reported until both settle.
+    // being read — nothing is reported until both settle, and nothing
+    // submits meanwhile, the other control's open confirmation included.
     expect(screen.queryByTestId("agents-stale")).toBeNull();
+    expect(fix().disabled).toBe(true);
+    expect((screen.getByTestId("agent-official-confirm-confirm") as HTMLButtonElement).disabled).toBe(true);
     await act(async () => { releaseOwn({ ...CROSSED, revision: "rev-9" }); });
     const stale = screen.getByTestId("agents-stale");
     expect(stale.textContent).toContain("could not be read again: the project's settings could not be read");
@@ -534,14 +539,22 @@ describe("settings-67: official names behind a third-party service", () => {
     expect(apply().disabled).toBe(true);
     expect(fix().disabled).toBe(true);
     expect((screen.getByTestId("agent-official-confirm-confirm") as HTMLButtonElement).disabled).toBe(true);
+    // Leaving Settings and entering again keeps the hold: it is the
+    // place's, not the page's.
+    cleanup();
+    render(<AgentCards />);
+    expect(screen.getByTestId("agents-stale").textContent).toContain("could not be read again");
+    expect(fix().disabled).toBe(true);
+    expect(apply().disabled).toBe(true);
     // Read again: held until your own read settles too, then offered.
     projectFails = false;
-    await act(async () => { fireEvent.click(within(stale).getByRole("button", { name: "Read again" })); });
-    expect(screen.getByTestId("agents-stale")).toBeTruthy();
+    await act(async () => { fireEvent.click(within(screen.getByTestId("agents-stale")).getByRole("button", { name: "Read again" })); });
+    expect(fix().disabled).toBe(true);
     await act(async () => { releaseOwn({ ...CROSSED, revision: "rev-9" }); });
     expect(screen.queryByTestId("agents-stale")).toBeNull();
     expect(fix().disabled).toBe(false);
     expect(apply().disabled).toBe(false);
+    fireEvent.click(fix());
     commandMock.mockResolvedValue({ ...CROSSED, revision: "rev-10" });
     await act(async () => { fireEvent.click(screen.getByTestId("agent-official-confirm-confirm")); });
     expect(commandMock).toHaveBeenLastCalledWith("config.batch", expect.objectContaining({ revision: "rev-9" }));

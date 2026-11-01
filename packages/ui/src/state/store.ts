@@ -219,6 +219,16 @@ export interface AppState extends AttachmentState {
   /** Read one project's composed configuration (`config.get` with its
    * id); a broadcast that overtook the read wins. */
   loadProjectConfig(projectId: string): Promise<void>;
+  /** A batch's conflict reading the config again (settings-58,
+   * settings-60): in flight, or failed with its reason; absent once
+   * every read succeeded. While it stands, no agent card's control
+   * submits a batch, whichever card started it, the page left and
+   * entered again or not. */
+  configReread?: { reading: true } | { reading: false; error: string };
+  /** Read your own group's config and every project composition held
+   * again, holding the agent cards' batches from the start until every
+   * read succeeds; the newest reading again decides. */
+  rereadConfig(): Promise<void>;
   /** Served machine definitions by playbook id (run-view-64); null
    * records a fetch that found no machine. */
   machineGraphs: Record<string, MachineGraph | null>;
@@ -1028,6 +1038,8 @@ function placeState(
   /** The newest config announcement's number: a project's `config.get`
    * reply older than a `config.state` broadcast is discarded. */
   let configReads = 0;
+  // Readings again after a batch's conflict, the newest deciding.
+  let rereads = 0;
 
   /** The newest re-read of the projects a Groups state set off: an older
    * reply is discarded. */
@@ -1808,6 +1820,18 @@ function placeState(
       const state = await getClient().command("config.get", { projectId });
       if (read !== configReads && projectId in get().projectConfigs) return;
       set({ projectConfigs: { ...get().projectConfigs, [projectId]: state } });
+    },
+
+    async rereadConfig(): Promise<void> {
+      const reading = ++rereads;
+      set({ configReread: { reading: true } });
+      const reads = await Promise.allSettled([
+        getClient().command("config.get", {}).then((configState) => set({ configState })),
+        ...Object.keys(get().projectConfigs).map((projectId) => get().loadProjectConfig(projectId)),
+      ]);
+      if (reading !== rereads) return;
+      const failed = reads.find((read): read is PromiseRejectedResult => read.status === "rejected");
+      set({ configReread: failed ? { reading: false, error: failed.reason instanceof Error ? failed.reason.message : String(failed.reason) } : undefined });
     },
     compileProgress: {},
     sessions: [],

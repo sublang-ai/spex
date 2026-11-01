@@ -13,7 +13,7 @@
 // and sets them to Provider default (settings-59, settings-60) — each
 // change one `config.batch` against the revision shown.
 
-import { createContext, useContext, useId, useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import type {
   AdapterName,
   ConfigBatchOpInput,
@@ -175,8 +175,8 @@ function OneModel({ entry, state, catalog }: { entry: ReadinessEntry; state: Ext
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<{ done: true; left: string[] } | { error: string }>();
-  const reread = useContext(RereadContext);
-  const stale = reread.stale !== undefined;
+  // Held while a conflict reads again, and after it failed (settings-58).
+  const stale = store((s) => s.configReread) !== undefined;
   const discovery = catalog.options?.discovery;
   const models = discovery?.status === "available" ? discovery.models : [];
   const defaultModel = discovery?.status === "available" ? discovery.defaultModel : undefined;
@@ -193,8 +193,8 @@ function OneModel({ entry, state, catalog }: { entry: ReadinessEntry; state: Ext
     send(store, plan.ops, state.revision)
       .then(() => setOutcome({ done: true, left: plan.left }))
       .catch((error: unknown) => {
-        if (error instanceof StaleRead) reread.failed(error.message);
-        else setOutcome({ error: refusalText(error) });
+        // A failed reading again speaks once, for the whole section.
+        if ((error as Partial<SpexCommandError>)?.code !== "conflict" || store.getState().configReread === undefined) setOutcome({ error: refusalText(error) });
       })
       .finally(() => { setBusy(false); setAsking(false); });
   }
@@ -258,23 +258,6 @@ function OneModel({ entry, state, catalog }: { entry: ReadinessEntry; state: Ext
   );
 }
 
-/** A conflict whose reading again failed: the list shown may still be
- * the one the refused batch was built from. */
-class StaleRead extends Error {}
-
-/** Read your own group's config and each project's composition shown
- * again, every read settled before it answers; any that failed is a
- * StaleRead. */
-async function reread(store: ReturnType<typeof usePlaceStore>): Promise<void> {
-  const client = store.getClient();
-  const reads = await Promise.allSettled([
-    client.command("config.get", {}).then((configState) => store.setState({ configState })),
-    ...Object.keys(store.getState().projectConfigs).map((projectId) => store.getState().loadProjectConfig(projectId)),
-  ]);
-  const failed = reads.find((read): read is PromiseRejectedResult => read.status === "rejected");
-  if (failed) throw new StaleRead(failed.reason instanceof Error ? failed.reason.message : String(failed.reason));
-}
-
 /** Send one batch against the revision shown, taking its reply as the
  * state shown at once (core-service-44). A conflict reads the config
  * and each project's composition shown again before it is reported, so
@@ -285,16 +268,10 @@ async function send(store: ReturnType<typeof usePlaceStore>, ops: ConfigBatchOpI
     const state = await store.getClient().command("config.batch", { ops, revision: revision ?? "" });
     store.setState({ configState: state });
   } catch (error) {
-    if ((error as Partial<SpexCommandError>)?.code === "conflict") await reread(store);
+    if ((error as Partial<SpexCommandError>)?.code === "conflict") await store.getState().rereadConfig();
     throw error;
   }
 }
-
-/** Whether a conflict's reading again failed, shared by every batch
- * control of the section: the lists any of them shows may be the
- * refused batch's, so none submits until a reading succeeds
- * (settings-58, settings-60). */
-const RereadContext = createContext<{ stale?: string; failed(message: string): void }>({ failed: () => {} });
 
 /** Official names behind a third-party service (settings-59, -60). */
 function OfficialNames({ entry, state, catalog }: { entry: ReadinessEntry; state: Extract<ConfigState, { status: "valid" }>; catalog: ReturnType<typeof useAgentOptions> }) {
@@ -304,8 +281,8 @@ function OfficialNames({ entry, state, catalog }: { entry: ReadinessEntry; state
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<{ done: true } | { error: string }>();
-  const reread = useContext(RereadContext);
-  const stale = reread.stale !== undefined;
+  // Held while a conflict reads again, and after it failed (settings-58).
+  const stale = store((s) => s.configReread) !== undefined;
   // Recomputed from the newest state on every render (settings-59).
   const rows = officialRoles(state, projectConfigs);
   const discovery = catalog.options?.discovery;
@@ -329,8 +306,8 @@ function OfficialNames({ entry, state, catalog }: { entry: ReadinessEntry; state
     send(store, ops, state.revision)
       .then(() => setOutcome({ done: true }))
       .catch((error: unknown) => {
-        if (error instanceof StaleRead) reread.failed(error.message);
-        else setOutcome({ error: refusalText(error) });
+        // A failed reading again speaks once, for the whole section.
+        if ((error as Partial<SpexCommandError>)?.code !== "conflict" || store.getState().configReread === undefined) setOutcome({ error: refusalText(error) });
       })
       .finally(() => { setBusy(false); setAsking(false); });
   }
@@ -468,17 +445,8 @@ export function AgentCards() {
   // comes (settings-5).
   const standing = STANDING.map((adapter) => byAdapter.get(adapter) ?? { adapter, ready: null, usedBy: [], fastModeSupported: false, subagentModelSupported: false });
   const others = readiness.filter((entry) => !STANDING.includes(entry.adapter));
-  const [stale, setStale] = useState<string>();
-  const [reading, setReading] = useState(false);
-  function readAgain(): void {
-    setReading(true);
-    reread(store)
-      .then(() => setStale(undefined))
-      .catch((error: unknown) => setStale(error instanceof Error ? error.message : String(error)))
-      .finally(() => setReading(false));
-  }
+  const reread = store((state) => state.configReread);
   return (
-    <RereadContext.Provider value={{ ...(stale !== undefined ? { stale } : {}), failed: setStale }}>
     <section data-testid="agents-section" className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="text-sm font-semibold text-neutral-500">{i18n._("Agents")}</h2>
@@ -494,10 +462,10 @@ export function AgentCards() {
           {i18n._("Changed a key and still not ready? Quit Spex completely and open it again.")}
         </span>
       </div>
-      {stale !== undefined ? (
+      {reread && !reread.reading ? (
         <div role="alert" data-testid="agents-stale" className="text-xs text-red-700 dark:text-red-300">
-          {i18n._("The config changed meanwhile and nothing was written, but it could not be read again: {message}", { message: stale })}{" "}
-          <button type="button" className={buttonClass} disabled={reading} onClick={readAgain}>
+          {i18n._("The config changed meanwhile and nothing was written, but it could not be read again: {message}", { message: reread.error })}{" "}
+          <button type="button" className={buttonClass} onClick={() => void store.getState().rereadConfig()}>
             {i18n._({ id: "Read again", comment: "read the config and the projects' settings again after a failed read" })}
           </button>
         </div>
@@ -505,6 +473,5 @@ export function AgentCards() {
       {standing.map((entry) => <AgentCard key={entry.adapter} entry={entry} state={configState} seat={seat} />)}
       {others.map((entry) => <OtherEntry key={entry.adapter} entry={entry} />)}
     </section>
-    </RereadContext.Provider>
   );
 }
