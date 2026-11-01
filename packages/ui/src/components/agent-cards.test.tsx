@@ -505,6 +505,40 @@ describe("settings-67: official names behind a third-party service", () => {
     expect(screen.getByTestId("agent-card-claude").textContent).not.toContain("Every role now uses Provider default.");
   });
 
+  test("a conflict whose project read fails says so once every read settles, and holds the batch until read again", async () => {
+    show(CROSSED, thirdParty(), { [PROJECT]: projectComposition(CROSSED) });
+    let releaseOwn: (state: ConfigState) => void = () => {};
+    let projectFails = true;
+    commandMock.mockImplementation((type: string, args: { projectId?: string }) => {
+      if (type === "config.batch") return Promise.reject(new SpexCommandError("conflict", "changed meanwhile; retry"));
+      if (type === "config.get" && args.projectId === undefined) return new Promise<ConfigState>((resolve) => { releaseOwn = resolve; });
+      if (type === "config.get") return projectFails ? Promise.reject(new Error("the project's settings could not be read")) : Promise.resolve(projectComposition(CROSSED));
+      return Promise.reject(new Error(`unexpected ${type}`));
+    });
+    fireEvent.click(screen.getByTestId("agent-official-fix"));
+    await act(async () => { fireEvent.click(screen.getByTestId("agent-official-confirm-confirm")); });
+    // settings-60: the project's read failed, but your own is still
+    // being read — nothing is reported until both settle.
+    expect(screen.queryByTestId("agent-official-error")).toBeNull();
+    await act(async () => { releaseOwn({ ...CROSSED, revision: "rev-9" }); });
+    const error = screen.getByTestId("agent-official-error");
+    expect(error.textContent).toContain("could not be read again: the project's settings could not be read");
+    // The list may be the refused batch's: no batch from it.
+    expect((screen.getByTestId("agent-official-fix") as HTMLButtonElement).disabled).toBe(true);
+    // Read again: once every read succeeds, the batch is offered again.
+    projectFails = false;
+    await act(async () => { fireEvent.click(within(error).getByRole("button", { name: "Read again" })); });
+    // Held while your own config is read again too.
+    expect(screen.getByTestId("agent-official-error")).toBeTruthy();
+    await act(async () => { releaseOwn({ ...CROSSED, revision: "rev-9" }); });
+    expect(screen.queryByTestId("agent-official-error")).toBeNull();
+    expect((screen.getByTestId("agent-official-fix") as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByTestId("agent-official-fix"));
+    commandMock.mockResolvedValue({ ...CROSSED, revision: "rev-10" });
+    await act(async () => { fireEvent.click(screen.getByTestId("agent-official-confirm-confirm")); });
+    expect(commandMock).toHaveBeenLastCalledWith("config.batch", expect.objectContaining({ revision: "rev-9" }));
+  });
+
   test("with no default model the control is disabled, with its line and a Retry", () => {
     catalogs.defaultModel = undefined;
     show(CROSSED, thirdParty());

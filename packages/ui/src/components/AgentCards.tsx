@@ -76,6 +76,9 @@ function positionLabel(position: string): string {
 /** A refusal in the reader's words: a conflict asks for a retry over
  * the config shown, a violation names its rule and field. */
 function refusalText(error: unknown): string {
+  if (error instanceof StaleRead) {
+    return i18n._("The config changed meanwhile and nothing was written, but it could not be read again: {message}", { message: error.message });
+  }
   const refusal = error as Partial<SpexCommandError>;
   if (refusal?.code === "conflict") {
     return i18n._("The config changed meanwhile and nothing was written: check the list and try again.");
@@ -174,7 +177,8 @@ function OneModel({ entry, state, catalog }: { entry: ReadinessEntry; state: Ext
   const [value, setValue] = useState("");
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [outcome, setOutcome] = useState<{ done: true; left: string[] } | { error: string }>();
+  const [outcome, setOutcome] = useState<{ done: true; left: string[] } | { error: string; stale: boolean }>();
+  const stale = outcome !== undefined && "stale" in outcome && outcome.stale;
   const discovery = catalog.options?.discovery;
   const models = discovery?.status === "available" ? discovery.models : [];
   const defaultModel = discovery?.status === "available" ? discovery.defaultModel : undefined;
@@ -190,7 +194,7 @@ function OneModel({ entry, state, catalog }: { entry: ReadinessEntry; state: Ext
     setOutcome(undefined);
     send(store, plan.ops, state.revision)
       .then(() => setOutcome({ done: true, left: plan.left }))
-      .catch((error: unknown) => setOutcome({ error: refusalText(error) }))
+      .catch((error: unknown) => setOutcome({ error: refusalText(error), stale: error instanceof StaleRead }))
       .finally(() => { setBusy(false); setAsking(false); });
   }
 
@@ -204,7 +208,7 @@ function OneModel({ entry, state, catalog }: { entry: ReadinessEntry; state: Ext
             models={models}
             {...(defaultModel ? { defaultModel } : {})}
             recommended={thirdParty && Boolean(defaultModel)}
-            onChange={(next) => { setValue(next); setAsking(false); setOutcome(undefined); }}
+            onChange={(next) => { setValue(next); setAsking(false); if (!stale) setOutcome(undefined); }}
             labelId={labelId}
             testId={`agent-unify-model-${entry.adapter}`}
           />
@@ -213,7 +217,7 @@ function OneModel({ entry, state, catalog }: { entry: ReadinessEntry; state: Ext
           type="button"
           data-testid={`agent-unify-apply-${entry.adapter}`}
           className={buttonClass}
-          disabled={busy || blindDefault || plan.ops.length === 0 || !state.revision}
+          disabled={busy || stale || blindDefault || plan.ops.length === 0 || !state.revision}
           onClick={() => { setAsking(true); setOutcome(undefined); }}
         >
           {i18n._({ id: "Apply", comment: "give every agent of the adapter the chosen model" })}
@@ -248,9 +252,26 @@ function OneModel({ entry, state, catalog }: { entry: ReadinessEntry; state: Ext
           ) : null}
         </div>
       ) : null}
-      {outcome && "error" in outcome ? <div role="alert" data-testid={`agent-unify-error-${entry.adapter}`} className="text-xs text-red-700 dark:text-red-300">{outcome.error}</div> : null}
+      {outcome && "error" in outcome ? <Refusal outcome={outcome} testId={`agent-unify-error-${entry.adapter}`} onRead={setOutcome} /> : null}
     </div>
   );
+}
+
+/** A conflict whose reading again failed: the list shown may still be
+ * the one the refused batch was built from. */
+class StaleRead extends Error {}
+
+/** Read your own group's config and each project's composition shown
+ * again, every read settled before it answers; any that failed is a
+ * StaleRead. */
+async function reread(store: ReturnType<typeof usePlaceStore>): Promise<void> {
+  const client = store.getClient();
+  const reads = await Promise.allSettled([
+    client.command("config.get", {}).then((configState) => store.setState({ configState })),
+    ...Object.keys(store.getState().projectConfigs).map((projectId) => store.getState().loadProjectConfig(projectId)),
+  ]);
+  const failed = reads.find((read): read is PromiseRejectedResult => read.status === "rejected");
+  if (failed) throw new StaleRead(failed.reason instanceof Error ? failed.reason.message : String(failed.reason));
 }
 
 /** Send one batch against the revision shown, taking its reply as the
@@ -259,19 +280,44 @@ function OneModel({ entry, state, catalog }: { entry: ReadinessEntry; state: Ext
  * the reader confirms over what the files now hold, never the list the
  * refused batch was built from (settings-58, settings-60). */
 async function send(store: ReturnType<typeof usePlaceStore>, ops: ConfigBatchOpInput[], revision: string | undefined): Promise<void> {
-  const client = store.getClient();
   try {
-    const state = await client.command("config.batch", { ops, revision: revision ?? "" });
+    const state = await store.getClient().command("config.batch", { ops, revision: revision ?? "" });
     store.setState({ configState: state });
   } catch (error) {
-    if ((error as Partial<SpexCommandError>)?.code === "conflict") {
-      await Promise.all([
-        client.command("config.get", {}).then((configState) => store.setState({ configState })),
-        ...Object.keys(store.getState().projectConfigs).map((projectId) => store.getState().loadProjectConfig(projectId)),
-      ]).catch(() => {});
-    }
+    if ((error as Partial<SpexCommandError>)?.code === "conflict") await reread(store);
     throw error;
   }
+}
+
+/** A refusal's line; after a failed reading again, a control reading
+ * once more, the batch held back until it succeeds. */
+function Refusal({ outcome, testId, onRead }: { outcome: { error: string; stale: boolean }; testId?: string; onRead: (next: { error: string; stale: boolean } | undefined) => void }) {
+  const store = usePlaceStore();
+  const [reading, setReading] = useState(false);
+  return (
+    <div role="alert" {...(testId ? { "data-testid": testId } : {})} className="text-xs text-red-700 dark:text-red-300">
+      {outcome.error}
+      {outcome.stale ? (
+        <>
+          {" "}
+          <button
+            type="button"
+            className={buttonClass}
+            disabled={reading}
+            onClick={() => {
+              setReading(true);
+              reread(store)
+                .then(() => onRead(undefined))
+                .catch((error: unknown) => onRead({ error: refusalText(error), stale: true }))
+                .finally(() => setReading(false));
+            }}
+          >
+            {i18n._({ id: "Read again", comment: "read the config and the projects' settings again after a failed read" })}
+          </button>
+        </>
+      ) : null}
+    </div>
+  );
 }
 
 /** Official names behind a third-party service (settings-59, -60). */
@@ -281,7 +327,8 @@ function OfficialNames({ entry, state, catalog }: { entry: ReadinessEntry; state
   const projects = store((s) => s.projects);
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [outcome, setOutcome] = useState<{ done: true } | { error: string }>();
+  const [outcome, setOutcome] = useState<{ done: true } | { error: string; stale: boolean }>();
+  const stale = outcome !== undefined && "stale" in outcome && outcome.stale;
   // Recomputed from the newest state on every render (settings-59).
   const rows = officialRoles(state, projectConfigs);
   const discovery = catalog.options?.discovery;
@@ -304,7 +351,7 @@ function OfficialNames({ entry, state, catalog }: { entry: ReadinessEntry; state
     setOutcome(undefined);
     send(store, ops, state.revision)
       .then(() => setOutcome({ done: true }))
-      .catch((error: unknown) => setOutcome({ error: refusalText(error) }))
+      .catch((error: unknown) => setOutcome({ error: refusalText(error), stale: error instanceof StaleRead }))
       .finally(() => { setBusy(false); setAsking(false); });
   }
 
@@ -330,7 +377,7 @@ function OfficialNames({ entry, state, catalog }: { entry: ReadinessEntry; state
             type="button"
             data-testid="agent-official-fix"
             className={buttonClass}
-            disabled={busy || !defaultModel || ops.length === 0 || !state.revision}
+            disabled={busy || stale || !defaultModel || ops.length === 0 || !state.revision}
             onClick={() => { setAsking(true); setOutcome(undefined); }}
           >
             {i18n._("Set all to Provider default")}
@@ -355,7 +402,7 @@ function OfficialNames({ entry, state, catalog }: { entry: ReadinessEntry; state
           </ul>
         </Confirm>
       ) : null}
-      {outcome && "error" in outcome ? <div role="alert" className="text-red-700 dark:text-red-300">{outcome.error}</div> : null}
+      {outcome && "error" in outcome ? <Refusal outcome={outcome} testId="agent-official-error" onRead={setOutcome} /> : null}
     </div>
   );
 }

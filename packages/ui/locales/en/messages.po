@@ -5697,6 +5697,11 @@ msgstr "read {age}"
 msgid "read again"
 msgstr "read again"
 
+#. read the config and the projects' settings again after a failed read
+#: src/components/AgentCards.tsx
+msgid "Read again"
+msgstr "Read again"
+
 #. a project's records: the Space lets this account only read them
 #: src/lib/space.ts
 msgid "Read-only"
@@ -7372,6 +7377,10 @@ msgstr "The compiled state machine, from the last compile"
 #: src/components/PlaybookStages.tsx
 msgid "The compiled XState machine that drives the players"
 msgstr "The compiled XState machine that drives the players"
+
+#: src/components/AgentCards.tsx
+msgid "The config changed meanwhile and nothing was written, but it could not be read again: {message}"
+msgstr "The config changed meanwhile and nothing was written, but it could not be read again: {message}"
 
 #: src/components/AgentCards.tsx
 msgid "The config changed meanwhile and nothing was written: check the list and try again."

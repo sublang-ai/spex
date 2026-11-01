@@ -5697,6 +5697,11 @@ msgstr "{age}读取"
 msgid "read again"
 msgstr "已重新读取"
 
+#. read the config and the projects' settings again after a failed read
+#: src/components/AgentCards.tsx
+msgid "Read again"
+msgstr "重新读取"
+
 #. a project's records: the Space lets this account only read them
 #: src/lib/space.ts
 msgid "Read-only"
@@ -7372,6 +7377,10 @@ msgstr "上次编译得到的状态机"
 #: src/components/PlaybookStages.tsx
 msgid "The compiled XState machine that drives the players"
 msgstr "驱动各 Player 的已编译 XState 状态机"
+
+#: src/components/AgentCards.tsx
+msgid "The config changed meanwhile and nothing was written, but it could not be read again: {message}"
+msgstr "配置在此期间已被改动，什么都没有写入，但重新读取失败：{message}"
 
 #: src/components/AgentCards.tsx
 msgid "The config changed meanwhile and nothing was written: check the list and try again."
