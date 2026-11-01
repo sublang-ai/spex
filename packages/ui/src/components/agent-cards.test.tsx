@@ -55,7 +55,7 @@ import { AgentCards } from "./AgentCards.js";
 import { AgentEditor } from "./AgentEditor.js";
 import { SettingsSurface } from "./SettingsSurface.js";
 import { PlaceStoreContext } from "../state/place-context.js";
-import { createAppStore, setClientForTests, useAppStore } from "../state/store.js";
+import { createAppStore, deliverServerMessageForTests, setClientForTests, useAppStore } from "../state/store.js";
 import { SpexCommandError } from "../lib/client.js";
 import type { BaseUrlState, ConfigState, ReadinessEntry } from "@sublang/spex-core/protocol";
 
@@ -558,6 +558,54 @@ describe("settings-67: official names behind a third-party service", () => {
     commandMock.mockResolvedValue({ ...CROSSED, revision: "rev-10" });
     await act(async () => { fireEvent.click(screen.getByTestId("agent-official-confirm-confirm")); });
     expect(commandMock).toHaveBeenLastCalledWith("config.batch", expect.objectContaining({ revision: "rev-9" }));
+  });
+
+  test("readings again answered out of order: no late answer replaces a newer one", async () => {
+    show(CROSSED, thirdParty(), { [PROJECT]: projectComposition(CROSSED) });
+    // Each reading again's answers, released by the test.
+    const pending: { own: (state: ConfigState) => void; project: (state: ConfigState) => void }[] = [];
+    commandMock.mockImplementation((type: string, args: { projectId?: string }) => {
+      if (type !== "config.get") return Promise.reject(new Error(`unexpected ${type}`));
+      if (args.projectId === undefined) pending.push({ own: () => {}, project: () => {} });
+      const round = pending.at(-1)!;
+      return new Promise<ConfigState>((resolve) => { if (args.projectId === undefined) round.own = resolve; else round.project = resolve; });
+    });
+    const older = { ...CROSSED, revision: "rev-old" };
+    const newer = { ...CROSSED, revision: "rev-new" };
+    // The older still binds the official-named player; the newer not.
+    const olderProject = projectComposition(CROSSED);
+    const newerProject = projectComposition(CROSSED, { coder: "dev.writer" });
+    let first!: Promise<void>, second!: Promise<void>;
+    act(() => { first = useAppStore.getState().rereadConfig(); });
+    act(() => { second = useAppStore.getState().rereadConfig(); });
+    // The second answers first and lifts the hold…
+    await act(async () => { pending[1]!.own(newer); pending[1]!.project(newerProject); await second; });
+    expect(useAppStore.getState().configReread).toBeUndefined();
+    // …then the first answers late: it writes nothing (settings-60).
+    await act(async () => { pending[0]!.own(older); pending[0]!.project(olderProject); await first; });
+    expect(useAppStore.getState().configState).toBe(newer);
+    expect(useAppStore.getState().projectConfigs[PROJECT]).toBe(newerProject);
+    expect(screen.getByTestId("agent-official-list").textContent).not.toContain("fix.coder");
+    expect(useAppStore.getState().configReread).toBeUndefined();
+  });
+
+  test("a broadcast newer than a reading again keeps its states", async () => {
+    show(CROSSED, thirdParty(), { [PROJECT]: projectComposition(CROSSED) });
+    let releaseOwn: (state: ConfigState) => void = () => {};
+    let releaseProject: (state: ConfigState) => void = () => {};
+    commandMock.mockImplementation((_type: string, args: { projectId?: string }) =>
+      new Promise<ConfigState>((resolve) => { if (args.projectId === undefined) releaseOwn = resolve; else releaseProject = resolve; }));
+    let reading!: Promise<void>;
+    act(() => { reading = useAppStore.getState().rereadConfig(); });
+    const broadcast = { ...CROSSED, revision: "rev-broadcast" };
+    const broadcastProject = projectComposition(CROSSED, { coder: "dev.writer" });
+    act(() => { deliverServerMessageForTests({ type: "config.state", state: broadcast, projects: { [PROJECT]: broadcastProject } }); });
+    // Still held until the reads settle.
+    expect((screen.getByTestId("agent-official-fix") as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => { releaseOwn({ ...CROSSED, revision: "rev-older" }); releaseProject(projectComposition(CROSSED)); await reading; });
+    expect(useAppStore.getState().configState).toBe(broadcast);
+    expect(useAppStore.getState().projectConfigs[PROJECT]).toBe(broadcastProject);
+    expect(useAppStore.getState().configReread).toBeUndefined();
   });
 
   test("with no default model the control is disabled, with its line and a Retry", () => {

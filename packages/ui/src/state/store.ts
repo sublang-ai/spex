@@ -1824,14 +1824,33 @@ function placeState(
 
     async rereadConfig(): Promise<void> {
       const reading = ++rereads;
+      const broadcast = configReads;
       set({ configReread: { reading: true } });
+      const projectIds = Object.keys(get().projectConfigs);
+      // Every answer is held until all settle: a reading again the
+      // next one overtook, or a `config.state` broadcast newer than its
+      // start, writes nothing, so no late answer replaces a newer one.
       const reads = await Promise.allSettled([
-        getClient().command("config.get", {}).then((configState) => set({ configState })),
-        ...Object.keys(get().projectConfigs).map((projectId) => get().loadProjectConfig(projectId)),
+        getClient().command("config.get", {}),
+        ...projectIds.map((projectId) => getClient().command("config.get", { projectId })),
       ]);
       if (reading !== rereads) return;
       const failed = reads.find((read): read is PromiseRejectedResult => read.status === "rejected");
-      set({ configReread: failed ? { reading: false, error: failed.reason instanceof Error ? failed.reason.message : String(failed.reason) } : undefined });
+      if (failed) {
+        set({ configReread: { reading: false, error: failed.reason instanceof Error ? failed.reason.message : String(failed.reason) } });
+        return;
+      }
+      const [own, ...projects] = reads.map((read) => (read as PromiseFulfilledResult<ConfigState>).value);
+      if (broadcast !== configReads) {
+        // The broadcast already brought newer states than these.
+        set({ configReread: undefined });
+        return;
+      }
+      set({
+        configState: own,
+        projectConfigs: { ...get().projectConfigs, ...Object.fromEntries(projectIds.map((projectId, index) => [projectId, projects[index]!])) },
+        configReread: undefined,
+      });
     },
     compileProgress: {},
     sessions: [],
