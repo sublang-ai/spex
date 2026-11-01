@@ -9,7 +9,8 @@
 // folders, with no core running. The stand-in runs in this process, so
 // every run is asynchronous. What each command prints is a project's
 // Packages tab's words (DR-172), the registry named by its descriptor's
-// display name (cli-22).
+// display name (cli-22), a provided spec's place in `specs/` among them
+// (DR-174).
 
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
@@ -21,7 +22,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 
-import { ContentStore, parseLock, publishRelease, readPublishableRelease, RegistryClient, requestsDigest, seedBuiltinPackage, serializeLock, type RegistrySourceLock, type Resolution } from "./lib/environment/index.js";
+import { ContentStore, parseLock, publishRelease, readPlacedRecord, readPublishableRelease, RegistryClient, requestsDigest, seedBuiltinPackage, serializeLock, type RegistrySourceLock, type Resolution } from "./lib/environment/index.js";
 import { fileCredentialStore } from "./lib/git-host.js";
 import { makeRelease, startStandinRegistry, type ReleaseFixture, type StandinRegistry } from "./testing/index.js";
 
@@ -150,6 +151,11 @@ async function publish(name: string, version: string, artifacts: Record<string, 
 const readYaml = (file: string): any => parseYaml(readFileSync(file, "utf8"));
 const skill = { kind: "skill", language: "en" };
 
+/** demo/spec's spec, citing demo/other's and demo/absent's by address. */
+const DEMO_SPEC_MD = "# spec: Spec\n\n## Intent\n\nThe spec.\n\n## External Behavior\n\n### spec-1\n\nThe spec shall build on the other [[other-1](spex:demo/other#other-1)] and the absent [[absent-1](spex:demo/absent#absent-1)].\n\n## Verification\n\n### spec-2\n\nWhen read, the suite shall assert it builds [[spec-1](#spec-1)].\n";
+/** The spec a folder of demo/other provides. */
+const OTHER_MD = "# other: Other\n\n## Intent\n\nThe other.\n\n## External Behavior\n\n### other-1\n\nThe other shall stand.\n\n## Verification\n\n### other-2\n\nWhen read, the suite shall assert it stands [[other-1](#other-1)].\n";
+
 before(async () => {
   registry = await startStandinRegistry({ dir: join(SCRATCH, "registry") });
   client = new RegistryClient({ url: registry.url });
@@ -167,6 +173,8 @@ before(async () => {
   // A suppressed release is passed over too: 1.2.1 is never picked.
   await publish("demo/other", "1.2.1", { other: skill }, skillFiles("other", "1.2.1"), { "demo/base": "^1.0.0" });
   registry.script.suppress("demo/other", "1.2.1");
+  // A spec citing two other releases' specs by address (environments-41).
+  await publish("demo/spec", "1.0.0", { spec: { kind: "spec", language: "en" } }, { "specs/en/spec.md": DEMO_SPEC_MD });
 
   // The home names the stand-in as its default instance (storage-2).
   mkdirSync(HOME, { recursive: true });
@@ -237,7 +245,8 @@ test("cli-15: add writes the package into spex.yaml, installs under .spex/ and p
   assert.deepEqual(Object.keys(lock.packages).sort(), ["demo/base", "demo/other", "demo/tool"]);
   assert.deepEqual(lock.packages["demo/base"]["required-by"], ["demo/other"]);
   assert.equal(lock.packages["demo/tool"].source.registry, registry.url);
-  assert.ok(existsSync(join(WORK, ".claude", "skills", "demo-base", "base.md")), "[cli-2] the spec exported as a skill");
+  assert.ok(existsSync(join(WORK, ".claude", "skills", "demo-base", "base.md")), "[cli-2] the spec exported as a skill where the folder holds no specs/");
+  assert.match(other, /^Added demo\/base 1\.0\.0 for demo\/other\n {2}spec needs specs\/ — spex scaffold$/m, "[cli-2] the spec waiting for specs/, in cli-6's words");
   // Git sees the two files and never the installed tree or the exports.
   const status = execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: WORK, encoding: "utf8" });
   assert.deepEqual(status.trim().split("\n").sort(), ["?? spex.lock", "?? spex.yaml"], "[cli-2] Git sees spex.yaml and spex.lock alone");
@@ -282,6 +291,7 @@ test("cli-15: list heads with the folder and the registry's name, then what is a
     "  demo/tool   ^1.0.0",
     "Installed",
     "  demo/base   1.0.0  from the registry  for demo/other  installed",
+    "    spec needs specs/ — spex scaffold",
     "  demo/other  1.2.0  from the registry                  installed",
     "  demo/tool   1.0.0  from the registry                  installed",
     "Skills for agents",
@@ -289,7 +299,7 @@ test("cli-15: list heads with the folder and the registry's name, then what is a
     "  other      .agents/skills, .claude/skills",
     "  tool       .agents/skills, .claude/skills",
     "",
-  ].join("\n"), "[cli-6] the folder, the registry by its display name, each package added with its version, each installed with its version, source, what it came for and its state, each skill with its folders, and no last line while spex.lock stands");
+  ].join("\n"), "[cli-6] the folder, the registry by its display name, each package added with its version, each installed with its version, source, what it came for and its state, a spec waiting for specs/ beneath its package, each skill with its folders, and no last line while spex.lock stands");
   assert.ok(!listed.includes(host), "[cli-22] the registry named, never by its host while its descriptor names it");
 
   // A folder holding neither file: one line (cli-6).
@@ -505,6 +515,49 @@ test("cli-15: list says the lock is missing or stale, and a skill a folder of yo
   assert.doesNotMatch(broken, /release/, "[cli-6] no word of the library's own");
 });
 
+test("cli-15: a package's spec is placed in specs/, its links waiting until their package is added, a hand edit left as yours and kept at the removal", async () => {
+  const dir = workingFolder(join(SCRATCH, "placing"));
+  writeFileSync(join(dir, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages: {}\n`);
+  await ok(dir, "scaffold");
+  assert.ok(statSync(join(dir, "specs", "packages")).isDirectory(), "a scaffolded specs/");
+  const placed = join(dir, "specs", "packages", "spec.md");
+
+  // Added from the registry: placed, both cited packages waiting.
+  const added = await ok(dir, "add", "demo/spec");
+  assert.match(added, /^Added demo\/spec 1\.0\.0\n {2}spec in specs\/packages\/spec\.md\n {2}1 links wait for demo\/absent — spex add demo\/absent\n {2}1 links wait for demo\/other — spex add demo\/other$/m, "[cli-2] the spec's line and one line per package its links wait for");
+  assert.match(readFileSync(placed, "utf8"), /^The spec shall build on the other and the absent\.$/m, "[cli-2] each waiting citation removed, the phrase kept");
+  assert.doesNotMatch(readFileSync(placed, "utf8"), /spex:/, "[cli-2] specs/ holds no address");
+  assert.equal(existsSync(join(dir, ".claude", "skills", "demo-spec")), false, "[cli-2] no spec skill where specs/ stands");
+  assert.equal(execFileSync("git", ["status", "--porcelain", "--untracked-files=all", "--", "specs/packages/spec.md"], { cwd: dir, encoding: "utf8" }), "?? specs/packages/spec.md\n", "[cli-2] the placed spec left for the reader to commit");
+
+  // The cited package added: its spec placed, and the link appears.
+  await makeRelease(join(dir, "kits", "other"), manifestOf("demo/other", "1.0.0", { other: { kind: "spec", language: "en" } }), { "specs/en/other.md": OTHER_MD });
+  const other = await ok(dir, "add", "demo/other", "--path", "kits/other");
+  assert.match(other, /^Added demo\/other 1\.0\.0\n {2}spec in specs\/packages\/other\.md$/m);
+  assert.match(readFileSync(placed, "utf8"), /^The spec shall build on the other \[\[other-1\]\(other\.md#other-1\)\] and the absent\.$/m, "[cli-2] the citation of demo/other a relative link once its spec stands");
+  assert.equal(readFileSync(join(dir, "specs", "packages", "other.md"), "utf8"), OTHER_MD);
+
+  const listed = await ok(dir, "list");
+  assert.match(listed, /^Installed\n {2}demo\/other +1\.0\.0 +from folder kits\/other +installed\n {4}spec in specs\/packages\/other\.md\n {2}demo\/spec +1\.0\.0 +from the registry +installed\n {4}spec in specs\/packages\/spec\.md\n {4}1 links wait for demo\/absent — spex add demo\/absent\n/m, "[cli-6] beneath each package its spec's place, then the packages its links wait for");
+
+  // A hand edit: left standing, read as edited.
+  const edited = `${readFileSync(placed, "utf8")}\nOur own note.\n`;
+  writeFileSync(placed, edited);
+  const installed = await ok(dir, "install");
+  assert.match(installed, /^Already installed demo\/spec 1\.0\.0\n {2}spec edited in specs\/packages\/spec\.md — left as yours$/m, "[cli-4] the edited copy reported");
+  assert.equal(readFileSync(placed, "utf8"), edited, "[cli-4] and left as it stands");
+  assert.match(await ok(dir, "list"), /^ {2}demo\/spec +1\.0\.0 +from the registry +installed\n {4}spec edited in specs\/packages\/spec\.md — left as yours\n/m, "[cli-6] read edited");
+
+  // Removed: the edited copy kept as the project's own, an unedited one gone.
+  const removed = await ok(dir, "remove", "demo/spec");
+  assert.match(removed, /^Removed demo\/spec 1\.0\.0\n {2}spec edited in specs\/packages\/spec\.md — kept as yours$/m, "[cli-3] the kept copy reported");
+  assert.equal(readFileSync(placed, "utf8"), edited, "[cli-3] the edited copy stays");
+  assert.deepEqual(Object.keys(readPlacedRecord(dir)?.specs ?? {}), ["demo/other"], "[cli-3] no longer Spex's copy");
+  await ok(dir, "remove", "demo/other");
+  assert.equal(existsSync(join(dir, "specs", "packages", "other.md")), false, "[cli-3] an unedited copy leaves with its package");
+  assert.equal(readFileSync(placed, "utf8"), edited);
+});
+
 test("cli-15: the built-in spec package a lock holds installs from this device's seed", async () => {
   // The home's store and cache hold the app's seed of sublang/playbooks;
   // no registry serves it (environments-7, environments-11).
@@ -652,7 +705,11 @@ test("cli-15: new makes spex-packages/<org>/<pkg>/, adds it by path and places i
   assert.equal(readFileSync(join(dir, ".claude", "skills", "greet", "SKILL.md"), "utf8"), GREET_MD, "[cli-8] .claude/skills/greet/ holds the skill");
   assert.ok(!exportsIn(dir, ".claude/skills").includes("greet"));
   assert.match(made, /^ {2}greet +\.agents\/skills, not \.claude\/skills \(yours is there\)$/m, "[cli-8] the skill placed, and kept out of the reader's own folder");
-  assert.ok(existsSync(join(dir, ".claude", "skills", "acme-hello", "hello.md")), "[cli-8] the spec exported as acme-hello");
+  // The project holds specs/: the spec stands in its specs/packages/,
+  // as no skill (environments-41).
+  assert.equal(readFileSync(join(dir, "specs", "packages", "hello.md"), "utf8"), SPEC_MD, "[cli-8] the spec placed in specs/packages/");
+  assert.equal(existsSync(join(dir, ".claude", "skills", "acme-hello")), false, "[cli-8] and not as a skill");
+  assert.match(made, /^ {2}spec in specs\/packages\/hello\.md$/m, "[cli-8] where the spec stands");
   // It ends naming the folder and the two publish commands.
   assert.match(made, /^Made spex-packages\/acme\/hello\/ for acme\/hello \(skill greet, spec hello\)\.$/m, "[cli-8] the folder");
   assert.match(made, /^Next: edit spex-packages\/acme\/hello\/, then\n {2}spex publish acme\/hello --dry-run\n {2}spex publish acme\/hello$/m, "[cli-8] the next steps");

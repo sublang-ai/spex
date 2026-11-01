@@ -1,19 +1,19 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The placed specs' record read at an environment's root (DR-174): the
-// record an install writes reads back whole, and anything else — a
-// missing or unreadable file, no JSON, another format or an entry of
-// another shape — reads as no record.
+// The placed specs' record at an environment's root (DR-174): the
+// record an install writes, compact and in name order, reads back whole,
+// and anything else — a missing or unreadable file, no JSON, another
+// format or an entry of another shape — reads as no record.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { SPEX_DIR } from "./layout.js";
-import { PLACED_RECORD, placedRecordPath, readPlacedRecord, type PlacedRecord } from "./placed-record.js";
+import { PLACED_RECORD, placedRecordPath, readPlacedRecord, writePlacedRecord, type PlacedRecord } from "./placed-record.js";
 
 const record: PlacedRecord = {
   format: 1,
@@ -38,6 +38,15 @@ test("placed record: the record an install writes reads back whole at <root>/.sp
   assert.equal(placedRecordPath(root), join(root, ".spex", "placed.json"));
   assert.deepEqual(readPlacedRecord(root), record);
   assert.deepEqual(readPlacedRecord(rootWith(JSON.stringify({ format: 1, specs: {} }))), { format: 1, specs: {} });
+});
+
+test("placed record: an install writes it whole as compact JSON in name order, no temporary file left", () => {
+  const root = rootWith("{}");
+  writePlacedRecord(root, record);
+  assert.deepEqual(readPlacedRecord(root), record);
+  const text = readFileSync(placedRecordPath(root), "utf8");
+  assert.equal(text, JSON.stringify({ format: 1, specs: { "acme/plain": record.specs["acme/plain"], "acme/tools": record.specs["acme/tools"] } }));
+  assert.deepEqual(readdirSync(join(root, SPEX_DIR)), [PLACED_RECORD]);
 });
 
 test("placed record: a missing, unreadable, unknown or misshapen record reads as none", () => {
