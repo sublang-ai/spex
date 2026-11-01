@@ -41,6 +41,7 @@ import {
 } from "../fixtures/playbooks.js";
 
 const commandMock = vi.fn();
+/** The public registry, as `registry.get` naming no origin replies. */
 const REGISTRY = "https://spex.example";
 const OTHER_REGISTRY = "https://packages.example";
 
@@ -141,13 +142,18 @@ beforeEach(() => {
         return { accepted: true };
       case "environment.registry.set":
         return environments[String(params?.repository)];
-      case "registry.get":
-        return useAppStore.getState().registryAccounts?.[String(params?.origin)] ?? account(false, { origin: String(params?.origin) });
+      case "registry.get": {
+        const origin = params?.origin === undefined ? REGISTRY : String(params.origin);
+        return (
+          useAppStore.getState().registryAccounts?.[origin] ??
+          account(false, { origin, displayName: origin === OTHER_REGISTRY ? "Packages Example" : "Spex Example" })
+        );
+      }
       case "registry.directory":
         return {
           spaces: [
             { origin: REGISTRY, displayName: "Spex Example", signIn: ["github"] },
-            { origin: OTHER_REGISTRY, displayName: "Packages Example", signIn: ["gitlab"] },
+            { origin: "https://space.example", displayName: "Space Example", signIn: ["gitlab"] },
           ],
         };
       case "registry.signin.start":
@@ -1123,28 +1129,38 @@ describe("playbook-library-94: nothing waits on the core's other work", () => {
 });
 
 describe("playbook-library-119: each heading's registry and the account there", () => {
-  test("the chooser lists the directory's registries and Other…, writing the choice as that heading's registry", async () => {
+  test("the chooser lists the public registry, the one spex.yaml names where that is another, and Other…, reading no directory", async () => {
     await renderTab();
-    const chooser = projectSection().getByTestId("registry-chooser");
-    fireEvent.click(chooser);
+    const entries = () => [...projectSection().getByTestId("registry-chooser-menu").querySelectorAll("button")].map((entry) => entry.textContent);
+    // A spex.yaml naming the public registry: it alone, checked, then
+    // Other…; no Space of the directory stands as a registry.
+    fireEvent.click(projectSection().getByTestId("registry-chooser"));
+    await vi.waitFor(() => expect(entries()).toEqual(["✓Spex Example", "Other…"]));
+    expect(commandMock).toHaveBeenCalledWith("registry.get", {});
+    expect(commandMock).not.toHaveBeenCalledWith("registry.directory", expect.anything());
+    fireEvent.click(projectSection().getByTestId("registry-chooser"));
+
+    // A spex.yaml naming another registry: the public one, then that
+    // one by its display name, checked.
+    update(PROJECT_ID, { ...environments[PROJECT_ID]!, registry: { origin: OTHER_REGISTRY, legacy: false } });
+    await vi.waitFor(() => expect(projectSection().getByTestId("registry-chooser").textContent).toBe("Registry: Packages Example"));
+    fireEvent.click(projectSection().getByTestId("registry-chooser"));
+    await vi.waitFor(() => expect(entries()).toEqual(["Spex Example", "✓Packages Example", "Other…"]));
     const menu = projectSection().getByTestId("registry-chooser-menu");
-    expect([...menu.querySelectorAll("button")].map((entry) => entry.textContent)).toEqual([
-      "✓Spex Example",
-      "Packages Example",
-      "Other…",
-    ]);
-    expect(within(menu).getByTestId(`registry-choice-${REGISTRY}`).getAttribute("aria-checked")).toBe("true");
-    fireEvent.click(within(menu).getByTestId(`registry-choice-${OTHER_REGISTRY}`));
+    expect(within(menu).getByTestId(`registry-choice-${OTHER_REGISTRY}`).getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(within(menu).getByTestId(`registry-choice-${REGISTRY}`));
     await vi.waitFor(() =>
-      expect(commandMock).toHaveBeenCalledWith("environment.registry.set", { repository: PROJECT_ID, origin: OTHER_REGISTRY }),
+      expect(commandMock).toHaveBeenCalledWith("environment.registry.set", { repository: PROJECT_ID, origin: REGISTRY }),
     );
     // Your own heading's choice is its own.
     expect(commandMock).not.toHaveBeenCalledWith("environment.registry.set", expect.objectContaining({ repository: OWN_KEY }));
-
-    // The state the core broadcasts names the new registry.
-    update(PROJECT_ID, { ...environments[PROJECT_ID]!, registry: { origin: OTHER_REGISTRY, legacy: false } });
-    await vi.waitFor(() => expect(projectSection().getByTestId("registry-chooser").textContent).toBe("Registry: Packages Example"));
     expect(personalSection().getByTestId("registry-chooser").textContent).toBe("Registry: Spex Example");
+    fireEvent.click(personalSection().getByTestId("registry-chooser"));
+    expect([...personalSection().getByTestId("registry-chooser-menu").querySelectorAll("button")].map((entry) => entry.textContent)).toEqual([
+      "✓Spex Example",
+      "Other…",
+    ]);
+    expect(commandMock).not.toHaveBeenCalledWith("registry.directory", expect.anything());
   });
 
   test("Other… reveals a field for a registry's address; a refusal shows in place", async () => {

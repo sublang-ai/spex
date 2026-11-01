@@ -2,9 +2,10 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The registry a project's packages come from, apart from its Space
-// (playbook-library-120, space-116, DR-168, DR-172): the "Packages"
-// heading's "Registry: <registry>" chooser takes a Space's origin through
-// "Other…", the account there signs in and out with the Space untouched,
+// (playbook-library-120, space-116, DR-168, DR-172, DR-173): the
+// "Packages" heading's "Registry: <registry>" chooser offers the public
+// registry and the one spex.yaml names, and takes a Space's origin
+// through "Other…", the account there signs in and out with the Space untouched,
 // and New playbook's one Org field suggests that account's orgs; the
 // Space surface's sign-in card lists the directory's Spaces.
 import {
@@ -39,38 +40,44 @@ test("playbook-library-120/space-116: independent same-origin registry account, 
   const key = (await refreshProjectKey(app))!;
   await open(page, app);
   // The "Packages" heading carries its registry as "Registry:
-  // <registry>", a chooser of the directory's registries by display name
-  // whose last entry "Other…" reveals the field for an address, and the
-  // account there, "Sign in" while none (playbook-library-119).
+  // <registry>", a chooser offering the public registry by its display
+  // name, the registry the project's spex.yaml names where that is
+  // another, and a last entry "Other…" revealing the field for an
+  // address, and the account there, "Sign in" while none
+  // (playbook-library-119).
   await projectTab(page, "Packages");
   const packages = packagesSection(page, "project");
   const chooser = registryChooser(packages);
   await expect(chooser).toBeVisible();
   await expect(chooser).toContainText("Registry:");
-  await expect.poll(async () => (await registryEntries(packages)).at(-1)).toBe("Other…");
-  await expect(registryAddress(packages)).toBeHidden();
   const signIn = packages.getByTestId("registry-signin");
   await expect(signIn).toHaveText("Sign in");
   await expect(signIn).toHaveAttribute("title", "For publishing and private packages");
-  // A registry the directory lists, chosen by its display name, is
-  // written as the registry of the project's spex.yaml; the public
-  // registry typed through "Other…" then takes its place.
+  // The project's spex.yaml names the public registry, which answers
+  // here as the stand-in: it stands alone, checked, before "Other…", and
+  // no Space of the directory is offered as a registry.
   const initial = (await app.core.command("environment.get", { repository: key })).registry?.origin;
   expect(initial).not.toBe(host.url);
-  // The public registry here answers as the stand-in, so two entries
-  // read alike: the directory's is picked by its own origin.
-  expect(await registryEntries(packages)).toContain("Stand-in Git host");
-  const listed = packages.getByTestId(`registry-choice-${host.url}`);
-  await expect(listed).toHaveText("Stand-in Git host");
-  await expect(listed).toHaveAttribute("aria-checked", "false");
-  await listed.click();
+  await expect.poll(() => registryEntries(packages)).toEqual(["Stand-in Git host", "Other…"]);
+  const publicEntry = packages.getByTestId(`registry-choice-${initial}`);
+  await expect(publicEntry).toHaveAttribute("aria-checked", "true");
+  await expect(registryAddress(packages)).toBeHidden();
+  // The Space's origin chosen through "Other…" is written as the
+  // registry of the project's spex.yaml; the chooser reads its display
+  // name and lists it, checked, after the public registry — the two read
+  // alike here, so each is picked by its own origin.
+  await chooseRegistry(packages, "Other…", host.url);
   await expect.poll(async () => (await app.core.command("environment.get", { repository: key })).registry?.origin).toBe(host.url);
   await expect.poll(() => chosenEntry(chooser)).toContain("Stand-in Git host");
-  await chooseRegistry(packages, "Other…", initial);
+  await expect.poll(() => registryEntries(packages)).toEqual(["Stand-in Git host", "Stand-in Git host", "Other…"]);
+  const listed = packages.getByTestId(`registry-choice-${host.url}`);
+  await expect(listed).toHaveAttribute("aria-checked", "true");
+  await expect(publicEntry).toHaveAttribute("aria-checked", "false");
+  // The public registry picked takes its place again, and the Space's
+  // origin, named by the spex.yaml no longer, leaves the list.
+  await publicEntry.click();
   await expect.poll(async () => (await app.core.command("environment.get", { repository: key })).registry?.origin).toBe(initial);
-  // The Space's origin chosen through "Other…" is written as the
-  // registry of the project's spex.yaml, and the chooser reads its
-  // display name.
+  await expect.poll(() => registryEntries(packages)).toEqual(["Stand-in Git host", "Other…"]);
   await chooseRegistry(packages, "Other…", host.url);
   await expect.poll(async () => (await app.core.command("environment.get", { repository: key })).registry?.origin).toBe(host.url);
   await expect.poll(() => chosenEntry(chooser)).toContain("Stand-in Git host");

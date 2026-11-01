@@ -2,10 +2,12 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The registry a heading of the Packages tab uses, and the person's
-// sign-in there (playbook-library-119, DR-168, DR-172): "Registry:
-// <display name> ▾", a chooser of the directory's registries whose last
-// entry, "Other…", reveals a field for a registry's address, the choice
-// written as the `registry` of that heading's spex.yaml; beside it
+// sign-in there (playbook-library-119, DR-168, DR-172, DR-173):
+// "Registry: <display name> ▾", a chooser offering the public registry
+// by its display name, the registry that heading's spex.yaml names where
+// that is another, and a last entry "Other…" revealing a field for a
+// registry's address, the choice written as the `registry` of that
+// heading's spex.yaml — it reads no directory for registries; beside it
 // "@<login>" with Sign out, or "Sign in" titled "For publishing and
 // private packages", its flow cancellable and continuing in the browser,
 // a refusal in place. The registry account is its own grant: signing in
@@ -21,7 +23,6 @@ import { hostNameOf } from "../lib/instances.js";
 import { usePopover } from "../lib/usePopover.js";
 import { i18n } from "../i18n.js";
 import { Icon } from "./Icon.js";
-import { useSpaceDirectory, type Directory } from "./SpaceDirectory.js";
 import { ContinueInBrowser, causePhrase, signInLabel, signingInLabel } from "./SpaceSignIn.js";
 
 const BUTTON =
@@ -45,11 +46,32 @@ export const registrySignInTitle = (): string =>
   });
 
 /** A registry by the name the reader knows it by: the name its own
- * description gives, else the directory's, else its host name. */
-export function registryNameOf(origin: string, state: RegistryState | undefined, directory: Directory): string {
-  if (state?.displayName) return state.displayName;
-  const listed = directory.status === "read" ? directory.spaces.find((space) => space.origin === origin) : undefined;
-  return listed?.displayName ?? hostNameOf(origin);
+ * description gives (environments-39), else its host name. */
+function registryNameOf(origin: string, state: RegistryState | undefined): string {
+  return state?.displayName || hostNameOf(origin);
+}
+
+/** The public registry by its own description (environments-39): the
+ * state `registry.get` replies naming no origin, the core's broadcast
+ * keeping it current; undefined until that reply. */
+function usePublicRegistry(): RegistryState | undefined {
+  const store = usePlaceStore();
+  const [answered, setAnswered] = useState<RegistryState>();
+  useEffect(() => {
+    let active = true;
+    void Promise.resolve()
+      .then(() => store.getClient().command("registry.get", {}))
+      .then((reply) => {
+        const state = reply as RegistryState | undefined;
+        if (active && typeof state?.origin === "string") setAnswered(state);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [store]);
+  const broadcast = store((state) => (answered ? state.registryAccounts?.[answered.origin] : undefined));
+  return broadcast ?? answered;
 }
 
 /** The person's account at the registry of `origin` and its sign-in:
@@ -181,9 +203,9 @@ export function RegistryAccount({ repository }: { repository: string }) {
 
 function RegistryHeading({ repository, origin, legacy }: { repository: string; origin: string; legacy: boolean }) {
   const store = usePlaceStore();
-  const directory = useSpaceDirectory();
   const account = useRegistrySignIn(origin, { read: true });
-  const name = registryNameOf(origin, account.state, directory);
+  const publicRegistry = usePublicRegistry();
+  const name = registryNameOf(origin, account.state);
   const [other, setOther] = useState(false);
   const [address, setAddress] = useState("");
   const [choosing, setChoosing] = useState(false);
@@ -215,11 +237,11 @@ function RegistryHeading({ repository, origin, legacy }: { repository: string; o
     }
   }
 
-  const registries =
-    directory.status === "read"
-      ? directory.spaces.map((space) => ({ origin: space.origin, name: space.displayName }))
-      : [];
-  if (!registries.some((entry) => entry.origin === origin)) registries.unshift({ origin, name });
+  // The public registry, then the one this spex.yaml names where that
+  // is another (playbook-library-119); "Other…" follows them.
+  const registries: { origin: string; name: string }[] = [];
+  if (publicRegistry) registries.push({ origin: publicRegistry.origin, name: registryNameOf(publicRegistry.origin, publicRegistry) });
+  if (publicRegistry?.origin !== origin) registries.push({ origin, name });
 
   const failure = refusal ?? account.error;
   return (
@@ -340,9 +362,9 @@ function RegistryHeading({ repository, origin, legacy }: { repository: string; o
   );
 }
 
-/** "Registry: <name> ▾": the directory's registries by display name,
- * the current one checked, then "Other…" (playbook-library-119), as a
- * menu in the house popover idiom. */
+/** "Registry: <name> ▾": the public registry and the one the heading's
+ * spex.yaml names by display name, the current one checked, then
+ * "Other…" (playbook-library-119), as a menu in the house popover idiom. */
 function RegistryChooser({
   label,
   current,

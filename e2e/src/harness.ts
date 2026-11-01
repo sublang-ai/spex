@@ -1936,8 +1936,9 @@ export function builtinLine(section: Locator): Locator {
 }
 
 /** A heading's registry chooser (playbook-library-119): the control
- * reading "Registry: <display name>", opening the directory's registries
- * by display name, its last entry "Other…" revealing the field for a
+ * reading "Registry: <display name>", opening the public registry and
+ * the one that heading's spex.yaml names where that is another, by
+ * display name, its last entry "Other…" revealing the field for a
  * registry's address. */
 export function registryChooser(section: Locator): Locator {
   return section.getByTestId("registry-chooser");
