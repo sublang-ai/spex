@@ -8,12 +8,15 @@ system should work and how to check it. A playbook coordinates AI work
 and review through a workflow written in plain language.
 
 A **spec package** shares a spec and related skills or playbooks as a
-versioned package. Packages come from a registry, and
-[Spex Space](https://spex.sublang.ai) is the public one: find and publish
-packages there, and add them from a project's **Packages** tab or the
-`spex` command line. Public packages need no account to browse or
-install. Publishing and private packages need a registry sign-in,
-separate from any Space sign-in. Syncing a project's records is optional.
+versioned package. The `provides` list in its `meta.yaml` decides what
+it offers a project; a playbook's source spec, or a skill the playbook
+requires, is installed with it but placed nowhere. Packages come from a
+registry, and [Spex Space](https://spex.sublang.ai) is the public one:
+find and publish packages there, and add them from a project's
+**Packages** tab or the `spex` command line. Public packages need no
+account to browse or install. Publishing and private packages need a
+registry sign-in, separate from any Space sign-in. Syncing a project's
+records is optional.
 
 ## Open the IDE and a project
 
@@ -54,9 +57,9 @@ top as **Registry: Spex Space**, with your sign-in there beside it.
    and features, "1.2.0 exactly" stays put — and choose **Add**. On the
    command line, `spex add <org>/<pkg>` adds the newest. Spex writes the
    package into `spex.yaml` and its exact version into `spex.lock`, and
-   installs it. Commit both files with your code so everyone on the
-   project installs the same packages; until you do, the tab shows
-   **spex.yaml, spex.lock not committed**.
+   installs it. Commit both files, and a spec it places, with your code
+   so everyone on the project installs the same packages; until you do,
+   the tab shows **spex.yaml, spex.lock not committed**.
 3. **Enable its playbooks.** Adding a package installs it but enables
    nothing. Open the **Playbooks** tab, find the playbook under
    **Available**, choose a player for each role and select **Enable**.
@@ -66,12 +69,16 @@ top as **Registry: Spex Space**, with your sign-in there beside it.
 4. **Publish your own.** See
    [Publish specs, skills, and playbooks](#publish-specs-skills-and-playbooks).
 
-Skills and specs need no enabling. Spex places them in `.claude/skills/`
-for Claude Code and `.agents/skills/` for Codex, Gemini CLI, Kimi Code,
-and OpenCode, a spec as a skill that holds it, so each agent finds them
-its own way. A package of only specs or skills has no playbook to
-enable. Playbook launch skills are placed for Claude Code alone; with
-other agents, run enabled playbooks from Spex's `/` menu.
+Skills and specs need no enabling. Spex places skills in
+`.claude/skills/` for Claude Code and `.agents/skills/` for Codex,
+Gemini CLI, Kimi Code, and OpenCode, so each agent finds them its own
+way. Playbook launch skills are placed for Claude Code alone; with other
+agents, run enabled playbooks from Spex's `/` menu. A package's spec is
+placed in `specs/packages/<pkg>.md`, beside your own specs, and agents
+and `spex lint` read it as any spec. Its first line names the package
+and version; once you edit it, it is yours: Spex leaves it, and a newer
+version waits. The spec's line in the package row says where it stands.
+Your **Personal** packages' specs reach your agents as skills instead.
 
 Private packages never appear in search. Choose **Sign in** beside the
 registry and approve in your browser, or run `spex login`, which signs
@@ -113,9 +120,9 @@ spex list
 ```
 
 Replace the example name with a real one. `spex list` shows what is
-added, installed, and placed for your agents. Open the same folder in
-the IDE and its **Packages** tab shows the same packages; what either
-changes, the other reads.
+added, installed, and placed for your agents and in `specs/`. Open the
+same folder in the IDE and its **Packages** tab shows the same packages;
+what either changes, the other reads.
 
 Public packages need no sign-in. For private packages or publishing:
 

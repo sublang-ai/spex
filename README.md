@@ -148,11 +148,12 @@ describes the retained originals and migration boundaries.
 packages it adds — specs with the skills and playbooks made from them —
 from a registry, a Git repository or a folder in the project, and
 `spex.lock` records the exact versions installed
-([package format](specs/packages/environments.md)). Their skills and
-specs reach every agent Spex runs: a project folder's `.claude/skills`
-for Claude Code and `.agents/skills` for Codex, Gemini CLI, Kimi Code
-and OpenCode, and, for your Personal packages, the same folders in your
-home folder. The app ships the built-in playbooks, `sublang/playbooks`,
+([package format](specs/packages/environments.md)). Their skills reach
+every agent Spex runs: a project folder's `.claude/skills` for Claude
+Code and `.agents/skills` for Codex, Gemini CLI, Kimi Code and OpenCode,
+and, for your Personal packages, the same folders in your home folder.
+A package's spec is placed in the project's `specs/packages/`, beside
+its own specs. The app ships the built-in playbooks, `sublang/playbooks`,
 which hold `/code`, `/review`, `/decide` and the others: the first start
 seeds them, so they run offline, and every project has them. A
 project's **Packages** tab adds, updates, removes and publishes its
@@ -162,10 +163,11 @@ enables one when you choose a player for each of its roles.
 **Publish and install through Spex Space.** Browse public packages
 without an account: on a project's **Packages** tab, choose **Add…**,
 search on **Registry**, pick a version and choose **Add**. Adding
-installs a package and places its skills for your agents; enable a
-playbook it provides on the **Playbooks** tab by choosing a player for
-each role. Author a workflow through **New playbook**, compile it, and
-**Publish** it after signing in to the registry with access to its org.
+installs a package and places its skills for your agents and its spec
+in `specs/`; enable a playbook it provides on the **Playbooks** tab by
+choosing a player for each role. Author a workflow through
+**New playbook**, compile it, and **Publish** it after signing in to the
+registry with access to its org.
 See the [package guide](docs/getting-started.md#install-and-use-a-package).
 For a spec-only or skill package, prepare a valid folder in the
 project, add it with **Add… → Folder**, then choose **Publish** on its

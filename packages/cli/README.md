@@ -79,6 +79,7 @@ the top level of the Git work tree, else the current folder.
 | `.spex/` | the installed files and the skills made for your agents | ignored by its own `.gitignore` |
 | `spex-packages/<org>/<pkg>/` | each package you develop here | commit it |
 | `.claude/skills/`, `.agents/skills/` | the skills placed for your agents | ignored through `.git/info/exclude` |
+| `specs/packages/<pkg>.md` | each spec placed from a package | commit it |
 
 A `spex.yaml` looks like this:
 
@@ -115,12 +116,24 @@ newest versions `spex.yaml` allows, on purpose. Downloaded files are
 checked against the digests in `spex.lock` and kept once in the home's
 `store/`, then linked or copied into `.spex/packages/`.
 
-Installed skills reach every agent. Each one is placed in
+Only what a package's `meta.yaml` `provides` is placed: a playbook's
+source spec, or a skill the playbook requires, is installed but placed
+nowhere. Installed skills reach every agent. Each one is placed in
 `.claude/skills/<name>/` for Claude Code and `.agents/skills/<name>/` for
-Codex, Gemini CLI, Kimi Code and OpenCode. A spec is placed as a skill
-named `<org>-<pkg>` that holds the spec file. A playbook's launch skill
+Codex, Gemini CLI, Kimi Code and OpenCode. A playbook's launch skill
 goes to `.claude/skills/` only. A folder of yours under the same name
 stays as it is, and the command says it left that skill out.
+
+A package's spec is placed in `specs/packages/<pkg>.md`, beside your own
+specs, opening with one line naming the package and version; commit it
+with your code. A citation of another package's spec becomes a relative
+link where that spec is placed too, and is dropped, its words kept,
+until you add that package. Once you edit the file, it is yours: Spex
+leaves it and says which newer version waits. An unedited copy follows
+its package's version and leaves with the package. A file of yours by
+that name keeps the spec out, and a folder with no `specs/` places none
+until `spex scaffold`. `spex lint` knows a placed spec by its first
+line, so `specs/map.md` need not list it.
 
 The Spex app reads the same files. Open the folder as a project in the
 app, before or after you use the CLI, and its **Packages** tab shows the
@@ -182,10 +195,12 @@ them in full.
 - `spex add <org>/<pkg>` adds the newest version the registry lists
   that is no prerelease, as `^<version>`; `@<version>` adds the one you
   write. `--path` adds a folder in this project instead, read in place.
-  A malformed name or version, a version and `--path` together, a folder
-  outside this project or holding no `meta.yaml` of that package, and a
-  package the registry does not list to you are each refused before
-  anything is written.
+  It installs and places what each package provides, a spec in
+  `specs/packages/<pkg>.md`, and prints where each went, the spec's line
+  as `spex list` reads it. A malformed name or version, a version and
+  `--path` together, a folder outside this project or holding no
+  `meta.yaml` of that package, and a package the registry does not list
+  to you are each refused before anything is written.
 - `spex remove` drops a package you added, with what only it needed,
   and refuses one `spex.yaml` does not list. The built-in playbooks
   cannot be removed: "sublang/playbooks comes with Spex".
@@ -199,6 +214,21 @@ them in full.
   clone, or what changed with `spex update` once `spex.yaml` or a folder
   package changed. In a folder with no packages, it says so and names
   `spex add`.
+- Beneath an installed package that provides a spec, `spex list` says
+  where the spec stands, and each package its links wait for:
+
+  ```text
+  Installed
+    my-org/rules    1.1.0  from the registry  installed
+      spec edited in specs/ — left as yours, 1.1.0 waiting
+    my-org/toolkit  1.2.0  from the registry  installed
+      spec in specs/packages/toolkit.md
+      2 links wait for my-org/base — spex add my-org/base
+  ```
+
+  One link reads `1 link waits`. A spec a file of yours keeps out reads
+  `spec not placed — specs/ holds <pkg>.md already`, and one in a folder
+  with no `specs/` reads `spec needs specs/ — spex scaffold`.
 
 ### `spex export`
 
@@ -451,6 +481,11 @@ place by copying your files, and can be run again to refresh it; it
 adds nothing to `spex.yaml` and has no `--move`. A folder `spex new`
 made keeps working; a skill `--move` took into it is edited there, since
 `spex export` refreshes a skill only from a folder of yours.
+
+Your next install places each package's spec in
+`specs/packages/<pkg>.md`, where the folder holds `specs/`, in place of
+its `<org>-<pkg>` skill; commit the new files. A skill that only
+supports a playbook is no longer placed for your agents.
 
 ### From 4.x
 
