@@ -890,8 +890,15 @@ function PlayerRoster({
           <MissingPlayerRow key={`${entry.repository}:${entry.player}`} entry={entry} />
         ))}
       {players.length === 0 && missing.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-neutral-300 px-4 py-3 text-xs text-neutral-500 dark:border-neutral-700">
-          {i18n._("No players yet — enabling a playbook in Playbooks adds the ones its roles need.")}
+        <p
+          data-testid="players-empty"
+          title={i18n._({
+            id: "Enabling a playbook on a project's Playbooks tab adds the players its roles need",
+            comment: "tooltip of Settings' empty players list: where players come from",
+          })}
+          className="rounded-lg border border-dashed border-neutral-300 px-4 py-3 text-xs text-neutral-500 dark:border-neutral-700"
+        >
+          {i18n._({ id: "No players yet", comment: "Settings' players list while it holds none" })}
         </p>
       ) : null}
       {adding ? (

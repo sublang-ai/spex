@@ -577,6 +577,9 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
     // names the folder relative to its project, and the request sent to
     // the seat's core alone carries that relative name.
     fireEvent.change(within(there).getByTestId("folder-request-path"), { target: { value: "spex-packages/triage" } });
+    // The seat's core reads the folder's meta.yaml, here naming no
+    // package, so the name is asked for (playbook-library-92).
+    await within(there).findByTestId("folder-request-name");
     const fields = pathEntries(there).map((field) => field.getAttribute("data-testid"));
     expect(fields).toEqual(["folder-request-path", "folder-request-name"]);
     expect(there.textContent).not.toContain("/work/");
@@ -584,6 +587,7 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
     fireEvent.click(within(there).getByTestId("folder-request-submit"));
     await settle();
     expect(callsOf(alpha, "environment.request")).toEqual([
+      { repository: expect.any(String), request: { kind: "path", path: "spex-packages/triage" }, dryRun: true },
       { repository: expect.any(String), name: "acme/triage", request: { kind: "path", path: "spex-packages/triage" } },
     ]);
     expect(callsOf(local, "environment.request")).toEqual([]);

@@ -460,7 +460,7 @@ describe("localization-4: the Settings surface reads the resolved language", () 
         "players-section",
         [
           "会话 Player", // Session players
-          "还没有 Player — 在“规程”界面启用规程会自动添加其角色所需的 Player。",
+          "还没有 Player",
           "添加 Player", // Add a player
         ],
       ],

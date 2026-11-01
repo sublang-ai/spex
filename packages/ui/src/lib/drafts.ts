@@ -82,7 +82,7 @@ export function draftChipWord(draft: DraftInfo): string {
   if (draft.sourceMissing) {
     return i18n._({
       id: "Source missing",
-      comment: "authoring state chip, at most 14 characters: the spec package folder is gone from the working folder",
+      comment: "authoring state chip, at most 14 characters: the package's folder is gone from the project folder",
     });
   }
   switch (draft.state) {
@@ -153,7 +153,10 @@ export function draftChipTone(draft: DraftInfo): StatusTone {
  * in the chip itself (playbook-library-50). */
 export function draftChipTitle(draft: DraftInfo, now: number): string | undefined {
   if (draft.sourceMissing) {
-    return i18n._("The spec package folder is gone from the working folder; only Delete remains");
+    return i18n._({
+      id: "Package folder not in the project folder · only Delete remains",
+      comment: "the title of an authoring session's chip Source missing: its package folder is gone from the project folder, so the session can only be deleted",
+    });
   }
   const compile = draft.compile;
   if (!compile) return undefined;

@@ -32,7 +32,7 @@ import {
   SPEC_PACKAGE_NAME_RULE,
   busyWord,
   isBuiltinPackage,
-  nameFromFolder,
+  listOf,
   providesPhrase,
   publishTargetOf,
   relativeInside,
@@ -49,7 +49,7 @@ import { PublishControl } from "./PublishControl.js";
 import { RegistryAccount, registrySignInTitle, useRegistrySignIn } from "./RegistryAccount.js";
 import { MoreMenu, type MenuEntry } from "./SpaceMenu.js";
 import { signingInLabel } from "./SpaceSignIn.js";
-import { PackageArtifacts, hasArtifactLines } from "./PackageArtifacts.js";
+import { PackageArtifacts, PlaybookEnableAct, hasArtifactLines, usePlaybookEnable } from "./PackageArtifacts.js";
 
 const BUTTON =
   "min-h-6 shrink-0 whitespace-nowrap rounded-md border border-neutral-300 px-2 py-0.5 text-xs text-neutral-700 hover:bg-neutral-100 disabled:opacity-40 disabled:hover:bg-transparent dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800";
@@ -62,12 +62,20 @@ const ERROR =
 const CHIP =
   "flex max-w-full flex-col gap-1 self-start rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-800 [overflow-wrap:anywhere] dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200";
 
-/** "Install": a package's files put back where spex.lock records them,
- * and Place skills again's act too (playbook-library-92). */
+/** "Install": the versions spex.lock names put on this computer
+ * (playbook-library-92). */
 const installTitle = (): string =>
   i18n._({
-    id: "Installs the files spex.lock records",
-    comment: "the title of Install and Place skills again: they put the files spex.lock records on this computer and place the skills for the agents",
+    id: "Installs the versions in spex.lock",
+    comment: "the title of a package's Install: it puts the versions spex.lock names on this computer; keep the file name as it is",
+  });
+
+/** "Place skills again": the skills put in the agents' folders again,
+ * by the same install (playbook-library-92). */
+const placeTitle = (): string =>
+  i18n._({
+    id: "Puts the skills in the agents' folders again",
+    comment: "the title of Place skills again: it places the packages' skills in the agents' folders once more",
   });
 
 /** "Update": the newest versions spex.yaml allows, installed. */
@@ -145,17 +153,12 @@ function SourceGlyph({ name, kind, tooltip }: { name: string; kind: EnvironmentP
   );
 }
 
-/** Whether the registry refused a package for want of a grant
- * (environments-12): a registry request the lock holds no version of,
- * while the environment's last operation failed and the person is not
- * signed in at its registry. */
-function refusedAsPrivate(
-  pkg: EnvironmentPackage | undefined,
-  request: EnvironmentState["requests"][string] | undefined,
-  state: EnvironmentState,
-  signedIn: boolean,
-): boolean {
-  return pkg === undefined && request?.kind === "registry" && state.error !== null && state.busy === null && !signedIn;
+/** Whether a package stands refused for want of a grant
+ * (playbook-library-92): the state lists it among the packages the
+ * standing failure's registry refused (environments-14), its files are
+ * not installed, and the person is not signed in at the registry. */
+function refusedAsPrivate(pkg: EnvironmentPackage | undefined, name: string, state: EnvironmentState, signedIn: boolean): boolean {
+  return state.refused?.includes(name) === true && pkg?.installed !== true && !signedIn;
 }
 
 function PackageRow({
@@ -168,6 +171,7 @@ function PackageRow({
   projectName,
   personal,
   target,
+  reveal = 0,
   onNavigate,
 }: {
   name: string;
@@ -181,6 +185,9 @@ function PackageRow({
   /** The heading is "Personal": its playbooks enable in your own config. */
   personal: boolean;
   target: PublishTarget | undefined;
+  /** Each new count asks the row to open its lines, the receipt's Enable
+   * for a package of several playbooks. */
+  reveal?: number;
   onNavigate?: (surface: "Settings" | "Space") => void;
 }) {
   const store = usePlaceStore();
@@ -189,6 +196,12 @@ function PackageRow({
   // (playbook-library-92); it stands folded until the reader opens it.
   const [expanded, setExpanded] = useState(false);
   const expandable = hasArtifactLines(pkg);
+  const expandRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (reveal === 0 || !expandable) return;
+    setExpanded(true);
+    expandRef.current?.focus();
+  }, [reveal, expandable]);
   const install = store((current) => current.installEnvironment);
   const removePackage = store((current) => current.removeSpecPackage);
   const account = useRegistrySignIn(state.registry?.origin);
@@ -205,7 +218,7 @@ function PackageRow({
   const direct = request !== undefined || pkg?.direct === true;
   const publishable = request?.kind === "path" && state.pathRoot !== null;
   const requirers = pkg?.requiredBy ?? [];
-  const privately = refusedAsPrivate(pkg, request, state, account.login !== undefined);
+  const privately = refusedAsPrivate(pkg, name, state, account.login !== undefined);
 
   async function remove(): Promise<void> {
     setConfirming(false);
@@ -269,6 +282,29 @@ function PackageRow({
         {i18n._({ id: "Installed", comment: "a package's standing: its files are installed on this computer" })}
       </span>
     );
+  } else if (privately) {
+    standing = (
+      <>
+        <span data-testid={`env-installed-${name}`} className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+          {i18n._({
+            id: "Not installed · private",
+            comment: "a package's standing: the registry refused it for want of a sign-in, so it is not installed",
+          })}
+        </span>
+        <button
+          type="button"
+          data-testid={`env-signin-${name}`}
+          disabled={account.busy || account.running !== undefined}
+          title={registrySignInTitle()}
+          onClick={() => void account.start()}
+          className={PRIMARY}
+        >
+          {account.busy || account.running
+            ? signingInLabel()
+            : i18n._({ id: "Sign in", comment: "sign in to a Space or a registry" })}
+        </button>
+      </>
+    );
   } else if (pkg) {
     standing = (
       <>
@@ -301,29 +337,6 @@ function PackageRow({
         </button>
       </>
     );
-  } else if (privately) {
-    standing = (
-      <>
-        <span data-testid={`env-installed-${name}`} className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-800 dark:bg-amber-950 dark:text-amber-200">
-          {i18n._({
-            id: "Not installed · private",
-            comment: "a package's standing: the registry refused it for want of a sign-in, so it is not installed",
-          })}
-        </span>
-        <button
-          type="button"
-          data-testid={`env-signin-${name}`}
-          disabled={account.busy || account.running !== undefined}
-          title={registrySignInTitle()}
-          onClick={() => void account.start()}
-          className={PRIMARY}
-        >
-          {account.busy || account.running
-            ? signingInLabel()
-            : i18n._({ id: "Sign in", comment: "sign in to a Space or a registry" })}
-        </button>
-      </>
-    );
   } else {
     standing = (
       <span data-testid={`env-installed-${name}`} className="rounded bg-neutral-100 px-1.5 py-0.5 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
@@ -343,6 +356,7 @@ function PackageRow({
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         {expandable ? (
           <button
+            ref={expandRef}
             type="button"
             data-testid={`env-expand-${name}`}
             aria-expanded={expanded}
@@ -353,12 +367,12 @@ function PackageRow({
               values: { name },
             })}
             onClick={() => setExpanded((current) => !current)}
-            className="-ml-1 flex h-6 w-6 shrink-0 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
           >
             <Icon name={expanded ? "caretDown" : "caretRight"} className="h-3.5 w-3.5" />
           </button>
         ) : (
-          <span aria-hidden className="-ml-1 h-6 w-6 shrink-0" />
+          <span aria-hidden className="h-6 w-6 shrink-0" />
         )}
         <span className="min-w-0 truncate font-mono text-sm font-semibold" title={name}>
           {name}
@@ -390,7 +404,7 @@ function PackageRow({
           question={i18n._({
             id: "Required by {packages}",
             comment: "Remove's confirm on a package other packages require; {packages} names them",
-            values: { packages: requirers.join(", ") },
+            values: { packages: listOf(requirers) },
           })}
           confirmLabel={i18n._({ id: "Remove", comment: "a package's act: take it out of spex.yaml and uninstall it" })}
           cancelLabel={i18n._({ id: "Keep", comment: "cancel a removal: leave it as it is" })}
@@ -496,16 +510,29 @@ function BuiltinLine({
 
 /** What an Add brought, once (playbook-library-92): "Added <name>
  * <version> · <what it provides>", with Enable where it provides a
- * playbook, which opens the project's Playbooks tab. */
+ * playbook — enabling its one playbook in place in the heading's config,
+ * as its row's line does, and reading where it is enabled after; for a
+ * package of several playbooks, opening its row's lines, each with its
+ * own Enable. */
 function Receipt({
   name,
   state,
-  onEnable,
+  repository,
+  projectId,
+  projectName,
+  personal,
+  onShowPlaybooks,
 }: {
   name: string;
   state: EnvironmentState | undefined;
-  onEnable: () => void;
+  repository: string;
+  projectId: string;
+  projectName: string;
+  personal: boolean;
+  onShowPlaybooks: () => void;
 }) {
+  const store = usePlaceStore();
+  const readLists = store((current) => current.playbookLists);
   const pkg = state?.packages.find((entry) => entry.name === name);
   const provides = pkg ? providesPhrase(pkg.artifacts) : "";
   const text = pkg?.version
@@ -525,22 +552,48 @@ function Receipt({
         comment: "the receipt after Add…, while the package's version is still being picked",
         values: { name },
       });
-  const playbook = pkg?.artifacts.some((artifact) => artifact.kind === "playbook") === true;
+  const playbooks = pkg?.artifacts.filter((artifact) => artifact.kind === "playbook") ?? [];
+  // The one playbook as the heading's environment lists it, read for
+  // this project: what its Enable writes.
+  const lists = readLists?.projectId === projectId ? readLists : undefined;
+  const listed = personal ? lists?.own : (lists?.project ?? undefined);
+  const only = playbooks.length === 1 ? playbooks[0] : undefined;
+  const entry = only ? listed?.find((candidate) => candidate.package === name && candidate.id === only.id) : undefined;
+  const enabling = usePlaybookEnable({ entry, personal, repository, projectId });
   return (
-    <div data-testid="add-receipt" className="flex flex-wrap items-center gap-2 text-xs text-neutral-600 dark:text-neutral-300">
-      <span data-testid="add-note" role="status" className="[overflow-wrap:anywhere]">
-        {text}
-      </span>
-      {playbook ? (
-        <button
-          type="button"
-          data-testid="add-note-enable"
-          title={i18n._({ id: "On the Playbooks tab", comment: "the title of Enable in the receipt after Add…: it opens the project's Playbooks tab, where its playbook is enabled" })}
-          onClick={onEnable}
-          className={PRIMARY}
-        >
-          {i18n._({ id: "Enable", comment: "enable a playbook: name a player for each of its roles" })}
-        </button>
+    <div data-testid="add-receipt" className="flex flex-col gap-1">
+      <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-600 dark:text-neutral-300">
+        <span data-testid="add-note" role="status" className="[overflow-wrap:anywhere]">
+          {text}
+        </span>
+        {only ? (
+          <PlaybookEnableAct
+            enabling={enabling}
+            command={entry?.command ?? only.id}
+            personal={personal}
+            projectName={projectName}
+            enableTestId="add-note-enable"
+            enabledTestId="add-note-enabled"
+          />
+        ) : playbooks.length > 1 ? (
+          <button
+            type="button"
+            data-testid="add-note-enable"
+            title={i18n._({
+              id: "Shows its playbooks, each with Enable",
+              comment: "the title of Enable in the receipt after Add…, for a package of several playbooks: it opens the package's row to its playbooks, each enabled on its own line",
+            })}
+            onClick={onShowPlaybooks}
+            className={PRIMARY}
+          >
+            {i18n._({ id: "Enable", comment: "enable a playbook: name a player for each of its roles" })}
+          </button>
+        ) : null}
+      </div>
+      {enabling.error ? (
+        <p role="alert" data-testid="add-note-enable-error" className={ERROR}>
+          {enabling.error}
+        </p>
       ) : null}
     </div>
   );
@@ -557,8 +610,8 @@ export function EnvironmentSection({
 }: {
   repository: string;
   /** The project whose tab this is: the playbook lists read for it
-   * name each row's playbooks, and the receipt's Enable opens its
-   * Playbooks tab. */
+   * name each row's playbooks, which its lines and the receipt enable
+   * in place. */
   projectId: string;
   /** The project's name, as an enabled playbook's line says it
    * (playbook-library-92). */
@@ -574,8 +627,10 @@ export function EnvironmentSection({
   const loadError = store((current) => current.environmentErrors[repository]);
   const resolve = store((current) => current.resolveEnvironment);
   const install = store((current) => current.installEnvironment);
-  const setWorkspaceTab = store((current) => current.setWorkspaceTab);
   const [error, setError] = useState<string>();
+  // The receipt's Enable on a package of several playbooks opens its
+  // row's lines: each ask a new count, so asking again opens it again.
+  const [revealed, setRevealed] = useState<{ name: string; times: number }>();
   const [pending, setPending] = useState<"update" | "builtin" | "place">();
   const [added, setAdded] = useState<string>();
   const progress = busyWord(state?.busy ?? null);
@@ -658,20 +713,26 @@ export function EnvironmentSection({
                       id: "No version fits every package: {conflicts}",
                       comment: "beneath the chip spex.yaml changed: the packages no version satisfies; {conflicts} lists each with what asks for it",
                       values: {
-                        conflicts: conflicts
-                          .map(
-                            (conflict) =>
-                              `${conflict.name} — ${conflict.requirements
-                                .map((entry) =>
-                                  i18n._({
-                                    id: "{requirement} by {requirer}",
-                                    comment: "one requirement in the list beneath spex.yaml changed: a version requirement and the package or file asking for it, such as ^0.4.0 by acme/triage",
-                                    values: { requirement: entry.requirement, requirer: entry.by },
-                                  }),
-                                )
-                                .join(", ")}`,
-                          )
-                          .join("; "),
+                        conflicts: listOf(
+                          conflicts.map((conflict) =>
+                            i18n._({
+                              id: "{name} ({requirements})",
+                              comment: "one package in the list beneath spex.yaml changed: the package and what asks for which versions of it, such as acme/lint (^1.0.0 by spex.yaml and ^2.0.0 by acme/triage)",
+                              values: {
+                                name: conflict.name,
+                                requirements: listOf(
+                                  conflict.requirements.map((entry) =>
+                                    i18n._({
+                                      id: "{requirement} by {requirer}",
+                                      comment: "one requirement in the list beneath spex.yaml changed: a version requirement and the package or file asking for it, such as ^0.4.0 by acme/triage",
+                                      values: { requirement: entry.requirement, requirer: entry.by },
+                                    }),
+                                  ),
+                                ),
+                              },
+                            }),
+                          ),
+                        ),
                       },
                     })}
                   </span>
@@ -691,7 +752,7 @@ export function EnvironmentSection({
                     type="button"
                     data-testid="environment-place-skills"
                     disabled={pending === "place"}
-                    title={installTitle()}
+                    title={placeTitle()}
                     onClick={() => act("place")}
                     className={PRIMARY}
                   >
@@ -751,6 +812,7 @@ export function EnvironmentSection({
                 projectName={projectName}
                 personal={personal}
                 target={target}
+                reveal={revealed?.name === row.name ? revealed.times : 0}
                 onNavigate={onNavigate}
               />
             ))}
@@ -799,13 +861,24 @@ export function EnvironmentSection({
         <span className="ml-auto">
           <AddPackages
             repository={repository}
+            personal={personal}
             onOpen={() => setAdded(undefined)}
             onAdded={setAdded}
             onRefused={setError}
           />
         </span>
       </div>
-      {added ? <Receipt name={added} state={state} onEnable={() => setWorkspaceTab(projectId, "playbooks")} /> : null}
+      {added ? (
+        <Receipt
+          name={added}
+          state={state}
+          repository={repository}
+          projectId={projectId}
+          projectName={projectName}
+          personal={personal}
+          onShowPlaybooks={() => setRevealed((current) => ({ name: added, times: (current?.times ?? 0) + 1 }))}
+        />
+      ) : null}
       {body}
     </section>
   );
@@ -819,6 +892,7 @@ type AddMode = "registry" | "folder" | "git";
  * that sent it. */
 function AddPackages(props: {
   repository: string;
+  personal: boolean;
   onOpen: () => void;
   onAdded: (name: string) => void;
   onRefused: (message: string) => void;
@@ -828,11 +902,13 @@ function AddPackages(props: {
 
 function AddPopover({
   repository,
+  personal,
   onOpen,
   onAdded,
   onRefused,
 }: {
   repository: string;
+  personal: boolean;
   onOpen: () => void;
   onAdded: (name: string) => void;
   onRefused: (message: string) => void;
@@ -867,7 +943,17 @@ function AddPopover({
       key: "folder",
       label: i18n._({ id: "Folder", comment: "a tab of Add…: add a package from a folder in the project" }),
       testId: "add-from-folder",
-      disabledWhy: folder ? undefined : i18n._({ id: "No folder on this computer", comment: "the title of Add…'s disabled Folder tab: this heading's folder is not on this computer" }),
+      disabledWhy: folder
+        ? undefined
+        : personal
+          ? i18n._({
+              id: "Your Personal records are not on this computer",
+              comment: "the title of Add…'s disabled Folder tab under Personal: the folder holding your Personal records, which a folder package lies in, is not on this computer",
+            })
+          : i18n._({
+              id: "The project folder is not on this computer",
+              comment: "the title of Add…'s disabled Folder tab under Packages: the project's folder, which a folder package lies in, is not on this computer, as for a project on a server",
+            }),
     },
     { key: "git", label: i18n._({ id: "Git", comment: "a tab of Add…: add a package from a Git repository" }), testId: "add-from-git" },
   ];
@@ -937,7 +1023,7 @@ function AddPopover({
           </div>
           <div id={`${baseId}-panel`} role="tabpanel" aria-labelledby={`${baseId}-${shown}`}>
             {shown === "registry" ? <RegistryTab repository={repository} onAdd={add} /> : null}
-            {shown === "folder" && folder ? <FolderTab folder={folder} onAdd={add} /> : null}
+            {shown === "folder" && folder ? <FolderTab repository={repository} folder={folder} onAdd={add} /> : null}
             {shown === "git" ? <GitTab onAdd={add} /> : null}
           </div>
         </div>
@@ -1192,7 +1278,7 @@ function nameRefusal(name: string): string | undefined {
   return SPEC_PACKAGE_NAME_RULE.test(name)
     ? undefined
     : i18n._({
-        id: "Name as org/name, in lowercase words joined by hyphens",
+        id: "Use org/name: lowercase words joined by hyphens",
         comment: "a package name typed in Add… breaks the rule; keep org/name as it is",
       });
 }
@@ -1251,26 +1337,42 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 const packageNameLabel = (): string =>
   i18n._({ id: "Package name", comment: "a field of Add…'s Folder and Git tabs: the package's org/name" });
 
+/** What Add…'s Folder tab read of a folder: nothing yet, the read in
+ * flight, its `meta.yaml`'s name and version (environments-15), or the
+ * core's refusal of the folder. */
+type FolderRead =
+  | { phase: "idle" }
+  | { phase: "reading"; path: string }
+  | { phase: "read"; path: string; name: string | null; version: string | null }
+  | { phase: "refused"; path: string; message: string };
+
 /** Add…'s Folder tab (playbook-library-92): a folder inside the heading's
  * folder, from `spex-packages/`, where a package under development lies
- * (environments-10); its name read from `spex-packages/<org>/<pkg>`, a
- * name field shown only where the folder gives none. */
+ * (environments-10); the core reads its name and version from its
+ * `meta.yaml` by a dry run of the request, nothing written
+ * (environments-15), and a name field shows only where that names none. */
 function FolderTab({
+  repository,
   folder,
   onAdd,
 }: {
+  repository: string;
   folder: string;
   onAdd: (name: string, request: EnvironmentRequest) => Promise<void>;
 }) {
+  const store = usePlaceStore();
+  const preview = store((current) => current.previewFolderPackage);
   const [path, setPath] = useState(PACKAGES_FOLDER);
   const [name, setName] = useState("");
   const [refusal, setRefusal] = useState<string>();
+  const [read, setRead] = useState<FolderRead>({ phase: "idle" });
+  const reads = useRef(0);
   const pathRef = useRef<HTMLInputElement>(null);
-  const derived = nameFromFolder(path);
   const typed = path.trim().replace(/\/+$/u, "");
+  const chosen = typed.length > 0 && `${typed}/` !== PACKAGES_FOLDER ? typed : "";
   // The shell's picker reads this computer's folders: a remote place's
   // project is on its server, so none is offered there (run-view-169).
-  const local = isLocalPlace(usePlaceStore().place);
+  const local = isLocalPlace(store.place);
   const pickDirectory = local ? window.spexNative?.pickDirectory : undefined;
 
   useEffect(() => {
@@ -1278,15 +1380,40 @@ function FolderTab({
     return () => clearTimeout(timer);
   }, []);
 
+  // The folder typed or picked is read once it rests; the newest read
+  // wins, a reply an edit overtook applying nothing.
+  useEffect(() => {
+    const at = (reads.current += 1);
+    if (!chosen) {
+      setRead({ phase: "idle" });
+      return;
+    }
+    setRead({ phase: "reading", path: chosen });
+    const timer = setTimeout(() => {
+      preview(repository, chosen)
+        .then((found) => {
+          if (at === reads.current) setRead({ phase: "read", path: chosen, name: found.name, version: found.version });
+        })
+        .catch((cause: Error) => {
+          if (at === reads.current) setRead({ phase: "refused", path: chosen, message: cause.message });
+        });
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [chosen, repository, preview]);
+
+  const current = read.phase !== "idle" && read.path === chosen ? read : undefined;
+  const found = current?.phase === "read" ? current.name : null;
+  const asksName = current?.phase === "read" && current.name === null;
+
   return (
     <RequestForm
       testId="folder-request"
-      ready={typed.length > 0 && `${typed}/` !== PACKAGES_FOLDER && (derived !== undefined || name.trim().length > 0)}
+      ready={current?.phase === "read" && (found !== null || name.trim().length > 0)}
       onSubmit={async () => {
-        const chosen = derived ?? name.trim();
-        const why = nameRefusal(chosen);
+        const taken = found ?? name.trim();
+        const why = nameRefusal(taken);
         if (why) throw new Error(why);
-        await onAdd(chosen, { kind: "path", path: typed });
+        await onAdd(taken, { kind: "path", path: chosen });
       }}
       fields={
         <>
@@ -1329,19 +1456,45 @@ function FolderTab({
               ) : null}
             </span>
             {refusal ? <span role="alert" className="text-red-600 dark:text-red-400">{refusal}</span> : null}
+            {current?.phase === "refused" ? (
+              <span role="alert" data-testid="folder-request-refusal" className="text-red-600 [overflow-wrap:anywhere] dark:text-red-400">
+                {current.message}
+              </span>
+            ) : null}
           </Field>
-          {derived !== undefined ? (
+          {current?.phase === "reading" ? (
+            <span data-testid="folder-request-reading" className="text-neutral-500">
+              {i18n._({ id: "Reading meta.yaml…", comment: "Add…'s Folder tab: the chosen folder's meta.yaml is being read for the package's name and version; keep the file name as it is" })}
+            </span>
+          ) : null}
+          {found !== null && current?.phase === "read" ? (
             <span className="flex min-w-0 flex-col gap-0.5">
               <span className="text-neutral-500">{packageNameLabel()}</span>
-              <span data-testid="folder-request-derived" className="truncate font-mono">
-                {derived}
+              <span className="flex min-w-0 items-baseline gap-2">
+                <span data-testid="folder-request-derived" className="truncate font-mono">
+                  {found}
+                </span>
+                {current.version ? (
+                  <span data-testid="folder-request-version" className="shrink-0 font-mono text-neutral-500">
+                    {current.version}
+                  </span>
+                ) : null}
               </span>
             </span>
-          ) : (
+          ) : null}
+          {asksName ? (
             <Field label={packageNameLabel()}>
-              <input data-testid="folder-request-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="acme/triage" spellCheck={false} className={`${INPUT} font-mono`} />
+              <input
+                data-testid="folder-request-name"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="acme/triage"
+                spellCheck={false}
+                title={i18n._({ id: "No name in its meta.yaml", comment: "the title of Add…'s Folder tab name field: the folder's meta.yaml names no package, so the name is typed; keep the file name as it is" })}
+                className={`${INPUT} font-mono`}
+              />
             </Field>
-          )}
+          ) : null}
         </>
       }
     />

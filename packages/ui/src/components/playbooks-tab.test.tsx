@@ -604,7 +604,8 @@ describe("playbook-library-1: both environments' playbooks on one tab", () => {
     expect(screen.getAllByTestId("playbook-card-review").map((card) => card.dataset.origin)).toEqual(["project", "own"]);
     expect(within(cardOf("code", "project")).queryByTestId("playbook-enabled-code")).toBeNull();
     expect(within(cardOf("code", "project")).getByTestId("playbook-from-code").textContent).toBe("built in");
-    expect(within(cardOf("code", "project")).getByTestId("playbook-from-code").title).toBe("sublang/playbooks 17.4.1");
+    // The source in the Packages tab's words (playbook-library-92).
+    expect(within(cardOf("code", "project")).getByTestId("playbook-from-code").title).toBe("Built in");
     // Sectioned by what a session effectively runs: review, which your
     // own group enables, stands under Enabled in both rows — the
     // project's offering Enable for the project, yours bound — and
@@ -734,10 +735,10 @@ describe("playbook-library-89/90: packaged work names its required review", () =
       own: [configured("code", { command: "build" }), configured("decide", { command: "design" })],
     });
     expect(screen.getByTestId("review-required-hint-code").textContent).toBe(
-      language === "zh" ? "/build 暂不可运行；请先在下方启用 /review。" : "/build is unavailable until /review is enabled below.",
+      language === "zh" ? "/build 需要先启用 /review" : "/build needs /review enabled",
     );
     expect(screen.getByTestId("review-required-hint-decide").textContent).toBe(
-      language === "zh" ? "/design 暂不可运行；请先在下方启用 /review。" : "/design is unavailable until /review is enabled below.",
+      language === "zh" ? "/design 需要先启用 /review" : "/design needs /review enabled",
     );
     expect(edits()).toEqual([]);
 
@@ -782,8 +783,7 @@ describe("playbook-library-48/49: dev names the delivery built-ins it lacks", ()
   test("dev without branch or pr carries the hint naming both", async () => {
     await renderTab({ own: [configured("dev", { intent: "plan a development request" })] });
     const hint = screen.getByTestId("dev-delivery-hint");
-    expect(hint.textContent).toContain("/branch and /pr are enabled");
-    expect(hint.textContent).toContain("/dev without a pull request still runs");
+    expect(hint.textContent).toBe("Pull requests need /branch and /pr · /dev still runs");
     // A hint, not an invalid mark.
     expect(screen.queryByTestId("playbook-invalid-dev")).toBeNull();
   });
@@ -793,7 +793,7 @@ describe("playbook-library-48/49: dev names the delivery built-ins it lacks", ()
       own: [configured("dev")],
       project: [available({ id: "branch", repository: PROJECT_ID, enabled: ["project"] })],
     });
-    expect(screen.getByTestId("dev-delivery-hint").textContent).toContain("/pr is enabled");
+    expect(screen.getByTestId("dev-delivery-hint").textContent).toBe("Pull requests need /pr · /dev still runs");
   });
 
   test("dev with both enabled carries no hint", async () => {

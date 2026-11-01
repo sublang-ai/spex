@@ -4,8 +4,8 @@
 // The project's Packages and Playbooks tabs' reading of environments
 // (DR-104, DR-172): your own group's spex repository, where a publish
 // goes, the words for sources, version requirements, what a package
-// provides and the core's busy states, the built-in package, the name a
-// package folder gives, and the two name rules the tabs check in place.
+// provides and the core's busy states, the built-in package, lists joined
+// in the reader's language, and the two name rules the tabs check in place.
 // Pure functions; the components render them. Every phrase is read when
 // called, never at module load (localization-4).
 
@@ -18,7 +18,7 @@ import type {
   RegistryState,
 } from "@sublang/spex-core/protocol";
 
-import { i18n } from "../i18n.js";
+import { currentLocale, i18n } from "../i18n.js";
 import { hostNameOf } from "./instances.js";
 
 /** A spec package's name, `<org>/<pkg>` in lowercase kebab-case
@@ -74,20 +74,6 @@ export function busyWord(busy: EnvironmentState["busy"]): string | undefined {
       return i18n._({ id: "Publishing…", comment: "a spec package is being uploaded to the registry" });
     default:
       return undefined;
-  }
-}
-
-/** A source's kind in one word (playbook-library-29). */
-export function sourceKindWord(kind: EnvironmentPackage["source"]["kind"]): string {
-  switch (kind) {
-    case "registry":
-      return i18n._({ id: "registry", comment: "a spec package's source: the registry" });
-    case "path":
-      return i18n._({ id: "path", comment: "a spec package's source: a folder in the working folder" });
-    case "git":
-      return i18n._({ id: "Git", comment: "a spec package's source: a Git repository at a commit" });
-    case "builtin":
-      return i18n._({ id: "built-in", comment: "a spec package's source: the one the app ships" });
   }
 }
 
@@ -222,8 +208,8 @@ export function sourceTooltip(
 }
 
 /** What a package provides, in one phrase (playbook-library-92): "1 spec
- * · 2 skills · 1 playbook", each kind it holds counted, in that order;
- * empty where it holds none. */
+ * · 2 skills · 1 playbook", each kind with an act of its own counted, in
+ * that order; empty where it holds none. */
 export function providesPhrase(artifacts: readonly EnvironmentPackage["artifacts"][number][]): string {
   const count = (kind: EnvironmentPackage["artifacts"][number]["kind"]): number =>
     artifacts.filter((artifact) => artifact.kind === kind).length;
@@ -244,21 +230,9 @@ export function providesPhrase(artifacts: readonly EnvironmentPackage["artifacts
   if (applets > 0) {
     parts.push(i18n._({ id: "{count, plural, one {# applet} other {# applets}}", comment: "what a package provides: its count of applets, pages the IDE shows in a tab", values: { count: applets } }));
   }
-  const sources = count("source");
-  if (sources > 0) {
-    parts.push(i18n._({ id: "{count, plural, one {# source} other {# sources}}", comment: "what a package provides: its count of source materials", values: { count: sources } }));
-  }
+  // A playbook's source text has no act and no line of its own, so it
+  // is not counted (playbook-library-92).
   return parts.join(" · ");
-}
-
-/** The name a package under development's folder gives it
- * (environments-10): `<org>/<pkg>` for `spex-packages/<org>/<pkg>`,
- * else undefined, where Add…'s Folder tab asks for the name. */
-export function nameFromFolder(path: string): string | undefined {
-  const match = /^(?:\.\/)?spex-packages\/([^/]+)\/([^/]+)\/?$/u.exec(path.trim());
-  if (!match) return undefined;
-  const name = `${match[1]}/${match[2]}`;
-  return SPEC_PACKAGE_NAME_RULE.test(name) ? name : undefined;
 }
 
 /** The folder Add…'s Folder tab starts from, where a package under
@@ -271,4 +245,11 @@ export function relativeInside(folder: string, picked: string): string | undefin
   const base = folder.replace(/\/+$/u, "");
   if (picked === base) return ".";
   return picked.startsWith(`${base}/`) ? picked.slice(base.length + 1) : undefined;
+}
+
+/** Names joined as the interface language lists them (localization-5):
+ * "a and b" ("a 和 b") for a phrase's packages, "a, b" ("a、b") for a
+ * line's ids. */
+export function listOf(items: readonly string[], style: "long" | "narrow" = "long"): string {
+  return new Intl.ListFormat(currentLocale(), { type: "conjunction", style }).format(items);
 }

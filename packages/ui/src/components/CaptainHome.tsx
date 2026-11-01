@@ -626,7 +626,7 @@ export function CaptainHome(props: CaptainHomeProps) {
                     : specState === "missing"
                       ? i18n._("No project specs yet")
                       : specState === "empty"
-                        ? i18n._("No spec packages yet")
+                        ? i18n._({ id: "No specs yet", comment: "the start view's line: the project's specs folder holds no spec yet" })
                         : specState === "legacy"
                           ? i18n._("Specs use an older format")
                           : specState === "error"

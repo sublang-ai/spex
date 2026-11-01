@@ -151,9 +151,10 @@ msgstr "{command} failed at {step}"
 msgid "{command} is not installed"
 msgstr "{command} is not installed"
 
+#. a hint on a built-in playbook's card: it runs only once /review is enabled too; {command} is its command, such as /code
 #: src/components/PlaybooksTab.tsx
-msgid "{command} is unavailable until /review is enabled below."
-msgstr "{command} is unavailable until /review is enabled below."
+msgid "{command} needs /review enabled"
+msgstr "{command} needs /review enabled"
 
 #: src/lib/client.ts
 msgid "{command} timed out"
@@ -260,11 +261,6 @@ msgstr "{count, plural, one {# session needs your attention} other {# sessions n
 msgid "{count, plural, one {# skill} other {# skills}}"
 msgstr "{count, plural, one {# skill} other {# skills}}"
 
-#. what a package provides: its count of source materials
-#: src/lib/environments.ts
-msgid "{count, plural, one {# source} other {# sources}}"
-msgstr "{count, plural, one {# source} other {# sources}}"
-
 #. what a package provides: its count of specs
 #: src/lib/environments.ts
 msgid "{count, plural, one {# spec} other {# specs}}"
@@ -289,10 +285,6 @@ msgstr "{count, plural, one {Keep {place}'s version? {name}'s stays in Git histo
 #: src/components/SpaceSync.tsx
 msgid "{count, plural, one {Keep this computer's version? {name}'s stays in Git history} other {Keep this computer's version of all #? {name}'s stays in Git history}}"
 msgstr "{count, plural, one {Keep this computer's version? {name}'s stays in Git history} other {Keep this computer's version of all #? {name}'s stays in Git history}}"
-
-#: src/components/PlaybooksTab.tsx
-msgid "{count, plural, one {Pull-request delivery is unavailable until {names} is enabled below; /dev without a pull request still runs.} other {Pull-request delivery is unavailable until {names} are enabled below; /dev without a pull request still runs.}}"
-msgstr "{count, plural, one {Pull-request delivery is unavailable until {names} is enabled below; /dev without a pull request still runs.} other {Pull-request delivery is unavailable until {names} are enabled below; /dev without a pull request still runs.}}"
 
 #. a package's skills line on the Packages tab: its skills, by id, are not in the agents' folders; {ids} lists them
 #: src/components/PackageArtifacts.tsx
@@ -518,6 +510,11 @@ msgstr "{name} · on this computer"
 #: src/components/SpaceGroups.tsx
 msgid "{name} · shared by @{login} at {space}"
 msgstr "{name} · shared by @{login} at {space}"
+
+#. one package in the list beneath spex.yaml changed: the package and what asks for which versions of it, such as acme/lint (^1.0.0 by spex.yaml and ^2.0.0 by acme/triage)
+#: src/components/EnvironmentSection.tsx
+msgid "{name} ({requirements})"
+msgstr "{name} ({requirements})"
 
 #: src/components/DraftRegisterTab.tsx
 #: src/components/PlaybooksTab.tsx
@@ -1642,14 +1639,11 @@ msgid "built in"
 msgstr "built in"
 
 #. the tooltip of a package's source glyph: the app ships it
+#. the tooltip of a package's source glyph: the app ships it
+#: src/components/PlaybooksTab.tsx
 #: src/lib/environments.ts
 msgid "Built in"
 msgstr "Built in"
-
-#. a spec package's source: the one the app ships
-#: src/lib/environments.ts
-msgid "built-in"
-msgstr "built-in"
 
 #. the built-in playbooks' line on the Packages tab, while spex.lock records no version of them
 #: src/components/EnvironmentSection.tsx
@@ -2702,6 +2696,11 @@ msgstr "deleted"
 msgid "Deleted {id}; its spec package folder stays at {path}"
 msgstr "Deleted {id}; its spec package folder stays at {path}"
 
+#. tooltip of an authoring session's Delete on the Playbooks tab: the session and its conversation go, its package folder stays in the project
+#: src/components/PlaybooksTab.tsx
+msgid "Deletes the session and its conversation · its package folder stays"
+msgstr "Deletes the session and its conversation · its package folder stays"
+
 #. session row, busy: the delete is in flight
 #: src/components/NavRail.tsx
 msgid "deleting…"
@@ -3108,6 +3107,11 @@ msgstr "Enabled in {project}"
 msgid "Enables the last compile — the source changed since."
 msgstr "Enables the last compile — the source changed since."
 
+#. tooltip of Settings' empty players list: where players come from
+#: src/components/SettingsSurface.tsx
+msgid "Enabling a playbook on a project's Playbooks tab adds the players its roles need"
+msgstr "Enabling a playbook on a project's Playbooks tab adds the players its roles need"
+
 #. the enable request is in flight
 #. the enable request is in flight
 #. the enable request is in flight
@@ -3291,11 +3295,6 @@ msgstr "Failed at an unknown phase, {age}"
 #: src/components/ParkedRun.tsx
 msgid "Failed workflow"
 msgstr "Failed workflow"
-
-#. mark: this artifact's wanted language was missing, the original stands
-#: src/components/PackageArtifacts.tsx
-msgid "fallback"
-msgstr "fallback"
 
 #. an agent runs in its adapter's fast mode
 #. mark on an agent: it runs in the runtime's fast mode
@@ -3603,10 +3602,8 @@ msgstr "From your groups on {place}"
 msgid "Gears"
 msgstr "Gears"
 
-#. a spec package's source: a Git repository at a commit
 #. a tab of Add…: add a package from a Git repository
 #: src/components/EnvironmentSection.tsx
-#: src/lib/environments.ts
 msgid "Git"
 msgstr "Git"
 
@@ -3847,15 +3844,15 @@ msgstr "Installing browser…"
 msgid "Installing…"
 msgstr "Installing…"
 
-#. the title of Install and Place skills again: they put the files spex.lock records on this computer and place the skills for the agents
-#: src/components/EnvironmentSection.tsx
-msgid "Installs the files spex.lock records"
-msgstr "Installs the files spex.lock records"
-
 #. the title of Update: it picks the newest versions spex.yaml allows for every package and installs them
 #: src/components/EnvironmentSection.tsx
 msgid "Installs the newest versions spex.yaml allows"
 msgstr "Installs the newest versions spex.yaml allows"
+
+#. the title of a package's Install: it puts the versions spex.lock names on this computer; keep the file name as it is
+#: src/components/EnvironmentSection.tsx
+msgid "Installs the versions in spex.lock"
+msgstr "Installs the versions in spex.lock"
 
 #. item group: Internal Behavior, abbreviated for a narrow column
 #: src/lib/spec-view-model.ts
@@ -4335,11 +4332,6 @@ msgstr "Move the focused Up next row"
 msgid "Name a folder"
 msgstr "Name a folder"
 
-#. a package name typed in Add… breaks the rule; keep org/name as it is
-#: src/components/EnvironmentSection.tsx
-msgid "Name as org/name, in lowercase words joined by hyphens"
-msgstr "Name as org/name, in lowercase words joined by hyphens"
-
 #: src/components/SettingsSurface.tsx
 msgid "Named by {project}, not set up here"
 msgstr "Named by {project}, not set up here"
@@ -4453,10 +4445,10 @@ msgstr "Next page"
 msgid "Next tab in Projects"
 msgstr "Next tab in Projects"
 
-#. the title of an artifact's fallback mark: it has no text in the wanted language; {language} is that language's code
+#. the title of an artifact's language mark on the Packages tab: it has no text in the wanted language, so another stands; {language} is the wanted language's name, such as Chinese
 #: src/components/PackageArtifacts.tsx
-msgid "No {language} text; the original stands"
-msgstr "No {language} text; the original stands"
+msgid "No {language} text yet"
+msgstr "No {language} text yet"
 
 #: src/components/SpecView.tsx
 msgid "No <0>specs/</0> directory yet — it holds spec packages and decision and intent records."
@@ -4490,11 +4482,6 @@ msgstr "No decision record matches."
 msgid "No difference"
 msgstr "No difference"
 
-#. the title of Add…'s disabled Folder tab: this heading's folder is not on this computer
-#: src/components/EnvironmentSection.tsx
-msgid "No folder on this computer"
-msgstr "No folder on this computer"
-
 #: src/components/SourcesTabs.tsx
 msgid "No GitHub connection yet — a GitHub origin remote and a signed-in gh CLI put issues and PRs here."
 msgstr "No GitHub connection yet — a GitHub origin remote and a signed-in gh CLI put issues and PRs here."
@@ -4511,6 +4498,11 @@ msgstr "no items match the search"
 #: src/components/ProjectGroup.tsx
 msgid "no messages yet"
 msgstr "no messages yet"
+
+#. the title of Add…'s Folder tab name field: the folder's meta.yaml names no package, so the name is typed; keep the file name as it is
+#: src/components/EnvironmentSection.tsx
+msgid "No name in its meta.yaml"
+msgstr "No name in its meta.yaml"
 
 #: src/components/SourcesTabs.tsx
 msgid "No open issues."
@@ -4548,9 +4540,10 @@ msgstr "No playbooks yet"
 msgid "No player named \"{player}\" — check the config"
 msgstr "No player named \"{player}\" — check the config"
 
+#. Settings' players list while it holds none
 #: src/components/SettingsSurface.tsx
-msgid "No players yet — enabling a playbook in Playbooks adds the ones its roles need."
-msgstr "No players yet — enabling a playbook in Playbooks adds the ones its roles need."
+msgid "No players yet"
+msgstr "No players yet"
 
 #. the Explore tab's preview of a file it does not show
 #: src/components/SpaceExplorer.tsx
@@ -4591,9 +4584,15 @@ msgstr "No source yet"
 msgid "No source yet — the agent writes <0>{path}</0> here as you talk."
 msgstr "No source yet — the agent writes <0>{path}</0> here as you talk."
 
+#. the start view's line: the project's specs folder holds no spec yet
 #: src/components/CaptainHome.tsx
-msgid "No spec packages yet"
-msgstr "No spec packages yet"
+msgid "No specs yet"
+msgstr "No specs yet"
+
+#. the title of an artifact's language mark on the Packages tab: it has no text in the wanted language, so another stands
+#: src/components/PackageArtifacts.tsx
+msgid "No text in the wanted language yet"
+msgstr "No text in the wanted language yet"
 
 #: src/components/SourcesTabs.tsx
 msgid "No unfinished intent records."
@@ -4897,11 +4896,6 @@ msgstr "On (unsupported)"
 msgid "On {server}"
 msgstr "On {server}"
 
-#. the title of Enable in the receipt after Add…: it opens the project's Playbooks tab, where its playbook is enabled
-#: src/components/EnvironmentSection.tsx
-msgid "On the Playbooks tab"
-msgstr "On the Playbooks tab"
-
 #: src/components/PlaybooksTab.tsx
 #: src/components/PlaybookStages.tsx
 msgid "One normative spec item per state behavior — the compiler's middle stage"
@@ -5142,6 +5136,11 @@ msgstr "Org: lowercase letters and digits in words joined by single hyphens, at 
 msgid "original files kept from an upgrade"
 msgstr "original files kept from an upgrade"
 
+#. an artifact's language mark on the Packages tab: it has no text in the wanted language, so its original stands
+#: src/components/PackageArtifacts.tsx
+msgid "Original text"
+msgstr "Original text"
+
 #. heading over units of no named kind
 #. heading over units of no named kind
 #: src/lib/space.ts
@@ -5185,6 +5184,11 @@ msgstr "package"
 msgid "Package"
 msgstr "Package"
 
+#. the title of an authoring session's chip Source missing: its package folder is gone from the project folder, so the session can only be deleted
+#: src/lib/drafts.ts
+msgid "Package folder not in the project folder · only Delete remains"
+msgstr "Package folder not in the project folder · only Delete remains"
+
 #. a field of Add…'s Folder and Git tabs: the package's org/name
 #: src/components/EnvironmentSection.tsx
 msgid "Package name"
@@ -5226,11 +5230,6 @@ msgstr "Paste a source or pick a file"
 #: src/components/DraftSourceTab.tsx
 msgid "Paste the playbook source — prose, a SKILL.md, or workflow markdown…"
 msgstr "Paste the playbook source — prose, a SKILL.md, or workflow markdown…"
-
-#. a spec package's source: a folder in the working folder
-#: src/lib/environments.ts
-msgid "path"
-msgstr "path"
 
 #. field holding a path to select and copy
 #. the field holding a new group's path at the Space, the last segment of its address
@@ -5531,9 +5530,19 @@ msgstr "Publishes {path} to {registry}"
 msgid "Publishing…"
 msgstr "Publishing…"
 
+#. a hint on the /dev card: delivering through a pull request needs these playbooks enabled, while a plain /dev runs; {names} names them, such as /branch and /pr
+#: src/components/PlaybooksTab.tsx
+msgid "Pull requests need {names} · /dev still runs"
+msgstr "Pull requests need {names} · /dev still runs"
+
 #: src/components/NextCard.tsx
 msgid "Put this task in the message — Send starts it"
 msgstr "Put this task in the message — Send starts it"
+
+#. the title of Place skills again: it places the packages' skills in the agents' folders once more
+#: src/components/EnvironmentSection.tsx
+msgid "Puts the skills in the agents' folders again"
+msgstr "Puts the skills in the agents' folders again"
 
 #. capture control: put this artifact in the queue
 #. capture control: put this artifact in the queue
@@ -5632,6 +5641,11 @@ msgstr "reading {id}…"
 #: src/components/SpaceMembers.tsx
 msgid "Reading members…"
 msgstr "Reading members…"
+
+#. Add…'s Folder tab: the chosen folder's meta.yaml is being read for the package's name and version; keep the file name as it is
+#: src/components/EnvironmentSection.tsx
+msgid "Reading meta.yaml…"
+msgstr "Reading meta.yaml…"
 
 #: src/components/CaptainHome.tsx
 msgid "Reading project specs…"
@@ -5755,11 +5769,6 @@ msgstr "Refresh status and GitHub data"
 #: src/lib/step-words.ts
 msgid "refused"
 msgstr "refused"
-
-#. a spec package's source: the registry
-#: src/lib/environments.ts
-msgid "registry"
-msgstr "registry"
 
 #. a tab of Add…: search the registry
 #. the line beneath a Space's heading naming its registry, where packages are published and read
@@ -5887,10 +5896,6 @@ msgstr "Remove project"
 #: src/components/SettingsSurface.tsx
 msgid "Remove the credential for {name}"
 msgstr "Remove the credential for {name}"
-
-#: src/components/PlaybooksTab.tsx
-msgid "Remove the session and its conversation; the spec package folder stays"
-msgstr "Remove the session and its conversation; the spec package folder stays"
 
 #: src/components/ProjectGroup.tsx
 msgid "Remove this intent from history"
@@ -6626,6 +6631,11 @@ msgstr "shown despite filter"
 msgid "shown despite search"
 msgstr "shown despite search"
 
+#. the title of Enable in the receipt after Add…, for a package of several playbooks: it opens the package's row to its playbooks, each enabled on its own line
+#: src/components/EnvironmentSection.tsx
+msgid "Shows its playbooks, each with Enable"
+msgstr "Shows its playbooks, each with Enable"
+
 #. sign in to a Space or a registry
 #. sign in to the Space chosen, or to a registry
 #: src/components/EnvironmentSection.tsx
@@ -6762,7 +6772,7 @@ msgstr "Source"
 msgid "Source file path (overrides the text)"
 msgstr "Source file path (overrides the text)"
 
-#. authoring state chip, at most 14 characters: the spec package folder is gone from the working folder
+#. authoring state chip, at most 14 characters: the package's folder is gone from the project folder
 #: src/lib/drafts.ts
 msgid "Source missing"
 msgstr "Source missing"
@@ -6812,7 +6822,7 @@ msgstr "Spec items"
 msgid "Spec package citation graph"
 msgstr "Spec package citation graph"
 
-#. tab name: the project's spec packages
+#. tab name: the project's specs
 #. the spec view's own heading
 #. the spec view's own heading
 #: src/App.tsx
@@ -7284,14 +7294,15 @@ msgstr "The last turn failed. Send a message to pick it up."
 msgid "The ledger could not be loaded: {reason}"
 msgstr "The ledger could not be loaded: {reason}"
 
-#. the title of an artifact's fallback mark: it has no text in the wanted language
-#: src/components/PackageArtifacts.tsx
-msgid "The original text stands"
-msgstr "The original text stands"
+#. the title of Add…'s disabled Folder tab under Packages: the project's folder, which a folder package lies in, is not on this computer, as for a project on a server
+#: src/components/EnvironmentSection.tsx
+msgid "The project folder is not on this computer"
+msgstr "The project folder is not on this computer"
 
+#. tooltip of the Specs tab: the project's own spec files; {keys} is its shortcut
 #: src/App.tsx
-msgid "The project's spec packages ({keys})"
-msgstr "The project's spec packages ({keys})"
+msgid "The project's specs ({keys})"
+msgstr "The project's specs ({keys})"
 
 #: src/components/DraftRegisterTab.tsx
 msgid "The proposal names {roles}, which the compiled entry lacks."
@@ -7326,10 +7337,6 @@ msgstr "the save failed"
 #: src/components/SpaceSignIn.tsx
 msgid "The sign-in did not start"
 msgstr "The sign-in did not start"
-
-#: src/lib/drafts.ts
-msgid "The spec package folder is gone from the working folder; only Delete remains"
-msgstr "The spec package folder is gone from the working folder; only Delete remains"
 
 #: src/App.tsx
 msgid "The Spex window and its core speak different protocol versions — restart the app (or update Spex) to fix this."
@@ -7458,6 +7465,11 @@ msgstr "This project uses a legacy specs layout"
 #: src/App.tsx
 msgid "This project's overview: history, now, up next, sources, repo state"
 msgstr "This project's overview: history, now, up next, sources, repo state"
+
+#. tooltip of the project's Packages tab: the packages the project's spex.yaml names, and those added for yourself
+#: src/App.tsx
+msgid "This project's packages and your Personal ones"
+msgstr "This project's packages and your Personal ones"
 
 #: src/components/ProjectGroup.tsx
 msgid "This record is not in the project's specs tree"
@@ -7782,6 +7794,11 @@ msgstr "Use browser setting from Settings"
 msgid "Use default"
 msgstr "Use default"
 
+#. a package name typed in Add… breaks the rule; keep org/name as it is
+#: src/components/EnvironmentSection.tsx
+msgid "Use org/name: lowercase words joined by hyphens"
+msgstr "Use org/name: lowercase words joined by hyphens"
+
 #. pair a project's records with the folder named
 #. the repair editor's control: make the folder named the project's folder
 #: src/components/SpaceGroups.tsx
@@ -7892,6 +7909,11 @@ msgstr "waiting for your verdict"
 #: src/components/EnvironmentSection.tsx
 msgid "What {name} provides"
 msgstr "What {name} provides"
+
+#. tooltip of the project's Playbooks tab: the playbooks enabled and available here
+#: src/App.tsx
+msgid "What a session in this project can run"
+msgstr "What a session in this project can run"
 
 #: src/components/CaptainHome.tsx
 msgid "What should change?"
@@ -8029,6 +8051,11 @@ msgstr "Your groups"
 #: src/components/PlaybooksTab.tsx
 msgid "Your orgs could not be read"
 msgstr "Your orgs could not be read"
+
+#. the title of Add…'s disabled Folder tab under Personal: the folder holding your Personal records, which a folder package lies in, is not on this computer
+#: src/components/EnvironmentSection.tsx
+msgid "Your Personal records are not on this computer"
+msgstr "Your Personal records are not on this computer"
 
 #: src/components/CaptainHome.tsx
 msgid "your project"

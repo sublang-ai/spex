@@ -9,8 +9,8 @@
 // <project>" or "Enabled · Personal" after; the skills "skills: <ids> ·
 // placed for your agents" or "· not placed"; the spec "spec · placed as
 // a skill"; an applet "<id> · its page", opening its tab (applets-1). An
-// artifact read in another language than the one wanted wears the
-// fallback mark.
+// artifact read in another language than the one wanted is marked with
+// the language it is shown in.
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type {
@@ -23,7 +23,8 @@ import { isLocalPlace } from "../state/store.js";
 import { usePlaceStore } from "../state/place-context.js";
 import { appletTabId } from "../lib/applets.js";
 import { enablePlaybook } from "../lib/enable-playbook.js";
-import { i18n } from "../i18n.js";
+import { listOf } from "../lib/environments.js";
+import { currentLocale, i18n } from "../i18n.js";
 
 type Artifact = EnvironmentPackage["artifacts"][number];
 
@@ -55,50 +56,58 @@ function placed(pkg: EnvironmentPackage, artifact: Artifact, state: EnvironmentS
   return !names.some((name) => skipped.has(name));
 }
 
-/** The mark of an artifact read in its original language where another
- * was wanted (environments-14). */
-function FallbackMark({ testId, language }: { testId: string; language: string | null }) {
+/** A language's name in the interface language, "English" for `en`;
+ * the code itself where none is known (localization-4). */
+function languageName(code: string): string {
+  try {
+    return new Intl.DisplayNames(currentLocale(), { type: "language" }).of(code) ?? code;
+  } catch {
+    return code;
+  }
+}
+
+/** The mark of an artifact read in another language than the one
+ * wanted (environments-14): the language it is shown in, its tooltip
+ * saying which language it has no text in yet. */
+function FallbackMark({ testId, shown, wanted }: { testId: string; shown: string | null; wanted: string | null }) {
   return (
     <span
       data-testid={testId}
       title={
-        language
+        wanted
           ? i18n._({
-              id: "No {language} text; the original stands",
-              comment: "the title of an artifact's fallback mark: it has no text in the wanted language; {language} is that language's code",
-              values: { language },
+              id: "No {language} text yet",
+              comment: "the title of an artifact's language mark on the Packages tab: it has no text in the wanted language, so another stands; {language} is the wanted language's name, such as Chinese",
+              values: { language: languageName(wanted) },
             })
-          : i18n._({ id: "The original text stands", comment: "the title of an artifact's fallback mark: it has no text in the wanted language" })
+          : i18n._({ id: "No text in the wanted language yet", comment: "the title of an artifact's language mark on the Packages tab: it has no text in the wanted language, so another stands" })
       }
       className="shrink-0 rounded bg-amber-100 px-1 text-amber-800 dark:bg-amber-950 dark:text-amber-200"
     >
-      {i18n._({ id: "fallback", comment: "mark: this artifact's wanted language was missing, the original stands" })}
+      {shown
+        ? languageName(shown)
+        : i18n._({ id: "Original text", comment: "an artifact's language mark on the Packages tab: it has no text in the wanted language, so its original stands" })}
     </span>
   );
 }
 
-/** One playbook's line: its command, and Enable — or where the heading's
- * config enables it, that standing (playbook-library-92). */
-function PlaybookLine({
-  name,
-  artifact,
+/** Enable on a package's playbook, wherever it stands — its line on an
+ * expanded row, or the receipt after Add… (playbook-library-92): the
+ * Playbooks tab's own write in the config of the heading's spex
+ * repository (playbook-library-3), the list read again so the playbook
+ * reads where it is enabled, and focus moving to that standing. */
+export function usePlaybookEnable({
   entry,
   personal,
   repository,
   projectId,
-  projectName,
-  fallback,
 }: {
-  name: string;
-  artifact: Artifact;
   /** The playbook as the heading's environment lists it; absent while
    * the list is read or where it lists no such playbook. */
   entry: PlaybookAvailability | undefined;
   personal: boolean;
   repository: string;
   projectId: string;
-  projectName: string;
-  fallback: ReactNode;
 }) {
   const store = usePlaceStore();
   const configState = store((current) => current.configState);
@@ -106,15 +115,14 @@ function PlaybookLine({
   const [error, setError] = useState<string>();
   const [settled, setSettled] = useState(false);
   const statusRef = useRef<HTMLSpanElement>(null);
-  const command = entry?.command ?? artifact.id;
   const enabled = entry?.enabled.includes(personal ? "own" : "project") === true;
   // Your own group's roster names every binding; an Enable stands only
   // while the config reads and the playbook's roles are known.
   const roster = configState?.status === "valid" ? (configState.summary.players ?? []) : undefined;
 
   // The control an Enable leaves gives focus to the standing that
-  // replaces it, so the reader stays on the line; a list that read no
-  // change leaves Enable, and focus, where they are.
+  // replaces it, so the reader stays where they were; a list that read
+  // no change leaves Enable, and focus, where they are.
   useEffect(() => {
     if (!settled) return;
     if (enabled) statusRef.current?.focus();
@@ -143,13 +151,32 @@ function PlaybookLine({
     }
   }
 
-  let act: ReactNode = null;
-  if (enabled) {
-    act = (
+  return { enabled, ready: entry !== undefined && roster !== undefined, busy, error, statusRef, enable };
+}
+
+/** Enable, or the standing that replaces it: "Enabled in <project>", or
+ * under "Personal" "Enabled · Personal" (playbook-library-92). */
+export function PlaybookEnableAct({
+  enabling,
+  command,
+  personal,
+  projectName,
+  enableTestId,
+  enabledTestId,
+}: {
+  enabling: ReturnType<typeof usePlaybookEnable>;
+  command: string;
+  personal: boolean;
+  projectName: string;
+  enableTestId: string;
+  enabledTestId: string;
+}) {
+  if (enabling.enabled) {
+    return (
       <span
-        ref={statusRef}
+        ref={enabling.statusRef}
         tabIndex={-1}
-        data-testid={`env-enabled-${name}-${artifact.id}`}
+        data-testid={enabledTestId}
         className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 text-emerald-700 outline-none dark:bg-emerald-950 dark:text-emerald-300"
       >
         {personal
@@ -161,41 +188,77 @@ function PlaybookLine({
             })}
       </span>
     );
-  } else if (entry && roster) {
-    act = (
-      <button
-        type="button"
-        data-testid={`env-enable-${name}-${artifact.id}`}
-        disabled={busy}
-        title={
-          personal
-            ? i18n._({
-                id: "For you, in every project of yours",
-                comment: "tooltip of Enable on a playbook your Personal packages list: it is written to your Personal config",
-              })
-            : i18n._({
-                id: "For you and every member of {project}",
-                comment: "tooltip of Enable on a playbook the project's packages list: it is written to the project's config",
-                values: { project: projectName },
-              })
-        }
-        aria-label={i18n._("Enable /{command}", { command })}
-        onClick={() => void enable()}
-        className={PRIMARY}
-      >
-        {busy
-          ? i18n._({ id: "Enabling…", comment: "the enable request is in flight" })
-          : i18n._({ id: "Enable", comment: "enable this playbook in this config" })}
-      </button>
-    );
   }
+  if (!enabling.ready) return null;
+  return (
+    <button
+      type="button"
+      data-testid={enableTestId}
+      disabled={enabling.busy}
+      title={
+        personal
+          ? i18n._({
+              id: "For you, in every project of yours",
+              comment: "tooltip of Enable on a playbook your Personal packages list: it is written to your Personal config",
+            })
+          : i18n._({
+              id: "For you and every member of {project}",
+              comment: "tooltip of Enable on a playbook the project's packages list: it is written to the project's config",
+              values: { project: projectName },
+            })
+      }
+      aria-label={i18n._("Enable /{command}", { command })}
+      onClick={() => void enabling.enable()}
+      className={PRIMARY}
+    >
+      {enabling.busy
+        ? i18n._({ id: "Enabling…", comment: "the enable request is in flight" })
+        : i18n._({ id: "Enable", comment: "enable this playbook in this config" })}
+    </button>
+  );
+}
+
+/** One playbook's line: its command, and Enable — or where the heading's
+ * config enables it, that standing (playbook-library-92). */
+function PlaybookLine({
+  name,
+  artifact,
+  entry,
+  personal,
+  repository,
+  projectId,
+  projectName,
+  fallback,
+}: {
+  name: string;
+  artifact: Artifact;
+  entry: PlaybookAvailability | undefined;
+  personal: boolean;
+  repository: string;
+  projectId: string;
+  projectName: string;
+  fallback: ReactNode;
+}) {
+  const enabling = usePlaybookEnable({ entry, personal, repository, projectId });
+  const command = entry?.command ?? artifact.id;
+  const act = (
+    <PlaybookEnableAct
+      enabling={enabling}
+      command={command}
+      personal={personal}
+      projectName={projectName}
+      enableTestId={`env-enable-${name}-${artifact.id}`}
+      enabledTestId={`env-enabled-${name}-${artifact.id}`}
+    />
+  );
+  const shown = enabling.enabled || enabling.ready;
 
   return (
     <li data-testid={`env-artifact-${name}-${artifact.id}`} data-kind="playbook" className="flex flex-col gap-1">
       <span className={LINE}>
         <span className="font-mono">/{command}</span>
         {fallback}
-        {act ? (
+        {shown ? (
           <>
             <span aria-hidden className="text-neutral-400">
               ·
@@ -204,9 +267,9 @@ function PlaybookLine({
           </>
         ) : null}
       </span>
-      {error ? (
+      {enabling.error ? (
         <p role="alert" data-testid={`env-enable-error-${name}-${artifact.id}`} className={ERROR}>
-          {error}
+          {enabling.error}
         </p>
       ) : null}
     </li>
@@ -248,7 +311,7 @@ export function PackageArtifacts({
   const pageHere = isLocalPlace(store.place) && pkg.installed && pkg.missingPath === null;
 
   const fallbackOf = (artifact: Artifact): ReactNode =>
-    artifact.fallback ? <FallbackMark testId={`env-fallback-${name}-${artifact.id}`} language={state.language} /> : null;
+    artifact.fallback ? <FallbackMark testId={`env-fallback-${name}-${artifact.id}`} shown={artifact.language} wanted={state.language} /> : null;
 
   const playbooks = pkg.artifacts.filter((artifact) => artifact.kind === "playbook");
   const skills = pkg.artifacts.filter((artifact) => artifact.kind === "skill");
@@ -259,7 +322,7 @@ export function PackageArtifacts({
 
   const skillLine = (group: Artifact[], isPlaced: boolean): ReactNode => {
     if (group.length === 0) return null;
-    const ids = group.map((artifact) => artifact.id).join(", ");
+    const ids = listOf(group.map((artifact) => artifact.id), "narrow");
     const fallen = group.find((artifact) => artifact.fallback);
     return (
       <li
@@ -281,7 +344,7 @@ export function PackageArtifacts({
               })}
         </span>
         {fallen ? (
-          <FallbackMark testId={`env-fallback-${name}-${isPlaced ? "placed" : "unplaced"}-skills`} language={state.language} />
+          <FallbackMark testId={`env-fallback-${name}-${isPlaced ? "placed" : "unplaced"}-skills`} shown={fallen.language} wanted={state.language} />
         ) : null}
       </li>
     );

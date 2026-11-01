@@ -261,10 +261,21 @@ describe("playbook-library-94: each heading and its rows", () => {
     expect(within(row).queryByTestId("env-provides-private/notes")).toBeNull();
     expect(within(row).getByTestId("env-installed-private/notes").textContent).toBe("Not installed");
 
-    // [playbook-library-92] the registry refused it for want of a grant:
-    // signed out there, the last operation failed.
+    // [playbook-library-92] signed out there, a failure the state lists
+    // no refusal for — an outage, a requirement no version meets — reads
+    // Not installed, with no Sign in.
     act(() => deliverServerMessageForTests({ type: "registry.state", state: account(false) }));
-    update(PROJECT_ID, { ...environments[PROJECT_ID]!, error: "private/notes: this account may not fetch it from the registry" });
+    update(PROJECT_ID, { ...environments[PROJECT_ID]!, error: "private/notes: Spex Example could not be reached — check the connection, then Retry" });
+    expect(within(row).getByTestId("env-installed-private/notes").textContent).toBe("Not installed");
+    expect(within(row).queryByTestId("env-signin-private/notes")).toBeNull();
+    // A refusal listing another package leaves this one Not installed.
+    update(PROJECT_ID, { ...environments[PROJECT_ID]!, error: "acme/other is not shared with you at Spex Example — ask its owner", refused: ["acme/other"] });
+    expect(within(row).getByTestId("env-installed-private/notes").textContent).toBe("Not installed");
+    expect(within(row).queryByTestId("env-signin-private/notes")).toBeNull();
+
+    // [playbook-library-92] the state lists it among the packages the
+    // registry refused for want of a grant: Not installed · private.
+    update(PROJECT_ID, { ...environments[PROJECT_ID]!, error: "private/notes is not shared with you at Spex Example — ask its owner", refused: ["private/notes"] });
     expect(within(row).getByTestId("env-installed-private/notes").textContent).toBe("Not installed · private");
     const signIn = within(row).getByTestId("env-signin-private/notes");
     expect(signIn.textContent).toBe("Sign in");
@@ -272,7 +283,7 @@ describe("playbook-library-94: each heading and its rows", () => {
     fireEvent.click(signIn);
     await vi.waitFor(() => expect(commandMock).toHaveBeenCalledWith("registry.signin.start", { origin: REGISTRY }));
     // The failure still shows its cause in place.
-    expect(projectSection().getByTestId("environment-error").textContent).toContain("may not fetch");
+    expect(projectSection().getByTestId("environment-error").textContent).toContain("not shared with you at Spex Example");
   });
 
   test("Git source tooltips use the display summary through live state updates", async () => {
@@ -353,10 +364,13 @@ describe("playbook-library-94: the chips", () => {
             { by: "acme/local-tools", requirement: "^1.0.0" },
           ],
         },
+        { name: "acme/tidy", requirements: [{ by: "spex.yaml", requirement: "^2.0.0" }] },
       ],
     });
+    // Each package with what asks for it, joined as the interface
+    // language lists them (localization-5).
     expect(projectSection().getByTestId("environment-conflicts").textContent).toBe(
-      "No version fits every package: acme/labels — ^0.4.0 by acme/triage, ^1.0.0 by acme/local-tools",
+      "No version fits every package: acme/labels (^0.4.0 by acme/triage and ^1.0.0 by acme/local-tools) and acme/tidy (^2.0.0 by spex.yaml)",
     );
     expect(projectSection().getByTestId("environment-update")).toBeTruthy();
     update(PROJECT_ID, { ...environments[PROJECT_ID]!, conflicts: null });
@@ -442,26 +456,45 @@ describe("playbook-library-94: Remove", () => {
   });
 });
 
-describe("playbook-library-94: a row's artifacts", () => {
-  /** The lists the core reads again after a write: what the config
-   * enables moves with each `playbook.add` (playbook-library-3). */
-  function listsFollowEdits(lists: CommandResults["environment.playbooks"]) {
-    const base = commandMock.getMockImplementation()!;
-    commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) => {
-      if (type === "environment.playbooks") return lists;
-      if (type === "config.edit") {
-        const op = params?.op as { kind: string; playbookId?: string };
-        if (op.kind === "playbook.add") {
-          const side = params?.repository === PROJECT_ID ? lists.project : lists.own;
-          const entry = side?.find((candidate) => candidate.id === op.playbookId);
-          if (entry) entry.enabled = [...entry.enabled, params?.repository === PROJECT_ID ? "project" : "own"];
-        }
-        return CONFIG_STATE;
+/** The lists the core reads again after a write: what the config
+ * enables moves with each `playbook.add` (playbook-library-3). */
+function listsFollowEdits(lists: CommandResults["environment.playbooks"]) {
+  const base = commandMock.getMockImplementation()!;
+  commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) => {
+    if (type === "environment.playbooks") return lists;
+    if (type === "config.edit") {
+      const op = params?.op as { kind: string; playbookId?: string };
+      if (op.kind === "playbook.add") {
+        const side = params?.repository === PROJECT_ID ? lists.project : lists.own;
+        const entry = side?.find((candidate) => candidate.id === op.playbookId);
+        if (entry) entry.enabled = [...entry.enabled, params?.repository === PROJECT_ID ? "project" : "own"];
       }
-      return base(type, params);
-    });
-  }
+      return CONFIG_STATE;
+    }
+    return base(type, params);
+  });
+}
 
+/** What the core's dry run of a request by path reads of each folder's
+ * meta.yaml (environments-15): its name and version, nulls where it
+ * names none, or a refusal. */
+function foldersRead(folders: Record<string, { name: string | null; version: string | null } | Error>) {
+  const base = commandMock.getMockImplementation()!;
+  commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) => {
+    if (type === "environment.request" && params?.dryRun === true) {
+      const path = (params.request as { path: string }).path;
+      const read = folders[path] ?? { name: null, version: null };
+      if (read instanceof Error) throw read;
+      return { accepted: true, preview: read };
+    }
+    return base(type, params);
+  });
+}
+
+/** The requests sent that write spex.yaml, no dry run among them. */
+const writes = () => commandMock.mock.calls.filter(([type, params]) => type === "environment.request" && params?.dryRun !== true);
+
+describe("playbook-library-94: a row's artifacts", () => {
   test("a row expands to one line per artifact; a playbook's Enable writes the project's config in place and then reads Enabled in the project", async () => {
     environments[PROJECT_ID] = {
       ...environments[PROJECT_ID]!,
@@ -487,12 +520,13 @@ describe("playbook-library-94: a row's artifacts", () => {
     const lines = within(row).getByTestId("env-artifacts-acme/triage");
     expect(disclosure.getAttribute("aria-controls")).toBe(lines.id);
     // [playbook-library-92] one line per artifact: the playbook with
-    // Enable, the spec placed as a skill wearing its fallback mark.
+    // Enable, the spec placed as a skill marked with the language it is
+    // shown in, its tooltip naming the language it has no text in.
     const playbook = within(lines).getByTestId("env-artifact-acme/triage-triage");
     expect(playbook.textContent).toBe("/triage·Enable");
     const spec = within(lines).getByTestId("env-artifact-acme/triage-triage-spec");
-    expect(spec.textContent).toBe("spec · placed as a skillfallback");
-    expect(within(spec).getByTestId("env-fallback-acme/triage-triage-spec").title).toBe("No zh-Hans text; the original stands");
+    expect(spec.textContent).toBe("spec · placed as a skillEnglish");
+    expect(within(spec).getByTestId("env-fallback-acme/triage-triage-spec").title).toBe("No Simplified Chinese text yet");
     expect(within(playbook).queryByTestId("env-fallback-acme/triage-triage")).toBeNull();
     // The playbook line's Enable says whom it reaches.
     const enable = await within(playbook).findByRole("button", { name: "Enable /triage" });
@@ -615,12 +649,15 @@ describe("playbook-library-94: a row's artifacts", () => {
     };
     await renderTab();
     const kit = projectSection().getByTestId("env-package-acme/kit");
+    // [playbook-library-92] what it provides counts what has a line and
+    // an act: a source is not counted.
+    expect(within(kit).getByTestId("env-provides-acme/kit").textContent).toBe("1 spec · 2 skills · 1 applet");
     fireEvent.click(within(kit).getByRole("button", { name: "What acme/kit provides" }));
     const lines = within(kit).getByTestId("env-artifacts-acme/kit");
     // [playbook-library-92] every skill placed: one line naming them;
     // a source has no line of its own.
     expect(within(lines).getByTestId("env-skills-placed-acme/kit").textContent).toBe(
-      "skills: greet, review · placed for your agentsfallback",
+      "skills: greet, review · placed for your agentsEnglish",
     );
     expect(within(lines).queryByTestId("env-skills-unplaced-acme/kit")).toBeNull();
     expect(within(lines).getByTestId("env-artifact-acme/kit-kit").textContent).toBe("spec · placed as a skill");
@@ -638,7 +675,7 @@ describe("playbook-library-94: a row's artifacts", () => {
       unexported: { skipped: [{ name: "review", folder: ".agents/skills" }, { name: "acme-kit", folder: ".claude/skills" }], missing: [] },
     });
     expect(within(lines).getByTestId("env-skills-placed-acme/kit").textContent).toBe("skill: greet · placed for your agents");
-    expect(within(lines).getByTestId("env-skills-unplaced-acme/kit").textContent).toBe("skill: review · not placedfallback");
+    expect(within(lines).getByTestId("env-skills-unplaced-acme/kit").textContent).toBe("skill: review · not placedEnglish");
     expect(within(lines).getByTestId("env-artifact-acme/kit-kit").textContent).toBe("spec · not placed");
     // A package whose files are not here: its skills not placed, its
     // applet with no page to open.
@@ -652,6 +689,11 @@ describe("playbook-library-94: a row's artifacts", () => {
 
 describe("playbook-library-94: Add…", () => {
   test("the Registry tab searches the heading's registry, reads each version's requirement, adds the chosen one, and the receipt reads what arrived with Enable", async () => {
+    const lists: CommandResults["environment.playbooks"] = {
+      project: [available({ id: "triage", package: "acme/triage", version: "1.2.3", source: "registry", repository: PROJECT_ID })],
+      own: [available({ id: "code", roles: ["coder", "reviewer"] })],
+    };
+    listsFollowEdits(lists);
     await renderTab();
     openAdd(projectSection());
     const popover = projectSection().getByTestId("add-packages");
@@ -686,9 +728,26 @@ describe("playbook-library-94: Add…", () => {
     // [playbook-library-92] the popover closes on the receipt.
     expect((await projectSection().findByTestId("add-note")).textContent).toBe("Added acme/triage 1.2.3 · 1 spec · 1 playbook");
     expect(projectSection().queryByTestId("add-packages")).toBeNull();
-    // It provides a playbook: Enable opens the project's Playbooks tab.
-    fireEvent.click(projectSection().getByTestId("add-note-enable"));
-    expect(useAppStore.getState().workspaceTabs[PROJECT_ID]).toBe("playbooks");
+    // [playbook-library-92] it provides one playbook: the receipt's
+    // Enable enables it in place in the project's config, the write its
+    // row's line makes (playbook-library-3), and then reads where it is
+    // enabled, focus moving there; no tab opens.
+    const receiptEnable = await projectSection().findByTestId("add-note-enable");
+    expect(receiptEnable.textContent).toBe("Enable");
+    expect(receiptEnable.getAttribute("aria-label")).toBe("Enable /triage");
+    expect(receiptEnable.title).toBe("For you and every member of demo");
+    fireEvent.click(receiptEnable);
+    await vi.waitFor(() =>
+      expect(commandMock).toHaveBeenCalledWith("config.edit", {
+        repository: PROJECT_ID,
+        op: { kind: "playbook.add", playbookId: "triage", roles: { coder: "dev.coder" } },
+      }),
+    );
+    const receiptEnabled = await projectSection().findByTestId("add-note-enabled");
+    expect(receiptEnabled.textContent).toBe("Enabled in demo");
+    await vi.waitFor(() => expect(document.activeElement).toBe(receiptEnabled));
+    expect(projectSection().queryByTestId("add-note-enable")).toBeNull();
+    expect(useAppStore.getState().workspaceTabs[PROJECT_ID]).toBeUndefined();
 
     // Your own heading searches its own registry.
     commandMock.mockClear();
@@ -717,6 +776,50 @@ describe("playbook-library-94: Add…", () => {
     expect(projectSection().queryByTestId("add-note-enable")).toBeNull();
   });
 
+  test("a package of several playbooks: the receipt's Enable opens its row to its playbooks, each with its own Enable", async () => {
+    listsFollowEdits({
+      project: [
+        available({ id: "sort", package: "acme/tidy", version: "0.3.0", source: "registry", repository: PROJECT_ID }),
+        available({ id: "sweep", package: "acme/tidy", version: "0.3.0", source: "registry", repository: PROJECT_ID }),
+      ],
+      own: [],
+    });
+    await renderTab();
+    openAdd(projectSection());
+    fireEvent.change(projectSection().getByTestId("registry-query"), { target: { value: "tidy" } });
+    fireEvent.click(within(await projectSection().findByTestId("registry-result-acme/tidy")).getByTestId("registry-add-acme/tidy"));
+    await projectSection().findByTestId("add-note");
+    update(PROJECT_ID, {
+      ...environments[PROJECT_ID]!,
+      requests: { ...environments[PROJECT_ID]!.requests, "acme/tidy": { kind: "registry", version: "^0.3.0" } },
+      packages: [
+        ...environments[PROJECT_ID]!.packages,
+        specPackage({
+          name: "acme/tidy",
+          version: "0.3.0",
+          artifacts: [
+            { id: "sort", kind: "playbook", language: "en", fallback: false },
+            { id: "sweep", kind: "playbook", language: "en", fallback: false },
+          ],
+        }),
+      ],
+    });
+    expect(projectSection().getByTestId("add-note").textContent).toBe("Added acme/tidy 0.3.0 · 2 playbooks");
+    const enable = projectSection().getByTestId("add-note-enable");
+    expect(enable.title).toBe("Shows its playbooks, each with Enable");
+    const row = projectSection().getByTestId("env-package-acme/tidy");
+    expect(within(row).queryByTestId("env-artifacts-acme/tidy")).toBeNull();
+    fireEvent.click(enable);
+    // [playbook-library-92] its row opens, focus on its disclosure; each
+    // playbook's line carries its own Enable, and nothing is written yet.
+    const lines = await within(row).findByTestId("env-artifacts-acme/tidy");
+    expect(within(row).getByTestId("env-expand-acme/tidy").getAttribute("aria-expanded")).toBe("true");
+    expect(document.activeElement).toBe(within(row).getByTestId("env-expand-acme/tidy"));
+    expect(await within(lines).findByTestId("env-enable-acme/tidy-sort")).toBeTruthy();
+    expect(within(lines).getByTestId("env-enable-acme/tidy-sweep")).toBeTruthy();
+    expect(commandMock).not.toHaveBeenCalledWith("config.edit", expect.anything());
+  });
+
   test("an add the core refuses shows its cause in place", async () => {
     await renderTab();
     const base = commandMock.getMockImplementation()!;
@@ -734,53 +837,103 @@ describe("playbook-library-94: Add…", () => {
     expect(projectSection().queryByTestId("add-note")).toBeNull();
   });
 
-  test("the Folder tab starts from spex-packages/, reads the name a package folder gives, asks for one elsewhere, and refuses a bad name before anything is sent", async () => {
+  test("the Folder tab starts from spex-packages/, reads the name and version from the folder's meta.yaml, asks for a name only where it names none, and refuses a bad name before anything is sent", async () => {
+    foldersRead({
+      "spex-packages/acme/tools": { name: "acme/tools", version: "0.1.0" },
+      // A meta.yaml naming another package than its path suggests.
+      "vendor/tools": { name: "acme/vendored", version: "2.0.0" },
+      "vendor/bare": { name: null, version: null },
+      "../out": new Error("../out is outside the project folder"),
+    });
     await renderTab();
     openAdd(projectSection(), "folder");
     const form = projectSection().getByTestId("folder-request");
     expect(form.textContent).toContain(`Folder inside ${PROJECT.path}`);
     const path = projectSection().getByTestId("folder-request-path") as HTMLInputElement;
     expect(path.value).toBe("spex-packages/");
-    // The prefill alone adds nothing.
+    // The prefill alone reads nothing and adds nothing.
     expect((projectSection().getByTestId("folder-request-submit") as HTMLButtonElement).disabled).toBe(true);
-    // A package under development names itself by its folder.
+    expect(commandMock).not.toHaveBeenCalledWith("environment.request", expect.anything());
+
+    // [playbook-library-92] a package under development: the core's dry
+    // run reads its meta.yaml (environments-15), writing nothing; its
+    // name and version show, and no name is asked for.
     fireEvent.change(path, { target: { value: "spex-packages/acme/tools/" } });
-    expect(projectSection().getByTestId("folder-request-derived").textContent).toBe("acme/tools");
+    expect(projectSection().getByTestId("folder-request-reading").textContent).toBe("Reading meta.yaml…");
+    expect((projectSection().getByTestId("folder-request-submit") as HTMLButtonElement).disabled).toBe(true);
+    expect((await projectSection().findByTestId("folder-request-derived")).textContent).toBe("acme/tools");
+    expect(projectSection().getByTestId("folder-request-version").textContent).toBe("0.1.0");
+    expect(commandMock).toHaveBeenCalledWith("environment.request", {
+      repository: PROJECT_ID,
+      request: { kind: "path", path: "spex-packages/acme/tools" },
+      dryRun: true,
+    });
     expect(projectSection().queryByTestId("folder-request-name")).toBeNull();
+    expect(writes()).toEqual([]);
     fireEvent.click(projectSection().getByTestId("folder-request-submit"));
     await vi.waitFor(() =>
-      expect(commandMock).toHaveBeenCalledWith("environment.request", {
-        repository: PROJECT_ID,
-        name: "acme/tools",
-        request: { kind: "path", path: "spex-packages/acme/tools" },
-      }),
+      expect(writes()).toEqual([
+        ["environment.request", { repository: PROJECT_ID, name: "acme/tools", request: { kind: "path", path: "spex-packages/acme/tools" } }],
+      ]),
     );
     expect((await projectSection().findByTestId("add-note")).textContent).toBe("Added acme/tools");
 
-    // Elsewhere, a name field.
+    // Anywhere else the name is meta.yaml's, not the path's.
     commandMock.mockClear();
     openAdd(projectSection(), "folder");
     fireEvent.change(projectSection().getByTestId("folder-request-path"), { target: { value: "vendor/tools" } });
-    fireEvent.change(projectSection().getByTestId("folder-request-name"), { target: { value: "Acme/Tools" } });
-    fireEvent.click(projectSection().getByTestId("folder-request-submit"));
-    expect((await projectSection().findByTestId("folder-request-error")).textContent).toContain("org/name");
-    expect(commandMock).not.toHaveBeenCalledWith("environment.request", expect.anything());
-    fireEvent.change(projectSection().getByTestId("folder-request-name"), { target: { value: "acme/tools" } });
+    expect((await projectSection().findByTestId("folder-request-derived")).textContent).toBe("acme/vendored");
+    expect(projectSection().getByTestId("folder-request-version").textContent).toBe("2.0.0");
+    expect(projectSection().queryByTestId("folder-request-name")).toBeNull();
     fireEvent.click(projectSection().getByTestId("folder-request-submit"));
     await vi.waitFor(() =>
-      expect(commandMock).toHaveBeenCalledWith("environment.request", {
-        repository: PROJECT_ID,
-        name: "acme/tools",
-        request: { kind: "path", path: "vendor/tools" },
-      }),
+      expect(writes()).toEqual([
+        ["environment.request", { repository: PROJECT_ID, name: "acme/vendored", request: { kind: "path", path: "vendor/tools" } }],
+      ]),
+    );
+    expect((await projectSection().findByTestId("add-note")).textContent).toBe("Added acme/vendored");
+
+    // A folder the core refuses says why in place, asks no name and adds nothing.
+    commandMock.mockClear();
+    openAdd(projectSection(), "folder");
+    fireEvent.change(projectSection().getByTestId("folder-request-path"), { target: { value: "../out" } });
+    expect((await projectSection().findByTestId("folder-request-refusal")).textContent).toBe("../out is outside the project folder");
+    expect(projectSection().queryByTestId("folder-request-name")).toBeNull();
+    expect((projectSection().getByTestId("folder-request-submit") as HTMLButtonElement).disabled).toBe(true);
+
+    // [playbook-library-92] a meta.yaml naming no package: a name field,
+    // a bad name refused before anything is sent.
+    fireEvent.change(projectSection().getByTestId("folder-request-path"), { target: { value: "vendor/bare" } });
+    const name = await projectSection().findByTestId("folder-request-name");
+    expect(name.title).toBe("No name in its meta.yaml");
+    expect(projectSection().queryByTestId("folder-request-derived")).toBeNull();
+    expect(projectSection().queryByTestId("folder-request-refusal")).toBeNull();
+    fireEvent.change(name, { target: { value: "Acme/Tools" } });
+    fireEvent.click(projectSection().getByTestId("folder-request-submit"));
+    expect((await projectSection().findByTestId("folder-request-error")).textContent).toBe("Use org/name: lowercase words joined by hyphens");
+    expect(writes()).toEqual([]);
+    fireEvent.change(projectSection().getByTestId("folder-request-name"), { target: { value: "acme/bare" } });
+    fireEvent.click(projectSection().getByTestId("folder-request-submit"));
+    await vi.waitFor(() =>
+      expect(writes()).toEqual([
+        ["environment.request", { repository: PROJECT_ID, name: "acme/bare", request: { kind: "path", path: "vendor/bare" } }],
+      ]),
     );
   });
 
   test("under Personal, the Folder tab asks for a folder inside its own folder and adds the path there", async () => {
+    foldersRead({ "spex-packages/me/notes": { name: "me/notes", version: "0.2.0" } });
     await renderTab();
     openAdd(personalSection(), "folder");
     expect(personalSection().getByTestId("folder-request").textContent).toContain(`Folder inside ${OWN_ENVIRONMENT.pathRoot}`);
     fireEvent.change(personalSection().getByTestId("folder-request-path"), { target: { value: "spex-packages/me/notes" } });
+    // Read and sent at your own records, never the project's.
+    expect((await personalSection().findByTestId("folder-request-derived")).textContent).toBe("me/notes");
+    expect(commandMock).toHaveBeenCalledWith("environment.request", {
+      repository: OWN_KEY,
+      request: { kind: "path", path: "spex-packages/me/notes" },
+      dryRun: true,
+    });
     fireEvent.click(personalSection().getByTestId("folder-request-submit"));
     await vi.waitFor(() =>
       expect(commandMock).toHaveBeenCalledWith("environment.request", {
@@ -789,15 +942,21 @@ describe("playbook-library-94: Add…", () => {
         request: { kind: "path", path: "spex-packages/me/notes" },
       }),
     );
+    expect(commandMock).not.toHaveBeenCalledWith("environment.request", expect.objectContaining({ repository: PROJECT_ID }));
   });
 
-  test("the Folder tab waits for a folder on this computer: a state naming none disables it", async () => {
+  test("the Folder tab waits for a folder on this computer: a state naming none disables it, saying which", async () => {
     environments[PROJECT_ID] = { ...environments[PROJECT_ID]!, pathRoot: null };
+    environments[OWN_KEY] = { ...environments[OWN_KEY]!, pathRoot: null };
     await renderTab();
     fireEvent.click(projectSection().getByTestId("add-open"));
     const folder = projectSection().getByTestId("add-from-folder") as HTMLButtonElement;
     expect(folder.disabled).toBe(true);
-    expect(folder.title).toBe("No folder on this computer");
+    expect(folder.title).toBe("The project folder is not on this computer");
+    fireEvent.click(personalSection().getByTestId("add-open"));
+    const own = personalSection().getByTestId("add-from-folder") as HTMLButtonElement;
+    expect(own.disabled).toBe(true);
+    expect(own.title).toBe("Your Personal records are not on this computer");
   });
 
   test("the Git tab adds a repository at a branch or tag by the package's name", async () => {
@@ -817,7 +976,7 @@ describe("playbook-library-94: Add…", () => {
   });
 });
 
-describe("playbook-library-115, playbook-library-116: a name the registry does not list", () => {
+describe("playbook-library-92, playbook-library-117: a name the registry does not list", () => {
   const name = "private/notes";
   async function typeName(section = projectSection(), typed = name) {
     openAdd(section);
@@ -922,6 +1081,23 @@ describe("playbook-library-94: nothing waits on the core's other work", () => {
       expect(control.disabled, control.dataset.testid).toBe(false);
       expect(control.title, control.dataset.testid).not.toMatch(/sync/i);
     }
+    // [playbook-library-92] the acts inside a row's overflow and inside
+    // Add… stand too: Remove and Publish, each Add… tab and a result's Add.
+    fireEvent.click(projectSection().getByTestId("env-more-acme/local-tools"));
+    for (const id of ["env-remove-acme/local-tools", "env-publish-acme/local-tools"]) {
+      const entry = projectSection().getByTestId(id) as HTMLButtonElement;
+      expect(entry.disabled, id).toBe(false);
+      expect(entry.title, id).not.toMatch(/sync/i);
+    }
+    fireEvent.click(projectSection().getByTestId("env-more-acme/local-tools"));
+    fireEvent.click(projectSection().getByTestId("add-open"));
+    for (const id of ["add-from-registry", "add-from-folder", "add-from-git"]) {
+      expect((projectSection().getByTestId(id) as HTMLButtonElement).disabled, id).toBe(false);
+    }
+    fireEvent.change(projectSection().getByTestId("registry-query"), { target: { value: "tri" } });
+    const add = within(await projectSection().findByTestId("registry-result-acme/triage")).getByTestId("registry-add-acme/triage") as HTMLButtonElement;
+    expect(add.disabled).toBe(false);
+    fireEvent.click(projectSection().getByTestId("add-open"));
     fireEvent.click(projectSection().getByTestId("env-install-acme/local-tools"));
     await vi.waitFor(() => expect(commandMock).toHaveBeenCalledWith("environment.install", { repository: PROJECT_ID }));
   });
@@ -1094,7 +1270,7 @@ describe("playbook-library-113: Publish a folder package from its row", () => {
     expect(row().queryByTestId(`env-publish-${NAME}`)).toBeNull();
   });
 
-  test("success reads the published version linking its page; a retained success cannot hide two identical refusals", async () => {
+  test("success reads the published version linking its page; a retained success cannot hide two identical refusals, and a different package can succeed", async () => {
     let state = local();
     environments[PROJECT_ID] = state;
     publishingReplies();
@@ -1114,6 +1290,21 @@ describe("playbook-library-113: Publish a folder package from its row", () => {
       expect(row().getByTestId("publish-error").textContent).toBe(refusal);
       expect(row().queryByTestId("publish-done")).toBeNull();
     }
+    // [playbook-library-93] a receipt stands only on the package it
+    // names: another folder package's publish succeeds on its own row.
+    const other = "acme/local-tools";
+    const otherRow = within(projectSection().getByTestId(`env-package-${other}`));
+    const base = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) =>
+      type === "environment.publish" && params?.dryRun
+        ? { accepted: true, preview: { ...PREVIEW, name: other } }
+        : base(type, params));
+    await confirm(other);
+    expect(commandMock).toHaveBeenCalledWith("environment.publish", { repository: PROJECT_ID, name: other });
+    update(PROJECT_ID, { ...state, error: null, published: { ...receipt, name: other, url: `${REGISTRY}/${other}` } });
+    expect(otherRow.getByTestId("publish-done").textContent).toBe("Published 1.2.3");
+    expect(otherRow.getByTestId("publish-link").getAttribute("href")).toBe(`${REGISTRY}/${other}`);
+    expect(row().queryByTestId("publish-done")).toBeNull();
   });
 
   test("a changed path discards a delayed preview; a changed registry or a sign-out discards an open one, Sign in to publish taking Publish's place", async () => {

@@ -997,14 +997,24 @@ function WorkspaceSurface({
           }}
           title={
             pinned === "specs"
-              ? i18n._("The project's spec packages ({keys})", {
-                  keys: keyLabel("⇧S"),
+              ? i18n._({
+                  id: "The project's specs ({keys})",
+                  comment: "tooltip of the Specs tab: the project's own spec files; {keys} is its shortcut",
+                  values: { keys: keyLabel("⇧S") },
                 })
-              : pinned === "overview"
-                ? i18n._(
-                    "This project's overview: history, now, up next, sources, repo state",
-                  )
-                : undefined
+              : pinned === "playbooks"
+                ? i18n._({
+                    id: "What a session in this project can run",
+                    comment: "tooltip of the project's Playbooks tab: the playbooks enabled and available here",
+                  })
+                : pinned === "packages"
+                  ? i18n._({
+                      id: "This project's packages and your Personal ones",
+                      comment: "tooltip of the project's Packages tab: the packages the project's spex.yaml names, and those added for yourself",
+                    })
+                  : i18n._(
+                      "This project's overview: history, now, up next, sources, repo state",
+                    )
           }
           onKeyDown={(event) => walkTabs(event, pinned)}
           onClick={() => pickTab(pinned)}
@@ -1018,7 +1028,7 @@ function WorkspaceSurface({
             <>
               {i18n._({
                 id: "Specs",
-                comment: "tab name: the project's spec packages",
+                comment: "tab name: the project's specs",
               })}
               {projectSpecItemCount > 0 ? (
                 <>
@@ -1320,6 +1330,7 @@ export function App() {
   // Each place's sidebar inputs, read from its own store.
   const placeStates = useEachPlace((state) => ({
     projects: state.projects,
+    projectsRead: state.projectsRead === true,
     sessions: state.sessions,
     views: state.views,
     ledger: state.ledger,
@@ -1337,12 +1348,18 @@ export function App() {
   }));
   const local = placeStates[0]!.value;
   // A remembered Playbooks surface lands on the Playbooks tab of the
-  // project current at this computer once one is (run-view-67).
+  // project current at this computer once one is (run-view-67); once the
+  // projects are read and none is there, it owes nothing, so a project
+  // added later opens as any other.
   useEffect(() => {
-    if (!retiredPlaybooks || !local.currentProjectId) return;
-    setRetiredPlaybooks(false);
-    useAppStore.getState().setWorkspaceTab(local.currentProjectId, "playbooks");
-  }, [retiredPlaybooks, local.currentProjectId]);
+    if (!retiredPlaybooks) return;
+    if (local.currentProjectId) {
+      setRetiredPlaybooks(false);
+      useAppStore.getState().setWorkspaceTab(local.currentProjectId, "playbooks");
+    } else if (local.projectsRead && local.projects.length === 0) {
+      setRetiredPlaybooks(false);
+    }
+  }, [retiredPlaybooks, local.currentProjectId, local.projectsRead, local.projects.length]);
   // The seats the local core holds, each with its sign-in at its
   // instance (core-service-142): the palette says where one still runs.
   const seatStates = useAppStore((state) => state.seats);

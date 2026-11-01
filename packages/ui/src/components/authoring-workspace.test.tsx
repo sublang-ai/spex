@@ -448,7 +448,7 @@ describe("playbook-library-50: the Authoring section", () => {
     const missing = within(section).getByTestId("draft-row-gone");
     expect(within(missing).getByTestId("draft-chip").textContent).toBe("Source missing");
     expect(within(missing).getByTestId("draft-chip").title).toBe(
-      "The spec package folder is gone from the working folder; only Delete remains",
+      "Package folder not in the project folder · only Delete remains",
     );
     expect(within(missing).queryByTestId("draft-open-gone")).toBeNull();
     expect(within(missing).getByTestId("draft-delete-gone")).toBeTruthy();

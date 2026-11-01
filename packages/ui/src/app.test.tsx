@@ -1298,10 +1298,15 @@ describe("run-view-48/50: the strip walks by keyboard and names its attention", 
     // Walking the strip activates nothing.
     expect(useAppStore.getState().workspaceTabs.p1).toBe("a-live");
 
-    // A tooltip naming a shortcut prints the platform's own modifier.
+    // A tooltip naming a shortcut prints the platform's own modifier;
+    // each pinned tab says what it holds in the tab's own words
+    // (DR-172): the project's own specs, what a session can run, and the
+    // project's packages with yours.
     expect(specs.title).toBe(
-      `The project's spec packages (${keyLabel("⇧S")})`,
+      `The project's specs (${keyLabel("⇧S")})`,
     );
+    expect(playbooks.title).toBe("What a session in this project can run");
+    expect(packages.title).toBe("This project's packages and your Personal ones");
     expect(plus.title).toBe(`New task (${keyLabel("N")})`);
   });
 
@@ -1816,6 +1821,32 @@ describe("DR-172: the rail of four, and the project's Playbooks and Packages tab
       expect(await screen.findByTestId("playbooks-tab")).toBeTruthy();
       // The stored value is mapped once: Projects stands in its place.
       expect(storage.kept.get("spex.surface")).toBe("Workspace");
+    } finally {
+      storage.restore();
+    }
+  });
+
+  test("[run-view-67] a remembered Playbooks surface waits for the projects' read, and owes nothing once it shows none", async () => {
+    const seeded = useAppStore.getState().projects;
+    const storage = keepStorage({ "spex.surface": "Playbooks" });
+    try {
+      // Read and empty: a project added later opens as any other.
+      useAppStore.setState({ projects: [], currentProjectId: undefined, projectsRead: true, workspaceTabs: {} });
+      const view = render(<App />);
+      expect(screen.getByRole("main").getAttribute("aria-label")).toBe("Projects");
+      await act(async () => {});
+      act(() => useAppStore.setState({ projects: seeded, currentProjectId: "p1" }));
+      await act(async () => {});
+      expect(useAppStore.getState().workspaceTabs.p1).not.toBe("playbooks");
+      view.unmount();
+
+      // Not read yet: the first current project lands on its Playbooks tab.
+      storage.kept.set("spex.surface", "Playbooks");
+      useAppStore.setState({ projects: [], currentProjectId: undefined, projectsRead: false, workspaceTabs: {} });
+      render(<App />);
+      await act(async () => {});
+      act(() => useAppStore.setState({ projects: seeded, currentProjectId: "p1", projectsRead: true }));
+      await vi.waitFor(() => expect(useAppStore.getState().workspaceTabs.p1).toBe("playbooks"));
     } finally {
       storage.restore();
     }

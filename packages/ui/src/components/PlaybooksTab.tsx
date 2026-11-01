@@ -220,9 +220,10 @@ function FromLabel({ entry, origin, project }: { entry: PlaybookAvailability; or
           values: { project },
         })
       : i18n._({ id: "Personal packages", comment: "tooltip of a playbook row's origin glyph: your Personal packages, available in every project, list it" });
+  // The source in the Packages tab's words (playbook-library-92).
   const source =
     entry.source === "builtin"
-      ? `${entry.package} ${entry.version}`
+      ? i18n._({ id: "Built in", comment: "the tooltip of a package's source glyph: the app ships it" })
       : entry.source === "path"
         ? i18n._({
             id: "From folder {path}",
@@ -997,7 +998,10 @@ function DraftRow({
             data-testid={`draft-delete-${draft.id}`}
             disabled={busy}
             aria-label={i18n._("Delete authoring session {id}", { id: draft.id })}
-            title={i18n._("Remove the session and its conversation; the spec package folder stays")}
+            title={i18n._({
+              id: "Deletes the session and its conversation · its package folder stays",
+              comment: "tooltip of an authoring session's Delete on the Playbooks tab: the session and its conversation go, its package folder stays in the project",
+            })}
             onClick={() => setConfirming(true)}
             className="rounded-md px-2 py-1 text-xs text-neutral-500 hover:bg-neutral-100 hover:text-red-600 disabled:opacity-40 dark:hover:bg-neutral-800"
           >
@@ -1581,8 +1585,10 @@ export function PlaybooksTab({
           data-testid={`review-required-hint-${entry.id}`}
           className="text-xs text-amber-700 dark:text-amber-300"
         >
-          {i18n._("{command} is unavailable until /review is enabled below.", {
-            command: `/${entry.command ?? entry.id}`,
+          {i18n._({
+            id: "{command} needs /review enabled",
+            comment: "a hint on a built-in playbook's card: it runs only once /review is enabled too; {command} is its command, such as /code",
+            values: { command: `/${entry.command ?? entry.id}` },
           })}
         </p>,
       );
@@ -1593,12 +1599,11 @@ export function PlaybooksTab({
     if (entry.id === "dev" && entry.enabled.length > 0 && missingDelivery.length > 0) {
       notes.push(
         <p key="delivery" data-testid="dev-delivery-hint" className="text-xs text-amber-700 dark:text-amber-300">
-          {/* One sentence, its verb chosen by how many playbooks are
-              missing — never an "is"/"are" switch spliced in. */}
-          {i18n._(
-            "{count, plural, one {Pull-request delivery is unavailable until {names} is enabled below; /dev without a pull request still runs.} other {Pull-request delivery is unavailable until {names} are enabled below; /dev without a pull request still runs.}}",
-            {
-              count: missingDelivery.length,
+          {/* One key phrase naming each missing playbook (playbook-library-48). */}
+          {i18n._({
+            id: "Pull requests need {names} · /dev still runs",
+            comment: "a hint on the /dev card: delivering through a pull request needs these playbooks enabled, while a plain /dev runs; {names} names them, such as /branch and /pr",
+            values: {
               // Two names at most, and the word between them is a text
               // of its own language, never English glue.
               names:
@@ -1613,7 +1618,7 @@ export function PlaybooksTab({
                     })
                   : `/${missingDelivery[0]}`,
             },
-          )}
+          })}
         </p>,
       );
     }

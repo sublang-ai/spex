@@ -23,6 +23,7 @@ import type {
   EnvironmentRequest,
   EnvironmentState,
   PublishPreview,
+  RequestPreview,
   ForgeState,
   IntentInfo,
   IntentSource,
@@ -227,6 +228,9 @@ export interface AppState extends AttachmentState {
   machineGraphs: Record<string, MachineGraph | null>;
   readiness: ReadinessEntry[];
   projects: ProjectInfo[];
+  /** The core's project list has been read once since the page loaded,
+   * so an empty `projects` means none. */
+  projectsRead?: boolean;
   projectMeta: Record<string, ProjectMeta>;
   compileProgress: Record<string, string[]>;
   activeCompile?: CompileTracker;
@@ -458,6 +462,10 @@ export interface AppState extends AttachmentState {
   /** Write a request into a spex repository's `spex.yaml`; resolving
    * and installing report through `environment.state`. */
   requestSpecPackage(repository: string, name: string, request: EnvironmentRequest): Promise<void>;
+  /** What a request by path would take, nothing written: the name and
+   * version its folder's `meta.yaml` gives, each null where none reads
+   * (environments-15). */
+  previewFolderPackage(repository: string, path: string): Promise<RequestPreview>;
   removeSpecPackage(repository: string, name: string): Promise<void>;
   resolveEnvironment(repository: string): Promise<void>;
   installEnvironment(repository: string): Promise<void>;
@@ -2099,7 +2107,7 @@ function placeState(
       })();
       const sessions = get().sessions;
       const loaded = new Set(Object.keys(get().views));
-      set({ configState, readiness, projects, views:{} });
+      set({ configState, readiness, projects, projectsRead: true, views:{} });
       void get().loadLedger();
       void get().loadMachineGraphs();
       for (const project of projects) {
@@ -3174,6 +3182,15 @@ function placeState(
     // through environment.state (environments-15, DR-010 §5).
     async requestSpecPackage(repository, name, request): Promise<void> {
       await getClient().command("environment.request", { repository, name, request });
+    },
+
+    async previewFolderPackage(repository: string, path: string): Promise<RequestPreview> {
+      const reply = await getClient().command("environment.request", {
+        repository,
+        request: { kind: "path", path },
+        dryRun: true,
+      });
+      return reply.preview ?? { name: null, version: null };
     },
 
     async removeSpecPackage(repository: string, name: string): Promise<void> {
