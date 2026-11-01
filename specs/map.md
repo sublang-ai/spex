@@ -198,13 +198,14 @@ meta.md       The spec of specs
 
 | [DR-177]\1 | 178-native-windows-private-storage.md | Native Windows private storage through fs-safe; fail-closed admission, privileged principals, coordinated storage dependency, launch environment and installation responsibilities |
 | [DR-178]\1 | 179-session-creation-waits-for-initialization.md | Session creation awaits its initialization for two minutes through the existing command-class reply bound |
-| [DR-173](decisions/173-windows-git-source-long-paths.md) | 173-windows-git-source-long-paths.md | Command-scoped Git for Windows long paths for package mirrors without changing user configuration |
+| [DR-180](decisions/180-windows-git-source-long-paths.md) | 180-windows-git-source-long-paths.md | Command-scoped Git for Windows long paths for package mirrors without changing user configuration |
 | [DR-174](decisions/174-owned-session-start-wait.md) | 174-owned-session-start-wait.md | Observe the single owned session creation through initialization without a false UI deadline or automatic resend |
 | [DR-175](decisions/175-windows-bounded-codex-commands.md) | 175-windows-bounded-codex-commands.md | Native Windows bounded Codex command transport through supplied Cligent |
 | [DR-176](decisions/176-native-desktop-tag-packages.md) | 176-native-desktop-tag-packages.md | App tags build native macOS arm64 and Windows x64 packages; both builds gate one release with checksums; amends DR-040 |
 | [DR-177](decisions/177-native-desktop-installers.md) | 177-native-desktop-installers.md | macOS M-series DMG and Windows Intel/AMD x86-64 NSIS installer; amends DR-176 for the Mac download format |
 | [DR-178](decisions/178-native-windows-private-storage.md) | 178-native-windows-private-storage.md | Native Windows private storage through fs-safe; fail-closed admission, privileged principals, coordinated storage dependency, launch environment and installation responsibilities |
 | [DR-179](decisions/179-session-creation-waits-for-initialization.md) | 179-session-creation-waits-for-initialization.md | Session creation awaits its initialization for two minutes through the existing command-class reply bound |
+| [DR-180](decisions/180-windows-git-source-long-paths.md) | 180-windows-git-source-long-paths.md | Command-scoped Git for Windows long paths for package mirrors without changing user configuration |
 
 ## Packages
 

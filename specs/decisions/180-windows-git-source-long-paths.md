@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-173: Windows Git Source Long Paths
+# DR-180: Windows Git Source Long Paths
 
 ## Status
 
