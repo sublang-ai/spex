@@ -12,7 +12,7 @@
 
 import type { Locator, Page } from "@playwright/test";
 
-import { test, expect, open, openTranslated, nav } from "../src/harness";
+import { test, expect, open, openTranslated, nav, projectTab } from "../src/harness";
 
 const FLOOR = 320;
 const SHORT = 400;
@@ -97,9 +97,11 @@ async function collapseRail(page: Page): Promise<void> {
   await expect(page.getByRole("button", { name: "Show the sidebar" })).toBeVisible();
 }
 
-test.describe("the role editors on the Playbooks surface", () => {
+test.describe("the role editors on a project's Playbooks tab", () => {
   let releaseDiscovery: (() => void) | undefined;
+  // The Playbooks tab is a project's (run-view-58, DR-172).
   test.use({ appOptions: {
+    project: true,
     discoverAgentModels: async () => {
       await new Promise<void>((resolve) => { releaseDiscovery = resolve; });
       return { status: "available", models: [{ id: "fixture-model", name: "Fixture model" }] };
@@ -121,7 +123,7 @@ test.describe("the role editors on the Playbooks surface", () => {
   }) => {
     await open(page, app);
     await collapseRail(page);
-    await nav(page, "Playbooks").click();
+    await projectTab(page, "Playbooks");
     await expect(page.getByTestId("playbooks-enabled")).toBeVisible();
 
     for (const width of [FLOOR, 480, 1280]) {
@@ -535,8 +537,10 @@ test.describe("the outline beside a selection", () => {
  * each language: the card's lines hold their line counts, so its
  * height stays in bounds whatever the words (spec-view-56). */
 for (const copy of [
-  { locale: "en-US", lang: "en", specs: "Specs", collapse: "Collapse the sidebar", show: "Show the sidebar" },
-  { locale: "zh-CN", lang: "zh", specs: "规约", collapse: "折叠侧栏", show: "显示侧栏" },
+  // The Specs tab by its name — in Chinese 规约, never the Packages
+  // tab, 规约包, beside it (run-view-58).
+  { locale: "en-US", lang: "en", specs: /^Specs/, collapse: "Collapse the sidebar", show: "Show the sidebar" },
+  { locale: "zh-CN", lang: "zh", specs: /^规约(?!包)/, collapse: "折叠侧栏", show: "显示侧栏" },
 ]) {
   test.describe(`the package cards at the floor (${copy.locale})`, () => {
     test.use({ locale: copy.locale, appOptions: { project: true } });

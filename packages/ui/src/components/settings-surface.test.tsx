@@ -356,22 +356,16 @@ describe("settings-46: your own group's file, and the players a project names", 
     );
   });
 
-  test("the surface names the file it writes by your own group's spex repository", () => {
+  test("the surface names the file it writes by its path alone, offering no project's file as editable here", () => {
     useAppStore.setState({ space: home() });
     renderSettings();
-    const scope = screen.getByTestId("settings-scope");
-    expect(scope.textContent).toBe(`Your own group's config, in ${OWN_KEY}`);
-    expect(scope.title).toBe("A project's playbooks and role bindings are edited in Playbooks");
-  });
-
-  test("without Space read yet, the repository comes from the file's place", () => {
-    useAppStore.setState({
-      configState: { ...CONFIG, summary: { ...CONFIG.summary!, path: `/home/me/.spex/workspace/${OWN_KEY}/config/playbook.config.yaml` } } as ConfigState,
-      readiness: READINESS,
-      refreshReadiness: vi.fn(async () => {}),
-    });
-    render(<SettingsSurface />);
-    expect(screen.getByTestId("settings-scope").textContent).toBe(`Your own group's config, in ${OWN_KEY}`);
+    // No spex repository named, and no sentence about a project's file:
+    // a project's playbooks and bindings are its Playbooks tab's.
+    expect(screen.queryByTestId("settings-scope")).toBeNull();
+    expect(document.body.textContent).not.toContain(OWN_KEY);
+    expect(document.body.textContent).not.toContain("Your own group's config");
+    expect(document.body.innerHTML).not.toContain("A project's playbooks and role bindings are edited in Playbooks");
+    expect(screen.getByTitle("Shared with the playbook CLI — edits made outside appear here").textContent).toBe(CONFIG.summary!.path);
   });
 });
 

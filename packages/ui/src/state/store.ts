@@ -23,6 +23,7 @@ import type {
   EnvironmentRequest,
   EnvironmentState,
   PublishPreview,
+  RequestPreview,
   ForgeState,
   IntentInfo,
   IntentSource,
@@ -116,10 +117,6 @@ export interface DraftRegisterForm {
    * (playbook-library-61). */
   repository?: string;
 }
-
-/** Which spex repository the Playbooks surface shows: the chosen
- * project's, or your own group's (playbook-library-1). */
-export type PlaybooksSide = "project" | "own";
 
 /** What `environment.playbooks` answered, and for which project. */
 export type PlaybookLists = CommandResults["environment.playbooks"] & {
@@ -227,6 +224,9 @@ export interface AppState extends AttachmentState {
   machineGraphs: Record<string, MachineGraph | null>;
   readiness: ReadinessEntry[];
   projects: ProjectInfo[];
+  /** The core's project list has been read once since the page loaded,
+   * so an empty `projects` means none. */
+  projectsRead?: boolean;
   projectMeta: Record<string, ProjectMeta>;
   compileProgress: Record<string, string[]>;
   activeCompile?: CompileTracker;
@@ -436,10 +436,13 @@ export interface AppState extends AttachmentState {
    * compileProgress, so the band can tick "last output ⟨age⟩ ago". */
   compileProgressAt: Record<string, number[]>;
   /** The Captain home's slash menu asked for a new playbook: the
-   * Library focuses its id field on arrival (playbook-library-51). */
+   * project's Playbooks tab focuses its id field on arrival
+   * (playbook-library-51). */
   newPlaybookRequested: boolean;
-  /** A playbook the Library should bring into view on its next render —
-   * the one an enabling just made (playbook-library-61). */
+  /** The id of a playbook the Playbooks tab should bring into view on
+   * its next render — the one an enabling just made, listed once
+   * whichever config it was enabled in (playbook-library-1,
+   * playbook-library-61). */
   revealPlaybook?: string;
   /** Each spex repository's environment as last read or broadcast
    * (playbook-library-92), by the repository's key. */
@@ -449,17 +452,17 @@ export interface AppState extends AttachmentState {
   /** The playbooks the chosen project's and your own group's
    * environments export (playbook-library-1); undefined until read. */
   playbookLists?: PlaybookLists;
-  /** The Playbooks surface's side (playbook-library-1). */
-  playbooksSide: PlaybooksSide;
-
-  setPlaybooksSide(side: PlaybooksSide): void;
-  /** Read what each environment exports, for this project's side and
-   * your own group's; the newest read wins. */
+  /** Read what each environment exports, the project's and your own
+   * group's; the newest read wins. */
   loadPlaybookLists(projectId: string | undefined): Promise<void>;
   loadEnvironment(repository: string): Promise<void>;
   /** Write a request into a spex repository's `spex.yaml`; resolving
    * and installing report through `environment.state`. */
   requestSpecPackage(repository: string, name: string, request: EnvironmentRequest): Promise<void>;
+  /** What a request by path would take, nothing written: the name and
+   * version its folder's `meta.yaml` gives, each null where none reads
+   * (environments-15). */
+  previewFolderPackage(repository: string, path: string): Promise<RequestPreview>;
   removeSpecPackage(repository: string, name: string): Promise<void>;
   resolveEnvironment(repository: string): Promise<void>;
   installEnvironment(repository: string): Promise<void>;
@@ -1859,7 +1862,6 @@ function placeState(
     newPlaybookRequested: false,
     environments: {},
     environmentErrors: {},
-    playbooksSide: "project",
     spaceChangeSeq: 0,
     spaceSplit: readPercent(
       prefKey(SPACE_SPLIT_KEY),
@@ -2102,7 +2104,7 @@ function placeState(
       })();
       const sessions = get().sessions;
       const loaded = new Set(Object.keys(get().views));
-      set({ configState, readiness, projects, views:{} });
+      set({ configState, readiness, projects, projectsRead: true, views:{} });
       void get().loadLedger();
       void get().loadMachineGraphs();
       for (const project of projects) {
@@ -3036,16 +3038,13 @@ function placeState(
         ...(input.repository ? { repository: input.repository } : {}),
       });
       // The session stays, to be worked on further and published; the
-      // list opens on the side enabled in, with the new card in view
-      // (playbook-library-61).
+      // list opens with the new card in view (playbook-library-61).
       // The config it wrote is everyone's; the workspace closes only if
       // it still shows the session that enabled.
       set({ configState });
       void get().loadPlaybookLists(projectId).catch(() => {});
       if (!isShown(draftId, instance) || get().openDraftId !== draftId) return;
-      const side: PlaybooksSide =
-        input.repository && input.repository !== projectId ? "own" : "project";
-      set({ revealPlaybook: draftId, playbooksSide: side, openDraftId: undefined });
+      set({ revealPlaybook: draftId, openDraftId: undefined });
     },
 
     async setDraftPlayer(draftId, playerId): Promise<void> {
@@ -3144,10 +3143,6 @@ function placeState(
     // Environments (playbook-library-1, playbook-library-92, DR-104)
     // -----------------------------------------------------------------
 
-    setPlaybooksSide(side: PlaybooksSide): void {
-      set({ playbooksSide: side });
-    },
-
     async loadPlaybookLists(projectId: string | undefined): Promise<void> {
       const read = (playbookListReads += 1);
       const lists = await getClient().command(
@@ -3181,6 +3176,15 @@ function placeState(
     // through environment.state (environments-15, DR-010 §5).
     async requestSpecPackage(repository, name, request): Promise<void> {
       await getClient().command("environment.request", { repository, name, request });
+    },
+
+    async previewFolderPackage(repository: string, path: string): Promise<RequestPreview> {
+      const reply = await getClient().command("environment.request", {
+        repository,
+        request: { kind: "path", path },
+        dryRun: true,
+      });
+      return reply.preview ?? { name: null, version: null };
     },
 
     async removeSpecPackage(repository: string, name: string): Promise<void> {

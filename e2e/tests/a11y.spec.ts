@@ -13,7 +13,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 
-import { test, expect, open, nav, send, settled, slowAuthoringScript } from "../src/harness";
+import { test, expect, open, nav, packagesSection, projectTab, send, settled, slowAuthoringScript } from "../src/harness";
 
 test.use({
   appOptions: {
@@ -90,9 +90,13 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page.getByTestId("specv-live")).toBeVisible();
     found.push(...(await scan(page, "Specs")));
 
-    await nav(page, "Playbooks").click();
+    await projectTab(page, "Packages");
+    await expect(packagesSection(page, "personal").getByTestId("environment-section")).toBeVisible();
+    found.push(...(await scan(page, "Packages tab")));
+
+    await projectTab(page, "Playbooks");
     await expect(page.getByTestId("playbooks-enabled")).toBeVisible();
-    found.push(...(await scan(page, "Playbooks")));
+    found.push(...(await scan(page, "Playbooks tab")));
 
     // The authoring workspace, state by state (DR-058).
     const idField = page.getByTestId("new-playbook-id");
@@ -149,7 +153,7 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page.getByTestId("agent-picker")).toHaveCount(0);
     await page.getByTestId("workspace-back").click();
     await expect(page.getByTestId("drafts-section")).toBeVisible();
-    found.push(...(await scan(page, "Playbooks (with a draft)")));
+    found.push(...(await scan(page, "Playbooks tab (with a draft)")));
 
     // Groups: your own group with its spex repositories (space-30);
     // the picker and the tree are scanned by space-44.

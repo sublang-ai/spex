@@ -17,7 +17,18 @@ import { join } from "node:path";
 import type { Page } from "@playwright/test";
 import { AUTHORING_SOURCE, seedInterruptedDraft } from "@sublang/spex-core/testing";
 
-import { test, expect, open, nav, slowAuthoringScript, surfaceEntry, EXAMPLE_ID } from "../src/harness";
+import {
+  test,
+  expect,
+  open,
+  newTaskTab,
+  packageRow,
+  packageSource,
+  packagesSection,
+  projectTab,
+  slowAuthoringScript,
+  EXAMPLE_ID,
+} from "../src/harness";
 
 test.use({
   appOptions: {
@@ -70,7 +81,7 @@ test("playbook-library-77: a new playbook is authored, compiled, and enabled thr
   test.setTimeout(150_000);
   await page.setViewportSize({ width: 1280, height: 800 });
   await open(page, app);
-  await nav(page, "Playbooks").click();
+  await projectTab(page, "Playbooks");
   await expect(page.getByTestId("playbooks-enabled")).toBeVisible();
 
   // ── New playbook: the id inline beside Org and License filled with
@@ -324,7 +335,7 @@ test("playbook-library-77: a new playbook is authored, compiled, and enabled thr
   //    tabs (playbook-library-62).
   await page.reload();
   await expect(page.getByRole("button", { name: "Dashboard" })).toBeVisible();
-  await nav(page, "Playbooks").click();
+  await projectTab(page, "Playbooks");
   await expect(page.getByTestId("draft-row-triage").getByTestId("draft-chip")).toContainText("Compiled");
   await page.getByTestId("draft-open-triage").click();
   await expect(workspace).toBeVisible();
@@ -377,10 +388,14 @@ test("playbook-library-77: a new playbook is authored, compiled, and enabled thr
   await page.setViewportSize({ width: 1280, height: 800 });
   await expect(divider).toBeVisible();
 
-  // ── Enable: the tab prefilled from the proposal, then `/triage`
-  //    enabled in the project, its spec package requested by path on
-  //    the project's side, the authoring session staying
-  //    (playbook-library-61, playbook-library-92).
+  // ── Enable: the tab prefilled from the proposal, "Enable for" offering
+  //    the project by its name, its default, and Personal, the form
+  //    carrying no caption on what Enable writes and the disabled
+  //    Enable saying what it waits for; then `/triage` enabled in the
+  //    project, its card saying to commit the package with the code,
+  //    the package listed under "Packages" from its folder, the
+  //    authoring session staying (playbook-library-61,
+  //    playbook-library-92).
   await tabs.getByRole("tab", { name: "Enable", exact: true }).click();
   const form = page.getByTestId("register-form");
   await expect(form).toContainText("Prefilled from the agent's proposal");
@@ -391,26 +406,44 @@ test("playbook-library-77: a new playbook is authored, compiled, and enabled thr
   );
   await expect(page.getByTestId("register-player-Triager")).toHaveValue("new:dev.triager");
   await expect(page.getByTestId("register-player-Verifier")).toHaveValue("dev.coder");
-  await expect(page.getByTestId("register-repository")).toHaveValue(app.projectId!);
+  const enableFor = form.getByLabel("Enable for");
+  await expect(enableFor).toHaveValue(app.projectId!);
+  await expect(enableFor.locator("option")).toHaveText(["demo-project", "Personal (every project of yours)"]);
+  await expect(form).not.toContainText("Requests the spec package by path");
+  await expect(form).not.toContainText("Every role needs a player");
+  const submit = page.getByTestId("register-submit");
+  await page.getByTestId("register-command").fill("");
+  await expect(submit).toBeDisabled();
+  await expect(submit).toHaveAttribute("title", "A player per role, a command and an intent");
+  await page.getByTestId("register-command").fill("triage");
+  await expect(submit).toBeEnabled();
   await expect(page.getByTestId("tab-dot-enable")).toHaveCount(0);
   expect(app.readProjectConfig()).not.toContain("triage:");
-  await page.getByTestId("register-submit").click();
+  await submit.click();
   const card = page.getByTestId("playbooks-enabled").getByTestId("playbook-card-triage");
   await expect(card).toBeVisible();
   await expect(card).toContainText("/triage");
-  await expect(card.getByTestId("playbook-enabled-triage")).toHaveText("Enabled in the project");
-  await expect(card.getByTestId("playbook-from-triage")).toHaveText(new RegExp(`^from\\s*${org}/triage 0\\.1\\.0\\s*· path$`));
+  await expect(card.getByTestId("playbook-enabled-triage")).toHaveText("in demo-project");
+  await expect(card.getByTestId("playbook-from-triage")).toHaveText(new RegExp(`^from\\s*${org}/triage 0\\.1\\.0$`));
+  // Listed once, the project's environment alone exporting it: its act
+  // writes the project's config, with no overflow (playbook-library-1).
+  await expect(page.getByTestId("playbook-card-triage")).toHaveCount(1);
+  await expect(card.getByTestId("playbook-disable-triage")).toHaveText("Disable");
+  await expect(card.getByTestId("playbook-personal-triage")).toHaveCount(0);
+  await expect(card.getByTestId("enabled-note")).toContainText("Enabled · restart running sessions to use it");
   await expect(card.getByTestId("enabled-commit")).toHaveText("Commit spex-packages/acme/triage with your code");
   await expect(workspace).toHaveCount(0);
   await expect(page.getByTestId("draft-row-triage").getByTestId("draft-chip")).toContainText("Enabled");
-  const requested = page.getByTestId("environment-section").getByTestId(`env-package-${org}/triage`);
-  await expect(requested.getByTestId(`env-source-${org}/triage`)).toHaveText("path spex-packages/acme/triage");
+  await projectTab(page, "Packages");
+  const requested = packageRow(packagesSection(page, "project"), `${org}/triage`);
+  await expect(packageSource(requested, `${org}/triage`)).toHaveAttribute("title", "From folder spex-packages/acme/triage");
   await expect.poll(() => app.readProjectConfig()).toContain("triage:");
   expect(app.readConfig()).toContain("dev.triager:");
   expect((await app.core.command("draft.list", {})).map((draft) => draft.id)).toEqual(["triage"]);
 
   // ── Delete asks Delete or Keep and removes the row, the spec package
   //    folder staying (playbook-library-63).
+  await projectTab(page, "Playbooks");
   await idField.fill("secaudit");
   await idField.press("Enter");
   await expect(workspace).toBeVisible();
@@ -460,7 +493,7 @@ test("playbook-library-77: a new playbook is authored, compiled, and enabled thr
   seedInterruptedDraft(app.dataDir, app.projectId!, "nightly", FIXED_SOURCE.replaceAll("triage", "nightly"));
   await app.start();
   await open(page, app);
-  await nav(page, "Playbooks").click();
+  await projectTab(page, "Playbooks");
   const nightly = page.getByTestId("draft-row-nightly");
   await expect(nightly.getByTestId("draft-chip")).toContainText("Interrupted");
   await page.getByTestId("draft-open-nightly").click();
@@ -497,7 +530,7 @@ test("playbook-library-84: a picked SKILL.md becomes the source of a draft with 
     };
   }, skillPath);
   await open(page, app);
-  await nav(page, "Playbooks").click();
+  await projectTab(page, "Playbooks");
   const idField = page.getByTestId("new-playbook-id");
   // The project's defaults fill Org and License (playbook-library-51).
   await expect(page.getByTestId("new-playbook-license")).toHaveValue("Apache-2.0");
@@ -537,7 +570,7 @@ test.describe("the pasted example", () => {
     app,
   }) => {
     await open(page, app);
-    await nav(page, "Playbooks").click();
+    await projectTab(page, "Playbooks");
     await page.getByTestId("example-prefill").click();
     await expect(page.getByTestId("authoring-workspace")).toBeVisible();
     const chip = page.getByTestId("draft-chip");
@@ -601,7 +634,7 @@ test.describe("the pasted example", () => {
     // example the Enable tab enables in the project's config is offered
     // (playbook-library-85, -41).
     await open(page, app);
-    await nav(page, "Playbooks").click();
+    await projectTab(page, "Playbooks");
     await page.getByTestId("example-prefill").click();
     await page.getByTestId("paste-use").click();
     await page.getByTestId("compile-button").click();
@@ -609,7 +642,7 @@ test.describe("the pasted example", () => {
     await page.getByRole("tablist", { name: "Draft artifacts" }).getByRole("tab", { name: "Enable", exact: true }).click();
     await page.getByTestId("register-submit").click();
     await expect(page.getByTestId(`playbook-card-${EXAMPLE_ID}`)).toBeVisible();
-    await surfaceEntry(page, "Workspace").click();
+    await newTaskTab(page);
     await page.getByTestId("start-composer").fill("/");
     await expect(page.getByRole("listbox")).toContainText(`/${EXAMPLE_ID}`, { timeout: 5_000 });
   });

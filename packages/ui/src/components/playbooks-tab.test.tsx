@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Playbooks surface coverage over a simulated document, through the
-// real store against a stand-in client answering as the core does:
+// A project's Playbooks tab over a simulated document, through the
+// real store against a stand-in client answering as the core does: the
+// project's and your own group's playbooks together, once by id, with
+// no switch — a playbook both environments export carrying the
+// project's act and your own group's in its overflow
+// (playbook-library-1, -94);
 // enabled roles name the session player that answers them and are
 // rebound in place — with tuning on your own group's entry, the player
 // alone on a project's (playbook-library-4, -38, -39); a playbook
@@ -29,7 +33,7 @@ import type {
   PlaybookAvailability,
 } from "@sublang/spex-core/protocol";
 
-import { LibrarySurface, NEUTRAL_BLOCK } from "./LibrarySurface.js";
+import { NEUTRAL_BLOCK, PlaybooksTab } from "./PlaybooksTab.js";
 import { agentChipText } from "./AgentChip.js";
 import { activateLanguage } from "../i18n.js";
 import { setClientForTests, useAppStore } from "../state/store.js";
@@ -82,7 +86,6 @@ function seed(over: Partial<ReturnType<typeof useAppStore.getState>> = {}) {
     projects: [PROJECT],
     currentProjectId: PROJECT_ID,
     space: home(),
-    playbooksSide: "own",
     playbookLists: undefined,
     environments: {},
     environmentErrors: {},
@@ -97,16 +100,30 @@ function seed(over: Partial<ReturnType<typeof useAppStore.getState>> = {}) {
   });
 }
 
-/** Render the surface on a side, its lists answered as `next` says. */
-async function renderLibrary(
+/** Render the project's tab, its lists answered as `next` says. */
+async function renderTab(
   next: Partial<CommandResults["environment.playbooks"]> = {},
   over: Partial<ReturnType<typeof useAppStore.getState>> = {},
 ) {
   lists = { project: [], own: [CODE_OWN, REVIEW_NOWHERE], ...next };
   seed(over);
-  const view = render(<LibrarySurface />);
+  const view = render(<PlaybooksTab project={PROJECT} />);
   await vi.waitFor(() => expect(useAppStore.getState().playbookLists).toBeTruthy());
   return view;
+}
+
+/** A playbook's one card under `root`: a playbook both environments
+ * export is listed once by its id (playbook-library-1). */
+function cardOf(id: string, root: ParentNode = document): HTMLElement {
+  const cards = root.querySelectorAll<HTMLElement>(`[data-testid="playbook-card-${id}"]`);
+  if (cards.length !== 1) throw new Error(`${cards.length} cards for ${id}`);
+  return cards[0]!;
+}
+
+/** The acts in a row's overflow, opened (playbook-library-1). */
+function overflowOf(card: HTMLElement, id: string): HTMLElement {
+  fireEvent.click(within(card).getByTestId(`playbook-personal-${id}`));
+  return within(card).getByTestId(`playbook-personal-${id}-menu`);
 }
 
 /** A playbook of your own group's config, its single coder role. */
@@ -153,7 +170,7 @@ function edits(): unknown[] {
 
 describe("playbook-library-1/38/39: enabled roles name the player that answers them", () => {
   test("a role prints its lane, what it runs, and that the lane is shared", async () => {
-    await renderLibrary();
+    await renderTab();
     // The role's own line says which session player answers it, and
     // the chip describes that lane's agent (DR-032).
     expect(screen.getByTestId("role-binding-code-coder").textContent).toBe("Ccoder");
@@ -170,7 +187,7 @@ describe("playbook-library-1/38/39: enabled roles name the player that answers t
   });
 
   test("on your own group's entry the gear rebinds the role and pins its own effort", async () => {
-    await renderLibrary();
+    await renderTab();
     fireEvent.click(screen.getByTestId("role-bind-code-coder"));
     const editor = screen.getByTestId("binding-editor-coder");
     await within(editor).findByText("Model list unavailable: Fixture");
@@ -210,7 +227,7 @@ describe("playbook-library-1/38/39: enabled roles name the player that answers t
   });
 
   test("the gear pins the role's subagent model and effort where the lane's adapter serves one (DR-093, DR-095)", async () => {
-    await renderLibrary();
+    await renderTab();
     // A codex lane is offered neither.
     fireEvent.click(screen.getByTestId("role-bind-code-reviewer"));
     const reviewer = screen.getByTestId("binding-editor-reviewer");
@@ -267,7 +284,7 @@ describe("playbook-library-1/38/39: enabled roles name the player that answers t
   });
 
   test("a binding's standing Off reads as such and stays clearable (DR-095)", async () => {
-    await renderLibrary({
+    await renderTab({
       own: [
         {
           ...CODE_OWN,
@@ -304,7 +321,7 @@ describe("playbook-library-1/38/39: enabled roles name the player that answers t
   });
 
   test("choosing a busy lane warns that the conversation is shared", async () => {
-    await renderLibrary();
+    await renderTab();
     fireEvent.click(screen.getByTestId("role-bind-code-reviewer"));
     const editor = screen.getByTestId("binding-editor-reviewer");
     // On its own lane the reviewer holds the only position.
@@ -319,7 +336,7 @@ describe("playbook-library-1/38/39: enabled roles name the player that answers t
   });
 
   test("a refused rebind surfaces inline and keeps the editor open", async () => {
-    await renderLibrary();
+    await renderTab();
     const base = commandMock.getMockImplementation()!;
     commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) => {
       if (type === "config.edit") throw new Error("dev.ghost is not a player");
@@ -335,7 +352,7 @@ describe("playbook-library-1/38/39: enabled roles name the player that answers t
   });
 
   test("on a project's entry the editor offers the player alone, says tuning is personal, and writes the name alone", async () => {
-    await renderLibrary(
+    await renderTab(
       {
         project: [
           available({
@@ -352,10 +369,11 @@ describe("playbook-library-1/38/39: enabled roles name the player that answers t
           }),
         ],
       },
-      { playbooksSide: "project" },
     );
-    await screen.findByTestId("role-bind-code-reviewer");
-    fireEvent.click(screen.getByTestId("role-bind-code-reviewer"));
+    // Both environments export code, enabled in both: its one row shows
+    // the project's bindings, the ones a session in the project runs.
+    const card = await vi.waitFor(() => cardOf("code"));
+    fireEvent.click(within(card).getByTestId("role-bind-code-reviewer"));
     const editor = screen.getByTestId("binding-editor-reviewer");
     expect(within(editor).getByTestId("binding-personal-note").textContent).toBe(
       "Tuning is personal — set it in Settings",
@@ -376,12 +394,15 @@ describe("playbook-library-1/38/39: enabled roles name the player that answers t
 
 describe("playbook-library-3/34/40: enabling and disabling", () => {
   test("a built-in enabled in neither config lists its command, intent and roles with Enable, and its source browses with no write", async () => {
-    await renderLibrary();
+    await renderTab();
     const card = within(screen.getByTestId("playbooks-available")).getByTestId("playbook-card-review");
     expect(card.textContent).toContain("/review");
     expect(card.textContent).toContain("review of committed phases");
     expect(card.textContent).toContain("host:");
-    expect(within(card).getByTestId("playbook-enabled-review").textContent).toBe("Not enabled");
+    // Enabled nowhere, it wears no mark of where (DR-172), and names
+    // where it comes from.
+    expect(within(card).queryByTestId("playbook-enabled-review")).toBeNull();
+    expect(within(card).getByTestId("playbook-from-review").textContent).toBe("built in");
     // The proposed player is dev.<role>, on the fixed neutral block
     // until the reader tunes it (DR-019, DR-032).
     expect((within(card).getByTestId("enable-player-review-host") as HTMLInputElement).value).toBe("dev.host");
@@ -396,8 +417,10 @@ describe("playbook-library-3/34/40: enabling and disabling", () => {
   });
 
   test("[playbook-library-40] enabling writes the missing player to your own roster first, with the block chosen, then the entry", async () => {
-    await renderLibrary({ project: [{ ...REVIEW_NOWHERE, repository: PROJECT_ID }] }, { playbooksSide: "project" });
-    const card = await screen.findByTestId("playbook-card-review");
+    await renderTab({ project: [{ ...REVIEW_NOWHERE, repository: PROJECT_ID }] });
+    // Both environments export review: its primary act writes the
+    // project's config.
+    const card = await vi.waitFor(() => cardOf("review"));
     fireEvent.click(within(card).getByTestId("enable-configure-review-host"));
     const popover = within(card).getByTestId("agent-popover");
     fireEvent.click(within(popover).getByTestId("agent-adapter-codex"));
@@ -444,7 +467,7 @@ describe("playbook-library-3/34/40: enabling and disabling", () => {
   });
 
   test("an untouched role is written on the neutral block; an id the roster holds is bound as it stands", async () => {
-    await renderLibrary();
+    await renderTab();
     fireEvent.click(screen.getByTestId("playbook-enable-review"));
     await vi.waitFor(() =>
       expect(edits()[0]).toEqual({ op: { kind: "player.set", playerId: "dev.host", patch: NEUTRAL_BLOCK } }),
@@ -454,7 +477,7 @@ describe("playbook-library-3/34/40: enabling and disabling", () => {
 
     // The proposed id is editable: naming a lane the roster holds
     // writes no player and shares that lane by choice (DR-032).
-    await renderLibrary();
+    await renderTab();
     const input = screen.getByTestId("enable-player-review-host");
     fireEvent.change(input, { target: { value: "dev.reviewer" } });
     // A lane the roster holds wears its own agent and needs no block.
@@ -468,7 +491,7 @@ describe("playbook-library-3/34/40: enabling and disabling", () => {
   });
 
   test("an id outside the player rule holds Enable, naming the role", async () => {
-    await renderLibrary();
+    await renderTab();
     fireEvent.change(screen.getByTestId("enable-player-review-host"), { target: { value: "Dev Host" } });
     const enable = screen.getByTestId("playbook-enable-review") as HTMLButtonElement;
     expect(enable.disabled).toBe(true);
@@ -476,7 +499,7 @@ describe("playbook-library-3/34/40: enabling and disabling", () => {
   });
 
   test("an enabling failure surfaces inline on the card", async () => {
-    await renderLibrary();
+    await renderTab();
     const base = commandMock.getMockImplementation()!;
     commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) => {
       if (type === "config.edit") throw new Error("config file is read-only");
@@ -489,7 +512,7 @@ describe("playbook-library-3/34/40: enabling and disabling", () => {
   });
 
   test("[playbook-library-26] Disable asks no confirm and writes the side's config", async () => {
-    await renderLibrary();
+    await renderTab();
     const disable = screen.getByTestId("playbook-disable-code");
     expect(disable.textContent).toBe("Disable");
     fireEvent.click(disable);
@@ -498,54 +521,311 @@ describe("playbook-library-3/34/40: enabling and disabling", () => {
     );
   });
 
-  test("[playbook-library-34] with no playbook enabled the list says so and points at enabling a built-in or authoring one", async () => {
-    await renderLibrary({ own: [REVIEW_NOWHERE] });
-    expect(screen.getByTestId("playbooks-empty").textContent).toBe(
-      "No playbooks enabled yet — enable a built-in below, or make your own with New playbook.",
-    );
+  test("[playbook-library-34] with no playbook enabled the list says so as a key phrase", async () => {
+    await renderTab({ own: [REVIEW_NOWHERE] });
+    expect(screen.getByTestId("playbooks-empty").textContent).toBe("Nothing enabled yet");
+    // The other playbooks stand under Available (playbook-library-1).
+    expect(within(screen.getByTestId("playbooks-available")).getByRole("heading").textContent).toBe("Available");
   });
 
   test("[playbook-library-1] a project whose config enables nothing lists your own group's enabled playbook under Enabled, never as empty", async () => {
-    // Neither config enables anything a side lists alone: one your own
-    // group enables only in its own environment still counts.
-    await renderLibrary(
+    // Both environments export code and review: each is listed once,
+    // with no switch, and code, which your own group enables, stands
+    // under Enabled.
+    await renderTab(
       { project: [{ ...REVIEW_NOWHERE, repository: PROJECT_ID }, { ...CODE_OWN, repository: PROJECT_ID }], own: [CODE_OWN, REVIEW_NOWHERE] },
-      { playbooksSide: "project" },
     );
+    expect(screen.queryByTestId("playbooks-switch")).toBeNull();
     const enabled = screen.getByTestId("playbooks-enabled");
-    const code = within(enabled).getByTestId("playbook-card-code");
-    expect(within(code).getByTestId("playbook-enabled-code").textContent).toBe("Enabled in your own group");
-    // Enable still writes the project's config.
-    expect(within(code).getByTestId("playbook-enable-code").textContent).toBe("Enable");
-    expect(within(screen.getByTestId("playbooks-available")).getByTestId("playbook-card-review")).toBeTruthy();
+    expect(screen.getAllByTestId("playbook-card-code")).toHaveLength(1);
+    const code = cardOf("code", enabled);
+    expect(within(code).getByTestId("playbook-enabled-code").textContent).toBe("Personal");
+    // The row is the playbook's, naming no environment it comes from.
+    expect(within(code).queryByTestId("playbook-origin-code")).toBeNull();
+    // Enabled for you alone, its primary act is "Enable for <project>",
+    // writing the project's config (playbook-library-3); its overflow
+    // holds Disable for Personal, writing yours.
+    const forProject = within(code).getByTestId("playbook-enable-code");
+    expect(forProject.textContent).toBe("Enable for demo");
+    expect(forProject.title).toBe("Members of demo get it too");
+    expect(within(code).queryByTestId("playbook-disable-code")).toBeNull();
+    const menu = overflowOf(code, "code");
+    const disablePersonal = within(menu).getByTestId("playbook-disable-personal-code");
+    expect(disablePersonal.textContent).toBe("Disable for Personal");
+    expect(disablePersonal.title).toBe("Stops /code in every project of yours; the package stays");
+    expect(within(menu).queryByTestId("playbook-enable-personal-code")).toBeNull();
+    fireEvent.click(disablePersonal);
+    await vi.waitFor(() =>
+      expect(edits()).toEqual([{ repository: OWN_KEY, op: { kind: "playbook.delete", playbookId: "code" } }]),
+    );
+    expect(screen.getAllByTestId("playbook-card-review")).toHaveLength(1);
+    expect(cardOf("review", screen.getByTestId("playbooks-available"))).toBeTruthy();
     expect(screen.queryByTestId("playbooks-empty")).toBeNull();
 
     cleanup();
-    await renderLibrary({ project: [{ ...REVIEW_NOWHERE, repository: PROJECT_ID }], own: [CODE_OWN] }, { playbooksSide: "project" });
-    expect(within(screen.getByTestId("playbooks-enabled")).queryByTestId("playbook-card-code")).toBeNull();
+    commandMock.mockClear();
+    // Your own group's environment alone exports code: one row writing
+    // your own group's config, with no overflow, and the list still
+    // never reads as empty.
+    await renderTab({ project: [{ ...REVIEW_NOWHERE, repository: PROJECT_ID }], own: [CODE_OWN] });
+    const after = cardOf("code", screen.getByTestId("playbooks-enabled"));
+    expect(within(after).getByTestId("playbook-disable-code").textContent).toBe("Disable");
+    expect(within(after).queryByTestId("playbook-personal-code")).toBeNull();
     expect(screen.queryByTestId("playbooks-empty")).toBeNull();
+  });
+});
+
+describe("playbook-library-1: both environments' playbooks on one tab, once each", () => {
+  test("each playbook lists once by its id, reading where it is enabled, with no switch and no package list", async () => {
+    await renderTab({
+      project: [
+        available({
+          id: "triage",
+          package: "acme/triage",
+          version: "1.2.3",
+          source: "registry",
+          repository: PROJECT_ID,
+          roles: ["triager"],
+          enabled: ["project"],
+          bindings: { project: { triager: { playerId: "dev.coder", display: "claude-opus-5 @ high" } } },
+        }),
+        available({ id: "code", repository: PROJECT_ID, roles: ["coder", "reviewer"] }),
+        available({ id: "review", repository: PROJECT_ID, roles: ["host"], enabled: ["own"] }),
+      ],
+      own: [
+        available({ id: "code", roles: ["coder", "reviewer"] }),
+        available({
+          id: "review",
+          roles: ["host"],
+          enabled: ["own"],
+          bindings: { own: { host: { playerId: "dev.reviewer", display: "gpt-5.6-sol" } } },
+        }),
+      ],
+    });
+    await screen.findByTestId("playbook-card-triage");
+    // No switch between the project and your own group, and nothing of
+    // the packages: they stand on the Packages tab (playbook-library-1).
+    expect(screen.queryByTestId("playbooks-switch")).toBeNull();
+    expect(screen.queryByTestId("environment-section")).toBeNull();
+    expect(screen.queryByTestId("add-packages")).toBeNull();
+    expect(screen.queryByTestId("registry-account")).toBeNull();
+    // The project's environment alone exports triage, enabled there:
+    // one row writing the project's config, with no overflow.
+    const triage = cardOf("triage");
+    expect(within(triage).getByTestId("playbook-enabled-triage").textContent).toBe("in demo");
+    expect(within(triage).getByTestId("role-binding-triage-triager").textContent).toBe("Ccoder");
+    expect(within(triage).queryByTestId("playbook-personal-triage")).toBeNull();
+    // [playbook-library-29] the package and version it comes from,
+    // its source in the tooltip.
+    expect(screen.getByTestId("playbook-from-triage").textContent).toBe("from acme/triage 1.2.3");
+    expect(screen.getByTestId("playbook-from-triage").title).toBe("From the registry");
+    // Both export code and review: one row each.
+    expect(screen.getAllByTestId("playbook-card-code")).toHaveLength(1);
+    expect(screen.getAllByTestId("playbook-card-review")).toHaveLength(1);
+    expect(within(cardOf("code")).queryByTestId("playbook-enabled-code")).toBeNull();
+    expect(within(cardOf("code")).getByTestId("playbook-from-code").textContent).toBe("built in");
+    // The source in the Packages tab's words (playbook-library-92).
+    expect(within(cardOf("code")).getByTestId("playbook-from-code").title).toBe("Built in");
+    // Sectioned by what a session effectively runs: review, which your
+    // own group enables, stands under Enabled, bound as your own
+    // group's config binds it and offering Enable for the project; code,
+    // which neither enables, below.
+    const enabled = screen.getByTestId("playbooks-enabled");
+    const available_ = screen.getByTestId("playbooks-available");
+    expect(cardOf("triage", enabled)).toBeTruthy();
+    const review = cardOf("review", enabled);
+    expect(within(review).getByTestId("playbook-enabled-review").textContent).toBe("Personal");
+    expect(within(review).getByTestId("role-binding-review-host").textContent).toBe("Rreviewer");
+    expect(within(review).getByTestId("playbook-enable-review").textContent).toBe("Enable for demo");
+    expect(available_.querySelectorAll('[data-testid="playbook-card-review"]')).toHaveLength(0);
+    expect(cardOf("code", available_)).toBeTruthy();
+    expect(screen.queryByTestId("playbooks-empty")).toBeNull();
+
+    // Code's "Enable for Personal" writes your own group's config with
+    // the players proposed.
+    const code = cardOf("code");
+    fireEvent.change(within(code).getByTestId("enable-player-code-coder"), { target: { value: "dev.coder" } });
+    fireEvent.change(within(code).getByTestId("enable-player-code-reviewer"), { target: { value: "dev.reviewer" } });
+    fireEvent.click(within(overflowOf(code, "code")).getByTestId("playbook-enable-personal-code"));
+    await vi.waitFor(() =>
+      expect(edits()).toEqual([
+        { repository: OWN_KEY, op: { kind: "playbook.add", playbookId: "code", roles: { coder: "dev.coder", reviewer: "dev.reviewer" } } },
+      ]),
+    );
+    // Review's "Enable for <project>" writes the project's config,
+    // naming the player your own group's entry binds.
+    fireEvent.click(within(review).getByTestId("playbook-enable-review"));
+    await vi.waitFor(() =>
+      expect(edits()).toContainEqual({ repository: PROJECT_ID, op: { kind: "playbook.add", playbookId: "review", roles: { host: "dev.reviewer" } } }),
+    );
+  });
+
+  test("[playbook-library-94] a playbook both environments export is one row in each state: where it is enabled, whose bindings it shows, the project's act and your own group's in its overflow", async () => {
+    // Four playbooks both environments export, one coder role each: the
+    // project's entry binds it to dev.reviewer, yours to dev.coder.
+    const projectRoles = { coder: { playerId: "dev.reviewer", display: "gpt-5.6-sol" } };
+    const ownRoles = { coder: { playerId: "dev.coder", display: "claude-opus-5 @ high" } };
+    const both = (id: string, enabled: ("project" | "own")[]): [PlaybookAvailability, PlaybookAvailability] => {
+      const bindings = {
+        ...(enabled.includes("project") ? { project: projectRoles } : {}),
+        ...(enabled.includes("own") ? { own: ownRoles } : {}),
+      };
+      return [available({ id, repository: PROJECT_ID, enabled, bindings }), available({ id, enabled, bindings })];
+    };
+    const pairs = [both("ship", ["project"]), both("mine", ["own"]), both("pair", ["project", "own"]), both("idle", [])];
+    await renderTab({ project: pairs.map(([inProject]) => inProject), own: pairs.map(([, inOwn]) => inOwn) });
+    const enabled = screen.getByTestId("playbooks-enabled");
+    const available_ = screen.getByTestId("playbooks-available");
+    // Each state: its section, where it is enabled, the binding shown —
+    // the project's where it is enabled there, else yours, else the
+    // proposed player — its primary act, and its overflow's one act.
+    const matrix = [
+      ["ship", enabled, "in demo", "Rreviewer", "playbook-disable-ship", "Disable", "playbook-enable-personal-ship", "Enable for Personal"],
+      ["mine", enabled, "Personal", "Ccoder", "playbook-enable-mine", "Enable for demo", "playbook-disable-personal-mine", "Disable for Personal"],
+      ["pair", enabled, "in demo · Personal", "Rreviewer", "playbook-disable-pair", "Disable", "playbook-disable-personal-pair", "Disable for Personal"],
+      ["idle", available_, null, null, "playbook-enable-idle", "Enable for demo", "playbook-enable-personal-idle", "Enable for Personal"],
+    ] as const;
+    for (const [id, section, where, bound, primary, primaryText, personal, personalText] of matrix) {
+      expect(screen.getAllByTestId(`playbook-card-${id}`)).toHaveLength(1);
+      const card = cardOf(id, section);
+      if (where === null) expect(within(card).queryByTestId(`playbook-enabled-${id}`)).toBeNull();
+      else expect(within(card).getByTestId(`playbook-enabled-${id}`).textContent).toBe(where);
+      if (bound === null) expect((within(card).getByTestId(`enable-player-${id}-coder`) as HTMLInputElement).value).toBe("dev.coder");
+      else expect(within(card).getByTestId(`role-binding-${id}-coder`).textContent).toBe(bound);
+      expect(within(card).getByTestId(primary).textContent).toBe(primaryText);
+      const trigger = within(card).getByTestId(`playbook-personal-${id}`);
+      expect(trigger.getAttribute("aria-label")).toBe(`More for /${id}`);
+      const menu = overflowOf(card, id);
+      expect(within(menu).getAllByRole("menuitem").map((item) => item.dataset.testid)).toEqual([personal]);
+      expect(within(menu).getByTestId(personal).textContent).toBe(personalText);
+      fireEvent.click(trigger);
+      expect(within(card).queryByTestId(`playbook-personal-${id}-menu`)).toBeNull();
+    }
+
+    // Each act writes its config — the primary the project's, the
+    // overflow yours — an enabling naming the players the shown
+    // bindings name.
+    const ship = cardOf("ship");
+    fireEvent.click(within(ship).getByTestId("playbook-disable-ship"));
+    await vi.waitFor(() => expect(edits()).toHaveLength(1));
+    await vi.waitFor(() => expect((within(ship).getByTestId("playbook-personal-ship") as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(within(overflowOf(ship, "ship")).getByTestId("playbook-enable-personal-ship"));
+    await vi.waitFor(() => expect(edits()).toHaveLength(2));
+    fireEvent.click(within(cardOf("mine")).getByTestId("playbook-enable-mine"));
+    await vi.waitFor(() => expect(edits()).toHaveLength(3));
+    fireEvent.click(within(overflowOf(cardOf("pair"), "pair")).getByTestId("playbook-disable-personal-pair"));
+    await vi.waitFor(() => expect(edits()).toHaveLength(4));
+    fireEvent.click(within(overflowOf(cardOf("idle"), "idle")).getByTestId("playbook-enable-personal-idle"));
+    await vi.waitFor(() => expect(edits()).toHaveLength(5));
+    expect(edits()).toEqual([
+      { repository: PROJECT_ID, op: { kind: "playbook.delete", playbookId: "ship" } },
+      { repository: OWN_KEY, op: { kind: "playbook.add", playbookId: "ship", roles: { coder: "dev.reviewer" } } },
+      { repository: PROJECT_ID, op: { kind: "playbook.add", playbookId: "mine", roles: { coder: "dev.coder" } } },
+      { repository: OWN_KEY, op: { kind: "playbook.delete", playbookId: "pair" } },
+      { repository: OWN_KEY, op: { kind: "playbook.add", playbookId: "idle", roles: { coder: "dev.coder" } } },
+    ]);
+  });
+
+  test("a read for another project lists nothing here", async () => {
+    seed({ playbookLists: { project: [available({ id: "elsewhere", repository: "acme/other-spex" })], own: [], projectId: "acme/other-spex" } });
+    commandMock.mockImplementation(async (type: string) => (type === "environment.playbooks" ? new Promise(() => {}) : type === "draft.list" ? [] : null));
+    render(<PlaybooksTab project={PROJECT} />);
+    expect(screen.queryByTestId("playbook-card-elsewhere")).toBeNull();
+    expect(screen.getByTestId("playbooks-enabled").textContent).toContain("loading…");
+  });
+
+  test("a playbook both configs enable reads both places, one whose files are gone says so, and Manage packages opens the Packages tab", async () => {
+    await renderTab({
+      project: [
+        available({
+          id: "triage",
+          package: "acme/triage",
+          version: "0.1.0",
+          source: "path",
+          folder: "/work/demo/spex-packages/acme/triage",
+          repository: PROJECT_ID,
+          enabled: ["project", "own"],
+          present: false,
+          bindings: {
+            project: { coder: { playerId: "dev.coder", display: "claude-opus-5 @ high" } },
+            own: { coder: { playerId: "dev.coder", display: "claude-opus-5 @ high" } },
+          },
+        }),
+      ],
+      own: [],
+    });
+    const card = await vi.waitFor(() => cardOf("triage"));
+    expect(within(card).getByTestId("playbook-enabled-triage").textContent).toBe("in demo · Personal");
+    // A folder package names its folder in the source's tooltip.
+    expect(within(card).getByTestId("playbook-from-triage").textContent).toBe("from acme/triage 0.1.0");
+    expect(within(card).getByTestId("playbook-from-triage").title).toBe("From folder /work/demo/spex-packages/acme/triage");
+    // Enabled in its own config, the row offers Disable alone.
+    expect(within(card).queryByTestId("playbook-enable-triage")).toBeNull();
+    expect(within(card).getByTestId("playbook-disable-triage").title).toBe(
+      "Stops /triage for every member of demo; the package stays",
+    );
+    expect(within(card).getByTestId("playbook-absent-triage").textContent).toBe("Its files are not on this computer");
+
+    // Nothing of the packages stands here but the way to their tab.
+    useAppStore.setState({ workspaceTabs: { [PROJECT_ID]: "playbooks" } });
+    const manage = screen.getByTestId("manage-packages");
+    expect(manage.textContent).toBe("Manage packages");
+    fireEvent.click(manage);
+    expect(useAppStore.getState().workspaceTabs[PROJECT_ID]).toBe("packages");
+    expect(edits()).toEqual([]);
+  });
+
+  test("an act names in its tooltip whose config it writes", async () => {
+    await renderTab({
+      project: [available({ id: "dev", repository: PROJECT_ID })],
+      own: [available({ id: "dev" }), available({ id: "inspect" })],
+    });
+    // Both environments export dev: the primary act writes the
+    // project's config, the overflow's yours.
+    const dev = await vi.waitFor(() => cardOf("dev"));
+    const enable = within(dev).getByTestId("playbook-enable-dev");
+    expect(enable.textContent).toBe("Enable for demo");
+    expect(enable.title).toBe("For you and every member of demo");
+    expect(enable.getAttribute("aria-label")).toBe("Enable /dev for demo");
+    expect(within(overflowOf(dev, "dev")).getByTestId("playbook-enable-personal-dev").title).toBe(
+      "For you, in every project of yours",
+    );
+    // Your own group's environment alone exports inspect: a plain
+    // Enable writing your own group's config, with no overflow.
+    const inspect = cardOf("inspect");
+    expect(within(inspect).getByTestId("playbook-enable-inspect").textContent).toBe("Enable");
+    expect(within(inspect).getByTestId("playbook-enable-inspect").title).toBe("For you, in every project of yours");
+    expect(within(inspect).queryByTestId("playbook-personal-inspect")).toBeNull();
   });
 });
 
 describe("playbook-library-2: invalid entries stand marked", () => {
   test("a listed entry carries its failure, and one no environment exports lists with it", async () => {
-    await renderLibrary({
+    await renderTab({
       invalid: [
         { config: "own", playbook: "code", reason: "duplicate command /code" },
         { config: "own", playbook: "ghost", reason: "no environment of the session exports ghost" },
-        { config: "project", playbook: "elsewhere", reason: "not on this side" },
+        { config: "project", playbook: "elsewhere", reason: "not in the project's environment" },
       ],
     });
     expect(screen.getByTestId("playbook-invalid-code").textContent).toBe("Invalid: duplicate command /code");
-    const ghost = screen.getByTestId("playbook-card-ghost");
+    const ghost = cardOf("ghost");
     expect(within(ghost).getByTestId("playbook-invalid-ghost").textContent).toBe(
       "Invalid: no environment of the session exports ghost",
     );
-    // Another side's failure is that side's.
-    expect(screen.queryByTestId("playbook-card-elsewhere")).toBeNull();
     fireEvent.click(within(ghost).getByTestId("playbook-disable-ghost"));
     await vi.waitFor(() =>
       expect(edits()).toEqual([{ repository: OWN_KEY, op: { kind: "playbook.delete", playbookId: "ghost" } }]),
+    );
+    // The project's config's failure stands beside it, its Disable
+    // writing the project's config.
+    const elsewhere = cardOf("elsewhere");
+    expect(within(elsewhere).getByTestId("playbook-invalid-elsewhere").textContent).toBe(
+      "Invalid: not in the project's environment",
+    );
+    fireEvent.click(within(elsewhere).getByTestId("playbook-disable-elsewhere"));
+    await vi.waitFor(() =>
+      expect(edits()).toContainEqual({ repository: PROJECT_ID, op: { kind: "playbook.delete", playbookId: "elsewhere" } }),
     );
   });
 });
@@ -553,14 +833,14 @@ describe("playbook-library-2: invalid entries stand marked", () => {
 describe("playbook-library-89/90: packaged work names its required review", () => {
   test.each(["en", "zh"] as const)("code and decide name their effective commands until validated review is enabled (%s)", async (language) => {
     activateLanguage(language);
-    await renderLibrary({
+    await renderTab({
       own: [configured("code", { command: "build" }), configured("decide", { command: "design" })],
     });
     expect(screen.getByTestId("review-required-hint-code").textContent).toBe(
-      language === "zh" ? "/build 暂不可运行；请先在下方启用 /review。" : "/build is unavailable until /review is enabled below.",
+      language === "zh" ? "/build 需要先启用 /review" : "/build needs /review enabled",
     );
     expect(screen.getByTestId("review-required-hint-decide").textContent).toBe(
-      language === "zh" ? "/design 暂不可运行；请先在下方启用 /review。" : "/design is unavailable until /review is enabled below.",
+      language === "zh" ? "/design 需要先启用 /review" : "/design needs /review enabled",
     );
     expect(edits()).toEqual([]);
 
@@ -579,7 +859,7 @@ describe("playbook-library-89/90: packaged work names its required review", () =
 
   test.each(["en", "zh"] as const)("another spec package's same ids and unrelated built-ins receive no hint (%s)", async (language) => {
     activateLanguage(language);
-    await renderLibrary({
+    await renderTab({
       own: [
         configured("code", { package: "acme/flows", source: "registry" }),
         configured("decide", { package: "acme/flows", source: "path" }),
@@ -593,7 +873,7 @@ describe("playbook-library-89/90: packaged work names its required review", () =
   });
 
   test("a review that fails validation does not count as enabled", async () => {
-    await renderLibrary({
+    await renderTab({
       own: [configured("code"), configured("review")],
       invalid: [{ config: "own", playbook: "review", reason: "role host is unresolved" }],
     });
@@ -603,24 +883,23 @@ describe("playbook-library-89/90: packaged work names its required review", () =
 
 describe("playbook-library-48/49: dev names the delivery built-ins it lacks", () => {
   test("dev without branch or pr carries the hint naming both", async () => {
-    await renderLibrary({ own: [configured("dev", { intent: "plan a development request" })] });
+    await renderTab({ own: [configured("dev", { intent: "plan a development request" })] });
     const hint = screen.getByTestId("dev-delivery-hint");
-    expect(hint.textContent).toContain("/branch and /pr are enabled");
-    expect(hint.textContent).toContain("plain /dev request still runs");
+    expect(hint.textContent).toBe("Pull requests need /branch and /pr · /dev still runs");
     // A hint, not an invalid mark.
     expect(screen.queryByTestId("playbook-invalid-dev")).toBeNull();
   });
 
   test("dev with branch enabled in the project but not pr names only pr", async () => {
-    await renderLibrary({
+    await renderTab({
       own: [configured("dev")],
       project: [available({ id: "branch", repository: PROJECT_ID, enabled: ["project"] })],
     });
-    expect(screen.getByTestId("dev-delivery-hint").textContent).toContain("/pr is enabled");
+    expect(screen.getByTestId("dev-delivery-hint").textContent).toBe("Pull requests need /pr · /dev still runs");
   });
 
   test("dev with both enabled carries no hint", async () => {
-    await renderLibrary({ own: [configured("dev"), configured("branch"), configured("pr")] });
+    await renderTab({ own: [configured("dev"), configured("branch"), configured("pr")] });
     expect(screen.queryByTestId("dev-delivery-hint")).toBeNull();
   });
 });
@@ -628,11 +907,11 @@ describe("playbook-library-48/49: dev names the delivery built-ins it lacks", ()
 describe("playbook-library-28/31: the config gate", () => {
   const invalid: ConfigState = { status: "invalid", path: "/tmp/config.yaml", errors: ["playbooks must be an object"] };
 
-  test("an invalid own config replaces the surface with the gate, Settings a control where navigation is offered", async () => {
+  test("an invalid own config replaces the tab with the gate, Settings a control where navigation is offered", async () => {
     const onNavigate = vi.fn();
     seed({ configState: invalid });
-    render(<LibrarySurface onNavigate={onNavigate} />);
-    expect(screen.getByText("The Captain can only run playbooks listed here.")).toBeTruthy();
+    render(<PlaybooksTab project={PROJECT} onNavigate={onNavigate} />);
+    expect(screen.queryByText("The Captain can only run playbooks listed here.")).toBeNull();
     const settings = screen.getByRole("button", { name: "Settings" });
     fireEvent.click(settings);
     expect(onNavigate).toHaveBeenCalledWith("Settings");
@@ -642,7 +921,7 @@ describe("playbook-library-28/31: the config gate", () => {
 
   test("a missing config without navigation names Settings as plain text", () => {
     seed({ configState: { status: "missing", path: "/tmp/config.yaml" } });
-    render(<LibrarySurface />);
+    render(<PlaybooksTab project={PROJECT} />);
     expect(screen.getByText(/Playbooks need a valid config/).textContent).toBe(
       "Playbooks need a valid config — fix it in Settings.",
     );
@@ -709,7 +988,7 @@ function artifactCalls(): number {
 describe("playbook-library-22/23/45: a listed playbook wears its pipeline as a row", () => {
   test("a press opens a stage, a second closes it, another swaps — on one request for that environment's artifact", async () => {
     withArtifacts(async () => ARTIFACTS);
-    await renderLibrary({ own: [CODE_OWN] });
+    await renderTab({ own: [CODE_OWN] });
     const row = screen.getByTestId("stages-code");
     expect(
       within(row)
@@ -752,7 +1031,7 @@ describe("playbook-library-22/23/45: a listed playbook wears its pipeline as a r
 
   test("the Gears stage stands as the outline's rows, collapsed", async () => {
     withArtifacts(async () => ARTIFACTS);
-    await renderLibrary({ own: [CODE_OWN] });
+    await renderTab({ own: [CODE_OWN] });
     const row = screen.getByTestId("stages-code");
     fireEvent.click(within(row).getByRole("button", { name: "Gears" }));
     await vi.waitFor(() =>
@@ -804,7 +1083,7 @@ describe("playbook-library-22/23/45: a listed playbook wears its pipeline as a r
 
   test("gears the parser could not read fall back to the markdown", async () => {
     withArtifacts(async () => ({ ...ARTIFACTS, gearsItems: undefined }));
-    await renderLibrary({ own: [CODE_OWN] });
+    await renderTab({ own: [CODE_OWN] });
     fireEvent.click(
       within(screen.getByTestId("stages-code")).getByRole("button", {
         name: "Gears",
@@ -820,7 +1099,7 @@ describe("playbook-library-22/23/45: a listed playbook wears its pipeline as a r
 
   test("the State machine's stage names its states", async () => {
     withArtifacts(async () => ARTIFACTS);
-    await renderLibrary({ own: [CODE_OWN] });
+    await renderTab({ own: [CODE_OWN] });
     fireEvent.click(
       within(screen.getByTestId("stages-code")).getByRole("button", {
         name: "State machine",
@@ -837,7 +1116,7 @@ describe("playbook-library-22/23/45: a listed playbook wears its pipeline as a r
 
   test("a stage the load cannot locate is struck out, inactive, and named in the box", async () => {
     withArtifacts(async () => ({ ...ARTIFACTS, gears: null, missing: ["gears"] }));
-    await renderLibrary({ own: [CODE_OWN] });
+    await renderTab({ own: [CODE_OWN] });
     const row = screen.getByTestId("stages-code");
     const gears = () =>
       within(row).getByRole("button", { name: "Gears" }) as HTMLButtonElement;
@@ -889,7 +1168,7 @@ describe("playbook-library-22/23/45: a listed playbook wears its pipeline as a r
     try {
       useAppStore.setState({ frameHeights: {} });
       withArtifacts(async () => ARTIFACTS);
-      await renderLibrary({ own: [CODE_OWN] });
+      await renderTab({ own: [CODE_OWN] });
       const row = screen.getByTestId("stages-code");
       fireEvent.click(within(row).getByRole("button", { name: "Source" }));
       await vi.waitFor(() =>
@@ -951,7 +1230,7 @@ describe("playbook-library-22/23/45: a listed playbook wears its pipeline as a r
     withArtifacts(async () => {
       throw new Error("no module beside /tmp/code");
     });
-    await renderLibrary({ own: [CODE_OWN] });
+    await renderTab({ own: [CODE_OWN] });
     fireEvent.click(
       within(screen.getByTestId("stages-code")).getByRole("button", {
         name: "Source",
@@ -967,7 +1246,7 @@ describe("playbook-library-22/23/45: a listed playbook wears its pipeline as a r
 
 describe("playbook-library-35: the example card", () => {
   test("the row stands on the card and opens all four in-memory stages", async () => {
-    await renderLibrary();
+    await renderTab();
     const card = screen.getByTestId("example-card");
     expect(card.textContent).toContain("Example: Two-Agent Change-and-Review Workflow");
     expect(card.textContent).toContain("from the slc demo");
@@ -1018,11 +1297,12 @@ describe("playbook-library-35: the example card", () => {
     expect(card.textContent).not.toContain("from 'xstate'");
   });
 
-  test("the prefill is offered only with a project chosen", async () => {
-    await renderLibrary({ project: null }, { projects: [], currentProjectId: undefined });
+  test("the prefill waits for New playbook's Org and License", async () => {
+    // No defaults read: the fields stand empty for the person to fill.
+    await renderTab();
     const prefill = screen.getByTestId("example-prefill") as HTMLButtonElement;
     expect(prefill.disabled).toBe(true);
-    expect(prefill.title).toBe("Add a project first");
+    expect(prefill.title).toBe("Org and License first");
   });
 });
 

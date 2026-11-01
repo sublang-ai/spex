@@ -38,10 +38,12 @@ export function isDraftId(id: string): boolean {
 /** The id field's caption (playbook-library-51). A function, never a
  * constant: a text read at module load would freeze the language the
  * module was imported in (localization-4). */
-export function draftIdCaption(): string {
-  return i18n._(
-    "Lowercase; it names the spec package, the file and the /command — the command can change when you enable it",
-  );
+export function draftIdCaption(id: string): string {
+  return i18n._({
+    id: "Lowercase, becomes /{id}",
+    comment: "caption of New playbook's id field: {id} is the id typed, or the example triage while none is",
+    values: { id },
+  });
 }
 
 /** The rule, as the refusal names it. */
@@ -80,7 +82,7 @@ export function draftChipWord(draft: DraftInfo): string {
   if (draft.sourceMissing) {
     return i18n._({
       id: "Source missing",
-      comment: "authoring state chip, at most 14 characters: the spec package folder is gone from the working folder",
+      comment: "authoring state chip, at most 14 characters: the package's folder is gone from the project folder",
     });
   }
   switch (draft.state) {
@@ -151,7 +153,10 @@ export function draftChipTone(draft: DraftInfo): StatusTone {
  * in the chip itself (playbook-library-50). */
 export function draftChipTitle(draft: DraftInfo, now: number): string | undefined {
   if (draft.sourceMissing) {
-    return i18n._("The spec package folder is gone from the working folder; only Delete remains");
+    return i18n._({
+      id: "Package folder not in the project folder · only Delete remains",
+      comment: "the title of an authoring session's chip Source missing: its package folder is gone from the project folder, so the session can only be deleted",
+    });
   }
   const compile = draft.compile;
   if (!compile) return undefined;

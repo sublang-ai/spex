@@ -32,7 +32,6 @@ import {
   type CredentialList,
   type ReadinessEntry,
   type SessionPlayerSummary,
-  type GroupsState,
   type MissingPlayer,
 } from "@sublang/spex-core/protocol";
 
@@ -397,15 +396,6 @@ function MissingPlayerRow({ entry }: { entry: MissingPlayer }) {
       ) : null}
     </div>
   );
-}
-
-/** Your own group's spex repository, which the settings file belongs
- * to (settings-46): as Space reads it, else from the file's place
- * under `workspace/<key>/config/` (DR-103). */
-function ownRepositoryOf(space: GroupsState | undefined, path: string): string | undefined {
-  const repository = space?.own.repositories.find((entry) => entry.own);
-  if (repository) return repository.key;
-  return /\/workspace\/([a-z0-9][a-z0-9/-]*-spex)\/config\//u.exec(path)?.[1];
 }
 
 /** Each agent's forms a member may set on a seat (settings-49), in the
@@ -900,8 +890,15 @@ function PlayerRoster({
           <MissingPlayerRow key={`${entry.repository}:${entry.player}`} entry={entry} />
         ))}
       {players.length === 0 && missing.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-neutral-300 px-4 py-3 text-xs text-neutral-500 dark:border-neutral-700">
-          {i18n._("No players yet — enabling a playbook in Playbooks adds the ones its roles need.")}
+        <p
+          data-testid="players-empty"
+          title={i18n._({
+            id: "Enabling a playbook on a project's Playbooks tab adds the players its roles need",
+            comment: "tooltip of Settings' empty players list: where players come from",
+          })}
+          className="rounded-lg border border-dashed border-neutral-300 px-4 py-3 text-xs text-neutral-500 dark:border-neutral-700"
+        >
+          {i18n._({ id: "No players yet", comment: "Settings' players list while it holds none" })}
         </p>
       ) : null}
       {adding ? (
@@ -1004,7 +1001,6 @@ export function SettingsSurface({
   const seat = !isLocalPlace(store.place);
   const configState = store((state) => state.configState);
   const readiness = store((state) => state.readiness);
-  const space = store((state) => state.space);
   const refreshReadiness = store((state) => state.refreshReadiness);
   const refresh = store((state) => state.refresh);
   const [error, setError] = useState<string>();
@@ -1114,7 +1110,6 @@ export function SettingsSurface({
   }
 
   const summary = configState.summary;
-  const ownRepository = ownRepositoryOf(space, summary.path);
   const readinessByAdapter = new Map(
     readiness.map((entry) => [entry.adapter, entry]),
   );
@@ -1140,18 +1135,10 @@ export function SettingsSurface({
     <div className="relative mx-auto flex w-full min-h-0 max-w-3xl flex-1 flex-col gap-5 overflow-y-auto p-6">
       <div>
         <h1 className="text-lg font-semibold">{i18n._("Settings")}</h1>
-        {/* The file written here is your own group's, named by its
-            spex repository; a project's playbooks and bindings are
-            edited in Playbooks (settings-46). */}
-        {ownRepository ? (
-          <p
-            data-testid="settings-scope"
-            title={i18n._("A project's playbooks and role bindings are edited in Playbooks")}
-            className="mt-0.5 text-xs text-neutral-500"
-          >
-            {i18n._("Your own group's config, in {repository}", { repository: ownRepository })}
-          </p>
-        ) : null}
+        {/* The file written here, by its path alone: no spex
+            repository named, and no project's file offered as editable
+            here — a project's playbooks and role bindings are its
+            Playbooks tab's (settings-46). */}
         <p className="mt-0.5 text-xs text-neutral-500">
           <span className="font-mono break-all" title={i18n._("Shared with the playbook CLI — edits made outside appear here")}>{summary.path}</span>
         </p>

@@ -20,16 +20,16 @@ import {
   nav,
   open,
   openTranslated,
+  projectTab,
   surfaceEntry,
   type SurfaceName,
 } from "../src/harness";
 import { HEIGHTS, TALL, measure, record } from "../src/fit";
 
-/** The rail's five entries as the `zh` catalog translates them. */
+/** The rail's four entries as the `zh` catalog translates them. */
 const RAIL_ZH: [SurfaceName, string][] = [
   ["Dashboard", "仪表盘"],
   ["Workspace", "项目"],
-  ["Playbooks", "规程"],
   ["Space", "Space"],
   ["Settings", "设置"],
 ];
@@ -38,7 +38,6 @@ const RAIL_ZH: [SurfaceName, string][] = [
 const RAIL_EN: [SurfaceName, string][] = [
   ["Dashboard", "Dashboard"],
   ["Workspace", "Projects"],
-  ["Playbooks", "Playbooks"],
   ["Space", "Space"],
   ["Settings", "Settings"],
 ];
@@ -98,7 +97,8 @@ test.describe("a browser that asks for Chinese", () => {
     await expect(page.getByTestId("palette-new-path")).toBeHidden();
     const meta = readFileSync(join(app.projectDir, "specs", "meta.md"), "utf8");
     expect(meta).toContain("Authoring language: zh");
-    await page.getByRole("tab", { name: /^规约/ }).click();
+    // The Specs tab, 规约 — not the Packages tab, 规约包 (run-view-58).
+    await page.getByRole("tab", { name: /^规约(?!包)/ }).click();
     await page.getByRole("button", { name: "meta.md 规约格式", exact: true }).click();
     await expect(page.getByText("Authoring language: zh", { exact: true })).toBeVisible();
   });
@@ -304,7 +304,6 @@ test.describe("the Chinese interface at the floor", () => {
       ["Dashboard", "dashboard", "dashboard-scroll"],
       ["Settings", "settings", "captain-section"],
       ["Space", "space", "space-header"],
-      ["Playbooks", "playbooks", "playbooks-enabled"],
       ["Workspace", "projects", "captain-home"],
     ];
     for (const [surface, name, ready] of surfaces) {
@@ -312,6 +311,10 @@ test.describe("the Chinese interface at the floor", () => {
       await expect(page.getByTestId(ready)).toBeVisible();
       await shoot(page, `${name}-1024`);
     }
+    // The project's Playbooks tab (run-view-58).
+    await projectTab(page, "Playbooks");
+    await expect(page.getByTestId("playbooks-enabled")).toBeVisible();
+    await shoot(page, "playbooks-1024");
 
     // The floor is stated with the sidebar collapsed (DR-041).
     await collapseRail(page);

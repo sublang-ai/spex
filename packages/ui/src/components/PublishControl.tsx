@@ -2,15 +2,26 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // One explicit preview and confirmation for a local spec package, shared
-// by environment rows and playbook authoring (playbook-library-93, -113).
-import { RegistryAccount } from "./RegistryAccount.js";
-import { useState } from "react";
+// by a folder package's row on the Packages tab and playbook authoring
+// (playbook-library-93, -113, DR-172): "Publish <org>/<pkg> <version> to
+// <registry>", the registry by its display name with its origin in the
+// tooltip, over "<count> files" and "as @<login> in <org>", with Publish
+// and Cancel; signed out, one button "Sign in to publish"; success
+// "Published <version>" linking its page at the registry.
+import { useEffect, useState } from "react";
 import type { EnvironmentState, PublishPreview } from "@sublang/spex-core/protocol";
 import type { PublishTarget } from "../lib/environments.js";
 import { usePlaceStore } from "../state/place-context.js";
 import { i18n } from "../i18n.js";
+import { RegistryFlowLine, registrySignInTitle, useRegistrySignIn } from "./RegistryAccount.js";
+import { signingInLabel } from "./SpaceSignIn.js";
 
 type Receipt = EnvironmentState["published"];
+
+const ERROR =
+  "rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700 [overflow-wrap:anywhere] dark:border-red-900 dark:bg-red-950 dark:text-red-300";
+const OUTLINE =
+  "rounded-md border border-brand-300 px-2.5 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50 disabled:opacity-40 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950";
 
 function receiptOrigin(receipt: Receipt): string | undefined {
   try { return receipt ? new URL(receipt.url).origin : undefined; } catch { return undefined; }
@@ -32,6 +43,17 @@ interface PublishProps {
    * preview (playbook-library-113). */
   path: string;
   target: PublishTarget | undefined;
+  /** Opened from a row's overflow (playbook-library-113): Cancel closes
+   * the control through `onClose`, and while `autoAsk` holds, the preview
+   * is asked for at once — or, signed out, the registry sign-in started —
+   * `onAutoAsked` saying it was, once per choice from the overflow, so a
+   * preview a change of folder, registry or account discarded is asked
+   * for again only by Publish. Absent, a Publish button asks for it
+   * (playbook-library-93). */
+  opened?: boolean;
+  autoAsk?: boolean;
+  onAutoAsked?: () => void;
+  onClose?: () => void;
   onNavigate?: (surface: "Settings" | "Space") => void;
 }
 
@@ -39,21 +61,77 @@ export function PublishControl(props: PublishProps) {
   // Remount synchronously when the upload destination changes, so an old
   // preview can never confirm against the new folder or account target.
   const key = JSON.stringify([props.repository, props.name, props.path, props.target?.origin,
-    props.target?.signedIn, props.target?.name]);
+    props.target?.signedIn, props.target?.name, props.target?.login]);
   return <PublishAttempt key={key} {...props} />;
 }
 
-/** Publish beneath the form (playbook-library-93): an inline summary
- * of the destination and what would upload — name, version, files —
- * confirmed with Publish or left with Cancel; the outcome reads from
- * the environment's state, the published version with its page at the
+/** Publish waits for the registry's state to be read. */
+function LoadingRegistry() {
+  return (
+    <div data-testid="publish" role="status" className="text-xs text-neutral-500">
+      {i18n._({ id: "Loading registry…", comment: "Publish waits for the registry's state to be read" })}
+    </div>
+  );
+}
+
+/** "Sign in to publish" in place of Publish (playbook-library-93): it
+ * starts the registry sign-in in place, its flow reading beneath it.
+ * Opened by a row's own "Sign in to publish" (playbook-library-113),
+ * the sign-in starts at once, once per choice. */
+function PublishSignIn({ target, autoStart, onStarted }: { target: PublishTarget; autoStart: boolean; onStarted?: () => void }) {
+  // The account there is read once where no state of it stands yet, as
+  // on a page opened after the sign-in; its broadcast settles the target.
+  const account = useRegistrySignIn(target.origin, { read: true });
+  useEffect(() => {
+    if (!autoStart) return;
+    onStarted?.();
+    void account.start();
+    // Started once per mount; a change of target remounts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  if (!account.state && !account.error && !account.running && !account.busy) return <LoadingRegistry />;
+  return (
+    <div data-testid="publish" className="flex flex-col gap-1.5 border-t border-neutral-200 pt-3 dark:border-neutral-800">
+      <div>
+        <button
+          type="button"
+          data-testid="publish-signin"
+          disabled={account.busy || account.running !== undefined}
+          title={registrySignInTitle()}
+          onClick={() => void account.start()}
+          className={OUTLINE}
+        >
+          {account.running || account.busy
+            ? signingInLabel()
+            : i18n._({ id: "Sign in to publish", comment: "in place of Publish while the person is not signed in to the registry: starts the registry sign-in" })}
+        </button>
+      </div>
+      {account.running ? <RegistryFlowLine running={account.running} name={target.name} testId="publish-signin" /> : null}
+      {account.error ? (
+        <p role="alert" data-testid="publish-signin-error" className={ERROR}>
+          {account.error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** Publish (playbook-library-93): an inline summary of the destination
+ * and what would upload — name, version, files, the account and org —
+ * confirmed with Publish or left with Cancel; the outcome reads from the
+ * environment's state, the published version linking its page at the
  * registry or the issues in place. A missing registry grant offers its
- * own sign-in in place; no Space state establishes publication authority. */
+ * own sign-in in place; no Space state establishes publication
+ * authority. */
 function PublishAttempt({
   repository,
   name,
   path,
   target,
+  opened = false,
+  autoAsk = false,
+  onAutoAsked,
+  onClose,
 }: PublishProps) {
   const store = usePlaceStore();
   const environment = store((state) => state.environments[repository]);
@@ -66,8 +144,18 @@ function PublishAttempt({
   // read from what changed rather than from what stood.
   const [sent, setSent] = useState<{ name: string; version: string; previous: EnvironmentState["published"] }>();
 
-  if (!target) return <div data-testid="publish" role="status" className="text-xs text-neutral-500">{i18n._("Loading registry…")}</div>;
-  if (!target.signedIn) return <div data-testid="publish"><RegistryAccount repository={repository} /></div>;
+  const signedIn = target?.signedIn === true;
+  // Opened from a row's overflow, the preview is asked for at once.
+  useEffect(() => {
+    if (!opened || !autoAsk || !signedIn) return;
+    onAutoAsked?.();
+    void ask();
+    // Asked once per mount; a change of target remounts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (!target) return <LoadingRegistry />;
+  if (!target.signedIn) return <PublishSignIn target={target} autoStart={opened && autoAsk} onStarted={onAutoAsked} />;
 
   const publishing = environment?.busy === "publishing";
   const settled = sent && pending === undefined && !publishing;
@@ -112,18 +200,27 @@ function PublishAttempt({
     }
   }
 
+  const org = (preview?.name ?? name).split("/")[0] ?? "";
+  // The registry the core reports it publishes to, by its display name.
+  const destination = preview?.instance ?? { origin: target.origin, name: target.name };
+  const publishingWord = i18n._({ id: "Publishing…", comment: "a spec package is being uploaded to the registry" });
   return (
     <div data-testid="publish" className="flex flex-col gap-2 border-t border-neutral-200 pt-3 dark:border-neutral-800">
       {preview ? (
         <div data-testid="publish-summary" className="flex flex-col gap-1 rounded border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-xs dark:border-neutral-800 dark:bg-neutral-950">
-          <span data-testid="publish-target" className="[overflow-wrap:anywhere]">
-            {i18n._("Publish to {origin}", { origin: target.origin })}
+          <span data-testid="publish-target" title={destination.origin} className="font-medium [overflow-wrap:anywhere]">
+            {i18n._({
+              id: "Publish {name} {version} to {registry}",
+              comment: "Publish's preview: the spec package, its version and the registry it goes to by its display name, such as Publish acme/triage 0.1.0 to Spex Space",
+              values: { name: preview.name, version: preview.version, registry: destination.name || target.name },
+            })}
           </span>
-          <span className="font-mono">
-            {preview.name} {preview.version}
-          </span>
-          <span className="text-neutral-500">
-            {i18n._("{count, plural, one {# file uploads:} other {# files upload:}}", { count: preview.files.length })}
+          <span data-testid="publish-count" className="text-neutral-500">
+            {i18n._({
+              id: "{count, plural, one {# file} other {# files}}",
+              comment: "Publish's preview: how many files the publish uploads, listed beneath",
+              values: { count: preview.files.length },
+            })}
           </span>
           <ul data-testid="publish-files" className="max-h-40 overflow-y-auto font-mono text-neutral-600 dark:text-neutral-300">
             {preview.files.map((file) => (
@@ -132,11 +229,23 @@ function PublishAttempt({
               </li>
             ))}
           </ul>
+          {target.login ? (
+            <span data-testid="publish-account" className="text-neutral-500 [overflow-wrap:anywhere]">
+              {i18n._({
+                id: "as @{login} in {org}",
+                comment: "Publish's preview: the registry account it publishes as and the org it publishes into; {login} is the account's login, {org} the package name's first half",
+                values: { login: target.login, org },
+              })}
+            </span>
+          ) : null}
           <span className="flex flex-wrap justify-end gap-2">
             <button
               type="button"
               data-testid="publish-cancel"
-              onClick={() => setPreview(undefined)}
+              onClick={() => {
+                setPreview(undefined);
+                onClose?.();
+              }}
               className="min-h-6 rounded px-2 py-0.5 text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
             >
               {i18n._({ id: "Cancel", comment: "leave an editor without saving" })}
@@ -149,7 +258,7 @@ function PublishAttempt({
               className="min-h-6 rounded bg-brand-600 px-2 py-0.5 font-medium text-white hover:bg-brand-500 disabled:opacity-40"
             >
               {pending === "publish"
-                ? i18n._({ id: "Publishing…", comment: "a spec package is being uploaded to the registry" })
+                ? publishingWord
                 : i18n._({ id: "Publish", comment: "upload the spec package to the registry" })}
             </button>
           </span>
@@ -160,19 +269,22 @@ function PublishAttempt({
             type="button"
             data-testid="publish-button"
             disabled={pending !== undefined || publishing}
-            title={i18n._("Upload {path} to the registry", { path })}
+            title={i18n._({
+              id: "Publishes {path} to {registry}",
+              comment: "the title of Publish: what it publishes and where; {path} is the package's folder, {registry} the registry's display name",
+              values: { path, registry: target.name },
+            })}
             onClick={() => void ask()}
-            className="rounded-md border border-brand-300 px-2.5 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50 disabled:opacity-40 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950"
+            className={OUTLINE}
           >
             {pending === "preview"
               ? i18n._({ id: "Checking…", comment: "the checks a publish makes are running, nothing uploads yet" })
               : publishing
-                ? i18n._({ id: "Publishing…", comment: "a spec package is being uploaded to the registry" })
+                ? publishingWord
                 : i18n._({ id: "Publish", comment: "upload the spec package to the registry" })}
           </button>
           {published ? (
             <span data-testid="publish-done" className="text-xs text-emerald-700 dark:text-emerald-300">
-              {i18n._("Published {name} {version}", { name: published.name, version: published.version })}{" "}
               <a
                 href={published.url}
                 target="_blank"
@@ -180,14 +292,18 @@ function PublishAttempt({
                 data-testid="publish-link"
                 className="text-brand-600 underline dark:text-brand-300"
               >
-                {i18n._("Open its page")}
+                {i18n._({
+                  id: "Published {version}",
+                  comment: "a publish succeeded: the version the registry now holds, linking its page there",
+                  values: { version: published.version },
+                })}
               </a>
             </span>
           ) : null}
         </div>
       )}
       {refusal ? (
-        <p role="alert" data-testid="publish-error" className="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700 [overflow-wrap:anywhere] dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+        <p role="alert" data-testid="publish-error" className={ERROR}>
           {refusal}
         </p>
       ) : null}

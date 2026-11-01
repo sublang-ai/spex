@@ -1156,9 +1156,10 @@ function RepositoryRow({
   const act = phrase.act?.kind === "retry" && repo.state === "unreachable" ? undefined : phrase.act;
 
   // Where its code is (space-1): a glyph titled by the core's phrase, a
-  // warning where the project names no remote, nothing for a group's own
-  // records or before the core knows.
-  const code = groupRepository ? null : codeOf(repo);
+  // warning in the attention tone where the project names no remote;
+  // nothing for a group's own records, before the core knows, or on a
+  // row under "This computer", which nobody shares yet.
+  const code = groupRepository ? null : codeOf(repo, instance === undefined);
 
   const more: MenuEntry[] = [];
   if (syncs) {
@@ -1292,10 +1293,9 @@ function RepositoryRow({
             id={describe("code")}
             data-testid={`space-repo-code-${repo.key}`}
             data-kind={code.kind}
+            data-tone={code.tone}
             title={code.phrase}
-            className={`hidden min-w-0 max-w-[40%] shrink-0 items-center gap-1 text-xs @md:inline-flex ${
-              code.kind === "none" ? "text-amber-700 dark:text-amber-300" : "text-neutral-500"
-            }`}
+            className={`hidden min-w-0 max-w-[40%] shrink-0 items-center gap-1 text-xs @md:inline-flex ${TONES[code.tone]}`}
           >
             {code.kind === "none" ? (
               <span className="min-w-0 truncate">

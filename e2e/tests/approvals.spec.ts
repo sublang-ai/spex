@@ -3,7 +3,7 @@
 
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { test, expect, open, nav } from "../src/harness";
+import { test, expect, open, projectTab } from "../src/harness";
 import { measure, record, setRail } from "../src/fit";
 
 const approval = {toolName: "desktop.inspect", input: {app: "Task-owned Example", action: "read-window", target: "<img src=x onerror=alert(1)>"}, reason: "Inspect only this task-owned window", details: {title: "Read the Example window?", description: "The inspector wants to read the task-owned Example window to describe its contents.", blockedPath: "/task-owned/example"}};
@@ -62,7 +62,7 @@ test("approvals-8: fresh served UI reviews actual pending scope, denies safely, 
 
 test("approvals-8: authoring approval has draft scope and disappears on abort", async ({page, app}) => {
   await open(page, app);
-  await nav(page, "Playbooks").click();
+  await projectTab(page, "Playbooks");
   // The project's defaults fill Org and License (playbook-library-51).
   await expect(page.getByTestId("new-playbook-license")).toHaveValue("Apache-2.0");
   await page.getByTestId("new-playbook-id").fill("approval-draft");

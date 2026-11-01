@@ -6,8 +6,9 @@
 // the core sends them — those its clone holds in the order added, the
 // path placement last, then each a placement file names that no remote
 // here holds, then each instance a creation waits at — naming its
-// Space's display name and its path there, or the path placement's
-// remote, with what that placement did: the step in flight at it, a step
+// Space's display name and the path of the group it is in there, nothing
+// in your namespace and never the records' own `-spex` name, or the path
+// placement's remote, with what that placement did: the step in flight at it, a step
 // waiting at the Space, the outcome the last sync left there, or its own
 // state and last sync (space-61, space-12, space-15, space-64). A row
 // with no clone here carries none.
@@ -68,6 +69,20 @@ export function placementGroupName(groups: GroupsState, repo: RepositoryState, l
     if (lower === instance.account.login.toLowerCase()) return personalLabel();
   }
   return parent || line.path;
+}
+
+/** The path of the group a placement is in at its Space (space-87):
+ * the part of its path before the last "/", never the records' own
+ * `-spex` name; none in your namespace there, which reads as Personal,
+ * nor for the path placement. */
+export function placementGroupPath(groups: GroupsState, repo: RepositoryState, line: PlacementState): string | null {
+  if (line.instance === null || repo.own) return null;
+  const parent = line.path.split("/").slice(0, -1).join("/");
+  if (!parent) return null;
+  const standing = standingEntry(groups, repo, line);
+  if (standing?.login != null && standing.mine) return null;
+  const login = instanceOf(groups, line.instance)?.account.login;
+  return login !== undefined && parent.toLowerCase() === login.toLowerCase() ? null : parent;
 }
 
 /** The sharing confirm (space-57, DR-172): "Share with <group> at
@@ -266,6 +281,7 @@ function PlacementLine({
   // The control the confirm answers, which Cancel hands focus back to.
   const askedRef = useRef<HTMLButtonElement | null>(null);
   const name = placementName(groups, line);
+  const groupPath = placementGroupPath(groups, repo, line);
   const phrase = placementPhrase(repo, line, now, dismissed, phraseNames(groups, repo, seatName(store.place)));
 
   const sync = repo.sync;
@@ -426,14 +442,15 @@ function PlacementLine({
           {name}
         </span>
         {/* The path placement is named by its remote; a Space's
-            placement by its Space, its path beside it (space-87). */}
-        {line.instance !== null ? (
+            placement by its Space, the path of its group beside it —
+            none in your namespace (space-87). */}
+        {groupPath !== null ? (
           <span
             data-testid="space-line-at"
             className="hidden min-w-0 max-w-[35%] truncate text-neutral-500 @md:inline"
-            title={line.path}
+            title={groupPath}
           >
-            {line.path}
+            {groupPath}
           </span>
         ) : null}
         <span

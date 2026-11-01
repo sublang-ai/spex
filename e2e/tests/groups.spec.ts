@@ -101,9 +101,9 @@ const SPACE_WORDS = /\b(instances?|hosts?|namespaces?|devices?|spex repositor(?:
  * space-41). It reads the Space surface alone: space-27 governs the copy
  * on the surface, so the Projects tree, the Captain home and a session's
  * transcript a journey also shows are other surfaces' words, which no
- * space item governs. A placement's line names its path in the Space
- * (space-87), the one place the records' path reads, and each display
- * name is a Space's own name; both are read past. */
+ * space item governs. A placement's line names the path of its group in
+ * the Space (space-87), and each display name is a Space's own name;
+ * both are read past. */
 async function scanVocabulary(page: Page, where: string, found: string[]): Promise<void> {
   const surface = page.getByTestId("space-surface");
   let text = await surface.innerText();
@@ -400,8 +400,9 @@ test.describe("first start", () => {
     ).toEqual([]);
 
     // A project added from the palette lists under "This computer" with
-    // no phrase and "Add to a group…" disabled and titled "Sign in to a
-    // Space first" (space-61).
+    // no phrase, no code glyph — nobody shares it yet — and "Add to a
+    // group…" disabled and titled "Sign in to a Space first" (space-61,
+    // space-1).
     seedDemoProject(app.projectDir);
     await page.getByTestId("sidebar").getByRole("button", { name: "Add a local project" }).click();
     const palette = page.getByRole("dialog", { name: /Add a project|Choose a project/ });
@@ -413,6 +414,7 @@ test.describe("first start", () => {
     await expect(here.getByTestId(`space-row-${localKey}`)).toBeVisible();
     await expect(page.getByTestId(`space-repo-${localKey}`)).toHaveText("demo-project");
     await expectNoPhrase(page, localKey);
+    await expect(page.getByTestId(`space-repo-code-${localKey}`)).toHaveCount(0);
     const pickBefore = page.getByTestId(`space-row-pick-${localKey}`);
     await expect(pickBefore).toHaveText("Add to a group…");
     await expect(pickBefore).toBeDisabled();
@@ -456,12 +458,13 @@ test.describe("first start", () => {
     await expect(personal.getByTestId(`space-row-${OWN_KEY}`)).toBeVisible();
     await expect(page.getByTestId(`space-repo-${OWN_KEY}`)).toHaveAccessibleName("Your sessions");
     await expect(personal.locator('[data-testid^="space-group-more-"]')).toHaveCount(0);
-    // The project stays under "This computer", with no phrase, its
-    // "Add to a group…" now offered (space-1, space-61).
+    // The project stays under "This computer", with no phrase and no
+    // code glyph, its "Add to a group…" now offered (space-1, space-61).
     const projectKey = `${HOST_LOGIN}/demo-project-spex`;
     await expect(here.getByTestId(`space-row-${projectKey}`)).toBeVisible();
     await expect(here.getByTestId(`space-row-${OWN_KEY}`)).toHaveCount(0);
     await expectNoPhrase(page, projectKey);
+    await expect(page.getByTestId(`space-repo-code-${projectKey}`)).toHaveCount(0);
     // Your own records stand on the host, pushed (space-4).
     await expect.poll(() => host.script.repositories.map((repo) => `${repo.group.fullPath}/${repo.path}`)).toContain(OWN_KEY);
     await expect.poll(() => headOf(bareOf(host, OWN_KEY), "spex"), { timeout: 30_000 }).toMatch(/^[0-9a-f]{40}$/);
@@ -489,16 +492,24 @@ test.describe("first start", () => {
     await expect(page.getByTestId(`space-repo-state-${TEAM_KEY}`)).toHaveText("Synced just now", { timeout: 30_000 });
     await expect(page.getByTestId(`space-row-${TEAM_KEY}`)).toHaveAttribute("data-state", "reachable");
     await expect(page.getByTestId(`space-repo-${TEAM_KEY}`)).toHaveText("demo-project");
+    // In a group, its code glyph stands: the project names no code
+    // remote, so "⚠ Code: no remote" in the attention tone (space-1).
+    const codeGlyph = page.getByTestId(`space-repo-code-${TEAM_KEY}`);
+    await expect(codeGlyph).toHaveAttribute("data-kind", "none");
+    await expect(codeGlyph).toHaveAttribute("data-tone", "attention");
+    await expect(codeGlyph).toHaveAttribute("title", "Code: no remote");
     // No placement's line on the row: in its Sync tab, the row's name
     // opening it, its one placement's line names the stand-in by its
-    // display name and the records' path there, and says what the sync
-    // did there (space-87, space-12).
+    // display name and the path there of the group it is in, never the
+    // records' own name, and says what the sync did there (space-87,
+    // space-12).
     await expect(page.getByTestId(`space-row-${TEAM_KEY}`).locator('[data-testid^="space-line-"]')).toHaveCount(0);
     await openRepository(page, TEAM_KEY);
     const line = placementLine(page, TEAM_KEY, host);
     await expect(line).toHaveAttribute("data-state", "reachable");
     await expect(line.getByTestId("space-line-instance")).toHaveText("Stand-in Git host");
-    await expect(line.getByTestId("space-line-at")).toHaveText(TEAM_PATH);
+    await expect(line.getByTestId("space-line-at")).toHaveText(HOST_GROUP);
+    await expect(line).not.toContainText("-spex");
     await expect(line.getByTestId("space-line-state")).toHaveText(/^Synced just now/);
     // "Sync now" stands in the row's overflow beside Members and
     // "Explore records", and nothing else (space-1).

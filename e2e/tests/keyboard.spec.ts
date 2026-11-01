@@ -48,19 +48,17 @@ test("run-view-101: palette, surfaces, sidebar, and composer by keyboard", async
   await expect(palette).toBeHidden();
   expect(await focusedIn()).toBe("surface");
 
-  // Surfaces by number — Dashboard, Projects, Playbooks, Space,
-  // Settings — and by comma; each lands focus inside the surface it
-  // opened, never on the body (run-view-50).
+  // Surfaces by number in the sidebar's order — Dashboard, Projects,
+  // Space, Settings, the modifier with 3 opening Space — and by comma;
+  // each lands focus inside the surface it opened, never on the body
+  // (run-view-49, run-view-50).
   await page.keyboard.press(`${MOD}+1`);
   await expect(page.getByTestId("attention-all-clear")).toBeVisible();
   expect(await focusedIn()).toBe("surface");
   await page.keyboard.press(`${MOD}+3`);
-  await expect(page.getByTestId("playbooks-enabled")).toBeVisible();
-  expect(await focusedIn()).toBe("surface");
-  await page.keyboard.press(`${MOD}+4`);
   await expect(page.getByTestId("space-surface")).toBeVisible();
   expect(await focusedIn()).toBe("surface");
-  await page.keyboard.press(`${MOD}+5`);
+  await page.keyboard.press(`${MOD}+4`);
   await expect(page.getByTestId("captain-section")).toBeVisible();
   expect(await focusedIn()).toBe("surface");
   await page.keyboard.press(`${MOD}+1`);
@@ -110,6 +108,13 @@ test("run-view-101: palette, surfaces, sidebar, and composer by keyboard", async
   await sessionTab.focus();
   await page.keyboard.press("ArrowRight");
   await expect(plusTab).toBeFocused();
+  // The pinned tabs follow in their order (run-view-58).
+  for (const pinned of ["specs", "playbooks", "packages", "overview"]) {
+    await page.keyboard.press("ArrowRight");
+    await expect(page.getByTestId(`workspace-tab-${pinned}`)).toBeFocused();
+  }
+  await page.keyboard.press("Home");
+  await expect(sessionTab).toBeFocused();
   await page.keyboard.press("End");
   await expect(page.getByRole("tab", { name: "Overview" })).toBeFocused();
   await page.keyboard.press("Home");

@@ -211,6 +211,10 @@ interface CloneState {
    * `spex.yaml` it read: shown while the file still stands at it. */
   conflicts: { requests: FileVersion; conflicts: Conflict[] } | null;
   error: string | null;
+  /** The registry packages the failure in `error` found its registry
+   * refusing, as for want of a grant (environments-14); null with any
+   * other failure, and with none. */
+  refused: string[] | null;
   published?: { name: string; version: string; url: string };
   /** The version of `spex.lock` the last install, by any operation,
    * was attempted from (environments-26), so a use's read installs only
@@ -356,6 +360,53 @@ function committedWithCode(root: string): boolean {
 /** Whether a folder stands at `path`, a link to one counted. */
 function isDirectory(path: string): boolean {
   try { return statSync(path).isDirectory(); } catch { return false; }
+}
+
+/** Whether a registry's answer refused a spec package as it refuses
+ * one for want of a grant: not found — a private package reads so to a
+ * reader without one —, unauthenticated or forbidden (environments-12). */
+function grantRefusal(error: unknown): error is RegistryError {
+  return error instanceof RegistryError && (error.kind === "not_found" || error.kind === "unauthenticated" || error.kind === "forbidden");
+}
+
+/** The spec package a failure's registry refused for want of a grant,
+ * as the state lists it (environments-14), else null. */
+function refusedBy(error: unknown): string[] | null {
+  return grantRefusal(error) && error.packageName ? [error.packageName] : null;
+}
+
+/** A registry source noting each spec package whose version index it
+ * refused for want of a grant, which resolution reads as no version
+ * (environments-5, environments-14). */
+function noteRefusals(source: RegistrySource, refused: Set<string>): RegistrySource {
+  return {
+    get url() { return source.url; },
+    index: (name) => source.index(name).catch((error: unknown) => {
+      if (grantRefusal(error)) refused.add(name);
+      throw error;
+    }),
+    version: (name, version) => source.version(name, version),
+    file: (name, version, path) => source.file(name, version, path),
+    archive: (name, version) => source.archive(name, version),
+    publish: (name, version, tgz) => source.publish(name, version, tgz),
+    search: (query) => source.search(query),
+  };
+}
+
+/** The name and version a folder's `meta.yaml` gives (environments-15),
+ * each null where it gives none: read for what a request by path takes,
+ * whatever else that manifest holds. */
+function folderManifest(folder: string): { name: string | null; version: string | null } {
+  let raw: unknown;
+  try { raw = parseDocument(readFileSync(join(folder, "meta.yaml"), "utf8")).toJS(); }
+  catch { return { name: null, version: null }; }
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return { name: null, version: null };
+  const { org, name, version } = raw as Record<string, unknown>;
+  const full = typeof org === "string" && typeof name === "string" ? `${org}/${name}` : null;
+  return {
+    name: full !== null && isPackageName(full) ? full : null,
+    version: typeof version === "string" && version.length > 0 ? version : null,
+  };
 }
 
 /** The reader's words for a folder your Personal records refuse as a
@@ -810,7 +861,7 @@ export class EnvironmentManager {
   private cloneState(key: string): CloneState {
     let state = this.clones.get(key);
     if (!state) {
-      state = { key, running: new Set(), conflicts: null, error: null, unexported: null };
+      state = { key, running: new Set(), conflicts: null, error: null, refused: null, unexported: null };
       this.clones.set(key, state);
     }
     return state;
@@ -986,6 +1037,7 @@ export class EnvironmentManager {
       if (blocked) {
         this.migrationBlocked.add(repository);
         this.cloneState(repository).error = message;
+        this.cloneState(repository).refused = null;
       } else {
         this.migrationBlocked.delete(repository);
         if (this.cloneState(repository).error === message) this.cloneState(repository).error = null;
@@ -1127,6 +1179,7 @@ export class EnvironmentManager {
       locked = readLockAt(lockPath);
     } catch (error) {
       state.error = unreadablePhrase(reading, error);
+      state.refused = null;
       this.announce(state.key);
       if (strict) throw new CoreError("invalid_request", state.error);
       return;
@@ -1148,10 +1201,14 @@ export class EnvironmentManager {
     const needsResolve = mode === "resolve" || (mode === "auto" && lock === null && read !== null);
     if (needsResolve && read !== null) {
       step("resolving");
+      // A version index the registry refused reads as no version; the
+      // names it refused are noted, so a resolution finding no version
+      // for them says they were refused (environments-14).
+      const unread = new Set<string>();
       let result: Awaited<ReturnType<typeof resolve>>;
       try {
         result = await resolve({
-          requests: read.requests, requestsText: read.text, registry, pathRoot, confined: this.isOwn(key), git: this.git, gitCredential: envGit.credential,
+          requests: read.requests, requestsText: read.text, registry: noteRefusals(registry, unread), pathRoot, confined: this.isOwn(key), git: this.git, gitCredential: envGit.credential,
           // A package resolving to the release its lock records keeps the
           // registry recorded there (environments-5).
           ...(locked ? { previous: locked.lock } : {}),
@@ -1161,6 +1218,7 @@ export class EnvironmentManager {
         const changed = this.changedSince(requestsPath, read.version, lockPath, lockVersion);
         if (changed) return this.overtaken(changed, strict);
         state.error = phrase;
+        state.refused = refusedBy(error);
         if (strict) throw new CoreError("invalid_request", state.error);
         return;
       }
@@ -1172,6 +1230,8 @@ export class EnvironmentManager {
         state.error = !target.legacy && (await this.signedInAtRegistry(target.origin)) === false
           ? i18n._({ id: "Sign in to {registry} to see private versions", comment: "No version fits every package while signed out at the registry, whose private versions Spex cannot see; {registry} is its display name", values: { registry: this.registryName(target.origin) } })
           : null;
+        const refused = result.conflicts.map((conflict) => conflict.name).filter((name) => unread.has(name));
+        state.refused = state.error !== null && refused.length > 0 ? refused : null;
         if (strict) throw new CoreError("invalid_request", this.conflictPhrase(this.shownConflicts(result.conflicts, read.requests, envGit)));
         return;
       }
@@ -1183,6 +1243,7 @@ export class EnvironmentManager {
       } catch (error) {
         if (error instanceof VersionConflictError) return this.overtaken(error, strict);
         state.error = await this.failure("resolve", error, envGit, read.requests, target.origin);
+        state.refused = null;
         if (strict) throw new CoreError("invalid_request", state.error);
         return;
       }
@@ -1227,6 +1288,7 @@ export class EnvironmentManager {
         const changed = this.changedSince(requestsPath, read?.version ?? null, lockPath, lockVersion);
         if (changed) return this.overtaken(changed, strict);
         state.error = null;
+        state.refused = null;
         if (strict) {
           let current: string | null = null;
           try { current = readRequestsAt(requestsPath)?.text ?? null; } catch { /* unreadable reads as changed */ }
@@ -1252,7 +1314,10 @@ export class EnvironmentManager {
       // A success clears a failure only while its files still stand as
       // it read and wrote them; its exports stand either way.
       obsolete = this.changedSince(requestsPath, read?.version ?? null, lockPath, lockVersion);
-      if (!obsolete) state.error = null;
+      if (!obsolete) {
+        state.error = null;
+        state.refused = null;
+      }
     } catch (error) {
       // The stale lock's refusal above is the strict caller's reply alone.
       if (error instanceof CoreError) throw error;
@@ -1261,6 +1326,7 @@ export class EnvironmentManager {
       const changed = this.changedSince(requestsPath, read?.version ?? null, lockPath, lockVersion);
       if (changed) return this.overtaken(changed, strict);
       state.error = phrase;
+      state.refused = refusedBy(error);
       if (strict) throw new CoreError("invalid_request", state.error);
       return;
     }
@@ -1308,6 +1374,12 @@ export class EnvironmentManager {
     if (isPathRequest(request) && typeof request.path === "string" && !isInsidePath(request.path)) throw this.outside(request.path, this.isOwn(key));
     const issues = requestIssues(name, request);
     if (issues.length > 0) throw new CoreError("invalid_request", listed(issues.map((issue) => issue.message)));
+    await this.refusePath(key, request);
+  }
+
+  /** A request by path's own refusals (environments-15): no path root
+   * here, a path outside it, or one your own group's clone refuses. */
+  private async refusePath(key: string, request: Request): Promise<void> {
     if (!isPathRequest(request)) return;
     const root = this.pathRoot(key);
     if (root === null) throw new CoreError("invalid_request", this.noFolderPhrase(key));
@@ -1361,13 +1433,56 @@ export class EnvironmentManager {
   /** `environment.request` (environments-15): refused before any write;
    * written; then resolved and installed, the outcome broadcast. The
    * returned promise settles once installed; the reply does not wait. */
-  async request(key: string, name: string, request: Request, strict = false): Promise<{ done: Promise<void> }> {
+  async request(key: string, name: string | undefined, request: Request, strict = false): Promise<{ done: Promise<void> }> {
     if (strict && this.stopped) throw stoppingError();
     const { root } = this.environmentOf(key);
-    await this.refuseRequest(key, name, request);
-    await this.writeRequest(key, root, name, request);
+    const taken = await this.taken(key, name, request);
+    if (taken.name === null) throw this.namesNone(request);
+    await this.writeRequest(key, root, taken.name, request);
     this.announce(key);
     return { done: this.settle(key, "resolve", strict) };
+  }
+
+  /** A dry run of `environment.request` (environments-15): its
+   * refusals, then the name it takes and the version its folder's
+   * `meta.yaml` gives, nothing written. */
+  async previewRequest(key: string, name: string | undefined, request: Request): Promise<{ name: string | null; version: string | null }> {
+    this.environmentOf(key);
+    return this.taken(key, name, request);
+  }
+
+  /** The name a request takes and the version its folder gives, after
+   * its refusals (environments-15): the name sent, else — for a request
+   * by path — the one its folder's `meta.yaml` gives, null where none
+   * reads; a request from the registry or Git names its package. */
+  private async taken(key: string, name: string | undefined, request: Request): Promise<{ name: string | null; version: string | null }> {
+    const read = (): { name: string | null; version: string | null } => {
+      const root = isPathRequest(request) ? this.pathRoot(key) : null;
+      return root === null || !isPathRequest(request) ? { name: null, version: null } : folderManifest(resolvePath(root, request.path));
+    };
+    if (name !== undefined) {
+      await this.refuseRequest(key, name, request);
+      return { name, version: read().version };
+    }
+    if (!isPathRequest(request)) throw this.namesNone(request);
+    await this.refusePath(key, request);
+    const found = read();
+    if (found.name !== null) await this.refuseRequest(key, found.name, request);
+    return found;
+  }
+
+  /** A request naming no package whose folder names none either. */
+  private namesNone(request: Request): CoreError {
+    return new CoreError("invalid_request", isPathRequest(request)
+      ? i18n._({
+        id: "{path} holds no meta.yaml naming a package",
+        comment: "Refusal: a package added by its folder names no package and the folder's meta.yaml names none either; {path} is the folder; keep meta.yaml as it is",
+        values: { path: request.path },
+      })
+      : i18n._({
+        id: "Name the package to add",
+        comment: "Refusal: a package added from the registry or Git must be named, as org/name",
+      }));
   }
 
   /** `environment.remove` (environments-15). */
@@ -1734,9 +1849,11 @@ export class EnvironmentManager {
         const receipt: PublishedPackage = { instance: preview.instance, name: published.name, version: published.version, url: `${target.origin}/${published.name}` };
         state.published = { name: receipt.name, version: receipt.version, url: receipt.url };
         state.error = null;
+        state.refused = null;
         return receipt;
       } catch (error) {
         state.error = this.publishFailure(error, target.origin, preview.name, preview.version);
+        state.refused = null;
         if (strict) throw new CoreError("invalid_request", state.error);
         return undefined;
       }
@@ -1957,6 +2074,10 @@ export class EnvironmentManager {
       conflicts: conflicts ? this.shownConflicts(conflicts, requests, envGit) : null,
       busy: this.busyOf(key),
       error,
+      // Which packages the standing failure's registry refused, as for
+      // want of a grant: listed only while that failure is the one shown
+      // (environments-14).
+      ...(error !== null && error === clone.error && clone.refused ? { refused: [...clone.refused] } : {}),
       published: clone.published ? { ...clone.published } : null,
       pathRoot,
       instance,

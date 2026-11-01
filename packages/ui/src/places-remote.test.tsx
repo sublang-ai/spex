@@ -367,8 +367,17 @@ const callsOf = (fake: Fake, type: string): unknown[] =>
 const credentialCommands = (fake: Fake): string[] =>
   fake.command.mock.calls.map(([type]) => type).filter((type) => type.startsWith("credential."));
 
-function goTo(surface: "Settings" | "Playbooks" | "Space"): void {
+function goTo(surface: "Settings" | "Space"): void {
   fireEvent.click(document.querySelector<HTMLElement>(`[data-surface="${surface}"]`)!);
+}
+
+/** Show a place's project with one of its pinned tabs: the tabs stand
+ * at the project's place (run-view-168, DR-172). */
+async function projectTab(rowTestId: string, tab: "playbooks" | "packages"): Promise<void> {
+  fireEvent.click(screen.getByTestId(rowTestId));
+  await settle();
+  fireEvent.click(screen.getByTestId(`workspace-tab-${tab}`));
+  await settle();
 }
 
 function pick(label: string): void {
@@ -539,40 +548,46 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
       environment({ repository: String(fields?.repository), pathRoot: "/home/member/projects/gpu" });
     alphaStore.setState({ currentProjectId: "p2" });
     render(<App />);
-    goTo("Playbooks");
-    await settle();
+    await projectTab("sidebar-project-p1", "packages");
+    const section = () => within(screen.getByTestId("packages-project"));
 
     // This computer: the folder request offers the shell's picker.
-    fireEvent.click(await screen.findByTestId("add-from-folder"));
-    const here = screen.getByTestId("folder-request");
+    fireEvent.click(await section().findByTestId("add-open"));
+    fireEvent.click(section().getByTestId("add-from-folder"));
+    const here = section().getByTestId("folder-request");
     expect(here.textContent).toContain("Folder inside /work/home-project");
-    expect(within(here).getByTestId("folder-request-pick").textContent).toBe("Pick folder");
+    expect(within(here).getByTestId("folder-request-pick").textContent).toBe("Choose folder…");
 
-    pick("build-box");
-    await settle();
+    // The seat's project, its Packages tab at the seat.
+    await projectTab(`sidebar-project-p2@${ALPHA.place}`, "packages");
+    fireEvent.click(await section().findByTestId("add-open"));
     await waitFor(() =>
-      expect((screen.getByTestId("add-from-folder") as HTMLButtonElement).disabled).toBe(false),
+      expect((section().getByTestId("add-from-folder") as HTMLButtonElement).disabled).toBe(false),
     );
-    fireEvent.click(screen.getByTestId("add-from-folder"));
-    const there = screen.getByTestId("folder-request");
+    fireEvent.click(section().getByTestId("add-from-folder"));
+    const there = section().getByTestId("folder-request");
     expect(there.textContent).toContain("Folder inside /home/member/projects/gpu");
     // [run-view-171] [run-view-169] a remote place's environment folder
     // request offers no folder picker: the shell's reads this
     // computer's disk.
     expect(within(there).queryByTestId("folder-request-pick")).toBeNull();
-    expect(within(there).queryByText("Pick folder")).toBeNull();
+    expect(within(there).queryByText("Choose folder…")).toBeNull();
     expect(pickDirectory).not.toHaveBeenCalled();
     // [run-view-171] no path on this computer: the one folder field
     // names the folder relative to its project, and the request sent to
     // the seat's core alone carries that relative name.
+    fireEvent.change(within(there).getByTestId("folder-request-path"), { target: { value: "spex-packages/triage" } });
+    // The seat's core reads the folder's meta.yaml, here naming no
+    // package, so the name is asked for (playbook-library-92).
+    await within(there).findByTestId("folder-request-name");
     const fields = pathEntries(there).map((field) => field.getAttribute("data-testid"));
-    expect(fields).toEqual(["folder-request-name", "folder-request-path"]);
+    expect(fields).toEqual(["folder-request-path", "folder-request-name"]);
     expect(there.textContent).not.toContain("/work/");
     fireEvent.change(within(there).getByTestId("folder-request-name"), { target: { value: "acme/triage" } });
-    fireEvent.change(within(there).getByTestId("folder-request-path"), { target: { value: "spex-packages/triage" } });
     fireEvent.click(within(there).getByTestId("folder-request-submit"));
     await settle();
     expect(callsOf(alpha, "environment.request")).toEqual([
+      { repository: expect.any(String), request: { kind: "path", path: "spex-packages/triage" }, dryRun: true },
       { repository: expect.any(String), name: "acme/triage", request: { kind: "path", path: "spex-packages/triage" } },
     ]);
     expect(callsOf(local, "environment.request")).toEqual([]);
@@ -600,16 +615,15 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
       draftSources: { triage: null },
     });
     render(<App />);
-    goTo("Playbooks");
-    await settle();
+    await projectTab("sidebar-project-p1", "playbooks");
 
     // This computer: Paste takes text, a path, or a picked file.
     fireEvent.click(within(screen.getByTestId("source-empty")).getByTestId("source-paste"));
     expect(screen.getByTestId("paste-path")).toBeTruthy();
     expect(screen.getByTestId("paste-pick").textContent).toBe("Pick file");
 
-    pick("build-box");
-    await settle();
+    // The seat's project, its Playbooks tab at the seat.
+    await projectTab(`sidebar-project-p2@${ALPHA.place}`, "playbooks");
     // [run-view-171] [run-view-169] a remote place's draft source offers
     // no picked file and no pasted path: pasted text alone.
     fireEvent.click(within(screen.getByTestId("source-empty")).getByTestId("source-paste"));

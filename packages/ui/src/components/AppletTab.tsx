@@ -6,15 +6,18 @@
 // frame there, sandboxed so the page's origin is opaque — it reaches
 // neither this page nor its token, keeps no storage, and reads only its
 // capability's own paths — and sent no referrer, so it learns nothing
-// of this page's address. One line above names the spec package and
-// version and offers Reload; a refusal shows its cause in the frame's
-// place.
+// of this page's address. One line above reads "from <package>
+// <version>", opening the package's row on the project's Packages tab
+// (applets-1, DR-172), and offers Reload; a refusal shows its cause in
+// the frame's place.
 
 import { useCallback, useEffect, useState } from "react";
 
 import type { SpexClient } from "../lib/client.js";
 import type { AppletTab as AppletTabEntry } from "../lib/applets.js";
 import { endpointOrigin } from "../lib/applets.js";
+import { openPackageRow } from "../lib/package-row.js";
+import { usePlaceStore } from "../state/place-context.js";
 import { i18n } from "../i18n.js";
 import { Icon } from "./Icon.js";
 
@@ -36,6 +39,7 @@ export function AppletTab({
   coreUrl: string | undefined;
   connected: boolean;
 }) {
+  const store = usePlaceStore();
   const [path, setPath] = useState<string>();
   const [error, setError] = useState<string>();
   // Each Reload loads the frame again at a fresh address the core reads
@@ -66,23 +70,35 @@ export function AppletTab({
 
   const origin = endpointOrigin(coreUrl);
   const source = path && origin ? `${origin}${path}${loads > 0 ? `?r=${loads}` : ""}` : undefined;
+  // The tab names the applet; the line names where it comes from, one
+  // whole phrase per case (localization-4).
   const label = applet.version
     ? i18n._({
-        id: "{name} {version} · applet {id}",
-        comment: "the line above an applet's frame: the spec package and version it comes from, then the applet's id",
-        values: { name: applet.package, version: applet.version, id: applet.id },
+        id: "from {name} {version}",
+        comment: "the line above an applet's page: the package and version it comes from; it opens the package's row on the Packages tab",
+        values: { name: applet.package, version: applet.version },
       })
     : i18n._({
-        id: "{name} · applet {id}",
-        comment: "the line above an applet's frame, for a spec package with no version: its name, then the applet's id",
-        values: { name: applet.package, id: applet.id },
+        id: "from {name}",
+        comment: "the line above an applet's page, for a package with no version yet: the package it comes from; it opens the package's row on the Packages tab",
+        values: { name: applet.package },
       });
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="applet-tab">
       <div className="flex items-center gap-2 border-b border-neutral-200 px-3 py-1.5 text-xs text-neutral-600 dark:border-neutral-800 dark:text-neutral-400">
-        <span className="min-w-0 flex-1 truncate" data-testid="applet-source">
-          {label}
+        <span className="min-w-0 flex-1 truncate">
+          <button
+            type="button"
+            data-testid="applet-source"
+            title={i18n._({ id: "Open its package", comment: "tooltip of an applet's from-line: shows the package's row on the Packages tab" })}
+            onClick={() =>
+              openPackageRow(store, project, applet.package, applet.repository === project ? "project" : "personal")
+            }
+            className="max-w-full truncate text-left hover:text-brand-600 hover:underline dark:hover:text-brand-300"
+          >
+            {label}
+          </button>
         </span>
         <button
           type="button"

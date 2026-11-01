@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The place selector (run-view-168, DR-133): Settings, Playbooks,
-// Groups and Environments show one place at a time, and the selector
-// names it — "This computer", or a seat's server's name. Picking a
-// place switches which core's store those surfaces read, so a seat's
-// Settings, Playbooks, Groups and Environments are the seat's own.
+// The place selector (run-view-168, DR-133, DR-172): Settings and
+// Space show one place at a time, and the selector names it — "This
+// computer", or a seat's server's name. Picking a place switches which
+// core's store those surfaces read, so a seat's Settings and Space are
+// the seat's own; a project's tabs stand at the project's place.
 
 import { i18n } from "../i18n.js";
 import { placeLabel, type AppStore } from "../state/store.js";
@@ -30,7 +30,7 @@ export function PlaceSelector({
         data-testid="place-selector"
         aria-label={i18n._({
           id: "Place",
-          comment: "the selector of where Settings, Playbooks, Groups and Environments are shown: This computer or a team server",
+          comment: "the selector of where Settings and Space are shown: This computer or a team server",
         })}
         value={shown.place.key}
         onChange={(event) => {

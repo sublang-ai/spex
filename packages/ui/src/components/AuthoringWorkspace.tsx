@@ -326,7 +326,7 @@ export function AuthoringWorkspace({
           className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
         >
           <span aria-hidden="true">‹</span>
-          {i18n._({ id: "Playbooks", comment: "the surface listing every playbook" })}
+          {i18n._({ id: "Playbooks", comment: "back to the project's Playbooks tab, listing its playbooks" })}
         </button>
         <span className="min-w-0 truncate font-mono font-semibold" title={draft.id}>
           {draft.id}
@@ -462,14 +462,16 @@ export function AuthoringWorkspace({
                     disabled={!enabled[entry.key]}
                     title={enabled[entry.key] ? entry.hint : i18n._({ id: "Compiles first", comment: "why a tab is disabled: nothing to show until a compile succeeds" })}
                     onClick={() => setTab(entry.key)}
-                    className={`inline-flex min-h-6 items-center gap-1 rounded-md px-2 text-xs ${
+                    className={`inline-flex min-h-6 items-center gap-1 rounded-md px-1.5 text-xs @xs:px-2 ${
                       on
                         ? "bg-brand-100 font-medium text-brand-700 dark:bg-brand-950 dark:text-brand-300"
                         : "text-neutral-600 hover:bg-neutral-100 disabled:opacity-40 disabled:hover:bg-transparent dark:text-neutral-300 dark:hover:bg-neutral-800"
                     }`}
                   >
-                    {/* Below @xs the tab is its icon and tooltip; the
-                        accessible name never changes (DR-041 §9). */}
+                    {/* Below @xs the tab is its icon and tooltip, its
+                        padding tightened so the strip keeps one line in
+                        the narrowest pane beneath the project's tabs;
+                        the accessible name never changes (DR-041 §9). */}
                     <Icon name={entry.icon} className="h-3.5 w-3.5 @xs:hidden" />
                     <span className="hidden @xs:inline">{label}</span>
                     {dot ? (

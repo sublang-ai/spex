@@ -83,7 +83,8 @@ export interface CaptainHomeProps {
   /** Go to a surface at the place this home shows (run-view-168):
    * the server form's "Open Space" opens Space there (run-view-174),
    * and the local form's "Sign in to your Space" the Space surface's
-   * sign-in (run-view-172). */
+   * sign-in (run-view-172); "Playbooks" opens the project's Playbooks
+   * tab (DR-172). */
   onNavigate: (surface: "Settings" | "Playbooks" | "Space") => void;
   /** Apply a merge patch to the Captain's block (captain.set). */
   onSaveCaptain: (patch: AgentPatch) => Promise<unknown>;
@@ -625,7 +626,7 @@ export function CaptainHome(props: CaptainHomeProps) {
                     : specState === "missing"
                       ? i18n._("No project specs yet")
                       : specState === "empty"
-                        ? i18n._("No spec packages yet")
+                        ? i18n._({ id: "No specs yet", comment: "the start view's line: the project's specs folder holds no spec yet" })
                         : specState === "legacy"
                           ? i18n._("Specs use an older format")
                           : specState === "error"
@@ -820,9 +821,9 @@ export function CaptainHome(props: CaptainHomeProps) {
               activeIndex={Math.min(slashIndex, slash.length - 1)}
               onPick={insertCommand}
               onCompileNew={() => {
-                // The Library lands on its id field (playbook-library-51),
-                // at the place shown here: the navigation opens Playbooks
-                // there (run-view-168).
+                // The project's Playbooks tab lands on its id field
+                // (playbook-library-51), at the place shown here
+                // (run-view-168, DR-172).
                 store.getState().requestNewPlaybook();
                 props.onNavigate("Playbooks");
               }}
@@ -988,8 +989,10 @@ export function CaptainHome(props: CaptainHomeProps) {
                   />
                 </span>
               ) : (
-                <button type="button" onClick={() => props.onNavigate("Playbooks")} className="font-medium text-brand-700 hover:underline dark:text-brand-300">
-                  {i18n._("No playbooks available — open Playbooks")}
+                // The way to the project's Playbooks tab, as a key phrase
+                // (DR-069, DR-172).
+                <button type="button" data-testid="start-no-playbooks" onClick={() => props.onNavigate("Playbooks")} className="font-medium text-brand-700 hover:underline dark:text-brand-300">
+                  {i18n._({ id: "No playbooks available", comment: "the task start's link to the project's Playbooks tab while no playbook is enabled" })}
                 </button>
               )}
             </div>

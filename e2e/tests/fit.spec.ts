@@ -13,14 +13,29 @@
 // journey (space-43) are the home of that evidence; the measurement
 // itself lives in ../src/fit.
 
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   appendHistorySession,
+  makeRelease,
   seedDemoProject,
 } from "@sublang/spex-core/testing";
 import type { Locator, Page } from "@playwright/test";
 
-import { test, expect, open, nav, runTurn, send, type App } from "../src/harness";
+import {
+  test,
+  expect,
+  open,
+  nav,
+  addPackages,
+  packagesSection,
+  registryChooser,
+  projectTab,
+  projectTabControl,
+  runTurn,
+  send,
+  type App,
+} from "../src/harness";
 import {
   HEIGHTS,
   OPEN_RAIL_MIN_WIDTH,
@@ -301,6 +316,13 @@ async function sweepQueueFit(
   }
 }
 
+/** The folder package the Packages tab is measured with. */
+const FIT_PACKAGE = "acme/measured-kit";
+const FIT_PACKAGE_PATH = "spex-packages/acme/measured-kit";
+/** The project's spex.yaml before the Packages tab's measurement
+ * changed it. */
+let fitRequests: string | undefined;
+
 interface Surface {
   name: string;
   /** Bring the surface up once. */
@@ -502,9 +524,69 @@ async function assertSurfaceMatrix(
       },
     },
     {
-      name: "Playbooks",
-      show: () => nav(page, "Playbooks").click(),
-      ready: () => expect(page.getByTestId("playbooks-enabled")).toBeVisible(),
+      // The project's Playbooks tab, a view of the project (run-view-58).
+      name: "Playbooks tab",
+      show: async () => {
+        await projectTab(page, "Playbooks");
+      },
+      ready: async () => {
+        await expect(projectTabControl(page, "Playbooks")).toHaveAttribute("aria-selected", "true");
+        await expect(page.getByTestId("playbooks-enabled")).toBeVisible();
+      },
+    },
+    {
+      // The project's Packages tab: the project's packages and, beneath
+      // them, your own group's (playbook-library-92) — a full folder
+      // package row with its name, version, source glyph, what it
+      // provides, its standing and its overflow, expanded to its lines;
+      // the chips "spex.yaml, spex.lock not committed" and "spex.yaml
+      // changed" with Update; each heading's built-in line.
+      name: "Packages tab",
+      show: async () => {
+        await makeRelease(join(app.projectDir, FIT_PACKAGE_PATH), {
+          format: 2, org: "acme", name: "measured-kit", version: "0.1.0", description: "A kit to measure", license: "Apache-2.0",
+          artifacts: {
+            "measured-reader": { kind: "skill", language: "en" },
+            "measured-guide": { kind: "skill", language: "en" },
+          },
+        }, {
+          "skills/en/measured-reader/SKILL.md": "---\nname: measured-reader\ndescription: Read a note\n---\nRead the note.\n",
+          "skills/en/measured-guide/SKILL.md": "---\nname: measured-guide\ndescription: Guide a reader\n---\nGuide the reader.\n",
+        });
+        await app.core.command("environment.request", {
+          repository: app.projectId!,
+          name: FIT_PACKAGE,
+          request: { kind: "path", path: FIT_PACKAGE_PATH },
+        });
+        await projectTab(page, "Packages");
+        const row = packagesSection(page, "project").getByTestId(`env-package-${FIT_PACKAGE}`);
+        await expect(row.getByTestId(`env-installed-${FIT_PACKAGE}`)).toHaveText("Installed", { timeout: 30_000 });
+        // spex.yaml edited past its lock: the tab, read again, wears
+        // "spex.yaml changed" with Update.
+        fitRequests = readFileSync(join(app.projectDir, "spex.yaml"), "utf8");
+        writeFileSync(join(app.projectDir, "spex.yaml"), `${fitRequests}# measured\n`);
+        await projectTab(page, "Playbooks");
+        await projectTab(page, "Packages");
+        await row.getByTestId(`env-expand-${FIT_PACKAGE}`).click();
+      },
+      ready: async () => {
+        await expect(projectTabControl(page, "Packages")).toHaveAttribute("aria-selected", "true");
+        const project = packagesSection(page, "project");
+        const row = project.getByTestId(`env-package-${FIT_PACKAGE}`);
+        await expect(row.getByTestId(`env-provides-${FIT_PACKAGE}`)).toHaveText("2 skills");
+        await expect(row.getByTestId(`env-more-${FIT_PACKAGE}`)).toBeVisible();
+        await expect(row.getByTestId(`env-artifacts-${FIT_PACKAGE}`)).toBeVisible();
+        await expect(project.getByTestId("environment-uncommitted")).toBeVisible();
+        await expect(project.getByTestId("environment-update")).toBeVisible();
+        // The built-in playbooks stand as each heading's one quiet line.
+        for (const whose of ["project", "personal"] as const) {
+          await expect(packagesSection(page, whose).getByTestId("environment-builtin")).toBeVisible();
+        }
+      },
+      // spex.yaml as it was, so no later surface reads it changed.
+      settle: async () => {
+        if (fitRequests !== undefined) writeFileSync(join(app.projectDir, "spex.yaml"), fitRequests);
+      },
     },
     {
       // The authoring workspace at rest after a compile: the thread
@@ -512,6 +594,7 @@ async function assertSurfaceMatrix(
       // and the compiled tabs enabled (playbook-library-52).
       name: "Playbook draft",
       show: async () => {
+        await projectTab(page, "Playbooks");
         const idField = page.getByTestId("new-playbook-id");
         // The project's defaults fill Org and License (playbook-library-51).
         await expect(page.getByTestId("new-playbook-license")).toHaveValue("Apache-2.0");
@@ -1376,6 +1459,125 @@ test.describe("chrome the sweep does not open", () => {
       }
     }
     expect(defects, defects.join("\n")).toEqual([]);
+  });
+});
+
+test.describe("the strip's pinned tabs at the narrowest width", () => {
+  test.use({ appOptions: { project: true } });
+
+  test("run-view-105: at 320px the new-task control, Specs, Playbooks, Packages and Overview each stand whole in the strip", async ({
+    page,
+    app,
+  }) => {
+    await open(page, app);
+    await setRail(page, false);
+    await page.setViewportSize({ width: 320, height: TALL });
+    const strip = page.getByRole("tablist", { name: "Sessions and project views" });
+    await expect(strip).toBeVisible();
+    // The strip's five pinned controls, in their order (run-view-58).
+    const controls = [
+      page.getByRole("tab", { name: "New task", exact: true }),
+      page.getByTestId("workspace-tab-specs"),
+      projectTabControl(page, "Playbooks"),
+      projectTabControl(page, "Packages"),
+      page.getByTestId("workspace-tab-overview"),
+    ];
+    /** Where a control stands now: whole inside the strip and every
+     * box that clips it, and inside the window. */
+    const standing = (control: (typeof controls)[number]) =>
+      control.evaluate((element) => {
+        const own = element.getBoundingClientRect();
+        const clips = [element.closest('[role="tablist"]')!.getBoundingClientRect()];
+        for (let at = element.parentElement; at && at !== document.body; at = at.parentElement) {
+          if (getComputedStyle(at).overflowX !== "visible") clips.push(at.getBoundingClientRect());
+        }
+        return {
+          name: (element.getAttribute("data-testid") ?? element.textContent ?? "").trim(),
+          left: own.left,
+          right: own.right,
+          whole:
+            own.width > 0 &&
+            own.left >= -0.5 &&
+            own.right <= window.innerWidth + 0.5 &&
+            clips.every((clip) => own.left >= clip.left - 0.5 && own.right <= clip.right + 0.5),
+        };
+      });
+    for (const [index, control] of controls.entries()) {
+      // Each is reached by the strip's own sideways scroll where the
+      // controls overflow it (run-view-48).
+      await control.scrollIntoViewIfNeeded();
+      await expect(control).toBeVisible();
+      const here = await standing(control);
+      expect(here.whole, `${here.name} stands whole in the strip at 320px`).toBe(true);
+      // No two overlap: every neighbour standing whole beside it now
+      // keeps clear of it.
+      for (const other of [controls[index - 1], controls[index + 1]]) {
+        if (!other) continue;
+        const there = await standing(other);
+        if (!there.whole) continue;
+        const apart = there.right <= here.left + 0.5 || there.left >= here.right - 0.5;
+        expect(apart, `${there.name} overlaps ${here.name} at 320px`).toBe(true);
+      }
+      // The page itself never scrolls sideways (run-view-106).
+      expect(
+        await page.evaluate(
+          () => window.scrollX === 0 && document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1,
+        ),
+        `the page scrolls sideways with ${here.name} in view`,
+      ).toBe(true);
+    }
+  });
+});
+
+test.describe("the Packages tab's popovers at the narrowest width", () => {
+  test.use({ appOptions: { project: true } });
+
+  test("run-view-105, playbook-library-92: at 320px each heading's Add… on its three tabs, its registry chooser and a row's overflow stand inside the Packages tab", async ({
+    page,
+    app,
+  }) => {
+    await makeRelease(join(app.projectDir, FIT_PACKAGE_PATH), {
+      format: 2, org: "acme", name: "measured-kit", version: "0.1.0", description: "A kit to measure", license: "Apache-2.0",
+      artifacts: { "measured-reader": { kind: "skill", language: "en" } },
+    }, { "skills/en/measured-reader/SKILL.md": "---\nname: measured-reader\ndescription: Read a note\n---\nRead the note.\n" });
+    await app.core.command("environment.request", { repository: app.projectId!, name: FIT_PACKAGE, request: { kind: "path", path: FIT_PACKAGE_PATH } });
+    await open(page, app);
+    await setRail(page, false);
+    await page.setViewportSize({ width: 320, height: TALL });
+    await projectTab(page, "Packages");
+    const tab = page.getByTestId("packages-tab");
+    await expect(packagesSection(page, "project").getByTestId(`env-package-${FIT_PACKAGE}`)).toBeVisible({ timeout: 30_000 });
+    /** A popup stands inside the tab's box and the window, the page not
+     * scrolling sideways (DR-041, run-view-106). */
+    const inside = async (popup: Locator, what: string) => {
+      await expect(popup, what).toBeVisible();
+      const box = await tab.boundingBox();
+      const own = await popup.boundingBox();
+      if (!box || !own) throw new Error(`${what} has no box`);
+      expect(own.x, `${what} starts inside the Packages tab at 320px`).toBeGreaterThanOrEqual(box.x - 0.5);
+      expect(own.x + own.width, `${what} ends inside the Packages tab at 320px`).toBeLessThanOrEqual(box.x + box.width + 0.5);
+      expect(own.x + own.width, `${what} ends inside the window at 320px`).toBeLessThanOrEqual(320 + 0.5);
+      expect(
+        await page.evaluate(() => window.scrollX === 0 && document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1),
+        `the page scrolls sideways with ${what} open`,
+      ).toBe(true);
+    };
+    for (const whose of ["project", "personal"] as const) {
+      const section = packagesSection(page, whose);
+      for (const name of ["Registry", "Folder", "Git"] as const) {
+        await addPackages(section, name);
+        await inside(section.getByTestId("add-packages"), `${whose} Add… on ${name}`);
+      }
+      await page.keyboard.press("Escape");
+      await expect(section.getByTestId("add-packages")).toHaveCount(0);
+      await registryChooser(section).click();
+      await inside(section.getByTestId("registry-chooser-menu"), `${whose} registry chooser`);
+      await page.keyboard.press("Escape");
+      await expect(section.getByTestId("registry-chooser-menu")).toHaveCount(0);
+    }
+    const row = packagesSection(page, "project").getByTestId(`env-package-${FIT_PACKAGE}`);
+    await row.getByTestId(`env-more-${FIT_PACKAGE}`).click();
+    await inside(row.getByTestId(`env-more-${FIT_PACKAGE}-menu`), "a package row's overflow");
   });
 });
 

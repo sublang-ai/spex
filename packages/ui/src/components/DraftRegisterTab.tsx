@@ -9,15 +9,19 @@
 // a new lane `dev.<role>` carrying the session's agent block, editable
 // in place as a built-in's is; a proposal that names a role the entry
 // lacks is shown as a mismatch with the derived roles authoritative.
-// Nothing is written until Enable. Beneath the form, Publish uploads
-// the spec package under development after an inline summary of what
-// it would upload (playbook-library-93).
+// Nothing is written until Enable, and no caption explains the write;
+// a held Enable says what it waits for in its tooltip. Beneath the
+// form, Publish uploads the package under development after an inline
+// summary of what it would upload, beside "Its package", which opens
+// the package's row on the Packages tab once it has one
+// (playbook-library-93, DR-172).
 
 import { useEffect, useRef, useState } from "react";
 import type {
   AgentBlockInput,
   AgentSummary,
   DraftInfo,
+  EnvironmentState,
   ReadinessEntry,
   SessionPlayerSummary,
 } from "@sublang/spex-core/protocol";
@@ -34,6 +38,7 @@ import {
   newPlayerId,
 } from "../lib/drafts.js";
 import { ownRepositoryKey, publishTargetOf } from "../lib/environments.js";
+import { openPackageRow } from "../lib/package-row.js";
 import { i18n } from "../i18n.js";
 import { AgentChip } from "./AgentChip.js";
 import { AgentEditorPopover } from "./AgentEditor.js";
@@ -206,6 +211,19 @@ export function DraftRegisterTab({
   }, [connected, environmentHeld, draft.projectId, loadEnvironment]);
   const ownListed = store((state) => state.playbookLists?.own);
   const ownKey = ownRepositoryKey(space, ownListed);
+  // The package has a row on the Packages tab once an environment the
+  // store holds lists it: the project's, else your own group's
+  // (playbook-library-93).
+  const packageName = draft.package ?? draft.id;
+  const ownEnvironment = store((state) => (ownKey !== undefined ? state.environments[ownKey] : undefined));
+  const lists = (held: EnvironmentState | undefined): boolean =>
+    held !== undefined &&
+    (held.requests[packageName] !== undefined || held.packages.some((entry) => entry.name === packageName));
+  const packageSection: "project" | "personal" | undefined = lists(environment)
+    ? "project"
+    : ownKey !== undefined && ownKey !== draft.projectId && lists(ownEnvironment)
+      ? "personal"
+      : undefined;
   const readinessByAdapter = new Map(readiness.map((entry) => [entry.adapter as string, entry]));
   const resolved = resolveRegisterForm(draft, source, players, form);
   const current: DraftRegisterForm = form ?? { players: {}, newPlayers: {} };
@@ -308,18 +326,25 @@ export function DraftRegisterTab({
           />
         </label>
         <label className="flex flex-col gap-0.5 @md:col-span-2">
-          <span className="text-xs text-neutral-500">{i18n._("Enable in")}</span>
+          <span className="text-xs text-neutral-500">
+            {i18n._({ id: "Enable for", comment: "field of the Enable form: the project, or Personal for every project of yours" })}
+          </span>
           <select
             data-testid="register-repository"
             value={resolved.repository}
             onChange={(event) => onForm({ ...current, repository: event.target.value })}
             className={INPUT_CLASS}
           >
-            <option value={draft.projectId}>
-              {i18n._("{project} — the project", { project: project?.name ?? draft.projectId })}
-            </option>
+            {/* The project by its name, the default; Personal for every
+                project of yours (playbook-library-61). */}
+            <option value={draft.projectId}>{project?.name ?? draft.projectId}</option>
             {ownKey && ownKey !== draft.projectId ? (
-              <option value={ownKey}>{i18n._({ id: "Your own group", comment: "switch: show your own group's playbooks" })}</option>
+              <option value={ownKey}>
+                {i18n._({
+                  id: "Personal (every project of yours)",
+                  comment: "a choice of the Enable form's Enable for: your Personal config, read in every project of yours",
+                })}
+              </option>
             ) : null}
           </select>
         </label>
@@ -431,15 +456,22 @@ export function DraftRegisterTab({
         </div>
       ) : null}
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs text-neutral-500">
-          {complete
-            ? i18n._("Requests the spec package by path, then writes the playbook and any new player")
-            : i18n._("Every role needs a player, and the command and intent their words")}
-        </span>
         <button
           type="button"
           data-testid="register-submit"
           disabled={disabled}
+          // A held Enable says what it waits for; nothing explains what
+          // it writes (playbook-library-61, DR-069).
+          title={
+            !connected
+              ? i18n._({ id: "Not connected", comment: "why a control is held: the page has no core" })
+              : !complete
+                ? i18n._({
+                    id: "A player per role, a command and an intent",
+                    comment: "tooltip of the Enable form's held Enable: what it waits for",
+                  })
+                : undefined
+          }
           onClick={() => void register()}
           className="ml-auto rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-40"
         >
@@ -448,7 +480,20 @@ export function DraftRegisterTab({
             : i18n._({ id: "Enable", comment: "enable this playbook in this config" })}
         </button>
       </div>
-      <PublishControl repository={draft.projectId} name={draft.package ?? draft.id} path={draftPackagePath(draft)} target={publishTargetOf(environment, registryAccounts)} onNavigate={onNavigate} />
+      <div className="flex flex-col gap-1">
+        <PublishControl repository={draft.projectId} name={packageName} path={draftPackagePath(draft)} target={publishTargetOf(environment, registryAccounts)} onNavigate={onNavigate} />
+        {packageSection ? (
+          <button
+            type="button"
+            data-testid="register-package-link"
+            title={packageName}
+            onClick={() => openPackageRow(store, draft.projectId, packageName, packageSection)}
+            className="self-start text-xs text-brand-600 hover:underline dark:text-brand-300"
+          >
+            {i18n._({ id: "Its package", comment: "link beside Publish: opens this playbook's package row on the Packages tab" })}
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }

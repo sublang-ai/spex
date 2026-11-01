@@ -7,7 +7,7 @@
 // the built-in spec package — so a Playbook whose intent moved, or a
 // catalog key that drifted from it by a byte, fails here rather than
 // reading English to a Chinese team. With `zh` resolved, the
-// slash menu and the Playbooks surface each show
+// slash menu and the project's Playbooks tab each show
 // a built-in's intent as the catalog translates that English text,
 // while a team's own playbook keeps its own words — even words the
 // catalog happens to hold for a label of its own.
@@ -17,7 +17,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import type { CommandResults, PlaybookSummary } from "@sublang/spex-core/protocol";
 
 import { CaptainHome } from "./CaptainHome.js";
-import { LibrarySurface } from "./LibrarySurface.js";
+import { PlaybooksTab } from "./PlaybooksTab.js";
 import { activateLanguage, i18n } from "../i18n.js";
 import { setClientForTests, useAppStore } from "../state/store.js";
 import {
@@ -127,7 +127,7 @@ describe("localization-4: slash menu discovery", () => {
   });
 });
 
-describe("localization-4: the Playbooks surface", () => {
+describe("localization-4: the project's Playbooks tab", () => {
   const commandMock = vi.fn();
 
   beforeEach(() => {
@@ -165,7 +165,6 @@ describe("localization-4: the Playbooks surface", () => {
       projects: [PROJECT],
       currentProjectId: PROJECT_ID,
       space: home(),
-      playbooksSide: "own",
       playbookLists: undefined,
       environments: {},
       environmentErrors: {},
@@ -181,7 +180,7 @@ describe("localization-4: the Playbooks surface", () => {
 
   test("with zh resolved each built-in's card reads its intent in Chinese and the team's as given", async () => {
     activateLanguage("zh");
-    render(<LibrarySurface />);
+    render(<PlaybooksTab project={PROJECT} />);
     await vi.waitFor(() => expect(useAppStore.getState().playbookLists).toBeTruthy());
 
     for (const id of BUILTIN_IDS) {

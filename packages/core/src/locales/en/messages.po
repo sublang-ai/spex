@@ -517,6 +517,11 @@ msgstr "{path} holds {file}, which your Personal records never share — remove 
 msgid "{path} holds {held}, not {name} — fix its meta.yaml, or publish {held}"
 msgstr "{path} holds {held}, not {name} — fix its meta.yaml, or publish {held}"
 
+#. Refusal: a package added by its folder names no package and the folder's meta.yaml names none either; {path} is the folder; keep meta.yaml as it is
+#: src/environments.ts
+msgid "{path} holds no meta.yaml naming a package"
+msgstr "{path} holds no meta.yaml naming a package"
+
 #. Refusal: a Personal package's folder is one Spex itself keeps, such as sessions/ or skills/
 #: src/environments.ts
 msgid "{path} is a folder Spex keeps in your Personal records — pick another folder"
@@ -1913,6 +1918,11 @@ msgstr "Name the account's login at {host}"
 #: src/space-groups.ts
 msgid "Name the group"
 msgstr "Name the group"
+
+#. Refusal: a package added from the registry or Git must be named, as org/name
+#: src/environments.ts
+msgid "Name the package to add"
+msgstr "Name the package to add"
 
 #. A stopped transfer's message; {host} is the remote's host
 #. A stopped transfer's message; {host} is the remote's host
