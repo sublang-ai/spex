@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   each with one line saying what it is for. `spex <command> --help`,
   `-h` or `spex help <command>` prints a command's lines and every
   option it takes; `spex --version` (`-V`) prints the installed version.
+- `spex export <org>/<pkg>` builds `spex-packages/<org>/<pkg>/` by
+  copying `--spec` and `--skill` files, which stay where they are, and
+  adds nothing to `spex.yaml`. A first export writes `meta.yaml` with
+  `provides` listing the kinds given; run again, it keeps `meta.yaml`
+  and refreshes the spec from `specs/` and each skill from the agent
+  folders. The spec's citations are rewritten for the release: another
+  package's spec by its address, a spec of no package dropped and a
+  decision record's link reduced to its text, each with a warning.
 
 ### Changed
 
@@ -43,6 +51,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   folder holds the package before writing `spex.yaml`.
 - The stand-in registry of `@sublang/spex/testing` describes itself at
   `/api/v1/registry` and names a scripted account at `/api/v1/whoami`.
+
+### Removed
+
+- **Breaking:** `spex new` and its `--move`, replaced by `spex export`.
 
 ## [5.0.0] - 2026-10-31
 
