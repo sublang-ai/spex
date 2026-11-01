@@ -6,7 +6,7 @@ import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writ
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
-import { checkDependencyClosure } from "./dependency-closure.mjs";
+import { checkDependencyClosure, checkPublishedRuntimes } from "./dependency-closure.mjs";
 
 const writeJson = (path, value) => writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
@@ -64,6 +64,50 @@ test("shared installed closure passes without conflating the separate scaffold g
   tree.save();
   assert.deepEqual(checkDependencyClosure(tree.root), { "@sublang/playbook": "18.1.0", "@sublang/cligent": "0.36.1", xstate: "5.33.0" });
 });
+
+function registryTree(t) {
+  const tree = installedTree(t);
+  for (const name of ["@sublang/cligent", "@sublang/playbook"]) {
+    const entry = tree.lock.packages[`node_modules/${name}`];
+    entry.resolved = `https://registry.npmjs.org/${name}/-/${name.split("/").at(-1)}-${entry.version}.tgz`;
+    entry.integrity = `sha512-${Buffer.alloc(64, 1).toString("base64")}`;
+  }
+  tree.save();
+  return tree;
+}
+
+test("release-42: a registry lock passes without installing or needing a local runtime archive", (t) => {
+  const tree = registryTree(t);
+  assert.deepEqual(checkPublishedRuntimes(tree.root), { "@sublang/cligent": "0.36.1", "@sublang/playbook": "18.1.0" });
+});
+
+for (const name of ["@sublang/cligent", "@sublang/playbook"]) {
+  test(`release-42: ${name} refuses non-registry or unverifiable lock sources`, (t) => {
+    const tree = registryTree(t);
+    const entry = tree.lock.packages[`node_modules/${name}`];
+    const original = { ...entry };
+    for (const change of [
+      { resolved: "file:vendor/runtime.tgz" },
+      { resolved: "git+https://github.com/example/runtime.git#abc" },
+      { resolved: original.resolved.replace("registry.npmjs.org", "example.com") },
+      { resolved: original.resolved.replace("https:", "http:") },
+      { integrity: undefined },
+      { link: true },
+    ]) {
+      tree.lock.packages[`node_modules/${name}`] = { ...original, ...change };
+      tree.save();
+      assert.throws(() => checkPublishedRuntimes(tree.root), /release requires a checksum-locked npm registry package/);
+    }
+  });
+  test(`release-42: ${name} refuses a local manifest even when the lock names registry bytes`, (t) => {
+    const tree = registryTree(t);
+    const manifestPath = join(tree.root, "packages/core/package.json");
+    const manifest = readJson(manifestPath);
+    manifest.dependencies[name] = "file:../../vendor/runtime.tgz";
+    writeJson(manifestPath, manifest);
+    assert.throws(() => checkPublishedRuntimes(tree.root), /must select a published npm version/);
+  });
+}
 
 for (const name of ["@sublang/playbook", "@sublang/cligent", "xstate"]) {
   test(`unlocked nested ${name} copy fails even at the same version and ABI`, (t) => {

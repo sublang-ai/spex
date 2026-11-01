@@ -95,6 +95,10 @@ When an app tag passes the existing CI, version, changelog and build/test gates 
 
 ### Package Hygiene
 
+#### release-41
+
+Before installing app-tag build dependencies, the release workflow shall require one checksum-locked public npm registry installation each of Cligent and Playbook, refusing local file, vendor, Git or other source dependencies for those runtimes in the app manifests and lockfile ([DR-176](../decisions/176-native-desktop-tag-packages.md)).
+
 #### release-12
 
 The released package's `package.json` shall keep the published tarball to runtime files and gate publishing on a green build:
@@ -265,6 +269,10 @@ When a release candidate tarball is inspected via `npm pack --dry-run`, the insp
 #### release-40
 
 When the repository-system audit reads the app release workflow and desktop packaging commands, the test suite shall assert the tag-only trigger, unchanged CI-green prerequisite, native macOS and Windows jobs installing and building the tagged tree, versioned artifact names and missing-file failures, non-publishing package commands and the final release's dependency on both builds, required files, checksums and exclusive release-write permission [[release-39](#release-39)] [[release-19](#release-19)].
+
+#### release-42
+
+When the dependency audit runs over isolated lockfile and manifest fixtures, the test suite shall verify that app releases accept checksum-locked public registry runtimes and refuse local archives, Git sources, alternate hosts, absent checksums and local manifest overrides before installation [[release-41](#release-41)].
 
 #### release-28
 
