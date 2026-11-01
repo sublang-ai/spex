@@ -23,9 +23,10 @@ import {
 import type { Dirent } from "node:fs";
 import { basename, dirname, isAbsolute, join, posix, sep } from "node:path";
 
+import { readPlacedMarker, readPlacedRecord } from "@sublang/spex/environment";
+
 import { defaultRunCommand, type RunCommand } from "./forge.js";
 import { i18n } from "./i18n.js";
-import { readPlacedMarker, readPlacedRecord } from "./placed-specs.js";
 import type {
   SpecFileInfo,
   SpecGroup,

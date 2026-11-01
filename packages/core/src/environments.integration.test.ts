@@ -1699,11 +1699,15 @@ test("environments-14, environments-1, environments-6, environments-41: environm
     "skills/en/helper/SKILL.md": skill("helper"),
     "sources/en/style/SOURCE.md": "# Style\n",
   });
-  for (const pkg of ["terms", "rules"]) {
+  // acme/terms cites twice a package no environment here requests, and
+  // once another, by their addresses inside a release (environments-42).
+  const cites = "The tool shall tidy as tidying does [[tidy-1](spex:acme/tidy#tidy-1)] and again [[tidy-2](spex:acme/tidy#tidy-2)], in the glossary's words [[glossary-1](spex:acme/glossary#glossary-1)].";
+  const released = { terms: spec("terms").replace("The tool shall run.", cites), rules: spec("rules") };
+  for (const pkg of ["terms", "rules"] as const) {
     await makeRelease(join(working, "kits", pkg), {
       format: 2, org: "acme", name: pkg, version: "0.1.0",
       artifacts: { [pkg]: { kind: "spec", language: "en" } },
-    }, { [`specs/en/${pkg}.md`]: spec(pkg) });
+    }, { [`specs/en/${pkg}.md`]: released[pkg] });
   }
   const installed = (state: EnvironmentState, names: string[]): boolean =>
     state.busy === null && names.every((name) => state.packages.some((pkg) => pkg.name === name && pkg.installed));
@@ -1722,11 +1726,9 @@ test("environments-14, environments-1, environments-6, environments-41: environm
   }, "a spec a sibling is made from, and a source a skill requires, are support; a skill a skill requires is a peer");
   assert.equal(kit.placement, undefined, "[environments-14] its spec is support: no placement");
 
-  // [environments-41] no copy written under specs/ yet: none read.
-  assert.equal((await read("acme/terms")).placement, undefined);
-
-  // [environments-41] the copy the record vouches for reads placed at its
-  // path, its links waiting as the record counts them.
+  // [environments-41] the copy the install wrote under its marker, and
+  // the record vouches for, reads placed at its path, its links waiting
+  // for the packages its release cites, with their count.
   const marker = (version: string): string => `<!-- Placed by Spex from acme/terms ${version}; an edit makes this file yours. -->`;
   const termsFile = join(working, "specs", "packages", "terms.md");
   const record = (version: string, bytes: string, waiting: Record<string, number> = {}): void => {
@@ -1735,12 +1737,16 @@ test("environments-14, environments-1, environments-6, environments-41: environm
       specs: { "acme/terms": { path: "specs/packages/terms.md", version, sha256: sha256Hex(bytes), waiting } },
     }));
   };
-  const copy = `${marker("0.1.0")}\n\n${spec("terms")}`;
+  const copy = readFileSync(termsFile, "utf8");
+  assert.ok(copy.startsWith(`${marker("0.1.0")}\n\n# terms: terms\n`), "the install placed the copy under its marker");
+  const waiting = [{ name: "acme/glossary", count: 1 }, { name: "acme/tidy", count: 2 }];
+  assert.deepEqual((await read("acme/terms")).placement, { spec: { state: "placed", path: "specs/packages/terms.md", waiting } });
+
+  // [environments-41] no copy written under specs/ yet: none read, the
+  // next install writing it.
+  rmSync(termsFile);
+  assert.equal((await read("acme/terms")).placement, undefined);
   writeFileSync(termsFile, copy);
-  record("0.1.0", copy, { "acme/tidy": 2, "acme/glossary": 1 });
-  assert.deepEqual((await read("acme/terms")).placement, {
-    spec: { state: "placed", path: "specs/packages/terms.md", waiting: [{ name: "acme/glossary", count: 1 }, { name: "acme/tidy", count: 2 }] },
-  });
 
   // [environments-41] other bytes under its marker at the version the
   // record holds: edited, no newer release waiting.
@@ -1749,18 +1755,18 @@ test("environments-14, environments-1, environments-6, environments-41: environm
 
   // [environments-14] an edited copy of an older release: the locked
   // release's version waits under .spex/.
-  const older = `${marker("0.0.9")}\n\n${spec("terms")}\nA note of ours.\n`;
-  writeFileSync(termsFile, older);
-  record("0.0.9", `${marker("0.0.9")}\n\n${spec("terms")}`);
+  const olderCopy = copy.replace(marker("0.1.0"), marker("0.0.9"));
+  writeFileSync(termsFile, `${olderCopy}\nA note of ours.\n`);
+  record("0.0.9", olderCopy);
   assert.deepEqual((await read("acme/terms")).placement, {
     spec: { state: "edited", path: "specs/packages/terms.md", waiting: [], waitingVersion: "0.1.0" },
   });
 
-  // [environments-41] as on a fresh clone, no record: a copy under the
-  // locked release's marker is the package's.
+  // [environments-41] as on a fresh clone, no record: a copy holding the
+  // derivation from the locked release is the package's.
   rmSync(join(working, ".spex", "placed.json"));
   writeFileSync(termsFile, copy);
-  assert.deepEqual((await read("acme/terms")).placement, { spec: { state: "placed", path: "specs/packages/terms.md", waiting: [] } });
+  assert.deepEqual((await read("acme/terms")).placement, { spec: { state: "placed", path: "specs/packages/terms.md", waiting } });
 
   // [environments-41] a project file of the spec's name blocks it.
   writeFileSync(join(working, "specs", "packages", "rules.md"), spec("rules"));
