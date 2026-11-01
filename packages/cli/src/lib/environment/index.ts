@@ -3,8 +3,8 @@
 
 // Spec packages and environments (DR-104): the format, requests and
 // lock, the registry and Git sources, resolution, the store and
-// installs, exports, citations across a release's boundary (DR-174) and
-// the built-in spec package.
+// installs, exports, the placed specs' record, citations across a
+// release's boundary (DR-174) and the built-in spec package.
 
 export * from "./format.js";
 export * from "./semver.js";
@@ -17,6 +17,7 @@ export * from "./resolve.js";
 export * from "./store.js";
 export * from "./layout.js";
 export * from "./install.js";
+export * from "./placed-record.js";
 export * from "./exports.js";
 export * from "./own-paths.js";
 export * from "./agent-folders.js";

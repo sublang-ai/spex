@@ -720,6 +720,61 @@ describe("lintSpecs", () => {
     assert.ok(!rules(listed).includes("map/unlisted"), JSON.stringify(listed));
   });
 
+  // lint-9: a spec an install placed is listed by the install record
+  // under the root's `.spex/`, not by the map (DR-174); the project's
+  // own unlisted files warn as before, and a record that does not read
+  // exempts nothing.
+  it("exempts a placed spec the install record lists from the map", () => {
+    const pkg = (name: string) =>
+      `# ${name}: ${name}\n\n## Intent\n\nP.\n\n## External Behavior\n\n### ${name}-1\n\nThe system shall act.\n\n## Verification\n\n### ${name}-2\n\nThe suite shall assert it acts [[${name}-1](#${name}-1)].\n`;
+    const tree = {
+      "specs/packages/tools.md": pkg("tools"),
+      "specs/packages/own.md": pkg("own"),
+    };
+    const unlisted = (findings: LintFinding[]) =>
+      findings
+        .filter((f) => f.rule === "map/unlisted")
+        .map((f) => f.path)
+        .sort();
+    const record = JSON.stringify({
+      format: 1,
+      specs: {
+        "acme/tools": {
+          path: "specs/packages/tools.md",
+          sha256: "0".repeat(64),
+          waiting: { "acme/other": 1 },
+        },
+      },
+    });
+
+    const placed = findingsFor(tree, { ".spex/placed.json": record });
+    assert.deepEqual(
+      unlisted(placed),
+      ["specs/packages/own.md"],
+      JSON.stringify(placed),
+    );
+
+    const none = findingsFor(tree);
+    assert.deepEqual(unlisted(none), [
+      "specs/packages/own.md",
+      "specs/packages/tools.md",
+    ]);
+    for (const malformed of [
+      "{not json",
+      record.replace('"format":1', '"format":2'),
+      JSON.stringify({
+        format: 1,
+        specs: { "acme/tools": { path: "specs/packages/tools.md" } },
+      }),
+    ]) {
+      assert.deepEqual(
+        findingsFor(tree, { ".spex/placed.json": malformed }),
+        none,
+        `a record that does not read changes nothing: ${malformed}`,
+      );
+    }
+  });
+
   // lint-13: citation discipline.
   it("allows supporting citations and markers in a package Intent", () => {
     const findings = findingsFor({
