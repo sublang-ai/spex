@@ -1427,6 +1427,40 @@ describe("playbook-library-113: Publish a folder package from its row", () => {
     await vi.waitFor(() => expect(commandMock).toHaveBeenCalledWith("registry.signin.start", { origin: REGISTRY }));
   });
 
+  test("a failed read of one registry's account judges no other: a changed registry waits for its own read", async () => {
+    environments[PROJECT_ID] = local();
+    publishingReplies();
+    // The first registry's read fails; the second's is held until released.
+    const reads: (() => void)[] = [];
+    const base = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation((type: string, params?: Record<string, unknown>) =>
+      type === "registry.get" && params?.origin === REGISTRY
+        ? Promise.reject(new Error("Spex Example could not be reached."))
+        : type === "registry.get" && params?.origin === OTHER_REGISTRY
+          ? new Promise((resolve) =>
+              reads.push(() => {
+                const answer = account(true, { origin: OTHER_REGISTRY, displayName: "Packages Example" });
+                deliverServerMessageForTests({ type: "registry.state", state: answer });
+                resolve(answer);
+              }),
+            )
+          : base(type, params));
+    await renderTab({ registryAccounts: {} });
+    choose(projectSection(), NAME, "publish");
+    expect((await row().findByTestId("publish-signin-error")).textContent).toBe("Spex Example could not be reached");
+    update(PROJECT_ID, { ...local(), registry: { origin: OTHER_REGISTRY, legacy: false } });
+    // Nothing judges the second registry before its own read lands.
+    expect(row().queryByTestId("publish-signin")).toBeNull();
+    expect(row().queryByTestId("publish-signin-error")).toBeNull();
+    expect(row().getByTestId("publish").textContent).toBe("Loading registry…");
+    await vi.waitFor(() => expect(reads.length).toBeGreaterThan(0));
+    await act(async () => {
+      for (const land of reads.splice(0)) land();
+    });
+    expect((await row().findByTestId("publish-button")).textContent).toBe("Publish");
+    expect(commandMock).not.toHaveBeenCalledWith("registry.signin.start", expect.anything());
+  });
+
   test("signed out at the registry, the overflow reads Sign in to publish in Publish's place and starts the sign-in", async () => {
     environments[PROJECT_ID] = local();
     await renderTab();

@@ -60,6 +60,15 @@ interface PublishProps {
 }
 
 export function PublishControl(props: PublishProps) {
+  // The overflow's entry as it read when chosen: its own "Sign in to
+  // publish" starts the sign-in at once, Publish never does.
+  const [choseSignIn] = useState(() => props.target?.signedIn === false);
+  // Each registry's account is read for itself: a failed read at one
+  // registry judges no other.
+  return <PublishRead key={props.target?.origin ?? ""} {...props} choseSignIn={choseSignIn} />;
+}
+
+function PublishRead({ choseSignIn, ...props }: PublishProps & { choseSignIn: boolean }) {
   // Nothing judges signed in or out before the account at the registry
   // is read (playbook-library-113): where no state of it stands, it is
   // read here, its answer judging and a failed read standing as signed
@@ -74,9 +83,6 @@ export function PublishControl(props: PublishProps) {
           ? { ...props.target, signedIn: false }
           : props.target
       : props.target;
-  // The overflow's entry as it read when chosen: its own "Sign in to
-  // publish" starts the sign-in at once, Publish never does.
-  const [choseSignIn] = useState(() => props.target?.signedIn === false);
   // Remount synchronously when the upload destination changes, so an old
   // preview can never confirm against the new folder or account target.
   const key = JSON.stringify([props.repository, props.name, props.path, target?.origin,
