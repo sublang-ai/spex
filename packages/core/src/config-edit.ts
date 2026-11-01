@@ -262,6 +262,101 @@ export async function editConfigFile(
   return writeCandidate(path, candidate, version);
 }
 
+/** The operations a `config.batch` takes (core-service-44). */
+export type ConfigBatchOp = Extract<ConfigEditOp, { kind: "captain.set" | "player.set" | "playbook.role.bind" }>;
+
+/** One violation of a batch as a whole: its rule, the field it names
+ * where it names one, and every operation touching what it covers —
+ * operations valid one by one can violate a rule together. */
+export interface BatchViolation {
+  rule: string;
+  field?: string;
+  message: string;
+  ops: number[];
+}
+
+export interface BatchResult extends EditResult {
+  violations?: BatchViolation[];
+}
+
+/** A config path a composition error names, in whichever language its
+ * words are: the paths themselves are the file's own. */
+const FIELD_PATTERN = /\b(?:captain|players|playbooks)(?:\.[A-Za-z0-9_[\]-]+)*/;
+
+/** The rule a composition error violates, as core-service-16's table
+ * names the rules, read from the field it names. */
+function ruleOf(field: string | undefined, message: string): string {
+  const last = field?.split(".").at(-1) ?? "";
+  if (last === "subagentEffort") return "subagent-effort";
+  if (last === "subagentModel") return "delegation";
+  if (last === "effort" || last === "reasoningEffort") return "effort";
+  if (last === "model" || last === "fastMode") return "tuning";
+  if (last === "adapter" || /adapter/.test(field ?? "")) return "adapter";
+  if (field?.includes(".permissions")) return "writable-paths";
+  if (field?.includes(".roles")) return "bindings";
+  if (/concurrent/i.test(message)) return "concurrency";
+  if (field?.startsWith("players")) return "roster";
+  return "config";
+}
+
+/** The fields an operation touches: the block it edits and, through a
+ * player it edits, every binding naming that player — whose tuning is
+ * read against the player's (core-service-16). */
+function touched(op: ConfigBatchOp, top: unknown): string[] {
+  if (op.kind === "captain.set") return ["captain"];
+  if (op.kind === "playbook.role.bind") return [`playbooks.${op.playbookId}.roles.${op.role}`];
+  const fields = [`players.${op.playerId}`];
+  const playbooks = (top as { playbooks?: Record<string, { roles?: Record<string, unknown> } | null> } | null)?.playbooks ?? {};
+  for (const [id, entry] of Object.entries(playbooks)) {
+    for (const [role, binding] of Object.entries(entry?.roles ?? {})) {
+      const player = typeof binding === "string" ? binding : (binding as { player?: unknown } | null)?.player;
+      if (player === op.playerId) fields.push(`playbooks.${id}.roles.${role}`);
+    }
+  }
+  return fields;
+}
+
+function violationOf(message: string, ops: readonly ConfigBatchOp[], top: unknown): BatchViolation {
+  const field = FIELD_PATTERN.exec(message)?.[0];
+  const related = (path: string): boolean => field !== undefined
+    && (field === path || field.startsWith(`${path}.`) || path.startsWith(`${field}.`));
+  return {
+    rule: ruleOf(field, message),
+    ...(field !== undefined ? { field } : {}),
+    message,
+    ops: ops.flatMap((op, index) => (touched(op, top).some(related) ? [index] : [])),
+  };
+}
+
+/**
+ * Apply a batch to your own group's file all or none (core-service-44):
+ * refused as a conflict where the file no longer stands at `revision`,
+ * the operations applied in order and the result validated once, as a
+ * whole, then written under the version read — a file changed
+ * meanwhile is a conflict too (DR-111).
+ */
+export async function editConfigBatch(
+  path: string,
+  ops: readonly ConfigBatchOp[],
+  revision: string,
+  loadModule?: LoadModule,
+  options: { modules?: PlaybookModules } = {},
+): Promise<BatchResult> {
+  const { bytes, version } = readVersioned(path);
+  if (bytes === null || version !== revision) return { ok: false, conflict: true, error: new VersionConflictError(path).message };
+  let candidate = bytes.toString("utf8");
+  for (const op of ops) candidate = applyConfigOp(candidate, op);
+  let top: unknown;
+  try {
+    top = parseDocument(candidate).toJS() as unknown;
+    await composeConfig(top, loadModule, path, options);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, error: message, violations: [violationOf(message, ops, top)] };
+  }
+  return writeCandidate(path, candidate, version);
+}
+
 /** The operations a project's or another group's file takes: only its
  * playbook entries, each naming its roles' players (core-service-2). */
 const PROJECT_OPS = new Set<ConfigEditOp["kind"]>(["playbook.add", "playbook.delete", "playbook.role.bind", "playbook.option.set"]);

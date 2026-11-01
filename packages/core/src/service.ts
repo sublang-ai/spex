@@ -38,6 +38,7 @@ import type { Duplex } from "node:stream";
 
 import {
   checkAdapterReadiness,
+  anthropicBaseUrl,
   checkAdapterRuntime,
   composeConfig,
   createModuleLoader,
@@ -100,10 +101,12 @@ import {
 } from "./forge.js";
 import {
   applyConfigOp,
+  editConfigBatch,
   editConfigFile,
   editProjectConfigFile,
   rewriteLibraryPaths,
   type AgentBlock,
+  type ConfigBatchOp,
   type ConfigEditOp,
 } from "./config-edit.js";
 import { migrateManagedLibraryConfig } from "./config-migrate.js";
@@ -2337,9 +2340,14 @@ export class CoreService {
         });
         nextComposed = loaded.composed;
         const missingPlayers = this.missingPlayers(loaded.raw, inputs);
+        // The digest of the bytes this state was composed from: what a
+        // batch names as the config its edits were made against
+        // (core-service-45).
+        const revision = inputs.get(this.configPath);
         nextState = {
           status: "valid",
           summary: summarizeConfig(loaded),
+          ...(typeof revision === "string" ? { revision } : {}),
           seeded: this.seeded,
           ...(this.reseeded ? { reseeded: true } : {}),
           ...(missingPlayers.length > 0 ? { missingPlayers } : {}),
@@ -2370,26 +2378,28 @@ export class CoreService {
   }
 
   async readiness(): Promise<ReadinessEntry[]> {
-    if (this.configState.status !== "valid") return [];
-    const summary = this.configState.summary;
     // Adapter-keyed and deduplicated (DR-019): readiness is a
     // property of the adapter's auth, not of any one agent block.
     // Each entry names the positions using the adapter so guidance
-    // points somewhere concrete.
-    const positions = new Map<AdapterName, string[]>();
+    // points somewhere concrete. Claude and Codex stand whether or not
+    // a position uses them, so a reader sees the other agent's state
+    // too — with no config to read, they are all there is, and no
+    // earlier config's positions carry over (core-service-9, DR-174).
+    const positions = new Map<AdapterName, string[]>([["claude", []], ["codex", []]]);
     const note = (adapter: AdapterName, position: string): void => {
       const list = positions.get(adapter);
       if (list) list.push(position);
       else positions.set(adapter, [position]);
     };
-    note(summary.captain.adapter, "captain");
+    const summary = this.configState.status === "valid" ? this.configState.summary : undefined;
+    if (summary) note(summary.captain.adapter, "captain");
     // A position is a session player, named by its own id; the roles
     // it serves ride along, since one lane may answer several
     // (DR-032). A lane no role binds is listed for Settings and the
     // draft picker (settings-26, playbook-library-55) but probed here
     // for nothing: it opens no session, so an unused entry never
     // gates a first run, and the picker's chip reads it as unknown.
-    for (const player of summary.players) {
+    for (const player of summary?.players ?? []) {
       if (player.boundBy.length === 0) continue;
       note(player.agent.adapter, `${player.id} (${player.boundBy.join(", ")})`);
     }
@@ -2400,6 +2410,10 @@ export class CoreService {
     const credentialHalf = seat && sources
       ? (adapter: AdapterName) => seatCredentialHalf(adapter, sources, seat.runValues(adapter), this.runCommand)
       : undefined;
+    // Manual steps are written for the computer that follows them; a
+    // seat's base URL is its own and none of the reader's (DR-174).
+    const shell = this.env.SHELL ? basename(this.env.SHELL) : undefined;
+    const host = { platform: process.platform, ...(shell ? { shell } : {}) };
     return Promise.all(
       [...positions.entries()].map(async ([adapter, usedBy]) => {
         const readiness = await checkAdapterReadiness(
@@ -2416,7 +2430,10 @@ export class CoreService {
           ...(readiness.requirement
             ? { requirement: readiness.requirement }
             : {}),
+          faults: readiness.faults,
           ...(readiness.credential ? { credential: readiness.credential } : {}),
+          ...(adapter === "claude" ? { baseUrl: seat ? { state: "hidden" as const } : anthropicBaseUrl(this.env) } : {}),
+          ...host,
           usedBy,
           // The embedded runtime declares which adapters take fast mode
           // (DR-038); the editor offers the switch only for those.
@@ -3216,6 +3233,32 @@ export class CoreService {
         await this.reloadConfig();
         // The reply is the state the files stand at; the write stands
         // either way (DR-111).
+        await this.settledConfig();
+        this.authors.republish();
+        return this.configState;
+      }
+      case "config.batch": {
+        // Your own group's file alone, all or none, against the config
+        // the client saw (core-service-44, DR-174).
+        const result = await editConfigBatch(
+          this.configPath,
+          command.ops as ConfigBatchOp[],
+          command.revision,
+          this.options.loadModule,
+          { modules: this.modules(null) },
+        );
+        if (result.conflict) throw new CoreError("conflict", result.error!);
+        if (!result.ok) {
+          throw new CoreError(
+            "invalid_config",
+            result.error ?? i18n._({
+              id: "edit rejected",
+              comment: "Refusal: a config edit failed validation with no reason given",
+            }),
+            { violations: result.violations ?? [] },
+          );
+        }
+        await this.reloadConfig();
         await this.settledConfig();
         this.authors.republish();
         return this.configState;

@@ -55,7 +55,9 @@ import type {
   AdapterCredential,
   AdapterName,
   AgentSummary,
+  BaseUrlState,
   ConfigSummary,
+  ReadinessFault,
 } from "./protocol.js";
 
 export const PLAYBOOK_CAPTAIN_MODULE = "@sublang/playbook/playbook-captain";
@@ -2035,6 +2037,8 @@ export interface AdapterReadiness {
   adapter: AdapterName;
   ready: boolean | null;
   requirement?: string;
+  /** Each unmet half by its kind (DR-174); `requirement` joins them. */
+  faults: ReadinessFault[];
   /** On a seat, the credential class and its phrase (settings-49). */
   credential?: AdapterCredential;
 }
@@ -2210,6 +2214,27 @@ export async function checkAdapterRuntime(
   };
 }
 
+/** The credential forms of Playbook's launcher (settings-14, DR-174):
+ * an environment variable of these, or the agent's home folder. */
+export const LOCAL_CREDENTIAL_FORMS: Partial<Record<AdapterName, { env: readonly string[]; folder: string }>> = {
+  claude: { env: ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"], folder: ".claude" },
+  codex: { env: ["OPENAI_API_KEY", "CODEX_API_KEY", "CODEX_ACCESS_TOKEN"], folder: ".codex" },
+};
+
+/** Where Claude's requests go, by `ANTHROPIC_BASE_URL` (core-service-9):
+ * its host name alone, so no path or secret written into it is ever
+ * reported. */
+export function anthropicBaseUrl(env: NodeJS.ProcessEnv): BaseUrlState {
+  const value = env.ANTHROPIC_BASE_URL?.trim();
+  if (!value) return { state: "unset" };
+  let host: string;
+  try { host = new URL(value).hostname.toLowerCase(); }
+  catch { return { state: "unknown" }; }
+  if (!host) return { state: "unknown" };
+  if (host === "api.anthropic.com") return { state: "unset" };
+  return { state: "third-party", host };
+}
+
 export async function checkAdapterReadiness(
   adapter: AdapterName,
   env: NodeJS.ProcessEnv = process.env,
@@ -2223,51 +2248,50 @@ export async function checkAdapterReadiness(
   credentialHalf?: (adapter: AdapterName) => Promise<CredentialHalf>,
 ): Promise<AdapterReadiness> {
   // Both halves are evaluated so an adapter missing both reports both —
-  // reporting one at a time sends the user round the loop twice.
-  const faults: string[] = [];
+  // reporting one at a time sends the user round the loop twice — and
+  // each by its kind, since reinstalling the app and setting a key are
+  // different repairs (DR-174).
+  const faults: ReadinessFault[] = [];
   const runtimeCheck = await runtime(adapter);
   if (!runtimeCheck.usable && runtimeCheck.requirement) {
-    faults.push(runtimeCheck.requirement);
+    faults.push({ kind: "runtime", requirement: runtimeCheck.requirement });
   }
   let credentialReady: boolean | null = null;
   let credential: AdapterCredential | undefined;
+  const forms = LOCAL_CREDENTIAL_FORMS[adapter];
   if (credentialHalf) {
     const half = await credentialHalf(adapter);
     credentialReady = half.ready;
     credential = half.credential;
-    if (!half.ready) faults.push(half.requirement ?? half.credential.phrase);
-  } else if (adapter === "claude") {
+    if (!half.ready) faults.push({ kind: "credential", requirement: half.requirement ?? half.credential.phrase });
+  } else if (forms) {
     credentialReady =
-      Boolean(env.ANTHROPIC_API_KEY) || existsSync(join(home, ".claude"));
+      forms.env.some((name) => Boolean(env[name])) || existsSync(join(home, forms.folder));
     if (!credentialReady) {
-      faults.push(
-        i18n._("sign in by running claude in a terminal, or set ANTHROPIC_API_KEY"),
-      );
-    }
-  } else if (adapter === "codex") {
-    credentialReady =
-      Boolean(env.OPENAI_API_KEY) || existsSync(join(home, ".codex"));
-    if (!credentialReady) {
-      faults.push(
-        i18n._({
-          id: "sign in by running codex in a terminal, or set OPENAI_API_KEY",
-          comment:
-            "Adapter requirement; `codex` is the command to run and OPENAI_API_KEY an environment variable",
-        }),
-      );
+      faults.push({
+        kind: "credential",
+        requirement: adapter === "claude"
+          ? i18n._("sign in by running claude in a terminal, or set ANTHROPIC_API_KEY")
+          : i18n._({
+            id: "sign in by running codex in a terminal, or set OPENAI_API_KEY",
+            comment:
+              "Adapter requirement; `codex` is the command to run and OPENAI_API_KEY an environment variable",
+          }),
+      });
     }
   }
   if (faults.length > 0) {
     return {
       adapter,
       ready: false,
-      requirement: faults.join(
+      requirement: faults.map((fault) => fault.requirement).join(
         i18n._({ id: "; ", comment: "Separates reasons listed in one message" }),
       ),
+      faults,
       ...(credential ? { credential } : {}),
     };
   }
   // The null class survives only over a usable runtime (settings-14): no
   // credential rule exists, so the UI shows verify-yourself guidance.
-  return { adapter, ready: credentialReady === null ? null : true, ...(credential ? { credential } : {}) };
+  return { adapter, ready: credentialReady === null ? null : true, faults, ...(credential ? { credential } : {}) };
 }

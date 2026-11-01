@@ -408,6 +408,8 @@ test("settings-50, settings-49: each credential class and phrase is delivered ov
     assert.match(entries[adapter]?.requirement ?? "", NONE);
   }
   assert.equal(status.length, 0, "no status command runs where no form is set");
+  // A seat's base URL is its own: nothing of it is reported (settings-14).
+  assert.deepEqual(entries.claude?.baseUrl, { state: "hidden" });
 
   // Present: the shared form, its status valid.
   writeShared(shared, "CLAUDE_CODE_OAUTH_TOKEN=sk-valid-shared\n");

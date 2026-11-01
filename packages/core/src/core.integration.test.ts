@@ -1253,8 +1253,10 @@ test("CORE-28: the starter template yields one readiness entry per adapter it na
     captain: { adapter: string };
     players: Record<string, { adapter: string }>;
   };
+  // Claude and Codex stand whether or not the template names them
+  // (core-service-26).
   const adapters = [
-    ...new Set([parsed.captain.adapter, ...Object.values(parsed.players).map((p) => p.adapter)]),
+    ...new Set(["claude", "codex", parsed.captain.adapter, ...Object.values(parsed.players).map((p) => p.adapter)]),
   ].sort();
   const harness = await startHarness(starterText(template), {
     env: { ANTHROPIC_API_KEY: "test-key", OPENAI_API_KEY: "test-key" },
