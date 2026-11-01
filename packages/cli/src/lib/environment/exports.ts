@@ -587,10 +587,11 @@ interface SpecPlan {
  * the files, their marker lines and the install record, writing nothing
  * but through `remove`:
  *
- * 1. each spec claims `specs/packages/<pkg>.md`, the first in name order
- *    taking it and a later one blocked, as is one whose path a copy of a
- *    package whose files are not here holds — by the record, or by the
- *    marker line of the copy standing there, as on a fresh clone;
+ * 1. each spec claims `specs/packages/<pkg>.md`: the package whose copy
+ *    stands there — by the record, or by the marker line, as on a fresh
+ *    clone — takes it, else the first in name order, and a later one is
+ *    blocked, as is one whose path a copy of a package whose files are
+ *    not here holds, by the record or the marker line alike;
  * 2. a recorded copy its package no longer places there — removed, no
  *    longer providing its spec, or now blocked — leaves through `remove`
  *    while it holds the bytes recorded, else stays as the project's own,
@@ -640,10 +641,18 @@ function planSpecs(root: string, sources: SpecSource[], unread: ReadonlySet<stri
     if (!held.has(path) && standingMarker(root, path)?.name === name) held.set(path, name);
   }
 
-  // 1. The basename's claim: the first in name order.
+  // 1. The basename's claim: the package whose copy stands at the path,
+  //    else the first in name order.
+  const standsFor = (source: SpecSource): boolean => {
+    const path = placedSpecPath(source.id);
+    const digest = digestOf(path);
+    if (digest === null || digest === NOT_A_FILE) return false;
+    return previous[source.name]?.path === path || standingMarker(root, path)?.name === source.name;
+  };
+  const claimants = [...ordered].sort((a, b) => Number(standsFor(b)) - Number(standsFor(a)) || byName(a, b));
   const claims = new Map<string, SpecSource>();
   const blocked = new Set<string>();
-  for (const source of ordered) {
+  for (const source of claimants) {
     const path = placedSpecPath(source.id);
     if (claims.has(path) || held.has(path)) blocked.add(source.name);
     else claims.set(path, source);

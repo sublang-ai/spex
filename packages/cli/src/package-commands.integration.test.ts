@@ -574,8 +574,8 @@ test("cli-15: a package's spec is placed in specs/ under its marker line, its li
   const listed = await ok(dir, "list");
   assert.match(listed, /^Installed\n {2}demo\/other +1\.0\.0 +from folder kits\/other +installed\n {4}spec in specs\/packages\/other\.md\n {2}demo\/spec +1\.0\.0 +from the registry +installed\n {4}spec in specs\/packages\/spec\.md\n {4}1 link waits for demo\/absent — spex add demo\/absent\n/m, "[cli-6] beneath each package its spec's place, then the packages its links wait for");
 
-  // A second package of one <pkg>, zeta/spec: demo/spec, first by its
-  // org, stays placed and zeta/spec is reported blocked.
+  // A second package of one <pkg>, zeta/spec: demo/spec, whose copy
+  // stands, stays placed and zeta/spec is reported blocked.
   await makeRelease(join(dir, "kits", "zeta"), manifestOf("zeta/spec", "1.0.0", { spec: { kind: "spec", language: "en" } }), { "specs/en/spec.md": "# spec: Zeta\n\n## Intent\n\nZeta's spec.\n\n## External Behavior\n\n### spec-1\n\nZeta shall stand.\n" });
   const before = text();
   const zeta = await ok(dir, "add", "zeta/spec", "--path", "kits/zeta");

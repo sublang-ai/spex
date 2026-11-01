@@ -76,6 +76,9 @@ const ADDRESS_SCHEME = "spex:";
 // The spec of specs at the specs root, which the scaffold puts in every
 // tree (meta-1).
 const META_PATH = "meta.md";
+// The folder under the specs root a placed spec stands in
+// (environments-41), from which a release's link to `meta.md` is written.
+const PLACED_FOLDER = "packages";
 const SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
 // Item headings: lowercase <pack>-<N> (meta-11).
 const ITEM_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*-[1-9][0-9]*$/;
@@ -114,8 +117,9 @@ export function isCitationUrl(url: string): boolean {
  * into a package's spec that package's address, and one into a spec of
  * no package or into a file two packages claim is removed; a decision
  * record's link keeps its text alone. A citation of `meta.md` at the
- * specs root, a same-file citation, an address and every other link
- * stay.
+ * specs root is kept as the link from `specs/packages/`, where the
+ * placed spec stands; a same-file citation, an address and every other
+ * link stay.
  */
 export function rewriteForRelease(
   text: string,
@@ -139,7 +143,12 @@ export function rewriteForRelease(
       edits.push(destinationEdit(text, site, `#${target.anchor}`));
       continue;
     }
-    if (resolved === META_PATH) continue;
+    if (resolved === META_PATH) {
+      if (posix.normalize(posix.join(PLACED_FOLDER, target.path)) !== META_PATH) {
+        edits.push(destinationEdit(text, site, `${posix.relative(PLACED_FOLDER, META_PATH)}#${target.anchor}`));
+      }
+      continue;
+    }
     const owner = ctx.packageOf(resolved);
     if (typeof owner === "string") {
       edits.push(destinationEdit(text, site, formatAddress(owner, target.anchor)));
