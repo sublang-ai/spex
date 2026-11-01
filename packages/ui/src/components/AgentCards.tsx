@@ -254,10 +254,24 @@ function OneModel({ entry, state, catalog }: { entry: ReadinessEntry; state: Ext
 }
 
 /** Send one batch against the revision shown, taking its reply as the
- * state shown at once (core-service-44). */
+ * state shown at once (core-service-44). A conflict reads the config
+ * and each project's composition shown again before it is reported, so
+ * the reader confirms over what the files now hold, never the list the
+ * refused batch was built from (settings-58, settings-60). */
 async function send(store: ReturnType<typeof usePlaceStore>, ops: ConfigBatchOpInput[], revision: string | undefined): Promise<void> {
-  const state = await store.getClient().command("config.batch", { ops, revision: revision ?? "" });
-  store.setState({ configState: state });
+  const client = store.getClient();
+  try {
+    const state = await client.command("config.batch", { ops, revision: revision ?? "" });
+    store.setState({ configState: state });
+  } catch (error) {
+    if ((error as Partial<SpexCommandError>)?.code === "conflict") {
+      await Promise.all([
+        client.command("config.get", {}).then((configState) => store.setState({ configState })),
+        ...Object.keys(store.getState().projectConfigs).map((projectId) => store.getState().loadProjectConfig(projectId)),
+      ]).catch(() => {});
+    }
+    throw error;
+  }
 }
 
 /** Official names behind a third-party service (settings-59, -60). */
@@ -275,7 +289,7 @@ function OfficialNames({ entry, state, catalog }: { entry: ReadinessEntry; state
   const defaultModel = discovery?.status === "available" ? discovery.defaultModel : undefined;
   const done = outcome !== undefined && "done" in outcome;
   if (rows.length === 0 && !done) return null;
-  const plan = fixPlan(rows);
+  const ops = fixPlan(rows);
   const target = (() => {
     const display = providerDefaultDisplay(models, defaultModel);
     return display.specific ? `${display.name} · ${display.specific}` : display.name;
@@ -288,7 +302,7 @@ function OfficialNames({ entry, state, catalog }: { entry: ReadinessEntry; state
   function apply(): void {
     setBusy(true);
     setOutcome(undefined);
-    send(store, plan.ops, state.revision)
+    send(store, ops, state.revision)
       .then(() => setOutcome({ done: true }))
       .catch((error: unknown) => setOutcome({ error: refusalText(error) }))
       .finally(() => { setBusy(false); setAsking(false); });
@@ -316,7 +330,7 @@ function OfficialNames({ entry, state, catalog }: { entry: ReadinessEntry; state
             type="button"
             data-testid="agent-official-fix"
             className={buttonClass}
-            disabled={busy || !defaultModel || plan.ops.length === 0 || !state.revision}
+            disabled={busy || !defaultModel || ops.length === 0 || !state.revision}
             onClick={() => { setAsking(true); setOutcome(undefined); }}
           >
             {i18n._("Set all to Provider default")}
@@ -335,9 +349,7 @@ function OfficialNames({ entry, state, catalog }: { entry: ReadinessEntry; state
             {rows.map((row) => (
               <li key={row.key} data-testid="agent-official-confirm-row">
                 <span className="font-mono">{label(row)}</span>: {row.model} →{" "}
-                {row.source.kind === "project-binding"
-                  ? i18n._("Change it in the project's Playbooks tab")
-                  : target}
+                {target}
               </li>
             ))}
           </ul>

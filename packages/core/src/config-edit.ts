@@ -13,7 +13,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { parseDocument, YAMLMap, isMap, isScalar } from "yaml";
 
-import { composeConfig, validateProjectConfig, type LoadModule, type PlaybookModules } from "./config.js";
+import { ConfigViolation, composeConfig, validateProjectConfig, type LoadModule, type PlaybookModules } from "./config.js";
 import { readVersioned, VersionConflictError, writeVersionedBytes, type FileVersion } from "@sublang/spex/files";
 import { i18n } from "./i18n.js";
 
@@ -279,26 +279,6 @@ export interface BatchResult extends EditResult {
   violations?: BatchViolation[];
 }
 
-/** A config path a composition error names, in whichever language its
- * words are: the paths themselves are the file's own. */
-const FIELD_PATTERN = /\b(?:captain|players|playbooks)(?:\.[A-Za-z0-9_[\]-]+)*/;
-
-/** The rule a composition error violates, as core-service-16's table
- * names the rules, read from the field it names. */
-function ruleOf(field: string | undefined, message: string): string {
-  const last = field?.split(".").at(-1) ?? "";
-  if (last === "subagentEffort") return "subagent-effort";
-  if (last === "subagentModel") return "delegation";
-  if (last === "effort" || last === "reasoningEffort") return "effort";
-  if (last === "model" || last === "fastMode") return "tuning";
-  if (last === "adapter" || /adapter/.test(field ?? "")) return "adapter";
-  if (field?.includes(".permissions")) return "writable-paths";
-  if (field?.includes(".roles")) return "bindings";
-  if (/concurrent/i.test(message)) return "concurrency";
-  if (field?.startsWith("players")) return "roster";
-  return "config";
-}
-
 /** The fields an operation touches: the block it edits and, through a
  * player it edits, every binding naming that player — whose tuning is
  * read against the player's (core-service-16). */
@@ -316,12 +296,20 @@ function touched(op: ConfigBatchOp, top: unknown): string[] {
   return fields;
 }
 
-function violationOf(message: string, ops: readonly ConfigBatchOp[], top: unknown): BatchViolation {
-  const field = FIELD_PATTERN.exec(message)?.[0];
+/** A composition refusal as a batch's violation: the rule and field
+ * the refusal carries (core-service-16), and every operation touching
+ * that field — none where it names no field, or one no operation
+ * reaches. */
+function violationOf(error: unknown, ops: readonly ConfigBatchOp[], top: unknown): BatchViolation {
+  const message = error instanceof Error ? error.message : String(error);
+  // Every check composition makes raises its rule; anything else — the
+  // file failing to read, or a library's own throw — reads as the
+  // file's shape, naming no field.
+  const { rule, field } = error instanceof ConfigViolation ? error : { rule: "structure", field: undefined };
   const related = (path: string): boolean => field !== undefined
     && (field === path || field.startsWith(`${path}.`) || path.startsWith(`${field}.`));
   return {
-    rule: ruleOf(field, message),
+    rule,
     ...(field !== undefined ? { field } : {}),
     message,
     ops: ops.flatMap((op, index) => (touched(op, top).some(related) ? [index] : [])),
@@ -351,8 +339,8 @@ export async function editConfigBatch(
     top = parseDocument(candidate).toJS() as unknown;
     await composeConfig(top, loadModule, path, options);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return { ok: false, error: message, violations: [violationOf(message, ops, top)] };
+    const violation = violationOf(error, ops, top);
+    return { ok: false, error: violation.message, violations: [violation] };
   }
   return writeCandidate(path, candidate, version);
 }

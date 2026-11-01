@@ -76,8 +76,7 @@ export function unifyPlan(summary: ConfigSummary, adapter: AdapterName, value: s
 export type OfficialSource =
   | { kind: "captain" }
   | { kind: "player"; playerId: string }
-  | { kind: "own-binding"; playbookId: string; role: string; playerId: string }
-  | { kind: "project-binding"; projectId: string };
+  | { kind: "own-binding"; playbookId: string; role: string; playerId: string };
 
 export interface OfficialRole {
   /** Stable across renders: the scope, then the role. */
@@ -104,7 +103,6 @@ export function officialRoles(state: ConfigState | undefined, projects: Record<s
   if (own.captain.adapter === "claude" && isOfficialModel(own.captain.model)) {
     rows.push({ key: "captain", role: "captain", model: own.captain.model!, source: { kind: "captain" } });
   }
-  const ownBinding = (playbookId: string, role: string) => own.playbooks.find((p) => p.id === playbookId)?.roles[role];
   const read = (summary: ConfigSummary, projectId?: string) => {
     for (const playbook of summary.playbooks) {
       for (const [role, binding] of Object.entries(playbook.roles)) {
@@ -114,13 +112,10 @@ export function officialRoles(state: ConfigState | undefined, projects: Record<s
         let source: OfficialSource;
         if (binding.model !== undefined) {
           model = binding.model;
-          // A project's file cannot pin a model today (core-service-2),
-          // so an override its composition shows is your own group's —
-          // unless your own config names none like it.
-          const mine = ownBinding(playbook.id, role);
-          source = projectId === undefined || (mine?.playerId === binding.playerId && mine.model === binding.model)
-            ? { kind: "own-binding", playbookId: playbook.id, role, playerId: binding.playerId }
-            : { kind: "project-binding", projectId };
+          // A project's file binds players by name alone (core-service-2),
+          // so a binding's own model is your own group's in every
+          // composition.
+          source = { kind: "own-binding", playbookId: playbook.id, role, playerId: binding.playerId };
         } else {
           model = player.agent.model;
           source = { kind: "player", playerId: player.id };
@@ -128,7 +123,7 @@ export function officialRoles(state: ConfigState | undefined, projects: Record<s
         if (!isOfficialModel(model)) continue;
         const name = `${playbook.id}.${role}`;
         // A project's role standing exactly as yours is one row.
-        const same = `${name}:${source.kind === "project-binding" ? `project:${projectId}` : JSON.stringify(source)}`;
+        const same = `${name}:${JSON.stringify(source)}`;
         if (seen.has(same)) continue;
         seen.add(same);
         rows.push({ key: `${projectId ?? ""}:${name}`, role: name, ...(projectId !== undefined ? { projectId } : {}), model: model as string, source });
@@ -142,25 +137,13 @@ export function officialRoles(state: ConfigState | undefined, projects: Record<s
   return rows;
 }
 
-export interface FixPlan {
-  ops: ConfigBatchOpInput[];
-  /** Outside the one write: changed in their project's Playbooks tab. */
-  elsewhere: OfficialRole[];
-}
-
 /** The batch setting each official name to Provider default where it
  * stands (settings-60): the Captain's and a player's `model` removed,
  * your own group's binding set to `false`. */
-export function fixPlan(rows: readonly OfficialRole[]): FixPlan {
+export function fixPlan(rows: readonly OfficialRole[]): ConfigBatchOpInput[] {
   const ops: ConfigBatchOpInput[] = [];
   const done = new Set<string>();
-  const elsewhere: OfficialRole[] = [];
-  for (const row of rows) {
-    const source = row.source;
-    if (source.kind === "project-binding") {
-      elsewhere.push(row);
-      continue;
-    }
+  for (const { source } of rows) {
     const key = JSON.stringify(source);
     if (done.has(key)) continue;
     done.add(key);
@@ -168,7 +151,7 @@ export function fixPlan(rows: readonly OfficialRole[]): FixPlan {
     else if (source.kind === "player") ops.push({ kind: "player.set", playerId: source.playerId, patch: { model: null } });
     else ops.push({ kind: "playbook.role.bind", playbookId: source.playbookId, role: source.role, playerId: source.playerId, model: false });
   }
-  return { ops, elsewhere };
+  return ops;
 }
 
 // ---------------------------------------------------------------------------

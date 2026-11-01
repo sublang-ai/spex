@@ -1814,10 +1814,6 @@ msgstr "Captain 工作中…"
 msgid "Change {agent} in Settings"
 msgstr "在设置中修改 {agent}"
 
-#: src/components/AgentCards.tsx
-msgid "Change it in the project's Playbooks tab"
-msgstr "需在项目的规程页修改"
-
 #. draft state chip, at most 14 characters: the source changed after the last compile
 #: src/lib/drafts.ts
 msgid "Changed"

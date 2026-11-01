@@ -305,7 +305,7 @@ test("core-service-148: a batch refused as a conflict, a violation or a request 
     assert.ok(!reply.ok && reply.error.code === "invalid_config", JSON.stringify(reply));
     let violations = (reply.ok ? [] : reply.error.details?.violations) as { rule: string; field?: string; ops: number[] }[];
     assert.equal(violations.length, 1, JSON.stringify(violations));
-    assert.equal(violations[0]!.rule, "effort");
+    assert.equal(violations[0]!.rule, "tuning");
     assert.equal(violations[0]!.field, "players.dev.coder.effort");
     assert.deepEqual(violations[0]!.ops, [1], "the operation that set it");
     assert.equal(readFileSync(configPath, "utf8"), bytes);

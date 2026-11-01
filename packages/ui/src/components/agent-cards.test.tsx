@@ -100,6 +100,9 @@ const CROSSED: Valid = {
       { id: "dev.coder", agent: { adapter: "claude", model: "claude-opus-5-5" }, display: "", boundBy: ["code.coder"] },
       { id: "dev.writer", agent: { adapter: "claude", model: "deepseek-flash" }, display: "", boundBy: ["code.reviewer"] },
       { id: "dev.official", agent: { adapter: "claude", model: "opus[1m]" }, display: "", boundBy: ["review.coder"] },
+      // Bound by no role of your own, only by a project's.
+      { id: "dev.spare", agent: { adapter: "claude", model: "claude-haiku-4" }, display: "", boundBy: [] },
+      { id: "dev.late", agent: { adapter: "claude", model: "opus" }, display: "", boundBy: [] },
     ],
     playbooks: [
       {
@@ -117,16 +120,18 @@ const CROSSED: Valid = {
 };
 
 const PROJECT = "alice/shop-spex";
-/** A project's composition binding an official name of its own. */
-function projectComposition(extra: Record<string, { playerId: string; model?: string | false; display: string }> = {}): ConfigState {
+/** A project's composition over `own` as core-service-2 composes it:
+ * the project's file enabling `fix` and binding its roles by player
+ * name alone, the players and their models your own group's. */
+function projectComposition(own: Valid, roles: Record<string, string> = { coder: "dev.spare" }): ConfigState {
   return {
-    ...CROSSED,
+    ...own,
     revision: undefined,
     summary: {
-      ...CROSSED.summary,
+      ...own.summary,
       playbooks: [
-        ...CROSSED.summary.playbooks,
-        { id: "fix", from: "", command: "fix", intent: "", roles: { coder: { playerId: "dev.writer", model: "claude-haiku-4", display: "" }, ...extra } },
+        ...own.summary.playbooks,
+        { id: "fix", from: "", command: "fix", intent: "", roles: Object.fromEntries(Object.entries(roles).map(([role, playerId]) => [role, { playerId, display: "" }])) },
       ],
     },
   } as Valid;
@@ -346,6 +351,22 @@ describe("settings-65: with no config to read", () => {
       expect(screen.queryByTestId("agent-unify-claude")).toBeNull();
       expect(screen.queryByTestId("agent-official")).toBeNull();
     });
+
+    test(`${configState.status}, on a seat: the cards' steps point to a Credentials section that stands`, () => {
+      const seat = createAppStore({ key: "https://space.test#1", name: "lab-1" }, { command: commandMock } as never);
+      commandMock.mockResolvedValue({ hosts: [], agents: [] });
+      seat.setState({
+        configState,
+        projectConfigs: {},
+        readiness: [notReady("claude", [{ kind: "credential", requirement: "sign in by setting your own credential for claude in the Credentials section" }], { baseUrl: { state: "hidden" } }), entry("codex")],
+      });
+      render(<PlaceStoreContext.Provider value={seat}><SettingsSurface /></PlaceStoreContext.Provider>);
+      expect(screen.getByTestId("config-broken")).toBeTruthy();
+      // settings-5: the seat's steps name the Credentials section…
+      expect(screen.getByTestId("agent-howto-claude").textContent).toContain("Credentials section");
+      // settings-48: …and it is there, the config broken or not.
+      expect(screen.getByTestId("credentials-section")).toBeTruthy();
+    });
   }
 });
 
@@ -376,7 +397,16 @@ describe("settings-66: one model for every agent of an adapter", () => {
 
     // Provider default removes each `model`.
     commandMock.mockReset();
-    commandMock.mockRejectedValue(new SpexCommandError("conflict", "changed meanwhile; retry"));
+    // The file gained a player meanwhile: the refusal reads it again.
+    const grown: Valid = {
+      ...UNIFY,
+      revision: "rev-2",
+      summary: { ...UNIFY.summary, players: [...UNIFY.summary.players, { id: "dev.late", agent: { adapter: "claude", model: "opus" }, display: "", boundBy: [] }] },
+    };
+    commandMock.mockImplementation(async (type: string) => {
+      if (type === "config.get") return grown;
+      throw new SpexCommandError("conflict", "changed meanwhile; retry");
+    });
     choose("claude", /Provider default/);
     fireEvent.click(screen.getByTestId("agent-unify-apply-claude"));
     await act(async () => { fireEvent.click(screen.getByTestId("agent-unify-confirm-claude-confirm")); });
@@ -384,8 +414,17 @@ describe("settings-66: one model for every agent of an adapter", () => {
       { kind: "captain.set", patch: { model: null } },
       { kind: "player.set", playerId: "dev.coder", patch: { model: null } },
     ] });
-    // settings-58: a conflict asks for a retry.
+    // settings-58: a conflict asks for a retry over the config now
+    // shown, read again: the next confirmation lists the new player and
+    // carries its revision.
     expect(screen.getByTestId("agent-unify-error-claude").textContent).toMatch(/changed meanwhile and nothing was written: check the list and try again/);
+    expect(commandMock).toHaveBeenCalledWith("config.get", {});
+    fireEvent.click(screen.getByTestId("agent-unify-apply-claude"));
+    expect(screen.getByTestId("agent-unify-changes").textContent).toContain("dev.late");
+    commandMock.mockReset();
+    commandMock.mockResolvedValue(grown);
+    await act(async () => { fireEvent.click(screen.getByTestId("agent-unify-confirm-claude-confirm")); });
+    expect(commandMock.mock.calls[0]?.[1]).toMatchObject({ revision: "rev-2" });
   });
 
   test("behind a third party with no default model, Provider default cannot apply until a model is chosen", () => {
@@ -407,7 +446,7 @@ describe("settings-67: official names behind a third-party service", () => {
   const thirdParty = () => [entry("claude", { baseUrl: { state: "third-party", host: "api.deepseek.com" } }), entry("codex")];
 
   test("listed by the model each role runs, confirmed with their targets, written where each stands, recomputed after", async () => {
-    show(CROSSED, thirdParty(), { [PROJECT]: projectComposition() });
+    show(CROSSED, thirdParty(), { [PROJECT]: projectComposition(CROSSED) });
     const list = screen.getByTestId("agent-official-list");
     // settings-59: by the effective model.
     expect(list.textContent).toContain("Captain · claude-opus-5-5");
@@ -421,7 +460,9 @@ describe("settings-67: official names behind a third-party service", () => {
     // settings-60: each role, its model, its target; the project's elsewhere.
     expect(rows).toContain("Captain: claude-opus-5-5 → Provider default · deepseek-flash");
     expect(rows).toContain("code.reviewer: claude-sonnet-5 → Provider default · deepseek-flash");
-    expect(rows).toContain("fix.coder (shop): claude-haiku-4 → Change it in the project's Playbooks tab");
+    // A project's role runs your own player's model: written there.
+    expect(rows).toContain("fix.coder (shop): claude-haiku-4 → Provider default · deepseek-flash");
+    expect(rows.join("\n")).not.toContain("dev.late");
 
     // After the write a project binds a further official name.
     const after: Valid = {
@@ -430,14 +471,15 @@ describe("settings-67: official names behind a third-party service", () => {
       summary: {
         ...CROSSED.summary,
         captain: { adapter: "claude" },
-        players: CROSSED.summary.players.map((player) => (player.id === "dev.official" ? { ...player, agent: { adapter: "claude" } } : player)),
+        players: CROSSED.summary.players.map((player) => (player.id === "dev.official" || player.id === "dev.spare" ? { ...player, agent: { adapter: "claude" } } : player)),
         playbooks: CROSSED.summary.playbooks.map((playbook) => (playbook.id === "code"
           ? { ...playbook, roles: { ...playbook.roles, reviewer: { playerId: "dev.writer", model: false, display: "" } } }
           : playbook)),
       },
     };
     commandMock.mockImplementation(async () => {
-      useAppStore.setState({ projectConfigs: { [PROJECT]: projectComposition({ reviewer: { playerId: "dev.writer", model: "opus", display: "" } }) } });
+      // The project's file now binds a role to an official-named player.
+      useAppStore.setState({ projectConfigs: { [PROJECT]: projectComposition(after, { coder: "dev.spare", reviewer: "dev.late" }) } });
       return after;
     });
     await act(async () => { fireEvent.click(screen.getByTestId("agent-official-confirm-confirm")); });
@@ -446,20 +488,19 @@ describe("settings-67: official names behind a third-party service", () => {
     const [type, batch] = commandMock.mock.calls[0]!;
     expect(type).toBe("config.batch");
     expect(batch.revision).toBe("rev-7");
-    expect(batch.ops).toHaveLength(3);
+    expect(batch.ops).toHaveLength(4);
     expect(batch.ops).toEqual(expect.arrayContaining([
       { kind: "captain.set", patch: { model: null } },
       { kind: "player.set", playerId: "dev.official", patch: { model: null } },
+      { kind: "player.set", playerId: "dev.spare", patch: { model: null } },
       { kind: "playbook.role.bind", playbookId: "code", role: "reviewer", playerId: "dev.writer", model: false },
     ]));
     // settings-60: recomputed from the newest state — the project's
-    // bindings remain, the new one among them, and nothing says all
-    // were set.
+    // new binding listed, and nothing says all were set.
     const done = screen.getByTestId("agent-official-done");
     expect(done.textContent).toBe("Written, but these roles still name an official model:");
     const remaining = screen.getByTestId("agent-official-list").textContent;
-    expect(remaining).toContain("fix.coder (shop) · claude-haiku-4");
-    expect(remaining).toContain("fix.reviewer (shop) · opus");
+    expect(remaining).toBe("fix.reviewer (shop) · opus");
     expect(remaining).not.toContain("Captain");
     expect(screen.getByTestId("agent-card-claude").textContent).not.toContain("Every role now uses Provider default.");
   });

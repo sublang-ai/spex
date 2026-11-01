@@ -1814,10 +1814,6 @@ msgstr "Captain is working…"
 msgid "Change {agent} in Settings"
 msgstr "Change {agent} in Settings"
 
-#: src/components/AgentCards.tsx
-msgid "Change it in the project's Playbooks tab"
-msgstr "Change it in the project's Playbooks tab"
-
 #. draft state chip, at most 14 characters: the source changed after the last compile
 #: src/lib/drafts.ts
 msgid "Changed"

@@ -113,23 +113,23 @@ const notInProjectFile = (entry: string): Error =>
 export function validateProjectConfig(top: unknown, _path: string): void {
   if (top === null || top === undefined) return;
   if (!isPlainObject(top)) {
-    throw new Error(i18n._({ id: "config must be a YAML mapping", comment: "Config error: the file's top level is not a mapping" }));
+    throw new ConfigViolation("structure", undefined, i18n._({ id: "config must be a YAML mapping", comment: "Config error: the file's top level is not a mapping" }));
   }
   for (const key of Object.keys(top)) if (key !== "playbooks") throw notInProjectFile(key);
   if (top.playbooks === undefined || top.playbooks === null) return;
   if (!isPlainObject(top.playbooks)) {
-    throw new Error(i18n._({ id: "playbooks must be an object", comment: "Config error; `playbooks` is the config file's own field name" }));
+    throw new ConfigViolation("structure", "playbooks", i18n._({ id: "playbooks must be an object", comment: "Config error; `playbooks` is the config file's own field name" }));
   }
   for (const [id, block] of Object.entries(top.playbooks)) {
     if (!isPlainObject(block)) {
-      throw new Error(i18n._({ id: "playbooks.{id} must be an object",
+      throw new ConfigViolation("structure", `playbooks.${id}`, i18n._({ id: "playbooks.{id} must be an object",
         comment: "Config error; `playbooks` is the config file's own field name and the id its key", values: { id } }));
     }
     if (Object.hasOwn(block, "from")) throw notInProjectFile(`playbooks.${id}.from`);
     for (const field of MODEL_FIELDS) if (Object.hasOwn(block, field)) throw notInProjectFile(`playbooks.${id}.${field}`);
     if (block.roles === undefined) continue;
     if (!isPlainObject(block.roles)) {
-      throw new Error(i18n._({ id: "playbooks.{id}.roles must be an object",
+      throw new ConfigViolation("bindings", `playbooks.${id}.roles`, i18n._({ id: "playbooks.{id}.roles must be an object",
         comment: "Config error; `playbooks.<id>.roles` is the config file's own field name", values: { id } }));
     }
     for (const [role, value] of Object.entries(block.roles)) {
@@ -362,9 +362,22 @@ export type LoadModule = (specifier: string) => Promise<unknown>;
  * to import ("unavailable") or predates the current registry contract
  * ("stale"). Callers branch on `kind`, never on the (localized) message.
  */
-export class RegistryError extends Error {
-  constructor(readonly kind: "unavailable" | "stale", message: string) {
+/** A composition refusal by the rule it breaks and the field it names
+ * (core-service-16, core-service-44): the rule is its row of the shared
+ * rule set — `structure`, `adapter` and `registry` naming a field's
+ * shape, an agent's adapter and a playbook's module entry — and the
+ * field a dotted path in the file, absent where the file's top level
+ * is at fault. */
+export class ConfigViolation extends Error {
+  constructor(readonly rule: string, readonly field: string | undefined, message: string) {
     super(message);
+    this.name = "ConfigViolation";
+  }
+}
+
+export class RegistryError extends ConfigViolation {
+  constructor(readonly kind: "unavailable" | "stale", message: string, field?: string) {
+    super("registry", field, message);
     this.name = "RegistryError";
   }
 }
@@ -834,10 +847,10 @@ function validateAgentBlock(
   block: Record<string, unknown>,
   path: string,
 ): void {
-  if (Object.hasOwn(block, "skills")) throw new Error(skillsRefusal(`${path}.skills`));
+  if (Object.hasOwn(block, "skills")) throw new ConfigViolation("skills", `${path}.skills`, skillsRefusal(`${path}.skills`));
   for (const key of Object.keys(block)) {
     if (!AGENT_FIELDS.has(key)) {
-      throw new Error(
+      throw new ConfigViolation("structure", `${path}.${key}`,
         i18n._({
           id: "Unknown config field {field}",
           comment:
@@ -849,7 +862,7 @@ function validateAgentBlock(
   }
   if (block.permissions !== undefined) {
     if (!isPlainObject(block.permissions)) {
-      throw new Error(
+      throw new ConfigViolation("structure", `${path}.permissions`,
         i18n._({
           id: "{path}.permissions must be an object",
           comment:
@@ -861,7 +874,7 @@ function validateAgentBlock(
     const permissions = block.permissions;
     for (const key of Object.keys(permissions)) {
       if (!PERMISSION_FIELDS.has(key)) {
-        throw new Error(
+        throw new ConfigViolation("structure", `${path}.permissions.${key}`,
           i18n._({
             id: "Unknown config field {field}",
             comment:
@@ -876,7 +889,7 @@ function validateAgentBlock(
       permissions.mode !== "auto" &&
       permissions.mode !== "bypass"
     ) {
-      throw new Error(
+      throw new ConfigViolation("structure", `${path}.permissions.mode`,
         i18n._({
           id: "{path}.permissions.mode must be auto or bypass",
           comment:
@@ -888,7 +901,7 @@ function validateAgentBlock(
     for (const policy of ["fileWrite", "shellExecute", "networkAccess"]) {
       const value = permissions[policy];
       if (value !== undefined && !["allow", "ask", "deny"].includes(String(value))) {
-        throw new Error(
+        throw new ConfigViolation("structure", `${path}.permissions.${policy}`,
           i18n._({
             id: "{path}.permissions.{policy} must be allow, ask, or deny",
             comment:
@@ -903,7 +916,7 @@ function validateAgentBlock(
       (!Array.isArray(permissions.writablePaths) ||
         permissions.writablePaths.some((p) => typeof p !== "string"))
     ) {
-      throw new Error(
+      throw new ConfigViolation("writable-paths", `${path}.permissions.writablePaths`,
         i18n._({
           id: "{path}.permissions.writablePaths must be a string list",
           comment:
@@ -914,7 +927,7 @@ function validateAgentBlock(
     }
   }
   if (block.effort !== undefined && block.reasoningEffort !== undefined) {
-    throw new Error(
+    throw new ConfigViolation("tuning", `${path}.effort`,
       i18n._({
         id: "{path} must not set both effort and its legacy alias reasoningEffort",
         comment:
@@ -949,7 +962,7 @@ export function resolveAgent(
     if ("profile" in value) {
       // Retired with the profiles model (playbook 3.0); the load path
       // migrates old files, so a survivor here is a hand-typed edit.
-      throw new Error(
+      throw new ConfigViolation("legacy", `${path}.profile`,
         i18n._({
           id: "{path}.profile is retired: agents carry their own adapter, model, effort, and permissions",
           comment:
@@ -960,7 +973,7 @@ export function resolveAgent(
     }
     return { ...value };
   }
-  throw new Error(
+  throw new ConfigViolation("structure", path,
     i18n._({
       id: "{path} must be an adapter shorthand or an agent block",
       comment:
@@ -977,7 +990,7 @@ function toResolvedAgent(
   validateAgentBlock(block, path);
   const adapter = block.adapter;
   if (typeof adapter !== "string" || adapter.length === 0) {
-    throw new Error(
+    throw new ConfigViolation("adapter", `${path}.adapter`,
       i18n._({
         id: "{path} must resolve an adapter",
         comment: "Config error: the agent names no adapter to run on",
@@ -989,7 +1002,7 @@ function toResolvedAgent(
     // English, deliberately (core-service-111): the page matches
     // `Unknown adapter "<name>"` to phrase this failure in its own
     // words, so these are wire text, not the core's own prose.
-    throw new Error(
+    throw new ConfigViolation("adapter", `${path}.adapter`,
       `Unknown adapter "${adapter}" for ${path}. Valid adapters: ${KNOWN_ADAPTERS.join(", ")}`,
     );
   }
@@ -1015,7 +1028,7 @@ function toResolvedAgent(
       const values = (supportedEffortValues(adapter as never) ?? []).join(
         ", ",
       );
-      throw new Error(
+      throw new ConfigViolation("tuning", `${path}.effort`,
         i18n._({
           id: "{path}.effort \"{effort}\" is not supported by the \"{adapter}\" adapter (valid: {values})",
           comment:
@@ -1026,14 +1039,14 @@ function toResolvedAgent(
     }
   }
   if (rest.browser !== undefined && typeof rest.browser !== "boolean") {
-    throw new Error(i18n._({
+    throw new ConfigViolation("structure", `${path}.browser`, i18n._({
       id: "{path}.browser must be a boolean",
       comment: "Config error; browser is the config field name",
       values: { path },
     }));
   }
   if (rest.fastMode !== undefined && typeof rest.fastMode !== "boolean") {
-    throw new Error(
+    throw new ConfigViolation("tuning", `${path}.fastMode`,
       i18n._({
         id: "{path}.fastMode must be a boolean",
         comment:
@@ -1105,7 +1118,7 @@ export function assertSubagentEffort(
   path: string,
 ): void {
   if (!isSubagentModelSupported(adapter as never)) {
-    throw new Error(
+    throw new ConfigViolation("subagent-effort", `${path}.subagentEffort`,
       i18n._({
         id: "{path}.subagentEffort is not supported for adapter \"{adapter}\"",
         comment:
@@ -1115,7 +1128,7 @@ export function assertSubagentEffort(
     );
   }
   if (subagentModel === undefined) {
-    throw new Error(
+    throw new ConfigViolation("subagent-effort", `${path}.subagentEffort`,
       i18n._({
         id: "{path}.subagentEffort for adapter \"{adapter}\" requires subagentModel",
         comment:
@@ -1126,7 +1139,7 @@ export function assertSubagentEffort(
   }
   const values = subagentEffortValues(adapter);
   if (typeof value !== "string" || !values.includes(value)) {
-    throw new Error(
+    throw new ConfigViolation("subagent-effort", `${path}.subagentEffort`,
       i18n._({
         id: "{path}.subagentEffort for adapter \"{adapter}\" must be one of: {values}",
         comment:
@@ -1147,7 +1160,7 @@ export function assertSubagentModel(
   path: string,
 ): void {
   if (typeof value !== "string" || value.trim().length === 0) {
-    throw new Error(
+    throw new ConfigViolation("delegation", `${path}.subagentModel`,
       i18n._({
         id: "{path}.subagentModel must be a nonblank string",
         comment:
@@ -1157,7 +1170,7 @@ export function assertSubagentModel(
     );
   }
   if (!isSubagentModelSupported(adapter as never)) {
-    throw new Error(
+    throw new ConfigViolation("tuning", `${path}.subagentModel`,
       i18n._({
         id: "{path}.subagentModel is not supported for adapter \"{adapter}\"",
         comment:
@@ -1226,7 +1239,7 @@ export function isValidRegistryEntry(
 function resolveBinding(value: unknown, path: string): ResolvedBinding {
   if (typeof value === "string") {
     if (!PLAYER_ID_PATTERN.test(value)) {
-      throw new Error(
+      throw new ConfigViolation("bindings", path,
         i18n._({
           id: "{path} is not a canonical player id",
           comment: "Config error: a role is bound to a malformed player id",
@@ -1237,7 +1250,7 @@ function resolveBinding(value: unknown, path: string): ResolvedBinding {
     return { playerId: value };
   }
   if (!isPlainObject(value)) {
-    throw new Error(
+    throw new ConfigViolation("bindings", path,
       i18n._({
         id: "{path} must be a player id or a binding block",
         comment: "Config error: a role's binding is neither form",
@@ -1248,7 +1261,7 @@ function resolveBinding(value: unknown, path: string): ResolvedBinding {
   const allowed = new Set(["player", "model", "effort", "fastMode", "subagentModel", "subagentEffort"]);
   for (const key of Object.keys(value)) {
     if (allowed.has(key)) continue;
-    throw new Error(
+    throw new ConfigViolation("binding-keys", `${path}.${key}`,
       i18n._({
         id: "{path}.{key} is not a role binding key: adapter, permissions, instruction and workspace belong to the session player",
         comment:
@@ -1259,7 +1272,7 @@ function resolveBinding(value: unknown, path: string): ResolvedBinding {
   }
   const playerId = value.player;
   if (typeof playerId !== "string" || !PLAYER_ID_PATTERN.test(playerId)) {
-    throw new Error(
+    throw new ConfigViolation("bindings", `${path}.player`,
       i18n._({
         id: "{path}.player must name a canonical player id",
         comment:
@@ -1275,7 +1288,7 @@ function resolveBinding(value: unknown, path: string): ResolvedBinding {
     // distinct from omission, which inherits the player's.
     if (raw === false) return false;
     if (typeof raw === "string" && raw.length > 0) return raw;
-    throw new Error(
+    throw new ConfigViolation("tuning", `${path}.${key}`,
       i18n._({
         id: "{path}.{key} must be a string or false (the provider default)",
         comment:
@@ -1288,7 +1301,7 @@ function resolveBinding(value: unknown, path: string): ResolvedBinding {
   if (fastMode !== undefined && typeof fastMode !== "boolean") {
     // Unlike model and effort, fast mode carries no provider-default
     // sentinel: omission inherits the player's, `false` is a literal request.
-    throw new Error(
+    throw new ConfigViolation("tuning", `${path}.fastMode`,
       i18n._({
         id: "{path}.fastMode must be a boolean",
         comment:
@@ -1356,14 +1369,14 @@ export async function composeConfig(
   options: ComposeOptions = {},
 ): Promise<ComposedConfig> {
   if (!isPlainObject(ownTop)) {
-    throw new Error(
+    throw new ConfigViolation("structure", undefined,
       i18n._({
         id: "config must be a YAML mapping",
         comment: "Config error: the file's top level is not a mapping",
       }),
     );
   }
-  if (Object.hasOwn(ownTop, "skills")) throw new Error(skillsRefusal("skills"));
+  if (Object.hasOwn(ownTop, "skills")) throw new ConfigViolation("skills", "skills", skillsRefusal("skills"));
   // A session's configuration is yours with the project's on top
   // (core-service-2); the project's file is checked before it layers.
   if (options.project) validateProjectConfig(options.project.top, options.project.path);
@@ -1373,7 +1386,7 @@ export async function composeConfig(
   if (top.profiles !== undefined) {
     // The load path migrates profiles-era files (DR-019); a map
     // arriving here came through an edit or a raw compose.
-    throw new Error(
+    throw new ConfigViolation("legacy", "profiles",
       i18n._({
         id: "profiles is retired (playbook 3.0): agents carry their settings inline",
         comment:
@@ -1383,7 +1396,7 @@ export async function composeConfig(
   }
 
   if (!isPlainObject(top.playbooks)) {
-    throw new Error(
+    throw new ConfigViolation("structure", "playbooks",
       i18n._({
         id: "playbooks must be an object",
         comment:
@@ -1393,7 +1406,7 @@ export async function composeConfig(
   }
   const playbookBlocks = top.playbooks;
   if (Object.keys(playbookBlocks).length === 0) {
-    throw new Error(
+    throw new ConfigViolation("structure", "playbooks",
       i18n._({
         id: "playbooks must enable at least one playbook",
         comment:
@@ -1407,7 +1420,7 @@ export async function composeConfig(
     typeof captainBlock.adapter !== "string" ||
     captainBlock.adapter.length === 0
   ) {
-    throw new Error(
+    throw new ConfigViolation("adapter", "captain.adapter",
       i18n._({
         id: "captain must resolve an adapter",
         comment:
@@ -1433,7 +1446,7 @@ export async function composeConfig(
   const sessionPlayers = new Map<string, ResolvedAgent>();
   if (top.players !== undefined) {
     if (!isPlainObject(top.players)) {
-      throw new Error(
+      throw new ConfigViolation("roster", "players",
         i18n._({
           id: "players must be an object",
           comment:
@@ -1444,7 +1457,7 @@ export async function composeConfig(
     for (const [playerId, value] of Object.entries(top.players)) {
       const path = `players.${playerId}`;
       if (!PLAYER_ID_PATTERN.test(playerId)) {
-        throw new Error(
+        throw new ConfigViolation("roster", path,
           i18n._({
             id: "{path} is not a canonical player id (lowercase segments, dots optional)",
             comment: "Config error: a session player's id is malformed",
@@ -1453,7 +1466,7 @@ export async function composeConfig(
         );
       }
       if (playerId === RESERVED_CAPTAIN_ROLE_ID) {
-        throw new Error(
+        throw new ConfigViolation("roster", "players.captain",
           i18n._({
             id: "players.captain is reserved for the session Captain, which is configured at the top level",
             comment:
@@ -1466,7 +1479,7 @@ export async function composeConfig(
         typeof resolved.adapter !== "string" ||
         resolved.adapter.length === 0
       ) {
-        throw new Error(
+        throw new ConfigViolation("adapter", `${path}.adapter`,
           i18n._({
             id: "{path} must resolve an adapter",
             comment: "Config error: the agent names no adapter to run on",
@@ -1489,7 +1502,7 @@ export async function composeConfig(
 
   for (const [id, blockValue] of Object.entries(playbookBlocks)) {
     if (!isPlainObject(blockValue)) {
-      throw new Error(
+      throw new ConfigViolation("structure", `playbooks.${id}`,
         i18n._({
           id: "playbooks.{id} must be an object",
           comment:
@@ -1502,7 +1515,7 @@ export async function composeConfig(
     // A playbook's module comes from the environment that installs it
     // and never from a path in a shared file (core-service-2, DR-104).
     if (Object.hasOwn(block, "from")) {
-      throw new Error(
+      throw new ConfigViolation("module", `playbooks.${id}.from`,
         i18n._({
           id: "playbooks.{id}.from is not allowed: a playbook's module comes from the environment that installs its spec package",
           comment:
@@ -1521,6 +1534,7 @@ export async function composeConfig(
             "Config error: no environment of the session installs the enabled playbook; {repository} is the spex repository's key",
           values: { id, repository: modules.repository },
         }),
+        `playbooks.${id}`,
       );
     }
     const from = located.module;
@@ -1537,11 +1551,12 @@ export async function composeConfig(
             "Config error; `message` is the import failure's own words, relayed",
           values: { id, from, message },
         }),
+        `playbooks.${id}`,
       );
     }
     const entry = (moduleValue as { default?: unknown } | undefined)?.default;
     if (!isValidRegistryEntry(entry)) {
-      throw new Error(
+      throw new ConfigViolation("registry", `playbooks.${id}`,
         i18n._({
           id: "playbooks.{id}: its module \"{from}\" exposes no valid registry entry",
           comment:
@@ -1568,10 +1583,11 @@ export async function composeConfig(
             "Config error; \"Playbooks\" is the app's own surface",
           values: { id, from },
         }),
+        `playbooks.${id}`,
       );
     }
     if (entry.id !== id) {
-      throw new Error(
+      throw new ConfigViolation("registry", `playbooks.${id}`,
         i18n._({
           id: "playbooks.{id} key must equal the module manifest id \"{manifestId}\"",
           comment:
@@ -1581,7 +1597,7 @@ export async function composeConfig(
       );
     }
     if (seenIds.has(entry.id)) {
-      throw new Error(
+      throw new ConfigViolation("registry", `playbooks.${id}`,
         i18n._({
           id: "duplicate playbook id \"{playbookId}\"",
           comment: "Config error: two entries enable the same playbook",
@@ -1597,7 +1613,7 @@ export async function composeConfig(
         : undefined;
     const command = commandOverride ?? entry.command;
     if (seenCommands.has(command)) {
-      throw new Error(
+      throw new ConfigViolation("registry", `playbooks.${id}`,
         i18n._({
           id: "duplicate effective command \"{command}\"",
           comment:
@@ -1609,7 +1625,7 @@ export async function composeConfig(
     seenCommands.add(command);
 
     if (entry.requiredRoleIds.includes(RESERVED_CAPTAIN_ROLE_ID)) {
-      throw new Error(
+      throw new ConfigViolation("registry", `playbooks.${id}`,
         i18n._({
           id: "playbooks.{id} requires local role \"captain\", which is reserved for the tmux-play Captain",
           comment:
@@ -1623,7 +1639,7 @@ export async function composeConfig(
     // per-playbook players block is the removed shape and rejects with
     // the launcher's own wording rather than a paraphrase.
     if (block.players !== undefined) {
-      throw new Error(
+      throw new ConfigViolation("legacy", `playbooks.${id}.players`,
         i18n._({
           id: "playbooks.{id}.players was removed in the explicit-session-player major release: define stable ids in top-level players and bind them explicitly under playbooks.<id>.roles; automatic migration would choose which prior conversations share a session",
           comment:
@@ -1633,7 +1649,7 @@ export async function composeConfig(
       );
     }
     if (!isPlainObject(block.roles)) {
-      throw new Error(
+      throw new ConfigViolation("bindings", `playbooks.${id}.roles`,
         i18n._({
           id: "playbooks.{id}.roles must be an object",
           comment:
@@ -1644,7 +1660,7 @@ export async function composeConfig(
     }
     const roleBlocks = block.roles;
     if (RESERVED_CAPTAIN_ROLE_ID in roleBlocks) {
-      throw new Error(
+      throw new ConfigViolation("bindings", `playbooks.${id}.roles.captain`,
         i18n._({
           id: "playbooks.{id}.roles.captain binds local role \"captain\", which is reserved for the tmux-play Captain",
           comment:
@@ -1664,7 +1680,7 @@ export async function composeConfig(
       // punctuate its own list (core-service-111); English is unchanged.
       const listed = (roles: string[]): string =>
         roles.join(i18n._({ id: ", ", comment: "Separates names listed in one message" }));
-      throw new Error(
+      throw new ConfigViolation("bindings", `playbooks.${id}.roles`,
         i18n._({
           id: "playbooks.{id}.roles must exactly cover requiredRoleIds{missing}{unknown}",
           comment:
@@ -1700,7 +1716,7 @@ export async function composeConfig(
       const path = `playbooks.${id}.roles.${role}`;
       const binding = resolveBinding(roleBlocks[role], path);
       if (!sessionPlayers.has(binding.playerId)) {
-        throw new Error(
+        throw new ConfigViolation("bindings", path,
           i18n._({
             id: "{path} names absent session player \"{playerId}\"",
             comment:
@@ -1775,7 +1791,7 @@ export async function composeConfig(
         ids.filter((value: string | undefined) => value !== undefined),
       );
       if (distinct.size < ids.length) {
-        throw new Error(
+        throw new ConfigViolation("concurrency", `playbooks.${id}.roles`,
           i18n._({
             id: "playbooks.{id} runs roles {roles} concurrently, so they must bind to distinct players",
             comment:
@@ -1825,7 +1841,7 @@ export async function composeConfig(
           ...(acceptsCwdOption ? { cwd: options.cwd } : {}),
         });
       } catch (error) {
-        throw new Error(i18n._({
+        throw new ConfigViolation("custom-options", `playbooks.${id}`, i18n._({
           id: "{file}: {reason}", comment: "A storage fault as one line: the file, then the reason — itself a message",
           values: { file: `playbooks.${id}`, reason: error instanceof Error ? error.message : String(error) },
         }));

@@ -1064,10 +1064,17 @@ export function SettingsSurface({
           ) : null}
           {error ? <p className="mt-2 text-xs">{error}</p> : null}
         </div>
-        {/* Readiness stands without a config (settings-5). */}
+        {/* Readiness stands without a config (settings-5), and on a
+            seat the Credentials section its cards point to
+            (settings-48). */}
         <div className="mt-5">
           <AgentCards />
         </div>
+        {seat ? (
+          <div className="mt-5">
+            <CredentialsSection ask={credentialHost} onAskShown={onCredentialHostShown} />
+          </div>
+        ) : null}
       </div>
     );
   }

@@ -29,6 +29,7 @@ import {
   templatePath,
   validateProjectConfig,
   type LoadModule,
+  ConfigViolation,
 } from "./config.js";
 import { sha256 } from "@sublang/spex/files";
 import { defaultOwnName, Home } from "./home.js";
@@ -817,6 +818,13 @@ test("command overrides land in captain options and duplicates are rejected", as
       ? { default: registryEntry({ id: "other", command: "code" }) }
       : stubLoader(specifier);
   await expectError(dupes, /^duplicate effective command "code"$/, loader);
+  // Its words name no field; the refusal still carries one.
+  await assert.rejects(compose(dupes, loader), (error: Error) => {
+    assert.ok(error instanceof ConfigViolation);
+    assert.equal(error.rule, "registry");
+    assert.match(error.field ?? "", /^playbooks\.(code|other)$/);
+    return true;
+  });
 });
 
 test("seedConfig creates once and never overwrites", () => {
