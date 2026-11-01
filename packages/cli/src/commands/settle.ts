@@ -429,15 +429,15 @@ export function skillLines(root: string, lock: Lock, name: string, state: Packag
 }
 
 /** A provided spec's place as a line, in a project's Packages tab's
- * words (cli-6, environments-41); an edited copy whose package no longer
- * places it is the project's own now. */
+ * words (cli-6, environments-41), an edited copy naming the newer
+ * release's version where one waits; an edited copy its package no
+ * longer places, the project's own now, reads as edited too (DR-172). */
 export function specText(placement: SpecPlacement): string {
   switch (placement.state) {
     case "placed": return `spec in ${placement.path}`;
-    case "edited": return `spec edited in ${placement.path} — left as yours`;
+    case "edited": return `spec edited in specs/ — left as yours${placement.waitingVersion ? `, ${placement.waitingVersion} waiting` : ""}`;
     case "blocked": return `spec not placed — specs/ holds ${posix.basename(placement.path)} already`;
     case "no-specs": return "spec needs specs/ — spex scaffold";
-    case "kept": return `spec edited in ${placement.path} — kept as yours`;
   }
 }
 
@@ -447,7 +447,7 @@ export function specText(placement: SpecPlacement): string {
 export function specLines(placements: readonly SpecPlacement[], name: string, indent = "  "): string[] {
   return placements.filter((placement) => placement.name === name).flatMap((placement) => [
     `${indent}${specText(placement)}`,
-    ...placement.waiting.map((wait) => `${indent}${wait.count} links wait for ${wait.name} — spex add ${wait.name}`),
+    ...placement.waiting.map((wait) => `${indent}${wait.count === 1 ? "1 link waits" : `${wait.count} links wait`} for ${wait.name} — spex add ${wait.name}`),
   ]);
 }
 
@@ -499,7 +499,7 @@ export function changeLine(change: LockChange, lock?: Lock, added?: ReadonlySet<
 }
 
 /** The lines naming each package gained, updated or removed, with where
- * each one's spec and skills went — a removed package's edited copy kept
+ * each one's spec and skills went — a removed package's edited copy left
  * as the project's own (cli-2, cli-3, environments-41). */
 export function gainedLines(root: string, settled: Settled, added: ReadonlySet<string>): string[] {
   const lines: string[] = [];

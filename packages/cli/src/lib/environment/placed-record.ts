@@ -4,10 +4,10 @@
 // The install record of placed specs (environments-41, lint-9, DR-174):
 // at `<root>/.spex/placed.json`, each provided spec an install placed
 // under the root's `specs/`, by its spec package, with the path it
-// stands at, the SHA-256 of the bytes written and the packages its links
-// wait for — so an install knows its own copy from an edited one, and
-// the linter a placed spec from the project's own. An install writes it
-// whole, atomically, as compact JSON.
+// stands at, the release's version, the SHA-256 of the bytes written and
+// the packages its links wait for — so an install knows its own copy
+// from an edited one, and the linter a placed spec from the project's
+// own. An install writes it whole, atomically, as compact JSON.
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -20,11 +20,12 @@ import { SPEX_DIR } from "./layout.js";
 export const PLACED_RECORD = "placed.json";
 
 /** One placed spec: its path from the root, `specs/packages/<pkg>.md`,
- * the SHA-256 in hex of the bytes the install wrote there, and each
- * package `<org>/<pkg>` its links wait for with their count
- * (environments-41). */
+ * the version of the release it was derived from, the SHA-256 in hex of
+ * the bytes the install wrote there, and each package `<org>/<pkg>` its
+ * links wait for with their count (environments-41). */
 export type PlacedSpec = {
   path: string;
+  version: string;
   sha256: string;
   waiting: Record<string, number>;
 };
@@ -45,11 +46,11 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
 
 function placedSpec(value: unknown): PlacedSpec | null {
   if (!isObject(value)) return null;
-  const { path, sha256, waiting } = value;
-  if (typeof path !== "string" || typeof sha256 !== "string" || !isObject(waiting)) return null;
+  const { path, version, sha256, waiting } = value;
+  if (typeof path !== "string" || typeof version !== "string" || typeof sha256 !== "string" || !isObject(waiting)) return null;
   const counts = Object.entries(waiting);
   if (!counts.every(([, count]) => typeof count === "number" && Number.isInteger(count) && count >= 0)) return null;
-  return { path, sha256, waiting: Object.fromEntries(counts) as Record<string, number> };
+  return { path, version, sha256, waiting: Object.fromEntries(counts) as Record<string, number> };
 }
 
 /** The root's record of placed specs, or null where none reads: a
@@ -77,9 +78,9 @@ export function readPlacedRecord(root: string): PlacedRecord | null {
  * specs in name order. */
 export function serializePlacedRecord(record: PlacedRecord): string {
   const specs = Object.keys(record.specs).sort().map((name): [string, PlacedSpec] => {
-    const { path, sha256, waiting } = record.specs[name]!;
+    const { path, version, sha256, waiting } = record.specs[name]!;
     const counts = Object.keys(waiting).sort().map((other): [string, number] => [other, waiting[other]!]);
-    return [name, { path, sha256, waiting: Object.fromEntries(counts) }];
+    return [name, { path, version, sha256, waiting: Object.fromEntries(counts) }];
   });
   return JSON.stringify({ format: 1, specs: Object.fromEntries(specs) });
 }

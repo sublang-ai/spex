@@ -18,8 +18,8 @@ import { PLACED_RECORD, placedRecordPath, readPlacedRecord, writePlacedRecord, t
 const record: PlacedRecord = {
   format: 1,
   specs: {
-    "acme/tools": { path: "specs/packages/tools.md", sha256: "ab".repeat(32), waiting: { "acme/other": 2 } },
-    "acme/plain": { path: "specs/packages/plain.md", sha256: "cd".repeat(32), waiting: {} },
+    "acme/tools": { path: "specs/packages/tools.md", version: "1.2.0", sha256: "ab".repeat(32), waiting: { "acme/other": 2 } },
+    "acme/plain": { path: "specs/packages/plain.md", version: "0.1.0", sha256: "cd".repeat(32), waiting: {} },
   },
 };
 
@@ -62,9 +62,11 @@ test("placed record: a missing, unreadable, unknown or misshapen record reads as
     ["another format", JSON.stringify({ ...record, format: 2 })],
     ["no format", JSON.stringify({ specs: record.specs })],
     ["specs no object", JSON.stringify({ format: 1, specs: [] })],
-    ["an entry without a path", one({ sha256: tools.sha256, waiting: {} })],
-    ["an entry without a hash", one({ path: tools.path, waiting: {} })],
-    ["an entry without waiting", one({ path: tools.path, sha256: tools.sha256 })],
+    ["an entry without a path", one({ version: tools.version, sha256: tools.sha256, waiting: {} })],
+    ["an entry without a version", one({ path: tools.path, sha256: tools.sha256, waiting: {} })],
+    ["a version as a number", one({ ...tools, version: 1 })],
+    ["an entry without a hash", one({ path: tools.path, version: tools.version, waiting: {} })],
+    ["an entry without waiting", one({ path: tools.path, version: tools.version, sha256: tools.sha256 })],
     ["a negative count", one({ ...tools, waiting: { "acme/other": -1 } })],
     ["a count as text", one({ ...tools, waiting: { "acme/other": "1" } })],
   ] as const) {
