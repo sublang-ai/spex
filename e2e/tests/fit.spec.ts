@@ -340,7 +340,8 @@ async function assertSurfaceMatrix(
   app: App,
   group: "conversation and projects" | "authoring and settings",
 ): Promise<void> {
-  test.setTimeout(120_000);
+  // The first run's settling wait may take a minute on a loaded runner.
+  test.setTimeout(160_000);
   const projectId = app.projectId!;
 
   // Arrange through the protocol: two queued intents, the second
@@ -406,7 +407,11 @@ async function assertSurfaceMatrix(
         // Settle one complete run first, then keep the next in flight:
         // every viewport therefore carries both the folded resting
         // measure and the live replacement whose fit it exercises.
-        await expect(abort).toHaveCount(0, { timeout: 20_000 });
+        // The run's scripted calls alone hold it about seven seconds and
+        // it settles in about fourteen on a fast machine; a loaded runner
+        // takes longer. This wait only reaches the resting state the
+        // measure starts from, so it allows a minute.
+        await expect(abort).toHaveCount(0, { timeout: 60_000 });
         await send(page, "Continue measuring the token refresh work");
         await expect(abort).toBeVisible();
       },
