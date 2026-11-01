@@ -36,7 +36,7 @@ While a file node is displayed, the spec view shall present the package's header
 - a count column whose group filter is off leaves the rows and the heading row [[spec-view-4](#spec-view-4)];
 - while an expanded package's contents scroll under the heading row, its header stays pinned beneath that row until the next package's header takes its place;
 - expanded, the node shows the file's intent in full — rendered as item bodies are [[spec-view-3](#spec-view-3)], its links jumping as [[spec-view-6](#spec-view-6)] states — followed by its items in document order — never sorted by ID [[meta-12](../meta.md#meta-12)] — headed wherever the file's `##` section changes between consecutive items by that section's group full name and item count in the group's color, a section outside the package grammar heading by its own words, and wherever the `###` topic changes by the topic's own words as a sub-heading beneath the section's, along with any file consistency notices;
-- expanded, the node heads its items with a line set off from the intent by a rule above it alone, stating the package's item count and holding the package's two controls, each named for what it acts on: one expanding or collapsing every item body at once, marked by an expand-all glyph rather than a disclosure chevron, and one editing the spec file, opening it in the editor [[spec-view-48](#spec-view-48)].
+- expanded, the node heads its items with a line set off from the intent by a rule above it alone, stating the package's item count and holding the package's two controls, each named for what it acts on: one expanding or collapsing every item body at once, marked by an expand-all glyph rather than a disclosure chevron, and one editing the spec file, opening it in the editor [[spec-view-48](#spec-view-48)] — for a file the tree marks placed [[spec-view-10](#spec-view-10)], the phrase "From ⟨org/pkg⟩ ⟨version⟩ · placed by Spex" in the control's place, its tooltip reading "Written by Spex from ⟨org/pkg⟩ ⟨version⟩ — an edit makes it yours" ([DR-174](../decisions/174-what-a-package-provides-is-placed.md)).
 
 ### Items
 
@@ -47,7 +47,7 @@ While an item row is displayed, the spec view shall render the row by its expans
 - the row shows the item's ID chip in its group color — bounded at 10rem and truncating there, since a long ID would otherwise widen the row past the outline pane ([DR-041](../decisions/041-chrome-that-fits.md)), with the whole ID in the chip's title and accessible name — its first line, and, collapsed or expanded, a muted citation summary counting its outbound citations and inbound backlinks, which raises the summary card [[spec-view-60](#spec-view-60)];
 - expanded, the row renders the item's full markdown body with horizontal overflow contained and its citations as outbound rows and inbound backlinks per [[spec-view-19](#spec-view-19)], every entry an in-view link; Markdown HTML comments are omitted from the rendering, while comment syntax inside code remains visible;
 - when the ID chip is activated, the view copies the item ID to the clipboard and acknowledges in words beside the chip ([DR-010](../decisions/010-interface-craft.md) §3);
-- the row's header ends with an Edit control opening its file in the editor with the caret on the item's heading [[spec-view-48](#spec-view-48)], shown by the row's hover or a focus within it and always reachable by keyboard ([DR-010](../decisions/010-interface-craft.md) §6).
+- the row's header ends with an Edit control opening its file in the editor with the caret on the item's heading [[spec-view-48](#spec-view-48)], shown by the row's hover or a focus within it and always reachable by keyboard ([DR-010](../decisions/010-interface-craft.md) §6), absent in a file the tree marks placed [[spec-view-10](#spec-view-10)].
 
 ### Citation Rows
 
@@ -288,7 +288,7 @@ When an Edit control is activated — in the records reader, on an expanded pack
 - opened from an item, the field lands its caret on the item's heading line, scrolled into view;
 - Cmd/Ctrl+S saves [[spec-view-50](#spec-view-50)] and Escape cancels [[spec-view-49](#spec-view-49)];
 - while the draft differs from the text as read, the editor and the Specs tab carry an unsaved mark;
-- the view offers no Edit control where the host wires no write.
+- the view offers no Edit control where the host wires no write, nor for a file the tree marks placed [[spec-view-10](#spec-view-10)] ([DR-174](../decisions/174-what-a-package-provides-is-placed.md)).
 
 #### spec-view-49
 
@@ -380,7 +380,8 @@ When `specs.get` names a known project, the core package shall parse the project
 - files are listed for the `packages/` collection [[meta-1](../meta.md#meta-1)], keyed by collection-relative path minus the extension, with collection subdirectories carried as navigation-only structure [[meta-31](../meta.md#meta-31)];
 - each file's items keep document order, never sorted by ID;
 - a tree carrying a legacy-generation directory other than `iterations/` [[scaffold-26](scaffold.md#scaffold-26)] is flagged legacy with no files parsed ([DR-015](../decisions/015-reference-content.md));
-- a project with no `specs/` directory yields a reply stating absence with empty lists rather than a failure.
+- a project with no `specs/` directory yields a reply stating absence with empty lists rather than a failure;
+- a `packages/` file whose first line is the marker an install writes [[environments-41](environments.md#environments-41)], and whose bytes carry the hash the install record under the project's `.spex/` holds for it where that record lists it, is marked placed, carrying its package's `<org>/<pkg>` and version from the marker; an edited copy is marked nothing ([DR-174](../decisions/174-what-a-package-provides-is-placed.md)).
 
 #### spec-view-11
 
@@ -602,3 +603,7 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 - selecting the package nearest the fitted frame's top-right corner, with packages along the foot, shows the node and its label clear of the pinned package card at every size without zooming, with the card's citation list closed and again once opened, the view overlapping the fitted frame by at least half on each axis, and clearing the selection returns the camera to the fitted frame [[spec-view-43](#spec-view-43)] [[spec-view-25](#spec-view-25)] [[spec-view-27](#spec-view-27)];
 - at 320 pixels with the sidebar collapsed, only the graph's drawing scrolls sideways, the threshold sentence, the fit control, the pinned card and the key lying inside the pane's visible width, and after a selection the node and the card both lie in it [[spec-view-59](#spec-view-59)] [[spec-view-43](#spec-view-43)];
 - at 320 by 400 pixels, in English and in Chinese, with a selection's citation list open, the pinned card lies wholly in the visible canvas within 45% of its height with its own lines unclipped and the selected node and its label clear of it, and another node mid-canvas taking hover or focus raises a card lying wholly in the canvas whose measured height fits the larger side above or below that node and which covers none of that node's circle [[spec-view-25](#spec-view-25)] [[spec-view-26](#spec-view-26)].
+
+#### spec-view-67
+
+When the data-plane suite parses a fixture tree holding `packages/tools.md` whose first line is the marker naming `acme/tools` 1.2.0, once with no install record and once with a record holding that file's hash, it shall assert the file marked placed with its package and version [[spec-view-10](#spec-view-10)], and unmarked once its bytes differ from the recorded hash [[spec-view-10](#spec-view-10)]; and the interface suite shall assert a placed node's header reading "From acme/tools 1.2.0 · placed by Spex" with the tooltip in the Edit control's place [[spec-view-2](#spec-view-2)], no Edit control on its item rows [[spec-view-3](#spec-view-3)], the editor opening for no such file while an unmarked file's controls stand [[spec-view-48](#spec-view-48)].
