@@ -1323,6 +1323,33 @@ describe("playbook-library-113: Publish a folder package from its row", () => {
     expect(row().queryByTestId("publish-done")).toBeNull();
   });
 
+  test("the overflow's Publish asks for the preview once: Checking… stands disabled until the summary takes the button's place", async () => {
+    environments[PROJECT_ID] = local();
+    let finish!: (reply: { accepted: true; preview: typeof PREVIEW }) => void;
+    const base = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation((type: string, params?: Record<string, unknown>) =>
+      type === "environment.publish" && params?.dryRun
+        ? new Promise((resolve) => {
+            finish = resolve;
+          })
+        : base(type, params));
+    await renderTab();
+    choose(projectSection(), NAME, "publish");
+    // The choice itself asks: no Publish of the control's own to press.
+    await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
+    const checking = row().getByTestId("publish-button");
+    expect(checking.textContent).toBe("Checking…");
+    expect((checking as HTMLButtonElement).disabled).toBe(true);
+    expect(row().queryByTestId("publish-summary")).toBeNull();
+    await act(async () => {
+      finish({ accepted: true, preview: PREVIEW });
+    });
+    // The summary replaces the button; nothing asked a second time.
+    expect(row().getByTestId("publish-summary")).not.toBeNull();
+    expect(row().queryByTestId("publish-button")).toBeNull();
+    expect(commandMock.mock.calls.filter(([type, params]) => type === "environment.publish" && params.dryRun)).toHaveLength(1);
+  });
+
   test("a changed path discards a delayed preview; a changed registry or a sign-out discards an open one, Sign in to publish taking Publish's place", async () => {
     environments[PROJECT_ID] = local();
     let finish!: (reply: { accepted: true; preview: typeof PREVIEW }) => void;
