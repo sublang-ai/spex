@@ -569,7 +569,7 @@ describe("playbook-library-94: a row's artifacts", () => {
         specPackage({
           name: "acme/notes",
           version: "0.2.0",
-          artifacts: [{ id: "note", kind: "playbook", language: "en", fallback: false }],
+          artifacts: [{ id: "note", kind: "playbook", language: "en", fallback: false, provided: true }],
           exports: [{ name: "note", artifact: "note" }],
         }),
       ],
@@ -632,11 +632,11 @@ describe("playbook-library-94: a row's artifacts", () => {
         specPackage({
           name: "acme/kit",
           artifacts: [
-            { id: "greet", kind: "skill", language: "en", fallback: false },
-            { id: "kit", kind: "spec", language: "en", fallback: false },
-            { id: "report", kind: "applet", language: null, fallback: false },
-            { id: "review", kind: "skill", language: "en", fallback: true },
-            { id: "notes", kind: "source", language: "en", fallback: false },
+            { id: "greet", kind: "skill", language: "en", fallback: false, provided: true },
+            { id: "kit", kind: "spec", language: "en", fallback: false, provided: true },
+            { id: "report", kind: "applet", language: null, fallback: false, provided: true },
+            { id: "review", kind: "skill", language: "en", fallback: true, provided: true },
+            { id: "notes", kind: "source", language: "en", fallback: false, provided: true },
           ],
           exports: [
             { name: "acme-kit", artifact: "kit" },
@@ -647,8 +647,8 @@ describe("playbook-library-94: a row's artifacts", () => {
         specPackage({
           name: "acme/away",
           artifacts: [
-            { id: "away", kind: "skill", language: "en", fallback: false },
-            { id: "board", kind: "applet", language: null, fallback: false },
+            { id: "away", kind: "skill", language: "en", fallback: false, provided: true },
+            { id: "board", kind: "applet", language: null, fallback: false, provided: true },
           ],
           exports: [{ name: "away", artifact: "away" }],
           installed: false,
@@ -783,7 +783,7 @@ describe("playbook-library-94: Add…", () => {
     update(PROJECT_ID, {
       ...environments[PROJECT_ID]!,
       requests: { ...environments[PROJECT_ID]!.requests, "acme/tidy": { kind: "registry", version: "^0.3.0" } },
-      packages: [...environments[PROJECT_ID]!.packages, specPackage({ name: "acme/tidy", version: "0.3.0", artifacts: [{ id: "tidy", kind: "skill", language: "en", fallback: false }] })],
+      packages: [...environments[PROJECT_ID]!.packages, specPackage({ name: "acme/tidy", version: "0.3.0", artifacts: [{ id: "tidy", kind: "skill", language: "en", fallback: false, provided: true }] })],
     });
     expect(projectSection().getByTestId("add-note").textContent).toBe("Added acme/tidy 0.3.0 · 1 skill");
     // No playbook, no Enable.
@@ -812,8 +812,8 @@ describe("playbook-library-94: Add…", () => {
           name: "acme/tidy",
           version: "0.3.0",
           artifacts: [
-            { id: "sort", kind: "playbook", language: "en", fallback: false },
-            { id: "sweep", kind: "playbook", language: "en", fallback: false },
+            { id: "sort", kind: "playbook", language: "en", fallback: false, provided: true },
+            { id: "sweep", kind: "playbook", language: "en", fallback: false, provided: true },
           ],
         }),
       ],

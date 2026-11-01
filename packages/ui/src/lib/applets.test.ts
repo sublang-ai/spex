@@ -30,12 +30,12 @@ function environment(repository: string, packages: EnvironmentPackage[]): Enviro
   return { repository, language: null, requests: {}, packages, stale: null, conflicts: null, busy: null, error: null, pathRoot: null };
 }
 
-const applet = (id: string) => ({ id, kind: "applet" as const, language: null, fallback: false });
+const applet = (id: string) => ({ id, kind: "applet" as const, language: null, fallback: false, provided: true });
 
 describe("appletTabs", () => {
   test("a tab per installed applet whose files stand, the project's environment first", () => {
     const project = environment("me/demo-spex", [
-      pkg("acme/report-kit", [applet("report"), { id: "lint", kind: "skill", language: "en", fallback: false }]),
+      pkg("acme/report-kit", [applet("report"), { id: "lint", kind: "skill", language: "en", fallback: false, provided: true }]),
       pkg("acme/pending", [applet("pending")], { installed: false }),
       pkg("acme/away", [applet("away")], { source: { kind: "path", detail: "spex-packages/away" }, missingPath: "spex-packages/away" }),
     ]);
