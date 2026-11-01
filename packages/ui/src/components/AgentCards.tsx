@@ -13,7 +13,7 @@
 // and sets them to Provider default (settings-59, settings-60) — each
 // change one `config.batch` against the revision shown.
 
-import { useId, useState, type ReactNode } from "react";
+import { createContext, useContext, useId, useState, type ReactNode } from "react";
 import type {
   AdapterName,
   ConfigBatchOpInput,
@@ -76,9 +76,6 @@ function positionLabel(position: string): string {
 /** A refusal in the reader's words: a conflict asks for a retry over
  * the config shown, a violation names its rule and field. */
 function refusalText(error: unknown): string {
-  if (error instanceof StaleRead) {
-    return i18n._("The config changed meanwhile and nothing was written, but it could not be read again: {message}", { message: error.message });
-  }
   const refusal = error as Partial<SpexCommandError>;
   if (refusal?.code === "conflict") {
     return i18n._("The config changed meanwhile and nothing was written: check the list and try again.");
@@ -177,8 +174,9 @@ function OneModel({ entry, state, catalog }: { entry: ReadinessEntry; state: Ext
   const [value, setValue] = useState("");
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [outcome, setOutcome] = useState<{ done: true; left: string[] } | { error: string; stale: boolean }>();
-  const stale = outcome !== undefined && "stale" in outcome && outcome.stale;
+  const [outcome, setOutcome] = useState<{ done: true; left: string[] } | { error: string }>();
+  const reread = useContext(RereadContext);
+  const stale = reread.stale !== undefined;
   const discovery = catalog.options?.discovery;
   const models = discovery?.status === "available" ? discovery.models : [];
   const defaultModel = discovery?.status === "available" ? discovery.defaultModel : undefined;
@@ -194,7 +192,10 @@ function OneModel({ entry, state, catalog }: { entry: ReadinessEntry; state: Ext
     setOutcome(undefined);
     send(store, plan.ops, state.revision)
       .then(() => setOutcome({ done: true, left: plan.left }))
-      .catch((error: unknown) => setOutcome({ error: refusalText(error), stale: error instanceof StaleRead }))
+      .catch((error: unknown) => {
+        if (error instanceof StaleRead) reread.failed(error.message);
+        else setOutcome({ error: refusalText(error) });
+      })
       .finally(() => { setBusy(false); setAsking(false); });
   }
 
@@ -208,7 +209,7 @@ function OneModel({ entry, state, catalog }: { entry: ReadinessEntry; state: Ext
             models={models}
             {...(defaultModel ? { defaultModel } : {})}
             recommended={thirdParty && Boolean(defaultModel)}
-            onChange={(next) => { setValue(next); setAsking(false); if (!stale) setOutcome(undefined); }}
+            onChange={(next) => { setValue(next); setAsking(false); setOutcome(undefined); }}
             labelId={labelId}
             testId={`agent-unify-model-${entry.adapter}`}
           />
@@ -230,7 +231,7 @@ function OneModel({ entry, state, catalog }: { entry: ReadinessEntry; state: Ext
         </span>
       ) : null}
       {asking ? (
-        <Confirm testId={`agent-unify-confirm-${entry.adapter}`} busy={busy} onConfirm={apply} onCancel={() => setAsking(false)}>
+        <Confirm testId={`agent-unify-confirm-${entry.adapter}`} busy={busy || stale} onConfirm={apply} onCancel={() => setAsking(false)}>
           <span>{i18n._("These agents change:")}</span>
           <RoleList roles={plan.changes} testId="agent-unify-changes" />
           {plan.left.length > 0 ? (
@@ -252,7 +253,7 @@ function OneModel({ entry, state, catalog }: { entry: ReadinessEntry; state: Ext
           ) : null}
         </div>
       ) : null}
-      {outcome && "error" in outcome ? <Refusal outcome={outcome} testId={`agent-unify-error-${entry.adapter}`} onRead={setOutcome} /> : null}
+      {outcome && "error" in outcome ? <div role="alert" data-testid={`agent-unify-error-${entry.adapter}`} className="text-xs text-red-700 dark:text-red-300">{outcome.error}</div> : null}
     </div>
   );
 }
@@ -289,36 +290,11 @@ async function send(store: ReturnType<typeof usePlaceStore>, ops: ConfigBatchOpI
   }
 }
 
-/** A refusal's line; after a failed reading again, a control reading
- * once more, the batch held back until it succeeds. */
-function Refusal({ outcome, testId, onRead }: { outcome: { error: string; stale: boolean }; testId?: string; onRead: (next: { error: string; stale: boolean } | undefined) => void }) {
-  const store = usePlaceStore();
-  const [reading, setReading] = useState(false);
-  return (
-    <div role="alert" {...(testId ? { "data-testid": testId } : {})} className="text-xs text-red-700 dark:text-red-300">
-      {outcome.error}
-      {outcome.stale ? (
-        <>
-          {" "}
-          <button
-            type="button"
-            className={buttonClass}
-            disabled={reading}
-            onClick={() => {
-              setReading(true);
-              reread(store)
-                .then(() => onRead(undefined))
-                .catch((error: unknown) => onRead({ error: refusalText(error), stale: true }))
-                .finally(() => setReading(false));
-            }}
-          >
-            {i18n._({ id: "Read again", comment: "read the config and the projects' settings again after a failed read" })}
-          </button>
-        </>
-      ) : null}
-    </div>
-  );
-}
+/** Whether a conflict's reading again failed, shared by every batch
+ * control of the section: the lists any of them shows may be the
+ * refused batch's, so none submits until a reading succeeds
+ * (settings-58, settings-60). */
+const RereadContext = createContext<{ stale?: string; failed(message: string): void }>({ failed: () => {} });
 
 /** Official names behind a third-party service (settings-59, -60). */
 function OfficialNames({ entry, state, catalog }: { entry: ReadinessEntry; state: Extract<ConfigState, { status: "valid" }>; catalog: ReturnType<typeof useAgentOptions> }) {
@@ -327,8 +303,9 @@ function OfficialNames({ entry, state, catalog }: { entry: ReadinessEntry; state
   const projects = store((s) => s.projects);
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [outcome, setOutcome] = useState<{ done: true } | { error: string; stale: boolean }>();
-  const stale = outcome !== undefined && "stale" in outcome && outcome.stale;
+  const [outcome, setOutcome] = useState<{ done: true } | { error: string }>();
+  const reread = useContext(RereadContext);
+  const stale = reread.stale !== undefined;
   // Recomputed from the newest state on every render (settings-59).
   const rows = officialRoles(state, projectConfigs);
   const discovery = catalog.options?.discovery;
@@ -351,7 +328,10 @@ function OfficialNames({ entry, state, catalog }: { entry: ReadinessEntry; state
     setOutcome(undefined);
     send(store, ops, state.revision)
       .then(() => setOutcome({ done: true }))
-      .catch((error: unknown) => setOutcome({ error: refusalText(error), stale: error instanceof StaleRead }))
+      .catch((error: unknown) => {
+        if (error instanceof StaleRead) reread.failed(error.message);
+        else setOutcome({ error: refusalText(error) });
+      })
       .finally(() => { setBusy(false); setAsking(false); });
   }
 
@@ -391,7 +371,7 @@ function OfficialNames({ entry, state, catalog }: { entry: ReadinessEntry; state
         </span>
       ) : null}
       {asking ? (
-        <Confirm testId="agent-official-confirm" busy={busy} onConfirm={apply} onCancel={() => setAsking(false)}>
+        <Confirm testId="agent-official-confirm" busy={busy || stale} onConfirm={apply} onCancel={() => setAsking(false)}>
           <ul className="list-disc pl-5">
             {rows.map((row) => (
               <li key={row.key} data-testid="agent-official-confirm-row">
@@ -402,7 +382,7 @@ function OfficialNames({ entry, state, catalog }: { entry: ReadinessEntry; state
           </ul>
         </Confirm>
       ) : null}
-      {outcome && "error" in outcome ? <Refusal outcome={outcome} testId="agent-official-error" onRead={setOutcome} /> : null}
+      {outcome && "error" in outcome ? <div role="alert" data-testid="agent-official-error" className="text-red-700 dark:text-red-300">{outcome.error}</div> : null}
     </div>
   );
 }
@@ -488,7 +468,17 @@ export function AgentCards() {
   // comes (settings-5).
   const standing = STANDING.map((adapter) => byAdapter.get(adapter) ?? { adapter, ready: null, usedBy: [], fastModeSupported: false, subagentModelSupported: false });
   const others = readiness.filter((entry) => !STANDING.includes(entry.adapter));
+  const [stale, setStale] = useState<string>();
+  const [reading, setReading] = useState(false);
+  function readAgain(): void {
+    setReading(true);
+    reread(store)
+      .then(() => setStale(undefined))
+      .catch((error: unknown) => setStale(error instanceof Error ? error.message : String(error)))
+      .finally(() => setReading(false));
+  }
   return (
+    <RereadContext.Provider value={{ ...(stale !== undefined ? { stale } : {}), failed: setStale }}>
     <section data-testid="agents-section" className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="text-sm font-semibold text-neutral-500">{i18n._("Agents")}</h2>
@@ -504,8 +494,17 @@ export function AgentCards() {
           {i18n._("Changed a key and still not ready? Quit Spex completely and open it again.")}
         </span>
       </div>
+      {stale !== undefined ? (
+        <div role="alert" data-testid="agents-stale" className="text-xs text-red-700 dark:text-red-300">
+          {i18n._("The config changed meanwhile and nothing was written, but it could not be read again: {message}", { message: stale })}{" "}
+          <button type="button" className={buttonClass} disabled={reading} onClick={readAgain}>
+            {i18n._({ id: "Read again", comment: "read the config and the projects' settings again after a failed read" })}
+          </button>
+        </div>
+      ) : null}
       {standing.map((entry) => <AgentCard key={entry.adapter} entry={entry} state={configState} seat={seat} />)}
       {others.map((entry) => <OtherEntry key={entry.adapter} entry={entry} />)}
     </section>
+    </RereadContext.Provider>
   );
 }

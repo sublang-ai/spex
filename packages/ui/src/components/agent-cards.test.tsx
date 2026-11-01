@@ -505,7 +505,7 @@ describe("settings-67: official names behind a third-party service", () => {
     expect(screen.getByTestId("agent-card-claude").textContent).not.toContain("Every role now uses Provider default.");
   });
 
-  test("a conflict whose project read fails says so once every read settles, and holds the batch until read again", async () => {
+  test("a conflict whose project read fails, from either control, holds every batch until read again", async () => {
     show(CROSSED, thirdParty(), { [PROJECT]: projectComposition(CROSSED) });
     let releaseOwn: (state: ConfigState) => void = () => {};
     let projectFails = true;
@@ -515,25 +515,33 @@ describe("settings-67: official names behind a third-party service", () => {
       if (type === "config.get") return projectFails ? Promise.reject(new Error("the project's settings could not be read")) : Promise.resolve(projectComposition(CROSSED));
       return Promise.reject(new Error(`unexpected ${type}`));
     });
-    fireEvent.click(screen.getByTestId("agent-official-fix"));
-    await act(async () => { fireEvent.click(screen.getByTestId("agent-official-confirm-confirm")); });
-    // settings-60: the project's read failed, but your own is still
+    const fix = () => screen.getByTestId("agent-official-fix") as HTMLButtonElement;
+    const apply = () => screen.getByTestId("agent-unify-apply-claude") as HTMLButtonElement;
+    // The other control's confirmation stands open meanwhile.
+    fireEvent.click(fix());
+    // The conflict comes from the one-model control.
+    choose("claude", /deepseek-flash/);
+    fireEvent.click(apply());
+    await act(async () => { fireEvent.click(screen.getByTestId("agent-unify-confirm-claude-confirm")); });
+    // settings-58: the project's read failed, but your own is still
     // being read — nothing is reported until both settle.
-    expect(screen.queryByTestId("agent-official-error")).toBeNull();
+    expect(screen.queryByTestId("agents-stale")).toBeNull();
     await act(async () => { releaseOwn({ ...CROSSED, revision: "rev-9" }); });
-    const error = screen.getByTestId("agent-official-error");
-    expect(error.textContent).toContain("could not be read again: the project's settings could not be read");
-    // The list may be the refused batch's: no batch from it.
-    expect((screen.getByTestId("agent-official-fix") as HTMLButtonElement).disabled).toBe(true);
-    // Read again: once every read succeeds, the batch is offered again.
+    const stale = screen.getByTestId("agents-stale");
+    expect(stale.textContent).toContain("could not be read again: the project's settings could not be read");
+    // settings-58, settings-60: the lists may be the refused batch's —
+    // no batch from either control, the open confirmation included.
+    expect(apply().disabled).toBe(true);
+    expect(fix().disabled).toBe(true);
+    expect((screen.getByTestId("agent-official-confirm-confirm") as HTMLButtonElement).disabled).toBe(true);
+    // Read again: held until your own read settles too, then offered.
     projectFails = false;
-    await act(async () => { fireEvent.click(within(error).getByRole("button", { name: "Read again" })); });
-    // Held while your own config is read again too.
-    expect(screen.getByTestId("agent-official-error")).toBeTruthy();
+    await act(async () => { fireEvent.click(within(stale).getByRole("button", { name: "Read again" })); });
+    expect(screen.getByTestId("agents-stale")).toBeTruthy();
     await act(async () => { releaseOwn({ ...CROSSED, revision: "rev-9" }); });
-    expect(screen.queryByTestId("agent-official-error")).toBeNull();
-    expect((screen.getByTestId("agent-official-fix") as HTMLButtonElement).disabled).toBe(false);
-    fireEvent.click(screen.getByTestId("agent-official-fix"));
+    expect(screen.queryByTestId("agents-stale")).toBeNull();
+    expect(fix().disabled).toBe(false);
+    expect(apply().disabled).toBe(false);
     commandMock.mockResolvedValue({ ...CROSSED, revision: "rev-10" });
     await act(async () => { fireEvent.click(screen.getByTestId("agent-official-confirm-confirm")); });
     expect(commandMock).toHaveBeenLastCalledWith("config.batch", expect.objectContaining({ revision: "rev-9" }));
