@@ -2,8 +2,8 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // A Space's section of the groups list (space-1, DR-127, DR-172): its
-// heading, its registry line, then its groups, Personal and every other
-// account's login beneath it. Signed in, the heading reads the Space's
+// heading, then its groups, Personal and every other account's login
+// beneath it. Signed in, the heading reads the Space's
 // display name — its host name until a read names one — beside
 // "@<login>", with "New group" where its read is held (space-68),
 // disabled and titled "Made by the people who run <Space>" where the
@@ -14,26 +14,24 @@
 // "<Space> · signed out · @<login>" where the Space signed this computer
 // out (space-3) — with "Sign in again", whose flow reads on it, and the
 // overflow's "Remove from this list", which removes the Space from this
-// list (space-82). Beneath each heading one line names the Space's
-// registry and the person's sign-in there (space-119), the surface
-// managing no package. Below 20rem the heading stacks, its last control
+// list (space-82). The heading carries nothing of packages or the
+// registry (DR-173). Below 20rem the heading stacks, its last control
 // full-width. While the home lists any Space, "Add a Space…" stands at
 // the list's foot and opens the sign-in card in its place (space-1,
 // space-3). Every act is a command whose outcome arrives as state
 // (space-29).
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import type { GroupsState, InstanceState, RegistryState } from "@sublang/spex-core/protocol";
+import type { GroupsState, InstanceState } from "@sublang/spex-core/protocol";
 
 import { usePlaceStore } from "../state/place-context.js";
 import { i18n } from "../i18n.js";
 import { instanceName, instanceOf, originOf } from "../lib/instances.js";
-import { openExternalBridge, seatName } from "../lib/space.js";
-import { directoryOffers, spaceNameOf, SpaceChooser, useSpaceDirectory } from "./SpaceDirectory.js";
+import { seatName } from "../lib/space.js";
+import { spaceNameOf, SpaceChooser } from "./SpaceDirectory.js";
 import { MoreMenu } from "./SpaceMenu.js";
 import { GroupNameEditor } from "./SpaceMembers.js";
 import {
-  ContinueInBrowser,
   causePhrase,
   focusCardField,
   opensInBrowser,
@@ -65,9 +63,8 @@ function stranded(disabledOn?: HTMLElement | null): boolean {
   );
 }
 
-/** One Space the home lists (space-1): its heading and its registry line
- * over what it lists, the caller's entries in the order the heading lists
- * them. */
+/** One Space the home lists (space-1): its heading over what it lists,
+ * the caller's entries in the order the heading lists them. */
 export function InstanceSection({
   instance,
   connected,
@@ -91,10 +88,7 @@ export function InstanceSection({
       data-signed-in={instance.signedIn ? "1" : "0"}
       className="@container flex min-w-0 flex-col gap-3 border-t border-neutral-200 pt-3 dark:border-neutral-800"
     >
-      <div className="flex min-w-0 flex-col gap-1">
-        <InstanceHeading instance={instance} connected={connected} signIn={signIn} onNote={onNote} />
-        <RegistryLine instance={instance} connected={connected} onNote={onNote} />
-      </div>
+      <InstanceHeading instance={instance} connected={connected} signIn={signIn} onNote={onNote} />
       {children}
     </div>
   );
@@ -425,161 +419,6 @@ function InstanceHeading({
           }}
           onNote={onNote}
         />
-      ) : null}
-    </div>
-  );
-}
-
-/** A registry sign-in in flight, as the start replied it. */
-type RegistryFlow = { flow: "browser"; url: string } | { flow: "device"; verificationUri: string };
-
-/** The registry line beneath a Space's heading (space-119, DR-168): where
- * the directory lists the Space, or could not be read, one line for the
- * registry at its origin — "Registry · signed in as @<login>" while the
- * person is signed in there, else "Registry" with Sign in, titled "For
- * publishing and private packages", its sign-in reading on the line as
- * the card's reads. The registry sign-in is its own grant: it signs in
- * to no Space, and the surface manages no package. */
-function RegistryLine({ instance, connected, onNote }: { instance: InstanceState; connected: boolean; onNote: Note }) {
-  const store = usePlaceStore();
-  const directory = useSpaceDirectory();
-  const origin = instance.origin;
-  const offered = directoryOffers(directory, origin);
-  const broadcast = store((state) => state.registryAccounts?.[origin]);
-  const [read, setRead] = useState<RegistryState>();
-  const [started, setStarted] = useState<RegistryFlow>();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string>();
-
-  // Read once the line stands: the account there, without credentials
-  // (core-service-143); the core's broadcast keeps it current.
-  useEffect(() => {
-    if (!offered || !connected) return;
-    let active = true;
-    void Promise.resolve()
-      .then(() => store.getClient().command("registry.get", { origin }))
-      .then((reply) => {
-        if (active) setRead(reply as RegistryState);
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
-  }, [offered, connected, origin, store]);
-
-  const state = broadcast ?? read;
-  const login = state?.account?.login;
-  const phase = state?.signIn?.phase;
-  // A flow the state stops — signed in, cancelled or failed — ends the
-  // one this line started.
-  const lastPhase = useRef(phase);
-  useEffect(() => {
-    if (lastPhase.current === "running" && phase !== "running") setStarted(undefined);
-    lastPhase.current = phase;
-  }, [phase]);
-  useEffect(() => {
-    if (login) setStarted(undefined);
-  }, [login]);
-
-  if (!offered) return null;
-  const registryName = state?.displayName || spaceNameOf(origin, undefined, directory);
-  const fromState = state?.signIn?.phase === "running" ? state.signIn : undefined;
-  const running: RegistryFlow | undefined = fromState
-    ? fromState.flow === "browser"
-      ? { flow: "browser", url: fromState.url }
-      : { flow: "device", verificationUri: fromState.verificationUri }
-    : login
-      ? undefined
-      : started;
-  const label = i18n._({ id: "Registry", comment: "the line beneath a Space's heading naming its registry, where packages are published and read" });
-
-  const start = async () => {
-    if (!connected || busy) return;
-    setBusy(true);
-    setError(undefined);
-    try {
-      const reply = (await store.getClient().command("registry.signin.start", { origin })) as
-        | { flow: "browser"; url: string }
-        | { flow: "device"; verificationUri: string };
-      if (reply?.flow === "browser") {
-        setStarted({ flow: "browser", url: reply.url });
-        await openExternalBridge()?.(reply.url).catch(() => false);
-      } else if (reply?.flow === "device") {
-        setStarted({ flow: "device", verificationUri: reply.verificationUri });
-      }
-    } catch (cause) {
-      const message = causePhrase((cause as Error).message);
-      setError(message);
-      onNote(message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const cancel = async () => {
-    setStarted(undefined);
-    try {
-      await store.getClient().command("registry.signin.cancel", { origin });
-    } catch (cause) {
-      onNote((cause as Error).message);
-    }
-  };
-
-  const failure = error ?? (state?.error ? causePhrase(state.error) : undefined);
-  return (
-    <div data-testid="space-registry" className="flex min-w-0 flex-col gap-1 text-xs text-neutral-500">
-      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-        {login ? (
-          <span data-testid="space-registry-account" className="min-w-0 truncate">
-            {i18n._({
-              id: "Registry · signed in as @{login}",
-              values: { login },
-              comment: "the registry line beneath a Space's heading while the person is signed in to that registry; {login} is their account there",
-            })}
-          </span>
-        ) : (
-          <>
-            <span className="min-w-0 truncate">{label}</span>
-            {running ? (
-              <button
-                type="button"
-                data-testid="space-registry-cancel"
-                className={`${SECONDARY} shrink-0`}
-                onClick={() => void cancel()}
-              >
-                {i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}
-              </button>
-            ) : null}
-            <button
-              type="button"
-              data-testid="space-registry-signin"
-              className={`${SECONDARY} shrink-0 whitespace-nowrap`}
-              disabled={!connected || busy || running !== undefined}
-              title={i18n._({
-                id: "For publishing and private packages",
-                comment: "the title of Sign in on a Space's registry line: what signing in to the registry is for",
-              })}
-              onClick={() => void start()}
-            >
-              {running || busy ? signingInLabel() : signInLabel()}
-            </button>
-          </>
-        )}
-      </div>
-      {running ? (
-        <div className="text-sm text-neutral-600 dark:text-neutral-300">
-          <ContinueInBrowser
-            testId="space-registry-signin"
-            link={running.flow === "browser" ? running.url : running.verificationUri}
-            space={registryName}
-            bridge={running.flow === "browser"}
-          />
-        </div>
-      ) : null}
-      {failure && !login && !running ? (
-        <p role="alert" data-testid="space-registry-error" className={ALERT}>
-          {failure}
-        </p>
       ) : null}
     </div>
   );

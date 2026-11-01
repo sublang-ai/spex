@@ -6,9 +6,8 @@
 // own heading in the home's order, "<Space> · @<login>" with New group —
 // disabled and titled where the Space says the person may not create one
 // — its overflow's "Remove from this list" and Sign out, no read time,
-// its read's failure on its heading alone (space-1, git-host-5); the
-// registry line beneath each heading (space-119); "Sign in again" whose
-// flow reads on its heading (space-3); the rows of a signed-out Space
+// its read's failure on its heading alone (space-1, git-host-5);
+// "Sign in again" whose flow reads on its heading (space-3); the rows of a signed-out Space
 // (space-61, space-11, space-120); the heading's fit (space-28); the
 // card "Sign in to a Space" with its chooser of Spaces (space-3,
 // space-115); "Add to a group…" offering each signed-in Space's Personal
@@ -22,11 +21,11 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
-import type { GroupsState, InstanceGroupState, InstanceState, RegistryState, RepositoryState } from "@sublang/spex-core/protocol";
+import type { GroupsState, InstanceGroupState, InstanceState, RepositoryState } from "@sublang/spex-core/protocol";
 
 import { activateLanguage } from "../i18n.js";
 import { repositoryRow } from "../fixtures/groups-state.js";
-import { deliverServerMessageForTests, setClientForTests } from "../state/store.js";
+import { setClientForTests } from "../state/store.js";
 import {
   BRANCH,
   KEY,
@@ -182,9 +181,8 @@ const DIRECTORY = {
 /** The core answering the directory as `directory` says, the device flow
  * at whatever origin a start names, and everything else as the fixtures
  * do. */
-function answering(directory: unknown, extra: Record<string, (fields: Record<string, unknown>) => unknown> = {}): void {
+function answering(directory: unknown): void {
   commandMock.mockImplementation(async (type: string, fields: Record<string, unknown> = {}) => {
-    if (extra[type]) return extra[type]!(fields);
     if (type === "registry.directory") {
       if (directory === undefined) throw new Error("The registry could not be read. Try again.");
       return directory;
@@ -541,75 +539,6 @@ describe("SPACE: each Space under its heading (space-1, git-host-5, space-3, spa
     fireEvent.click(remove);
     await waitFor(() => expect(screen.queryByTestId(`space-instance-${SECOND}`)).toBeNull());
     expect(live()).toBe(zh ? "已从列表中移除 Second Example" : "Removed Second Example from this list");
-  });
-});
-
-describe("SPACE: the registry line beneath each heading (space-119, DR-168)", () => {
-  /** The registry at the first Space, as the core reports it
-   * (core-service-143). */
-  const registry = (over: Partial<RegistryState> = {}): RegistryState => ({
-    origin: ORIGIN,
-    displayName: "Spex Example",
-    account: null,
-    signIn: { phase: "idle" },
-    error: null,
-    ...over,
-  });
-
-  test("space-119: 'Registry' with Sign in, titled 'For publishing and private packages', starts that registry's sign-in at the Space's origin and reads on the line as the card's; signed in, 'Registry · signed in as @<login>', the heading unchanged; a Space the directory does not list carries none", async () => {
-    answering(
-      { spaces: [DIRECTORY.spaces[0]] },
-      {
-        "registry.get": () => registry(),
-        "registry.signin.start": (fields) => ({
-          flow: "device",
-          userCode: "QRST-UVWX",
-          verificationUri: `${fields.origin as string}/login/device?user_code=QRST-UVWX`,
-          expiresAt: NOW + 15 * MIN,
-          interval: 5,
-        }),
-        "registry.signin.cancel": () => ({ stopped: true }),
-      },
-    );
-    await renderGroups(twoInstances(), { open: false });
-    const first = within(sectionOf(ORIGIN));
-    // The directory lists the first Space alone: its line stands, the
-    // second carries none (space-119).
-    const line = await first.findByTestId("space-registry");
-    expect(within(sectionOf(SECOND)).queryByTestId("space-registry")).toBeNull();
-    await waitFor(() => expect(calls("registry.get")).toEqual([{ origin: ORIGIN }]));
-    expect(line.textContent).toBe("RegistrySign in");
-    const signIn = within(line).getByTestId("space-registry-signin") as HTMLButtonElement;
-    expect(signIn.title).toBe("For publishing and private packages");
-    // Its sign-in starts at the Space's origin, reading on the line as the
-    // card's does: "Continue in your browser" and "Open <Space>", the code
-    // never shown, with Cancel (space-119, space-3).
-    fireEvent.click(signIn);
-    await waitFor(() => expect(calls("registry.signin.start")).toEqual([{ origin: ORIGIN }]));
-    const link = (await within(line).findByTestId("space-registry-signin-link")) as HTMLAnchorElement;
-    expect(link.textContent).toBe("Open Spex Example");
-    expect(link.href).toBe(`${ORIGIN}/login/device?user_code=QRST-UVWX`);
-    expect(line.textContent).not.toContain("QRST-UVWX");
-    expect(signIn.textContent).toBe("Signing in…");
-    expect(signIn.disabled).toBe(true);
-    expect(calls("space.signin.start")).toEqual([]);
-    // Cancel stops it.
-    fireEvent.click(within(line).getByTestId("space-registry-cancel"));
-    await waitFor(() => expect(calls("registry.signin.cancel")).toEqual([{ origin: ORIGIN }]));
-    expect(within(line).queryByTestId("space-registry-signin-link")).toBeNull();
-    // Signed in at the registry, the line says so; the Space's heading is
-    // unchanged and the line holds no package control (space-119).
-    deliverServerMessageForTests({ type: "registry.state", state: registry({ account: { id: "7", login: "jane" } }) });
-    await waitFor(() => expect(first.getByTestId("space-registry").textContent).toBe("Registry · signed in as @jane"));
-    expect(within(first.getByTestId("space-registry")).queryAllByRole("button")).toEqual([]);
-    expect(first.getByRole("heading", { level: 2 }).textContent).toBe("Spex Example · @jane");
-  });
-
-  test("space-119: where the directory cannot be read, every Space's heading carries its registry line", async () => {
-    answering(undefined, { "registry.get": (fields) => registry({ origin: fields.origin as string, displayName: "Registry there" }) });
-    await renderGroups(twoInstances(), { open: false });
-    await waitFor(() => expect(screen.getAllByTestId("space-registry")).toHaveLength(2));
-    expect(within(sectionOf(SECOND)).getByTestId("space-registry").textContent).toBe("RegistrySign in");
   });
 });
 

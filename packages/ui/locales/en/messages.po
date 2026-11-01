@@ -1657,7 +1657,6 @@ msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a 
 #. leave the editor without changing anything
 #. leave the editor without changing anything
 #. leave the editor without changing anything
-#. leave the editor without changing anything
 #. stop the running compile
 #: src/components/AgentEditor.tsx
 #: src/components/AgentSettings.tsx
@@ -3402,11 +3401,6 @@ msgstr "For example:"
 #: src/components/RunView.tsx
 msgid "For new sessions"
 msgstr "For new sessions"
-
-#. the title of Sign in on a Space's registry line: what signing in to the registry is for
-#: src/components/SpaceInstance.tsx
-msgid "For publishing and private packages"
-msgstr "For publishing and private packages"
 
 #: src/components/RunView.tsx
 msgid "For this conversation, from the next message"
@@ -5565,16 +5559,6 @@ msgstr "refused"
 #: src/lib/environments.ts
 msgid "registry"
 msgstr "registry"
-
-#. the line beneath a Space's heading naming its registry, where packages are published and read
-#: src/components/SpaceInstance.tsx
-msgid "Registry"
-msgstr "Registry"
-
-#. the registry line beneath a Space's heading while the person is signed in to that registry; {login} is their account there
-#: src/components/SpaceInstance.tsx
-msgid "Registry · signed in as @{login}"
-msgstr "Registry · signed in as @{login}"
 
 #: src/lib/environments.ts
 msgid "registry {requirement}"

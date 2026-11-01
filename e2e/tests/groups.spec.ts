@@ -335,8 +335,8 @@ const OWN_BEFORE = `${E2E_OWN}/${E2E_OWN}-spex`;
 /** Your own records once signed in (space-59). */
 const OWN_KEY = `${HOST_LOGIN}/${HOST_LOGIN}-spex`;
 /** The routes of the public registry's directory, which a journey
- * routing the public registry to the stand-in has it answer (space-115,
- * space-119): no call of the Space itself. */
+ * routing the public registry to the stand-in has it answer (space-115):
+ * no call of the Space itself. */
 const DIRECTORY_ROUTES = ["/api/v1/spaces", "/api/v1/registry"];
 
 // ---------------------------------------------------------------------------
