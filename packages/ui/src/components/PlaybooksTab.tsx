@@ -12,7 +12,7 @@
 // sessions follow the playbooks; the example closes the tab. An
 // authoring session of the project opened here replaces the list with
 // its workspace. The packages themselves stand on the project's
-// Packages tab.
+// Packages tab, which "Manage packages" opens.
 
 import { type KeyboardEvent as ReactKeyboardEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -46,10 +46,7 @@ import {
   newPlayerId,
   packageOrgRuleText,
 } from "../lib/drafts.js";
-import {
-  ownRepositoryKey,
-  sourceKindWord,
-} from "../lib/environments.js";
+import { ownRepositoryKey } from "../lib/environments.js";
 import { i18n } from "../i18n.js";
 import { phaseLabel } from "../lib/compile-log.js";
 import { playbookIntent } from "../lib/playbook-intent.js";
@@ -169,32 +166,95 @@ function PlaybookPipeline({ playbookId, repository }: { playbookId: string; repo
   );
 }
 
-/** Where a playbook is enabled, in one phrase (playbook-library-1). */
-function enabledPhrase(enabled: readonly ("project" | "own")[]): string {
-  const project = enabled.includes("project");
+/** Where a playbook is enabled, as one key phrase (playbook-library-1):
+ * "in <project>" for the project's config, "Personal" for your own
+ * group's, both, or nothing where neither enables it. */
+function whereEnabled(enabled: readonly ("project" | "own")[], project: string): string | undefined {
+  const inProject = enabled.includes("project");
   const own = enabled.includes("own");
-  if (project && own) return i18n._("Enabled in the project and your own group");
-  if (project) return i18n._("Enabled in the project");
-  if (own) return i18n._("Enabled in your own group");
-  return i18n._({ id: "Not enabled", comment: "a listed playbook no config enables" });
+  if (inProject && own) {
+    return i18n._({
+      id: "in {project} · Personal",
+      comment: "where a playbook is enabled: in the project's config and in your Personal one; {project} is the project's name",
+      values: { project },
+    });
+  }
+  if (inProject) {
+    return i18n._({
+      id: "in {project}",
+      comment: "where a playbook is enabled: in the project's config, for every member; {project} is the project's name",
+      values: { project },
+    });
+  }
+  if (own) return i18n._({ id: "Personal", comment: "your own records and packages at a Space, never \"your namespace\"" });
+  return undefined;
 }
 
-/** The `from` label (playbook-library-29): the spec package and its
- * version, with the source's kind for a path or Git request. */
-function FromLabel({ entry }: { entry: PlaybookAvailability }) {
-  const kind = entry.source === "path" || entry.source === "git" ? sourceKindWord(entry.source) : undefined;
+/** A string with one value set apart, as code, wherever the language
+ * places it, so no translation is assembled from pieces
+ * (localization-4). */
+function withCode(phrase: (slot: string) => string, value: string): ReactNode {
+  const slot = "\u0000";
+  const [before = "", after = ""] = phrase(slot).split(slot);
   return (
-    <span
-      data-testid={`playbook-from-${entry.id}`}
-      title={entry.folder ?? `${entry.package} ${entry.version}`}
-      className="ml-auto flex min-w-0 items-center gap-1 text-xs text-neutral-500"
-    >
-      {/* The prefix and the kind stand outside the truncation. */}
-      <span className="shrink-0">{i18n._({ id: "from", comment: "label before the spec package a playbook comes from" })}</span>
-      <span className="min-w-0 truncate font-mono">
-        {entry.package} {entry.version}
+    <>
+      {before}
+      <code className="font-mono">{value}</code>
+      {after}
+    </>
+  );
+}
+
+/** Where a row's playbook comes from (playbook-library-1): "from
+ * <package> <version>", or "built in" for the built-in playbooks, the
+ * source in its tooltip, and the row's origin — the project's packages
+ * or your Personal ones — as a glyph whose tooltip names it, so the two
+ * rows of a playbook both environments export read apart (DR-172). */
+function FromLabel({ entry, origin, project }: { entry: PlaybookAvailability; origin: PlaybookOrigin; project: string }) {
+  const originName =
+    origin === "project"
+      ? i18n._({
+          id: "{project}'s packages",
+          comment: "tooltip of a playbook row's origin glyph: the project's packages list it; {project} is the project's name",
+          values: { project },
+        })
+      : i18n._({ id: "Personal packages", comment: "tooltip of a playbook row's origin glyph: your Personal packages, available in every project, list it" });
+  const source =
+    entry.source === "builtin"
+      ? `${entry.package} ${entry.version}`
+      : entry.source === "path"
+        ? i18n._({
+            id: "From folder {path}",
+            comment: "tooltip: a package taken from a folder; {path} is that folder",
+            values: { path: entry.folder ?? entry.package },
+          })
+        : entry.source === "git"
+          ? i18n._({ id: "From Git", comment: "tooltip: a package taken from a Git repository" })
+          : i18n._({ id: "From the registry", comment: "tooltip: a package taken from the registry" });
+  return (
+    <span className="flex min-w-0 items-center gap-1 text-xs text-neutral-500">
+      <span
+        role="img"
+        data-testid={`playbook-origin-${entry.id}`}
+        aria-label={originName}
+        title={originName}
+        className="shrink-0"
+      >
+        <Icon name={origin === "project" ? "folder" : "home"} className="h-3.5 w-3.5" />
       </span>
-      {kind ? <span className="shrink-0">· {kind}</span> : null}
+      <span data-testid={`playbook-from-${entry.id}`} title={source} className="min-w-0 truncate">
+        {entry.source === "builtin"
+          ? i18n._({ id: "built in", comment: "a playbook row: it comes with Spex, from no package of yours" })
+          : withCode(
+              (slot) =>
+                i18n._({
+                  id: "from {package}",
+                  comment: "a playbook row: the package and version it comes from, e.g. from acme/triage 1.2.0",
+                  values: { package: slot },
+                }),
+              `${entry.package} ${entry.version}`,
+            )}
+      </span>
     </span>
   );
 }
@@ -394,19 +454,14 @@ function ProposedRole({
 /** "Commit ⟨folder⟩ with your code", the folder set as code wherever
  * the language places it (playbook-library-61, DR-069). */
 function commitPhrase(folder: string): ReactNode {
-  const slot = "\u0000";
-  const phrase = i18n._({
-    id: "Commit {folder} with your code",
-    comment: "after enabling an authored playbook: {folder} is its spec package's folder in the working folder, e.g. spex-packages/acme/triage",
-    values: { folder: slot },
-  });
-  const [before = "", after = ""] = phrase.split(slot);
-  return (
-    <>
-      {before}
-      <code className="font-mono">{folder}</code>
-      {after}
-    </>
+  return withCode(
+    (slot) =>
+      i18n._({
+        id: "Commit {folder} with your code",
+        comment: "after enabling an authored playbook: {folder} is its package's folder in the project folder, e.g. spex-packages/acme/triage",
+        values: { folder: slot },
+      }),
+    folder,
   );
 }
 
@@ -418,6 +473,7 @@ function PlaybookRow({
   entry,
   origin,
   repository,
+  project,
   invalid,
   bindings,
   roster,
@@ -434,6 +490,8 @@ function PlaybookRow({
   origin: PlaybookOrigin;
   /** The spex repository whose config this row writes: its origin's. */
   repository: string;
+  /** The project's name, as the row's phrases name it. */
+  project: string;
   invalid?: string;
   bindings: Record<string, RoleBindingSummary> | undefined;
   roster: SessionPlayerSummary[];
@@ -450,6 +508,10 @@ function PlaybookRow({
 }) {
   const store = usePlaceStore();
   const enabledHere = entry.enabled.includes(origin);
+  // A playbook enabled for you alone offers the project's row "Enable
+  // for <project>" (playbook-library-3).
+  const forProject = origin === "project" && entry.enabled.includes("own");
+  const where = whereEnabled(entry.enabled, project);
   const [players, setPlayers] = useState<Record<string, string>>({});
   const [blocks, setBlocks] = useState<Record<string, AgentBlockInput>>({});
   const [busy, setBusy] = useState(false);
@@ -524,25 +586,36 @@ function PlaybookRow({
     >
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-mono text-sm font-semibold">/{command}</span>
-        <span className="min-w-0 flex-1 truncate text-xs text-neutral-500" title={intent ?? undefined}>
+        <FromLabel entry={entry} origin={origin} project={project} />
+        <span className="min-w-0 flex-1 basis-24 truncate text-xs text-neutral-500" title={intent ?? undefined}>
           {intent}
         </span>
-        <span
-          data-testid={`playbook-enabled-${entry.id}`}
-          className={`shrink-0 rounded px-1.5 py-0.5 text-xs ${
-            entry.enabled.length > 0
-              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
-              : "bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
-          }`}
-        >
-          {enabledPhrase(entry.enabled)}
-        </span>
+        {where ? (
+          <span
+            data-testid={`playbook-enabled-${entry.id}`}
+            className="max-w-full shrink-0 truncate rounded bg-emerald-100 px-1.5 py-0.5 text-xs text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+          >
+            {where}
+          </span>
+        ) : null}
         {enabledHere ? (
           <button
             type="button"
             data-testid={`playbook-disable-${entry.id}`}
             disabled={busy}
-            title={i18n._("/{command} stops being offered; the spec package stays", { command })}
+            title={
+              origin === "project"
+                ? i18n._({
+                    id: "Stops /{command} for every member of {project}; the package stays",
+                    comment: "tooltip of Disable on a playbook the project's config enables",
+                    values: { command, project },
+                  })
+                : i18n._({
+                    id: "Stops /{command} in every project of yours; the package stays",
+                    comment: "tooltip of Disable on a playbook your Personal config enables",
+                    values: { command },
+                  })
+            }
             aria-label={i18n._("Disable /{command}", { command })}
             onClick={() => void disable()}
             className={SECONDARY}
@@ -559,15 +632,44 @@ function PlaybookRow({
             title={
               badLane !== undefined
                 ? i18n._("{role} needs a player id: lowercase segments joined by dots", { role: badLane })
-                : i18n._("Enable /{command} with a player per role", { command })
+                : origin === "project"
+                  ? forProject
+                    ? i18n._({
+                        id: "Members of {project} get it too",
+                        comment: "tooltip of Enable for <project> on a playbook enabled for you alone",
+                        values: { project },
+                      })
+                    : i18n._({
+                        id: "For you and every member of {project}",
+                        comment: "tooltip of Enable on a playbook the project's packages list: it is written to the project's config",
+                        values: { project },
+                      })
+                  : i18n._({
+                      id: "For you, in every project of yours",
+                      comment: "tooltip of Enable on a playbook your Personal packages list: it is written to your Personal config",
+                    })
             }
-            aria-label={i18n._("Enable /{command}", { command })}
+            aria-label={
+              forProject
+                ? i18n._({
+                    id: "Enable /{command} for {project}",
+                    comment: "accessible name of Enable for <project>",
+                    values: { command, project },
+                  })
+                : i18n._("Enable /{command}", { command })
+            }
             onClick={() => void enable()}
             className={PRIMARY}
           >
             {busy
               ? i18n._({ id: "Enabling…", comment: "the enable request is in flight" })
-              : i18n._({ id: "Enable", comment: "enable this playbook in this config" })}
+              : forProject
+                ? i18n._({
+                    id: "Enable for {project}",
+                    comment: "on a playbook enabled for you alone: enable it in the project's config too; {project} is the project's name",
+                    values: { project },
+                  })
+                : i18n._({ id: "Enable", comment: "enable this playbook in this config" })}
           </button>
         )}
       </div>
@@ -578,12 +680,17 @@ function PlaybookRow({
       ) : null}
       {!entry.present ? (
         <p data-testid={`playbook-absent-${entry.id}`} className="text-xs text-amber-700 dark:text-amber-300">
-          {i18n._("Its files are not on this device")}
+          {i18n._({ id: "Its files are not on this computer", comment: "a playbook whose package folder is missing here" })}
         </p>
       ) : null}
       {enabledFolder !== undefined ? (
-        <p data-testid="enabled-note" className="text-xs text-neutral-500 [overflow-wrap:anywhere]">
-          {i18n._("Enabled. Sessions started before must be restarted to use it.")}{" "}
+        <p data-testid="enabled-note" className="flex flex-wrap gap-x-3 text-xs text-neutral-500 [overflow-wrap:anywhere]">
+          <span>
+            {i18n._({
+              id: "Enabled · restart running sessions to use it",
+              comment: "after enabling an authored playbook: sessions already running do not offer it until restarted",
+            })}
+          </span>
           <span data-testid="enabled-commit">{commitPhrase(enabledFolder)}</span>
         </p>
       ) : null}
@@ -615,7 +722,6 @@ function PlaybookRow({
             />
           ),
         )}
-        <FromLabel entry={entry} />
       </div>
       {error ? (
         <div role="alert" data-testid={`playbook-error-${entry.id}`} className={ERROR}>
@@ -936,8 +1042,11 @@ function DraftRow({
 /** The New playbook field (playbook-library-51): the id, checked in
  * place against the Agent Skills name rule and the ids the
  * environments already hold, beside "Org" and "License" for the new
- * spec package's manifest, filled with the project's defaults; Enter
- * creates the authoring session and opens its workspace. */
+ * package's `meta.yaml`, filled with the project's defaults; Enter
+ * creates the authoring session and opens its workspace. The Org is
+ * one field suggesting the orgs the registry account may publish to
+ * (playbook-library-121): a typed org they omit wears "not yours to
+ * publish to", and what is typed always stands. */
 function NewPlaybookField({
   taken,
   drafts,
@@ -959,6 +1068,7 @@ function NewPlaybookField({
   drafts: Record<string, DraftInfo>;
   /** The new spec package's org and license, as the person left them. */
   org: string;
+  /** The orgs the registry account may publish to, as last read. */
   orgs?: { name: string; path: string; provider?: string }[];
   orgsStatus: "idle" | "loading" | "ready" | "error";
   orgsError?: string;
@@ -1035,6 +1145,31 @@ function NewPlaybookField({
     }
   };
   const field = "rounded border border-neutral-300 bg-white px-2 py-1 font-mono dark:border-neutral-700 dark:bg-neutral-950";
+  // One note beneath the Org at a time (playbook-library-121): the
+  // read in flight, its failure with Retry, an account with no org to
+  // publish to, or a typed org the account's list omits.
+  const typedOrg = org.trim();
+  const orgNote =
+    orgsStatus === "loading" ? (
+      <span id="new-playbook-org-note" role="status" data-testid="new-playbook-org-note" className="text-xs text-neutral-500">
+        {i18n._({ id: "Loading…", comment: "a read is still in flight" })}
+      </span>
+    ) : orgsStatus === "error" ? (
+      <span id="new-playbook-org-note" role="alert" data-testid="new-playbook-org-note" className="text-xs text-amber-700 dark:text-amber-300">
+        {orgsError}{" "}
+        <button type="button" data-testid="new-playbook-orgs-retry" onClick={onRetryOrgs} className="underline">
+          {i18n._({ id: "Retry", comment: "read the registry account's orgs again" })}
+        </button>
+      </span>
+    ) : orgsStatus === "ready" && !orgs?.length ? (
+      <span id="new-playbook-org-note" role="status" data-testid="new-playbook-org-note" className="text-xs text-neutral-500">
+        {i18n._({ id: "No orgs to publish to", comment: "the registry account may publish to no org" })}
+      </span>
+    ) : orgsStatus === "ready" && typedOrg && !orgs?.some((entry) => entry.name === typedOrg) ? (
+      <span id="new-playbook-org-note" data-testid="new-playbook-org-note" className="text-xs text-amber-700 dark:text-amber-300">
+        {i18n._({ id: "not yours to publish to", comment: "beneath New playbook's Org: the registry account may not publish to the org typed" })}
+      </span>
+    ) : null;
 
   return (
     <div
@@ -1054,7 +1189,7 @@ function NewPlaybookField({
               setError(undefined);
             }}
             onKeyDown={onKeyDown}
-            placeholder={i18n._({ id: "e.g. triage", comment: "placeholder of the new-playbook id field; triage is an example id" })}
+            placeholder={i18n._({ id: "e.g. triage", comment: "the hint inside the new-playbook id field; triage is an example id" })}
             spellCheck={false}
             aria-invalid={error !== undefined}
             aria-describedby="new-playbook-caption"
@@ -1063,21 +1198,28 @@ function NewPlaybookField({
         </label>
         <label className="flex min-w-0 flex-1 basis-28 flex-col gap-0.5 text-sm">
           <span className="text-xs text-neutral-500">{i18n._({ id: "Org", comment: "field of New playbook: the registry org its spec package is published under" })}</span>
-          {orgs?.length ? <select aria-label={i18n._("Registry namespaces")} value={orgs.some((entry) => entry.name === org) ? org : ""} onChange={(event) => onOrgChange(event.target.value)} className={field}><option value="">{i18n._("Choose namespace")}</option>{orgs.map((entry) => <option key={entry.name} value={entry.name}>{entry.name}{entry.provider ? ` (${entry.provider})` : ""}</option>)}</select> : null}
           <input
             data-testid="new-playbook-org"
             value={org}
+            list="new-playbook-orgs"
             onChange={(event) => {
               onOrgChange(event.target.value);
               setError(undefined);
             }}
             onKeyDown={onKeyDown}
             spellCheck={false}
+            autoComplete="off"
+            aria-describedby={orgNote ? "new-playbook-org-note" : undefined}
             className={field}
           />
-          {orgsStatus === "loading" ? <span role="status" className="text-xs text-neutral-500">{i18n._("Loading registry namespaces…")}</span> : null}
-          {orgsStatus === "ready" && !orgs?.length ? <span role="status" className="text-xs text-neutral-500">{i18n._("No publishing namespaces available.")}</span> : null}
-          {orgsStatus === "error" ? <span role="alert" className="text-xs text-amber-700 dark:text-amber-300">{orgsError} <button type="button" onClick={onRetryOrgs} className="underline">{i18n._("Retry")}</button></span> : null}
+          {/* The suggestions: the orgs the account may publish to, as
+              the registry read them — never a filter on what is typed. */}
+          <datalist id="new-playbook-orgs" data-testid="new-playbook-orgs">
+            {(orgs ?? []).map((entry) => (
+              <option key={entry.name} value={entry.name} />
+            ))}
+          </datalist>
+          {orgNote}
         </label>
         <label className="flex min-w-0 flex-1 basis-28 flex-col gap-0.5 text-sm">
           <span className="text-xs text-neutral-500">{i18n._({ id: "License", comment: "field of New playbook: the SPDX license its spec package is published under" })}</span>
@@ -1089,7 +1231,7 @@ function NewPlaybookField({
               setError(undefined);
             }}
             onKeyDown={onKeyDown}
-            placeholder={i18n._({ id: "e.g. Apache-2.0", comment: "placeholder of the new-playbook license field; an SPDX license id" })}
+            placeholder={i18n._({ id: "e.g. Apache-2.0", comment: "the hint inside the new-playbook license field; an SPDX license id" })}
             spellCheck={false}
             className={field}
           />
@@ -1105,7 +1247,7 @@ function NewPlaybookField({
         </button>
       </div>
       <span id="new-playbook-caption" data-testid="new-playbook-caption" className="text-xs text-neutral-500">
-        {draftIdCaption()}
+        {draftIdCaption(isDraftId(value.trim()) ? value.trim() : "triage")}
       </span>
       {error ? (
         <span
@@ -1230,7 +1372,7 @@ export function PlaybooksTab({
         const reply = await store.getClient().command("registry.orgs", { repository: projectId }, { timeoutMs: 35_000 });
         if (active) { setRegistryOrgs(reply.orgs); setRegistryOrgsStatus("ready"); }
       } catch (cause) {
-        if (active) { setRegistryOrgsError(cause instanceof Error ? cause.message : i18n._("Could not load registry namespaces. Try again.")); setRegistryOrgsStatus("error"); }
+        if (active) { setRegistryOrgsError(cause instanceof Error ? cause.message : i18n._({ id: "Your orgs could not be read", comment: "the registry did not answer which orgs the account may publish to" })); setRegistryOrgsStatus("error"); }
       }
     })();
     return () => { active = false; };
@@ -1359,10 +1501,9 @@ export function PlaybooksTab({
   if (!configState || configState.status !== "valid") {
     return (
       <div className="relative m-auto max-h-full max-w-md overflow-y-auto p-6 text-center text-sm text-neutral-500">
-        <p>{i18n._("The Captain can only run playbooks listed here.")}</p>
-        {/* One sentence with the way to Settings inside it, so no
+        {/* One phrase with the way to Settings inside it, so no
             translation is assembled from pieces. */}
-        <p className="mt-1">
+        <p>
           <Rich
             text={i18n._("Playbooks need a valid config — fix it in <0>Settings</0>.")}
             components={[
@@ -1465,7 +1606,7 @@ export function PlaybooksTab({
           {/* One sentence, its verb chosen by how many playbooks are
               missing — never an "is"/"are" switch spliced in. */}
           {i18n._(
-            "{count, plural, one {Pull-request delivery is unavailable until {names} is enabled below; a plain /dev request still runs.} other {Pull-request delivery is unavailable until {names} are enabled below; a plain /dev request still runs.}}",
+            "{count, plural, one {Pull-request delivery is unavailable until {names} is enabled below; /dev without a pull request still runs.} other {Pull-request delivery is unavailable until {names} are enabled below; /dev without a pull request still runs.}}",
             {
               count: missingDelivery.length,
               // Two names at most, and the word between them is a text
@@ -1495,6 +1636,7 @@ export function PlaybooksTab({
       entry={entry}
       origin={origin}
       repository={repository}
+      project={project.name}
       invalid={invalidFor[origin].get(entry.id)}
       bindings={
         entry.bindings?.[origin] ??
@@ -1547,7 +1689,18 @@ export function PlaybooksTab({
           <option key={player.id} value={player.id} />
         ))}
       </datalist>
-      <h1 className="text-lg font-semibold">{i18n._({ id: "Playbooks", comment: "heading of the project's Playbooks tab" })}</h1>
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <h1 className="text-lg font-semibold">{i18n._({ id: "Playbooks", comment: "heading of the project's Playbooks tab" })}</h1>
+        {/* The packages stand on their own tab (playbook-library-1). */}
+        <button
+          type="button"
+          data-testid="manage-packages"
+          onClick={() => store.getState().setWorkspaceTab(projectId, "packages")}
+          className="ml-auto text-xs text-brand-600 hover:underline dark:text-brand-300"
+        >
+          {i18n._({ id: "Manage packages", comment: "link on the Playbooks tab: opens the project's Packages tab" })}
+        </button>
+      </div>
       {listError ? (
         <div role="alert" className={ERROR}>
           {listError}
@@ -1574,7 +1727,7 @@ export function PlaybooksTab({
             data-testid="playbooks-empty"
             className="rounded-lg border border-dashed border-neutral-300 px-4 py-5 text-center text-sm text-neutral-500 dark:border-neutral-700"
           >
-            {i18n._("No playbooks enabled yet — enable a built-in below, or make your own with New playbook.")}
+            {i18n._({ id: "Nothing enabled yet", comment: "the Playbooks tab's Enabled section while neither config enables a playbook" })}
           </div>
         ) : null}
       </section>
@@ -1582,7 +1735,7 @@ export function PlaybooksTab({
       {rest.length > 0 ? (
         <section data-testid="playbooks-available" className="flex flex-col gap-2">
           <h2 className="text-sm font-semibold text-neutral-500">
-            {i18n._({ id: "Not enabled", comment: "section heading: playbooks neither the project's config nor your own group's enables" })}
+            {i18n._({ id: "Available", comment: "section heading: playbooks a package provides that neither the project's config nor your Personal one enables" })}
           </h2>
           {rest.map(rowFor)}
         </section>

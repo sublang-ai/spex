@@ -168,6 +168,11 @@ msgstr "{command} 超时"
 msgid "{count, plural, one {, # time} other {, # times}}"
 msgstr "{count, plural, other {，# 次}}"
 
+#. what a package provides: its count of applets, pages the IDE shows in a tab
+#: src/lib/environments.ts
+msgid "{count, plural, one {# applet} other {# applets}}"
+msgstr "{count, plural, other {# 个小应用}}"
+
 #: src/components/SpecView.tsx
 msgid "{count, plural, one {# citation names an item} other {# citations name items}} absent from the tree"
 msgstr "{count, plural, other {未解析引用 # 条}}：指向的条目不存在"
@@ -176,9 +181,10 @@ msgstr "{count, plural, other {未解析引用 # 条}}：指向的条目不存�
 msgid "{count, plural, one {# entry} other {# entries}}"
 msgstr "{count, plural, other {# 项}}"
 
+#. Publish's preview: how many files the publish uploads, listed beneath
 #: src/components/PublishControl.tsx
-msgid "{count, plural, one {# file uploads:} other {# files upload:}}"
-msgstr "{count, plural, other {将上传 # 个文件：}}"
+msgid "{count, plural, one {# file} other {# files}}"
+msgstr "{count, plural, other {# 个文件}}"
 
 #. a session's node in the Explore tab on a team server's Space; {place} is the server's name
 #: src/components/SpaceExplorer.tsx
@@ -216,7 +222,9 @@ msgstr "{count, plural, other {# 项需要关注}}"
 msgid "{count, plural, one {# package} other {# packages}} sharing citations with {name}"
 msgstr "与 {name} 有引用关系的 {count} 个规约包"
 
+#. what a package provides: its count of playbooks
 #: src/App.tsx
+#: src/lib/environments.ts
 msgid "{count, plural, one {# playbook} other {# playbooks}}"
 msgstr "{count, plural, other {# 个规程}}"
 
@@ -247,6 +255,21 @@ msgstr "{count, plural, other {# 个会话需要你}}"
 msgid "{count, plural, one {# session needs your attention} other {# sessions need your attention}}"
 msgstr "{count, plural, other {# 个会话需要关注}}"
 
+#. what a package provides: its count of skills for agents
+#: src/lib/environments.ts
+msgid "{count, plural, one {# skill} other {# skills}}"
+msgstr "{count, plural, other {# 个技能}}"
+
+#. what a package provides: its count of source materials
+#: src/lib/environments.ts
+msgid "{count, plural, one {# source} other {# sources}}"
+msgstr "{count, plural, other {# 份源材料}}"
+
+#. what a package provides: its count of specs
+#: src/lib/environments.ts
+msgid "{count, plural, one {# spec} other {# specs}}"
+msgstr "{count, plural, other {# 份规约}}"
+
 #: src/components/DashboardSurface.tsx
 #: src/components/DeliveryCard.tsx
 #: src/components/NavRail.tsx
@@ -268,8 +291,8 @@ msgid "{count, plural, one {Keep this computer's version? {name}'s stays in Git 
 msgstr "{count, plural, other {保留本机的 # 项版本？{name} 的版本仍保留在 Git 历史中}}"
 
 #: src/components/PlaybooksTab.tsx
-msgid "{count, plural, one {Pull-request delivery is unavailable until {names} is enabled below; a plain /dev request still runs.} other {Pull-request delivery is unavailable until {names} are enabled below; a plain /dev request still runs.}}"
-msgstr "{count, plural, other {需在下方启用 {names} 才能交付 PR；普通的 /dev 请求仍可运行。}}"
+msgid "{count, plural, one {Pull-request delivery is unavailable until {names} is enabled below; /dev without a pull request still runs.} other {Pull-request delivery is unavailable until {names} are enabled below; /dev without a pull request still runs.}}"
+msgstr "{count, plural, other {需在下方启用 {names} 才能交付 PR；不经 PR 的 /dev 仍可运行。}}"
 
 #. Apply's confirm where some choices take the Space's side; {name} is the Space's display name, {count} how many records it replaces
 #: src/components/SpaceSync.tsx
@@ -346,10 +369,10 @@ msgstr "{effort}（不支持）"
 msgid "{first} and {second}"
 msgstr "{first} 和 {second}"
 
-#. an exported skill left out of an agent folder because the reader placed a folder of that name there; {folder} is the agent folder, such as .agents/skills
+#. a skill left out of an agent folder because the reader placed a folder of that name there; {folder} is the agent folder, such as .agents/skills
 #: src/components/EnvironmentSection.tsx
 msgid "{folder} holds a folder of yours by that name"
-msgstr "{folder} 中已有你放置的同名文件夹"
+msgstr "{folder} 中已有你的同名文件夹"
 
 #. graph edge card: one package's citations of another
 #: src/components/SpecGraph.tsx
@@ -447,11 +470,6 @@ msgstr "{minutes} 分 {seconds} 秒"
 msgid "{minutes}m ago"
 msgstr "{minutes} 分钟前"
 
-#. the line above an applet's frame, for a spec package with no version: its name, then the applet's id
-#: src/components/AppletTab.tsx
-msgid "{name} · applet {id}"
-msgstr "{name} · 小应用 {id}"
-
 #. a quiet line, with no control, under a group or Personal of a Space whose listing holds a copy of records standing in another group; {name} is the row's name, {group} the group it stands under, by its name, {space} that group's Space by its display name
 #: src/components/SpaceGroups.tsx
 msgid "{name} · in {group} at {space}"
@@ -462,6 +480,11 @@ msgstr "{name} · 在 {space} 的 {group} 中"
 #: src/components/SpaceGroups.tsx
 msgid "{name} · in Personal at {space}"
 msgstr "{name} · 在 {space} 的个人中"
+
+#. Add…'s registry tab: a package name typed in full that the registry's search does not list, as for a private package
+#: src/components/EnvironmentSection.tsx
+msgid "{name} · not listed publicly"
+msgstr "{name} · 未公开列出"
 
 #: src/components/SpaceRepairs.tsx
 msgid "{name} · now a project at {path}"
@@ -485,11 +508,6 @@ msgstr "{name} · 在本机上"
 #: src/components/SpaceGroups.tsx
 msgid "{name} · shared by @{login} at {space}"
 msgstr "{name} · 由 @{login} 在 {space} 共享"
-
-#. the line above an applet's frame: the spec package and version it comes from, then the applet's id
-#: src/components/AppletTab.tsx
-msgid "{name} {version} · applet {id}"
-msgstr "{name} {version} · 小应用 {id}"
 
 #: src/components/DraftRegisterTab.tsx
 #: src/components/PlaybooksTab.tsx
@@ -585,9 +603,10 @@ msgstr "{playbookId} 状态机，当前处于 {state}"
 msgid "{player} · {step} · {span}"
 msgstr "{player} · {step} · {span}"
 
-#: src/components/DraftRegisterTab.tsx
-msgid "{project} — the project"
-msgstr "{project} — 本项目"
+#. tooltip of a playbook row's origin glyph: the project's packages list it; {project} is the project's name
+#: src/components/PlaybooksTab.tsx
+msgid "{project}'s packages"
+msgstr "{project} 的规约包"
 
 #: src/components/ProjectsSurface.tsx
 msgid "{reason} Remove anyway?"
@@ -600,6 +619,7 @@ msgstr "{reason}仍要移除吗？"
 msgid "{received} received; nothing sent"
 msgstr "收到 {received}；未发出任何内容"
 
+#. one requirement in the list beneath spex.yaml changed: a version requirement and the package or file asking for it, such as ^0.4.0 by acme/triage
 #: src/components/EnvironmentSection.tsx
 msgid "{requirement} by {requirer}"
 msgstr "{requirer} 要求 {requirement}"
@@ -644,10 +664,6 @@ msgstr "{size} KB"
 #: src/lib/space.ts
 msgid "{size} MB"
 msgstr "{size} MB"
-
-#: src/components/EnvironmentSection.tsx
-msgid "{source}, required by {packages}"
-msgstr "{source}，{packages} 依赖它"
 
 #: src/lib/time.ts
 msgid "{span} ago"
@@ -727,6 +743,16 @@ msgstr "{title} — {note}"
 msgid "{title} — {note} — {more}"
 msgstr "{title} — {note} — {more}"
 
+#. a version choice in Add…'s registry results: this version or any newer one in its series, such as 1.2.0 and newer 1.x
+#: src/lib/environments.ts
+msgid "{version} and newer {series}"
+msgstr "{version} 及更新的 {series}"
+
+#. a package's version requirement that admits one version only, such as 1.2.0 exactly; {version} is that version
+#: src/lib/environments.ts
+msgid "{version} exactly"
+msgstr "仅 {version}"
+
 #: src/lib/time.ts
 msgid "{weeks}w ago"
 msgstr "{weeks} 周前"
@@ -762,10 +788,6 @@ msgstr "已移除 @{login}"
 #: src/components/Composer.tsx
 msgid "/ for playbooks · Enter sends"
 msgstr "/ 打开规程 · Enter 发送"
-
-#: src/components/PlaybooksTab.tsx
-msgid "/{command} stops being offered; the spec package stays"
-msgstr "不再提供 /{command}；规约包保留"
 
 #. a run's one-line strip: the workflow, where it stands, who called it
 #: src/components/MachineCard.tsx
@@ -928,9 +950,10 @@ msgstr "有 Player 在等待你的回复：{detail}"
 msgid "A player named {id} already exists — edit it above instead."
 msgstr "已存在名为 {id} 的 Player — 请在上方编辑。"
 
-#: src/components/SettingsSurface.tsx
-msgid "A project's playbooks and role bindings are edited in Playbooks"
-msgstr "项目的规程和角色绑定在“规程”界面编辑"
+#. tooltip of the Enable form's held Enable: what it waits for
+#: src/components/DraftRegisterTab.tsx
+msgid "A player per role, a command and an intent"
+msgstr "每个角色一个 Player、一条命令和一个意图"
 
 #: src/components/Composer.tsx
 msgid "A reply is needed. Answer or ask Captain to explain."
@@ -951,10 +974,6 @@ msgstr "有会话在等待你的回复"
 #: src/state/dashboard.ts
 msgid "A session is waiting for your verdict"
 msgstr "有会话在等待你的裁定"
-
-#: src/components/EnvironmentSection.tsx
-msgid "A spec package is named org/name, each part lowercase words joined by single hyphens"
-msgstr "规约包名为 org/name，每部分由单个连字符连接的小写单词组成"
 
 #: src/state/reducer.ts
 #: src/state/store.ts
@@ -1027,11 +1046,10 @@ msgid "Adapter option; model support unverified."
 msgstr "适配器选项；模型支持未验证。"
 
 #. add the person at the chosen role at the Space
+#. add this package to spex.yaml and install it
 #. create this player in your own roster
 #. register the typed path as an existing repository
 #. register the typed path as an existing repository
-#. request this spec package at the chosen version
-#. request this spec package at the chosen version
 #: src/components/EnvironmentSection.tsx
 #: src/components/ProjectPalette.tsx
 #: src/components/SettingsSurface.tsx
@@ -1084,10 +1102,6 @@ msgstr "请先添加项目（{keys}）"
 msgid "Add a Space…"
 msgstr "添加 Space…"
 
-#: src/components/EnvironmentSection.tsx
-msgid "Add a spec package"
-msgstr "添加规约包"
-
 #: src/components/ProjectPalette.tsx
 msgid "Add an existing Git repository or create a new project."
 msgstr "添加已有 Git 仓库，或创建全新项目。"
@@ -1095,26 +1109,6 @@ msgstr "添加已有 Git 仓库，或创建全新项目。"
 #: src/components/ProjectGroup.tsx
 msgid "Add an intent to {project}"
 msgstr "向 {project} 添加意图"
-
-#. open the registry request form for a known package and version requirement
-#: src/components/EnvironmentSection.tsx
-msgid "Add by name"
-msgstr "按名称添加"
-
-#. request a spec package by its folder in the working folder
-#: src/components/EnvironmentSection.tsx
-msgid "Add from folder"
-msgstr "从文件夹添加"
-
-#. request a spec package from a Git repository at a rev
-#: src/components/EnvironmentSection.tsx
-msgid "Add from Git"
-msgstr "从 Git 添加"
-
-#. open the search over the registry's spec packages
-#: src/components/EnvironmentSection.tsx
-msgid "Add from registry"
-msgstr "从注册表添加"
 
 #: src/components/ProjectGroup.tsx
 msgid "Add intent…"
@@ -1147,6 +1141,26 @@ msgstr "加入群组…"
 msgid "Add to Up next"
 msgstr "加入“接下来”"
 
+#. a Packages tab heading's control: opens the ways to add a package, from the registry, a folder or Git
+#: src/components/EnvironmentSection.tsx
+msgid "Add…"
+msgstr "添加…"
+
+#. the receipt after Add…, while the package's version is still being picked
+#: src/components/EnvironmentSection.tsx
+msgid "Added {name}"
+msgstr "已添加 {name}"
+
+#. the receipt after Add…, for a package that provides nothing: the package and the version installed
+#: src/components/EnvironmentSection.tsx
+msgid "Added {name} {version}"
+msgstr "已添加 {name} {version}"
+
+#. the receipt after Add…: the package, the version installed and what it provides, such as Added acme/triage 0.1.0 · 1 playbook
+#: src/components/EnvironmentSection.tsx
+msgid "Added {name} {version} · {provides}"
+msgstr "已添加 {name} {version} · {provides}"
+
 #: src/components/CaptainHome.tsx
 #: src/components/Composer.tsx
 msgid "Added to Up next — see the project's Overview."
@@ -1156,8 +1170,7 @@ msgstr "已加入“接下来” — 见项目概览。"
 #. a repair's control while the folder is paired with the project
 #. the Add control, while the Space adds the person
 #. the Use this folder control, while the folder is paired
-#. the request is being written
-#. the request is being written
+#. the package is being added to spex.yaml
 #. the request is being written
 #: src/components/EnvironmentSection.tsx
 #: src/components/SettingsSurface.tsx
@@ -1166,6 +1179,11 @@ msgstr "已加入“接下来” — 见项目概览。"
 #: src/components/SpaceRepairs.tsx
 msgid "Adding…"
 msgstr "添加中…"
+
+#. the title of Add in Add…'s registry tab: its consequence; {name} is the package
+#: src/components/EnvironmentSection.tsx
+msgid "Adds {name} to spex.yaml and installs it"
+msgstr "将 {name} 添加到 spex.yaml 并安装"
 
 #. a failure's way back: open this agent's settings for this conversation
 #: src/components/RunView.tsx
@@ -1327,6 +1345,11 @@ msgstr "答复智能体"
 msgid "Answers {positions}"
 msgstr "担任 {positions}"
 
+#. a package's version requirement admitting a series of versions, such as any 1.x; {series} is that series
+#: src/lib/environments.ts
+msgid "any {series}"
+msgstr "任意 {series}"
+
 #. keyboard shortcut column: pressing any letter key
 #: src/lib/shortcuts.ts
 msgid "any letter"
@@ -1385,6 +1408,11 @@ msgstr "在浏览器中批准 {server} 上的 Spex"
 #: src/state/reducer.ts
 msgid "Approved once; native execution is reported separately."
 msgstr "已允许此次操作；原生执行结果将单独报告。"
+
+#. Publish's preview: the registry account it publishes as and the org it publishes into; {login} is the account's login, {org} the package name's first half
+#: src/components/PublishControl.tsx
+msgid "as @{login} in {org}"
+msgstr "以 @{login} 身份发布到 {org}"
 
 #: src/components/AuthoringWorkspace.tsx
 msgid "as the last run left them, not compiled"
@@ -1485,6 +1513,11 @@ msgstr "自动（受保护）"
 msgid "auto: the agent works on its own inside the repo, with the adapter's own protections on"
 msgstr "自动：智能体在仓库内自主工作，并启用适配器自带的保护"
 
+#. section heading: playbooks a package provides that neither the project's config nor your Personal one enables
+#: src/components/PlaybooksTab.tsx
+msgid "Available"
+msgstr "可用"
+
 #: src/components/SpecView.tsx
 msgid "back to {id}"
 msgstr "返回 {id}"
@@ -1533,9 +1566,10 @@ msgstr "阻塞"
 msgid "bound to no role yet"
 msgstr "尚未绑定任何角色"
 
+#. a field of Add…'s Git tab: the branch or tag to add the package at
 #: src/components/EnvironmentSection.tsx
-msgid "Branch, tag or commit"
-msgstr "分支、标签或提交"
+msgid "Branch or tag"
+msgstr "分支或标签"
 
 #: src/components/DraftConversation.tsx
 msgid "Brings a file in as the source, then asks to adapt it"
@@ -1597,14 +1631,35 @@ msgstr "已修复缺陷"
 msgid "build and review step by step"
 msgstr "逐步开发和审阅"
 
+#. a playbook row: it comes with Spex, from no package of yours
+#: src/components/PlaybooksTab.tsx
+msgid "built in"
+msgstr "内置"
+
+#. the tooltip of a package's source glyph: the app ships it
+#: src/lib/environments.ts
+msgid "Built in"
+msgstr "内置"
+
 #. a spec package's source: the one the app ships
 #: src/lib/environments.ts
 msgid "built-in"
 msgstr "内置"
 
+#. the built-in playbooks' line on the Packages tab, while spex.lock records no version of them
 #: src/components/EnvironmentSection.tsx
-msgid "Built-in playbooks {shipped} shipped with this app; this environment runs {locked}"
-msgstr "本应用附带内置规程 {shipped}；此环境运行的是 {locked}"
+msgid "Built-in playbooks"
+msgstr "内置规程"
+
+#. the built-in playbooks' line on the Packages tab: {locked} is the version spex.lock records
+#: src/components/EnvironmentSection.tsx
+msgid "Built-in playbooks {locked}"
+msgstr "内置规程 {locked}"
+
+#. the built-in playbooks' line while the app ships a newer release: {locked} is the version spex.lock records, {shipped} the one this app ships
+#: src/components/EnvironmentSection.tsx
+msgid "Built-in playbooks {locked} · {shipped} shipped with this app"
+msgstr "内置规程 {locked} · 本应用附带 {shipped}"
 
 #. permission mode: no prompts at all
 #: src/components/AgentEditor.tsx
@@ -1646,6 +1701,9 @@ msgstr "无法连接 {endpoint} 上的 Spex 核心 — 每秒重试中。网页�
 #. leave an editor without saving
 #. leave an editor without saving
 #. leave an editor without saving
+#. leave the editor without changing anything
+#. leave the editor without changing anything
+#. leave the editor without changing anything
 #. leave the editor without changing anything
 #. leave the editor without changing anything
 #. leave the editor without changing anything
@@ -1830,6 +1888,11 @@ msgstr "检查中…"
 msgid "choose"
 msgstr "待选择"
 
+#. Add…'s Folder tab: the folder chosen lies outside the project's folder; {folder} is that folder's path
+#: src/components/EnvironmentSection.tsx
+msgid "Choose a folder inside {folder}"
+msgstr "请选择 {folder} 内的文件夹"
+
 #: src/components/AgentEditor.tsx
 msgid "Choose a listed effort or the provider default."
 msgstr "选择列出的推理强度，或使用服务商默认值。"
@@ -1868,7 +1931,9 @@ msgid "Choose effort…"
 msgstr "选择推理强度…"
 
 #. on a repair: name the project's folder on this computer
+#. open the system's folder picker
 #. pick the project folder on this computer that a project's records pair with
+#: src/components/EnvironmentSection.tsx
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceRepairs.tsx
 msgid "Choose folder…"
@@ -1877,10 +1942,6 @@ msgstr "选择文件夹…"
 #: src/components/SpaceSync.tsx
 msgid "Choose for {count, plural, one {# conflict} other {# conflicts}}"
 msgstr "为 {count, plural, other {# 处冲突}}选择"
-
-#: src/components/PlaybooksTab.tsx
-msgid "Choose namespace"
-msgstr "选择命名空间"
 
 #. a step: the analyst chooses which workflows the request takes
 #: src/lib/step-words.ts
@@ -2096,7 +2157,7 @@ msgstr "合并…"
 msgid "Combining…"
 msgstr "合并中…"
 
-#. after enabling an authored playbook: {folder} is its spec package's folder in the working folder, e.g. spex-packages/acme/triage
+#. after enabling an authored playbook: {folder} is its package's folder in the project folder, e.g. spex-packages/acme/triage
 #: src/components/PlaybooksTab.tsx
 msgid "Commit {folder} with your code"
 msgstr "把 {folder} 和代码一起提交"
@@ -2108,6 +2169,11 @@ msgstr "提交或丢弃它们"
 #: src/lib/failure-catalogue.ts
 msgid "Commit or discard what is left"
 msgstr "提交或丢弃剩余更改"
+
+#. the title of the chip spex.yaml, spex.lock not committed: what to do about it and why
+#: src/components/EnvironmentSection.tsx
+msgid "Commit them with the code so every member installs the same packages"
+msgstr "把它们和代码一起提交，让每位成员安装相同的规约包"
 
 #. a call's outcome: it committed its change
 #. a call's outcome: it committed its change
@@ -2324,10 +2390,6 @@ msgstr "继续"
 msgid "Continue in your browser"
 msgstr "在浏览器中继续"
 
-#: src/components/RegistryAccount.tsx
-msgid "Continue registry sign-in"
-msgstr "继续登录注册表"
-
 #: src/components/ApprovalInbox.tsx
 msgid "Conversation: {name}"
 msgstr "对话：{name}"
@@ -2417,10 +2479,6 @@ msgstr "无法答复 {actor} 的 {tool} 请求：{reason}"
 #: src/lib/step-words.ts
 msgid "could not inspect"
 msgstr "无法调查"
-
-#: src/components/PlaybooksTab.tsx
-msgid "Could not load registry namespaces. Try again."
-msgstr "无法加载注册表命名空间。请重试。"
 
 #: src/components/SpecView.tsx
 msgid "Could not open {path}"
@@ -2895,10 +2953,12 @@ msgstr "放弃中…"
 msgid "e.g. .git, docs/generated"
 msgstr "例如 .git、docs/generated"
 
+#. the hint inside the new-playbook license field; an SPDX license id
 #: src/components/PlaybooksTab.tsx
 msgid "e.g. Apache-2.0"
 msgstr "例如 Apache-2.0"
 
+#. the hint inside the new-playbook id field; triage is an example id
 #: src/components/PlaybooksTab.tsx
 msgid "e.g. triage"
 msgstr "例如 triage"
@@ -2980,11 +3040,13 @@ msgstr "推理强度"
 msgid "Effort options apply to the adapter; support for this model is unverified."
 msgstr "推理强度选项适用于适配器；该模型的支持情况未验证。"
 
+#. enable a playbook: name a player for each of its roles
 #. enable this playbook in this config
 #. enable this playbook in this config
 #. enable this playbook in this config
 #: src/components/AuthoringWorkspace.tsx
 #: src/components/DraftRegisterTab.tsx
+#: src/components/EnvironmentSection.tsx
 #: src/components/PlaybooksTab.tsx
 msgid "Enable"
 msgstr "启用"
@@ -2993,13 +3055,20 @@ msgstr "启用"
 msgid "Enable /{command}"
 msgstr "启用 /{command}"
 
+#. accessible name of Enable for <project>
 #: src/components/PlaybooksTab.tsx
-msgid "Enable /{command} with a player per role"
-msgstr "为每个角色指定 Player 并启用 /{command}"
+msgid "Enable /{command} for {project}"
+msgstr "为 {project} 启用 /{command}"
 
+#. field of the Enable form: the project, or Personal for every project of yours
 #: src/components/DraftRegisterTab.tsx
-msgid "Enable in"
+msgid "Enable for"
 msgstr "启用于"
+
+#. on a playbook enabled for you alone: enable it in the project's config too; {project} is the project's name
+#: src/components/PlaybooksTab.tsx
+msgid "Enable for {project}"
+msgstr "为 {project} 启用"
 
 #. authoring state chip, at most 14 characters: the compiled playbook is enabled in a config
 #. section heading: the playbooks the project's config or your own group's enables
@@ -3008,25 +3077,14 @@ msgstr "启用于"
 msgid "Enabled"
 msgstr "已启用"
 
+#. after enabling an authored playbook: sessions already running do not offer it until restarted
+#: src/components/PlaybooksTab.tsx
+msgid "Enabled · restart running sessions to use it"
+msgstr "已启用 · 重启运行中的会话后可用"
+
 #: src/components/PlaybooksTab.tsx
 msgid "Enabled /{command}"
 msgstr "已启用 /{command}"
-
-#: src/components/PlaybooksTab.tsx
-msgid "Enabled in the project"
-msgstr "已在项目中启用"
-
-#: src/components/PlaybooksTab.tsx
-msgid "Enabled in the project and your own group"
-msgstr "已在项目和你自己的群组中启用"
-
-#: src/components/PlaybooksTab.tsx
-msgid "Enabled in your own group"
-msgstr "已在你自己的群组中启用"
-
-#: src/components/PlaybooksTab.tsx
-msgid "Enabled. Sessions started before must be restarted to use it."
-msgstr "已启用。此前开始的会话须重启后才能使用。"
 
 #: src/components/DraftRegisterTab.tsx
 msgid "Enables the last compile — the source changed since."
@@ -3063,16 +3121,6 @@ msgstr "Enter 发送"
 msgid "Enter to send · Shift+Enter for a new line"
 msgstr "Enter 发送 · Shift+Enter 换行"
 
-#. section heading: the spec packages a project installs; {project} is the project's name
-#: src/components/EnvironmentSection.tsx
-msgid "Environment of {project}"
-msgstr "{project} 的环境"
-
-#. section heading: the spec packages your own group installs
-#: src/components/EnvironmentSection.tsx
-msgid "Environment of your own group"
-msgstr "你自己的群组的环境"
-
 #. stands where a failed call named no reason
 #: src/components/PlayerPane.tsx
 msgid "error"
@@ -3087,10 +3135,6 @@ msgstr "所有记录仍保留在 {place}"
 #: src/components/SpaceInstance.tsx
 msgid "Every record stays on this computer"
 msgstr "所有记录仍保留在本机"
-
-#: src/components/DraftRegisterTab.tsx
-msgid "Every role needs a player, and the command and intent their words"
-msgstr "每个角色都要有 Player，命令与意图都要填写"
 
 #. the sharing confirm: what goes to the group
 #: src/components/SpacePlacements.tsx
@@ -3161,20 +3205,6 @@ msgstr "浏览"
 #: src/components/SpaceGroups.tsx
 msgid "Explore records"
 msgstr "浏览记录"
-
-#. export the environment's skills to the agents' folders again
-#: src/components/EnvironmentSection.tsx
-msgid "Export again"
-msgstr "重新导出"
-
-#: src/components/EnvironmentSection.tsx
-msgid "Export this environment's skills to the agents' folders again"
-msgstr "将此环境的技能重新导出到智能体的文件夹"
-
-#. the environment's skills are being exported again
-#: src/components/EnvironmentSection.tsx
-msgid "Exporting…"
-msgstr "导出中…"
 
 #. item group: External Behavior, abbreviated for a narrow column
 #: src/lib/spec-view-model.ts
@@ -3277,6 +3307,11 @@ msgstr "文件"
 msgid "Files in {name}"
 msgstr "{name} 中的文件"
 
+#. a package's standing: spex.lock records it but its files are not all on this computer
+#: src/components/EnvironmentSection.tsx
+msgid "Files missing"
+msgstr "文件缺失"
+
 #: src/lib/media-client.ts
 msgid "Files must be 100 MiB or smaller."
 msgstr "每个文件不得超过 100 MiB。"
@@ -3376,13 +3411,15 @@ msgstr "在设置中修复 Player"
 msgid "Fixed"
 msgstr "已修复"
 
+#. a tab of Add…: add a package from a folder in the project
+#: src/components/EnvironmentSection.tsx
+msgid "Folder"
+msgstr "文件夹"
+
+#. a field of Add…'s Folder tab: a folder inside the project's folder; {folder} is that folder's path
 #: src/components/EnvironmentSection.tsx
 msgid "Folder inside {folder}"
 msgstr "{folder} 内的文件夹"
-
-#: src/components/EnvironmentSection.tsx
-msgid "Folder inside it (optional)"
-msgstr "其中的文件夹（可选）"
 
 #. the folder field of a group's own records opened on this computer: where the group's sessions run
 #: src/components/ProjectPalette.tsx
@@ -3402,9 +3439,26 @@ msgstr "例如："
 msgid "For new sessions"
 msgstr "在新会话中生效"
 
+#. the title of Sign in on a Space's registry line: what signing in to the registry is for
+#. the title of Sign in on a registry: what signing in to the registry is for
+#: src/components/RegistryAccount.tsx
+#: src/components/SpaceInstance.tsx
+msgid "For publishing and private packages"
+msgstr "用于发布和私有规约包"
+
 #: src/components/RunView.tsx
 msgid "For this conversation, from the next message"
 msgstr "仅限本对话，从下一条消息起生效"
+
+#. tooltip of Enable on a playbook the project's packages list: it is written to the project's config
+#: src/components/PlaybooksTab.tsx
+msgid "For you and every member of {project}"
+msgstr "供你和 {project} 的所有成员使用"
+
+#. tooltip of Enable on a playbook your Personal packages list: it is written to your Personal config
+#: src/components/PlaybooksTab.tsx
+msgid "For you, in every project of yours"
+msgstr "供你在所有项目中使用"
 
 #. a call's outcome: the review raised nothing
 #: src/lib/step-words.ts
@@ -3416,11 +3470,6 @@ msgstr "未发现问题"
 msgid "found problems"
 msgstr "发现问题"
 
-#. label before the spec package a playbook comes from
-#: src/components/PlaybooksTab.tsx
-msgid "from"
-msgstr "来自"
-
 #: src/lib/media.ts
 msgid "From {actor}"
 msgstr "来自 {actor}"
@@ -3429,15 +3478,53 @@ msgstr "来自 {actor}"
 msgid "from {credit}"
 msgstr "来自 {credit}"
 
+#. the line above an applet's page, for a package with no version yet: the package it comes from; it opens the package's row on the Packages tab
+#: src/components/AppletTab.tsx
+msgid "from {name}"
+msgstr "来自 {name}"
+
 #. a Sync tab's heading over what one Space holds that this computer lacks; {name} is the Space's display name, {count} how many
 #: src/components/SpaceSync.tsx
 msgid "From {name} ({count})"
 msgstr "来自 {name}（{count}）"
 
+#. the line above an applet's page: the package and version it comes from; it opens the package's row on the Packages tab
+#: src/components/AppletTab.tsx
+msgid "from {name} {version}"
+msgstr "来自 {name} {version}"
+
+#. a playbook row: the package and version it comes from, e.g. from acme/triage 1.2.0
+#: src/components/PlaybooksTab.tsx
+msgid "from {package}"
+msgstr "来自 {package}"
+
 #. on a settled run's card: the state that called it
 #: src/components/MachineCard.tsx
 msgid "from {state}"
 msgstr "来自 {state}"
+
+#. the tooltip of a package's source glyph: it comes from a folder; {path} is the folder, such as spex-packages/acme/triage
+#. the tooltip of a package's source glyph: it comes from a folder; {path} is the folder, such as spex-packages/acme/triage
+#. tooltip: a package taken from a folder; {path} is that folder
+#: src/components/PlaybooksTab.tsx
+#: src/lib/environments.ts
+msgid "From folder {path}"
+msgstr "来自文件夹 {path}"
+
+#. tooltip: a package taken from a Git repository
+#: src/components/PlaybooksTab.tsx
+msgid "From Git"
+msgstr "来自 Git"
+
+#. the tooltip of a package's source glyph: it comes from a Git repository at a branch or tag; {repository} names the repository, {rev} the branch or tag
+#: src/lib/environments.ts
+msgid "From Git {repository} at {rev}"
+msgstr "来自 Git {repository}，版本 {rev}"
+
+#. the tooltip of a package's source glyph, for a package another package requires: it comes from Git; {source} names the repository and its commit
+#: src/lib/environments.ts
+msgid "From Git {source}"
+msgstr "来自 Git {source}"
 
 #. tuning choice: take the value the Settings surface configured
 #: src/components/AgentSettings.tsx
@@ -3460,6 +3547,18 @@ msgstr "取自设置（开启）"
 msgid "from the compile before this change"
 msgstr "来自本次更改前的编译"
 
+#. the tooltip of a package's source glyph, for a package another package requires: it comes from the registry
+#. tooltip: a package taken from the registry
+#: src/components/PlaybooksTab.tsx
+#: src/lib/environments.ts
+msgid "From the registry"
+msgstr "来自注册中心"
+
+#. the tooltip of a package's source glyph: it comes from the registry at the versions {range} reads, such as any 1.x
+#: src/lib/environments.ts
+msgid "From the registry · {range}"
+msgstr "来自注册中心 · {range}"
+
 #. project palette: heading over the projects of the member's groups this computer can open
 #: src/components/ProjectPalette.tsx
 msgid "From your groups"
@@ -3481,17 +3580,11 @@ msgid "Gears"
 msgstr "Gears"
 
 #. a spec package's source: a Git repository at a commit
+#. a tab of Add…: add a package from a Git repository
+#: src/components/EnvironmentSection.tsx
 #: src/lib/environments.ts
 msgid "Git"
 msgstr "Git"
-
-#: src/lib/environments.ts
-msgid "Git {repository} at {rev}"
-msgstr "Git {repository}，版本 {rev}"
-
-#: src/lib/environments.ts
-msgid "Git {repository} at {rev}, {path}"
-msgstr "Git {repository}，版本 {rev}，{path}"
 
 #. entry mark: the repository's own files
 #. entry mark: the repository's own files
@@ -3638,6 +3731,16 @@ msgstr "分阶段实现编码意图，每个阶段经审阅、形成一个提交
 msgid "Implement an IR task"
 msgstr "实现 IR 任务"
 
+#. where a playbook is enabled: in the project's config, for every member; {project} is the project's name
+#: src/components/PlaybooksTab.tsx
+msgid "in {project}"
+msgstr "在 {project}"
+
+#. where a playbook is enabled: in the project's config and in your Personal one; {project} is the project's name
+#: src/components/PlaybooksTab.tsx
+msgid "in {project} · Personal"
+msgstr "在 {project} · 个人"
+
 #: src/App.tsx
 #: src/components/NavRail.tsx
 msgid "in use elsewhere"
@@ -3681,7 +3784,7 @@ msgstr "调查"
 msgid "inspect supplied material or a running web interface and explain observed evidence without changing the repository"
 msgstr "检查给定材料或运行中的网页界面，并解释观察到的证据，不改动仓库"
 
-#. install the locked files that are missing on this device
+#. a package's act: put the files spex.lock records on this computer
 #: src/components/EnvironmentSection.tsx
 msgid "Install"
 msgstr "安装"
@@ -3690,15 +3793,11 @@ msgstr "安装"
 msgid "Install {command}"
 msgstr "安装 {command}"
 
-#: src/components/EnvironmentSection.tsx
-msgid "Install the locked files on this device"
-msgstr "在本机安装锁定的文件"
-
 #: src/lib/labels.ts
 msgid "Install the missing command"
 msgstr "安装缺失的命令"
 
-#. a spec package's files are installed on this device
+#. a package's standing: its files are installed on this computer
 #: src/components/EnvironmentSection.tsx
 msgid "Installed"
 msgstr "已安装"
@@ -3717,12 +3816,22 @@ msgstr "已安装的规约包与供智能体使用的技能"
 msgid "Installing browser…"
 msgstr "正在安装浏览器…"
 
-#. the environment's locked files are being installed
-#. the environment's locked files are being installed
+#. the files spex.lock records are being installed on this computer
+#. the files spex.lock records are being installed on this computer
 #: src/components/EnvironmentSection.tsx
 #: src/lib/environments.ts
 msgid "Installing…"
 msgstr "安装中…"
+
+#. the title of Install and Place skills again: they put the files spex.lock records on this computer and place the skills for the agents
+#: src/components/EnvironmentSection.tsx
+msgid "Installs the files spex.lock records"
+msgstr "安装 spex.lock 记录的文件"
+
+#. the title of Update: it picks the newest versions spex.yaml allows for every package and installs them
+#: src/components/EnvironmentSection.tsx
+msgid "Installs the newest versions spex.yaml allows"
+msgstr "安装 spex.yaml 允许的最新版本"
 
 #. item group: Internal Behavior, abbreviated for a narrow column
 #: src/lib/spec-view-model.ts
@@ -3836,10 +3945,17 @@ msgstr "不会有任何作用"
 msgid "its endpoint"
 msgstr "该端点"
 
+#. a package left out of the agents' folders because its files are not on this computer
+#. a playbook whose package folder is missing here
 #: src/components/EnvironmentSection.tsx
 #: src/components/PlaybooksTab.tsx
-msgid "Its files are not on this device"
-msgstr "它的文件不在本机"
+msgid "Its files are not on this computer"
+msgstr "其文件不在本机"
+
+#. link beside Publish: opens this playbook's package row on the Packages tab
+#: src/components/DraftRegisterTab.tsx
+msgid "Its package"
+msgstr "其规约包"
 
 #: src/components/SpecView.tsx
 msgid "Its specs/ tree holds an earlier layout's directories: the user/, dev/, test/ or items/ groups, or an interactions/ or compositions/ collection."
@@ -3973,13 +4089,10 @@ msgstr "正在加载媒体…"
 msgid "Loading model options…"
 msgstr "加载模型选项中…"
 
-#: src/components/PlaybooksTab.tsx
-msgid "Loading registry namespaces…"
-msgstr "正在加载注册表命名空间…"
-
+#. Publish waits for the registry's state to be read
 #: src/components/PublishControl.tsx
 msgid "Loading registry…"
-msgstr "正在加载注册表…"
+msgstr "正在加载注册中心…"
 
 #: src/components/DraftConversation.tsx
 msgid "Loading the conversation…"
@@ -4007,7 +4120,9 @@ msgstr "加载中…"
 #. a read is still in flight
 #. a read is still in flight
 #. a read is still in flight
+#. a read is still in flight
 #: src/components/DashboardSurface.tsx
+#: src/components/PlaybooksTab.tsx
 #: src/components/ProjectGroup.tsx
 #: src/components/SpaceExplorer.tsx
 msgid "Loading…"
@@ -4026,9 +4141,10 @@ msgstr "降低门槛"
 msgid "Lowercase letters and digits in words joined by single hyphens, at most 64 characters"
 msgstr "由单个连字符连接的小写字母和数字，最多 64 个字符"
 
+#. caption of New playbook's id field: {id} is the id typed, or the example triage while none is
 #: src/lib/drafts.ts
-msgid "Lowercase; it names the spec package, the file and the /command — the command can change when you enable it"
-msgstr "小写；它决定规约包名、文件名和斜杠命令 — 该命令可在启用时更改"
+msgid "Lowercase, becomes /{id}"
+msgstr "小写，成为 /{id}"
 
 #. pipeline stage: the compiled state machine
 #. pipeline stage: the compiled state machine
@@ -4046,6 +4162,11 @@ msgstr "由运营 {space} 的人创建"
 #: src/lib/failure-catalogue.ts
 msgid "Made more than one commit"
 msgstr "产生了多次提交"
+
+#. link on the Playbooks tab: opens the project's Packages tab
+#: src/components/PlaybooksTab.tsx
+msgid "Manage packages"
+msgstr "管理规约包"
 
 #. spec view footer link: the tree's index file
 #: src/components/SpecView.tsx
@@ -4086,6 +4207,11 @@ msgstr "成员会保留他们下载的内容"
 msgid "Members of {name}"
 msgstr "{name} 的成员"
 
+#. tooltip of Enable for <project> on a playbook enabled for you alone
+#: src/components/PlaybooksTab.tsx
+msgid "Members of {project} get it too"
+msgstr "{project} 的成员也会获得"
+
 #. a step: the coder merges both proposals into specs and commits
 #: src/lib/step-words.ts
 msgid "Merge the proposals"
@@ -4120,10 +4246,6 @@ msgstr "迁移回执与输入文件"
 #: src/components/SpecGraph.tsx
 msgid "Minimum citations per pair"
 msgstr "每对关系的最少引用数"
-
-#: src/components/EnvironmentSection.tsx
-msgid "Missing on this device: {path}"
-msgstr "本机缺失：{path}"
 
 #: src/components/PlaybooksTab.tsx
 msgid "missing stages: {stages}"
@@ -4183,6 +4305,11 @@ msgstr "移动“接下来”中选中的行"
 #: src/components/SpaceRepairs.tsx
 msgid "Name a folder"
 msgstr "请填写文件夹"
+
+#. a package name typed in Add… breaks the rule; keep org/name as it is
+#: src/components/EnvironmentSection.tsx
+msgid "Name as org/name, in lowercase words joined by hyphens"
+msgstr "名称写作 org/name，由连字符连接的小写单词组成"
 
 #: src/components/SettingsSurface.tsx
 msgid "Named by {project}, not set up here"
@@ -4297,6 +4424,7 @@ msgstr "下一页"
 msgid "Next tab in Projects"
 msgstr "项目中的下一个标签页"
 
+#. the title of an artifact's fallback mark: it has no text in the wanted language; {language} is that language's code
 #: src/components/EnvironmentSection.tsx
 msgid "No {language} text; the original stands"
 msgstr "没有 {language} 文本；保留原文"
@@ -4333,6 +4461,11 @@ msgstr "没有匹配的决策记录。"
 msgid "No difference"
 msgstr "没有差异"
 
+#. the title of Add…'s disabled Folder tab: this heading's folder is not on this computer
+#: src/components/EnvironmentSection.tsx
+msgid "No folder on this computer"
+msgstr "本机没有此文件夹"
+
 #: src/components/SourcesTabs.tsx
 msgid "No GitHub connection yet — a GitHub origin remote and a signed-in gh CLI put issues and PRs here."
 msgstr "尚未连接 GitHub — 配置 GitHub origin 远程仓库并登录 gh CLI 后，Issue 与 PR 会显示在这里。"
@@ -4358,13 +4491,25 @@ msgstr "没有未关闭的 Issue。"
 msgid "No open pull requests."
 msgstr "没有未关闭的 PR。"
 
-#: src/components/CaptainHome.tsx
-msgid "No playbooks available — open Playbooks"
-msgstr "暂无可用规程，打开“规程”"
-
+#. the registry account may publish to no org
 #: src/components/PlaybooksTab.tsx
-msgid "No playbooks enabled yet — enable a built-in below, or make your own with New playbook."
-msgstr "尚未启用任何规程 — 在下方启用内置规程，或用“新建规程”自己创建。"
+msgid "No orgs to publish to"
+msgstr "没有可发布的组织"
+
+#. Add…'s registry search found nothing
+#: src/components/EnvironmentSection.tsx
+msgid "No package matches"
+msgstr "没有匹配的规约包"
+
+#. a Packages tab heading with no package in its spex.yaml
+#: src/components/EnvironmentSection.tsx
+msgid "No packages yet"
+msgstr "还没有规约包"
+
+#. the task start's link to the project's Playbooks tab while no playbook is enabled
+#: src/components/CaptainHome.tsx
+msgid "No playbooks available"
+msgstr "没有可用的规程"
 
 #: src/App.tsx
 msgid "No playbooks yet"
@@ -4400,10 +4545,6 @@ msgstr "这里还没有项目"
 msgid "No projects yet — register a repository in the <0>Projects</0> to put its work here."
 msgstr "还没有项目 — 在<0>项目</0>中注册一个仓库，其工作就会出现在这里。"
 
-#: src/components/PlaybooksTab.tsx
-msgid "No publishing namespaces available."
-msgstr "没有可发布的命名空间。"
-
 #: src/components/FailureCard.tsx
 msgid "No reason was reported"
 msgstr "未报告原因"
@@ -4421,14 +4562,6 @@ msgstr "还没有源文"
 msgid "No source yet — the agent writes <0>{path}</0> here as you talk."
 msgstr "还没有源文 — 在你交谈的过程中，智能体会把 <0>{path}</0> 写到这里。"
 
-#: src/components/EnvironmentSection.tsx
-msgid "No spec package matches"
-msgstr "没有匹配的规约包"
-
-#: src/components/EnvironmentSection.tsx
-msgid "No spec packages requested yet"
-msgstr "尚未请求任何规约包"
-
 #: src/components/CaptainHome.tsx
 msgid "No spec packages yet"
 msgstr "还没有规约包"
@@ -4437,13 +4570,15 @@ msgstr "还没有规约包"
 msgid "No unfinished intent records."
 msgstr "没有未完成的意图记录。"
 
+#. beneath the chip spex.yaml changed: the packages no version satisfies; {conflicts} lists each with what asks for it
 #: src/components/EnvironmentSection.tsx
-msgid "No version meets every requirement:"
-msgstr "没有版本满足全部要求："
+msgid "No version fits every package: {conflicts}"
+msgstr "没有版本适合所有规约包：{conflicts}"
 
+#. the title of a package's version shown as a dash: spex.lock holds no version of it yet
 #: src/components/EnvironmentSection.tsx
-msgid "No working folder on this device"
-msgstr "本机没有工作文件夹"
+msgid "no version yet"
+msgstr "尚无版本"
 
 #: src/components/AgentEditor.tsx
 msgid "none (adapter default)"
@@ -4492,11 +4627,6 @@ msgstr "尚未检查"
 msgid "not cited by other packages"
 msgstr "未被其他包引用"
 
-#. a project's spex.yaml and spex.lock are not both in its code's HEAD, so its environment is this device's alone
-#: src/components/EnvironmentSection.tsx
-msgid "Not committed with the code"
-msgstr "未随代码提交"
-
 #: src/lib/client.ts
 msgid "not connected"
 msgstr "未连接"
@@ -4504,26 +4634,17 @@ msgstr "未连接"
 #. why a control is held: the page has no core
 #. why a control is held: the page has no core
 #. why a control is held: the page has no core
+#. why a control is held: the page has no core
 #: src/components/AuthoringWorkspace.tsx
 #: src/components/Composer.tsx
 #: src/components/DraftConversation.tsx
+#: src/components/DraftRegisterTab.tsx
 msgid "Not connected"
 msgstr "未连接"
 
 #: src/components/NavRail.tsx
 msgid "not deleted"
 msgstr "未删除"
-
-#. a listed playbook no config enables
-#. section heading: playbooks neither the project's config nor your own group's enables
-#: src/components/PlaybooksTab.tsx
-msgid "Not enabled"
-msgstr "未启用"
-
-#. heading of the skills and spec packages the last export left out of the agents' folders
-#: src/components/EnvironmentSection.tsx
-msgid "Not exported"
-msgstr "未导出"
 
 #. the cited item is not in this tree
 #. the cited item is not in this tree
@@ -4533,14 +4654,24 @@ msgstr "未导出"
 msgid "not found"
 msgstr "未找到"
 
+#. a chip: the skills and packages the last placing left out of the agents' folders, listed beneath
+#: src/components/EnvironmentSection.tsx
+msgid "Not in the agents' folders"
+msgstr "不在智能体的文件夹中"
+
 #: src/components/ModelField.tsx
 msgid "Not in this runtime's list. Check the model ID."
 msgstr "不在此运行时的列表中。请检查模型 ID。"
 
-#. a spec package's files are not installed on this device yet
+#. a package's standing: spex.yaml names it but no version of it is installed yet
 #: src/components/EnvironmentSection.tsx
 msgid "Not installed"
 msgstr "未安装"
+
+#. a package's standing: the registry refused it for want of a sign-in, so it is not installed
+#: src/components/EnvironmentSection.tsx
+msgid "Not installed · private"
+msgstr "未安装 · 私有"
 
 #. a project's records, or a copy of them at a Space, not on the team server whose Space is shown; {place} is the server's name
 #. on a repair at a team server's Space: answer that this project is not kept on the server; {place} is the server's name
@@ -4556,23 +4687,19 @@ msgstr "不在 {place} 上"
 msgid "Not on this computer"
 msgstr "不在本机上"
 
+#. the title of a package's standing Files missing, for a folder package whose folder is not here; {path} is that folder
+#: src/components/EnvironmentSection.tsx
+msgid "Not on this computer: {path}"
+msgstr "不在本机：{path}"
+
 #. the adapter needs something before it can run
 #: src/components/AgentChip.tsx
 msgid "not ready"
 msgstr "未就绪"
 
-#. a requested spec package the lock holds no version of yet
-#: src/components/EnvironmentSection.tsx
-msgid "not resolved"
-msgstr "未解析"
-
 #: src/components/CaptainHome.tsx
 msgid "not set"
 msgstr "未设置"
-
-#: src/components/RegistryAccount.tsx
-msgid "Not signed in to registry"
-msgstr "尚未登录注册表"
 
 #: src/components/AgentEditor.tsx
 msgid "Not supported by this model"
@@ -4587,6 +4714,11 @@ msgstr "自 {moment} 起未同步"
 msgid "Not yet shared"
 msgstr "尚未共享"
 
+#. beneath New playbook's Org: the registry account may not publish to the org typed
+#: src/components/PlaybooksTab.tsx
+msgid "not yours to publish to"
+msgstr "你无权发布到此组织"
+
 #. History band, empty while the project's finished conversations served no intent: they list in the sidebar, and only work queued as an intent lists in History
 #: src/components/ProjectGroup.tsx
 msgid "Nothing done here yet · finished conversations are in the sidebar; work queued as an intent lands here"
@@ -4595,6 +4727,11 @@ msgstr "这里还没有完成的工作 · 已结束的对话在侧栏；作为�
 #: src/components/ProjectGroup.tsx
 msgid "Nothing done here yet."
 msgstr "这里还没有完成的工作。"
+
+#. the Playbooks tab's Enabled section while neither config enables a playbook
+#: src/components/PlaybooksTab.tsx
+msgid "Nothing enabled yet"
+msgstr "尚未启用"
 
 #. why a control published by the parked run would do nothing
 #: src/lib/failure-catalogue.ts
@@ -4731,6 +4868,11 @@ msgstr "开启（不支持）"
 msgid "On {server}"
 msgstr "在 {server} 上"
 
+#. the title of Enable in the receipt after Add…: it opens the project's Playbooks tab, where its playbook is enabled
+#: src/components/EnvironmentSection.tsx
+msgid "On the Playbooks tab"
+msgstr "在“规程”标签页中"
+
 #: src/components/PlaybooksTab.tsx
 #: src/components/PlaybookStages.tsx
 msgid "One normative spec item per state behavior — the compiler's middle stage"
@@ -4811,9 +4953,10 @@ msgstr "打开文件夹…"
 msgid "Open here"
 msgstr "在这里打开"
 
-#: src/components/PublishControl.tsx
-msgid "Open its page"
-msgstr "打开其页面"
+#. tooltip of an applet's from-line: shows the package's row on the Packages tab
+#: src/components/AppletTab.tsx
+msgid "Open its package"
+msgstr "打开其规约包"
 
 #. a project's Open entry for a team server: opens the member's seat there where none is, then the project on it; {server} is the server's name
 #: src/components/SpaceGroups.tsx
@@ -4976,6 +5119,11 @@ msgstr "其他"
 msgid "Other Space…"
 msgstr "其他 Space…"
 
+#. a registry chooser's last entry: reveals a field for a registry the list does not hold
+#: src/components/RegistryAccount.tsx
+msgid "Other…"
+msgstr "其他…"
+
 #. tab name: the project's own history, now and queue
 #. the project's Overview tab
 #: src/App.tsx
@@ -5003,16 +5151,24 @@ msgstr "规约包"
 msgid "Package"
 msgstr "打包"
 
-#: src/components/RegistryAccount.tsx
-msgid "Package registry"
-msgstr "软件包注册表"
+#. a field of Add…'s Folder and Git tabs: the package's org/name
+#: src/components/EnvironmentSection.tsx
+msgid "Package name"
+msgstr "规约包名称"
 
+#. a Packages tab heading: the packages the project's spex.yaml names
 #. heading over a project's changed spex.yaml and spex.lock: the packages it adds
 #. tab name: the spec packages this project and your own group install
 #: src/App.tsx
+#: src/components/EnvironmentSection.tsx
 #: src/lib/space.ts
 msgid "Packages"
 msgstr "规约包"
+
+#. the title of the Packages tab's heading Personal
+#: src/components/EnvironmentSection.tsx
+msgid "Packages added for yourself, available in every project"
+msgstr "为你自己添加的规约包，在你的所有项目中可用"
 
 #. the sharing confirm: the records made before and after the share both go
 #: src/components/SpacePlacements.tsx
@@ -5049,10 +5205,6 @@ msgstr "路径"
 msgid "Path"
 msgstr "路径"
 
-#: src/lib/environments.ts
-msgid "path {path}"
-msgstr "路径 {path}"
-
 #: src/components/ProjectPalette.tsx
 msgid "Path to an existing Git repository"
 msgstr "已有 Git 仓库路径"
@@ -5061,18 +5213,28 @@ msgstr "已有 Git 仓库路径"
 msgid "Permission mode"
 msgstr "权限模式"
 
+#. a Packages tab heading: the packages added for yourself, available in every project
+#. your own records and packages at a Space, never "your namespace"
 #. your own records and packages at a Space, never "your namespace"
 #. your own records and packages at a Space, never "your namespace"
 #. your own records at a Space, apart from any group: a heading, a picker's choice and where records are shared into
+#: src/components/EnvironmentSection.tsx
+#: src/components/PlaybooksTab.tsx
 #: src/components/ProjectPalette.tsx
 #: src/components/ProjectsSurface.tsx
 #: src/lib/space.ts
 msgid "Personal"
 msgstr "个人"
 
-#: src/components/EnvironmentSection.tsx
-msgid "Pick a folder inside {folder}"
-msgstr "请选择 {folder} 内的文件夹"
+#. a choice of the Enable form's Enable for: your Personal config, read in every project of yours
+#: src/components/DraftRegisterTab.tsx
+msgid "Personal (every project of yours)"
+msgstr "个人（你的所有项目）"
+
+#. tooltip of a playbook row's origin glyph: your Personal packages, available in every project, list it
+#: src/components/PlaybooksTab.tsx
+msgid "Personal packages"
+msgstr "个人规约包"
 
 #: src/components/CaptainHome.tsx
 msgid "Pick a project first ({keys})"
@@ -5086,11 +5248,6 @@ msgstr "在侧栏选择一个项目，再说说你的目标。"
 #: src/components/DraftSourceTab.tsx
 msgid "Pick file"
 msgstr "选择文件"
-
-#. open the system's folder picker
-#: src/components/EnvironmentSection.tsx
-msgid "Pick folder"
-msgstr "选择文件夹"
 
 #. the title of Choose folder… on a project whose records are here without its folder
 #: src/components/SpaceGroups.tsx
@@ -5107,9 +5264,19 @@ msgstr "指定一个值…"
 msgid "Place"
 msgstr "位置"
 
+#. place the packages' skills in the agents' folders again
+#: src/components/EnvironmentSection.tsx
+msgid "Place skills again"
+msgstr "重新放入技能"
+
 #: src/components/DraftConversation.tsx
 msgid "Places the six-line example as your first message"
 msgstr "把六行示例放为你的第一条消息"
+
+#. the skills are being placed in the agents' folders again
+#: src/components/EnvironmentSection.tsx
+msgid "Placing…"
+msgstr "放入中…"
 
 #. the built-in /dev playbook's intent, as its registry entry states it
 #: src/lib/playbook-intent.ts
@@ -5302,24 +5469,32 @@ msgstr "公开：任何人都可读取"
 
 #. upload the spec package to the registry
 #. upload the spec package to the registry
+#. upload the spec package to the registry
+#: src/components/EnvironmentSection.tsx
 #: src/components/PublishControl.tsx
 msgid "Publish"
 msgstr "发布"
+
+#. Publish's preview: the spec package, its version and the registry it goes to by its display name, such as Publish acme/triage 0.1.0 to Spex Space
+#: src/components/PublishControl.tsx
+msgid "Publish {name} {version} to {registry}"
+msgstr "将 {name} {version} 发布到 {registry}"
 
 #. the built-in /pr playbook's intent, as its registry entry states it; `code` is the /code playbook
 #: src/lib/playbook-intent.ts
 msgid "publish a reviewed branch as a pull request, wait for its checks, fix red checks once through code, and merge it"
 msgstr "将经审阅的分支发布为 PR，等待其检查，经由 code 修复一次未通过的检查，然后合并"
 
+#. a publish succeeded: the version the registry now holds, linking its page there
 #: src/components/PublishControl.tsx
-msgid "Publish to {origin}"
-msgstr "发布到 {origin}"
+msgid "Published {version}"
+msgstr "已发布 {version}"
 
+#. the title of Publish: what it publishes and where; {path} is the package's folder, {registry} the registry's display name
 #: src/components/PublishControl.tsx
-msgid "Published {name} {version}"
-msgstr "已发布 {name} {version}"
+msgid "Publishes {path} to {registry}"
+msgstr "将 {path} 发布到 {registry}"
 
-#. a spec package is being uploaded to the registry
 #. a spec package is being uploaded to the registry
 #. a spec package is being uploaded to the registry
 #: src/components/PublishControl.tsx
@@ -5555,19 +5730,29 @@ msgstr "拒绝执行"
 #. a spec package's source: the registry
 #: src/lib/environments.ts
 msgid "registry"
-msgstr "注册表"
+msgstr "注册中心"
 
-#: src/lib/environments.ts
-msgid "registry {requirement}"
-msgstr "注册表 {requirement}"
+#. a tab of Add…: search the registry
+#. the line beneath a Space's heading naming its registry, where packages are published and read
+#: src/components/EnvironmentSection.tsx
+#: src/components/SpaceInstance.tsx
+msgid "Registry"
+msgstr "注册中心"
 
-#: src/components/PlaybooksTab.tsx
-msgid "Registry namespaces"
-msgstr "注册表命名空间"
+#. the registry line beneath a Space's heading while the person is signed in to that registry; {login} is their account there
+#: src/components/SpaceInstance.tsx
+msgid "Registry · signed in as @{login}"
+msgstr "注册中心 · 已登录为 @{login}"
 
+#. the field Other… reveals in a Packages tab heading's registry chooser: a registry's address, such as https://spex.sublang.ai
 #: src/components/RegistryAccount.tsx
-msgid "Registry URL"
-msgstr "注册表地址"
+msgid "Registry address"
+msgstr "注册中心地址"
+
+#. a Packages tab heading's registry chooser: the registry its spex.yaml names, by its display name; it opens the list of registries
+#: src/components/RegistryAccount.tsx
+msgid "Registry: {registry}"
+msgstr "注册中心：{registry}"
 
 #. a call's outcome: the coder rejected every finding
 #: src/lib/step-words.ts
@@ -5600,18 +5785,18 @@ msgstr "重新加载"
 msgid "Reloading…"
 msgstr "重新加载中…"
 
+#. a package's act: take it out of spex.yaml and uninstall it
+#. a package's act: take it out of spex.yaml and uninstall it
 #. confirm: forget this project, leaving the repo on disk
 #. confirm: forget this project, leaving the repo on disk
 #. confirm: remove a project whose records are gone from this computer
 #. confirm: take the member out at the Space
 #. confirm: take this player out of the roster
 #. confirm: take this row off the record
-#. confirm: take this spec package out of the requests
 #. queue row control: take this row out of the queue
 #. row menu item: take this row out of the queue
 #. take a member out of a group or a project's records at the Space
 #. take the member's credential for a code host or an agent off the team server
-#. take this spec package out of the requests
 #: src/components/EnvironmentSection.tsx
 #: src/components/NextCard.tsx
 #: src/components/ProjectGroup.tsx
@@ -5631,13 +5816,8 @@ msgid "Remove {id}?"
 msgstr "移除 {id}？"
 
 #: src/components/ComposerAttachments.tsx
-#: src/components/EnvironmentSection.tsx
 msgid "Remove {name}"
 msgstr "移除 {name}"
-
-#: src/components/EnvironmentSection.tsx
-msgid "Remove {name}?"
-msgstr "移除 {name}？"
 
 #: src/components/NextCard.tsx
 msgid "Remove {title}"
@@ -5718,6 +5898,11 @@ msgstr "已移除“{title}”"
 msgid "Removed {space} from this list"
 msgstr "已从列表中移除 {space}"
 
+#. the title of a package row's Remove: its consequence; {name} is the package
+#: src/components/EnvironmentSection.tsx
+msgid "Removes {name} from spex.yaml and uninstalls it"
+msgstr "从 spex.yaml 中移除 {name} 并卸载"
+
 #. a term shown before the first connection to a team server; {server} is its name, {space} the Space's display name
 #: src/components/SpaceServers.tsx
 msgid "Removing {server}, or revoking its access at {space}, stops new use; a credential already there lasts until it expires"
@@ -5761,25 +5946,10 @@ msgstr "自动模式下智能体可在常规范围之外写入的仓库相对路
 msgid "Report it"
 msgstr "上报这个问题"
 
+#. a field of Add…'s Git tab: the Git repository's address
 #: src/components/EnvironmentSection.tsx
-msgid "Repository URL"
-msgstr "仓库 URL"
-
-#: src/components/EnvironmentSection.tsx
-msgid "Request {requirement}"
-msgstr "请求 {requirement}"
-
-#: src/components/EnvironmentSection.tsx
-msgid "Request a Git repository at a branch, tag or commit"
-msgstr "请求某个分支、标签或提交上的 Git 仓库"
-
-#: src/components/EnvironmentSection.tsx
-msgid "Request a spec package by its folder"
-msgstr "按文件夹请求一个规约包"
-
-#: src/components/EnvironmentSection.tsx
-msgid "Requested {name}"
-msgstr "已请求 {name}"
+msgid "Repository"
+msgstr "仓库"
 
 #: src/components/ApprovalInbox.tsx
 msgid "Requested action"
@@ -5793,13 +5963,10 @@ msgstr "请求工具审批：{tool}"
 msgid "Requested tool approval: {tool} — {reason}"
 msgstr "请求工具审批：{tool} — {reason}"
 
+#. Remove's confirm on a package other packages require; {packages} names them
 #: src/components/EnvironmentSection.tsx
-msgid "Requests changed; resolve again to install"
-msgstr "请求已更改；请重新解析后安装"
-
-#: src/components/DraftRegisterTab.tsx
-msgid "Requests the spec package by path, then writes the playbook and any new player"
-msgstr "按路径请求规约包，再写入规程和新的 Player"
+msgid "Required by {packages}"
+msgstr "{packages} 依赖它"
 
 #: src/components/ProjectGroup.tsx
 msgid "Resize History"
@@ -5838,26 +6005,6 @@ msgstr "调整目录树窗格大小"
 msgid "Resolve"
 msgstr "解决"
 
-#. resolve the changed requests into a new lock
-#: src/components/EnvironmentSection.tsx
-msgid "Resolve again"
-msgstr "重新解析"
-
-#: src/components/EnvironmentSection.tsx
-msgid "Resolve the requests again to run {version}"
-msgstr "重新解析请求以运行 {version}"
-
-#: src/components/EnvironmentSection.tsx
-msgid "Resolve the requests into a new lock and install it"
-msgstr "将请求解析为新的锁并安装"
-
-#. the environment's requests are being resolved into a lock
-#. the environment's requests are being resolved into a lock
-#: src/components/EnvironmentSection.tsx
-#: src/lib/environments.ts
-msgid "Resolving…"
-msgstr "解析中…"
-
 #. act: bring back the interrupted work's saved position and report what was recorded; nothing runs again
 #: src/components/SessionRecovery.tsx
 msgid "Restore"
@@ -5895,6 +6042,7 @@ msgstr "本机智能体对话的续接令牌；在别处无效"
 
 #. act: load the transcript again
 #. read the record again
+#. read the registry account's orgs again
 #. read the specs tree again
 #. run the stopped step again
 #. run the stopped step again
@@ -6109,13 +6257,10 @@ msgstr "保存中…"
 msgid "Scaffold one in the project directory:"
 msgstr "在项目目录中生成一个："
 
+#. the hint inside Add…'s registry search field: search the registry, or type a package's full name
 #: src/components/EnvironmentSection.tsx
-msgid "Search the registry"
-msgstr "搜索注册表"
-
-#: src/components/EnvironmentSection.tsx
-msgid "Search the registry and request a version"
-msgstr "搜索注册表并请求某个版本"
+msgid "Search, or type org/name"
+msgstr "搜索，或输入 org/name"
 
 #. the registry search is in flight
 #: src/components/EnvironmentSection.tsx
@@ -6452,7 +6597,9 @@ msgstr "筛选外仍显示"
 msgid "shown despite search"
 msgstr "搜索外仍显示"
 
+#. sign in to a Space or a registry
 #. sign in to the Space chosen, or to a registry
+#: src/components/EnvironmentSection.tsx
 #: src/components/SpaceSignIn.tsx
 msgid "Sign in"
 msgstr "登录"
@@ -6485,9 +6632,12 @@ msgstr "登录到 Space"
 msgid "Sign in to a Space first"
 msgstr "请先登录一个 Space"
 
-#: src/components/RegistryAccount.tsx
-msgid "Sign in to registry"
-msgstr "登录注册表"
+#. in place of Publish while the person is not signed in to the registry: starts the registry sign-in
+#. in place of Publish while the person is not signed in to the registry: starts the registry sign-in
+#: src/components/EnvironmentSection.tsx
+#: src/components/PublishControl.tsx
+msgid "Sign in to publish"
+msgstr "登录以发布"
 
 #. welcome page action while this computer is signed in to no Space: shows the Space surface, where the sign-in is
 #: src/components/CaptainHome.tsx
@@ -6499,7 +6649,9 @@ msgstr "登录你的 Space"
 msgid "Sign in with {provider}"
 msgstr "使用 {provider} 登录"
 
+#. sign out of a Space or a registry
 #. sign this computer out of the Space whose heading carries it
+#: src/components/RegistryAccount.tsx
 #: src/components/SpaceInstance.tsx
 msgid "Sign out"
 msgstr "退出登录"
@@ -6508,10 +6660,6 @@ msgstr "退出登录"
 #: src/components/SpaceInstance.tsx
 msgid "Sign out first"
 msgstr "请先退出登录"
-
-#: src/components/RegistryAccount.tsx
-msgid "Sign out of registry"
-msgstr "退出注册表"
 
 #. on a Space's heading, after its name: the Space signed this computer out; {login} is the account to sign in again as
 #: src/components/SpaceInstance.tsx
@@ -6640,10 +6788,6 @@ msgstr "规约条目"
 msgid "Spec package citation graph"
 msgstr "规约包引用图谱"
 
-#: src/components/EnvironmentSection.tsx
-msgid "Spec package name"
-msgstr "规约包名称"
-
 #. tab name: the project's spec packages
 #. the spec view's own heading
 #. the spec view's own heading
@@ -6702,6 +6846,16 @@ msgstr "Spex 导航"
 #: src/components/ProjectPalette.tsx
 msgid "Spex will create this folder and set up Git."
 msgstr "Spex 会创建此文件夹并设置 Git。"
+
+#. a chip: spex.yaml names packages spex.lock does not record yet; keep the file name as it is
+#: src/components/EnvironmentSection.tsx
+msgid "spex.yaml changed"
+msgstr "spex.yaml 已更改"
+
+#. a chip on the project's packages: its two files are not both in the code's last commit; keep the file names as they are
+#: src/components/EnvironmentSection.tsx
+msgid "spex.yaml, spex.lock not committed"
+msgstr "spex.yaml、spex.lock 未提交"
 
 #: src/lib/failure-catalogue.ts
 msgid "Squash or reset them yourself"
@@ -6828,10 +6982,6 @@ msgstr "步骤：{state}"
 msgid "Stop"
 msgstr "停止"
 
-#: src/components/EnvironmentSection.tsx
-msgid "Stop requesting this spec package"
-msgstr "不再请求此规约包"
-
 #: src/lib/failure-catalogue.ts
 msgid "Stopped before it finished"
 msgstr "未完成即被停止"
@@ -6840,6 +6990,16 @@ msgstr "未完成即被停止"
 #: src/components/SpaceSync.tsx
 msgid "Stopping…"
 msgstr "停止中…"
+
+#. tooltip of Disable on a playbook the project's config enables
+#: src/components/PlaybooksTab.tsx
+msgid "Stops /{command} for every member of {project}; the package stays"
+msgstr "为 {project} 的所有成员停用 /{command}；规约包保留"
+
+#. tooltip of Disable on a playbook your Personal config enables
+#: src/components/PlaybooksTab.tsx
+msgid "Stops /{command} in every project of yours; the package stays"
+msgstr "在你的所有项目中停用 /{command}；规约包保留"
 
 #. the tuning editor's field for the reasoning effort an agent's subagents run at
 #: src/components/TuningField.tsx
@@ -7030,10 +7190,6 @@ msgstr "智能体的登录已过期 — 请在终端用该智能体的 CLI 重�
 msgid "The call timed out"
 msgstr "调用超时"
 
-#: src/components/PlaybooksTab.tsx
-msgid "The Captain can only run playbooks listed here."
-msgstr "Captain 只能运行这里列出的规程。"
-
 #: src/components/CaptainPane.tsx
 msgid "The Captain will report here."
 msgstr "Captain 会在这里汇报。"
@@ -7104,6 +7260,7 @@ msgstr "上一轮失败。发送消息即可接续。"
 msgid "The ledger could not be loaded: {reason}"
 msgstr "无法加载意图台账：{reason}"
 
+#. the title of an artifact's fallback mark: it has no text in the wanted language
 #: src/components/EnvironmentSection.tsx
 msgid "The original text stands"
 msgstr "保留原文"
@@ -7132,10 +7289,6 @@ msgstr "无法加载队列。<0>重试</0>"
 #: src/components/PlaybooksTab.tsx
 msgid "The raw prose the example starts from"
 msgstr "示例所基于的原始文稿"
-
-#: src/components/RegistryAccount.tsx
-msgid "The registry could not be read. Try again."
-msgstr "无法读取注册表。请重试。"
 
 #: src/components/SpecEditor.tsx
 msgid "the reload failed"
@@ -7256,10 +7409,6 @@ msgstr "仅限本对话"
 #: src/state/store.ts
 msgid "This draft is no longer listed."
 msgstr "该草稿已不在列表中。"
-
-#: src/components/RegistryAccount.tsx
-msgid "This environment keeps its previous package destination until you choose a registry."
-msgstr "在选择注册表之前，此环境保留原有的软件包目标。"
 
 #: src/components/SpecEditor.tsx
 msgid "This file changed on disk since you opened it."
@@ -7521,10 +7670,15 @@ msgstr "接下来"
 msgid "Up next: <0>{title}</0>"
 msgstr "接下来：<0>{title}</0>"
 
-#. resolve the environment again to run the built-in playbooks this app ships
+#. a package's act: install the newest versions spex.yaml allows
 #: src/components/EnvironmentSection.tsx
 msgid "Update"
 msgstr "更新"
+
+#. the built-in playbooks' line: update to the release this app ships; {version} is that release
+#: src/components/EnvironmentSection.tsx
+msgid "Update to {version}"
+msgstr "更新到 {version}"
 
 #. a sync unit's change: it changed on this side
 #: src/components/SpaceSync.tsx
@@ -7547,14 +7701,13 @@ msgstr "{age}由你更新"
 msgid "Updated the starter config at <0>{path}</0> for the current sign-ins"
 msgstr "已按当前登录更新 <0>{path}</0> 的初始配置"
 
-#. the environment is being resolved again to run the built-in playbooks this app ships
+#. the packages spex.yaml names are being updated to the newest versions it allows and installed
+#. the packages spex.yaml names are being updated to the newest versions it allows and installed
+#. the packages spex.yaml names are being updated to the newest versions it allows and installed
 #: src/components/EnvironmentSection.tsx
+#: src/lib/environments.ts
 msgid "Updating…"
 msgstr "更新中…"
-
-#: src/components/PublishControl.tsx
-msgid "Upload {path} to the registry"
-msgstr "将 {path} 上传到注册表"
 
 #: src/components/ComposerAttachments.tsx
 msgid "Upload failed"
@@ -7576,6 +7729,11 @@ msgstr "上传中…"
 #: src/lib/space.ts
 msgid "uploads not yet attached"
 msgstr "尚未附加的上传"
+
+#. use the registry at the address typed for this heading's spex.yaml
+#: src/components/RegistryAccount.tsx
+msgid "Use"
+msgstr "使用"
 
 #. on a repair: make the folder the core found this project's folder; {folder} is its path
 #: src/components/SpaceRepairs.tsx
@@ -7600,10 +7758,6 @@ msgstr "使用设置中的浏览器选项"
 msgid "Use default"
 msgstr "使用默认"
 
-#: src/components/RegistryAccount.tsx
-msgid "Use registry"
-msgstr "使用此注册表"
-
 #. pair a project's records with the folder named
 #. the repair editor's control: make the folder named the project's folder
 #: src/components/SpaceGroups.tsx
@@ -7611,14 +7765,11 @@ msgstr "使用此注册表"
 msgid "Use this folder"
 msgstr "使用此文件夹"
 
+#. the accessible name of a version choice in Add…; {name} is the package
+#. the accessible name of a version choice in Add…; {name} is the package
 #: src/components/EnvironmentSection.tsx
 msgid "Version of {name}"
 msgstr "{name} 的版本"
-
-#. required registry version: exact, caret or tilde requirement
-#: src/components/EnvironmentSection.tsx
-msgid "Version or range"
-msgstr "版本或范围"
 
 #. a membership that comes through the named group, not the group's or repository's own
 #: src/components/SpaceMembers.tsx
@@ -7845,14 +7996,10 @@ msgstr "配置文件有错误 — 规程不可用。"
 msgid "Your groups"
 msgstr "你的群组"
 
-#. switch: show your own group's playbooks
-#: src/components/DraftRegisterTab.tsx
-msgid "Your own group"
-msgstr "你自己的群组"
-
-#: src/components/SettingsSurface.tsx
-msgid "Your own group's config, in {repository}"
-msgstr "你自己的群组的配置，位于 {repository}"
+#. the registry did not answer which orgs the account may publish to
+#: src/components/PlaybooksTab.tsx
+msgid "Your orgs could not be read"
+msgstr "无法读取你的组织"
 
 #: src/components/CaptainHome.tsx
 msgid "your project"

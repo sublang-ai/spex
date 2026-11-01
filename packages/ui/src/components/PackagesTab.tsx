@@ -2,21 +2,20 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // A project's Packages tab (playbook-library-92, DR-104, DR-172): the
-// project's environment, and your own group's beneath it, each with the
-// registry account it publishes and reads private packages through
-// (playbook-library-119), its spec packages (playbook-library-92) and
-// the ways to add one. Every command a section sends names that
-// section's spex repository: the project's for the project's, your own
-// group's for yours. The playbooks the packages provide stand on the
-// project's Playbooks tab.
+// project's packages under "Packages", and yours beneath them under
+// "Personal" — packages added for yourself, available in every project —
+// each heading with the registry its spex.yaml names and your account
+// there (playbook-library-119), its packages and one "Add…". Every
+// command a heading sends names that heading's spex repository: the
+// project's for "Packages", your own group's for "Personal". The
+// playbooks the packages provide stand on the project's Playbooks tab.
 
 import { useEffect } from "react";
 import type { ProjectInfo } from "@sublang/spex-core/protocol";
 
 import { usePlaceStore } from "../state/place-context.js";
 import { ownRepositoryKey } from "../lib/environments.js";
-import { RegistryAccount } from "./RegistryAccount.js";
-import { AddSpecPackages, EnvironmentSection } from "./EnvironmentSection.js";
+import { EnvironmentSection } from "./EnvironmentSection.js";
 
 export function PackagesTab({
   project,
@@ -61,18 +60,12 @@ export function PackagesTab({
       data-testid="packages-tab"
       className="@container relative mx-auto flex w-full min-h-0 max-w-3xl flex-1 flex-col gap-5 overflow-y-auto p-6"
     >
-      {/* The ways to add a spec package stand directly beneath each
-          environment's list (playbook-library-92). */}
       <div data-testid="packages-project" className="flex flex-col gap-3">
-        <RegistryAccount repository={projectId} />
-        <EnvironmentSection repository={projectId} project={project.name} onNavigate={onNavigate} />
-        <AddSpecPackages repository={projectId} />
+        <EnvironmentSection repository={projectId} projectId={projectId} onNavigate={onNavigate} />
       </div>
       {personal !== undefined ? (
         <div data-testid="packages-personal" className="flex flex-col gap-3">
-          <RegistryAccount repository={personal} />
-          <EnvironmentSection repository={personal} onNavigate={onNavigate} />
-          <AddSpecPackages repository={personal} />
+          <EnvironmentSection repository={personal} projectId={projectId} personal onNavigate={onNavigate} />
         </div>
       ) : null}
     </div>

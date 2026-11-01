@@ -3,29 +3,47 @@
 
 // A project's Playbooks and Packages tabs as a user works them
 // (playbook-library-41, DR-104, DR-172): the Playbooks tab lists the
-// playbooks of the project's environment and your own group's together
-// — where each is enabled, enabling a built-in in the project, a card's
-// stage row, disabling with no confirm — and the Packages tab holds
-// both environments' packages, removing one behind a confirm; each
-// change lands in the spex repository's config it names; and a role's
-// tuning saved in your own group's config (playbook-library-39).
+// playbooks of the project's packages and your Personal ones together
+// under Enabled and Available — each naming where it is enabled, "in
+// <project>" or "Personal", a built-in reading "built in" — enables a
+// built-in in the project, opens a card's stage row and disables with no
+// confirm, and its "Manage packages" opens the Packages tab, whose
+// "Packages" and "Personal" headings each carry one "Add…" and the
+// built-in line, a row's Remove carrying its consequence as its tooltip;
+// each change lands in the config it names; and a role's tuning saved
+// in your Personal config (playbook-library-39).
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { parse } from "yaml";
+import { makeRelease } from "@sublang/spex-core/testing";
 
 import {
   test,
   expect,
   open,
+  builtinLine,
   newTaskTab,
+  packageRow,
   packagesSection,
   playbookCard,
   projectTab,
+  projectTabControl,
+  rowAct,
 } from "../src/harness";
 
 test.use({ appOptions: { project: true } });
 
 /** The built-in spec package every environment requests (environments-11). */
 const BUILTINS = "sublang/playbooks";
+
+/** The project as its tabs name it (playbook-library-1). */
+const PROJECT = "demo-project";
+
+/** A package of the project's own, added by folder, whose row's
+ * overflow holds Remove (playbook-library-92). */
+const NOTES = "acme/notes-kit";
+const NOTES_PATH = "spex-packages/acme/notes-kit";
 
 test.describe("runtime binding options", () => {
   test.use({ appOptions: {
@@ -131,26 +149,39 @@ test.describe("runtime binding options", () => {
   });
 });
 
-test("playbook-library-41: both environments listed together, a built-in enabled in the project, the stage row, disable and remove", async ({
+test("playbook-library-41: both tabs' words, a built-in enabled in the project, the stage row, disable, and Remove's consequence", async ({
   page,
   app,
 }) => {
   test.setTimeout(90_000);
+  // A package by folder in the project's spex.yaml (arranged over the
+  // protocol), so the project's heading holds a row of its own.
+  await makeRelease(join(app.projectDir, NOTES_PATH), {
+    format: 2, org: "acme", name: "notes-kit", version: "0.1.0", description: "A note reader", license: "Apache-2.0",
+    artifacts: { "notes-reader": { kind: "skill", language: "en" } },
+  }, { "skills/en/notes-reader/SKILL.md": "---\nname: notes-reader\ndescription: Read a note\n---\nRead the note without changes.\n" });
+  await app.core.command("environment.request", { repository: app.projectId!, name: NOTES, request: { kind: "path", path: NOTES_PATH } });
   await open(page, app);
-  await projectTab(page, "Playbooks");
+  const playbooks = await projectTab(page, "Playbooks");
 
-  // The tab stands with no switch between the project and your own
-  // group, and holds no package list, add control or registry account,
-  // which stand on the project's Packages tab (playbook-library-1).
+  // The tab stands with no switch between the project and Personal,
+  // and holds no package list, add control or registry account — only
+  // "Manage packages", opening the project's Packages tab
+  // (playbook-library-1).
   await expect(page.getByTestId("playbooks-switch")).toHaveCount(0);
-  await expect(page.getByTestId("environment-section")).toHaveCount(0);
-  await expect(page.getByTestId("add-packages")).toHaveCount(0);
-  await expect(page.getByTestId("registry-account")).toHaveCount(0);
-  await projectTab(page, "Packages");
+  await expect(playbooks.getByTestId(/^env-package-/)).toHaveCount(0);
+  await expect(playbooks.getByRole("button", { name: "Add…", exact: true })).toHaveCount(0);
+  await expect(playbooks.getByTestId("add-packages")).toHaveCount(0);
+  await expect(playbooks.getByTestId("registry-chooser")).toHaveCount(0);
+  await expect(playbooks.getByTestId("registry-account")).toHaveCount(0);
+  await playbooks.getByText("Manage packages", { exact: true }).click();
+  await expect(projectTabControl(page, "Packages")).toHaveAttribute("aria-selected", "true");
 
-  // The Packages tab: the project's environment, named by the project
-  // and never by its spex repository (DR-159), with the ways to add a
-  // spec package, and your own group's beneath it (playbook-library-92).
+  // The Packages tab: the project's packages under "Packages", yours
+  // beneath them under "Personal", whose tooltip says what it holds;
+  // each heading carries one "Add…" and the built-in playbooks as one
+  // quiet line, and neither names a spex repository (playbook-library-92,
+  // DR-159).
   const precedes = (first: string, second: string) =>
     page.evaluate(
       ([a, b]) => {
@@ -160,63 +191,77 @@ test("playbook-library-41: both environments listed together, a built-in enabled
       },
       [first, second] as const,
     );
-  const environment = packagesSection(page, "project").getByTestId("environment-section");
-  await expect(environment.getByRole("heading")).toHaveText("Environment of demo-project");
-  await expect(environment).not.toContainText(app.projectId!);
-  await expect(environment).not.toContainText("-spex");
-  await expect(environment.getByTestId(`env-package-${BUILTINS}`)).toBeVisible();
-  await expect(packagesSection(page, "project").getByTestId("add-from-registry")).toBeVisible();
-  const ownEnvironment = packagesSection(page, "personal").getByTestId("environment-section");
-  await expect(ownEnvironment.getByRole("heading")).toHaveText("Environment of your own group");
-  await expect(ownEnvironment).not.toContainText(app.ownKey);
-  await expect(ownEnvironment.getByTestId(`env-package-${BUILTINS}`)).toBeVisible();
+  const packages = packagesSection(page, "project");
+  const personal = packagesSection(page, "personal");
+  await expect(packages.getByRole("heading", { name: "Packages", exact: true })).toBeVisible();
+  await expect(personal.getByRole("heading", { name: "Personal", exact: true })).toHaveAttribute(
+    "title",
+    "Packages added for yourself, available in every project",
+  );
+  for (const section of [packages, personal]) {
+    await expect(section.getByRole("button", { name: "Add…", exact: true })).toHaveCount(1);
+    // The built-in spec package stands as the one quiet line, never a
+    // removable row.
+    await expect(builtinLine(section)).toBeVisible();
+    await expect(packageRow(section, BUILTINS)).toHaveCount(0);
+    await expect(section).not.toContainText("-spex");
+  }
+  await expect(packages).not.toContainText(app.projectId!);
+  await expect(personal).not.toContainText(app.ownKey);
   expect(await precedes("packages-project", "packages-personal")).toBe(true);
+  await expect(packageRow(packages, NOTES)).toBeVisible();
 
-  // Your own group's rows: every enabled playbook with its command,
-  // intent, spec package and role bindings (playbook-library-1,
-  // playbook-library-29).
+  // Personal rows: every enabled playbook with its command, intent, the
+  // built-in reading "built in", where it is enabled and its role
+  // bindings (playbook-library-1, playbook-library-29).
   await projectTab(page, "Playbooks");
   const enabled = page.getByTestId("playbooks-enabled");
+  const available = page.getByTestId("playbooks-available");
+  await expect(enabled.getByRole("heading").first()).toHaveText("Enabled");
+  await expect(available.getByRole("heading").first()).toHaveText("Available");
   const code = playbookCard(enabled, "code", "personal");
   const review = playbookCard(enabled, "review", "personal");
   await expect(code).toContainText("/code");
   await expect(code).toContainText("implement a coding intent in reviewed, one-commit phases");
-  await expect(code.getByTestId("playbook-enabled-code")).toHaveText("Enabled in your own group");
-  await expect(code.getByTestId("playbook-from-code")).toHaveText(/^from\s*sublang\/playbooks \d+\.\d+\.\d+$/);
+  await expect(code.getByTestId("playbook-enabled-code")).toHaveText("Personal");
+  await expect(code.getByTestId("playbook-from-code")).toHaveText("built in");
   await expect(code.getByTestId("role-binding-code-coder")).toHaveText("Ccoder");
   await expect(code.getByTestId("role-binding-code-coder")).toHaveAttribute("title", /^dev\.coder · /);
   await expect(review).toContainText("/review");
+  await expect(review.getByTestId("playbook-enabled-review")).toHaveText("Personal");
   await expect(review.getByTestId("role-binding-review-coder")).toHaveText("Ccoder");
   await expect(review.getByTestId("role-binding-review-coder")).toHaveAttribute("title", /^dev\.coder · /);
   await expect(review.getByTestId("role-binding-review-reviewer")).toHaveText("Rreviewer");
   await expect(review.getByTestId("role-binding-review-reviewer")).toHaveAttribute("title", /^dev\.reviewer · /);
 
-  // The project's rows list the same playbooks from its own
-  // environment, none enabled in its config: those your own group
-  // enables stand under Enabled naming it, so the list never reads as
-  // empty, and the built-ins enabled in neither config below them
-  // (playbook-library-1, playbook-library-34).
-  await expect(playbookCard(enabled, "code", "project").getByTestId("playbook-enabled-code")).toHaveText("Enabled in your own group");
+  // The project's rows list the same playbooks from its own packages,
+  // none enabled in its config: those your Personal config enables stand
+  // under Enabled reading "Personal", so the list never reads as empty,
+  // and the built-ins enabled in neither config beneath them under
+  // Available, each reading "built in" (playbook-library-1,
+  // playbook-library-34).
+  await expect(playbookCard(enabled, "code", "project").getByTestId("playbook-enabled-code")).toHaveText("Personal");
   await expect(page.getByTestId("playbooks-empty")).toHaveCount(0);
-  const available = page.getByTestId("playbooks-available");
   await expect(available.getByTestId("playbook-card-code")).toHaveCount(0);
   const decide = playbookCard(available, "decide", "project");
-  await expect(decide.getByTestId("playbook-enabled-decide")).toHaveText("Not enabled");
+  await expect(decide.getByTestId("playbook-from-decide")).toHaveText("built in");
+  await expect(decide).not.toContainText(`in ${PROJECT}`);
+  await expect(decide).not.toContainText("Personal");
   await expect(decide.getByTestId("playbook-enable-decide")).toHaveText("Enable");
   // Enabling it writes the project's config and lists it among the
-  // enabled there.
+  // enabled, reading "in <project>".
   expect(app.readProjectConfig()).not.toContain("decide:");
   await decide.getByTestId("playbook-enable-decide").click();
   await expect.poll(() => app.readProjectConfig()).toContain("decide:");
   expect(app.readConfig()).not.toMatch(/^\s{2}decide:/m);
   const enabledDecide = playbookCard(enabled, "decide", "project");
   await expect(enabledDecide).toBeVisible();
-  await expect(enabledDecide.getByTestId("playbook-enabled-decide")).toHaveText("Enabled in the project");
+  await expect(enabledDecide.getByTestId("playbook-enabled-decide")).toHaveText(`in ${PROJECT}`);
   await expect(available.getByTestId("playbook-card-decide")).toHaveCount(0);
 
-  // The stage row stands on the card — here your own group's row of
-  // /code: a press opens that stage, a press beside it swaps, a second
-  // press closes (playbook-library-22).
+  // The stage row stands on the card — here the Personal row of /code:
+  // a press opens that stage, a press beside it swaps, a second press
+  // closes (playbook-library-22).
   const row = code.getByTestId("stages-code");
   const stage = (name: string) => row.getByRole("button", { name });
   const pipeline = code.getByTestId("pipeline-code");
@@ -288,27 +333,27 @@ test("playbook-library-41: both environments listed together, a built-in enabled
   await stage("Source").click();
   await expect(pipeline).toHaveCount(0);
 
-  // Disabling asks for no confirm: your own group's config no longer
-  // names it, and it lists among those not enabled (playbook-library-26,
+  // Disabling asks for no confirm: your Personal config no longer names
+  // it, and it lists under Available (playbook-library-26,
   // playbook-library-3).
   await page.getByRole("button", { name: "Disable /review" }).click();
   await expect.poll(() => app.readConfig()).not.toMatch(/^\s{2}review:/m);
   await expect(page.getByRole("button", { name: "Disable /review" })).toHaveCount(0);
   await expect(playbookCard(available, "review", "personal")).toBeVisible();
 
-  // Removing a spec package from your own group's, on the Packages
-  // tab, asks Remove or Keep; Keep leaves it requested
-  // (playbook-library-26, playbook-library-92).
+  // Remove in a package row's overflow carries its consequence as its
+  // tooltip (playbook-library-92, playbook-library-26); Escape leaves
+  // the package where it is.
   await projectTab(page, "Packages");
-  const requested = packagesSection(page, "personal").getByTestId(`env-package-${BUILTINS}`);
-  await requested.getByRole("button", { name: `Remove ${BUILTINS}` }).click();
-  await expect(requested).toContainText(`Remove ${BUILTINS}?`);
-  await expect(requested.getByRole("button", { name: "Remove", exact: true })).toBeVisible();
-  await requested.getByRole("button", { name: "Keep", exact: true }).click();
-  await expect(requested.getByRole("button", { name: `Remove ${BUILTINS}` })).toBeVisible();
-  await expect(requested.getByTestId(`env-installed-${BUILTINS}`)).toHaveText("Installed");
+  const notes = packageRow(packages, NOTES);
+  const remove = await rowAct(notes, "Remove");
+  await expect(remove).toHaveAttribute("title", `Removes ${NOTES} from spex.yaml and uninstalls it`);
+  await page.keyboard.press("Escape");
+  await expect(notes.getByRole("menu")).toHaveCount(0);
+  await expect(notes).toBeVisible();
+  expect(readFileSync(join(app.projectDir, "spex.yaml"), "utf8")).toContain(NOTES);
 
-  // The Captain home's slash menu follows your own group's config.
+  // The Captain home's slash menu follows your Personal config.
   await newTaskTab(page);
   const box = page.getByTestId("start-composer");
   await box.fill("/");

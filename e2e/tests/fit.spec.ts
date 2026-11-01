@@ -532,8 +532,9 @@ async function assertSurfaceMatrix(
       },
       ready: async () => {
         await expect(projectTabControl(page, "Packages")).toHaveAttribute("aria-selected", "true");
+        // The built-in playbooks stand as each heading's one quiet line.
         for (const whose of ["project", "personal"] as const) {
-          await expect(packagesSection(page, whose).getByTestId("env-package-sublang/playbooks")).toBeVisible();
+          await expect(packagesSection(page, whose).getByTestId("environment-builtin")).toBeVisible();
         }
       },
     },

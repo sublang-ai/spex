@@ -196,10 +196,12 @@ test.describe("a player the project names", () => {
     writeFileSync(projectConfig, "playbooks:\n  review:\n    roles:\n      coder: dev.coder\n      reviewer: dev.auditor\n");
 
     // The surface names the file it writes — your own group's — by its
-    // spex repository, and points a project's bindings to Playbooks.
-    const scope = page.getByTestId("settings-scope");
-    await expect(scope).toHaveText(`Your own group's config, in ${app.ownKey}`);
-    await expect(scope).toHaveAttribute("title", "A project's playbooks and role bindings are edited in Playbooks");
+    // path alone: no spex repository, and no project file offered as
+    // editable here, a project's playbooks and role bindings being its
+    // Playbooks tab's (settings-46).
+    await expect(page.getByTestId("settings-scope")).toHaveCount(0);
+    await expect(page.getByText(/Your own group's config|edited in Playbooks/)).toHaveCount(0);
+    await expect(page.locator('[title*="edited in Playbooks"]')).toHaveCount(0);
 
     // The roster shows the missing player, named by its project, with
     // Add (settings-46).

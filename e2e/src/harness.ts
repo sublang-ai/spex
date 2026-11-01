@@ -1556,16 +1556,7 @@ export function spaceAddress(card: Locator): Locator {
  * chosen option, a listbox's selected option, or its trigger's text;
  * empty where no chooser stands. */
 export async function chosenSpace(card: Locator): Promise<string> {
-  const chooser = spaceChooser(card);
-  if ((await chooser.count()) === 0) return "";
-  return chooser.first().evaluate((root) => {
-    const select = root instanceof HTMLSelectElement ? root : root.querySelector("select");
-    if (select) return (select.selectedOptions[0]?.textContent ?? "").trim();
-    const selected = root.querySelector('[role="option"][aria-selected="true"]');
-    if (selected) return (selected.textContent ?? "").trim();
-    const trigger = root.querySelector('[role="combobox"], [aria-haspopup="listbox"], button');
-    return (trigger?.textContent ?? root.textContent ?? "").trim();
-  });
+  return chosenEntry(spaceChooser(card));
 }
 
 /** Choose an entry of a sign-in card's chooser by the name it reads — a
@@ -1585,6 +1576,22 @@ export async function chooseSpace(card: Locator, entry: string): Promise<void> {
     await chooser.locator('[role="combobox"], [aria-haspopup="listbox"]').first().click();
   }
   await option.click();
+}
+
+/** How a chooser's chosen entry reads — a native select's chosen
+ * option, a listbox's selected option, or its trigger's text — empty
+ * where no chooser stands; the chooser of Spaces (space-115) and of
+ * registries (playbook-library-119) alike. */
+export async function chosenEntry(chooser: Locator): Promise<string> {
+  if ((await chooser.count()) === 0) return "";
+  return chooser.first().evaluate((root) => {
+    const select = root instanceof HTMLSelectElement ? root : root.querySelector("select");
+    if (select) return (select.selectedOptions[0]?.textContent ?? "").trim();
+    const selected = root.querySelector('[role="option"][aria-selected="true"]');
+    if (selected) return (selected.textContent ?? "").trim();
+    const trigger = root.querySelector('[role="combobox"], [aria-haspopup="listbox"], button');
+    return (trigger?.textContent ?? root.textContent ?? "").trim();
+  });
 }
 
 /**
@@ -1897,11 +1904,168 @@ export function playbookCard(scope: Page | Locator, id: string, origin: Playbook
   return scope.locator(`[data-testid="playbook-card-${id}"][data-origin="${config}"]`);
 }
 
-/** One heading's half of the Packages tab: the project's packages, or
- * your own group's beneath them under Personal (playbook-library-92).
- * Each half holds its registry account, its packages and its Add. */
+/** One heading's half of the Packages tab: the project's packages under
+ * "Packages", or those you added for yourself beneath them under
+ * "Personal" (playbook-library-92). Each half holds its heading line —
+ * "Registry: <registry>" with the account there and one "Add…"
+ * (playbook-library-119) — its chips, its rows and its built-in line. */
 export function packagesSection(page: Page, whose: PlaybookOrigin): Locator {
   return page.getByTestId(`packages-${whose}`);
+}
+
+/** A package's row in one heading's half of the Packages tab: its name,
+ * version, source glyph, what it provides and its standing, with its one
+ * overflow (playbook-library-92). */
+export function packageRow(section: Locator, name: string): Locator {
+  return section.getByTestId(`env-package-${name}`);
+}
+
+/** A package row's source glyph, whose tooltip names where the package
+ * comes from: "From the registry · <range>", "From folder <path>",
+ * "From Git <repository> at <rev>" or "Built in" (playbook-library-92). */
+export function packageSource(row: Locator, name: string): Locator {
+  return row.getByTestId(`env-source-${name}`);
+}
+
+/** The built-in playbooks' one quiet line of a heading's half
+ * (playbook-library-92): "Built-in playbooks <locked>", with "· <shipped>
+ * shipped with this app" and "Update to <shipped>" where the app ships a
+ * newer release — never a removable row. */
+export function builtinLine(section: Locator): Locator {
+  return section.getByText(/^Built-in playbooks \d+\.\d+\.\d+/).first();
+}
+
+/** A heading's registry chooser (playbook-library-119): the control
+ * reading "Registry: <display name>", opening the directory's registries
+ * by display name, its last entry "Other…" revealing the field for a
+ * registry's address. */
+export function registryChooser(section: Locator): Locator {
+  return section.getByTestId("registry-chooser");
+}
+
+/** The field for a registry's address that "Other…" reveals
+ * (playbook-library-119). */
+export function registryAddress(section: Locator): Locator {
+  return section.getByTestId("registry-address");
+}
+
+/** The registry chooser's open list of entries, opening it unless open. */
+async function registryMenu(section: Locator): Promise<Locator> {
+  const menu = section.getByTestId("registry-chooser-menu");
+  if (!(await menu.isVisible())) await registryChooser(section).click();
+  await expect(menu).toBeVisible();
+  return menu;
+}
+
+/** The registry chooser's entries as they read, in order — each
+ * registry's display name, then "Other…" (playbook-library-119) —
+ * leaving the list open. */
+export async function registryEntries(section: Locator): Promise<string[]> {
+  const menu = await registryMenu(section);
+  const texts = await menu.locator('[role="menuitem"], [role="menuitemradio"]').allTextContents();
+  return texts.map((text) => text.replace(/^\s*✓/, "").trim());
+}
+
+/** Choose a heading's registry (playbook-library-119): an entry by its
+ * display name, or "Other…" with an address typed in the field it
+ * reveals and entered, which writes it as that spex.yaml's `registry`. */
+export async function chooseRegistry(section: Locator, entry: string, address?: string): Promise<void> {
+  const menu = await registryMenu(section);
+  await menu
+    .locator('[role="menuitem"], [role="menuitemradio"]')
+    .filter({ hasText: new RegExp(`^\\s*✓?\\s*${escapeRegExp(entry)}\\s*$`) })
+    .first()
+    .click();
+  if (address === undefined) return;
+  const field = registryAddress(section);
+  await expect(field).toBeVisible();
+  await field.fill(address);
+  await field.press("Enter");
+}
+
+/** Open a heading's one "Add…" at one of its three tabs — Registry,
+ * Folder or Git (playbook-library-92) — and return the heading's half,
+ * which holds the popover's fields: the search "Search, or type
+ * org/name" with its results and the row of a typed name the registry
+ * does not list, the folder field, the Git fields, and the receipt. */
+export async function addPackages(section: Locator, tab: "Registry" | "Folder" | "Git" = "Registry"): Promise<Locator> {
+  const control = section.getByRole("tab", { name: tab, exact: true });
+  if (!(await control.isVisible())) await section.getByRole("button", { name: "Add…", exact: true }).click();
+  await control.click();
+  await expect(control).toHaveAttribute("aria-selected", "true");
+  return section;
+}
+
+/** Text that reads exactly `words`, whitespace aside. */
+function exactly(words: string): RegExp {
+  return new RegExp(`^\\s*${escapeRegExp(words)}\\s*$`);
+}
+
+/** `text` as a regular expression matching it literally. */
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Open a package row's one overflow (playbook-library-92), unless it
+ * stands open, and return its menu. */
+export async function rowMenu(row: Locator): Promise<Locator> {
+  const menu = row.getByRole("menu").first();
+  if (!(await menu.isVisible())) await row.locator('[aria-haspopup="menu"]').first().click();
+  await expect(menu).toBeVisible();
+  return menu;
+}
+
+/** An act of a package row's overflow by its words — "Remove", "Publish",
+ * "Sign in to publish" (playbook-library-92, playbook-library-113) —
+ * opening the overflow to find it. */
+export async function rowAct(row: Locator, words: string): Promise<Locator> {
+  return (await rowMenu(row)).getByRole("menuitem").filter({ hasText: exactly(words) });
+}
+
+/**
+ * Start Publish from a folder package's row (playbook-library-113): its
+ * overflow's Publish — or the publish control's own Publish where an
+ * earlier attempt left it standing beneath the row — up to the inline
+ * preview, and return the row's publish control holding it.
+ */
+export async function publishFromRow(row: Locator): Promise<Locator> {
+  const publish = row.getByTestId("publish");
+  const summary = publish.getByTestId("publish-summary");
+  const button = publish.getByTestId("publish-button");
+  if (!(await button.isVisible())) await (await rowAct(row, "Publish")).click();
+  await expect(summary.or(button).first()).toBeVisible();
+  if (!(await summary.isVisible())) await button.click();
+  await expect(summary).toBeVisible();
+  return publish;
+}
+
+/** The control a row offers in Publish's place while no registry grant
+ * stands (playbook-library-113, playbook-library-93): "Sign in to
+ * publish" — the publish control's one button, opened by the overflow's
+ * Publish where it does not stand open, or the overflow's own act. */
+export async function rowSignInToPublish(row: Locator): Promise<Locator> {
+  const button = row.getByTestId("publish").getByRole("button", { name: "Sign in to publish", exact: true });
+  if (await button.isVisible()) return button;
+  const menu = await rowMenu(row);
+  const entry = menu.getByRole("menuitem").filter({ hasText: exactly("Sign in to publish") });
+  if ((await entry.count()) > 0) return entry;
+  await menu.getByRole("menuitem").filter({ hasText: exactly("Publish") }).click();
+  return button;
+}
+
+/** The orgs New playbook's one "Org" field suggests (playbook-library-121),
+ * as they read: its datalist's entries, or the listbox it opens. */
+export async function orgSuggestions(page: Page): Promise<string[]> {
+  const field = page.getByTestId("new-playbook-org");
+  const list = await field.getAttribute("list");
+  if (list) {
+    return page
+      .locator(`datalist[id="${list}"] option`)
+      .evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value));
+  }
+  const listbox = page.getByTestId("new-playbook").getByRole("option");
+  if ((await listbox.count()) === 0) await field.focus();
+  return (await listbox.allTextContents()).map((text) => text.trim());
 }
 
 /** The project's New task tab, where its start composer stands. */

@@ -989,8 +989,10 @@ export function CaptainHome(props: CaptainHomeProps) {
                   />
                 </span>
               ) : (
-                <button type="button" onClick={() => props.onNavigate("Playbooks")} className="font-medium text-brand-700 hover:underline dark:text-brand-300">
-                  {i18n._("No playbooks available — open Playbooks")}
+                // The way to the project's Playbooks tab, as a key phrase
+                // (DR-069, DR-172).
+                <button type="button" data-testid="start-no-playbooks" onClick={() => props.onNavigate("Playbooks")} className="font-medium text-brand-700 hover:underline dark:text-brand-300">
+                  {i18n._({ id: "No playbooks available", comment: "the task start's link to the project's Playbooks tab while no playbook is enabled" })}
                 </button>
               )}
             </div>

@@ -38,10 +38,12 @@ export function isDraftId(id: string): boolean {
 /** The id field's caption (playbook-library-51). A function, never a
  * constant: a text read at module load would freeze the language the
  * module was imported in (localization-4). */
-export function draftIdCaption(): string {
-  return i18n._(
-    "Lowercase; it names the spec package, the file and the /command — the command can change when you enable it",
-  );
+export function draftIdCaption(id: string): string {
+  return i18n._({
+    id: "Lowercase, becomes /{id}",
+    comment: "caption of New playbook's id field: {id} is the id typed, or the example triage while none is",
+    values: { id },
+  });
 }
 
 /** The rule, as the refusal names it. */

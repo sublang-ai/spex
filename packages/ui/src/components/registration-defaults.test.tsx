@@ -186,14 +186,14 @@ test("explicit equal existing-lane choices preserve deliberate sharing", async (
   expect((await form.submit()).newPlayers).toBeUndefined();
 });
 
-test("the spex repository field defaults to the project and offers your own group, each a typed Enable command", async () => {
+test("Enable for defaults to the project by its name and offers Personal, each a typed Enable command", async () => {
   useAppStore.setState({ projects: [PROJECT], space: home() });
   const form = renderForm(["Coder"], { roster: ["dev.coder"] });
   const field = screen.getByTestId("register-repository") as HTMLSelectElement;
   expect(field.value).toBe(PROJECT.id);
   expect([...field.options].map((option) => [option.value, option.textContent])).toEqual([
-    [PROJECT.id, "demo — the project"],
-    [OWN_KEY, "Your own group"],
+    [PROJECT.id, "demo"],
+    [OWN_KEY, "Personal (every project of yours)"],
   ]);
   fireEvent.change(field, { target: { value: OWN_KEY } });
   expect((await form.submit()).repository).toBe(OWN_KEY);

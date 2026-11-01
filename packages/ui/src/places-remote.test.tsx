@@ -552,13 +552,15 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
     const section = () => within(screen.getByTestId("packages-project"));
 
     // This computer: the folder request offers the shell's picker.
-    fireEvent.click(await section().findByTestId("add-from-folder"));
+    fireEvent.click(await section().findByTestId("add-open"));
+    fireEvent.click(section().getByTestId("add-from-folder"));
     const here = section().getByTestId("folder-request");
     expect(here.textContent).toContain("Folder inside /work/home-project");
-    expect(within(here).getByTestId("folder-request-pick").textContent).toBe("Pick folder");
+    expect(within(here).getByTestId("folder-request-pick").textContent).toBe("Choose folder…");
 
     // The seat's project, its Packages tab at the seat.
     await projectTab(`sidebar-project-p2@${ALPHA.place}`, "packages");
+    fireEvent.click(await section().findByTestId("add-open"));
     await waitFor(() =>
       expect((section().getByTestId("add-from-folder") as HTMLButtonElement).disabled).toBe(false),
     );
@@ -569,16 +571,16 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
     // request offers no folder picker: the shell's reads this
     // computer's disk.
     expect(within(there).queryByTestId("folder-request-pick")).toBeNull();
-    expect(within(there).queryByText("Pick folder")).toBeNull();
+    expect(within(there).queryByText("Choose folder…")).toBeNull();
     expect(pickDirectory).not.toHaveBeenCalled();
     // [run-view-171] no path on this computer: the one folder field
     // names the folder relative to its project, and the request sent to
     // the seat's core alone carries that relative name.
+    fireEvent.change(within(there).getByTestId("folder-request-path"), { target: { value: "spex-packages/triage" } });
     const fields = pathEntries(there).map((field) => field.getAttribute("data-testid"));
-    expect(fields).toEqual(["folder-request-name", "folder-request-path"]);
+    expect(fields).toEqual(["folder-request-path", "folder-request-name"]);
     expect(there.textContent).not.toContain("/work/");
     fireEvent.change(within(there).getByTestId("folder-request-name"), { target: { value: "acme/triage" } });
-    fireEvent.change(within(there).getByTestId("folder-request-path"), { target: { value: "spex-packages/triage" } });
     fireEvent.click(within(there).getByTestId("folder-request-submit"));
     await settle();
     expect(callsOf(alpha, "environment.request")).toEqual([

@@ -14,7 +14,8 @@ test("playbook-library-34: existing homes explicitly enable Inspect and a browse
   // live (playbook-library-1, playbook-library-34).
   const inspect = playbookCard(page.getByTestId("playbooks-available"), "inspect", "personal");
   await expect(inspect).toBeVisible();
-  await expect(inspect.getByTestId("playbook-enabled-inspect")).toHaveText("Not enabled");
+  // Enabled nowhere, it wears no where-enabled chip (playbook-library-1).
+  await expect(inspect.getByTestId("playbook-enabled-inspect")).toHaveCount(0);
   // Browsing its source changes no config.
   await inspect.getByTestId("stages-inspect").getByRole("button", { name: "Source", exact: true }).click();
   await expect(inspect.getByTestId("pipeline-inspect")).toContainText(/inspect/i);

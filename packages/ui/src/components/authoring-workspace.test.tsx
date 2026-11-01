@@ -465,23 +465,26 @@ describe("playbook-library-50: the Authoring section", () => {
     expect(screen.queryByTestId("new-playbook-section")).toBeNull();
   });
 
-  test("without a session the section is absent, the empty state names New playbook, and the field stands after the playbooks", async () => {
+  test("without a session the section is absent, the empty state a key phrase, and the field stands after the playbooks", async () => {
     lists = { project: [available({ id: "review", repository: PROJECT_ID, roles: ["host"] })], own: [] };
     seed();
     render(<PlaybooksTab project={PROJECT} />);
     expect(screen.queryByTestId("drafts-section")).toBeNull();
-    expect((await screen.findByTestId("playbooks-empty")).textContent).toBe(
-      "No playbooks enabled yet — enable a built-in below, or make your own with New playbook.",
-    );
+    expect((await screen.findByTestId("playbooks-empty")).textContent).toBe("Nothing enabled yet");
     const field = screen.getByTestId("new-playbook-section");
     expect(
       screen.getByTestId("playbooks-available").compareDocumentPosition(field) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(screen.getByTestId("new-playbook-button").textContent).toBe("New playbook");
-    expect(screen.getByTestId("new-playbook").textContent).toContain(
-      "Lowercase; it names the spec package, the file and the /command — the command can change when you enable it",
-    );
+    // The id's caption names the command it becomes: the example's
+    // while none is typed, then the id as typed once it is one.
+    const caption = screen.getByTestId("new-playbook-caption");
+    expect(caption.textContent).toBe("Lowercase, becomes /triage");
+    fireEvent.change(screen.getByTestId("new-playbook-id"), { target: { value: "sort-issues" } });
+    expect(caption.textContent).toBe("Lowercase, becomes /sort-issues");
+    fireEvent.change(screen.getByTestId("new-playbook-id"), { target: { value: "Sort" } });
+    expect(caption.textContent).toBe("Lowercase, becomes /triage");
   });
 
   test("another project's sessions stand on that project's tab, its open workspace there alone", async () => {
@@ -1540,9 +1543,9 @@ describe("playbook-library-61: the Enable tab", () => {
     await vi.waitFor(() => expect(screen.getByTestId("playbook-card-triage")).toBeTruthy());
     const card = screen.getByTestId("playbook-card-triage");
     expect(card.className).toContain("ring-2");
-    expect(within(card).getByTestId("playbook-from-triage").textContent).toBe("fromacme/triage 0.1.0· path");
-    // [playbook-library-10] sessions started before must restart.
-    expect(screen.getByTestId("enabled-note").textContent).toContain("restarted to use it");
+    expect(within(card).getByTestId("playbook-from-triage").textContent).toBe("from acme/triage 0.1.0");
+    // [playbook-library-10] sessions already running must restart.
+    expect(screen.getByTestId("enabled-note").textContent).toContain("Enabled · restart running sessions to use it");
     // [playbook-library-61] and the package folder is committed with the code.
     expect(screen.getByTestId("enabled-commit").textContent).toBe("Commit spex-packages/acme/triage with your code");
     expect(screen.getByTestId("library-live").textContent).toBe("Enabled /triage");
@@ -1563,9 +1566,11 @@ describe("playbook-library-61: the Enable tab", () => {
     fireEvent.click(tab("Enable"));
     const field = screen.getByTestId("register-repository") as HTMLSelectElement;
     expect(field.value).toBe(PROJECT_ID);
+    // "Enable for": the project by its name, then Personal.
+    expect(screen.getByText("Enable for")).toBeTruthy();
     expect([...field.options].map((option) => [option.value, option.textContent])).toEqual([
-      [PROJECT_ID, "demo — the project"],
-      [OWN_KEY, "Your own group"],
+      [PROJECT_ID, "demo"],
+      [OWN_KEY, "Personal (every project of yours)"],
     ]);
     fireEvent.change(field, { target: { value: OWN_KEY } });
     // Both environments export the package once enabled, your own
@@ -1632,14 +1637,23 @@ describe("playbook-library-61: the Enable tab", () => {
     await vi.waitFor(() => expect(tab("Enable").disabled).toBe(false));
     fireEvent.click(tab("Enable"));
     expect((screen.getByTestId("register-intent") as HTMLInputElement).value).toBe("");
-    expect((screen.getByTestId("register-submit") as HTMLButtonElement).disabled).toBe(true);
+    const submit = screen.getByTestId("register-submit") as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    // The held Enable says what it waits for, in its tooltip alone: no
+    // caption explains what Enable writes (playbook-library-61).
+    expect(submit.title).toBe("A player per role, a command and an intent");
+    const form = screen.getByTestId("register-form").textContent ?? "";
+    expect(form).not.toContain("Requests the spec package");
+    expect(form).not.toContain("Every role needs a player");
     fireEvent.change(screen.getByTestId("register-intent"), { target: { value: "Sort issues" } });
-    expect((screen.getByTestId("register-submit") as HTMLButtonElement).disabled).toBe(false);
+    expect(submit.disabled).toBe(false);
+    expect(submit.title).toBe("");
   });
 });
 
 describe("playbook-library-93: Publish beneath the Enable form", () => {
   const PREVIEW = {
+    instance: { origin: "https://spex.example", name: "Spex Example" },
     name: "acme/triage",
     version: "0.1.0",
     files: ["meta.yaml", "playbooks/en/triage/triage.md", "playbooks/en/triage/triage.playbook/triage.fsm.ts"],
@@ -1673,9 +1687,14 @@ describe("playbook-library-93: Publish beneath the Enable form", () => {
       expect(commandMock).toHaveBeenCalledWith("environment.publish", { repository: PROJECT_ID, name: "acme/triage", dryRun: true }),
     );
     const summary = await screen.findByTestId("publish-summary");
-    expect(summary.textContent).toContain("acme/triage 0.1.0");
-    expect(summary.textContent).toContain("3 files upload:");
+    // The registry by its display name, its origin in the tooltip, over
+    // the file count and the account and org it publishes as.
+    const destination = within(summary).getByTestId("publish-target");
+    expect(destination.textContent).toBe("Publish acme/triage 0.1.0 to Spex Example");
+    expect(destination.title).toBe("https://spex.example");
+    expect(within(summary).getByTestId("publish-count").textContent).toBe("3 files");
     expect([...within(summary).getByTestId("publish-files").querySelectorAll("li")].map((item) => item.textContent)).toEqual(PREVIEW.files);
+    expect(within(summary).getByTestId("publish-account").textContent).toBe("as @me in acme");
 
     // Cancel uploads nothing.
     fireEvent.click(within(summary).getByTestId("publish-cancel"));
@@ -1699,7 +1718,7 @@ describe("playbook-library-93: Publish beneath the Enable form", () => {
         state: { ...CURRENT, published: { name: "acme/triage", version: "0.1.0", url: "https://spex.example/acme/triage/0.1.0" } },
       });
     });
-    expect(screen.getByTestId("publish-done").textContent).toContain("Published acme/triage 0.1.0");
+    expect(screen.getByTestId("publish-done").textContent).toBe("Published 0.1.0");
     expect(screen.getByTestId("publish-link").getAttribute("href")).toBe("https://spex.example/acme/triage/0.1.0");
   });
 
@@ -1731,6 +1750,36 @@ describe("playbook-library-93: Publish beneath the Enable form", () => {
       });
     });
     expect(screen.getByTestId("publish-error").textContent).toBe("the registry refused acme/triage 0.1.0: that version exists");
+  });
+});
+
+describe("playbook-library-93: Its package beside Publish", () => {
+  test("once the project's spex.yaml lists the package, Its package opens its row on the Packages tab", async () => {
+    renderWorkspace(COMPILED, { view: foldView(THREAD) });
+    await vi.waitFor(() => expect(tab("Enable").disabled).toBe(false));
+    fireEvent.click(tab("Enable"));
+    await screen.findByTestId("publish");
+    // No row yet, no link.
+    expect(screen.queryByTestId("register-package-link")).toBeNull();
+    act(() => {
+      deliverServerMessageForTests({
+        type: "environment.state",
+        repository: PROJECT_ID,
+        state: {
+          repository: PROJECT_ID, registry: { origin: "https://spex.example", legacy: false }, language: null,
+          requests: { "acme/triage": { kind: "path", path: "spex-packages/acme/triage" } },
+          packages: [], stale: null, conflicts: null, busy: null, error: null, pathRoot: "/work/demo",
+        },
+      });
+    });
+    const link = await screen.findByTestId("register-package-link");
+    expect(link.textContent).toBe("Its package");
+    // Beneath the form, beside Publish.
+    expect(
+      screen.getByTestId("publish").compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    fireEvent.click(link);
+    expect(useAppStore.getState().workspaceTabs[PROJECT_ID]).toBe("packages");
   });
 });
 
@@ -1772,7 +1821,7 @@ describe("playbook-library-111: what stands beneath the Enable form by the proje
       project: "at Two",
       instances: "One signed in, Two signed out",
       space: groups("two", [{ origin: ONE, name: "One", signedIn: true }, { origin: TWO, name: "Two", signedIn: false }]),
-      beneath: "Sign in to registry",
+      beneath: "Sign in to publish",
       // The environment's instance as the core reads it from spex.yaml:
       // its space, else the home's default (environments-2).
       instance: TWO,
@@ -1790,7 +1839,7 @@ describe("playbook-library-111: what stands beneath the Enable form by the proje
       project: "local-only",
       instances: "One signed out, Two signed in",
       space: groups("local", [{ origin: ONE, name: "One", signedIn: false }, { origin: TWO, name: "Two", signedIn: true }]),
-      beneath: "Sign in to registry",
+      beneath: "Sign in to publish",
       // The environment's instance as the core reads it from spex.yaml:
       // its space, else the home's default (environments-2).
       instance: ONE,
@@ -1799,7 +1848,7 @@ describe("playbook-library-111: what stands beneath the Enable form by the proje
       project: "local-only",
       instances: "none, the home created with https://spex.pub",
       space: groups("local", [], "https://spex.pub"),
-      beneath: "Sign in to registry",
+      beneath: "Sign in to publish",
       // The environment's instance as the core reads it from spex.yaml:
       // its space, else the home's default (environments-2).
       instance: "https://spex.pub",
@@ -1828,10 +1877,12 @@ describe("playbook-library-111: what stands beneath the Enable form by the proje
       expect(within(publish).queryByTestId("publish-signin")).toBeNull();
       return;
     }
-    // In the control's place, opening Groups to sign in.
+    // One button in the control's place, starting the registry sign-in
+    // there.
     expect(within(publish).queryByTestId("publish-button")).toBeNull();
-    const signIn = within(publish).getByRole("button", { name: "Sign in to registry" });
+    const signIn = within(publish).getByTestId("publish-signin");
     expect(signIn.textContent).toBe(beneath);
+    expect(signIn.title).toBe("For publishing and private packages");
     fireEvent.click(signIn);
     await vi.waitFor(() => expect(commandMock).toHaveBeenCalledWith("registry.signin.start", { origin: instance }));
     expect(onNavigate).not.toHaveBeenCalled();
@@ -1867,10 +1918,34 @@ describe("playbook-library-111: what stands beneath the Enable form by the proje
     expect(within(publish).getByTestId("publish-button").textContent).toBe("Publish");
     expect(within(publish).queryByTestId("publish-signin")).toBeNull();
   });
+
+  test("a page opened after the registry sign-in reads the account there and offers Publish, never Sign in to publish first (playbook-library-93)", async () => {
+    const origin = "https://spex.example";
+    const signedIn = { origin, displayName: "Spex Example", account: { id: "registry", login: "me" }, signIn: { phase: "idle" as const }, error: null };
+    const original = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation(async (type, ...args) => {
+      if (type !== "registry.get") return original(type, ...args);
+      // The core answers the read and broadcasts the state it read.
+      deliverServerMessageForTests({ type: "registry.state", state: signedIn });
+      return signedIn;
+    });
+    seed({ registryAccounts: {}, drafts: { triage: COMPILED }, openDraftId: "triage", draftViews: { triage: foldView(THREAD) }, draftSources: { triage: SOURCE } });
+    render(<PlaybooksTab project={PROJECT} />);
+    await vi.waitFor(() => expect(tab("Enable").disabled).toBe(false));
+    fireEvent.click(tab("Enable"));
+    const button = await screen.findByTestId("publish-button");
+    expect(button.textContent).toBe("Publish");
+    expect(commandMock).toHaveBeenCalledWith("registry.get", { origin });
+    expect(screen.queryByTestId("publish-signin")).toBeNull();
+  });
 });
 
-describe("playbook-library-120/121: authoritative registry namespaces", () => {
-  test("loading, failure and retry remain visible without replacing a manually entered namespace", async () => {
+describe("playbook-library-120/121: Org suggests the orgs the registry account may publish to", () => {
+  const note = () => screen.queryByTestId("new-playbook-org-note");
+  const suggestions = () =>
+    [...screen.getByTestId("new-playbook-orgs").querySelectorAll("option")].map((option) => option.value);
+
+  test("loading, failure and retry remain visible without replacing a manually entered org", async () => {
     const original = commandMock.getMockImplementation()!;
     const held: { resolve: (value: unknown) => void; reject: (cause: Error) => void }[] = [];
     commandMock.mockImplementation((type, ...args) => type === "registry.orgs"
@@ -1878,18 +1953,23 @@ describe("playbook-library-120/121: authoritative registry namespaces", () => {
     seed();
     render(<PlaybooksTab project={PROJECT} />);
     await defaultsShown();
-    await screen.findByText("Loading registry namespaces…");
+    await vi.waitFor(() => expect(note()?.textContent).toBe("Loading…"));
+    // One field, suggestions and no chooser beside it.
+    expect(screen.queryByRole("combobox", { name: "Registry namespaces" })).toBeNull();
+    expect(screen.getByTestId("new-playbook-org").getAttribute("list")).toBe("new-playbook-orgs");
     fireEvent.change(screen.getByTestId("new-playbook-org"), { target: { value: "manual-org" } });
     await act(async () => held[0]!.reject(new Error("Registry unavailable")));
     expect((await screen.findByRole("alert")).textContent).toContain("Registry unavailable");
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
-    await screen.findByText("Loading registry namespaces…");
+    await vi.waitFor(() => expect(note()?.textContent).toBe("Loading…"));
     await act(async () => held[1]!.resolve({ orgs: [{ name: "alpha", path: "alpha", role: "Owner" }, { name: "zeta", path: "zeta", role: "Owner", provider: "github" }] }));
-    const namespaces = await screen.findByRole("combobox", { name: "Registry namespaces" });
-    expect(within(namespaces).getByRole("option", { name: "alpha" })).toBeTruthy();
-    expect(within(namespaces).getByRole("option", { name: "zeta (github)" })).toBeTruthy();
+    await vi.waitFor(() => expect(suggestions()).toEqual(["alpha", "zeta"]));
+    // What was typed stands, and wears that it is not the account's.
     expect((screen.getByTestId("new-playbook-org") as HTMLInputElement).value).toBe("manual-org");
+    expect(note()?.textContent).toBe("not yours to publish to");
     expect(screen.queryByRole("alert")).toBeNull();
+    fireEvent.change(screen.getByTestId("new-playbook-org"), { target: { value: "zeta" } });
+    expect(note()).toBeNull();
   });
 
   test("waits for a registry account, ignores its late answer after sign-out, and distinguishes a valid empty answer", async () => {
@@ -1904,17 +1984,18 @@ describe("playbook-library-120/121: authoritative registry namespaces", () => {
     await defaultsShown();
     await vi.waitFor(() => expect(useAppStore.getState().environments[PROJECT_ID]?.registry?.origin).toBe(origin));
     expect(commandMock.mock.calls.filter(([type]) => type === "registry.orgs")).toEqual([]);
+    expect(note()).toBeNull();
     act(() => useAppStore.setState({ registryAccounts: { [origin]: { ...registry, account: { id: "old", login: "old" } } } }));
-    await screen.findByText("Loading registry namespaces…");
+    await vi.waitFor(() => expect(note()?.textContent).toBe("Loading…"));
     fireEvent.change(screen.getByTestId("new-playbook-org"), { target: { value: "my-choice" } });
     act(() => useAppStore.setState({ registryAccounts: { [origin]: registry } }));
     await act(async () => held[0]!({ orgs: [{ name: "former-account", path: "former-account", role: "Owner" }] }));
-    expect(screen.queryByRole("combobox", { name: "Registry namespaces" })).toBeNull();
-    expect(screen.queryByText("Loading registry namespaces…")).toBeNull();
+    expect(suggestions()).toEqual([]);
+    expect(note()).toBeNull();
     act(() => useAppStore.setState({ registryAccounts: { [origin]: { ...registry, account: { id: "new", login: "new" } } } }));
-    await screen.findByText("Loading registry namespaces…");
+    await vi.waitFor(() => expect(note()?.textContent).toBe("Loading…"));
     await act(async () => held[1]!({ orgs: [] }));
-    expect(await screen.findByText("No publishing namespaces available.")).toBeTruthy();
+    await vi.waitFor(() => expect(note()?.textContent).toBe("No orgs to publish to"));
     expect(screen.queryByRole("alert")).toBeNull();
     expect((screen.getByTestId("new-playbook-org") as HTMLInputElement).value).toBe("my-choice");
   });

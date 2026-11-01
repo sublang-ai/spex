@@ -22,6 +22,8 @@ import {
   expect,
   open,
   newTaskTab,
+  packageRow,
+  packageSource,
   packagesSection,
   projectTab,
   slowAuthoringScript,
@@ -386,10 +388,14 @@ test("playbook-library-77: a new playbook is authored, compiled, and enabled thr
   await page.setViewportSize({ width: 1280, height: 800 });
   await expect(divider).toBeVisible();
 
-  // ── Enable: the tab prefilled from the proposal, then `/triage`
-  //    enabled in the project, its spec package requested by path in
-  //    the project's packages, the authoring session staying
-  //    (playbook-library-61, playbook-library-92).
+  // ── Enable: the tab prefilled from the proposal, "Enable for" offering
+  //    the project by its name, its default, and Personal, the form
+  //    carrying no caption on what Enable writes and the disabled
+  //    Enable saying what it waits for; then `/triage` enabled in the
+  //    project, its card saying to commit the package with the code,
+  //    the package listed under "Packages" from its folder, the
+  //    authoring session staying (playbook-library-61,
+  //    playbook-library-92).
   await tabs.getByRole("tab", { name: "Enable", exact: true }).click();
   const form = page.getByTestId("register-form");
   await expect(form).toContainText("Prefilled from the agent's proposal");
@@ -400,21 +406,32 @@ test("playbook-library-77: a new playbook is authored, compiled, and enabled thr
   );
   await expect(page.getByTestId("register-player-Triager")).toHaveValue("new:dev.triager");
   await expect(page.getByTestId("register-player-Verifier")).toHaveValue("dev.coder");
-  await expect(page.getByTestId("register-repository")).toHaveValue(app.projectId!);
+  const enableFor = form.getByLabel("Enable for");
+  await expect(enableFor).toHaveValue(app.projectId!);
+  await expect(enableFor.locator("option")).toHaveText(["demo-project", "Personal (every project of yours)"]);
+  await expect(form).not.toContainText("Requests the spec package by path");
+  await expect(form).not.toContainText("Every role needs a player");
+  const submit = page.getByTestId("register-submit");
+  await page.getByTestId("register-command").fill("");
+  await expect(submit).toBeDisabled();
+  await expect(submit).toHaveAttribute("title", "A player per role, a command and an intent");
+  await page.getByTestId("register-command").fill("triage");
+  await expect(submit).toBeEnabled();
   await expect(page.getByTestId("tab-dot-enable")).toHaveCount(0);
   expect(app.readProjectConfig()).not.toContain("triage:");
-  await page.getByTestId("register-submit").click();
+  await submit.click();
   const card = page.getByTestId("playbooks-enabled").getByTestId("playbook-card-triage");
   await expect(card).toBeVisible();
   await expect(card).toContainText("/triage");
-  await expect(card.getByTestId("playbook-enabled-triage")).toHaveText("Enabled in the project");
-  await expect(card.getByTestId("playbook-from-triage")).toHaveText(new RegExp(`^from\\s*${org}/triage 0\\.1\\.0\\s*· path$`));
+  await expect(card.getByTestId("playbook-enabled-triage")).toHaveText("in demo-project");
+  await expect(card.getByTestId("playbook-from-triage")).toHaveText(new RegExp(`^from\\s*${org}/triage 0\\.1\\.0`));
+  await expect(card.getByTestId("enabled-note")).toContainText("Enabled · restart running sessions to use it");
   await expect(card.getByTestId("enabled-commit")).toHaveText("Commit spex-packages/acme/triage with your code");
   await expect(workspace).toHaveCount(0);
   await expect(page.getByTestId("draft-row-triage").getByTestId("draft-chip")).toContainText("Enabled");
   await projectTab(page, "Packages");
-  const requested = packagesSection(page, "project").getByTestId(`env-package-${org}/triage`);
-  await expect(requested.getByTestId(`env-source-${org}/triage`)).toHaveText("path spex-packages/acme/triage");
+  const requested = packageRow(packagesSection(page, "project"), `${org}/triage`);
+  await expect(packageSource(requested, `${org}/triage`)).toHaveAttribute("title", "From folder spex-packages/acme/triage");
   await expect.poll(() => app.readProjectConfig()).toContain("triage:");
   expect(app.readConfig()).toContain("dev.triager:");
   expect((await app.core.command("draft.list", {})).map((draft) => draft.id)).toEqual(["triage"]);

@@ -1877,7 +1877,7 @@ describe("DR-172: the rail of four, and the project's Playbooks and Packages tab
   test("the start view's way to the playbooks opens the project's Playbooks tab", async () => {
     useAppStore.setState({ workspaceTabs: { p1: "start" } });
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: "No playbooks available — open Playbooks" }));
+    fireEvent.click(screen.getByRole("button", { name: "No playbooks available" }));
     expect(useAppStore.getState().workspaceTabs.p1).toBe("playbooks");
     expect(screen.getByRole("main").getAttribute("aria-label")).toBe("Projects");
     expect(await screen.findByTestId("playbooks-tab")).toBeTruthy();

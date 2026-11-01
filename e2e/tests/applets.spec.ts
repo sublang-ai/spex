@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// An applet in the IDE (applets-8, DR-161): a release holding an applet
-// whose page lists the working folder through `~/` and shows its README
-// is requested through Add from registry on the project's Packages tab;
-// its tab stands after the pinned tabs Specs, Playbooks, Packages and
-// Overview, the frame it shows is sandboxed and confined — a navigation
-// of the frame off the endpoint's origin refused — Reload reads the
-// README again, and Remove takes the tab away.
+// An applet in the IDE (applets-8, DR-161, DR-172): a release holding an
+// applet whose page lists the working folder through `~/` and shows its
+// README is added through the Packages tab's Add…; its tab stands after
+// the pinned tabs Specs, Playbooks, Packages and Overview, its line
+// "from <package> <version>" opens the package's row, the frame it
+// shows is sandboxed and confined — a navigation of the frame off the
+// endpoint's origin refused — Reload reads the README again, and Remove
+// in the package row's overflow takes the tab away.
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
@@ -15,7 +16,19 @@ import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import { APPLET_ID, APPLET_PACKAGE, APPLET_VERSION, publishAppletRelease } from "@sublang/spex-core/testing";
 
-import { expect, open, packagesSection, projectTab, selectRegistryCore, test, uiDist } from "../src/harness";
+import {
+  addPackages,
+  expect,
+  open,
+  packageRow,
+  packagesSection,
+  projectTab,
+  projectTabControl,
+  rowAct,
+  selectRegistryCore,
+  test,
+  uiDist,
+} from "../src/harness";
 
 test.use({ appOptions: { project: true, host: { registry: true } } });
 
@@ -37,15 +50,14 @@ test("applets-8: an applet installed from the registry stands as a tab, shows th
 
   await open(page, app);
   await projectTab(page, "Packages");
-  const packages = packagesSection(page, "project");
-  await packages.getByTestId("add-from-registry").click();
+  const packages = await addPackages(packagesSection(page, "project"), "Registry");
   await packages.getByTestId("registry-query").fill("report-kit");
   const result = packages.getByTestId(`registry-result-${APPLET_PACKAGE}`);
   await expect(result).toBeVisible();
   await result.getByTestId(`registry-add-${APPLET_PACKAGE}`).click();
-  const row = packages.getByTestId(`env-package-${APPLET_PACKAGE}`);
+  const row = packageRow(packages, APPLET_PACKAGE);
   await expect(row.getByTestId(`env-installed-${APPLET_PACKAGE}`)).toHaveText("Installed");
-  await expect(row.getByTestId(`env-artifact-${APPLET_PACKAGE}-${APPLET_ID}`)).toContainText("applet");
+  await expect(row).toContainText("1 applet");
 
   // The tab stands after the pinned tabs — Specs, Playbooks, Packages
   // and Overview, in that order — named by the applet's id and naming
@@ -66,11 +78,11 @@ test("applets-8: an applet installed from the registry stands as a tab, shows th
   ]);
 
   // Shown, it fills the pane with a sandboxed frame under the line
-  // naming the spec package and version (applets-2), whose page lists
-  // the working folder and shows the README read through the core
+  // "from <package> <version>" (applets-2), whose page lists the
+  // working folder and shows the README read through the core
   // (applets-4).
   await tab.click();
-  await expect(page.getByTestId("applet-source")).toHaveText(`${APPLET_PACKAGE} ${APPLET_VERSION} · applet ${APPLET_ID}`);
+  await expect(page.getByTestId("applet-source")).toHaveText(`from ${APPLET_PACKAGE} ${APPLET_VERSION}`);
   const iframe = page.locator("iframe[sandbox]");
   await expect(iframe).toHaveAttribute("sandbox", "allow-scripts allow-forms allow-modals allow-downloads");
   await expect(iframe).toHaveAttribute("referrerpolicy", "no-referrer");
@@ -144,11 +156,15 @@ test("applets-8: an applet installed from the registry stands as a tab, shows th
   const built = readFileSync(join(uiDist, "index.html"), "utf8");
   expect(built).toContain("frame-src 'self' http://127.0.0.1:* http://localhost:*");
 
-  // Remove of the spec package on the Packages tab takes the tab away
-  // (applets-1).
-  await projectTab(page, "Packages");
-  await row.getByTestId(`env-remove-${APPLET_PACKAGE}`).click();
-  await row.getByRole("button", { name: "Remove", exact: true }).click();
+  // The line opens the package's row on the Packages tab (applets-2).
+  await page.getByTestId("applet-source").click();
+  await expect(projectTabControl(page, "Packages")).toHaveAttribute("aria-selected", "true");
+  await expect(row).toBeInViewport();
+
+  // Remove in the package row's overflow — no other package requiring
+  // it, so with no confirm — takes the tab away (applets-1,
+  // playbook-library-92).
+  await (await rowAct(row, "Remove")).click();
   await expect(row).toHaveCount(0);
   await expect(strip.getByRole("tab", { name: "Overview" })).toBeVisible();
   await expect(strip.getByRole("tab", { name: APPLET_ID, exact: true })).toHaveCount(0);
