@@ -197,7 +197,7 @@ Where your own group's config is valid, the `claude` card and the `codex` card [
 
 When the reader chooses Apply on a card's one-model control [[settings-57](#settings-57)], the Settings surface shall ask for confirmation listing the agents it changes and the roles whose binding names a model of its own, which it leaves, and on confirmation submit the changes as one `config.batch` [[core-service-44](core-service.md#core-service-44)] carrying the revision of the config state the surface shows [[core-service-45](core-service.md#core-service-45)], then say it is done, listing the roles it left again ([DR-174](../decisions/174-workshop-agents-in-one-pass.md)):
 
-- a batch refused `conflict` changes nothing, reads your own group's config and each project's composition shown again, and asks the reader to retry over them; a refused violation names the agent and the rule [[settings-12](#settings-12)], and changes nothing;
+- a batch refused `conflict` changes nothing, reads your own group's config and each project's composition shown again, and once every read settles asks the reader to retry over them — where a read failed, saying so with a control reading again, and offering no batch until every read succeeds; a refused violation names the agent and the rule [[settings-12](#settings-12)], and changes nothing;
 - an effort the new model does not support stays, shown as requiring correction [[settings-34](#settings-34)];
 - where the `claude` base URL is `third-party` [[settings-14](#settings-14)] and discovery failed or reported no `defaultModel` [[settings-35](#settings-35)], Apply is disabled while Provider default is chosen, beside "The default model can't be read right now: retry, or choose a specific model" and a Retry rediscovering the models, while a specific model applies as ever.
 
@@ -219,7 +219,7 @@ When the reader chooses "Set all to Provider default" [[settings-59](#settings-5
 | a binding in your own group's file | `model: false` on that binding — Provider default, never inheriting the player |
 
 - once written, the card recomputes the list from the newest config state and lists every role still naming an official model, saying all were set only where none remains;
-- a batch refused `conflict` changes nothing, reads your own group's config and each project's composition shown again, and asks the reader to retry over them;
+- a batch refused `conflict` changes nothing, reads your own group's config and each project's composition shown again, and once every read settles asks the reader to retry over them — where a read failed, saying so with a control reading again, and offering no batch until every read succeeds;
 - where discovery failed or reported no `defaultModel`, the control is disabled beside "The default model can't be read right now" and a Retry rediscovering the models.
 
 #### settings-61
@@ -552,6 +552,7 @@ Where the Settings surface renders a `third-party` base URL over a config whose 
 - the confirmation lists each role with its model and the target, the project's role by its project among them [[settings-60](#settings-60)];
 - confirming sends one `config.batch` with the shown revision removing the Captain's and each official-named player's `model`, the project's included, and writing `model: false` on your own group's binding [[settings-60](#settings-60)];
 - once a project's composition binds a further official-named player after the confirmation, the done notice lists that role alone and never says all were set [[settings-60](#settings-60)];
+- a refused `conflict` whose project read fails reports nothing until your own read settles too, then says the read failed, with the control disabled until reading again succeeds, the next batch carrying the revision read [[settings-60](#settings-60)];
 - with no `defaultModel`, the control is disabled with its line and a Retry that rediscovers [[settings-60](#settings-60)].
 
 ### Browser Journeys
