@@ -10,7 +10,7 @@ Amends [DR-167](167-the-compiler-shares-the-apps-engine.md) only in the Playbook
 Amends [DR-178](178-native-windows-private-storage.md) by retiring its temporary vendored runtime inputs; its storage admission remains.
 Supersedes [DR-183](183-windows-bounded-codex-commands.md) in platform launch overrides: the published adapter uses the official Codex SDK directly and inherits native user configuration, with explicit policies passed through its public configuration.
 Implements the registry-only release inputs of [DR-184](184-native-desktop-tag-packages.md).
-Amended by [DR-193](193-playbook-18-1-2-cligent-0-37-0-slc-0-20-1-adoption.md) in the Playbook, Cligent and slc floors.
+Amended by [DR-204](204-playbook-18-1-2-cligent-0-37-0-slc-0-20-1-adoption.md) in the Playbook, Cligent and slc floors.
 
 ## Context
 

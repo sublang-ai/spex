@@ -9,7 +9,7 @@ Accepted (2026-09-28) on the owner's report: "Spex desktop only shows default or
 Amends [DR-052](052-runtime-model-options.md), which remains accepted, in how a model choice reads alone: one display rule names every choice, and the model field becomes a listbox whose rows carry the runtime's own words.
 Amends [DR-067](067-tuning-for-one-conversation.md), which remains accepted, in §"A chip is a setting, not a receipt" alone: while an agent still runs on the adapter and model setting its latest reporting call began under, its chip's model reads what the runtime reported for that call.
 Amends [DR-068](068-an-agents-settings-where-the-agent-is.md), which remains accepted, in the reading its chip carries alone: the reported model in place of the set one, with what is set kept in the chip's title and accessible name.
-The model list's rows are amended by [DR-190](190-agent-cards-read-alike.md): rows running one model read as one row, and a resolution the name already says reads once.
+The model list's rows are amended by [DR-201](201-agent-cards-read-alike.md): rows running one model read as one row, and a resolution the name already says reads once.
 
 ## Context
 
