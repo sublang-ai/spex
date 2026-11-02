@@ -1,12 +1,12 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-185: Dismiss Reminders Without Losing History
+# DR-197: Dismiss Reminders Without Losing History
 
 ## Status
 
 Accepted (2026-11-02) on the owner's request to dismiss the remaining format-incompatibility notice and distinguish active reminders from dismissed ones with consistent actions.
-Amends [DR-182](182-saved-work-is-a-choice-not-setup-debt.md) in optional-reminder acknowledgement and [DR-184](184-a-review-count-and-a-way-back.md) in dismissal wording, list grouping and the sidebar return path.
+Amends [DR-194](194-saved-work-is-a-choice-not-setup-debt.md) in optional-reminder acknowledgement and [DR-196](196-a-review-count-and-a-way-back.md) in dismissal wording, list grouping and the sidebar return path.
 
 ## Context
 

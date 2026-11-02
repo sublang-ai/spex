@@ -1,11 +1,11 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-177: Repairs Explain the Next Step
+# DR-189: Repairs Explain the Next Step
 
 ## Status
 
-Amended by [DR-182](182-saved-work-is-a-choice-not-setup-debt.md): optional saved-work recovery replaces the repair list’s connection language and urgency, related imports form one task and folder choice retries them without a restart; structured causes and preservation stand.
+Amended by [DR-194](194-saved-work-is-a-choice-not-setup-debt.md): optional saved-work recovery replaces the repair list’s connection language and urgency, related imports form one task and folder choice retries them without a restart; structured causes and preservation stand.
 
 Accepted (2026-11-02) for the owner's request to make the warnings after signing in understandable to fresh users.
 Amends [DR-172](172-surfaces-a-fresh-user-reads.md) in the repair wording: an unconnected project folder is not described as missing, and storage failures carry a next step with their technical evidence behind Details.

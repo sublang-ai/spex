@@ -537,7 +537,7 @@ function MemberRow({
 
 /** Familiar role summaries explain the choice without supplying the role
  * list or authorizing anything. Unknown or inconsistent roles use only
- * the capability the Space actually reports (DR-178). */
+ * the capability the Space actually reports (DR-190). */
 function roleDescription(role: InstanceState["roles"][number], group: boolean): string {
   if (!role.mayPush) {
     if (role.name === "Guest") return i18n._("Limited access; cannot read or sync private shared records.");
@@ -561,7 +561,7 @@ function usernames(text: string): string[] {
 }
 
 /** Several existing Space accounts, one role, independent outcomes
- * (space-69, DR-179). Successful additions are never retried here. */
+ * (space-69, DR-191). Successful additions are never retried here. */
 function InviteEditor({
   instance,
   target,

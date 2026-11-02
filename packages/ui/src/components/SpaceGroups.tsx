@@ -11,7 +11,7 @@
 // and each project not yet shared. A group's heading carries its name,
 // its path where the two differ, its member count where read, and one
 // overflow control, "More", holding Members and permitted group
-// deletion (DR-181); beneath it, one line
+// deletion (DR-193); beneath it, one line
 // per team server of that group (run-view-170), then its rows, then one
 // quiet line, with no control, per row standing elsewhere a placement of
 // which its listing holds, naming the row and where it stands (DR-128).
@@ -513,7 +513,7 @@ interface Shared {
  * none, or "Personal", a group or another account's login under a
  * Space's heading. Its heading — a group of a signed-in Space carrying
  * one "More" holding Members and permitted deletion, the others none
- * (DR-114, DR-172, DR-178) — then
+ * (DR-114, DR-172, DR-190) — then
  * its servers' lines, its rows, and the groups inside it. */
 function GroupSection({
   instance,
@@ -1806,7 +1806,7 @@ interface PickSection {
   creatable: InstanceGroupState[];
 }
 
-/** Adding a project is a choice, review and explicit submission (DR-180).
+/** Adding a project is a choice, review and explicit submission (DR-192).
  * Reading and selecting never mutate the project. The current Space's
  * destinations are resolved again on every render, so a removed group
  * or signed-out Space cannot leave an actionable stale selection. */

@@ -531,7 +531,7 @@ describe("run-view-70: the sidebar navigates, the tabs hold what is open", () =>
   });
 });
 
-describe("postponed folder choices remain reachable (DR-184)", () => {
+describe("postponed folder choices remain reachable (DR-196)", () => {
   test.each([false, true])("the sidebar reopens zero-count choices after leaving Space (collapsed: %s)", async (collapsed) => {
     let space = groupsState({ diagnostics: ["Atlas", "Website", "Notes"].map((name, index) => ({
       file: `workspace/personal/${name}`, reason: "No project folder registered", blocking: false,
@@ -594,7 +594,7 @@ describe("postponed folder choices remain reachable (DR-184)", () => {
   });
 });
 
-describe("saved conversations without project files (DR-183)", () => {
+describe("saved conversations without project files (DR-195)", () => {
   test.each(["ready", "retry", "removed"])("opens saved history without project setup and handles %s", async (scenario) => {
     const failFirstRead = scenario === "retry";
     const saved = session({

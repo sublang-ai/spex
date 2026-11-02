@@ -3346,7 +3346,7 @@ test("core-service-60: sessions another host wrote are served, bound to their pr
   writeForeignSession(sessionsDir, elsewhere, join(dir, "elsewhere"), foreignTurn("elsewhere"));
   // ...and one in a clone no folder pairs — your own group's — whose
   // history remains readable without borrowing that project's folder
-  // (core-service-60, DR-183).
+  // (core-service-60, DR-195).
   const unpaired = "ccccccc2-3333-4333-8333-cccccccccccc";
   writeForeignSession(join(clonePath(join(dir, "state"), `${OWN}/${OWN}-spex`), "sessions"), unpaired, projectDir, foreignTurn("unpaired"));
 

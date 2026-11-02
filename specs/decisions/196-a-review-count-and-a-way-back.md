@@ -1,15 +1,15 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-184: A Review Count and a Way Back
+# DR-196: A Review Count and a Way Back
 
 ## Status
 
 Accepted (2026-11-02) on the owner's request for one shared explanation, a meaningful warning count and a clear return path after Not now.
-Amends [DR-182](182-saved-work-is-a-choice-not-setup-debt.md) in the header's attention marker and count, and [DR-183](183-read-saved-conversations-before-locating-files.md) in explanation placement and deferred navigation.
+Amends [DR-194](194-saved-work-is-a-choice-not-setup-debt.md) in the header's attention marker and count, and [DR-195](195-read-saved-conversations-before-locating-files.md) in explanation placement and deferred navigation.
 Amends [DR-175](175-projects-shown-where-they-are-open.md) in sidebar availability: a place with a saved-record folder task has a useful review entry even without a registered project.
 
-Amended by [DR-185](185-dismiss-reminders-without-losing-history.md) in unified dismissal, separated active and dismissed items, and preserved-history notice acknowledgement.
+Amended by [DR-197](197-dismiss-reminders-without-losing-history.md) in unified dismissal, separated active and dismissed items, and preserved-history notice acknowledgement.
 
 ## Context
 

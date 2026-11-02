@@ -1,12 +1,12 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-179: Invite Several Members Together
+# DR-191: Invite Several Members Together
 
 ## Status
 
 Accepted (2026-11-02) on the owner's request to enter several usernames when that can use the existing membership operation without a large new feature.
-Amends [DR-178](178-membership-with-a-clear-scope.md) in the invitation's one-username limit, submission and outcome; its permission model, role guidance, immediate access and group deletion are unchanged.
+Amends [DR-190](190-membership-with-a-clear-scope.md) in the invitation's one-username limit, submission and outcome; its permission model, role guidance, immediate access and group deletion are unchanged.
 
 ## Context
 

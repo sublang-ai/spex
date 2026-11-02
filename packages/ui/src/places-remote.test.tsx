@@ -511,7 +511,7 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
     expect(within(palette).queryByTestId(`palette-project-places-p2@${ALPHA.place}`)).toBeNull();
     expect(within(palette).queryByTestId("palette-project-places-p1")).toBeNull();
     // The shell reads once for the persistent folder-review shortcut;
-    // the palette adds no separate seat-group read (DR-184).
+    // the palette adds no separate seat-group read (DR-196).
     expect(callsOf(beta, "space.get")).toHaveLength(1);
 
     // [run-view-171] [run-view-168] with every project of the groups
@@ -601,7 +601,7 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
     fireEvent.click(screen.getByTestId("space-issues"));
     const there = screen.getByTestId("space-repair");
     // Saved conversations identify the task; its explanation names the
-    // server and its previous folder is explicitly labelled (DR-182).
+    // server and its previous folder is explicitly labelled (DR-194).
     expect(within(there).getByTestId("space-repair-title").textContent).toBe("Earlier conversations");
     expect(screen.getByText("Conversation history is saved on build-box. Project files must be available there for further work.")).toBeTruthy();
     const previousFolder = within(within(there).getByTestId("space-repair-folder"));

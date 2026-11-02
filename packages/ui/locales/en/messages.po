@@ -1051,10 +1051,6 @@ msgstr "Adapter option; model support unverified."
 msgid "Add"
 msgstr "Add"
 
-#: src/components/SettingsSurface.tsx
-msgid "Add {id} with the neutral agent, then tune it here"
-msgstr "Add {id} with the neutral agent, then tune it here"
-
 #. visible heading of the local project's destination form
 #: src/components/SpaceGroups.tsx
 msgid "Add {name} to a group"
@@ -1698,8 +1694,6 @@ msgid "build and review step by step"
 msgstr "build and review step by step"
 
 #. the tooltip of a package's source glyph: the app ships it
-#. the tooltip of a package's source glyph: the app ships it
-#: src/components/PlaybookCard.tsx
 #: src/lib/environments.ts
 msgid "Built in"
 msgstr "Built in"
@@ -3643,6 +3637,7 @@ msgid "from the compile before this change"
 msgstr "from the compile before this change"
 
 #. the tooltip of a package's source glyph, for a package another package requires: it comes from the registry
+#. tooltip: a package taken from the registry
 #. tooltip: a package taken from the registry
 #: src/components/PlaybookCard.tsx
 #: src/lib/environments.ts
@@ -8363,11 +8358,6 @@ msgstr "Your orgs could not be read"
 #: src/components/SpaceGroups.tsx
 msgid "Your personal group"
 msgstr "Your personal group"
-
-#. the title of Add…'s disabled Folder tab under Personal: the folder holding your Personal records, which a folder package lies in, is not on this computer
-#: src/components/EnvironmentSection.tsx
-msgid "Your Personal records are not on this computer"
-msgstr "Your Personal records are not on this computer"
 
 #: src/components/CaptainHome.tsx
 msgid "your project"

@@ -10,7 +10,7 @@
 // panel — the group editor (space-68), Invite members (space-69), Remove
 // (space-72), and the label budget the fit rests on (space-28); no link
 // to a page of the Space anywhere (DR-120); and renaming, creating a
-// group inside a group and moving a project not offered (DR-172, DR-178). A spex
+// group inside a group and moving a project not offered (DR-172, DR-190). A spex
 // repository's Members, Invite members and Remove act on its placement at the
 // fixtures' Space, named in each command (DR-128). Each act is checked
 // by the command it sends.
@@ -287,7 +287,7 @@ describe("GROUPS: each act where the host's read says (space-1, space-62, space-
     expect(head.textContent).toBe("New group…");
     expect(within(screen.getByTestId(`space-instance-${ORIGIN}`)).getByTestId("space-instance-heading").contains(head)).toBe(true);
     // acme: its heading's one "More", outside the heading, holds Members
-    // and the permitted group deletion (space-1, DR-178).
+    // and the permitted group deletion (space-1, DR-190).
     const acme = region("acme");
     const more = within(acme).getByTestId("space-group-more-acme");
     expect(more.getAttribute("aria-label")).toBe("More for acme");

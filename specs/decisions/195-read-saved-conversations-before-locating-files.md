@@ -1,14 +1,14 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-183: Read Saved Conversations Before Locating Files
+# DR-195: Read Saved Conversations Before Locating Files
 
 ## Status
 
 Accepted (2026-11-02) on the owner's request to explain where conversations are saved, distinguish them visually, group them by project and explain why a folder is needed.
-Amends [DR-182](182-saved-work-is-a-choice-not-setup-debt.md) in recovery identity, source explanation and the distinction between reading history and locating project files.
+Amends [DR-194](194-saved-work-is-a-choice-not-setup-debt.md) in recovery identity, source explanation and the distinction between reading history and locating project files.
 
-Amended by [DR-184](184-a-review-count-and-a-way-back.md) in shared explanation and postponed-task navigation.
+Amended by [DR-196](196-a-review-count-and-a-way-back.md) in shared explanation and postponed-task navigation.
 
 ## Context
 

@@ -161,7 +161,7 @@ When a client sends `space.group.rename`, the core shall ask the instance that l
 
 #### git-host-34
 
-When a client sends `space.group.deletionCheck` naming a real group listed at its instance, the core shall read `GET /api/v1/host/groups/<id>/deletion` and return the fresh public group `{id, fullPath, name}` with `contents: [{kind, name}]`, where `kind` is `project`, `group`, `records` or `server`, relaying failures as [[git-host-11](#git-host-11)] ([DR-181](../decisions/181-group-deletion-follows-the-space-policy.md)):
+When a client sends `space.group.deletionCheck` naming a real group listed at its instance, the core shall read `GET /api/v1/host/groups/<id>/deletion` and return the fresh public group `{id, fullPath, name}` with `contents: [{kind, name}]`, where `kind` is `project`, `group`, `records` or `server`, relaying failures as [[git-host-11](#git-host-11)] ([DR-193](../decisions/193-group-deletion-follows-the-space-policy.md)):
 
 - the named entries describe the Space's actual deletion blockers, including content absent from its ordinary repository listing; memberships do not count;
 - a newly created group with its Owner has no contents merely because it was created [[git-host-15](#git-host-15)];
@@ -170,7 +170,7 @@ When a client sends `space.group.deletionCheck` naming a real group listed at it
 
 #### git-host-19
 
-When a client sends `space.group.delete` with the public path reviewed by the fresh deletion check [[git-host-34](#git-host-34)] as `confirmPath`, the core shall request empty-group deletion through `POST /api/v1/host/groups/<id>/deletion` with that path as `confirm_path`, following the Space's policy and relaying its outcome ([DR-181](../decisions/181-group-deletion-follows-the-space-policy.md)):
+When a client sends `space.group.delete` with the public path reviewed by the fresh deletion check [[git-host-34](#git-host-34)] as `confirmPath`, the core shall request empty-group deletion through `POST /api/v1/host/groups/<id>/deletion` with that path as `confirm_path`, following the Space's policy and relaying its outcome ([DR-193](../decisions/193-group-deletion-follows-the-space-policy.md)):
 
 | Answer | The core |
 | --- | --- |
@@ -187,7 +187,7 @@ When a client sends `space.group.delete` with the public path reviewed by the fr
 
 #### git-host-33
 
-When a client sends `space.group.restore` naming a real group listed at its instance, the core shall request restoration through `POST /api/v1/host/groups/<id>/restore`, hold the returned group as authoritative by its stable id, publish its restored state and reply with its id, public path and name, relaying a refusal without changing the view [[git-host-11](#git-host-11)] ([DR-181](../decisions/181-group-deletion-follows-the-space-policy.md)):
+When a client sends `space.group.restore` naming a real group listed at its instance, the core shall request restoration through `POST /api/v1/host/groups/<id>/restore`, hold the returned group as authoritative by its stable id, publish its restored state and reply with its id, public path and name, relaying a refusal without changing the view [[git-host-11](#git-host-11)] ([DR-193](../decisions/193-group-deletion-follows-the-space-policy.md)):
 
 - a target not listed as a real group is refused `not_found` before any request, and the Space decides current restoration permission;
 - the returned group is held by stable id alone, without rebasing other groups or local rows at the same old path; other groups keep their reported state until the full read recovers the Space's current values;

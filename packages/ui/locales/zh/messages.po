@@ -1051,10 +1051,6 @@ msgstr "适配器选项；模型支持未验证。"
 msgid "Add"
 msgstr "添加"
 
-#: src/components/SettingsSurface.tsx
-msgid "Add {id} with the neutral agent, then tune it here"
-msgstr "以中性智能体添加 {id}，再在此调整"
-
 #. visible heading of the local project's destination form
 #: src/components/SpaceGroups.tsx
 msgid "Add {name} to a group"
@@ -1698,8 +1694,6 @@ msgid "build and review step by step"
 msgstr "逐步开发和审阅"
 
 #. the tooltip of a package's source glyph: the app ships it
-#. the tooltip of a package's source glyph: the app ships it
-#: src/components/PlaybookCard.tsx
 #: src/lib/environments.ts
 msgid "Built in"
 msgstr "内置"
@@ -3643,6 +3637,7 @@ msgid "from the compile before this change"
 msgstr "来自本次更改前的编译"
 
 #. the tooltip of a package's source glyph, for a package another package requires: it comes from the registry
+#. tooltip: a package taken from the registry
 #. tooltip: a package taken from the registry
 #: src/components/PlaybookCard.tsx
 #: src/lib/environments.ts
@@ -8363,11 +8358,6 @@ msgstr "无法读取你的组织"
 #: src/components/SpaceGroups.tsx
 msgid "Your personal group"
 msgstr "你的个人群组"
-
-#. the title of Add…'s disabled Folder tab under Personal: the folder holding your Personal records, which a folder package lies in, is not on this computer
-#: src/components/EnvironmentSection.tsx
-msgid "Your Personal records are not on this computer"
-msgstr "你的个人记录不在本机"
 
 #: src/components/CaptainHome.tsx
 msgid "your project"

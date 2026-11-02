@@ -356,7 +356,7 @@ export function hostRefused(host: string, words: string | null): string {
       });
 }
 
-/** Where membership decides (space-50, DR-178): Invite members, or a member who
+/** Where membership decides (space-50, DR-190): Invite members, or a member who
  * may manage access, in Spex — no role claimed, no act the host did not name,
  * and no page of the host. */
 export function membersDecide(): string {

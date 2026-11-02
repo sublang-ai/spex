@@ -47,7 +47,7 @@ test("git-host-19/33: normal deletion and restore use explicit safe endpoints, p
   assert.deepEqual(await client.deleteGroup("7", "team"), { status: "deleted" });
 
   // An older Space's 404 is a refusal, not permission to invoke its
-  // legacy permanently destructive endpoint (DR-181).
+  // legacy permanently destructive endpoint (DR-193).
   response = { error: { code: "not_found", message: "Unsupported operation" } };
   status = 404;
   const before = requests.length;

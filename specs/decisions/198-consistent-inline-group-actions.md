@@ -1,12 +1,12 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-188: Consistent Inline Group Actions
+# DR-198: Consistent Inline Group Actions
 
 ## Status
 
 Accepted (2026-11-02) on the owner's request for consistent presentation, punctuation and repeated-button behavior across group selection, Members and Delete group.
-Amends [DR-178](178-membership-with-a-clear-scope.md) in membership-panel presentation and dismissal, [DR-180](180-choose-a-group-before-adding.md) in repeated chooser activation, and [DR-181](181-group-deletion-follows-the-space-policy.md) in repeated confirmation activation and its presentation.
+Amends [DR-190](190-membership-with-a-clear-scope.md) in membership-panel presentation and dismissal, [DR-192](192-choose-a-group-before-adding.md) in repeated chooser activation, and [DR-193](193-group-deletion-follows-the-space-policy.md) in repeated confirmation activation and its presentation.
 Extends [DR-187](187-the-group-chooser-belongs-to-its-project.md)'s attached expansion to Members and Delete group.
 Applies [DR-010](010-interface-craft.md)'s visual and keyboard rules to these flows and the related New group and Invite members editors.
 

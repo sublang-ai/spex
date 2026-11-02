@@ -1,15 +1,15 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-181: Transparent Empty-Group Deletion
+# DR-193: Transparent Empty-Group Deletion
 
 ## Status
 
 Accepted (2026-11-02) on the owner's request to keep the empty-group safeguard and explain every blocking content item.
-Amends [DR-120](120-the-instance-is-the-space.md) and [DR-178](178-membership-with-a-clear-scope.md) in the deletion check, confirmation and outcome; the empty-group restriction remains.
+Amends [DR-120](120-the-instance-is-the-space.md) and [DR-190](190-membership-with-a-clear-scope.md) in the deletion check, confirmation and outcome; the empty-group restriction remains.
 Amended by [DR-186](186-unavailable-group-operations.md) in the explanation of a recognized unavailable deletion or restoration operation.
 
-Amended by [DR-188](188-consistent-inline-group-actions.md) in the confirmation’s attached presentation and repeated activation without clearing or repeating its check.
+Amended by [DR-198](198-consistent-inline-group-actions.md) in the confirmation’s attached presentation and repeated activation without clearing or repeating its check.
 
 ## Context
 

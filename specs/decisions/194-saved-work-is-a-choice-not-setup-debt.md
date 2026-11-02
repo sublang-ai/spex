@@ -1,20 +1,20 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-182: Saved Work Is a Choice, Not Setup Debt
+# DR-194: Saved Work Is a Choice, Not Setup Debt
 
 ## Status
 
 Accepted (2026-11-02) on the owner's rejection of the repair screen's unexplained names, connection language and ambiguous folder action.
-Amends [DR-177](177-repairs-explain-the-next-step.md) in its repair presentation, next steps and issue count; structured causes and preservation remain.
+Amends [DR-189](189-repairs-explain-the-next-step.md) in its repair presentation, next steps and issue count; structured causes and preservation remain.
 Amends [DR-065](065-repairs-the-reader-answers.md) in acknowledgement meaning and presentation: Not now postpones optional recovery, without asserting where a project belongs.
 Amends [DR-172](172-surfaces-a-fresh-user-reads.md) in the repairs' heading, attention styling, naming and actions, and extends [DR-069](069-key-phrases-not-sentences.md) to make an action's purpose and scope visible before asking for it.
 
-Amended by [DR-183](183-read-saved-conversations-before-locating-files.md) in source explanation, project grouping and reading history before locating files.
+Amended by [DR-195](195-read-saved-conversations-before-locating-files.md) in source explanation, project grouping and reading history before locating files.
 
-Amended by [DR-184](184-a-review-count-and-a-way-back.md) in the header review count and persistent return path.
+Amended by [DR-196](196-a-review-count-and-a-way-back.md) in the header review count and persistent return path.
 
-Amended by [DR-185](185-dismiss-reminders-without-losing-history.md) in unified dismissal, separated active and dismissed items, and preserved-history notice acknowledgement.
+Amended by [DR-197](197-dismiss-reminders-without-losing-history.md) in unified dismissal, separated active and dismissed items, and preserved-history notice acknowledgement.
 
 ## Context
 

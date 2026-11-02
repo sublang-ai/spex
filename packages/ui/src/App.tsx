@@ -833,7 +833,7 @@ function WorkspaceSurface({
   const activeSession = open.find((session) => session.id === tab);
 
   // Saved conversations are readable before the project files are
-  // located (DR-183). Do not route an opened transcript to project
+  // located (DR-195). Do not route an opened transcript to project
   // setup, or offer work controls for an unpaired project.
   if (!project) {
     if (!activeSession) return <div className="flex min-h-0 flex-1 flex-col">{startView}</div>;

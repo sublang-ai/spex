@@ -20,7 +20,7 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 - [DR-041](041-chrome-that-fits.md) in its label budget: a menu's entry, and a row's act this record fixes as a whole phrase — "Add to a group…", "Merge histories…", "Not on this computer", "Open on <server>" among them — may exceed fourteen characters and wraps within its row.
 - [DR-132](132-team-servers.md) in "A client presents a ticket": every admission mints a bearer of its own, those of the person's earlier admissions standing while the lease lasts; and in "The helper creates the account on first admission": the account is made without the host's login skeleton, and one bound covers the whole admission — the account, the unit and the seat's socket — which the client's wait exceeds.
 
-Amended by [DR-180](180-choose-a-group-before-adding.md) in the flow opened by "Add to a group…": selection is reviewed before an explicit Add to group or Connect project action.
+Amended by [DR-192](192-choose-a-group-before-adding.md) in the flow opened by "Add to a group…": selection is reviewed before an explicit Add to group or Connect project action.
 
 ## Context
 

@@ -22,7 +22,7 @@ While the app is connected, the Space surface — reached from the sidebar's Spa
 | --- | --- |
 | sign-in | while the home lists no instance, the sign-in card [[space-3](#space-3)] |
 | refresh | while any instance is signed in, Refresh, which reads every signed-in instance [[git-host-5](git-host.md#git-host-5)] |
-| issues | while any repair or diagnostic stands, "Review (<n>)" with a warning icon and attention colour where the core's unresolved count is positive [[space-49](#space-49)], otherwise neutral "Review" without an icon or zero badge, opening review [[space-55](#space-55)] ([DR-184](../decisions/184-a-review-count-and-a-way-back.md)) |
+| issues | while any repair or diagnostic stands, "Review (<n>)" with a warning icon and attention colour where the core's unresolved count is positive [[space-49](#space-49)], otherwise neutral "Review" without an icon or zero badge, opening review [[space-55](#space-55)] ([DR-196](../decisions/196-a-review-count-and-a-way-back.md)) |
 | Git | "Git is not installed" with install guidance, replacing every other field, where no `git` runs |
 
 | An instance's heading, while it is | Carries |
@@ -148,7 +148,7 @@ When the reader activates "Remove from this list" in a signed-out instance's hea
 
 #### space-125
 
-The Space surface's Add to a group chooser, Members panel and Delete group confirmation shall use one attached inline presentation ([DR-188](../decisions/188-consistent-inline-group-actions.md)):
+The Space surface's Add to a group chooser, Members panel and Delete group confirmation shall use one attached inline presentation ([DR-198](../decisions/198-consistent-inline-group-actions.md)):
 
 - the owning project, group or placement heading and its panel form one continuous quiet expansion with a shared muted background and a thin interaction-colour left rule; a group's child projects remain outside that expansion;
 - each panel names its affected project or group, retaining the Space context required by its action [[space-58](#space-58)] [[space-62](#space-62)] [[space-77](#space-77)];
@@ -157,7 +157,7 @@ The Space surface's Add to a group chooser, Members panel and Delete group confi
 
 #### space-126
 
-When the reader activates a local control for Add to a group, Members, Delete group, New group or Invite members, the surface shall apply this interaction contract ([DR-188](../decisions/188-consistent-inline-group-actions.md)):
+When the reader activates a local control for Add to a group, Members, Delete group, New group or Invite members, the surface shall apply this interaction contract ([DR-198](../decisions/198-consistent-inline-group-actions.md)):
 
 | Control and state | Outcome |
 | --- | --- |
@@ -174,7 +174,7 @@ When the reader activates a local control for Add to a group, Members, Delete gr
 
 #### space-127
 
-The Space surface's group-management labels shall use a trailing ellipsis only on an idle command requiring information to define its action ([DR-188](../decisions/188-consistent-inline-group-actions.md)):
+The Space surface's group-management labels shall use a trailing ellipsis only on an idle command requiring information to define its action ([DR-198](../decisions/198-consistent-inline-group-actions.md)):
 
 - Add to a group…, Invite members… and New group… require a destination, usernames or a name;
 - Members opens a view and Delete group asks only for confirmation, so neither takes an ellipsis;
@@ -182,7 +182,7 @@ The Space surface's group-management labels shall use a trailing ellipsis only o
 
 #### space-57
 
-While a placement's host repository has other members, or the placement is your own group's own repository's at an instance other than its first placement's [[space-4](#space-4)], and it has never been pushed from this device, when a sync reaching that placement, or a pick [[space-58](#space-58)] joining it, is admitted, the surface shall require explicit acknowledgement of sharing with that placement's group at its Space, covering every session in full with attachments, past and future records, members keeping what they download, and "Public: anyone can read" where the repository is public ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md), [DR-180](../decisions/180-choose-a-group-before-adding.md)):
+While a placement's host repository has other members, or the placement is your own group's own repository's at an instance other than its first placement's [[space-4](#space-4)], and it has never been pushed from this device, when a sync reaching that placement, or a pick [[space-58](#space-58)] joining it, is admitted, the surface shall require explicit acknowledgement of sharing with that placement's group at its Space, covering every session in full with attachments, past and future records, members keeping what they download, and "Public: anyone can read" where the repository is public ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md), [DR-192](../decisions/192-choose-a-group-before-adding.md)):
 
 - for a sync, the sharing confirm is titled "Share with <group> at <display name>?", over the phrases "All sessions: conversations, agent activity, and attachments", "Existing and future project records" and "Removing access won’t erase copies members already saved", with Share and Cancel, Cancel focused and Escape cancelling ([DR-010](../decisions/010-interface-craft.md) §4);
 - for an existing-project pick, the same facts stand in the selected destination's review [[space-58](#space-58)], acknowledged only by "Connect project"; selecting its row records no acknowledgement;
@@ -195,7 +195,7 @@ While a placement's host repository has other members, or the placement is your 
 
 #### space-58
 
-When a working folder is added while any instance is signed in [[storage-6](storage.md#storage-6)], or the reader activates "Add to a group…" on a spex repository whose clone holds no placement with an instance [[space-61](#space-61)], the surface shall offer a bounded inline form visibly titled "Add <project> to a group", attached to its owning project with destination selection separate from confirmation ([DR-180](../decisions/180-choose-a-group-before-adding.md), [DR-187](../decisions/187-the-group-chooser-belongs-to-its-project.md)):
+When a working folder is added while any instance is signed in [[storage-6](storage.md#storage-6)], or the reader activates "Add to a group…" on a spex repository whose clone holds no placement with an instance [[space-61](#space-61)], the surface shall offer a bounded inline form visibly titled "Add <project> to a group", attached to its owning project with destination selection separate from confirmation ([DR-192](../decisions/192-choose-a-group-before-adding.md), [DR-187](../decisions/187-the-group-chooser-belongs-to-its-project.md)):
 
 1. In the Space list the chooser uses the attached panel presentation [[space-125](#space-125)] and opening behavior [[space-126](#space-126)], with the opener identifying its form; in the project palette, the same compact form uses the palette's enclosing surface without row decoration or a nested card, both contexts fitting the container [[space-28](#space-28)].
 2. The eligible Spaces are the signed-in instances, restricted to the clone's instance where its key lies under one [[storage-31](storage.md#storage-31)]; "Space" labels the display name on the same line, with the value wrapping as needed, as static context for one eligible Space or a selector for several, initially showing the first eligible Space.
@@ -246,7 +246,7 @@ The Space surface shall show each spex repository, and each of its placements, i
 
 #### space-62
 
-When the reader activates Members on the heading of a group an instance lists or on a reachable placement's line [[space-87](#space-87)], another account's login's among them, the surface shall show a panel headed by that group or project and list its members as its instance reports them [[git-host-8](git-host.md#git-host-8)] — username as the personal name, You beside the current account, the Space's own role name and, on a membership held through another group, "via <group>" — with "Invite members…" in the panel header where the view says the person may add a member [[git-host-5](git-host.md#git-host-5)] [[space-69](#space-69)] and Remove on each member held directly where the view says the person may manage its members [[space-72](#space-72)], never on one held through another group ([DR-178](../decisions/178-membership-with-a-clear-scope.md)):
+When the reader activates Members on the heading of a group an instance lists or on a reachable placement's line [[space-87](#space-87)], another account's login's among them, the surface shall show a panel headed by that group or project and list its members as its instance reports them [[git-host-8](git-host.md#git-host-8)] — username as the personal name, You beside the current account, the Space's own role name and, on a membership held through another group, "via <group>" — with "Invite members…" in the panel header where the view says the person may add a member [[git-host-5](git-host.md#git-host-5)] [[space-69](#space-69)] and Remove on each member held directly where the view says the person may manage its members [[space-72](#space-72)], never on one held through another group ([DR-190](../decisions/190-membership-with-a-clear-scope.md)):
 
 - the invitation action belongs to the panel, apart from every member row, and its editor stands above the roster; the permitted action stays present during member reads so an idle form can close back to it;
 - the panel admits only one membership mutation at a time: an addition [[space-69](#space-69)] disables removals, and a removal [[space-72](#space-72)] disables additions and other removals until its response;
@@ -267,7 +267,7 @@ When the reader activates "New group…" on an instance's heading, the surface s
 
 #### space-69
 
-When the reader activates "Invite members…" in a members panel [[space-62](#space-62)], the surface shall open a bounded inline form headed "Invite to <name>", naming that group or project, with the following controls and guidance, and on submission shall add each entered username in order through `space.share` with that group, or that spex repository and placement's instance, and the one selected role [[git-host-16](git-host.md#git-host-16)] ([DR-178](../decisions/178-membership-with-a-clear-scope.md), [DR-179](../decisions/179-invite-several-members-together.md)):
+When the reader activates "Invite members…" in a members panel [[space-62](#space-62)], the surface shall open a bounded inline form headed "Invite to <name>", naming that group or project, with the following controls and guidance, and on submission shall add each entered username in order through `space.share` with that group, or that spex repository and placement's instance, and the one selected role [[git-host-16](git-host.md#git-host-16)] ([DR-190](../decisions/190-membership-with-a-clear-scope.md), [DR-191](../decisions/191-invite-several-members-together.md)):
 
 | Part | Presentation |
 | --- | --- |
@@ -300,7 +300,7 @@ When the reader activates Remove on a member in a members panel [[space-62](#spa
 
 #### space-77
 
-When the reader activates "Delete group" in a group's overflow [[space-1](#space-1)], the surface shall open an inline confirmation naming the group and Space, using the shared presentation [[space-125](#space-125)] and repeated-opening behavior [[space-126](#space-126)], read fresh contents through `space.group.deletionCheck` [[git-host-34](git-host.md#git-host-34)], and permit a safe `space.group.delete` request only after that check finds the group empty [[git-host-19](git-host.md#git-host-19)] ([DR-181](../decisions/181-group-deletion-follows-the-space-policy.md)):
+When the reader activates "Delete group" in a group's overflow [[space-1](#space-1)], the surface shall open an inline confirmation naming the group and Space, using the shared presentation [[space-125](#space-125)] and repeated-opening behavior [[space-126](#space-126)], read fresh contents through `space.group.deletionCheck` [[git-host-34](git-host.md#git-host-34)], and permit a safe `space.group.delete` request only after that check finds the group empty [[git-host-19](git-host.md#git-host-19)] ([DR-193](../decisions/193-group-deletion-follows-the-space-policy.md)):
 
 - the check reads "Checking…" with deletion unavailable; a failed check remains in place and does not imply emptiness, with a recognized missing operation explained as unavailable at this Space [[git-host-35](git-host.md#git-host-35)];
 - every returned blocker is shown with its public name and kind — project, group, shared records or server — and prevents deletion, including content absent from the ordinary list; members do not count, and cached local rows never block this fresh check;
@@ -311,7 +311,7 @@ When the reader activates "Delete group" in a group's overflow [[space-1](#space
 
 #### space-123
 
-While the Space reports a group scheduled for deletion [[git-host-5](git-host.md#git-host-5)], the surface shall retain its heading with "Scheduled for deletion" and offer Restore only where its reported `can.restore` is true, sending `space.group.restore` for its instance and id [[git-host-33](git-host.md#git-host-33)] ([DR-181](../decisions/181-group-deletion-follows-the-space-policy.md)):
+While the Space reports a group scheduled for deletion [[git-host-5](git-host.md#git-host-5)], the surface shall retain its heading with "Scheduled for deletion" and offer Restore only where its reported `can.restore` is true, sending `space.group.restore` for its instance and id [[git-host-33](git-host.md#git-host-33)] ([DR-193](../decisions/193-group-deletion-follows-the-space-policy.md)):
 
 - the scheduled status survives Refresh and is not replaced by another Delete action; an inherited schedule names the reported deletion root as the group to restore, without offering Restore on the child;
 - Restore reads "Restoring…" until its response, prevents a duplicate and is unavailable while disconnected;
@@ -387,7 +387,7 @@ Where the surface shows a seat's place [[run-view-168](run-view.md#run-view-168)
 
 #### space-46
 
-When the core reports the home's diagnostics, it shall fold every diagnostic a folder on this device would repair into one task, carrying the facts that task needs, and leave every unrelated diagnostic unfolded [[core-service-86](core-service.md#core-service-86)] ([DR-063](../decisions/063-space-setup-and-repair.md), [DR-182](../decisions/182-saved-work-is-a-choice-not-setup-debt.md), [DR-183](../decisions/183-read-saved-conversations-before-locating-files.md)):
+When the core reports the home's diagnostics, it shall fold every diagnostic a folder on this device would repair into one task, carrying the facts that task needs, and leave every unrelated diagnostic unfolded [[core-service-86](core-service.md#core-service-86)] ([DR-063](../decisions/063-space-setup-and-repair.md), [DR-194](../decisions/194-saved-work-is-a-choice-not-setup-debt.md), [DR-195](../decisions/195-read-saved-conversations-before-locating-files.md)):
 
 | Repair | Raised by | Presented as |
 | --- | --- | --- |
@@ -403,7 +403,7 @@ When the core reports the home's diagnostics, it shall fold every diagnostic a f
 
 #### space-47
 
-When the user locates a repair's existing project folder or dismisses the reminder, the Space surface shall settle that choice in place ([DR-183](../decisions/183-read-saved-conversations-before-locating-files.md)):
+When the user locates a repair's existing project folder or dismisses the reminder, the Space surface shall settle that choice in place ([DR-195](../decisions/195-read-saved-conversations-before-locating-files.md)):
 
 - the shared introduction explains the folder task's purpose [[space-55](#space-55)] without promising continuation after relocation [[core-service-73](core-service.md#core-service-73)]; "Locate folder…" opens the editor, "Use <folder>" may directly accept a checked proposal [[space-53](#space-53)], and Dismiss sets the reminder aside [[space-49](#space-49)];
 - the editor asks where the files for that project or saved work are, labels its field "Project folder on this computer", starts with only the checked proposal or an empty value, offers Browse… where a directory picker exists, and states that the existing-folder selection creates or downloads no project and applies to all conversations in that group alone;
@@ -415,7 +415,7 @@ When the user locates a repair's existing project folder or dismisses the remind
 
 #### space-48
 
-When a repair's folder is saved with its recorded directories attached [[space-47](#space-47)], the Space surface shall replace that task in place with an outcome confirming the saved folder, without claiming that every older conversation could be opened ([DR-182](../decisions/182-saved-work-is-a-choice-not-setup-debt.md)):
+When a repair's folder is saved with its recorded directories attached [[space-47](#space-47)], the Space surface shall replace that task in place with an outcome confirming the saved folder, without claiming that every older conversation could be opened ([DR-194](../decisions/194-saved-work-is-a-choice-not-setup-debt.md)):
 
 - Open project alone leaves the review; any import still refused keeps its own diagnostic [[core-service-85](core-service.md#core-service-85)];
 - the live region confirms the saved-folder outcome;
@@ -424,10 +424,10 @@ When a repair's folder is saved with its recorded directories attached [[space-4
 
 #### space-49
 
-While a task stands unanswered, the core shall count it as an unresolved task, only this device's reader's act settling it ([DR-065](../decisions/065-repairs-the-reader-answers.md), [DR-182](../decisions/182-saved-work-is-a-choice-not-setup-debt.md)):
+While a task stands unanswered, the core shall count it as an unresolved task, only this device's reader's act settling it ([DR-065](../decisions/065-repairs-the-reader-answers.md), [DR-194](../decisions/194-saved-work-is-a-choice-not-setup-debt.md)):
 
 - drawing the task, opening review or re-reading state settles nothing;
-- Dismiss keeps saved conversations and reduces the header count by that task alone, leaving unrelated active notices counted and moving the task to Dismissed [[space-124](#space-124)], without claiming the project is absent from this computer ([DR-185](../decisions/185-dismiss-reminders-without-losing-history.md));
+- Dismiss keeps saved conversations and reduces the header count by that task alone, leaving unrelated active notices counted and moving the task to Dismissed [[space-124](#space-124)], without claiming the project is absent from this computer ([DR-197](../decisions/197-dismiss-reminders-without-losing-history.md));
 - the dismissed task remains reachable with its folder choice and Show again still available [[space-124](#space-124)];
 - resolving removes the repair, and postponement lapses only when its recorded facts change, not when a folder appears or disappears.
 
@@ -446,7 +446,7 @@ When the core reports a repair, it shall check the folders that repair already n
 - exactly one folder present, a work tree root and unclaimed is the proposal; two qualifying folders propose nothing, and the row asks instead;
 - the check lists no directory and descends none, so a path never reported is a path never examined;
 - a check is bounded and one that exceeds it reports unknown, so an unreachable folder never delays the surface's read [[space-2](#space-2)];
-- the surface keeps checks beside their explicitly named previously used folders inside Technical details, with an unknown check claiming neither absence nor an invalid project; a failed candidate submission names that candidate and the existing-project requirement [[core-service-85](core-service.md#core-service-85)] ([DR-182](../decisions/182-saved-work-is-a-choice-not-setup-debt.md)).
+- the surface keeps checks beside their explicitly named previously used folders inside Technical details, with an unknown check claiming neither absence nor an invalid project; a failed candidate submission names that candidate and the existing-project requirement [[core-service-85](core-service.md#core-service-85)] ([DR-194](../decisions/194-saved-work-is-a-choice-not-setup-debt.md)).
 
 #### space-54
 
@@ -459,17 +459,17 @@ While this device's reader has postponed a repair's folder choice, the core shal
 
 #### space-55
 
-While saved-work diagnostics exist, the Space surface shall offer a review that distinguishes optional recovery from work requiring attention ([DR-182](../decisions/182-saved-work-is-a-choice-not-setup-debt.md)):
+While saved-work diagnostics exist, the Space surface shall offer a review that distinguishes optional recovery from work requiring attention ([DR-194](../decisions/194-saved-work-is-a-choice-not-setup-debt.md)):
 
 - nonblocking review stays initially closed and neutral, opened by Review [[space-1](#space-1)] or the sidebar's place-specific Locate project files action [[run-view-67](run-view.md#run-view-67)], with active folder tasks and their explanation under Locate project files, standalone active diagnostics under a separate Review notices heading, and dismissed items in their own section [[space-124](#space-124)];
-- one introduction above repository folder tasks says the conversation history is saved on this computer, or on the named server [[space-112](#space-112)], that identified conversations can be read now and further project work needs the files; where no task contains conversations, it explains only the required files; where no preview can open history, it makes no read-now promise, and no version claims the project files are absent or repeats the explanation under each project [DR-184](../decisions/184-a-review-count-and-a-way-back.md);
+- one introduction above repository folder tasks says the conversation history is saved on this computer, or on the named server [[space-112](#space-112)], that identified conversations can be read now and further project work needs the files; where no task contains conversations, it explains only the required files; where no preview can open history, it makes no read-now promise, and no version claims the project files are absent or repeats the explanation under each project [DR-196](../decisions/196-a-review-count-and-a-way-back.md);
 - a blocking diagnostic opens review automatically and gives the panel the Needs attention heading and attention styling, without turning unrelated optional tasks into blockers;
 - each task has one recognizable heading and its controls, separated by spacing or dividers rather than one large warning field;
 - dismissed folder tasks retain Locate folder, the sidebar return surviving a zero count, reload or later visit [[space-54](#space-54)] and revealing the dismissed tasks [[space-124](#space-124)]; resolved tasks show the saved-folder outcome [[space-48](#space-48)].
 
 #### space-121
 
-While an unfolded storage diagnostic other than a pending merge stands, the Space surface shall describe what saved work is unavailable, using the core's optional code rather than matching its reason [[core-service-86](core-service.md#core-service-86)], with original file and reason inside collapsed Technical details ([DR-182](../decisions/182-saved-work-is-a-choice-not-setup-debt.md)):
+While an unfolded storage diagnostic other than a pending merge stands, the Space surface shall describe what saved work is unavailable, using the core's optional code rather than matching its reason [[core-service-86](core-service.md#core-service-86)], with original file and reason inside collapsed Technical details ([DR-194](../decisions/194-saved-work-is-a-choice-not-setup-debt.md)):
 
 | Case | Meaning shown |
 | --- | --- |
@@ -482,7 +482,7 @@ While an unfolded storage diagnostic other than a pending merge stands, the Spac
 
 #### space-124
 
-When the reader changes an optional item's dismissal, the Space surface shall move that item between active review and one collapsed Dismissed section only after the core confirms the change ([DR-185](../decisions/185-dismiss-reminders-without-losing-history.md)):
+When the reader changes an optional item's dismissal, the Space surface shall move that item between active review and one collapsed Dismissed section only after the core confirms the change ([DR-197](../decisions/197-dismiss-reminders-without-losing-history.md)):
 
 - folder reminders offer Dismiss through their existing local acknowledgement [[space-54](#space-54)], and nonblocking standalone older-conversation notices offer Dismiss only where the core supplies the matching capability [[core-service-148](core-service.md#core-service-148)];
 - Dismissed shows its own item count, grouping folder reminders and notices outside the active sections and warning count; each item offers Show again, which restores its active count, while folder reminders retain their conversation and folder actions;
@@ -789,7 +789,7 @@ The Space surface shall fit its pane at every width down to the 320-pixel floor 
 - below 20rem the header's fields stack with the primary control last and full-width, and an instance heading's stack with its primary control full-width and its overflow after it, as in every width ([DR-172](../decisions/172-surfaces-a-fresh-user-reads.md));
 - in each repository row and change row the label owns the slack and truncates with its title, the code glyph and detail hiding below 28rem, the row's control keeping its accessible name;
 - the tree and preview stand side by side from 42rem and stack below it, the preview under the tree; the preview's box scrolls inside itself and the diff box scrolls sideways as a canvas;
-- every control reads at most 14 characters, its busy form included: Sign in, Sign in again, Signing in…, Sign out, Signing out…, Sync now, Syncing…, Check, Checking…, Stop, Open here, Opening…, Show, More, Disconnect, Resolve, Combine…, Members, Retry, Retrying…, Apply, Applying…, Cancel, Save, Saving…, Adding…, Locate folder…, Choose folder…, Open folder…, Open project, View diff, Hide diff, All here, Open session, Show in Finder, Show in folder, Copy path, Refresh, Dismiss, New group…, Share, Close, Add member, Add members, Delete group, Deleting…, Restore, Restoring…, Create, Creating…, Add, Keep, Add a Space…; a menu's entries and conversation-title controls [[space-46](#space-46)] and the acts a decision fixes as whole phrases — "Add to a group…", "Invite members…", "Connect project", "Needs attention", "Technical details", "Remove from this list", "Not on this computer", "Use <folder>", "Use this folder", "Open on <server>", "Show on <server>", "Keep this computer's", "Take <display name>'s", "All <display name>'s" — stand outside the budget and wrap within their row ([DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md), [DR-180](../decisions/180-choose-a-group-before-adding.md));
+- every control reads at most 14 characters, its busy form included: Sign in, Sign in again, Signing in…, Sign out, Signing out…, Sync now, Syncing…, Check, Checking…, Stop, Open here, Opening…, Show, More, Disconnect, Resolve, Combine…, Members, Retry, Retrying…, Apply, Applying…, Cancel, Save, Saving…, Adding…, Locate folder…, Choose folder…, Open folder…, Open project, View diff, Hide diff, All here, Open session, Show in Finder, Show in folder, Copy path, Refresh, Dismiss, New group…, Share, Close, Add member, Add members, Delete group, Deleting…, Restore, Restoring…, Create, Creating…, Add, Keep, Add a Space…; a menu's entries and conversation-title controls [[space-46](#space-46)] and the acts a decision fixes as whole phrases — "Add to a group…", "Invite members…", "Connect project", "Needs attention", "Technical details", "Remove from this list", "Not on this computer", "Use <folder>", "Use this folder", "Open on <server>", "Show on <server>", "Keep this computer's", "Take <display name>'s", "All <display name>'s" — stand outside the budget and wrap within their row ([DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md), [DR-192](../decisions/192-choose-a-group-before-adding.md));
 - the surface scrolls inside its own box and the page never scrolls.
 
 ### On a Seat
@@ -1320,7 +1320,7 @@ Where the Space surface renders over a home whose issues list holds three unansw
 
 #### space-128
 
-Where the rendered Space surface offers group selection, group and project Members, group deletion, New group and Invite members, the integration and browser suites shall verify the common interaction matrix ([DR-188](../decisions/188-consistent-inline-group-actions.md)):
+Where the rendered Space surface offers group selection, group and project Members, group deletion, New group and Invite members, the integration and browser suites shall verify the common interaction matrix ([DR-198](../decisions/198-consistent-inline-group-actions.md)):
 
 - each main panel remains visibly attached to its owning heading, a group's children outside its expansion, with consistent typography, controls and fit in both themes, both languages and a narrow container [[space-125](#space-125)];
 - repeating a chooser, Members, deletion, creation or invitation opener focuses the existing task, retaining its selection, usernames, name, completed check or failure without sending a new read or mutation [[space-126](#space-126)];

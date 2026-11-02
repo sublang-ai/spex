@@ -14,7 +14,7 @@ Amended by [DR-127](127-a-home-signed-in-to-several-instances.md) in "New group"
 Amended by [DR-128](128-a-spex-repository-placed-at-several-instances.md) in a spex repository's Members, Share and removing a member: each acts on one placement at its instance.
 Amended by [DR-172](172-surfaces-a-fresh-user-reads.md) in the headings, the rows and the acts offered.
 
-Amended by [DR-178](178-membership-with-a-clear-scope.md) in the members panel and editor: Invite members names the group or project, Username and Role carry visible guidance, and Add member grants an existing account access immediately.
+Amended by [DR-190](190-membership-with-a-clear-scope.md) in the members panel and editor: Invite members names the group or project, Username and Role carry visible guidance, and Add member grants an existing account access immediately.
 
 ## Context
 

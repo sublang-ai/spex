@@ -1,17 +1,17 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-178: Membership with a Clear Scope
+# DR-190: Membership with a Clear Scope
 
 ## Status
 
 Accepted (2026-11-02) on the owner's request to make inviting group members understandable and to offer group deletion under the Space's permission policy.
 Amends [DR-114](114-groups-and-sharing-from-spex.md) in the members panel and its invitation editor, [DR-120](120-the-instance-is-the-space.md) in membership guidance and empty-group deletion, and [DR-172](172-surfaces-a-fresh-user-reads.md) in the group overflow's actions.
 Extends [DR-069](069-key-phrases-not-sentences.md): the invitation's scope, required account, role capability and immediate effect are essential guidance beside their controls, visible without hovering.
-Amended by [DR-179](179-invite-several-members-together.md) in the one-username limit, submission and outcome: removable username tokens share one role, additions run sequentially, and only failed or unsent entries remain for an explicit retry.
-Amended by [DR-181](181-group-deletion-follows-the-space-policy.md) in empty-group deletion: a fresh Space check names every blocking content item instead of relying on cached rows, and a safe request preserves scheduled state and restoration where allowed.
+Amended by [DR-191](191-invite-several-members-together.md) in the one-username limit, submission and outcome: removable username tokens share one role, additions run sequentially, and only failed or unsent entries remain for an explicit retry.
+Amended by [DR-193](193-group-deletion-follows-the-space-policy.md) in empty-group deletion: a fresh Space check names every blocking content item instead of relying on cached rows, and a safe request preserves scheduled state and restoration where allowed.
 
-Amended by [DR-188](188-consistent-inline-group-actions.md) in the Members panel’s attached presentation, visible Close, repeated activation and mutation guards.
+Amended by [DR-198](198-consistent-inline-group-actions.md) in the Members panel’s attached presentation, visible Close, repeated activation and mutation guards.
 
 ## Context
 
