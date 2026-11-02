@@ -407,7 +407,9 @@ export function rehomeBuiltinLock(root: string, pkg: BuiltinPackage, registryUrl
   // `spex.yaml` names the instance placed at, or none is given.
   const naming = space !== null && parseRequests(text).space !== space;
   if (source.registry === target && !naming) return false;
-  if (current !== serializeLock(builtinLock(pkg, source.registry, text))) return false;
+  // CRLF read as LF: a checkout that converted the lock's line endings
+  // holds the lock a pairing prepared all the same.
+  if (current.replace(/\r\n/g, "\n") !== serializeLock(builtinLock(pkg, source.registry, text))) return false;
   let next = text;
   if (naming) {
     const doc = parseDocument(text);

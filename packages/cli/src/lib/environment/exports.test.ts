@@ -15,11 +15,12 @@
 // package's copy by the record or its marker line, the second package
 // of one `<pkg>` included, and a recorded copy whose marker line the
 // reader removed read as edited; a committed copy holding the
-// derivation adopted on a fresh clone, one at a newer release's version
-// on a device whose record held the older hash, and one of a package
-// whose files are not here standing for the links citing it; a project
-// without `specs/` placing no spec and reporting it; your own group's
-// writing the generated skill; and each state read back from the files.
+// derivation, CRLF read as LF, adopted on a fresh clone, one at a newer
+// release's version on a device whose record held the older hash, and
+// one of a package whose files are not here standing for the links
+// citing it; a project without `specs/` placing no spec and reporting
+// it; your own group's writing the generated skill; and each state read
+// back from the files.
 
 import { after, test } from "node:test";
 import assert from "node:assert/strict";
@@ -296,10 +297,12 @@ test("environments-41: a file of the name blocks the placement — the project's
   assert.deepEqual(Object.keys(recorded.specs), ["acme/kit", "acme/tools"], "[environments-41] a blocked spec is not recorded");
   assert.deepEqual(readSpecPlacements(root, lockOf(lock)), report.specs, "[environments-14] each read back as the placement reported it");
 
-  // A clone of committed copies: the files stand, the record does not;
-  // each holding the derivation is adopted and recorded, nothing
-  // rewritten.
+  // A clone of committed copies, checked out with CRLF line endings as
+  // Git for Windows does by default: the files stand, the record does
+  // not; each whose text, CRLF read as LF, is the derivation is adopted
+  // and recorded, nothing rewritten.
   rmSync(placedRecordPath(root));
+  for (const pkg of ["kit", "tools"]) writeFileSync(join(root, "specs", "packages", `${pkg}.md`), read(root, `specs/packages/${pkg}.md`).replace(/\n/g, "\r\n"));
   const kit = stamp(join(root, "specs", "packages", "kit.md"));
   assert.deepEqual(readSpecPlacements(root, lockOf(lock)), report.specs, "[environments-14] committed copies read as placed with no record");
   const again = await place(root, lock);

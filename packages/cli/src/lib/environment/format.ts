@@ -598,6 +598,19 @@ export function sha256Hex(bytes: Uint8Array | string): string {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
+/** The SHA-256 of a text file, CRLF line endings read as LF, so a
+ * checkout whose Git converts line endings — Windows by default —
+ * digests as the file committed (environments-3, environments-41): a
+ * string is that text; bytes are read as UTF-8, and bytes that are no
+ * UTF-8 or hold NUL are no text and are hashed as they are. */
+export function lfDigest(content: Uint8Array | string): string {
+  if (typeof content === "string") return sha256Hex(content.replace(/\r\n/g, "\n"));
+  let text: string;
+  try { text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(content); }
+  catch { return sha256Hex(content); }
+  return text.includes("\0") ? sha256Hex(content) : sha256Hex(text.replace(/\r\n/g, "\n"));
+}
+
 /** Every file of a folder with its digest and executable bit, but what
  * the compiler keeps for itself beside a playbook; a link or a special
  * file is an issue, never followed. */

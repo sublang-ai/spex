@@ -1788,6 +1788,19 @@ test("environments-14, environments-1, environments-6, environments-41: environm
   writeFileSync(termsFile, copy);
   assert.deepEqual((await read("acme/terms")).placement, { spec: { state: "placed", path: "specs/packages/terms.md", waiting } });
 
+  // [environments-3] [environments-41] as on a checkout that wrote CRLF
+  // line endings — Git for Windows by default: the lock reads current
+  // and the copy, no record, is the package's.
+  const requestsFile = join(working, "spex.yaml");
+  const requestsText = readFileSync(requestsFile, "utf8");
+  writeFileSync(requestsFile, requestsText.replace(/\n/g, "\r\n"));
+  writeFileSync(termsFile, copy.replace(/\n/g, "\r\n"));
+  const crlf = await client.expectOk("environment.get", { repository: key });
+  assert.equal(crlf.stale, null, "[environments-3] a CRLF spex.yaml keeps the lock current");
+  assert.deepEqual(crlf.packages.find((pkg) => pkg.name === "acme/terms")?.placement, { spec: { state: "placed", path: "specs/packages/terms.md", waiting } }, "[environments-41] a CRLF copy is the package's");
+  writeFileSync(requestsFile, requestsText);
+  writeFileSync(termsFile, copy);
+
   // [environments-41] a project file of the spec's name blocks it.
   writeFileSync(join(working, "specs", "packages", "rules.md"), spec("rules"));
   assert.deepEqual((await read("acme/rules")).placement, { spec: { state: "blocked", path: "specs/packages/rules.md", waiting: [] } });
