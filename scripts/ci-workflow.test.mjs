@@ -19,7 +19,7 @@ const invokeVerdict = (needs) => spawnSync(process.execPath, [join(root, "script
   encoding: "utf8", env: { ...process.env, CI_NEEDS: JSON.stringify(needs) },
 });
 const selected = ({ full = false, channel = "app", docsOnly = false, affected = "" } = {}) => ({
-  changes: { result: "success", outputs: { full: String(full), channel, "docs-only": String(docsOnly), affected } },
+  changes: { result: "success", outputs: { full: String(full), channel, "docs-only": String(docsOnly), ...(affected ? { affected } : {}), "affected-json": JSON.stringify(affected) } },
   test: { result: docsOnly ? "skipped" : "success" },
   journeys: { result: full && channel === "app" ? "success" : "skipped" },
   "desktop-browser": { result: full && channel === "app" ? "success" : "skipped" },
@@ -82,6 +82,7 @@ test("release-33: classification chooses the exact full channel and keeps shared
   for (const output of ["docs-only", "affected", "full", "channel"]) {
     assert.equal(changes.outputs[output], `\${{ steps.classify.outputs.${output} }}`);
   }
+  assert.equal(changes.outputs["affected-json"], "${{ toJSON(steps.classify.outputs.affected) }}", "an empty selection survives job-output serialization");
   const classifyAt = changes.steps.findIndex((step) => step.id === "classify");
   const classify = changes.steps[classifyAt];
   const nodeAt = changes.steps.findIndex((step) => step.uses?.startsWith("actions/setup-node@"));
@@ -173,10 +174,13 @@ test("release-33: the real verdict accepts the selected PR, documentation and fu
     }
   }
   for (const outputs of [undefined, {}, { full: "maybe" },
-    { full: "true", channel: "app", "docs-only": "false", affected: "packages/ui" },
-    { full: "true", channel: "cli", "docs-only": "false", affected: "all" },
-    { full: "false", channel: "app", "docs-only": "true", affected: "packages/ui" },
-    { full: "false", channel: "unknown", "docs-only": "false", affected: "" }]) {
+    { full: "true", channel: "app", "docs-only": "false", "affected-json": '"packages/ui"' },
+    { full: "true", channel: "cli", "docs-only": "false", "affected-json": '"all"' },
+    { full: "false", channel: "app", "docs-only": "true", "affected-json": '"packages/ui"' },
+    { full: "false", channel: "unknown", "docs-only": "false", "affected-json": '""' },
+    { full: "false", channel: "app", "docs-only": "false" },
+    { full: "false", channel: "app", "docs-only": "false", "affected-json": 'null' },
+    { full: "false", channel: "app", "docs-only": "false", "affected-json": '' }]) {
     const plan = selected();
     plan.changes.outputs = outputs;
     assert.notEqual(invokeVerdict(plan).status, 0, JSON.stringify(outputs));

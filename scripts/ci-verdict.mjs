@@ -33,9 +33,12 @@ export function verifyChecks(needs) {
   const full = boolean(outputs?.full, "full");
   const docsOnly = boolean(outputs?.["docs-only"], "docs-only");
   if (!["app", "cli"].includes(outputs?.channel)) throw new Error("unknown validation channel");
-  if (typeof outputs?.affected !== "string") throw new Error("affected is missing");
-  if (docsOnly && outputs.affected !== "") throw new Error("documentation has a nonempty selection");
-  if (full && (docsOnly || outputs.affected !== (outputs.channel === "app" ? "all" : "packages/cli"))) {
+  // Empty job outputs disappear from GitHub's needs JSON. The encoded
+  // selection remains present even for documentation or script tests alone.
+  const affected = JSON.parse(outputs?.["affected-json"] ?? "null");
+  if (typeof affected !== "string") throw new Error("affected is missing");
+  if (docsOnly && affected !== "") throw new Error("documentation has a nonempty selection");
+  if (full && (docsOnly || affected !== (outputs.channel === "app" ? "all" : "packages/cli"))) {
     throw new Error("full validation has an incomplete selection");
   }
   const fullApp = full && outputs.channel === "app";

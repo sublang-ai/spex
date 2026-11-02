@@ -43,6 +43,8 @@ jobs:
     outputs:
       docs-only: ${{ steps.classify.outputs.docs-only }}
       affected: ${{ steps.classify.outputs.affected }}
+      # GitHub omits empty job outputs; JSON preserves the scripts-only plan.
+      affected-json: ${{ toJSON(steps.classify.outputs.affected) }}
       full: ${{ steps.classify.outputs.full }}
       channel: ${{ steps.classify.outputs.channel }}
       matrix: ${{ steps.matrix.outputs.matrix }}
