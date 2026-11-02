@@ -20,6 +20,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { GroupsState, RepositoryState, SessionInfo } from "@sublang/spex-core/protocol";
 
+import { SpaceSurface } from "./SpaceSurface.js";
 import { activateLanguage, i18n } from "../i18n.js";
 import { deliverServerMessageForTests, setClientForTests, useAppStore } from "../state/store.js";
 import {
@@ -177,7 +178,7 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     ...over,
   });
 
-  test("'⚠ <n> to fix' opens 'To fix (<n>)' in place, a pending merge read in plain words and the merge noted in the Sync tab", async () => {
+  test("Review counts notices and opens a neutral review, with a pending merge read in plain words", async () => {
     await renderGroups(
       repoState(
         { mergePending: true },
@@ -190,13 +191,14 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
       ),
     );
     const issues = screen.getByTestId("space-issues");
-    expect(issues.textContent).toBe("Saved work");
-    expect(issues.className).not.toContain("amber");
+    expect(issues.textContent).toBe("⚠Review (2)");
+    expect(issues.className).toContain("amber");
     expect(screen.queryByTestId("space-issues-list")).toBeNull();
     fireEvent.click(issues);
     const list = screen.getByTestId("space-issues-list");
-    expect(screen.getByRole("region", { name: "Saved work" })).toBe(list);
-    expect(screen.getByTestId("space-issues-heading").textContent).toBe("Saved work");
+    expect(screen.getByRole("region", { name: "Review notices" })).toBe(list);
+    expect(list.className).not.toContain("amber");
+    expect(screen.getByTestId("space-issues-heading").textContent).toBe("Review notices");
     expect(list.textContent).toContain("Finish or abort the merge in your terminal");
     expect(list.textContent).not.toContain("MERGE_HEAD");
     expect(within(list).getAllByRole("listitem")).toHaveLength(2);
@@ -207,7 +209,7 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
   test.each(["en", "zh"] as const)("storage diagnostics in %s explain the next step by code and disclose technical details only on request", async (language) => {
     activateLanguage(language);
     const words = {
-      heading: `⚠${i18n._("Needs attention")}`,
+      heading: `⚠${i18n._("Review ({count})", { count: 5 })}`,
       older: i18n._("An older conversation can’t be opened"),
       folder: i18n._("A saved conversation needs a project folder"),
       generic: i18n._("Saved data needs attention"),
@@ -227,6 +229,7 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     ];
     await renderGroups(repoState({}, { diagnostics }), { open: false });
     expect(screen.getByTestId("space-issues").textContent).toBe(words.heading);
+    expect(screen.getByTestId("space-issues").getAttribute("aria-expanded")).toBe("true");
     const rows = screen.getAllByTestId("space-diagnostic");
     expect(rows).toHaveLength(diagnostics.length);
     const summaries = [
@@ -274,7 +277,7 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
       { open: false },
     );
     // Displaying it settles nothing: it still counts (space-54).
-    expect(screen.getByTestId("space-issues").textContent).toBe("Saved work");
+    expect(screen.getByTestId("space-issues").textContent).toBe("⚠Review (1)");
     fireEvent.click(screen.getByTestId("space-issues"));
     const row = screen.getByTestId("space-repair");
     expect(row.dataset.kind).toBe("repository");
@@ -283,7 +286,8 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     expect(within(row).getByTestId("space-repair-title").textContent).toBe("Infra");
     expect(row.textContent).not.toContain("infra-spex");
     expect(within(row).getByTestId("space-repair-folder").textContent).toBe("Previously used folder/code/infra");
-    expect(row.textContent).toContain("To work on this project again, locate its files.");
+    expect(screen.getByTestId("space-issues-list").textContent).toContain("Conversation history is saved on this computer. To work on a project again, locate its files.");
+    expect(row.textContent).not.toContain("To work on");
     // Its controls, in their order (space-47).
     expect(within(row).getAllByRole("button").map((button) => button.textContent)).toEqual([
       "Use /code/infra",
@@ -319,8 +323,8 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
       details: [{ file: "/records/older.spex.json", reason: "legacy session needs a cwd" }],
     });
     await renderGroups(repoState({}, { diagnostics: [{ file: "workspace/slalph/slalph-spex", reason: "no working folder", blocking: false, repair }] }), { open: false });
-    const review = screen.getByRole("button", { name: "Saved work" });
-    expect(review.className).not.toContain("amber");
+    const review = screen.getByRole("button", { name: "Review 1 notice" });
+    expect(review.className).toContain("amber");
     expect(screen.queryByTestId("space-issues-list")).toBeNull();
     fireEvent.click(review);
     const row = screen.getByTestId("space-repair");
@@ -328,8 +332,10 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     expect(row.textContent).not.toContain("slalph");
     expect(within(row).getByTestId("space-repair-title").textContent).toBe("Earlier conversations");
     expect(row.textContent).toContain("5 saved conversations");
-    expect(screen.getByTestId("space-issues-list").textContent).toContain("Conversation history is saved in Spex on this computer, separately from your project files.");
-    expect(row.textContent).toContain("You can read these conversations now.");
+    expect(screen.getByTestId("space-issues-list").textContent).toContain("Conversation history is saved on this computer. You can read the conversations now. To work on a project again, locate its files.");
+    expect(screen.getByTestId("space-issues-list").className).not.toContain("amber");
+    expect(row.textContent).not.toContain("You can read");
+    expect(screen.getByTestId("space-issues-list").textContent).not.toContain("If you don’t have");
     expect(within(row).getByTestId("space-repair-folder").textContent).toBe("Previously used folders~/Projects/old/other");
     expect(row.textContent).toContain("Plan the onboarding flow");
     expect(row.textContent).toContain("Conversation saved");
@@ -383,7 +389,7 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     act(() => deliverServerMessageForTests({ type: "session.removed", sessionId: "second-chat", projectId: "two/atlas-spex" }));
     fireEvent.click(within(rows[1]!).getByRole("button", { name: "Review the project guide" }));
     expect(onOpenSession).toHaveBeenCalledTimes(1);
-    expect(within(rows[1]!).getByTestId("space-conversation-error").textContent).toBe("This conversation is no longer listed. Refresh Saved work and try again.");
+    expect(within(rows[1]!).getByTestId("space-conversation-error").textContent).toBe("This conversation is no longer listed. Refresh this list and try again.");
     expect(calls("project.rebind")).toHaveLength(0);
     act(() => useAppStore.setState({ sessions: indexed }));
     fireEvent.click(within(rows[1]!).getByRole("button", { name: "Review the project guide" }));
@@ -546,9 +552,10 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     // It counts as no issue, but the control stays reachable — and
     // with nothing unanswered it stops wearing attention's colour.
     const issues = screen.getByTestId("space-issues");
-    expect(issues.textContent).toBe("Saved work");
+    expect(issues.textContent).toBe("Review");
     expect(issues.title).toBe("");
-    expect(issues.getAttribute("aria-label")).toBe("Saved work");
+    expect(issues.getAttribute("aria-label")).toBe("Review");
+    expect(issues.className).not.toContain("amber");
     expect(issues.className).not.toContain("amber");
     fireEvent.click(issues);
     expect(screen.getByTestId("space-issues-list").className).not.toContain("amber");
@@ -560,7 +567,56 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     // Declining strips nothing: the row still offers what it offered.
     expect(within(row).getByRole("button", { name: "Locate folder…" })).toBeTruthy();
     expect(within(row).queryByRole("button", { name: "Not now" })).toBeNull();
-    expect(screen.getByTestId("space-issues-heading").textContent).toBe("Saved work");
+    expect(screen.getByTestId("space-issues-heading").textContent).toBe("Locate project files");
+  });
+
+  test("Not now reduces the core count, keeps unrelated notices, and sidebar requests reopen deferred tasks", async () => {
+    const repairs = [unpaired(), unpaired({ repository: "jane/docs-spex", key: "docs", projectName: "Docs" })];
+    const deferred = new Set<string>();
+    let otherNotice = true;
+    const report = (): GroupsState => repoState({}, { diagnostics: [
+      ...repairs.map((repair) => ({ file: `workspace/${repair.repository}`, reason: "no folder", blocking: false,
+        repair: deferred.has(repair.key) ? { ...repair, declined: NOW } : repair })),
+      ...(otherNotice ? [{ file: "/older.json", reason: "unsupported format", blocking: false }] : []),
+    ] });
+    commandMock.mockImplementation(async (type: string, fields: Record<string, unknown> = {}) => {
+      if (type === "space.repair.decline") {
+        deferred.add(String(fields.repair));
+        home.current = report();
+        return home.current;
+      }
+      return answer(type, fields);
+    });
+    const { view, onOpenSession, onOpenProject } = await renderGroups(report(), { open: false });
+    expect(screen.getByTestId("space-issues").textContent).toBe("⚠Review (3)");
+    fireEvent.click(screen.getByTestId("space-issues"));
+    fireEvent.click(within(screen.getAllByTestId("space-repair")[0]!).getByRole("button", { name: "Not now" }));
+    await waitFor(() => expect(screen.getByTestId("space-issues").textContent).toBe("⚠Review (2)"));
+    const notice = screen.getByTestId("space-deferred-notice");
+    expect(notice.textContent).toBe("You can return through Locate project files in the sidebar.");
+    expect(notice.closest(".sr-only")).toBeNull();
+    fireEvent.click(within(screen.getByTestId("space-repair")).getByRole("button", { name: "Not now" }));
+    await waitFor(() => expect(screen.getByTestId("space-issues").textContent).toBe("⚠Review (1)"));
+    expect(screen.getByTestId("space-diagnostic")).toBeTruthy();
+    expect(screen.getAllByTestId("space-deferred-notice")).toHaveLength(1);
+    otherNotice = false;
+    deliver(report());
+    expect(screen.getByTestId("space-issues").textContent).toBe("Review");
+    fireEvent.click(screen.getByTestId("space-issues"));
+    expect(screen.queryByTestId("space-issues-list")).toBeNull();
+    const consume = vi.fn();
+    view.rerender(<SpaceSurface onOpenSession={onOpenSession} onOpenProject={onOpenProject} reviewRequest={1} onReviewOpened={consume} />);
+    expect(screen.getByRole("region", { name: "Locate project files" })).toBeTruthy();
+    expect(consume).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByTestId("space-repair-declined")).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Locate folder…" })).toHaveLength(2);
+    view.rerender(<SpaceSurface onOpenSession={onOpenSession} onOpenProject={onOpenProject} onReviewOpened={consume} />);
+    fireEvent.click(screen.getByTestId("space-issues"));
+    expect(screen.queryByTestId("space-issues-list")).toBeNull();
+    view.rerender(<SpaceSurface onOpenSession={onOpenSession} onOpenProject={onOpenProject} reviewRequest={2} onReviewOpened={consume} />);
+    expect(screen.getByRole("region", { name: "Locate project files" })).toBeTruthy();
+    expect(consume).toHaveBeenCalledTimes(2);
+    expect(calls("project.rebind")).toHaveLength(0);
   });
 
   test("space-56: an outcome and a declined row hold their places until the reader's Refresh, as focus and the count move on", async () => {
@@ -613,7 +669,7 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
       }
     });
     const { onOpenProject } = await renderGroups(report(), { open: false });
-    expect(screen.getByTestId("space-issues").textContent).toBe("Saved work");
+    expect(screen.getByTestId("space-issues").textContent).toBe("⚠Review (3)");
     fireEvent.click(screen.getByTestId("space-issues"));
     const items = () => within(screen.getByTestId("space-issues-list")).getAllByRole("listitem");
     const at = (index: number) => items()[index]!;
@@ -624,9 +680,9 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     await waitFor(() => expect(at(0).dataset.testid).toBe("space-repair-declined"));
     expect(at(0).textContent).toContain("infra");
     expect(at(0).textContent).toContain("For later");
-    expect(screen.getByTestId("space-issues").textContent).toBe("Saved work");
-    expect(screen.getByTestId("space-issues-heading").textContent).toBe("Saved work");
-    expect(live()).toBe("Saved for later. Your conversations are kept.");
+    expect(screen.getByTestId("space-issues").textContent).toBe("⚠Review (2)");
+    expect(screen.getByTestId("space-issues-heading").textContent).toBe("Locate project files");
+    expect(live()).toBe("You can return through Locate project files in the sidebar.");
 
     // The last row gives way to its outcome in its own place.
     fireEvent.click(within(docs!).getByTestId("space-repair-use"));
@@ -635,7 +691,7 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     // The count falls, the live region counts what the header does —
     // the declined row not among them — and focus wraps to the next
     // unanswered repair's first control.
-    expect(screen.getByTestId("space-issues").textContent).toBe("Saved work");
+    expect(screen.getByTestId("space-issues").textContent).toBe("⚠Review (1)");
     expect(live()).toBe("Project folder saved: /code/docs");
     await waitFor(() => expect(document.activeElement).toBe(within(at(1)).getByTestId("space-repair-use")));
     expect(at(1).textContent).toContain("slc");
@@ -655,6 +711,8 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     fireEvent.click(within(at(0)).getByTestId("space-repair-use"));
     await waitFor(() => expect(at(0).dataset.testid).toBe("space-repair-resolved"));
     expect(live()).toBe("Project folder saved: /code/slc");
+    expect(screen.getByTestId("space-issues").textContent).toBe("Review");
+    expect(screen.getByTestId("space-issues").className).not.toContain("amber");
     const openSlc = within(at(0)).getByRole("button", { name: "Open project" });
     await waitFor(() => expect(document.activeElement).toBe(openSlc));
     fireEvent.click(openSlc);

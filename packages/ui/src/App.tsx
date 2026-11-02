@@ -842,7 +842,7 @@ function WorkspaceSurface({
       continuable: undefined,
       recovery: undefined,
       continuationReason: activeSession.continuationReason ?? i18n._({
-        id: "Locate the project files in Saved work to work with them again.",
+        id: "Use Locate project files in the sidebar to work with these files again.",
         comment: "saved history can be read before its project folder is located",
       }),
     };
@@ -1351,6 +1351,13 @@ export function App() {
   // project's place (DR-172).
   const [configuredPlace, setConfiguredPlace] = useState<string>(LOCAL_PLACE_KEY);
   const configured = storeAt(configuredPlace);
+  const [folderReview, setFolderReview] = useState<{ place: string; nonce: number }>();
+  const folderReviewSeq = useRef(0);
+  const openFolderReview = (store: AppStore): void => {
+    setConfiguredPlace(store.place.key);
+    setFolderReview({ place: store.place.key, nonce: ++folderReviewSeq.current });
+    setSurface("Space");
+  };
   useEffect(() => {
     if (configured.place.key !== configuredPlace) setConfiguredPlace(LOCAL_PLACE_KEY);
   }, [configured, configuredPlace]);
@@ -1388,6 +1395,23 @@ export function App() {
     space: state.space,
     connection: state.connection,
   }));
+  // The return path must exist after a fresh launch on any surface,
+  // before the reader has opened Space. Read once per connection;
+  // subsequent space.state reports keep the same sidebar data current.
+  const folderReviewReads = useRef(new Set<AppStore>());
+  const folderReviewSeen = useRef(new WeakSet<AppStore>());
+  useEffect(() => {
+    for (const { store, value } of placeStates) {
+      if (value.connection !== "open") { folderReviewReads.current.delete(store); continue; }
+      if (folderReviewReads.current.has(store)) continue;
+      folderReviewReads.current.add(store);
+      if (!value.space || folderReviewSeen.current.has(store)) void store.getState().loadSpace().catch(() => {});
+      folderReviewSeen.current.add(store);
+    }
+    for (const store of folderReviewReads.current) {
+      if (!placeStates.some((entry) => entry.store === store)) folderReviewReads.current.delete(store);
+    }
+  }, [placeStates]);
   const local = placeStates[0]!.value;
   // The seats the local core holds, each with its sign-in at its
   // instance (core-service-142): the palette says where one still runs.
@@ -1755,6 +1779,8 @@ export function App() {
     // The projects its core is opening, read from its Groups state
     // (run-view-168).
     opening: openingProjects(value.space, value.projects),
+    onLocateFiles: value.space?.diagnostics.some((entry) => entry.repair?.kind === "repository")
+      ? () => openFolderReview(store) : undefined,
     sessions: value.sessions,
     attention: attentionAt(store.place.key),
     currentProjectId: value.currentProjectId,
@@ -1934,6 +1960,8 @@ export function App() {
               ) : (
                 <SpaceSurface
                   key={configured.place.key}
+                  reviewRequest={folderReview?.place === configured.place.key ? folderReview.nonce : undefined}
+                  onReviewOpened={() => setFolderReview(undefined)}
                   onOpenSession={(sessionId) =>
                     openSessionAndShow(sessionId, undefined, configured.place.key)
                   }

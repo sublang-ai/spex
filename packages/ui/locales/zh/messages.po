@@ -2486,15 +2486,25 @@ msgstr "在浏览器中继续"
 msgid "Contribute shared records and manage projects and their members."
 msgstr "可以修改共享记录，并管理项目及其成员。"
 
-#. the active server holds the saved history, not the reader's own computer
+#. server-side folder requirement where no readable conversation links are available
 #: src/components/SpaceRepairs.tsx
-msgid "Conversation history is saved in Spex on {place}, separately from your project files."
-msgstr "会话历史保存在 {place} 上的 Spex 中，与项目文件分开存放。"
+msgid "Conversation history is saved on {place}. Project files must be available there for further work."
+msgstr "会话历史保存在 {place} 上。继续工作需要该服务器上有项目文件。"
 
-#. where saved conversation records are kept, without claiming they are local-only or synced
+#. saved history and required files belong to the named server, which allocates its folders
 #: src/components/SpaceRepairs.tsx
-msgid "Conversation history is saved in Spex on this computer, separately from your project files."
-msgstr "会话历史保存在本机的 Spex 中，与项目文件分开存放。"
+msgid "Conversation history is saved on {place}. You can read the conversations now. Project files must be available there for further work."
+msgstr "会话历史保存在 {place} 上，现在就可以阅读。继续工作需要该服务器上有项目文件。"
+
+#. older cores without readable conversation links still explain why project files are needed
+#: src/components/SpaceRepairs.tsx
+msgid "Conversation history is saved on this computer. To work on a project again, locate its files."
+msgstr "会话历史保存在本机上。如需继续处理项目，请指定项目文件的位置。"
+
+#. one explanation for all project-folder choices, without claiming the files are absent
+#: src/components/SpaceRepairs.tsx
+msgid "Conversation history is saved on this computer. You can read the conversations now. To work on a project again, locate its files."
+msgstr "会话历史保存在本机上，现在就可以阅读。如需继续处理项目，请指定项目文件的位置。"
 
 #. an untitled conversation identified by its actual saved date
 #: src/components/SpaceRepairs.tsx
@@ -3803,11 +3813,6 @@ msgstr "空闲 — 还没有对话。"
 msgid "idle, held a failure"
 msgstr "空闲，有失败未处理"
 
-#. saved-work recovery is optional even when no local project files are available
-#: src/components/SpaceRepairs.tsx
-msgid "If you don’t have the project files here, you can leave this for later."
-msgstr "如果这里没有项目文件，可以稍后再处理。"
-
 #. stands in for a blocked image that carried no alt text
 #: src/components/Markdown.tsx
 msgid "image"
@@ -4236,10 +4241,18 @@ msgstr "加载中…"
 msgid "Locate folder…"
 msgstr "查找文件夹…"
 
-#. saved history can be read before its project folder is located
-#: src/App.tsx
-msgid "Locate the project files in Saved work to work with them again."
-msgstr "如需继续处理项目文件，请在“以往工作”中指定文件夹位置。"
+#. review the project folders needed for saved conversations
+#. sidebar return to unfinished project folder choices, including those left for later
+#. sidebar return to unfinished project folder choices, including those left for later
+#: src/components/NavRail.tsx
+#: src/components/SpaceRepairs.tsx
+msgid "Locate project files"
+msgstr "查找项目文件"
+
+#. accessible name and tooltip of a place-specific folder review shortcut
+#: src/components/NavRail.tsx
+msgid "Locate project files on {place}"
+msgstr "查找 {place} 上的项目文件"
 
 #: src/components/SpecGraph.tsx
 msgid "Lower the threshold"
@@ -4414,10 +4427,8 @@ msgid "Name a folder"
 msgstr "请填写文件夹"
 
 #. saved data currently blocks an operation
-#. saved data currently blocks an operation
 #: src/components/DashboardSurface.tsx
 #: src/components/SpaceRepairs.tsx
-#: src/components/SpaceSurface.tsx
 msgid "Needs attention"
 msgstr "需要关注"
 
@@ -6233,9 +6244,21 @@ msgid "Return (Alt+Left)"
 msgstr "返回（Alt+←）"
 
 #. a step: the reviewer reviews the change
+#. reopen notices and postponed project-folder choices
+#: src/components/SpaceSurface.tsx
 #: src/lib/step-words.ts
 msgid "Review"
 msgstr "审查"
+
+#. review the pending notices; postponed folder choices do not count
+#: src/components/SpaceSurface.tsx
+msgid "Review ({count})"
+msgstr "查看（{count}）"
+
+#. accessible name for the notice review control
+#: src/components/SpaceSurface.tsx
+msgid "Review {count, plural, one {# notice} other {# notices}}"
+msgstr "查看 {count, plural, other {# 条提示}}"
 
 #. the built-in /review playbook's intent, as its registry entry states it
 #: src/lib/playbook-intent.ts
@@ -6250,6 +6273,11 @@ msgstr "复审"
 #: src/components/CaptainHome.tsx
 msgid "review committed changes"
 msgstr "审阅已提交改动"
+
+#. stored-data notices that do not offer a project folder choice
+#: src/components/SpaceRepairs.tsx
+msgid "Review notices"
+msgstr "查看提示"
 
 #. a step: the reviewer reviews the coder's fixes
 #: src/lib/step-words.ts
@@ -6378,11 +6406,6 @@ msgstr "已保存的会话"
 msgid "Saved data needs attention"
 msgstr "已保存的数据需要处理"
 
-#. confirmation after deferring an optional saved-work task
-#: src/components/SpaceRepairs.tsx
-msgid "Saved for later. Your conversations are kept."
-msgstr "已留待以后处理，会话仍保留。"
-
 #: src/components/SessionRecovery.tsx
 msgid "Saved input"
 msgstr "已保存的输入"
@@ -6396,13 +6419,6 @@ msgstr "已保存在 {place}，尚未发送"
 #: src/components/SpaceSync.tsx
 msgid "Saved on this computer, not sent yet"
 msgstr "已保存在本机，尚未发送"
-
-#. open an optional review of earlier saved work
-#. optional review of earlier work available on this computer
-#: src/components/SpaceRepairs.tsx
-#: src/components/SpaceSurface.tsx
-msgid "Saved work"
-msgstr "以往工作"
 
 #. the project's saved conversations are no longer present
 #: src/components/SpaceRepairs.tsx
@@ -7462,11 +7478,6 @@ msgstr "上一轮失败。发送消息即可接续。"
 msgid "The ledger could not be loaded: {reason}"
 msgstr "无法加载意图台账：{reason}"
 
-#. a server allocates folders itself, so no local picker is offered
-#: src/components/SpaceRepairs.tsx
-msgid "The project files need to be available on {place} to work from these conversations."
-msgstr "要继续处理这些会话中的工作，{place} 上需要有项目文件。"
-
 #. the title of Add…'s disabled Folder tab under Packages: the project's folder, which a folder package lies in, is not on this computer, as for a project on a server
 #: src/components/EnvironmentSection.tsx
 msgid "The project folder is not on this computer"
@@ -7617,8 +7628,8 @@ msgstr "该对话正在别处使用 — 其设置为只读。"
 
 #. the saved-work preview is older than the current session list; this does not assert that any file was deleted
 #: src/components/SpaceRepairs.tsx
-msgid "This conversation is no longer listed. Refresh Saved work and try again."
-msgstr "会话列表中已没有这段会话。请刷新“以往工作”后重试。"
+msgid "This conversation is no longer listed. Refresh this list and try again."
+msgstr "会话列表中已没有这段会话。请刷新列表后重试。"
 
 #: src/components/AgentSettings.tsx
 msgid "This conversation only"
@@ -7724,15 +7735,15 @@ msgstr "连续三次 — 请告诉智能体如何继续"
 msgid "To send ({count})"
 msgstr "待发送（{count}）"
 
-#. locate original project files without promising resumable checkpoints
+#. folder tasks on the named server contain no saved conversations
 #: src/components/SpaceRepairs.tsx
-msgid "To work on this project again, locate its files."
-msgstr "如需继续处理此项目，请指定项目文件的位置。"
+msgid "To work on a project, its files must be available on {place}."
+msgstr "如需处理项目，{place} 上需要有该项目的文件。"
 
-#. older cores without readable preview identifiers still offer the folder action
+#. folder tasks contain no saved conversations, so explain only the need for project files
 #: src/components/SpaceRepairs.tsx
-msgid "To work with these files again, locate the folder used for this work."
-msgstr "如需继续处理这些文件，请指定这项工作使用的文件夹。"
+msgid "To work on a project, locate its files."
+msgstr "如需处理项目，请指定项目文件的位置。"
 
 #: src/components/SpecView.tsx
 msgid "Toggle {name}"
@@ -8030,6 +8041,11 @@ msgstr "使用默认"
 msgid "Use Enter or commas between usernames."
 msgstr "用回车或逗号分隔用户名。"
 
+#. saved history can be read before its project folder is located
+#: src/App.tsx
+msgid "Use Locate project files in the sidebar to work with these files again."
+msgstr "如需继续处理这些文件，请使用侧栏中的“查找项目文件”。"
+
 #. a package name typed in Add… breaks the rule; keep org/name as it is
 #: src/components/EnvironmentSection.tsx
 msgid "Use org/name: lowercase words joined by hyphens"
@@ -8296,19 +8312,15 @@ msgstr "由 Spex 根据 {name} {version} 写入 — 编辑后即归你所有"
 msgid "You"
 msgstr "你"
 
-#. reading history needs no folder; work with project files does
-#: src/components/SpaceRepairs.tsx
-msgid "You can read these conversations now. To work on this project again, locate its files."
-msgstr "现在就可以阅读这些会话。如需继续处理此项目，请指定项目文件的位置。"
-
-#. reading history needs no folder; work with the original files does
-#: src/components/SpaceRepairs.tsx
-msgid "You can read these conversations now. To work with their files again, locate the folder used for this work."
-msgstr "现在就可以阅读这些会话。如需继续处理其中的文件，请指定这项工作使用的文件夹。"
-
 #: src/components/SpaceGroups.tsx
 msgid "You can restore this group before deletion takes effect."
 msgstr "您可以在删除生效前恢复此群组。"
+
+#. after postponing a folder choice, explains the persistent way back at this place
+#. after postponing a folder choice, explains the persistent way back at this place
+#: src/components/SpaceRepairs.tsx
+msgid "You can return through Locate project files in the sidebar."
+msgstr "之后可以从侧栏中的“查找项目文件”回到这里。"
 
 #. a deletion confirmation whose Space permissions changed while it was open
 #: src/components/SpaceGroups.tsx

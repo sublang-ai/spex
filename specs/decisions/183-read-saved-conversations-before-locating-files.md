@@ -8,6 +8,8 @@
 Accepted (2026-11-02) on the owner's request to explain where conversations are saved, distinguish them visually, group them by project and explain why a folder is needed.
 Amends [DR-182](182-saved-work-is-a-choice-not-setup-debt.md) in recovery identity, source explanation and the distinction between reading history and locating project files.
 
+Amended by [DR-184](184-a-review-count-and-a-way-back.md) in shared explanation and postponed-task navigation.
+
 ## Context
 
 Conversation records are held by the selected Spex core, separately from project files.

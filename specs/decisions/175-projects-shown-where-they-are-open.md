@@ -12,6 +12,8 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 - [DR-159](159-projects-in-groups-opened-where-you-work.md) in "Projects", "Space" and "A seat opens when needed": the palette lists the groups' projects once, every row carrying its Space row's Open control; a server's line offers no Connect, the seat opening on "Open on <server>" alone; a project whose code is on no Git host says so and offers no server.
 - [DR-172](172-surfaces-a-fresh-user-reads.md) in its vocabulary: the code glyph's phrase for code on no Git host.
 
+Amended by [DR-184](184-a-review-count-and-a-way-back.md) in sidebar availability for a place holding a saved-record folder task.
+
 ## Context
 
 - A member signed in to a space, opened a seat on its server and saw, in the left panel, the server's name as a heading over nothing, beside "This computer" and its projects; it read as the group they had joined, broken.

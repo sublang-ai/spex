@@ -22,7 +22,7 @@ While the app is connected, the Space surface — reached from the sidebar's Spa
 | --- | --- |
 | sign-in | while the home lists no instance, the sign-in card [[space-3](#space-3)] |
 | refresh | while any instance is signed in, Refresh, which reads every signed-in instance [[git-host-5](git-host.md#git-host-5)] |
-| issues | while any repair or diagnostic stands, a neutral "Saved work" control opening optional review, or "Needs attention" in the attention colour while a blocking diagnostic stands, with no warning mark or fix count for nonblocking work [[space-55](#space-55)] ([DR-182](../decisions/182-saved-work-is-a-choice-not-setup-debt.md)) |
+| issues | while any repair or diagnostic stands, "Review (<n>)" with a warning icon and attention colour where the core's unresolved count is positive [[space-49](#space-49)], otherwise neutral "Review" without an icon or zero badge, opening review [[space-55](#space-55)] ([DR-184](../decisions/184-a-review-count-and-a-way-back.md)) |
 | Git | "Git is not installed" with install guidance, replacing every other field, where no `git` runs |
 
 | An instance's heading, while it is | Carries |
@@ -368,7 +368,7 @@ When the core reports the home's diagnostics, it shall fold every diagnostic a f
 
 When the user locates a repair's existing project folder or postpones the task, the Space surface shall settle that choice in place ([DR-183](../decisions/183-read-saved-conversations-before-locating-files.md)):
 
-- a task explains that its identified conversations can be read now and project files are needed to work with those files again, without promising continuation after relocation [[core-service-73](core-service.md#core-service-73)]; "Locate folder…" opens the editor, "Use <folder>" may directly accept a checked proposal [[space-53](#space-53)], and "Not now" postpones it [[space-49](#space-49)];
+- the shared introduction explains the folder task's purpose [[space-55](#space-55)] without promising continuation after relocation [[core-service-73](core-service.md#core-service-73)]; "Locate folder…" opens the editor, "Use <folder>" may directly accept a checked proposal [[space-53](#space-53)], and "Not now" postpones it [[space-49](#space-49)];
 - the editor asks where the files for that project or saved work are, labels its field "Project folder on this computer", starts with only the checked proposal or an empty value, offers Browse… where a directory picker exists, and states that the existing-folder selection creates or downloads no project and applies to all conversations in that group alone;
 - Use this folder confirms the candidate, Cancel and Escape cancel without changing it, and a refusal stays beside the field with its value kept;
 - confirmation applies the existing-identity folder choice [[core-service-85](core-service.md#core-service-85)], recording the previous directories as aliases so those conversations remain readable with the chosen folder [[storage-6](storage.md#storage-6)];
@@ -390,7 +390,7 @@ When a repair's folder is saved with its recorded directories attached [[space-4
 While a task stands unanswered, the core shall count it as an unresolved task, only this device's reader's act settling it ([DR-065](../decisions/065-repairs-the-reader-answers.md), [DR-182](../decisions/182-saved-work-is-a-choice-not-setup-debt.md)):
 
 - drawing the task, opening review or re-reading state settles nothing;
-- Not now postpones optional recovery, keeps saved conversations and stops counting that task without claiming the project is absent from this computer;
+- Not now postpones optional recovery, keeps saved conversations and reduces the header count by that task alone, leaving unrelated notices counted and confirming the Locate project files sidebar return path once visibly and through the live region [[run-view-67](run-view.md#run-view-67)], without claiming the project is absent from this computer ([DR-184](../decisions/184-a-review-count-and-a-way-back.md));
 - the postponed task remains reachable as "For later", with its folder choice still available;
 - resolving removes the repair, and postponement lapses only when its recorded facts change, not when a folder appears or disappears.
 
@@ -424,10 +424,11 @@ While this device's reader has postponed a repair's folder choice, the core shal
 
 While saved-work diagnostics exist, the Space surface shall offer a review that distinguishes optional recovery from work requiring attention ([DR-182](../decisions/182-saved-work-is-a-choice-not-setup-debt.md)):
 
-- nonblocking review is neutral, headed "Saved work", initially closed and opened by its header control [[space-1](#space-1)], with a concise explanation that conversation history is saved in Spex on this computer, or on the named server [[space-112](#space-112)], separately from project files [[storage-1](storage.md#storage-1)], without claiming it is stored only there or was synced from a Space ([DR-183](../decisions/183-read-saved-conversations-before-locating-files.md));
-- a blocking diagnostic opens review and gives its heading and header control attention styling, without turning unrelated optional tasks into blocking errors;
-- each task has one recognizable heading, its necessary purpose and its controls, separated by spacing or dividers rather than one large warning field;
-- postponed tasks read "For later" in a secondary tone, and resolved tasks show the saved-folder outcome [[space-48](#space-48)];
+- nonblocking review stays initially closed and neutral, opened by Review [[space-1](#space-1)] or the sidebar's place-specific Locate project files action [[run-view-67](run-view.md#run-view-67)], with the panel titled Locate project files while folder tasks exist, otherwise Review notices;
+- one introduction above repository folder tasks says the conversation history is saved on this computer, or on the named server [[space-112](#space-112)], that identified conversations can be read now and further project work needs the files; where no task contains conversations, it explains only the required files; where no preview can open history, it makes no read-now promise, and no version claims the project files are absent or repeats the explanation under each project [DR-184](../decisions/184-a-review-count-and-a-way-back.md);
+- a blocking diagnostic opens review automatically and gives the panel the Needs attention heading and attention styling, without turning unrelated optional tasks into blockers;
+- each task has one recognizable heading and its controls, separated by spacing or dividers rather than one large warning field;
+- postponed tasks read For later and retain Locate folder, the sidebar return surviving a zero count, reload or later visit [[space-54](#space-54)]; resolved tasks show the saved-folder outcome [[space-48](#space-48)];
 - a postponed task keeps its place until the reader's Refresh [[space-2](#space-2)] or leaving the surface, then stands after unanswered tasks [[space-46](#space-46)].
 
 #### space-121
@@ -1104,10 +1105,10 @@ When an integration suite writes local changes of every unit kind into a clone, 
 When an integration suite reports diagnostics on a home holding a clone no pair names and sessions recorded under a directory, it shall assert the repair contract:
 
 - the diagnostics fold to one repair naming the spex repository by its name and group, carrying the recorded directory and the count of sessions there [[space-46](#space-46)];
-- a session working directory that is missing or invalid folds into no repair and keeps its own row [[space-46](#space-46)];
-- a rebind to a chosen folder, carrying the repair's recorded directories as aliases, pairs the spex repository and lets every session recorded under them continue [[space-47](#space-47)];
+- an import requiring the same folder joins that repair, while an unrelated missing-directory report keeps its own row [[space-46](#space-46)];
+- a rebind to a chosen folder, carrying the repair's recorded directories as aliases, pairs the saved records without promising relocated continuation [[space-47](#space-47)];
 - a rebind refused because the folder is inside another working folder, because the folder is another spex repository's, or because that repository's turn is running leaves the repair standing with its reason [[space-47](#space-47)];
-- a repair the core reports still counts while it stands drawn, only the reader's act settling it, and declining writes to this device's preferences and to no tracked file [[space-49](#space-49)] [[space-54](#space-54)];
+- a repair still counts while drawn, while declining reduces the count and writes only this device's preference, the count and postponement surviving a core restart and changed folder findings, and direct folder selection removing the repaired task and its postponement [[space-49](#space-49)] [[space-54](#space-54)];
 - answering a repair the core does not report is refused [[space-54](#space-54)];
 - a recorded directory that is here and a work tree root no pair names is proposed, one that is absent is reported absent and proposed not at all, and no directory outside those the repair names and the shared-parent candidate is examined [[space-53](#space-53)].
 
@@ -1263,7 +1264,7 @@ Where the Space surface uses the production store over a controlled command conn
 
 Where the Space surface renders over a home whose issues list holds three unanswered repairs, each proposing its recorded folder, when the reader declines the first, activates the third's "Use <folder>", lets the core deliver a re-read, activates Refresh, then the second's "Use <folder>" and then the declined first's, the core reporting after each act what then remains, the test suite shall assert through the surface:
 
-- the postponed row keeps the first place, reading "For later", and the review and its header control remain neutral, headed "Saved work" [[space-55](#space-55)] [[space-49](#space-49)] [[space-1](#space-1)];
+- the postponed row keeps the first place, reading "For later", and the review remains neutral and Review shows the remaining unresolved count [[space-55](#space-55)] [[space-49](#space-49)] [[space-1](#space-1)];
 - the third row gives way in its own place to an outcome confirming the chosen folder and a live-region announcement of that outcome [[space-48](#space-48)];
 - focus rests on the second repair's "Use <folder>", wrapping past the declined row [[space-48](#space-48)];
 - the core's re-read leaves the three rows in their places [[space-48](#space-48)] [[space-55](#space-55)];
@@ -1448,11 +1449,11 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 
 Where the Space surface renders over a controlled command connection reporting folder recovery and unfolded diagnostics, the integration suite shall assert the English and Chinese review flow:
 
-- optional recovery starts behind a neutral Saved work control while a blocking diagnostic opens attention-styled review [[space-1](#space-1)] [[space-55](#space-55)];
-- review identifies the conversation history's local or named-server location separately from project files, without claiming exclusive local storage or sync [[space-55](#space-55)];
+- optional recovery starts closed behind Review with the core's positive count and warning icon, a zero count leaving neutral Review with no icon, while only a blocking diagnostic opens attention-styled review [[space-1](#space-1)] [[space-55](#space-55)];
+- review explains location, reading and locating project files once above the tasks, without claiming that project files are absent, repeating per-project instructions or adding leave-for-later guidance; when all folder tasks report zero conversations, the local and server introductions make no saved-history or read-now claim [[space-55](#space-55)];
 - named projects have separate groups, including equal names at distinct identities, and unnamed history shows Earlier conversations with every previous folder; previews have conversation icons and known-date or untitled fallbacks [[space-46](#space-46)];
 - opening an identified conversation shows its saved transcript with no registered project or folder choice, starts no turn and sends no folder change; previews without an identity remain text and a removed session's stale preview stays on Space with a Refresh instruction [[space-46](#space-46)];
 - Locate folder opens the selected group's existing-folder editor, explains why files are needed and that none are created or downloaded, starts empty when the recorded folder is unusable, keeps the candidate on refusal and sends only that group's confirmed choice, leaving the other groups unchanged and Cancel and Escape sending nothing [[space-47](#space-47)];
-- Not now preserves the choice for later, and a saved-folder outcome does not claim all imports succeeded [[space-49](#space-49)] [[space-48](#space-48)];
+- Not now lowers the count once, preserves unrelated notices and confirms the sidebar return path, with all-postponed tasks still reachable at zero [[space-49](#space-49)], and a saved-folder outcome does not claim all imports succeeded [[space-48](#space-48)];
 - a dependent older-session diagnostic remains in its folder task's details without becoming another task [[space-46](#space-46)];
 - import, upgrade, missing-folder and unknown-code diagnostics show only their supported meanings, with technical evidence collapsed and expandable [[space-121](#space-121)].

@@ -88,7 +88,7 @@ const WORDS = {
     combineConfirm: "Combine",
     repair: "Delta",
     recoveryHelp: "Spex could not read this saved conversation. The original file is still saved.",
-    savedOnLab: "Conversation history is saved in Spex on lab-1, separately from your project files.",
+    savedOnLab: "Conversation history is saved on lab-1. Project files must be available there for further work.",
     folderRetry: "Choose its project folder, then restart Spex to retry",
     repairFolder: "Previously used folder~/code/delta",
     chooseFolder: "Locate folder…",
@@ -144,7 +144,7 @@ const WORDS = {
     combineConfirm: "合并",
     repair: "Delta",
     recoveryHelp: "Spex 无法读取这段会话，原始文件仍然保留。",
-    savedOnLab: "会话历史保存在 lab-1 上的 Spex 中，与项目文件分开存放。",
+    savedOnLab: "会话历史保存在 lab-1 上。继续工作需要该服务器上有项目文件。",
     folderRetry: "选择其项目文件夹，然后重启 Spex 重试",
     repairFolder: "之前使用的文件夹~/code/delta",
     chooseFolder: "查找文件夹…",
@@ -381,6 +381,36 @@ function pick(trigger: string, entry: string): void {
 }
 
 const phrase = (key: string): string => screen.getByTestId(`space-repo-state-${key}`).textContent ?? "";
+
+test.each([
+  { server: false, purpose: "To work on a project, locate its files." },
+  { server: true, purpose: "To work on a project, its files must be available on lab-1." },
+])("folder tasks with no conversations explain only project files (server: $server)", async ({ server, purpose }) => {
+  activateLanguage("en");
+  state = home({
+    diagnostics: ["Delta", "Epsilon"].map((name) => ({
+      file: `/records/${name.toLowerCase()}`, reason: "no working folder", blocking: false,
+      repair: {
+        kind: "repository", repository: `acme/${name.toLowerCase()}-spex`, projectName: name,
+        key: `repair-${name.toLowerCase()}`, directories: [], sessions: 0,
+      },
+    })),
+  });
+  seat.command.mockImplementation(async (type: string) => type === "space.get" ? state : {});
+  render(
+    <PlaceStoreContext.Provider value={server ? seatStore : useAppStore}>
+      <SpaceSurface onOpenSession={vi.fn()} onOpenProject={vi.fn()} />
+    </PlaceStoreContext.Provider>,
+  );
+  fireEvent.click(await screen.findByTestId("space-issues"));
+  const review = screen.getByTestId("space-issues-list");
+  expect(within(review).getAllByText(purpose)).toHaveLength(1);
+  expect(review.textContent).not.toContain("Conversation history is saved");
+  expect(review.textContent).not.toContain("You can read");
+  expect(within(review).getAllByTestId("space-repair")).toHaveLength(2);
+  expect(within(review).queryAllByRole("button", { name: "Locate folder…" })).toHaveLength(server ? 0 : 2);
+  expect(callsOf(server ? seat : local, "project.rebind")).toHaveLength(0);
+});
 
 describe.each(["en", "zh"] as const)("space-113: the Space surface reads as projects in groups (%s)", (language: Language) => {
   const words = WORDS[language];
@@ -681,7 +711,12 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
         file: "/records/sessions/older.spex.json",
         reason: "missing cwd",
         blocking: false,
+      }, {
+        file: "/records/delta", reason: "no working folder", blocking: false,
+        repair: { kind: "repository", repository: "acme/delta-spex", projectName: "Delta",
+          key: "server-delta", directories: ["/projects/delta"], sessions: 1 },
       }],
+      issues: 2,
       own: { name: "ada", named: false, repositories: [] },
       instances: [
         instanceState(ORIGIN, {
@@ -711,6 +746,7 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
     fireEvent.click(screen.getByTestId("space-issues"));
     const diagnostic = screen.getByTestId("space-diagnostic");
     expect(within(screen.getByTestId("space-issues-list")).getByText(words.savedOnLab)).toBeTruthy();
+    expect(within(screen.getByTestId("space-repair")).queryByRole("button", { name: words.chooseFolder })).toBeNull();
     expect(within(diagnostic).getByText(words.recoveryHelp)).toBeTruthy();
     expect(within(diagnostic).queryByText(words.folderRetry)).toBeNull();
     // [space-112] "Not on lab-1".

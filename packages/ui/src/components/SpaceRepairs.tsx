@@ -42,11 +42,12 @@ function TechnicalDetails({ entries, children }: {
 
 /** One saved-work group: read its conversations or locate its files.
  * Names from the storage layout never stand in for a user's project. */
-function RepairRow({ repair, disabled, focusSeq, onResolved, onNote, onOpenSession }: {
+function RepairRow({ repair, disabled, focusSeq, onResolved, onDeferred, onNote, onOpenSession }: {
   repair: DiagnosticRepair;
   disabled: boolean;
   focusSeq?: number;
   onResolved(key: string, summary: string, projectId?: string): void;
+  onDeferred(): void;
   onNote: Note;
   onOpenSession(sessionId: string): void;
 }) {
@@ -60,7 +61,6 @@ function RepairRow({ repair, disabled, focusSeq, onResolved, onNote, onOpenSessi
   const recorded = repair.directories[0] ?? "";
   const folderRepair = repair.kind === "folder";
   const hasConversations = repair.sessions > 0;
-  const canRead = repair.conversations?.some((conversation) => conversation.id) ?? false;
   const [editing, setEditing] = useState(false);
   const [removing, setRemoving] = useState(false);
   // A historical path is evidence, not a suggestion. Only a folder the
@@ -94,7 +94,7 @@ function RepairRow({ repair, disabled, focusSeq, onResolved, onNote, onOpenSessi
     // not navigate to whichever conversation is still selected.
     if (!store.getState().sessions.some((session) => session.id === sessionId)) {
       setReadError(i18n._({
-        id: "This conversation is no longer listed. Refresh Saved work and try again.",
+        id: "This conversation is no longer listed. Refresh this list and try again.",
         comment: "the saved-work preview is older than the current session list; this does not assert that any file was deleted",
       }));
       return;
@@ -136,7 +136,8 @@ function RepairRow({ repair, disabled, focusSeq, onResolved, onNote, onOpenSessi
     setBusy(true);
     try {
       await decline(repair.key, true);
-      onNote(i18n._({ id: "Saved for later. Your conversations are kept.", comment: "confirmation after deferring an optional saved-work task" }));
+      onDeferred();
+      onNote(i18n._({ id: "You can return through Locate project files in the sidebar.", comment: "after postponing a folder choice, explains the persistent way back at this place" }));
     } catch (cause) {
       setRefusal((cause as Error).message);
     } finally {
@@ -289,15 +290,7 @@ function RepairRow({ repair, disabled, focusSeq, onResolved, onNote, onOpenSessi
       {folderRepair ? <p className="text-xs text-neutral-500">{seat === undefined
         ? i18n._({ id: "The saved work for this folder is no longer on this computer.", comment: "a project whose saved records disappeared, without claiming its project files are gone" })
         : i18n._({ id: "The saved work for this folder is no longer on {place}.", values: { place: seat }, comment: "a server's saved project records are gone" })}</p>
-        : <p className="text-sm text-neutral-600 dark:text-neutral-400">{local
-          ? repair.projectName
-            ? canRead
-              ? i18n._({ id: "You can read these conversations now. To work on this project again, locate its files.", comment: "reading history needs no folder; work with project files does" })
-              : i18n._({ id: "To work on this project again, locate its files.", comment: "locate original project files without promising resumable checkpoints" })
-            : canRead
-              ? i18n._({ id: "You can read these conversations now. To work with their files again, locate the folder used for this work.", comment: "reading history needs no folder; work with the original files does" })
-              : i18n._({ id: "To work with these files again, locate the folder used for this work.", comment: "older cores without readable preview identifiers still offer the folder action" })
-          : i18n._({ id: "The project files need to be available on {place} to work from these conversations.", values: { place: seat }, comment: "a server allocates folders itself, so no local picker is offered" })}</p>}
+        : null}
       {recorded ? <div data-testid="space-repair-folder" className="flex min-w-0 flex-col gap-1 text-xs text-neutral-500">
         <span>{repair.directories.length === 1
           ? i18n._({ id: "Previously used folder", comment: "the historical folder below is evidence, not the new folder selection" })
@@ -424,6 +417,7 @@ export function IssuesList({
   // the pointer. The layout is the order the list last drew, ids of
   // rows gone meanwhile kept so an outcome landing late finds its place.
   const [outcomes, setOutcomes] = useState<Record<string, RepairOutcome>>({});
+  const [hasDeferredChoice, setHasDeferredChoice] = useState(false);
   const layout = useRef<string[]>([]);
   const [focusTo, setFocusTo] = useState<{ id: string; seq: number }>();
   const seenRefreshes = useRef(refreshes);
@@ -432,6 +426,7 @@ export function IssuesList({
     seenRefreshes.current = refreshes;
     layout.current = [];
     setOutcomes({});
+    setHasDeferredChoice(false);
     setFocusTo(undefined);
   }, [refreshes]);
 
@@ -491,9 +486,14 @@ export function IssuesList({
   const focusSeq = (id: string): number | undefined => (focusTo?.id === id ? focusTo.seq : undefined);
 
   if (!listOpen) return null;
+  const folderTasks = groups.diagnostics.filter((entry) => entry.repair?.kind === "repository");
+  const hasHistory = folderTasks.some((entry) => (entry.repair?.sessions ?? 0) > 0);
+  const readable = folderTasks.some((entry) => entry.repair?.conversations?.some((conversation) => conversation.id));
   const title = blocking
     ? i18n._({ id: "Needs attention", comment: "saved data currently blocks an operation" })
-    : i18n._({ id: "Saved work", comment: "optional review of earlier work available on this computer" });
+    : folderTasks.length > 0
+      ? i18n._({ id: "Locate project files", comment: "review the project folders needed for saved conversations" })
+      : i18n._({ id: "Review notices", comment: "stored-data notices that do not offer a project folder choice" });
   return (
     <section data-testid="space-issues-list" aria-label={title}
       className={`flex min-w-0 flex-col gap-4 rounded-lg border p-4 text-sm ${blocking
@@ -502,13 +502,22 @@ export function IssuesList({
     >
       <div className="flex flex-col gap-1">
         <h2 data-testid="space-issues-heading" className={`font-medium ${blocking ? "text-amber-800 dark:text-amber-200" : ""}`}>{title}</h2>
-        {!blocking ? <>
-          <p className="text-sm text-neutral-500">{seat === undefined
-            ? i18n._({ id: "Conversation history is saved in Spex on this computer, separately from your project files.", comment: "where saved conversation records are kept, without claiming they are local-only or synced" })
-            : i18n._({ id: "Conversation history is saved in Spex on {place}, separately from your project files.", values: { place: seat }, comment: "the active server holds the saved history, not the reader's own computer" })}</p>
-          <p className="text-sm text-neutral-500">{i18n._({ id: "If you don’t have the project files here, you can leave this for later.", comment: "saved-work recovery is optional even when no local project files are available" })}</p>
-        </> : null}
+        {folderTasks.length > 0 ? <p className="text-sm text-neutral-500">{!hasHistory
+          ? seat === undefined
+            ? i18n._({ id: "To work on a project, locate its files.", comment: "folder tasks contain no saved conversations, so explain only the need for project files" })
+            : i18n._({ id: "To work on a project, its files must be available on {place}.", values: { place: seat }, comment: "folder tasks on the named server contain no saved conversations" })
+          : seat === undefined
+          ? readable
+            ? i18n._({ id: "Conversation history is saved on this computer. You can read the conversations now. To work on a project again, locate its files.", comment: "one explanation for all project-folder choices, without claiming the files are absent" })
+            : i18n._({ id: "Conversation history is saved on this computer. To work on a project again, locate its files.", comment: "older cores without readable conversation links still explain why project files are needed" })
+          : readable
+            ? i18n._({ id: "Conversation history is saved on {place}. You can read the conversations now. Project files must be available there for further work.", values: { place: seat }, comment: "saved history and required files belong to the named server, which allocates its folders" })
+            : i18n._({ id: "Conversation history is saved on {place}. Project files must be available there for further work.", values: { place: seat }, comment: "server-side folder requirement where no readable conversation links are available" })}</p> : null}
       </div>
+      {hasDeferredChoice ? <p data-testid="space-deferred-notice" className="text-sm text-neutral-500">{i18n._({
+        id: "You can return through Locate project files in the sidebar.",
+        comment: "after postponing a folder choice, explains the persistent way back at this place",
+      })}</p> : null}
       <ul className="flex min-w-0 flex-col divide-y divide-neutral-200 dark:divide-neutral-800">
         {placed.map((id) => {
           const row = rows.get(id)!;
@@ -538,6 +547,7 @@ export function IssuesList({
                 disabled={!connected}
                 focusSeq={focusSeq(id)}
                 onResolved={onResolved}
+                onDeferred={() => setHasDeferredChoice(true)}
                 onOpenSession={onOpenSession}
                 onNote={onNote}
               />

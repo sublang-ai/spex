@@ -676,14 +676,14 @@ test("space-39: local changes of every unit kind list in order, incoming units a
 // space-51: a clone no folder pairs, and the repair the reader answers
 // ---------------------------------------------------------------------------
 
-test("space-51: a clone no folder pairs folds to one repair the reader answers, and a rebind with its recorded folder as an alias resolves it", async (t) => {
+test("space-51: deferred folder review survives restart and changed checks, with history readable before rebind resolves it", async (t) => {
   const first = await startHome("repairs");
   const { key } = await addFolder(first, first.projectDir);
   const sessionId = await runTurn(first, key, "Work before the move");
   await first.stop();
   // The folder's pair is forgotten on this device; its clone stays.
   const unpaired = Home.load(first.dataDir); unpaired.unpair(key); unpaired.save();
-  const home = await startHome("repairs-again", { dataDir: first.dataDir, project: false });
+  let home = await startHome("repairs-again", { dataDir: first.dataDir, project: false });
   t.after(() => home.stop());
   const state = await home.client.expectOk("space.get", {});
   const repair = state.diagnostics.find((d) => d.repair?.repository === key);
@@ -702,27 +702,63 @@ test("space-51: a clone no folder pairs folds to one repair the reader answers, 
   assert.ok(checked.some((c) => c.path === first.projectDir && c.here && c.repo && !c.claimedBy), JSON.stringify(checked));
   assert.deepEqual(repair.repair?.proposal, { path: first.projectDir, from: "recorded" });
   assert.ok(checked.every((c) => repair.repair!.directories.includes(c.path)), "only paths the repair names");
-  assert.ok(!(await home.client.expectOk("session.list", {})).some((s) => s.id === sessionId), "unlisted until paired");
+  const unpairedSession = (await home.client.expectOk("session.list", {})).find((s) => s.id === sessionId);
+  assert.ok(unpairedSession, "saved conversation is listed before its files are located");
+  assert.equal(unpairedSession.continuable, undefined, "locating files is separate from reading history");
+  const savedHistory = await home.client.expectOk("history.get", { sessionId });
+  assert.ok(savedHistory.records.some((r) => r.record.type === "turn_started"));
+  assert.ok(!(await home.client.expectOk("project.list", {})).some((project) => project.id === key), "reading history registers no project");
   // Only the reader's act settles a repair, and it is this device's alone.
   const before = await home.client.expectOk("space.get", {});
   assert.equal(before.issues, before.diagnostics.length, "an unanswered repair counts");
   const status = git(clonePath(home.dataDir, key), "status", "--porcelain");
   const declined = await home.client.expectOk("space.repair.decline", { repair: repair.repair!.key, declined: true });
-  assert.notEqual(declined.diagnostics.find((d) => d.repair?.repository === key)?.repair?.declined, undefined);
+  const declinedAt = declined.diagnostics.find((d) => d.repair?.repository === key)?.repair?.declined;
+  assert.equal(typeof declinedAt, "number");
   assert.equal(declined.issues, before.issues - 1, "a repair not added counts no more");
   assert.equal(typeof prefsOf(home.dataDir)[`space:repair:${repair.repair!.key}`], "object", "the answer is a preference");
   assert.equal(git(clonePath(home.dataDir, key), "status", "--porcelain"), status, "and never a tracked file");
+  // A changed check is not a new task: the recorded folder, not its
+  // current availability or proposal, identifies this answer.
+  const temporarilyMoved = `${first.projectDir}-aside`;
+  renameSync(first.projectDir, temporarilyMoved);
+  try {
+    const absent = await home.client.expectOk("space.get", {});
+    const postponed = absent.diagnostics.find((d) => d.repair?.repository === key)?.repair;
+    assert.equal(postponed?.key, repair.repair!.key);
+    assert.equal(postponed?.declined, declinedAt);
+    assert.equal(postponed?.checked?.find((entry) => entry.path === first.projectDir)?.here, false);
+    assert.equal(postponed?.proposal, undefined);
+    assert.equal(absent.issues, declined.issues, "changed checks never raise a postponed task again");
+  } finally {
+    renameSync(temporarilyMoved, first.projectDir);
+  }
+  // The persisted answer survives both a fresh core and a proposal
+  // becoming available again. The card and its history remain reachable.
+  await home.stop();
+  home = await startHome("repairs-deferred-restart", { dataDir: first.dataDir, project: false });
+  const restarted = await home.client.expectOk("space.get", {});
+  const postponed = restarted.diagnostics.find((d) => d.repair?.repository === key)?.repair;
+  assert.equal(postponed?.key, repair.repair!.key);
+  assert.equal(postponed?.declined, declinedAt);
+  assert.equal(restarted.issues, declined.issues, "the reduced review count survives restart");
+  assert.deepEqual(postponed?.proposal, { path: first.projectDir, from: "recorded" });
+  assert.equal(repositoryOf(restarted, key).folder, null);
+  assert.deepEqual(await home.client.expectOk("history.get", { sessionId }), savedHistory, "Not now preserves readable history across restart");
   const restored = await home.client.expectOk("space.repair.decline", { repair: repair.repair!.key, declined: false });
   assert.equal(restored.issues, before.issues, "brought back, it counts again");
   await home.client.expectError("space.repair.decline", { repair: "no-such-repair", declined: true }, "invalid_request");
-  // A rebind to a chosen folder carrying the recorded one as an alias
-  // pairs the spex repository; every session recorded there lists again.
+  await home.client.expectOk("space.repair.decline", { repair: repair.repair!.key, declined: true });
+  // A deferred card can locate its folder directly, without first
+  // restoring its review count. Rebind retires the task and its answer.
   const checkout = gitFolder("repairs-checkout");
   const bound = await home.client.expectOk("project.rebind", { projectId: key, path: checkout, aliases: [first.projectDir] });
   assert.equal(bound.id, key);
   assert.equal(bound.path, checkout);
   const after = await home.client.expectOk("space.get", {});
   assert.ok(!after.diagnostics.some((d) => d.repair?.repository === key), "one rebind resolves the repair");
+  assert.equal(prefsOf(home.dataDir)[`space:repair:${repair.repair!.key}`], undefined, "resolved task leaves no postponed answer");
+  assert.equal(after.issues, declined.issues, "resolving a deferred task does not raise the count");
   assert.equal(repositoryOf(after, key).folder, checkout);
   const listed = (await home.client.expectOk("session.list", {})).find((s) => s.id === sessionId);
   assert.equal(listed?.title, "Work before the move");

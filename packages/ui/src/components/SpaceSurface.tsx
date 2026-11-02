@@ -69,6 +69,10 @@ export interface SpaceSurfaceProps {
   /** Open this place's Credentials section at a code host whose clone
    * failed for want of the member's credential (space-103, settings-48). */
   onAddCredential?(host: string): void;
+  /** A sidebar request opens review even when every folder was postponed. */
+  reviewRequest?: number;
+  /** Consume the request so a later ordinary visit keeps its own open state. */
+  onReviewOpened?(): void;
 }
 
 export type SpaceTab = "sync" | "explore";
@@ -242,7 +246,7 @@ function Field({
   );
 }
 
-export function SpaceSurface({ onOpenSession, onOpenProject, onAddCredential }: SpaceSurfaceProps) {
+export function SpaceSurface({ onOpenSession, onOpenProject, onAddCredential, reviewRequest, onReviewOpened }: SpaceSurfaceProps) {
   const store = usePlaceStore();
   const groups = store((state) => state.space);
   const spaceError = store((state) => state.spaceError);
@@ -270,6 +274,11 @@ export function SpaceSurface({ onOpenSession, onOpenProject, onAddCredential }: 
   // (space-1).
   const [tab, setTab] = useState<SpaceTab>("sync");
   const [issuesOpen, setIssuesOpen] = useState(false);
+  useEffect(() => {
+    if (reviewRequest === undefined) return;
+    setIssuesOpen(true);
+    onReviewOpened?.();
+  }, [reviewRequest, onReviewOpened]);
   // The reader's own Refresh (space-2), counted: it lets the issues
   // list lay itself out afresh (space-48, space-55) and an open members
   // list read the host again (space-62).
@@ -549,8 +558,10 @@ function HomeHeader({
   issuesOpen: boolean;
   onIssuesOpen(open: boolean): void;
 }) {
-  // Existing history is optional. Reserve attention for actual blockers.
-  const blocking = groups.diagnostics.some((entry) => entry.blocking);
+  // Count notices the reader has not set aside, using the core's fold.
+  // A zero-count review remains reachable while postponed tasks stand.
+  const noticeCount = groups.issues;
+  const reviewIsOpen = issuesOpen || groups.diagnostics.some((entry) => entry.blocking);
   const reading = refreshing || groups.instances.some((instance) => instance.read.phase === "running");
   const listed = groups.instances.length > 0;
   const refresh = anySignedIn(groups);
@@ -560,15 +571,18 @@ function HomeHeader({
     .filter((instance) => instance.signedIn && instance.readAt !== null)
     .reduce<number | null>((latest, instance) => Math.max(latest ?? 0, instance.readAt!), null);
   const row = "flex min-w-0 flex-col gap-1 @xs:flex-row @xs:flex-wrap @xs:items-center @xs:gap-x-3";
-  const issuesLabel = blocking
-    ? i18n._({ id: "Needs attention", comment: "saved data currently blocks an operation" })
-    : i18n._({ id: "Saved work", comment: "open an optional review of earlier saved work" });
+  const issuesLabel = noticeCount > 0
+    ? i18n._({ id: "Review ({count})", values: { count: noticeCount }, comment: "review the pending notices; postponed folder choices do not count" })
+    : i18n._({ id: "Review", comment: "reopen notices and postponed project-folder choices" });
+  const issuesName = noticeCount > 0
+    ? i18n._({ id: "Review {count, plural, one {# notice} other {# notices}}", values: { count: noticeCount }, comment: "accessible name for the notice review control" })
+    : issuesLabel;
   const issues = groups.diagnostics.length > 0 ? (
-    <button type="button" data-testid="space-issues" aria-expanded={issuesOpen} aria-label={issuesLabel}
-      className={`flex items-center gap-1 text-sm hover:underline ${blocking ? "text-amber-700 dark:text-amber-300" : "text-neutral-500"}`}
+    <button type="button" data-testid="space-issues" aria-expanded={reviewIsOpen} aria-label={issuesName}
+      className={`flex items-center gap-1 text-sm hover:underline ${noticeCount > 0 ? "text-amber-700 dark:text-amber-300" : "text-neutral-500"}`}
       onClick={() => onIssuesOpen(!issuesOpen)}
     >
-      {blocking ? <span aria-hidden>⚠</span> : null}
+      {noticeCount > 0 ? <span aria-hidden>⚠</span> : null}
       {issuesLabel}
     </button>
   ) : null;

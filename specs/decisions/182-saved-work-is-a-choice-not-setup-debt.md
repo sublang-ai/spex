@@ -12,6 +12,8 @@ Amends [DR-172](172-surfaces-a-fresh-user-reads.md) in the repairs' heading, att
 
 Amended by [DR-183](183-read-saved-conversations-before-locating-files.md) in source explanation, project grouping and reading history before locating files.
 
+Amended by [DR-184](184-a-review-count-and-a-way-back.md) in the header review count and persistent return path.
+
 ## Context
 
 The previous repair screen made storage diagnostics into mandatory setup work after sign-in.
