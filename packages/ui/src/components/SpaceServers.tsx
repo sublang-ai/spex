@@ -5,8 +5,8 @@
 // DR-133, DR-159, DR-172): on this computer's Space surface, each server
 // stands as one line beneath the heading of its group, before that
 // group's rows — its name, then "Connected" with Disconnect in its
-// overflow while this computer is connected to it, and Connect
-// otherwise. Connect, and "Open on <server>" on any row (space-111), run
+// overflow while this computer is connected to it, and its name alone
+// otherwise (DR-175). "Open on <server>" on any row (space-111) runs
 // one flow per server (state/server-opens): the first connection from
 // this computer shows the Space's terms as bullets in the words its
 // record fixes (Spex Space DR-029), rendered in the page's language, "I
@@ -32,7 +32,7 @@ import { i18n } from "../i18n.js";
 import { instanceName } from "../lib/instances.js";
 import { openExternalBridge } from "../lib/space.js";
 import { usePlaceStore } from "../state/place-context.js";
-import { answerContract, connectServer, sendServerAct, serverPlace, useServerOpens } from "../state/server-opens.js";
+import { answerContract, sendServerAct, serverPlace, useServerOpens } from "../state/server-opens.js";
 import { causePhrase, signInAgainLabel } from "./SpaceSignIn.js";
 import { MoreMenu } from "./SpaceMenu.js";
 import { PRIMARY, SECONDARY, type Note } from "./SpaceSurface.js";
@@ -239,10 +239,11 @@ export function InstanceServers({
   );
 }
 
-/** One server's line (run-view-170): its name, Connect or "Connected"
- * with Disconnect in its overflow, the contract beneath it on its first
- * open here, the open while it runs, the seat's sign-in until it
- * completes, and a refusal's cause. */
+/** One server's line (run-view-170): its name, "Connected" with
+ * Disconnect in its overflow while a seat is open there, the contract
+ * beneath it on this device's first "Open on <server>", the open while
+ * it runs, the seat's sign-in until it completes, and a refusal's
+ * cause. */
 function ServerLine({
   instance,
   server,
@@ -268,7 +269,6 @@ function ServerLine({
   const busy = acting !== undefined;
   const refusal = line?.refusal;
   const [slow, setSlow] = useState(false);
-  const controlRef = useRef<HTMLButtonElement>(null);
   const moreRef = useRef<HTMLButtonElement>(null);
 
   // A connection still running past ten seconds says in its title that
@@ -290,13 +290,13 @@ function ServerLine({
   }, [refusal, onNote]);
 
   /** Focus left with the contract's controls, or with an act's busy
-   * control, returns to the line's own control, never to the page
-   * (DR-010 §6). */
+   * control, returns to the line's overflow where it has one, never to
+   * the page (DR-010 §6). */
   const refocus = () =>
     setTimeout(() => {
       const active = document.activeElement;
       if (active && active !== document.body && active.isConnected) return;
-      (controlRef.current ?? moreRef.current)?.focus();
+      moreRef.current?.focus();
     }, 0);
   const wasBusy = useRef(busy);
   useEffect(() => {
@@ -396,18 +396,7 @@ function ServerLine({
                 },
               ]}
             />
-          ) : (
-            <button
-              ref={controlRef}
-              type="button"
-              data-testid={`space-server-control-${place}`}
-              className={SECONDARY}
-              disabled={!connected || busy || asking}
-              onClick={() => connectServer(store, server)}
-            >
-              {i18n._({ id: "Connect", comment: "connect this computer to a team server, where projects open and agents run as you" })}
-            </button>
-          )}
+          ) : null}
         </span>
       </div>
       {signIn?.state === "failed" ? (

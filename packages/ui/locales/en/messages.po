@@ -931,11 +931,6 @@ msgstr "A follow-up message continues this intent."
 msgid "A nested workflow failed"
 msgstr "A nested workflow failed"
 
-#. project palette: where a project added or created by path lands; {place} is the place's name, "This computer"
-#: src/components/ProjectPalette.tsx
-msgid "A new project is added on {place}."
-msgstr "A new project is added on {place}."
-
 #: src/lib/failure-catalogue.ts
 msgid "A Playbook defect"
 msgstr "A Playbook defect"
@@ -1258,11 +1253,6 @@ msgstr "Agents"
 msgid "Agents on {server} run on the sign-ins its administrator set up, unless you set your own"
 msgstr "Agents on {server} run on the sign-ins its administrator set up, unless you set your own"
 
-#. the second step on the welcome page at a team server, beside its label, the server's name; "here" is that server
-#: src/components/CaptainHome.tsx
-msgid "Agents run here as you"
-msgstr "Agents run here as you"
-
 #: src/components/ProjectsSurface.tsx
 msgid "ahead of upstream"
 msgstr "ahead of upstream"
@@ -1304,6 +1294,11 @@ msgstr "All here"
 #: src/components/DashboardSurface.tsx
 msgid "All projects"
 msgstr "All projects"
+
+#. project palette: every project of the member's groups is open on this computer already
+#: src/components/ProjectPalette.tsx
+msgid "All your groups' projects are open here"
+msgstr "All your groups' projects are open here"
 
 #: src/components/ApprovalInbox.tsx
 msgid "Allow this tool operation?"
@@ -2329,11 +2324,6 @@ msgstr "Confirm the command, intent, players and where to enable it"
 #: src/components/DeliveryCard.tsx
 msgid "Confirming…"
 msgstr "Confirming…"
-
-#. connect this computer to a team server, where projects open and agents run as you
-#: src/components/SpaceServers.tsx
-msgid "Connect"
-msgstr "Connect"
 
 #: src/components/CaptainHome.tsx
 msgid "Connect to read project specs"
@@ -3604,11 +3594,6 @@ msgstr "From the registry · {range}"
 msgid "From your groups"
 msgstr "From your groups"
 
-#. project palette: heading over the projects of the member's groups a team server can open; {place} is the server's name
-#: src/components/ProjectPalette.tsx
-msgid "From your groups on {place}"
-msgstr "From your groups on {place}"
-
 #. pipeline stage: the compiled spec items
 #. pipeline stage: the compiler's normative spec items (a proper name)
 #. pipeline stage: the compiler's normative spec items (a proper name)
@@ -3666,11 +3651,6 @@ msgstr "Group name"
 #: src/lib/space.ts
 msgid "Group sessions"
 msgstr "Group sessions"
-
-#. label of the first step on the welcome page at a team server: your groups at the Space, whose projects open there
-#: src/components/CaptainHome.tsx
-msgid "Groups"
-msgstr "Groups"
 
 #. a delegation line: the Captain gave this call to the named player
 #: src/components/CallLines.tsx
@@ -4332,6 +4312,9 @@ msgid "More for {name}"
 msgstr "More for {name}"
 
 #. the accessible name of the menu beside a project's primary control, listing the other servers, or this computer, it may be opened on; {name} is the project's name
+#. the accessible name of the menu beside a project's primary control, listing the other servers, or this computer, it may be opened on; {name} is the project's name
+#. the accessible name of the menu beside a project's primary control, listing the other servers, or this computer, it may be opened on; {name} is the project's name
+#: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
 msgid "More ways to open {name}"
 msgstr "More ways to open {name}"
@@ -4360,6 +4343,11 @@ msgstr "Needs attention"
 #: src/App.tsx
 msgid "needs recovery"
 msgstr "needs recovery"
+
+#. the title of a disabled Open on <server> entry: the project's records name no code remote, so the server cannot fetch its code; the member pushes the code to a Git host first
+#: src/components/ProjectPalette.tsx
+msgid "Needs the code on a Git host"
+msgstr "Needs the code on a Git host"
 
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
@@ -4580,6 +4568,11 @@ msgstr "No project specs yet"
 msgid "No projects here yet"
 msgstr "No projects here yet"
 
+#. project palette: the member's groups list no project to open
+#: src/components/ProjectPalette.tsx
+msgid "No projects in your groups yet"
+msgstr "No projects in your groups yet"
+
 #. the Dashboard's Projects band with no project: the link opens Projects, where a project is added
 #: src/components/DashboardSurface.tsx
 msgid "No projects yet · <0>Add a project</0>"
@@ -4798,11 +4791,6 @@ msgstr "Nothing is repeated"
 msgid "Nothing left to fix."
 msgstr "Nothing left to fix."
 
-#. project palette: a place's groups list no project it lacks
-#: src/components/ProjectPalette.tsx
-msgid "Nothing more to open from your groups"
-msgstr "Nothing more to open from your groups"
-
 #. a Sync tab's incoming section after a check: the Space holds nothing this computer lacks; {name} is its display name
 #: src/components/SpaceSync.tsx
 msgid "Nothing new at {name}"
@@ -4967,8 +4955,7 @@ msgstr "Open {title} — {reason}"
 msgid "Open {title} — running in {project}"
 msgstr "Open {title} — running in {project}"
 
-#. welcome page action: opens the project palette at the projects of your groups that place can open
-#. welcome page action: opens the project palette at the projects of your groups that place can open
+#. welcome page action: opens the project palette at the projects of your groups this computer can open
 #: src/components/CaptainHome.tsx
 msgid "Open a project from your groups"
 msgstr "Open a project from your groups"
@@ -4994,6 +4981,7 @@ msgstr "Open folder…"
 
 #. a project's primary control for the place shown: downloads its records and its code there
 #. project palette: open a project of the member's groups on this computer, downloading its records and code into the folder named beside
+#. project palette: open a project of the member's groups on this computer, downloading its records and code into the folder named beside
 #: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
 msgid "Open here"
@@ -5005,6 +4993,8 @@ msgid "Open its package"
 msgstr "Open its package"
 
 #. a project's Open entry for a team server: opens the member's seat there where none is, then the project on it; {server} is the server's name
+#. a project's Open entry for a team server: opens the member's seat there where none is, then the project on it; {server} is the server's name
+#: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
 msgid "Open on {server}"
 msgstr "Open on {server}"
@@ -5036,7 +5026,6 @@ msgstr "Open Settings →"
 msgid "Open Settings to see what's wrong"
 msgstr "Open Settings to see what's wrong"
 
-#. secondary action of the welcome page at a team server: shows the Space surface at that server
 #: src/components/CaptainHome.tsx
 msgid "Open Space"
 msgstr "Open Space"
@@ -5456,11 +5445,6 @@ msgstr "Projects"
 msgid "Projects and sessions"
 msgstr "Projects and sessions"
 
-#. the first step on the welcome page at a team server, beside its label Groups; "here" is that server
-#: src/components/CaptainHome.tsx
-msgid "Projects here come from your groups"
-msgstr "Projects here come from your groups"
-
 #. collapsed card: the text the playbook sent the player
 #: src/components/PlayerPane.tsx
 msgid "Prompt"
@@ -5668,7 +5652,6 @@ msgstr "Reading project specs…"
 msgid "reading specs…"
 msgstr "reading specs…"
 
-#: src/components/ProjectPalette.tsx
 #: src/components/SpaceSurface.tsx
 msgid "Reading your groups…"
 msgstr "Reading your groups…"
@@ -6605,6 +6588,8 @@ msgid "Show log"
 msgstr "Show log"
 
 #. a project's Open entry where it is open on that team server already: shows it there on Projects; {server} is the server's name
+#. a project's Open entry where it is open on that team server already: shows it there on Projects; {server} is the server's name
+#: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
 msgid "Show on {server}"
 msgstr "Show on {server}"
@@ -6714,16 +6699,11 @@ msgid "Signed out of {name}"
 msgstr "Signed out of {name}"
 
 #. a team server's line while it signs in at the Space, before any page asks the person to approve it; {space} is the Space's display name
-#. project palette: under a team server's groups while the server signs in at the Space, before which it lists nothing; {space} is the Space's display name
+#. a team server's line while it signs in at the Space, before any page asks the person to approve it; {space} is the Space's display name
 #: src/components/ProjectPalette.tsx
 #: src/components/SpaceServers.tsx
 msgid "Signing in to {space}…"
 msgstr "Signing in to {space}…"
-
-#. the welcome page at a team server while the server signs in at the Space; the tagged run links the Space's page where the person approves "Spex on <server>"; {space} is the Space's display name, {server} the server's name
-#: src/components/CaptainHome.tsx
-msgid "Signing in to {space}… <0>approve Spex on {server} in your browser</0>"
-msgstr "Signing in to {space}… <0>approve Spex on {server} in your browser</0>"
 
 #. the Sign in control, while the sign-in runs
 #: src/components/SpaceSignIn.tsx
@@ -7996,11 +7976,6 @@ msgstr "which process is writing right now"
 #: src/components/SpaceServers.tsx
 msgid "Whoever runs {server} can act as you: in your groups, in your records, and with your {space} account, wherever it reaches"
 msgstr "Whoever runs {server} can act as you: in your groups, in your records, and with your {space} account, wherever it reaches"
-
-#. headline of the welcome page at a team server where you have no project yet; {server} is the server's name
-#: src/components/CaptainHome.tsx
-msgid "Work on {server} from this computer."
-msgstr "Work on {server} from this computer."
 
 #: src/components/DraftSourceTab.tsx
 msgid "Workflow source"

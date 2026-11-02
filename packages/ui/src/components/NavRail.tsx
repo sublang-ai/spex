@@ -275,7 +275,17 @@ function placed(place: NavPlace, key: string): string {
 type Buckets = Map<string, { live: SessionInfo[]; idle: SessionInfo[] }>;
 
 export function NavRail(props: NavRailProps) {
-  const { surface, onSurface, attentionCount, collapsed, onCollapsed, places } = props;
+  const { surface, onSurface, attentionCount, collapsed, onCollapsed, places: allPlaces } = props;
+  // A place stands in the tree while a seat holds a project or is
+  // opening one (run-view-67, run-view-168): this computer always, a
+  // seat only then, so a seat holding nothing adds no heading.
+  const places = useMemo(
+    () =>
+      allPlaces.filter(
+        (place) => place.key === LOCAL_PLACE_KEY || place.projects.length > 0 || (place.opening?.length ?? 0) > 0,
+      ),
+    [allPlaces],
+  );
   // Keyed by each row's placed key (run-view-168): a project or a
   // session at two places keeps two of each.
   const [showAll, setShowAll] = useState<Record<string, boolean>>({});
@@ -294,7 +304,8 @@ export function NavRail(props: NavRailProps) {
   const typeahead = useRef({ text: "", at: 0 });
   // One clock per render keeps every row's age consistent.
   const now = Date.now();
-  // A heading per place where any seat is open (run-view-67).
+  // A heading per place while any seat holds a project or is opening
+  // one (run-view-67): one place alone needs no heading.
   const headed = places.length > 1;
 
   const isExpanded = (place: NavPlace, projectId: string): boolean =>

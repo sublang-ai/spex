@@ -1246,6 +1246,16 @@ msgstr "Code not downloaded: {host} needs your credential — add it in Settings
 msgid "Code not downloaded: your credential for {host} cannot be read — set it again in Settings"
 msgstr "Code not downloaded: your credential for {host} cannot be read — set it again in Settings"
 
+#. The title of a warning glyph on a project's row while the project is not open on this computer: its records name no Git host for its code
+#: src/space.ts
+msgid "Code not on a Git host"
+msgstr "Code not on a Git host"
+
+#. The title of a warning glyph on a project's row while the project is open on this computer: its code is on no Git host, only in its folder here
+#: src/space.ts
+msgid "Code only on this computer"
+msgstr "Code only on this computer"
+
 #. The project file's unit label: the remote of the code changed
 #: src/space.ts
 msgid "Code remote changed"
@@ -1255,11 +1265,6 @@ msgstr "Code remote changed"
 #: src/space.ts
 msgid "Code: {where}"
 msgstr "Code: {where}"
-
-#. The title of a warning glyph on a project's row: no remote is set for the project's code
-#: src/space.ts
-msgid "Code: no remote"
-msgstr "Code: no remote"
 
 #. Refusal: the compile the Boss awaited was canceled
 #. The outcome of a compile the reader stopped
@@ -1923,6 +1928,11 @@ msgstr "Name the group"
 #: src/environments.ts
 msgid "Name the package to add"
 msgstr "Name the package to add"
+
+#. Refusal of opening a project on a team server: its records name no Git host for its code, so the server has no code to take; the member pushes the code to a Git host first
+#: src/space.ts
+msgid "Needs the code on a Git host"
+msgstr "Needs the code on a Git host"
 
 #. A stopped transfer's message; {host} is the remote's host
 #. A stopped transfer's message; {host} is the remote's host

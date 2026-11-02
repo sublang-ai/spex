@@ -279,7 +279,7 @@ describe("run-view-171: the sidebar holds a heading per place", () => {
     expect(within(sidebar).queryByTestId(`sidebar-project-p1@${ALPHA.place}`)).toBeNull();
   });
 
-  test("the project palette names each project's place and the place of a new one", () => {
+  test("the project palette names each project's place", () => {
     render(<App />);
     fireEvent.keyDown(window, { key: "p", metaKey: true });
     const palette = screen.getByTestId("project-palette");
@@ -295,10 +295,6 @@ describe("run-view-171: the sidebar holds a heading per place", () => {
       "build-box",
       "gpu-box",
     ]);
-    // [run-view-168] a project added here lands on this computer.
-    expect(within(palette).getByTestId("palette-new-place").textContent).toBe(
-      "A new project is added on This computer.",
-    );
 
     // [run-view-168] picking a seat's project makes it current at that
     // place alone, and the Projects surface shows it there.

@@ -95,7 +95,7 @@ test("space-104, space-103, projects-37, git-host-9: a seat's join allocates the
   const key = hostKey(host, "acme/alpha-spex");
   // A repository x-spex in the subgroup acme/alpha, beside it.
   host.script.groups.push({ id: "2011", fullPath: "acme/alpha", name: "Alpha", kind: "group" });
-  const nested = host.script.addRepository({ group: "acme/alpha", name: "x-spex", project: { format: 1, name: "x" } });
+  const nested = host.script.addRepository({ group: "acme/alpha", name: "x-spex", project: { format: 1, name: "x", remote: code.remote } });
   const logged = captureConsole(t);
   const home = await startHome("seat-allocate", { host, project: false, extra: { seat: SEAT } });
   t.after(() => home.stop());

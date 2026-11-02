@@ -39,6 +39,8 @@ import {
   ATTENTION_RANK,
   type AttentionItem,
 } from "../state/dashboard.js";
+import { useEachPlace } from "../state/place-context.js";
+import { hostIdAt, openOnServer, pendingKey, seatHolding, serverPlace, useServerOpens } from "../state/server-opens.js";
 import { LOCAL_PLACE, LOCAL_PLACE_KEY, placeLabel, useAppStore } from "../state/store.js";
 import { i18n } from "../i18n.js";
 import {
@@ -49,9 +51,11 @@ import {
   signedInInstances,
 } from "../lib/instances.js";
 import { waitingOf } from "../lib/placements.js";
-import { awaitsFolder, isGroupRepository, projectName } from "../lib/space.js";
+import { isGroupRepository, projectName } from "../lib/space.js";
 import { Icon } from "./Icon.js";
 import { GroupPicker } from "./SpaceGroups.js";
+import { MenuButton, type MenuEntry } from "./SpaceMenu.js";
+import { useServers } from "./SpaceServers.js";
 
 /** A refusal as the palette shows it: the core's words, and Git's own
  * output where the core relayed it beside them (projects-34). */
@@ -78,57 +82,51 @@ export interface PalettePlace {
   attention: Map<string, AttentionItem>;
   /** The seat's current project, where the workspace is on it. */
   currentProjectId?: string;
-  /** The member's groups at the seat, as its Groups state reads them;
-   * absent until read (run-view-169). */
-  groups?: GroupsState;
-  /** Whether the seat's connection is open, so its groups can be read. */
-  connected?: boolean;
   /** The instance's name while the seat's sign-in there has not
-   * completed (run-view-168, core-service-142). */
+   * completed (run-view-168, core-service-142): the row's entry for the
+   * server says so. */
   signingIn?: string;
-  /** Open a spex repository of the member's groups at the seat:
-   * `space.join` with no folder, the seat allocating one (space-103). */
-  onJoin?: (instance: string, hostId: string) => Promise<void>;
-  /** Read the seat's Groups state, where nothing has read it yet. */
-  onReadGroups?: () => void;
 }
 
-/** A project a place may open (run-view-168): records a signed-in Space
- * of that place lists in the member's groups — with no clone there, as
- * its "Open here" row stands (space-61), or, at a team server, cloned
- * there with its code clone failed, opened again (space-103). This
- * computer's clone whose code found no folder is paired from its Space
- * row instead (space-63), a second open of it being refused there. */
+/** A project this computer may open (run-view-168): records a signed-in
+ * Space lists in the member's groups with no clone here, as its "Open
+ * here" row stands (space-61). A clone whose code found no folder is
+ * paired from its Space row instead (space-63). */
 interface PaletteJoin {
-  /** The team server it opens at; absent on this computer. */
-  seat?: PalettePlace;
   /** The origin of the Space whose heading lists it (space-29). */
   instance: string;
   group: InstanceGroupState;
   repo: RepositoryState;
-  /** Its open stopped, or, at a team server, its code clone failed:
-   * "Try again" sends it again. */
+  /** Its open stopped: "Try again" sends it again. */
   again: boolean;
-  /** Its open runs at that place: the row reads "Opening…". */
+  /** Its open runs here: the row reads "Opening…". */
   opening: boolean;
 }
 
-function joinable(groups: GroupsState | undefined, seat?: PalettePlace): PaletteJoin[] {
+function joinable(groups: GroupsState | undefined): PaletteJoin[] {
   if (!groups) return [];
   return signedInInstances(groups).flatMap((instance) =>
     entriesOf(instance).flatMap((group) =>
       group.repositories
         .filter((repo) => {
-          if (repo.id === null) return false;
-          const opening = repo.sync.phase === "running" && repo.sync.op === "join";
-          if (repo.sync.phase === "running" && !opening) return false;
-          return repo.state === "absent" || (seat !== undefined && awaitsFolder(group, repo));
+          if (repo.id === null || repo.state !== "absent") return false;
+          return repo.sync.phase !== "running" || repo.sync.op === "join";
         })
         .map((repo) => {
           const opening = repo.sync.phase === "running" && repo.sync.op === "join";
           const stopped = repo.sync.phase === "stopped" && repo.sync.op === "join";
-          return { seat, instance: instance.origin, group, repo, opening, again: !opening && (stopped || repo.state !== "absent") };
+          return { instance: instance.origin, group, repo, opening, again: !opening && stopped };
         }),
+    ),
+  );
+}
+
+/** Whether the member's groups list any project (run-view-168): a
+ * group's own records and your own are none. */
+function groupsListProjects(groups: GroupsState): boolean {
+  return signedInInstances(groups).some((instance) =>
+    entriesOf(instance).some((group) =>
+      group.repositories.some((repo) => repo.id !== null && !repo.own && !isGroupRepository(group, repo)),
     ),
   );
 }
@@ -150,22 +148,25 @@ function groupLabel(group: InstanceGroupState): string {
   return group.fullPath;
 }
 
-/** A row's key: this computer's by its repository alone, a seat's
- * qualified by its place, as the project rows are (run-view-168). */
+/** A row's key: its repository's (run-view-168). */
 function joinKeyOf(entry: PaletteJoin): string {
-  return entry.seat ? `${entry.repo.key}@${entry.seat.key}` : entry.repo.key;
+  return entry.repo.key;
 }
 
-/** One place's "From your groups" (run-view-168): this computer's, or a
- * seat's. */
-interface JoinSection {
-  /** The place's key. */
-  key: string;
-  seat?: PalettePlace;
-  /** The place's Groups state; absent until read. */
-  groups?: GroupsState;
-  rows: PaletteJoin[];
-}
+/** "Open here" (space-111): this computer's entry of a project's Open. */
+const openHereLabel = (): string =>
+  i18n._({
+    id: "Open here",
+    comment: "project palette: open a project of the member's groups on this computer, downloading its records and code into the folder named beside",
+  });
+
+/** The title of a disabled "Open on <server>" (space-111): no server can
+ * fetch code its records name no remote for. */
+const needsCodeHostLabel = (): string =>
+  i18n._({
+    id: "Needs the code on a Git host",
+    comment: "the title of a disabled Open on <server> entry: the project's records name no code remote, so the server cannot fetch its code; the member pushes the code to a Git host first",
+  });
 
 /** A project of the member's groups as the palette names it: as its
  * code is, never by its `<name>-spex` (DR-159). */
@@ -196,10 +197,12 @@ export interface ProjectPaletteProps {
   /** Opened from a project-add action: lead with folder selection,
    * keeping project switching and the Academy choice out of this form. */
   addProjectOnly?: boolean;
-  /** Opened at a place's "From your groups", by the place's key: the
-   * welcome page's "Open a project from your groups" (run-view-172,
-   * run-view-174). */
+  /** Opened at "From your groups": the welcome page's "Open a project
+   * from your groups" (run-view-172). */
   groupsAt?: string;
+  /** Show this computer's Space surface, where a server's contract is
+   * asked beneath its line (run-view-170). */
+  onShowSpace?: () => void;
   onClose: () => void;
 }
 
@@ -372,7 +375,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
    * where the shell offers no picker (space-63). */
   const [asking, setAsking] = useState<string>();
   const rowRefs = useRef(new Map<string, HTMLButtonElement>());
-  const sectionRefs = useRef(new Map<string, HTMLDivElement>());
+  const sectionRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<Refusal>();
   const dialogRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -451,8 +454,9 @@ export function ProjectPalette(props: ProjectPaletteProps) {
     }
     return rows;
   }, [props.projects, props.sessions, props.attention, props.currentProjectId, props.seats]);
-  // Each project names its place where any seat is open (run-view-168).
-  const placed = (props.seats?.length ?? 0) > 0;
+  // Each open project names its place while any seat holds one
+  // (run-view-168).
+  const placed = (props.seats ?? []).some((seat) => seat.projects.length > 0);
   const here = placeLabel(LOCAL_PLACE);
 
   const filtered = listed.filter(
@@ -461,47 +465,96 @@ export function ProjectPalette(props: ProjectPaletteProps) {
       project.path.toLowerCase().includes(query.toLowerCase()),
   );
 
-  // Each seat's Groups state is read where nothing has read it yet, so
-  // its groups' projects can be named (run-view-169): as the palette
-  // opens, and as a seat connects while it is open. One read per
-  // connection; the store keeps them fresh from there.
-  const asked = useRef(new Set<string>());
-  const unread = (props.seats ?? [])
-    .map((seat) => `${seat.key}:${seat.connected === true}:${seat.groups !== undefined}`)
-    .join("\n");
-  useEffect(() => {
-    for (const seat of props.seats ?? []) {
-      if (seat.connected === false) {
-        asked.current.delete(seat.key);
-        continue;
-      }
-      if (seat.groups || asked.current.has(seat.key)) continue;
-      asked.current.add(seat.key);
-      seat.onReadGroups?.();
-    }
-    // The seats' keys, connections and reads are the inputs.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [unread]);
   // This computer's Groups state is read where nothing has read it yet,
   // as a seat's is (run-view-168).
   useEffect(() => {
     if (connected && !useAppStore.getState().space) void loadSpace().catch(() => {});
   }, [connected, loadSpace]);
-  // The spex repositories of the member's groups each place lacks:
-  // this computer's once its Groups state reads it signed in somewhere,
-  // then each seat's under the seat's name, filtered as the projects
-  // are.
-  const joinSections: JoinSection[] = [
-    ...(anySignedIn(space) ? [{ key: LOCAL_PLACE_KEY, groups: space, rows: joinable(space) }] : []),
-    ...(props.seats ?? [])
-      .filter((seat) => seat.onJoin)
-      .map((seat) => ({ key: seat.key, seat, groups: seat.groups, rows: joinable(seat.groups, seat) })),
-  ];
+  // The spex repositories of the member's groups this computer lacks,
+  // once its Groups state reads it signed in somewhere, each once,
+  // filtered as the projects are (run-view-168).
+  const signedIn = anySignedIn(space);
+  const joinAll = signedIn ? joinable(space) : [];
   const matches = (entry: PaletteJoin): boolean =>
     entry.repo.name.toLowerCase().includes(query.toLowerCase()) ||
     entry.group.fullPath.toLowerCase().includes(query.toLowerCase());
-  const joinShown = joinSections.map((section) => ({ ...section, rows: section.rows.filter(matches) }));
-  const joinRows = joinShown.flatMap(({ rows }) => rows);
+  const joinRows = joinAll.filter(matches);
+  const anyProject = space !== undefined && groupsListProjects(space);
+  // The servers of each signed-in Space the member may open (space-111):
+  // the listing read while any is signed in, again as a seat opens or
+  // closes; and what each open seat holds, for "Show on <server>".
+  const seats = props.seats ?? [];
+  const servers = useServers(
+    signedIn && space
+      ? `${signedInInstances(space).map((instance) => instance.origin).join("|")}#${seats.map((seat) => seat.key).join("|")}`
+      : undefined,
+  );
+  const pending = useServerOpens((state) => state.pending);
+  const holdings = new Map(
+    useEachPlace((state) => ({ projects: state.projects, space: state.space })).map(({ store, value }) => [store.place.key, value]),
+  );
+
+  /** A row's other places, as its Space row offers them (space-111,
+   * run-view-168): for each server of its Space the member may open,
+   * "Show on <server>" where that seat holds the project, else "Open on
+   * <server>" — disabled, titled "Needs the code on a Git host", while
+   * its records name no code remote, reading "Signing in to <Space>…"
+   * while that seat still signs in — opening the seat where none is,
+   * whose contract the Space surface asks beneath the server's line. */
+  function placeEntries(repo: RepositoryState): MenuEntry[] {
+    if (repo.own || repo.id === null || repo.state === "local-only" || repo.state === "unreachable") return [];
+    const entries: MenuEntry[] = [];
+    for (const server of (servers.listing?.servers ?? []).filter((each) => each.instance === repo.instance)) {
+      const hostId = hostIdAt(repo, server.instance);
+      if (hostId === null) continue;
+      const at = serverPlace(server);
+      const held = server.open ? holdings.get(at) : undefined;
+      const holding = held ? seatHolding(held, repo.key, server.instance, hostId) : undefined;
+      if (holding?.projectId !== undefined) {
+        const projectId = holding.projectId;
+        entries.push({
+          label: i18n._({
+            id: "Show on {server}",
+            values: { server: server.name },
+            comment: "a project's Open entry where it is open on that team server already: shows it there on Projects; {server} is the server's name",
+          }),
+          testId: `palette-show-at-${at}-${repo.key}`,
+          onSelect: () => {
+            props.onPickAt?.(at, projectId);
+            props.onClose();
+          },
+        });
+        continue;
+      }
+      const signingIn = seats.find((seat) => seat.key === at)?.signingIn;
+      const open = pending[pendingKey(at, hostId)];
+      const waiting = open !== undefined && open.stage !== "failed";
+      const noCode = repo.codeKind === "none";
+      entries.push({
+        label:
+          signingIn !== undefined
+            ? i18n._({
+                id: "Signing in to {space}…",
+                values: { space: signingIn },
+                comment: "a team server's line while it signs in at the Space, before any page asks the person to approve it; {space} is the Space's display name",
+              })
+            : i18n._({
+                id: "Open on {server}",
+                values: { server: server.name },
+                comment: "a project's Open entry for a team server: opens the member's seat there where none is, then the project on it; {server} is the server's name",
+              }),
+        ...(noCode ? { title: needsCodeHostLabel() } : {}),
+        testId: `palette-open-at-${at}-${repo.key}`,
+        disabled: noCode || waiting || signingIn !== undefined || busy,
+        onSelect: () => {
+          openOnServer(useAppStore, server, { key: repo.key, hostId });
+          if (useServerOpens.getState().lines[at]?.asking) props.onShowSpace?.();
+          props.onClose();
+        },
+      });
+    }
+    return entries;
+  }
 
   // Entries the arrow keys traverse, in visual order: the Academy row
   // where it leads the list, then projects, then each seat's groups'
@@ -512,18 +565,16 @@ export function ProjectPalette(props: ProjectPaletteProps) {
   const clamped = Math.min(index, Math.max(0, entryCount - 1));
   const openFolderIndex = joinStart + joinRows.length;
 
-  // Opened at a place's "From your groups" (run-view-172, run-view-174):
-  // that section in view and, once it lists a project, its first one
-  // highlighted and focused — until the reader moves elsewhere first.
+  // Opened at "From your groups" (run-view-172): the section in view
+  // and, once it lists a project, its first one highlighted and focused
+  // — until the reader moves elsewhere first.
   const landing = useRef(props.groupsAt);
-  const landingRow = landing.current
-    ? joinRows.find((entry) => (entry.seat?.key ?? LOCAL_PLACE_KEY) === landing.current)
-    : undefined;
+  const landingRow = landing.current ? joinRows[0] : undefined;
   const landingKey = landingRow ? joinKeyOf(landingRow) : undefined;
   useEffect(() => {
     const at = landing.current;
     if (!at) return;
-    sectionRefs.current.get(at)?.scrollIntoView?.({ block: "nearest" });
+    sectionRef.current?.scrollIntoView?.({ block: "nearest" });
     if (!landingRow || !landingKey) return;
     landing.current = undefined;
     setIndex(joinStart + joinRows.indexOf(landingRow));
@@ -605,23 +656,19 @@ export function ProjectPalette(props: ProjectPaletteProps) {
     }
   }
 
-  /** Send a group's project's join to its place's core: `space.join`
-   * naming its instance and host id — on this computer with `folder`,
-   * as its Space row's Join sends it (space-63); at a seat with none,
-   * again where its code clone failed, its core cloning the code into
-   * the folder it allocated (space-103, run-view-169). Accepted, the
-   * project becomes its place's current one and the palette closes, the
-   * join reporting there and on the place's Space row (space-63); a
-   * refusal is thrown to the caller. */
-  async function sendJoin(entry: PaletteJoin, folder?: string): Promise<void> {
+  /** Send a group's project's join to this computer's core: `space.join`
+   * naming its instance and host id with `folder`, as its Space row's
+   * Join sends it (space-63). Accepted, the project becomes this
+   * computer's current one and the palette closes, the join reporting
+   * on its Space row (space-63); a refusal is thrown to the caller. */
+  async function sendJoin(entry: PaletteJoin, folder: string): Promise<void> {
     if (entry.repo.id === null) return;
     setBusy(true);
     setJoining(joinKeyOf(entry));
     setError(undefined);
     try {
-      if (entry.seat) await entry.seat.onJoin?.(entry.instance, entry.repo.id);
-      else await spaceJoin(entry.instance, entry.repo.id, folder);
-      props.onOpened?.(entry.seat?.key ?? LOCAL_PLACE_KEY, entry.repo.key);
+      await spaceJoin(entry.instance, entry.repo.id, folder);
+      props.onOpened?.(LOCAL_PLACE_KEY, entry.repo.key);
       props.onClose();
     } finally {
       setBusy(false);
@@ -629,22 +676,19 @@ export function ProjectPalette(props: ProjectPaletteProps) {
     }
   }
 
-  /** Open a group's project at its place (run-view-168): on this
-   * computer into the folder the act's own picker takes — the shell's
-   * picker, else a path named in place beneath the row (space-63); at a
-   * seat at once. A refusal stands in the palette. */
+  /** Open a group's project on this computer (run-view-168): into the
+   * folder the act's own picker takes — the shell's picker, else a path
+   * named in place beneath the row (space-63). A refusal stands in the
+   * palette. */
   async function runJoin(entry: PaletteJoin): Promise<void> {
     if (busy || entry.opening || entry.repo.id === null) return;
-    let folder: string | undefined;
-    if (!entry.seat) {
-      if (!props.onPickFolder) {
-        setError(undefined);
-        setAsking(joinKeyOf(entry));
-        return;
-      }
-      folder = (await props.onPickFolder()) ?? undefined;
-      if (!folder) return;
+    if (!props.onPickFolder) {
+      setError(undefined);
+      setAsking(joinKeyOf(entry));
+      return;
     }
+    const folder = await props.onPickFolder();
+    if (!folder) return;
     try {
       await sendJoin(entry, folder);
     } catch (cause) {
@@ -979,14 +1023,27 @@ export function ProjectPalette(props: ProjectPaletteProps) {
             // This computer's rows keep their keys and test ids; a
             // seat's are qualified by its place (run-view-168).
             const key = seat ? `${project.id}@${seat.key}` : project.id;
+            // The row's other places, as its Space row offers them
+            // (run-view-168, space-111): this computer's project's
+            // servers; a seat's project's "Open here" while this computer
+            // lacks it.
+            const repo = space ? allRepositories(space).find((each) => each.key === project.repository.key) : undefined;
+            const joinHere = seat ? joinAll.find((each) => each.repo.key === project.repository.key) : undefined;
+            const places: MenuEntry[] = seat
+              ? joinHere
+                ? [{ label: openHereLabel(), testId: `palette-open-here-${key}`, disabled: busy || joinHere.opening, onSelect: () => void runJoin(joinHere) }]
+                : []
+              : repo
+                ? placeEntries(repo)
+                : [];
             return (
+              <div key={key} className="flex items-center pr-2">
               <button
-                key={key}
                 type="button"
                 data-testid={`palette-project-${key}`}
                 title={project.path}
                 onClick={() => pickRow(entry)}
-                className={`flex w-full items-center gap-2 px-4 py-2 text-left text-sm hover:bg-neutral-50 dark:hover:bg-neutral-800 ${
+                className={`flex min-w-0 flex-1 items-center gap-2 px-4 py-2 text-left text-sm hover:bg-neutral-50 dark:hover:bg-neutral-800 ${
                   i + lead === clamped ? ROW_ACTIVE : ""
                 }`}
               >
@@ -1048,6 +1105,20 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                   ) : null}
                 </span>
               </button>
+              {places.length > 0 ? (
+                <MenuButton
+                  trigger={<span aria-hidden>▾</span>}
+                  name={i18n._({
+                    id: "More ways to open {name}",
+                    values: { name: project.name },
+                    comment: "the accessible name of the menu beside a project's primary control, listing the other servers, or this computer, it may be opened on; {name} is the project's name",
+                  })}
+                  testId={`palette-project-places-${key}`}
+                  entries={places}
+                  disabled={busy}
+                />
+              ) : null}
+              </div>
             );
           })}
           {filtered.length === 0 && query ? (
@@ -1055,41 +1126,34 @@ export function ProjectPalette(props: ProjectPaletteProps) {
               {i18n._('No project matches "{query}"', { query })}
             </div>
           ) : null}
-          {joinShown.map(({ key: place, seat, groups, rows }) => (
-            // Each place's projects of the member's groups (run-view-168):
-            // a seat's opened there with no folder (run-view-169), this
-            // computer's into the folder the act picks (space-63).
+          {signedIn ? (
+            // The projects of the member's groups this computer lacks
+            // (run-view-168), opened here into the folder the act picks
+            // (space-63), or on a server from the row's places (space-111).
             <div
-              key={place}
-              ref={(node) => {
-                if (node) sectionRefs.current.set(place, node);
-                else sectionRefs.current.delete(place);
-              }}
+              ref={sectionRef}
               role="group"
-              data-testid={`palette-groups-${place}`}
-              aria-labelledby={`palette-groups-heading-${place}`}
+              data-testid="palette-groups"
+              aria-labelledby="palette-groups-heading"
               className="border-t border-neutral-100 py-1 dark:border-neutral-800"
             >
               <div
-                id={`palette-groups-heading-${place}`}
+                id="palette-groups-heading"
+                data-testid="palette-groups-heading"
                 className="px-4 py-1 text-xs font-medium text-neutral-500"
               >
-                {seat
-                  ? i18n._({
-                      id: "From your groups on {place}",
-                      values: { place: seat.label },
-                      comment: "project palette: heading over the projects of the member's groups a team server can open; {place} is the server's name",
-                    })
-                  : i18n._({
-                      id: "From your groups",
-                      comment: "project palette: heading over the projects of the member's groups this computer can open",
-                    })}
+                {i18n._({
+                  id: "From your groups",
+                  comment: "project palette: heading over the projects of the member's groups this computer can open",
+                })}
               </div>
-              {rows.map((entry) => {
+              {joinRows.map((entry) => {
                 const key = joinKeyOf(entry);
                 const at = joinStart + joinRows.indexOf(entry);
+                const places = placeEntries(entry.repo);
                 return (
                   <div key={key}>
+                    <div className="flex items-center pr-2">
                     <button
                       ref={(node) => {
                         if (node) rowRefs.current.set(key, node);
@@ -1098,9 +1162,9 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                       type="button"
                       data-testid={entry.again ? `palette-join-again-${key}` : `palette-join-${key}`}
                       disabled={busy || entry.opening}
-                      aria-expanded={seat || props.onPickFolder ? undefined : asking === key}
+                      aria-expanded={props.onPickFolder ? undefined : asking === key}
                       onClick={() => void runJoin(entry)}
-                      className={`flex w-full items-center gap-2 px-4 py-2 text-left text-sm hover:bg-neutral-50 disabled:opacity-60 dark:hover:bg-neutral-800 ${
+                      className={`flex min-w-0 flex-1 items-center gap-2 px-4 py-2 text-left text-sm hover:bg-neutral-50 disabled:opacity-60 dark:hover:bg-neutral-800 ${
                         at === clamped ? ROW_ACTIVE : ""
                       }`}
                     >
@@ -1114,17 +1178,34 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                           {i18n._({ id: "Opening…", comment: "a project of your groups while it opens: its records and code are downloaded" })}
                         </span>
                       ) : entry.again ? (
-                        // Its open stopped, or, at a team server, its code
-                        // clone failed: the row sends it again (space-103).
+                        // Its open stopped: the row sends it again.
                         <span className="ml-auto shrink-0 text-xs text-neutral-500">
                           {i18n._({
                             id: "Try again",
                             comment: "on a project of your groups whose open stopped: open it again",
                           })}
                         </span>
-                      ) : null}
+                      ) : (
+                        // The row is this computer's entry of its Open
+                        // (space-111, run-view-168): it reads "Open here".
+                        <span className="ml-auto shrink-0 text-xs text-neutral-500">{openHereLabel()}</span>
+                      )}
                     </button>
-                    {!seat && asking === key ? (
+                    {places.length > 0 ? (
+                      <MenuButton
+                        trigger={<span aria-hidden>▾</span>}
+                        name={i18n._({
+                          id: "More ways to open {name}",
+                          values: { name: projectNameOf(entry.repo) },
+                          comment: "the accessible name of the menu beside a project's primary control, listing the other servers, or this computer, it may be opened on; {name} is the project's name",
+                        })}
+                        testId={`palette-join-places-${key}`}
+                        entries={places}
+                        disabled={busy}
+                      />
+                    ) : null}
+                    </div>
+                    {asking === key ? (
                       <JoinFolder
                         testId={`palette-join-folder-${key}`}
                         label={
@@ -1142,24 +1223,21 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                   </div>
                 );
               })}
-              {rows.length === 0 && !query ? (
-                <div data-testid={`palette-groups-note-${place}`} className="px-4 py-1 text-xs text-neutral-500">
-                  {seat?.signingIn !== undefined
+              {joinRows.length === 0 && !query ? (
+                <div data-testid="palette-groups-note" className="px-4 py-1 text-xs text-neutral-500">
+                  {anyProject
                     ? i18n._({
-                        id: "Signing in to {space}…",
-                        values: { space: seat.signingIn },
-                        comment: "project palette: under a team server's groups while the server signs in at the Space, before which it lists nothing; {space} is the Space's display name",
+                        id: "All your groups' projects are open here",
+                        comment: "project palette: every project of the member's groups is open on this computer already",
                       })
-                    : groups
-                      ? i18n._({
-                          id: "Nothing more to open from your groups",
-                          comment: "project palette: a place's groups list no project it lacks",
-                        })
-                      : i18n._("Reading your groups…")}
+                    : i18n._({
+                        id: "No projects in your groups yet",
+                        comment: "project palette: the member's groups list no project to open",
+                      })}
                 </div>
               ) : null}
             </div>
-          ))}
+          ) : null}
           {props.onPickFolder ? (
             <button
               type="button"
@@ -1231,18 +1309,6 @@ export function ProjectPalette(props: ProjectPaletteProps) {
             </label>
           ) : null}
           </>
-          ) : null}
-          {placed ? (
-            // A project added or created here is this computer's
-            // (run-view-168): a seat's projects are opened among the
-            // member's groups, with no path entry (run-view-169).
-            <p data-testid="palette-new-place" className="px-0.5 text-xs text-neutral-500">
-              {i18n._({
-                id: "A new project is added on {place}.",
-                comment: "project palette: where a project added or created by path lands; {place} is the place's name, \"This computer\"",
-                values: { place: here },
-              })}
-            </p>
           ) : null}
           {empty ? null : (
             <button

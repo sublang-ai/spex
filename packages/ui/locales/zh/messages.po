@@ -931,11 +931,6 @@ msgstr "再发一条消息即可继续该意图。"
 msgid "A nested workflow failed"
 msgstr "嵌套工作流失败"
 
-#. project palette: where a project added or created by path lands; {place} is the place's name, "This computer"
-#: src/components/ProjectPalette.tsx
-msgid "A new project is added on {place}."
-msgstr "新项目添加在{place}。"
-
 #: src/lib/failure-catalogue.ts
 msgid "A Playbook defect"
 msgstr "Playbook 缺陷"
@@ -1258,11 +1253,6 @@ msgstr "智能体"
 msgid "Agents on {server} run on the sign-ins its administrator set up, unless you set your own"
 msgstr "{server} 上的智能体使用其管理员设置的登录凭据运行，除非你设置自己的"
 
-#. the second step on the welcome page at a team server, beside its label, the server's name; "here" is that server
-#: src/components/CaptainHome.tsx
-msgid "Agents run here as you"
-msgstr "智能体在这里以你的身份运行"
-
 #: src/components/ProjectsSurface.tsx
 msgid "ahead of upstream"
 msgstr "领先于上游"
@@ -1304,6 +1294,11 @@ msgstr "全用这里的"
 #: src/components/DashboardSurface.tsx
 msgid "All projects"
 msgstr "所有项目"
+
+#. project palette: every project of the member's groups is open on this computer already
+#: src/components/ProjectPalette.tsx
+msgid "All your groups' projects are open here"
+msgstr "你的群组的项目都已在本机打开"
 
 #: src/components/ApprovalInbox.tsx
 msgid "Allow this tool operation?"
@@ -2329,11 +2324,6 @@ msgstr "确认命令、意图、Player 以及启用位置"
 #: src/components/DeliveryCard.tsx
 msgid "Confirming…"
 msgstr "确认中…"
-
-#. connect this computer to a team server, where projects open and agents run as you
-#: src/components/SpaceServers.tsx
-msgid "Connect"
-msgstr "连接"
 
 #: src/components/CaptainHome.tsx
 msgid "Connect to read project specs"
@@ -3604,11 +3594,6 @@ msgstr "来自注册中心 · {range}"
 msgid "From your groups"
 msgstr "来自你的群组"
 
-#. project palette: heading over the projects of the member's groups a team server can open; {place} is the server's name
-#: src/components/ProjectPalette.tsx
-msgid "From your groups on {place}"
-msgstr "来自你在 {place} 上的群组"
-
 #. pipeline stage: the compiled spec items
 #. pipeline stage: the compiler's normative spec items (a proper name)
 #. pipeline stage: the compiler's normative spec items (a proper name)
@@ -3666,11 +3651,6 @@ msgstr "群组名称"
 #: src/lib/space.ts
 msgid "Group sessions"
 msgstr "群组会话"
-
-#. label of the first step on the welcome page at a team server: your groups at the Space, whose projects open there
-#: src/components/CaptainHome.tsx
-msgid "Groups"
-msgstr "群组"
 
 #. a delegation line: the Captain gave this call to the named player
 #: src/components/CallLines.tsx
@@ -4332,6 +4312,9 @@ msgid "More for {name}"
 msgstr "{name} 的更多操作"
 
 #. the accessible name of the menu beside a project's primary control, listing the other servers, or this computer, it may be opened on; {name} is the project's name
+#. the accessible name of the menu beside a project's primary control, listing the other servers, or this computer, it may be opened on; {name} is the project's name
+#. the accessible name of the menu beside a project's primary control, listing the other servers, or this computer, it may be opened on; {name} is the project's name
+#: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
 msgid "More ways to open {name}"
 msgstr "以其他方式打开 {name}"
@@ -4360,6 +4343,11 @@ msgstr "需要关注"
 #: src/App.tsx
 msgid "needs recovery"
 msgstr "需要恢复"
+
+#. the title of a disabled Open on <server> entry: the project's records name no code remote, so the server cannot fetch its code; the member pushes the code to a Git host first
+#: src/components/ProjectPalette.tsx
+msgid "Needs the code on a Git host"
+msgstr "需要先将代码托管在 Git 主机上"
 
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
@@ -4580,6 +4568,11 @@ msgstr "尚无项目规约"
 msgid "No projects here yet"
 msgstr "这里还没有项目"
 
+#. project palette: the member's groups list no project to open
+#: src/components/ProjectPalette.tsx
+msgid "No projects in your groups yet"
+msgstr "你的群组还没有项目"
+
 #. the Dashboard's Projects band with no project: the link opens Projects, where a project is added
 #: src/components/DashboardSurface.tsx
 msgid "No projects yet · <0>Add a project</0>"
@@ -4798,11 +4791,6 @@ msgstr "不会重复任何工作"
 msgid "Nothing left to fix."
 msgstr "没有待处理的了。"
 
-#. project palette: a place's groups list no project it lacks
-#: src/components/ProjectPalette.tsx
-msgid "Nothing more to open from your groups"
-msgstr "你的群组中没有更多可打开的项目"
-
 #. a Sync tab's incoming section after a check: the Space holds nothing this computer lacks; {name} is its display name
 #: src/components/SpaceSync.tsx
 msgid "Nothing new at {name}"
@@ -4967,8 +4955,7 @@ msgstr "打开 {title} — {reason}"
 msgid "Open {title} — running in {project}"
 msgstr "打开 {title} — 正在 {project} 中运行"
 
-#. welcome page action: opens the project palette at the projects of your groups that place can open
-#. welcome page action: opens the project palette at the projects of your groups that place can open
+#. welcome page action: opens the project palette at the projects of your groups this computer can open
 #: src/components/CaptainHome.tsx
 msgid "Open a project from your groups"
 msgstr "从群组打开项目"
@@ -4994,6 +4981,7 @@ msgstr "打开文件夹…"
 
 #. a project's primary control for the place shown: downloads its records and its code there
 #. project palette: open a project of the member's groups on this computer, downloading its records and code into the folder named beside
+#. project palette: open a project of the member's groups on this computer, downloading its records and code into the folder named beside
 #: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
 msgid "Open here"
@@ -5005,6 +4993,8 @@ msgid "Open its package"
 msgstr "打开其规约包"
 
 #. a project's Open entry for a team server: opens the member's seat there where none is, then the project on it; {server} is the server's name
+#. a project's Open entry for a team server: opens the member's seat there where none is, then the project on it; {server} is the server's name
+#: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
 msgid "Open on {server}"
 msgstr "在 {server} 上打开"
@@ -5036,7 +5026,6 @@ msgstr "打开设置 →"
 msgid "Open Settings to see what's wrong"
 msgstr "打开设置查看问题所在"
 
-#. secondary action of the welcome page at a team server: shows the Space surface at that server
 #: src/components/CaptainHome.tsx
 msgid "Open Space"
 msgstr "打开 Space"
@@ -5456,11 +5445,6 @@ msgstr "项目"
 msgid "Projects and sessions"
 msgstr "项目与会话"
 
-#. the first step on the welcome page at a team server, beside its label Groups; "here" is that server
-#: src/components/CaptainHome.tsx
-msgid "Projects here come from your groups"
-msgstr "这里的项目来自你的群组"
-
 #. collapsed card: the text the playbook sent the player
 #: src/components/PlayerPane.tsx
 msgid "Prompt"
@@ -5668,7 +5652,6 @@ msgstr "正在读取项目规约…"
 msgid "reading specs…"
 msgstr "正在读取规约…"
 
-#: src/components/ProjectPalette.tsx
 #: src/components/SpaceSurface.tsx
 msgid "Reading your groups…"
 msgstr "正在读取你的群组…"
@@ -6605,6 +6588,8 @@ msgid "Show log"
 msgstr "显示日志"
 
 #. a project's Open entry where it is open on that team server already: shows it there on Projects; {server} is the server's name
+#. a project's Open entry where it is open on that team server already: shows it there on Projects; {server} is the server's name
+#: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
 msgid "Show on {server}"
 msgstr "在 {server} 上显示"
@@ -6714,16 +6699,11 @@ msgid "Signed out of {name}"
 msgstr "已退出 {name} 的登录"
 
 #. a team server's line while it signs in at the Space, before any page asks the person to approve it; {space} is the Space's display name
-#. project palette: under a team server's groups while the server signs in at the Space, before which it lists nothing; {space} is the Space's display name
+#. a team server's line while it signs in at the Space, before any page asks the person to approve it; {space} is the Space's display name
 #: src/components/ProjectPalette.tsx
 #: src/components/SpaceServers.tsx
 msgid "Signing in to {space}…"
 msgstr "正在登录 {space}…"
-
-#. the welcome page at a team server while the server signs in at the Space; the tagged run links the Space's page where the person approves "Spex on <server>"; {space} is the Space's display name, {server} the server's name
-#: src/components/CaptainHome.tsx
-msgid "Signing in to {space}… <0>approve Spex on {server} in your browser</0>"
-msgstr "正在登录 {space}… <0>请在浏览器中批准 {server} 上的 Spex</0>"
 
 #. the Sign in control, while the sign-in runs
 #: src/components/SpaceSignIn.tsx
@@ -7996,11 +7976,6 @@ msgstr "当前正在写入的进程"
 #: src/components/SpaceServers.tsx
 msgid "Whoever runs {server} can act as you: in your groups, in your records, and with your {space} account, wherever it reaches"
 msgstr "运营 {server} 的人可以以你的身份行事：在你的群组中、在你的记录中，以及用你的 {space} 账户，凡其所及之处"
-
-#. headline of the welcome page at a team server where you have no project yet; {server} is the server's name
-#: src/components/CaptainHome.tsx
-msgid "Work on {server} from this computer."
-msgstr "从本机在 {server} 上工作。"
 
 #: src/components/DraftSourceTab.tsx
 msgid "Workflow source"
