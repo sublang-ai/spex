@@ -1156,7 +1156,17 @@ test("cli-18: each cause of the table names the registry by its name and ends in
     const before = snapshot(at);
     const ran = await spexAt(home, at, ...args);
     assert.equal(ran.code, 1, `${label}: ${ran.stdout}${ran.stderr}`);
-    assert.equal(ran.stderr, `spex ${args[0]}: ${cause}\n`, `[cli-13] ${label}`);
+    // A supported Windows fallback diagnoses itself on stderr. Keep those
+    // warnings visible in the test log and still compare every other byte;
+    // unrelated warnings/errors must not disappear from this assertion.
+    let stderr = ran.stderr;
+    const fallback = /^\(node:\d+\) \[FS_SAFE_NATIVE_FALLBACK\] FsSafeWarning: windows-(?:owner-dacl|private-creation|private-directory) is using its portable fallback because [^\r\n]+\r?\n/gm;
+    const diagnostics = process.platform === "win32" ? stderr.match(fallback) : null;
+    if (diagnostics?.length) {
+      for (const diagnostic of diagnostics) process.stderr.write(diagnostic);
+      stderr = stderr.replace(fallback, "").replace(/^\(Use `node --trace-warnings \.\.\.` to show where the warning was created\)\r?\n/m, "");
+    }
+    assert.equal(stderr, `spex ${args[0]}: ${cause}\n`, `[cli-13] ${label}`);
     assert.deepEqual(snapshot(at), before, `[cli-13] ${label} writes nothing`);
   };
 
