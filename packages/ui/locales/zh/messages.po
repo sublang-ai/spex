@@ -2858,10 +2858,6 @@ msgstr "删除中…"
 msgid "Deleting…"
 msgstr "删除中…"
 
-#: src/components/SpaceGroups.tsx
-msgid "Deletion may be immediate. If scheduled, you can restore the group before deletion takes effect."
-msgstr "删除可能立即生效。如果已计划删除，您可以在删除生效前恢复群组。"
-
 #: src/components/CaptainHome.tsx
 msgid "Delivery"
 msgstr "交付"

@@ -749,7 +749,6 @@ function GroupSection({
               </>
             ) : <p>{i18n._("This group is empty. Deleting it removes the group for all members.")}</p> : null}
           </div>
-          {review?.contents.length === 0 ? <p className="text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">{i18n._("Deletion may be immediate. If scheduled, you can restore the group before deletion takes effect.")}</p> : null}
           {deleteReason ? <p className="text-xs text-neutral-600 dark:text-neutral-400">{deleteReason}</p> : null}
           {deleteError ? <p role="alert" className="break-words text-xs text-red-600 dark:text-red-400">{deleteError}</p> : null}
           <div className="flex flex-wrap justify-end gap-2">
