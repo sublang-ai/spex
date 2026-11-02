@@ -572,6 +572,8 @@ export type EnvironmentMutationResult = { accepted: true } | { completed: true }
 export interface RequestPreview { name: string | null; version: string | null }
 
 export interface PublishPreview {
+  /** Whether the registry confirmed this account may publish to the org. */
+  orgVerified: boolean;
   instance: PublishDestination;
   name: string;
   version: string;

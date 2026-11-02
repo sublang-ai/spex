@@ -410,10 +410,16 @@ export class RegistryClient implements RegistrySource {
    * the timeout; null for no answer — a refusal, any other status, a
    * body not in its shape, a network failure, or none in time. */
   async orgs(timeoutMs = ORGS_TIMEOUT_MS): Promise<RegistryOrg[] | null> {
+    return this.readOrgs(timeoutMs).catch(() => null);
+  }
+
+  private async readOrgs(timeoutMs: number): Promise<RegistryOrg[] | null> {
     const signal = AbortSignal.timeout(timeoutMs);
     const late = new Promise<null>((resolve) => signal.addEventListener("abort", () => resolve(null), { once: true }));
     const asked = (async (): Promise<RegistryOrg[] | null> => {
-      const raw = await this.json("/api/v1/account/orgs", undefined, { signal });
+      const response = await this.request("/api/v1/account/orgs", undefined, { signal });
+      if (response.status !== 200) return null;
+      const raw: unknown = await response.json();
       if (!isPlainObject(raw) || !Array.isArray(raw.orgs)) return null;
       const orgs: RegistryOrg[] = [];
       for (const org of raw.orgs) {
@@ -421,8 +427,26 @@ export class RegistryClient implements RegistrySource {
         orgs.push({ name: org.name, path: org.path, role: org.role, ...(typeof org.provider === "string" ? { provider: org.provider } : {}) });
       }
       return orgs;
-    })().catch(() => null);
+    })();
     return Promise.race([asked, late]);
+  }
+
+  /** Check publishing rights before a preview or upload. An unreadable
+   * answer is not an empty list: neither case authorizes publishing. */
+  async checkPublishOrg(name: string, timeoutMs = 30_000): Promise<void> {
+    const [org] = splitName(name);
+    const orgs = await this.readOrgs(timeoutMs).catch((error: unknown) => {
+      // Keep an expired/revoked sign-in distinct from an unreadable or
+      // unavailable list; request() already applied its refusal hook.
+      if (error instanceof RegistryError && error.kind === "unauthenticated") throw error;
+      return null;
+    });
+    if (orgs === null) {
+      throw new RegistryError("unavailable", name, `Your orgs at ${registryHost(this.url)} could not be read`, "orgs_unavailable", undefined, { registry: this.url });
+    }
+    if (!orgs.some((entry) => entry.name === org)) {
+      throw new RegistryError("forbidden", name, `${org} is not yours at ${registryHost(this.url)}`, "org_not_owned", undefined, { registry: this.url });
+    }
   }
 
   async search(query: string): Promise<SearchResult[]> {

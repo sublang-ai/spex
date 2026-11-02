@@ -204,6 +204,7 @@ meta.md       The spec of specs
 | [DR-183](decisions/183-windows-bounded-codex-commands.md) | 183-windows-bounded-codex-commands.md | Native Windows bounded Codex command transport through supplied Cligent |
 | [DR-184](decisions/184-native-desktop-tag-packages.md) | 184-native-desktop-tag-packages.md | App tags build native macOS arm64 and Windows x64 packages; both builds gate one release with checksums; amends DR-040 |
 | [DR-185](decisions/185-the-suites-a-change-reaches.md) | 185-the-suites-a-change-reaches.md | The suites a change reaches: the classifier names the reach of a pull request's change from the workspaces' declared dependencies, the test job runs only those suites, the Linux test job on Node 22 alone, the journeys in three shards, `npm run test:affected` locally; amends DR-145, DR-166 and DR-169 |
+| [DR-186](decisions/186-publishing-names-need-registry-authority.md) | 186-publishing-names-need-registry-authority.md | Unchecked local names explained before release, refreshed account suggestions, and fresh registry authorization in publish previews and uploads |
 
 ## Packages
 

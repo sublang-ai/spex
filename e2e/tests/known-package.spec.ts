@@ -25,6 +25,7 @@ test("playbook-library-117: install a private known package with explicit requir
   const name = `${org}/notes`;
   const refusedOrg = "private-refused";
   const refusedName = `${refusedOrg}/unreadable`;
+  registry.script.setOrgs(instance.url, [org, refusedOrg, "public"].map((name) => ({ name, path: name, role: "Owner" })));
   const skill = "---\nname: note-reader\ndescription: Read a supplied note\n---\nRead the note without changes.\n";
   async function release(namespace: string, pkg: string, version: string) {
     const path = `spex-packages/${namespace}/${pkg}`;

@@ -18,6 +18,8 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 
 Amended by [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md) in what an install does for a playbook: a placed playbook runs, its roles bound by default; `enable` and `disable` retire as acts and as words.
 
+Amended by [DR-186](186-publishing-names-need-registry-authority.md) in the unchecked publishing-rights guidance of export.
+
 ## Context
 
 - A release holds one spec. [DR-115](115-a-spec-reaches-the-agents.md) exports it to agents as a generated skill; nothing puts it into a project's `specs/`, where the project's own specs could cite it, the linter could check it and a reader would look for it. A package under development at `spex-packages/<org>/<pkg>/` has the same gap: its spec is never a spec of the project developing it.

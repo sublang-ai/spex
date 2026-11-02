@@ -1650,8 +1650,6 @@ msgid "build and review step by step"
 msgstr "逐步开发和审阅"
 
 #. the tooltip of a package's source glyph: the app ships it
-#. the tooltip of a package's source glyph: the app ships it
-#: src/components/PlaybookCard.tsx
 #: src/lib/environments.ts
 msgid "Built in"
 msgstr "内置"
@@ -2032,6 +2030,11 @@ msgstr "引用 {out} · 被引用 {in}"
 #: src/components/SpecGraph.tsx
 msgid "cites it"
 msgstr "引用它"
+
+#. Open the selected registry's account page to claim a publishing name
+#: src/components/PlaybookAuthoring.tsx
+msgid "Claim an org"
+msgstr "认领组织名"
 
 #: src/components/AgentSettings.tsx
 msgid "Clear the fast-mode choice; this adapter does not accept it."
@@ -3465,6 +3468,7 @@ msgid "from the compile before this change"
 msgstr "来自本次更改前的编译"
 
 #. the tooltip of a package's source glyph, for a package another package requires: it comes from the registry
+#. tooltip: a package taken from the registry
 #. tooltip: a package taken from the registry
 #: src/components/PlaybookCard.tsx
 #: src/lib/environments.ts
@@ -5014,6 +5018,11 @@ msgstr "组织"
 msgid "Org and License first"
 msgstr "请先填写组织和许可证"
 
+#. An unsigned publish preview checks local files but cannot verify the package's org
+#: src/components/PublishControl.tsx
+msgid "Org not checked — sign in to {registry} to check publishing rights"
+msgstr "尚未验证组织名 — 请登录 {registry} 验证发布权限"
+
 #: src/lib/drafts.ts
 msgid "Org: lowercase letters and digits in words joined by single hyphens, at most 64 characters"
 msgstr "组织：由单个连字符连接的小写字母和数字，最多 64 个字符"
@@ -5393,6 +5402,11 @@ msgstr "已发布 {version}"
 #: src/components/PublishControl.tsx
 msgid "Publishes {path} to {registry}"
 msgstr "将 {path} 发布到 {registry}"
+
+#. New playbook's Org has no successful registry account check
+#: src/components/PlaybookAuthoring.tsx
+msgid "Publishing rights not checked"
+msgstr "尚未验证发布权限"
 
 #. a spec package is being uploaded to the registry
 #. a spec package is being uploaded to the registry
@@ -7380,6 +7394,11 @@ msgstr "连续三次 — 请告诉智能体如何继续"
 #: src/components/SpaceRepairs.tsx
 msgid "To fix"
 msgstr "待处理"
+
+#. Local package names do not establish publishing rights at the selected registry
+#: src/components/PlaybookAuthoring.tsx
+msgid "To publish, use an org you can claim at this registry."
+msgstr "要发布规约包，请使用你能在此注册中心认领的组织名。"
 
 #. a Sync tab's heading over the records this computer changed that no Space holds yet; {count} how many
 #: src/components/SpaceSync.tsx

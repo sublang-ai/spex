@@ -1422,6 +1422,7 @@ describe("playbook-library-113: Publish a folder package from its row", () => {
     name: NAME,
     version: "1.2.3",
     files: ["meta.yaml", "specs/en/triage.md", "skills/en/tidy/SKILL.md"],
+    orgVerified: true,
   };
   const receipt = { name: NAME, version: "1.2.3", url: `${REGISTRY}/${NAME}` };
   const row = () => within(projectSection().getByTestId(`env-package-${NAME}`));
@@ -1463,7 +1464,7 @@ describe("playbook-library-113: Publish a folder package from its row", () => {
     choose(projectSection(), NAME, "publish");
     const summary = await row().findByTestId("publish-summary");
     // By name: the core reads the current request's folder (environments-10).
-    expect(commandMock).toHaveBeenCalledWith("environment.publish", { repository: PROJECT_ID, name: NAME, dryRun: true });
+    expect(commandMock).toHaveBeenCalledWith("environment.publish", { repository: PROJECT_ID, name: NAME, dryRun: true }, { timeoutMs: 35_000 });
     const destination = within(summary).getByTestId("publish-target");
     expect(destination.textContent).toBe(`Publish ${NAME} 1.2.3 to Spex Example`);
     expect(destination.title).toBe(REGISTRY);
@@ -1517,7 +1518,7 @@ describe("playbook-library-113: Publish a folder package from its row", () => {
         ? { accepted: true, preview: { ...PREVIEW, name: other } }
         : base(type, params));
     await confirm(other);
-    expect(commandMock).toHaveBeenCalledWith("environment.publish", { repository: PROJECT_ID, name: other });
+    expect(commandMock).toHaveBeenCalledWith("environment.publish", { repository: PROJECT_ID, name: other }, { timeoutMs: 35_000 });
     update(PROJECT_ID, { ...state, error: null, published: { ...receipt, name: other, url: `${REGISTRY}/${other}` } });
     expect(otherRow.getByTestId("publish-done").textContent).toBe("Published 1.2.3");
     expect(otherRow.getByTestId("publish-link").getAttribute("href")).toBe(`${REGISTRY}/${other}`);
