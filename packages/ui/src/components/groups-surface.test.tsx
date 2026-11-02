@@ -1256,6 +1256,33 @@ describe("GROUPS: Open here (space-63, space-111, space-29)", () => {
 });
 
 describe("GROUPS: the instance's entries (space-1, space-58, space-61, DR-120)", () => {
+  test("same-path pending and replacement groups keep their own children, and ambiguous parents are not guessed", async () => {
+    const group = (id: string, fullPath: string, name: string, deletionRoot?: string): InstanceGroupState => ({
+      id, fullPath, name, login: null, mine: false, can: NO_CAN, placed: [], repositories: [],
+      ...(deletionRoot ? { pendingDeletion: true, deletionRoot } : {}),
+    });
+    await renderGroups(withGroups(base(),
+      group("old", "team", "Old team", "team"),
+      group("new", "team", "Current team"),
+      group("old-child", "team/old-child", "Old child", "team"),
+      group("new-child", "team/new-child", "Current child"),
+      group("pending-child", "team/pending-child", "Pending child", "team/pending-child"),
+      group("ambiguous-1", "ambiguous", "First parent"),
+      group("ambiguous-2", "ambiguous", "Second parent"),
+      group("unplaced", "ambiguous/child", "Separate child"),
+    ), { open: false });
+    const section = (name: string) => screen.getByRole("heading", { name: new RegExp(`^${name}\\b`) }).closest('[role="group"]')! as HTMLElement;
+    const old = section("Old team");
+    const current = section("Current team");
+    expect(old.contains(section("Old child"))).toBe(true);
+    expect(old.contains(section("Current child"))).toBe(false);
+    expect(current.contains(section("Current child"))).toBe(true);
+    expect(current.contains(section("Old child"))).toBe(false);
+    expect(current.contains(section("Pending child"))).toBe(true);
+    expect(section("First parent").contains(section("Separate child"))).toBe(false);
+    expect(section("Second parent").contains(section("Separate child"))).toBe(false);
+  });
+
   /** Your own group; acme; another account's login under which the host
    * lists a repository; and a group named like your login. */
   function instanceHome(): GroupsState {

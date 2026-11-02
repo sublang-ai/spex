@@ -1709,7 +1709,7 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
   function groupPathTaken(fullPath: string, except: StandinGroup | null): "group" | "account" | null {
     const taken = (other: string): boolean => other.toLowerCase() === fullPath.toLowerCase();
     if (!fullPath.includes("/") && !script.admitLoginGroups && [script.person, ...script.accounts].some((account) => taken(account.login))) return "account";
-    if (script.groups.some((g) => g !== except && (g.kind === "group" || !script.admitLoginGroups) && taken(g.fullPath)) || script.takenGroups.some(taken)) return "group";
+    if (script.groups.some((g) => g !== except && !pendingRoot(g) && (g.kind === "group" || !script.admitLoginGroups) && taken(g.fullPath)) || script.takenGroups.some(taken)) return "group";
     return null;
   }
 
@@ -1736,7 +1736,10 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
       if (taken === "account") return envelope(res, 409, "name_taken", "This path is taken by an account.");
       if (taken === "group") return envelope(res, 409, "name_taken", "Failed to save group: Path has already been taken.");
       // Everything inside moves with it, on the Git system as at the host.
-      const inside = script.groups.filter((g) => g.kind === "group" && (g === group || g.fullPath.startsWith(`${from}/`)));
+      const inside = script.groups.filter((g) => {
+        const pending = pendingRoot(g);
+        return g.kind === "group" && (g === group || (g.fullPath.startsWith(`${from}/`) && (!pending || pending.fullPath.startsWith(`${from}/`))));
+      });
       const store = (fullPath: string): string => join(dir, storage, ...fullPath.split("/"));
       if (existsSync(store(from))) {
         mkdirSync(dirname(store(to)), { recursive: true });

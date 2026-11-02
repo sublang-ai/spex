@@ -416,9 +416,16 @@ function groupTree(entries: InstanceGroupState[]): GroupNode[] {
   for (const group of sorted) {
     const node = nodes.get(group)!;
     const path = group.fullPath.toLowerCase();
-    const parent = sorted
-      .filter((other) => other !== group && path.startsWith(`${other.fullPath.toLowerCase()}/`))
-      .sort((a, b) => b.fullPath.length - a.fullPath.length)[0];
+    const parents = sorted
+      .filter((other) => {
+        if (other === group || !path.startsWith(`${other.fullPath.toLowerCase()}/`)) return false;
+        if (other.pendingDeletion) return group.pendingDeletion && !!group.deletionRoot && group.deletionRoot === other.deletionRoot;
+        return !group.pendingDeletion || group.deletionRoot?.toLowerCase().startsWith(`${other.fullPath.toLowerCase()}/`);
+      })
+      .sort((a, b) => b.fullPath.length - a.fullPath.length);
+    // Distinct IDs may share a public path. Without a unique parent,
+    // keep the group separate rather than attach it to the first one.
+    const parent = parents[0]?.fullPath.length === parents[1]?.fullPath.length ? undefined : parents[0];
     if (parent) nodes.get(parent)!.children.push(node);
     else roots.push(node);
   }

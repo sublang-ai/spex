@@ -74,7 +74,7 @@ function apiRequests(host: StandinHost, from: number): string[] {
 /** Send one undo command and return its reply with the state broadcast
  * before it that `check` accepts: the core holds the stand-in's answer
  * and announces it first (git-host-18..20). */
-async function heldBefore<T extends "space.group.rename" | "space.group.delete" | "space.group.restore" | "space.repository.move">(
+async function heldBefore<T extends "space.group.create" | "space.group.rename" | "space.group.delete" | "space.group.restore" | "space.repository.move">(
   home: Home,
   type: T,
   fields: Omit<Extract<Command, { type: T }>, "type" | "id">,
@@ -203,6 +203,85 @@ test("space-79: a group renamed, a deletion without path confirmation refused an
   // Every reply and broadcast this client was sent names nothing behind
   // the instance (space-30, space-1).
   assert.deepEqual(leaks(host, [...broadcasts(home.client.messages), await home.client.expectOk("space.get", {}), ...replies]), []);
+});
+
+test("git-host-5: a pending group and its replacement retain separate IDs before and after refresh and rename", async (t) => {
+  const host = await startHost();
+  const home = await startHome("group-identity", { host, project: false, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  const mark = home.client.mark();
+  await signIn(home, host);
+  await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
+  host.script.scheduleGroupDeletion(true);
+  const refresh = async () => {
+    const from = home.client.mark();
+    const readAt = instanceOf(await home.client.expectOk("space.get", {}), host.url)?.readAt;
+    await home.client.expectOk("space.refresh", {});
+    return home.client.waitSpace(from, (state) => instanceOf(state, host.url)?.readAt !== readAt && instanceOf(state, host.url)?.read.phase === "idle");
+  };
+  // Exercise both a pending group held since creation and one already
+  // present in the last complete listing. A public path is not an ID.
+  for (const listed of [false, true]) {
+    const path = listed ? "listed-original" : "held-original";
+    const original = (await home.client.expectOk("space.group.create", { instance: host.url, name: "Original", path, parent: null })).group;
+    if (listed) {
+      // An externally scheduled subtree can coexist with a replacement;
+      // Spex's own deletion still requires an empty group.
+      host.script.groups.push({ id: `${original.id}-child`, fullPath: `${path}/child`, name: "Original child", kind: "group" });
+      host.script.groups.find((group) => group.id === original.id)!.pendingDeletion = true;
+      await refresh();
+    } else {
+      await home.client.expectOk("space.group.delete", { instance: host.url, group: original.id, confirmPath: path });
+    }
+    const created = await heldBefore(home, "space.group.create", { instance: host.url, name: "Replacement", path, parent: null }, (state) =>
+      entriesAt(state, host).filter((group) => group.fullPath === path).length === 2);
+    const replacement = created.reply.group;
+    assert.notEqual(original.id, replacement.id);
+    const check = (state: GroupsState, replacementPath: string, replacementName: string) => {
+      const groups = entriesAt(state, host);
+      assert.equal(groups.filter((group) => group.id === original.id).length, 1);
+      assert.equal(groups.filter((group) => group.id === replacement.id).length, 1);
+      const old = groups.find((group) => group.id === original.id)!;
+      const current = groups.find((group) => group.id === replacement.id)!;
+      assert.equal(old.fullPath, path);
+      assert.equal(old.name, "Original");
+      assert.equal(old.pendingDeletion, true);
+      assert.equal(current.fullPath, replacementPath);
+      assert.equal(current.name, replacementName);
+      assert.equal(current.pendingDeletion, undefined);
+      if (listed) {
+        const child = groups.find((group) => group.id === `${original.id}-child`)!;
+        assert.equal(child.fullPath, `${path}/child`);
+        assert.equal(child.pendingDeletion, true);
+        assert.equal(child.deletionRoot, path);
+      }
+    };
+    check(created.announced, path, "Replacement");
+    const renamedPath = `${path}-new`;
+    const renamed = await heldBefore(home, "space.group.rename", { instance: host.url, group: replacement.id, name: "Current", path: renamedPath }, (state) =>
+      entriesAt(state, host).some((group) => group.id === replacement.id && group.fullPath === renamedPath));
+    check(renamed.announced, renamedPath, "Current");
+    check(await refresh(), renamedPath, "Current");
+  }
+  // A repository can be listed before its newly created group reaches
+  // the catalog. Its known group ID must not borrow the pending heading.
+  const original = (await home.client.expectOk("space.group.create", { instance: host.url, name: "Old row owner", path: "row-owner", parent: null })).group;
+  await home.client.expectOk("space.group.delete", { instance: host.url, group: original.id, confirmPath: original.fullPath });
+  await refresh();
+  host.script.lagGroupListing(true);
+  const replacement = (await home.client.expectOk("space.group.create", { instance: host.url, name: "Current row owner", path: original.fullPath, parent: null })).group;
+  const repository = host.script.addRepository({ group: replacement.id, name: "notes-spex" });
+  const lagging = entriesAt(await refresh(), host);
+  assert.deepEqual(lagging.find((group) => group.id === original.id)?.repositories, []);
+  const owner = lagging.find((group) => group.id === replacement.id)!;
+  assert.ok(owner, "repository group ID keeps a separate heading while the catalog lags");
+  assert.equal(owner.fullPath, original.fullPath);
+  assert.equal(owner.name, replacement.name);
+  assert.deepEqual(owner.repositories.map((row) => row.id), [repository.id]);
+  assert.deepEqual(owner.can, { createSubgroup: false, manageMembers: false, rename: false, delete: false });
+  host.script.lagGroupListing(false);
+  const listed = entriesAt(await refresh(), host);
+  assert.deepEqual(listed.find((group) => group.id === replacement.id)?.repositories.map((row) => row.id), [repository.id]);
 });
 
 test("git-host-19/33/34: fresh group contents ignore members and stale local paths, name actual blockers, recheck races, and preserve empty-group schedule and restore", async (t) => {

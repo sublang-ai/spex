@@ -4340,6 +4340,12 @@ class RepositorySync {
   }
 }
 
+/** Group IDs stay authoritative when a pending original and its
+ * replacement share a public path (git-host-5). */
+function hostGroupKey(group: HostGroup): string {
+  return group.kind === "user" ? `login:${group.fullPath.toLowerCase()}` : group.id !== null ? `id:${group.id}` : `path:${group.fullPath}`;
+}
+
 /** One instance the core talks to, known by its canonical origin
  * (git-host intent, DR-127): its own client, which keeps that
  * instance's app token current, refreshes it one at a time and holds
@@ -4377,7 +4383,7 @@ class HostInstance {
    * held (git-host-5). */
   readonly attached = new Map<string, HostListing>();
   /** The groups this core created there since its view's read began, as
-   * it answered them, by full path: listed, like `attached`, until its
+   * it answered them, by identity: listed, like `attached`, until its
    * next read is held (git-host-5, git-host-15). */
   readonly created = new Map<string, HostGroup>();
   /** The login of the account it signed this device out of
@@ -5600,7 +5606,8 @@ export class SpaceManager {
    * next read is held (git-host-5, git-host-15). */
   private listedGroups(instance: HostInstance, view: Pick<HostView, "groups"> | undefined): HostGroup[] {
     const groups = view?.groups ?? [];
-    const held = [...instance.created.values()].filter((group) => !groups.some((entry) => entry.fullPath === group.fullPath || (group.id !== null && entry.id === group.id)));
+    const listed = new Set(groups.map(hostGroupKey));
+    const held = [...instance.created.values()].filter((group) => !listed.has(hostGroupKey(group)));
     return [...groups, ...held];
   }
 
@@ -7018,7 +7025,7 @@ export class SpaceManager {
     // is begun here: the host's listing may lag behind its creation
     // (git-host-5).
     instance.changedAfter = instance.readsBegun;
-    if (this.signedInAt(instance)) instance.created.set(created.fullPath, created);
+    if (this.signedInAt(instance)) instance.created.set(hostGroupKey(created), created);
     await this.publish();
     return { group: { id: created.id ?? "", fullPath: created.fullPath, name: created.name } };
   }
@@ -7057,14 +7064,20 @@ export class SpaceManager {
       throw this.hostWriteRefusal(instance, error);
     }
     const to = renamed.fullPath;
-    const here = (group: Pick<HostGroup, "id" | "fullPath">): boolean => group.id === id || group.fullPath === from;
+    const here = (group: Pick<HostGroup, "id" | "fullPath">): boolean => group.id !== null ? group.id === id : group.fullPath === from;
     const inside = (fullPath: string): string => fullPath.startsWith(`${from}/`) ? `${to}${fullPath.slice(from.length)}` : fullPath;
+    const descendant = (group: HostGroup): HostGroup => {
+      // A pending original can share the replacement's public path.
+      // Its inherited subtree belongs to that original, not this rename.
+      if (group.pendingDeletion && !group.deletionRoot?.startsWith(`${from}/`)) return group;
+      return { ...group, fullPath: inside(group.fullPath), ...(group.deletionRoot ? { deletionRoot: inside(group.deletionRoot) } : {}) };
+    };
     this.holdChange(instance, {
-      group: (group) => group.kind !== "group" ? group : here(group) ? { ...renamed, id, kind: "group" } : { ...group, fullPath: inside(group.fullPath) },
+      group: (group) => group.kind !== "group" ? group : here(group) ? { ...renamed, id, kind: "group" } : descendant(group),
       listing: (listing) => {
         const group = listing.repository.group;
         if (group.kind !== "group") return listing;
-        const next = here(group) ? { ...group, fullPath: to, name: renamed.name } : { ...group, fullPath: inside(group.fullPath) };
+        const next = here(group) ? { ...group, fullPath: to, name: renamed.name } : descendant(group);
         return { ...listing, repository: { ...listing.repository, group: next } };
       },
     });
@@ -7199,7 +7212,7 @@ export class SpaceManager {
     if (change.group) {
       const held = groups([...instance.created.values()]);
       instance.created.clear();
-      for (const group of held) instance.created.set(group.fullPath, group);
+      for (const group of held) instance.created.set(hostGroupKey(group), group);
     }
     if (change.listing) for (const [id, listing] of [...instance.attached]) instance.attached.set(id, change.listing(listing));
     for (const target of instance.targets.values()) {
@@ -8335,12 +8348,14 @@ export class SpaceManager {
       }
       return entry;
     };
-    const unlisted = (heading: Heading, path: string): InstanceGroupState => {
-      let entry = heading.byPath.get(path);
+    const unlisted = (heading: Heading, path: string, group?: HostGroup): InstanceGroupState => {
+      const id = group?.id ?? null;
+      let entry = id !== null ? heading.byId.get(id) : heading.byPath.get(path);
       if (!entry) {
-        entry = { id: null, login: null, mine: false, fullPath: path, name: path.split("/").pop() ?? path, can: noCan(), placed: [], repositories: [] };
+        entry = { id, login: null, mine: false, fullPath: path, name: group?.name ?? path.split("/").pop() ?? path, can: noCan(), ...(group?.pendingDeletion ? { pendingDeletion: true } : {}), ...(group?.deletionRoot ? { deletionRoot: group.deletionRoot } : {}), placed: [], repositories: [] };
         heading.entries.push(entry);
-        heading.byPath.set(path, entry);
+        if (id !== null) heading.byId.set(id, entry);
+        if (!heading.byPath.has(path)) heading.byPath.set(path, entry);
       }
       return entry;
     };
@@ -8366,7 +8381,7 @@ export class SpaceManager {
     // The entry a listed group stands as under its instance's heading.
     const entryOf = (heading: Heading, group: HostGroup): InstanceGroupState => group.kind === "user"
       ? namespace(heading, group.fullPath)
-      : (group.id !== null && heading.byId.get(group.id)?.fullPath === group.fullPath ? heading.byId.get(group.id)! : unlisted(heading, group.fullPath));
+      : unlisted(heading, group.fullPath, group);
     const own: RepositoryState[] = [];
     // The rows a read lists first, so every login's entry stands before
     // a row no read lists falls back to its key.
