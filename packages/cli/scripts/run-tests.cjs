@@ -24,9 +24,12 @@ if (files.length === 0) {
 }
 
 // --test-timeout turns a hung test into a named failure; force-exit
-// keeps a leaked handle from zombifying the run.
+// keeps a leaked handle from zombifying the run. The packed-command
+// integration file starts many native CLI processes; Windows private-storage
+// checks make its cumulative run exceed three minutes on native hosts.
+const timeoutMs = process.platform === "win32" ? 600000 : 180000;
 execFileSync(
   process.execPath,
-  ["--test", "--test-timeout=180000", "--test-force-exit", ...files],
+  ["--test", `--test-timeout=${timeoutMs}`, "--test-force-exit", ...files],
   { stdio: "inherit" },
 );

@@ -12,12 +12,15 @@ const root = resolve(import.meta.dirname, "..");
 const workflow = parse(readFileSync(join(root, ".github/workflows/ci.yml"), "utf8"));
 const laneWorkflow = parse(readFileSync(join(root, ".github/workflows/hub-lane.yml"), "utf8"));
 
-/** The check names the merge rule requires (release-29): what the suites report on a pull request, and what the stand-in reports for documentation alone (release-34). */
+/** The check names the merge rule requires (release-29): what the suites report on a pull request, and what the stand-in reports for documentation alone (release-34, DR-185). */
 const PULL_REQUEST_CHECKS = [
   "changes",
-  "test (ubuntu-latest, 22)", "test (ubuntu-latest, 24)", "test (windows-latest, 22)",
-  "journeys (ubuntu-latest)", "desktop-browser (ubuntu-latest)",
+  "test (ubuntu-latest, 22)", "test (windows-latest, 22)",
+  "journeys (ubuntu-latest, 1)", "journeys (ubuntu-latest, 2)", "journeys (ubuntu-latest, 3)",
+  "desktop-browser (ubuntu-latest)",
 ];
+/** The classifier's reach of a change, as the test job reads it (release-34, DR-185). */
+const AFFECTED = "needs.changes.outputs.affected";
 /** The suites run only where the classifier succeeded and found more than documentation (release-34). */
 const SUITE_CONDITION = "needs.changes.result == 'success' && needs.changes.outputs.docs-only != 'true'";
 /** The stand-in runs only where the classifier succeeded and found documentation alone (release-34, DR-169). */
@@ -29,7 +32,7 @@ test("release-33: one run per pull-request head, cancelled by its next push and 
   assert.ok(Array.isArray(workflow.on.schedule) && workflow.on.schedule.length === 1, "a nightly schedule runs the full matrix");
 });
 
-test("release-33: a pull request runs the reduced matrix, main and the nightly the whole; the required checks are that run's jobs (release-29, release-34)", () => {
+test("release-33: a pull request runs the reduced matrix on one Node with the journeys in three shards, main and the nightly the whole; the required checks are that run's jobs (release-29, release-34, DR-185)", () => {
   // The matrices narrow by event through expressions: a job-level `if`
   // cannot read the matrix, so each matrix picks its own rows.
   const byEvent = (expression) => {
@@ -40,15 +43,23 @@ test("release-33: a pull request runs the reduced matrix, main and the nightly t
   const test = workflow.jobs.test;
   const lfs = test.steps.find((step) => step.run === "git lfs version");
   assert.ok(lfs, "complete app tests require real Git LFS");
-  assert.equal(lfs.if, "runner.os != 'Windows'", "the prerequisite runs wherever complete app tests run");
+  const reach = test.steps.find((step) => step.name === "Tests the change reaches");
+  assert.ok(reach, "the app tests run where the change reaches");
+  assert.equal(lfs.if, reach.if, "the prerequisite runs wherever complete app tests run");
+  assert.equal(lfs.if, "runner.os != 'Windows'");
+  // A pull request runs Node 22 alone: Linux and Windows, no macOS and no Node 24.
   const exclude = byEvent(test.strategy.matrix.exclude);
-  assert.deepEqual(exclude.pullRequest, [{ os: "windows-latest", "node-version": 24 }, { os: "macos-latest", "node-version": 22 }, { os: "macos-latest", "node-version": 24 }]);
+  assert.deepEqual(exclude.pullRequest, [{ os: "windows-latest", "node-version": 24 }, { os: "macos-latest", "node-version": 22 }, { os: "macos-latest", "node-version": 24 }, { os: "ubuntu-latest", "node-version": 24 }]);
   assert.deepEqual(exclude.other, [{ os: "windows-latest", "node-version": 24 }]);
   for (const name of ["journeys", "desktop-browser"]) {
     const os = byEvent(workflow.jobs[name].strategy.matrix.os);
     assert.deepEqual(os.pullRequest, ["ubuntu-latest"], name);
     assert.deepEqual(os.other, ["ubuntu-latest", "macos-latest"], name);
   }
+  // The journeys run as three shards on every event; the other suites are not sharded.
+  assert.deepEqual(Object.keys(workflow.jobs.journeys.strategy.matrix), ["os", "shard"], "the shard follows the os in the job's name");
+  assert.deepEqual(workflow.jobs.journeys.strategy.matrix.shard, [1, 2, 3]);
+  assert.deepEqual(Object.keys(workflow.jobs["desktop-browser"].strategy.matrix), ["os"]);
   // Every name the suites report on a pull request is a required check, and nothing else is.
   const excluded = new Set(exclude.pullRequest.map((row) => `${row.os}:${row["node-version"]}`));
   const onPullRequest = [];
@@ -56,20 +67,37 @@ test("release-33: a pull request runs the reduced matrix, main and the nightly t
     if (excluded.has(`${os}:${node}`)) continue;
     onPullRequest.push(`test (${os}, ${node})`);
   }
-  for (const name of ["journeys", "desktop-browser"]) for (const os of byEvent(workflow.jobs[name].strategy.matrix.os).pullRequest) onPullRequest.push(`${name} (${os})`);
+  for (const os of byEvent(workflow.jobs.journeys.strategy.matrix.os).pullRequest) for (const shard of workflow.jobs.journeys.strategy.matrix.shard) onPullRequest.push(`journeys (${os}, ${shard})`);
+  for (const os of byEvent(workflow.jobs["desktop-browser"].strategy.matrix.os).pullRequest) onPullRequest.push(`desktop-browser (${os})`);
   onPullRequest.push("changes");
   assert.deepEqual(PULL_REQUEST_CHECKS.slice().sort(), onPullRequest.sort());
 });
 
-test("release-33: documentation alone keeps the spec gates and skips the suites behind a required classifier (release-34)", () => {
+test("release-33: the classifier names the reach of a pull request's change; documentation alone keeps the spec gates and skips the suites behind it (release-34, DR-185)", () => {
   const changes = workflow.jobs.changes;
   assert.equal(changes["runs-on"], "ubuntu-latest");
-  assert.equal(changes.outputs["docs-only"], "${{ steps.classify.outputs.docs-only }}");
-  const classify = changes.steps.find((step) => step.id === "classify");
-  assert.ok(classify, "a classify step");
-  assert.match(classify.run, /git diff --name-only "origin\/\$\{\{ github\.base_ref \}\}\.\.\.HEAD"/, "the pull request's own changes");
-  assert.match(classify.run, /docs\/\*\|specs\/\*\|\*\.md\)/, "documentation is docs/, specs/ and Markdown");
-  assert.match(classify.run, /github\.event_name \}\}" = "pull_request"/, "a push and the nightly never count as documentation alone");
+  assert.deepEqual(changes.outputs, { "docs-only": "${{ steps.classify.outputs.docs-only }}", affected: "${{ steps.classify.outputs.affected }}" });
+  const classifyAt = changes.steps.findIndex((step) => step.id === "classify");
+  assert.ok(classifyAt >= 0, "a classify step");
+  const classify = changes.steps[classifyAt];
+  const nodeAt = changes.steps.findIndex((step) => typeof step.uses === "string" && step.uses.startsWith("actions/setup-node@"));
+  assert.ok(nodeAt >= 0 && nodeAt < classifyAt, "Node is set up before the classifier runs");
+  assert.equal(changes.steps[nodeAt].if, undefined, "on every event");
+  assert.equal(changes.steps[nodeAt].with["node-version"], 22);
+  assert.equal(classify.shell, "bash", "a failing classifier fails its pipe");
+  assert.match(classify.run, /github\.event_name \}\}" = "pull_request"/, "a pull request's change is classified");
+  assert.match(classify.run, /node scripts\/affected-tests\.mjs --base "origin\/\$\{\{ github\.base_ref \}\}" --github-output \| tee -a "\$GITHUB_OUTPUT"/, "the pull request's own changes against its base");
+  // A push to main and the nightly reach everything and never count as documentation alone.
+  for (const event of ["push", "schedule"]) {
+    const dir = mkdtempSync(join(tmpdir(), "spex-classify-"));
+    const output = join(dir, "output");
+    writeFileSync(output, "");
+    const run = spawnSync("bash", ["-e", "-o", "pipefail", "-c", classify.run.replaceAll("${{ github.event_name }}", event).replaceAll("${{ github.base_ref }}", "main")], {
+      cwd: root, encoding: "utf8", env: { ...process.env, GITHUB_OUTPUT: output },
+    });
+    assert.equal(run.status, 0, `${event}: ${run.stderr}`);
+    assert.equal(readFileSync(output, "utf8"), "docs-only=false\naffected=all\n", event);
+  }
   const gates = changes.steps.find((step) => step.name === "Documentation alone keeps the spec gates");
   assert.ok(gates && gates.if === "steps.classify.outputs.docs-only == 'true'", "the gates run for documentation alone");
   for (const command of ["npm test -w packages/cli", "node packages/cli/dist/cli.js lint"]) assert.ok(gates.run.includes(command), command);
@@ -78,6 +106,37 @@ test("release-33: documentation alone keeps the spec gates and skips the suites 
     assert.equal(workflow.jobs[name].if, SUITE_CONDITION, `${name} runs past the classifier alone`);
     assert.equal(workflow.jobs[name].name, undefined, `${name} reports under its job id and matrix values`);
   }
+});
+
+test("release-33: the test job runs the suites the change reaches, and each Windows suite where the change reaches its workspace (release-34, DR-185)", () => {
+  const steps = workflow.jobs.test.steps;
+  const reach = steps.find((step) => step.name === "Tests the change reaches");
+  assert.equal(reach.run, `node scripts/affected-tests.mjs --run "\${{ ${AFFECTED} }}"`);
+  assert.equal(reach.if, "runner.os != 'Windows'");
+  assert.ok(!steps.some((step) => /^npm test\s*$/.test(step.run ?? "")), "no step runs every suite regardless of the reach");
+  const windows = [
+    ["Windows scaffold tests", "packages/cli", "npm test -w packages/cli"],
+    ["Windows UI tests", "packages/ui", "npm test -w packages/ui"],
+    ["Windows native storage and unsupported-host refusal", "packages/core", "node --test packages/core/dist/platform.integration.test.js packages/core/dist/windows-storage.integration.test.js"],
+  ];
+  for (const [name, folder, run] of windows) {
+    const step = steps.find((candidate) => candidate.name === name);
+    assert.ok(step, name);
+    assert.equal(step.run, run, name);
+    assert.equal(step.if, `runner.os == 'Windows' && (${AFFECTED} == 'all' || contains(${AFFECTED}, '${folder}'))`, name);
+  }
+  assert.deepEqual(steps.filter((step) => /Windows/.test(step.if ?? "") && step.if !== "runner.os != 'Windows'").map((step) => step.name), windows.map(([name]) => name), "no other Windows step");
+});
+
+test("release-33: each journey shard runs its third of the journeys and keeps its own report (release-34, DR-185)", () => {
+  const steps = workflow.jobs.journeys.steps;
+  const journeys = steps.find((step) => step.name === "Browser journeys");
+  assert.equal(journeys.run, "npm run e2e -- --shard=${{ matrix.shard }}/3");
+  // npm reads an option after a script's name as its own unless a `--` precedes it, so the root script ends with one.
+  assert.equal(JSON.parse(readFileSync(join(root, "package.json"), "utf8")).scripts.e2e, "npm run journeys -w e2e --", "the shard reaches Playwright");
+  const report = steps.find((step) => typeof step.uses === "string" && step.uses.startsWith("actions/upload-artifact@"));
+  assert.ok(report && report.if === "failure()", "a failed shard keeps its report");
+  assert.equal(report.with.name, "journey-report-${{ matrix.os }}-${{ matrix.shard }}", "one artifact name per shard");
 });
 
 test("release-33: documentation alone reports success under each of the suites' required names through a stand-in, and under no other condition (release-34)", () => {

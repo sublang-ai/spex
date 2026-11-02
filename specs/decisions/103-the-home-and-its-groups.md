@@ -38,6 +38,7 @@ Amended by [DR-128](128-a-spex-repository-placed-at-several-instances.md) in its
 Amended by [DR-134](134-execution-ownership.md) in "you can continue it only on a device where the project's working folder is the one it ran in": a session continues only on the runtime it is assigned to.
 Amended by [DR-132](132-team-servers.md) in "Spex adds no access control", your own group's sign-in and "What lives where": a seat holds its lease, places your own group nowhere and holds a `projects/` tree.
 Amended by [DR-159](159-projects-in-groups-opened-where-you-work.md) in the Space surface's rows: a row is a project, named as its code is, never a spex repository named `<name>-spex`; a group's own repository reads as the group's own sessions; the Git of the records is reached from a row's overflow and shown on no row.
+Amended by [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md) in a player a project names and your roster lacks: the role runs on the Captain's agent until you set the player up, a row in Settings and no longer a config error.
 
 ## Context
 

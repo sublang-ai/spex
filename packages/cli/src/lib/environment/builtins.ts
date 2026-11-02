@@ -464,6 +464,30 @@ export function ensureBuiltinRequest(root: string, version: string, space: strin
   return true;
 }
 
+/**
+ * A new project's environment at its pairing (storage-6, DR-176): where
+ * the working folder holds no `spex.yaml`, one naming the public
+ * registry as every new file does (environments-38), `space` where the
+ * project's spex repository is placed at an instance (DR-170), and
+ * requesting nothing — the built-in spec package is a global package,
+ * never a project's request (environments-11). Created exclusively, so a
+ * file written meanwhile stands; a root that does not exist is left as
+ * it is. Returns whether it wrote.
+ */
+export function prepareProjectEnvironment(root: string, space: string | null = null): boolean {
+  if (!existsSync(root)) return false;
+  const doc = new Document({ format: 1, ...(space !== null ? { space } : {}), registry: PUBLIC_REGISTRY_ORIGIN, packages: {} });
+  const text = doc.toString({ lineWidth: 0 });
+  parseRequests(text);
+  try {
+    writeVersionedBytes(join(root, "spex.yaml"), text, null);
+  } catch (error) {
+    if (error instanceof VersionConflictError) return false;
+    throw error;
+  }
+  return true;
+}
+
 /** A registry that answers `sublang/playbooks` from the built-in source
  * first — offline, from what this device seeded — and everything else
  * from the remote registry, whose URL the lock records. */

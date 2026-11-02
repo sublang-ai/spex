@@ -268,12 +268,16 @@ test("the retired profile key is rejected on captain and player blocks", async (
   );
 });
 
-test("missing or empty playbooks are rejected", async () => {
+test("core-service-2: no written entry is no error, while playbooks that is no mapping is refused", async () => {
+  // Every placed playbook runs on its default binding (DR-176), so a
+  // file writing none composes.
   const top = baseConfig();
   delete top.playbooks;
-  await expectError(top, /^playbooks must be an object$/);
+  assert.deepEqual((await compose(top, stubLoader)).playbooks, []);
   top.playbooks = {};
-  await expectError(top, /^playbooks must enable at least one playbook$/);
+  assert.deepEqual((await compose(top, stubLoader)).playbooks, []);
+  top.playbooks = ["code"];
+  await expectError(top, /^playbooks must be an object$/);
 });
 
 test("captain must resolve an adapter", async () => {
@@ -334,8 +338,8 @@ test("playbook-library-91: a compiled module's compatibility guidance is truthfu
           : stubLoader(specifier);
         await assert.rejects(compose(top, loader, undefined, { modules: compiled }), (error: Error) => {
           const expected = language === "zh"
-            ? `playbooks.code：其模块“${registry}”与此版本的 Spex 不兼容；请在“规程”中编译其源文本以启用“code”`
-            : `playbooks.code: its module "${registry}" is not compatible with this version of Spex; compile its source in Playbooks to enable "code"`;
+            ? `playbooks.code：其模块“${registry}”与此版本的 Spex 不兼容；请在“规程”中编译其源文本以运行“code”`
+            : `playbooks.code: its module "${registry}" is not compatible with this version of Spex; compile its source in Playbooks to run "code"`;
           assert.equal(error.message, expected);
           assert.ok(error instanceof RegistryError);
           assert.equal(error.kind, "stale");
@@ -401,12 +405,18 @@ test("role bindings cover the manifest exactly, as the launcher requires", async
     /^playbooks\.code\.roles must exactly cover requiredRoleIds; unknown reviewer$/,
   );
 
+  // A player the roster lacks plays on the Captain's block without its
+  // instruction, flagged to set up, refusing nothing (core-service-2).
   const absent = baseConfig();
   codeRoles(absent).coder = "dev.nobody";
-  await expectError(
-    absent,
-    /^playbooks\.code\.roles\.coder names absent session player "dev\.nobody"$/,
-  );
+  const standIn = await compose(absent, stubLoader);
+  assert.deepEqual(standIn.toSetUp, ["dev.nobody"]);
+  const { instruction: _instruction, ...captain } = standIn.captainAgent;
+  assert.deepEqual(standIn.players.find((player) => player.id === "dev.nobody"), { id: "dev.nobody", ...captain });
+  assert.equal(standIn.captainOptions.sessionAgents.players["dev.nobody"]?.adapter, standIn.captainAgent.adapter);
+  assert.equal(standIn.captainOptions.sessionAgents.players["dev.nobody"]?.instruction, undefined);
+  assert.equal(standIn.captainOptions.playbooks.code.roles.coder.playerId, "dev.nobody");
+  assert.ok(!standIn.roster.some((player) => player.id === "dev.nobody"), "the roster stays the file's");
 
   // Adapter and permissions belong to the player envelope and are
   // refused inside a binding.
@@ -799,13 +809,15 @@ test("cwd acceptance probe marks entries that take a cwd option", async () => {
   );
 });
 
-test("command overrides land in captain options and duplicates are rejected", async () => {
+test("core-service-2: command overrides land in captain options; of two playbooks of one command, one composes and the other stands aside", async () => {
   const top = baseConfig();
   codeBlock(top).command = "build";
   const composed = await compose(top, stubLoader);
   assert.equal(composed.captainOptions.playbooks.code.command, "build");
   assert.equal(composed.playbooks[0].command, "build");
 
+  // Two written entries of one command, both from the global
+  // environment: the first by spec package name composes.
   const dupes = baseConfig();
   (dupes.playbooks as Record<string, unknown>).other = {
     roles: {
@@ -816,7 +828,126 @@ test("command overrides land in captain options and duplicates are rejected", as
     specifier === "@sublang/playbook/other/registry"
       ? { default: registryEntry({ id: "other", command: "code" }) }
       : stubLoader(specifier);
-  await expectError(dupes, /^duplicate effective command "code"$/, loader);
+  const modules: PlaybookModules = {
+    repository: "me/me-spex",
+    find: (id) => ({ module: `@sublang/playbook/${id}/registry`, builtin: true, package: id === "other" ? "zeta/other" : "sublang/playbooks", version: "1.0.0", environment: "own", repository: "me/me-spex" }),
+  };
+  const clashed = await compose(dupes, loader, undefined, { modules });
+  assert.equal(clashed.playbooks.find((playbook) => playbook.command === "code")?.id, "code");
+  assert.ok(!clashed.playbooks.some((playbook) => playbook.id === "other"));
+  assert.deepEqual(clashed.standsAside, [{ playbook: "other", package: "zeta/other", reason: "/code is sublang/playbooks's", winner: "sublang/playbooks" }]);
+});
+
+/** The environments placing playbooks, standing in: each location the
+ * stub loader's specifier, the project's listed first (environments-9). */
+function placedModules(locations: { id: string; package: string; environment: "project" | "own"; present?: boolean; module?: string }[], repository = "acme/app-spex"): PlaybookModules {
+  const placed = locations.map((location) => ({
+    id: location.id,
+    module: location.module ?? `@sublang/playbook/${location.id}/registry`,
+    builtin: true,
+    package: location.package,
+    version: "1.0.0",
+    environment: location.environment,
+    repository: location.environment === "project" ? repository : "me/me-spex",
+    present: location.present ?? true,
+  }));
+  return {
+    repository,
+    find: (id) => {
+      const found = placed.find((location) => location.id === id && location.present);
+      if (!found) return undefined;
+      const { id: _id, present: _present, ...module } = found;
+      return module;
+    },
+    placed: () => placed.map((location) => ({ ...location })),
+  };
+}
+
+test("core-service-2: a placed playbook no entry binds composes on dev.<role>, the missing players on the Captain's block", async () => {
+  const top = baseConfig();
+  top.playbooks = {};
+  const modules = placedModules([
+    { id: "dev", package: "sublang/playbooks", environment: "own" },
+    { id: "review", package: "sublang/playbooks", environment: "own" },
+  ]);
+  const composed = await compose(top, stubLoader, undefined, { modules });
+  assert.deepEqual(composed.playbooks.map((playbook) => [playbook.id, playbook.origin, playbook.package]), [["dev", "default", "sublang/playbooks"], ["review", "default", "sublang/playbooks"]]);
+  assert.equal(composed.captainOptions.playbooks.dev.roles.analyst.playerId, "dev.analyst");
+  assert.equal(composed.captainOptions.playbooks.review.roles.coder.playerId, "dev.coder");
+  assert.equal(composed.captainOptions.playbooks.review.roles.reviewer.playerId, "dev.reviewer");
+  // The roster's own players play where it names them; the rest stand in.
+  const rostered = Object.keys(roster(top));
+  for (const id of ["dev.analyst", "dev.coder", "dev.reviewer"]) {
+    assert.equal(composed.toSetUp.includes(id), !rostered.includes(id), `${id} to set up only where the roster lacks it`);
+  }
+  // The summary lists each player to set up, flagged.
+  const summary = summarizeConfig({ path: "/c", raw: top, composed });
+  for (const id of composed.toSetUp) {
+    assert.equal(summary.players.find((player) => player.id === id)?.toSetUp, true);
+  }
+  assert.ok(summary.players.filter((player) => player.toSetUp !== true).every((player) => rostered.includes(player.id)));
+  assert.equal(summary.playbooks.find((playbook) => playbook.id === "dev")?.origin, "default");
+  // Roles of other characters read as valid segmented ids.
+  const odd = await compose(top, async (specifier) => specifier.includes("/dev/")
+    ? { default: registryEntry({ id: "dev", command: "dev", requiredRoleIds: ["Code Reviewer", "9lives"] }) }
+    : stubLoader(specifier), undefined, { modules });
+  assert.deepEqual(Object.values(odd.captainOptions.playbooks.dev.roles).map((binding) => binding.playerId), ["dev.code-reviewer", "dev.role-9lives"]);
+});
+
+test("core-service-2: a default that will not compose stands aside and invalidates nothing; one both environments place composes once, the project's", async () => {
+  const top = baseConfig();
+  top.playbooks = {};
+  const modules = placedModules([
+    { id: "review", package: "acme/review", environment: "project", module: "@sublang/playbook/project-review/registry" },
+    { id: "review", package: "sublang/playbooks", environment: "own" },
+    { id: "dev", package: "sublang/playbooks", environment: "own" },
+    { id: "inspect", package: "sublang/playbooks", environment: "own", present: false },
+  ]);
+  const loader: LoadModule = async (specifier) => {
+    if (specifier === "@sublang/playbook/project-review/registry") return { default: reviewEntry() };
+    // A default whose concurrent roles share one player stands aside.
+    if (specifier === "@sublang/playbook/dev/registry") return { default: registryEntry({ id: "dev", command: "dev", requiredRoleIds: ["Lead", "lead"], concurrentRoleSets: [["Lead", "lead"]] }) };
+    return stubLoader(specifier);
+  };
+  const composed = await compose(top, loader, undefined, { modules });
+  assert.deepEqual(composed.playbooks.map((playbook) => playbook.id), ["review"]);
+  assert.equal(composed.playbooks[0]?.package, "acme/review", "the project's copy");
+  assert.equal(composed.playbooks[0]?.environment, "project");
+  assert.deepEqual(composed.standsAside.map((entry) => entry.playbook).sort(), ["dev", "inspect"]);
+  assert.match(composed.standsAside.find((entry) => entry.playbook === "dev")!.reason, /must bind to distinct players/);
+  assert.equal(composed.standsAside.find((entry) => entry.playbook === "inspect")!.reason, "sublang/playbooks places inspect, but its files are not on this computer");
+});
+
+test("core-service-2: one command — the project's over the global, a written entry over a default, else the first package by name", async () => {
+  const loader: LoadModule = async (specifier) => {
+    const id = /playbook\/([^/]+)\/registry/.exec(specifier)?.[1] ?? "";
+    if (["alpha", "beta", "gamma"].includes(id)) return { default: registryEntry({ id, command: "go" }) };
+    return stubLoader(specifier);
+  };
+  const top = baseConfig();
+  top.playbooks = {};
+  // The project's default over the global's.
+  const projectFirst = await compose(top, loader, undefined, { modules: placedModules([
+    { id: "beta", package: "acme/beta", environment: "project" },
+    { id: "alpha", package: "acme/alpha", environment: "own" },
+  ]) });
+  assert.deepEqual(projectFirst.playbooks.map((playbook) => playbook.id), ["beta"]);
+  assert.deepEqual(projectFirst.standsAside, [{ playbook: "alpha", package: "acme/alpha", reason: "/go is acme/beta's", winner: "acme/beta" }]);
+  // A written entry over a default, within one environment.
+  const written = baseConfig();
+  written.playbooks = { gamma: { roles: { coder: String(codeRoles(baseConfig()).coder) } } };
+  const writtenFirst = await compose(written, loader, undefined, { modules: placedModules([
+    { id: "alpha", package: "acme/alpha", environment: "own" },
+    { id: "gamma", package: "acme/gamma", environment: "own" },
+  ]) });
+  assert.deepEqual(writtenFirst.playbooks.map((playbook) => [playbook.id, playbook.origin]), [["gamma", "own"]]);
+  assert.equal(writtenFirst.standsAside[0]?.winner, "acme/gamma");
+  // Else the first by package name.
+  const byName = await compose(top, loader, undefined, { modules: placedModules([
+    { id: "gamma", package: "acme/gamma", environment: "own" },
+    { id: "alpha", package: "acme/alpha", environment: "own" },
+  ]) });
+  assert.deepEqual(byName.playbooks.map((playbook) => playbook.id), ["alpha"]);
 });
 
 test("seedConfig creates once and never overwrites", () => {
@@ -847,23 +978,26 @@ test("resolveConfigPath honors SPEX_HOME and falls back to ~/.spex", () => {
   assert.equal(resolveConfigPath({ SPEX_HOME: root }, "/home/u"), join(root, "workspace", "alice", "alice-spex", "config", "playbook.config.yaml"));
 });
 
-test("environments-9: an enabled playbook comes from the environments' modules, and one none exports is a config error naming both", async () => {
+test("environments-9: a written entry's playbook comes from the environments' modules, and one none places stands aside naming both", async () => {
   const requested: string[] = [];
   const recording: LoadModule = async (specifier) => { requested.push(specifier); return stubLoader(specifier); };
   const composed = await compose(baseConfig(), recording);
   assert.equal(composed.captainOptions.playbooks.code.from, "@sublang/playbook/code/registry");
   assert.ok(requested.includes("@sublang/playbook/code/registry"));
-  // An id no environment of the session exports is unavailable, by its
-  // kind, naming the playbook and the spex repository lacking it.
+  // An id no environment of the session places stands aside, naming the
+  // playbook and the spex repository lacking it, and blocks nothing.
   const unknown = baseConfig();
   (unknown.playbooks as Record<string, unknown>).triage = { roles: { triager: String(codeRoles(unknown).coder) } };
   const lacking: PlaybookModules = { repository: "acme/app-spex", find: (id) => (id === "triage" ? undefined : STUB_MODULES.find(id)) };
-  await assert.rejects(compose(unknown, stubLoader, undefined, { modules: lacking }), (error: Error) => {
-    assert.ok(error instanceof RegistryError);
-    assert.equal(error.kind, "unavailable");
-    assert.equal(error.message, "playbooks.triage is enabled, but no package of acme/app-spex places a playbook triage");
-    return true;
-  });
+  const standing = await compose(unknown, stubLoader, undefined, { modules: lacking });
+  assert.ok(!standing.playbooks.some((playbook) => playbook.id === "triage"));
+  assert.ok(standing.playbooks.some((playbook) => playbook.id === "code"), "the rest composes");
+  assert.deepEqual(standing.standsAside, [{ playbook: "triage", reason: "playbooks.triage: no package of acme/app-spex places a playbook triage" }]);
+  // One placed whose files are not on this device stands aside the same
+  // way, naming its package.
+  const absent = placedModules([{ id: "triage", package: "acme/triage", environment: "project", present: false }]);
+  const gone = await compose(unknown, stubLoader, undefined, { modules: { ...absent, find: (id) => (id === "triage" ? absent.find(id) : STUB_MODULES.find(id)), placed: () => absent.placed!().filter((location) => location.id === "triage") } });
+  assert.deepEqual(gone.standsAside, [{ playbook: "triage", package: "acme/triage", reason: "playbooks.triage: acme/triage places it, but its files are not on this computer" }]);
 });
 
 test("core-service-2: a project's file layers on yours, naming players only", async () => {
@@ -875,8 +1009,10 @@ test("core-service-2: a project's file layers on yours, naming players only", as
   const project = { playbooks: { code: { roles: { coder: other } } } };
   const composed = await compose(own, stubLoader, undefined, { project: { top: project, path: "/p/config/playbook.config.yaml" } });
   assert.equal(composed.captainOptions.playbooks.code.roles.coder.playerId, other);
-  // Its playbooks join yours: review stays enabled.
+  // Its playbooks join yours: review still runs, by your entry.
   assert.ok(composed.playbooks.some((playbook) => playbook.id === "review"));
+  assert.equal(composed.playbooks.find((playbook) => playbook.id === "code")?.origin, "project");
+  assert.equal(composed.playbooks.find((playbook) => playbook.id === "review")?.origin, "own");
   // Forbidden entries are config errors naming the entry.
   for (const [bad, entry] of [
     [{ captain: { adapter: "claude" } }, "captain"],
@@ -888,11 +1024,12 @@ test("core-service-2: a project's file layers on yours, naming players only", as
     assert.throws(() => validateProjectConfig(bad, "/p/config/playbook.config.yaml"), new RegExp(`${entry.replace(/\./g, "\\.")} is not allowed in a project's settings`));
     await assert.rejects(compose(own, stubLoader, undefined, { project: { top: bad, path: "/p" } }), new RegExp(entry.replace(/\./g, "\\.")));
   }
-  // A player the project names and yours lacks fails composition, named.
-  await assert.rejects(
-    compose(own, stubLoader, undefined, { project: { top: { playbooks: { code: { roles: { coder: "team.missing" } } } }, path: "/p" } }),
-    /absent session player "team\.missing"/,
-  );
+  // A player the project names and yours lacks plays on the Captain's
+  // block, flagged to set up, refusing nothing (settings-46).
+  const missing = await compose(own, stubLoader, undefined, { project: { top: { playbooks: { code: { roles: { coder: "team.missing" } } } }, path: "/p" } });
+  assert.deepEqual(missing.toSetUp, ["team.missing"]);
+  assert.equal(missing.captainOptions.playbooks.code.roles.coder.playerId, "team.missing");
+  assert.equal(missing.captainOptions.sessionAgents.players["team.missing"]?.adapter, missing.captainAgent.adapter);
 });
 
 // DR-024: readiness combines the runtime half with the credential half.

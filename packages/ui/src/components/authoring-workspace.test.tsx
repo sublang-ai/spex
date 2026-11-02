@@ -1,22 +1,26 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// DR-058/DR-104 authoring coverage over a simulated document: the
-// Authoring section and the New playbook field (playbook-library-50/51),
-// the workspace's header, tabs, and compile control by the state table
-// (playbook-library-52/57/59/60), the conversation's bubbles, cards,
-// and running mark (playbook-library-53), the composer's labels and
-// queue (playbook-library-54), the agent picker (playbook-library-55),
-// the Source tab's path, edit, conflict, and paste paths
+// DR-058/DR-104/DR-176 authoring coverage over a simulated document:
+// the Authoring section and the New playbook field of the project's
+// Playbooks tab and of the Playbooks surface, each listing and creating
+// in its own environment (playbook-library-50/51), the workspace's
+// header, tabs — Source, Gears, Machine, Add — and compile control by
+// the state table (playbook-library-52/57/59/60), the conversation's
+// bubbles, cards — "Proposed /<command>" with "Open Add" — and running
+// mark (playbook-library-53), the composer's labels and queue
+// (playbook-library-54), the agent picker (playbook-library-55), the
+// Source tab's path, edit, conflict, and paste paths
 // (playbook-library-56), the band's phases, failure and Cancel
-// (playbook-library-57/58, playbook-library-30), the Enable tab's
-// prefill precedence, mismatch and spex repository
-// (playbook-library-61) and its role defaults (playbook-library-88),
-// Publish beneath it (playbook-library-93) or "Sign in to publish at
-// <name>" by the project's instance and the home's
-// (playbook-library-111), Delete's confirm (playbook-library-63), the
-// example prefill (playbook-library-35), and the 14-character budget on
-// every workspace control (DR-041).
+// (playbook-library-57/58, playbook-library-30), the Add tab's prefill
+// precedence and mismatch, asking no destination, and the card it lists
+// with its success line (playbook-library-61, playbook-library-10) and
+// its role defaults (playbook-library-88), Publish beneath it
+// (playbook-library-93) or "Sign in to publish at <name>" by the
+// project's instance and the home's (playbook-library-111), Delete's
+// confirm (playbook-library-63), the example prefill
+// (playbook-library-35), and the 14-character budget on every workspace
+// control (DR-041).
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
@@ -41,6 +45,7 @@ vi.mock("../state/store.js", async (importOriginal) => {
 });
 
 import { PlaybooksTab } from "./PlaybooksTab.js";
+import { PlaybooksSurface } from "./PlaybooksSurface.js";
 import { SLC_DEMO } from "../examples/slc-demo.js";
 import { activateLanguage } from "../i18n.js";
 import { applyRecord, initialSessionView } from "../state/reducer.js";
@@ -85,8 +90,10 @@ const CONFIG_STATE: ConfigState = {
           coder: { playerId: "dev.coder", display: "claude-opus-5 @ high" },
           reviewer: { playerId: "dev.reviewer", display: "gpt-6-astra" },
         },
+        origin: "project",
       },
     ],
+    standsAside: [],
   },
 };
 
@@ -101,30 +108,39 @@ const READINESS: ReadinessEntry[] = [
   },
 ];
 
-/** What the environments export: the project's own `code` playbook,
- * enabled there, and the built-in `review` no config enables. */
+/** A playbook the project's environment alone places (playbook-library-1). */
+function projectPlaybook(over: Parameters<typeof available>[0]): ReturnType<typeof available> {
+  return available({ repository: PROJECT_ID, placedBy: ["project"], ...over });
+}
+
+/** What the environments place: the project's own `code` playbook, its
+ * entry written there, and the built-in `review` both environments
+ * place, listed once under Global on its default binding. */
 function playbookLists(extra: ReturnType<typeof available>[] = []): CommandResults["environment.playbooks"] {
   return {
     project: [
-      available({
+      projectPlaybook({
         id: "code",
         package: "acme/flows",
         version: "2.0.0",
         source: "registry",
-        repository: PROJECT_ID,
         roles: ["coder", "reviewer"],
-        enabled: ["project"],
+        entry: ["project"],
         bindings: {
+          coder: { playerId: "dev.coder", display: "claude-opus-5 @ high", from: "project" },
+          reviewer: { playerId: "dev.reviewer", display: "gpt-6-astra", from: "project" },
+        },
+        written: {
           project: {
             coder: { playerId: "dev.coder", display: "claude-opus-5 @ high" },
             reviewer: { playerId: "dev.reviewer", display: "gpt-6-astra" },
           },
         },
       }),
-      available({ id: "review", repository: PROJECT_ID, roles: ["host"] }),
+      available({ id: "review", repository: PROJECT_ID, roles: ["host"], placedBy: ["project", "own"] }),
       ...extra,
     ],
-    own: [available({ id: "review", roles: ["host"] })],
+    own: [available({ id: "review", roles: ["host"], placedBy: ["project", "own"] })],
   };
 }
 
@@ -409,7 +425,7 @@ describe("playbook-library-50: the Authoring section", () => {
     seed({
       drafts: {
         changelog: { ...COMPILED, id: "changelog" },
-        intake: draftInfo({ id: "intake", state: "enabled", compile: { at: now - HOUR, by: "boss", outcome: "ok", roles: ["Triager"] } }),
+        intake: draftInfo({ id: "intake", state: "added", added: true, compile: { at: now - HOUR, by: "boss", outcome: "ok", roles: ["Triager"] } }),
         triage: draftInfo({
           state: "failed",
           compile: { at: now - 9 * HOUR, by: "agent", outcome: "failed", phase: "gears2fsm", output: "✗ gears2fsm failed" },
@@ -425,14 +441,14 @@ describe("playbook-library-50: the Authoring section", () => {
     expect(within(section).getByRole("heading").textContent).toBe("Authoring");
     // After the playbooks; the packages stand on their own tab
     // (playbook-library-1).
-    const playbooks = await screen.findByTestId("playbooks-available");
+    const playbooks = await screen.findByTestId("playbooks-global");
     expect(
       playbooks.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(screen.queryByTestId("add-packages")).toBeNull();
     expect(within(section).queryByTestId("draft-row-elsewhere")).toBeNull();
-    // An enabled playbook's session stays, its chip saying so.
-    expect(within(within(section).getByTestId("draft-row-intake")).getByTestId("draft-chip").textContent).toBe("Enabled");
+    // An added playbook's session stays, its chip saying so.
+    expect(within(within(section).getByTestId("draft-row-intake")).getByTestId("draft-chip").textContent).toBe("Added");
 
     const failed = within(section).getByTestId("draft-row-triage");
     const chip = within(failed).getByTestId("draft-chip");
@@ -466,16 +482,17 @@ describe("playbook-library-50: the Authoring section", () => {
   });
 
   test("without a session the section is absent, the empty state a key phrase, and the field stands after the playbooks", async () => {
-    lists = { project: [available({ id: "review", repository: PROJECT_ID, roles: ["host"] })], own: [] };
+    lists = { project: [], own: [] };
     seed();
     render(<PlaybooksTab project={PROJECT} />);
     expect(screen.queryByTestId("drafts-section")).toBeNull();
-    expect((await screen.findByTestId("playbooks-empty")).textContent).toBe("Nothing enabled yet");
+    const empty = await screen.findByTestId("playbooks-empty");
+    expect(empty.textContent).toBe("No playbooks yet");
+    // A heading with no row is left out (playbook-library-1).
+    expect(screen.queryByTestId("playbooks-project")).toBeNull();
+    expect(screen.queryByTestId("playbooks-global")).toBeNull();
     const field = screen.getByTestId("new-playbook-section");
-    expect(
-      screen.getByTestId("playbooks-available").compareDocumentPosition(field) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    expect(empty.compareDocumentPosition(field) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByTestId("new-playbook-button").textContent).toBe("New playbook");
     // The id's caption names the command it becomes: the example's
     // while none is typed, then the id as typed once it is one.
@@ -491,7 +508,7 @@ describe("playbook-library-50: the Authoring section", () => {
     const other = draftInfo({ id: "elsewhere", projectId: "acme/tools-spex" });
     seed({ drafts: { elsewhere: other }, openDraftId: "elsewhere" });
     render(<PlaybooksTab project={PROJECT} />);
-    await screen.findByTestId("playbooks-enabled");
+    await screen.findByTestId("playbooks-project");
     expect(screen.queryByTestId("authoring-workspace")).toBeNull();
     expect(screen.queryByTestId("drafts-section")).toBeNull();
     expect(screen.getByTestId("new-playbook-section")).toBeTruthy();
@@ -518,7 +535,8 @@ describe("playbook-library-51: New playbook asks for the id", () => {
     );
     fireEvent.change(input, { target: { value: "review" } });
     fireEvent.click(screen.getByTestId("new-playbook-button"));
-    expect(screen.getByTestId("new-playbook-error").textContent).toBe("review is a built-in — enable it instead");
+    // A built-in's id is a playbook of its package as any other's.
+    expect(screen.getByTestId("new-playbook-error").textContent).toBe("review is already a playbook of sublang/playbooks");
     expect(commandMock).not.toHaveBeenCalledWith("draft.create", expect.anything());
   });
 
@@ -591,7 +609,7 @@ describe("playbook-library-51: New playbook asks for the id", () => {
   });
 });
 
-describe("playbook-library-105: New playbook's Org and License, and the commit line after enabling", () => {
+describe("playbook-library-105: New playbook's Org and License, and the commit line after an Add", () => {
   test("Org and License read the project's defaults; with no license both New playbook and the example's prefill wait for one", async () => {
     defaultLicense = null;
     seed();
@@ -641,22 +659,24 @@ describe("playbook-library-105: New playbook's Org and License, and the commit l
     );
   });
 
-  test.each(["en", "zh"] as const)("the enabled card's success line names the folder to commit, standing past its highlight (%s)", async (language) => {
+  test.each(["en", "zh"] as const)("the added card's success line names the folder to commit, standing past its highlight (%s)", async (language) => {
     activateLanguage(language);
     try {
       lists = playbookLists([
-        available({ id: "triage", package: "acme/triage", version: "0.1.0", source: "path", repository: PROJECT_ID, roles: ["Triager"], enabled: ["project"] }),
+        projectPlaybook({ id: "triage", package: "acme/triage", version: "0.1.0", source: "path", roles: ["Triager"] }),
       ]);
-      seed({ drafts: { triage: draftInfo({ state: "enabled", packagePath: "spex-packages/acme/triage" }) }, revealPlaybook: "triage" });
+      seed({ drafts: { triage: draftInfo({ state: "added", added: true, packagePath: "spex-packages/acme/triage" }) }, revealPlaybook: "triage" });
       render(<PlaybooksTab project={PROJECT} />);
       const card = await screen.findByTestId("playbook-card-triage");
-      const line = await within(card).findByTestId("enabled-commit");
+      // Under the project's name: its package is the project's.
+      expect(within(screen.getByTestId("playbooks-project")).getByTestId("playbook-card-triage")).toBe(card);
+      const line = await within(card).findByTestId("added-commit");
       expect(line.textContent).toBe(
         language === "zh" ? "把 spex-packages/acme/triage 和代码一起提交" : "Commit spex-packages/acme/triage with your code",
       );
       expect(line.querySelector("code")?.textContent).toBe("spex-packages/acme/triage");
       await vi.waitFor(() => expect(screen.getByTestId("playbook-card-triage").className).not.toContain("ring-2"), { timeout: 4000 });
-      expect(within(screen.getByTestId("playbook-card-triage")).getByTestId("enabled-commit").textContent).toBe(line.textContent);
+      expect(within(screen.getByTestId("playbook-card-triage")).getByTestId("added-commit").textContent).toBe(line.textContent);
     } finally {
       activateLanguage("en");
     }
@@ -737,7 +757,7 @@ describe("playbook-library-52: the workspace replaces the list", () => {
       "Source",
       "Gears",
       "Machine",
-      "Enable",
+      "Add",
     ]);
     expect(screen.getByTestId("compile-button").textContent).toBe("Compile");
 
@@ -784,7 +804,7 @@ describe("playbook-library-52: the workspace replaces the list", () => {
 describe("playbook-library-57/59/60: the right pane by the draft's state", () => {
   test("no source: the compiled tabs and Compile stand disabled with their reasons", () => {
     renderWorkspace(draftInfo({ state: "no-source", firstLine: null }), { source: null });
-    for (const name of ["Gears", "Machine", "Enable"]) {
+    for (const name of ["Gears", "Machine", "Add"]) {
       expect(tab(name).disabled).toBe(true);
       expect(tab(name).title).toBe("Compiles first");
     }
@@ -854,11 +874,13 @@ describe("playbook-library-57/59/60: the right pane by the draft's state", () =>
     expect(screen.getByTestId("draft-chip").textContent).toBe("runningCompiling");
   });
 
-  test("a successful compile fills Gears and Machine, enables Enable with a dot, and Changed captions the artifacts", async () => {
+  test("a successful compile fills Gears and Machine, enables Add with a dot, and Changed captions the artifacts", async () => {
     renderWorkspace(COMPILED, { view: foldView(THREAD) });
     await vi.waitFor(() => expect(tab("Gears").disabled).toBe(false));
-    expect(tab("Enable").disabled).toBe(false);
-    expect(screen.getByTestId("tab-dot-enable")).toBeTruthy();
+    expect(tab("Add").disabled).toBe(false);
+    expect(tab("Add").title).toBe("Confirm the command, intent and players, then add it");
+    expect(screen.getByTestId("tab-add")).toBe(tab("Add"));
+    expect(screen.getByTestId("tab-dot-add")).toBeTruthy();
     expect(screen.queryByTestId("tab-dot-source")).toBeNull();
     expect(screen.getByTestId("compile-roles").textContent).toBe("roles: Triager, Verifier");
 
@@ -870,9 +892,9 @@ describe("playbook-library-57/59/60: the right pane by the draft's state", () =>
     expect(screen.getByTestId("panel-machine").textContent).toContain("xstate");
     expect(screen.queryByTestId("artifact-caption")).toBeNull();
 
-    // Opening Enable clears its dot.
-    fireEvent.click(tab("Enable"));
-    expect(screen.queryByTestId("tab-dot-enable")).toBeNull();
+    // Opening Add clears its dot.
+    fireEvent.click(tab("Add"));
+    expect(screen.queryByTestId("tab-dot-add")).toBeNull();
 
     // The source changed since: the chip says so and the artifacts are captioned.
     act(() => {
@@ -898,7 +920,7 @@ describe("playbook-library-57/59/60: the right pane by the draft's state", () =>
       draftInfo({ state: "failed", failures: 1, compile: { at: now - 60_000, by: "agent", outcome: "failed", phase: "gears2fsm", output: "result 'labeled' declared twice" } }),
     );
     await vi.waitFor(() => expect(tab("Gears").disabled).toBe(false));
-    expect(tab("Enable").disabled).toBe(true);
+    expect(tab("Add").disabled).toBe(true);
     fireEvent.click(tab("Machine"));
     expect(screen.getByTestId("artifact-caption").textContent).toBe("as the last run left them, not compiled");
   });
@@ -1045,8 +1067,7 @@ describe("playbook-library-53: the conversation pane", () => {
     const cards = within(thread).getAllByTestId("directive-card");
     expect(cards.map((card) => card.getAttribute("data-kind"))).toEqual(["compile", "register"]);
     expect(cards[0].textContent).toBe("Asked to compile");
-    expect(cards[1].textContent).toContain("Proposed enabling");
-    expect(cards[1].textContent).toContain("/triage");
+    expect(cards[1].textContent).toContain("Proposed /triage");
     expect(cards[1].textContent).toContain("Triager");
     expect(cards[1].textContent).toContain("dev.triager");
     // The fence itself never shows as text.
@@ -1071,10 +1092,10 @@ describe("playbook-library-53: the conversation pane", () => {
     const compileLine = within(thread).getAllByTestId("system-line").find((line) => line.textContent === "◇ Compiling — asked by the agent")!;
     expect(cards[0].compareDocumentPosition(compileLine) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(within(thread).getAllByTestId("player-result")[0].textContent).toBe("✓ done");
-    // Open Enable lands on the tab.
-    expect(within(cards[1]).getByTestId("open-enable").textContent).toBe("Open Enable");
-    fireEvent.click(within(cards[1]).getByTestId("open-enable"));
-    expect(tab("Enable").getAttribute("aria-selected")).toBe("true");
+    // Open Add lands on the tab.
+    expect(within(cards[1]).getByTestId("open-add").textContent).toBe("Open Add");
+    fireEvent.click(within(cards[1]).getByTestId("open-add"));
+    expect(tab("Add").getAttribute("aria-selected")).toBe("true");
   });
 
   test("while a turn runs the header wears the running mark and the ticking span", () => {
@@ -1383,11 +1404,11 @@ describe("playbook-library-56: the Source tab", () => {
   });
 });
 
-describe("playbook-library-61: the Enable tab", () => {
+describe("playbook-library-61: the Add tab", () => {
   test("prefills from the derived defaults, then the proposal, with the Boss's edits winning", async () => {
     renderWorkspace(COMPILED, { view: foldView(THREAD) });
-    await vi.waitFor(() => expect(tab("Enable").disabled).toBe(false));
-    fireEvent.click(tab("Enable"));
+    await vi.waitFor(() => expect(tab("Add").disabled).toBe(false));
+    fireEvent.click(tab("Add"));
     expect((screen.getByTestId("register-command") as HTMLInputElement).value).toBe("triage");
     expect((screen.getByTestId("register-intent") as HTMLInputElement).value).toBe(
       "When an issue arrives, Captain shall prompt Triager to **label** it.",
@@ -1416,7 +1437,10 @@ describe("playbook-library-61: the Enable tab", () => {
     expect((screen.getByTestId("register-intent") as HTMLInputElement).value).toBe("My own intent");
     expect((screen.getByTestId("register-command") as HTMLInputElement).value).toBe("sort");
     expect((screen.getByTestId("register-player-Verifier") as HTMLSelectElement).value).toBe("dev.reviewer");
-    expect(screen.getByTestId("register-shared-Verifier").textContent).toBe("also code.reviewer");
+    // The player another playbook binds says which, never a position
+    // (playbook-library-38).
+    expect(screen.getByTestId("register-shared-Verifier").textContent).toBe("also in /code");
+    expect(screen.getByTestId("register-shared-Verifier").title).toBe("Also plays in /code");
     expect(screen.getByTestId("register-form").textContent).toContain("Prefilled from the agent's proposal — edit anything");
     // A role the entry lacks stands as a mismatch, the derived roles authoritative.
     expect(screen.getByTestId("register-mismatch").textContent).toContain("Auditor");
@@ -1435,8 +1459,8 @@ describe("playbook-library-61: the Enable tab", () => {
       proposal: { command: "triage", intent: "Triage a new issue", players: { Coder: "dev.coder", Verifier: "dev.reviewer" } },
     });
     renderWorkspace(compiled, { view: foldView(THREAD) });
-    await vi.waitFor(() => expect(tab("Enable").disabled).toBe(false));
-    fireEvent.click(tab("Enable"));
+    await vi.waitFor(() => expect(tab("Add").disabled).toBe(false));
+    fireEvent.click(tab("Add"));
     expect((screen.getByTestId("register-player-coder") as HTMLSelectElement).value).toBe("dev.coder");
     expect((screen.getByTestId("register-player-verifier") as HTMLSelectElement).value).toBe("dev.reviewer");
     expect(screen.queryByTestId("register-mismatch")).toBeNull();
@@ -1451,8 +1475,8 @@ describe("playbook-library-61: the Enable tab", () => {
       }),
       { view: foldView(THREAD) },
     );
-    await vi.waitFor(() => expect(tab("Enable").disabled).toBe(false));
-    fireEvent.click(tab("Enable"));
+    await vi.waitFor(() => expect(tab("Add").disabled).toBe(false));
+    fireEvent.click(tab("Add"));
     const coder = () => screen.getByTestId("register-player-coder") as HTMLSelectElement;
     const offered = () => Array.from(coder().options).map((option) => option.textContent);
     expect(coder().value).toBe("dev.coder");
@@ -1460,14 +1484,15 @@ describe("playbook-library-61: the Enable tab", () => {
 
     // With dev.coder-2 on the roster as well, the first free suffix
     // moves on, and the existing lane stays the choice.
+    const valid = CONFIG_STATE as Extract<ConfigState, { status: "valid" }>;
     act(() => {
       useAppStore.setState({
         configState: {
-          ...CONFIG_STATE,
+          ...valid,
           summary: {
-            ...CONFIG_STATE.summary,
+            ...valid.summary,
             players: [
-              ...CONFIG_STATE.summary.players,
+              ...valid.summary.players,
               {
                 id: "dev.coder-2",
                 agent: { adapter: "claude", model: "claude-opus-5", effort: "high" },
@@ -1484,13 +1509,13 @@ describe("playbook-library-61: the Enable tab", () => {
     expect(offered()).not.toContain("New player dev.coder-2");
   });
 
-  test("Enable writes the bindings and the new players in the project, then the list opens with the card in view and the session stays", async () => {
+  test("Add writes the bindings and the new players, naming no destination, then the list opens with the card in view and the session stays", async () => {
     renderWorkspace(
       { ...COMPILED, proposal: { command: "triage", intent: "Triage a new issue", players: { Triager: "dev.triager", Verifier: "dev.reviewer" } } },
       { view: foldView(THREAD) },
     );
-    await vi.waitFor(() => expect(tab("Enable").disabled).toBe(false));
-    fireEvent.click(tab("Enable"));
+    await vi.waitFor(() => expect(tab("Add").disabled).toBe(false));
+    fireEvent.click(tab("Add"));
     // The new lane's block is the draft's agent, tunable in place.
     const row = screen.getByTestId("register-role-Triager");
     expect(within(row).getByLabelText("Triager: claude · claude-opus-5 @ high (ready)")).toBeTruthy();
@@ -1510,8 +1535,10 @@ describe("playbook-library-61: the Enable tab", () => {
       type === "draft.register" ? new Promise<ConfigState>((r) => (resolve = r)) : base(type, params),
     );
     fireEvent.click(submit());
-    await vi.waitFor(() => expect(submit().textContent).toBe("Enabling…"));
-    // The spex repository defaults to the project (playbook-library-7).
+    expect(submit().textContent).not.toBe("Add");
+    await vi.waitFor(() => expect(submit().textContent).toBe("Adding…"));
+    // No destination is asked: the session's environment takes it
+    // (playbook-library-7, playbook-library-61).
     expect(commandMock).toHaveBeenCalledWith("draft.register", {
       projectId: PROJECT_ID,
       draftId: "triage",
@@ -1520,21 +1547,22 @@ describe("playbook-library-61: the Enable tab", () => {
       intent: "Triage a new issue",
       bindings: { Triager: "dev.triager", Verifier: "dev.reviewer" },
       newPlayers: { "dev.triager": { adapter: "codex", model: "gpt-6-astra", permissions: { mode: "auto" } } },
-      repository: PROJECT_ID,
     });
-    // The core requested the package by path and enabled it: the
-    // project's environment now exports it, enabled there.
+    // The core requested the package by path and wrote its entry: the
+    // project's environment now places it, and it runs there.
     lists = playbookLists([
-      available({
+      projectPlaybook({
         id: "triage",
         intent: "Triage a new issue",
         package: "acme/triage",
         version: "0.1.0",
         source: "path",
-        repository: PROJECT_ID,
         roles: ["Triager", "Verifier"],
-        enabled: ["project"],
-        bindings: { project: { Triager: { playerId: "dev.triager", display: "gpt-6-astra" }, Verifier: { playerId: "dev.reviewer", display: "gpt-6-astra" } } },
+        entry: ["project"],
+        bindings: {
+          Triager: { playerId: "dev.triager", display: "gpt-6-astra", from: "project" },
+          Verifier: { playerId: "dev.reviewer", display: "gpt-6-astra", from: "project" },
+        },
       }),
     ]);
     await act(async () => {
@@ -1544,68 +1572,93 @@ describe("playbook-library-61: the Enable tab", () => {
     const card = screen.getByTestId("playbook-card-triage");
     expect(card.className).toContain("ring-2");
     expect(within(card).getByTestId("playbook-from-triage").textContent).toBe("from acme/triage 0.1.0");
+    // Under the project's name, the playbook it runs with its players.
+    expect(within(screen.getByTestId("playbooks-project")).getByTestId("playbook-card-triage")).toBe(card);
     // [playbook-library-10] sessions already running must restart.
-    expect(screen.getByTestId("enabled-note").textContent).toContain("Enabled · restart running sessions to use it");
+    expect(within(card).getByTestId("added-note").textContent).toContain("Added · restart running sessions to use it");
     // [playbook-library-61] and the package folder is committed with the code.
-    expect(screen.getByTestId("enabled-commit").textContent).toBe("Commit spex-packages/acme/triage with your code");
-    expect(screen.getByTestId("library-live").textContent).toBe("Enabled /triage");
+    expect(within(card).getByTestId("added-commit").textContent).toBe("Commit spex-packages/acme/triage with your code");
+    expect(screen.getByTestId("library-live").textContent).toBe("Added /triage");
     // The session stays, to be worked on further and published; its
-    // chip reads Enabled once the core says so.
+    // chip reads Added once the core says so.
     act(() => {
-      deliverServerMessageForTests({ type: "draft.state", draft: { ...COMPILED, state: "enabled" } });
+      deliverServerMessageForTests({ type: "draft.state", draft: { ...COMPILED, state: "added", added: true } });
     });
-    expect(within(screen.getByTestId("draft-row-triage")).getByTestId("draft-chip").textContent).toBe("Enabled");
+    expect(within(screen.getByTestId("draft-row-triage")).getByTestId("draft-chip").textContent).toBe("Added");
   });
 
-  test("[playbook-library-88] the spex repository defaults to the project and offers your own group, the list revealing the playbook's one row", async () => {
-    renderWorkspace(
-      { ...COMPILED, proposal: { command: "triage", intent: "Triage a new issue", players: { Triager: "dev.coder", Verifier: "dev.reviewer" } } },
-      { view: foldView(THREAD) },
+  test("[DR-176] a session of the global environment lists, creates and adds on the Playbooks surface alone, with no commit line", async () => {
+    const globalDraft = { ...COMPILED, projectId: OWN_KEY, proposal: { command: "triage", intent: "Triage a new issue", players: { Triager: "dev.coder", Verifier: "dev.reviewer" } } };
+    // The global environment's records hold the session
+    // (core-service-96): the surface lists it, the project's tab does not.
+    seed({ drafts: { triage: globalDraft } });
+    const tabView = render(<PlaybooksTab project={PROJECT} />);
+    await screen.findByTestId("playbooks-global");
+    expect(screen.queryByTestId("draft-row-triage")).toBeNull();
+    tabView.unmount();
+
+    lists = { project: null, own: [available({ id: "review", roles: ["host"] })] };
+    render(<PlaybooksSurface />);
+    const section = await screen.findByTestId("drafts-section");
+    expect(within(section).getByTestId("draft-row-triage")).toBeTruthy();
+    // New playbook reads the global environment's defaults and creates
+    // there (playbook-library-51).
+    await defaultsShown("me");
+    expect(commandMock).toHaveBeenCalledWith("draft.defaults", { projectId: OWN_KEY });
+    const input = screen.getByTestId("new-playbook-id");
+    fireEvent.change(input, { target: { value: "sorter" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await vi.waitFor(() =>
+      expect(commandMock).toHaveBeenCalledWith("draft.create", { projectId: OWN_KEY, draftId: "sorter", org: "me", license: "Apache-2.0" }),
     );
-    await vi.waitFor(() => expect(tab("Enable").disabled).toBe(false));
-    fireEvent.click(tab("Enable"));
-    const field = screen.getByTestId("register-repository") as HTMLSelectElement;
-    expect(field.value).toBe(PROJECT_ID);
-    // "Enable for": the project by its name, then Personal.
-    expect(screen.getByText("Enable for")).toBeTruthy();
-    expect([...field.options].map((option) => [option.value, option.textContent])).toEqual([
-      [PROJECT_ID, "demo"],
-      [OWN_KEY, "Personal (every project of yours)"],
-    ]);
-    fireEvent.change(field, { target: { value: OWN_KEY } });
-    // Both environments export the package once enabled, your own
-    // group's config enabling it.
-    const triage = { id: "triage", package: "acme/triage", version: "0.1.0", source: "path" as const, roles: ["Triager", "Verifier"] };
-    const before = playbookLists();
-    lists = {
-      project: [...before.project!, available({ ...triage, repository: PROJECT_ID, enabled: ["own"] })],
-      own: [...before.own, available({ ...triage, enabled: ["own"] })],
+
+    // The session's own workspace on the surface: Add asks no
+    // destination and lists the card beneath its package's row.
+    act(() => {
+      useAppStore.setState({ drafts: { triage: globalDraft }, openDraftId: "triage", draftSources: { triage: SOURCE }, draftViews: { triage: foldView(THREAD) } });
+    });
+    await vi.waitFor(() => expect(tab("Add").disabled).toBe(false));
+    fireEvent.click(tab("Add"));
+    expect(screen.queryByTestId("register-repository")).toBeNull();
+    // The core requests the package by path from the global environment
+    // and writes its entry there.
+    const triage = { id: "triage", intent: "Triage a new issue", package: "acme/triage", version: "0.1.0", source: "path" as const, roles: ["Triager", "Verifier"] };
+    lists = { project: null, own: [available({ id: "review", roles: ["host"] }), available({ ...triage, entry: ["own"] })] };
+    const ownState = {
+      repository: OWN_KEY, registry: { origin: "https://spex.example", legacy: false }, language: null,
+      requests: { "acme/triage": { kind: "path" as const, path: "spex-packages/acme/triage" } },
+      packages: [{ name: "acme/triage", version: "0.1.0", source: { kind: "path" as const, detail: "spex-packages/acme/triage" }, direct: true, requiredBy: [], artifacts: [{ id: "triage", kind: "playbook" as const, language: "en", fallback: false, provided: true }], exports: [], installed: true, missingPath: null }],
+      stale: null, conflicts: null, busy: null, error: null, pathRoot: "/home/me/.spex/workspace/me/me-spex",
     };
+    const base = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) =>
+      type === "environment.get" && params?.repository === OWN_KEY ? ownState : base(type, params));
     fireEvent.click(screen.getByTestId("register-submit"));
     await vi.waitFor(() =>
-      expect(commandMock).toHaveBeenCalledWith("draft.register", expect.objectContaining({ repository: OWN_KEY })),
+      expect(commandMock).toHaveBeenCalledWith("draft.register", expect.objectContaining({ projectId: OWN_KEY, draftId: "triage" })),
     );
+    expect(commandMock.mock.calls.find(([type]) => type === "draft.register")![1]).not.toHaveProperty("repository");
     await vi.waitFor(() => expect(screen.queryByTestId("authoring-workspace")).toBeNull());
-    // No switch: the list stands whole, the playbook both environments
-    // export listed once, that row revealed with its success line
-    // (playbook-library-1, playbook-library-61).
-    expect(screen.queryByTestId("playbooks-switch")).toBeNull();
-    await vi.waitFor(() => expect(screen.getByTestId("playbook-card-triage").className).toContain("ring-2"));
+    // The lists are read again for the surface, with no project.
+    expect(commandMock).toHaveBeenCalledWith("environment.playbooks", {});
+    const card = await screen.findByTestId("playbook-card-triage");
+    expect(within(screen.getByTestId("surface-playbooks-acme/triage")).getByTestId("playbook-card-triage")).toBe(card);
     expect(screen.getAllByTestId("playbook-card-triage")).toHaveLength(1);
-    const card = screen.getByTestId("playbook-card-triage");
-    expect(within(card).getByTestId("playbook-enabled-triage").textContent).toBe("Personal");
-    expect(within(card).getByTestId("enabled-commit")).toBeTruthy();
+    await vi.waitFor(() => expect(within(card).getByTestId("added-note").textContent).toContain("Added · restart running sessions to use it"));
+    // Its folder syncs with the global records: nothing to commit.
+    expect(within(card).queryByTestId("added-commit")).toBeNull();
+    expect(document.body.textContent).not.toContain("Personal");
   });
 
-  test("a refusal names the rule inline and leaves the form standing; a working session enables all the same", async () => {
+  test("a refusal names the rule inline and leaves the form standing; a working session adds all the same", async () => {
     const base = commandMock.getMockImplementation()!;
     commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) => {
       if (type === "draft.register") throw new Error("player dev.triager collides with a reserved id");
       return base(type, params);
     });
     renderWorkspace(COMPILED, { view: foldView(THREAD) });
-    await vi.waitFor(() => expect(tab("Enable").disabled).toBe(false));
-    fireEvent.click(tab("Enable"));
+    await vi.waitFor(() => expect(tab("Add").disabled).toBe(false));
+    fireEvent.click(tab("Add"));
     fireEvent.click(screen.getByTestId("register-submit"));
     await vi.waitFor(() => expect(screen.getByTestId("register-error").textContent).toContain("collides"));
     expect(screen.getByTestId("register-form")).toBeTruthy();
@@ -1618,27 +1671,27 @@ describe("playbook-library-61: the Enable tab", () => {
     expect(submit.disabled).toBe(false);
   });
 
-  test("with no prose paragraph the intent defaults to the source's title, so the app's own example enables on its defaults", async () => {
+  test("with no prose paragraph the intent defaults to the source's title, so the app's own example adds on its defaults", async () => {
     // The example is a title over a roles list and numbered steps.
     renderWorkspace(COMPILED, { view: foldView(THREAD), source: { ...SOURCE, markdown: SLC_DEMO.stages.normalized } });
-    await vi.waitFor(() => expect(tab("Enable").disabled).toBe(false));
-    fireEvent.click(tab("Enable"));
+    await vi.waitFor(() => expect(tab("Add").disabled).toBe(false));
+    fireEvent.click(tab("Add"));
     expect((screen.getByTestId("register-intent") as HTMLInputElement).value).toBe(
       "Two-Agent Change-and-Review Workflow",
     );
     expect((screen.getByTestId("register-submit") as HTMLButtonElement).disabled).toBe(false);
   });
 
-  test("an empty intent holds Enable until the Boss writes one", async () => {
+  test("an empty intent holds Add until the Boss writes one", async () => {
     // Neither a prose paragraph nor a title to derive one from.
     renderWorkspace(COMPILED, { view: foldView(THREAD), source: { ...SOURCE, markdown: "Roles:\n- Triager\n- Verifier" } });
-    await vi.waitFor(() => expect(tab("Enable").disabled).toBe(false));
-    fireEvent.click(tab("Enable"));
+    await vi.waitFor(() => expect(tab("Add").disabled).toBe(false));
+    fireEvent.click(tab("Add"));
     expect((screen.getByTestId("register-intent") as HTMLInputElement).value).toBe("");
     const submit = screen.getByTestId("register-submit") as HTMLButtonElement;
     expect(submit.disabled).toBe(true);
-    // The held Enable says what it waits for, in its tooltip alone: no
-    // caption explains what Enable writes (playbook-library-61).
+    // The held Add says what it waits for, in its tooltip alone: no
+    // caption explains what Add writes (playbook-library-61).
     expect(submit.title).toBe("A player per role, a command and an intent");
     const form = screen.getByTestId("register-form").textContent ?? "";
     expect(form).not.toContain("Requests the spec package");
@@ -1649,7 +1702,7 @@ describe("playbook-library-61: the Enable tab", () => {
   });
 });
 
-describe("playbook-library-93: Publish beneath the Enable form", () => {
+describe("playbook-library-93: Publish beneath the Add form", () => {
   const PREVIEW = {
     instance: { origin: "https://spex.example", name: "Spex Example" },
     name: "acme/triage",
@@ -1658,10 +1711,10 @@ describe("playbook-library-93: Publish beneath the Enable form", () => {
   };
   const CURRENT = { repository: PROJECT_ID, registry: { origin: "https://spex.example", legacy: false }, language: null, requests: {}, packages: [], stale: null, conflicts: null, busy: null, error: null, pathRoot: null };
 
-  async function openEnable(draft: DraftInfo = COMPILED) {
+  async function openAdd(draft: DraftInfo = COMPILED) {
     renderWorkspace(draft, { view: foldView(THREAD) });
-    await vi.waitFor(() => expect(tab("Enable").disabled).toBe(false));
-    fireEvent.click(tab("Enable"));
+    await vi.waitFor(() => expect(tab("Add").disabled).toBe(false));
+    fireEvent.click(tab("Add"));
     // The control stands once the environment's instance is read.
     await screen.findByTestId("publish");
   }
@@ -1673,7 +1726,7 @@ describe("playbook-library-93: Publish beneath the Enable form", () => {
         ? params?.dryRun ? { accepted: true, preview: PREVIEW } : { accepted: true }
         : base(type, params),
     );
-    await openEnable();
+    await openAdd();
     const publish = screen.getByTestId("publish");
     // Beneath the form.
     expect(
@@ -1726,7 +1779,7 @@ describe("playbook-library-93: Publish beneath the Enable form", () => {
       if (type === "environment.publish" && params?.dryRun) throw new Error("meta.yaml: description is required");
       return base(type, params);
     });
-    await openEnable();
+    await openAdd();
     fireEvent.click(screen.getByTestId("publish-button"));
     expect((await screen.findByTestId("publish-error")).textContent).toBe("meta.yaml: description is required");
     expect(screen.queryByTestId("publish-summary")).toBeNull();
@@ -1754,8 +1807,8 @@ describe("playbook-library-93: Publish beneath the Enable form", () => {
 describe("playbook-library-93: Its package beside Publish", () => {
   test("once the project's spex.yaml lists the package, Its package opens its row on the Packages tab", async () => {
     renderWorkspace(COMPILED, { view: foldView(THREAD) });
-    await vi.waitFor(() => expect(tab("Enable").disabled).toBe(false));
-    fireEvent.click(tab("Enable"));
+    await vi.waitFor(() => expect(tab("Add").disabled).toBe(false));
+    fireEvent.click(tab("Add"));
     await screen.findByTestId("publish");
     // No row yet, no link.
     expect(screen.queryByTestId("register-package-link")).toBeNull();
@@ -1781,7 +1834,7 @@ describe("playbook-library-93: Its package beside Publish", () => {
   });
 });
 
-describe("playbook-library-111: what stands beneath the Enable form by the project's instance and the home's", () => {
+describe("playbook-library-111: what stands beneath the Add form by the project's instance and the home's", () => {
   const ONE = "https://one.test";
   const TWO = "https://two.test";
 
@@ -1863,8 +1916,8 @@ describe("playbook-library-111: what stands beneath the Enable form by the proje
       draftSources: { triage: SOURCE },
     });
     render(<PlaybooksTab project={PROJECT} onNavigate={onNavigate} />);
-    await vi.waitFor(() => expect(tab("Enable").disabled).toBe(false));
-    fireEvent.click(tab("Enable"));
+    await vi.waitFor(() => expect(tab("Add").disabled).toBe(false));
+    fireEvent.click(tab("Add"));
     const publish = await screen.findByTestId("publish");
     // Beneath the form.
     expect(
@@ -1890,8 +1943,8 @@ describe("playbook-library-111: what stands beneath the Enable form by the proje
     missingRegistry = true;
     seed({ drafts: { triage: COMPILED }, openDraftId: "triage", draftViews: { triage: foldView(THREAD) }, draftSources: { triage: SOURCE } });
     render(<PlaybooksTab project={PROJECT} />);
-    await vi.waitFor(() => expect(tab("Enable").disabled).toBe(false));
-    fireEvent.click(tab("Enable"));
+    await vi.waitFor(() => expect(tab("Add").disabled).toBe(false));
+    fireEvent.click(tab("Add"));
     expect((await screen.findByTestId("publish")).textContent).toBe("Loading registry…");
     expect(screen.queryByTestId("publish-button")).toBeNull();
     expect(commandMock).not.toHaveBeenCalledWith("space.signin.start", expect.anything());
@@ -1919,8 +1972,8 @@ describe("playbook-library-111: what stands beneath the Enable form by the proje
           ));
     seed({ registryAccounts: {}, drafts: { triage: COMPILED }, openDraftId: "triage", draftViews: { triage: foldView(THREAD) }, draftSources: { triage: SOURCE } });
     render(<PlaybooksTab project={PROJECT} />);
-    await vi.waitFor(() => expect(tab("Enable").disabled).toBe(false));
-    fireEvent.click(tab("Enable"));
+    await vi.waitFor(() => expect(tab("Add").disabled).toBe(false));
+    fireEvent.click(tab("Add"));
     expect((await screen.findByTestId("publish")).textContent).toBe("Loading registry…");
     expect(screen.queryByTestId("publish-button")).toBeNull();
     expect(screen.queryByTestId("publish-signin")).toBeNull();
@@ -1953,8 +2006,8 @@ describe("playbook-library-111: what stands beneath the Enable form by the proje
       draftSources: { triage: SOURCE },
     });
     render(<PlaybooksTab project={PROJECT} />);
-    await vi.waitFor(() => expect(tab("Enable").disabled).toBe(false));
-    fireEvent.click(tab("Enable"));
+    await vi.waitFor(() => expect(tab("Add").disabled).toBe(false));
+    fireEvent.click(tab("Add"));
     const publish = await screen.findByTestId("publish");
     expect(within(publish).getByTestId("publish-button").textContent).toBe("Publish");
     expect(within(publish).queryByTestId("publish-signin")).toBeNull();
@@ -1972,8 +2025,8 @@ describe("playbook-library-111: what stands beneath the Enable form by the proje
     });
     seed({ registryAccounts: {}, drafts: { triage: COMPILED }, openDraftId: "triage", draftViews: { triage: foldView(THREAD) }, draftSources: { triage: SOURCE } });
     render(<PlaybooksTab project={PROJECT} />);
-    await vi.waitFor(() => expect(tab("Enable").disabled).toBe(false));
-    fireEvent.click(tab("Enable"));
+    await vi.waitFor(() => expect(tab("Add").disabled).toBe(false));
+    fireEvent.click(tab("Add"));
     const button = await screen.findByTestId("publish-button");
     expect(button.textContent).toBe("Publish");
     expect(commandMock).toHaveBeenCalledWith("registry.get", { origin });
@@ -2284,10 +2337,10 @@ describe("playbook-library-97: a history replaced on disk, and a session replace
       useAppStore.setState({ openDraftId: "triage" });
       useAppStore.getState().setDraftComposer("triage", "successor words");
     });
-    const enabled = { ...CONFIG_STATE };
+    const added = { ...CONFIG_STATE };
     settle["draft.open"].resolve({ draft: COMPILED, source: { markdown: "# Former", version: "v0", mtime: now }, records: [] });
     settle["draft.artifacts"].resolve(ARTIFACTS);
-    settle["draft.register"].resolve(enabled);
+    settle["draft.register"].resolve(added);
     settle["draft.send"].reject(new Error("conflict: triage changed meanwhile; retry"));
     await act(async () => { await Promise.all(pending); });
     const after = useAppStore.getState();
@@ -2298,8 +2351,8 @@ describe("playbook-library-97: a history replaced on disk, and a session replace
     expect(after.draftComposers.triage?.draft).toBe("successor words");
     expect(after.openDraftId).toBe("triage");
     expect(after.revealPlaybook).toBeUndefined();
-    // The config the enabling wrote is everyone's.
-    expect(after.configState).toBe(enabled);
+    // The config the Add wrote is everyone's.
+    expect(after.configState).toBe(added);
 
     // Removed, the session leaves no trace, and a record arriving after
     // makes no thread.
@@ -2342,7 +2395,7 @@ describe("playbook-library-97: a history replaced on disk, and a session replace
     // survive a reply that names neither.
     const late = useAppStore.getState().listDrafts();
     await act(async () => {
-      await useAppStore.getState().createDraft("fresh", { org: "me", license: "MIT" });
+      await useAppStore.getState().createDraft("fresh", { org: "me", license: "MIT" }, PROJECT_ID);
     });
     answer([listedDraft]);
     await late;

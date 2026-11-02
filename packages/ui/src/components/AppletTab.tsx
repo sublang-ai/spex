@@ -7,8 +7,9 @@
 // neither this page nor its token, keeps no storage, and reads only its
 // capability's own paths — and sent no referrer, so it learns nothing
 // of this page's address. One line above reads "from <package>
-// <version>", opening the package's row on the project's Packages tab
-// (applets-1, DR-172), and offers Reload; a refusal shows its cause in
+// <version>", opening the package's row — on the project's Packages tab
+// for the project's package, on the Playbooks surface for a global one
+// (applets-1, DR-176) — and offers Reload; a refusal shows its cause in
 // the frame's place.
 
 import { useCallback, useEffect, useState } from "react";
@@ -30,6 +31,7 @@ export function AppletTab({
   client,
   coreUrl,
   connected,
+  onShowGlobal,
 }: {
   applet: AppletTabEntry;
   /** The spex repository of the project whose tab this is. */
@@ -38,6 +40,8 @@ export function AppletTab({
   /** The WebSocket endpoint this page's client dials. */
   coreUrl: string | undefined;
   connected: boolean;
+  /** Shows the Playbooks surface, where a global package's row stands. */
+  onShowGlobal?: () => void;
 }) {
   const store = usePlaceStore();
   const [path, setPath] = useState<string>();
@@ -91,9 +95,13 @@ export function AppletTab({
           <button
             type="button"
             data-testid="applet-source"
-            title={i18n._({ id: "Open its package", comment: "tooltip of an applet's from-line: shows the package's row on the Packages tab" })}
+            title={i18n._({ id: "Open its package", comment: "tooltip of an applet's from-line: shows the package's row on the Packages tab, or on the Playbooks page for a global package" })}
             onClick={() =>
-              openPackageRow(store, project, applet.package, applet.repository === project ? "project" : "personal")
+              openPackageRow(
+                store,
+                applet.repository === project ? { projectId: project } : { show: () => onShowGlobal?.() },
+                applet.package,
+              )
             }
             className="max-w-full truncate text-left hover:text-brand-600 hover:underline dark:hover:text-brand-300"
           >

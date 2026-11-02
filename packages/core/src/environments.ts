@@ -18,8 +18,9 @@
 // is relative to the paired working folder, or, in your own group's
 // environment, to its clone, confined to what that clone syncs
 // (environments-2, environments-32, DR-125). The built-in spec
-// package is seeded at start and requested where an environment lacks
-// it, so the built-in playbooks work offline from the first start. An
+// package is seeded at start, requested in the global environment once
+// when the home is made, so the built-in playbooks work offline from the
+// first start, and in no project's at its pairing (DR-176). An
 // environment's explicit registry is independent of its Space. Legacy
 // manifests retain their former routing, while independent installations
 // use only the selected registry and its registry grant (DR-168).
@@ -73,6 +74,7 @@ import {
   placeOf,
   prepareBuiltinEnvironment,
   prepareEnvironment,
+  prepareProjectEnvironment,
   providedArtifacts,
   publishIssues,
   publishRelease,
@@ -119,7 +121,7 @@ import { migrateEnvironments, type MigratedRepository } from "./migrate-environm
 import { gitEnvironment } from "./storage-git.js";
 import { splitKey } from "./home.js";
 import { canonicalOrigin } from "@sublang/spex/instance";
-import type { PlaybookModules } from "./config.js";
+import type { PlacedPlaybook, PlaybookModule, PlaybookModules } from "./config.js";
 import type { EnvironmentPackage, EnvironmentRequest, EnvironmentRequestSummary, EnvironmentState, PublishedPackage, PublishPreview } from "./protocol.js";
 import { CoreError } from "./session.js";
 import type { Store } from "./store.js";
@@ -956,15 +958,14 @@ export class EnvironmentManager {
 
   // -- the built-in spec package (environments-11) ---------------------------
 
-  /** Request the built-in spec package where the environment at `root`
-   * lacks it, with the lock where that is all it requests, locked at the
-   * registry of the instance the spex repository is placed at, else the
-   * default instance's, and naming that instance as `space` wherever it
-   * has one (environments-11, environments-2). */
-  prepare(root: string, key: string): boolean {
-    if (!this.options.builtin) return false;
-    const placed = this.options.placedAt(key);
-    return prepareBuiltinEnvironment(root, this.options.builtin, placed ?? this.defaultOrigin(), this.spaceOf(placed));
+  /** A project's environment at its pairing where the working folder
+   * holds no `spex.yaml` (storage-6): one naming the instance the spex
+   * repository is placed at as `space`, wherever it has one, and
+   * requesting nothing — the built-in spec package is global, requested
+   * once when the home is made (environments-11, environments-2,
+   * DR-170, DR-176). */
+  prepareProject(root: string, key: string): boolean {
+    return prepareProjectEnvironment(root, this.spaceOf(this.options.placedAt(key)));
   }
 
   /** The release this app ships beside the one a lock selects, where the
@@ -984,14 +985,30 @@ export class EnvironmentManager {
     return { shipped, locked: source.version };
   }
 
-  /** At start: seed the built-in spec package, move every project's
-   * environment its clone still holds into its working folder
-   * (storage-24), request the built-in spec package in your own group's
-   * environment where it lacks it, then resolve where no lock stands,
-   * install and export every environment, and collect the store. A
-   * project's working folder holding no `spex.yaml` holds no
-   * environment: its request is written at pairing alone
-   * (environments-11, storage-6). */
+  /** The global environment where its home was made with none (a home
+   * an earlier version, or a store with no environments, made): its
+   * `spex.yaml` requesting the built-in spec package, locked at the
+   * registry of the instance your own group's own repository is placed
+   * at, else the default instance's, naming that instance as `space`
+   * wherever it has one (environments-11, environments-2). An
+   * environment that stands never has it requested again, so a removal
+   * stands. */
+  private prepareGlobal(root: string, key: string): boolean {
+    if (!this.options.builtin || existsSync(join(root, "spex.yaml")) || existsSync(join(root, "spex.lock"))) return false;
+    const placed = this.options.placedAt(key);
+    return prepareBuiltinEnvironment(root, this.options.builtin, placed ?? this.defaultOrigin(), this.spaceOf(placed));
+  }
+
+  /** At start: seed the built-in spec package into the store, so it
+   * installs offline and a newer shipped release reads as an update, move
+   * every project's environment its clone still holds into its working
+   * folder (storage-24), make the global environment where the home holds
+   * none, then resolve where no lock stands, install and export every
+   * environment, and collect the store. The global environment requests
+   * the built-in spec package once, when the home is made, and never
+   * again once it stands, so a removal stands; a project's working folder
+   * holding no `spex.yaml` holds no environment until its pairing writes
+   * one (environments-11, storage-6). */
   async startup(): Promise<void> {
     if (this.options.builtin) {
       try { await seedBuiltinPackage(this.contentStore, this.cacheDir, this.options.builtin); }
@@ -1001,13 +1018,11 @@ export class EnvironmentManager {
     for (const repository of this.store.listRepositories()) {
       if (this.migrationBlocked.has(repository.key)) continue;
       const root = this.rootOf(repository.key);
-      let wrote = false;
       if (this.isOwn(repository.key) && root !== null) {
-        try { wrote = this.prepare(root, repository.key); }
+        try { this.prepareGlobal(root, repository.key); }
         catch (error) { console.error(`spex: ${repository.key} does not request the built-in spec package: ${String(error)}`); }
       }
-      const lock = root !== null && existsSync(join(root, "spex.lock"));
-      await this.settle(repository.key, wrote && !lock ? "resolve" : "auto", false);
+      await this.settle(repository.key, "auto", false);
     }
     this.collect();
   }
@@ -1649,13 +1664,13 @@ export class EnvironmentManager {
   /** A working folder was paired with a clone this device holds
    * (environments-31, storage-6): the environment the clone still holds
    * moves into the folder (storage-24); a folder then holding no
-   * `spex.yaml` is written the new environment requesting the built-in
-   * spec package, locked at its environment's registry where no lock
-   * stands, a stray lock left to the reader — stale, resolved again on
-   * request; unreadable, refused until removed (environments-11),
-   * while one holding its own is installed from it, nothing but `.spex/`
-   * written (environments-26); its environment is then exported into the
-   * folder as an install does (environments-7), its state broadcast. */
+   * `spex.yaml` is written a new environment naming its `space` and
+   * requesting nothing, resolved where no lock stands, a stray lock left
+   * to the reader — stale, resolved again on request; unreadable, refused
+   * until removed (environments-11), while one holding its own is
+   * installed from it, nothing but `.spex/` written (environments-26);
+   * its environment is then exported into the folder as an install does
+   * (environments-7), its state broadcast. */
   paired(key: string): Promise<void> {
     if (!this.store.repository(key)) return Promise.resolve();
     this.migrate(key);
@@ -1664,8 +1679,8 @@ export class EnvironmentManager {
     if (root === null) return Promise.resolve();
     let wrote = false;
     if (!existsSync(join(root, "spex.yaml"))) {
-      try { wrote = this.prepare(root, key); }
-      catch (error) { console.error(`spex: ${key} does not request the built-in spec package: ${error instanceof Error ? error.message : String(error)}`); }
+      try { wrote = this.prepareProject(root, key); }
+      catch (error) { console.error(`spex: ${key} was written no spex.yaml: ${error instanceof Error ? error.message : String(error)}`); }
     }
     return this.settle(key, wrote && !existsSync(join(root, "spex.lock")) ? "resolve" : "auto", false);
   }
@@ -1943,25 +1958,39 @@ export class EnvironmentManager {
   }
 
   /** Where a session's playbooks come from (environments-9): the
-   * project's environment, else your own group's; a module missing on
-   * this device counts as none. */
+   * project's environment, else your own group's — the global; a module
+   * missing on this device counts as none for `find`, while `placed`
+   * lists every playbook either places, the project's first, so each
+   * runs on its default binding where no entry binds it
+   * (core-service-2). */
   modulesFor(projectKey: string | null): PlaybookModules {
     const own = this.store.home.own();
     const ownLocations = this.locations(own);
     const project = projectKey !== null && projectKey !== own ? this.locations(projectKey) : null;
-    const pick = (locations: Map<string, ModuleLocation> | null, id: string): ModuleLocation | undefined => {
+    const placedOf = (locations: Map<string, ModuleLocation> | null, environment: "project" | "own", repository: string): PlacedPlaybook[] =>
+      [...(locations?.values() ?? [])].map((location) => ({
+        id: location.id,
+        module: location.module,
+        builtin: location.builtin,
+        package: location.package,
+        version: location.version,
+        environment,
+        repository,
+        present: location.present,
+      }));
+    const placed = [...placedOf(project, "project", projectKey ?? own), ...placedOf(ownLocations, "own", own)];
+    const pick = (locations: Map<string, ModuleLocation> | null, environment: "project" | "own", repository: string, id: string): PlaybookModule | undefined => {
       if (!locations) return undefined;
-      const named = locations.get(id);
-      if (named?.present) return named;
-      for (const location of locations.values()) if (location.id === id && location.present) return location;
-      return undefined;
+      let location = locations.get(id);
+      if (!location?.present) location = [...locations.values()].find((entry) => entry.id === id && entry.present);
+      return location
+        ? { module: location.module, builtin: location.builtin, package: location.package, version: location.version, environment, repository }
+        : undefined;
     };
     return {
       repository: project ? projectKey! : own,
-      find: (id) => {
-        const location = pick(project, id) ?? pick(ownLocations, id);
-        return location ? { module: location.module, builtin: location.builtin } : undefined;
-      },
+      find: (id) => pick(project, "project", projectKey ?? own, id) ?? pick(ownLocations, "own", own, id),
+      placed: () => placed.map((entry) => ({ ...entry })),
     };
   }
 

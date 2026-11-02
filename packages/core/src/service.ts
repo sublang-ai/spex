@@ -8,6 +8,7 @@
 // (CORE-13), and record channels filtered by visibility at this
 // boundary (CORE-8/14).
 
+import { prepareWindowsStorageDirectory } from "@sublang/spex/files";
 import { canonicalOrigin } from "@sublang/spex/instance";
 import { AppletServer, isAppletPath } from "./applets.js";
 import { ApprovalBroker } from "./approvals.js";
@@ -60,6 +61,7 @@ import {
 import {
   adapterNameSchema,
   CAPTAIN_AGENT_ID,
+  defaultPlayerId,
   parseCommand,
   PACKAGE_LICENSE_PATTERN,
   PROTOCOL_VERSION,
@@ -121,6 +123,7 @@ import {
   isSkillName,
   playbookModuleCandidates,
   prepareBuiltinEnvironment,
+  prepareProjectEnvironment,
   readManifest,
   writeExcludeBlock,
   type BuiltinPackage,
@@ -275,7 +278,7 @@ export interface CoreServiceOptions {
    * default the processes the core started — each child process created
    * while its own work ran — with their descendants on macOS and Linux.
    * A shell that bounds its own exit — Electron's — passes none. */
-  agentProcesses?: () => number[];
+  agentProcesses?: () => number[] | Promise<number[]>;
   /** This runtime's label, stored beside the home's device at assignment
    * for display alone (DR-134): the server's name on a seat, else this
    * label, else the host name. */
@@ -897,9 +900,10 @@ export class CoreService {
     const spaceHost: SpaceHost & SpaceEnvironmentHooks = {
       environmentChanged: (key: string) => this.environments.applied(key),
       environmentMoved: (oldKey: string, newKey: string) => this.environments.moved(oldKey, newKey),
-      // A clone a join paired requests the built-in spec package at its
-      // instance's registry, then installs and exports; one a pick placed
-      // at an instance locks it there (environments-11, environments-31).
+      // A clone a join paired is written an environment naming its
+      // instance and requesting nothing where its folder holds none, then
+      // installs and exports; one a pick placed at an instance names it
+      // (storage-6, environments-11, environments-31).
       environmentPaired: (key: string) => { void this.environments.paired(key).catch(() => {}); },
       environmentPlaced: (key: string) => { void this.environments.placed(key).catch(() => {}); },
       home: this.store.dir,
@@ -964,12 +968,16 @@ export class CoreService {
     });
     // Authoring sessions live in the spex repository of their project
     // (storage-23); their spec packages in its working folder
-    // (environments-10).
+    // (environments-10). The global environment's sessions live with
+    // your own group's records, its clone their working folder
+    // (core-service-96).
     this.drafts = new DraftStore(() =>
       this.store.listRepositories().map((repository) => ({
         key: repository.key,
         authoringDir: repository.authoringDir,
-        workingFolder: this.store.home.folderOf(repository.key)?.path ?? null,
+        workingFolder: repository.key === this.store.home.own()
+          ? (existsSync(repository.dir) ? repository.dir : null)
+          : this.store.home.folderOf(repository.key)?.path ?? null,
       })));
     const service = this;
     this.authors = new AuthorManager({
@@ -991,7 +999,7 @@ export class CoreService {
       // An id either environment exports is taken (playbook-library-51).
       reservedIds: (projectId) => this.reservedPlaybookIds(projectId),
       homeLanguage: () => this.homeLanguage(),
-      enabled: (id) => this.draftEnabled(id),
+      added: (id) => this.draftAdded(id),
       excludeEngineLinks: (workingFolder) => excludeEngineLinks(workingFolder),
       device: () => this.store.home.device,
       importInto: (prepare, place) => this.media.importInto(prepare, place),
@@ -1164,28 +1172,18 @@ export class CoreService {
     return [...ids];
   }
 
-  /** Whether an authoring session's playbook is enabled: a config of
-   * the session's project or your own group enables its id, and that
-   * spex repository's environment requests the session's spec package
-   * by path (playbook-library-69). */
-  private draftEnabled(id: string): boolean {
-    const projectId = this.drafts.projectOf(id);
+  /** Whether an authoring session's playbook is added: the environment
+   * the session belongs to — its project's, or the global — requests the
+   * session's spec package by path, so the playbook runs there
+   * (playbook-library-69, core-service-2). */
+  private draftAdded(id: string): boolean {
+    const key = this.drafts.projectOf(id);
     const draftFolder = this.drafts.workingFolder(id);
-    if (!projectId || draftFolder === null) return false;
+    if (!key || draftFolder === null || !this.store.repository(key)) return false;
     const packageDir = resolve(draftFolder, this.drafts.packagePath(id));
-    for (const key of new Set([projectId, this.store.home.own()])) {
-      const repository = this.store.repository(key);
-      const folder = this.environments.pathRoot(key);
-      if (!repository || folder === null) continue;
-      const requested = [...this.environments.pathRequests(key).values()].some((path) => resolve(folder, path) === packageDir);
-      if (!requested) continue;
-      const configPath = key === this.store.home.own() ? this.configPath : repository.configPath;
-      try {
-        const top = existsSync(configPath) ? parseYaml(readFileSync(configPath, "utf8")) as { playbooks?: Record<string, unknown> } | null : null;
-        if (top?.playbooks && Object.hasOwn(top.playbooks, id)) return true;
-      } catch { /* an unreadable config enables nothing */ }
-    }
-    return false;
+    const folder = this.environments.pathRoot(key);
+    if (folder === null) return false;
+    return [...this.environments.pathRequests(key).values()].some((path) => resolve(folder, path) === packageDir);
   }
 
   /** An environment's files or exports changed (environments-17): your
@@ -1235,20 +1233,30 @@ export class CoreService {
     }
     const located = keys.map((key) => this.environments.locations(key));
     const modules = this.modules(projectId);
+    // A module entry's full version: a missing one stands at its first
+    // candidate, and any of them appearing repairs it.
+    const record = (location: { module: string; id: string; present: boolean }): void => {
+      const entries = location.present ? [location.module] : playbookModuleCandidates(dirname(dirname(location.module)), location.id);
+      for (const entry of entries) {
+        if (!inputs.has(entry) || typeof inputs.get(entry) === "boolean") inputs.set(entry, inputVersion(entry));
+      }
+    };
     return {
       repository: modules.repository,
       find: (id) => {
         for (const locations of located) {
           for (const [name, location] of locations) {
-            if (name !== id && location.id !== id) continue;
-            // A missing entry stands at its first candidate; any of them appearing repairs it.
-            const entries = location.present ? [location.module] : playbookModuleCandidates(dirname(dirname(location.module)), location.id);
-            for (const entry of entries) {
-              if (!inputs.has(entry) || typeof inputs.get(entry) === "boolean") inputs.set(entry, inputVersion(entry));
-            }
+            if (name === id || location.id === id) record(location);
           }
         }
         return modules.find(id);
+      },
+      // Every placed playbook's module is an input as `find`'s are: a
+      // placed playbook runs on its default binding (core-service-2).
+      placed: () => {
+        const placed = modules.placed?.() ?? [];
+        for (const location of placed) record(location);
+        return placed;
       },
     };
   }
@@ -1442,13 +1450,16 @@ export class CoreService {
   }
 
   private static async boot(options: CoreServiceOptions, started: StartedProcesses): Promise<CoreService> {
-    if (process.platform !== "darwin" && process.platform !== "linux") {
+    if (process.platform !== "darwin" && process.platform !== "linux" && process.platform !== "win32") {
       throw new Error(i18n._({
-        id: "Spex desktop and server require macOS or Linux with private POSIX file permissions. On Windows, use the scaffold CLI or connect to a Spex server in your browser.",
+        id: "Spex desktop and server require macOS, Linux, or Windows with verified private storage permissions.",
         comment: "Startup refusal shown in the shell's dialog on an unsupported host",
       }));
     }
-    if (options.dataDir) ApplicationMedia.assertStagingParents(options.dataDir);
+    if (options.dataDir) {
+      await prepareWindowsStorageDirectory(options.dataDir);
+      ApplicationMedia.assertStagingParents(options.dataDir);
+    }
     // A seat's facts are checked before anything opens (core-service-125).
     if (options.seat) options = { ...options, seat: checkSeat(options.seat) };
     const env = options.env ?? process.env;
@@ -1490,9 +1501,11 @@ export class CoreService {
       }
     }
     // The home opens under its lease, migrating the former layout once
-    // before any writer is admitted (storage-9, core-service-15). Every
-    // clone the store makes requests the built-in spec package before
-    // its first commit (storage-6, environments-11).
+    // before any writer is admitted (storage-9, core-service-15). Your own
+    // group's clone requests the built-in spec package as the home is
+    // made, before its first commit, and a project paired here is
+    // written an environment requesting nothing (storage-6,
+    // environments-11, DR-176).
     const builtin = CoreService.shippedBuiltin(options);
     // A seat reads its credentials into the environment before the
     // store seeds your own group's config from them (core-service-126,
@@ -1512,7 +1525,10 @@ export class CoreService {
         ...(options.home !== undefined ? { home: options.home } : {}),
         ...(options.dataDir ? { libraryDir: options.libraryDir ?? join(options.dataDir, "playbooks") } : {}),
         ...(relocateConfig ? { relocateConfig } : {}),
-        ...(builtin ? { prepareRepository: (dir: string, _key: string, registryOrigin: string, space: string | null) => { prepareBuiltinEnvironment(dir, builtin, registryOrigin, space); } } : {}),
+        prepareRepository: (dir: string, _key: string, registryOrigin: string, space: string | null, global: boolean) => {
+          if (!global) prepareProjectEnvironment(dir, space);
+          else if (builtin) prepareBuiltinEnvironment(dir, builtin, registryOrigin, space);
+        },
       });
     } catch (error) { seat?.environment.restore(); throw error; }
     let service: CoreService;
@@ -2006,10 +2022,13 @@ export class CoreService {
   /**
    * The configuration a session of this project runs with
    * (core-service-2): your own group's, with the project's own file on
-   * top where its spex repository holds one. A project's file that
-   * breaks the rules, or names a player yours lacks, is a config error
-   * raised here, when a session of that project opens — never at load,
-   * so sessions of other spex repositories are unaffected.
+   * top where its spex repository holds one, and every playbook the
+   * project's or the global environment places on its default binding
+   * where no entry binds it. A project's file that breaks the rules is a
+   * config error raised here, when a session of that project opens —
+   * never at load, so sessions of other spex repositories are
+   * unaffected; a player it names that yours lacks plays on the
+   * Captain's block, refusing nothing (settings-46).
    */
   private async composedFor(projectId: string): Promise<ComposedConfig> {
     await this.settledConfig();
@@ -2713,7 +2732,15 @@ export class CoreService {
         // yet read here (DR-111).
         await this.settledConfig();
         if (command.projectId === undefined) return this.configState;
-        return this.projectConfigState(command.projectId, true);
+        try { return await this.projectConfigState(command.projectId, true); }
+        catch (error) {
+          // Your own group's state stands on the projects' files too, by
+          // the players they name (settings-46): one changed while the
+          // project composed is read once more (DR-111).
+          if (!(error instanceof CoreError) || error.code !== "conflict") throw error;
+          await this.settledConfig();
+          return this.projectConfigState(command.projectId, true);
+        }
       case "credential.list": {
         const credentials = this.codeCredentials;
         if (!credentials) throw credentialsOffSeat();
@@ -3369,14 +3396,16 @@ export class CoreService {
             throw new CoreError("invalid_request", message);
           }
           // The one-shot form is a draft-style compile followed by the
-          // enabling path a session takes (playbook-library-69).
-          return await this.enableCompiled({
+          // Add path a session takes (playbook-library-69), into the
+          // project's environment unless another is named.
+          return await this.addCompiled({
             playbookId: command.playbookId,
             result,
             bindings: command.bindings,
             newPlayers: command.newPlayers,
-            projectId: project.id,
-            ...(command.repository !== undefined ? { repository: command.repository } : {}),
+            repository: command.repository === undefined || command.repository === this.store.home.own() || command.repository === project.id
+              ? command.repository ?? project.id
+              : (() => { throw noProject(command.repository!); })(),
             packageDir,
           });
         } finally {
@@ -3817,20 +3846,21 @@ export class CoreService {
       case "draft.list":
         return this.authors.list();
       case "draft.defaults": {
-        // What New playbook fills in, read from the project and the
-        // registry of its instance now, asked once (playbook-library-103).
-        const { project, repository } = this.draftHome(command.projectId);
-        return newPackageDefaults(repository.key, project.path, await this.environments.publishableOrgs(repository.key));
+        // What New playbook fills in, read from the project — or the
+        // global environment — and the registry of its instance now,
+        // asked once (playbook-library-103).
+        const { repository, workingFolder } = this.draftHome(command.projectId);
+        return newPackageDefaults(repository.key, workingFolder, await this.environments.publishableOrgs(repository.key));
       }
       case "draft.create": {
         // The ids the config enables are taken (playbook-library-51), as
         // its files stand (DR-111).
         await this.settledConfig();
-        const { project, repository } = this.draftHome(command.projectId);
+        const { repository, workingFolder } = this.draftHome(command.projectId);
         // The id names the spec package, the file and the command: the
         // Agent Skills name rule (playbook-library-51).
         if (!isSkillName(command.draftId)) throw invalidPlaybookId(command.draftId);
-        if (this.drafts.exists(command.draftId) && this.drafts.projectOf(command.draftId) !== project.id) {
+        if (this.drafts.exists(command.draftId) && this.drafts.projectOf(command.draftId) !== repository.key) {
           throw new CoreError("invalid_request", i18n._({
             id: "{id} is already an authoring session of another project; pick another id",
             values: { id: command.draftId },
@@ -3855,7 +3885,7 @@ export class CoreService {
         }
         return this.authors.create(
           command.draftId,
-          { key: repository.key, authoringDir: repository.authoringDir, workingFolder: project.path },
+          { key: repository.key, authoringDir: repository.authoringDir, workingFolder },
           { org: command.org, license: command.license },
         );
       }
@@ -3892,22 +3922,22 @@ export class CoreService {
           }));
         }
         // Re-package with the confirmed command and intent, one job over
-        // the artifact folder (playbook-library-99), then enable through
-        // the shared path; the session is not held and stays after,
-        // enabled; a refused write leaves it standing with its artifacts
-        // (playbook-library-69).
+        // the artifact folder (playbook-library-99), then add through the
+        // shared path to the environment the session belongs to — its
+        // project's, or the global (core-service-96); the session is not
+        // held and stays after, added; a refused write leaves it standing
+        // with its artifacts (playbook-library-69).
         return await this.authors.register(
           command.draftId,
           command.instance,
           command.command,
           command.intent,
-          (result, location) => this.enableCompiled({
+          (result, location) => this.addCompiled({
             playbookId: command.draftId,
             result,
             bindings: command.bindings,
             newPlayers: command.newPlayers,
-            projectId: command.projectId,
-            ...(command.repository !== undefined ? { repository: command.repository } : {}),
+            repository: command.projectId,
             packageDir: location.packageDir,
           }),
         );
@@ -4046,9 +4076,12 @@ export class CoreService {
     return undefined;
   }
 
-  /** `environment.playbooks` (playbook-library-1): every playbook the
-   * project's and your own group's environments export, with where each
-   * is enabled, read from the config files. */
+  /** `environment.playbooks` (playbook-library-1, playbook-library-122):
+   * every playbook the project's and the global environment place, read
+   * from the composition a session there runs with (core-service-2) —
+   * whether it runs or stands aside, which environments place it, which
+   * configs hold an entry for it and each role's effective binding — and
+   * each written entry's own bindings, for editing. */
   private async playbookAvailability(projectId: string | undefined): Promise<CommandResults["environment.playbooks"]> {
     const own = this.store.home.own();
     const projectRepository = projectId !== undefined && projectId !== own ? this.store.repository(projectId) : undefined;
@@ -4056,6 +4089,17 @@ export class CoreService {
     // Each listed playbook's module is read on the app's engine
     // (environments-9, playbook-library-46).
     await this.environments.prepareForUse(projectRepository ? projectId! : null);
+    // The composition a session there runs with, as its files stand
+    // (DR-111); none while a config will not compose, every playbook
+    // then reading as not running, the cause listed as invalid.
+    let composed: ComposedConfig | undefined;
+    try {
+      await this.settledConfig();
+      composed = projectRepository ? await this.composeProject(projectRepository.key, true) : this.composed;
+    } catch (error) {
+      if (error instanceof CoreError && error.code === "conflict") throw error;
+      composed = undefined;
+    }
     const topOf = (path: string | undefined): Record<string, unknown> | null => {
       if (!path || !existsSync(path)) return null;
       try {
@@ -4070,31 +4114,40 @@ export class CoreService {
     const ownEntries = entriesOf(ownTop);
     const projectEntries = entriesOf(projectTop);
     const players = (ownTop && typeof ownTop.players === "object" && ownTop.players !== null ? ownTop.players : {}) as Record<string, unknown>;
-    // What each binding effectively runs (playbook-library-1): the
-    // role's own pin, the provider default it chose, or its player's.
+    const captain = (ownTop && (typeof ownTop.captain === "string" ? { adapter: ownTop.captain } : ownTop.captain)) as { adapter?: string; model?: string } | null;
+    // What a binding effectively runs (playbook-library-1): the role's
+    // own pin, the provider default it chose, or its player's — the
+    // Captain's for a player your roster lacks (core-service-2).
+    const summaryOf = (playerId: string, binding: Record<string, unknown> | null): RoleBindingSummary => {
+      const player = players[playerId];
+      const agent = (player === undefined ? captain ?? {} : typeof player === "string" ? { adapter: player } : player ?? {}) as { adapter?: string; model?: string };
+      const tuning: Partial<RoleBindingSummary> = {};
+      for (const field of ["model", "effort", "fastMode", "subagentModel", "subagentEffort"] as const) {
+        const tuned = binding?.[field];
+        if (typeof tuned === "string" || typeof tuned === "boolean") (tuning as Record<string, unknown>)[field] = tuned;
+      }
+      const display = tuning.model === false ? `${agent.adapter ?? "?"} default` : (typeof tuning.model === "string" ? tuning.model : agent.model ?? agent.adapter ?? "?");
+      return { playerId, ...tuning, display };
+    };
     const bindingsOf = (entry: Record<string, unknown> | undefined): Record<string, RoleBindingSummary> | undefined => {
       if (!entry || typeof entry.roles !== "object" || entry.roles === null) return undefined;
       const out: Record<string, RoleBindingSummary> = {};
       for (const [role, value] of Object.entries(entry.roles as Record<string, unknown>)) {
         const binding = (typeof value === "string" ? { player: value } : value) as Record<string, unknown> | null;
         const playerId = typeof binding?.player === "string" ? binding.player : undefined;
-        if (!playerId) continue;
-        const player = players[playerId];
-        const agent = (typeof player === "string" ? { adapter: player } : player ?? {}) as { adapter?: string; model?: string };
-        const tuning: Partial<RoleBindingSummary> = {};
-        for (const field of ["model", "effort", "fastMode", "subagentModel", "subagentEffort"] as const) {
-          const tuned = binding?.[field];
-          if (typeof tuned === "string" || typeof tuned === "boolean") (tuning as Record<string, unknown>)[field] = tuned;
-        }
-        const display = tuning.model === false ? `${agent.adapter ?? "?"} default` : (typeof tuning.model === "string" ? tuning.model : agent.model ?? agent.adapter ?? "?");
-        out[role] = { playerId, ...tuning, display };
+        if (playerId) out[role] = summaryOf(playerId, binding);
       }
       return out;
     };
-    const list = async (key: string): Promise<PlaybookAvailability[]> => {
+    const summary = composed ? summarizeConfig({ path: this.configPath, raw: null, composed }) : undefined;
+    const projectLocations = projectRepository ? this.environments.locations(projectRepository.key) : null;
+    const ownLocations = this.environments.locations(own);
+    const placedIn = (locations: Map<string, { id: string }> | null, id: string): boolean =>
+      [...(locations?.values() ?? [])].some((location) => location.id === id);
+    const list = async (key: string, locations: ReturnType<EnvironmentManager["locations"]>): Promise<PlaybookAvailability[]> => {
       const lock = this.environments.lockOf(key);
       const out: PlaybookAvailability[] = [];
-      for (const [name, location] of this.environments.locations(key)) {
+      for (const [name, location] of locations) {
         let entry: { command?: unknown; intent?: unknown; requiredRoleIds?: unknown } | undefined;
         if (location.present) {
           try {
@@ -4106,10 +4159,26 @@ export class CoreService {
         const source: PlaybookAvailability["source"] = location.builtin ? "builtin"
           : resolution && isPathSource(resolution.source) ? "path"
             : resolution && isGitSource(resolution.source) ? "git" : "registry";
+        const running = composed?.playbooks.find((playbook) => playbook.id === location.id);
+        const shown = summary?.playbooks.find((playbook) => playbook.id === location.id);
+        const aside = running ? undefined : composed?.standsAside.find((standing) => standing.playbook === location.id && (standing.package === undefined || standing.package === location.package));
         const config = projectEntries[location.id] ?? ownEntries[location.id];
-        const command = typeof config?.command === "string" ? config.command : typeof entry?.command === "string" ? entry.command : null;
-        const projectBindings = projectRepository ? bindingsOf(projectEntries[location.id]) : undefined;
-        const ownBindings = bindingsOf(ownEntries[location.id]);
+        const roles = running ? [...running.requiredRoleIds] : Array.isArray(entry?.requiredRoleIds) ? [...entry!.requiredRoleIds as string[]] : [];
+        const command = running?.command ?? (typeof config?.command === "string" ? config.command : typeof entry?.command === "string" ? entry.command : null);
+        // Each role's effective binding: as it composed, or, for one that
+        // does not run, as its entry or the default would bind it.
+        const projectWritten = projectRepository ? bindingsOf(projectEntries[location.id]) : undefined;
+        const ownWritten = bindingsOf(ownEntries[location.id]);
+        const bindings: PlaybookAvailability["bindings"] = {};
+        if (running && shown) {
+          for (const [role, binding] of Object.entries(shown.roles)) bindings[role] = { ...binding, from: running.origin };
+        } else {
+          const written = projectWritten ? { roles: projectWritten, from: "project" as const } : ownWritten ? { roles: ownWritten, from: "own" as const } : undefined;
+          for (const role of roles) {
+            const binding = written?.roles[role];
+            bindings[role] = binding ? { ...binding, from: written!.from } : { ...summaryOf(defaultPlayerId(role), null), from: "default" };
+          }
+        }
         // The artifact's folder: the module stands in it, or in its
         // `<id>.playbook/` (playbook-library-29).
         const near = dirname(location.module);
@@ -4117,18 +4186,25 @@ export class CoreService {
           name,
           id: location.id,
           command,
-          intent: typeof entry?.intent === "string" ? entry.intent : null,
-          roles: Array.isArray(entry?.requiredRoleIds) ? [...entry!.requiredRoleIds as string[]] : [],
+          intent: running?.intent ?? (typeof entry?.intent === "string" ? entry.intent : null),
+          roles,
           package: location.package,
           version: location.version,
           source,
           repository: key,
-          enabled: [
+          runs: running !== undefined,
+          ...(aside ? { standsAside: { reason: aside.reason, ...(aside.winner !== undefined ? { winner: aside.winner } : {}) } } : {}),
+          placedBy: [
+            ...(placedIn(projectLocations, location.id) ? ["project" as const] : []),
+            ...(placedIn(ownLocations, location.id) ? ["own" as const] : []),
+          ],
+          entry: [
             ...(projectRepository && Object.hasOwn(projectEntries, location.id) ? ["project" as const] : []),
             ...(Object.hasOwn(ownEntries, location.id) ? ["own" as const] : []),
           ],
           present: location.present,
-          ...(projectBindings || ownBindings ? { bindings: { ...(projectBindings ? { project: projectBindings } : {}), ...(ownBindings ? { own: ownBindings } : {}) } } : {}),
+          bindings,
+          ...(projectWritten || ownWritten ? { written: { ...(projectWritten ? { project: projectWritten } : {}), ...(ownWritten ? { own: ownWritten } : {}) } } : {}),
           folder: basename(near) === `${location.id}.playbook` ? dirname(near) : near,
         });
       }
@@ -4136,18 +4212,21 @@ export class CoreService {
     };
     const invalid = await this.invalidEntries(ownTop, projectRepository ? { key: projectRepository.key, path: projectRepository.configPath, top: projectTop } : undefined);
     return {
-      project: projectRepository ? await list(projectRepository.key) : null,
-      own: await list(own),
+      project: projectRepository && projectLocations ? await list(projectRepository.key, projectLocations) : null,
+      own: await list(own, ownLocations),
       ...(invalid.length > 0 ? { invalid } : {}),
     };
   }
 
   /**
-   * Each enabled entry failing the fail-closed validation, with its own
-   * failure (playbook-library-2): every entry composed alone — yours on
-   * your own group's modules, a project's on top of your roster with the
-   * project's modules first — and the effective commands checked across
-   * them, so one bad entry hides no other.
+   * Each written entry failing the fail-closed validation, or standing
+   * aside because no environment of the session places its playbook or
+   * its module is not on this device, with its own failure
+   * (playbook-library-2): every entry composed alone — yours on the
+   * global environment's modules, a project's on top of your roster with
+   * the project's modules first — and no placed playbook's default, so
+   * one bad entry hides no other. A command two playbooks answer is no
+   * failure: one runs, the other's row stands aside (core-service-2).
    */
   private async invalidEntries(
     ownTop: Record<string, unknown> | null,
@@ -4158,27 +4237,18 @@ export class CoreService {
     const entries = (top: Record<string, unknown> | null): Record<string, unknown> =>
       top && typeof top.playbooks === "object" && top.playbooks !== null ? top.playbooks as Record<string, unknown> : {};
     const reason = (error: unknown): string => (error instanceof Error ? error.message : String(error));
-    const commands = new Map<string, string>();
     const check = async (config: "own" | "project", id: string, compose: () => Promise<ComposedConfig>): Promise<void> => {
       try {
         const composed = await compose();
-        const command = composed.playbooks.find((playbook) => playbook.id === id)?.command;
-        if (command === undefined) return;
-        const holder = commands.get(command);
-        if (holder !== undefined && holder !== id) {
-          out.push({ config, playbook: id, reason: i18n._({
-            id: "duplicate effective command \"{command}\"",
-            comment: "Config error: two playbooks answer to the same slash command",
-            values: { command },
-          }) });
-        } else commands.set(command, id);
+        const aside = composed.standsAside.find((standing) => standing.playbook === id);
+        if (aside) out.push({ config, playbook: id, reason: aside.reason });
       } catch (error) {
         out.push({ config, playbook: id, reason: reason(error) });
       }
     };
     for (const id of Object.keys(entries(ownTop))) {
       const only = { ...ownTop, playbooks: { [id]: entries(ownTop)[id] } };
-      await check("own", id, () => composeConfig(only, this.options.loadModule, this.configPath, { modules: this.modules(null) }));
+      await check("own", id, () => composeConfig(only, this.options.loadModule, this.configPath, { modules: this.modules(null), defaults: false }));
     }
     if (project) {
       for (const id of Object.keys(entries(project.top))) {
@@ -4186,7 +4256,7 @@ export class CoreService {
         const ownBase = { ...ownTop, playbooks: { ...entries(ownTop) } } as Record<string, unknown>;
         await check("project", id, () => composeConfig(
           { ...ownBase, playbooks: { [id]: (ownBase.playbooks as Record<string, unknown>)[id] ?? {} } },
-          this.options.loadModule, this.configPath, { modules: this.modules(project.key), project: { top: projectOnly, path: project.path }, cwd: this.store.getProject(project.key)?.path },
+          this.options.loadModule, this.configPath, { modules: this.modules(project.key), project: { top: projectOnly, path: project.path }, cwd: this.store.getProject(project.key)?.path, defaults: false },
         ));
       }
     }
@@ -4194,32 +4264,32 @@ export class CoreService {
   }
 
   /**
-   * The tail of a compile (playbook-library-69), shared by the one-shot
-   * `compile.run` and an authoring session's enabling: re-key the
-   * bindings onto the compiled entry's derived roles; check the whole
-   * enabling against the config's fail-closed rules before anything is
-   * written (playbook-library-15, playbook-library-20); request the spec
-   * package by path from the chosen spex repository's environment and
-   * install it; write the players your own group's roster lacks; write
-   * the `playbooks.<id>` entry, no `from`, into that spex repository's
-   * config; reload. Each write is versioned on its own file; one refused
-   * after others leaves them written, named in the refusal (DR-111).
+   * The Add path (playbook-library-69), shared by the one-shot
+   * `compile.run` and an authoring session's Add: re-key the bindings
+   * onto the compiled entry's derived roles; check the whole Add against
+   * the config's fail-closed rules before anything is written
+   * (playbook-library-15, playbook-library-20); request the spec package
+   * by path from the environment named — the session's, the project's or
+   * the global — and install it; write the players your own group's
+   * roster lacks; write the `playbooks.<id>` entry, no `from`, into that
+   * environment's config; reload. Each write is versioned on its own
+   * file; one refused after others leaves them written, named in the
+   * refusal (DR-111).
    */
-  private async enableCompiled(input: {
+  private async addCompiled(input: {
     playbookId: string;
     result: CompileResult;
     bindings: Record<string, string>;
     newPlayers: Record<string, AgentBlock> | undefined;
-    projectId: string;
-    /** The spex repository to enable in: the project's, by default, or your own group's. */
-    repository?: string;
+    /** The environment to add to: a project's spex repository, or your
+     * own group's — the global (core-service-96). */
+    repository: string;
     packageDir: string;
   }): Promise<ConfigState> {
     const { playbookId, result } = input;
     const roles = this.rekeyRoles(result, input.bindings);
     const own = this.store.home.own();
-    const targetKey = input.repository ?? input.projectId;
-    if (targetKey !== own && targetKey !== input.projectId) throw noProject(targetKey);
+    const targetKey = input.repository;
     const target = this.store.repository(targetKey);
     if (!target) throw noProject(targetKey);
     // A request by path is relative to the environment's path root:
@@ -4229,12 +4299,12 @@ export class CoreService {
     if (targetFolder === null || relativePath === undefined || relativePath === "" || relativePath.startsWith("..") || isAbsolute(relativePath)) {
       throw new CoreError("invalid_request", targetKey === own
         ? i18n._({
-          id: "This package's folder is outside your Personal records — enable it in the project, or publish it and add it from the registry",
-          comment: "Refusal of Enable: a Personal package is added from a folder only inside what Spex keeps for you alone (environments-2), and this package lies elsewhere",
+          id: "This package's folder is outside your global records — add it in the project, or publish it and add it from the registry",
+          comment: "Refusal of Add: a global package is added from a folder only inside what Spex keeps for you alone, your global records (environments-2), and this package lies elsewhere",
         })
         : i18n._({
-          id: "This package's folder is outside the project folder — enable it in that project, or publish it and add it from the registry",
-          comment: "Refusal of Enable: a project's package is added from a folder only inside its project folder (environments-2), and this package lies elsewhere",
+          id: "This package's folder is outside the project folder — add it in that project, or publish it and add it from the registry",
+          comment: "Refusal of Add: a project's package is added from a folder only inside its project folder (environments-2), and this package lies elsewhere",
         }));
     }
     const packagePath = relativePath.split(sep).join("/");
@@ -4245,9 +4315,9 @@ export class CoreService {
     const entryOp: ConfigEditOp = { kind: "playbook.add", playbookId, roles };
     const playerOps: ConfigEditOp[] = Object.entries(input.newPlayers ?? {}).map(([playerId, block]) => ({ kind: "player.set", playerId, patch: block }));
 
-    // Nothing is written until the whole enabling passes the config's
-    // own rules, the new module standing in for the one the environment
-    // will export (playbook-library-15).
+    // Nothing is written until the whole Add passes the config's own
+    // rules, the new module standing in for the one the environment will
+    // place (playbook-library-15).
     const base = this.modules(targetKey === own ? null : targetKey);
     const overlay: PlaybookModules = {
       repository: base.repository,
@@ -4276,7 +4346,7 @@ export class CoreService {
     if (validationFailure) {
       const { error } = validationFailure;
       throw new CoreError("invalid_config", i18n._({
-        id: "compiled, but enabling was refused: {error}",
+        id: "compiled, but adding was refused: {error}",
         comment: "Refusal after a successful compile; `error` is the config validation's own words",
         values: { error: error instanceof Error ? error.message : String(error) },
       }));
@@ -4292,14 +4362,14 @@ export class CoreService {
       // config names its playbook (playbook-library-69, environments-15).
       const requested = await this.environments.ensureRequested(targetKey, name, { path: packagePath });
       if (requested) {
-        done.push(i18n._({ id: "{name} added to spex.yaml", comment: "A completed step of an enabling: the package written into spex.yaml", values: { name } }));
+        done.push(i18n._({ id: "{name} added to spex.yaml", comment: "A completed step of an Add: the package written into spex.yaml", values: { name } }));
       }
       const progress = { lockWritten: false, installed: false };
       try {
         await this.environments.installNow(targetKey, requested, progress);
       } finally {
-        if (progress.lockWritten) done.push(i18n._({ id: "spex.lock written", comment: "A completed step of an enabling: spex.lock written with the versions chosen" }));
-        if (progress.installed) done.push(i18n._({ id: "packages installed", comment: "A completed step of an enabling: the project's installed packages replaced, those the added package needs among them" }));
+        if (progress.lockWritten) done.push(i18n._({ id: "spex.lock written", comment: "A completed step of an Add: spex.lock written with the versions chosen" }));
+        if (progress.installed) done.push(i18n._({ id: "packages installed", comment: "A completed step of an Add: the project's installed packages replaced, those the added package needs among them" }));
       }
 
       // Lanes the bindings name but the roster lacks are created first,
@@ -4314,7 +4384,7 @@ export class CoreService {
             values: { playerId, error: minted.error },
           }));
         }
-        done.push(i18n._({ id: "player {playerId} written", comment: "A completed step of an enabling: a new session player written to your own settings", values: { playerId } }));
+        done.push(i18n._({ id: "player {playerId} written", comment: "A completed step of an Add: a new session player written to your own settings", values: { playerId } }));
       }
       const edit = targetKey === own
         ? await editConfigFile(this.configPath, entryOp, this.options.loadModule, { modules: this.modules(null) })
@@ -4327,37 +4397,49 @@ export class CoreService {
           values: { error: edit.error },
         }));
       }
-      done.push(i18n._({ id: "playbook {playbookId} written", comment: "A completed step of an enabling: the playbook's entry written to the config", values: { playbookId } }));
+      done.push(i18n._({ id: "playbook {playbookId} written", comment: "A completed step of an Add: the playbook's entry written to the config", values: { playbookId } }));
       await this.reloadConfig();
-      // The state the files stand at, or the enabling reports what it did.
+      // The state the files stand at, or the Add reports what it did.
       await this.settledConfig();
       this.authors.republish();
     } catch (error) {
       if (done.length === 0) throw error;
       const failure = coreErrorOf(error);
       throw new CoreError(failure.code, i18n._({
-        id: "enabling stopped after {done}: {error}",
-        comment: "Refusal of an enabling after some of its writes, which stand; {done} lists them, each itself a message, and {error} is the refusal's own words",
+        id: "adding stopped after {done}: {error}",
+        comment: "Refusal of an Add after some of its writes, which stand; {done} lists them, each itself a message, and {error} is the refusal's own words",
         values: { done: listed(done), error: failure.message },
       }), failure.details);
     }
     return this.configState;
   }
 
-  /** The project a new authoring session would live in, with its spex
-   * repository, or `invalid_request` where its working folder is not on
-   * this device (core-service-96). */
-  private draftHome(projectId: string): { project: ProjectInfo; repository: SpexRepository } {
-    const project = this.store.getProject(projectId);
-    const repository = this.store.repository(projectId);
+  /** The environment a new authoring session would belong to — a
+   * project's, or the global, named by your own group's key — with its
+   * spex repository and its working folder: the project's, or your own
+   * group's clone; `invalid_request` where that folder is not on this
+   * device (core-service-96). */
+  private draftHome(key: string): { repository: SpexRepository; workingFolder: string } {
+    if (key === this.store.home.own()) {
+      const repository = this.store.repository(key);
+      if (!repository || !existsSync(repository.dir)) {
+        throw new CoreError("invalid_request", i18n._({
+          id: "Your global packages' folder is not on this computer",
+          comment: "Refusal: a new global playbook — one every project of yours runs — while the records that hold your global packages are not on this computer",
+        }));
+      }
+      return { repository, workingFolder: repository.dir };
+    }
+    const project = this.store.getProject(key);
+    const repository = this.store.repository(key);
     if (!project || !repository) {
       throw new CoreError("invalid_request", i18n._({
         id: "{name} has no project folder on this computer — Open here first",
         comment: "Refusal: package work in a project not opened on this computer, so its spex.yaml has no folder here; 'Open here' is the project's control on the Space surface",
-        values: { name: splitKey(projectId).name.replace(/-spex$/, "") },
+        values: { name: splitKey(key).name.replace(/-spex$/, "") },
       }));
     }
-    return { project, repository };
+    return { repository, workingFolder: project.path };
   }
 
   /** An authoring session of the named project, or `not_found`
@@ -4417,8 +4499,8 @@ export class CoreService {
   private afterRepositoriesChanged(): void {
     if (this.options.watchConfig !== false) this.watchRepositories();
     this.authors.republish();
-    // A new clone's environment — requesting the built-in spec package
-    // since the store made it (storage-6) — resolves and installs.
+    // A new clone's environment — written by the store as it made it
+    // (storage-6) — resolves and installs.
     this.environments.settleUnresolved();
   }
 

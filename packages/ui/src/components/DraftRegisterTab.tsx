@@ -1,29 +1,32 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The Enable tab (playbook-library-61, playbook-library-7): the form
-// over the compiled entry's derived roles — command, intent, one
-// player per role, and the spex repository to enable in — prefilled
-// in the precedence the Boss's own edits, then the agent's latest
-// proposal, then derived defaults. A role's row offers the roster and
-// a new lane `dev.<role>` carrying the session's agent block, editable
-// in place as a built-in's is; a proposal that names a role the entry
-// lacks is shown as a mismatch with the derived roles authoritative.
-// Nothing is written until Enable, and no caption explains the write;
-// a held Enable says what it waits for in its tooltip. Beneath the
-// form, Publish uploads the package under development after an inline
-// summary of what it would upload, beside "Its package", which opens
-// the package's row on the Packages tab once it has one
-// (playbook-library-93, DR-172).
+// The Add tab (playbook-library-61, playbook-library-7, DR-176): the
+// form over the compiled entry's derived roles — command, intent and
+// one player per role, the environment it is added to being the one the
+// session belongs to, the project's or the global, and no field —
+// prefilled in the precedence the Boss's own edits, then the agent's
+// latest proposal, then derived defaults. A role's row offers the
+// roster and a new lane `dev.<role>` carrying the session's agent
+// block, editable in place as a built-in's is; a proposal that names a
+// role the entry lacks is shown as a mismatch with the derived roles
+// authoritative. Nothing is written until Add, and no caption explains
+// the write; a held Add says what it waits for in its tooltip. Beneath
+// the form, Publish uploads the package under development after an
+// inline summary of what it would upload, beside "Its package", which
+// opens the package's row — on the project's Packages tab, or on the
+// Playbooks surface for a global one — once it has one
+// (playbook-library-93).
 
 import { useEffect, useRef, useState } from "react";
-import type {
-  AgentBlockInput,
-  AgentSummary,
-  DraftInfo,
-  EnvironmentState,
-  ReadinessEntry,
-  SessionPlayerSummary,
+import {
+  defaultPlayerId,
+  type AgentBlockInput,
+  type AgentSummary,
+  type DraftInfo,
+  type EnvironmentState,
+  type ReadinessEntry,
+  type SessionPlayerSummary,
 } from "@sublang/spex-core/protocol";
 
 import { type DraftRegisterForm, type DraftSourceState } from "../state/store.js";
@@ -35,9 +38,8 @@ import {
   draftMediaOwner,
   draftPackagePath,
   existingRolePlayerId,
-  newPlayerId,
 } from "../lib/drafts.js";
-import { ownRepositoryKey, publishTargetOf } from "../lib/environments.js";
+import { listOf, publishTargetOf } from "../lib/environments.js";
 import { openPackageRow } from "../lib/package-row.js";
 import { i18n } from "../i18n.js";
 import { AgentChip } from "./AgentChip.js";
@@ -52,8 +54,6 @@ export interface RegisterInput {
   intent: string;
   bindings: Record<string, string>;
   newPlayers?: Record<string, AgentBlockInput>;
-  /** The spex repository to enable in (playbook-library-7). */
-  repository: string;
 }
 
 /** The form's effective values (playbook-library-61): the Boss's edits
@@ -67,8 +67,6 @@ export function resolveRegisterForm(
   roles: string[];
   command: string;
   intent: string;
-  /** The spex repository to enable in: the project by default. */
-  repository: string;
   /** Role → roster id, or `new:<id>` for a lane to mint. */
   choices: Record<string, string>;
   /** Role → the id its "New player" option would mint. */
@@ -121,7 +119,7 @@ export function resolveRegisterForm(
       : proposed && !roster.has(proposed)
         ? proposed
         : undefined;
-    const minted = newPlayerId(role);
+    const minted = defaultPlayerId(role);
     const newId = explicitNew ?? (occupied.has(minted) ? freeId(minted, occupied) : minted);
     occupied.add(newId);
     newIds[role] = newId;
@@ -151,7 +149,6 @@ export function resolveRegisterForm(
     command: form?.command ?? proposal?.command ?? draft.id,
     intent:
       form?.intent ?? proposal?.intent ?? derivedIntent(source?.markdown ?? ""),
-    repository: form?.repository ?? draft.projectId,
     choices,
     newIds,
     ...(extra.length > 0 || missing.length > 0 ? { mismatch: { extra, missing } } : {}),
@@ -197,33 +194,27 @@ export function DraftRegisterTab({
   const [error, setError] = useState<string>();
   const [openRole, setOpenRole] = useState<string>();
   const gearRef = useRef<HTMLButtonElement>(null);
-  const project = store((state) => state.projects.find((entry) => entry.id === draft.projectId));
-  const space = store((state) => state.space);
+  // A project's session, or one of the global environment, kept with
+  // your own group's records (core-service-96).
+  const ofProject = store((state) => state.projects.some((entry) => entry.id === draft.projectId));
   const registryAccounts = store((state) => state.registryAccounts);
-  // A publish goes to the project's environment's instance, as the core
-  // reads it from its `spex.yaml` (playbook-library-93, environments-2):
-  // its state is read where none is held yet.
+  // A publish goes to the registry of the session's environment, as the
+  // core reads it from its `spex.yaml` (playbook-library-93,
+  // environments-2): its state is read where none is held yet.
   const environment = store((state) => state.environments[draft.projectId]);
   const loadEnvironment = store((state) => state.loadEnvironment);
   const environmentHeld = environment !== undefined;
   useEffect(() => {
     if (connected && !environmentHeld) void loadEnvironment(draft.projectId).catch(() => {});
   }, [connected, environmentHeld, draft.projectId, loadEnvironment]);
-  const ownListed = store((state) => state.playbookLists?.own);
-  const ownKey = ownRepositoryKey(space, ownListed);
-  // The package has a row on the Packages tab once an environment the
-  // store holds lists it: the project's, else your own group's
+  // The package has a row once the session's environment lists it: on
+  // the project's Packages tab, or on the Playbooks surface
   // (playbook-library-93).
   const packageName = draft.package ?? draft.id;
-  const ownEnvironment = store((state) => (ownKey !== undefined ? state.environments[ownKey] : undefined));
   const lists = (held: EnvironmentState | undefined): boolean =>
     held !== undefined &&
     (held.requests[packageName] !== undefined || held.packages.some((entry) => entry.name === packageName));
-  const packageSection: "project" | "personal" | undefined = lists(environment)
-    ? "project"
-    : ownKey !== undefined && ownKey !== draft.projectId && lists(ownEnvironment)
-      ? "personal"
-      : undefined;
+  const hasRow = lists(environment);
   const readinessByAdapter = new Map(readiness.map((entry) => [entry.adapter as string, entry]));
   const resolved = resolveRegisterForm(draft, source, players, form);
   const current: DraftRegisterForm = form ?? { players: {}, newPlayers: {} };
@@ -259,7 +250,6 @@ export function DraftRegisterTab({
         intent: resolved.intent.trim(),
         bindings,
         ...(Object.keys(newPlayers).length > 0 ? { newPlayers } : {}),
-        repository: resolved.repository,
       });
     } catch (cause) {
       // The refusal stands inline and the form stays (playbook-library-61).
@@ -277,7 +267,7 @@ export function DraftRegisterTab({
       </p>
       {draft.state === "changed" ? (
         <p data-testid="register-changed" className="text-xs text-amber-700 dark:text-amber-300">
-          {i18n._("Enables the last compile — the source changed since.")}
+          {i18n._({ id: "Adds the last compile — the source changed since.", comment: "above the Add form: the playbook added is the one the last compile made, and its source has changed since" })}
         </p>
       ) : null}
       {resolved.mismatch ? (
@@ -325,29 +315,6 @@ export function DraftRegisterTab({
             className={INPUT_CLASS}
           />
         </label>
-        <label className="flex flex-col gap-0.5 @md:col-span-2">
-          <span className="text-xs text-neutral-500">
-            {i18n._({ id: "Enable for", comment: "field of the Enable form: the project, or Personal for every project of yours" })}
-          </span>
-          <select
-            data-testid="register-repository"
-            value={resolved.repository}
-            onChange={(event) => onForm({ ...current, repository: event.target.value })}
-            className={INPUT_CLASS}
-          >
-            {/* The project by its name, the default; Personal for every
-                project of yours (playbook-library-61). */}
-            <option value={draft.projectId}>{project?.name ?? draft.projectId}</option>
-            {ownKey && ownKey !== draft.projectId ? (
-              <option value={ownKey}>
-                {i18n._({
-                  id: "Personal (every project of yours)",
-                  comment: "a choice of the Enable form's Enable for: your Personal config, read in every project of yours",
-                })}
-              </option>
-            ) : null}
-          </select>
-        </label>
       </div>
       <div className="flex flex-col gap-2">
         {resolved.roles.map((role) => {
@@ -357,9 +324,14 @@ export function DraftRegisterTab({
             : resolved.newIds[role];
           const chosenPlayer = players.find((player) => player.id === choice);
           const block = chosenPlayer ? chosenPlayer.agent : blockFor(newId);
-          // A roster lane bound elsewhere is a shared conversation, and
-          // the row says so (DR-032).
-          const sharedWith = chosenPlayer?.boundBy ?? [];
+          // A roster lane another playbook binds is a shared
+          // conversation, and the row names those playbooks (DR-032,
+          // playbook-library-38).
+          const sharedWith = [
+            ...new Set((chosenPlayer?.boundBy ?? []).map((position) => position.slice(0, position.indexOf(".") < 0 ? position.length : position.indexOf(".")))),
+          ]
+            .filter((playbook) => playbook !== draft.id)
+            .map((playbook) => `/${playbook}`);
           return (
             <div
               key={role}
@@ -396,10 +368,18 @@ export function DraftRegisterTab({
               {sharedWith.length > 0 ? (
                 <span
                   data-testid={`register-shared-${role}`}
-                  title={i18n._("This lane also answers {positions} — one conversation across them", { positions: sharedWith.join(", ") })}
+                  title={i18n._({
+                    id: "Also plays in {playbooks}",
+                    comment: "beneath a role's player choice: the player plays roles of these other playbooks too, one conversation across them; {playbooks} names them, such as /code and /fix",
+                    values: { playbooks: listOf(sharedWith) },
+                  })}
                   className="rounded-full bg-brand-50 px-1.5 py-0.5 text-xs text-brand-700 dark:bg-brand-950 dark:text-brand-300"
                 >
-                  {i18n._("also {position}", { position: sharedWith[0] })}
+                  {i18n._({
+                    id: "also in {playbook}",
+                    comment: "a short mark beside a role's player in the Add form: the player plays in this other playbook too; {playbook} is it, such as /code",
+                    values: { playbook: sharedWith[0] },
+                  })}
                   {sharedWith.length > 1 ? ` +${sharedWith.length - 1}` : ""}
                 </span>
               ) : null}
@@ -460,15 +440,15 @@ export function DraftRegisterTab({
           type="button"
           data-testid="register-submit"
           disabled={disabled}
-          // A held Enable says what it waits for; nothing explains what
-          // it writes (playbook-library-61, DR-069).
+          // A held Add says what it waits for; nothing explains what it
+          // writes (playbook-library-61, DR-069).
           title={
             !connected
               ? i18n._({ id: "Not connected", comment: "why a control is held: the page has no core" })
               : !complete
                 ? i18n._({
                     id: "A player per role, a command and an intent",
-                    comment: "tooltip of the Enable form's held Enable: what it waits for",
+                    comment: "tooltip of the Add form's held Add: what it waits for",
                   })
                 : undefined
           }
@@ -476,21 +456,27 @@ export function DraftRegisterTab({
           className="ml-auto rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-40"
         >
           {busy
-            ? i18n._({ id: "Enabling…", comment: "the enable request is in flight" })
-            : i18n._({ id: "Enable", comment: "enable this playbook in this config" })}
+            ? i18n._({ id: "Adding…", comment: "the Add form's request is in flight: the playbook is being added" })
+            : i18n._({ id: "Add", comment: "the Add form's act: add the compiled playbook to the packages of the page it was made on, with these players" })}
         </button>
       </div>
       <div className="flex flex-col gap-1">
         <PublishControl repository={draft.projectId} name={packageName} path={draftPackagePath(draft)} target={publishTargetOf(environment, registryAccounts)} onNavigate={onNavigate} />
-        {packageSection ? (
+        {hasRow ? (
           <button
             type="button"
             data-testid="register-package-link"
             title={packageName}
-            onClick={() => openPackageRow(store, draft.projectId, packageName, packageSection)}
+            onClick={() =>
+              openPackageRow(
+                store,
+                ofProject ? { projectId: draft.projectId } : { show: () => store.getState().closeDraft() },
+                packageName,
+              )
+            }
             className="self-start text-xs text-brand-600 hover:underline dark:text-brand-300"
           >
-            {i18n._({ id: "Its package", comment: "link beside Publish: opens this playbook's package row on the Packages tab" })}
+            {i18n._({ id: "Its package", comment: "link beside Publish: opens this playbook's package row, on the project's Packages tab or on the Playbooks page" })}
           </button>
         ) : null}
       </div>

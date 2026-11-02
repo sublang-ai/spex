@@ -260,10 +260,10 @@ msgstr "{host} signed you in as another account — sign in as @{login}"
 msgid "{id} changed meanwhile; retry"
 msgstr "{id} changed meanwhile; retry"
 
-#. Refusal: the id offered for a new playbook is one an installed package exports, in this project or among the packages Spex keeps for you alone
+#. Refusal: the id offered for a new playbook is one an installed package exports, in this project or among your global packages, which every project of yours runs
 #: src/authoring.ts
-msgid "{id} is already a playbook of this project or of your Personal packages — pick another id"
-msgstr "{id} is already a playbook of this project or of your Personal packages — pick another id"
+msgid "{id} is already a playbook of this project or of your global packages — pick another id"
+msgstr "{id} is already a playbook of this project or of your global packages — pick another id"
 
 #. Refusal: the id offered for a new playbook is another project's authoring session
 #: src/service.ts
@@ -285,7 +285,7 @@ msgstr "{name} {version} is already at {registry} — raise its version in meta.
 msgid "{name} {version} is too large for {registry} — leave out what it does not need, then Retry"
 msgstr "{name} {version} is too large for {registry} — leave out what it does not need, then Retry"
 
-#. A completed step of an enabling: the package written into spex.yaml
+#. A completed step of an Add: the package written into spex.yaml
 #: src/service.ts
 msgid "{name} added to spex.yaml"
 msgstr "{name} added to spex.yaml"
@@ -487,6 +487,11 @@ msgstr "{name}: spex.lock names no registry address for it — Update writes spe
 msgid "{org} is not yours to publish to at {registry} — claim it there, or publish under one of your orgs"
 msgstr "{org} is not yours to publish to at {registry} — claim it there, or publish under one of your orgs"
 
+#. Why a placed playbook stands aside, composing nothing: its spec package is not installed here; {package} is its name, org/pkg
+#: src/config.ts
+msgid "{package} places {id}, but its files are not on this computer"
+msgstr "{package} places {id}, but its files are not on this computer"
+
 #. A stopped sync: the Space renamed or moved the project's records, and the folder on this computer they would move to is taken; {path} is that folder
 #: src/space.ts
 msgid "{path} already exists, so these records cannot move there"
@@ -684,11 +689,6 @@ msgstr "{path} must not set both effort and its legacy alias reasoningEffort"
 msgid "{path} must resolve an adapter"
 msgstr "{path} must resolve an adapter"
 
-#. Config error: a role binds a player the roster does not define
-#: src/config.ts
-msgid "{path} names absent session player \"{playerId}\""
-msgstr "{path} names absent session player \"{playerId}\""
-
 #. Refusal: a folder inside a Personal package's folder, which Git does not ignore, cannot be read; {entry} is its path in the records
 #: src/environments.ts
 msgid "{path}: {entry} cannot be read to confirm it syncs with your Personal records — check its permissions, then Retry"
@@ -871,6 +871,11 @@ msgstr "{what} changed meanwhile; retry"
 #: src/session.ts
 msgid "{who}'s {field} changed"
 msgstr "{who}'s {field} changed"
+
+#. Why a playbook stands aside, composing nothing: another playbook answers its slash command; {winner} is that playbook's spec package, org/pkg
+#: src/config.ts
+msgid "/{command} is {winner}'s"
+msgstr "/{command} is {winner}'s"
 
 #. Draft thread status line: the compile was canceled; the ◇ stays
 #: src/authoring.ts
@@ -1088,6 +1093,11 @@ msgstr "Add it to a group first"
 msgid "Add this computer's SSH key to your account, accept a new host key in a terminal, then Retry"
 msgstr "Add this computer's SSH key to your account, accept a new host key in a terminal, then Retry"
 
+#. Refusal of an Add after some of its writes, which stand; {done} lists them, each itself a message, and {error} is the refusal's own words
+#: src/service.ts
+msgid "adding stopped after {done}: {error}"
+msgstr "adding stopped after {done}: {error}"
+
 #. Refusal on a team server of opening another team server from it: a server opens no server of its own; the person opens it from their own computer
 #: src/service.ts
 msgid "Already on a server — open it from your computer"
@@ -1285,13 +1295,13 @@ msgstr "compile the draft successfully before registering it"
 
 #. Refusal after a successful compile; `error` is the config validation's own words
 #: src/service.ts
-msgid "compiled, but creating session player \"{playerId}\" was refused: {error}"
-msgstr "compiled, but creating session player \"{playerId}\" was refused: {error}"
+msgid "compiled, but adding was refused: {error}"
+msgstr "compiled, but adding was refused: {error}"
 
 #. Refusal after a successful compile; `error` is the config validation's own words
 #: src/service.ts
-msgid "compiled, but enabling was refused: {error}"
-msgstr "compiled, but enabling was refused: {error}"
+msgid "compiled, but creating session player \"{playerId}\" was refused: {error}"
+msgstr "compiled, but creating session player \"{playerId}\" was refused: {error}"
 
 #. Refusal after a successful compile; `error` is the config validation's own words
 #: src/service.ts
@@ -1406,22 +1416,10 @@ msgstr "Draft is unavailable."
 msgid "duplicate binding {projectId}"
 msgstr "duplicate binding {projectId}"
 
-#. Config error: two playbooks answer to the same slash command
-#. Config error: two playbooks answer to the same slash command
-#: src/config.ts
-#: src/service.ts
-msgid "duplicate effective command \"{command}\""
-msgstr "duplicate effective command \"{command}\""
-
 #. Storage diagnostic: two open intents hold one issue or pull request
 #: src/storage-git.ts
 msgid "duplicate open source {source}"
 msgstr "duplicate open source {source}"
-
-#. Config error: two entries enable the same playbook
-#: src/config.ts
-msgid "duplicate playbook id \"{playbookId}\""
-msgstr "duplicate playbook id \"{playbookId}\""
 
 #. Storage diagnostic: the registry lists one project twice
 #: src/app-storage.ts
@@ -1445,11 +1443,6 @@ msgstr "duplicate record id {id}: {first} and {second}"
 #: src/service.ts
 msgid "edit rejected"
 msgstr "edit rejected"
-
-#. Refusal of an enabling after some of its writes, which stand; {done} lists them, each itself a message, and {error} is the refusal's own words
-#: src/service.ts
-msgid "enabling stopped after {done}: {error}"
-msgstr "enabling stopped after {done}: {error}"
 
 #. Refusal of a sign-in: what the reader entered is not a Space's address alone — not a URL, a scheme other than https (or http on this computer), a user or password, a path, a query, a fragment, a host outside letters, digits, hyphens and dots, or port 0; https://spex.sublang.ai is an example address and stays as it is
 #: src/space.ts
@@ -2011,9 +2004,15 @@ msgid "No longer shared with you"
 msgstr "No longer shared with you"
 
 #. Stands where a role binds no player at all
+#. Stands where a role binds no player at all
 #: src/session.ts
 msgid "no one"
 msgstr "no one"
+
+#. Refusal of a new session: no environment of the project or your global packages places a playbook that composes; {name} is the project's name
+#: src/session.ts
+msgid "No playbook runs in {name} — add a package that provides one"
+msgstr "No playbook runs in {name} — add a package that provides one"
 
 #. Refusal: no project of this id is registered
 #. Refusal: no project of this id is registered
@@ -2157,7 +2156,7 @@ msgstr "org {org} is not lowercase letters and digits in words joined by single 
 msgid "Package"
 msgstr "Package"
 
-#. A completed step of an enabling: the project's installed packages replaced, those the added package needs among them
+#. A completed step of an Add: the project's installed packages replaced, those the added package needs among them
 #: src/service.ts
 msgid "packages installed"
 msgstr "packages installed"
@@ -2208,7 +2207,7 @@ msgstr "playbook {playbookId} is no longer enabled"
 msgid "playbook {playbookId} joined the session"
 msgstr "playbook {playbookId} joined the session"
 
-#. A completed step of an enabling: the playbook's entry written to the config
+#. A completed step of an Add: the playbook's entry written to the config
 #: src/service.ts
 msgid "playbook {playbookId} written"
 msgstr "playbook {playbookId} written"
@@ -2218,6 +2217,7 @@ msgstr "playbook {playbookId} written"
 msgid "playbook {playbookId}'s {field} changed"
 msgstr "playbook {playbookId}'s {field} changed"
 
+#. One settings drift: a role changed lanes; the ids are the config file's own
 #. One settings drift: a role changed lanes; the ids are the config file's own
 #: src/session.ts
 msgid "playbook {playbookId}'s {role} role now binds {player} instead of {before}"
@@ -2229,17 +2229,7 @@ msgstr "playbook {playbookId}'s {role} role now binds {player} instead of {befor
 msgid "playbooks must be an object"
 msgstr "playbooks must be an object"
 
-#. Config error; `playbooks` is the config file's own field name and stays as it is
-#: src/config.ts
-msgid "playbooks must enable at least one playbook"
-msgstr "playbooks must enable at least one playbook"
-
-#. Config error: no environment of the session places the enabled playbook; {repository} is the spex repository's key
-#: src/config.ts
-msgid "playbooks.{id} is enabled, but no package of {repository} places a playbook {id}"
-msgstr "playbooks.{id} is enabled, but no package of {repository} places a playbook {id}"
-
-#. Config error: the key enabling a playbook differs from the id its module declares
+#. Config error: the key naming a playbook differs from the id its module declares
 #: src/config.ts
 msgid "playbooks.{id} key must equal the module manifest id \"{manifestId}\""
 msgstr "playbooks.{id} key must equal the module manifest id \"{manifestId}\""
@@ -2260,6 +2250,11 @@ msgstr "playbooks.{id} requires local role \"captain\", which is reserved for th
 msgid "playbooks.{id} runs roles {roles} concurrently, so they must bind to distinct players"
 msgstr "playbooks.{id} runs roles {roles} concurrently, so they must bind to distinct players"
 
+#. Why a written playbook entry stands aside, composing nothing: the spec package placing the playbook is not installed here; {package} is its name, org/pkg
+#: src/config.ts
+msgid "playbooks.{id}: {package} places it, but its files are not on this computer"
+msgstr "playbooks.{id}: {package} places it, but its files are not on this computer"
+
 #. Config error: the module the environment installs is no compiled playbook
 #: src/config.ts
 msgid "playbooks.{id}: its module \"{from}\" exposes no valid registry entry"
@@ -2272,8 +2267,13 @@ msgstr "playbooks.{id}: its module \"{from}\" failed to import: {message}"
 
 #. Config error; "Playbooks" is the app's own surface
 #: src/config.ts
-msgid "playbooks.{id}: its module \"{from}\" is not compatible with this version of Spex; compile its source in Playbooks to enable \"{id}\""
-msgstr "playbooks.{id}: its module \"{from}\" is not compatible with this version of Spex; compile its source in Playbooks to enable \"{id}\""
+msgid "playbooks.{id}: its module \"{from}\" is not compatible with this version of Spex; compile its source in Playbooks to run \"{id}\""
+msgstr "playbooks.{id}: its module \"{from}\" is not compatible with this version of Spex; compile its source in Playbooks to run \"{id}\""
+
+#. Why a written playbook entry stands aside, composing nothing: no environment of the session places the playbook; {repository} is the spex repository's key
+#: src/config.ts
+msgid "playbooks.{id}: no package of {repository} places a playbook {id}"
+msgstr "playbooks.{id}: no package of {repository} places a playbook {id}"
 
 #. Config error; `playbooks.<id>.from` is the config file's own field name, retired by environments
 #: src/config.ts
@@ -2326,7 +2326,7 @@ msgstr "player {playerId} is no longer bound by the session's playbooks"
 msgid "player {playerId} joined the roster"
 msgstr "player {playerId} joined the roster"
 
-#. A completed step of an enabling: a new session player written to your own settings
+#. A completed step of an Add: a new session player written to your own settings
 #: src/service.ts
 msgid "player {playerId} written"
 msgstr "player {playerId} written"
@@ -2644,8 +2644,8 @@ msgstr "Spex cannot identify this computer: {reason}"
 
 #. Startup refusal shown in the shell's dialog on an unsupported host
 #: src/service.ts
-msgid "Spex desktop and server require macOS or Linux with private POSIX file permissions. On Windows, use the scaffold CLI or connect to a Spex server in your browser."
-msgstr "Spex desktop and server require macOS or Linux with private POSIX file permissions. On Windows, use the scaffold CLI or connect to a Spex server in your browser."
+msgid "Spex desktop and server require macOS, Linux, or Windows with verified private storage permissions."
+msgstr "Spex desktop and server require macOS, Linux, or Windows with verified private storage permissions."
 
 #. The browser page once a sign-in failed
 #: src/space-groups.ts
@@ -2712,7 +2712,7 @@ msgstr "spex.lock is from a newer Spex (format {format}) — update Spex"
 msgid "spex.lock names no registry address — Update writes spex.lock again"
 msgstr "spex.lock names no registry address — Update writes spex.lock again"
 
-#. A completed step of an enabling: spex.lock written with the versions chosen
+#. A completed step of an Add: spex.lock written with the versions chosen
 #: src/service.ts
 msgid "spex.lock written"
 msgstr "spex.lock written"
@@ -3166,15 +3166,15 @@ msgstr "This folder already contains a Git repository without an initial commit.
 msgid "This folder already contains a Git repository. Use Add to register it."
 msgstr "This folder already contains a Git repository. Use Add to register it."
 
-#. Refusal of Enable: a project's package is added from a folder only inside its project folder (environments-2), and this package lies elsewhere
+#. Refusal of Add: a project's package is added from a folder only inside its project folder (environments-2), and this package lies elsewhere
 #: src/service.ts
-msgid "This package's folder is outside the project folder — enable it in that project, or publish it and add it from the registry"
-msgstr "This package's folder is outside the project folder — enable it in that project, or publish it and add it from the registry"
+msgid "This package's folder is outside the project folder — add it in that project, or publish it and add it from the registry"
+msgstr "This package's folder is outside the project folder — add it in that project, or publish it and add it from the registry"
 
-#. Refusal of Enable: a Personal package is added from a folder only inside what Spex keeps for you alone (environments-2), and this package lies elsewhere
+#. Refusal of Add: a global package is added from a folder only inside what Spex keeps for you alone, your global records (environments-2), and this package lies elsewhere
 #: src/service.ts
-msgid "This package's folder is outside your Personal records — enable it in the project, or publish it and add it from the registry"
-msgstr "This package's folder is outside your Personal records — enable it in the project, or publish it and add it from the registry"
+msgid "This package's folder is outside your global records — add it in the project, or publish it and add it from the registry"
+msgstr "This package's folder is outside your global records — add it in the project, or publish it and add it from the registry"
 
 #. Refusal: the recovery the reader activated is no longer advertised; the id is the runtime's own
 #: src/session.ts
@@ -3410,6 +3410,11 @@ msgstr "You stopped the transfer; your commits stand."
 #: src/space-git.ts
 msgid "You stopped the transfer; your commits stand. Git runs without prompts, so a helper that prompts fails instead of hanging."
 msgstr "You stopped the transfer; your commits stand. Git runs without prompts, so a helper that prompts fails instead of hanging."
+
+#. Refusal: a new global playbook — one every project of yours runs — while the records that hold your global packages are not on this computer
+#: src/service.ts
+msgid "Your global packages' folder is not on this computer"
+msgstr "Your global packages' folder is not on this computer"
 
 #. Guidance under a send the Space refused twice because its records moved meanwhile
 #: src/space.ts

@@ -1,30 +1,32 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// One heading of the project's Packages tab (playbook-library-92,
-// DR-104, DR-172): "Packages" for the project's spex.yaml, or
-// "Personal" for the packages added for yourself, its line carrying the
-// registry and the account there (playbook-library-119) and one "Add…";
-// beneath it the chips — "spex.yaml, spex.lock not committed", "spex.yaml
-// changed" with Update, "Not in the agents' folders" with Place skills
-// again — then one row per package spex.yaml names, each package it
-// requires under it: its name, its version, a source glyph, what it
-// provides and its standing, Remove and Publish in its overflow,
-// expanding to one line per artifact its release provides with its one
-// act — a playbook's Enable writing this heading's config in place, a
+// One environment's packages (playbook-library-92, playbook-library-122,
+// DR-104, DR-176): on a project's Packages tab the project's spex.yaml
+// under "Packages"; on the Playbooks surface the global one under the
+// surface's own "Playbooks" header, each package's playbooks beneath its
+// row. The heading carries the registry and the account there
+// (playbook-library-119) and one "Add…"; beneath it the chips —
+// "spex.yaml, spex.lock not committed", "spex.yaml changed" with Update,
+// "Not in the agents' folders" with Place skills again — then one row per
+// package spex.yaml names, each package it requires under it: its name,
+// its version, a source glyph, what it provides and its standing, the
+// built-in package's "Update to <shipped>" among them, Remove and Publish
+// in its overflow, expanding to one line per artifact its release
+// provides with its one act — a playbook's "/<command>" with none, a
 // spec's waiting links' Add requesting the package they wait for, as
-// Add… does, with its receipt; the built-in playbooks as one quiet line,
-// never a removable row. Neither heading names the spex repository
-// behind it (DR-159). A sync, an
-// update or an install running beside it refuses nothing (DR-111): its
-// progress shows by the heading, and a change the core refuses shows its
-// cause in place.
+// Add… does, with its receipt. The built-in spec package is one row
+// among the rest. No heading names the spex repository behind it
+// (DR-159). A sync, an update or an install running beside it refuses
+// nothing (DR-111): its progress shows by the heading, and a change the
+// core refuses shows its cause in place.
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type {
   EnvironmentPackage,
   EnvironmentRequest,
   EnvironmentState,
+  PlaybookAvailability,
 } from "@sublang/spex-core/protocol";
 
 import { isLocalPlace, type RegistryResult } from "../state/store.js";
@@ -37,7 +39,6 @@ import {
   busyWord,
   firstRequirement,
   isBuiltinPackage,
-  isProvided,
   listOf,
   providesPhrase,
   publishTargetOf,
@@ -55,7 +56,7 @@ import { PublishControl } from "./PublishControl.js";
 import { RegistryAccount, registrySignInTitle, useRegistrySignIn } from "./RegistryAccount.js";
 import { MoreMenu, type MenuEntry } from "./SpaceMenu.js";
 import { signingInLabel } from "./SpaceSignIn.js";
-import { PackageArtifacts, PlaybookEnableAct, UnlistedRequest, hasArtifactLines, usePlaybookEnable } from "./PackageArtifacts.js";
+import { PackageArtifacts, UnlistedRequest, hasArtifactLines } from "./PackageArtifacts.js";
 
 const BUTTON =
   "min-h-6 shrink-0 whitespace-nowrap rounded-md border border-neutral-300 px-2 py-0.5 text-xs text-neutral-700 hover:bg-neutral-100 disabled:opacity-40 disabled:hover:bg-transparent dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800";
@@ -93,8 +94,8 @@ const updateTitle = (): string =>
 
 /** The packages in the order the heading draws them: each one spex.yaml
  * names with what it requires beneath it, then any the lock holds that
- * no listed package names as its requirer; the built-in playbooks stand
- * on their own line instead. */
+ * no listed package names as its requirer — the built-in spec package
+ * as any other (playbook-library-92). */
 function packageTree(state: EnvironmentState): { pkg: EnvironmentPackage | undefined; name: string; depth: number }[] {
   const byName = new Map(state.packages.map((pkg) => [pkg.name, pkg]));
   const rows: { pkg: EnvironmentPackage | undefined; name: string; depth: number }[] = [];
@@ -103,7 +104,6 @@ function packageTree(state: EnvironmentState): { pkg: EnvironmentPackage | undef
     // A cycle is allowed and adds nothing (DR-104).
     if (placed.has(name)) return;
     placed.add(name);
-    if (isBuiltinPackage(name, byName.get(name))) return;
     rows.push({ pkg: byName.get(name), name, depth });
     for (const child of state.packages) {
       if (!child.direct && child.requiredBy.includes(name)) place(child.name, depth + 1);
@@ -174,10 +174,9 @@ function PackageRow({
   state,
   repository,
   projectId,
-  projectName,
-  personal,
+  playbooks,
   target,
-  reveal = 0,
+  beneath,
   onAdded,
   onNavigate,
 }: {
@@ -186,15 +185,15 @@ function PackageRow({
   depth: number;
   state: EnvironmentState;
   repository: string;
-  /** The project whose tab this is, and its name as the lines say it. */
-  projectId: string;
-  projectName: string;
-  /** The heading is "Personal": its playbooks enable in your own config. */
-  personal: boolean;
+  /** The project whose Packages tab this is; absent on the Playbooks
+   * surface. */
+  projectId?: string;
+  /** The playbooks the environment places, naming each line's command. */
+  playbooks?: readonly PlaybookAvailability[];
   target: PublishTarget | undefined;
-  /** Each new count asks the row to open its lines, the receipt's Enable
-   * for a package of several playbooks. */
-  reveal?: number;
+  /** What stands beneath the row: on the Playbooks surface, the
+   * playbooks the package places (playbook-library-122). */
+  beneath?: ReactNode;
   /** A package its lines' Add requested, for the heading's receipt. */
   onAdded?: (name: string) => void;
   onNavigate?: (surface: "Settings" | "Space") => void;
@@ -206,17 +205,14 @@ function PackageRow({
   const [expanded, setExpanded] = useState(false);
   const expandable = hasArtifactLines(pkg);
   const expandRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    if (reveal === 0 || !expandable) return;
-    setExpanded(true);
-    expandRef.current?.focus();
-  }, [reveal, expandable]);
   const install = store((current) => current.installEnvironment);
+  const resolve = store((current) => current.resolveEnvironment);
   const removePackage = store((current) => current.removeSpecPackage);
   const account = useRegistrySignIn(state.registry?.origin);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [installing, setInstalling] = useState(false);
+  const [updating, setUpdating] = useState(false);
   const [error, setError] = useState<string>();
   // Each Publish chosen from the overflow is its own attempt, asking for
   // its preview once (playbook-library-113).
@@ -249,6 +245,18 @@ function PackageRow({
     void install(repository)
       .catch((cause: Error) => setError(cause.message))
       .finally(() => setInstalling(false));
+  }
+
+  // A newer built-in release the app ships reads on the built-in spec
+  // package's row as "Update to <shipped>" (playbook-library-92,
+  // environments-11), picking the newest versions spex.yaml allows.
+  const shipped = isBuiltinPackage(name, pkg) ? state.builtinUpdate?.shipped : undefined;
+  function updateBuiltin(): void {
+    setUpdating(true);
+    setError(undefined);
+    void resolve(repository)
+      .catch((cause: Error) => setError(cause.message))
+      .finally(() => setUpdating(false));
   }
 
   const entries: MenuEntry[] = [];
@@ -406,6 +414,24 @@ function PackageRow({
         ) : null}
         <span className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-1.5">
           {standing}
+          {shipped ? (
+            <button
+              type="button"
+              data-testid={`env-update-${name}`}
+              disabled={updating}
+              title={updateTitle()}
+              onClick={updateBuiltin}
+              className={PRIMARY}
+            >
+              {updating
+                ? i18n._({ id: "Updating…", comment: "the packages spex.yaml names are being updated to the newest versions it allows and installed" })
+                : i18n._({
+                    id: "Update to {version}",
+                    comment: "on the built-in package's row: update to the release this app ships; {version} is that release",
+                    values: { version: shipped },
+                  })}
+            </button>
+          ) : null}
           <MoreMenu of={name} testId={`env-more-${name}`} entries={entries} buttonRef={moreRef} />
         </span>
       </div>
@@ -433,8 +459,7 @@ function PackageRow({
           state={state}
           repository={repository}
           projectId={projectId}
-          projectName={projectName}
-          personal={personal}
+          playbooks={playbooks}
           onAdded={onAdded}
         />
       ) : null}
@@ -460,90 +485,15 @@ function PackageRow({
           {error ?? account.error}
         </p>
       ) : null}
+      {beneath}
     </li>
   );
 }
 
-/** The built-in playbooks (playbook-library-92, environments-11): one
- * quiet line with the version spex.lock records, and where the app
- * ships a newer release the requirement admits, that release with
- * "Update to <shipped>". */
-function BuiltinLine({
-  locked,
-  update,
-  pending,
-  onUpdate,
-}: {
-  locked: string | undefined;
-  update: EnvironmentState["builtinUpdate"];
-  pending: boolean;
-  onUpdate: () => void;
-}) {
-  const text = locked
-    ? update
-      ? i18n._({
-          id: "Built-in playbooks {locked} · {shipped} shipped with this app",
-          comment: "the built-in playbooks' line while the app ships a newer release: {locked} is the version spex.lock records, {shipped} the one this app ships",
-          values: { locked, shipped: update.shipped },
-        })
-      : i18n._({
-          id: "Built-in playbooks {locked}",
-          comment: "the built-in playbooks' line on the Packages tab: {locked} is the version spex.lock records",
-          values: { locked },
-        })
-    : i18n._({ id: "Built-in playbooks", comment: "the built-in playbooks' line on the Packages tab, while spex.lock records no version of them" });
-  return (
-    <div data-testid="environment-builtin" className="flex flex-wrap items-center gap-2 px-1 text-xs text-neutral-500">
-      <span data-testid="environment-builtin-line" className="min-w-0">
-        {text}
-      </span>
-      {update ? (
-        <button
-          type="button"
-          data-testid="environment-builtin-update"
-          disabled={pending}
-          title={updateTitle()}
-          onClick={onUpdate}
-          className={PRIMARY}
-        >
-          {pending
-            ? i18n._({ id: "Updating…", comment: "the packages spex.yaml names are being updated to the newest versions it allows and installed" })
-            : i18n._({
-                id: "Update to {version}",
-                comment: "the built-in playbooks' line: update to the release this app ships; {version} is that release",
-                values: { version: update.shipped },
-              })}
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
 /** What an Add brought, once (playbook-library-92): "Added <name>
- * <version> · <what it provides>", with Enable where it provides a
- * playbook — enabling its one playbook in place in the heading's config,
- * as its row's line does, and reading where it is enabled after; for a
- * package of several playbooks, opening its row's lines, each with its
- * own Enable. */
-function Receipt({
-  name,
-  state,
-  repository,
-  projectId,
-  projectName,
-  personal,
-  onShowPlaybooks,
-}: {
-  name: string;
-  state: EnvironmentState | undefined;
-  repository: string;
-  projectId: string;
-  projectName: string;
-  personal: boolean;
-  onShowPlaybooks: () => void;
-}) {
-  const store = usePlaceStore();
-  const readLists = store((current) => current.playbookLists);
+ * <version> · <what it provides>", a playbook it provides running at
+ * once, with no further act. */
+function Receipt({ name, state }: { name: string; state: EnvironmentState | undefined }) {
   const pkg = state?.packages.find((entry) => entry.name === name);
   const provides = pkg ? providesPhrase(pkg.artifacts) : "";
   const text = pkg?.version
@@ -563,99 +513,82 @@ function Receipt({
         comment: "the receipt after Add…, while the package's version is still being picked",
         values: { name },
       });
-  const playbooks = pkg?.artifacts.filter((artifact) => artifact.kind === "playbook" && isProvided(artifact)) ?? [];
-  // The one playbook as the heading's environment lists it, read for
-  // this project: what its Enable writes.
-  const lists = readLists?.projectId === projectId ? readLists : undefined;
-  const listed = personal ? lists?.own : (lists?.project ?? undefined);
-  const only = playbooks.length === 1 ? playbooks[0] : undefined;
-  const entry = only ? listed?.find((candidate) => candidate.package === name && candidate.id === only.id) : undefined;
-  const enabling = usePlaybookEnable({ entry, personal, repository, projectId });
   return (
-    <div data-testid="add-receipt" className="flex flex-col gap-1">
-      <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-600 dark:text-neutral-300">
-        <span data-testid="add-note" role="status" className="[overflow-wrap:anywhere]">
-          {text}
-        </span>
-        {only ? (
-          <PlaybookEnableAct
-            enabling={enabling}
-            command={entry?.command ?? only.id}
-            personal={personal}
-            projectName={projectName}
-            enableTestId="add-note-enable"
-            enabledTestId="add-note-enabled"
-            named
-          />
-        ) : playbooks.length > 1 ? (
-          <button
-            type="button"
-            data-testid="add-note-enable"
-            title={i18n._({
-              id: "Shows its playbooks, each with Enable",
-              comment: "the title of Enable in the receipt after Add…, for a package of several playbooks: it opens the package's row to its playbooks, each enabled on its own line",
-            })}
-            onClick={onShowPlaybooks}
-            className={PRIMARY}
-          >
-            {i18n._({ id: "Enable", comment: "enable a playbook: name a player for each of its roles" })}
-          </button>
-        ) : null}
-      </div>
-      {enabling.error ? (
-        <p role="alert" data-testid="add-note-enable-error" className={ERROR}>
-          {enabling.error}
-        </p>
-      ) : null}
+    <div data-testid="add-receipt" className="flex flex-wrap items-center gap-2 text-xs text-neutral-600 dark:text-neutral-300">
+      <span data-testid="add-note" role="status" className="[overflow-wrap:anywhere]">
+        {text}
+      </span>
     </div>
   );
 }
 
-/** One heading of the Packages tab (playbook-library-92): the project's
- * spex.yaml under "Packages", or yours under "Personal". */
+/** One environment's packages (playbook-library-92,
+ * playbook-library-122): the project's spex.yaml under "Packages" on its
+ * Packages tab, or, with no project, the global one under the Playbooks
+ * surface's header, each package's playbooks beneath its row. */
 export function EnvironmentSection({
   repository,
   projectId,
-  projectName,
-  personal = false,
+  beneath,
   onNavigate,
 }: {
   repository: string;
-  /** The project whose tab this is: the playbook lists read for it
-   * name each row's playbooks, which its lines and the receipt enable
-   * in place. */
-  projectId: string;
-  /** The project's name, as an enabled playbook's line says it
-   * (playbook-library-92). */
-  projectName: string;
-  /** The packages added for yourself, available in every project. */
-  personal?: boolean;
+  /** The project whose Packages tab this is; absent, the Playbooks
+   * surface shows the global environment. */
+  projectId?: string;
+  /** On the Playbooks surface, what stands beneath a package's row: the
+   * playbooks it places. */
+  beneath?: (name: string) => ReactNode;
   onNavigate?: (surface: "Settings" | "Space") => void;
 }) {
   const store = usePlaceStore();
+  const global = projectId === undefined;
   const state = store((current) => current.environments[repository]);
   const registryAccounts = store((current) => current.registryAccounts);
   const target = publishTargetOf(state, registryAccounts);
   const loadError = store((current) => current.environmentErrors[repository]);
+  const loadEnvironment = store((current) => current.loadEnvironment);
+  const connected = store((current) => current.connection === "open");
   const resolve = store((current) => current.resolveEnvironment);
   const install = store((current) => current.installEnvironment);
+  const readLists = store((current) => current.playbookLists);
+  // The playbooks the environment places, as the lists read them for
+  // this page — the project's for its tab, the global for the surface —
+  // naming each playbook line's command.
+  const playbooks = global
+    ? readLists?.projectId === null
+      ? readLists.own
+      : undefined
+    : readLists?.projectId === projectId
+      ? (readLists.project ?? undefined)
+      : undefined;
   const [error, setError] = useState<string>();
-  // The receipt's Enable on a package of several playbooks opens its
-  // row's lines: each ask a new count, so asking again opens it again.
-  const [revealed, setRevealed] = useState<{ name: string; times: number }>();
-  const [pending, setPending] = useState<"update" | "builtin" | "place">();
+  const [pending, setPending] = useState<"update" | "place">();
   const [added, setAdded] = useState<string>();
   const progress = busyWord(state?.busy ?? null);
-  const heading = personal
-    ? i18n._({ id: "Personal", comment: "a Packages tab heading: the packages added for yourself, available in every project" })
-    : i18n._({ id: "Packages", comment: "a Packages tab heading: the packages the project's spex.yaml names" });
+  // While the global environment requests nothing, the surface reads
+  // "No playbooks yet" above its one "Add…" (playbook-library-122).
+  const emptyGlobal = global && state !== undefined && packageTree(state).length === 0;
+  const addPackages = (
+    <AddPackages
+      repository={repository}
+      global={global}
+      onOpen={() => setAdded(undefined)}
+      onAdded={setAdded}
+      onRefused={setError}
+    />
+  );
 
-  function act(kind: "update" | "builtin" | "place"): void {
+  useEffect(() => {
+    if (connected) void loadEnvironment(repository).catch(() => {});
+  }, [connected, repository, loadEnvironment]);
+
+  function act(kind: "update" | "place"): void {
     setPending(kind);
     setError(undefined);
-    // Update, and the built-in line's Update to, pick the newest
-    // versions spex.yaml allows (environments-11); Place skills again
-    // installs, which places the skills again.
+    // Update picks the newest versions spex.yaml allows
+    // (environments-11); Place skills again installs, which places the
+    // skills again.
     void (kind === "place" ? install(repository) : resolve(repository))
       .catch((cause: Error) => setError(cause.message))
       .finally(() => setPending(undefined));
@@ -672,13 +605,6 @@ export function EnvironmentSection({
     );
   } else {
     const tree = packageTree(state);
-    const builtinNames = [...new Set([...Object.keys(state.requests), ...state.packages.map((pkg) => pkg.name)])].filter((name) =>
-      isBuiltinPackage(name, state.packages.find((pkg) => pkg.name === name)),
-    );
-    const builtin = builtinNames
-      .map((name) => state.packages.find((pkg) => pkg.name === name))
-      .find((pkg) => pkg?.version);
-    const showBuiltin = builtinNames.length > 0 || state.builtinUpdate !== undefined;
     const conflicts = state.conflicts ?? [];
     const changed = state.stale !== null || conflicts.length > 0;
     body = (
@@ -821,49 +747,52 @@ export function EnvironmentSection({
                 state={state}
                 repository={repository}
                 projectId={projectId}
-                projectName={projectName}
-                personal={personal}
+                playbooks={playbooks}
                 target={target}
-                reveal={revealed?.name === row.name ? revealed.times : 0}
+                beneath={beneath?.(row.name)}
                 onAdded={setAdded}
                 onNavigate={onNavigate}
               />
             ))}
           </ul>
         ) : null}
-        {showBuiltin ? (
-          <BuiltinLine
-            locked={builtin?.version ?? state.builtinUpdate?.locked}
-            update={state.builtinUpdate}
-            pending={pending === "builtin"}
-            onUpdate={() => act("builtin")}
-          />
-        ) : null}
-        {tree.length === 0 && !showBuiltin ? (
-          <p data-testid="environment-empty" className="text-xs text-neutral-500">
-            {i18n._({ id: "No packages yet", comment: "a Packages tab heading with no package in its spex.yaml" })}
-          </p>
+        {tree.length === 0 ? (
+          global ? (
+            <div
+              data-testid="playbooks-surface-empty"
+              // Add… keeps its place at the right edge, where its popover
+              // opens leftward inside the surface's box (DR-041).
+              className="flex flex-col items-end gap-2 rounded-lg border border-dashed border-neutral-300 px-4 py-4 text-sm text-neutral-500 dark:border-neutral-700"
+            >
+              <p className="self-stretch text-center">
+                {i18n._({ id: "No playbooks yet", comment: "a Playbooks list while no package places a playbook" })}
+              </p>
+              {addPackages}
+            </div>
+          ) : (
+            <p data-testid="environment-empty" className="text-xs text-neutral-500">
+              {i18n._({ id: "No packages yet", comment: "a Packages tab heading with no package in its spex.yaml" })}
+            </p>
+          )
         ) : null}
       </>
     );
   }
 
   return (
-    <section data-testid="environment-section" className="flex flex-col gap-2">
+    <section data-testid={global ? "surface-packages" : "environment-section"} className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <h2
-          className="shrink-0 text-sm font-semibold text-neutral-700 dark:text-neutral-200"
-          title={
-            personal
-              ? i18n._({
-                  id: "Packages added for yourself, available in every project",
-                  comment: "the title of the Packages tab's heading Personal",
-                })
-              : undefined
-          }
-        >
-          {heading}
-        </h2>
+        {global ? (
+          // The surface's own header (playbook-library-122): its global
+          // packages are what it lists.
+          <h1 className="shrink-0 text-lg font-semibold">
+            {i18n._({ id: "Playbooks", comment: "the Playbooks page's heading: the global playbooks" })}
+          </h1>
+        ) : (
+          <h2 className="shrink-0 text-sm font-semibold text-neutral-700 dark:text-neutral-200">
+            {i18n._({ id: "Packages", comment: "a Packages tab heading: the packages the project's spex.yaml names" })}
+          </h2>
+        )}
         <RegistryAccount repository={repository} />
         {progress ? (
           <span className="flex items-center gap-1 text-xs text-neutral-500">
@@ -871,27 +800,9 @@ export function EnvironmentSection({
             <span data-testid="environment-progress">{progress}</span>
           </span>
         ) : null}
-        <span className="ml-auto">
-          <AddPackages
-            repository={repository}
-            personal={personal}
-            onOpen={() => setAdded(undefined)}
-            onAdded={setAdded}
-            onRefused={setError}
-          />
-        </span>
+        {emptyGlobal ? null : <span className="ml-auto">{addPackages}</span>}
       </div>
-      {added ? (
-        <Receipt
-          name={added}
-          state={state}
-          repository={repository}
-          projectId={projectId}
-          projectName={projectName}
-          personal={personal}
-          onShowPlaybooks={() => setRevealed((current) => ({ name: added, times: (current?.times ?? 0) + 1 }))}
-        />
-      ) : null}
+      {added ? <Receipt name={added} state={state} /> : null}
       {body}
     </section>
   );
@@ -905,7 +816,7 @@ type AddMode = "registry" | "folder" | "git";
  * that sent it. */
 function AddPackages(props: {
   repository: string;
-  personal: boolean;
+  global: boolean;
   onOpen: () => void;
   onAdded: (name: string) => void;
   onRefused: (message: string) => void;
@@ -915,13 +826,13 @@ function AddPackages(props: {
 
 function AddPopover({
   repository,
-  personal,
+  global,
   onOpen,
   onAdded,
   onRefused,
 }: {
   repository: string;
-  personal: boolean;
+  global: boolean;
   onOpen: () => void;
   onAdded: (name: string) => void;
   onRefused: (message: string) => void;
@@ -958,10 +869,10 @@ function AddPopover({
       testId: "add-from-folder",
       disabledWhy: folder
         ? undefined
-        : personal
+        : global
           ? i18n._({
-              id: "Your Personal records are not on this computer",
-              comment: "the title of Add…'s disabled Folder tab under Personal: the folder holding your Personal records, which a folder package lies in, is not on this computer",
+              id: "The folder of your global packages is not on this computer",
+              comment: "the title of Add…'s disabled Folder tab on the Playbooks page: the folder holding your global packages, which a folder package lies in, is not on this computer",
             })
           : i18n._({
               id: "The project folder is not on this computer",

@@ -18,14 +18,24 @@ import { cpSync, existsSync, lstatSync, readdirSync, readFileSync, renameSync, r
 import { join } from "node:path";
 
 import { BUILTIN_PACKAGE_NAME, INSTALL_RECORD, parseLock, parseRequests, publishRelease, RegistryClient, requestsDigest, serializeLock } from "@sublang/spex/environment";
+import { builtinPackage } from "./builtins.js";
 import type { EnvironmentState } from "./protocol.js";
 import { bareOf, clonePath, createSpaceHarness, hostKey, ownClone, OWN_KEY } from "./testing/space-harness.js";
 import type { StandinHost } from "./testing/standin-host.js";
 import { makeRelease, startStandinRegistry, type StandinRegistry } from "@sublang/spex/testing";
 
 const fixture = createSpaceHarness();
-const { scratch, git, gitFolder, addFolder, sleep, startHome, startHost, signIn } = fixture;
+const { scratch, git, gitFolder, sleep, startHome, startHost, signIn } = fixture;
 test.after(() => fixture.dispose());
+
+/** A project paired as an earlier core paired one, its environment
+ * requesting the built-in spec package, installed (environments-11): the
+ * former environments these journeys move hold it. */
+async function addFolder(home: Home, path: string): Promise<{ key: string; clone: string }> {
+  const added = await fixture.addFolder(home, path);
+  await home.client.expectOk("environment.request", { repository: added.key, name: BUILTIN_PACKAGE_NAME, request: { kind: "registry", version: `^${builtinPackage().version}` }, wait: true });
+  return added;
+}
 
 type Home = Awaited<ReturnType<typeof startHome>>;
 

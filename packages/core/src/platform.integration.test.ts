@@ -16,16 +16,14 @@ test("core-service-90: unsupported native startup refuses before creating storag
       import { existsSync } from "node:fs";
       import { CoreService } from ${JSON.stringify(new URL("./service.js", import.meta.url).href)};
       const nativePlatform = process.platform;
-      // Windows CI exercises the real platform. Other hosts exercise only
-      // the refusal branch; they do not claim Windows filesystem coverage.
-      if (nativePlatform !== "win32") {
-        Object.defineProperty(process, "platform", { value: "win32" });
-      }
+      // This exercises only the unsupported-host refusal branch.
+      // windows-storage.integration.test exercises the real Windows filesystem.
+      Object.defineProperty(process, "platform", { value: "freebsd" });
       const dataDir = ${JSON.stringify(join(scratch, "state"))};
       const configPath = ${JSON.stringify(join(scratch, "config", "playbook.yaml"))};
       await assert.rejects(
         CoreService.start({ dataDir, configPath }),
-        /require macOS or Linux.*On Windows, use the scaffold CLI or connect to a Spex server/,
+        /require macOS.*Linux/,
       );
       assert.equal(existsSync(dataDir), false);
       assert.equal(existsSync(configPath), false);

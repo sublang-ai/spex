@@ -57,7 +57,7 @@ import {
   useAppStore,
 } from "./state/store.js";
 import { applyRecords, initialSessionView, type SessionView } from "./state/reducer.js";
-import { keyLabel } from "./lib/shortcuts.js";
+import { SHORTCUTS, keyLabel } from "./lib/shortcuts.js";
 import type { SessionInfo, TmuxPlayRecord } from "@sublang/spex-core/protocol";
 import { currentLocale } from "./i18n.js";
 import { groupsState, instanceState, namespace, repositoryRow } from "./fixtures/groups-state.js";
@@ -630,8 +630,12 @@ describe("run-view-72: the chrome folds without dropping a duty", () => {
     expect(main.getAttribute("aria-label")).toBe("Dashboard");
     expect(main.contains(document.activeElement)).toBe(true);
     expect(document.activeElement).not.toBe(document.body);
-    // Space by number, from the Dashboard's region (run-view-49).
+    // Playbooks and Space by number, from the Dashboard's region
+    // (run-view-49).
     fireEvent.keyDown(window, { key: "3", metaKey: true });
+    expect(main.getAttribute("aria-label")).toBe("Playbooks");
+    expect(main.contains(document.activeElement)).toBe(true);
+    fireEvent.keyDown(window, { key: "4", metaKey: true });
     expect(main.getAttribute("aria-label")).toBe("Space");
     expect(main.contains(document.activeElement)).toBe(true);
     // Back to Projects by number: the composer is the stop.
@@ -1300,13 +1304,13 @@ describe("run-view-48/50: the strip walks by keyboard and names its attention", 
 
     // A tooltip naming a shortcut prints the platform's own modifier;
     // each pinned tab says what it holds in the tab's own words
-    // (DR-172): the project's own specs, what a session can run, and the
-    // project's packages with yours.
+    // (DR-172, DR-176): the project's own specs, what a session can run,
+    // and the project's packages alone.
     expect(specs.title).toBe(
       `The project's specs (${keyLabel("⇧S")})`,
     );
     expect(playbooks.title).toBe("What a session in this project can run");
-    expect(packages.title).toBe("This project's packages and your Personal ones");
+    expect(packages.title).toBe("This project's packages");
     expect(plus.title).toBe(`New task (${keyLabel("N")})`);
   });
 
@@ -1767,7 +1771,7 @@ describe("run-view-135/136: a summons the session answers names its turn", () =>
   });
 });
 
-describe("DR-172: the rail of four, and the project's Playbooks and Packages tabs", () => {
+describe("DR-176: the rail of five, and the project's Playbooks and Packages tabs", () => {
   /** This page's storage, kept in memory for one test: the host's own
    * may answer no call. */
   function keepStorage(initial: Record<string, string>): { kept: Map<string, string>; restore: () => void } {
@@ -1789,64 +1793,55 @@ describe("DR-172: the rail of four, and the project's Playbooks and Packages tab
     return { kept, restore: () => { if (real) Object.defineProperty(window, "localStorage", real); } };
   }
 
-  test("[run-view-67] [run-view-49] the rail reads Dashboard, Projects, Space and Settings, Cmd/Ctrl+1..4 in its order", () => {
+  test("[run-view-67] [run-view-49] the rail reads Dashboard, Projects, Playbooks, Space and Settings, Cmd/Ctrl+1..5 in its order", () => {
     // A config Settings can draw without a Captain.
     useAppStore.setState({ configState: { status: "missing", path: "/tmp/config.yaml" } as never });
     render(<App />);
     const rail = screen.getByTestId("sidebar");
     expect([...rail.querySelectorAll<HTMLElement>("[data-surface]")].map((entry) => entry.dataset.surface)).toEqual([
       "Dashboard",
+      "Playbooks",
       "Space",
       "Settings",
     ]);
     expect(within(rail).getByTestId("sidebar-workspace").textContent).toBe("Projects");
-    expect(rail.querySelector('[data-surface="Playbooks"]')).toBeNull();
+    expect(rail.querySelector('[data-surface="Playbooks"]')!.textContent).toBe("Playbooks");
     const main = screen.getByRole("main");
-    for (const [key, label] of [["1", "Dashboard"], ["2", "Projects"], ["3", "Space"], ["4", "Settings"]] as const) {
+    for (const [key, label] of [["1", "Dashboard"], ["2", "Projects"], ["3", "Playbooks"], ["4", "Space"], ["5", "Settings"]] as const) {
       fireEvent.keyDown(window, { key, metaKey: true });
       expect(main.getAttribute("aria-label")).toBe(label);
     }
-    // No fifth surface: the key moves nothing.
-    fireEvent.keyDown(window, { key: "5", metaKey: true });
+    // No sixth surface: the key moves nothing.
+    fireEvent.keyDown(window, { key: "6", metaKey: true });
     expect(main.getAttribute("aria-label")).toBe("Settings");
+    // The shortcut sheet names the five in the rail's order.
+    expect(SHORTCUTS.find((entry) => entry.keys === "1–5")?.does).toBe("Go to Dashboard, Projects, Playbooks, Space, Settings");
   });
 
-  test("[run-view-67] a remembered Playbooks surface opens Projects at the current project's Playbooks tab, read once", async () => {
+  test("[run-view-67] [playbook-library-122] the rail's Playbooks entry opens the Playbooks surface, its own entry current and no project row selected", async () => {
+    render(<App />);
+    const rail = screen.getByTestId("sidebar");
+    fireEvent.click(rail.querySelector<HTMLElement>('[data-surface="Playbooks"]')!);
+    expect(screen.getByRole("main").getAttribute("aria-label")).toBe("Playbooks");
+    expect(await screen.findByTestId("playbooks-surface")).toBeTruthy();
+    expect(rail.querySelector('[data-surface="Playbooks"]')!.getAttribute("aria-current")).toBe("page");
+    expect(rail.querySelector('[aria-selected="true"][role="treeitem"]')).toBeNull();
+    // It reads what the global environment places, for no project.
+    await vi.waitFor(() => expect(commandMock).toHaveBeenCalledWith("environment.playbooks", {}));
+    // The workspace's tab stands as it was.
+    expect(useAppStore.getState().workspaceTabs.p1).toBe("a-live");
+  });
+
+  test("[run-view-67] a remembered Playbooks surface opens the Playbooks surface itself, not a project's tab", async () => {
     const storage = keepStorage({ "spex.surface": "Playbooks" });
     try {
       render(<App />);
-      expect(screen.getByRole("main").getAttribute("aria-label")).toBe("Projects");
-      await vi.waitFor(() => expect(useAppStore.getState().workspaceTabs.p1).toBe("playbooks"));
-      expect(screen.getByTestId("workspace-tab-playbooks").getAttribute("aria-selected")).toBe("true");
-      expect(await screen.findByTestId("playbooks-tab")).toBeTruthy();
-      // The stored value is mapped once: Projects stands in its place.
-      expect(storage.kept.get("spex.surface")).toBe("Workspace");
-    } finally {
-      storage.restore();
-    }
-  });
-
-  test("[run-view-67] a remembered Playbooks surface waits for the projects' read, and owes nothing once it shows none", async () => {
-    const seeded = useAppStore.getState().projects;
-    const storage = keepStorage({ "spex.surface": "Playbooks" });
-    try {
-      // Read and empty: a project added later opens as any other.
-      useAppStore.setState({ projects: [], currentProjectId: undefined, projectsRead: true, workspaceTabs: {} });
-      const view = render(<App />);
-      expect(screen.getByRole("main").getAttribute("aria-label")).toBe("Projects");
-      await act(async () => {});
-      act(() => useAppStore.setState({ projects: seeded, currentProjectId: "p1" }));
-      await act(async () => {});
-      expect(useAppStore.getState().workspaceTabs.p1).not.toBe("playbooks");
-      view.unmount();
-
-      // Not read yet: the first current project lands on its Playbooks tab.
-      storage.kept.set("spex.surface", "Playbooks");
-      useAppStore.setState({ projects: [], currentProjectId: undefined, projectsRead: false, workspaceTabs: {} });
-      render(<App />);
-      await act(async () => {});
-      act(() => useAppStore.setState({ projects: seeded, currentProjectId: "p1", projectsRead: true }));
-      await vi.waitFor(() => expect(useAppStore.getState().workspaceTabs.p1).toBe("playbooks"));
+      expect(screen.getByRole("main").getAttribute("aria-label")).toBe("Playbooks");
+      expect(await screen.findByTestId("playbooks-surface")).toBeTruthy();
+      expect(screen.queryByTestId("playbooks-tab")).toBeNull();
+      expect(useAppStore.getState().workspaceTabs.p1).toBe("a-live");
+      // Nothing is mapped: the stored value stands.
+      expect(storage.kept.get("spex.surface")).toBe("Playbooks");
     } finally {
       storage.restore();
     }

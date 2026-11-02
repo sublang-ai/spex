@@ -16,6 +16,7 @@ import { pathToFileURL } from "node:url";
 import { WebSocket } from "ws";
 
 import type { LineSpawner } from "./compile.js";
+import { builtinPackage } from "./builtins.js";
 import { CoreService } from "./service.js";
 import type { EnvironmentManager } from "./environments.js";
 import type { Store } from "./store.js";
@@ -216,17 +217,21 @@ test("core-service-117: commands, turns and compiles read the config files as th
   const announced = client.messages.slice(mark).filter((m) => m.type === "config.state" || m.type === "readiness.state");
   assert.deepEqual(announced.map((m) => m.type === "config.state" ? model(m.state) : m.type), ["claude-probed", "claude-reprobed", "readiness.state"]);
 
-  // A locked entry gone is the config's missing module; restored, with
-  // the lock unchanged and no reload, the next read composes it.
+  // A locked entry gone makes its playbook stand aside, blocking nothing
+  // (core-service-2); restored, with the lock unchanged and no reload,
+  // the next read composes it.
+  const composesCode = (state: ConfigState): boolean => state.status === "valid" && state.summary.playbooks.some((playbook) => playbook.id === "code");
   const aside = `${codeModule}.aside`;
   renameSync(codeModule, aside);
   try {
     const missing = await client.ok("config.get", {});
-    assert.ok(missing.status === "invalid", JSON.stringify(missing));
+    assert.ok(missing.status === "valid" && !composesCode(missing) && missing.summary.standsAside.some((entry) => entry.playbook === "code"), JSON.stringify(missing));
   } finally {
     renameSync(aside, codeModule);
   }
-  assert.equal(model(await client.ok("config.get", {})), "claude-reprobed");
+  const restored = await client.ok("config.get", {});
+  assert.equal(model(restored), "claude-reprobed");
+  assert.ok(composesCode(restored), JSON.stringify(restored));
 
   // An edit's reply is the state the files stand at after its reload:
   // overtaken twice while that reload composes, never the state before.
@@ -254,6 +259,10 @@ test("core-service-117: commands, turns and compiles read the config files as th
   mkdirSync(working);
   execFileSync("git", ["init", "-q", working]);
   const project = await client.ok("project.register", { path: working });
+  // The project requests the built-in spec package itself, so its
+  // composition imports its own copy of code's module, held apart from
+  // the global environment's (environments-9).
+  await client.ok("environment.request", { repository: project.id, name: "sublang/playbooks", request: { kind: "registry", version: `^${builtinPackage().version}` }, wait: true });
   const projectConfig = internals.store.repository(project.id)!.configPath;
   mkdirSync(join(projectConfig, ".."), { recursive: true });
   writeFileSync(projectConfig, "playbooks:\n  code:\n    roles:\n      coder: dev.coder\n");
@@ -279,7 +288,10 @@ test("core-service-117: commands, turns and compiles read the config files as th
   writeFileSync(projectConfig, "playbooks:\n  code:\n    roles:\n      coder: dev.absent\n");
   hold.open();
   const projectAnswer = await projectReply;
-  assert.ok(projectAnswer.ok && projectAnswer.result.status === "invalid" && /dev\.absent/.test(projectAnswer.result.errors.join(" ")), JSON.stringify(projectAnswer));
+  // The answer reflects the edit: a player your roster lacks, to set up
+  // (core-service-2, settings-46).
+  assert.ok(projectAnswer.ok && projectAnswer.result.status === "valid" &&
+    projectAnswer.result.summary.players.some((player) => player.id === "dev.absent" && player.toSetUp === true), JSON.stringify(projectAnswer));
 
   // Authoring: each turn — a Boss turn and a queued one alike — reads
   // the config as it stands when it starts; a running turn keeps its own.

@@ -11,7 +11,8 @@
 // their Add, which requests it; the Specs tab reads the placed copy with
 // its provenance in Edit's place; the line follows the copy hand-edited,
 // a project file of a package's name and a folder without specs/; and
-// under "Personal" the spec reads placed as a skill.
+// on the Playbooks surface, among the global packages, the spec reads
+// placed as a skill.
 
 import { readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -19,7 +20,7 @@ import { publishRelease, RegistryClient } from "@sublang/spex/environment";
 import { makeRelease } from "@sublang/spex-core/testing";
 import type { Locator } from "@playwright/test";
 
-import { addPackages, expect, open, packageRow, packagesSection, projectTab, test } from "../src/harness";
+import { addPackages, expect, open, packageRow, packagesSection, playbooksSurface, projectTab, test } from "../src/harness";
 
 // The public registry the environments name answers as the stand-in.
 test.use({ appOptions: { project: true, host: { registry: true }, independentRegistry: true } });
@@ -205,13 +206,15 @@ test("playbook-library-94, spec-view-67: a provided spec is placed in specs/, it
   await projectTab(page, "Packages");
   await expect(await specLine(packages, HANDBOOK, "handbook")).toHaveText("spec · needs specs/ — scaffold first");
 
-  // Under "Personal", whose root holds no specs/, the spec is placed as a
-  // skill, its row counting it alone and listing no waiting links
-  // (playbook-library-92).
-  const personal = packagesSection(page, "personal");
-  await expect(packageRow(personal, HANDBOOK).getByTestId(`env-provides-${HANDBOOK}`)).toHaveText("1 spec");
-  const personalLines = await linesOf(personal, HANDBOOK);
-  await expect(personalLines.getByTestId(`env-artifact-${HANDBOOK}-handbook`)).toHaveText("spec · placed as a skill");
-  await expect(personalLines.getByTestId(`env-waiting-${HANDBOOK}-${STYLE}`)).toHaveCount(0);
-  await expect(personalLines).not.toContainText("handbook-checks");
+  // Among the global packages on the Playbooks surface, whose root holds
+  // no specs/, the spec is placed as a skill, its row counting it alone
+  // and listing no waiting links (playbook-library-92,
+  // playbook-library-122).
+  await playbooksSurface(page);
+  const global = packagesSection(page, "global");
+  await expect(packageRow(global, HANDBOOK).getByTestId(`env-provides-${HANDBOOK}`)).toHaveText("1 spec");
+  const globalLines = await linesOf(global, HANDBOOK);
+  await expect(globalLines.getByTestId(`env-artifact-${HANDBOOK}-handbook`)).toHaveText("spec · placed as a skill");
+  await expect(globalLines.getByTestId(`env-waiting-${HANDBOOK}-${STYLE}`)).toHaveCount(0);
+  await expect(globalLines).not.toContainText("handbook-checks");
 });

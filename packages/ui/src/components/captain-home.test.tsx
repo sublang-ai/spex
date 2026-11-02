@@ -65,6 +65,7 @@ const PLAYBOOKS: PlaybookSummary[] = [
     command: "code",
     intent: "software development workflow",
     roles: { coder: { playerId: "dev.coder", display: "claude-opus-5" } },
+    origin: "own",
   },
   {
     id: "review",
@@ -72,6 +73,7 @@ const PLAYBOOKS: PlaybookSummary[] = [
     command: "review",
     intent: "design review",
     roles: { host: { playerId: "dev.coder", display: "claude-opus-5" } },
+    origin: "own",
   },
 ];
 
@@ -228,6 +230,7 @@ describe("RUN-29: captain home structure and one-motion start", () => {
       id: "inspect", from: "@sublang/playbook/inspect/registry", command: "inspect",
       intent: "inspect supplied material or a running web interface and explain observed evidence without changing the repository",
       roles: {},
+      origin: "own",
     };
     renderHome({ playbooks: [
       { ...PLAYBOOKS[1], intent: "review a supplied scope of committed work until no unsettled findings remain" },

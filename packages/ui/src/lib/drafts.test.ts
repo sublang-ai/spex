@@ -5,7 +5,7 @@
 // (playbook-library-50, playbook-library-61).
 
 import { describe, expect, test } from "vitest";
-import type { DraftInfo } from "@sublang/spex-core/protocol";
+import { defaultPlayerId, type DraftInfo } from "@sublang/spex-core/protocol";
 
 import {
   agentBlockOf,
@@ -13,7 +13,6 @@ import {
   draftChipWord,
   derivedIntent,
   firstProseParagraph,
-  newPlayerId,
 } from "./drafts.js";
 
 const t = 1_700_000_000_000;
@@ -39,7 +38,7 @@ function draft(overrides: Partial<DraftInfo>): DraftInfo {
 describe("draft chips", () => {
   test("every state has its word, each within the 14-character budget", () => {
     const words = (
-      ["no-source", "draft", "compiling", "failed", "interrupted", "compiled", "changed", "enabled"] as const
+      ["no-source", "draft", "compiling", "failed", "interrupted", "compiled", "changed", "added"] as const
     ).map((state) => draftChipWord(draft({ state })));
     expect(words).toEqual([
       "No source",
@@ -49,7 +48,7 @@ describe("draft chips", () => {
       "Interrupted",
       "Compiled",
       "Changed",
-      "Enabled",
+      "Added",
     ]);
     expect(draftChipWord(draft({ sourceMissing: true }))).toBe("Source missing");
     for (const word of [...words, "Source missing"]) {
@@ -114,8 +113,8 @@ describe("derivedIntent", () => {
 
 describe("new lanes", () => {
   test("a role mints dev.<role> in lowercase", () => {
-    expect(newPlayerId("Triager")).toBe("dev.triager");
-    expect(newPlayerId("Code Reviewer")).toBe("dev.code-reviewer");
+    expect(defaultPlayerId("Triager")).toBe("dev.triager");
+    expect(defaultPlayerId("Code Reviewer")).toBe("dev.code-reviewer");
   });
 
   test("the draft's agent becomes a block without instruction or fast mode", () => {

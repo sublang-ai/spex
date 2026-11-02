@@ -536,16 +536,27 @@ async function assertSurfaceMatrix(
       },
       ready: async () => {
         await expect(projectTabControl(page, "Playbooks")).toHaveAttribute("aria-selected", "true");
-        await expect(page.getByTestId("playbooks-enabled")).toBeVisible();
+        await expect(page.getByTestId("playbooks-global")).toBeVisible();
       },
     },
     {
-      // The project's Packages tab: the project's packages and, beneath
-      // them, your own group's (playbook-library-92) — a full folder
-      // package row with its name, version, source glyph, what it
-      // provides, its standing and its overflow, expanded to its lines;
-      // the chips "spex.yaml, spex.lock not committed" and "spex.yaml
-      // changed" with Update; each heading's built-in line.
+      // The Playbooks surface: the global packages, each with its
+      // playbooks beneath it, the Authoring section after them
+      // (playbook-library-122).
+      name: "Playbooks surface",
+      show: () => nav(page, "Playbooks").click(),
+      ready: async () => {
+        await expect(page.getByTestId("playbooks-surface")).toBeVisible();
+        await expect(page.getByTestId("surface-packages").getByTestId("playbook-card-code")).toBeVisible();
+        await expect(page.getByTestId("new-playbook")).toBeVisible();
+      },
+    },
+    {
+      // The project's Packages tab: the project's packages alone
+      // (playbook-library-92) — a full folder package row with its
+      // name, version, source glyph, what it provides, its standing and
+      // its overflow, expanded to its lines; the chips "spex.yaml,
+      // spex.lock not committed" and "spex.yaml changed" with Update.
       name: "Packages tab",
       show: async () => {
         await makeRelease(join(app.projectDir, FIT_PACKAGE_PATH), {
@@ -583,10 +594,6 @@ async function assertSurfaceMatrix(
         await expect(row.getByTestId(`env-artifacts-${FIT_PACKAGE}`)).toBeVisible();
         await expect(project.getByTestId("environment-uncommitted")).toBeVisible();
         await expect(project.getByTestId("environment-update")).toBeVisible();
-        // The built-in playbooks stand as each heading's one quiet line.
-        for (const whose of ["project", "personal"] as const) {
-          await expect(packagesSection(page, whose).getByTestId("environment-builtin")).toBeVisible();
-        }
       },
       // spex.yaml as it was, so no later surface reads it changed.
       settle: async () => {
@@ -1537,7 +1544,7 @@ test.describe("the strip's pinned tabs at the narrowest width", () => {
 test.describe("the Packages tab's popovers at the narrowest width", () => {
   test.use({ appOptions: { project: true } });
 
-  test("run-view-105, playbook-library-92: at 320px each heading's Add… on its three tabs, its registry chooser and a row's overflow stand inside the Packages tab", async ({
+  test("run-view-105, playbook-library-92: at 320px Add… on its three tabs, the registry chooser and a row's overflow stand inside the Packages tab and the Playbooks surface", async ({
     page,
     app,
   }) => {
@@ -1550,24 +1557,32 @@ test.describe("the Packages tab's popovers at the narrowest width", () => {
     await setRail(page, false);
     await page.setViewportSize({ width: 320, height: TALL });
     await projectTab(page, "Packages");
-    const tab = page.getByTestId("packages-tab");
     await expect(packagesSection(page, "project").getByTestId(`env-package-${FIT_PACKAGE}`)).toBeVisible({ timeout: 30_000 });
-    /** A popup stands inside the tab's box and the window, the page not
-     * scrolling sideways (DR-041, run-view-106). */
+    /** A popup stands inside its page's box — the Packages tab, or the
+     * Playbooks surface — and the window, the page not scrolling
+     * sideways (DR-041, run-view-106). */
     const inside = async (popup: Locator, what: string) => {
       await expect(popup, what).toBeVisible();
-      const box = await tab.boundingBox();
+      const box = await page.getByTestId("packages-tab").or(page.getByTestId("playbooks-surface")).boundingBox();
       const own = await popup.boundingBox();
       if (!box || !own) throw new Error(`${what} has no box`);
-      expect(own.x, `${what} starts inside the Packages tab at 320px`).toBeGreaterThanOrEqual(box.x - 0.5);
-      expect(own.x + own.width, `${what} ends inside the Packages tab at 320px`).toBeLessThanOrEqual(box.x + box.width + 0.5);
+      expect(own.x, `${what} starts inside its page at 320px`).toBeGreaterThanOrEqual(box.x - 0.5);
+      expect(own.x + own.width, `${what} ends inside its page at 320px`).toBeLessThanOrEqual(box.x + box.width + 0.5);
       expect(own.x + own.width, `${what} ends inside the window at 320px`).toBeLessThanOrEqual(320 + 0.5);
       expect(
         await page.evaluate(() => window.scrollX === 0 && document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1),
         `the page scrolls sideways with ${what} open`,
       ).toBe(true);
     };
-    for (const whose of ["project", "personal"] as const) {
+    for (const whose of ["project", "global"] as const) {
+      if (whose === "global") {
+        const row = packagesSection(page, "project").getByTestId(`env-package-${FIT_PACKAGE}`);
+        await row.getByTestId(`env-more-${FIT_PACKAGE}`).click();
+        await inside(row.getByTestId(`env-more-${FIT_PACKAGE}-menu`), "a package row's overflow");
+        await page.keyboard.press("Escape");
+        await nav(page, "Playbooks").click();
+        await expect(page.getByTestId("playbooks-surface")).toBeVisible();
+      }
       const section = packagesSection(page, whose);
       for (const name of ["Registry", "Folder", "Git"] as const) {
         await addPackages(section, name);
@@ -1580,9 +1595,10 @@ test.describe("the Packages tab's popovers at the narrowest width", () => {
       await page.keyboard.press("Escape");
       await expect(section.getByTestId("registry-chooser-menu")).toHaveCount(0);
     }
-    const row = packagesSection(page, "project").getByTestId(`env-package-${FIT_PACKAGE}`);
-    await row.getByTestId(`env-more-${FIT_PACKAGE}`).click();
-    await inside(row.getByTestId(`env-more-${FIT_PACKAGE}-menu`), "a package row's overflow");
+    // The built-in spec package's row on the surface, with its overflow.
+    const builtins = packagesSection(page, "global").getByTestId("env-package-sublang/playbooks");
+    await builtins.getByTestId("env-more-sublang/playbooks").click();
+    await inside(builtins.getByTestId("env-more-sublang/playbooks-menu"), "the built-in row's overflow");
   });
 });
 
