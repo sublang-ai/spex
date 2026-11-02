@@ -207,6 +207,8 @@ export interface AppOptions {
    * and named "Third stand-in" unless another name is given.
    */
   host?: boolean | {
+    /** Friendly Space name for journeys and visual evidence. */
+    displayName?: string;
     registry?: boolean;
     share?: { host: StandinHost; registry?: StandinRegistry; second?: StandinHost };
     second?: { backend?: "separate" | "shared"; displayName?: string; person?: StandinPerson; canCreateGroup?: boolean; registry?: boolean };
@@ -880,7 +882,7 @@ async function arrangeApp(
         registry = await startStandinRegistry({ dir: join(scratch, "registry") });
         owned.push(registry);
       }
-      host = await startStandinHost({ dir: join(scratch, "host"), ...(registry ? { registry: registry.url } : {}) });
+      host = await startStandinHost({ dir: join(scratch, "host"), ...(spec.displayName ? { displayName: spec.displayName } : {}), ...(registry ? { registry: registry.url } : {}) });
       owned.push(host);
     }
     hosts.push(host);

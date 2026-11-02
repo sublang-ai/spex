@@ -278,7 +278,7 @@ async function expectNoPhrase(page: Page, key: string): Promise<void> {
     .toBe("");
 }
 
-/** How a group picker's "Share into" reads each of the stand-in's
+/** How a group picker's "Choose group" reads each of the stand-in's
  * entries (space-58): your namespace "Personal", first, then a group by
  * its name and its path after the separator where the two differ, as the
  * list reads them (space-1). */
@@ -297,10 +297,24 @@ const entryKey = (entry: string): string => (entry === HOST_LOGIN ? `@${HOST_LOG
  * there, under the Space's display name — the first stand-in's unless
  * another is named — and no field naming the new records. */
 async function pickSection(picker: Locator, host: { url: string }, name = "Stand-in Git host"): Promise<Locator> {
+  const chooser = picker.getByRole("combobox", { name: "Space", exact: true });
+  if (await chooser.count()) await chooser.selectOption(host.url);
   const section = picker.getByTestId(`space-pick-instance-${host.url}`);
-  await expect(section.getByRole("heading", { level: 3 })).toHaveText(name);
+  await expect(section).toBeVisible();
+  await expect(picker).toContainText(name);
   await expect(section.getByRole("textbox")).toHaveCount(0);
   return section;
+}
+
+/** Native radio inputs keep their names in associated labels, not text
+ * children; assert their order and visible destination names together. */
+async function expectPickOptions(section: Locator, names: string[]): Promise<void> {
+  const options = section.locator('[data-testid^="space-pick-group-"]');
+  await expect(options).toHaveCount(names.length);
+  for (const [index, name] of names.entries()) {
+    // The visual separator is decorative and hidden from speech.
+    await expect(options.nth(index)).toHaveAccessibleName(name.replaceAll(" · ", " "));
+  }
 }
 
 /** The step lines in their order (space-12): the Check step names the
@@ -482,13 +496,14 @@ test.describe("first start", () => {
     await expect(picker).toBeVisible();
     await expect(picker.locator('[data-testid^="space-pick-instance-"]')).toHaveCount(1);
     const section = await pickSection(picker, host);
-    await expect(section).toContainText("Share into");
-    await expect(section.locator('[data-testid^="space-pick-group-"]')).toHaveText([
+    await expect(section).toContainText("Choose group");
+    await expectPickOptions(section, [
       PICKED_AS[HOST_LOGIN]!,
       PICKED_AS[HOST_GROUP]!,
       PICKED_AS[`${HOST_GROUP}/research`]!,
     ]);
-    await section.getByTestId(`space-pick-group-${HOST_GROUP}`).click();
+    await section.getByTestId(`space-pick-group-${HOST_GROUP}`).check();
+    await picker.getByRole("button", { name: "Add to group", exact: true }).click();
     await expect(page.getByTestId(`space-repo-state-${TEAM_KEY}`)).toHaveText("Synced just now", { timeout: 30_000 });
     await expect(page.getByTestId(`space-row-${TEAM_KEY}`)).toHaveAttribute("data-state", "reachable");
     await expect(page.getByTestId(`space-repo-${TEAM_KEY}`)).toHaveText("demo-project");
@@ -605,7 +620,7 @@ test.describe("a folder added while signed in", () => {
 
     // The folder pairs with records through the picker, standing in the
     // palette in place of its list: under the stand-in's display name,
-    // "Share into" with "Personal" first and then its groups, and no
+    // "Choose group" with "Personal" first and then its groups, and no
     // field naming the new records (projects-1, space-58).
     await page.getByTestId("sidebar").getByRole("button", { name: "Add a local project" }).click();
     const palette = page.getByRole("dialog", { name: /Add a project|Choose a project/ });
@@ -616,8 +631,8 @@ test.describe("a folder added while signed in", () => {
     await expect(picker).toBeVisible();
     await expect(palette.getByTestId("palette-path")).toHaveCount(0);
     const section = await pickSection(picker, host);
-    await expect(section).toContainText("Share into");
-    await expect(section.locator('[data-testid^="space-pick-group-"]')).toHaveText([
+    await expect(section).toContainText("Choose group");
+    await expectPickOptions(section, [
       PICKED_AS[HOST_LOGIN]!,
       PICKED_AS[HOST_GROUP]!,
       PICKED_AS[`${HOST_GROUP}/research`]!,
@@ -626,7 +641,8 @@ test.describe("a folder added while signed in", () => {
     // Picking the team's group creates `<name>-spex` there and pushes;
     // the palette closes, and the row is reachable in that group with
     // the project followed to its key (space-58, space-60).
-    await section.getByTestId(`space-pick-group-${HOST_GROUP}`).click();
+    await section.getByTestId(`space-pick-group-${HOST_GROUP}`).check();
+    await picker.getByRole("button", { name: "Add to group", exact: true }).click();
     await expect(palette).toBeHidden();
     await showGroups(page);
     await expect(page.getByTestId(`space-repo-state-${TEAM_KEY}`)).toHaveText("Synced just now", { timeout: 30_000 });
@@ -638,6 +654,85 @@ test.describe("a folder added while signed in", () => {
       page.getByRole("tree", { name: "Projects and sessions" }).getByRole("treeitem", { name: "demo-project", exact: true }),
     ).toBeVisible();
     expect((await app.core.command("project.list", {})).map((project) => project.id)).toEqual([TEAM_KEY]);
+  });
+});
+
+// The redesigned form is verified against real records and a scratch
+// Space; its screenshots are the same rendered UI the journey uses.
+test.describe("reviewing a local project's destination", () => {
+  test.use({ appOptions: { host: { displayName: "spex.sublang.xyz" }, signedIn: true } });
+
+  test("space-58: selection is harmless, confirmation adds once, and the form fits both themes", async ({ page, app }, testInfo) => {
+    test.setTimeout(120_000);
+    const host = app.host!;
+    const workshop = host.script.groups.find((group) => group.fullPath === HOST_GROUP)!;
+    workshop.name = "goodme-workshop";
+    workshop.fullPath = "goodme-workshop";
+    host.script.groups = host.script.groups.filter((group) => group.kind === "user" || group.id === workshop.id);
+    const from = app.core.mark();
+    const readAt = instanceOf(await app.core.command("space.get", {}), host.url)?.readAt ?? 0;
+    await app.core.command("space.refresh", {});
+    await app.core.waitSpace(from, (state) => (instanceOf(state, host.url)?.readAt ?? 0) > readAt, 30_000);
+    const local = await registerLocalProject(app, "slc");
+    const created = () => host.script.repositories.filter((repo) => repo.path === "slc-spex");
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await open(page, app);
+    await showGroups(page);
+    const opener = page.getByTestId(`space-row-pick-${local.key}`);
+    await opener.click();
+    const picker = page.getByTestId(`space-picker-${local.key}`);
+    const submit = picker.getByRole("button", { name: "Add to group", exact: true });
+    const personal = picker.getByTestId(`space-pick-group-@${HOST_LOGIN}`);
+    const group = picker.getByTestId("space-pick-group-goodme-workshop");
+    await expect(picker.getByRole("heading", { name: "Add slc to a group", exact: true })).toBeVisible();
+    await expect(picker).toContainText("Space");
+    await expect(picker).toContainText("spex.sublang.xyz");
+    await expect(submit).toBeDisabled();
+    await expect(picker.getByRole("radio", { checked: true })).toHaveCount(0);
+    await picker.screenshot({ path: testInfo.outputPath("01-choose-group-light.png") });
+
+    // Arrow navigation selects, while all remote and local records stay
+    // untouched. Escape returns to the opener and leaves no destination.
+    await personal.focus();
+    await page.keyboard.press("ArrowDown");
+    await expect(group).toBeChecked();
+    await expect(submit).toBeEnabled();
+    expect(created()).toHaveLength(0);
+    expect(repositoryOf(await app.core.command("space.get", {}), local.key).state).toBe("local-only");
+    await page.keyboard.press("Escape");
+    await expect(picker).toHaveCount(0);
+    await expect(opener).toBeFocused();
+    expect(created()).toHaveLength(0);
+    await opener.click();
+    await expect(picker.getByRole("radio", { checked: true })).toHaveCount(0);
+    await group.check();
+    for (const phrase of SHARING_PHRASES) await expect(picker).toContainText(phrase);
+    await picker.screenshot({ path: testInfo.outputPath("02-review-group-light.png") });
+    await page.screenshot({ path: testInfo.outputPath("03-space-context-light.png") });
+
+    for (const theme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: theme });
+      const accessibility = await new AxeBuilder({ page }).include(`[data-testid="space-picker-${local.key}"]`).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+      expect(accessibility.violations.filter((violation) => ["serious", "critical"].includes(violation.impact ?? ""))).toEqual([]);
+      for (const width of [320, 640, 1280]) {
+        await setRail(page, false);
+        await page.setViewportSize({ width, height: 900 });
+        const fit = await measure(page, [`[data-testid="space-picker-${local.key}"] label`]);
+        expect({ overflow: fit.overflow, vertical: fit.vertical, overlap: fit.overlap }, `${theme} at ${width}px`).toEqual({ overflow: [], vertical: [], overlap: [] });
+        if (theme === "dark" && width === 320) await picker.screenshot({ path: testInfo.outputPath("04-review-group-dark-narrow.png") });
+      }
+    }
+    await setRail(page, true);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.emulateMedia({ colorScheme: "light" });
+    expect(created()).toHaveLength(0);
+    await submit.click();
+    await expect(picker).toHaveCount(0);
+    const key = hostKey(host, "goodme-workshop/slc-spex");
+    await expect(page.getByTestId(`space-repo-state-${key}`)).toHaveText("Synced just now", { timeout: 30_000 });
+    expect(created()).toHaveLength(1);
+    expect(repositoryOf(await app.core.command("space.get", {}), key).folder).toBe(local.dir);
+    await page.screenshot({ path: testInfo.outputPath("05-added-to-group.png") });
   });
 });
 
@@ -671,18 +766,31 @@ test.describe("a folder added while signed in at two Spaces", () => {
     const localKey = `${HOST_LOGIN}/demo-project-spex`;
     const picker = palette.getByTestId(`space-picker-${localKey}`);
     await expect(picker).toBeVisible();
-    await expect(picker.locator('[data-testid^="space-pick-instance-"]')).toHaveCount(2);
-    const firstPick = await pickSection(picker, first);
-    const secondPick = await pickSection(picker, second, SECOND_HOST_NAME);
-    for (const section of [firstPick, secondPick]) {
-      await expect(section.getByTestId(`space-pick-group-${HOST_GROUP}`)).toHaveText(PICKED_AS[HOST_GROUP]!);
+    await expect(picker.locator('[data-testid^="space-pick-instance-"]')).toHaveCount(1);
+    await expect(picker.getByRole("combobox", { name: "Space", exact: true }).getByRole("option")).toHaveCount(2);
+    for (const [host, name] of [[first, "Stand-in Git host"], [second, SECOND_HOST_NAME]] as const) {
+      const section = await pickSection(picker, host, name);
+      await expectPickOptions(section, [PICKED_AS[HOST_LOGIN]!, PICKED_AS[HOST_GROUP]!, PICKED_AS[`${HOST_GROUP}/research`]!]);
     }
+
+    // Changing Space clears a pending destination instead of carrying
+    // an identically named group across accounts.
+    const firstChoice = await pickSection(picker, first);
+    await firstChoice.getByTestId(`space-pick-group-${HOST_GROUP}`).check();
+    await expect(picker.getByRole("button", { name: "Add to group", exact: true })).toBeEnabled();
+    await pickSection(picker, second, SECOND_HOST_NAME);
+    await expect(picker.getByRole("radio", { checked: true })).toHaveCount(0);
+    await expect(picker.getByRole("button", { name: "Add to group", exact: true })).toBeDisabled();
+    expect(first.script.repositories.some((repository) => repository.path === "demo-project-spex")).toBe(false);
+    expect(second.script.repositories.some((repository) => repository.path === "demo-project-spex")).toBe(false);
 
     // Picking the second's creates `<name>-spex` at the second and pairs
     // the folder with it: the second lists it, the first does not, and
     // the project follows it to its key under the second's folder
     // (projects-17, space-58).
-    await secondPick.getByTestId(`space-pick-group-${HOST_GROUP}`).click();
+    const secondPick = await pickSection(picker, second, SECOND_HOST_NAME);
+    await secondPick.getByTestId(`space-pick-group-${HOST_GROUP}`).check();
+    await picker.getByRole("button", { name: "Add to group", exact: true }).click();
     await expect(palette).toBeHidden();
     const SECOND_KEY = hostKey(second, TEAM_PATH);
     await expect
@@ -708,7 +816,7 @@ test.describe("a folder joining a team's project", () => {
   test.use({ appOptions: { host: true, signedIn: true } });
 
   for (const unknown of [false, true]) {
-    test(`space-81: a pick joining a team's project ${unknown ? "whose members' count is unknown" : "with another member"} asks the sharing confirm in the picker, and Share joins it`, async ({
+    test(`space-81: a pick joining a team's project ${unknown ? "whose members' count is unknown" : "with another member"} reviews sharing without mutating, and Connect project joins it`, async ({
       page,
       app,
     }) => {
@@ -738,40 +846,36 @@ test.describe("a folder joining a team's project", () => {
       await expectNoPhrase(page, localKey);
 
       // "Add to a group…" lists the team's project for the same code
-      // under "Join the records already in", by its name, with its group
+      // under "Connect to an existing project", by its name, with its group
       // read as its heading reads and no member count from the full read
       // (space-58).
       await page.getByTestId(`space-row-pick-${localKey}`).click();
       const picker = page.getByTestId(`space-picker-${localKey}`);
       const section = await pickSection(picker, host);
-      await expect(section).toContainText("Join the records already in");
+      await expect(section).toContainText("Connect to an existing project");
       const listed = section.getByTestId(`space-pick-repo-${key}`);
-      await expect(listed).toContainText("demo-project");
-      await expect(listed).not.toContainText("-spex");
+      await expect(listed).toHaveAccessibleName(/demo-project/);
+      await expect(listed).not.toHaveAccessibleName(/-spex/);
       await expect(section.getByTestId(`space-pick-listed-group-${key}`)).toHaveText(PICKED_AS[HOST_GROUP]!);
-      await expect(listed).not.toContainText("member");
+      await expect(listed).not.toHaveAccessibleName(/member/);
 
-      // Picking it shows the sharing confirm in the picker, beneath it,
-      // titled "Share with Acme at <display name>?" over its three
-      // phrases, Cancel focused; Escape closes the confirm alone and
-      // sends nothing, focus back on the records (space-57).
-      await listed.click();
-      const confirm = picker.getByTestId(`space-pick-notice-${localKey}`);
-      await expect(confirm).toContainText("Share with Acme at Stand-in Git host?");
-      for (const phrase of SHARING_PHRASES) await expect(confirm).toContainText(phrase);
-      await expect(confirm.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+      // Selecting only exposes the review; no operation starts until
+      // Connect project. Escape cancels the whole form without sharing.
+      await listed.check();
+      await expect(listed).toBeChecked();
+      for (const phrase of SHARING_PHRASES) await expect(picker).toContainText(phrase);
+      await expect(picker.getByRole("button", { name: "Connect project", exact: true })).toBeEnabled();
+      expect(repositoryOf(await app.core.command("space.get", {}), localKey).state).toBe("local-only");
       await page.keyboard.press("Escape");
-      await expect(confirm).toHaveCount(0);
-      await expect(picker).toBeVisible();
-      await expect(listed).toBeFocused();
+      await expect(picker).toHaveCount(0);
+      await expect(page.getByTestId(`space-row-pick-${localKey}`)).toBeFocused();
       expect(repositoryOf(await app.core.command("space.get", {}), localKey).state).toBe("local-only");
 
-      // Share joins it: the picker closes, the project's row stands
-      // reachable in the team's group with the confirm recorded, and the
-      // peer's records are in the clone, which the stand-in holds
-      // (space-57, space-58, space-13).
-      await listed.click();
-      await confirm.getByRole("button", { name: "Share", exact: true }).click();
+      // Explicit confirmation connects the project's records with the
+      // existing history and records the reviewed sharing scope.
+      await page.getByTestId(`space-row-pick-${localKey}`).click();
+      await listed.check();
+      await picker.getByRole("button", { name: "Connect project", exact: true }).click();
       await expect(picker).toHaveCount(0);
       const row = page.getByTestId(`space-group-${HOST_GROUP}`).getByTestId(`space-row-${key}`);
       await expect(row).toHaveAttribute("data-state", "reachable", { timeout: 30_000 });
@@ -836,7 +940,7 @@ test.describe("organizing", () => {
     await closeMenu(page);
 
     // A project added from the palette is offered, under the stand-in's
-    // display name and "Share into", "Personal" and then every group by
+    // display name and "Choose group", "Personal" and then every group by
     // its name, its path after it where the two differ, and shared into
     // the new group: `<name>-spex` stands there on the stand-in's `spex`
     // (space-58).
@@ -848,14 +952,15 @@ test.describe("organizing", () => {
     const localKey = `${HOST_LOGIN}/demo-project-spex`;
     const picker = palette.getByTestId(`space-picker-${localKey}`);
     const section = await pickSection(picker, host);
-    await expect(section).toContainText("Share into");
-    await expect(section.locator('[data-testid^="space-pick-group-"]')).toHaveText([
+    await expect(section).toContainText("Choose group");
+    await expectPickOptions(section, [
       PICKED_AS[HOST_LOGIN]!,
       PICKED_AS[HOST_GROUP]!,
       PICKED_AS[`${HOST_GROUP}/research`]!,
       "Platform · platform",
     ]);
-    await section.getByTestId("space-pick-group-platform").click();
+    await section.getByTestId("space-pick-group-platform").check();
+    await picker.getByRole("button", { name: "Add to group", exact: true }).click();
     await expect(palette).toBeHidden();
     await showGroups(page);
     const picked = hostKey(host, "platform/demo-project-spex");
@@ -1166,17 +1271,19 @@ test.describe("a second Space", () => {
     // second's `acme`; the first holds nothing of it (space-58).
     await list.getByTestId("space-own").getByTestId(`space-row-pick-${local.key}`).click();
     const picker = list.getByTestId(`space-picker-${local.key}`);
-    await expect(picker.locator('[data-testid^="space-pick-instance-"]')).toHaveCount(2);
-    const firstPick = await pickSection(picker, first);
-    const secondPick = await pickSection(picker, second, SECOND_HOST_NAME);
-    for (const section of [firstPick, secondPick]) {
-      await expect(section.locator('[data-testid^="space-pick-group-"]')).toHaveText([
+    await expect(picker.locator('[data-testid^="space-pick-instance-"]')).toHaveCount(1);
+    await expect(picker.getByRole("combobox", { name: "Space", exact: true }).getByRole("option")).toHaveCount(2);
+    for (const [host, name] of [[first, "Stand-in Git host"], [second, SECOND_HOST_NAME]] as const) {
+      const section = await pickSection(picker, host, name);
+      await expectPickOptions(section, [
         PICKED_AS[HOST_LOGIN]!,
         PICKED_AS[HOST_GROUP]!,
         PICKED_AS[`${HOST_GROUP}/research`]!,
       ]);
     }
-    await secondPick.getByTestId(`space-pick-group-${HOST_GROUP}`).click();
+    const secondPick = await pickSection(picker, second, SECOND_HOST_NAME);
+    await secondPick.getByTestId(`space-pick-group-${HOST_GROUP}`).check();
+    await picker.getByRole("button", { name: "Add to group", exact: true }).click();
     const secondRow = secondSection.getByTestId(`space-group-${HOST_GROUP}`).getByTestId(`space-row-${SECOND_KEY}`);
     await expect(secondRow).toHaveAttribute("data-state", "reachable", { timeout: 30_000 });
     await expect(secondRow.getByTestId(`space-repo-state-${SECOND_KEY}`)).toHaveText("Synced just now", { timeout: 30_000 });

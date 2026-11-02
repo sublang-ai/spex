@@ -1015,6 +1015,11 @@ msgstr "Aborting…"
 msgid "Accepts {provider} accounts"
 msgstr "Accepts {provider} accounts"
 
+#. Personal does not imply that a project is private
+#: src/components/SpaceGroups.tsx
+msgid "Access follows this project's members and visibility"
+msgstr "Access follows this project's members and visibility"
+
 #: src/components/ProjectGroup.tsx
 msgid "Actions for {title}"
 msgstr "Actions for {title}"
@@ -1058,7 +1063,11 @@ msgstr "Adapter option; model support unverified."
 msgid "Add"
 msgstr "Add"
 
-#. the name of the group picker "Add to a group…" opens; {name} is the project's name
+#: src/components/SettingsSurface.tsx
+msgid "Add {id} with the neutral agent, then tune it here"
+msgstr "Add {id} with the neutral agent, then tune it here"
+
+#. visible heading of the local project's destination form
 #: src/components/SpaceGroups.tsx
 msgid "Add {name} to a group"
 msgstr "Add {name} to a group"
@@ -1133,6 +1142,11 @@ msgstr "Add this to the project's Up next without sending it"
 msgid "Add to a group…"
 msgstr "Add to a group…"
 
+#. confirm adding the local project's records to the selected group
+#: src/components/SpaceGroups.tsx
+msgid "Add to group"
+msgstr "Add to group"
+
 #: src/components/CaptainHome.tsx
 #: src/components/Composer.tsx
 msgid "Add to Up next"
@@ -1178,8 +1192,14 @@ msgstr "Added /{command}"
 msgid "Added to Up next — see the project's Overview."
 msgstr "Added to Up next — see the project's Overview."
 
+#. acknowledges an accepted request; the project row reports completion or a wait
+#: src/components/SpaceGroups.tsx
+msgid "Adding {name} to {group} at {space}"
+msgstr "Adding {name} to {group} at {space}"
+
 #. a repair's control while the folder is paired with the project
 #. a repair's control while the folder is paired with the project
+#. adding this project to the selected group
 #. the Add control, while the Space adds the person
 #. the Add form's request is in flight: the playbook is being added
 #. the Use this folder control, while the folder is paired
@@ -1937,6 +1957,11 @@ msgstr "Choose folder…"
 msgid "Choose for {count, plural, one {# conflict} other {# conflicts}}"
 msgstr "Choose for {count, plural, one {# conflict} other {# conflicts}}"
 
+#. legend of the single-choice destination list
+#: src/components/SpaceGroups.tsx
+msgid "Choose group"
+msgstr "Choose group"
+
 #. a step: the analyst chooses which workflows the request takes
 #: src/lib/step-words.ts
 msgid "Choose the approach"
@@ -2147,6 +2172,11 @@ msgstr "Combine both sets of records into one?"
 msgid "Combine…"
 msgstr "Combine…"
 
+#. consequence of connecting a matching project
+#: src/components/SpaceGroups.tsx
+msgid "Combines this project's local and existing records"
+msgstr "Combines this project's local and existing records"
+
 #. the Combine… control while both sets of records are brought into one
 #: src/components/SpacePlacements.tsx
 msgid "Combining…"
@@ -2323,6 +2353,16 @@ msgstr "Confirm the command, intent and players, then add it"
 msgid "Confirming…"
 msgstr "Confirming…"
 
+#. confirm connecting this local project to the selected existing project
+#: src/components/SpaceGroups.tsx
+msgid "Connect project"
+msgstr "Connect project"
+
+#. matching projects already in the selected Space; connecting combines their records
+#: src/components/SpaceGroups.tsx
+msgid "Connect to an existing project"
+msgstr "Connect to an existing project"
+
 #: src/components/CaptainHome.tsx
 msgid "Connect to read project specs"
 msgstr "Connect to read project specs"
@@ -2341,6 +2381,11 @@ msgstr "Connected to {server}, but {reason}"
 msgid "Connected, but {reason}"
 msgstr "Connected, but {reason}"
 
+#. acknowledges an accepted connection; the project row reports completion
+#: src/components/SpaceGroups.tsx
+msgid "Connecting {name} at {space}"
+msgstr "Connecting {name} at {space}"
+
 #. a term shown before the first connection to a team server; {server} is its name
 #: src/components/SpaceServers.tsx
 msgid "Connecting puts your Space sign-in on {server}"
@@ -2351,10 +2396,12 @@ msgstr "Connecting puts your Space sign-in on {server}"
 msgid "Connecting to {server}…"
 msgstr "Connecting to {server}…"
 
+#. connecting this local project's records to an existing group project
 #. the page is reaching for the core
 #: src/components/CaptainHome.tsx
 #: src/components/Composer.tsx
 #: src/components/DraftConversation.tsx
+#: src/components/SpaceGroups.tsx
 msgid "Connecting…"
 msgstr "Connecting…"
 
@@ -2736,6 +2783,11 @@ msgstr "Describe your goal. AI helps write specs for how the system should work 
 msgid "desktop"
 msgstr "desktop"
 
+#. review of the project group's destination before confirmation
+#: src/components/SpaceGroups.tsx
+msgid "Destination"
+msgstr "Destination"
+
 #. a call's outcome: no pull request was opened
 #: src/lib/step-words.ts
 msgid "did not publish"
@@ -3066,6 +3118,8 @@ msgid "Every record stays on this computer"
 msgstr "Every record stays on this computer"
 
 #. the sharing confirm: what goes to the group
+#. the sharing confirm: what goes to the group
+#: src/components/SpaceGroups.tsx
 #: src/components/SpacePlacements.tsx
 msgid "Every session, whole, attachments included"
 msgstr "Every session, whole, attachments included"
@@ -3534,6 +3588,11 @@ msgstr "Global"
 msgid "Go to Dashboard, Projects, Playbooks, Space, Settings"
 msgstr "Go to Dashboard, Projects, Playbooks, Space, Settings"
 
+#. effect of adding the project's records to a group
+#: src/components/SpaceGroups.tsx
+msgid "Group members can access these records"
+msgstr "Group members can access these records"
+
 #. the field naming a new group at the Space
 #: src/components/SpaceMembers.tsx
 msgid "Group name"
@@ -3866,11 +3925,6 @@ msgstr "its page"
 msgid "Its specs/ tree holds an earlier layout's directories: the user/, dev/, test/ or items/ groups, or an interactions/ or compositions/ collection."
 msgstr "Its specs/ tree holds an earlier layout's directories: the user/, dev/, test/ or items/ groups, or an interactions/ or compositions/ collection."
 
-#. the picker's heading, inside one Space's section, over the projects that Space already holds for the folder's code, each with its group
-#: src/components/SpaceGroups.tsx
-msgid "Join the records already in"
-msgstr "Join the records already in"
-
 #. a return line's tag: the Captain is judging what the call came back with
 #: src/components/CallLines.tsx
 msgid "judging"
@@ -4107,6 +4161,8 @@ msgid "Members"
 msgstr "Members"
 
 #. the sharing confirm: nothing recalls what the group's members downloaded
+#. the sharing confirm: nothing recalls what the group's members downloaded
+#: src/components/SpaceGroups.tsx
 #: src/components/SpacePlacements.tsx
 msgid "Members keep what they download"
 msgstr "Members keep what they download"
@@ -5090,6 +5146,8 @@ msgid "Packages"
 msgstr "Packages"
 
 #. the sharing confirm: the records made before and after the share both go
+#. the sharing confirm: the records made before and after the share both go
+#: src/components/SpaceGroups.tsx
 #: src/components/SpacePlacements.tsx
 msgid "Past and future records"
 msgstr "Past and future records"
@@ -5308,6 +5366,11 @@ msgstr "Project folder on this computer"
 msgid "Project path"
 msgstr "Project path"
 
+#. what adding a project to a group syncs
+#: src/components/SpaceGroups.tsx
+msgid "Project records"
+msgstr "Project records"
+
 #. Dashboard band heading: one group per project
 #: src/components/DashboardSurface.tsx
 #: src/components/NavRail.tsx
@@ -5362,6 +5425,8 @@ msgid "PRs"
 msgstr "PRs"
 
 #. the sharing confirm, on records at a public place of the Space
+#. the sharing confirm, on records at a public place of the Space
+#: src/components/SpaceGroups.tsx
 #: src/components/SpacePlacements.tsx
 msgid "Public: anyone can read"
 msgstr "Public: anyone can read"
@@ -6405,11 +6470,6 @@ msgstr "Settled — {title}"
 msgid "Share"
 msgstr "Share"
 
-#. the picker's heading, inside one Space's section, over Personal and the groups the project's records may be shared into
-#: src/components/SpaceGroups.tsx
-msgid "Share into"
-msgstr "Share into"
-
 #. the sharing confirm's title, before a project's records first go to a group others read; {group} is the group's name, or Personal; {name} the Space's display name
 #: src/components/SpacePlacements.tsx
 msgid "Share with {group} at {name}?"
@@ -6648,11 +6708,13 @@ msgstr "Sources: GitHub not connected · {records, plural, one {# open record} o
 msgid "Sources: Loading GitHub… · {records, plural, one {# open record} other {# open records}}"
 msgstr "Sources: Loading GitHub… · {records, plural, one {# open record} other {# open records}}"
 
+#. label identifying the Space that holds the destination groups
 #. the Space destination: groups, projects and their shared records
 #. the Space destination: groups, projects and their shared records
 #. the accessible name of the sign-in card's chooser of Spaces
 #: src/components/NavRail.tsx
 #: src/components/SpaceDirectory.tsx
+#: src/components/SpaceGroups.tsx
 #: src/components/SpaceSurface.tsx
 msgid "Space"
 msgstr "Space"
@@ -7931,6 +7993,16 @@ msgstr "Your groups"
 #: src/components/PlaybookAuthoring.tsx
 msgid "Your orgs could not be read"
 msgstr "Your orgs could not be read"
+
+#. Personal's explanation in the group picker, without promising private visibility
+#: src/components/SpaceGroups.tsx
+msgid "Your personal group"
+msgstr "Your personal group"
+
+#. the title of Add…'s disabled Folder tab under Personal: the folder holding your Personal records, which a folder package lies in, is not on this computer
+#: src/components/EnvironmentSection.tsx
+msgid "Your Personal records are not on this computer"
+msgstr "Your Personal records are not on this computer"
 
 #: src/components/CaptainHome.tsx
 msgid "your project"

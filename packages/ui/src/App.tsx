@@ -350,10 +350,13 @@ function SeatBanners({ banner }: { banner: "connection" | "refresh" }) {
 
 /** One persistent polite live region (DR-010 §7): announces the
  * moments the product is built around without spamming. */
-function Announcer() {
+function Announcer({ note }: { note?: { text: string } }) {
   const connection = useAppStore((state) => state.connection);
   const everConnected = useAppStore((state) => state.everConnected);
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState({ text: "", revision: 0 });
+  const announce = useCallback((text: string) => {
+    setMessage((previous) => ({ text, revision: previous.revision + 1 }));
+  }, []);
   // The core-derived attention queue is the one derivation (DR-035),
   // joined across the places (dashboard-9).
   const joined = useJoinedAttention();
@@ -368,7 +371,7 @@ function Announcer() {
 
   useEffect(() => {
     if (blockingCount > lastCount.current) {
-      setMessage(
+      announce(
         latestDetail
           ? i18n._("A player is waiting for your reply: {detail}", {
               detail: latestDetail,
@@ -380,27 +383,33 @@ function Announcer() {
       );
     }
     lastCount.current = blockingCount;
-  }, [blockingCount, latestDetail]);
+  }, [blockingCount, latestDetail, announce]);
 
   useEffect(() => {
     if (!everConnected) return;
     if (connection !== lastConnection.current) {
       if (connection === "open") {
-        if (lost.current) setMessage(i18n._("Connection restored."));
+        if (lost.current) announce(i18n._("Connection restored."));
         lost.current = false;
       } else if (connection === "closed") {
-        setMessage(
+        announce(
           i18n._("Connection to the Spex core lost — reconnecting."),
         );
         lost.current = true;
       }
       lastConnection.current = connection;
     }
-  }, [connection, everConnected]);
+  }, [connection, everConnected, announce]);
+
+  // The palette closes after acceptance; its note must survive that
+  // unmount. A fresh event also replaces identical previous wording.
+  useEffect(() => {
+    if (note) announce(note.text);
+  }, [note, announce]);
 
   return (
-    <div aria-live="polite" role="status" className="sr-only">
-      {message}
+    <div aria-live="polite" role="status" className="sr-only" data-testid="app-live">
+      <span key={message.revision}>{message.text}</span>
     </div>
   );
 }
@@ -1260,6 +1269,7 @@ export function App() {
     safeStorageSet(SURFACE_KEY, next);
   }, []);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteNote, setPaletteNote] = useState<{ text: string }>();
   const [paletteAddProject, setPaletteAddProject] = useState(false);
   // The place whose "From your groups" the palette opens at, by its key
   // (run-view-172, run-view-174).
@@ -1786,7 +1796,7 @@ export function App() {
       <ApprovalFeedback />
       <RefreshErrorBanner store={useAppStore} />
       <SeatBanners banner="refresh" />
-      <Announcer />
+      <Announcer note={paletteNote} />
       {paletteOpen ? (
         <ProjectPalette
           addProjectOnly={paletteAddProject}
@@ -1827,6 +1837,7 @@ export function App() {
           onOpened={(place, projectId) => pickProject(projectId, place)}
           onAddPath={addProjectByPath}
           onCreatePath={(path, scaffold) => createProject(path, scaffold)}
+          onNote={(text) => setPaletteNote({ text })}
           onClose={() => {
             setPaletteOpen(false);
             setPaletteAddProject(false);

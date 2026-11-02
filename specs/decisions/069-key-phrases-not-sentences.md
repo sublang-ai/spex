@@ -13,6 +13,8 @@ Extended by [DR-075](075-a-failure-says-what-and-what-now.md): a failure's cause
 Extended by [DR-172](172-surfaces-a-fresh-user-reads.md) with the principles of its surfaces.
 Extended by [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md) with one principle: a page's acts match its scope.
 
+Extended by [DR-180](180-choose-a-group-before-adding.md): destination and record-access consequences are visible beside the confirmation they inform.
+
 ## Context
 
 - A walk through every surface found the same habit in five places: a sentence explaining what a control already shows, a sentence explaining what a surface does not offer, and a fact repeated in prose beside the control that carries it.

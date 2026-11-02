@@ -9,7 +9,7 @@ You sign in to one Spex Space instance, and it is the whole space: your own grou
 2. **New group** makes the workshop's group.
 3. **New subgroup** on it makes one group per team.
 4. **Share** the workshop's group with each team's representative at Maintainer, so they can make their team's subgroup and add projects beneath it, and with everyone else at Developer or Reporter. Spex lists the roles and offers each person only what their role allows.
-5. **Create or add a project** and pick the team's group. Spex creates `<name>-spex` there and pushes it; the group's members see its records on their own Space page.
+5. **Create or add a project**, then open **Add to a group…** on its Space row. Check the labelled **Space**, select the team under **Choose group**, and review the records and access before **Add to group**. Selecting a row alone changes nothing. **Personal** means your personal group. If the same project already appears in that Space, **Connect to an existing project** lets you review and combine its records before **Connect project**. A first sync may still ask you to confirm sharing after checking access.
 6. **Claim the org** to publish under the workshop's name. The organizer, Owner of the group she made, opens `<instance>/account/orgs` in her browser and claims the org of that name; the claim form lists the groups at the instance's root that she owns. New playbook then offers that org for the projects in the group.
 
 Undo in Spex: rename a group, move a project's records to another group, delete an empty group.

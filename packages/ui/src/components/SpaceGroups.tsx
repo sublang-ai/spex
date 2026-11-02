@@ -121,7 +121,7 @@ import { MenuButton, MoreMenu, type MenuEntry } from "./SpaceMenu.js";
 import { CombineConfirm, SharingConfirm, combineLabel, combiningLabel, continueLabel, entryName, placementGroupName } from "./SpacePlacements.js";
 import type { SignInFlow } from "./SpaceSignIn.js";
 import { ChoicesContext, ConflictsPicker, stoppedRetryInput } from "./SpaceSync.js";
-import { SECONDARY, syncRefusal, type Note } from "./SpaceSurface.js";
+import { PRIMARY, SECONDARY, syncRefusal, type Note } from "./SpaceSurface.js";
 
 /** An entry's identity under its Space's heading (space-1, DR-127): a
  * group by its id, a namespace by its login, a group no read lists by
@@ -1573,271 +1573,217 @@ interface PickSection {
   creatable: InstanceGroupState[];
 }
 
-/** Where a project in no group goes (space-58): in one picker, one
- * section per signed-in Space under its display name — the clone's
- * Space alone where its key lies under one — each holding "Join the
- * records already in", the spex repositories that Space lists for the
- * same code, each with its group, read as the list reads it, and its
- * members' count, and "Share into", "Personal" first and then every
- * group it lists; the new records take the folder's name, no field
- * naming them. Picking a listed one that may have other members says
- * the sharing confirm beneath it first, and joins with `noticed` only on
- * Share (space-57). A choice names the Space of its section
- * (space-29). */
-export function GroupPicker({
-  groups,
-  repo,
-  connected,
-  onClose,
-  onNote,
-}: {
+/** Adding a project is a choice, review and explicit submission (DR-180).
+ * Reading and selecting never mutate the project. The current Space's
+ * destinations are resolved again on every render, so a removed group
+ * or signed-out Space cannot leave an actionable stale selection. */
+export function GroupPicker({ groups, repo, connected, onClose, onNote, onPendingChange }: {
   groups: GroupsState;
   repo: RepositoryState;
   connected: boolean;
   onClose(): void;
   onNote: Note;
+  onPendingChange?(pending: boolean): void;
 }) {
   const store = usePlaceStore();
   const spacePick = store((state) => state.spacePick);
-  const sections: PickSection[] = pickInstances(groups, repo).map((instance) => {
-    // "Personal" is always offered: a Space lists your namespace only
-    // once it holds something there.
-    const mine = namespaceOf(instance) ?? {
-      id: null,
-      login: instance.account.login,
-      mine: true,
-      fullPath: instance.account.login,
-      name: instance.account.login,
+  const sections: PickSection[] = pickInstances(groups, repo).map((instance) => ({
+    instance,
+    listed: instance.groups.flatMap((group) => group.repositories
+      .filter((other) => other.key !== repo.key && other.id !== null && other.state !== "local-only" && sameCode(other, repo))
+      .map((other) => ({ group, repo: other, placement: placementAt(other, instance.origin) ?? rowPlacement(other) }))),
+    creatable: [namespaceOf(instance) ?? {
+      id: null, login: instance.account.login, mine: true,
+      fullPath: instance.account.login, name: instance.account.login,
       can: { createSubgroup: false, manageMembers: false, rename: false, delete: false },
-      placed: [],
-      repositories: [],
-    };
-    return {
-      instance,
-      // The listed ones are the Space's: a host id, a state it read.
-      listed: instance.groups.flatMap((group) =>
-        group.repositories
-          .filter((other) => other.key !== repo.key && other.id !== null && other.state !== "local-only" && sameCode(other, repo))
-          // Its members and visibility are its placement's there
-          // (space-30).
-          .map((other) => ({ group, repo: other, placement: placementAt(other, instance.origin) ?? rowPlacement(other) })),
-      ),
-      // GroupsState names no right to create a repository, so every
-      // group is offered and a refusal waits on the row (space-64).
-      creatable: [mine, ...instance.groups.filter((group) => group.id !== null && group.login === null).sort((a, b) => a.fullPath.localeCompare(b.fullPath))],
-    };
-  });
-  // The new records take the folder's name (space-58).
-  const name = repo.folder ? lastSegment(repo.folder) : repo.name.replace(/-spex$/, "");
-  const [busy, setBusy] = useState<string>();
+      placed: [], repositories: [],
+    }, ...instance.groups.filter((group) => group.id !== null && group.login === null)
+      .sort((a, b) => a.fullPath.localeCompare(b.fullPath))],
+  }));
+  const [origin, setOrigin] = useState(() => sections[0]?.instance.origin);
+  const [selection, setSelection] = useState<{ origin: string; kind: "create" | "join"; key: string; identity: string }>();
+  const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string>();
-  // The listed spex repository whose sharing confirm stands (space-57).
-  const [notice, setNotice] = useState<string>();
-  // Each section's headings are named by ids no other picker shares.
-  const ids = useId();
+  const submitting = useRef(false);
+  const refocus = useRef(false);
   const pickerRef = useRef<HTMLDivElement>(null);
-  const firstRef = useRef<HTMLButtonElement>(null);
-  // Where focus goes once a refused pick re-enables the picker: its
-  // controls are disabled while the pick is asked (DR-010 §6).
-  const refocus = useRef<() => void>(undefined);
+  const submitRef = useRef<HTMLButtonElement>(null);
+  const ids = useId();
+  const section = sections.find((entry) => entry.instance.origin === origin);
+  const selected = selection?.origin === section?.instance.origin ? selection : undefined;
+  const existing = selected?.kind === "join" ? section?.listed.find((entry) => entry.repo.key === selected.key && entry.repo.id === selected.identity) : undefined;
+  const target = selected?.kind === "create" ? section?.creatable.find((entry) => groupTestKey(entry) === selected.key && entryKey(entry) === selected.identity) : existing?.group;
+  const disabled = !connected || busy;
+  const project = projectName(repo.name);
+  const title = i18n._({ id: "Add {name} to a group", values: { name: project }, comment: "visible heading of the local project's destination form" });
+
   useEffect(() => {
-    firstRef.current?.focus();
+    pickerRef.current?.querySelector<HTMLElement>("select, input, button")?.focus();
   }, []);
   useLayoutEffect(() => {
-    if (busy !== undefined || !refocus.current) return;
-    const focus = refocus.current;
-    refocus.current = undefined;
-    focus();
+    if (busy) pickerRef.current?.focus();
+    if (!busy && refocus.current) {
+      refocus.current = false;
+      submitRef.current?.focus();
+    }
   }, [busy]);
-
-  const optionOf = (key: string) =>
-    pickerRef.current?.querySelector<HTMLButtonElement>(`[data-testid="space-pick-repo-${key}"], [data-testid="space-pick-group-${key}"]`);
-
-  /** Cancel starts nothing; focus returns to the option (DR-010 §6). */
-  const closeNotice = (key: string) => {
-    setNotice(undefined);
-    setTimeout(() => optionOf(key)?.focus(), 0);
-  };
-
-  const pick = async (id: string, choice: SpaceGroupChoice, noticed = false, focusKey = id) => {
-    setBusy(id);
+  // A removed Space never silently changes where the pending choice goes.
+  useEffect(() => {
+    if (sections.some((entry) => entry.instance.origin === origin)) return;
+    setOrigin(sections[0]?.instance.origin);
+    setSelection(undefined);
     setRefusal(undefined);
+  }, [groups, origin]);
+
+  const select = (kind: "create" | "join", key: string, identity: string) => {
+    if (!section || submitting.current) return;
+    setSelection({ origin: section.instance.origin, kind, key, identity });
+    setRefusal(undefined);
+  };
+  const submit = async () => {
+    if (disabled || submitting.current || !section || !selected || !target) return;
+    submitting.current = true;
+    onPendingChange?.(true);
+    setBusy(true);
+    setRefusal(undefined);
+    const space = instanceName(section.instance);
+    const choice: SpaceGroupChoice = existing
+      ? { kind: "join", instance: section.instance.origin, hostId: existing.repo.id! }
+      : { kind: "create", instance: section.instance.origin, groupId: target.mine ? null : target.id,
+          name: repo.folder ? lastSegment(repo.folder) : project };
+    // The visible review answers the existing project's sharing notice.
+    // A newly created destination still gets its fresh first-sync check:
+    // its visibility and recipients are not known before creation.
+    const noticed = existing && !existing.placement?.noticed && (existing.placement?.members == null || existing.placement.members > 1);
     try {
       await (noticed ? spacePick(repo.key, choice, true) : spacePick(repo.key, choice));
+      onNote(existing
+        ? i18n._({ id: "Connecting {name} at {space}", values: { name: project, space }, comment: "acknowledges an accepted connection; the project row reports completion" })
+        : i18n._({ id: "Adding {name} to {group} at {space}", values: { name: project, group: entryName(target), space }, comment: "acknowledges an accepted request; the project row reports completion or a wait" }));
       onClose();
     } catch (cause) {
       const message = (cause as Error).message;
       setRefusal(message);
       onNote(message);
-      // A refused pick hands focus back to its option, its confirm
-      // closed (space-58).
-      setNotice(undefined);
-      refocus.current = () => optionOf(focusKey)?.focus();
+      refocus.current = true;
     } finally {
-      setBusy(undefined);
+      submitting.current = false;
+      onPendingChange?.(false);
+      setBusy(false);
     }
   };
-
-  /** Join a listed spex repository at its Space (space-58): one whose
-   * only member is the account joins at once; one with others, or whose
-   * count the Space's last read lacks, says the sharing confirm first
-   * unless this computer's reader has answered it for that placement
-   * (space-57). */
-  const join = (instance: InstanceState, other: RepositoryState) => {
-    const listed = placementAt(other, instance.origin) ?? rowPlacement(other);
-    const members = listed?.members ?? null;
-    if (!listed?.noticed && (members === null || members > 1)) {
-      setRefusal(undefined);
-      setNotice(other.key);
-      return;
-    }
-    void pick(other.key, { kind: "join", instance: instance.origin, hostId: other.id! });
-  };
-
-  /** Create `<name>-spex` in an entry at its Space (space-58): your
-   * namespace named by none, a group by its host id. */
-  const create = (instance: InstanceState, group: InstanceGroupState) => {
-    setNotice(undefined);
-    void pick(
-      `${instance.origin} ${groupTestKey(group)}`,
-      { kind: "create", instance: instance.origin, groupId: group.mine ? null : group.id, name },
-      false,
-      groupTestKey(group),
-    );
-  };
-
-  const option =
-    "flex w-full min-w-0 items-center gap-2 rounded border border-neutral-200 px-2 py-1 text-left text-sm hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-800 dark:hover:bg-neutral-800";
-  const disabled = !connected || busy !== undefined;
-  let first = true;
-  const takeFirst = () => {
-    if (!first) return undefined;
-    first = false;
-    return firstRef;
-  };
+  const rowClass = (checked: boolean) => "flex min-w-0 cursor-pointer items-start gap-3 px-3 py-3 transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-inset has-[:focus-visible]:ring-brand-500 " +
+    (checked ? "bg-brand-50 dark:bg-brand-950/50" : "hover:bg-neutral-100 dark:hover:bg-neutral-800") +
+    (disabled ? " pointer-events-none opacity-60" : "");
 
   return (
-    <div
-      ref={pickerRef}
-      role="group"
-      aria-label={i18n._({
-        id: "Add {name} to a group",
-        values: { name: projectName(repo.name) },
-        comment: "the name of the group picker \"Add to a group…\" opens; {name} is the project's name",
-      })}
-      data-testid={`space-picker-${repo.key}`}
-      className="ml-6 flex min-w-0 flex-col gap-2 rounded border border-neutral-300 p-2 dark:border-neutral-700"
+    <div ref={pickerRef} tabIndex={-1} role="group" aria-labelledby={ids + "-title"} aria-busy={busy}
+      data-testid={"space-picker-" + repo.key}
+      className="mx-1 my-2 flex min-w-0 max-w-xl flex-col gap-5 rounded-xl border border-neutral-300 bg-white p-4 shadow-sm dark:border-neutral-700 dark:bg-neutral-900"
       onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
         if (event.key === "Escape") {
+          event.preventDefault();
           event.stopPropagation();
-          onClose();
+          if (!submitting.current) onClose();
         }
-      }}
-    >
-      {sections.map(({ instance, listed, creatable }, index) => {
-        const heading = `${ids}-${index}`;
-        return (
-          <div
-            key={instance.origin}
-            role="group"
-            aria-labelledby={heading}
-            data-testid={`space-pick-instance-${instance.origin}`}
-            className="flex min-w-0 flex-col gap-2"
-          >
-            <h3
-              id={heading}
-              className="min-w-0 truncate text-xs font-semibold text-neutral-700 dark:text-neutral-300"
-              title={instanceName(instance)}
-            >
-              {instanceName(instance)}
-            </h3>
-            {listed.length > 0 ? (
-              <section aria-labelledby={`${heading}-listed`} className="flex min-w-0 flex-col gap-1">
-                <h4 id={`${heading}-listed`} className="text-xs font-medium text-neutral-500">
-                  {i18n._({
-                    id: "Join the records already in",
-                    comment: "the picker's heading, inside one Space's section, over the projects that Space already holds for the folder's code, each with its group",
-                  })}
-                </h4>
-                <ul className="flex min-w-0 flex-col gap-1">
-                  {listed.map(({ group, repo: other, placement }) => (
-                    <li key={other.key} className="min-w-0">
-                      <button
-                        ref={takeFirst()}
-                        type="button"
-                        data-testid={`space-pick-repo-${other.key}`}
-                        className={option}
-                        disabled={disabled}
-                        onClick={() => join(instance, other)}
-                      >
-                        <span className="min-w-0 flex-1 truncate font-medium" title={projectName(other.name)}>
-                          {rowName(group, other)}
-                        </span>
-                        <span
-                          data-testid={`space-pick-listed-group-${other.key}`}
-                          className="flex min-w-0 max-w-[40%] items-baseline gap-1 text-xs text-neutral-500"
-                        >
-                          <GroupOptionLabel entry={group} />
-                        </span>
-                        {placement && placement.members !== null ? (
-                          <span className="shrink-0 text-xs text-neutral-500">
-                            {i18n._("{count, plural, one {# member} other {# members}}", { count: placement.members })}
-                          </span>
-                        ) : null}
-                      </button>
-                      {notice === other.key ? (
-                        <div data-testid={`space-pick-notice-${repo.key}`} className="mt-1 pl-2">
-                          <SharingConfirm
-                            group={entryName(group)}
-                            name={instanceName(instance)}
-                            visibility={placement?.visibility ?? null}
-                            disabled={disabled}
-                            onShare={() => void pick(other.key, { kind: "join", instance: instance.origin, hostId: other.id! }, true)}
-                            onCancel={() => closeNotice(other.key)}
-                          />
-                        </div>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ) : null}
-            <section aria-labelledby={`${heading}-create`} className="flex min-w-0 flex-col gap-1">
-              <h4 id={`${heading}-create`} className="text-xs font-medium text-neutral-500">
-                {i18n._({
-                  id: "Share into",
-                  comment: "the picker's heading, inside one Space's section, over Personal and the groups the project's records may be shared into",
+      }}>
+      <h3 id={ids + "-title"} className="min-w-0 break-words text-base font-semibold">{title}</h3>
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <label id={ids + "-space-label"} htmlFor={sections.length > 1 ? ids + "-space" : undefined} className="text-xs font-medium text-neutral-600 dark:text-neutral-400">
+          {i18n._({ id: "Space", comment: "label identifying the Space that holds the destination groups" })}
+        </label>
+        {sections.length > 1 ? (
+          <select id={ids + "-space"} value={origin ?? ""} disabled={disabled}
+            className="min-h-10 w-full min-w-0 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-brand-500 dark:border-neutral-600 dark:bg-neutral-900"
+            onChange={(event) => { setOrigin(event.target.value); setSelection(undefined); setRefusal(undefined); }}>
+            {sections.map(({ instance }) => <option key={instance.origin} value={instance.origin}>{instanceName(instance)}</option>)}
+          </select>
+        ) : <p aria-labelledby={ids + "-space-label"} className="min-w-0 break-words text-sm font-medium">{section ? instanceName(section.instance) : i18n._("Sign in to a Space first")}</p>}
+      </div>
+      {section ? (
+        <div role="group" aria-label={instanceName(section.instance)} data-testid={"space-pick-instance-" + section.instance.origin} className="min-w-0">
+          <fieldset disabled={disabled} className="min-w-0">
+            <legend className="mb-2 text-sm font-medium">{i18n._({ id: "Choose group", comment: "legend of the single-choice destination list" })}</legend>
+            <ul className="min-w-0 divide-y divide-neutral-200 overflow-hidden rounded-lg border border-neutral-300 dark:divide-neutral-700 dark:border-neutral-700">
+              {section.creatable.map((group, index) => {
+                const key = groupTestKey(group);
+                const id = ids + "-group-" + index;
+                const checked = selected?.kind === "create" && selected.key === key && selected.identity === entryKey(group);
+                return <li key={key} className="min-w-0">
+                  <label className={rowClass(checked)}>
+                    <input type="radio" name={ids + "-destination"} value={"create:" + key} checked={checked}
+                      aria-labelledby={id + "-name"} aria-describedby={group.mine ? id + "-description" : undefined}
+                      data-testid={"space-pick-group-" + key} className="mt-0.5 h-4 w-4 shrink-0 accent-brand-600 dark:accent-brand-400"
+                      onChange={() => select("create", key, entryKey(group))} />
+                    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <span id={id + "-name"} className="flex min-w-0 flex-wrap items-baseline gap-x-1 text-sm font-medium"><GroupOptionLabel entry={group} /></span>
+                      {group.mine ? <span id={id + "-description"} className="text-xs text-neutral-500">{i18n._({ id: "Your personal group", comment: "Personal's explanation in the group picker, without promising private visibility" })}</span> : null}
+                    </span>
+                  </label>
+                </li>;
+              })}
+            </ul>
+            {section.listed.length > 0 ? <div className="mt-4 min-w-0">
+              <h4 className="mb-2 text-sm font-medium">{i18n._({ id: "Connect to an existing project", comment: "matching projects already in the selected Space; connecting combines their records" })}</h4>
+              <ul className="min-w-0 divide-y divide-neutral-200 overflow-hidden rounded-lg border border-neutral-300 dark:divide-neutral-700 dark:border-neutral-700">
+                {section.listed.map(({ group, repo: other, placement }, index) => {
+                  const id = ids + "-existing-" + index;
+                  const checked = selected?.kind === "join" && selected.key === other.key && selected.identity === other.id;
+                  return <li key={other.key} className="min-w-0">
+                    <label className={rowClass(checked)}>
+                      <input type="radio" name={ids + "-destination"} value={"join:" + other.key} checked={checked}
+                        aria-labelledby={id + "-name " + id + "-group"} aria-describedby={id + "-description"}
+                        data-testid={"space-pick-repo-" + other.key} className="mt-0.5 h-4 w-4 shrink-0 accent-brand-600 dark:accent-brand-400"
+                        onChange={() => select("join", other.key, other.id!)} />
+                      <span className="flex min-w-0 flex-1 flex-col gap-1">
+                        <span id={id + "-name"} className="break-words text-sm font-medium">{rowName(group, other)}</span>
+                        <span id={id + "-group"} data-testid={"space-pick-listed-group-" + other.key} className="flex min-w-0 flex-wrap items-baseline gap-x-1 text-xs text-neutral-500"><GroupOptionLabel entry={group} /></span>
+                        <span id={id + "-description"} className="text-xs text-neutral-500">{placement?.members != null ? i18n._("{count, plural, one {# member} other {# members}}", { count: placement.members }) : null}</span>
+                      </span>
+                    </label>
+                  </li>;
                 })}
-              </h4>
-              <ul className="flex min-w-0 flex-col gap-1">
-                {creatable.map((group) => (
-                  <li key={groupTestKey(group)} className="min-w-0">
-                    <button
-                      ref={takeFirst()}
-                      type="button"
-                      data-testid={`space-pick-group-${groupTestKey(group)}`}
-                      className={option}
-                      disabled={disabled}
-                      onClick={() => create(instance, group)}
-                    >
-                      <GroupOptionLabel entry={group} />
-                    </button>
-                  </li>
-                ))}
               </ul>
-            </section>
+            </div> : null}
+          </fieldset>
+        </div>
+      ) : null}
+      {section && target ? (
+        <div data-testid={"space-pick-review-" + repo.key} className="flex min-w-0 flex-col gap-3 rounded-lg bg-neutral-50 p-3 text-xs dark:bg-neutral-800/70">
+          <div className="min-w-0">
+            <h4 className="mb-1 font-medium text-neutral-600 dark:text-neutral-400">{i18n._({ id: "Destination", comment: "review of the project group's destination before confirmation" })}</h4>
+            {existing ? <p className="mb-1 break-words text-sm font-medium">{rowName(target, existing.repo)}</p> : null}
+            <p className="flex min-w-0 flex-wrap items-baseline gap-x-1 text-sm font-medium"><GroupOptionLabel entry={target} /><span aria-hidden>·</span><span className="min-w-0 break-words">{instanceName(section.instance)}</span></p>
           </div>
-        );
-      })}
-      <div className="flex flex-wrap items-center gap-2">
-        <button type="button" data-testid={`space-pick-cancel-${repo.key}`} className={SECONDARY} onClick={onClose}>
+          {existing ? <p className="font-medium">{i18n._({ id: "Combines this project's local and existing records", comment: "consequence of connecting a matching project" })}</p> : null}
+          <div>
+            <p className="mb-1 font-medium">{i18n._({ id: "Project records", comment: "what adding a project to a group syncs" })}</p>
+            <ul className="list-disc space-y-1 pl-4 text-neutral-600 dark:text-neutral-300">
+              <li>{i18n._({ id: "Every session, whole, attachments included", comment: "the sharing confirm: what goes to the group" })}</li>
+              <li>{i18n._({ id: "Past and future records", comment: "the sharing confirm: the records made before and after the share both go" })}</li>
+              <li>{i18n._({ id: "Members keep what they download", comment: "the sharing confirm: nothing recalls what the group's members downloaded" })}</li>
+            </ul>
+          </div>
+          <p className="text-neutral-600 dark:text-neutral-300">{target.login !== null
+            ? i18n._({ id: "Access follows this project's members and visibility", comment: "Personal does not imply that a project is private" })
+            : i18n._({ id: "Group members can access these records", comment: "effect of adding the project's records to a group" })}</p>
+          {existing?.placement?.visibility === "public" ? <p className="font-medium text-amber-800 dark:text-amber-300">{i18n._({ id: "Public: anyone can read", comment: "the sharing confirm, on records at a public place of the Space" })}</p> : null}
+        </div>
+      ) : null}
+      {refusal ? <p role="alert" className="break-words text-sm text-red-600 dark:text-red-400">{refusal}</p> : null}
+      <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 border-t border-neutral-200 pt-3 dark:border-neutral-700">
+        <button type="button" data-testid={"space-pick-cancel-" + repo.key} className={SECONDARY + " min-h-9 px-3 py-1.5 text-sm"} disabled={busy} onClick={onClose}>
           {i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}
         </button>
-        {refusal ? (
-          <span role="alert" className="min-w-0 text-xs text-red-600 dark:text-red-400">
-            {refusal}
-          </span>
-        ) : null}
+        <button ref={submitRef} type="button" data-testid={"space-pick-submit-" + repo.key} className={PRIMARY + " min-h-9"} disabled={disabled || !target}
+          onClick={() => void submit()}>
+          {busy ? existing
+            ? i18n._({ id: "Connecting…", comment: "connecting this local project's records to an existing group project" })
+            : i18n._({ id: "Adding…", comment: "adding this project to the selected group" })
+            : existing
+              ? i18n._({ id: "Connect project", comment: "confirm connecting this local project to the selected existing project" })
+              : i18n._({ id: "Add to group", comment: "confirm adding the local project's records to the selected group" })}
+        </button>
       </div>
     </div>
   );

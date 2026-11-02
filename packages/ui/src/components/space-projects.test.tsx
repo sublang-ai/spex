@@ -563,8 +563,8 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
     expect(add.textContent).toBe(words.addToGroup);
     fireEvent.click(add);
     const section = within(screen.getByTestId(`space-picker-${GAMMA_KEY}`)).getByTestId(`space-pick-instance-${ORIGIN}`);
-    const options = within(section).getAllByTestId(/^space-pick-group-/).map((option) => option.textContent ?? "");
-    expect(options[0]).toBe(words.personal);
+    const options = within(section).getAllByTestId(/^space-pick-group-/).map((option) => (option as HTMLInputElement).labels?.[0]?.textContent ?? "");
+    expect(options[0]).toContain(words.personal);
     expect(options[1]).toBe("acme");
     expect(options[2]?.startsWith("Research")).toBe(true);
   });

@@ -770,6 +770,58 @@ describe("run-view-57: a workspace holding projects opens inside one", () => {
 });
 
 describe("run-view-172: first-project welcome route", () => {
+  test("space-58: palette feedback survives close and repeated refusals are fresh announcements", async () => {
+    const added = {
+      id: "me/gamma-spex", name: "gamma", path: "/tmp/gamma", registeredAt: 0,
+      repository: { key: "me/gamma-spex", name: "gamma-spex", group: "me", own: true },
+    };
+    const space = groupsState({
+      own: { name: "me", named: true, repositories: [repositoryRow(added.id, { folder: added.path })] },
+      instances: [instanceState("https://example.test", { displayName: "Example" })],
+    });
+    const ledger = { intents: [], attention: [], badge: 0 };
+    let picks = 0;
+    commandMock.mockImplementation(async (type: string) => {
+      if (type === "project.register") return added;
+      if (type === "project.list") return [added];
+      if (type === "space.get") return space;
+      if (type === "ledger.get") return ledger;
+      if (type === "space.pick") {
+        if (++picks < 3) throw new Error("Destination unavailable");
+        return { accepted: true };
+      }
+      return defaultReply(type);
+    });
+    useAppStore.setState({
+      projects: [], sessions: [], views: {}, currentProjectId: undefined,
+      activeSessionId: undefined, workspaceTabs: {}, openTabs: {},
+      ledger: ledger as never, space,
+    });
+    render(<App />);
+    fireEvent.click(screen.getByTestId("home-add-project"));
+    fireEvent.change(screen.getByTestId("palette-path"), { target: { value: added.path } });
+    fireEvent.click(screen.getByTestId("palette-add"));
+    const picker = await screen.findByTestId(`space-picker-${added.id}`);
+    fireEvent.click(within(picker).getByTestId("space-pick-group-@me"));
+    const submit = within(picker).getByTestId(`space-pick-submit-${added.id}`);
+    const live = screen.getByTestId("app-live");
+    fireEvent.click(submit);
+    await vi.waitFor(() => expect(live.textContent).toBe("Destination unavailable"));
+    const previousAnnouncement = live.firstElementChild;
+    fireEvent.click(submit);
+    await vi.waitFor(() => {
+      expect(picks).toBe(2);
+      expect(live.textContent).toBe("Destination unavailable");
+      expect(live.firstElementChild).not.toBe(previousAnnouncement);
+    });
+    fireEvent.click(submit);
+    await vi.waitFor(() => {
+      expect(screen.queryByTestId("project-palette")).toBeNull();
+      expect(live.textContent).toBe("Adding gamma to Personal at Example");
+    });
+    expect(live.isConnected).toBe(true);
+  });
+
   test("landing and sidebar add the same way; the switch shortcut still offers Academy", () => {
     useAppStore.setState({
       projects: [],

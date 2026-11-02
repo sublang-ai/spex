@@ -205,6 +205,7 @@ meta.md       The spec of specs
 | [DR-184](decisions/184-native-desktop-tag-packages.md) | 184-native-desktop-tag-packages.md | App tags build native macOS arm64 and Windows x64 packages; both builds gate one release with checksums; amends DR-040 |
 | [DR-185](decisions/185-the-suites-a-change-reaches.md) | 185-the-suites-a-change-reaches.md | The suites a change reaches: the classifier names the reach of a pull request's change from the workspaces' declared dependencies, the test job runs only those suites, the Linux test job on Node 22 alone, the journeys in three shards, `npm run test:affected` locally; amends DR-145, DR-166 and DR-169 |
 | [DR-188](decisions/188-registry-sign-in-opens-the-browser.md) | 188-registry-sign-in-opens-the-browser.md | Active registry sign-ins permit automatic browser opening without a Space; shared sign-in continuation links work independently of the native opener |
+| [DR-180](decisions/180-choose-a-group-before-adding.md) | 180-choose-a-group-before-adding.md | Choose a group before adding: visible task title and labelled Space, radio choices without side effects, destination and access review, explicit Add to group or Connect project; amends DR-172 and DR-159, extends DR-069 |
 
 ## Packages
 

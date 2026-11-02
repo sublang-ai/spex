@@ -1015,6 +1015,11 @@ msgstr "中止中…"
 msgid "Accepts {provider} accounts"
 msgstr "支持 {provider} 账户"
 
+#. Personal does not imply that a project is private
+#: src/components/SpaceGroups.tsx
+msgid "Access follows this project's members and visibility"
+msgstr "访问权限取决于此项目的成员和可见性"
+
 #: src/components/ProjectGroup.tsx
 msgid "Actions for {title}"
 msgstr "{title} 的操作"
@@ -1058,7 +1063,11 @@ msgstr "适配器选项；模型支持未验证。"
 msgid "Add"
 msgstr "添加"
 
-#. the name of the group picker "Add to a group…" opens; {name} is the project's name
+#: src/components/SettingsSurface.tsx
+msgid "Add {id} with the neutral agent, then tune it here"
+msgstr "以中性智能体添加 {id}，再在此调整"
+
+#. visible heading of the local project's destination form
 #: src/components/SpaceGroups.tsx
 msgid "Add {name} to a group"
 msgstr "将 {name} 加入群组"
@@ -1133,6 +1142,11 @@ msgstr "加入项目的“接下来”，暂不发送"
 msgid "Add to a group…"
 msgstr "加入群组…"
 
+#. confirm adding the local project's records to the selected group
+#: src/components/SpaceGroups.tsx
+msgid "Add to group"
+msgstr "添加到群组"
+
 #: src/components/CaptainHome.tsx
 #: src/components/Composer.tsx
 msgid "Add to Up next"
@@ -1178,8 +1192,14 @@ msgstr "已添加 /{command}"
 msgid "Added to Up next — see the project's Overview."
 msgstr "已加入“接下来” — 见项目概览。"
 
+#. acknowledges an accepted request; the project row reports completion or a wait
+#: src/components/SpaceGroups.tsx
+msgid "Adding {name} to {group} at {space}"
+msgstr "正在将 {name} 添加到 {space} 的 {group}"
+
 #. a repair's control while the folder is paired with the project
 #. a repair's control while the folder is paired with the project
+#. adding this project to the selected group
 #. the Add control, while the Space adds the person
 #. the Add form's request is in flight: the playbook is being added
 #. the Use this folder control, while the folder is paired
@@ -1937,6 +1957,11 @@ msgstr "选择文件夹…"
 msgid "Choose for {count, plural, one {# conflict} other {# conflicts}}"
 msgstr "为 {count, plural, other {# 处冲突}}选择"
 
+#. legend of the single-choice destination list
+#: src/components/SpaceGroups.tsx
+msgid "Choose group"
+msgstr "选择群组"
+
 #. a step: the analyst chooses which workflows the request takes
 #: src/lib/step-words.ts
 msgid "Choose the approach"
@@ -2147,6 +2172,11 @@ msgstr "将两组记录合并为一组？"
 msgid "Combine…"
 msgstr "合并…"
 
+#. consequence of connecting a matching project
+#: src/components/SpaceGroups.tsx
+msgid "Combines this project's local and existing records"
+msgstr "合并此项目的本地记录与已有记录"
+
 #. the Combine… control while both sets of records are brought into one
 #: src/components/SpacePlacements.tsx
 msgid "Combining…"
@@ -2323,6 +2353,16 @@ msgstr "确认命令、意图和 Player，然后添加"
 msgid "Confirming…"
 msgstr "确认中…"
 
+#. confirm connecting this local project to the selected existing project
+#: src/components/SpaceGroups.tsx
+msgid "Connect project"
+msgstr "连接项目"
+
+#. matching projects already in the selected Space; connecting combines their records
+#: src/components/SpaceGroups.tsx
+msgid "Connect to an existing project"
+msgstr "连接现有项目"
+
 #: src/components/CaptainHome.tsx
 msgid "Connect to read project specs"
 msgstr "连接后可查看项目规约"
@@ -2341,6 +2381,11 @@ msgstr "已连接 {server}，但{reason}"
 msgid "Connected, but {reason}"
 msgstr "已连接，但{reason}"
 
+#. acknowledges an accepted connection; the project row reports completion
+#: src/components/SpaceGroups.tsx
+msgid "Connecting {name} at {space}"
+msgstr "正在连接 {space} 上的 {name}"
+
 #. a term shown before the first connection to a team server; {server} is its name
 #: src/components/SpaceServers.tsx
 msgid "Connecting puts your Space sign-in on {server}"
@@ -2351,10 +2396,12 @@ msgstr "连接会把你的 Space 登录放到 {server} 上"
 msgid "Connecting to {server}…"
 msgstr "正在连接 {server}…"
 
+#. connecting this local project's records to an existing group project
 #. the page is reaching for the core
 #: src/components/CaptainHome.tsx
 #: src/components/Composer.tsx
 #: src/components/DraftConversation.tsx
+#: src/components/SpaceGroups.tsx
 msgid "Connecting…"
 msgstr "连接中…"
 
@@ -2736,6 +2783,11 @@ msgstr "说说你的目标。AI 帮你把系统该做什么、怎样检查结果
 msgid "desktop"
 msgstr "桌面通知"
 
+#. review of the project group's destination before confirmation
+#: src/components/SpaceGroups.tsx
+msgid "Destination"
+msgstr "目标位置"
+
 #. a call's outcome: no pull request was opened
 #: src/lib/step-words.ts
 msgid "did not publish"
@@ -3066,6 +3118,8 @@ msgid "Every record stays on this computer"
 msgstr "所有记录仍保留在本机"
 
 #. the sharing confirm: what goes to the group
+#. the sharing confirm: what goes to the group
+#: src/components/SpaceGroups.tsx
 #: src/components/SpacePlacements.tsx
 msgid "Every session, whole, attachments included"
 msgstr "每个会话，完整发送，包括附件"
@@ -3534,6 +3588,11 @@ msgstr "全局"
 msgid "Go to Dashboard, Projects, Playbooks, Space, Settings"
 msgstr "前往仪表盘、项目、规程、Space、设置"
 
+#. effect of adding the project's records to a group
+#: src/components/SpaceGroups.tsx
+msgid "Group members can access these records"
+msgstr "群组成员可访问这些记录"
+
 #. the field naming a new group at the Space
 #: src/components/SpaceMembers.tsx
 msgid "Group name"
@@ -3866,11 +3925,6 @@ msgstr "其页面"
 msgid "Its specs/ tree holds an earlier layout's directories: the user/, dev/, test/ or items/ groups, or an interactions/ or compositions/ collection."
 msgstr "它的 specs/ 目录树保留着早期布局的目录：user/、dev/、test/ 或 items/ 分组，或 interactions/、compositions/ 集合。"
 
-#. the picker's heading, inside one Space's section, over the projects that Space already holds for the folder's code, each with its group
-#: src/components/SpaceGroups.tsx
-msgid "Join the records already in"
-msgstr "加入已有的记录"
-
 #. a return line's tag: the Captain is judging what the call came back with
 #: src/components/CallLines.tsx
 msgid "judging"
@@ -4107,6 +4161,8 @@ msgid "Members"
 msgstr "成员"
 
 #. the sharing confirm: nothing recalls what the group's members downloaded
+#. the sharing confirm: nothing recalls what the group's members downloaded
+#: src/components/SpaceGroups.tsx
 #: src/components/SpacePlacements.tsx
 msgid "Members keep what they download"
 msgstr "成员会保留他们下载的内容"
@@ -5090,6 +5146,8 @@ msgid "Packages"
 msgstr "规约包"
 
 #. the sharing confirm: the records made before and after the share both go
+#. the sharing confirm: the records made before and after the share both go
+#: src/components/SpaceGroups.tsx
 #: src/components/SpacePlacements.tsx
 msgid "Past and future records"
 msgstr "过去和将来的记录"
@@ -5308,6 +5366,11 @@ msgstr "本机上的项目文件夹"
 msgid "Project path"
 msgstr "项目路径"
 
+#. what adding a project to a group syncs
+#: src/components/SpaceGroups.tsx
+msgid "Project records"
+msgstr "项目记录"
+
 #. Dashboard band heading: one group per project
 #: src/components/DashboardSurface.tsx
 #: src/components/NavRail.tsx
@@ -5362,6 +5425,8 @@ msgid "PRs"
 msgstr "PR"
 
 #. the sharing confirm, on records at a public place of the Space
+#. the sharing confirm, on records at a public place of the Space
+#: src/components/SpaceGroups.tsx
 #: src/components/SpacePlacements.tsx
 msgid "Public: anyone can read"
 msgstr "公开：任何人都可读取"
@@ -6405,11 +6470,6 @@ msgstr "已裁定 — {title}"
 msgid "Share"
 msgstr "共享"
 
-#. the picker's heading, inside one Space's section, over Personal and the groups the project's records may be shared into
-#: src/components/SpaceGroups.tsx
-msgid "Share into"
-msgstr "共享到"
-
 #. the sharing confirm's title, before a project's records first go to a group others read; {group} is the group's name, or Personal; {name} the Space's display name
 #: src/components/SpacePlacements.tsx
 msgid "Share with {group} at {name}?"
@@ -6648,11 +6708,13 @@ msgstr "来源：GitHub 未连接 · {records, plural, other {# 条未完成记�
 msgid "Sources: Loading GitHub… · {records, plural, one {# open record} other {# open records}}"
 msgstr "来源：正在加载 GitHub… · {records, plural, other {# 条未完成记录}}"
 
+#. label identifying the Space that holds the destination groups
 #. the Space destination: groups, projects and their shared records
 #. the Space destination: groups, projects and their shared records
 #. the accessible name of the sign-in card's chooser of Spaces
 #: src/components/NavRail.tsx
 #: src/components/SpaceDirectory.tsx
+#: src/components/SpaceGroups.tsx
 #: src/components/SpaceSurface.tsx
 msgid "Space"
 msgstr "Space"
@@ -7931,6 +7993,16 @@ msgstr "你的群组"
 #: src/components/PlaybookAuthoring.tsx
 msgid "Your orgs could not be read"
 msgstr "无法读取你的组织"
+
+#. Personal's explanation in the group picker, without promising private visibility
+#: src/components/SpaceGroups.tsx
+msgid "Your personal group"
+msgstr "你的个人群组"
+
+#. the title of Add…'s disabled Folder tab under Personal: the folder holding your Personal records, which a folder package lies in, is not on this computer
+#: src/components/EnvironmentSection.tsx
+msgid "Your Personal records are not on this computer"
+msgstr "你的个人记录不在本机"
 
 #: src/components/CaptainHome.tsx
 msgid "your project"
