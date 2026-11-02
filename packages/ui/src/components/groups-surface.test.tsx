@@ -1089,6 +1089,38 @@ describe("GROUPS: Add to a group… (space-58, space-29)", () => {
     expect(calls("space.pick")).toEqual([]);
   });
 
+  test.each(["create", "join"] as const)("space-58: pending groups and their projects are excluded, invalidating an earlier %s selection until chosen again", async (kind) => {
+    const active = joining({});
+    const pending = withInstance(active, {
+      groups: active.instances[0]!.groups.map((group) => group.fullPath === "acme/team" ? {
+        ...group, pendingDeletion: true, deletionRoot: "acme/team",
+        can: { createSubgroup: false, manageMembers: false, rename: false, delete: false, restore: true },
+      } : group),
+    });
+    await renderGroups(pending, { open: false });
+    open();
+    const groupId = "space-pick-group-acme/team";
+    const projectId = `space-pick-repo-${LISTED}`;
+    for (const id of [groupId, projectId]) expect(within(picker()).queryByTestId(id)).toBeNull();
+    expect(within(picker()).getByRole("radio", { name: "Personal" })).toBeTruthy();
+    expect(submit().disabled).toBe(true);
+    deliver(active);
+    const choice = kind === "create" ? groupId : projectId;
+    fireEvent.click(selected(choice));
+    expect(submit().disabled).toBe(false);
+    deliver(pending);
+    for (const id of [groupId, projectId]) expect(within(picker()).queryByTestId(id)).toBeNull();
+    expect(submit().disabled).toBe(true);
+    fireEvent.click(submit());
+    expect(calls("space.pick")).toEqual([]);
+    deliver(active);
+    expect(selected(choice).checked).toBe(false);
+    expect(submit().disabled).toBe(true);
+    fireEvent.click(selected(choice));
+    expect(submit().disabled).toBe(false);
+    expect(calls("space.pick")).toEqual([]);
+  });
+
   test("space-58: an existing project replaced at the same path requires a new selection", async () => {
     const home = joining({});
     await renderGroups(home, { open: false });
