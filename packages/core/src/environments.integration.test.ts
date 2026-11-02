@@ -272,19 +272,20 @@ test("environments-23: a fresh home with no registry reachable seeds the built-i
   assert.deepEqual(ownState.packages.map((pkg) => [pkg.name, pkg.version, pkg.source.kind, pkg.installed]), [["sublang/playbooks", shipped.version, "builtin", true]]);
   assert.equal(ownState.stale, null);
 
-  // A new project's environment requests it at its working folder's
-  // root, the clone's first commit holding none of it (environments-26).
+  // A new project's environment requests nothing at its working folder's
+  // root — the built-in spec package is global — the clone's first commit
+  // holding none of it (storage-6, environments-11, environments-26).
   const project = await core.client.expectOk("project.register", { path: gitFolder(join(dir, "project")) });
   const projectClone = clonePath(core.dataDir, project.id);
   const projectRoot = join(dir, "project");
   const firstCommit = execFileSync("git", ["-C", projectClone, "show", "--name-only", "--format=", "HEAD"], { encoding: "utf8" });
   assert.doesNotMatch(firstCommit, /^spex\.(yaml|lock)$/m);
-  assert.deepEqual(parseYaml(readFileSync(join(projectRoot, "spex.yaml"), "utf8")), { format: 1, registry: "https://spex.sublang.ai", packages: { "sublang/playbooks": { version: `^${shipped.version}` } } });
-  assert.ok(existsSync(join(projectRoot, "spex.lock")));
+  assert.deepEqual(parseYaml(readFileSync(join(projectRoot, "spex.yaml"), "utf8")), { format: 1, registry: "https://spex.sublang.ai", packages: {} });
   const config = await core.client.expectOk("config.get", {});
   assert.equal(config.status, "valid", JSON.stringify(config));
 
-  // Every built-in playbook launches from the project's installed package.
+  // Every built-in playbook launches in the project from the global
+  // environment's installed package (environments-9).
   const session = await core.client.expectOk("session.create", { projectId: project.id });
   await core.client.expectOk("turn.submit", { sessionId: session.id, text: "Hello" });
   await core.client.waitFor((m) => m.type === "session.state" && m.session.id === session.id && m.session.turns === 1 && m.session.turnActive === false, 60_000);
@@ -292,34 +293,31 @@ test("environments-23: a fresh home with no registry reachable seeds the built-i
   const ids = ["branch", "code", "decide", "dev", "inspect", "pr", "review"];
   assert.deepEqual(Object.keys(manifest.structuralProjection.catalog).sort(), ids);
   for (const id of ids) {
-    assert.ok(manifest.structuralProjection.catalog[id]!.from.startsWith(pathToFileURL(join(dir, "project", ".spex", "packages", "sublang", "playbooks", "playbooks", "en", id)).href), id);
+    assert.ok(manifest.structuralProjection.catalog[id]!.from.startsWith(pathToFileURL(join(ownClone, ".spex", "packages", "sublang", "playbooks", "playbooks", "en", id)).href), id);
   }
-  // The built-ins' skills are exported where claude reads them.
-  assert.ok(existsSync(join(dir, "project", ".claude", "skills", "code", "SKILL.md")));
-  assert.ok(existsSync(join(dir, "project", ".claude", "skills", "review", "SKILL.md")), "[environments-1] a playbook a playbook requires is a peer, its skill placed");
+  // The built-ins' skills are exported where your agents read them in
+  // your home folder, and into no project (environments-8).
   assert.ok(existsSync(join(dir, "user", ".claude", "skills", "review", "SKILL.md")), "[environments-1] a playbook a playbook requires is a peer, its skill placed");
+  assert.equal(existsSync(join(dir, "project", ".claude", "skills", "code")), false);
 
-  // A newer built-in release seeds beside the older; neither lock moves.
-  const locks = [ownClone, projectRoot].map((root) => readFileSync(join(root, "spex.lock"), "utf8"));
+  // A newer built-in release seeds beside the older; the lock moves not.
+  const locks = [ownClone].map((root) => readFileSync(join(root, "spex.lock"), "utf8"));
   await core.stop();
   const newer = newerBuiltin();
   core = await startCore(dir, { hostUrl: UNREACHABLE, realShell: true, extra: { builtinPackage: newer } });
   assert.ok(existsSync(join(core.dataDir, "cache", "builtins", `${shipped.version}.json`)), "the older stays seeded");
   assert.ok(existsSync(join(core.dataDir, "cache", "builtins", `${newer.version}.json`)), "the newer is seeded beside it");
-  assert.deepEqual([ownClone, projectRoot].map((root) => readFileSync(join(root, "spex.lock"), "utf8")), locks, "an app update changes no lock");
-  const still = await core.client.expectOk("environment.get", { repository: project.id });
-  assert.deepEqual(still.packages.map((pkg) => [pkg.version, pkg.installed]), [[shipped.version, true]]);
-  // [environments-11] each state names the newer release beside the
+  assert.deepEqual([ownClone].map((root) => readFileSync(join(root, "spex.lock"), "utf8")), locks, "an app update changes no lock");
+  // [environments-11] the state names the newer release beside the
   // older its lock selects, the caret request admitting the newer.
-  assert.deepEqual(still.builtinUpdate, { shipped: newer.version, locked: shipped.version });
   const ownBefore = await core.client.expectOk("environment.get", { repository: own });
   assert.deepEqual(ownBefore.builtinUpdate, { shipped: newer.version, locked: shipped.version });
-  // A new environment takes the newer release, and its state names none.
+  // A new project's environment still requests nothing, and its state
+  // names no update.
   const later = await core.client.expectOk("project.register", { path: gitFolder(join(dir, "later")) });
-  const laterLock = parseYaml(readFileSync(join(dir, "later", "spex.lock"), "utf8")) as { packages: Record<string, { source: { version: string } }> };
-  assert.equal(laterLock.packages["sublang/playbooks"]!.source.version, newer.version);
+  assert.deepEqual(parseYaml(readFileSync(join(dir, "later", "spex.yaml"), "utf8")).packages, {});
   const laterState = await core.client.expectOk("environment.get", { repository: later.id });
-  assert.ok(!("builtinUpdate" in laterState), "[environments-11] a lock selecting the shipped release names no update");
+  assert.ok(!("builtinUpdate" in laterState), "[environments-11] no update where the built-in is not requested");
 
   // [environments-11] resolving again — what Update sends — moves the
   // lock to the newer release, and the state names none.
@@ -329,7 +327,8 @@ test("environments-23: a fresh home with no registry reachable seeds the built-i
   assert.deepEqual(updated.packages.map((pkg) => [pkg.name, pkg.version, pkg.source.kind, pkg.installed]), [["sublang/playbooks", newer.version, "builtin", true]]);
   assert.ok(!("builtinUpdate" in updated), "[environments-11] the lock selects the shipped release");
 
-  // [environments-11] a request admitting only the older release names
+  // [environments-11] a project requesting the built-in spec package
+  // itself, at an exact version admitting only the older release, names
   // no update, its lock still selecting the older.
   mark = core.client.mark();
   await core.client.expectOk("environment.request", { repository: project.id, name: "sublang/playbooks", request: { kind: "registry", version: shipped.version } });
@@ -337,6 +336,36 @@ test("environments-23: a fresh home with no registry reachable seeds the built-i
     && JSON.stringify(state.requests["sublang/playbooks"]) === JSON.stringify({ kind: "registry", version: shipped.version }));
   assert.deepEqual(exact.packages.map((pkg) => [pkg.version, pkg.installed]), [[shipped.version, true]]);
   assert.ok(!("builtinUpdate" in exact), "[environments-11] the request admits only the older release");
+});
+
+test("environments-11: the global environment requests the built-in spec package once, when the home is made; removed, it stays removed across a restart, the entries written for its playbooks standing aside", { timeout: 180_000 }, async (t) => {
+  const dir = scratchDir("spex-env-builtin-removed-");
+  let core = await startCore(dir, { hostUrl: UNREACHABLE });
+  t.after(() => core.stop());
+  const own = `${OWN}/${OWN}-spex`;
+  const requests = (): Record<string, unknown> => (parseYaml(readFileSync(join(clonePath(core.dataDir, own), "spex.yaml"), "utf8")) as { packages: Record<string, unknown> }).packages;
+  assert.ok(requests()["sublang/playbooks"], "[environments-11] requested as the home is made");
+  assert.equal((await core.client.expectOk("config.get", {})).status, "valid");
+  assert.deepEqual(await core.client.expectOk("environment.remove", { repository: own, name: "sublang/playbooks", wait: true }), { completed: true });
+  assert.deepEqual(requests(), {}, "[environments-15] removed as any other package");
+  await core.stop();
+  core = await startCore(dir, { hostUrl: UNREACHABLE });
+  assert.deepEqual(requests(), {}, "[environments-11] a removal stands: a start requests it no more");
+  // The entries the config writes for its playbooks stand aside, each
+  // named, and block nothing (core-service-2, playbook-library-2).
+  const state = await core.client.expectOk("config.get", {});
+  assert.equal(state.status, "valid", JSON.stringify(state));
+  if (state.status === "valid") {
+    assert.deepEqual(state.summary.playbooks, []);
+    assert.ok(state.summary.standsAside.some((entry) => entry.playbook === "code" && /no package of .+ places a playbook code/.test(entry.reason)), JSON.stringify(state.summary.standsAside));
+  }
+  const listed = await core.client.expectOk("environment.playbooks", {});
+  assert.deepEqual(listed.own, []);
+  assert.ok(listed.invalid?.some((entry) => entry.config === "own" && entry.playbook === "code"), "[playbook-library-2] the entry listed with its failure");
+  // With no playbook composing, a new session is refused in the
+  // reader's words (core-service-2).
+  const project = await core.client.expectOk("project.register", { path: gitFolder(join(dir, "project")) });
+  await core.client.expectError("session.create", { projectId: project.id }, "invalid_config", /^No playbook runs in project — add a package that provides one$/);
 });
 
 test("environments-23, environments-7, environments-11: a lock records the archive checksum the seed packs to; with no registry reachable, a lock of the seeded release at another device's archive checksum with the same files' digests installs from the seed, and one recording another digest for a file fails naming the spec package", { timeout: 120_000 }, async (t) => {
@@ -430,7 +459,8 @@ test("environments-7, environments-21, environments-26: a home of the former lay
     const state = await core.client.expectOk("environment.get", { repository: key });
     assert.ok(state.packages.length > 0 && state.packages.every((pkg) => pkg.installed), `${key} reads installed: ${JSON.stringify(state.packages)}`);
     assert.equal(readFileSync(join(root, ".spex", ".gitignore"), "utf8"), "*\n", "[environments-26] .spex/ ignores everything in it");
-    assert.ok(existsSync(join(root, ".spex", "packages", "sublang", "playbooks", "meta.yaml")), `${key}: the built-in stands under .spex/packages/`);
+    const name = key === own ? "sublang/playbooks" : "acme/kit";
+    assert.ok(existsSync(join(root, ".spex", "packages", ...name.split("/"), "meta.yaml")), `${key}: ${name} stands under .spex/packages/`);
   }
   assert.equal(readFileSync(join(working, ".spex", "packages", "acme", "kit", "skills", "en", "tidy", "SKILL.md"), "utf8"), installed);
   assert.ok(existsSync(join(working, ".spex", "skills", "tidy", "SKILL.md")), "the generated skills stand under .spex/skills/");
@@ -449,7 +479,9 @@ test("environments-9, environments-7, playbook-library-46: an installed playbook
   const working = gitFolder(join(dir, "project"));
   const project = await core.client.expectOk("project.register", { path: working });
   await settledProject(core.client, project.id);
-  const links = join(working, ".spex", "packages", "sublang", "playbooks", "playbooks", "en", "code", "node_modules");
+  // The global environment's built-in a session in the project runs
+  // (environments-9).
+  const links = join(clonePath(core.dataDir, `${OWN}/${OWN}-spex`), ".spex", "packages", "sublang", "playbooks", "playbooks", "en", "code", "node_modules");
   assert.ok(lstatSync(join(links, "xstate")).isSymbolicLink(), "the app's install prepared the folder");
   rmSync(links, { recursive: true, force: true });
   const session = await core.client.expectOk("session.create", { projectId: project.id });
@@ -467,6 +499,9 @@ test("environments-9, environments-7, playbook-library-46: installed playbook fo
   const working = gitFolder(join(dir, "project"));
   const project = await core.client.expectOk("project.register", { path: working });
   await settledProject(core.client, project.id);
+  // The project requests the built-in spec package itself, as one paired
+  // before it became global still does (environments-11).
+  await core.client.expectOk("environment.request", { repository: project.id, name: "sublang/playbooks", request: { kind: "registry", version: `^${builtinPackage().version}` }, wait: true });
   const linksOf = (root: string): string => join(root, ".spex", "packages", "sublang", "playbooks", "playbooks", "en", "code", "node_modules");
   const ownLinks = linksOf(clonePath(core.dataDir, own));
   const projectLinks = linksOf(working);
@@ -578,6 +613,13 @@ test("environments-22 through a real core: retained files of another lock are no
   assert.ok(before.error, "the failed restoration remains visible");
   const configBefore = await core.client.expectOk("config.get", {});
   const importedBefore = loaded.length;
+  // Whether code composes: its entry stands aside, blocking nothing,
+  // while its module is not on this device (core-service-2).
+  const codeRuns = async (): Promise<boolean> => {
+    const state = await core.client.expectOk("config.get", {});
+    assert.equal(state.status, "valid", JSON.stringify(state));
+    return state.status === "valid" && state.summary.playbooks.some((playbook) => playbook.id === "code");
+  };
 
   // One normal resolve selects the seeded release, installs it and
   // prepares the engine links before the first registry import.
@@ -585,9 +627,9 @@ test("environments-22 through a real core: retained files of another lock are no
   await core.client.expectOk("environment.resolve", { repository: own });
   const after = await core.client.environment(own, mark, (state) => state.busy === null && state.packages[0]?.installed === true);
   assert.equal(after.error, null);
-  assert.equal((await core.client.expectOk("config.get", {})).status, "valid", "a successful resolve repairs config without restarting the core");
-  assert.equal(configBefore.status, "invalid");
-  assert.match(JSON.stringify(configBefore), /places a playbook code/);
+  assert.equal(await codeRuns(), true, "a successful resolve brings code back without restarting the core");
+  assert.equal(configBefore.status, "valid", "an entry whose module is not here blocks nothing");
+  assert.match(JSON.stringify(configBefore), /places it, but its files are not on this computer/);
   assert.equal(importedBefore, 0, "no retained registry was imported while its package was uninstalled");
   assert.ok(loaded.length > 0, "the installed registries were imported after recovery");
 
@@ -597,16 +639,16 @@ test("environments-22 through a real core: retained files of another lock are no
   const recordPath = join(clone, ".spex", "packages", INSTALL_RECORD);
   const record = readFileSync(recordPath);
   rmSync(recordPath);
-  assert.equal((await core.client.expectOk("config.get", {})).status, "invalid");
+  assert.equal(await codeRuns(), false);
   writeFileSync(recordPath, record);
-  assert.equal((await core.client.expectOk("config.get", {})).status, "valid");
+  assert.equal(await codeRuns(), true);
 
   const machinePath = join(clone, ".spex", "packages", "sublang", "playbooks", "playbooks", "en", "code", "code.playbook", "code.fsm.js");
   const machine = readFileSync(machinePath);
   rmSync(machinePath);
-  assert.equal((await core.client.expectOk("config.get", {})).status, "invalid", "a missing selected non-entry file invalidates cached availability");
+  assert.equal(await codeRuns(), false, "a missing selected non-entry file invalidates cached availability");
   writeFileSync(machinePath, machine);
-  assert.equal((await core.client.expectOk("config.get", {})).status, "valid");
+  assert.equal(await codeRuns(), true);
 
   // A Git source at another commit is equally unavailable: the retained
   // registry files never establish that the new locked source installed.
@@ -615,10 +657,10 @@ test("environments-22 through a real core: retained files of another lock are no
   gitLock.packages["sublang/playbooks"]!.source = { git: pathToFileURL(join(dir, "not-fetched.git")).href, commit: "0".repeat(40) };
   const beforeGitRead = loaded.length;
   writeFileSync(lockPath, stringifyYaml(gitLock));
-  assert.equal((await core.client.expectOk("config.get", {})).status, "invalid");
+  assert.equal(await codeRuns(), false);
   assert.equal(loaded.length, beforeGitRead, "no files retained for a different Git source are imported");
   writeFileSync(lockPath, installedLock);
-  assert.equal((await core.client.expectOk("config.get", {})).status, "valid");
+  assert.equal(await codeRuns(), true);
   assert.equal(readFileSync(core.configPath, "utf8"), CONFIG, "recovery preserves the authored configuration");
   assert.equal(readFileSync(join(clone, "spex.yaml"), "utf8"), requests, "resolving again preserves the authored version requirement");
   assert.deepEqual(readdirSync(join(clone, "sessions")), [], "no workflow or provider turn was needed");
@@ -658,13 +700,13 @@ test("environments-24: a playbook authored in a project compiles, is requested b
   // The engine links stay out of the working folder's Git.
   assert.match(readFileSync(join(working, ".git", "info", "exclude"), "utf8"), /^\*\*\/playbooks\/\*\/\*\/node_modules\/$/m);
 
-  // Enabling requests it by path, installs and writes the project's entry.
+  // Add requests it by path, installs and writes the project's entry.
   await core.client.expectOk("draft.register", {
     projectId: project.id, draftId: "triage", instance, command: "triage", intent: "Label new issues",
     bindings: { Triager: "dev.coder", Verifier: "dev.coder" },
   });
   assert.equal((parseYaml(readFileSync(join(working, "spex.yaml"), "utf8")) as { packages: Record<string, unknown> }).packages[`${ORG}/triage`] !== undefined, true);
-  await until(() => latest()?.state === "enabled", 10_000, "the enabled chip");
+  await until(() => latest()?.state === "added", 10_000, "the added chip");
   // A session of the project launches it from the working folder.
   const session = await core.client.expectOk("session.create", { projectId: project.id });
   const manifestFile = join(clone, "sessions", `${session.id}.json`);
@@ -744,7 +786,10 @@ test("environments-24: a playbook authored in a project compiles, is requested b
   assert.deepEqual([pkg.version, pkg.source.kind, pkg.direct], ["0.1.0", "registry", true]);
   const playbooks = await other.client.expectOk("environment.playbooks", { projectId: otherProject.id });
   const row = playbooks.project?.find((entry) => entry.id === "triage");
-  assert.deepEqual([row?.source, row?.version, row?.enabled, row?.present], ["registry", "0.1.0", [], true]);
+  // Placed with no entry, it runs on its default binding (core-service-2,
+  // environments-9).
+  assert.deepEqual([row?.source, row?.version, row?.entry, row?.runs, row?.placedBy, row?.present], ["registry", "0.1.0", [], true, ["project"], true]);
+  assert.deepEqual(Object.fromEntries(Object.entries(row?.bindings ?? {}).map(([role, binding]) => [role, [binding.playerId, binding.from]])), { triager: ["dev.triager", "default"], verifier: ["dev.verifier", "default"] });
 });
 
 // ---------------------------------------------------------------------------
@@ -1432,8 +1477,9 @@ test("environments-25: every environment command replies and refuses as its tabl
   assert.deepEqual(Object.keys(initial).sort(), ["busy", "committed", "conflicts", "error", "instance", "language", "packages", "pathRoot", "published", "registry", "repository", "requests", "stale"]);
   assert.equal(initial.committed, false, "a project's environment its code does not hold is this device's (environments-14)");
   assert.equal(initial.pathRoot, project.path, "a project's paths are relative to its working folder (environments-2)");
-  assert.deepEqual(Object.keys(initial.packages[0]!).sort(), ["artifacts", "direct", "exports", "installed", "missingPath", "name", "requiredBy", "source", "version"]);
-  assert.deepEqual(initial.requests["sublang/playbooks"], { kind: "registry", version: `^${builtinPackage().version}` });
+  // A pairing writes the project's environment requesting nothing: the
+  // built-in spec package is global (storage-6, environments-11).
+  assert.deepEqual([initial.requests, initial.packages], [{}, []]);
 
   // environment.search through the registry of the named spex
   // repository's environment; a key naming no clone is refused.
@@ -1451,6 +1497,7 @@ test("environments-25: every environment command replies and refuses as its tabl
   let mark = client.mark();
   assert.deepEqual(await client.expectOk("environment.request", { repository: key, name: "acme/lint", request: { kind: "registry", version: "^1.0.0" } }), { accepted: true });
   const requested = await client.environment(key, mark, (state) => state.busy === null && state.packages.some((pkg) => pkg.name === "acme/lint" && pkg.installed));
+  assert.deepEqual(Object.keys(requested.packages[0]!).sort(), ["artifacts", "direct", "exports", "installed", "missingPath", "name", "requiredBy", "source", "version"]);
   assert.deepEqual(requested.packages.find((pkg) => pkg.name === "acme/lint")?.exports, [{ name: "tidy", artifact: "tidy" }]);
   assert.ok(existsSync(join(working, ".claude", "skills", "tidy", "SKILL.md")), "the skill is exported where claude reads it");
 
@@ -1545,11 +1592,15 @@ test("environments-25: every environment command replies and refuses as its tabl
   await client.expectError("environment.publish", { repository: key, name: "acme/absent", dryRun: true }, "invalid_request", /^No folder for acme\/absent at spex-packages\/acme\/absent — npx @sublang\/spex export acme\/absent \[--spec <file>\] \[--skill <folder>\]… builds one$/);
   await client.expectError("environment.publish", { repository: key, name: "none", dryRun: true }, "invalid_request", /^none is not a package name — name it like acme\/triage$/);
 
-  // The playbooks both environments export, with where each is enabled.
+  // The playbooks both environments place, each with the entries
+  // written for it and the bindings a session in the project runs it
+  // with (playbook-library-1, core-service-2).
   const listed = await client.expectOk("environment.playbooks", { projectId: key });
-  const code = listed.project?.find((row) => row.id === "code");
-  assert.deepEqual([code?.source, code?.enabled, code?.present], ["builtin", ["own"], true]);
-  assert.equal(code?.bindings?.own?.coder?.playerId, "dev.coder");
+  assert.equal(listed.project?.some((row) => row.id === "code"), false, "the project's environment places no built-in");
+  const code = listed.own.find((row) => row.id === "code");
+  assert.deepEqual([code?.source, code?.entry, code?.runs, code?.placedBy, code?.present], ["builtin", ["own"], true, ["own"], true]);
+  assert.equal(code?.written?.own?.coder?.playerId, "dev.coder");
+  assert.deepEqual([code?.bindings.coder?.playerId, code?.bindings.coder?.from], ["dev.coder", "own"]);
   assert.ok(code?.folder?.endsWith(join("packages", "sublang", "playbooks", "playbooks", "en", "code")));
   assert.ok(listed.own.some((row) => row.id === "review"));
 
@@ -1664,6 +1715,8 @@ test("environments-21, environments-26, environments-14: a project's spex.yaml a
   const project = await core.client.expectOk("project.register", { path: working });
   const clone = clonePath(core.dataDir, project.id);
   await settledProject(core.client, project.id);
+  // A package the project requests itself, installed (environments-7).
+  await core.client.expectOk("environment.request", { repository: project.id, name: "sublang/playbooks", request: { kind: "registry", version: `^${builtinPackage().version}` }, wait: true });
 
   // [environments-26] the two files at the working folder's root, the
   // installed files under its .spex/, nothing of either in the clone.
@@ -2063,7 +2116,13 @@ async function settledProject(client: Client, key: string): Promise<void> {
   const start = Date.now();
   for (;;) {
     const state = await client.expectOk("environment.get", { repository: key });
-    if (state.busy === null && state.packages.some((pkg) => pkg.name === "sublang/playbooks" && pkg.installed)) return;
+    // The global environment holds the built-in spec package; a project's,
+    // as its pairing wrote it, requests nothing and is resolved
+    // (environments-11, storage-6).
+    const settled = key === `${OWN}/${OWN}-spex`
+      ? state.packages.some((pkg) => pkg.name === "sublang/playbooks" && pkg.installed)
+      : state.pathRoot !== null && existsSync(join(state.pathRoot, "spex.lock")) && state.stale === null;
+    if (state.busy === null && settled) return;
     if (Date.now() - start > 60_000) throw new Error(`timeout waiting for ${key} to settle`);
     await sleep(25);
   }
@@ -2553,7 +2612,7 @@ test("shared-config-roundtrip-3: a config edit whose file another writer changes
   }
 });
 
-test("playbook-library-98: an enabling refused after some of its writes names them, they stand, nothing else is overwritten, and a retry enables from what stands", { timeout: 180_000 }, async (t) => {
+test("playbook-library-98: an Add refused after some of its writes names them, they stand, nothing else is overwritten, and a retry adds from what stands", { timeout: 180_000 }, async (t) => {
   const dir = scratchDir("spex-env-enable-");
   const core = await startCore(dir, { hostUrl: UNREACHABLE, script: authoringScript(), slc: stubSlcSource("['triager', 'verifier']") });
   t.after(() => core.stop());
@@ -2573,8 +2632,8 @@ test("playbook-library-98: an enabling refused after some of its writes names th
     bindings: { Triager: "dev.triager", Verifier: "dev.coder" }, newPlayers: { "dev.triager": { adapter: "claude" } } };
 
   // The project's config folder is a file another writer placed: the
-  // entry, the enabling's last write, fails after the request, the lock
-  // and the new player were written.
+  // entry, the Add's last write, fails after the request, the lock and
+  // the new player were written.
   const configDir = join(clone, "config");
   const aside = join(clone, "config.aside");
   const hadConfig = existsSync(configDir);
@@ -2596,9 +2655,9 @@ test("playbook-library-98: an enabling refused after some of its writes names th
     rmSync(configDir, { force: true });
     if (hadConfig) renameSync(aside, configDir);
   }
-  assert.ok(failure, "the enabling is refused");
+  assert.ok(failure, "the Add is refused");
   assert.equal(failure.code, "internal", failure.message);
-  assert.match(failure.message, /^enabling stopped after /);
+  assert.match(failure.message, /^adding stopped after /);
   for (const step of [/local\/triage added to spex\.yaml|\/triage added to spex\.yaml/, /spex\.lock written/, /player dev\.triager written/]) assert.match(failure.message, step);
   assert.match(failure.message, /ENOTDIR/);
   assert.doesNotMatch(failure.message, /playbook triage written/);
@@ -2609,14 +2668,14 @@ test("playbook-library-98: an enabling refused after some of its writes names th
   assert.equal(afterFailure!.foreign, foreign);
 
   // A retry, the folder back, reads what stands: no request written
-  // again, the entry written, the session enabled.
+  // again, the entry written, the session added.
   await client.expectOk("draft.register", register);
   assert.equal(readFileSync(join(working, "spex.yaml"), "utf8"), afterFailure!.requests, "the standing request is not written again");
   assert.match(readFileSync(join(clone, "config", "playbook.config.yaml"), "utf8"), /triage:\n\s+roles:/);
-  await until(() => latest()?.state === "enabled", 10_000, "the enabled chip");
+  await until(() => latest()?.state === "added", 10_000, "the added chip");
 });
 
-test("playbook-library-110: an authoring session whose spec package lies in your own group's clone enables in your own group's environment by its path there", { timeout: 180_000 }, async (t) => {
+test("playbook-library-110: an authoring session of the global environment keeps its spec package in your own group's clone and adds it in the global environment by its path there", { timeout: 180_000 }, async (t) => {
   const dir = scratchDir("spex-env-enable-own-");
   const core = await startCore(dir, { hostUrl: UNREACHABLE, script: authoringScript(), slc: stubSlcSource("['triager', 'verifier']") });
   t.after(() => core.stop());
@@ -2625,10 +2684,9 @@ test("playbook-library-110: an authoring session whose spec package lies in your
   const clone = ownClone(core.dataDir);
   await settledProject(client, ownKey);
 
-  // Your own group's spex repository paired with its own clone as its
-  // working folder: an authoring session there makes its spec package
-  // folder inside the clone.
-  await client.expectOk("project.rebind", { projectId: ownKey, path: clone });
+  // The global environment, named by your own group's key, takes an
+  // authoring session whose spec package folder lies in its clone
+  // (core-service-96).
   const created = await client.expectOk("draft.create", { projectId: ownKey, draftId: "triage", org: OWN, license: "Apache-2.0" });
   const { instance } = created;
   assert.ok(instance, "the session's recorded instance");
@@ -2638,9 +2696,9 @@ test("playbook-library-110: an authoring session whose spec package lies in your
   const latest = () => client.messages.filter((m) => m.type === "draft.state" && m.draft.id === "triage").map((m) => (m as { draft: CommandResults["draft.create"] }).draft).at(-1);
   await until(() => latest()?.activity === "idle" && latest()?.proposal !== undefined, 120_000, "the compiled proposal");
 
-  // Enabled in your own group's environment by its path in the clone
+  // Added in the global environment by its path in the clone
   // (playbook-library-7).
-  await client.expectOk("draft.register", { projectId: ownKey, draftId: "triage", instance, repository: ownKey,
+  await client.expectOk("draft.register", { projectId: ownKey, draftId: "triage", instance,
     command: "triage", intent: "Label new issues", bindings: { Triager: "dev.triager", Verifier: "dev.coder" }, newPlayers: { "dev.triager": { adapter: "claude" } } });
   const requests = parseYaml(readFileSync(join(clone, "spex.yaml"), "utf8")) as { packages: Record<string, unknown> };
   assert.deepEqual(requests.packages[`${OWN}/triage`], { path: `spex-packages/${OWN}/triage` }, "[playbook-library-7] requested by its path in your own group's clone");
@@ -2648,7 +2706,8 @@ test("playbook-library-110: an authoring session whose spec package lies in your
   assert.equal((lock.packages[`${OWN}/triage`]?.source as { path?: string } | undefined)?.path, `spex-packages/${OWN}/triage`, "[playbook-library-7] resolved there");
   const own = parseYaml(readFileSync(core.configPath, "utf8")) as { playbooks: Record<string, unknown> };
   // Keyed by the roles the stub compile derived.
-  assert.deepEqual(own.playbooks.triage, { roles: { triager: "dev.triager", verifier: "dev.coder" } }, "[playbook-library-7] enabled in your own group's config");
+  assert.deepEqual(own.playbooks.triage, { roles: { triager: "dev.triager", verifier: "dev.coder" } }, "[playbook-library-7] written in the global config");
+  await until(() => latest()?.state === "added", 10_000, "the added chip");
 });
 
 

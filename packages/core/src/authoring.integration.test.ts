@@ -380,7 +380,7 @@ test("playbook-library-72: a draft is authored, compiled, proposed, and register
   assert.equal(created.player, null);
   assert.equal(created.agent.adapter, "claude");
   assert.equal(created.projectId, projectId);
-  assert.equal(created.enabled, false);
+  assert.equal(created.added, false);
   assert.equal(created.package, "acme/triage");
   assert.equal(created.packagePath, "spex-packages/acme/triage");
   assert.equal(created.sourcePath, "spex-packages/acme/triage/playbooks/en/triage/triage.md");
@@ -479,7 +479,7 @@ test("playbook-library-72: a draft is authored, compiled, proposed, and register
   // playbook-library-68/66: the success turn named the roles; the
   // proposal landed with the block's fields.
   const success = stats.runs[1];
-  assert.match(success.prompt, /The compile of triage succeeded; the roles are Triager, Verifier\. Propose enabling in a register block/);
+  assert.match(success.prompt, /The compile of triage succeeded; the roles are Triager, Verifier\. Propose adding it in a register block/);
   assert.match(success.prompt, /^Spex: /m);
   assert.ok(success.resume, "the success turn continued the provider conversation");
   assert.doesNotMatch(success.prompt, /You are helping the Boss/);
@@ -494,29 +494,14 @@ test("playbook-library-72: a draft is authored, compiled, proposed, and register
   assert.ok(artifacts.gears && artifacts.fsm, "the compiled stages serve");
   assert.ok(artifacts.stateIds?.includes("ready"));
 
-  // playbook-library-69/70: enabling requests the spec package by path
-  // from the project's environment and installs it, writes the new
-  // player to your own roster first, then the project's entry keyed by
-  // the derived roles, no `from`; the session stays, enabled.
+  // playbook-library-69/70: Add requests the spec package by path from
+  // the environment the session belongs to — the project's — and
+  // installs it, writes the new player to your own roster first, then
+  // the project's entry keyed by the derived roles, no `from`; the
+  // session stays, added.
   const projectConfig = join(clone, "config", "playbook.config.yaml");
-  // Your own group's environment requests by path only from inside its
-  // clone, which does not hold this package: refused, with no config or
-  // environment write (playbook-library-7).
   const ownClone = join(harness.dataDir, "workspace", "tester", "tester-spex");
-  const written = (): (string | null)[] => [configPath, projectConfig, join(harness.dir, "project", "spex.yaml"), join(ownClone, "spex.yaml"), join(ownClone, "spex.lock"), join(ownClone, "config", "playbook.config.yaml")]
-    .map((file) => (existsSync(file) ? readFileSync(file, "utf8") : null));
-  const before = written();
-  const refused = await client.expectError("draft.register", {
-    projectId,
-    draftId: "triage",
-    repository: "tester/tester-spex",
-    command: "triage",
-    intent: "Label new issues",
-    bindings: { Triager: "dev.triager", Verifier: "dev.coder" },
-    newPlayers: { "dev.triager": { adapter: "claude" } },
-  }, "invalid_request");
-  assert.match(refused.message, /^This package's folder is outside your Personal records — /, "[playbook-library-7] your own group only where its clone holds the package");
-  assert.deepEqual(written(), before, "[playbook-library-7] no config or environment write");
+  const ownRequests = readFileSync(join(ownClone, "spex.yaml"), "utf8");
   const state = await client.expectOk("draft.register", {
     projectId,
     draftId: "triage",
@@ -533,26 +518,29 @@ test("playbook-library-72: a draft is authored, compiled, proposed, and register
   assert.equal(lock.packages["acme/triage"]?.source.path, "spex-packages/acme/triage");
   const own = parseYaml(readFileSync(configPath, "utf8")) as { players: Record<string, unknown>; playbooks: Record<string, unknown> };
   assert.deepEqual(own.players["dev.triager"], { adapter: "claude" }, "the new player joins your own roster");
-  assert.equal(own.playbooks.triage, undefined, "your own group's config is not the one enabling it");
+  assert.equal(own.playbooks.triage, undefined, "the global config is not the one the session's Add writes");
+  assert.equal(readFileSync(join(ownClone, "spex.yaml"), "utf8"), ownRequests, "[core-service-96] the global environment untouched");
   const entry = (parseYaml(readFileSync(projectConfig, "utf8")) as { playbooks: Record<string, unknown> }).playbooks.triage;
   assert.deepEqual(entry, { roles: { Triager: "dev.triager", Verifier: "dev.coder" } });
   const wrapper = readFileSync(join(artifactDir, "triage.registry.ts"), "utf8");
   assert.match(wrapper, /command: "triage"/);
   assert.match(wrapper, /intent: "Label new issues"/);
-  // The session reads enabled and stays (playbook-library-61), its
+  // The session reads added and stays (playbook-library-61), its
   // files where they were.
-  await until(() => client.latest("triage")?.enabled === true, 10_000, "the enabled session");
+  await until(() => client.latest("triage")?.added === true, 10_000, "the added session");
   const listed = await client.expectOk("draft.list", {});
-  assert.deepEqual(listed.map((draft) => [draft.id, draft.enabled]), [["triage", true]]);
+  assert.deepEqual(listed.map((draft) => [draft.id, draft.added]), [["triage", true]]);
   assert.ok(!client.messages.some((m) => m.type === "draft.removed"), "nothing retires the session");
   for (const path of [files.record, files.records]) assert.ok(existsSync(path), `${path} stays`);
-  // The playbook is listed from the project's environment, enabled there.
+  // The playbook is listed from the project's environment, running there
+  // on the project's entry.
   const playbooks = await client.expectOk("environment.playbooks", { projectId });
   const triage = playbooks.project?.find((row) => row.id === "triage");
-  assert.ok(triage, "the project's environment exports it");
-  assert.deepEqual([triage.command, triage.intent, triage.roles, triage.source, triage.package, triage.version, triage.enabled],
-    ["triage", "Label new issues", ["Triager", "Verifier"], "path", "acme/triage", "0.1.0", ["project"]]);
-  assert.equal(client.latest("triage")?.state, "enabled");
+  assert.ok(triage, "the project's environment places it");
+  assert.deepEqual([triage.command, triage.intent, triage.roles, triage.source, triage.package, triage.version, triage.entry, triage.runs, triage.placedBy],
+    ["triage", "Label new issues", ["Triager", "Verifier"], "path", "acme/triage", "0.1.0", ["project"], true, ["project"]]);
+  assert.deepEqual(Object.fromEntries(Object.entries(triage.bindings).map(([role, binding]) => [role, [binding.playerId, binding.from]])), { Triager: ["dev.triager", "project"], Verifier: ["dev.coder", "project"] });
+  assert.equal(client.latest("triage")?.state, "added");
 
   // playbook-library-70: the list titles the session by its source's
   // first `#` heading, past a license comment written above it, else
@@ -567,6 +555,68 @@ test("playbook-library-72: a draft is authored, compiled, proposed, and register
 
   client.close();
   await harness.service.stop();
+});
+
+// ---------------------------------------------------------------------------
+// core-service-96: an authoring session of the global environment
+// ---------------------------------------------------------------------------
+
+test("core-service-96: a session of the global environment keeps its package in your own group's clone, and its Add requests it there and writes the global config", { timeout: 120_000 }, async () => {
+  const harness = await startHarness({ script: { rules: [], fallback: { deltas: ["Noted."], result: "Noted." } }, slc: stubSlcSource("['Triager', 'Verifier']") });
+  const { configPath } = harness;
+  const global = "tester/tester-spex";
+  const ownClone = join(harness.dataDir, "workspace", "tester", "tester-spex");
+  const client = new Client(harness.service.port());
+  await client.open();
+  try {
+    // Your own group's key stands in a project's place (core-service-96).
+    const defaults = await client.expectOk("draft.defaults", { projectId: global });
+    assert.equal(typeof defaults.org, "string");
+    const created = await client.expectOk("draft.create", { projectId: global, draftId: "triage", ...NEW_PACKAGE });
+    assert.equal(created.projectId, global);
+    assert.equal(created.packagePath, "spex-packages/acme/triage");
+    assert.equal(created.added, false);
+    assert.ok(existsSync(join(ownClone, "spex-packages", "acme", "triage", "meta.yaml")), "[core-service-96] the spec package in your own group's clone");
+    assert.ok(existsSync(authoringFiles(ownClone, "triage").record), "[core-service-96] the session kept with the global records");
+    await client.expectOk("subscribe", { channel: { kind: "draft", draftId: "triage" } });
+    await client.expectOk("draft.source.write", { projectId: global, draftId: "triage", content: SOURCE });
+    assert.deepEqual(await client.expectOk("draft.compile", { projectId: global, draftId: "triage" }), { ok: true, roles: ["Triager", "Verifier"] });
+    const state = await client.expectOk("draft.register", {
+      projectId: global,
+      draftId: "triage",
+      command: "triage",
+      intent: "Label new issues",
+      bindings: { Triager: "dev.coder", Verifier: "dev.reviewer" },
+    });
+    assert.equal(state.status, "valid");
+    // Requested by path from the global environment, the entry written
+    // into the global config (playbook-library-69).
+    const requests = parseYaml(readFileSync(join(ownClone, "spex.yaml"), "utf8")) as { packages: Record<string, unknown> };
+    assert.deepEqual(requests.packages["acme/triage"], { path: "spex-packages/acme/triage" }, "[core-service-96] the global environment requests it by path");
+    const config = parseYaml(readFileSync(configPath, "utf8")) as { playbooks: Record<string, unknown> };
+    assert.deepEqual(config.playbooks.triage, { roles: { Triager: "dev.coder", Verifier: "dev.reviewer" } }, "[core-service-96] the global config's entry");
+    assert.equal(existsSync(join(harness.dir, "project", "spex-packages")), false, "nothing written in the project's folder");
+    await until(() => client.latest("triage")?.added === true, 10_000, "the added session");
+    const listed = await client.expectOk("environment.playbooks", {});
+    const triage = listed.own.find((row) => row.id === "triage");
+    assert.deepEqual([triage?.runs, triage?.entry, triage?.placedBy, triage?.source], [true, ["own"], ["own"], "path"]);
+    // A project's session lists it too: a global playbook runs in every
+    // project of yours (core-service-2).
+    const inProject = await client.expectOk("environment.playbooks", { projectId: harness.projectId });
+    assert.equal(inProject.own.find((row) => row.id === "triage")?.runs, true);
+
+    // With your own group's clone gone from this device, the global
+    // environment takes no new session and no defaults (core-service-96).
+    const away = `${ownClone}-away`;
+    renameSync(ownClone, away);
+    try {
+      await client.expectError("draft.create", { projectId: global, draftId: "other", ...NEW_PACKAGE }, "invalid_request");
+      await client.expectError("draft.defaults", { projectId: global }, "invalid_request");
+    } finally { renameSync(away, ownClone); }
+  } finally {
+    client.close();
+    await harness.service.stop();
+  }
 });
 
 // ---------------------------------------------------------------------------
