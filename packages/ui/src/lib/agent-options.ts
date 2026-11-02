@@ -47,7 +47,8 @@ export interface ModelDisplay {
  * it — else the id when it says more than the name, else nothing. */
 function specificModel(row: AgentModelOption, name: string): string | undefined {
   const resolved = row.resolvedModel;
-  if (resolved && resolved !== row.id && !row.id.startsWith(resolved)) return resolved;
+  // A resolution the name already says is not said twice.
+  if (resolved && resolved !== row.id && !row.id.startsWith(resolved)) return resolved.toLowerCase() === name.toLowerCase() ? undefined : resolved;
   if (row.id.toLowerCase() !== name.toLowerCase()) return row.id;
   return undefined;
 }

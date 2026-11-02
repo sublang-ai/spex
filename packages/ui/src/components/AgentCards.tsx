@@ -5,7 +5,8 @@
 // and one for Codex whether or not a role uses them, then an entry per
 // other adapter the config names. A card says its readiness and who
 // uses it, Claude's model service and each card's default model; one
-// not ready says what to do by its fault's kind (settings-61) and how
+// not ready says what to do by its fault's kind (settings-61) — in the
+// Workshop what is missing and its setup guide (settings-69) — and how
 // to configure it on this computer, or on a seat where to set a
 // credential. With a valid config a card gives every agent of its
 // adapter one model (settings-57, settings-58), and Claude's behind a
@@ -24,8 +25,11 @@ import type {
 import { usePlaceStore } from "../state/place-context.js";
 import { isLocalPlace } from "../state/store.js";
 import { i18n } from "../i18n.js";
-import { useAgentOptions, providerDefaultDisplay } from "../lib/agent-options.js";
+import { useAgentOptions, modelDisplay, modelDisplayText, providerDefaultDisplay } from "../lib/agent-options.js";
 import {
+  adapterModels,
+  distinctRunModels,
+  agentName,
   faultGuidance,
   faultsOf,
   fixPlan,
@@ -36,28 +40,38 @@ import {
   unifyPlan,
   type OfficialRole,
 } from "../lib/agent-cards.js";
-import { WORKSHOP } from "../lib/workshop.js";
+import { WORKSHOP, workshopGuideUrl } from "../lib/workshop.js";
 import type { SpexCommandError } from "../lib/client.js";
-import { noCheckNote, readinessWord } from "./AgentChip.js";
+import { noCheckNote, readinessWord, unconfirmedNote, unconfirmedWord } from "./AgentChip.js";
+import { Icon } from "./Icon.js";
 import { ModelField } from "./ModelField.js";
 import { Rich } from "./Rich.js";
 
 const STANDING: readonly AdapterName[] = ["claude", "codex"];
 
-/** A product's own name stands untranslated. */
-const CARD_NAME: Partial<Record<AdapterName, string>> = { claude: "Claude", codex: "Codex" };
 
 const cardClass = "flex flex-col gap-2 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm dark:border-neutral-800 dark:bg-neutral-900";
 const mutedClass = "text-xs text-neutral-500 dark:text-neutral-400";
 const buttonClass = "rounded-md border border-neutral-300 px-2 py-0.5 text-xs hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-700 dark:hover:bg-neutral-800";
+// The card's one primary action: the other controls' box, filled.
+const primaryClass = "rounded-md border border-brand-600 bg-brand-600 px-2.5 py-1 text-xs font-medium text-white hover:border-brand-500 hover:bg-brand-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-brand-600 disabled:hover:bg-brand-600";
 const code = <code className="font-mono" key="code" />;
 
 function Badge({ entry }: { entry: ReadinessEntry }) {
   if (entry.ready === true) {
-    return <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">{readinessWord(true)}</span>;
+    return (
+      <span data-testid={`agent-badge-${entry.adapter}`} title={i18n._("Found a sign-in or key; whether it works is checked on your first task.")} className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+        {readinessWord(true)}
+      </span>
+    );
   }
   if (entry.ready === false) {
-    return <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-700 dark:bg-red-950 dark:text-red-300">{readinessWord(false)}</span>;
+    // One tone for every not-ready card, whoever uses it: a step still
+    // to take, not an error (settings-5).
+    return <span data-testid={`agent-badge-${entry.adapter}`} data-tone="attention" className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300">{readinessWord(false)}</span>;
+  }
+  if (entry.unconfirmed !== undefined) {
+    return <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300">{unconfirmedWord()}</span>;
   }
   return (
     <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-500 dark:bg-neutral-800" title={entry.requirement ?? noCheckNote()}>
@@ -86,7 +100,9 @@ function refusalText(error: unknown): string {
   return named ? i18n._("Nothing was written: {message} — {named}", { message, named }) : message;
 }
 
-/** The steps that configure an agent here (settings-5). */
+/** The steps that configure an agent here (settings-5), where the
+ * Workshop's routes stand not: on a seat a pointer to the Credentials
+ * section; on this computer the manual steps. */
 function HowToConfigure({ entry, seat }: { entry: ReadinessEntry; seat: boolean }) {
   if (seat) {
     return (
@@ -100,23 +116,53 @@ function HowToConfigure({ entry, seat }: { entry: ReadinessEntry; seat: boolean 
   return (
     <details data-testid={`agent-howto-${entry.adapter}`} className={mutedClass}>
       <summary className="cursor-pointer">{i18n._("How to configure")}</summary>
-      <ol className="mt-1 flex list-decimal flex-col gap-1 pl-5">
-        {WORKSHOP ? (
-          <li data-testid="agent-howto-script">{i18n._("Run the Workshop setup script, as the Workshop materials describe.")}</li>
-        ) : null}
-        <li data-testid="agent-howto-manual">
-          {WORKSHOP ? <span>{i18n._({ id: "Or set it by hand.", comment: "configuration step: the manual way, after the setup script" })} </span> : null}
-          <Rich text={steps.where} components={[code]} />
-          <pre className="mt-1 overflow-x-auto rounded bg-neutral-50 px-2 py-1 font-mono dark:bg-neutral-950">{steps.lines.join("\n")}</pre>
-          {entry.adapter === "codex" ? <span>{i18n._("Codex needs an official OpenAI key.")} </span> : null}
-          <span>{i18n._("Quit Spex completely and open it again.")}</span>
-        </li>
-      </ol>
+      <div data-testid="agent-howto-manual" className="mt-1 flex flex-col gap-1">
+        <span><Rich text={steps.where} components={[code]} /></span>
+        <pre className="overflow-x-auto rounded bg-neutral-50 px-2 py-1 font-mono dark:bg-neutral-950">{steps.lines.join("\n")}</pre>
+        <span>
+          {entry.adapter === "codex" ? `${i18n._("Codex needs an official OpenAI key.")} ` : ""}
+          {i18n._("Quit Spex completely and open it again.")}
+        </span>
+      </div>
     </details>
   );
 }
 
-/** Each fault in the reader's next step, the core's words beneath. */
+/** The Workshop's one route (settings-69): whom it is for over its
+ * primary action, the configuration document opened at the reader's
+ * platform, then how to see the result. The online service is told in
+ * the room, not offered here (DR-176). */
+function WorkshopRoute({ entry, local }: { entry: ReadinessEntry; local: string }) {
+  return (
+    <div data-testid={`agent-routes-${entry.adapter}`} className="flex flex-col gap-3">
+      <div data-testid="agent-route-local" className="flex min-w-0 flex-col items-start gap-2">
+        <span className="text-sm text-neutral-700 [overflow-wrap:anywhere] dark:text-neutral-300">{local}</span>
+        <a
+          data-testid="agent-guide"
+          href={workshopGuideUrl(entry.adapter, entry.platform)}
+          target="_blank"
+          rel="noreferrer"
+          className={`${primaryClass} inline-flex items-center gap-1`}
+        >
+          {i18n._({ id: "Open the setup guide", comment: "an agent card's primary action in the Workshop: the configuration document, opened in the browser" })}
+          <Icon name="external" className="h-3 w-3 shrink-0" />
+        </a>
+      </div>
+      <span data-testid={`agent-routes-closing-${entry.adapter}`} className="text-xs text-neutral-600 dark:text-neutral-300">
+        {i18n._("Once connected, press Re-check; if nothing changes, quit Spex completely and open it again.")}
+      </span>
+    </div>
+  );
+}
+
+/** Each fault in the reader's next step, the core's words in its
+ * tooltip where the step is in other words (settings-61). */
+function closingLine(closing: "re-check" | "restart"): string {
+  return closing === "re-check"
+    ? i18n._("After signing in, re-check; after setting the key, quit Spex completely and open it again — see How to configure.")
+    : i18n._("Then quit Spex completely and open it again — see How to configure.");
+}
+
 function FaultLines({ entry, seat }: { entry: ReadinessEntry; seat: boolean }) {
   const faults = faultsOf(entry);
   if (faults.length === 0) return null;
@@ -126,14 +172,21 @@ function FaultLines({ entry, seat }: { entry: ReadinessEntry; seat: boolean }) {
         const guidance = faultGuidance(entry, fault, { workshop: WORKSHOP, seat });
         return (
           <li key={`${fault.kind}:${fault.requirement}`} data-testid={`agent-fault-${fault.kind}`} className="flex flex-col">
-            {guidance.text ? (
-              <span className="text-xs">
-                <Rich text={guidance.text} components={[code, <code className="font-mono" key="code-1" />]} />
-                {guidance.local ? ` ${i18n._("Then quit Spex completely and open it again — see How to configure.")}` : ""}
+            {guidance.local !== undefined ? (
+              // Plain text: the badge carries the tone, and the section's
+              // verdict the one warning (settings-69).
+              <span data-testid="agent-fault-guidance" className="text-sm text-neutral-700 [overflow-wrap:anywhere] dark:text-neutral-300" title={guidance.core}>
+                <Rich text={guidance.text ?? guidance.core} components={[code]} />
               </span>
-            ) : null}
-            {/* The core's own requirement, whole (settings-23). */}
-            <span data-testid="agent-fault-core" className={guidance.text ? "text-[11px] text-neutral-500 break-words" : "text-xs break-words"}>{guidance.core}</span>
+            ) : guidance.text ? (
+              <span data-testid="agent-fault-guidance" className="text-sm font-medium text-neutral-900 [overflow-wrap:anywhere] dark:text-neutral-100" title={guidance.core}>
+                <Rich text={guidance.text} components={[code, <code className="font-mono" key="code-1" />]} />
+                {guidance.closing ? ` ${closingLine(guidance.closing)}` : ""}
+              </span>
+            ) : (
+              // The core's own requirement is the guidance, whole (settings-23).
+              <span data-testid="agent-fault-core" className="text-sm break-words text-neutral-900 dark:text-neutral-100">{guidance.core}</span>
+            )}
           </li>
         );
       })}
@@ -185,7 +238,7 @@ function OneModel({ entry, state, catalog }: { entry: ReadinessEntry; state: Ext
   // until the runtime reports it (settings-58).
   const blindDefault = thirdParty && value === "" && !defaultModel;
   const plan = unifyPlan(state.summary, entry.adapter, value);
-  const name = CARD_NAME[entry.adapter] ?? entry.adapter;
+  const name = agentName(entry.adapter);
 
   function apply(): void {
     setBusy(true);
@@ -201,7 +254,12 @@ function OneModel({ entry, state, catalog }: { entry: ReadinessEntry; state: Ext
 
   return (
     <div data-testid={`agent-unify-${entry.adapter}`} className="flex flex-col gap-1">
-      <span id={labelId} className={mutedClass}>{i18n._("Every agent on {name} uses:", { name })}</span>
+      {/* The field's label says it changes them all and where one is
+          set alone, one line above it, in one message so each language
+          joins its sentences its own way (settings-57). */}
+      <span id={labelId} data-testid={`agent-unify-label-${entry.adapter}`} className={mutedClass}>
+        {i18n._("This changes the model of every Captain and player on {name} at once. To change only the Captain's or one player's, edit its settings above.", { name })}
+      </span>
       <div className="flex flex-wrap items-start gap-2">
         <div className="min-w-0 flex-1 basis-56">
           <ModelField
@@ -312,8 +370,9 @@ function OfficialNames({ entry, state, catalog }: { entry: ReadinessEntry; state
       .finally(() => { setBusy(false); setAsking(false); });
   }
 
+  const host = entry.baseUrl?.state === "third-party" ? entry.baseUrl.host : "";
   return (
-    <div data-testid="agent-official" className="flex flex-col gap-1 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+    <div data-testid="agent-official" className="flex flex-col gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
       {done ? (
         <span role="status" data-testid="agent-official-done">
           {rows.length === 0
@@ -321,15 +380,13 @@ function OfficialNames({ entry, state, catalog }: { entry: ReadinessEntry; state
             : i18n._("Written, but these roles still name an official model:")}
         </span>
       ) : (
-        <span>{i18n._("These roles still name an official model and may bypass the model you chose:")}</span>
+        <span className="flex items-start gap-1.5 text-sm">
+          <Icon name="alert" className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{i18n._("Some roles still name a Claude model, which {host} may bill as another model or refuse.", { host })}</span>
+        </span>
       )}
       {rows.length > 0 ? (
-        <ul data-testid="agent-official-list" className="list-disc pl-5">
-          {rows.map((row) => <li key={row.key}><span className="font-mono">{label(row)}</span> · {row.model}</li>)}
-        </ul>
-      ) : null}
-      {rows.length > 0 ? (
-        <span className="flex flex-wrap items-center gap-2">
+        <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <button
             type="button"
             data-testid="agent-official-fix"
@@ -337,13 +394,23 @@ function OfficialNames({ entry, state, catalog }: { entry: ReadinessEntry; state
             disabled={busy || stale || !defaultModel || ops.length === 0 || !state.revision}
             onClick={() => { setAsking(true); setOutcome(undefined); }}
           >
-            {i18n._("Set all to Provider default")}
+            {defaultModel
+              ? i18n._({ id: "Use {model} for all", comment: "sets every role naming an official model to Provider default, named by the model it runs", values: { model: modelDisplayText(modelDisplay(models, defaultModel)) } })
+              : i18n._("Set all to Provider default")}
           </button>
           {!defaultModel ? (
             <span data-testid="agent-official-blind">
               {i18n._("The default model can't be read right now.")}{" "}
               <button type="button" className={buttonClass} onClick={catalog.refresh}>{i18n._({ id: "Retry", comment: "try creating the config file again" })}</button>
             </span>
+          ) : null}
+          {!asking ? (
+            <details data-testid="agent-official-roles">
+              <summary className="cursor-pointer">{i18n._("Show which roles")}</summary>
+              <ul data-testid="agent-official-list" className="mt-1 list-disc pl-5">
+                {rows.map((row) => <li key={row.key}>{label(row)} · {row.model}</li>)}
+              </ul>
+            </details>
           ) : null}
         </span>
       ) : null}
@@ -352,7 +419,7 @@ function OfficialNames({ entry, state, catalog }: { entry: ReadinessEntry; state
           <ul className="list-disc pl-5">
             {rows.map((row) => (
               <li key={row.key} data-testid="agent-official-confirm-row">
-                <span className="font-mono">{label(row)}</span>: {row.model} →{" "}
+                {label(row)}: {row.model} →{" "}
                 {target}
               </li>
             ))}
@@ -364,9 +431,16 @@ function OfficialNames({ entry, state, catalog }: { entry: ReadinessEntry; state
   );
 }
 
+/** The Claude card's tag (settings-5) while it is not ready: once it
+ * is, the recommendation has done its work. */
+function RecommendedTag({ adapter, ready }: { adapter: AdapterName; ready: boolean | null }) {
+  if (adapter !== "claude" || ready === true) return null;
+  return <span data-testid={`agent-tag-${adapter}`} className="rounded border border-neutral-300 px-1.5 text-xs text-neutral-500 dark:border-neutral-700 dark:text-neutral-400">{i18n._({ id: "Recommended", comment: "tag beside the Claude agent card's name" })}</span>;
+}
+
 function AgentCard({ entry, state, seat }: { entry: ReadinessEntry; state: ConfigState | undefined; seat: boolean }) {
   const catalog = useAgentOptions(entry.adapter);
-  const name = CARD_NAME[entry.adapter] ?? entry.adapter;
+  const name = agentName(entry.adapter);
   const discovery = catalog.options?.discovery;
   const models = discovery?.status === "available" ? discovery.models : [];
   const defaultModel = discovery?.status === "available" ? discovery.defaultModel : undefined;
@@ -375,46 +449,158 @@ function AgentCard({ entry, state, seat }: { entry: ReadinessEntry; state: Confi
   // Provider default and the model it runs, by the display rule
   // (settings-38), or unavailable where discovery named none.
   const shown = providerDefaultDisplay(models, defaultModel);
-  const defaultText = shown.specific ? `${shown.name} · ${shown.specific}` : i18n._({ id: "Unavailable", comment: "the runtime reported no default model" });
+  const defaultText = shown.specific ?? i18n._({ id: "Unavailable", comment: "the runtime reported no default model" });
+  // What its agents run: the one model, Provider default's by name, or
+  // that they run several (settings-5).
+  const running = validState ? distinctRunModels(adapterModels(validState.summary, entry.adapter), models, defaultModel) : [""];
+  const runsText = running.length > 1
+    ? i18n._({ id: "Several models", comment: "an agent card's agents run different models" })
+    : running[0] ? modelDisplayText(modelDisplay(models, running[0])) : defaultText;
+  const notReady = entry.ready === false;
+  const [listed, setListed] = useState(false);
+  const [changing, setChanging] = useState(false);
+  const listId = useId();
+  const changeId = useId();
+  // A local credential with the Workshop switch on: what is missing
+  // and the setup guide (settings-69), else the steps (settings-5).
+  const routes = notReady && WORKSHOP && !seat
+    ? faultsOf(entry).map((fault) => faultGuidance(entry, fault, { workshop: true, seat: false }).local).find((local) => local !== undefined)
+    : undefined;
+  const chips = (
+    <span className="flex flex-wrap items-center gap-1">
+      {notReady
+        ? i18n._({ id: "Needed by", comment: "the positions a not-ready agent card's adapter is set for follow" })
+        : i18n._({ id: "Used by", comment: "the positions an agent card's adapter serves follow" })}
+      {entry.usedBy.map((position) => (
+        <span key={position} title={position} className="max-w-full rounded [overflow-wrap:anywhere] bg-neutral-100 px-1.5 py-0.5 dark:bg-neutral-800">{positionLabel(position)}</span>
+      ))}
+    </span>
+  );
+  // One frame in every state (settings-5): the heading with who uses
+  // it, a line saying what is missing or what runs, then what to do.
   return (
-    <div data-testid={`agent-card-${entry.adapter}`} className={cardClass}>
+    <div data-testid={`agent-card-${entry.adapter}`} className={`${cardClass} gap-3 py-3`}>
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-medium">{name}</span>
+        <RecommendedTag adapter={entry.adapter} ready={entry.ready} />
         <Badge entry={entry} />
-        {entry.ready === true ? (
-          <span data-testid={`agent-checked-later-${entry.adapter}`} className={mutedClass}>
-            {i18n._("Whether the connection works is checked on your first task")}
-          </span>
-        ) : null}
-      </div>
-      <div className={mutedClass} data-testid={`agent-users-${entry.adapter}`}>
-        {entry.usedBy.length === 0 ? (
-          i18n._("No role uses {name} yet.", { name })
+        {entry.usedBy.length > 0 ? (
+          // Who uses it, in brief; the whole list opens beneath.
+          <button
+            type="button"
+            data-testid={`agent-users-${entry.adapter}`}
+            title={entry.usedBy.map(positionLabel).join(", ")}
+            aria-expanded={listed}
+            aria-controls={listId}
+            onClick={() => setListed((open) => !open)}
+            className={`${mutedClass} ml-auto rounded text-right hover:text-neutral-700 hover:underline dark:hover:text-neutral-200`}
+          >
+            {usersBrief(entry.usedBy, notReady)}
+          </button>
         ) : (
-          <span className="flex flex-wrap items-center gap-1">
-            {i18n._({ id: "Used by", comment: "the positions an agent card's adapter serves follow" })}
-            {entry.usedBy.map((position) => (
-              <span key={position} title={position} className="rounded bg-neutral-100 px-1.5 py-0.5 dark:bg-neutral-800">{positionLabel(position)}</span>
-            ))}
-          </span>
+          <span data-testid={`agent-users-${entry.adapter}`} className={`${mutedClass} ml-auto`}>{i18n._("No role uses {name} yet.", { name })}</span>
         )}
       </div>
-      {service ? (
-        <div className={mutedClass} data-testid="agent-service">
-          {i18n._("Model service: {service}", { service })}
+      {listed ? <div id={listId} data-testid={`agent-users-list-${entry.adapter}`} className={mutedClass}>{chips}</div> : null}
+      {entry.ready === null && entry.unconfirmed !== undefined ? (
+        <div data-testid={`agent-unconfirmed-${entry.adapter}`} className="text-xs text-amber-800 dark:text-amber-300">
+          {unconfirmedNote(entry.unconfirmed)}
         </div>
       ) : null}
-      <div className={mutedClass} data-testid={`agent-default-${entry.adapter}`}>
-        {i18n._("Default model: {model}", { model: defaultText })}
-      </div>
-      {entry.adapter === "codex" ? <div className={mutedClass}>{i18n._("Codex needs an official OpenAI key.")}</div> : null}
-      {entry.ready === false ? <FaultLines entry={entry} seat={seat} /> : null}
-      {entry.ready === false ? <HowToConfigure entry={entry} seat={seat} /> : null}
-      {validState ? <OneModel entry={entry} state={validState} catalog={catalog} /> : null}
-      {validState && entry.adapter === "claude" && entry.baseUrl?.state === "third-party" ? (
-        <OfficialNames entry={entry} state={validState} catalog={catalog} />
-      ) : null}
+      {notReady ? (
+        // Its configuration alone: the model settings have nothing to
+        // act on before the agent runs (settings-5).
+        <div className="flex flex-col gap-2.5">
+          <FaultLines entry={entry} seat={seat} />
+          {routes !== undefined ? <WorkshopRoute entry={entry} local={routes} /> : <HowToConfigure entry={entry} seat={seat} />}
+        </div>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span data-testid={`agent-runs-${entry.adapter}`} className="min-w-0 text-sm text-neutral-700 [overflow-wrap:anywhere] dark:text-neutral-300">
+              {service ? <span data-testid="agent-service">{service}</span> : null}
+              {service ? " · " : ""}
+              <span data-testid={`agent-default-${entry.adapter}`}>{runsText}</span>
+            </span>
+            {validState ? (
+              <button
+                type="button"
+                data-testid={`agent-change-${entry.adapter}`}
+                aria-expanded={changing}
+                aria-controls={changeId}
+                onClick={() => setChanging((open) => !open)}
+                className="inline-flex items-center gap-1 rounded text-xs text-brand-600 hover:underline dark:text-brand-300"
+              >
+                <Icon name="edit" className="h-3 w-3" />
+                {i18n._({ id: "Change model", comment: "opens an agent card's adapter-wide model setting" })}
+              </button>
+            ) : null}
+          </div>
+          {validState && changing ? (
+            <div id={changeId}>
+              <OneModel entry={entry} state={validState} catalog={catalog} />
+            </div>
+          ) : null}
+          {validState && entry.adapter === "claude" && entry.baseUrl?.state === "third-party" ? (
+            <OfficialNames entry={entry} state={validState} catalog={catalog} />
+          ) : null}
+        </>
+      )}
     </div>
+  );
+}
+
+/** A card's positions in brief: the first by name and how many more,
+ * opening the whole list (settings-5); a not-ready card's need the
+ * agent rather than use it, since none can run yet. */
+function usersBrief(usedBy: readonly string[], notReady: boolean): string {
+  const first = positionLabel(usedBy[0]!);
+  const values = { first, count: usedBy.length - 1, total: usedBy.length };
+  if (notReady) {
+    if (usedBy.length === 1) return i18n._("Needed by {first}", { first });
+    return i18n._({
+      id: "Needed by {first} and {count, plural, one {# more role} other {# more roles}}",
+      comment: "a not-ready agent card's positions in brief; {first} is a role such as Captain, {count} the roles beside it, {total} all of them",
+      values,
+    });
+  }
+  if (usedBy.length === 1) return i18n._("Used by {first}", { first });
+  return i18n._({
+    id: "Used by {first} and {count, plural, one {# more role} other {# more roles}}",
+    comment: "an agent card's positions in brief; {first} is a role such as Captain, {count} the roles beside it, {total} all of them",
+    values,
+  });
+}
+
+/** The section's verdict (settings-70): a line where something needs
+ * doing before a task can start or run whole, read from the Captain's
+ * agent, since a task needs at least one agent and the Captain runs
+ * first; none where nothing does, or once the core has not answered. */
+function Verdict({ readiness }: { readiness: readonly ReadinessEntry[] }) {
+  if (readiness.length === 0) return null;
+  const captain = readiness.find((entry) => entry.usedBy.includes("captain"));
+  // A Captain on an agent with no check, or one unconfirmed, says
+  // nothing either way.
+  if (captain && captain.ready === null) return null;
+  const ready = readiness.filter((entry) => entry.ready === true);
+  // A role on an agent not ready fails at its step, though a task
+  // starts.
+  const waiting = readiness.find((entry) => entry.ready === false && entry.usedBy.length > 0);
+  let text: string;
+  if (ready.length === 0) {
+    text = i18n._("Set up at least one agent to start a task; Claude is recommended.");
+  } else if (captain && captain.ready === false) {
+    text = i18n._("The Captain uses {name}, which is not ready: set it up, or switch the Captain to {other}.", { name: agentName(captain.adapter), other: agentName(ready[0]!.adapter) });
+  } else if (captain && captain.ready === true && waiting) {
+    text = i18n._("Tasks can start, but {first} uses {other}, which is not ready, so its steps fail until it is set up.", { first: positionLabel(waiting.usedBy[0]!), other: agentName(waiting.adapter) });
+  } else {
+    return null;
+  }
+  return (
+    <p data-testid="agents-verdict" className="flex items-start gap-1.5 text-sm text-amber-800 [overflow-wrap:anywhere] dark:text-amber-300">
+      <Icon name="alert" className="mt-0.5 h-4 w-4 shrink-0" />
+      <span>{text}</span>
+    </p>
   );
 }
 
@@ -446,21 +632,27 @@ export function AgentCards() {
   const standing = STANDING.map((adapter) => byAdapter.get(adapter) ?? { adapter, ready: null, usedBy: [], fastModeSupported: false, subagentModelSupported: false });
   const others = readiness.filter((entry) => !STANDING.includes(entry.adapter));
   const reread = store((state) => state.configReread);
+  const [checking, setChecking] = useState(false);
+  function recheck(): void {
+    setChecking(true);
+    void refreshReadiness().finally(() => setChecking(false));
+  }
   return (
     <section data-testid="agents-section" className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="text-sm font-semibold text-neutral-500">{i18n._("Agents")}</h2>
         <button
           type="button"
-          title={i18n._("Re-run adapter readiness checks (e.g. after signing in)")}
-          onClick={() => void refreshReadiness()}
-          className="rounded-md border border-neutral-300 px-2 py-0.5 text-xs text-neutral-500 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800"
+          data-testid="agents-recheck"
+          title={i18n._("Reads each agent's sign-in and Claude Code's settings again; a key set as an environment variable needs Spex quit and opened again.")}
+          aria-busy={checking}
+          disabled={checking}
+          onClick={recheck}
+          className="inline-flex items-center gap-1 rounded-md border border-neutral-300 px-2 py-0.5 text-xs text-neutral-500 hover:bg-neutral-100 disabled:opacity-70 dark:border-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800"
         >
-          {i18n._("Re-check readiness")}
+          <Icon name="refresh" className={`h-3 w-3 shrink-0${checking ? " animate-spin motion-reduce:animate-none" : ""}`} />
+          {i18n._({ id: "Re-check", comment: "the Agents section's control: read each agent's readiness again" })}
         </button>
-        <span data-testid="agents-recheck-note" className={mutedClass}>
-          {i18n._("Changed a key and still not ready? Quit Spex completely and open it again.")}
-        </span>
       </div>
       {reread && !reread.reading ? (
         <div role="alert" data-testid="agents-stale" className="text-xs text-red-700 dark:text-red-300">
@@ -470,6 +662,7 @@ export function AgentCards() {
           </button>
         </div>
       ) : null}
+      <Verdict readiness={readiness} />
       {standing.map((entry) => <AgentCard key={entry.adapter} entry={entry} state={configState} seat={seat} />)}
       {others.map((entry) => <OtherEntry key={entry.adapter} entry={entry} />)}
     </section>

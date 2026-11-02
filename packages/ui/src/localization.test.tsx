@@ -468,8 +468,7 @@ describe("localization-4: the Settings surface reads the resolved language", () 
         "agents-section",
         [
           "智能体", // Agents
-          "重新检查就绪状态", // Re-check readiness
-          "改了 key 后仍未就绪，请彻底退出并重新打开 Spex。", // Changed a key and still not ready?
+          "重新检查", // Re-check
         ],
       ],
       [
@@ -528,7 +527,7 @@ describe("localization-4: the Settings surface reads the resolved language", () 
       "Language",
       "Keyboard shortcuts",
       "Add a player",
-      "Re-check readiness",
+      "Re-check",
     ]) {
       expect(whole).not.toContain(english);
     }
@@ -543,7 +542,7 @@ describe("localization-4: the Settings surface reads the resolved language", () 
     );
     for (const [testId, phrase] of [
       ["players-section", "Session players"],
-      ["agents-section", "Re-check readiness"],
+      ["agents-section", "Re-check"],
       ["notifications-section", "A turn finishes"],
       ["language-section", "System follows your device"],
       ["shortcuts-section", "Keyboard shortcuts"],

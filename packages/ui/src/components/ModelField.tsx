@@ -82,6 +82,23 @@ function LineView({ line, id }: { line: Line; id?: string }) {
   );
 }
 
+/** The runtime's rows, one per model they run (settings-39): the row
+ * naming the model itself, else the last its group lists, the runtime
+ * listing its own default alias first; the held value's row stands for
+ * its group. Where Provider default is recommended, it stands for the
+ * model it runs, so that group lists no row of its own. */
+function distinctRows(models: readonly AgentModelOption[], value: string, absorbed: string | undefined): AgentModelOption[] {
+  const runs = (entry: AgentModelOption) => entry.resolvedModel ?? entry.id;
+  const kept = new Map<string, AgentModelOption>();
+  for (const entry of models) {
+    const current = kept.get(runs(entry));
+    if (!current || (current.id !== value && (entry.id === value || current.id !== runs(entry)))) kept.set(runs(entry), entry);
+  }
+  const taken = absorbed === undefined ? undefined : models.find((entry) => entry.id === absorbed) ?? models.find((entry) => runs(entry) === absorbed);
+  return models.filter((entry) => kept.get(runs(entry)) === entry
+    && !(taken !== undefined && runs(entry) === runs(taken) && entry.id !== value));
+}
+
 export function ModelField({
   value,
   models,
@@ -156,7 +173,7 @@ export function ModelField({
   if (value && selected && selected.id !== value) {
     choices.push({ key: `resolved:${value}`, value, line: { text: value } });
   }
-  for (const entry of models) {
+  for (const entry of distinctRows(models, value, recommended ? defaultModel : undefined)) {
     const display = modelDisplay(models, entry.id);
     choices.push({
       key: `model:${entry.id}`,

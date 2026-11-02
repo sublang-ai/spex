@@ -1067,6 +1067,13 @@ function placeState(
     set({ runErrors: { ...get().runErrors, [sessionId]: message } });
   }
 
+  // A re-check may reseed and reload the config, broadcasting the new
+  // state; the config is read after it so an older read never lands last.
+  async function readReadinessThenConfig() {
+    const readiness = await getClient().command("readiness.get", {});
+    return [readiness, await getClient().command("config.get", {})] as const;
+  }
+
   // Session lists have no revision on the wire. Keep announcements only
   // while the latest list is pending, including per-ID removals. Its
   // superseded peers may still finish independent project/prose work.
@@ -2104,9 +2111,8 @@ function placeState(
     },
 
     async rereadProse(): Promise<void> {
-      const [configState, readiness, projects, sessionsCurrent] = await Promise.all([
-        getClient().command("config.get", {}),
-        getClient().command("readiness.get", {}),
+      const [[readiness, configState], projects, sessionsCurrent] = await Promise.all([
+        readReadinessThenConfig(),
         getClient().command("project.list", {}),
         readSessions(),
       ]);
@@ -2125,9 +2131,8 @@ function placeState(
     },
 
     async refresh(): Promise<void> {
-      const [configState, readiness, projects, sessionsCurrent] = await Promise.all([
-        getClient().command("config.get", {}),
-        getClient().command("readiness.get", {}),
+      const [[readiness, configState], projects, sessionsCurrent] = await Promise.all([
+        readReadinessThenConfig(),
         getClient().command("project.list", {}),
         readSessions(),
       ]);

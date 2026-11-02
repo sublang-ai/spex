@@ -13,14 +13,18 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 afterEach(cleanup);
 
 const flags = vi.hoisted(() => ({ workshop: true }));
-vi.mock("../lib/workshop.js", () => ({
+vi.mock("../lib/workshop.js", async (original) => ({
+  ...(await original<typeof import("../lib/workshop.js")>()),
   get WORKSHOP() { return flags.workshop; },
   WORKSHOP_ADAPTERS: ["claude", "codex"],
+  WORKSHOP_GUIDE_URL: "https://merico.feishu.cn/docx/AjiHdkmV1oIAd6xY4CPcWJZpnah",
 }));
 
 /** Each adapter's catalog, and the refresh a Retry calls. */
 const catalogs = vi.hoisted(() => ({
   defaultModel: "deepseek-flash" as string | undefined,
+  /** Claude's rows where a test reads its own, else the two below. */
+  claude: undefined as { id: string; name: string; resolvedModel?: string; description?: string }[] | undefined,
   refresh: vi.fn(),
 }));
 vi.mock("../lib/agent-options.js", async (original) => {
@@ -37,7 +41,7 @@ vi.mock("../lib/agent-options.js", async (original) => {
         discovery: {
           status: "available",
           models: adapter === "claude"
-            ? [{ id: "deepseek-flash", name: "deepseek-flash" }, { id: "deepseek-v4-pro", name: "deepseek-v4-pro" }]
+            ? catalogs.claude ?? [{ id: "deepseek-flash", name: "deepseek-flash" }, { id: "deepseek-v4-pro", name: "deepseek-v4-pro" }]
             : [{ id: "gpt-6-sol", name: "gpt-6-sol" }],
           ...(adapter === "claude" && catalogs.defaultModel ? { defaultModel: catalogs.defaultModel } : {}),
           ...(adapter === "codex" ? { defaultModel: "gpt-6-sol" } : {}),
@@ -168,7 +172,13 @@ function show(configState: ConfigState | undefined, readiness: ReadinessEntry[],
 }
 
 /** Choose a row of a card's one-model field by its words. */
+/** Opens a ready card's model setting where it is folded (settings-5). */
+function openChange(adapter: string) {
+  if (!screen.queryByTestId(`agent-unify-${adapter}`)) fireEvent.click(screen.getByTestId(`agent-change-${adapter}`));
+}
+
 function choose(adapter: string, words: RegExp) {
+  openChange(adapter);
   fireEvent.click(screen.getByTestId(`agent-unify-model-${adapter}-trigger`));
   const row = screen.getAllByTestId(`agent-unify-model-${adapter}-option`).find((option) => words.test(option.textContent ?? ""));
   fireEvent.click(row!);
@@ -177,6 +187,7 @@ function choose(adapter: string, words: RegExp) {
 beforeEach(() => {
   flags.workshop = true;
   catalogs.defaultModel = "deepseek-flash";
+  catalogs.claude = undefined;
   catalogs.refresh.mockReset();
   commandMock.mockReset();
   setClientForTests({ command: commandMock } as never);
@@ -212,33 +223,54 @@ describe("settings-62: the Workshop switch limits adapter choices", () => {
 });
 
 describe("settings-63: each base-URL state", () => {
-  const cases: { label: string; baseUrl: BaseUrlState; service: string | null; listed: boolean; on: RegExp; off: RegExp; mark: boolean }[] = [
-    { label: "unset", baseUrl: { state: "unset" }, service: "Model service: Anthropic official", listed: false, on: /Sign in by running claude in a terminal, or set ANTHROPIC_API_KEY/, off: /Sign in by running claude in a terminal, or set ANTHROPIC_API_KEY/, mark: false },
-    { label: "third-party", baseUrl: { state: "third-party", host: "api.deepseek.com" }, service: "Model service: Third party api.deepseek.com", listed: true, on: /Run the setup script to configure it again/, off: /Set ANTHROPIC_AUTH_TOKEN and ANTHROPIC_BASE_URL/, mark: true },
-    { label: "unknown", baseUrl: { state: "unknown" }, service: "Model service: Unrecognized", listed: false, on: /Run the setup script to configure it again/, off: /ANTHROPIC_BASE_URL is not recognized: check the address/, mark: false },
+  const RECHECK = "After signing in, re-check; after setting the key, quit Spex completely and open it again — see How to configure.";
+  const RESTART = "Then quit Spex completely and open it again — see How to configure.";
+  const cases: { label: string; baseUrl: BaseUrlState; service: string | null; listed: boolean; missing: RegExp; off: RegExp; closing: string; mark: boolean }[] = [
+    { label: "unset", baseUrl: { state: "unset" }, service: "Anthropic official", listed: false, missing: /^Not signed in on this computer, and no key set\.$/, off: /Sign in by running claude in a terminal, or set ANTHROPIC_API_KEY/, closing: RECHECK, mark: false },
+    { label: "third-party", baseUrl: { state: "third-party", host: "api.deepseek.com" }, service: "Third party api.deepseek.com", listed: true, missing: /^The third-party service api\.deepseek\.com is set, but its key is not\.$/, off: /Set ANTHROPIC_AUTH_TOKEN and ANTHROPIC_BASE_URL/, closing: RESTART, mark: true },
+    { label: "unknown", baseUrl: { state: "unknown" }, service: "Unrecognized", listed: false, missing: /^ANTHROPIC_BASE_URL is not an address Spex recognizes\.$/, off: /ANTHROPIC_BASE_URL is not recognized: check the address/, closing: RESTART, mark: false },
   ];
   for (const each of cases) {
     test(`${each.label}: the model service, the official-name list, the guidance and the mark`, () => {
+      show(CROSSED, [entry("claude", { baseUrl: each.baseUrl }), entry("codex")]);
+      const ready = screen.getByTestId("agent-card-claude");
+      // settings-5: the model service by the base URL's state.
+      expect(within(ready).getByTestId("agent-service").textContent).toBe(each.service);
+      // settings-59: listed only behind a third party.
+      expect(within(ready).queryByTestId("agent-official") !== null).toBe(each.listed);
+      // settings-34, settings-39: Provider default recommended only
+      // behind a third party with a default model read.
+      choose("claude", /Provider default/);
+      fireEvent.click(screen.getByTestId("agent-unify-model-claude-trigger"));
+      expect(screen.queryByTestId("agent-unify-model-claude-mark") !== null).toBe(each.mark);
+      if (each.mark) expect(screen.getByTestId("agent-unify-model-claude-mark").textContent).toBe("Recommended");
+      cleanup();
       for (const workshop of [true, false]) {
         flags.workshop = workshop;
         show(CROSSED, [notReady("claude", [CLAUDE_CREDENTIAL], { baseUrl: each.baseUrl }), entry("codex")]);
         const card = screen.getByTestId("agent-card-claude");
-        // settings-5: the model service by the base URL's state.
-        expect(within(card).getByTestId("agent-service").textContent).toBe(each.service);
-        // settings-59: listed only behind a third party.
-        expect(within(card).queryByTestId("agent-official") !== null).toBe(each.listed);
-        // settings-61: guidance by the state, and the switch.
         const fault = within(card).getByTestId("agent-fault-credential");
-        expect(fault.textContent).toMatch(workshop ? each.on : each.off);
-        expect(fault.textContent).toContain("Then quit Spex completely and open it again — see How to configure.");
-        // settings-23: the core's own words whole beneath.
-        expect(within(fault).getByTestId("agent-fault-core").textContent).toBe(CLAUDE_CREDENTIAL.requirement);
-        // settings-34, settings-39: Provider default recommended only
-        // behind a third party with a default model read.
-        choose("claude", /Provider default/);
-        fireEvent.click(screen.getByTestId("agent-unify-model-claude-trigger"));
-        expect(screen.queryByTestId("agent-unify-model-claude-mark") !== null).toBe(each.mark);
-        if (each.mark) expect(screen.getByTestId("agent-unify-model-claude-mark").textContent).toBe("Recommended");
+        if (workshop) {
+          // settings-69: what is missing, then the setup guide by the
+          // state; the route's own line closes it.
+          expect(fault.textContent).toMatch(each.missing);
+          expect(within(card).getByTestId("agent-route-local").textContent).toBe("Connect Claude with a Claude subscription, or an Anthropic-compatible API key such as DeepSeek's: the setup guide walks you through it.Open the setup guide");
+          expect(within(card).getByTestId("agent-routes-closing-claude").textContent).toBe("Once connected, press Re-check; if nothing changes, quit Spex completely and open it again.");
+          expect(fault.textContent).not.toContain(RECHECK);
+          expect(fault.textContent).not.toContain(RESTART);
+        } else {
+          // settings-61: guidance by the state; re-check after a
+          // sign-in, restart after a variable.
+          expect(fault.textContent).toMatch(each.off);
+          expect(fault.textContent).toContain(each.closing);
+          if (each.closing === RESTART) expect(fault.textContent).not.toContain(RECHECK);
+          expect(within(card).queryByTestId("agent-routes-claude")).toBeNull();
+        }
+        // settings-23, settings-61: the core's own words whole, in the
+        // guidance's tooltip and nowhere else.
+        expect(within(fault).getByTestId("agent-fault-guidance").getAttribute("title")).toBe(CLAUDE_CREDENTIAL.requirement);
+        expect(within(fault).queryByTestId("agent-fault-core")).toBeNull();
+        expect(card.textContent).not.toContain(CLAUDE_CREDENTIAL.requirement);
         cleanup();
       }
     });
@@ -283,7 +315,27 @@ describe("settings-63: each base-URL state", () => {
     // settings-61: both halves unmet, both lines.
     const codex = screen.getByTestId("agent-card-codex");
     expect(within(codex).getByTestId("agent-fault-runtime").textContent).toContain("codex runtime failed to load");
-    expect(within(codex).getByTestId("agent-fault-credential").textContent).toMatch(/Run codex login, or set OPENAI_API_KEY \(an official OpenAI key\)/);
+    const codexCredential = within(codex).getByTestId("agent-fault-credential");
+    expect(codexCredential.textContent).toBe("Not signed in on this computer, and no key set.");
+    expect(within(codexCredential).getByTestId("agent-fault-guidance").getAttribute("title")).toBe(CODEX_CREDENTIAL.requirement);
+  });
+  test("a sign-in not confirmed just now reads as such, apart from an adapter with no check, and asks for a re-check", () => {
+    show(CROSSED, [
+      entry("claude", { ready: null, unconfirmed: "its status command did not answer in time", baseUrl: { state: "unset" } }),
+      entry("codex", { ready: null }),
+    ]);
+    // settings-5: the reason and the next step, no sign-in steps.
+    const claude = screen.getByTestId("agent-card-claude");
+    expect(claude.textContent).toContain("sign-in unconfirmed");
+    expect(within(claude).getByTestId("agent-unconfirmed-claude").textContent).toBe("Sign-in could not be confirmed just now: its status command did not answer in time. Re-check to try again.");
+    expect(within(claude).queryByTestId("agent-howto-claude")).toBeNull();
+    expect(within(claude).queryByTestId("agent-checked-later-claude")).toBeNull();
+    // An adapter with no check stays unknown, with no such line.
+    const codex = screen.getByTestId("agent-card-codex");
+    expect(codex.textContent).toContain("unverified");
+    expect(codex.textContent).not.toContain("sign-in unconfirmed");
+    expect(within(codex).queryByTestId("agent-unconfirmed-codex")).toBeNull();
+    expect(screen.getByRole("button", { name: /^Re-check$/ })).toBeTruthy();
   });
 });
 
@@ -295,23 +347,66 @@ describe("settings-64: how to configure, per place and computer", () => {
     { platform: "win32", file: /user environment variable[\s\S]*setx ANTHROPIC_API_KEY/ },
   ];
   for (const computer of computers) {
-    test(`${computer.platform} ${computer.shell ?? ""}: the manual steps, with and without the setup script`, () => {
+    test(`${computer.platform} ${computer.shell ?? ""}: the manual steps, with and without the Workshop's routes`, () => {
       for (const workshop of [true, false]) {
         flags.workshop = workshop;
         show(UNIFY, [
-          notReady("claude", [CLAUDE_CREDENTIAL], { baseUrl: { state: "unset" }, platform: computer.platform, ...(computer.shell ? { shell: computer.shell } : {}) }),
+          notReady("claude", [CLAUDE_CREDENTIAL], { usedBy: ["captain", "dev.coder (code.coder, review.coder)", "dev.reviewer (review.reviewer)"], baseUrl: { state: "unset" }, platform: computer.platform, ...(computer.shell ? { shell: computer.shell } : {}) }),
           notReady("codex", [CODEX_CREDENTIAL], { platform: computer.platform, ...(computer.shell ? { shell: computer.shell } : {}) }),
         ]);
-        const howto = screen.getByTestId("agent-howto-claude");
-        // settings-5: the script first only with the switch on.
-        expect(within(howto).queryByTestId("agent-howto-script") !== null).toBe(workshop);
-        const manual = within(howto).getByTestId("agent-howto-manual").textContent ?? "";
-        expect(manual).toMatch(computer.file);
-        expect(manual).toContain("Quit Spex completely and open it again.");
-        // settings-5: Codex names its key.
+        const claude = screen.getByTestId("agent-card-claude");
         const codex = screen.getByTestId("agent-card-codex");
-        expect(codex.textContent).toContain("Codex needs an official OpenAI key.");
-        expect(within(codex).getByTestId("agent-howto-manual").textContent).toMatch(computer.platform === "win32" ? /setx OPENAI_API_KEY/ : /export OPENAI_API_KEY=/);
+        if (workshop) {
+          // settings-69: one route, the setup guide as the primary
+          // action, no online service; the guide opens at the platform.
+          const routes = within(claude).getByTestId("agent-routes-claude");
+          expect(routes.textContent).toMatch(/^Connect Claude with a Claude subscription/);
+          expect(routes.textContent).not.toMatch(/online/i);
+          expect(within(claude).queryByTestId("agent-online")).toBeNull();
+          expect(within(claude).queryByTestId("agent-howto-claude")).toBeNull();
+          expect(claude.textContent).not.toMatch(/export |setx/);
+          const guide = within(claude).getByTestId("agent-guide");
+          expect(guide.textContent).toBe("Open the setup guide");
+          expect(guide.getAttribute("target")).toBe("_blank");
+          expect(guide.getAttribute("href")).toBe(`https://merico.feishu.cn/docx/AjiHdkmV1oIAd6xY4CPcWJZpnah${computer.platform === "win32" ? "#doxcnAdFPoFFjXyeRrnquz98wQ4" : "#doxcnEXXdRnpDfvWb8k8vHYt16d"}`);
+          // settings-69: what is missing in plain text, the badge
+          // carrying the tone.
+          expect(within(claude).getByTestId("agent-fault-guidance").dataset.tone).toBeUndefined();
+          // settings-69: Codex's route names OpenAI's alone.
+          expect(within(codex).getByTestId("agent-route-local").textContent).toContain("Connect Codex with a ChatGPT subscription or an official OpenAI API key: the setup guide walks you through it.");
+          // settings-69: Codex's guide opens at its own section.
+          expect(within(codex).getByTestId("agent-guide").getAttribute("href")).toBe(`https://merico.feishu.cn/docx/AjiHdkmV1oIAd6xY4CPcWJZpnah${computer.platform === "win32" ? "#doxcn7rsGnFZ0EKTepBD0qSnXrd" : "#doxcnfsvh6ogCgUgDtH1qeSIrhh"}`);
+        } else {
+          // settings-5: off, the manual steps closed under How to
+          // configure, ending with the restart; Codex's naming its key.
+          expect(within(claude).queryByTestId("agent-routes-claude")).toBeNull();
+          const howto = screen.getByTestId("agent-howto-claude") as HTMLDetailsElement;
+          expect(howto.open).toBe(false);
+          expect(howto.querySelector("summary")?.textContent).toBe("How to configure");
+          const manual = within(howto).getByTestId("agent-howto-manual").textContent ?? "";
+          expect(manual).toMatch(computer.file);
+          expect(manual).toContain("Quit Spex completely and open it again.");
+          const codexManual = within(codex).getByTestId("agent-howto-manual").textContent ?? "";
+          expect(codexManual).toContain("Codex needs an official OpenAI key.");
+          expect(codexManual).toMatch(computer.platform === "win32" ? /setx OPENAI_API_KEY/ : /export OPENAI_API_KEY=/);
+        }
+        // settings-5: positions in brief, the whole list in the tooltip
+        // and beneath on a press; no model settings while not ready.
+        const users = screen.getByTestId("agent-users-claude");
+        expect(users.textContent).toBe("Needed by Captain and 2 more roles");
+        expect(users.getAttribute("title")).toBe("Captain, dev.coder, dev.reviewer");
+        expect(screen.queryByTestId("agent-users-list-claude")).toBeNull();
+        fireEvent.click(users);
+        expect(screen.getByTestId("agent-users-list-claude").textContent).toBe("Needed byCaptaindev.coderdev.reviewer");
+        expect(within(claude).queryByTestId("agent-default-claude")).toBeNull();
+        expect(within(claude).queryByTestId("agent-service")).toBeNull();
+        expect(within(claude).queryByTestId("agent-unify-claude")).toBeNull();
+        // settings-5: one tone for every not-ready card, used or not,
+        // and Claude's tag alone while it is not ready.
+        expect(screen.getByTestId("agent-badge-codex").dataset.tone).toBe("attention");
+        expect(screen.getByTestId("agent-badge-claude").dataset.tone).toBe("attention");
+        expect(screen.getByTestId("agent-tag-claude").textContent).toBe("Recommended");
+        expect(screen.queryByTestId("agent-tag-codex")).toBeNull();
         // settings-5: no position uses Codex here.
         expect(screen.getByTestId("agent-users-codex").textContent).toBe("No role uses Codex yet.");
         cleanup();
@@ -319,15 +414,32 @@ describe("settings-64: how to configure, per place and computer", () => {
     });
   }
 
-  test("a ready card says the connection is checked on the first task, beside its users, and Re-check stands with its line", () => {
+  test("a ready card's badge says the connection is checked on the first task, beside its users, and Re-check stands with its line", () => {
     show(UNIFY, [entry("claude", { usedBy: ["captain", "dev.coder (code.coder, review.coder)"], baseUrl: { state: "unset" } }), entry("codex")]);
     // settings-5
-    expect(screen.getByTestId("agent-checked-later-claude").textContent).toBe("Whether the connection works is checked on your first task");
-    expect(screen.getByTestId("agent-users-claude").textContent).toMatch(/Captain.*dev\.coder/);
+    expect(screen.getByTestId("agent-badge-claude").getAttribute("title")).toBe("Found a sign-in or key; whether it works is checked on your first task.");
+    expect(screen.queryByTestId("agent-checked-later-claude")).toBeNull();
+    const users = screen.getByTestId("agent-users-claude");
+    expect(users.textContent).toBe("Used by Captain and 1 more role");
+    expect(users.getAttribute("title")).toBe("Captain, dev.coder");
+    fireEvent.click(users);
+    expect(screen.getByTestId("agent-users-list-claude").textContent).toBe("Used byCaptaindev.coder");
     expect(screen.queryByTestId("agent-howto-claude")).toBeNull();
-    expect(screen.getByTestId("agent-default-claude").textContent).toBe("Default model: Provider default · deepseek-flash");
-    expect(screen.getByTestId("agents-recheck-note").textContent).toBe("Changed a key and still not ready? Quit Spex completely and open it again.");
-    expect(screen.getByRole("button", { name: /Re-check readiness/ })).toBeTruthy();
+    // settings-5: ready, what runs on one line, the model setting
+    // folded behind Change model with where a single role's model is set.
+    // UNIFY's agents run different models.
+    expect(screen.getByTestId("agent-runs-claude").textContent).toBe("Anthropic official · Several models");
+    // Codex's one agent runs one model, named.
+    expect(screen.getByTestId("agent-runs-codex").textContent).toMatch(/gpt-6-sol/);
+    expect(screen.queryByTestId("agent-unify-claude")).toBeNull();
+    fireEvent.click(screen.getByTestId("agent-change-claude"));
+    expect(screen.getByTestId("agent-unify-claude")).toBeTruthy();
+    expect(screen.getByTestId("agent-unify-label-claude").textContent).toBe("This changes the model of every Captain and player on Claude at once. To change only the Captain's or one player's, edit its settings above.");
+    // settings-5: Re-check alone in the heading, its tooltip saying
+    // what it reads.
+    expect(screen.queryByTestId("agents-recheck-note")).toBeNull();
+    expect(screen.getByTestId("agents-recheck").textContent).toBe("Re-check");
+    expect(screen.getByTestId("agents-recheck").getAttribute("title")).toBe("Reads each agent's sign-in and Claude Code's settings again; a key set as an environment variable needs Spex quit and opened again.");
   });
 });
 
@@ -348,7 +460,7 @@ describe("settings-65: with no config to read", () => {
       // settings-5: both cards beside the broken-config notice.
       expect(screen.getByTestId("agent-card-claude").textContent).toContain("not ready");
       expect(screen.getByTestId("agent-card-codex").textContent).toContain("ready");
-      expect(screen.getByTestId("agent-howto-claude")).toBeTruthy();
+      expect(screen.getByTestId("agent-routes-claude")).toBeTruthy();
       // settings-57, settings-59: nothing to batch without a config.
       expect(screen.queryByTestId("agent-unify-claude")).toBeNull();
       expect(screen.queryByTestId("agent-official")).toBeNull();
@@ -370,6 +482,29 @@ describe("settings-65: with no config to read", () => {
       expect(screen.getByTestId("credentials-section")).toBeTruthy();
     });
   }
+});
+
+describe("settings-71: the section's verdict and Claude's tag", () => {
+  test("what needs doing before a task starts or runs whole, read from the Captain's agent", () => {
+    const cases: { label: string; readiness: ReadinessEntry[]; text: string | null }[] = [
+      { label: "none ready", readiness: [notReady("claude", [CLAUDE_CREDENTIAL], { usedBy: ["captain"] }), notReady("codex", [CODEX_CREDENTIAL])], text: "Set up at least one agent to start a task; Claude is recommended." },
+      { label: "the Captain's not ready, another is", readiness: [notReady("claude", [CLAUDE_CREDENTIAL], { usedBy: ["captain"] }), entry("codex")], text: "The Captain uses Claude, which is not ready: set it up, or switch the Captain to Codex." },
+      { label: "the Captain's ready, the other unused", readiness: [entry("claude", { usedBy: ["captain"] }), notReady("codex", [CODEX_CREDENTIAL])], text: null },
+      { label: "the Captain's ready, a role waiting on the other", readiness: [entry("claude", { usedBy: ["captain"] }), notReady("codex", [CODEX_CREDENTIAL], { usedBy: ["dev.reviewer (review.reviewer)"] })], text: "Tasks can start, but dev.reviewer uses Codex, which is not ready, so its steps fail until it is set up." },
+      { label: "both ready", readiness: [entry("claude", { usedBy: ["captain"] }), entry("codex")], text: null },
+    ];
+    for (const each of cases) {
+      show(UNIFY, each.readiness);
+      expect(screen.queryByTestId("agents-verdict")?.textContent ?? null, each.label).toBe(each.text);
+      // Claude's tag stands while it is not ready, and goes once it is.
+      expect(screen.queryByTestId("agent-tag-claude")?.textContent ?? null).toBe(each.readiness[0]!.ready === true ? null : "Recommended");
+      expect(screen.queryByTestId("agent-tag-codex")).toBeNull();
+      cleanup();
+    }
+    // Before the core answers, nothing is said.
+    show(UNIFY, []);
+    expect(screen.queryByTestId("agents-verdict")).toBeNull();
+  });
 });
 
 describe("settings-66: one model for every agent of an adapter", () => {
@@ -433,6 +568,7 @@ describe("settings-66: one model for every agent of an adapter", () => {
     catalogs.defaultModel = undefined;
     show(UNIFY, [entry("claude", { baseUrl: { state: "third-party", host: "api.deepseek.com" } }), entry("codex")]);
     // settings-58: disabled on Provider default, with its line and Retry.
+    openChange("claude");
     const apply = screen.getByTestId("agent-unify-apply-claude") as HTMLButtonElement;
     expect(apply.disabled).toBe(true);
     const blind = screen.getByTestId("agent-unify-blind-claude");
@@ -444,11 +580,42 @@ describe("settings-66: one model for every agent of an adapter", () => {
   });
 });
 
+describe("settings-39: one row per model behind a third-party service", () => {
+  test("the runtime's aliases of one model read as one row, and Provider default stands for its own", () => {
+    // Claude Code's catalog behind DeepSeek, as it reports it.
+    catalogs.defaultModel = "deepseek-flash[1m]";
+    catalogs.claude = [
+      { id: "default", name: "Default (recommended)", resolvedModel: "deepseek-flash[1m]", description: "Use the default model (currently deepseek-flash[1m])" },
+      { id: "opus", name: "deepseek-flash[1m]", resolvedModel: "deepseek-flash[1m]", description: "Custom Opus model (1M context)" },
+      { id: "claude-fable-5-1", name: "Fable", resolvedModel: "claude-fable-5-1" },
+      { id: "sonnet", name: "deepseek-flash[1m]", resolvedModel: "deepseek-flash[1m]", description: "Custom Sonnet model (1M context)" },
+      { id: "haiku", name: "deepseek-flash", resolvedModel: "deepseek-flash", description: "Custom Haiku model" },
+      { id: "deepseek-flash[1m]", name: "deepseek-flash[1m]", resolvedModel: "deepseek-flash[1m]", description: "Custom model" },
+    ];
+    show(UNIFY, [entry("claude", { baseUrl: { state: "third-party", host: "api.deepseek.com" } }), entry("codex")]);
+    openChange("claude");
+    fireEvent.click(screen.getByTestId("agent-unify-model-claude-trigger"));
+    const rows = screen.getAllByTestId("agent-unify-model-claude-option").map((option) => option.getAttribute("data-value"));
+    // settings-39: the default alias, the Opus and Sonnet slots and the
+    // model's own row all run Provider default's model: none lists.
+    expect(rows).toEqual(["", "claude-fable-5-1", "haiku", "__spex_custom__"]);
+    // settings-38: a resolution the name already says reads once.
+    const haiku = screen.getAllByTestId("agent-unify-model-claude-option")[2]!;
+    expect(haiku.textContent).not.toMatch(/deepseek-flash.*deepseek-flash/);
+  });
+});
+
 describe("settings-67: official names behind a third-party service", () => {
   const thirdParty = () => [entry("claude", { baseUrl: { state: "third-party", host: "api.deepseek.com" } }), entry("codex")];
 
   test("listed by the model each role runs, confirmed with their targets, written where each stands, recomputed after", async () => {
     show(CROSSED, thirdParty(), { [PROJECT]: projectComposition(CROSSED) });
+    // settings-59: one line naming the service, the fix by the model it
+    // sets, the roles folded beneath.
+    const official = screen.getByTestId("agent-official");
+    expect(official.textContent).toContain("Some roles still name a Claude model, which api.deepseek.com may bill as another model or refuse.");
+    expect(screen.getByTestId("agent-official-fix").textContent).toBe("Use deepseek-flash for all");
+    expect((screen.getByTestId("agent-official-roles") as HTMLDetailsElement).open).toBe(false);
     const list = screen.getByTestId("agent-official-list");
     // settings-59: by the effective model.
     expect(list.textContent).toContain("Captain · claude-opus-5-5");
@@ -518,7 +685,7 @@ describe("settings-67: official names behind a third-party service", () => {
       return Promise.reject(new Error(`unexpected ${type}`));
     });
     const fix = () => screen.getByTestId("agent-official-fix") as HTMLButtonElement;
-    const apply = () => screen.getByTestId("agent-unify-apply-claude") as HTMLButtonElement;
+    const apply = () => { openChange("claude"); return screen.getByTestId("agent-unify-apply-claude") as HTMLButtonElement; };
     // The other control's confirmation stands open meanwhile.
     fireEvent.click(fix());
     // The conflict comes from the one-model control.

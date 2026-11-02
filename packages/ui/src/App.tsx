@@ -434,6 +434,7 @@ function sessionTooltip(
 function WorkspaceSurface({
   onNavigate,
   onOpenAgentSettings,
+  onOpenAgentCard,
   onOpenPalette,
   onOpenOwnProject,
   onOpenFromGroups,
@@ -452,6 +453,8 @@ function WorkspaceSurface({
   onNavigate: (surface: Surface) => void;
   /** Settings at an agent's row (run-view-179, settings-52). */
   onOpenAgentSettings: (agentId: string) => void;
+  /** Settings at an adapter's agent card (run-view-45, settings-68). */
+  onOpenAgentCard: (adapter: string) => void;
   onOpenPalette: () => void;
   onOpenOwnProject: () => void;
   /** The palette at the shown place's "From your groups" (run-view-172,
@@ -723,6 +726,7 @@ function WorkspaceSurface({
       attachments={homeMedia.controls}
       onDraftChange={setHomeDraft}
       onRecheckReadiness={refreshReadiness}
+      onOpenAgentCard={onOpenAgentCard}
       onOpenPalette={onOpenPalette}
       onOpenOwnProject={onOpenOwnProject}
       onOpenFromGroups={onOpenFromGroups}
@@ -1319,6 +1323,9 @@ export function App() {
   // The agent a failure asked Settings to open at (run-view-179,
   // settings-52), until that place's Settings has opened its row.
   const [agentAsk, setAgentAsk] = useState<{ place: string; agent: string }>();
+  // The adapter the home's readiness notice asked Settings to show
+  // (run-view-45, settings-68), until that place's Settings has.
+  const [cardAsk, setCardAsk] = useState<{ place: string; adapter: string }>();
   /** Go to a surface on behalf of `store`'s place: Settings and Space
    * open at that place (run-view-168). */
   const navigateFrom = (store: AppStore) => (next: Surface) => {
@@ -1894,6 +1901,8 @@ export function App() {
                   onCredentialHostShown={() => setCredentialAsk(undefined)}
                   agentRow={agentAsk?.place === configured.place.key ? agentAsk.agent : undefined}
                   onAgentRowShown={() => setAgentAsk(undefined)}
+                  agentCard={cardAsk?.place === configured.place.key ? cardAsk.adapter : undefined}
+                  onAgentCardShown={() => setCardAsk(undefined)}
                 />
               ) : (
                 <SpaceSurface
@@ -1930,6 +1939,10 @@ export function App() {
                 onNavigate={navigateFrom(shown)}
                 onOpenAgentSettings={(agent) => {
                   setAgentAsk({ place: shown.place.key, agent });
+                  navigateFrom(shown)("Settings");
+                }}
+                onOpenAgentCard={(adapter) => {
+                  setCardAsk({ place: shown.place.key, adapter });
                   navigateFrom(shown)("Settings");
                 }}
                 onOpenPalette={openPalette}

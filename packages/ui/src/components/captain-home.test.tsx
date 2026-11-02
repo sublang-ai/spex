@@ -4,6 +4,7 @@
 // RUN-29/31/35: the project start explains its scope, discovers
 // playbooks through slash, and tunes the Captain in place (DR-141).
 
+import { useState } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   act,
@@ -97,6 +98,7 @@ function renderHome({
   // this default the way an omitted option does.
   captain = CAPTAIN as AgentSummary | null,
   onRecheckReadiness = undefined as (() => Promise<unknown>) | undefined,
+  onOpenAgentCard = undefined as ((adapter: string) => void) | undefined,
   readiness = READY,
   configStatus = undefined as "valid" | "invalid" | "missing" | undefined,
   configErrors = undefined as string[] | undefined,
@@ -125,6 +127,7 @@ function renderHome({
       configStatus={configStatus}
       configErrors={configErrors}
       onRecheckReadiness={onRecheckReadiness}
+      onOpenAgentCard={onOpenAgentCard}
       onOpenPalette={onOpenPalette}
       onOpenOwnProject={onOpenOwnProject}
       onOpenFromGroups={onOpenFromGroups}
@@ -539,29 +542,151 @@ describe("RUN-44: broken config surfaces in the thread", () => {
 });
 
 describe("RUN-45: readiness heals at hand", () => {
-  test("only the selected Captain blocks dispatch and offers a re-check", async () => {
+  const NOT_READY: ReadinessEntry = {
+    adapter: "claude",
+    ready: false,
+    requirement: "set ANTHROPIC_API_KEY or sign in with Claude Code",
+    usedBy: ["captain", "code.coder"],
+    fastModeSupported: true, subagentModelSupported: true,
+  };
+
+  test("only the selected Captain blocks dispatch: the notice names why, and a start re-checks without dispatching", async () => {
     const onRecheckReadiness = vi.fn(async () => {});
-    renderHome({
-      onRecheckReadiness,
-      readiness: [
-        {
-          adapter: "claude",
-          ready: false,
-          requirement: "set ANTHROPIC_API_KEY or sign in with Claude Code",
-          usedBy: ["captain", "code.coder"],
-          fastModeSupported: true, subagentModelSupported: true,
-        },
-      ],
-    });
+    const onOpenAgentCard = vi.fn();
+    const { onStart } = renderHome({ onRecheckReadiness, onOpenAgentCard, readiness: [NOT_READY] });
     const status = screen.getByTestId("captain-readiness");
     expect(status.textContent).toContain("Set up an agent before starting a task.");
+    // run-view-45: the adapter and its card's next step.
+    expect(screen.getByTestId("captain-readiness-reason").textContent).toBe(
+      "The Captain's agent, Claude, is not ready. Sign in by running claude in a terminal, or set ANTHROPIC_API_KEY.",
+    );
     const composer = screen.getByTestId("start-composer") as HTMLTextAreaElement;
     fireEvent.change(composer, { target: { value: "Review this task" } });
     expect(composer.value).toBe("Review this task");
-    expect((screen.getByTestId("start-send") as HTMLButtonElement).disabled).toBe(true);
+    // run-view-45: the start stays enabled; a press re-checks, starts
+    // nothing, keeps the draft, marks the notice and focuses its way
+    // to Settings.
+    const send = screen.getByTestId("start-send") as HTMLButtonElement;
+    expect(send.disabled).toBe(false);
+    fireEvent.click(send);
+    await vi.waitFor(() => expect(onRecheckReadiness).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(status.dataset.marked).toBe("true"));
+    expect(onStart).not.toHaveBeenCalled();
+    expect(composer.value).toBe("Review this task");
+    expect(document.activeElement).toBe(screen.getByTestId("captain-readiness-setup"));
+    // run-view-45: Settings at the Captain's agent card.
+    fireEvent.click(screen.getByTestId("captain-readiness-setup"));
+    expect(onOpenAgentCard).toHaveBeenCalledWith("claude");
     expect(screen.getByTestId("recheck-readiness").textContent).toBe("Re-check");
     fireEvent.click(screen.getByTestId("recheck-readiness"));
-    await vi.waitFor(() => expect(onRecheckReadiness).toHaveBeenCalled());
+    await vi.waitFor(() => expect(onRecheckReadiness).toHaveBeenCalledTimes(2));
+  });
+
+  test("a start whose re-check finds the Captain's agent ready starts the task", async () => {
+    const onStart = vi.fn(async () => {});
+    function Home() {
+      const [readiness, setReadiness] = useState<ReadinessEntry[]>([NOT_READY]);
+      return (
+        <CaptainHome
+          hasProject
+          hasProjects
+          projectName={PROJECT.name}
+          playbooks={PLAYBOOKS as PlaybookSummary[]}
+          captain={CAPTAIN}
+          readiness={readiness}
+          connected
+          onRecheckReadiness={async () => setReadiness(READY)}
+          onOpenPalette={vi.fn()}
+          onOpenOwnProject={vi.fn()}
+          onOpenFromGroups={vi.fn()}
+          onNavigate={vi.fn()}
+          onSaveCaptain={vi.fn(async () => {})}
+          onStart={onStart}
+        />
+      );
+    }
+    render(<Home />);
+    fireEvent.change(screen.getByTestId("start-composer"), { target: { value: "Review this task" } });
+    fireEvent.click(screen.getByTestId("start-send"));
+    // run-view-45: ready once re-checked, so the task starts.
+    await vi.waitFor(() => expect(onStart).toHaveBeenCalledWith("Review this task"));
+  });
+
+  test("a start pressed while a re-check already runs starts once that check finds the agent ready", async () => {
+    const onStart = vi.fn(async () => {});
+    let finish: () => void = () => {};
+    const onRecheck = vi.fn();
+    function Home() {
+      const [readiness, setReadiness] = useState<ReadinessEntry[]>([NOT_READY]);
+      return (
+        <CaptainHome
+          hasProject
+          hasProjects
+          projectName={PROJECT.name}
+          playbooks={PLAYBOOKS as PlaybookSummary[]}
+          captain={CAPTAIN}
+          readiness={readiness}
+          connected
+          onRecheckReadiness={() => {
+            onRecheck();
+            return new Promise<void>((resolve) => { finish = () => { setReadiness(READY); resolve(); }; });
+          }}
+          onOpenPalette={vi.fn()}
+          onOpenOwnProject={vi.fn()}
+          onOpenFromGroups={vi.fn()}
+          onNavigate={vi.fn()}
+          onSaveCaptain={vi.fn(async () => {})}
+          onStart={onStart}
+        />
+      );
+    }
+    render(<Home />);
+    fireEvent.change(screen.getByTestId("start-composer"), { target: { value: "Review this task" } });
+    fireEvent.click(screen.getByTestId("recheck-readiness"));
+    fireEvent.click(screen.getByTestId("start-send"));
+    // run-view-45: the running check answers the start; none is added.
+    expect(onRecheck).toHaveBeenCalledTimes(1);
+    expect(onStart).not.toHaveBeenCalled();
+    await act(async () => { finish(); });
+    await vi.waitFor(() => expect(onStart).toHaveBeenCalledWith("Review this task"));
+  });
+
+  test("a start whose re-check cannot confirm the agent keeps the draft, says so, and starts on a second press", async () => {
+    const onStart = vi.fn(async () => {});
+    const unconfirmed: ReadinessEntry = { ...NOT_READY, ready: null, unconfirmed: "its status command did not answer in time" };
+    delete (unconfirmed as { requirement?: string }).requirement;
+    function Home() {
+      const [readiness, setReadiness] = useState<ReadinessEntry[]>([NOT_READY]);
+      return (
+        <CaptainHome
+          hasProject
+          hasProjects
+          projectName={PROJECT.name}
+          playbooks={PLAYBOOKS as PlaybookSummary[]}
+          captain={CAPTAIN}
+          readiness={readiness}
+          connected
+          onRecheckReadiness={async () => setReadiness([unconfirmed])}
+          onOpenPalette={vi.fn()}
+          onOpenOwnProject={vi.fn()}
+          onOpenFromGroups={vi.fn()}
+          onNavigate={vi.fn()}
+          onSaveCaptain={vi.fn(async () => {})}
+          onStart={onStart}
+        />
+      );
+    }
+    render(<Home />);
+    fireEvent.change(screen.getByTestId("start-composer"), { target: { value: "Review this task" } });
+    fireEvent.click(screen.getByTestId("start-send"));
+    // run-view-45: only a check reporting ready starts the task.
+    const notice = await screen.findByTestId("captain-readiness-unconfirmed");
+    expect(notice.textContent).toContain("its status command did not answer in time");
+    expect(onStart).not.toHaveBeenCalled();
+    expect((screen.getByTestId("start-composer") as HTMLTextAreaElement).value).toBe("Review this task");
+    // The attendee chooses to try anyway.
+    fireEvent.click(screen.getByTestId("start-send"));
+    await vi.waitFor(() => expect(onStart).toHaveBeenCalledWith("Review this task"));
   });
 
   test("a ready alternative opens the Captain agent picker", () => {

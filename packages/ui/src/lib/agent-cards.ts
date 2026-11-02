@@ -9,6 +9,7 @@
 
 import type {
   AdapterName,
+  AgentModelOption,
   BaseUrlState,
   ConfigBatchOpInput,
   ConfigState,
@@ -66,6 +67,49 @@ export function unifyPlan(summary: ConfigSummary, adapter: AdapterName, value: s
     }
   }
   return { changes, left, ops };
+}
+
+/** The models an adapter's agents run in your own group's file, after
+ * inheritance (settings-5): each distinct one, `""` for Provider
+ * default, so a card can name the one model or say there are several. */
+export function adapterModels(summary: ConfigSummary, adapter: AdapterName): string[] {
+  const models = new Set<string>();
+  const players = new Map<string, string>();
+  if (summary.captain.adapter === adapter) models.add(summary.captain.model ?? "");
+  for (const player of summary.players) {
+    if (player.agent.adapter !== adapter) continue;
+    players.set(player.id, player.agent.model ?? "");
+    models.add(player.agent.model ?? "");
+  }
+  for (const playbook of summary.playbooks) {
+    for (const binding of Object.values(playbook.roles)) {
+      if (!players.has(binding.playerId) || binding.model === undefined) continue;
+      models.add(binding.model === false ? "" : binding.model);
+    }
+  }
+  return [...models];
+}
+
+/** The model a value runs (settings-5): Provider default's model where
+ * the runtime names one, a catalog row's resolution where the value is
+ * its id or alias, else the value itself. */
+function runModel(value: string, models: readonly AgentModelOption[], defaultModel: string | undefined): string {
+  const model = value || defaultModel;
+  if (!model) return "";
+  const row = models.find((entry) => entry.id === model);
+  return row?.resolvedModel ?? model;
+}
+
+/** The values of {@link adapterModels} one per model they run, so an
+ * alias, its model and Provider default naming one model read as one
+ * (settings-5): the first value of each, Provider default first. */
+export function distinctRunModels(values: readonly string[], models: readonly AgentModelOption[], defaultModel: string | undefined): string[] {
+  const kept = new Map<string, string>();
+  for (const value of [...values].sort((a, b) => Number(a !== "") - Number(b !== ""))) {
+    const model = runModel(value, models, defaultModel);
+    if (!kept.has(model)) kept.set(model, value);
+  }
+  return [...kept.values()];
 }
 
 // ---------------------------------------------------------------------------
@@ -158,6 +202,12 @@ export function fixPlan(rows: readonly OfficialRole[]): ConfigBatchOpInput[] {
 // Words (settings-5, settings-61)
 // ---------------------------------------------------------------------------
 
+/** An agent card's name: a product's own name stands untranslated,
+ * any other adapter by its config name. */
+export function agentName(adapter: string): string {
+  return adapter === "claude" ? "Claude" : adapter === "codex" ? "Codex" : adapter;
+}
+
 /** The model service a `claude` card names, or nothing on a seat. */
 export function modelServiceText(baseUrl: BaseUrlState | undefined): string | undefined {
   if (baseUrl?.state === "third-party") {
@@ -176,42 +226,61 @@ export function faultsOf(entry: ReadinessEntry): ReadinessFault[] {
 }
 
 export interface Guidance {
-  /** Our words, where the fault has any; else the core's alone. */
+  /** Our words, where the fault has any; else the core's alone. In the
+   * Workshop, what is missing (settings-69). */
   text?: string;
-  /** The core's own requirement, kept beneath (settings-23). */
+  /** The core's own requirement: the guidance's tooltip where the
+   * guidance is in other words (settings-61). */
   core: string;
-  /** Whether the local closing line follows. */
-  local: boolean;
+  /** The local closing line that follows: re-checking after a
+   * sign-in or restarting after a variable, or restarting alone. */
+  closing?: "re-check" | "restart";
+  /** In the Workshop, the local route's line beside the online
+   * service's (settings-69); the routes' own line closes it. */
+  local?: string;
+}
+
+/** What a missing local credential leaves, in the Workshop's words. */
+function noService(): string {
+  return i18n._({ id: "Not signed in on this computer, and no key set.", comment: "What an agent card in the Workshop says is missing, beneath its Not ready badge" });
+}
+
+/** The Workshop's guidance for a local credential (settings-69): what
+ * is missing, and the local route's line, by the agent. */
+function workshopGuidance(entry: ReadinessEntry, core: string): Guidance {
+  const local = entry.adapter === "codex"
+    ? i18n._({ id: "Connect Codex with a ChatGPT subscription or an official OpenAI API key: the setup guide walks you through it.", comment: "The route on the Codex card in the Workshop, over the button opening the setup guide" })
+    : i18n._({ id: "Connect Claude with a Claude subscription, or an Anthropic-compatible API key such as DeepSeek's: the setup guide walks you through it.", comment: "The route on the Claude card in the Workshop, over the button opening the setup guide" });
+  const baseUrl = entry.adapter === "claude" ? entry.baseUrl : undefined;
+  if (baseUrl?.state === "third-party") {
+    return { text: i18n._({ id: "The third-party service {host} is set, but its key is not.", comment: "What the Claude card says is missing; {host} is a host name, kept as it is", values: { host: baseUrl.host } }), core, local };
+  }
+  if (baseUrl?.state === "unknown") {
+    return { text: i18n._({ id: "<0>ANTHROPIC_BASE_URL</0> is not an address Spex recognizes.", comment: "What the Claude card says is missing; the variable name stays as it is" }), core, local };
+  }
+  return { text: noService(), core, local };
 }
 
 /** One fault in the reader's next step (settings-61). */
 export function faultGuidance(entry: ReadinessEntry, fault: ReadinessFault, options: { workshop: boolean; seat: boolean }): Guidance {
   const core = fault.requirement;
-  if (fault.kind === "runtime") return { core, local: false };
-  if (options.seat) return { text: entry.credential?.phrase ?? core, core, local: false };
+  if (fault.kind === "runtime") return { core };
+  if (options.seat) return { text: entry.credential?.phrase ?? core, core };
+  if (options.workshop && (entry.adapter === "claude" || entry.adapter === "codex")) return workshopGuidance(entry, core);
   if (entry.adapter === "claude") {
     const state = entry.baseUrl?.state ?? "unset";
-    const script = () => i18n._({ id: "Run the setup script to configure it again", comment: "Readiness guidance: the Workshop's setup script, outside Spex" });
     if (state === "third-party") {
-      return {
-        text: options.workshop ? script() : i18n._({ id: "Set <0>ANTHROPIC_AUTH_TOKEN</0> and <1>ANTHROPIC_BASE_URL</1>", comment: "Readiness guidance; the variable names stay as they are" }),
-        core,
-        local: true,
-      };
+      return { text: i18n._({ id: "Set <0>ANTHROPIC_AUTH_TOKEN</0> and <1>ANTHROPIC_BASE_URL</1>.", comment: "Readiness guidance; the variable names stay as they are" }), core, closing: "restart" };
     }
     if (state === "unknown") {
-      return {
-        text: options.workshop ? script() : i18n._({ id: "<0>ANTHROPIC_BASE_URL</0> is not recognized: check the address, then set its credential", comment: "Readiness guidance; the variable name stays as it is" }),
-        core,
-        local: true,
-      };
+      return { text: i18n._({ id: "<0>ANTHROPIC_BASE_URL</0> is not recognized: check the address, then set its credential.", comment: "Readiness guidance; the variable name stays as it is" }), core, closing: "restart" };
     }
-    return { text: i18n._({ id: "Sign in by running claude in a terminal, or set <0>ANTHROPIC_API_KEY</0>", comment: "Readiness guidance; `claude` is the command and the variable name stays as it is" }), core, local: true };
+    return { text: i18n._({ id: "Sign in by running claude in a terminal, or set <0>ANTHROPIC_API_KEY</0>.", comment: "Readiness guidance; `claude` is the command and the variable name stays as it is" }), core, closing: "re-check" };
   }
   if (entry.adapter === "codex") {
-    return { text: i18n._({ id: "Run codex login, or set <0>OPENAI_API_KEY</0> (an official OpenAI key)", comment: "Readiness guidance; `codex login` is the command and the variable name stays as it is" }), core, local: true };
+    return { text: i18n._({ id: "Run codex login, or set <0>OPENAI_API_KEY</0> (an official OpenAI key).", comment: "Readiness guidance; `codex login` is the command and the variable name stays as it is" }), core, closing: "re-check" };
   }
-  return { core, local: false };
+  return { core };
 }
 
 /** The variables a manual step sets, by the agent and its service. */

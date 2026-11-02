@@ -313,7 +313,8 @@ test("settings-41: the trigger and every row name the specific model the runtime
   expect(rows("agent-model")).toEqual([
     // The runtime's default model, unlisted here, reads as itself.
     { name: "Provider default", detail: "opus[1m]", selected: false },
-    { name: "Default (recommended) claude-opus-5-5", detail: OPUS_WORDS, selected: false },
+    // The runtime's own default alias runs Opus too: one row per model,
+    // the held one standing for it.
     { name: "Opus claude-opus-5-5", detail: OPUS_WORDS, selected: true },
     // An id that extends its resolved model says more than it: the id.
     { name: "Fable claude-fable-5-1[1m]", detail: undefined, selected: false },
@@ -398,14 +399,13 @@ test("settings-41: the keyboard opens, walks, chooses and dismisses the list", a
   expect(active()).toBe("claude-fable-5-1[1m]");
   fireEvent.keyDown(listbox, { key: "ArrowUp" });
   fireEvent.keyDown(listbox, { key: "ArrowUp" });
-  expect(active()).toBe("default");
+  expect(active()).toBe("");
   fireEvent.keyDown(listbox, { key: "End" });
   expect(active()).toBe("__spex_custom__");
   fireEvent.keyDown(listbox, { key: "ArrowDown" });
   expect(active()).toBe("__spex_custom__");
   fireEvent.keyDown(listbox, { key: "Home" });
   expect(active()).toBe("");
-  fireEvent.keyDown(listbox, { key: "ArrowDown" });
   fireEvent.keyDown(listbox, { key: "ArrowDown" });
   fireEvent.keyDown(listbox, { key: "ArrowDown" });
   fireEvent.keyDown(listbox, { key: "ArrowDown" });

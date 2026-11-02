@@ -217,12 +217,14 @@ describe("SET: adapter readiness panel", () => {
     renderSettings();
     const claude = screen.getByTestId("agent-card-claude");
     expect(claude.textContent).toContain("Claude");
-    // Positions render per DR-019: the Captain and each playbook role.
+    // Positions render per DR-019: the Captain and each playbook role,
+    // in brief with the whole list in the tooltip (settings-5).
     expect(claude.textContent).toMatch(/Captain/i);
-    expect(claude.textContent).toMatch(/coder/i);
+    expect(within(claude).getByTestId("agent-users-claude").getAttribute("title")).toMatch(/coder/i);
 
     const codex = screen.getByTestId("agent-card-codex");
-    expect(codex.textContent).toContain(
+    // The core's requirement stands in the guidance's tooltip (settings-61).
+    expect(within(codex).getByTestId("agent-fault-guidance").getAttribute("title")).toBe(
       "set OPENAI_API_KEY or sign in with the Codex CLI",
     );
     expect(codex.textContent).toMatch(/reviewer/i);
@@ -238,7 +240,7 @@ describe("SET: adapter readiness panel", () => {
       refreshReadiness,
     });
     render(<SettingsSurface />);
-    fireEvent.click(screen.getByRole("button", { name: /Re-check readiness/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Re-check$/i }));
     expect(refreshReadiness).toHaveBeenCalled();
   });
 });
@@ -624,5 +626,21 @@ describe("settings-53: Settings opened at an agent's row", () => {
     // A later visit asks for nothing and opens as the reader left it.
     render(<SettingsSurface />);
     expect(expanded("player-edit-dev.reviewer")).toBe("false");
+  });
+  test("an adapter's agent card comes into view once, and a later visit scrolls nowhere", async () => {
+    useAppStore.setState({ configState: CONFIG, readiness: READINESS, refreshReadiness: vi.fn(async () => {}) });
+    const scrolled: string[] = [];
+    Element.prototype.scrollIntoView = vi.fn(function (this: HTMLElement) {
+      scrolled.push(this.dataset.testid ?? "");
+    });
+    const onAgentCardShown = vi.fn();
+    const { unmount } = render(<SettingsSurface agentCard="codex" onAgentCardShown={onAgentCardShown} />);
+    // settings-68: that card, once.
+    await vi.waitFor(() => expect(onAgentCardShown).toHaveBeenCalledTimes(1));
+    expect(scrolled).toEqual(["agent-card-codex"]);
+    expect(expanded("captain-edit")).toBe("false");
+    unmount();
+    render(<SettingsSurface />);
+    expect(scrolled).toEqual(["agent-card-codex"]);
   });
 });

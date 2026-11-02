@@ -932,8 +932,9 @@ function PlayerRoster({
           type="button"
           data-testid="player-add"
           onClick={() => setAdding(true)}
-          className="self-start rounded-md border border-neutral-300 px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+          className="inline-flex items-center gap-1 self-start rounded-md border border-neutral-300 px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
         >
+          <Icon name="plus" className="h-3 w-3 shrink-0" />
           {i18n._("Add a player")}
         </button>
       )}
@@ -946,6 +947,8 @@ export function SettingsSurface({
   onCredentialHostShown,
   agentRow,
   onAgentRowShown,
+  agentCard,
+  onAgentCardShown,
 }: {
   /** On a seat, the code host its Groups row asked to take a credential
    * for: the Credentials section opens at it (settings-48). */
@@ -955,6 +958,10 @@ export function SettingsSurface({
    * editor opens in view (settings-52). */
   agentRow?: string;
   onAgentRowShown?: () => void;
+  /** The adapter the home's readiness notice asked for: its agent card
+   * comes into view (settings-68). */
+  agentCard?: string;
+  onAgentCardShown?: () => void;
 } = {}) {
   const store = usePlaceStore();
   // A seat's Settings carry its Credentials section (settings-48).
@@ -988,6 +995,22 @@ export function SettingsSurface({
       ?.scrollIntoView?.({ block: "center" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [summaryForAsk]);
+  // Asked for an adapter's card (settings-68): it comes into view once
+  // it renders, its entry beneath the cards where it has no card, and
+  // the ask is taken once.
+  const cardAsked = useRef(agentCard);
+  useEffect(() => {
+    const adapter = cardAsked.current;
+    if (adapter === undefined) return;
+    const elements = Array.from(document.querySelectorAll<HTMLElement>("[data-testid]"));
+    const card = elements.find((element) => element.dataset.testid === `agent-card-${adapter}`)
+      ?? elements.find((element) => element.dataset.testid === `agent-row-${adapter}`);
+    if (!card) return;
+    cardAsked.current = undefined;
+    onAgentCardShown?.();
+    // Centered, so the section's Re-check above stays in reach.
+    card.scrollIntoView?.({ block: "center" });
+  });
 
   if (!configState) {
     return (
