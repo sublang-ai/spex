@@ -219,7 +219,7 @@ const COMMAND_HELP: Record<string, { aliases?: string[]; options: string[] }> = 
   update: { options: [] },
   list: { aliases: ["ls"], options: [] },
   search: { options: [] },
-  new: { options: ["--skill <folder>", "--spec <file>", "--language <tag>", "--description <text>", "--license <id>", "--move"] },
+  export: { options: ["--spec <file>", "--skill <folder>", "--language <tag>", "--description <text>", "--license <id>"] },
   publish: { options: ["--dry-run"] },
   login: { options: ["--registry <url>", "--space <url>", "--force"] },
   logout: { options: ["--registry <url>", "--space <url>"] },

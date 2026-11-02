@@ -3,8 +3,11 @@
 
 // `spex remove <org>/<pkg>`, or `spex rm` (cli-3, environments-15): take
 // the package out of `spex.yaml`, resolve, install and export what
-// remains, and print each package removed. A package `spex.yaml` does
-// not add, and the built-in one, are refused before any write.
+// remains, and print each package removed, an edited copy of its spec
+// left in `specs/` as the project's own and read as edited, in the words
+// `spex list` uses (environments-41, DR-172). A package
+// `spex.yaml` does not add, and the built-in one, are refused before any
+// write.
 
 import { BUILTIN_PACKAGE_NAME, RequestsError, setRequest } from "../lib/environment/index.js";
 import { VersionConflictError } from "../lib/files.js";

@@ -19,7 +19,7 @@ import { readVersioned, writeVersionedBytes } from "../files.js";
 import type { AuthScope } from "../git-host.js";
 import { defaultInstanceOf, type HomeFile } from "../home-file.js";
 import { canonicalOrigin, OriginRefused } from "../instance.js";
-import { isLanguageTag, isPackageName, isSkillName, sha256Hex, type Issue } from "./format.js";
+import { isLanguageTag, isPackageName, isSkillName, lfDigest, type Issue } from "./format.js";
 import { isRequirement } from "./semver.js";
 
 export interface Selection {
@@ -268,9 +268,11 @@ export function parseRequests(text: string): Requests {
   return parseRequestsValue(doc.toJS() ?? {});
 }
 
-/** The lock's `requests` field: the SHA-256 of the file's bytes. */
+/** The lock's `requests` field: the SHA-256 of the file, CRLF line
+ * endings read as LF (environments-3), so a checkout whose Git converts
+ * line endings — Windows by default — keeps a committed lock current. */
 export function requestsDigest(text: string | Uint8Array): string {
-  return sha256Hex(text);
+  return lfDigest(text);
 }
 
 export async function readRequests(file: string): Promise<Requests> {

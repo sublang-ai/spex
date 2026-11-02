@@ -202,6 +202,11 @@ msgstr "{count, plural, one {# file} other {# files}} · the session's file, its
 msgid "{count, plural, one {# item} other {# items}}"
 msgstr "{count, plural, one {# item} other {# items}}"
 
+#. beneath a package's spec line on the Packages tab: the placed spec's links to another package's spec, dropped until that package is added; {name} is that package, such as acme/glossary
+#: src/components/PackageArtifacts.tsx
+msgid "{count, plural, one {# link waits} other {# links wait}} for {name}"
+msgstr "{count, plural, one {# link waits} other {# links wait}} for {name}"
+
 #: src/components/SpecView.tsx
 msgid "{count, plural, one {# match} other {# matches}}"
 msgstr "{count, plural, one {# match} other {# matches}}"
@@ -482,8 +487,8 @@ msgstr "{name} · in {group} at {space}"
 msgid "{name} · in Personal at {space}"
 msgstr "{name} · in Personal at {space}"
 
-#. Add…'s registry tab: a package name typed in full that the registry's search does not list, as for a private package
-#: src/components/EnvironmentSection.tsx
+#. a package name in full that the registry's search does not list, as for a private package: Add…'s registry tab, or a spec's waiting links whose Add found no such package
+#: src/lib/environments.ts
 msgid "{name} · not listed publicly"
 msgstr "{name} · not listed publicly"
 
@@ -901,7 +906,7 @@ msgid "✗ failed"
 msgstr "✗ failed"
 
 #. examples of exact, caret and tilde registry requirements; preserve the syntax
-#: src/components/EnvironmentSection.tsx
+#: src/components/PackageArtifacts.tsx
 msgid "1.2.3, ^1.2.3, ~1.2.3"
 msgstr "1.2.3, ^1.2.3, ~1.2.3"
 
@@ -1056,10 +1061,10 @@ msgstr "Adapter option; model support unverified."
 #. create this player in your own roster
 #. register the typed path as an existing repository
 #. register the typed path as an existing repository
-#: src/components/EnvironmentSection.tsx
 #: src/components/ProjectPalette.tsx
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceMembers.tsx
+#: src/lib/environments.ts
 msgid "Add"
 msgstr "Add"
 
@@ -1178,16 +1183,16 @@ msgstr "Added to Up next — see the project's Overview."
 #. the Use this folder control, while the folder is paired
 #. the package is being added to spex.yaml
 #. the request is being written
-#: src/components/EnvironmentSection.tsx
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceMembers.tsx
 #: src/components/SpaceRepairs.tsx
+#: src/lib/environments.ts
 msgid "Adding…"
 msgstr "Adding…"
 
 #. the title of Add in Add…'s registry tab: its consequence; {name} is the package
-#: src/components/EnvironmentSection.tsx
+#: src/lib/environments.ts
 msgid "Adds {name} to spex.yaml and installs it"
 msgstr "Adds {name} to spex.yaml and installs it"
 
@@ -3522,6 +3527,11 @@ msgstr "From {name} ({count})"
 #: src/components/AppletTab.tsx
 msgid "from {name} {version}"
 msgstr "from {name} {version}"
+
+#. a placed spec's package node, where its Edit control would stand: {name} is the spec package it came from, as org/pkg, {version} that package's version
+#: src/components/SpecView.tsx
+msgid "From {name} {version} · placed by Spex"
+msgstr "From {name} {version} · placed by Spex"
 
 #. a playbook row: the package and version it comes from, e.g. from acme/triage 1.2.0
 #: src/components/PlaybooksTab.tsx
@@ -6794,10 +6804,35 @@ msgstr "Space"
 msgid "Space address"
 msgstr "Space address"
 
+#. a package's spec line on the Packages tab: its placed copy in specs/ was edited, so installs leave it as the project's own; keep specs/ as it is
+#: src/components/PackageArtifacts.tsx
+msgid "spec · edited in specs/ — left as yours"
+msgstr "spec · edited in specs/ — left as yours"
+
+#. a package's spec line on the Packages tab: its placed copy in specs/ was edited, so installs leave it as the project's own; {version} is the package's newer release, waiting for someone to merge it into that file; keep specs/ as it is
+#: src/components/PackageArtifacts.tsx
+msgid "spec · edited in specs/ — left as yours · {version} waiting"
+msgstr "spec · edited in specs/ — left as yours · {version} waiting"
+
+#. a package's spec line on the Packages tab: an install placed its spec in the project's specs/ at {path}, such as specs/packages/glossary.md; keep the path as it is
+#: src/components/PackageArtifacts.tsx
+msgid "spec · in {path}"
+msgstr "spec · in {path}"
+
+#. a package's spec line on the Packages tab: the project has no specs/ folder to place its spec in, and scaffolding the project's specs makes one; keep specs/ as it is
+#: src/components/PackageArtifacts.tsx
+msgid "spec · needs specs/ — scaffold first"
+msgstr "spec · needs specs/ — scaffold first"
+
 #. a package's spec line on the Packages tab: its spec is not in the agents' folders
 #: src/components/PackageArtifacts.tsx
 msgid "spec · not placed"
 msgstr "spec · not placed"
+
+#. a package's spec line on the Packages tab: its spec is not placed because a file of the same name, {file} such as glossary.md, already stands in the project's specs/; keep specs/ and the file name as they are
+#: src/components/PackageArtifacts.tsx
+msgid "spec · not placed — specs/ holds {file} already"
+msgstr "spec · not placed — specs/ holds {file} already"
 
 #. a package's spec line on the Packages tab: its spec stands in the agents' folders as a skill
 #: src/components/PackageArtifacts.tsx
@@ -7801,6 +7836,7 @@ msgstr "Use this folder"
 #. the accessible name of a version choice in Add…; {name} is the package
 #. the accessible name of a version choice in Add…; {name} is the package
 #: src/components/EnvironmentSection.tsx
+#: src/components/PackageArtifacts.tsx
 msgid "Version of {name}"
 msgstr "Version of {name}"
 
@@ -8024,6 +8060,11 @@ msgstr "Writing a reply"
 #: src/components/DraftSourceTab.tsx
 msgid "Writing…"
 msgstr "Writing…"
+
+#. tooltip on a placed spec's provenance: Spex wrote the file from the spec package {name} (org/pkg) at {version}, and editing the file makes it the project's own
+#: src/components/SpecView.tsx
+msgid "Written by Spex from {name} {version} — an edit makes it yours"
+msgstr "Written by Spex from {name} {version} — an edit makes it yours"
 
 #. the choices note; {name} is that placement's Space's display name, or the path placement's remote
 #: src/components/SpaceSync.tsx

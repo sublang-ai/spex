@@ -8,10 +8,11 @@
 // filter-as-you-type search, plain citation rows and backlinks
 // (SPECV-19), citation jumps with a one-step return chip, a records
 // reader that also serves meta.md, a whole-file editor with a preview
-// (spec-view-48), and one polite live region for the transient
-// outcomes (DR-010 §5–§7). Pure props: the host wires specs.get /
-// specs.read / specs.write and persists the lifted SpecViewState per
-// project.
+// (spec-view-48) that a spec an install placed never opens, its node
+// saying where it comes from instead (spec-view-2, DR-174), and one
+// polite live region for the transient outcomes (DR-010 §5–§7). Pure
+// props: the host wires specs.get / specs.read / specs.write and
+// persists the lifted SpecViewState per project.
 
 import {
   useCallback,
@@ -297,6 +298,17 @@ type ReaderState = {
   origin?: RecordOrigin;
 };
 
+/** A placed spec's tooltip, riding its node's provenance phrase
+ * (spec-view-2, DR-174). */
+function placedTooltip(placed: { name: string; version: string }): string {
+  return i18n._({
+    id: "Written by Spex from {name} {version} — an edit makes it yours",
+    values: placed,
+    comment:
+      "tooltip on a placed spec's provenance: Spex wrote the file from the spec package {name} (org/pkg) at {version}, and editing the file makes it the project's own",
+  });
+}
+
 export function SpecView(props: SpecViewProps) {
   const { onViewState } = props;
   // A stale persisted shape (pre-DR-015 user/dev/test state) resets to
@@ -425,6 +437,8 @@ export function SpecView(props: SpecViewProps) {
   const editor = canEdit ? viewState.editor : undefined;
   const viewStateRef = useRef(viewState);
   viewStateRef.current = viewState;
+  const treeRef = useRef(tree);
+  treeRef.current = tree;
   const [openFailure, setOpenFailure] = useState<{
     anchor: string;
     message: string;
@@ -851,12 +865,26 @@ export function SpecView(props: SpecViewProps) {
     setLiveNote(i18n._("Editing {path}", { path }));
   }
 
+  /** Whether the tree marks the file at a `specs/`-relative path
+   * placed: an install's copy, read here and changed where it comes
+   * from (spec-view-10, DR-174). */
+  function isPlaced(path: string): boolean {
+    return treeRef.current.files.some(
+      (file) => file.path === `specs/${path}` && file.placed !== undefined,
+    );
+  }
+
   /** Open the editor from the outline: fetch the file first, and say
-   * so beside the control that asked when the fetch fails (§5). */
+   * so beside the control that asked when the fetch fails (§5). A
+   * placed file opens no editor, nor one the tree marked placed while
+   * its fetch was out (spec-view-48). */
   function openEditor(anchor: string, path: string, itemId?: string) {
+    if (isPlaced(path)) return;
     setOpenFailure(null);
     readSpec(path)
-      .then((served) => standEditor(path, served, itemId))
+      .then((served) => {
+        if (!isPlaced(path)) standEditor(path, served, itemId);
+      })
       .catch((cause: Error) => {
         setOpenFailure({
           anchor,
@@ -1461,6 +1489,11 @@ export function SpecView(props: SpecViewProps) {
     const allIds = file.items.map((item) => item.id);
     const allExpanded =
       allIds.length > 0 && allIds.every((id) => expandedItems.has(id));
+    // A placed spec is read here, not edited: its provenance stands in
+    // the Edit control's place and its items offer none (spec-view-2,
+    // spec-view-3, DR-174).
+    const placed = file.placed;
+    const editable = canEdit && placed === undefined;
     // Cross-file citation rollup, carried on every file row —
     // collapsed included — so the outline reads as a dependency map at
     // a glance; intra-file wiring never counts, and a citation of an
@@ -1687,7 +1720,7 @@ export function SpecView(props: SpecViewProps) {
                 the intent, so it heads the list below rather than standing
                 as a row of its own, and its controls read as acting on the
                 items and the file (spec-view-2). */}
-            {(allIds.length > 0 && items.length > 0) || canEdit ? (
+            {(allIds.length > 0 && items.length > 0) || canEdit || placed ? (
               <div
                 data-testid={`items-head-${key}`}
                 className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-neutral-200 pt-2 dark:border-neutral-800"
@@ -1713,7 +1746,26 @@ export function SpecView(props: SpecViewProps) {
                     {allExpanded ? i18n._("Collapse all items") : i18n._("Expand all items")}
                   </button>
                 ) : null}
-                {canEdit ? (
+                {placed ? (
+                  <>
+                    <span
+                      data-testid={`file-placed-${key}`}
+                      title={placedTooltip(placed)}
+                      aria-describedby={`specv-placed-${key}`}
+                      className="text-xs text-neutral-500"
+                    >
+                      {i18n._({
+                        id: "From {name} {version} · placed by Spex",
+                        values: placed,
+                        comment:
+                          "a placed spec's package node, where its Edit control would stand: {name} is the spec package it came from, as org/pkg, {version} that package's version",
+                      })}
+                    </span>
+                    <span id={`specv-placed-${key}`} className="sr-only">
+                      {placedTooltip(placed)}
+                    </span>
+                  </>
+                ) : editable ? (
                   <button
                     type="button"
                     data-testid={`file-edit-${key}`}
@@ -1740,7 +1792,7 @@ export function SpecView(props: SpecViewProps) {
             <SpecItemRows
               items={items}
               onEditItem={
-                canEdit
+                editable
                   ? (item) =>
                       openEditor(
                         `item:${item.id}`,

@@ -54,9 +54,9 @@ top as **Registry: Spex Space**, with your sign-in there beside it.
    and features, "1.2.0 exactly" stays put — and choose **Add**. On the
    command line, `spex add <org>/<pkg>` adds the newest. Spex writes the
    package into `spex.yaml` and its exact version into `spex.lock`, and
-   installs it. Commit both files with your code so everyone on the
-   project installs the same packages; until you do, the tab shows
-   **spex.yaml, spex.lock not committed**.
+   installs it. Commit both files, and a spec it places, with your code
+   so everyone on the project installs the same packages; until you do,
+   the tab shows **spex.yaml, spex.lock not committed**.
 3. **Enable its playbooks.** Adding a package installs it but enables
    nothing. Open the **Playbooks** tab, find the playbook under
    **Available**, choose a player for each role and select **Enable**.
@@ -66,12 +66,16 @@ top as **Registry: Spex Space**, with your sign-in there beside it.
 4. **Publish your own.** See
    [Publish specs, skills, and playbooks](#publish-specs-skills-and-playbooks).
 
-Skills and specs need no enabling. Spex places them in `.claude/skills/`
-for Claude Code and `.agents/skills/` for Codex, Gemini CLI, Kimi Code,
-and OpenCode, a spec as a skill that holds it, so each agent finds them
-its own way. A package of only specs or skills has no playbook to
-enable. Playbook launch skills are placed for Claude Code alone; with
-other agents, run enabled playbooks from Spex's `/` menu.
+Skills and specs need no enabling. Spex places skills in
+`.claude/skills/` for Claude Code and `.agents/skills/` for Codex,
+Gemini CLI, Kimi Code, and OpenCode, so each agent finds them its own
+way. Playbook launch skills are placed for Claude Code alone; with other
+agents, run enabled playbooks from Spex's `/` menu. A package's spec is
+placed in `specs/packages/<pkg>.md`, beside your own specs, and agents
+and `spex lint` read it as any spec. Its first line names the package
+and version; once you edit it, it is yours: Spex leaves it, and a newer
+version waits. The spec's line in the package row says where it stands.
+Your **Personal** packages' specs reach your agents as skills instead.
 
 Private packages never appear in search. Choose **Sign in** beside the
 registry and approve in your browser, or run `spex login`, which signs
@@ -113,9 +117,9 @@ spex list
 ```
 
 Replace the example name with a real one. `spex list` shows what is
-added, installed, and placed for your agents. Open the same folder in
-the IDE and its **Packages** tab shows the same packages; what either
-changes, the other reads.
+added, installed, and placed for your agents and in `specs/`. Open the
+same folder in the IDE and its **Packages** tab shows the same packages;
+what either changes, the other reads.
 
 Public packages need no sign-in. For private packages or publishing:
 
@@ -169,22 +173,25 @@ be private.
 ### Publish a spec or skill package
 
 To publish a skill you already have, such as one Claude Code keeps under
-`.claude/skills/`, sign in to the registry, then start a package from the
+`.claude/skills/`, sign in to the registry, then build a package from the
 skill in your project's folder, under an org of yours:
 
 ```sh
 npx @sublang/spex login
-npx @sublang/spex new my-org/my-skill --skill .claude/skills/my-skill --move
+npx @sublang/spex export my-org/my-skill --skill .claude/skills/my-skill
 ```
 
 `spex login` signs in with a code in your browser: open the address it
-prints, enter the code and approve. `spex new` writes
+prints, enter the code and approve. `spex export` writes
 `spex-packages/my-org/my-skill/` with its `meta.yaml`, a README and your
-project's license, adds it to `spex.yaml`, and installs it. `--move`
-hands the skill to the package; Spex places it back in `.claude/skills/`
-from there. For a spec, pass `--spec specs/packages/<name>.md` and name
-the package `<org>/<name>`; `--description` and `--license` override what
-it reads. To write a folder by hand, follow the
+project's license, copying the skill, which stays in `.claude/skills/`
+for your agent; it adds nothing to `spex.yaml`. After you edit the skill,
+run `spex export my-org/my-skill` again to refresh the copy. For a spec,
+pass `--spec specs/packages/<name>.md` and name the package
+`<org>/<name>`: a citation of another package's spec becomes its
+address, and one the package cannot carry is dropped with a warning.
+`--description` and `--license` override what it reads. To write a
+folder by hand, follow the
 [package format](../specs/packages/environments.md#environments-1).
 
 Check what will be published, then publish it:
@@ -197,10 +204,10 @@ npx @sublang/spex publish my-org/my-skill
 The dry run shows the registry, the name, the version and the files, and
 publishes nothing. The publish prints the package's page at the registry.
 
-Or publish from the IDE. A folder `spex new` made is already on the
-**Packages** tab. For one you made another way, choose **Add… → Folder**
-and pick `spex-packages/<org>/<name>`; Spex reads its name and version
-from its `meta.yaml`. Open the package row's overflow and choose
+Or publish from the IDE. On the **Packages** tab, choose **Add… →
+Folder** and pick `spex-packages/<org>/<name>`, the folder `spex export`
+built or one you made another way; Spex reads its name and version from
+its `meta.yaml`. Open the package row's overflow and choose
 **Publish**, which reads **Sign in to publish** while you are signed out.
 Review "Publish ⟨org⟩/⟨name⟩ ⟨version⟩ to Spex Space", the files it will
 publish and the account, then confirm **Publish**. No playbook, compile or
@@ -242,7 +249,8 @@ lists a folder as JSON, read-only, so a playbook can write a report into
 the project and the applet can show it. The page runs in a sandbox: it
 reaches neither the network nor Spex itself, and its frame stays at
 Spex's own address. Add the folder and its `{ kind: applet }` entry in
-`meta.yaml` by hand; `spex new` does not add applets.
+`meta.yaml` by hand; `spex export` does not add applets, and leaves them
+as they are.
 
 ## Optionally sync project records
 

@@ -10,10 +10,12 @@
 // again — then one row per package spex.yaml names, each package it
 // requires under it: its name, its version, a source glyph, what it
 // provides and its standing, Remove and Publish in its overflow,
-// expanding to one line per artifact with its one act — a playbook's
-// Enable writing this heading's config in place; the built-in
-// playbooks as one quiet line, never a removable row. Neither
-// heading names the spex repository behind it (DR-159). A sync, an
+// expanding to one line per artifact its release provides with its one
+// act — a playbook's Enable writing this heading's config in place, a
+// spec's waiting links' Add requesting the package they wait for, as
+// Add… does, with its receipt; the built-in playbooks as one quiet line,
+// never a removable row. Neither heading names the spex repository
+// behind it (DR-159). A sync, an
 // update or an install running beside it refuses nothing (DR-111): its
 // progress shows by the heading, and a change the core refuses shows its
 // cause in place.
@@ -30,8 +32,12 @@ import { usePlaceStore } from "../state/place-context.js";
 import {
   PACKAGES_FOLDER,
   SPEC_PACKAGE_NAME_RULE,
+  addLabel,
+  addsTitle,
   busyWord,
+  firstRequirement,
   isBuiltinPackage,
+  isProvided,
   listOf,
   providesPhrase,
   publishTargetOf,
@@ -49,7 +55,7 @@ import { PublishControl } from "./PublishControl.js";
 import { RegistryAccount, registrySignInTitle, useRegistrySignIn } from "./RegistryAccount.js";
 import { MoreMenu, type MenuEntry } from "./SpaceMenu.js";
 import { signingInLabel } from "./SpaceSignIn.js";
-import { PackageArtifacts, PlaybookEnableAct, hasArtifactLines, usePlaybookEnable } from "./PackageArtifacts.js";
+import { PackageArtifacts, PlaybookEnableAct, UnlistedRequest, hasArtifactLines, usePlaybookEnable } from "./PackageArtifacts.js";
 
 const BUTTON =
   "min-h-6 shrink-0 whitespace-nowrap rounded-md border border-neutral-300 px-2 py-0.5 text-xs text-neutral-700 hover:bg-neutral-100 disabled:opacity-40 disabled:hover:bg-transparent dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800";
@@ -172,6 +178,7 @@ function PackageRow({
   personal,
   target,
   reveal = 0,
+  onAdded,
   onNavigate,
 }: {
   name: string;
@@ -188,6 +195,8 @@ function PackageRow({
   /** Each new count asks the row to open its lines, the receipt's Enable
    * for a package of several playbooks. */
   reveal?: number;
+  /** A package its lines' Add requested, for the heading's receipt. */
+  onAdded?: (name: string) => void;
   onNavigate?: (surface: "Settings" | "Space") => void;
 }) {
   const store = usePlaceStore();
@@ -426,6 +435,7 @@ function PackageRow({
           projectId={projectId}
           projectName={projectName}
           personal={personal}
+          onAdded={onAdded}
         />
       ) : null}
       {publishing > 0 && direct && publishable && request?.kind === "path" ? (
@@ -553,7 +563,7 @@ function Receipt({
         comment: "the receipt after Add…, while the package's version is still being picked",
         values: { name },
       });
-  const playbooks = pkg?.artifacts.filter((artifact) => artifact.kind === "playbook") ?? [];
+  const playbooks = pkg?.artifacts.filter((artifact) => artifact.kind === "playbook" && isProvided(artifact)) ?? [];
   // The one playbook as the heading's environment lists it, read for
   // this project: what its Enable writes.
   const lists = readLists?.projectId === projectId ? readLists : undefined;
@@ -815,6 +825,7 @@ export function EnvironmentSection({
                 personal={personal}
                 target={target}
                 reveal={revealed?.name === row.name ? revealed.times : 0}
+                onAdded={setAdded}
                 onNavigate={onNavigate}
               />
             ))}
@@ -1137,22 +1148,10 @@ function RegistryTab({
           ))}
         </ul>
       ) : null}
-      {unlisted ? <UnlistedRow key={typed} name={typed} onAdd={onAdd} /> : null}
+      {unlisted ? <UnlistedRequest key={typed} name={typed} onAdd={onAdd} /> : null}
     </div>
   );
 }
-
-const addsTitle = (name: string): string =>
-  i18n._({
-    id: "Adds {name} to spex.yaml and installs it",
-    comment: "the title of Add in Add…'s registry tab: its consequence; {name} is the package",
-    values: { name },
-  });
-
-const addLabel = (busy: boolean): string =>
-  busy
-    ? i18n._({ id: "Adding…", comment: "the package is being added to spex.yaml" })
-    : i18n._({ id: "Add", comment: "add this package to spex.yaml and install it" });
 
 function RegistryResultRow({
   result,
@@ -1162,7 +1161,7 @@ function RegistryResultRow({
   onAdd: (name: string, request: EnvironmentRequest) => Promise<void>;
 }) {
   const choices = result.versions.flatMap((version) => requirementChoices(version));
-  const [requirement, setRequirement] = useState(choices[0]?.requirement ?? "");
+  const [requirement, setRequirement] = useState(firstRequirement(result.versions) ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   return (
@@ -1214,65 +1213,6 @@ function RegistryResultRow({
         </p>
       ) : null}
     </li>
-  );
-}
-
-/** A typed `org/name` the registry does not list (playbook-library-92,
- * DR-152): one row "<name> · not listed publicly" with a version taking
- * an exact, caret or tilde requirement, added as typed; the core checks
- * the requirement and the access. */
-function UnlistedRow({
-  name,
-  onAdd,
-}: {
-  name: string;
-  onAdd: (name: string, request: EnvironmentRequest) => Promise<void>;
-}) {
-  const [version, setVersion] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string>();
-  const ready = version.trim().length > 0;
-  return (
-    <form
-      data-testid="known-package-request"
-      onSubmit={(event) => {
-        event.preventDefault();
-        if (busy || !ready) return;
-        setBusy(true);
-        setError(undefined);
-        void onAdd(name, { kind: "registry", version: version.trim() })
-          .catch((cause: Error) => setError(cause.message))
-          .finally(() => setBusy(false));
-      }}
-      className="flex flex-col gap-1 border-t border-neutral-200 pt-2 text-xs dark:border-neutral-800"
-    >
-      <div className="flex flex-wrap items-center gap-2">
-        <span data-testid="known-package-name" className="min-w-0 flex-1 truncate">
-          {i18n._({
-            id: "{name} · not listed publicly",
-            comment: "Add…'s registry tab: a package name typed in full that the registry's search does not list, as for a private package",
-            values: { name },
-          })}
-        </span>
-        <input
-          data-testid="known-package-version"
-          value={version}
-          onChange={(event) => setVersion(event.target.value)}
-          aria-label={i18n._({ id: "Version of {name}", comment: "the accessible name of a version choice in Add…; {name} is the package", values: { name } })}
-          placeholder={i18n._({ id: "1.2.3, ^1.2.3, ~1.2.3", comment: "examples of exact, caret and tilde registry requirements; preserve the syntax" })}
-          spellCheck={false}
-          className={`${INPUT} w-36 font-mono`}
-        />
-        <button type="submit" data-testid="known-package-request-submit" disabled={busy || !ready} title={addsTitle(name)} className={PRIMARY}>
-          {addLabel(busy)}
-        </button>
-      </div>
-      {error ? (
-        <p role="alert" data-testid="known-package-request-error" className={ERROR}>
-          {error}
-        </p>
-      ) : null}
-    </form>
   );
 }
 

@@ -13,7 +13,10 @@
 // the one the lock being replaced records where it resolves to the
 // version and checksum recorded there (environments-5, DR-127): only the
 // label is kept, never the solution. Within the solution, artifacts,
-// languages, files and exports are selected in the record's four steps.
+// languages, files and exports are selected in the record's four steps,
+// the exports naming only what each release provides (environments-1),
+// read from its manifest: a registry release's `meta.yaml` fetched as
+// a raw file and checked against the digest its version resource lists.
 
 import { existsSync, realpathSync } from "node:fs";
 import { isAbsolute, join, relative, resolve as resolvePath, sep } from "node:path";
@@ -23,12 +26,15 @@ import {
   artifactLanguages,
   FormatError,
   inArtifact,
+  parseManifestText,
+  providedArtifacts,
   readRelease,
   ROOT_FILES,
   type ArtifactKind,
   type Release,
   type ReleaseFile,
 } from "./format.js";
+import { sha256 } from "../files.js";
 import { canonicalOrigin } from "../instance.js";
 import { specExportName } from "./exports.js";
 import type { GitCredential, GitSource } from "./git-source.js";
@@ -233,6 +239,25 @@ function keptRegistry(previous: Lock | undefined, name: string, version: string,
   try { return canonicalOrigin(source.registry); } catch { return undefined; }
 }
 
+/** The kinds whose artifacts are placed under a skill name
+ * (environments-6). */
+const PLACED_KINDS: readonly ArtifactKind[] = ["skill", "playbook", "spec"];
+
+/** What a registry release provides (environments-1): read from its
+ * `meta.yaml`, which its version resource does not restate, fetched as a
+ * raw file (environments-12) and taken only where its bytes carry the
+ * digest the resource lists for it. */
+async function registryProvided(registry: RegistrySource, name: string, version: string, files: readonly ReleaseFile[]): Promise<Set<string>> {
+  const unreadable = (why: string): RegistryError => new RegistryError("unreadable", name, `the registry's meta.yaml for ${name} ${version} is unreadable: ${why}`);
+  const listed = files.find((file) => file.path === "meta.yaml");
+  if (listed === undefined) throw unreadable("the release lists none");
+  const bytes = Buffer.from(await registry.file(name, version, "meta.yaml"));
+  if (sha256(bytes) !== listed.sha256) throw unreadable("its bytes do not match the digest the registry lists");
+  const { manifest, issues } = parseManifestText(bytes.toString("utf8"));
+  if (manifest === null) throw unreadable(issues.map((issue) => issue.message).join("; "));
+  return providedArtifacts(manifest);
+}
+
 /** Resolve requests into a lock (environments-5, environments-6). */
 export async function resolve(input: ResolveInput): Promise<ResolveResult> {
   const { requests, registry } = input;
@@ -374,6 +399,9 @@ export async function resolve(input: ResolveInput): Promise<ResolveResult> {
     files: ReleaseFile[];
     source: SourceLock;
     lockFiles: boolean;
+    /** The artifacts its release provides, or null where it holds none
+     * placed under a skill name. */
+    provided: Set<string> | null;
   }
   const picked: Picked[] = [];
   for (const name of names) {
@@ -388,7 +416,7 @@ export async function resolve(input: ResolveInput): Promise<ResolveResult> {
       const source: SourceLock = candidate.fixed.kind === "path"
         ? { path: candidate.fixed.path!, version: release.manifest.version, dependencies: { ...release.manifest.dependencies }, requires: manifestRequires(release.manifest) }
         : { git: candidate.fixed.repo!, commit: candidate.fixed.commit!, ...(candidate.fixed.subpath ? { path: candidate.fixed.subpath } : {}) };
-      picked.push({ name, version: candidate.version, artifacts, files: release.files, source, lockFiles: candidate.fixed.kind === "git" });
+      picked.push({ name, version: candidate.version, artifacts, files: release.files, source, lockFiles: candidate.fixed.kind === "git", provided: providedArtifacts(release.manifest) });
       continue;
     }
     const resource = await registry.version(name, candidate.version);
@@ -403,6 +431,7 @@ export async function resolve(input: ResolveInput): Promise<ResolveResult> {
         requires: Array.isArray(artifact.requires) ? artifact.requires : [],
       };
     }
+    const placed = Object.values(artifacts).some((artifact) => PLACED_KINDS.includes(artifact.kind));
     picked.push({
       name,
       version: candidate.version,
@@ -410,6 +439,7 @@ export async function resolve(input: ResolveInput): Promise<ResolveResult> {
       files: resource.files,
       source: { registry: keptRegistry(input.previous, name, candidate.version, resource.checksum) ?? registry.url, version: candidate.version, checksum: resource.checksum },
       lockFiles: true,
+      provided: placed ? await registryProvided(registry, name, candidate.version, resource.files) : null,
     });
   }
 
@@ -457,12 +487,15 @@ export async function resolve(input: ResolveInput): Promise<ResolveResult> {
         .map((file) => ({ path: file.path, sha256: file.sha256, executable: file.executable }))
         .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
       : [];
-    // 4. Exports: one skill per selected skill and playbook under its
-    // id, and per selected spec under `<org>-<pkg>` (DR-115), or alias.
+    // 4. Exports: one skill per provided skill and playbook under its
+    // id, and per provided spec under `<org>-<pkg>` (DR-115), or alias;
+    // a selected artifact its release does not provide — a sibling's
+    // support, or of a kind `provides` leaves out — is installed with the
+    // rest and placed nowhere, so its name clashes with none.
     const exports: Record<string, string> = {};
     for (const id of selected) {
       const kind = entry.artifacts[id]!.kind;
-      if (kind !== "skill" && kind !== "playbook" && kind !== "spec") continue;
+      if (!PLACED_KINDS.includes(kind) || entry.provided?.has(id) !== true) continue;
       const name = request?.alias?.[id] ?? (kind === "spec" ? specExportName(entry.name) : id);
       exports[name] = id;
       const list = exported.get(name) ?? [];

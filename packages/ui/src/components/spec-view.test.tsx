@@ -8,7 +8,8 @@
 // rows and grouped backlinks (SPECV-19), cross-file rollups on every
 // file row, citation jumps with the one-step return chip and focus
 // landing, the meta.md route, the polite live region, records reader
-// focus flow, and the empty/legacy states.
+// focus flow, the empty/legacy states, the editor, and a placed spec
+// read but never edited (spec-view-67).
 
 import { useState } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
@@ -3300,6 +3301,95 @@ describe("spec-view-53: the editor", () => {
     expect(screen.getByTestId("editor-dirty")).toBeTruthy();
     fireEvent.click(screen.getByTestId("editor-edit"));
     expect(field().value).toBe(`${AUTH_TEXT}\nDraft.\n`);
+  });
+
+  test("spec-view-67: a placed spec offers no Edit, its provenance in the control's place", async () => {
+    const TOOLS_PATH = "packages/tools.md";
+    const tools = (placed?: { name: string; version: string }): SpecTreeState => ({
+      ...TREE,
+      files: [
+        ...TREE.files,
+        {
+          path: `specs/${TOOLS_PATH}`,
+          key: "tools",
+          dir: "",
+          basename: "tools",
+          title: "Tools",
+          intent: "What the tools do.",
+          notices: [],
+          items: [
+            {
+              id: "tools-1",
+              group: "external",
+              section: "External Behavior",
+              firstLine: "The tool shall run.",
+              text: "The tool shall run.",
+              cites: [],
+            },
+          ],
+          ...(placed ? { placed } : {}),
+        },
+      ],
+    });
+    const placedTree = tools({ name: "acme/tools", version: "1.2.0" });
+    // A read held open, so the tree can mark the file placed while
+    // its fetch is out.
+    let release: (served: { markdown: string; version: string }) => void = () => {};
+    const onReadRecord = vi.fn((path: string) =>
+      path === TOOLS_PATH
+        ? new Promise<{ markdown: string; version: string }>((resolve) => {
+            release = resolve;
+          })
+        : Promise.resolve({ markdown: AUTH_TEXT, version: "v-auth" }),
+    );
+    const onWriteSpec = vi.fn();
+    const { rerender } = render(
+      <Harness tree={tools()} onReadRecord={onReadRecord} onWriteSpec={onWriteSpec} />,
+    );
+
+    // Unmarked, its Edit fetches the file; marked placed by a re-read
+    // before the fetch lands, it opens no editor (spec-view-48).
+    fireEvent.click(screen.getByTestId("file-toggle-tools"));
+    fireEvent.click(screen.getByTestId("file-edit-tools"));
+    expect(onReadRecord).toHaveBeenCalledWith(TOOLS_PATH);
+    rerender(
+      <Harness tree={placedTree} onReadRecord={onReadRecord} onWriteSpec={onWriteSpec} />,
+    );
+    await act(async () => {
+      release({ markdown: "# tools: Tools\n", version: "v-tools" });
+    });
+    expect(screen.queryByTestId("spec-editor")).toBeNull();
+
+    // The phrase stands where the package's Edit control stood, its
+    // tooltip on its title and as its description (spec-view-2).
+    const phrase = screen.getByTestId("file-placed-tools");
+    const tooltip = "Written by Spex from acme/tools 1.2.0 — an edit makes it yours";
+    expect(phrase.textContent).toBe("From acme/tools 1.2.0 · placed by Spex");
+    expect(phrase.getAttribute("title")).toBe(tooltip);
+    expect(
+      document.getElementById(phrase.getAttribute("aria-describedby") ?? "")?.textContent,
+    ).toBe(tooltip);
+    // The expand-all control stays the head's one control.
+    expect(
+      within(screen.getByTestId("items-head-tools"))
+        .getAllByRole("button")
+        .map((button) => button.getAttribute("data-testid")),
+    ).toEqual(["expand-all-tools"]);
+    expect(screen.queryByTestId("file-edit-tools")).toBeNull();
+    // Its items offer none either (spec-view-3).
+    fireEvent.click(screen.getByTestId("item-toggle-tools-1"));
+    expect(screen.getByTestId("item-toggle-tools-1").getAttribute("aria-expanded")).toBe("true");
+    expect(screen.queryByTestId("item-edit-tools-1")).toBeNull();
+
+    // An unmarked sibling keeps its controls, and its editor opens.
+    fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
+    expect(screen.queryByTestId(`file-placed-${AUTH}`)).toBeNull();
+    fireEvent.click(screen.getByTestId("item-toggle-AUTH-1"));
+    expect(screen.getByTestId("item-edit-AUTH-1")).toBeTruthy();
+    fireEvent.click(screen.getByTestId(`file-edit-${AUTH}`));
+    await screen.findByTestId("spec-editor");
+    expect(field().value).toBe(AUTH_TEXT);
+    expect(onWriteSpec).not.toHaveBeenCalled();
   });
 
   test("a record requested while a draft stands opens beneath it, discarding nothing", async () => {

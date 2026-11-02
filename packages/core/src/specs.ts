@@ -3,10 +3,11 @@
 
 // The spec-view data plane (SPECV; DR-011, DR-015): parse a project's
 // specs/ tree — the packages collection of meta-1 — into the
-// protocol's SpecTreeState in one pass, confine specs.read fetches
-// to the specs/ directory, and replace one file atomically under a
-// digest token (specs.write, DR-043). Sync fs is deliberate — spec
-// trees are small and reads happen on request (no watcher).
+// protocol's SpecTreeState in one pass, marking the specs an install
+// placed (spec-view-10, DR-174), confine specs.read fetches to the
+// specs/ directory, and replace one file atomically under a digest
+// token (specs.write, DR-043). Sync fs is deliberate — spec trees are
+// small and reads happen on request (no watcher).
 
 import { createHash } from "node:crypto";
 import {
@@ -21,6 +22,8 @@ import {
 } from "node:fs";
 import type { Dirent } from "node:fs";
 import { basename, dirname, isAbsolute, join, posix, sep } from "node:path";
+
+import { lfDigest, readPlacedMarker, readPlacedRecord } from "@sublang/spex/environment";
 
 import { defaultRunCommand, type RunCommand } from "./forge.js";
 import { i18n } from "./i18n.js";
@@ -168,9 +171,15 @@ function firstSentence(body: string[]): string {
   return sentence ? sentence[1] : firstText;
 }
 
-/** Parse one spec file's markdown text (exported for tests). */
+/** Parse one spec file's markdown text (exported for tests). A file
+ * opening with the marker is marked placed; parseSpecFile unmarks a
+ * copy the install record says was edited. */
 export function parseSpecFileText(text: string, key: string): SpecFileInfo {
   const file = fileShell(key);
+  // The marker an install writes first in a spec it placed
+  // (environments-41), naming its spec package and version.
+  const placed = readPlacedMarker(text);
+  if (placed) file.placed = placed;
   const unexpectedSections = new Set<string>();
 
   let h1: string | undefined;
@@ -335,11 +344,19 @@ export function parseSpecFileText(text: string, key: string): SpecFileInfo {
   return file;
 }
 
-/** Read + parse one spec file; never throws (SPECV degradation). */
-export function parseSpecFile(absPath: string, key: string): SpecFileInfo {
-  let text: string;
+/** Read + parse one spec file; never throws (SPECV degradation).
+ * `recorded` is the SHA-256 the install record holds for the file,
+ * where it lists it: a marked file whose text, CRLF read as LF, hashes
+ * otherwise is an edited copy, the project's own, and is marked nothing
+ * (spec-view-10). */
+export function parseSpecFile(
+  absPath: string,
+  key: string,
+  recorded?: string,
+): SpecFileInfo {
+  let bytes: Buffer;
   try {
-    text = readFileSync(absPath, "utf8");
+    bytes = readFileSync(absPath);
   } catch (error) {
     // The core's own words; what the filesystem or the parse said is
     // relayed as it came.
@@ -354,7 +371,15 @@ export function parseSpecFile(absPath: string, key: string): SpecFileInfo {
     };
   }
   try {
-    return parseSpecFileText(text, key);
+    const file = parseSpecFileText(bytes.toString("utf8"), key);
+    if (
+      file.placed &&
+      recorded !== undefined &&
+      lfDigest(bytes) !== recorded
+    ) {
+      delete file.placed;
+    }
+    return file;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return {
@@ -366,6 +391,23 @@ export function parseSpecFile(absPath: string, key: string): SpecFileInfo {
       }),
     };
   }
+}
+
+// ---------------------------------------------------------------------------
+// The install record of placed specs
+// ---------------------------------------------------------------------------
+
+/** The SHA-256 the install record of placed specs under the project's
+ * `.spex/` holds for each spec it placed, keyed by the spec's path from
+ * the project's root (environments-41). A missing or unreadable record,
+ * or one any entry of which is of another shape, is no record, so the
+ * marker alone decides, as the linter and an install read it. */
+function readPlacedHashes(projectPath: string): ReadonlyMap<string, string> {
+  const hashes = new Map<string, string>();
+  for (const entry of Object.values(readPlacedRecord(projectPath)?.specs ?? {})) {
+    hashes.set(posix.normalize(entry.path), entry.sha256);
+  }
+  return hashes;
 }
 
 // ---------------------------------------------------------------------------
@@ -752,9 +794,18 @@ export function parseSpecTree(
 
   // Walk the packages collection; subdirectories are navigation only
   // (meta-31), so files stay flat, keyed by collection-relative path.
+  // A placed spec is told by its marker and, where the install record
+  // lists it, the hash it holds (spec-view-10).
+  const placedHashes = readPlacedHashes(projectPath);
   const files = walkCollection(join(specsDir, "packages"), baseReal, notices)
     .sort((a, b) => (a.keyRel < b.keyRel ? -1 : a.keyRel > b.keyRel ? 1 : 0))
-    .map((entry) => parseSpecFile(entry.abs, entry.keyRel));
+    .map((entry) =>
+      parseSpecFile(
+        entry.abs,
+        entry.keyRel,
+        placedHashes.get(`specs/packages/${entry.keyRel}.md`),
+      ),
+    );
 
   return {
     present: true,

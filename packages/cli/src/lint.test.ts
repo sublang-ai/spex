@@ -720,6 +720,40 @@ describe("lintSpecs", () => {
     assert.ok(!rules(listed).includes("map/unlisted"), JSON.stringify(listed));
   });
 
+  // lint-9: a spec an install placed opens with the marker it writes
+  // (environments-41, DR-174) and needs no map entry; the project's own
+  // unlisted files warn as before, and a marker anywhere but the first
+  // line marks nothing. No install record is read: a fresh clone has
+  // none.
+  it("exempts a package file whose first line is a placed spec's marker from the map", () => {
+    const pkg = (name: string) =>
+      `# ${name}: ${name}\n\n## Intent\n\nP.\n\n## External Behavior\n\n### ${name}-1\n\nThe system shall act.\n\n## Verification\n\n### ${name}-2\n\nThe suite shall assert it acts [[${name}-1](#${name}-1)].\n`;
+    const marker = (name: string) =>
+      `<!-- Placed by Spex from acme/${name} 1.2.0; an edit makes this file yours. -->`;
+    const unlisted = (findings: LintFinding[]) =>
+      findings
+        .filter((f) => f.rule === "map/unlisted")
+        .map((f) => f.path)
+        .sort();
+
+    const findings = findingsFor({
+      "specs/packages/tools.md": `${marker("tools")}\n\n${pkg("tools")}`,
+      "specs/packages/crlf.md": `${marker("crlf")}\r\n\r\n${pkg("crlf")}`,
+      "specs/packages/own.md": pkg("own"),
+      "specs/packages/late.md": `<!-- SPDX-License-Identifier: Apache-2.0 -->\n${marker("late")}\n\n${pkg("late")}`,
+    });
+    assert.deepEqual(
+      unlisted(findings),
+      ["specs/packages/late.md", "specs/packages/own.md"],
+      JSON.stringify(findings),
+    );
+    assert.deepEqual(
+      findings.filter((f) => f.path === "specs/packages/tools.md"),
+      [],
+      "the marked file draws no finding of any rule",
+    );
+  });
+
   // lint-13: citation discipline.
   it("allows supporting citations and markers in a package Intent", () => {
     const findings = findingsFor({

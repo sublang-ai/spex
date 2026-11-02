@@ -73,9 +73,11 @@ import {
   placeOf,
   prepareBuiltinEnvironment,
   prepareEnvironment,
+  providedArtifacts,
   publishIssues,
   publishRelease,
   readRelease,
+  readSpecPlacements,
   RegistryClient,
   RegistryError,
   rehomeBuiltinLock,
@@ -106,6 +108,7 @@ import {
   type RegistrySourceLock,
   type Request,
   type Requests,
+  type SpecPlacement,
 } from "@sublang/spex/environment";
 import { parseDocument } from "yaml";
 import type { AuthScope } from "@sublang/spex/git-host";
@@ -1785,8 +1788,8 @@ export class EnvironmentManager {
     // reported with its cause, rather than reading as signed out.
     if (!isDirectory(folder)) {
       throw new CoreError("invalid_request", i18n._({
-        id: "No folder for {name} at {path} — npx @sublang/spex new {name} starts one",
-        comment: "Refusal of Publish: the package has no folder; {path} is where it would stand, the folder spex.yaml adds it from or spex-packages/<org>/<pkg>. 'npx @sublang/spex new' runs the command line's command that starts a package's folder",
+        id: "No folder for {name} at {path} — npx @sublang/spex export {name} [--spec <file>] [--skill <folder>]… builds one",
+        comment: "Refusal of Publish: the package has no folder; {path} is where it would stand, the folder spex.yaml adds it from or spex-packages/<org>/<pkg>. 'npx @sublang/spex export' runs the command line's command that builds a package's folder from the project's own spec file or skill folder; '<file>' and '<folder>' are the command's placeholders, kept as they are",
         values: { name, path },
       }));
     }
@@ -2008,6 +2011,17 @@ export class EnvironmentManager {
     catch (cause) { error = unreadablePhrase("spex.lock", cause); }
     const installedNames = lock && envRoot !== null ? installedPackages(envRoot, lock) : new Set<string>();
     const conflicts = clone.conflicts !== null && clone.conflicts.requests === requestsVersion ? clone.conflicts.conflicts : null;
+    // Where each provided spec stands under a project's `specs/`, read
+    // through the library as an install finds it, writing nothing
+    // (environments-14, environments-41); your own group's environment
+    // places its spec as a skill its exports name, so it has none
+    // (environments-8). Files that cannot be read place nothing here.
+    const specs = new Map<string, SpecPlacement>();
+    if (lock && envRoot !== null && !this.isOwn(key)) {
+      try {
+        for (const placement of readSpecPlacements(envRoot, lock, pathRoot)) specs.set(placement.name, placement);
+      } catch { /* unreadable files: no placement to report */ }
+    }
     const packages: EnvironmentPackage[] = [];
     for (const name of Object.keys(lock?.packages ?? {}).sort()) {
       const resolution = lock!.packages[name]!;
@@ -2035,6 +2049,24 @@ export class EnvironmentManager {
         if (resolution.artifacts[id]?.language === null) return "applet";
         return "playbook";
       };
+      // What the release provides (environments-1, environments-6), read
+      // by the library from its manifest where its files stand here at
+      // the version locked; a release whose files are not here reads as
+      // its lock names its artifacts, every one provided, since a lock
+      // records the manifest's digest alone, never its fields.
+      const locked = resolutionVersion(resolution);
+      const provided = manifest !== null && (locked === undefined || manifest.version === locked) ? providedArtifacts(manifest) : null;
+      const artifacts = Object.keys(resolution.artifacts).sort().map((id) => ({
+        id,
+        kind: kindOf(id),
+        language: resolution.artifacts[id]!.language,
+        fallback: resolution.artifacts[id]!.fallback,
+        provided: provided === null || provided.has(id),
+      }));
+      // A spec's placement only while the release provides it: a copy
+      // its release no longer provides, left as the project's own, is no
+      // placement of the package (environments-14).
+      const spec = artifacts.some((artifact) => artifact.kind === "spec" && artifact.provided) ? specs.get(name) : undefined;
       const builtin = name === BUILTIN_PACKAGE_NAME && isRegistrySource(source);
       packages.push({
         name,
@@ -2046,15 +2078,11 @@ export class EnvironmentManager {
             : { kind: "path", detail: source.path },
         direct: requests?.packages[name] !== undefined,
         requiredBy: [...resolution.requiredBy],
-        artifacts: Object.keys(resolution.artifacts).sort().map((id) => ({
-          id,
-          kind: kindOf(id),
-          language: resolution.artifacts[id]!.language,
-          fallback: resolution.artifacts[id]!.fallback,
-        })),
+        artifacts,
         exports: Object.keys(resolution.exports).sort().map((exported) => ({ name: exported, artifact: resolution.exports[exported]! })),
         installed,
         missingPath: missing && pathSource ? source.path : null,
+        ...(spec ? { placement: { spec: specPlacementOf(spec) } } : {}),
       });
     }
     const requestMap: Record<string, EnvironmentRequestSummary> = {};
@@ -2096,6 +2124,19 @@ export class EnvironmentManager {
     this.stopped = true;
     await Promise.allSettled([...this.operations]);
   }
+}
+
+/** A provided spec's placement as `environment.get` carries it
+ * (environments-14, environments-41). The library's states are the
+ * protocol's four, so each is carried as it is; a state the library
+ * adds fails to compile here until it is mapped to one of them. */
+function specPlacementOf(placement: SpecPlacement): NonNullable<NonNullable<EnvironmentPackage["placement"]>["spec"]> {
+  return {
+    state: placement.state,
+    path: placement.path,
+    waiting: placement.waiting.map(({ name, count }) => ({ name, count })),
+    ...(placement.waitingVersion !== undefined ? { waitingVersion: placement.waitingVersion } : {}),
+  };
 }
 
 /** A request's value for comparison: keys sorted at every level. */

@@ -16,7 +16,7 @@ import { Document, isMap, parseDocument } from "yaml";
 import { readVersioned, VersionConflictError, writeApplicationBytes, writeVersionedBytes } from "../files.js";
 import { packFiles } from "./archive.js";
 import { BUILTIN_PACKAGE_NAME, specExportName } from "./exports.js";
-import { artifactLanguages, inArtifact, parseManifestText, readRelease, ROOT_FILES, sha256Hex, type Manifest, type ReleaseFile } from "./format.js";
+import { artifactLanguages, inArtifact, parseManifestText, providedArtifacts, readRelease, ROOT_FILES, sha256Hex, type Manifest, type ReleaseFile } from "./format.js";
 import { isRegistrySource, parseLock, serializeLock, type Lock, type LockedFile } from "./lock.js";
 import { RegistryError, type RegistrySource, type SearchResult, type VersionIndex, type VersionIndexEntry, type VersionResource } from "./registry.js";
 import { parseRequests, PUBLIC_REGISTRY_ORIGIN, setRegistryIn, requestsDigest, setSpaceIn } from "./requests.js";
@@ -295,8 +295,9 @@ function pkgPathOf(dir: string, path: string): string {
  * The lock an environment requesting only the built-in spec package
  * resolves to, computed from the release this app ships without any
  * source or network (environments-3, environments-6): every artifact in
- * its original language, every file of theirs, each playbook exported
- * under its id. A clone the store makes holds it from its first commit.
+ * its original language, every file of theirs, each playbook it
+ * provides exported under its id. A clone the store makes holds it from
+ * its first commit.
  */
 export function builtinLock(pkg: BuiltinPackage, registryUrl: string, requestsText: string): Lock {
   const key = `${pkg.dir}\u0000${pkg.version}\u0000${registryUrl}`;
@@ -320,9 +321,11 @@ function builtinResolution(pkg: BuiltinPackage, registryUrl: string): Lock["pack
   const artifacts: Lock["packages"][string]["artifacts"] = {};
   const exports: Record<string, string> = {};
   const ids = Object.keys(manifest.artifacts).sort();
+  const provided = providedArtifacts(manifest);
   for (const id of ids) {
     const artifact = manifest.artifacts[id]!;
     artifacts[id] = { language: artifact.kind === "applet" ? null : artifact.language ?? null, fallback: false };
+    if (!provided.has(id)) continue;
     if (artifact.kind === "playbook" || artifact.kind === "skill") exports[id] = id;
     else if (artifact.kind === "spec") exports[specExportName(BUILTIN_PACKAGE_NAME)] = id;
   }
@@ -404,7 +407,9 @@ export function rehomeBuiltinLock(root: string, pkg: BuiltinPackage, registryUrl
   // `spex.yaml` names the instance placed at, or none is given.
   const naming = space !== null && parseRequests(text).space !== space;
   if (source.registry === target && !naming) return false;
-  if (current !== serializeLock(builtinLock(pkg, source.registry, text))) return false;
+  // CRLF read as LF: a checkout that converted the lock's line endings
+  // holds the lock a pairing prepared all the same.
+  if (current.replace(/\r\n/g, "\n") !== serializeLock(builtinLock(pkg, source.registry, text))) return false;
   let next = text;
   if (naming) {
     const doc = parseDocument(text);

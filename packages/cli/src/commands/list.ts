@@ -6,14 +6,18 @@
 // (DR-172) — the folder and its registry by name; each package added,
 // with its version or folder; each package installed, with its version,
 // where it comes from, the packages it came for and whether its files
-// stand; each skill with the agent folders it is placed in; and, where
-// `spex.lock` is missing or stale, or a package is not installed, the
-// command to run: `spex update` for a stale lock, as the Packages tab's
-// chip offers Update, else `spex install`.
+// stand, beneath one providing a spec where that spec stands in
+// `specs/` and the packages its links wait for, read from the files,
+// their marker lines and the install record as an install would find
+// them, with no placement run (environments-41); each
+// skill with the agent folders it is placed in; and, where `spex.lock`
+// is missing or stale, or a package is not installed, the command to
+// run: `spex update` for a stale lock, as the Packages tab's chip offers
+// Update, else `spex install`.
 
-import { BUILTIN_PACKAGE_NAME, isGitRequest, isPathRequest, isPathSource, type Request } from "../lib/environment/index.js";
+import { BUILTIN_PACKAGE_NAME, isGitRequest, isPathRequest, isPathSource, readSpecPlacements, type Request } from "../lib/environment/index.js";
 import { Environment } from "./environment.js";
-import { gitLabel, gitLocators, packageStates, placeText, skillPlaces, sourceLabel, staleReasons, table, unnamedText, versionOf } from "./settle.js";
+import { gitLabel, gitLocators, packageStates, placeText, skillPlaces, sourceLabel, specLines, staleReasons, table, unnamedText, versionOf } from "./settle.js";
 import { parsed, type Command } from "./run.js";
 
 /** A package as `spex.yaml` adds it: its version, its folder, or its Git
@@ -59,11 +63,13 @@ export const list: Command = async (args) => {
   const names = Object.keys(lock.packages).sort();
   const states = packageStates(env.root, lock);
   if (names.length > 0) {
-    lines.push("Installed", ...table(names.map((name) => {
+    const rows = table(names.map((name) => {
       const resolution = lock.packages[name]!;
       const requiredBy = resolution.requiredBy.length > 0 ? `for ${resolution.requiredBy.join(", ")}` : "";
       return [name, versionOf(env.root, name, resolution), sourceLabel(name, resolution), requiredBy, states.get(name)!];
-    })));
+    }));
+    const specs = readSpecPlacements(env.root, lock);
+    lines.push("Installed", ...names.flatMap((name, at) => [rows[at]!, ...specLines(specs, name, "    ")]));
   }
   const skills = names.flatMap((name) => skillPlaces(env.root, lock, name, states.get(name)!).map((place) => [place.skill, placeText(place)]));
   if (skills.length > 0) lines.push("Skills for agents", ...table(skills));
