@@ -11,6 +11,7 @@ Completes [DR-104](104-spec-package-format-and-client-environments.md) in its as
 Follows [DR-081](081-the-app-supplies-the-compiler.md)'s explicit-bump rule for the compiler and [DR-024](024-app-supplied-agent-runtimes.md)'s app-supplied agent runtimes; nothing either decided changes.
 Amended by [DR-108](108-the-root-lease-names-the-machine.md) in its Playbook floor alone, now `^17.6.0`: the core requires Playbook 17.6.0, the first release publishing `@sublang/playbook/machine-identity`.
 Amended by [DR-123](123-playbook-17-10-1-cligent-0-34-0-slc-0-18-0-adoption.md) in its parity claim alone: the core refuses a `skills` list beside a playbook's `from`.
+Amended by [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md) in the core's parity with the launcher: the default bindings and players the core composes for placed playbooks are its third exception, beside `from` and `skills`.
 
 ## Context
 

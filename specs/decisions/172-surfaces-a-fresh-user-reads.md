@@ -10,6 +10,7 @@ Amends [DR-011](011-project-workspace.md) in the rail and the workspace's tabs, 
 Amended by [DR-173](173-the-registry-is-no-face-of-a-space.md): the registry stands nowhere on the Space surface, and the Packages tab's chooser reads no directory for registries.
 Amended by [DR-174](174-what-a-package-provides-is-placed.md) in its vocabulary, its Packages tab and one accepted loss: "place" is the word for what an install writes for agents and into `specs/`, a row's spec line says where the spec stands, and the command line's `export` closes the "New package…" loss.
 Amended by [DR-175](175-projects-shown-where-they-are-open.md) in its vocabulary: the code glyph's phrase for code on no Git host.
+Amended by [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md) in its map, its vocabulary, its Packages and Playbooks tabs and one accepted loss: the rail regains Playbooks as the global page, and a remembered Playbooks surface opens it; "Global" is the word for what applies to every project of yours, "Personal" staying the name of your own group on Space; the Packages tab holds the project's packages alone, the built-in playbooks one package among the rest; a package row's playbook line carries no act; with no project open the global page stands.
 
 ## Context
 
