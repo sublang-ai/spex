@@ -204,7 +204,7 @@ test("projects-21: removal deletes the clone behind a second confirm naming its 
   // The environment as the removal finds it — its two files and its
   // installed tree — stays with the folder byte for byte
   // (environments-26).
-  const inSpex = ([path]: [string, string]): boolean => path === ".spex" || path.startsWith(`.spex${sep}`) || path === "spex.yaml" || path === "spex.lock";
+  const inSpex = ([path]: [string, string]): boolean => path === ".spex" || path.startsWith(`.spex${sep}`) || path === "spex.yaml" || path === "spex.lock" || path === ".gitattributes";
   const spexBefore = new Map([...snapshot(folder)].filter(inSpex));
   assert.ok(spexBefore.size > 1, "the installed tree stands under .spex/");
 

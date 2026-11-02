@@ -519,7 +519,8 @@ test("environments-7, environments-26, environments-21: environment.get finding 
   // main line (environments-26).
   const gitIn = (...args: string[]): string => execFileSync("git", ["-C", working, "-c", "user.name=Spex Test", "-c", "user.email=test@spex.invalid", "-c", "commit.gpgsign=false", ...args], { encoding: "utf8" });
   gitIn("checkout", "-q", "-b", "both");
-  gitIn("add", "spex.yaml", "spex.lock");
+  writeFileSync(join(working, ".gitattributes"), "spex.yaml text eol=lf\nspex.lock text eol=lf\nspecs/packages/*.md text eol=lf\n");
+  gitIn("add", "spex.yaml", "spex.lock", ".gitattributes");
   gitIn("commit", "-q", "-m", "Request kit and tool");
   const both = { requests: readFileSync(join(working, "spex.yaml")), lock: readFileSync(join(working, "spex.lock")) };
   gitIn("checkout", "-q", "-b", "kit");
@@ -797,6 +798,7 @@ test("environments-22 through a real core: a spec-only spec package requested fr
   assert.equal(readFileSync(placed, "utf8"), `<!-- Placed by Spex from acme/trip-split 1.0.0; an edit makes this file yours. -->\n\n${spec}`,
     "[environments-41] the marker line, a blank line, then the release's spec");
   assert.equal((JSON.parse(readFileSync(join(working, ".spex", "placed.json"), "utf8")) as { specs: Record<string, { version: string }> }).specs["acme/trip-split"]?.version, "1.0.0", "[environments-41] recorded with the release's version");
+  assert.equal(readFileSync(join(working, ".gitattributes"), "utf8"), "spex.yaml text eol=lf\nspex.lock text eol=lf\nspecs/packages/*.md text eol=lf\n", "[environments-44] the three LF rules in the project's .gitattributes");
   for (const folder of [exported, shared]) assert.equal(existsSync(folder), false, `[environments-8] into no agent folder: ${folder}`);
   assert.doesNotMatch(exclude(), /acme-trip-split|specs/, "[environments-41] nothing of it in Git's exclude");
   assert.equal(execFileSync("git", ["-C", working, "status", "--porcelain", "--untracked-files=all", "--", "specs/packages/trip-split.md"], { encoding: "utf8" }),
@@ -1671,7 +1673,7 @@ test("environments-21, environments-26, environments-14: a project's spex.yaml a
   // [environments-26] the core staged and committed nothing in the
   // code's Git and ignored neither file: both read untracked, and
   // .spex/ ignores itself.
-  assert.deepEqual(codeStatus(working), ["?? spex.lock", "?? spex.yaml"]);
+  assert.deepEqual(codeStatus(working), ["?? .gitattributes", "?? spex.lock", "?? spex.yaml"], "[environments-44] .gitattributes beside the two files, untracked too");
   assert.equal(codeGit(working, "rev-list", "--all").trim(), "", "no commit was made");
   for (const file of ["spex.yaml", "spex.lock"]) {
     assert.throws(() => codeGit(working, "check-ignore", "-q", file), `${file} is not ignored`);
@@ -1788,19 +1790,6 @@ test("environments-14, environments-1, environments-6, environments-41: environm
   writeFileSync(termsFile, copy);
   assert.deepEqual((await read("acme/terms")).placement, { spec: { state: "placed", path: "specs/packages/terms.md", waiting } });
 
-  // [environments-3] [environments-41] as on a checkout that wrote CRLF
-  // line endings — Git for Windows by default: the lock reads current
-  // and the copy, no record, is the package's.
-  const requestsFile = join(working, "spex.yaml");
-  const requestsText = readFileSync(requestsFile, "utf8");
-  writeFileSync(requestsFile, requestsText.replace(/\n/g, "\r\n"));
-  writeFileSync(termsFile, copy.replace(/\n/g, "\r\n"));
-  const crlf = await client.expectOk("environment.get", { repository: key });
-  assert.equal(crlf.stale, null, "[environments-3] a CRLF spex.yaml keeps the lock current");
-  assert.deepEqual(crlf.packages.find((pkg) => pkg.name === "acme/terms")?.placement, { spec: { state: "placed", path: "specs/packages/terms.md", waiting } }, "[environments-41] a CRLF copy is the package's");
-  writeFileSync(requestsFile, requestsText);
-  writeFileSync(termsFile, copy);
-
   // [environments-41] a project file of the spec's name blocks it.
   writeFileSync(join(working, "specs", "packages", "rules.md"), spec("rules"));
   assert.deepEqual((await read("acme/rules")).placement, { spec: { state: "blocked", path: "specs/packages/rules.md", waiting: [] } });
@@ -1871,7 +1860,8 @@ test("environments-21, environments-26, environments-7, environments-14: a worki
   // A working folder cloned with its environment committed, as a
   // reader's code holds it.
   const committed = await withEnvironment("committed");
-  codeGit(committed.folder, "add", "spex.yaml", "spex.lock");
+  writeFileSync(join(committed.folder, ".gitattributes"), "spex.yaml text eol=lf\nspex.lock text eol=lf\nspecs/packages/*.md text eol=lf\n");
+  codeGit(committed.folder, "add", "spex.yaml", "spex.lock", ".gitattributes");
   codeGit(committed.folder, "commit", "-q", "-m", "The environment");
   const head = codeGit(committed.folder, "rev-parse", "HEAD").trim();
   const files = ["spex.yaml", "spex.lock"].map((file) => readFileSync(join(committed.folder, file)));

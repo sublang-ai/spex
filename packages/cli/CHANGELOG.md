@@ -82,13 +82,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- A checkout that converts line endings — Git for Windows by default —
-  keeps a committed `spex.lock` current and reads a placed spec as its
-  package's copy, which an update then rewrites: the lock's digest of
-  `spex.yaml` and the comparison of a placed copy with its derivation
-  read CRLF as LF, and a placed spec is written with LF line endings.
-  A lock resolved earlier from a `spex.yaml` with CRLF line endings reads
-  stale once, and `spex install` resolves it again.
+- Spex writes LF, and an install pins `spex.yaml`, `spex.lock` and
+  `specs/packages/*.md` to LF in the project's `.gitattributes`, so a
+  checkout whose Git converts line endings — Git for Windows by default —
+  installs from the committed files to no diff.
 
 ### Fixed
 

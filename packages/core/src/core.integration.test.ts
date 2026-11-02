@@ -1612,7 +1612,7 @@ test("projects-18: real scaffolding uses the requested language or the core's la
         new RegExp(`Authoring language: ${requested ?? "zh"}`));
       // Every generated file committed; the environment pairing wrote at
       // the root is the reader's to commit (environments-26).
-      assert.equal(execFileSync("git", ["status", "--porcelain"], { cwd: path, encoding: "utf8" }).trim(), "?? spex.lock\n?? spex.yaml");
+      assert.equal(execFileSync("git", ["status", "--porcelain"], { cwd: path, encoding: "utf8" }).trim(), "?? .gitattributes\n?? spex.lock\n?? spex.yaml", "[environments-44] .gitattributes beside the two files");
     }
   } finally {
     client.close();
@@ -1862,7 +1862,7 @@ test("PROJ: work-tree validation, create flow, forge states, removal", async () 
   // The generated files are committed; the environment the pairing
   // wrote at the root waits for the reader's commit (environments-26).
   assert.equal(status.dirty, true);
-  assert.equal(execFileSync("git", ["status", "--porcelain"], { cwd: created.path, encoding: "utf8" }).trim(), "?? spex.lock\n?? spex.yaml");
+  assert.equal(execFileSync("git", ["status", "--porcelain"], { cwd: created.path, encoding: "utf8" }).trim(), "?? .gitattributes\n?? spex.lock\n?? spex.yaml", "[environments-44] .gitattributes beside the two files");
   const licensing = readFileSync(
     join(created.path, "specs", "packages", "licensing.md"),
     "utf-8",
