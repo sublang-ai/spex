@@ -152,7 +152,7 @@ test("cli-14: the same install given an engine hands it every playbook folder", 
   assert.deepEqual(linked, ["tools/local/playbooks/en/walk"]);
 });
 
-test("environments-44: a Git source's files are read as the repository holds them, whatever this device's Git line-ending settings", async () => {
+test("environments-45: a Git source's files are read as the repository holds them, whatever this device's Git line-ending settings", async () => {
   // Git for Windows sets core.autocrlf=true, which `git archive` applies
   // even from a bare mirror: resolved there, a lock would hold CRLF
   // digests that no other device's bytes match. The lock's digests are
@@ -177,13 +177,13 @@ test("environments-44: a Git source's files are read as the repository holds the
   if (!result.ok) assert.fail(`resolution failed: ${JSON.stringify(result.conflicts)}`);
   const locked = result.lock.packages["acme/git-kit"]!.files;
   assert.ok(locked.length > 0, "the lock selects the release's files");
-  for (const file of locked) assert.equal(file.sha256, sha256Hex(committed[file.path]!), `[environments-44] ${file.path} is locked at the digest of the bytes the repository holds`);
+  for (const file of locked) assert.equal(file.sha256, sha256Hex(committed[file.path]!), `[environments-45] ${file.path} is locked at the digest of the bytes the repository holds`);
   await writeLock(join(workingFolder, "spex.lock"), result.lock);
 
   // Installed from that lock on a second device, this one as it is.
   const second = scratch("spex-cli-home-");
   const report = await install({ root: workingFolder, lock: result.lock, lockVersion: fileVersion(join(workingFolder, "spex.lock")), store: new ContentStore(second), cache: join(second, "cache"), registry: client, git: gitSource(join(second, "cache")), pathRoot: workingFolder });
-  assert.deepEqual(report.installed, ["acme/git-kit"], "[environments-44] the second device installs the first's lock");
+  assert.deepEqual(report.installed, ["acme/git-kit"], "[environments-45] the second device installs the first's lock");
   const installed = join(workingFolder, ".spex", "packages", "acme", "git-kit");
-  for (const file of locked) assert.equal(readFileSync(join(installed, ...file.path.split("/")), "utf8"), committed[file.path], `[environments-44] ${file.path} is installed as the repository holds it`);
+  for (const file of locked) assert.equal(readFileSync(join(installed, ...file.path.split("/")), "utf8"), committed[file.path], `[environments-45] ${file.path} is installed as the repository holds it`);
 });

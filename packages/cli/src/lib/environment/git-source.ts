@@ -8,7 +8,7 @@
 // tree at the locked commit. The tree is the repository's own: Git converts
 // line endings only as the repository's attributes direct, never as this
 // device is set, so the lock's digests match on every device
-// (environments-44). A credential, where one is given, reaches Git only
+// (environments-45). A credential, where one is given, reaches Git only
 // through the caller's credential arguments.
 
 import { spawn } from "node:child_process";

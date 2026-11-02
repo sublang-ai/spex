@@ -261,7 +261,7 @@ When the core resolves or installs a Git source, it shall fetch the repository a
 - a `rev` naming a branch or tag resolves to its commit at resolution and the lock holds the commit alone;
 - a repository at the Git origin of no instance the home is signed in to, a signed-out instance's included, is fetched with this device's own Git, so a public one still installs and a private one reports Git's refusal.
 
-#### environments-44
+#### environments-45
 
 When the core reads a Git source's files at resolution or install, it shall read them as the repository's own content and attributes alone determine them, with no line-ending conversion this device's Git is set to apply, so a lock resolved on one device installs on every other ([DR-104](../decisions/104-spec-package-format-and-client-environments.md)).
 
@@ -384,7 +384,7 @@ When an integration suite installs locked environments on a scratch home, it sha
 - a changed `spex.yaml`, a changed path-source manifest and a path source lacking a selected artifact each mark the lock stale, install nothing new and report resolving again [[environments-7](#environments-7)];
 - a path source is used in place, a second working folder of the same project runs its own copy, and a device whose working folder lacks it reports it missing [[environments-7](#environments-7)];
 - a Git source at a branch resolves to its commit, installs from that commit through the stand-in host's credential, and the lock holds the commit alone [[environments-13](#environments-13)];
-- a Git source resolved with this device's Git set to convert line endings to CRLF locks each file at the digest of the bytes the repository holds, and a second home installs that lock from the repository with those bytes [[environments-44](#environments-44)];
+- a Git source resolved with this device's Git set to convert line endings to CRLF locks each file at the digest of the bytes the repository holds, and a second home installs that lock from the repository with those bytes [[environments-45](#environments-45)];
 - a project's `spex.yaml` and `spex.lock` stand at its working folder's root and its installed files under that root's `.spex/`, nothing of either in its clone, the core having staged, committed and ignored nothing outside `.spex/` [[environments-26](#environments-26)]; a working folder paired while holding a committed environment installs from it with nothing but `.spex/` written [[environments-26](#environments-26)] [[environments-7](#environments-7)]; a project's clone holding a former `packages/` and `skills/` loses them at the next install [[environments-7](#environments-7)]; an environment the command line installed in a folder the app then pairs is read installed with its install record, nothing rewritten, and one the app installed is read by the command line the same way [[environments-26](#environments-26)] [[environments-14](#environments-14)]; a lock changed by a Git checkout in the folder is installed at the next use [[environments-7](#environments-7)]; and the environment is listed as this device's while the files are untracked, still after `git add` alone, and as committed once a commit holds both [[environments-14](#environments-14)];
 - a private namespace at the stand-in registry installs with the app token of the instance it answers at and refuses without, naming the spec package, a resolution with no token ending in the registry's answer, not a conflict [[environments-12](#environments-12)] [[environments-5](#environments-5)].
 
