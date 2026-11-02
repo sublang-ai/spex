@@ -113,6 +113,10 @@ msgstr "{actor} · Turn {turn}"
 msgid "{adapter} is not ready — check Settings"
 msgstr "{adapter} is not ready — check Settings"
 
+#: src/components/SpaceMembers.tsx
+msgid "{added, plural, one {# member added} other {# members added}}; {remaining} still to add."
+msgstr "{added, plural, one {# member added} other {# members added}}; {remaining} still to add."
+
 #: src/lib/space.ts
 msgid "{ahead, plural, one {# commit} other {# commits}} ahead, {behind, plural, one {# commit} other {# commits}} behind · checked {at}"
 msgstr "{ahead, plural, one {# commit} other {# commits}} ahead, {behind, plural, one {# commit} other {# commits}} behind · checked {at}"
@@ -211,7 +215,12 @@ msgstr "{count, plural, one {# link waits} other {# links wait}} for {name}"
 msgid "{count, plural, one {# match} other {# matches}}"
 msgstr "{count, plural, one {# match} other {# matches}}"
 
+#: src/components/SpaceMembers.tsx
+msgid "{count, plural, one {# member added} other {# members added}} as {role}"
+msgstr "{count, plural, one {# member added} other {# members added}} as {role}"
+
 #: src/components/SpaceGroups.tsx
+#: src/components/SpaceMembers.tsx
 msgid "{count, plural, one {# member} other {# members}}"
 msgstr "{count, plural, one {# member} other {# members}}"
 
@@ -388,6 +397,18 @@ msgstr "{from} cites {to} {count, plural, one {# time} other {# times}}"
 #: src/components/SpecView.tsx
 msgid "{group} ({count})"
 msgstr "{group} ({count})"
+
+#: src/components/SpaceGroups.tsx
+msgid "{group} deleted."
+msgstr "{group} deleted."
+
+#: src/components/SpaceGroups.tsx
+msgid "{group} is scheduled for deletion."
+msgstr "{group} is scheduled for deletion."
+
+#: src/components/SpaceGroups.tsx
+msgid "{group} restored."
+msgstr "{group} restored."
 
 #. what failed, then what the agent said about it
 #: src/lib/failure-catalogue.ts
@@ -782,6 +803,10 @@ msgstr "@{login} added as {role}"
 msgid "@{login} removed"
 msgstr "@{login} removed"
 
+#: src/components/SpaceMembers.tsx
+msgid "@{login}: {message}"
+msgstr "@{login}: {message}"
+
 #: src/components/Composer.tsx
 msgid "/ for playbooks · Enter sends"
 msgstr "/ for playbooks · Enter sends"
@@ -918,6 +943,10 @@ msgstr "A credential you place on {server} stays there until you remove it"
 msgid "A follow-up message continues this intent."
 msgstr "A follow-up message continues this intent."
 
+#: src/components/SpaceGroups.tsx
+msgid "A group owner can restore it before deletion takes effect."
+msgstr "A group owner can restore it before deletion takes effect."
+
 #: src/lib/failure-catalogue.ts
 msgid "A nested workflow failed"
 msgstr "A nested workflow failed"
@@ -1020,6 +1049,10 @@ msgstr "Accepts {provider} accounts"
 msgid "Access follows this project's members and visibility"
 msgstr "Access follows this project's members and visibility"
 
+#: src/components/SpaceMembers.tsx
+msgid "Access starts immediately when you add them."
+msgstr "Access starts immediately when you add them."
+
 #: src/components/ProjectGroup.tsx
 msgid "Actions for {title}"
 msgstr "Actions for {title}"
@@ -1047,7 +1080,6 @@ msgstr "Adapter option; model support unverified"
 msgid "Adapter option; model support unverified."
 msgstr "Adapter option; model support unverified."
 
-#. add the person at the chosen role at the Space
 #. add this package to spex.yaml and install it
 #. create this player in your own roster
 #. register the typed path as an existing repository
@@ -1058,7 +1090,6 @@ msgstr "Adapter option; model support unverified."
 #: src/components/DraftRegisterTab.tsx
 #: src/components/ProjectPalette.tsx
 #: src/components/SettingsSurface.tsx
-#: src/components/SpaceMembers.tsx
 #: src/lib/environments.ts
 msgid "Add"
 msgstr "Add"
@@ -1116,9 +1147,22 @@ msgstr "Add an existing Git repository or create a new project."
 msgid "Add an intent to {project}"
 msgstr "Add an intent to {project}"
 
+#: src/components/SpaceMembers.tsx
+msgid "Add another username"
+msgstr "Add another username"
+
 #: src/components/ProjectGroup.tsx
 msgid "Add intent…"
 msgstr "Add intent…"
+
+#. immediately give this account the selected access
+#: src/components/SpaceMembers.tsx
+msgid "Add member"
+msgstr "Add member"
+
+#: src/components/SpaceMembers.tsx
+msgid "Add members"
+msgstr "Add members"
 
 #: src/components/SettingsSurface.tsx
 msgid "Add player"
@@ -1192,6 +1236,10 @@ msgstr "Added /{command}"
 msgid "Added to Up next — see the project's Overview."
 msgstr "Added to Up next — see the project's Overview."
 
+#: src/components/SpaceMembers.tsx
+msgid "Adding {current} of {total}…"
+msgstr "Adding {current} of {total}…"
+
 #. acknowledges an accepted request; the project row reports completion or a wait
 #: src/components/SpaceGroups.tsx
 msgid "Adding {name} to {group} at {space}"
@@ -1200,9 +1248,9 @@ msgstr "Adding {name} to {group} at {space}"
 #. a repair's control while the folder is paired with the project
 #. a repair's control while the folder is paired with the project
 #. adding this project to the selected group
-#. the Add control, while the Space adds the person
 #. the Add form's request is in flight: the playbook is being added
 #. the Use this folder control, while the folder is paired
+#. the members are being added at the Space
 #. the package is being added to spex.yaml
 #. the request is being written
 #: src/components/DraftRegisterTab.tsx
@@ -1378,6 +1426,10 @@ msgstr "always"
 #: src/lib/failure-catalogue.ts
 msgid "An agent failed"
 msgstr "An agent failed"
+
+#: src/components/SpaceGroups.tsx
+msgid "An owner can restore {group} to keep this group."
+msgstr "An owner can restore {group} to keep this group."
 
 #: src/components/ParkedRun.tsx
 msgid "Answer below, or drop the run"
@@ -1707,6 +1759,10 @@ msgstr "C"
 msgid "call /{playbookId}"
 msgstr "call /{playbookId}"
 
+#: src/components/SpaceMembers.tsx
+msgid "Can sync changes to shared records."
+msgstr "Can sync changes to shared records."
+
 #. banner: a team server's seat never answered; {server} is the server's name
 #: src/App.tsx
 msgid "Can't reach {server} — retrying every second."
@@ -1773,6 +1829,10 @@ msgstr "Canceled {age}"
 #: src/lib/useBrowserTools.ts
 msgid "Cancelling browser setup…"
 msgstr "Cancelling browser setup…"
+
+#: src/components/SpaceMembers.tsx
+msgid "Cannot sync changes to shared records."
+msgstr "Cannot sync changes to shared records."
 
 #. the agent that routes the Boss's message to a playbook
 #. the agent that routes the Boss's message to a playbook
@@ -1864,6 +1924,10 @@ msgstr "chat"
 msgid "Check"
 msgstr "Check"
 
+#: src/components/SpaceGroups.tsx
+msgid "Check again"
+msgstr "Check again"
+
 #: src/components/CaptainPane.tsx
 msgid "Check agent readiness"
 msgstr "Check agent readiness"
@@ -1893,6 +1957,10 @@ msgstr "Checking browser runtime…"
 #: src/lib/useBrowserTools.ts
 msgid "Checking browser support…"
 msgstr "Checking browser support…"
+
+#: src/components/SpaceGroups.tsx
+msgid "Checking group contents…"
+msgstr "Checking group contents…"
 
 #. sync step running: reading what the Space holds
 #. sync step running: reading what the Space holds
@@ -1945,6 +2013,10 @@ msgstr "Choose a project"
 #: src/components/ProjectPalette.tsx
 msgid "Choose a project folder…"
 msgstr "Choose a project folder…"
+
+#: src/components/SpaceMembers.tsx
+msgid "Choose a role"
+msgstr "Choose a role"
 
 #. empty choice of the reasoning-effort select
 #: src/components/TuningField.tsx
@@ -2421,6 +2493,10 @@ msgstr "Connecting…"
 msgid "connection closed"
 msgstr "connection closed"
 
+#: src/components/SpaceMembers.tsx
+msgid "Connection lost. Reconnect to add the remaining members."
+msgstr "Connection lost. Reconnect to add the remaining members."
+
 #: src/App.tsx
 msgid "Connection restored."
 msgstr "Connection restored."
@@ -2438,6 +2514,10 @@ msgstr "Continue"
 #: src/components/SpaceSignIn.tsx
 msgid "Continue in your browser"
 msgstr "Continue in your browser"
+
+#: src/components/SpaceMembers.tsx
+msgid "Contribute shared records and manage projects and their members."
+msgstr "Contribute shared records and manage projects and their members."
 
 #: src/components/ApprovalInbox.tsx
 msgid "Conversation: {name}"
@@ -2701,6 +2781,11 @@ msgstr "decision records {count}"
 msgid "Delete"
 msgstr "Delete"
 
+#. group deletion confirmation naming exactly the group and its Space
+#: src/components/SpaceGroups.tsx
+msgid "Delete {group} at {space}?"
+msgstr "Delete {group} at {space}?"
+
 #: src/components/PlaybookAuthoring.tsx
 msgid "Delete authoring session {id}"
 msgstr "Delete authoring session {id}"
@@ -2708,6 +2793,16 @@ msgstr "Delete authoring session {id}"
 #: src/components/NavRail.tsx
 msgid "delete failed"
 msgstr "delete failed"
+
+#. confirm deletion of the named empty group
+#: src/components/SpaceGroups.tsx
+msgid "Delete group"
+msgstr "Delete group"
+
+#. a group's overflow action: check that the group is empty before confirming deletion
+#: src/components/SpaceGroups.tsx
+msgid "Delete group…"
+msgstr "Delete group…"
 
 #: src/components/NavRail.tsx
 msgid "Delete session {title}"
@@ -2756,10 +2851,16 @@ msgstr "Deletes the session and its conversation · its package folder stays"
 msgid "deleting…"
 msgstr "deleting…"
 
+#. busy group deletion action
 #. the delete request is in flight
 #: src/components/PlaybookAuthoring.tsx
+#: src/components/SpaceGroups.tsx
 msgid "Deleting…"
 msgstr "Deleting…"
+
+#: src/components/SpaceGroups.tsx
+msgid "Deletion may be immediate. If scheduled, you can restore the group before deletion takes effect."
+msgstr "Deletion may be immediate. If scheduled, you can restore the group before deletion takes effect."
 
 #: src/components/CaptainHome.tsx
 msgid "Delivery"
@@ -3002,6 +3103,10 @@ msgstr "Dropping…"
 #: src/components/AgentEditor.tsx
 msgid "e.g. .git, docs/generated"
 msgstr "e.g. .git, docs/generated"
+
+#: src/components/SpaceMembers.tsx
+msgid "e.g. alex, sam"
+msgstr "e.g. alex, sam"
 
 #. the hint inside the new-playbook license field; an SPDX license id
 #: src/components/PlaybookAuthoring.tsx
@@ -3557,6 +3662,14 @@ msgstr "From the registry · {range}"
 msgid "From your groups"
 msgstr "From your groups"
 
+#: src/components/SpaceMembers.tsx
+msgid "Full control of this group, including its members and deletion."
+msgstr "Full control of this group, including its members and deletion."
+
+#: src/components/SpaceMembers.tsx
+msgid "Full control of this project, including its members and deletion."
+msgstr "Full control of this project, including its members and deletion."
+
 #. pipeline stage: the compiled spec items
 #. pipeline stage: the compiler's normative spec items (a proper name)
 #. pipeline stage: the compiler's normative spec items (a proper name)
@@ -3621,9 +3734,14 @@ msgid "Group name"
 msgstr "Group name"
 
 #. the row of a group's own records: the group's sessions outside any project
+#: src/components/SpaceGroups.tsx
 #: src/lib/space.ts
 msgid "Group sessions"
 msgstr "Group sessions"
+
+#: src/components/SpaceGroups.tsx
+msgid "Group: {name}"
+msgstr "Group: {name}"
 
 #. a delegation line: the Captain gave this call to the named player
 #: src/components/CallLines.tsx
@@ -3886,6 +4004,15 @@ msgstr "Interrupted turn"
 msgid "Invalid: {reason}"
 msgstr "Invalid: {reason}"
 
+#. open the form to add people to this group or project's records
+#: src/components/SpaceMembers.tsx
+msgid "Invite members"
+msgstr "Invite members"
+
+#: src/components/SpaceMembers.tsx
+msgid "Invite to {name}"
+msgstr "Invite to {name}"
+
 #: src/lib/media.ts
 msgid "Invocation {call}"
 msgstr "Invocation {call}"
@@ -4048,6 +4175,10 @@ msgstr "Last-used folder not found on this computer"
 msgid "License"
 msgstr "License"
 
+#: src/components/SpaceMembers.tsx
+msgid "Limited access; cannot read or sync private shared records."
+msgstr "Limited access; cannot read or sync private shared records."
+
 #. compile phase: slc links the machine
 #: src/lib/compile-log.ts
 msgid "Link"
@@ -4117,11 +4248,6 @@ msgstr "loading…"
 msgid "Loading…"
 msgstr "Loading…"
 
-#. the field for a person's login at the Space, named by the Space's display name
-#: src/components/SpaceMembers.tsx
-msgid "Login at {space}"
-msgstr "Login at {space}"
-
 #: src/components/SpecGraph.tsx
 msgid "Lower the threshold"
 msgstr "Lower the threshold"
@@ -4190,6 +4316,14 @@ msgstr "Members"
 #: src/components/SpaceMembers.tsx
 msgid "Members of {name}"
 msgstr "Members of {name}"
+
+#: src/components/SpaceMembers.tsx
+msgid "Membership applies to this group and the projects and groups inside it."
+msgstr "Membership applies to this group and the projects and groups inside it."
+
+#: src/components/SpaceMembers.tsx
+msgid "Membership applies to this project's records at {space}."
+msgstr "Membership applies to this project's records at {space}."
 
 #. a step: the coder merges both proposals into specs and commits
 #: src/lib/step-words.ts
@@ -4458,6 +4592,10 @@ msgstr "no items in active groups"
 msgid "no items match the search"
 msgstr "no items match the search"
 
+#: src/components/SpaceMembers.tsx
+msgid "No members added. Review the usernames below."
+msgstr "No members added. Review the usernames below."
+
 #: src/components/NavRail.tsx
 #: src/components/ProjectGroup.tsx
 msgid "no messages yet"
@@ -4544,6 +4682,10 @@ msgstr "No projects yet · <0>Add a project</0>"
 #: src/components/FailureCard.tsx
 msgid "No reason was reported"
 msgstr "No reason was reported"
+
+#: src/components/SpaceMembers.tsx
+msgid "No role available. Refresh to check your access."
+msgstr "No role available. Refresh to check your access."
 
 #. draft state chip, at most 14 characters: nothing written to the draft's source file yet
 #: src/lib/drafts.ts
@@ -5407,6 +5549,10 @@ msgstr "Project path"
 msgid "Project records"
 msgstr "Project records"
 
+#: src/components/SpaceGroups.tsx
+msgid "Project: {name}"
+msgstr "Project: {name}"
+
 #. Dashboard band heading: one group per project
 #: src/components/DashboardSurface.tsx
 #: src/components/NavRail.tsx
@@ -5839,6 +5985,10 @@ msgstr "Remove @{login}"
 msgid "Remove @{login} from {place}?"
 msgstr "Remove @{login} from {place}?"
 
+#: src/components/SpaceMembers.tsx
+msgid "Remove @{login} from invitation"
+msgstr "Remove @{login} from invitation"
+
 #: src/components/ProjectsSurface.tsx
 msgid "Remove from Spex (repo stays on disk)"
 msgstr "Remove from Spex (repo stays on disk)"
@@ -6024,6 +6174,10 @@ msgstr "Resolve"
 msgid "Restore"
 msgstr "Restore"
 
+#: src/components/SpaceGroups.tsx
+msgid "Restore group"
+msgstr "Restore group"
+
 #: src/lib/failure-catalogue.ts
 msgid "Restore the branch yourself"
 msgstr "Restore the branch yourself"
@@ -6037,6 +6191,7 @@ msgid "Restore the interrupted turn before sending."
 msgstr "Restore the interrupted turn before sending."
 
 #: src/components/SessionRecovery.tsx
+#: src/components/SpaceGroups.tsx
 msgid "Restoring…"
 msgstr "Restoring…"
 
@@ -6147,7 +6302,7 @@ msgstr "Reviewed"
 msgid "Rewrote history"
 msgstr "Rewrote history"
 
-#. the Space's role a person is added at
+#. the access granted to every selected member
 #: src/components/SpaceMembers.tsx
 msgid "Role"
 msgstr "Role"
@@ -6281,6 +6436,10 @@ msgstr "Saving…"
 msgid "Scaffold one in the project directory:"
 msgstr "Scaffold one in the project directory:"
 
+#: src/components/SpaceGroups.tsx
+msgid "Scheduled for deletion"
+msgstr "Scheduled for deletion"
+
 #. the hint inside Add…'s registry search field: search the registry, or type a package's full name
 #: src/components/EnvironmentSection.tsx
 msgid "Search, or type org/name"
@@ -6392,6 +6551,10 @@ msgstr "sends when this turn ends"
 #: src/components/CompileBand.tsx
 msgid "sent to the agent"
 msgstr "sent to the agent"
+
+#: src/components/SpaceGroups.tsx
+msgid "Server: {name}"
+msgstr "Server: {name}"
 
 #. the team servers of a Space this computer can connect to
 #: src/components/SpaceServers.tsx
@@ -6521,9 +6684,7 @@ msgstr "Settings backup"
 msgid "Settled — {title}"
 msgstr "Settled — {title}"
 
-#. add a person at the Space to a group or a project's records
 #. the sharing confirm's control: send the records to the group
-#: src/components/SpaceMembers.tsx
 #: src/components/SpacePlacements.tsx
 msgid "Share"
 msgstr "Share"
@@ -7406,6 +7567,10 @@ msgstr "These records are also placed at {names}"
 msgid "these sessions"
 msgstr "these sessions"
 
+#: src/components/SpaceMembers.tsx
+msgid "They need an account at {space}."
+msgstr "They need an account at {space}."
+
 #. collapsed card: the agent's own reasoning summary
 #: src/components/PlayerPane.tsx
 msgid "Thinking"
@@ -7463,6 +7628,18 @@ msgstr "This file changed on disk since you opened it."
 msgid "This file is too large to preview."
 msgstr "This file is too large to preview."
 
+#: src/components/SpaceGroups.tsx
+msgid "This group is already scheduled for deletion."
+msgstr "This group is already scheduled for deletion."
+
+#: src/components/SpaceGroups.tsx
+msgid "This group is empty. Deleting it removes the group for all members."
+msgstr "This group is empty. Deleting it removes the group for all members."
+
+#: src/components/SpaceGroups.tsx
+msgid "This group isn't empty. Remove these items before deleting it:"
+msgstr "This group isn't empty. Remove these items before deleting it:"
+
 #: src/components/ProjectsSurface.tsx
 msgid "This project is no longer registered."
 msgstr "This project is no longer registered."
@@ -7483,6 +7660,10 @@ msgstr "This project's packages"
 #: src/components/ProjectGroup.tsx
 msgid "This record is not in the project's specs tree"
 msgstr "This record is not in the project's specs tree"
+
+#: src/components/SpaceMembers.tsx
+msgid "This role applies to everyone you add."
+msgstr "This role applies to everyone you add."
 
 #: src/components/DeliveryCard.tsx
 msgid "This session has ended — the replay is read-only"
@@ -7798,6 +7979,10 @@ msgstr "Use browser setting from Settings"
 msgid "Use default"
 msgstr "Use default"
 
+#: src/components/SpaceMembers.tsx
+msgid "Use Enter or commas between usernames."
+msgstr "Use Enter or commas between usernames."
+
 #. a package name typed in Add… breaks the rule; keep org/name as it is
 #: src/components/EnvironmentSection.tsx
 msgid "Use org/name: lowercase words joined by hyphens"
@@ -7809,6 +7994,10 @@ msgstr "Use org/name: lowercase words joined by hyphens"
 #: src/components/SpaceRepairs.tsx
 msgid "Use this folder"
 msgstr "Use this folder"
+
+#: src/components/SpaceMembers.tsx
+msgid "Usernames"
+msgstr "Usernames"
 
 #. the accessible name of a version choice in Add…; {name} is the package
 #. the accessible name of a version choice in Add…; {name} is the package
@@ -7822,6 +8011,10 @@ msgstr "Version of {name}"
 msgid "via {group}"
 msgstr "via {group}"
 
+#: src/components/SpaceMembers.tsx
+msgid "View and download shared records; cannot send changes."
+msgstr "View and download shared records; cannot send changes."
+
 #: src/components/CaptainHome.tsx
 msgid "View details"
 msgstr "View details"
@@ -7833,6 +8026,10 @@ msgstr "View diff"
 #: src/components/CaptainHome.tsx
 msgid "View specs"
 msgstr "View specs"
+
+#: src/components/SpaceMembers.tsx
+msgid "View, download, and contribute shared records."
+msgstr "View, download, and contribute shared records."
 
 #: src/components/SpaceSurface.tsx
 msgid "Views of {name}"
@@ -8037,6 +8234,19 @@ msgstr "Writing…"
 #: src/components/SpecView.tsx
 msgid "Written by Spex from {name} {version} — an edit makes it yours"
 msgstr "Written by Spex from {name} {version} — an edit makes it yours"
+
+#: src/components/SpaceMembers.tsx
+msgid "You"
+msgstr "You"
+
+#: src/components/SpaceGroups.tsx
+msgid "You can restore this group before deletion takes effect."
+msgstr "You can restore this group before deletion takes effect."
+
+#. a deletion confirmation whose Space permissions changed while it was open
+#: src/components/SpaceGroups.tsx
+msgid "You no longer have permission to delete this group."
+msgstr "You no longer have permission to delete this group."
 
 #. the choices note; {name} is that placement's Space's display name, or the path placement's remote
 #: src/components/SpaceSync.tsx

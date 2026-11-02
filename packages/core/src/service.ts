@@ -3819,7 +3819,11 @@ export class CoreService {
           ...(command.path !== undefined ? { path: command.path } : {}),
         });
       case "space.group.delete":
-        return this.requireSpace().deleteGroup(command.instance, command.group);
+        return this.requireSpace().deleteGroup(command.instance, command.group, command.confirmPath);
+      case "space.group.deletionCheck":
+        return this.requireSpace().checkGroupDeletion(command.instance, command.group);
+      case "space.group.restore":
+        return this.requireSpace().restoreGroup(command.instance, command.group);
       case "space.repository.move":
         return this.requireSpace().moveRepository(command.repository, command.groupId, command.instance);
       case "space.share":

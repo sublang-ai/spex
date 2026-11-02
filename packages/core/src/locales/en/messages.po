@@ -167,11 +167,6 @@ msgstr "{group} already holds {name}"
 msgid "{group} is a group named like your login"
 msgstr "{group} is a group named like your login"
 
-#. Refusal of a group's deletion: it still holds a project's records or a group; {group} is the group's path at the Space
-#: src/space-groups.ts
-msgid "{group} is not empty"
-msgstr "{group} is not empty"
-
 #. A package Git source failed without a recognized status; raw backing-host or unclassified stderr stays inside the core
 #: src/space.ts
 msgid "{host} answered with an error"
@@ -1868,10 +1863,10 @@ msgstr "Media read begins beyond the file length."
 msgid "Media storage has stopped."
 msgstr "Media storage has stopped."
 
-#. Guidance under a transfer the Space refused; Share is the control in the members panel; it claims no role
+#. Guidance under a transfer the Space refused; Invite members is the control in the members panel; it claims no role
 #: src/space-git.ts
-msgid "Membership decides who may send here: use Share, or ask a member who may share it."
-msgstr "Membership decides who may send here: use Share, or ask a member who may share it."
+msgid "Membership decides who may send here: use Invite members, or ask someone who can manage members."
+msgstr "Membership decides who may send here: use Invite members, or ask someone who can manage members."
 
 #. Migration diagnostic: the file changed under the migration, which wrote nothing
 #. Migration diagnostic: the file changed under the migration, which wrote nothing
@@ -3258,6 +3253,11 @@ msgstr "This upload was canceled or expired. Retry the file upload."
 #: src/media-transfers.ts
 msgid "Too many files are uploading. Finish or cancel an upload, then retry."
 msgstr "Too many files are uploading. Finish or cancel an upload, then retry."
+
+#. Refusal of group deletion without a reviewed public group path; no changes were sent
+#: src/space-groups.ts
+msgid "Review {group} before deleting it"
+msgstr "Review {group} before deleting it"
 
 #. Config error; the field's dotted path is the config file's own
 #. Config error; the field's dotted path is the config file's own

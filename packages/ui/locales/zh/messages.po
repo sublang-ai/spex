@@ -113,6 +113,10 @@ msgstr "{actor} · 第 {turn} 轮"
 msgid "{adapter} is not ready — check Settings"
 msgstr "{adapter} 未就绪 — 请查看设置"
 
+#: src/components/SpaceMembers.tsx
+msgid "{added, plural, one {# member added} other {# members added}}; {remaining} still to add."
+msgstr "已添加 {added} 位成员；还有 {remaining} 位待添加。"
+
 #: src/lib/space.ts
 msgid "{ahead, plural, one {# commit} other {# commits}} ahead, {behind, plural, one {# commit} other {# commits}} behind · checked {at}"
 msgstr "领先 {ahead, plural, other {# 个提交}}，落后 {behind, plural, other {# 个提交}} · {at} 检查过"
@@ -211,7 +215,12 @@ msgstr "{count, plural, other {# 个链接}}等待 {name}"
 msgid "{count, plural, one {# match} other {# matches}}"
 msgstr "{count, plural, other {# 个匹配}}"
 
+#: src/components/SpaceMembers.tsx
+msgid "{count, plural, one {# member added} other {# members added}} as {role}"
+msgstr "已添加 {count} 位成员，角色为 {role}"
+
 #: src/components/SpaceGroups.tsx
+#: src/components/SpaceMembers.tsx
 msgid "{count, plural, one {# member} other {# members}}"
 msgstr "{count, plural, other {# 名成员}}"
 
@@ -388,6 +397,18 @@ msgstr "{from} 引用 {to} {count} 次"
 #: src/components/SpecView.tsx
 msgid "{group} ({count})"
 msgstr "「{group}」{count} 条"
+
+#: src/components/SpaceGroups.tsx
+msgid "{group} deleted."
+msgstr "已删除 {group}。"
+
+#: src/components/SpaceGroups.tsx
+msgid "{group} is scheduled for deletion."
+msgstr "{group} 已计划删除。"
+
+#: src/components/SpaceGroups.tsx
+msgid "{group} restored."
+msgstr "已恢复 {group}。"
 
 #. what failed, then what the agent said about it
 #: src/lib/failure-catalogue.ts
@@ -782,6 +803,10 @@ msgstr "已添加 @{login}，角色为 {role}"
 msgid "@{login} removed"
 msgstr "已移除 @{login}"
 
+#: src/components/SpaceMembers.tsx
+msgid "@{login}: {message}"
+msgstr "@{login}：{message}"
+
 #: src/components/Composer.tsx
 msgid "/ for playbooks · Enter sends"
 msgstr "/ 打开规程 · Enter 发送"
@@ -918,6 +943,10 @@ msgstr "你放在 {server} 上的凭据会一直留在那里，直到你将其�
 msgid "A follow-up message continues this intent."
 msgstr "再发一条消息即可继续该意图。"
 
+#: src/components/SpaceGroups.tsx
+msgid "A group owner can restore it before deletion takes effect."
+msgstr "群组所有者可在删除生效前恢复此群组。"
+
 #: src/lib/failure-catalogue.ts
 msgid "A nested workflow failed"
 msgstr "嵌套工作流失败"
@@ -1020,6 +1049,10 @@ msgstr "支持 {provider} 账户"
 msgid "Access follows this project's members and visibility"
 msgstr "访问权限取决于此项目的成员和可见性"
 
+#: src/components/SpaceMembers.tsx
+msgid "Access starts immediately when you add them."
+msgstr "添加后，对方将立即获得访问权限。"
+
 #: src/components/ProjectGroup.tsx
 msgid "Actions for {title}"
 msgstr "{title} 的操作"
@@ -1047,7 +1080,6 @@ msgstr "适配器选项；模型支持未验证"
 msgid "Adapter option; model support unverified."
 msgstr "适配器选项；模型支持未验证。"
 
-#. add the person at the chosen role at the Space
 #. add this package to spex.yaml and install it
 #. create this player in your own roster
 #. register the typed path as an existing repository
@@ -1058,7 +1090,6 @@ msgstr "适配器选项；模型支持未验证。"
 #: src/components/DraftRegisterTab.tsx
 #: src/components/ProjectPalette.tsx
 #: src/components/SettingsSurface.tsx
-#: src/components/SpaceMembers.tsx
 #: src/lib/environments.ts
 msgid "Add"
 msgstr "添加"
@@ -1116,9 +1147,22 @@ msgstr "添加已有 Git 仓库，或创建全新项目。"
 msgid "Add an intent to {project}"
 msgstr "向 {project} 添加意图"
 
+#: src/components/SpaceMembers.tsx
+msgid "Add another username"
+msgstr "添加其他用户名"
+
 #: src/components/ProjectGroup.tsx
 msgid "Add intent…"
 msgstr "添加意图…"
+
+#. immediately give this account the selected access
+#: src/components/SpaceMembers.tsx
+msgid "Add member"
+msgstr "添加成员"
+
+#: src/components/SpaceMembers.tsx
+msgid "Add members"
+msgstr "添加成员"
 
 #: src/components/SettingsSurface.tsx
 msgid "Add player"
@@ -1192,6 +1236,10 @@ msgstr "已添加 /{command}"
 msgid "Added to Up next — see the project's Overview."
 msgstr "已加入“接下来” — 见项目概览。"
 
+#: src/components/SpaceMembers.tsx
+msgid "Adding {current} of {total}…"
+msgstr "正在添加第 {current} 位，共 {total} 位…"
+
 #. acknowledges an accepted request; the project row reports completion or a wait
 #: src/components/SpaceGroups.tsx
 msgid "Adding {name} to {group} at {space}"
@@ -1200,9 +1248,9 @@ msgstr "正在将 {name} 添加到 {space} 的 {group}"
 #. a repair's control while the folder is paired with the project
 #. a repair's control while the folder is paired with the project
 #. adding this project to the selected group
-#. the Add control, while the Space adds the person
 #. the Add form's request is in flight: the playbook is being added
 #. the Use this folder control, while the folder is paired
+#. the members are being added at the Space
 #. the package is being added to spex.yaml
 #. the request is being written
 #: src/components/DraftRegisterTab.tsx
@@ -1378,6 +1426,10 @@ msgstr "无条件"
 #: src/lib/failure-catalogue.ts
 msgid "An agent failed"
 msgstr "有智能体失败"
+
+#: src/components/SpaceGroups.tsx
+msgid "An owner can restore {group} to keep this group."
+msgstr "所有者可恢复 {group}，以保留此群组。"
 
 #: src/components/ParkedRun.tsx
 msgid "Answer below, or drop the run"
@@ -1707,6 +1759,10 @@ msgstr "C"
 msgid "call /{playbookId}"
 msgstr "调用 /{playbookId}"
 
+#: src/components/SpaceMembers.tsx
+msgid "Can sync changes to shared records."
+msgstr "可以将更改同步到共享记录。"
+
 #. banner: a team server's seat never answered; {server} is the server's name
 #: src/App.tsx
 msgid "Can't reach {server} — retrying every second."
@@ -1773,6 +1829,10 @@ msgstr "{age}取消"
 #: src/lib/useBrowserTools.ts
 msgid "Cancelling browser setup…"
 msgstr "正在取消浏览器设置…"
+
+#: src/components/SpaceMembers.tsx
+msgid "Cannot sync changes to shared records."
+msgstr "不能将更改同步到共享记录。"
 
 #. the agent that routes the Boss's message to a playbook
 #. the agent that routes the Boss's message to a playbook
@@ -1864,6 +1924,10 @@ msgstr "对话"
 msgid "Check"
 msgstr "检查"
 
+#: src/components/SpaceGroups.tsx
+msgid "Check again"
+msgstr "重新检查"
+
 #: src/components/CaptainPane.tsx
 msgid "Check agent readiness"
 msgstr "检查智能体就绪状态"
@@ -1893,6 +1957,10 @@ msgstr "正在检查浏览器运行环境…"
 #: src/lib/useBrowserTools.ts
 msgid "Checking browser support…"
 msgstr "正在检查浏览器支持…"
+
+#: src/components/SpaceGroups.tsx
+msgid "Checking group contents…"
+msgstr "正在检查群组内容…"
 
 #. sync step running: reading what the Space holds
 #. sync step running: reading what the Space holds
@@ -1945,6 +2013,10 @@ msgstr "选择项目"
 #: src/components/ProjectPalette.tsx
 msgid "Choose a project folder…"
 msgstr "选择项目文件夹…"
+
+#: src/components/SpaceMembers.tsx
+msgid "Choose a role"
+msgstr "选择角色"
 
 #. empty choice of the reasoning-effort select
 #: src/components/TuningField.tsx
@@ -2421,6 +2493,10 @@ msgstr "连接中…"
 msgid "connection closed"
 msgstr "连接已关闭"
 
+#: src/components/SpaceMembers.tsx
+msgid "Connection lost. Reconnect to add the remaining members."
+msgstr "连接已断开。重新连接后可添加剩余成员。"
+
 #: src/App.tsx
 msgid "Connection restored."
 msgstr "连接已恢复。"
@@ -2438,6 +2514,10 @@ msgstr "继续"
 #: src/components/SpaceSignIn.tsx
 msgid "Continue in your browser"
 msgstr "在浏览器中继续"
+
+#: src/components/SpaceMembers.tsx
+msgid "Contribute shared records and manage projects and their members."
+msgstr "可以修改共享记录，并管理项目及其成员。"
 
 #: src/components/ApprovalInbox.tsx
 msgid "Conversation: {name}"
@@ -2701,6 +2781,11 @@ msgstr "决策记录 {count}"
 msgid "Delete"
 msgstr "删除"
 
+#. group deletion confirmation naming exactly the group and its Space
+#: src/components/SpaceGroups.tsx
+msgid "Delete {group} at {space}?"
+msgstr "删除 {space} 的 {group} 群组？"
+
 #: src/components/PlaybookAuthoring.tsx
 msgid "Delete authoring session {id}"
 msgstr "删除编写会话 {id}"
@@ -2708,6 +2793,16 @@ msgstr "删除编写会话 {id}"
 #: src/components/NavRail.tsx
 msgid "delete failed"
 msgstr "删除失败"
+
+#. confirm deletion of the named empty group
+#: src/components/SpaceGroups.tsx
+msgid "Delete group"
+msgstr "删除群组"
+
+#. a group's overflow action: check that the group is empty before confirming deletion
+#: src/components/SpaceGroups.tsx
+msgid "Delete group…"
+msgstr "删除群组…"
 
 #: src/components/NavRail.tsx
 msgid "Delete session {title}"
@@ -2756,10 +2851,16 @@ msgstr "删除会话及其对话 · 规约包文件夹保留"
 msgid "deleting…"
 msgstr "删除中…"
 
+#. busy group deletion action
 #. the delete request is in flight
 #: src/components/PlaybookAuthoring.tsx
+#: src/components/SpaceGroups.tsx
 msgid "Deleting…"
 msgstr "删除中…"
+
+#: src/components/SpaceGroups.tsx
+msgid "Deletion may be immediate. If scheduled, you can restore the group before deletion takes effect."
+msgstr "删除可能立即生效。如果已计划删除，您可以在删除生效前恢复群组。"
 
 #: src/components/CaptainHome.tsx
 msgid "Delivery"
@@ -3002,6 +3103,10 @@ msgstr "放弃中…"
 #: src/components/AgentEditor.tsx
 msgid "e.g. .git, docs/generated"
 msgstr "例如 .git、docs/generated"
+
+#: src/components/SpaceMembers.tsx
+msgid "e.g. alex, sam"
+msgstr "例如 alex, sam"
 
 #. the hint inside the new-playbook license field; an SPDX license id
 #: src/components/PlaybookAuthoring.tsx
@@ -3557,6 +3662,14 @@ msgstr "来自注册中心 · {range}"
 msgid "From your groups"
 msgstr "来自你的群组"
 
+#: src/components/SpaceMembers.tsx
+msgid "Full control of this group, including its members and deletion."
+msgstr "拥有此群组的全部管理权限，包括管理成员和删除群组。"
+
+#: src/components/SpaceMembers.tsx
+msgid "Full control of this project, including its members and deletion."
+msgstr "拥有此项目的全部管理权限，包括管理成员和删除项目。"
+
 #. pipeline stage: the compiled spec items
 #. pipeline stage: the compiler's normative spec items (a proper name)
 #. pipeline stage: the compiler's normative spec items (a proper name)
@@ -3621,9 +3734,14 @@ msgid "Group name"
 msgstr "群组名称"
 
 #. the row of a group's own records: the group's sessions outside any project
+#: src/components/SpaceGroups.tsx
 #: src/lib/space.ts
 msgid "Group sessions"
 msgstr "群组会话"
+
+#: src/components/SpaceGroups.tsx
+msgid "Group: {name}"
+msgstr "群组：{name}"
 
 #. a delegation line: the Captain gave this call to the named player
 #: src/components/CallLines.tsx
@@ -3886,6 +4004,15 @@ msgstr "中断的轮次"
 msgid "Invalid: {reason}"
 msgstr "无效：{reason}"
 
+#. open the form to add people to this group or project's records
+#: src/components/SpaceMembers.tsx
+msgid "Invite members"
+msgstr "邀请成员"
+
+#: src/components/SpaceMembers.tsx
+msgid "Invite to {name}"
+msgstr "邀请加入 {name}"
+
 #: src/lib/media.ts
 msgid "Invocation {call}"
 msgstr "调用 {call}"
@@ -4048,6 +4175,10 @@ msgstr "本机上未找到上次使用的文件夹"
 msgid "License"
 msgstr "许可证"
 
+#: src/components/SpaceMembers.tsx
+msgid "Limited access; cannot read or sync private shared records."
+msgstr "访问权限有限；不能读取或同步私密的共享记录。"
+
 #. compile phase: slc links the machine
 #: src/lib/compile-log.ts
 msgid "Link"
@@ -4117,11 +4248,6 @@ msgstr "加载中…"
 msgid "Loading…"
 msgstr "加载中…"
 
-#. the field for a person's login at the Space, named by the Space's display name
-#: src/components/SpaceMembers.tsx
-msgid "Login at {space}"
-msgstr "{space} 上的登录名"
-
 #: src/components/SpecGraph.tsx
 msgid "Lower the threshold"
 msgstr "降低门槛"
@@ -4190,6 +4316,14 @@ msgstr "成员"
 #: src/components/SpaceMembers.tsx
 msgid "Members of {name}"
 msgstr "{name} 的成员"
+
+#: src/components/SpaceMembers.tsx
+msgid "Membership applies to this group and the projects and groups inside it."
+msgstr "成员权限适用于此群组及其下的项目和群组。"
+
+#: src/components/SpaceMembers.tsx
+msgid "Membership applies to this project's records at {space}."
+msgstr "成员权限适用于此项目在 {space} 的记录。"
 
 #. a step: the coder merges both proposals into specs and commits
 #: src/lib/step-words.ts
@@ -4458,6 +4592,10 @@ msgstr "启用的分组中没有条目"
 msgid "no items match the search"
 msgstr "没有匹配搜索的条目"
 
+#: src/components/SpaceMembers.tsx
+msgid "No members added. Review the usernames below."
+msgstr "未添加任何成员。请检查下方用户名。"
+
 #: src/components/NavRail.tsx
 #: src/components/ProjectGroup.tsx
 msgid "no messages yet"
@@ -4544,6 +4682,10 @@ msgstr "还没有项目 · <0>添加项目</0>"
 #: src/components/FailureCard.tsx
 msgid "No reason was reported"
 msgstr "未报告原因"
+
+#: src/components/SpaceMembers.tsx
+msgid "No role available. Refresh to check your access."
+msgstr "没有可用角色。请刷新以检查你的权限。"
 
 #. draft state chip, at most 14 characters: nothing written to the draft's source file yet
 #: src/lib/drafts.ts
@@ -5407,6 +5549,10 @@ msgstr "项目路径"
 msgid "Project records"
 msgstr "项目记录"
 
+#: src/components/SpaceGroups.tsx
+msgid "Project: {name}"
+msgstr "项目：{name}"
+
 #. Dashboard band heading: one group per project
 #: src/components/DashboardSurface.tsx
 #: src/components/NavRail.tsx
@@ -5839,6 +5985,10 @@ msgstr "移除 @{login}"
 msgid "Remove @{login} from {place}?"
 msgstr "要将 @{login} 从 {place} 中移除吗？"
 
+#: src/components/SpaceMembers.tsx
+msgid "Remove @{login} from invitation"
+msgstr "从邀请中移除 @{login}"
+
 #: src/components/ProjectsSurface.tsx
 msgid "Remove from Spex (repo stays on disk)"
 msgstr "从 Spex 移除（仓库保留在磁盘上）"
@@ -6024,6 +6174,10 @@ msgstr "解决"
 msgid "Restore"
 msgstr "恢复"
 
+#: src/components/SpaceGroups.tsx
+msgid "Restore group"
+msgstr "恢复群组"
+
 #: src/lib/failure-catalogue.ts
 msgid "Restore the branch yourself"
 msgstr "自行恢复分支"
@@ -6037,6 +6191,7 @@ msgid "Restore the interrupted turn before sending."
 msgstr "发送前请先恢复中断的轮次。"
 
 #: src/components/SessionRecovery.tsx
+#: src/components/SpaceGroups.tsx
 msgid "Restoring…"
 msgstr "恢复中…"
 
@@ -6147,7 +6302,7 @@ msgstr "已审阅"
 msgid "Rewrote history"
 msgstr "重写了历史"
 
-#. the Space's role a person is added at
+#. the access granted to every selected member
 #: src/components/SpaceMembers.tsx
 msgid "Role"
 msgstr "角色"
@@ -6281,6 +6436,10 @@ msgstr "保存中…"
 msgid "Scaffold one in the project directory:"
 msgstr "在项目目录中生成一个："
 
+#: src/components/SpaceGroups.tsx
+msgid "Scheduled for deletion"
+msgstr "已计划删除"
+
 #. the hint inside Add…'s registry search field: search the registry, or type a package's full name
 #: src/components/EnvironmentSection.tsx
 msgid "Search, or type org/name"
@@ -6392,6 +6551,10 @@ msgstr "本轮结束后发送"
 #: src/components/CompileBand.tsx
 msgid "sent to the agent"
 msgstr "已发送给智能体"
+
+#: src/components/SpaceGroups.tsx
+msgid "Server: {name}"
+msgstr "服务器：{name}"
 
 #. the team servers of a Space this computer can connect to
 #: src/components/SpaceServers.tsx
@@ -6521,9 +6684,7 @@ msgstr "设置备份"
 msgid "Settled — {title}"
 msgstr "已裁定 — {title}"
 
-#. add a person at the Space to a group or a project's records
 #. the sharing confirm's control: send the records to the group
-#: src/components/SpaceMembers.tsx
 #: src/components/SpacePlacements.tsx
 msgid "Share"
 msgstr "共享"
@@ -7406,6 +7567,10 @@ msgstr "这些记录也放在 {names}"
 msgid "these sessions"
 msgstr "这些会话"
 
+#: src/components/SpaceMembers.tsx
+msgid "They need an account at {space}."
+msgstr "对方需先在 {space} 注册账号。"
+
 #. collapsed card: the agent's own reasoning summary
 #: src/components/PlayerPane.tsx
 msgid "Thinking"
@@ -7463,6 +7628,18 @@ msgstr "打开之后，此文件在磁盘上已更改。"
 msgid "This file is too large to preview."
 msgstr "文件过大，无法预览。"
 
+#: src/components/SpaceGroups.tsx
+msgid "This group is already scheduled for deletion."
+msgstr "此群组已计划删除。"
+
+#: src/components/SpaceGroups.tsx
+msgid "This group is empty. Deleting it removes the group for all members."
+msgstr "此群组为空。删除后，所有成员都将失去对此群组的访问权限。"
+
+#: src/components/SpaceGroups.tsx
+msgid "This group isn't empty. Remove these items before deleting it:"
+msgstr "此群组不为空。请先移除以下内容，再删除群组："
+
 #: src/components/ProjectsSurface.tsx
 msgid "This project is no longer registered."
 msgstr "此项目已不在注册列表中。"
@@ -7483,6 +7660,10 @@ msgstr "本项目的规约包"
 #: src/components/ProjectGroup.tsx
 msgid "This record is not in the project's specs tree"
 msgstr "此记录不在项目的 specs 目录树中"
+
+#: src/components/SpaceMembers.tsx
+msgid "This role applies to everyone you add."
+msgstr "此角色适用于所有待添加成员。"
 
 #: src/components/DeliveryCard.tsx
 msgid "This session has ended — the replay is read-only"
@@ -7798,6 +7979,10 @@ msgstr "使用设置中的浏览器选项"
 msgid "Use default"
 msgstr "使用默认"
 
+#: src/components/SpaceMembers.tsx
+msgid "Use Enter or commas between usernames."
+msgstr "用回车或逗号分隔用户名。"
+
 #. a package name typed in Add… breaks the rule; keep org/name as it is
 #: src/components/EnvironmentSection.tsx
 msgid "Use org/name: lowercase words joined by hyphens"
@@ -7809,6 +7994,10 @@ msgstr "使用 org/name：由连字符连接的小写单词"
 #: src/components/SpaceRepairs.tsx
 msgid "Use this folder"
 msgstr "使用此文件夹"
+
+#: src/components/SpaceMembers.tsx
+msgid "Usernames"
+msgstr "用户名"
 
 #. the accessible name of a version choice in Add…; {name} is the package
 #. the accessible name of a version choice in Add…; {name} is the package
@@ -7822,6 +8011,10 @@ msgstr "{name} 的版本"
 msgid "via {group}"
 msgstr "通过 {group}"
 
+#: src/components/SpaceMembers.tsx
+msgid "View and download shared records; cannot send changes."
+msgstr "可以查看和下载共享记录，不能发送更改。"
+
 #: src/components/CaptainHome.tsx
 msgid "View details"
 msgstr "查看详情"
@@ -7833,6 +8026,10 @@ msgstr "查看差异"
 #: src/components/CaptainHome.tsx
 msgid "View specs"
 msgstr "查看规约"
+
+#: src/components/SpaceMembers.tsx
+msgid "View, download, and contribute shared records."
+msgstr "可以查看、下载和修改共享记录。"
 
 #: src/components/SpaceSurface.tsx
 msgid "Views of {name}"
@@ -8037,6 +8234,19 @@ msgstr "写入中…"
 #: src/components/SpecView.tsx
 msgid "Written by Spex from {name} {version} — an edit makes it yours"
 msgstr "由 Spex 根据 {name} {version} 写入 — 编辑后即归你所有"
+
+#: src/components/SpaceMembers.tsx
+msgid "You"
+msgstr "你"
+
+#: src/components/SpaceGroups.tsx
+msgid "You can restore this group before deletion takes effect."
+msgstr "您可以在删除生效前恢复此群组。"
+
+#. a deletion confirmation whose Space permissions changed while it was open
+#: src/components/SpaceGroups.tsx
+msgid "You no longer have permission to delete this group."
+msgstr "你已无权删除此群组。"
 
 #. the choices note; {name} is that placement's Space's display name, or the path placement's remote
 #: src/components/SpaceSync.tsx

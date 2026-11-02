@@ -1530,7 +1530,9 @@ export const commandSchema = z.discriminatedUnion("type", [
       path: z.string().min(1).optional(),
     })
     .strict(),
-  z.object({ type: z.literal("space.group.delete"), id, instance: instanceOriginSchema, group: z.string().min(1) }).strict(),
+  z.object({ type: z.literal("space.group.delete"), id, instance: instanceOriginSchema, group: z.string().min(1), confirmPath: z.string().optional() }).strict(),
+  z.object({ type: z.literal("space.group.deletionCheck"), id, instance: instanceOriginSchema, group: z.string().min(1) }).strict(),
+  z.object({ type: z.literal("space.group.restore"), id, instance: instanceOriginSchema, group: z.string().min(1) }).strict(),
   /** `instance`: the placement's, its first where omitted (space-29, DR-128). */
   z.object({ type: z.literal("space.repository.move"), id, repository: repositoryKeySchema, instance: instanceOriginSchema.optional(), groupId: z.string().min(1).nullable() }).strict(),
   z
@@ -1802,7 +1804,9 @@ export interface CommandResults {
   "space.members": { members: HostMemberInfo[] };
   "space.group.create": { group: { id: string; fullPath: string; name: string } };
   "space.group.rename": { group: { id: string; fullPath: string; name: string } };
-  "space.group.delete": { deleted: true };
+  "space.group.delete": { status: "scheduled" | "deleted" };
+  "space.group.deletionCheck": { group: { id: string; fullPath: string; name: string }; contents: { kind: "project" | "group" | "records" | "server"; name: string }[] };
+  "space.group.restore": { group: { id: string; fullPath: string; name: string } };
   /** `fullPath`: the repository's path in the instance after the move. */
   "space.repository.move": { repository: { id: string; fullPath: string } };
   "space.share": { members: HostMemberInfo[] };
@@ -2508,7 +2512,9 @@ export interface InstanceGroupState {
   name: string;
   /** What its last read said the person may do there; all false until
    * one is held, and in a namespace. */
-  can: { createSubgroup: boolean; manageMembers: boolean; rename: boolean; delete: boolean };
+  can: { createSubgroup: boolean; manageMembers: boolean; rename: boolean; delete: boolean; restore?: boolean };
+  pendingDeletion?: boolean;
+  deletionRoot?: string;
   /** The rows standing elsewhere one of whose placements this group or
    * namespace holds, each shown as one line (space-1, DR-128). */
   placed: { key: string; name: string }[];
