@@ -16,11 +16,34 @@ folder, with no running app. Requires Node.js 22 or later.
 
 ## Install
 
+This page describes the current source CLI, version 5.0. The published
+npm release is 4.2.0: it supports `scaffold` and `lint`, but its package
+commands use the older `spex package …` interface and a running app.
+Use the source build for the independent package workflows below, or
+read the [4.2 reference](https://github.com/sublang-ai/spex/blob/cli-v4.2.0/packages/cli/README.md)
+for the released CLI.
+
+### Install current source CLI
+
+Use Git and Node.js 22.19 or later. From a new checkout, install only
+the CLI workspace's dependencies, build it, and install its packaged
+artifact:
+
 ```sh
-npm install -g @sublang/spex
+git clone --depth=1 https://github.com/sublang-ai/spex.git
+cd spex
+npm ci --workspace @sublang/spex --include-workspace-root=false
+npm run build --workspace @sublang/spex
+npm install --global "$(npm pack --workspace @sublang/spex --silent)"
+spex --version
 ```
 
-Or run once without installing:
+This installs the CLI without building or starting the IDE. Check that
+`spex --version` reports 5.0.0 and `spex export --help` lists the export
+options before continuing. The package commands below use this installed
+`spex`, rather than asking `npx` for the older published release.
+
+To scaffold specs with the published CLI without installing it:
 
 ```sh
 npx @sublang/spex scaffold

@@ -8,6 +8,10 @@ In the IDE, **Space** shows **Personal**, the groups you belong to, and
 their projects. A Space sign-in is separate from the registry sign-in
 used to publish packages or install private ones.
 
+These controls follow the current source IDE. See
+[Open the IDE and a project](getting-started.md#open-the-ide-and-a-project)
+to run it; published app 0.9.0-beta.24 has earlier membership controls.
+
 ## Share a project
 
 1. Open **Space** in the IDE and **Sign in** to the Space where your team

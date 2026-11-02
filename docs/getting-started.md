@@ -16,17 +16,18 @@ line. Public packages need no account to browse or install. Publishing
 and private packages need a registry sign-in, separate from any Space
 sign-in. Syncing a project's records is optional.
 
+This guide follows the current source build. Its CLI commands and IDE
+controls are newer than the published CLI 4.2.0 and desktop app
+0.9.0-beta.24. Use the source setup below for the IDE, or
+[install the current source CLI](../packages/cli/README.md#install-current-source-cli)
+for command-line package workflows.
+
 ## Open the IDE and a project
 
-Download the desktop app from
-[GitHub Releases](https://github.com/sublang-ai/spex/releases): the macOS
-M-series DMG or the Windows x86-64 installer. See the
-[installation notes](../README.md#getting-started) for platform details.
-
-On Linux, or to run current source on macOS, use Git, Node.js 22.19 or
-later, and a native build toolchain: Xcode Command Line Tools on macOS;
-Python 3, `make`, and `g++` on Linux. The first installation and launch
-need the network:
+Use Git and Node.js 22.19 or later. Source builds also need Xcode Command
+Line Tools on macOS, or Python 3, `make`, and `g++` on Linux. Native
+Windows uses the bundled Node SQLite and skips that native-module rebuild.
+The first installation and launch need the network:
 
 ```sh
 git clone --depth=1 https://github.com/sublang-ai/spex.git
@@ -35,8 +36,11 @@ npm ci
 npm start
 ```
 
-These commands follow current `main`. A downloaded release can have an
-earlier interface than this guide; use its release notes for that version.
+Desktop downloads are also available on
+[GitHub Releases](https://github.com/sublang-ai/spex/releases): the macOS
+M-series DMG or the Windows x86-64 installer. Those releases currently
+have earlier controls; use the documentation at their release tag.
+See the [README](../README.md#getting-started) for platform details.
 
 Choose **Add a local project** for an existing Git repository, or expand
 **Create a new project…** and keep the specs scaffold enabled. **Open the
@@ -124,13 +128,13 @@ same.
 
 ## Use the CLI
 
-The `spex` command line is the **Packages** tab without the app: the
-same verbs on the same files. It needs Node.js 22 or later and no
-running app. Run it in your project's folder, or put `npx @sublang/spex`
-in place of `spex`:
+The current source CLI manages the same package files as the IDE without
+a running app. First
+[install the source CLI](../packages/cli/README.md#install-current-source-cli);
+the published npm 4.2.0 release uses older package commands. Then run
+`spex` in your project's folder:
 
 ```sh
-npm install -g @sublang/spex
 cd /absolute/path/to/project
 spex search toolkit
 spex add my-org/toolkit
@@ -272,8 +276,8 @@ To publish a skill you already have, such as one Claude Code keeps under
 skill in your project's folder, under an org of yours:
 
 ```sh
-npx @sublang/spex login
-npx @sublang/spex export my-org/my-skill --skill .claude/skills/my-skill
+spex login
+spex export my-org/my-skill --skill .claude/skills/my-skill
 ```
 
 `spex login` signs in with a code in your browser: open the address it
@@ -292,8 +296,8 @@ folder by hand, follow the
 Check what will be published, then publish it:
 
 ```sh
-npx @sublang/spex publish my-org/my-skill --dry-run
-npx @sublang/spex publish my-org/my-skill
+spex publish my-org/my-skill --dry-run
+spex publish my-org/my-skill
 ```
 
 The dry run shows the registry, the name, the version and the files, and
