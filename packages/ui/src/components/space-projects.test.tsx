@@ -86,7 +86,9 @@ const WORDS = {
     apart: "Started separately at Spex Example",
     combine: "Combine…",
     combineConfirm: "Combine",
-    repair: "delta · acme — Folder missing on this computer",
+    repair: "delta · acme — Project folder not connected on this computer",
+    recoveryHelp: "Share these details for help recovering this session",
+    folderRetry: "Choose its project folder, then restart Spex to retry",
     repairFolder: "~/code/delta · 3 sessions ran there",
     chooseFolder: "Choose folder…",
     notHere: "Not on this computer",
@@ -139,7 +141,9 @@ const WORDS = {
     apart: "在 Spex Example 上各自开始",
     combine: "合并…",
     combineConfirm: "合并",
-    repair: "delta · acme — 本机缺少文件夹",
+    repair: "delta · acme — 本机尚未关联项目文件夹",
+    recoveryHelp: "提供这些详情，以获取恢复此会话的帮助",
+    folderRetry: "选择其项目文件夹，然后重启 Spex 重试",
     repairFolder: "~/code/delta · 3 个会话曾在此运行",
     chooseFolder: "选择文件夹…",
     notHere: "不在本机上",
@@ -643,7 +647,7 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
     await renderHere();
     fireEvent.click(screen.getByTestId("space-issues"));
     const repair = screen.getByTestId("space-repair");
-    // [space-46] "<project> · acme — Folder missing on this computer",
+    // [space-46] "<project> · acme — Project folder not connected on this computer",
     // the folder beneath it.
     expect(within(repair).getByTestId("space-repair-title").textContent).toBe(words.repair);
     expect(within(repair).getByTestId("space-repair-folder").textContent).toBe(words.repairFolder);
@@ -664,6 +668,12 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
     const seatState = groupsState({
       home: HOME,
       defaultInstance: ORIGIN,
+      diagnostics: [{
+        code: "session-folder-required",
+        file: "/records/sessions/older.spex.json",
+        reason: "missing cwd",
+        blocking: false,
+      }],
       own: { name: "ada", named: false, repositories: [] },
       instances: [
         instanceState(ORIGIN, {
@@ -688,6 +698,12 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
       </PlaceStoreContext.Provider>,
     );
     await screen.findByTestId(`space-row-${BETA_KEY}`);
+    // A server allocates its own project folders: the local retry
+    // guidance must not tell its reader to pick a folder or restart.
+    fireEvent.click(screen.getByTestId("space-issues"));
+    const diagnostic = screen.getByTestId("space-diagnostic");
+    expect(within(diagnostic).getByText(words.recoveryHelp)).toBeTruthy();
+    expect(within(diagnostic).queryByText(words.folderRetry)).toBeNull();
     // [space-112] "Not on lab-1".
     fireEvent.click(screen.getByTestId(`space-repo-${BETA_KEY}`));
     expect(within(await screen.findByTestId("space-repository")).getAllByText(words.notOnLab).length).toBeGreaterThan(0);

@@ -203,7 +203,79 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     expect(screen.getByTestId("space-merge-note").textContent).toContain("Finish or abort the merge in your terminal");
   });
 
-  test("records no project folder pairs read '<project> · <group> — Folder missing on this computer', propose the folder the core checked, and 'Use <folder>' pairs it in one gesture (space-46, space-53, space-47)", async () => {
+  test.each(["en", "zh"] as const)("storage diagnostics in %s explain the next step by code and disclose technical details only on request", async (language) => {
+    activateLanguage(language);
+    const words = language === "en" ? {
+      heading: "⚠5 to fix",
+      older: "Older session not imported",
+      folder: "Older session needs a project folder",
+      generic: "Saved data needs attention",
+      recover: "Share these details for help recovering this session",
+      choose: "Choose its project folder, then restart Spex to retry",
+      repair: "Share these details for help repairing this data",
+      blocking: "Needs repair before continuing",
+      nonblocking: "Other work can continue",
+      details: "Details",
+    } : {
+      heading: "⚠5 项待处理",
+      older: "旧版会话尚未导入",
+      folder: "旧版会话需要关联项目文件夹",
+      generic: "已保存的数据需要处理",
+      recover: "提供这些详情，以获取恢复此会话的帮助",
+      choose: "选择其项目文件夹，然后重启 Spex 重试",
+      repair: "提供这些详情，以获取修复此数据的帮助",
+      blocking: "修复后才能继续相关操作",
+      nonblocking: "其他工作可继续",
+      details: "详情",
+    };
+    const diagnostics: GroupsState["diagnostics"] = [
+      { code: "session-import", file: "/old/sessions/one.json", reason: "unsupported legacy schema 1", blocking: false },
+      { code: "session-upgrade", file: "/records/sessions/two.spex.json", reason: "旧版会话无法转换", blocking: false },
+      { code: "session-folder-required", file: "/records/sessions/three.spex.json", reason: "invalid sidecar or missing cwd", blocking: false },
+      // The same technical text must not choose a session repair when
+      // the producer supplied no known classification.
+      { file: "/records/home.yaml", reason: "unsupported legacy schema 1", blocking: true },
+      { code: "future-diagnostic" as GroupsState["diagnostics"][number]["code"], file: "/records/other.json", reason: "<script>diagnostic text</script>", blocking: false },
+    ];
+    await renderGroups(repoState({}, { diagnostics }), { open: false });
+    expect(screen.getByTestId("space-issues").textContent).toBe(words.heading);
+    const rows = screen.getAllByTestId("space-diagnostic");
+    expect(rows).toHaveLength(diagnostics.length);
+    const summaries = [
+      words.older,
+      words.older,
+      words.folder,
+      words.generic,
+      words.generic,
+    ];
+    const guidance = [
+      words.recover,
+      words.recover,
+      words.choose,
+      words.repair,
+      words.repair,
+    ];
+    for (const [index, row] of rows.entries()) {
+      const entry = diagnostics[index]!;
+      expect(within(row).getByText(summaries[index]!).closest("details")).toBeNull();
+      expect(within(row).getByText(guidance[index]!).closest("details")).toBeNull();
+      expect(within(row).getByTestId("space-diagnostic-impact").textContent).toBe(
+        entry.blocking ? words.blocking : words.nonblocking,
+      );
+      const details = row.querySelector("details")!;
+      expect(details.open).toBe(false);
+      expect(within(row).getByText(entry.file).closest("details")).toBe(details);
+      expect(within(row).getByText(entry.reason).closest("details")).toBe(details);
+      fireEvent.click(within(row).getByText(words.details));
+      expect(details.open).toBe(true);
+      expect(details.textContent).toContain(entry.file);
+      expect(details.textContent).toContain(entry.reason);
+    }
+    expect(screen.getByTestId("space-issues-list").querySelector("script")).toBeNull();
+    expect(calls("project.rebind")).toHaveLength(0);
+  });
+
+  test("records no project folder pairs read '<project> · <group> — Project folder not connected on this computer', propose the folder the core checked, and 'Use <folder>' pairs it in one gesture (space-46, space-53, space-47)", async () => {
     commandMock.mockImplementation(async (type: string, fields: Record<string, unknown> = {}) => {
       if (type === "project.rebind") return { id: "jane/infra-spex", name: "infra", path: fields.path, registeredAt: 1 };
       if (type === "project.list") return [];
@@ -220,7 +292,7 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     expect(row.dataset.kind).toBe("repository");
     // Named by the project and its group, the folder it last ran in
     // secondary, no sentence (space-46, DR-159, DR-069).
-    expect(within(row).getByTestId("space-repair-title").textContent).toBe("infra · jane — Folder missing on this computer");
+    expect(within(row).getByTestId("space-repair-title").textContent).toBe("infra · jane — Project folder not connected on this computer");
     expect(row.textContent).not.toContain("infra-spex");
     expect(within(row).getByTestId("space-repair-folder").textContent).toBe("/code/infra · 5 sessions ran there");
     expect(row.querySelectorAll("p")).toHaveLength(1);
@@ -307,33 +379,41 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     expect(within(resolved).queryByRole("button", { name: "Open project" })).toBeNull();
   });
 
-  test("a folder the core did not find proposes nothing, the row saying the folder is missing (space-53)", async () => {
+  test.each([
+    { here: false, unknown: false, finding: "a missing folder" },
+    { here: true, unknown: false, finding: "a parent folder that is not a Git project" },
+    { here: true, unknown: true, finding: "a folder whose check timed out" },
+  ])("$finding offers the folder editor without claiming that files were deleted (space-53)", async ({ here, unknown }) => {
     const repair = unpaired({
       directories: ["/gone/worktree"],
       sessions: 2,
       key: "jane/infra-spex|/gone/worktree",
-      checked: [{ path: "/gone/worktree", here: false, repo: false }],
+      checked: [{ path: "/gone/worktree", here, repo: false, ...(unknown ? { unknown: true } : {}) }],
       proposal: undefined,
     });
     await renderGroups(repoState({}, { diagnostics: [{ file: "workspace/jane/infra-spex", reason: "no working folder pairs it", blocking: false, repair }] }), { open: false });
     fireEvent.click(screen.getByTestId("space-issues"));
     const row = screen.getByTestId("space-repair");
-    expect(within(row).getByTestId("space-repair-title").textContent).toBe("infra · jane — Folder missing on this computer");
+    expect(within(row).getByTestId("space-repair-title").textContent).toBe("infra · jane — Project folder not connected on this computer");
+    expect(within(row).queryByText("Not a Git project folder — choose the project folder, not its parent") !== null).toBe(here && !unknown);
+    expect(within(row).queryByText("Last-used folder not found on this computer") !== null).toBe(!here && !unknown);
     expect(within(row).queryByTestId("space-repair-use")).toBeNull();
     expect(within(row).getAllByRole("button").map((button) => button.textContent)).toEqual(["Choose folder…", "Not on this computer"]);
+    expect(within(row).getByRole("button", { name: "Not on this computer" }).title).toBe("Set aside this reminder on this computer; saved sessions stay");
     // "Choose folder…" opens the row as an editor over the recorded path:
     // "Use this folder" and Cancel, Escape cancelling, its note a phrase
     // (space-47).
     fireEvent.click(within(row).getByRole("button", { name: "Choose folder…" }));
-    const path = within(row).getByLabelText("Project folder of infra") as HTMLInputElement;
+    const path = within(row).getByLabelText("Project folder for infra") as HTMLInputElement;
     expect(path.value).toBe("/gone/worktree");
-    expect(row.textContent).toContain("Kept on this computer only; never synced");
+    expect(row.textContent).toContain("Folder location saved only on this computer");
     expect(within(row).getByTestId("space-repair-submit").textContent).toBe("Use this folder");
     fireEvent.change(path, { target: { value: "" } });
     fireEvent.click(within(row).getByTestId("space-repair-submit"));
     expect(within(row).getByRole("alert").textContent).toBe("Name a folder");
     fireEvent.keyDown(path, { key: "Escape" });
     expect(within(row).queryByTestId("space-repair-submit")).toBeNull();
+    expect(calls("project.rebind")).toHaveLength(0);
   });
 
   test("a repair set aside stands in the list, marked 'set aside', and counts no more, the header's control reading '⚠' alone, titled 'Nothing to fix' (space-1, space-54, space-55)", async () => {
@@ -353,7 +433,7 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     fireEvent.click(issues);
     expect(screen.getByTestId("space-issues-list").className).not.toContain("amber");
     const row = screen.getByTestId("space-repair-declined");
-    expect(within(row).getByTestId("space-repair-title").textContent).toBe("infra · jane — Folder missing on this computer · set aside");
+    expect(within(row).getByTestId("space-repair-title").textContent).toBe("infra · jane — Project folder not connected on this computer · set aside");
     // Its condition is named for assistive technology, by mark and word
     // (space-55).
     expect(row.textContent).toContain("Set aside");

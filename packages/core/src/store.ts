@@ -1021,7 +1021,14 @@ export class Store {
         } catch (error) {
           this.sessionLocations.set(id, repository.key);
           this.untrackedSessions.add(id);
-          this.sessionProblems.set(id, {file:sourcePath, reason:String(error), blocking:false});
+          this.sessionProblems.set(id, {
+            file: sourcePath, reason: String(error), blocking: false,
+            // A sidecar needs the project's paired folder to import.
+            // Its error also covers invalid metadata, so report the
+            // known missing prerequisite without parsing that wording.
+            ...(sidecar ? { code: cwd && isAbsolute(cwd) && resolve(cwd) === cwd
+              ? "session-upgrade" as const : "session-folder-required" as const } : {}),
+          });
         }
       }
     }
@@ -1232,7 +1239,7 @@ export class Store {
    * (storage-12): one whose file is gone since leaves, and so does the
    * mark keeping an unindexed session's files out of Git once none of
    * them stands. */
-  sessionDiagnostics(): { file: string; reason: string; blocking: boolean }[] {
+  sessionDiagnostics(): StorageDiagnostic[] {
     for (const id of [...this.sessionProblems.keys()]) this.sessionProblem(id);
     return [...this.sessionProblems.values()];
   }

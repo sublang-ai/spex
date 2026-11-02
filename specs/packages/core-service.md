@@ -250,6 +250,7 @@ When a client sends `storage.diagnostics`, the core shall report each unresolved
 - after verified migration, damaged application or session files do not refuse startup; affected commands return `invalid_request` with the failing file and reason, while unrelated operations remain available;
 - a diagnostic a local folder would repair carries that repair's own facts — the project it names with that project's registered name, the working directories recorded for it, how many sessions record them, what the core found about each folder it names, and the one folder it proposes where exactly one qualifies [[space-53](space.md#space-53)] — so a client offers the repair, and its proposal, from the data rather than from the reason's wording;
 - a diagnostic no local folder repairs carries none, and a project is named by its registered name rather than by its identifier wherever a repair names it.
+- failed former-store imports carry optional code `session-import`, and failed older desktop-session imports carry `session-folder-required` when no normalized project folder is available, otherwise `session-upgrade`, assigned at the reporting operation without classifying the reason's prose; these codes change neither preservation nor blocking ([DR-177](../decisions/177-repairs-explain-the-next-step.md)).
 
 ### Boss Turns
 
@@ -1029,7 +1030,7 @@ Where fixture sessions another host wrote [[core-service-60](#core-service-60)] 
 
 #### core-service-88
 
-When an integration suite changes stored history and folder pairs through a running core, it shall verify removal and restoration of a recorded-path alias [[core-service-85](#core-service-85)], diagnostics preserving unresolved files [[core-service-86](#core-service-86)], and history-replacement notification before the updated summary [[core-service-87](#core-service-87)].
+When an integration suite changes stored history and folder pairs through a running core, it shall verify removal and restoration of a recorded-path alias [[core-service-85](#core-service-85)], diagnostics preserving unresolved files and distinguishing skipped former-store imports, older desktop-session failures and a missing project folder through their codes [[core-service-86](#core-service-86)], and history-replacement notification before the updated summary [[core-service-87](#core-service-87)].
 
 #### core-service-77
 

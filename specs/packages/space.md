@@ -316,7 +316,7 @@ When the core reports the home's diagnostics, it shall fold every diagnostic a f
 
 | Repair | Raised by | Named by |
 | --- | --- | --- |
-| a spex repository with no working folder here | a clone under `workspace/` that no pair names [[storage-2](storage.md#storage-2)] | the project — the spex repository's name with its `-spex` dropped — with its group, "<project> · <group> — Folder missing on this computer", the folder it last ran in secondary ([DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)) |
+| a spex repository with no working folder here | a clone under `workspace/` that no pair names [[storage-2](storage.md#storage-2)] | the project — the spex repository's name with its `-spex` dropped — with its group, "<project> · <group> — Project folder not connected on this computer", the folder it last ran in secondary ([DR-177](../decisions/177-repairs-explain-the-next-step.md), [DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)) |
 | a working folder whose clone is missing | a pair naming a clone that is not under `workspace/` | the folder's path |
 
 - one spex repository's repair resolves every session it holds, however many sessions ran there;
@@ -329,8 +329,8 @@ When the user pairs a repair's spex repository with the folder proposed [[space-
 
 - pairing a folder the home already pairs with that spex repository sets that pair's folder, carrying the repair's recorded directories as aliases so every session recorded under them may continue [[storage-6](storage.md#storage-6)];
 - pairing a folder the home pairs with nothing writes the pair [[storage-6](storage.md#storage-6)], and where that folder is not one the repair records, attaches those recorded directories to it as aliases;
-- naming a different folder, through "Choose folder…", opens the row as an in-place editor over the proposed or recorded path, with Use this folder, Cancel, Escape cancelling, and an Open folder… control where the running deployment offers a directory picker;
-- the editor says that where a project lives is recorded on this device alone and never syncs [[storage-1](storage.md#storage-1)];
+- naming a different folder, through "Choose folder…", opens the row as an in-place editor over the proposed or recorded path, with Use this folder, Cancel, Escape cancelling, and a Browse… control where the running deployment offers a directory picker, the field labelled "Project folder for <name>";
+- the editor reads "Folder location saved only on this computer", naming the location as what never syncs [[storage-1](storage.md#storage-1)] ([DR-177](../decisions/177-repairs-explain-the-next-step.md));
 - a refusal shows in the row with the path kept and the control offered again: a folder inside another working folder, a folder already another spex repository's, and a spex repository whose turn is still running;
 - a sync of that spex repository running meanwhile disables no repair control and refuses no rebind [[space-21](#space-21)];
 - at a remote place [[run-view-169](run-view.md#run-view-169)] a repair offers neither a folder nor "Use <folder>": a seat's core allocates every folder itself [[space-103](#space-103)].
@@ -349,7 +349,7 @@ When pairing a repair's spex repository succeeds with every recorded folder atta
 While a repair stands unanswered, the Space surface shall count it as an issue [[space-1](#space-1)], only this device's reader's own act settling it ([DR-065](../decisions/065-repairs-the-reader-answers.md)):
 
 - drawing a row, opening the list and re-reading the state settle nothing;
-- declining, with "Not on this computer", says this is not a project on this device: the row stands in the list, counts no more, and keeps the controls it had, so changing that answer is pairing the project rather than undoing anything ([DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md));
+- declining, with "Not on this computer", says this is not a project on this device: its tooltip says that the reminder is set aside here and saved sessions stay, and the row stands in the list, counts no more, and keeps the controls it had, so changing that answer is pairing the project rather than undoing anything ([DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md));
 - resolving a repair removes it from the list, the core no longer reporting it;
 - an answer lapses only when the repair's own recorded facts change, never because a folder appeared or vanished beneath it.
 
@@ -368,7 +368,7 @@ When the core reports a repair, it shall check the folders that repair already n
 - exactly one folder present, a work tree root and unclaimed is the proposal; two qualifying folders propose nothing, and the row asks instead;
 - the check lists no directory and descends none, so a path never reported is a path never examined;
 - a check is bounded and one that exceeds it reports unknown, so an unreachable folder never delays the surface's read [[space-2](#space-2)];
-- the surface renders what was found before any control can accept it.
+- the surface renders what was found before any control can accept it, an absent recorded folder reading "Last-used folder not found on this computer", an unknown check claiming no absence, and a recorded folder present but not a work tree root reading "Not a Git project folder — choose the project folder, not its parent" ([DR-177](../decisions/177-repairs-explain-the-next-step.md)).
 
 #### space-54
 
@@ -392,6 +392,21 @@ While the issues list stands, the Space surface shall tell a repair's three cond
 - the list's heading reads "To fix (<n>)", <n> counting the unanswered repairs, followed by " · <m> set aside" while <m> declined ones stand ([DR-172](../decisions/172-surfaces-a-fresh-user-reads.md));
 - the issues list and the header's control wear the surface's attention colour only while a repair stands unanswered, reading as settled — and staying reachable — once none does;
 - a declined row holds its place until the reader's own Refresh [[space-2](#space-2)] or his leaving the Sync tab, then standing after the unanswered repairs [[space-46](#space-46)].
+
+#### space-121
+
+While an unfolded storage diagnostic other than a pending merge stands, the Space surface shall present its cause and next step in plain language, using the core's optional code rather than matching its reason [[core-service-86](core-service.md#core-service-86)], with the original file and reason inside collapsed Details ([DR-177](../decisions/177-repairs-explain-the-next-step.md)):
+
+| Code | Summary | Next step |
+| --- | --- | --- |
+| `session-import` or `session-upgrade` | Older session not imported | Share these details for help recovering this session |
+| `session-folder-required` | Older session needs a project folder | Choose its project folder, then restart Spex to retry |
+| absent or unknown | Saved data needs attention | Share these details for help repairing this data |
+
+- blocking reads "Needs repair before continuing"; nonblocking reads "Other work can continue";
+- at a remote place the missing-folder case asks to share Details for help recovering the session, offering no local folder choice [[space-47](#space-47)];
+- the code never implies that an import failed because data was corrupt, or that a repair is automatic;
+- paths and technical reasons wrap inside Details without widening the surface.
 
 ### Changes
 
@@ -1362,10 +1377,18 @@ Where the Space surface renders over a signed-in home whose instance lists a gro
 - `alpha`'s primary control reads "Show", offering "Open on lab-1" beside it, `beta`'s "Open here", offering "Show on lab-1", and `acme-spex`'s "Open here" asking for the folder its sessions run in; "Open here" on `beta` sends `space.join` with the folder the picker returns, "Open on lab-1" on `alpha` sends that seat's client `space.join` with no folder once the seat's `signIn` reads `signedIn`, the row reading "Opening on lab-1…" meanwhile, and nothing while it reads `running` [[space-111](#space-111)] [[space-63](#space-63)];
 - a local-only project, once added, stands under "This computer" with no phrase and "Add to a group…", whose form visibly names the project and labels the Space, its "Choose group" listing "Personal" first and then `acme` and "Research", with no destination selected or command sent before confirmation [[space-61](#space-61)] [[space-58](#space-58)];
 - over a placement ended in choices needed, `alpha` reads "1 to send" while it holds a local unit and otherwise "Changed here and at <display name>" with Resolve, Resolve showing the picker beneath the row with "Keep this computer's", "Take <display name>'s", "All here" and "All <display name>'s", while a placement started separately reads "Started separately at <display name>" with "Combine…" and its confirmation [[space-120](#space-120)] [[space-14](#space-14)] [[space-17](#space-17)] [[space-13](#space-13)];
-- a repair row reads "<project> · acme — Folder missing on this computer" with the folder beneath it, "Use <folder>" where it proposes one, "Choose folder…" and "Not on this computer", declining sending `space.repair.decline` [[space-46](#space-46)] [[space-47](#space-47)] [[space-49](#space-49)];
+- a repair row reads "<project> · acme — Project folder not connected on this computer" with the folder beneath it, "Use <folder>" where it proposes one, "Choose folder…" and "Not on this computer", declining sending `space.repair.decline` [[space-46](#space-46)] [[space-47](#space-47)] [[space-49](#space-49)];
 - shown at the seat's place, the same surface reads "Not on lab-1", "Keep lab-1's" and "Spex keeps lab-1's files in <home>" [[space-112](#space-112)];
 - every new control follows the label budget or its fixed-phrase exception and fits at the 320-pixel floor [[space-28](#space-28)].
 
 #### space-114
 
 Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell beside a stand-in instance listing one server of the member's group, a stand-in hub relaying to a further core standing for its seat, signed in at the same instance and holding no project, when the journey activates "Open on <server>" on a group project's row of this computer's Space, the test suite shall assert through the page: the contract shown once and "I understand" sending `server.open`, the server's line reading "Connecting to <server>…" then "Connected", the row reading "Opening on <server>…" and then "On <server>", that seat's core having received `space.join` with no folder, the project standing under the server's heading in the sidebar, and a second "Open on <server>" of another project sending its join at once with no contract [[space-111](#space-111)] [[space-1](#space-1)] [[space-63](#space-63)].
+
+#### space-122
+
+Where the Space surface renders over a controlled command connection reporting a folder repair and unfolded diagnostics, the integration suite shall assert the presentation in English and Chinese:
+
+- an existing recorded folder with no Git root asks for the project's Git folder, its editor names the folder location as saved only here, and declining's tooltip preserves saved sessions [[space-46](#space-46)] [[space-47](#space-47)] [[space-49](#space-49)] [[space-53](#space-53)];
+- the import, upgrade and missing-folder codes show their distinct guidance even when the technical reason says nothing about their cause, and an unknown code takes the generic guidance [[space-121](#space-121)];
+- Details starts collapsed and exposes the file and original reason when opened, while the visible impact distinguishes blocking from nonblocking diagnostics [[space-121](#space-121)].

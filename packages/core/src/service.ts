@@ -711,7 +711,7 @@ export class CoreService {
   private credentialPushes = 0;
   /** The reload in flight, awaited before a runtime opens (core-service-92). */
   private reloading?: Promise<void>;
-  private readonly migrationDiagnostics: {file: string; reason: string; blocking: boolean}[] = [];
+  private readonly migrationDiagnostics: StorageDiagnostic[] = [];
   private stopping = false;
   /** The endpoint file this process wrote under the home
    * (core-service-143), removed at stop; unset while none stands. */
@@ -1669,6 +1669,7 @@ export class CoreService {
     const result = await this.store.sessionStore().migrateLegacyDefault({env:this.env,homeDir:this.home});
     for (const entry of result.skipped) this.migrationDiagnostics.push({
       file:join(result.sourceDir,`${entry.sessionId}.json`), reason:entry.reason, blocking:false,
+      code: "session-import",
     });
   }
 

@@ -5024,6 +5024,9 @@ for (const selection of ["default", "home override", "sessions override"] as con
     await seed.dispose();
     writeFileSync(source,original,{mode:0o600});
     writeFileSync(join(legacyDir,`${sessionId}.records.jsonl`),await readSessionReplay(join(seedDir,`${sessionId}.records.jsonl`)),{mode:0o600});
+    const unsupported = join(legacyDir, `${randomUUID()}.json`);
+    const unsupportedBytes = JSON.stringify({ schemaVersion: 1 });
+    writeFileSync(unsupported, unsupportedBytes, { mode: 0o600 });
     const service = await CoreService.start({token:"test",configPath,dataDir,home,own:OWN,watchConfig:false,
       env:{HOME:home,XDG_STATE_HOME:join(home,"old-state"),...(selection === "home override" ? {SPEX_HOME:dataDir} : {})}});
     t.after(async () => {await service.stop();rmSync(home,{recursive:true,force:true});});
@@ -5039,6 +5042,10 @@ for (const selection of ["default", "home override", "sessions override"] as con
       assert.equal(sessions.length,0,"a session of a clone no folder pairs is not listed");
       const repair = (await client.expectOk("storage.diagnostics",{})).find((entry) => entry.repair?.kind === "repository" && entry.repair.repository === ownKey);
       assert.equal(repair?.repair?.sessions, 1, "your own group's clone is reported once it holds the session");
+      const skipped = (await client.expectOk("storage.diagnostics", {})).find((entry) => entry.file === unsupported);
+      assert.equal(skipped?.code, "session-import", "the skipped import carries guidance without parsing its reason");
+      assert.equal(skipped?.blocking, false);
+      assert.equal(readFileSync(unsupported, "utf8"), unsupportedBytes, "the unsupported older file is preserved");
       assert.equal(existsSync(source),false,"old active manifest retires after the new bundle is valid");
       // Retained in the destination store's receipts (storage-18).
       const migrations = join(clonePath(dataDir, ownKey),"local","migrations");
@@ -5046,6 +5053,7 @@ for (const selection of ["default", "home override", "sessions override"] as con
       assert.ok(inputs.some((path) => readFileSync(join(migrations,String(path)),"utf8") === original),"original bytes are retained locally");
     } else {
       assert.equal(sessions.length,0); assert.equal(readFileSync(source,"utf8"),original);
+      assert.equal((await client.expectOk("storage.diagnostics", {})).some((entry) => entry.file === unsupported), false);
     }
   });
 }
@@ -5628,8 +5636,8 @@ test("core-service-86: unreadable legacy sidecars and forge cache preserve unrel
   service=await CoreService.start({token:"test",dataDir:harness.dataDir,configPath:join(harness.dir,"playbook.config.yaml"),env:{},home:join(harness.dir,"home"),watchConfig:false,adapterImports:fakeAdapterImports({}).imports});
   client=new Client(service.port()); await client.open();
   const diagnostics=await client.expectOk("storage.diagnostics",{});
-  assert.ok(diagnostics.some((entry)=>entry.file===sidecar&&entry.reason.length>0));
-  assert.ok(diagnostics.some((entry)=>entry.file===malformed&&entry.reason.length>0));
+  assert.ok(diagnostics.some((entry)=>entry.file===sidecar&&entry.reason.length>0&&entry.code==="session-upgrade"));
+  assert.ok(diagnostics.some((entry)=>entry.file===malformed&&entry.reason.length>0&&entry.code==="session-upgrade"));
   assert.ok(diagnostics.some((entry)=>entry.file===cache&&!entry.blocking));
   assert.ok((await client.expectOk("session.list",{})).some((session)=>session.id===prior.id));
   await client.expectOk("config.edit",{op:{kind:"captain.set",patch:{instruction:"Still available"}}});
@@ -5638,6 +5646,45 @@ test("core-service-86: unreadable legacy sidecars and forge cache preserve unrel
   assert.equal(readFileSync(sidecar,"utf8"),"{broken sidecar");
   assert.equal(readFileSync(malformed,"utf8"),malformedBytes);
   assert.equal(readFileSync(cache,"utf8"),"{broken cache");
+});
+
+test("core-service-86: an older session without a project folder names that prerequisite and imports after pairing and restart", async (t) => {
+  const root = scratchDir("spex-sidecar-folder-");
+  const dataDir = join(root, "state");
+  const projectPath = join(root, "project");
+  const configPath = join(root, "playbook.config.yaml");
+  mkdirSync(projectPath);
+  execFileSync("git", ["init", "-q", projectPath]);
+  writeFileSync(configPath, VALID_CONFIG);
+  const { projectId: key, sessionsDir } = pairedHome(dataDir, projectPath);
+  const homePath = join(dataDir, "home.yaml");
+  const home = parseYaml(readFileSync(homePath, "utf8"));
+  home.folders = [];
+  writeFileSync(homePath, stringifyYaml(home));
+  const id = randomUUID();
+  const sidecar = join(sessionsDir, `${id}.spex.json`);
+  const original = JSON.stringify({ v: 1, id, projectId: key, createdAt: 1, endedAt: 2, live: false, players: [], initialVisible: [] });
+  writeFileSync(sidecar, original, { mode: 0o600 });
+  const options = { token: "test", configPath, dataDir, home: join(root, "home"), own: OWN, env: {}, watchConfig: false };
+  let service = await CoreService.start(options);
+  let client = new Client(service.port());
+  await client.open();
+  t.after(async () => { client.close(); await service.stop(); rmSync(root, { recursive: true, force: true }); });
+  const diagnostic = (await client.expectOk("storage.diagnostics", {})).find((entry) => entry.file === sidecar);
+  assert.equal(diagnostic?.code, "session-folder-required");
+  assert.equal(diagnostic?.blocking, false);
+  assert.equal(readFileSync(sidecar, "utf8"), original, "a missing folder does not damage or delete the older file");
+  const groups = await client.expectOk("space.get", {});
+  assert.equal(groups.diagnostics.find((entry) => entry.file === sidecar)?.code, "session-folder-required");
+  await client.expectOk("project.rebind", { projectId: key, path: projectPath });
+  client.close();
+  await service.stop();
+  service = await CoreService.start(options);
+  client = new Client(service.port());
+  await client.open();
+  assert.equal(existsSync(sidecar), false, "restart imports the sidecar with the folder now paired");
+  assert.equal((await client.expectOk("storage.diagnostics", {})).some((entry) => entry.file === sidecar), false);
+  assert.ok((await client.expectOk("session.list", {})).some((session) => session.id === id));
 });
 
 test("storage-15: repeated default-home startup does not grow leases for a refused sidecar", async (t) => {

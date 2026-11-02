@@ -15,14 +15,12 @@ import {
   assertPlainDirectory, readJsonFile, sha256, StorageFormatError, writeApplicationBytes, writeApplicationFile, writeVersionedBytes, UUID,
 } from "@sublang/spex/files";
 import { i18n } from "./i18n.js";
-import { mediaAttachmentsSchema, type AssignedRuntime, type DiagnosticRepair, type IntentAuthor, type IntentInfo, type IntentSource, type MediaAsset, type RepairChecked } from "./protocol.js";
+import { mediaAttachmentsSchema, type AssignedRuntime, type DiagnosticRepair, type IntentAuthor, type IntentInfo, type IntentSource, type MediaAsset, type RepairChecked, type StorageDiagnostic } from "./protocol.js";
 
 export {
   closed, isObject, knownFormat, need, readJsonFile, sha256, StorageFormatError, UUID, writeApplicationBytes, writeApplicationFile,
 };
-export type { DiagnosticRepair, RepairChecked };
-
-export interface StorageDiagnostic { file: string; reason: string; blocking: boolean; repair?: DiagnosticRepair }
+export type { DiagnosticRepair, RepairChecked, StorageDiagnostic };
 
 /** A repair's identity is the facts it names (space-49, space-54). */
 export function repairKey(repository: string | undefined, directories: string[]): string {

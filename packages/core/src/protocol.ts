@@ -1706,7 +1706,7 @@ export interface CommandResults {
   "agent.options": AgentOptions;
   "project.list": ProjectInfo[];
   "project.rebind": ProjectInfo;
-  "storage.diagnostics": { file: string; reason: string; blocking: boolean; repair?: DiagnosticRepair }[];
+  "storage.diagnostics": StorageDiagnostic[];
   "project.register": ProjectInfo;
   "project.remove": null;
   "project.create": ProjectInfo;
@@ -2101,6 +2101,16 @@ export interface BuiltinPlaybookInfo {
 // Groups (space-30, DR-103)
 // ---------------------------------------------------------------------------
 
+/** A stored-file problem, with optional facts for human guidance. The
+ * code describes the operation that failed, never a parsed reason. */
+export interface StorageDiagnostic {
+  file: string;
+  reason: string;
+  blocking: boolean;
+  repair?: DiagnosticRepair;
+  code?: "session-import" | "session-upgrade" | "session-folder-required";
+}
+
 /** What a folder on this device would repair (space-46): a spex
  * repository no working folder here pairs, or a working folder whose
  * clone is missing. */
@@ -2449,7 +2459,7 @@ export interface GroupsState {
   own: { name: string; named: boolean; repositories: RepositoryState[] };
   /** Every instance the home lists, in its order (space-1). */
   instances: InstanceState[];
-  diagnostics: { file: string; reason: string; blocking: boolean; repair?: DiagnosticRepair }[];
+  diagnostics: StorageDiagnostic[];
   /** What the header counts (space-1): the repairs this device's
    * reader has not answered, plus every diagnostic no repair folds.
    * Carried as one number so header and list cannot disagree. */

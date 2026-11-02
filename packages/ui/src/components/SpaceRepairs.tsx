@@ -4,8 +4,8 @@
 // What needs fixing on the Space surface (space-1, space-46..space-56,
 // DR-065, DR-172): the list "To fix (<n>) · <m> set aside" the header's
 // "⚠ <n> to fix" opens, holding every repair the core folded and every
-// problem no repair folds. A project whose folder is missing on this
-// computer reads "<project> · <group> — Folder missing on this computer"
+// problem no repair folds. A project with no folder connected on this
+// computer reads "<project> · <group> — Project folder not connected on this computer"
 // with "Use <folder>" where the core found one, "Choose folder…" and
 // "Not on this computer"; a project folder whose records are missing
 // offers to remove the project, as the Overview tab's Remove does. An answered row keeps its place until the
@@ -205,9 +205,17 @@ function RepairRow({
             values: { project: projectName(checkedRecorded.claimedBy) },
             comment: "a repair's evidence: the folder it last ran in is another project's; {project} is that project",
           })
-        : checkedRecorded?.here && !checkedRecorded.repo
-          ? i18n._({ id: "That folder is not a Git repository", comment: "a repair's evidence: the folder it last ran in is here but holds no Git repository" })
-          : undefined;
+        : checkedRecorded?.here && !checkedRecorded.repo && !checkedRecorded.unknown
+          ? i18n._({ id: "Not a Git project folder — choose the project folder, not its parent", comment: "a repair's evidence: the folder it last ran in is here but holds no Git repository" })
+          : checkedRecorded && !checkedRecorded.here && !checkedRecorded.unknown
+            ? seat === undefined
+              ? i18n._({ id: "Last-used folder not found on this computer", comment: "a repair's evidence: the core checked the recorded folder and confirmed that it is missing on this computer" })
+              : i18n._({
+                  id: "Last-used folder not found on {place}",
+                  values: { place: seat },
+                  comment: "a repair's evidence: the recorded folder is missing on a team server; {place} is the server's name",
+                })
+            : undefined;
 
   const refusalLine = refusal ? (
     <span role="alert" className="text-xs text-red-600 dark:text-red-400">
@@ -286,6 +294,16 @@ function RepairRow({
           data-testid="space-repair-decline"
           className={SECONDARY}
           disabled={disabled || busy}
+          title={seat === undefined
+            ? i18n._({
+                id: "Set aside this reminder on this computer; saved sessions stay",
+                comment: "a repair's decline tooltip: only the reminder is set aside, never the saved sessions",
+              })
+            : i18n._({
+                id: "Set aside this reminder on {place}; saved sessions stay",
+                values: { place: seat },
+                comment: "a repair's decline tooltip at a team server's Space; {place} is the server's name",
+              })}
           onClick={() => void setDeclined(true)}
         >
           {notHereAnswer(seat)}
@@ -300,7 +318,7 @@ function RepairRow({
       <label className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
         <span className="shrink-0 text-neutral-500">
           {i18n._({
-            id: "Project folder of {name}",
+            id: "Project folder for {name}",
             values: { name },
             comment: "the repair editor's field caption: the folder on this computer that is this project; {name} is the project",
           })}
@@ -331,13 +349,13 @@ function RepairRow({
               if (picked) setPath(picked);
             }}
           >
-            {i18n._({ id: "Open folder…", comment: "the repair editor's control: opens the system folder picker" })}
+            {i18n._({ id: "Browse…", comment: "the repair editor's control: opens the system folder picker" })}
           </button>
         ) : null}
       </label>
       <p className="text-xs text-neutral-500">
         {i18n._({
-          id: "Kept on this computer only; never synced",
+          id: "Folder location saved only on this computer",
           comment: "the repair editor's note: where a project's folder is, is recorded on this computer alone and never syncs",
         })}
       </p>
@@ -362,23 +380,23 @@ function RepairRow({
     seat === undefined
       ? group
         ? i18n._({
-            id: "{state, select, aside {{project} · {group} — Folder missing on this computer · set aside} other {{project} · {group} — Folder missing on this computer}}",
+            id: "{state, select, aside {{project} · {group} — Project folder not connected on this computer · set aside} other {{project} · {group} — Project folder not connected on this computer}}",
             values: { project: name, group, state },
-            comment: "a repair row: the project's records are here, its folder on this computer is not; {project} is the project, {group} the group holding its records; 'set aside' follows once the reader answered Not on this computer",
+            comment: "a repair row: the project's records are here, no project folder is connected on this computer; {project} is the project, {group} the group holding its records; 'set aside' follows once the reader answered Not on this computer",
           })
         : i18n._({
-            id: "{state, select, aside {{project} — Folder missing on this computer · set aside} other {{project} — Folder missing on this computer}}",
+            id: "{state, select, aside {{project} — Project folder not connected on this computer · set aside} other {{project} — Project folder not connected on this computer}}",
             values: { project: name, state },
-            comment: "a repair row of a project in no group: its records are here, its folder on this computer is not; 'set aside' follows once the reader answered Not on this computer",
+            comment: "a repair row of a project in no group: its records are here, no project folder is connected on this computer; 'set aside' follows once the reader answered Not on this computer",
           })
       : group
         ? i18n._({
-            id: "{state, select, aside {{project} · {group} — Folder missing on {place} · set aside} other {{project} · {group} — Folder missing on {place}}}",
+            id: "{state, select, aside {{project} · {group} — Project folder not connected on {place} · set aside} other {{project} · {group} — Project folder not connected on {place}}}",
             values: { project: name, group, place: seat, state },
             comment: "a repair row on a team server's Space; {project} is the project, {group} the group holding its records, {place} the server's name; 'set aside' follows once the reader answered Not on the server",
           })
         : i18n._({
-            id: "{state, select, aside {{project} — Folder missing on {place} · set aside} other {{project} — Folder missing on {place}}}",
+            id: "{state, select, aside {{project} — Project folder not connected on {place} · set aside} other {{project} — Project folder not connected on {place}}}",
             values: { project: name, place: seat, state },
             comment: "a repair row of a project in no group on a team server's Space; {place} is the server's name; 'set aside' follows once the reader answered Not on the server",
           });
@@ -479,6 +497,45 @@ function RepairOutcomeRow({
 }
 
 type IssueEntry = GroupsState["diagnostics"][number];
+
+/** Storage operations identify known causes; technical prose never
+ * determines the next step (space-121). */
+function DiagnosticRow({ entry }: { entry: IssueEntry }) {
+  const store = usePlaceStore();
+  const local = isLocalPlace(store.place);
+  const folderRequired = entry.code === "session-folder-required";
+  const olderSession = folderRequired || entry.code === "session-import" || entry.code === "session-upgrade";
+  const summary = folderRequired
+    ? i18n._({ id: "Older session needs a project folder", comment: "an older session cannot be imported until its project has a folder" })
+    : olderSession
+      ? i18n._({ id: "Older session not imported", comment: "an older session's import failed; this does not imply damaged data" })
+      : i18n._({ id: "Saved data needs attention", comment: "a stored file could not be used; the technical cause is in Details" });
+  const guidance = folderRequired && local
+    ? i18n._({ id: "Choose its project folder, then restart Spex to retry", comment: "how to retry an older session import that lacks a project folder" })
+    : olderSession
+      ? i18n._({ id: "Share these details for help recovering this session", comment: "manual help is needed for an older session import; no automatic repair is promised" })
+      : i18n._({ id: "Share these details for help repairing this data", comment: "next step for an unclassified stored-file problem" });
+  return (
+    <li data-testid="space-diagnostic" className="flex min-w-0 flex-col gap-1">
+      <span className="font-medium">{summary}</span>
+      <p className="text-xs text-neutral-500">{guidance}</p>
+      <p data-testid="space-diagnostic-impact" className="text-xs text-neutral-500">
+        {entry.blocking
+          ? i18n._({ id: "Needs repair before continuing", comment: "a storage diagnostic blocks operations that depend on this data" })
+          : i18n._({ id: "Other work can continue", comment: "this storage diagnostic does not block unrelated work" })}
+      </p>
+      <details className="min-w-0 text-xs">
+        <summary className="cursor-pointer">
+          {i18n._({ id: "Details", comment: "expand a storage warning's original file path and technical reason" })}
+        </summary>
+        <div className="mt-1 flex min-w-0 flex-col gap-1">
+          <span className="break-all font-mono">{entry.file}</span>
+          <span className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{entry.reason}</span>
+        </div>
+      </details>
+    </li>
+  );
+}
 
 /** One row's place in the list: a repair keeps its place as it changes
  * condition, its outcome taking the same one. */
@@ -652,19 +709,7 @@ export function IssuesList({
               />
             );
           }
-          return (
-            <li key={id} className="flex min-w-0 flex-wrap items-center gap-2">
-              <span className="min-w-0 truncate font-mono text-xs" title={entry.file}>
-                {entry.file}
-              </span>
-              <span className="min-w-0 flex-1">— {entry.reason}</span>
-              {entry.blocking ? (
-                <span className="shrink-0 rounded-full border border-current px-1.5 text-xs">
-                  {i18n._({ id: "blocking", comment: "mark on a problem that stops a sync" })}
-                </span>
-              ) : null}
-            </li>
-          );
+          return <DiagnosticRow key={id} entry={entry} />;
         })}
       </ul>
     </section>
