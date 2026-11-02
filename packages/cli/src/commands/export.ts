@@ -563,7 +563,7 @@ export const exportPackage: Command = async (args) => {
   if (specFile !== null && specText !== null) {
     const selfPath = relative(join(root, "specs"), specFile).split(sep).join("/");
     const rewritten = rewriteForRelease(specText, { selfPath, packageOf: specOwners(root) });
-    releaseSpec = rewritten.text;
+    releaseSpec = rewritten.text.replace(/\r\n/g, "\n");
     warnings = rewritten.warnings;
   }
 

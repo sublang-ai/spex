@@ -86,6 +86,9 @@ function spexWith(vars: NodeJS.ProcessEnv, home: string, cwd: string, ...args: s
 }
 
 /** A run that succeeded, with what it printed. */
+/** The LF rules an install keeps in a project's `.gitattributes`. */
+const LF_RULES = "spex.yaml text eol=lf\nspex.lock text eol=lf\nspecs/packages/*.md text eol=lf\n";
+
 async function ok(cwd: string, ...args: string[]): Promise<string> {
   return okAt(HOME, cwd, ...args);
 }
@@ -154,8 +157,6 @@ const skill = { kind: "skill", language: "en" };
 /** demo/spec's spec, citing demo/other's and demo/absent's by address
  * and the specs root's meta.md relatively. */
 const DEMO_SPEC_MD = "# spec: Spec\n\n## Intent\n\nThe spec.\n\n## External Behavior\n\n### spec-1\n\nThe spec shall build on the other [[other-1](spex:demo/other#other-1)] and the absent [[absent-1](spex:demo/absent#absent-1)], one sentence per line [[meta-25](../meta.md#meta-25)].\n\n## Verification\n\n### spec-2\n\nWhen read, the suite shall assert it builds [[spec-1](#spec-1)].\n";
-/** demo/base's spec. */
-const BASE_MD = "# base: Base\n\n## Intent\n\nThe base.\n\n## External Behavior\n\n### base-1\n\nThe base shall stand.\n\n## Verification\n\n### base-2\n\nWhen read, the suite shall assert it stands [[base-1](#base-1)].\n";
 /** The spec a folder of demo/other provides. */
 const OTHER_MD = "# other: Other\n\n## Intent\n\nThe other.\n\n## External Behavior\n\n### other-1\n\nThe other shall stand.\n\n## Verification\n\n### other-2\n\nWhen read, the suite shall assert it stands [[other-1](#other-1)].\n";
 
@@ -164,7 +165,9 @@ before(async () => {
   client = new RegistryClient({ url: registry.url });
   host = new URL(registry.url).host;
   await publish("demo/tool", "1.0.0", { tool: skill }, skillFiles("tool", "1.0.0"));
-  await publish("demo/base", "1.0.0", { base: { kind: "spec", language: "en" } }, { "specs/en/base.md": BASE_MD });
+  await publish("demo/base", "1.0.0", { base: { kind: "spec", language: "en" } }, {
+    "specs/en/base.md": "# base: Base\n\n## Intent\n\nThe base.\n\n## External Behavior\n\n### base-1\n\nThe base shall stand.\n\n## Verification\n\n### base-2\n\nWhen read, the suite shall assert it stands [[base-1](#base-1)].\n",
+  });
   for (const version of ["1.0.0", "1.2.0", "1.3.0", "2.0.0-beta.1"]) {
     await publish("demo/other", version, { other: skill }, skillFiles("other", version), { "demo/base": "^1.0.0" });
   }
@@ -245,6 +248,7 @@ test("cli-15: add writes the package into spex.yaml, installs under .spex/ and p
   assert.deepEqual(requests, { format: 1, space: registry.url, packages: { "demo/tool": { version: "^1.0.0" } } }, "[cli-2] the requirement written into the existing spex.yaml, its space kept");
   assert.match(added, /^Added demo\/tool 1\.0\.0\n {2}tool {2}\.agents\/skills, \.claude\/skills$/m, "[cli-2] the package added, with its version and where its skill went");
   assert.equal(readFileSync(join(WORK, ".spex", ".gitignore"), "utf8"), "*\n", "[cli-2] .spex/ ignores everything in it");
+  assert.equal(readFileSync(join(WORK, ".gitattributes"), "utf8"), LF_RULES, "[cli-2] .gitattributes keeps spex.yaml, spex.lock and the placed specs at LF");
   assert.match(readFileSync(join(WORK, ".spex", "packages", "demo", "tool", "skills", "en", "tool", "SKILL.md"), "utf8"), /at 1\.0\.0/);
   for (const folder of [".claude", ".agents"]) assert.match(readFileSync(join(WORK, folder, "skills", "tool", "SKILL.md"), "utf8"), /name: tool/, `[cli-2] exported into ${folder}/skills`);
 
@@ -259,10 +263,10 @@ test("cli-15: add writes the package into spex.yaml, installs under .spex/ and p
   assert.match(other, /^Added demo\/base 1\.0\.0 for demo\/other\n {2}spec in specs\/packages\/base\.md$/m, "[cli-2] the spec placed in the scaffolded specs/, in cli-6's words");
   assert.ok(readFileSync(join(WORK, "specs", "packages", "base.md"), "utf8").startsWith("<!-- Placed by Spex from demo/base 1.0.0; an edit makes this file yours. -->\n\n# base: Base\n"), "[cli-2] under its marker line");
   for (const folder of [".claude", ".agents"]) assert.equal(existsSync(join(WORK, folder, "skills", "demo-base")), false, `[cli-2] no spec skill in ${folder}/skills where specs/ stands`);
-  // Git sees the two files and the placed spec, never the installed tree
-  // or the exports.
+  // Git sees the two files, the placed spec and .gitattributes, never
+  // the installed tree or the exports.
   const status = execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: WORK, encoding: "utf8" });
-  assert.deepEqual(status.trim().split("\n").sort(), ["?? specs/packages/base.md", "?? spex.lock", "?? spex.yaml"], "[cli-2] Git sees spex.yaml, spex.lock and the placed spec alone");
+  assert.deepEqual(status.trim().split("\n").sort(), ["?? .gitattributes", "?? specs/packages/base.md", "?? spex.lock", "?? spex.yaml"], "[cli-2] Git sees spex.yaml, spex.lock, the placed spec and .gitattributes alone");
 
   const refusals: [string, string[], RegExp][] = [
     ["a name that is not <org>/<pkg>", ["add", "Demo/tool"], /^spex add: "Demo\/tool" is not a package name — use <org>\/<pkg>, /m],
@@ -323,15 +327,17 @@ test("cli-15: list heads with the folder and the registry's name, then what is a
   assert.match(found, /^demo\/other {2}The demo\/other spec package\n {2}2\.0\.0-beta\.1, 1\.2\.0, 1\.0\.0$/m, "[cli-7] the match with its versions, newest first");
 });
 
-test("cli-15: install from the committed files alone writes no spex.lock and installs the same files; again it rewrites nothing", async () => {
-  // A second clone of the committed environment and placed spec, checked
-  // out with CRLF line endings as Git for Windows does by default.
-  git(WORK, "add", "spex.yaml", "spex.lock", "specs");
+test("cli-15: install from the committed files alone writes no spex.lock and installs byte for byte; again it rewrites nothing", async () => {
+  // A second clone of the committed environment, placed spec and
+  // .gitattributes, made by a Git converting line endings as Git for
+  // Windows does by default: the rules keep the four files at LF.
+  git(WORK, "add", "spex.yaml", "spex.lock", "specs", ".gitattributes");
   git(WORK, "commit", "--quiet", "-m", "Add the environment");
   const second = join(SCRATCH, "second");
   git(SCRATCH, "-c", "core.autocrlf=true", "clone", "--quiet", WORK, second);
+  for (const path of ["spex.yaml", "spex.lock", "specs/packages/base.md"]) assert.ok(!readFileSync(join(second, ...path.split("/")), "utf8").includes("\r"), `[cli-4] ${path} checked out with LF`);
+  assert.ok(readFileSync(join(second, "specs", "meta.md"), "utf8").includes("\r\n"), "the clone's Git converted what no rule covers");
   const lockBytes = readFileSync(join(second, "spex.lock"), "utf8");
-  for (const path of ["spex.yaml", "spex.lock", "specs/packages/base.md"]) assert.ok(readFileSync(join(second, ...path.split("/")), "utf8").includes("\r\n"), `the clone checked ${path} out with CRLF`);
   const committed = stamps(join(second, "specs"));
   registry.script.clearRequests();
   const installed = await ok(second, "install");
@@ -341,7 +347,7 @@ test("cli-15: install from the committed files alone writes no spex.lock and ins
   assert.match(installed, /^Installed demo\/base 1\.0\.0\n {2}spec in specs\/packages\/base\.md$/m, "[cli-4] the committed copy read as the package's");
   assert.deepEqual(stamps(join(second, "specs")), committed, "[environments-41] the first install rewrites nothing in specs/");
   const base = join(second, "specs", "packages", "base.md");
-  assert.deepEqual(readPlacedRecord(second)?.specs["demo/base"], readPlacedRecord(WORK)?.specs["demo/base"], "[environments-41] the committed copy, its line endings as the checkout wrote them, recorded as the package's, as where it was placed");
+  assert.deepEqual(readPlacedRecord(second)?.specs["demo/base"], { path: "specs/packages/base.md", version: "1.0.0", sha256: createHash("sha256").update(readFileSync(base)).digest("hex"), waiting: {} }, "[environments-41] the committed copy recorded as the package's");
   assert.deepEqual(snapshot(join(second, ".spex", "packages")), snapshot(join(WORK, ".spex", "packages")), "[cli-4] byte-identical .spex/packages/");
   for (const folder of [".claude", ".agents"]) {
     assert.deepEqual(snapshot(join(second, folder, "skills")), snapshot(join(WORK, folder, "skills")), `[cli-4] byte-identical exports in ${folder}/skills`);
@@ -356,16 +362,17 @@ test("cli-15: install from the committed files alone writes no spex.lock and ins
   for (const path of Object.keys(before.files)) assert.equal(after[path], before.files[path], `[cli-4] ${path} is not rewritten`);
   assert.deepEqual(Object.keys(after).sort(), Object.keys(before.files).sort(), "[cli-4] no file made or removed");
 
-  // With spex.yaml alone, as the clone checked it out, the lock is
-  // resolved first, the same lock.
+  // With spex.yaml alone, the lock is resolved first.
   const third = workingFolder(join(SCRATCH, "third"));
-  copyFileSync(join(second, "spex.yaml"), join(third, "spex.yaml"));
+  copyFileSync(join(WORK, "spex.yaml"), join(third, "spex.yaml"));
+  writeFileSync(join(third, ".gitattributes"), "*.png binary");
   const resolved = await ok(third, "install");
+  assert.equal(readFileSync(join(third, ".gitattributes"), "utf8"), `*.png binary\n${LF_RULES}`, "[cli-4] the reader's rule kept, the three LF rules appended");
   assert.match(resolved, /^Wrote spex\.lock$/m, "[cli-4] the lock written first where it is missing");
   assert.match(resolved, /^Installed demo\/base 1\.0\.0\n {2}spec needs specs\/ — spex scaffold$/m, "[cli-4] a folder holding no specs/ places no spec, naming spex scaffold");
   for (const folder of [".claude", ".agents"]) assert.equal(existsSync(join(third, folder, "skills", "demo-base")), false, `[environments-41] and no spec skill in ${folder}/skills`);
   assert.equal(existsSync(join(third, "specs")), false, "[environments-41] no specs/ made");
-  assert.equal(readFileSync(join(third, "spex.lock"), "utf8"), lockBytes.replace(/\r\n/g, "\n"), "[cli-4] the same lock, line endings aside");
+  assert.equal(readFileSync(join(third, "spex.lock"), "utf8"), lockBytes, "[cli-4] the same lock");
   assert.deepEqual(snapshot(join(third, ".spex", "packages")), snapshot(join(WORK, ".spex", "packages")));
 
   // With neither, refused naming the folder and spex add.
@@ -374,36 +381,6 @@ test("cli-15: install from the committed files alone writes no spex.lock and ins
   assert.equal(refused.code, 1);
   assert.equal(refused.stderr, `spex install: no spex.yaml in ${fourth} — spex add <org>/<pkg>\n`, "[cli-4] refused naming the folder and spex add");
   assert.deepEqual(snapshot(fourth), {}, "[cli-4] nothing written");
-
-  // A newer release of demo/base: the clone's unedited copy, its line
-  // endings as the checkout wrote them, is rewritten by the derivation,
-  // with LF line endings. Yanked at once, so the folders of the tests
-  // after this one resolve demo/base as before.
-  const NEWER_BASE_MD = BASE_MD.replace("The base.\n", "The base, newer.\n");
-  await publish("demo/base", "1.1.0", { base: { kind: "spec", language: "en" } }, { "specs/en/base.md": NEWER_BASE_MD });
-  let moved: string;
-  try { moved = await ok(second, "update"); }
-  finally { registry.script.yank("demo/base", "1.1.0"); }
-  assert.match(moved, /^Updated demo\/base 1\.0\.0 → 1\.1\.0\n {2}spec in specs\/packages\/base\.md$/m, "[cli-5] the unedited copy follows its release");
-  assert.equal(readFileSync(base, "utf8"), `<!-- Placed by Spex from demo/base 1.1.0; an edit makes this file yours. -->\n\n${NEWER_BASE_MD}`, "[cli-5] the newer release's derivation, with LF line endings");
-  assert.equal(readPlacedRecord(second)?.specs["demo/base"]?.sha256, createHash("sha256").update(readFileSync(base)).digest("hex"), "[cli-5] recorded with the written bytes' hash");
-});
-
-test("cli-15: a release whose spec holds CRLF line endings is placed with LF and read as placed at the next install", async () => {
-  const CRLF_MD = "# crlf: Crlf\r\n\r\n## Intent\r\n\r\nThe crlf.\r\n\r\n## External Behavior\r\n\r\n### crlf-1\r\n\r\nThe crlf shall stand.\r\n\r\n## Verification\r\n\r\n### crlf-2\r\n\r\nWhen read, the suite shall assert it stands [[crlf-1](#crlf-1)].\r\n";
-  await publish("demo/crlf", "1.0.0", { crlf: { kind: "spec", language: "en" } }, { "specs/en/crlf.md": CRLF_MD });
-  const dir = workingFolder(join(SCRATCH, "crlf"));
-  writeFileSync(join(dir, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages: {}\n`);
-  await ok(dir, "scaffold");
-  const added = await ok(dir, "add", "demo/crlf");
-  assert.match(added, /^Added demo\/crlf 1\.0\.0\n {2}spec in specs\/packages\/crlf\.md$/m, "[cli-2] placed");
-  const placed = join(dir, "specs", "packages", "crlf.md");
-  const bytes = readFileSync(placed);
-  assert.equal(bytes.toString("utf8"), `<!-- Placed by Spex from demo/crlf 1.0.0; an edit makes this file yours. -->\n\n${CRLF_MD.replace(/\r\n/g, "\n")}`, "[cli-2] written with LF line endings");
-  assert.equal(readPlacedRecord(dir)?.specs["demo/crlf"]?.sha256, createHash("sha256").update(bytes).digest("hex"), "[cli-2] recorded with the written bytes' hash");
-  const before = stamps(join(dir, "specs"));
-  assert.match(await ok(dir, "install"), /^Already installed demo\/crlf 1\.0\.0\n {2}spec in specs\/packages\/crlf\.md$/m, "[cli-4] read as placed, not edited");
-  assert.deepEqual(stamps(join(dir, "specs")), before, "[cli-4] nothing rewritten in specs/");
 });
 
 test("cli-15: update takes a newer release, naming both versions, and then says it is up to date", async () => {
@@ -467,7 +444,7 @@ test("cli-15: the root is found from a subfolder, and at the Git top level of a 
   assert.equal(existsSync(join(mono, "spex.yaml")), false);
   assert.ok(existsSync(join(app, ".claude", "skills", "tool", "SKILL.md")));
   const monoStatus = execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: mono, encoding: "utf8" });
-  assert.deepEqual(monoStatus.trim().split("\n").sort(), ["?? packages/app/spex.lock", "?? packages/app/spex.yaml"], "[cli-1] Git sees spex.yaml and spex.lock alone");
+  assert.deepEqual(monoStatus.trim().split("\n").sort(), ["?? packages/app/.gitattributes", "?? packages/app/spex.lock", "?? packages/app/spex.yaml"], "[cli-1] Git sees spex.yaml, spex.lock and .gitattributes alone, at the nearest root");
 
   // Outside any Git work tree and below no spex.yaml, the current folder.
   const loose = join(SCRATCH, "loose", "here");
@@ -811,6 +788,10 @@ test("cli-15: export builds spex-packages/<org>/<pkg>/ by copying the project's 
   const tools = await ok(dir, "export", "acme/tools", "--spec", "specs/packages/tools.md");
   assert.match(tools, /^ {2}spec tools {2}from specs\/packages\/tools\.md$/m, "[cli-23] a spec alone");
   assert.deepEqual(readYaml(join(dir, "spex-packages/acme/tools/meta.yaml")).provides, ["spec"], "[cli-23] provides the one kind given");
+  // A project spec holding CRLF line endings goes into its release with LF.
+  writeFileSync(join(dir, "specs", "packages", "crlf.md"), "# crlf: Crlf\r\n\r\n## Intent\r\n\r\nThe crlf.\r\n\r\n## External Behavior\r\n\r\n### crlf-1\r\n\r\nThe crlf shall stand.\r\n");
+  await ok(dir, "export", "acme/crlf", "--spec", "specs/packages/crlf.md");
+  assert.equal(readFileSync(join(dir, "spex-packages/acme/crlf/specs/en/crlf.md"), "utf8"), "# crlf: Crlf\n\n## Intent\n\nThe crlf.\n\n## External Behavior\n\n### crlf-1\n\nThe crlf shall stand.\n", "[cli-23] written with LF line endings");
 
   const before = snapshot(dir);
   const requests = readFileSync(join(dir, "spex.yaml"), "utf8");
@@ -859,7 +840,7 @@ test("cli-15: export builds spex-packages/<org>/<pkg>/ by copying the project's 
   assert.equal(readFileSync(join(dir, "spex.yaml"), "utf8"), requests, "[cli-23] no request written");
   assert.equal(readFileSync(join(dir, "spex.lock"), "utf8"), lockBytes, "[cli-23] nothing resolved");
   assert.deepEqual(outsidePackages(snapshot(dir)), outsidePackages(before), "[cli-23] the project's files, its environment and its placements as they were");
-  assert.deepEqual(readdirSync(join(dir, "spex-packages", "acme")), ["hello", "tools"], "[cli-23] no staging folder left");
+  assert.deepEqual(readdirSync(join(dir, "spex-packages", "acme")), ["crlf", "hello", "tools"], "[cli-23] no staging folder left");
 
   // The folder added by path, as a reader may: its skill now placed in
   // .agents/skills/ by Spex, which a refresh passes over.

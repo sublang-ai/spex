@@ -4,7 +4,7 @@
 // The install record of placed specs (environments-41, lint-9, DR-174):
 // at `<root>/.spex/placed.json`, each provided spec an install placed
 // under the root's `specs/`, by its spec package, with the path it
-// stands at, the release's version, the SHA-256 of its derivation and
+// stands at, the release's version, the SHA-256 of the bytes written and
 // the packages its links wait for — so an install knows its own copy
 // from an edited one, and the linter a placed spec from the project's
 // own. An install writes it whole, atomically, as compact JSON.
@@ -21,9 +21,8 @@ export const PLACED_RECORD = "placed.json";
 
 /** One placed spec: its path from the root, `specs/packages/<pkg>.md`,
  * the version of the release it was derived from, the SHA-256 in hex of
- * the derivation — the LF text an install writes there, which a copy's
- * text, CRLF read as LF, still hashes to — and each package `<org>/<pkg>`
- * its links wait for with their count (environments-41). */
+ * the bytes the install wrote there, and each package `<org>/<pkg>` its
+ * links wait for with their count (environments-41). */
 export type PlacedSpec = {
   path: string;
   version: string;

@@ -531,11 +531,10 @@ test("environments-20: the lock is exactly its encoding, and a second home insta
   const firstReport = await installAsOnDisk({ root: first.clone, lock, store: first.store, cache: first.cache, registry: client, git: gitSource(first.cache), pathRoot: null });
   assert.deepEqual(firstReport.installed, ["acme/app", "acme/lib", "acme/press"]);
 
-  // The second home's files with CRLF line endings, as a checkout that
-  // converts them writes them — Git for Windows by default.
   const second = makeHome();
   mkdirSync(second.clone, { recursive: true });
-  for (const file of ["spex.yaml", "spex.lock"]) writeFileSync(join(second.clone, file), readFileSync(join(first.clone, file), "utf8").replace(/\n/g, "\r\n"));
+  cpSync(join(first.clone, "spex.yaml"), join(second.clone, "spex.yaml"));
+  cpSync(join(first.clone, "spex.lock"), join(second.clone, "spex.lock"));
   registry.script.clearRequests();
   const secondLock = (await readLock(join(second.clone, "spex.lock")))!;
   const report = await installAsOnDisk({ root: second.clone, lock: secondLock, store: second.store, cache: second.cache, registry: client, git: gitSource(second.cache), pathRoot: null });
@@ -545,7 +544,7 @@ test("environments-20: the lock is exactly its encoding, and a second home insta
   // A store lacking every file takes the release archive.
   assert.ok(registry.script.requests.some((line) => /^GET \/api\/v1\/packages\/acme\/press\/1\.0\.0\/download$/.test(line)));
   assert.deepEqual(snapshot(join(second.clone, ".spex", "packages")), snapshot(join(first.clone, ".spex", "packages")));
-  assert.equal(readFileSync(join(second.clone, "spex.lock"), "utf8"), written.replace(/\n/g, "\r\n"), "the lock as the checkout wrote it");
+  assert.equal(readFileSync(join(second.clone, "spex.lock"), "utf8"), written);
   // A second install of the same lock changes nothing.
   const again = await installAsOnDisk({ root: second.clone, lock: secondLock, store: second.store, cache: second.cache, registry: client, git: gitSource(second.cache), pathRoot: null });
   assert.equal(again.unchanged, true);

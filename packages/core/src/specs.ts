@@ -23,7 +23,7 @@ import {
 import type { Dirent } from "node:fs";
 import { basename, dirname, isAbsolute, join, posix, sep } from "node:path";
 
-import { lfDigest, readPlacedMarker, readPlacedRecord } from "@sublang/spex/environment";
+import { readPlacedMarker, readPlacedRecord } from "@sublang/spex/environment";
 
 import { defaultRunCommand, type RunCommand } from "./forge.js";
 import { i18n } from "./i18n.js";
@@ -346,8 +346,8 @@ export function parseSpecFileText(text: string, key: string): SpecFileInfo {
 
 /** Read + parse one spec file; never throws (SPECV degradation).
  * `recorded` is the SHA-256 the install record holds for the file,
- * where it lists it: a marked file whose text, CRLF read as LF, hashes
- * otherwise is an edited copy, the project's own, and is marked nothing
+ * where it lists it: a marked file whose bytes differ from it is an
+ * edited copy, the project's own, and is marked nothing
  * (spec-view-10). */
 export function parseSpecFile(
   absPath: string,
@@ -375,7 +375,7 @@ export function parseSpecFile(
     if (
       file.placed &&
       recorded !== undefined &&
-      lfDigest(bytes) !== recorded
+      createHash("sha256").update(bytes).digest("hex") !== recorded
     ) {
       delete file.placed;
     }

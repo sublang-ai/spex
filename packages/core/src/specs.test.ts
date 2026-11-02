@@ -795,11 +795,6 @@ test("spec-view-67: a placed spec is told by its marker and the install record's
   tree = parseSpecTree(dir);
   assert.deepEqual(file(tree, "tools").placed, marked);
   assert.equal(file(tree, "auth").placed, undefined);
-  // Its line endings CRLF, as a checkout that converts them writes
-  // them: still the package's copy.
-  writeFileSync(join(dir, "specs", "packages", "tools.md"), placed.replace(/\n/g, "\r\n"));
-  assert.deepEqual(file(parseSpecTree(dir), "tools").placed, marked);
-  writeFileSync(join(dir, "specs", "packages", "tools.md"), placed);
 
   // A record holding another hash: an edited copy, marked nothing.
   record(tools("0".repeat(64)));

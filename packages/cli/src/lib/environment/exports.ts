@@ -19,12 +19,11 @@
 // A provided spec stands in a project's `specs/packages/<pkg>.md`,
 // derived from the release's file — the marker line naming its package
 // and version, a blank line, then the file with its citations rewritten
-// for the tree, written with LF line endings — whenever the set of
-// placed specs changes, its version and its hash kept in the install
-// record at `.spex/placed.json`, and the file left for the reader to
-// commit: a copy whose text, CRLF read as LF, is the derivation is the
-// package's, record or no record; one whose text so read has the hash
-// recorded follows its release; one edited since, its marker line
+// for the tree — whenever the set of placed specs changes, its version
+// and its bytes' hash kept in the install record at `.spex/placed.json`,
+// and the file left for the reader to commit: a copy holding the
+// derivation is the package's, record or no record; one holding the
+// bytes recorded follows its release; one edited since, its marker line
 // or one the record names at its path, stands as the reader's; one
 // whose package no longer places it leaves unless edited; and a file of
 // its basename anywhere under `specs/` that is none of these blocks it.
@@ -53,11 +52,11 @@ import {
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { parseDocument, stringify as stringifyYaml } from "yaml";
 
-import { readVersioned, sha256, writeVersionedBytes, type FileVersion } from "../files.js";
+import { readVersioned, sha256, writeVersionedBytes } from "../files.js";
 import { AGENT_FOLDERS } from "./agent-folders.js";
 import { rewriteForTree } from "./citations.js";
 import { ensureSpexDir, installedDir, skillsDir as generatedSkillsDir } from "./layout.js";
-import { lfDigest, parseManifestText, providedArtifacts, type Manifest } from "./format.js";
+import { parseManifestText, providedArtifacts, type Manifest } from "./format.js";
 import { isPathSource, resolutionVersion, type Lock, type Resolution } from "./lock.js";
 import { placedMarker, readPlacedMarker } from "./marker.js";
 import { placedRecordPath, readPlacedRecord, serializePlacedRecord, writePlacedRecord, type PlacedSpec } from "./placed-record.js";
@@ -491,23 +490,16 @@ function isDirectory(path: string): boolean {
  * have it. */
 const NOT_A_FILE = "not a file";
 
-/** What stands at a root's path, read once: its `digest` — a file's
- * SHA-256, CRLF read as LF (lfDigest), so a copy a checkout converted —
- * Windows by default — still equals its derivation (environments-41);
- * null where nothing stands; NOT_A_FILE where something else stands, a
- * folder, a link, or a path under a file — and its `version`, the
- * SHA-256 of a file's bytes, null otherwise, which a write or a removal
- * over it checks at the instant before (DR-111). */
-interface Standing { digest: string | null; version: FileVersion }
-
-function standingAt(root: string, path: string): Standing {
+/** What stands at a root's path, as a digest: the SHA-256 of a file's
+ * bytes; null where nothing stands; and NOT_A_FILE where something else
+ * stands — a folder, a link, or a path under a file. */
+function standingDigest(root: string, path: string): string | null {
   const file = join(root, ...path.split("/"));
   try {
-    if (!lstatSync(file).isFile()) return { digest: NOT_A_FILE, version: null };
-    const bytes = readFileSync(file);
-    return { digest: lfDigest(bytes), version: sha256(bytes) };
+    if (!lstatSync(file).isFile()) return NOT_A_FILE;
+    return sha256(readFileSync(file));
   } catch (error) {
-    return { digest: (error as NodeJS.ErrnoException).code === "ENOENT" ? null : NOT_A_FILE, version: null };
+    return (error as NodeJS.ErrnoException).code === "ENOENT" ? null : NOT_A_FILE;
   }
 }
 
@@ -553,11 +545,31 @@ function specMode(root: string, workingFolder: string | null): SpecMode {
  * the release's version, and its spec file in its chosen language. */
 interface SpecSource { name: string; id: string; version: string; file: string }
 
-/** Remove a copy only while it still holds the bytes the plan read —
- * their text, CRLF read as LF, the hash recorded — checked at the instant
- * before (DR-111); whether it went. */
-function removeUnchanged(root: string, path: string, version: FileVersion): boolean {
-  if (version === null || standingAt(root, path).version !== version) return false;
+/** The Git attributes an install keeps in a project's `.gitattributes`
+ * (environments-44): the files Spex writes with LF — `spex.yaml`,
+ * `spex.lock` and the placed specs — checked out with LF on every
+ * device, so a checkout whose Git converts line endings, Windows by
+ * default, holds the bytes the lock and the placement record digest. */
+const LF_RULES = ["spex.yaml text eol=lf", "spex.lock text eol=lf", "specs/packages/*.md text eol=lf"];
+
+/** Append to the root's `.gitattributes` each LF rule it lacks, the rest
+ * of the file kept (environments-44) — an append, as DR-111 allows — and
+ * leave it the reader's to commit. */
+function pinLineEndings(root: string): void {
+  const file = join(root, ".gitattributes");
+  let prior = "";
+  try { prior = readFileSync(file, "utf8"); } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+  const present = new Set(prior.split(/\r?\n/).map((line) => line.trim()));
+  const missing = LF_RULES.filter((rule) => !present.has(rule));
+  if (missing.length === 0) return;
+  const lead = prior === "" || prior.endsWith("\n") ? "" : "\n";
+  writeFileSync(file, `${lead}${missing.join("\n")}\n`, { flag: "a" });
+}
+
+/** Remove a copy only while it still holds the bytes recorded, checked
+ * at the instant before (DR-111); whether it went. */
+function removeUnchanged(root: string, path: string, digest: string): boolean {
+  if (standingDigest(root, path) !== digest) return false;
   rmSync(join(root, ...path.split("/")), { force: true });
   return true;
 }
@@ -572,24 +584,23 @@ function standingMarker(root: string, path: string): { name: string; version: st
 /** The bytes a provided spec is placed as (environments-41): the marker
  * line naming its package and version, a blank line, then the release's
  * file with each address rewritten for the specs standing — `standing`
- * giving each package's placed path below `specs/` — written with LF
- * line endings, so the SHA-256 recorded is the written bytes' and a copy
- * a checkout converted digests as it (lfDigest); and the packages its
- * links wait for. */
+ * giving each package's placed path below `specs/` — and the packages
+ * its links wait for. */
 function deriveSpec(source: SpecSource, standing: ReadonlyMap<string, string>): { text: string; sha256: string; waiting: Record<string, number> } {
   const self = placedSpecPath(source.id).slice(SPECS.length + 1);
   const placedPathOf = (name: string): string | null => (name === source.name ? self : standing.get(name) ?? null);
   const rewritten = rewriteForTree(readFileSync(source.file, "utf8"), { placedPathOf, selfPath: self });
+  // Written with LF, whatever the release holds: Spex writes LF.
   const text = `${placedMarker(source.name, source.version)}\n\n${rewritten.text}`.replace(/\r\n/g, "\n");
   return { text, sha256: sha256(text), waiting: rewritten.waiting };
 }
 
 /** What placing a root's provided specs does: where each stands, each
- * file written with the version it must still hold (DR-111), and the
+ * file written with the digest it must still hold (DR-111), and the
  * record left. */
 interface SpecPlan {
   placements: SpecPlacement[];
-  writes: { path: string; text: string; version: FileVersion }[];
+  writes: { path: string; text: string; digest: string | null }[];
   record: Record<string, PlacedSpec>;
 }
 
@@ -605,9 +616,8 @@ interface SpecPlan {
  *    not here holds, by the record or the marker line alike;
  * 2. a recorded copy its package no longer places there — removed, no
  *    longer providing its spec, or now blocked — leaves through `remove`
- *    while its text, CRLF read as LF, has the hash recorded, else stays
- *    as the project's own, reported edited where its package places no
- *    spec now;
+ *    while it holds the bytes recorded, else stays as the project's own,
+ *    reported edited where its package places no spec now;
  * 3. a claimed spec is blocked by a file at its path the record does not
  *    name for it and whose marker line names another package or none, or
  *    by a file of its basename elsewhere under `specs/` whose marker line
@@ -617,15 +627,14 @@ interface SpecPlan {
  *    only for another's presumed standing;
  * 4. each spec not blocked is derived for the specs standing — those not
  *    blocked, and the copies of packages whose files are not here that
- *    hold their paths — and is placed where the file's text, CRLF read
- *    as LF, is the derivation, recorded with or without an earlier
- *    record, as on a fresh clone; written where no file stands or the
- *    file's text so read has the hash recorded; and
+ *    hold their paths — and is placed where the file holds the derivation, recorded
+ *    with or without an earlier record, as on a fresh clone; written
+ *    where no file stands or the file holds the bytes recorded; and
  *    otherwise edited, the package's by its marker line or its record:
  *    left standing, its record kept as it was, the release's version
  *    waiting where the marker, else the record, names another.
  */
-function planSpecs(root: string, sources: SpecSource[], unread: ReadonlySet<string>, remove: (path: string, version: FileVersion) => boolean): SpecPlan {
+function planSpecs(root: string, sources: SpecSource[], unread: ReadonlySet<string>, remove: (path: string, digest: string) => boolean): SpecPlan {
   const previous = readPlacedRecord(root)?.specs ?? {};
   const record: Record<string, PlacedSpec> = {};
   const placements: SpecPlacement[] = [];
@@ -635,7 +644,7 @@ function planSpecs(root: string, sources: SpecSource[], unread: ReadonlySet<stri
   const names = new Set(ordered.map((source) => source.name));
   // A copy `remove` took leaves nothing standing at its path.
   const gone = new Set<string>();
-  const standingOf = (path: string): Standing => (gone.has(path) ? { digest: null, version: null } : standingAt(root, path));
+  const digestOf = (path: string): string | null => (gone.has(path) ? null : standingDigest(root, path));
 
   // A package whose files are not here keeps what the record says of its
   // copy, which still holds its path (environments-8).
@@ -658,7 +667,7 @@ function planSpecs(root: string, sources: SpecSource[], unread: ReadonlySet<stri
   //    else the first in name order.
   const standsFor = (source: SpecSource): boolean => {
     const path = placedSpecPath(source.id);
-    const { digest } = standingOf(path);
+    const digest = digestOf(path);
     if (digest === null || digest === NOT_A_FILE) return false;
     return previous[source.name]?.path === path || standingMarker(root, path)?.name === source.name;
   };
@@ -676,9 +685,9 @@ function planSpecs(root: string, sources: SpecSource[], unread: ReadonlySet<stri
     if (record[name] !== undefined) continue;
     const entry = previous[name]!;
     if (claims.get(entry.path)?.name === name) continue;
-    const { digest, version } = standingOf(entry.path);
+    const digest = digestOf(entry.path);
     if (digest === null) continue;
-    if (digest === entry.sha256 && remove(entry.path, version)) { gone.add(entry.path); continue; }
+    if (digest === entry.sha256 && remove(entry.path, entry.sha256)) { gone.add(entry.path); continue; }
     if (!names.has(name)) placements.push({ name, path: entry.path, state: "edited", waiting: [] });
   }
 
@@ -687,7 +696,7 @@ function planSpecs(root: string, sources: SpecSource[], unread: ReadonlySet<stri
     const entry = previous[source.name];
     const found = {
       path,
-      ...standingOf(path),
+      digest: digestOf(path),
       recorded: entry !== undefined && entry.path === path ? entry : null,
       marker: gone.has(path) ? null : standingMarker(root, path),
     };
@@ -703,7 +712,7 @@ function planSpecs(root: string, sources: SpecSource[], unread: ReadonlySet<stri
   // 4. Each derived for the specs standing: placed, written or edited.
   const standing = new Map<string, string>();
   for (const source of ordered) if (!blocked.has(source.name)) standing.set(source.name, placedSpecPath(source.id).slice(SPECS.length + 1));
-  for (const [path, name] of held) if (standingOf(path).digest !== null) standing.set(name, path.slice(SPECS.length + 1));
+  for (const [path, name] of held) if (digestOf(path) !== null) standing.set(name, path.slice(SPECS.length + 1));
   for (const source of ordered) {
     const path = placedSpecPath(source.id);
     const candidate = candidates.get(source.name);
@@ -711,7 +720,7 @@ function planSpecs(root: string, sources: SpecSource[], unread: ReadonlySet<stri
       placements.push({ name: source.name, path, state: "blocked", waiting: [] });
       continue;
     }
-    const { digest, version, recorded, marker } = candidate;
+    const { digest, recorded, marker } = candidate;
     const spec = deriveSpec(source, standing);
     if (digest !== null && digest !== spec.sha256 && digest !== recorded?.sha256) {
       // Edited since it was placed: the reader's to merge.
@@ -721,7 +730,7 @@ function planSpecs(root: string, sources: SpecSource[], unread: ReadonlySet<stri
       placements.push({ name: source.name, path, state: "edited", waiting: [], ...waiting });
       continue;
     }
-    if (digest !== spec.sha256) writes.push({ path, text: spec.text, version });
+    if (digest !== spec.sha256) writes.push({ path, text: spec.text, digest });
     record[source.name] = { path, version: source.version, sha256: spec.sha256, waiting: spec.waiting };
     placements.push({ name: source.name, path, state: "placed", waiting: waitingList(spec.waiting) });
   }
@@ -730,16 +739,16 @@ function planSpecs(root: string, sources: SpecSource[], unread: ReadonlySet<stri
 
 /** Place the provided specs of a root holding `specs/` (environments-41)
  * as `planSpecs` decides: a copy that leaves removed while it holds the
- * bytes the plan read, each file written under the version read so a
- * hand edit meanwhile is refused (DR-111), and the record written whole
- * only where it changed, removed once it records nothing. */
+ * bytes recorded, each file written under the version read so a hand
+ * edit meanwhile is refused (DR-111), and the record written whole only
+ * where it changed, removed once it records nothing. */
 function placeSpecs(root: string, sources: SpecSource[], unread: ReadonlySet<string>): SpecPlacement[] {
-  const plan = planSpecs(root, sources, unread, (path, version) => removeUnchanged(root, path, version));
-  for (const { path, text, version } of plan.writes) {
+  const plan = planSpecs(root, sources, unread, (path, digest) => removeUnchanged(root, path, digest));
+  for (const { path, text, digest } of plan.writes) {
     // A project file the reader commits.
     const file = join(root, ...path.split("/"));
     mkdirSync(dirname(file), { recursive: true });
-    writeVersionedBytes(file, text, version, 0o644);
+    writeVersionedBytes(file, text, digest, 0o644);
   }
   const record = { format: 1 as const, specs: plan.record };
   const recordFile = placedRecordPath(root);
@@ -797,7 +806,7 @@ export function readSpecPlacements(root: string, lock: Lock, pathRoot: string | 
   const { sources, unread } = lockedSpecs(root, lock, pathRoot);
   if (!isDirectory(join(root, SPECS))) return sources.map(({ name, id }) => ({ name, path: placedSpecPath(id), state: "no-specs" as const, waiting: [] }));
   const plan = planSpecs(root, sources, unread, () => true);
-  const unwritten = new Set(plan.writes.filter((write) => write.version === null).map((write) => write.path));
+  const unwritten = new Set(plan.writes.filter((write) => write.digest === null).map((write) => write.path));
   return plan.placements.filter((placement) => placement.state !== "placed" || !unwritten.has(placement.path));
 }
 
@@ -885,8 +894,10 @@ export async function exportEnvironment(options: ExportOptions): Promise<ExportR
     renameSync(skillsDir, finalSkillsDir);
   }
   const mirrored = mirrorExports(options, finalSkillsDir, report, playbookSkills);
-  // The specs after the skills, in the project's `specs/`, never listed
-  // in its Git's exclude: they are the reader's to commit.
+  // A project's `.gitattributes`, then the specs after the skills, in the
+  // project's `specs/`, never listed in its Git's exclude: they are the
+  // reader's to commit.
+  if (mode !== "skills") pinLineEndings(envRoot);
   if (mode === "files") mirrored.specs = placeSpecs(envRoot, specSources, unread);
   return mirrored;
 }

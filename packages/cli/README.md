@@ -79,6 +79,7 @@ the top level of the Git work tree, else the current folder.
 | `.spex/` | the installed files and the skills made for your agents | ignored by its own `.gitignore` |
 | `spex-packages/<org>/<pkg>/` | each package you develop here | commit it |
 | `specs/packages/<pkg>.md` | the spec a package provides, placed in your `specs/` | commit it |
+| `.gitattributes` | the lines keeping `spex.yaml`, `spex.lock` and placed specs at LF on every checkout | commit it |
 | `.claude/skills/`, `.agents/skills/` | the skills placed for your agents | ignored through `.git/info/exclude` |
 
 A `spex.yaml` looks like this:
