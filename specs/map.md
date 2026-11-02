@@ -213,6 +213,7 @@ meta.md       The spec of specs
 | [DR-182](decisions/182-saved-work-is-a-choice-not-setup-debt.md) | 182-saved-work-is-a-choice-not-setup-debt.md | Optional saved-work recovery: recognizable conversations, explicit existing-folder choice, dependent imports folded into one task and retried immediately |
 | [DR-183](decisions/183-read-saved-conversations-before-locating-files.md) | 183-read-saved-conversations-before-locating-files.md | Saved conversations state their location, group by known project and open history before any project-folder choice |
 | [DR-184](decisions/184-a-review-count-and-a-way-back.md) | 184-a-review-count-and-a-way-back.md | One shared recovery explanation, a pending-notice count and persistent sidebar return after Not now |
+| [DR-186](decisions/186-unavailable-group-operations.md) | 186-unavailable-group-operations.md | Explain unavailable group deletion and restoration without unrelated package guidance |
 
 ## Packages
 

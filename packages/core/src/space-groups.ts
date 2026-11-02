@@ -349,6 +349,26 @@ export function notFoundAt(host: string, words: string | null): string {
       });
 }
 
+/** Missing lifecycle routes are unavailable operations, not missing
+ * groups. Older Space deployments sent their registry catchall here. */
+export function unavailableGroupOperation(error: unknown, host: string, operation: "delete" | "restore"): string | null {
+  if (!(error instanceof HostError) || error.status !== 404) return null;
+  const missingRoute = error.code === "route_not_found"
+    || (error.code === "not_found" && error.words === "Package management is available at https://spex.sublang.ai");
+  if (!missingRoute) return null;
+  return operation === "delete"
+    ? i18n._({
+        id: "Group deletion isn’t available at {host}. Contact the Space administrator.",
+        values: { host },
+        comment: "The Space has no group deletion operation; the group is kept",
+      })
+    : i18n._({
+        id: "Group restoration isn’t available at {host}. Contact the Space administrator.",
+        values: { host },
+        comment: "The Space has no group restoration operation; the group remains scheduled for deletion",
+      });
+}
+
 /** Refusal: a new group needs a name (git-host-15). */
 export function nameTheGroup(): string {
   return i18n._({ id: "Name the group", comment: "Refusal of a new group whose name is blank" });

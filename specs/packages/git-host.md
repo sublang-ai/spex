@@ -176,7 +176,7 @@ When a client sends `space.group.delete` with the public path reviewed by the fr
 | --- | --- |
 | `scheduled` with a group | holds the authoritative group by its stable id and returned public path, with its reported pending state and ordinary group operations disabled; publishes that state, then replies `{ status: "scheduled" }` |
 | `deleted` | removes that group from the instance's held listings; publishes the resulting state, then replies `{ status: "deleted" }` |
-| `not_found` | refuses `not_found` with the Space's words |
+| `not_found` | refuses `not_found` with the Space's words, except for a recognized unavailable operation [[git-host-35](#git-host-35)] |
 | refused or unrecognized | preserves the view and refuses as the classified Space response [[git-host-11](#git-host-11)] |
 
 - an absent or blank confirmation path is refused `invalid_request` before any request; a target the instance's view does not list as a real group, including a personal namespace, is refused `not_found`;
@@ -227,7 +227,7 @@ When a client sends `space.signout` naming a signed-in instance, the core shall 
 
 #### git-host-11
 
-When the host answers a call with anything but success, the core shall relay it in the reader's language with the host's own words kept whole wherever it carries them, and shall claim nothing the host did not say ([DR-064](../decisions/064-honest-remote-failure.md)):
+When the host answers a call with anything but success, the core shall relay it in the reader's language with the host's own words kept whole wherever it carries them, except for a recognized unavailable group operation [[git-host-35](#git-host-35)], and shall claim nothing the host did not say ([DR-064](../decisions/064-honest-remote-failure.md)):
 
 | Answer | Relayed as |
 | --- | --- |
@@ -238,6 +238,13 @@ When the host answers a call with anything but success, the core shall relay it 
 | `rate_limited` | the host asks to wait N seconds — its `Retry-After`'s number, or the seconds until its HTTP date, none below zero — or a moment, where it gives neither |
 | `reauth_required`, `token_revoked`, `invalid_token` | sign in again |
 | `provider_unavailable`, no answer | the host could not be reached |
+
+#### git-host-35
+
+When a group deletion check [[git-host-34](#git-host-34)], deletion request [[git-host-19](#git-host-19)] or restoration [[git-host-33](#git-host-33)] receives a recognized missing-operation response, the core shall refuse `invalid_request` in the reader's language with "Group deletion isn’t available at <display name>. Contact the Space administrator." or its "Group restoration" counterpart, preserving the group and sending no fallback request ([DR-186](../decisions/186-unavailable-group-operations.md)):
+
+- recognized responses are HTTP 404 with `route_not_found`, or HTTP 404 with `not_found` and the older fallback message exactly "Package management is available at https://spex.sublang.ai";
+- another status, a genuine missing-resource message or a permission refusal retains the ordinary explanation [[git-host-11](#git-host-11)].
 
 #### git-host-21
 
@@ -330,6 +337,7 @@ When an integration suite drives host reads and writes against the stand-in [[gi
 - an empty group's scheduled response retains its pending state and reported restoration permission through Refresh, while a completed response removes only that group from its instance's held listings, leaving local files and other placements untouched [[git-host-19](#git-host-19)] [[git-host-5](#git-host-5)];
 - restoring a directly scheduled group holds its authoritative response by stable id without changing other groups or local rows at the old path, then rereads the Space; a failed follow-up read reports that failure without turning the accepted restoration into a refusal, and a refused restoration preserves the pending group [[git-host-33](#git-host-33)];
 - an omitted or blank confirmation path reaches no deletion route, and an unsupported safe route or an unrecognized response never falls back to legacy deletion or changes the group optimistically [[git-host-19](#git-host-19)];
+- missing deletion-check, deletion and restoration routes report their unavailability in English and Chinese for both the explicit code and older fallback, preserve the group and send no alternative request, while genuine missing-resource answers, permission refusals and other statuses retain their explanations [[git-host-35](#git-host-35)];
 - a taken path — a known account's login at the root among them — and a taken name are refused as taken, a refusal the stand-in scripts for each of the three, and the stand-in's own refusal of what it says the person may not do, with its words kept whole in English and in Chinese; neither a name nor a path, a blank one, a group held as colliding, your namespace, and a group or spex repository the view does not list are refused before any request reaches the stand-in [[git-host-18](#git-host-18)] [[git-host-19](#git-host-19)] [[git-host-20](#git-host-20)];
 - each stand-in answer of the table is relayed in English and in Chinese with the stand-in's words kept whole [[git-host-11](#git-host-11)];
 - a 429 is relayed with `Retry-After: 2` as "asks to wait 2 seconds", with an HTTP date 3 s ahead "3 seconds", with a date past in RFC 850's or asctime's form "0 seconds", and with none "a moment" [[git-host-11](#git-host-11)]; a full read the stand-in answers 429 with `Retry-After: 30`, beyond its test-shortened 1 s hold bound [[git-host-21](#git-host-21)], keeps the previous view with its time, its rows reading unreachable with "<display name> asks to wait 30 seconds", in English and in Chinese [[git-host-5](#git-host-5)] [[git-host-11](#git-host-11)];

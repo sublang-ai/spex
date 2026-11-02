@@ -59,7 +59,7 @@ import {
 import {
   callbackPages, collidingGroup, confirmGroupPath, groupNameTaken, groupNamedLikeYourLogin, groupNotListed, hostKey, listingFor, namedLikeYourLogin,
   namedLogins, nameOneTarget, nameTaken, nameTheGroup, nameTheLogin, notARole, notFoundAt, ownNameFor, pathTheGroup, readHostCatalog, readHostListing, readHostView, relayHostError,
-  renameNothing, repositoryDescription, repositoryFor, sameLogin, sameOrigin, signInFailure, takenIn, underOrigin, userGroup, waitingPhrase,
+  renameNothing, repositoryDescription, repositoryFor, sameLogin, sameOrigin, signInFailure, takenIn, unavailableGroupOperation, underOrigin, userGroup, waitingPhrase,
   type HostCatalog, type HostListing, type HostView,
 } from "./space-groups.js";
 import {
@@ -7065,7 +7065,7 @@ export class SpaceManager {
     try {
       answer = await instance.client.deleteGroup(id, confirmPath);
     } catch (error) {
-      throw this.hostWriteRefusal(instance, error);
+      throw this.hostWriteRefusal(instance, error, "delete");
     }
     if (answer.status === "scheduled") this.holdGroupLifecycle(instance, id, answer.group);
     else this.holdChange(instance, { group: (group) => group.id === id ? null : group });
@@ -7082,7 +7082,7 @@ export class SpaceManager {
     try {
       const { group, contents } = await instance.client.inspectGroupDeletion(id);
       return { group: { id, fullPath: group.fullPath, name: group.name }, contents };
-    } catch (error) { throw this.hostWriteRefusal(instance, error); }
+    } catch (error) { throw this.hostWriteRefusal(instance, error, "delete"); }
   }
 
   /** Hold the response before a post-restore read. Only the root's
@@ -7094,7 +7094,7 @@ export class SpaceManager {
     this.instanceGroup(instance, id);
     let restored: HostGroup;
     try { restored = await instance.client.restoreGroup(id); }
-    catch (error) { throw this.hostWriteRefusal(instance, error); }
+    catch (error) { throw this.hostWriteRefusal(instance, error, "restore"); }
     this.holdGroupLifecycle(instance, id, restored);
     await this.publish();
     // A successful write remains successful if the follow-up read
@@ -7336,7 +7336,9 @@ export class SpaceManager {
    * git-host-15..17): `not_found` with the host's words, which name what
    * it found no trace of; anything else `invalid_request`, a refusal in
    * the host's words. */
-  private hostWriteRefusal(instance: HostInstance, error: unknown): CoreError {
+  private hostWriteRefusal(instance: HostInstance, error: unknown, groupOperation?: "delete" | "restore"): CoreError {
+    const unavailable = groupOperation && unavailableGroupOperation(error, this.nameOf(instance), groupOperation);
+    if (unavailable) return new CoreError("invalid_request", unavailable);
     if (error instanceof HostError && error.kind === "not_found") return new CoreError("not_found", notFoundAt(this.nameOf(instance), error.words));
     return new CoreError("invalid_request", relayHostError(error, this.nameOf(instance)));
   }
