@@ -395,7 +395,7 @@ test("cli-15: update takes a newer release, naming both versions, and then says 
   assert.match(found, /^demo\/tool {2}The demo\/tool spec package\n {2}1\.1\.0, 1\.0\.0$/m, "[cli-7] newest first");
 });
 
-test("cli-15: remove takes the package out of spex.yaml, the files and the skills; one not added, and the built-in, are refused", async () => {
+test("cli-15: remove takes the package out of spex.yaml, the files and the skills; one not added is refused, the built-in as any other", async () => {
   const removed = await ok(WORK, "remove", "demo/other");
   assert.match(removed, /^Removed demo\/other 1\.2\.0$/m, "[cli-3] the loss");
   assert.match(removed, /^Removed demo\/base 1\.0\.0$/m);
@@ -409,10 +409,11 @@ test("cli-15: remove takes the package out of spex.yaml, the files and the skill
   assert.equal(refused.code, 1);
   assert.equal(refused.stderr, "spex rm: demo/other is not in spex.yaml — spex list shows what is added\n", "[cli-3] a package spex.yaml does not add is refused");
   assert.deepEqual(snapshot(WORK), before, "[cli-3] nothing written");
-  // The built-in playbooks come with Spex, never a package to remove.
+  // The built-in spec package is removed as any other (DR-176): this
+  // folder does not add it, so it is refused as any package not added.
   const builtin = await spex(WORK, "remove", "sublang/playbooks");
   assert.equal(builtin.code, 1);
-  assert.equal(builtin.stderr, "spex remove: sublang/playbooks comes with Spex\n", "[cli-3] the built-in refused");
+  assert.equal(builtin.stderr, "spex remove: sublang/playbooks is not in spex.yaml — spex list shows what is added\n", "[cli-3] the built-in refused only as a package not added");
   assert.deepEqual(snapshot(WORK), before, "[cli-3] nothing written");
 });
 
@@ -653,6 +654,13 @@ test("cli-15: the built-in spec package a lock holds installs from this device's
   assert.match(await okAt(home, second, "install"), /^Installed sublang\/playbooks 18\.1\.0$/m, "[cli-4] installed from the seed");
   assert.deepEqual(snapshot(join(second, ".spex", "packages")), snapshot(join(dir, ".spex", "packages")));
   assert.match(await okAt(home, second, "list"), /^ {2}sublang\/playbooks +18\.1\.0 +built in +installed$/m, "[cli-6] the built-in row reads built in");
+  // Removed as any other package (DR-176): the request, the lock's entry
+  // and the installed files go, the rest stays.
+  const removed = await okAt(home, second, "remove", "sublang/playbooks");
+  assert.match(removed, /^Removed sublang\/playbooks 18\.1\.0$/m, "[cli-3] the built-in removable as any other");
+  assert.deepEqual(Object.keys(readYaml(join(second, "spex.yaml")).packages), ["demo/tool"], "[cli-3] its request dropped");
+  assert.deepEqual(Object.keys(parseLock(readFileSync(join(second, "spex.lock"), "utf8")).packages), ["demo/tool"], "[cli-3] the lock without it");
+  assert.equal(existsSync(join(second, ".spex", "packages", "sublang")), false, "[cli-3] its files gone");
 });
 
 test("cli-15: a lock recording the app's built-in at a checksum no registry serves installs the rest and marks the built-in built in", async () => {

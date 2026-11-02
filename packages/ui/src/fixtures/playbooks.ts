@@ -7,16 +7,17 @@
 // export — the shapes the core answers over the protocol, so a test
 // drives the real store and tabs against a stand-in client.
 
-import type {
-  ConfigState,
-  EnvironmentPackage,
-  EnvironmentState,
-  GroupsState,
-  InstanceState,
-  PlaybookAvailability,
-  ProjectInfo,
-  ReadinessEntry,
-  RepositoryState,
+import {
+  defaultPlayerId,
+  type ConfigState,
+  type EnvironmentPackage,
+  type EnvironmentState,
+  type GroupsState,
+  type InstanceState,
+  type PlaybookAvailability,
+  type ProjectInfo,
+  type ReadinessEntry,
+  type RepositoryState,
 } from "@sublang/spex-core/protocol";
 
 import { groupsState, instanceState, namespace, rowOf, type RowOver } from "./groups-state.js";
@@ -60,6 +61,7 @@ export const CONFIG_STATE: ConfigState = {
       },
     ],
     playbooks: [],
+    standsAside: [],
   },
 };
 
@@ -138,19 +140,26 @@ export function home(
   });
 }
 
-/** A playbook an environment exports, enabled nowhere unless told. */
+/** A playbook the global environment places, running on its default
+ * binding — each role on `dev.<role>` — unless told (core-service-2). */
 export function available(over: Partial<PlaybookAvailability> & { id: string }): PlaybookAvailability {
+  const roles = over.roles ?? ["coder"];
   return {
     name: over.id,
     command: over.id,
     intent: `${over.id} intent`,
-    roles: ["coder"],
+    roles,
     package: "sublang/playbooks",
     version: "17.4.1",
     source: "builtin",
     repository: OWN_KEY,
-    enabled: [],
+    runs: true,
+    placedBy: ["own"],
+    entry: [],
     present: true,
+    bindings: Object.fromEntries(
+      roles.map((role) => [role, { playerId: defaultPlayerId(role), display: "claude-opus-4-8 @ high", from: "default" as const }]),
+    ),
     ...over,
   };
 }

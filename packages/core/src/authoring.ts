@@ -122,8 +122,9 @@ export interface AuthorManagerOptions {
    * prose (core-service-108): a new session's language where neither
    * its package nor its project names one (playbook-library-70). */
   homeLanguage: () => string;
-  /** Whether a session's playbook is enabled (playbook-library-69). */
-  enabled: (id: string) => boolean;
+  /** Whether a session's playbook is added: its environment requests the
+   * session's spec package by path (playbook-library-69). */
+  added: (id: string) => boolean;
   /** List a working folder's engine links in its `info/exclude`. */
   excludeEngineLinks?: (workingFolder: string) => void;
   /** The home's device, marking what this device runs (storage-23). */
@@ -333,7 +334,7 @@ export function relayText(id: string, compile: StoredDraftCompile, elapsed: stri
 
 /** The success text (playbook-library-65). */
 export function successText(id: string, roles: readonly string[]): string {
-  return `The compile of ${id} succeeded; the roles are ${roles.join(", ")}. Propose enabling in a register block.`;
+  return `The compile of ${id} succeeded; the roles are ${roles.join(", ")}. Propose adding it in a register block.`;
 }
 
 /** The unreadable-block relay's text (playbook-library-65): the
@@ -689,10 +690,10 @@ export class AuthorManager {
     else if (compile?.outcome === "interrupted") state = "interrupted";
     else if (compile?.outcome === "ok") state = compile.sourceSha256 === source.sha256 ? "compiled" : "changed";
     else state = "draft";
-    // Enabled in a config, the session stays to work on: its chip reads
-    // so while what it compiled stands (playbook-library-61).
-    const enabled = this.options.enabled(id);
-    if (enabled && state === "compiled") state = "enabled";
+    // Added to its environment, the session stays to work on: its chip
+    // reads so while what it compiled stands (playbook-library-61).
+    const added = this.options.added(id);
+    if (added && state === "compiled") state = "added";
     return {
       id,
       instance: draft.instance,
@@ -702,7 +703,7 @@ export class AuthorManager {
       firstLine: source ? titleOf(source.markdown) : null,
       ...this.packageFields(id, draft.package, draft.language ?? DEFAULT_AUTHORING_LANGUAGE, dir),
       ...(dirExists ? {} : { sourceMissing: true }),
-      enabled,
+      added,
       activity,
       compiling,
       state,
@@ -764,7 +765,7 @@ export class AuthorManager {
       firstLine: source ? titleOf(source.markdown) : null,
       ...this.packageFields(id, this.drafts.packagePath(id), this.drafts.language(id), dir),
       ...(dirExists ? {} : { sourceMissing: true }),
-      enabled: this.options.enabled(id),
+      added: this.options.added(id),
       activity: this.activity(id),
       // A file that will not read names no instance whose compile runs.
       compiling: false,
@@ -950,9 +951,9 @@ export class AuthorManager {
       throw new CoreError(
         "invalid_request",
         i18n._({
-          id: "{id} is already a playbook of this project or of your Personal packages — pick another id",
+          id: "{id} is already a playbook of this project or of your global packages — pick another id",
           values: { id },
-          comment: "Refusal: the id offered for a new playbook is one an installed package exports, in this project or among the packages Spex keeps for you alone",
+          comment: "Refusal: the id offered for a new playbook is one an installed package exports, in this project or among your global packages, which every project of yours runs",
         }),
       );
     }
@@ -1076,16 +1077,16 @@ export class AuthorManager {
   }
 
   /**
-   * Enable the session's playbook (playbook-library-69): re-package the
+   * Add the session's playbook (playbook-library-69): re-package the
    * last successful compile with the confirmed command and intent, hand
-   * the result to `commit` — the enabling path shared with
-   * `compile.run`, which requests the spec package and writes the
-   * config — and keep the session, now enabled, so the playbook can be
+   * the result to `commit` — the Add path shared with `compile.run`,
+   * which requests the spec package from the session's environment and
+   * writes the config — and keep the session, now added, so the playbook can be
    * worked on further and published (playbook-library-61); a refused
    * commit leaves the session standing with its artifacts. Its
    * repackaging is the one job writing the artifact folder, refused
    * while a compile writes it (playbook-library-99); the commit after it
-   * holds nothing, and once started the enabling finishes or fails on
+   * holds nothing, and once started the Add finishes or fails on
    * its own, whatever becomes of the session (DR-111) — its writes are
    * the environment's and the config's.
    */
@@ -1141,7 +1142,7 @@ export class AuthorManager {
     return await commit(result, { packageDir, packagePath, workingFolder });
   }
 
-  /** Announce a session's state again: its enabled mark may have moved. */
+  /** Announce a session's state again: its added mark may have moved. */
   republish(): void {
     for (const id of this.drafts.ids()) this.publish(id);
   }

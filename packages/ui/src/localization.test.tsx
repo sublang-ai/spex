@@ -361,13 +361,12 @@ describe("localization-4: the rail reads the resolved language", () => {
     speak("zh");
     render(<Root />);
     const labels = railLabels();
-    // Space is a product name the glossary keeps as authored (DR-172).
-    // The rail holds four entries; the playbooks are a project's tab
-    // (DR-172).
-    for (const label of ["仪表盘", "项目", "Space", "设置"]) {
+    // Space is a product name the glossary keeps as authored (DR-172);
+    // the rail's Playbooks entry, the global page, reads 规程 (DR-176).
+    for (const label of ["仪表盘", "项目", "规程", "Space", "设置"]) {
       expect(labels).toContain(label);
     }
-    for (const label of ["Dashboard", "Playbooks", "规程", "Settings"]) {
+    for (const label of ["Dashboard", "Playbooks", "Settings"]) {
       expect(labels).not.toContain(label);
     }
   });

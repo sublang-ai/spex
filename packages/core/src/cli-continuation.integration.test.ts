@@ -19,6 +19,10 @@ import type { Command, CommandResults, ServerMessage } from "./protocol.js";
 import { fakeAdapterImports } from "./testing/fake-adapter.js";
 
 const exec = promisify(execFile);
+// Every built-in the global environment places has its entry and every
+// player its block, so the session holds no default binding or stand-in
+// player, which Spex composes and the CLI does not (core-service-16,
+// DR-176): both compose it alike.
 const CONFIG = `captain:
   adapter: claude
   model: claude-test
@@ -26,10 +30,39 @@ players:
   dev.coder:
     adapter: claude
     model: claude-test
+  dev.reviewer:
+    adapter: claude
+    model: claude-test
+  dev.analyst:
+    adapter: claude
+    model: claude-test
+  dev.inspector:
+    adapter: claude
+    model: claude-test
 playbooks:
   code:
     roles:
       coder: dev.coder
+  review:
+    roles:
+      coder: dev.coder
+      reviewer: dev.reviewer
+  decide:
+    roles:
+      coder: dev.coder
+      reviewer: dev.reviewer
+  dev:
+    roles:
+      analyst: dev.analyst
+  branch:
+    roles:
+      coder: dev.coder
+  pr:
+    roles:
+      coder: dev.coder
+  inspect:
+    roles:
+      inspector: dev.inspector
 `;
 
 // Same provider-only loader seam as Playbook's CLI storage integration

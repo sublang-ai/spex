@@ -257,7 +257,10 @@ beforeEach(() => {
   local.answers["environment.get"] = (fields?: Record<string, unknown>) =>
     environment({ repository: String(fields?.repository), packages: [specPackage({ name: "acme/home-tools" })] });
   alpha.answers["space.get"] = SEAT_GROUPS;
-  alpha.answers["environment.playbooks"] = { project: [available({ id: "train", repository: "p2" })], own: [] };
+  alpha.answers["environment.playbooks"] = (fields?: Record<string, unknown>) =>
+    fields?.projectId
+      ? { project: [available({ id: "train", repository: "p2", placedBy: ["project"] })], own: [] }
+      : { project: null, own: [available({ id: "tune", repository: "gpu/me-spex" })] };
   alpha.answers["environment.get"] = (fields?: Record<string, unknown>) =>
     environment({ repository: String(fields?.repository), packages: [specPackage({ name: "acme/gpu-tools" })] });
   setClientForTests(local.client);
@@ -301,7 +304,7 @@ const commandsOf = (fake: Fake): string[] => fake.command.mock.calls.map(([type]
 const callsOf = (fake: Fake, type: string): unknown[] =>
   fake.command.mock.calls.filter(([name]) => name === type).map(([, fields]) => fields);
 
-function goTo(surface: "Settings" | "Space"): void {
+function goTo(surface: "Playbooks" | "Settings" | "Space"): void {
   fireEvent.click(document.querySelector<HTMLElement>(`[data-surface="${surface}"]`)!);
 }
 
@@ -316,7 +319,7 @@ const shownPlace = (): string => {
   return selector.selectedOptions[0]!.textContent ?? "";
 };
 
-describe("run-view-171: the selector switches Settings and Space", () => {
+describe("run-view-171: the selector switches Playbooks, Settings and Space", () => {
   test("each surface reads and acts at the place the selector names", async () => {
     render(<App />);
 
@@ -368,6 +371,17 @@ describe("run-view-171: the selector switches Settings and Space", () => {
     expect(commandsOf(alpha)).not.toContain("server.list");
     expect(document.querySelector('[data-testid^="space-servers-"]')).toBeNull();
     expect(document.querySelector('[data-testid^="space-server-"]')).toBeNull();
+
+    // Playbooks: the seat's global environment, read from its core, the
+    // place still picked (DR-176).
+    goTo("Playbooks");
+    await settle();
+    expect(shownPlace()).toBe("build-box");
+    expect(screen.getByTestId("playbooks-surface")).toBeTruthy();
+    expect(callsOf(alpha, "environment.playbooks")).toContainEqual({});
+    pick("This computer");
+    await settle();
+    expect(callsOf(local, "environment.playbooks")).toContainEqual({});
     // A seat's state touches no other place.
     expect(commandsOf(beta)).toEqual([]);
   });
@@ -499,7 +513,7 @@ describe("run-view-168: a new playbook asked for at a seat", () => {
         ...SEAT_CONFIG,
         summary: {
           ...summary,
-          playbooks: [{ id: "train", from: "acme/gpu-tools", command: "train", intent: "train a model", roles: {} }],
+          playbooks: [{ id: "train", from: "acme/gpu-tools", command: "train", intent: "train a model", roles: {}, origin: "default" }],
         },
       } as ConfigState,
     });

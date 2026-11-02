@@ -1,27 +1,24 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// A package row's expanded lines (playbook-library-92, DR-172, DR-174):
+// A package row's expanded lines (playbook-library-92, DR-174, DR-176):
 // one line per artifact its release provides with its one act, a
-// sibling's support unlisted, so installing a package is never mistaken
-// for enabling it — a playbook "/<command> · Enable", enabled in place in
-// the config of the heading's spex repository by the Playbooks tab's own
-// write (playbook-library-3) and reading "Enabled in <project>" or
-// "Enabled · Personal" after; the skills "skills: <ids> · placed for your
-// agents" or "· not placed"; the spec where the state reads it under
+// sibling's support unlisted — a playbook "/<command>", running with its
+// package and carrying no act; the skills "skills: <ids> · placed for
+// your agents" or "· not placed"; the spec where the state reads it under
 // `specs/` (environments-14, environments-41) — "spec · in <path>",
 // "spec · edited in specs/ — left as yours" with the version waiting,
 // "spec · not placed — specs/ holds <pkg>.md already" or "spec · needs
 // specs/ — scaffold first" — followed by "<n> links wait for <org/pkg> ·
 // Add" for each package its links wait for, Add requesting it as Add…'s
 // registry tab does, a version asked in place for one it does not list;
-// else, as your own group's environment and an older
+// else, as the global environment and an older
 // core read it, "spec · placed as a skill" or "· not placed"; an applet
 // "<id> · its page", opening its tab (applets-1). An artifact read in
 // another language than the one wanted is marked with the language it is
 // shown in.
 
-import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import type {
   EnvironmentPackage,
   EnvironmentRequest,
@@ -32,7 +29,6 @@ import type {
 import { isLocalPlace } from "../state/store.js";
 import { usePlaceStore } from "../state/place-context.js";
 import { appletTabId } from "../lib/applets.js";
-import { enablePlaybook } from "../lib/enable-playbook.js";
 import { addLabel, addsTitle, firstRequirement, isProvided, listOf, notListedPhrase } from "../lib/environments.js";
 import { currentLocale, i18n } from "../i18n.js";
 
@@ -104,194 +100,23 @@ function FallbackMark({ testId, shown, wanted }: { testId: string; shown: string
   );
 }
 
-/** Enable on a package's playbook, wherever it stands — its line on an
- * expanded row, or the receipt after Add… (playbook-library-92): the
- * Playbooks tab's own write in the config of the heading's spex
- * repository (playbook-library-3), the list read again so the playbook
- * reads where it is enabled, and focus moving to that standing. */
-export function usePlaybookEnable({
-  entry,
-  personal,
-  repository,
-  projectId,
-}: {
-  /** The playbook as the heading's environment lists it; absent while
-   * the list is read or where it lists no such playbook. */
-  entry: PlaybookAvailability | undefined;
-  personal: boolean;
-  repository: string;
-  projectId: string;
-}) {
-  const store = usePlaceStore();
-  const configState = store((current) => current.configState);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string>();
-  const [settled, setSettled] = useState(false);
-  const statusRef = useRef<HTMLSpanElement>(null);
-  const enabled = entry?.enabled.includes(personal ? "own" : "project") === true;
-  // Your own group's roster names every binding; an Enable stands only
-  // while the config reads and the playbook's roles are known.
-  const roster = configState?.status === "valid" ? (configState.summary.players ?? []) : undefined;
-
-  // The control an Enable leaves gives focus to the standing that
-  // replaces it, so the reader stays where they were; a list that read
-  // no change leaves Enable, and focus, where they are.
-  useEffect(() => {
-    if (!settled) return;
-    if (enabled) statusRef.current?.focus();
-    setSettled(false);
-  }, [settled, enabled]);
-
-  async function enable(): Promise<void> {
-    if (!entry || !roster) return;
-    setBusy(true);
-    setError(undefined);
-    try {
-      await enablePlaybook(store.getClient(), {
-        repository,
-        playbookId: entry.id,
-        roles: entry.roles,
-        roster,
-      });
-      // The list reads again, so the line reads where it is enabled
-      // before Enable gives way.
-      await store.getState().loadPlaybookLists(projectId).catch(() => {});
-      setSettled(true);
-    } catch (cause) {
-      setError((cause as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return { enabled, ready: entry !== undefined && roster !== undefined, busy, error, statusRef, enable };
-}
-
-/** Enable, or the standing that replaces it: "Enabled in <project>", or
- * under "Personal" "Enabled · Personal" (playbook-library-92). */
-export function PlaybookEnableAct({
-  enabling,
-  command,
-  personal,
-  projectName,
-  enableTestId,
-  enabledTestId,
-  named = false,
-}: {
-  enabling: ReturnType<typeof usePlaybookEnable>;
-  command: string;
-  personal: boolean;
-  projectName: string;
-  enableTestId: string;
-  enabledTestId: string;
-  /** The visible label names the command, "Enable /triage", where no
-   * command stands before it: the receipt after Add… (playbook-library-92). */
-  named?: boolean;
-}) {
-  if (enabling.enabled) {
-    return (
-      <span
-        ref={enabling.statusRef}
-        tabIndex={-1}
-        data-testid={enabledTestId}
-        className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 text-emerald-700 outline-none dark:bg-emerald-950 dark:text-emerald-300"
-      >
-        {personal
-          ? i18n._({ id: "Enabled · Personal", comment: "a package's playbook line on the Packages tab: enabled in your Personal config, for every project of yours" })
-          : i18n._({
-              id: "Enabled in {project}",
-              comment: "a package's playbook line on the Packages tab: enabled in the project's config, for every member; {project} is the project's name",
-              values: { project: projectName },
-            })}
-      </span>
-    );
-  }
-  if (!enabling.ready) return null;
-  const label = i18n._("Enable /{command}", { command });
-  return (
-    <button
-      type="button"
-      data-testid={enableTestId}
-      disabled={enabling.busy}
-      title={
-        personal
-          ? i18n._({
-              id: "For you, in every project of yours",
-              comment: "tooltip of Enable on a playbook your Personal packages list: it is written to your Personal config",
-            })
-          : i18n._({
-              id: "For you and every member of {project}",
-              comment: "tooltip of Enable on a playbook the project's packages list: it is written to the project's config",
-              values: { project: projectName },
-            })
-      }
-      aria-label={label}
-      onClick={() => void enabling.enable()}
-      className={PRIMARY}
-    >
-      {enabling.busy
-        ? i18n._({ id: "Enabling…", comment: "the enable request is in flight" })
-        : named
-          ? label
-          : i18n._({ id: "Enable", comment: "enable this playbook in this config" })}
-    </button>
-  );
-}
-
-/** One playbook's line: its command, and Enable — or where the heading's
- * config enables it, that standing (playbook-library-92). */
+/** One playbook's line: its command, running with its package and
+ * carrying no act (playbook-library-92). */
 function PlaybookLine({
   name,
   artifact,
   entry,
-  personal,
-  repository,
-  projectId,
-  projectName,
   fallback,
 }: {
   name: string;
   artifact: Artifact;
   entry: PlaybookAvailability | undefined;
-  personal: boolean;
-  repository: string;
-  projectId: string;
-  projectName: string;
   fallback: ReactNode;
 }) {
-  const enabling = usePlaybookEnable({ entry, personal, repository, projectId });
-  const command = entry?.command ?? artifact.id;
-  const act = (
-    <PlaybookEnableAct
-      enabling={enabling}
-      command={command}
-      personal={personal}
-      projectName={projectName}
-      enableTestId={`env-enable-${name}-${artifact.id}`}
-      enabledTestId={`env-enabled-${name}-${artifact.id}`}
-    />
-  );
-  const shown = enabling.enabled || enabling.ready;
-
   return (
-    <li data-testid={`env-artifact-${name}-${artifact.id}`} data-kind="playbook" className="flex flex-col gap-1">
-      <span className={LINE}>
-        <span className="font-mono">/{command}</span>
-        {fallback}
-        {shown ? (
-          <>
-            <span aria-hidden className="text-neutral-400">
-              ·
-            </span>
-            {act}
-          </>
-        ) : null}
-      </span>
-      {enabling.error ? (
-        <p role="alert" data-testid={`env-enable-error-${name}-${artifact.id}`} className={ERROR}>
-          {enabling.error}
-        </p>
-      ) : null}
+    <li data-testid={`env-artifact-${name}-${artifact.id}`} data-kind="playbook" className={LINE}>
+      <span className="font-mono">/{entry?.command ?? artifact.id}</span>
+      {fallback}
     </li>
   );
 }
@@ -493,8 +318,7 @@ export function PackageArtifacts({
   state,
   repository,
   projectId,
-  projectName,
-  personal,
+  playbooks,
   onAdded,
 }: {
   /** The list's element id, which the row's disclosure controls. */
@@ -502,25 +326,22 @@ export function PackageArtifacts({
   name: string;
   pkg: EnvironmentPackage;
   state: EnvironmentState;
-  /** The heading's spex repository, whose config an Enable writes and
-   * whose spex.yaml a waiting link's Add writes. */
+  /** The heading's spex repository, whose spex.yaml a waiting link's
+   * Add writes. */
   repository: string;
-  projectId: string;
-  projectName: string;
-  /** The heading is "Personal": your own group's config. */
-  personal: boolean;
+  /** The project whose Packages tab this is; absent on the Playbooks
+   * surface, where no project's tab opens. */
+  projectId?: string;
+  /** The playbooks the environment places, naming each line's command. */
+  playbooks?: readonly PlaybookAvailability[];
   /** A package a waiting link's Add requested, for the heading's receipt. */
   onAdded?: (name: string) => void;
 }) {
   const store = usePlaceStore();
-  const readLists = store((current) => current.playbookLists);
   const setWorkspaceTab = store((current) => current.setWorkspaceTab);
-  // What the heading's environment exports, as read for this project.
-  const lists = readLists?.projectId === projectId ? readLists : undefined;
-  const listed = personal ? lists?.own : (lists?.project ?? undefined);
   // An applet's page is a tab of this computer's project, standing while
   // its files are here (applets-1).
-  const pageHere = isLocalPlace(store.place) && pkg.installed && pkg.missingPath === null;
+  const pageHere = projectId !== undefined && isLocalPlace(store.place) && pkg.installed && pkg.missingPath === null;
 
   const fallbackOf = (artifact: Artifact): ReactNode =>
     artifact.fallback ? <FallbackMark testId={`env-fallback-${name}-${artifact.id}`} shown={artifact.language} wanted={state.language} /> : null;
@@ -528,7 +349,7 @@ export function PackageArtifacts({
   // What the release provides has a line; a sibling's support has none
   // (environments-6).
   const provided = pkg.artifacts.filter(isProvided);
-  const playbooks = provided.filter((artifact) => artifact.kind === "playbook");
+  const playbookArtifacts = provided.filter((artifact) => artifact.kind === "playbook");
   const skills = provided.filter((artifact) => artifact.kind === "skill");
   const specs = provided.filter((artifact) => artifact.kind === "spec");
   const applets = provided.filter((artifact) => artifact.kind === "applet");
@@ -570,16 +391,12 @@ export function PackageArtifacts({
 
   return (
     <ul id={id} data-testid={`env-artifacts-${name}`} className="flex flex-col gap-1 pl-6 text-neutral-600 dark:text-neutral-300">
-      {playbooks.map((artifact) => (
+      {playbookArtifacts.map((artifact) => (
         <PlaybookLine
           key={`playbook:${artifact.id}`}
           name={name}
           artifact={artifact}
-          entry={listed?.find((entry) => entry.package === pkg.name && entry.id === artifact.id)}
-          personal={personal}
-          repository={repository}
-          projectId={projectId}
-          projectName={projectName}
+          entry={playbooks?.find((entry) => entry.package === pkg.name && entry.id === artifact.id)}
           fallback={fallbackOf(artifact)}
         />
       ))}
@@ -626,7 +443,7 @@ export function PackageArtifacts({
                   comment: "accessible name of an applet's line on the Packages tab, its page: opens the applet's tab; {applet} is its id",
                   values: { applet: artifact.id },
                 })}
-                onClick={() => setWorkspaceTab(projectId, appletTabId(repository, artifact.id))}
+                onClick={() => projectId !== undefined && setWorkspaceTab(projectId, appletTabId(repository, artifact.id))}
                 className={LINK}
               >
                 {i18n._({ id: "its page", comment: "an applet's line on the Packages tab: opens the applet's page, its tab in the project" })}

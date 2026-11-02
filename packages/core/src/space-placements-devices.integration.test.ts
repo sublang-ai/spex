@@ -22,6 +22,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { BUILTIN_PACKAGE_NAME, PUBLIC_REGISTRY_ORIGIN, parseLock, parseRequests, type RegistrySourceLock } from "@sublang/spex/environment";
+import { builtinPackage } from "./builtins.js";
 import { Home } from "./home.js";
 import { canonicalOrigin } from "@sublang/spex/instance";
 import { encodePlacementFile, PLACEMENTS_DIR } from "./placements.js";
@@ -408,6 +409,9 @@ test("storage-35, space-99, space-90, space-87, space-29, space-117, environment
   // independently of its collaboration Space (environments-11, -38).
   const code = gitFolder("delta");
   const { key: local, clone } = await addFolder(home, code);
+  // The project pins a package: the built-in spec package, as a project
+  // paired before it became global still requests it (environments-11).
+  await home.client.expectOk("environment.request", { repository: local, name: BUILTIN_PACKAGE_NAME, request: { kind: "registry", version: `^${builtinPackage().version}` }, wait: true });
   assert.equal(await builtinRegistry(home, local, PUBLIC_REGISTRY_ORIGIN), PUBLIC_REGISTRY_ORIGIN);
   const root = environmentRoot(home.dataDir, local);
   assert.equal(parseRequests(readFileSync(join(root, "spex.yaml"), "utf8")).registry, PUBLIC_REGISTRY_ORIGIN);

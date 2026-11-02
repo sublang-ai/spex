@@ -98,7 +98,7 @@ When the user edits a role's binding, the Playbooks surface — the global page 
 
 #### playbook-library-43
 
-While the role-binding editor [[playbook-library-4](#playbook-library-4)] stands open, the Playbooks tab shall keep it inside the box that must show it — the tab's own scroll box — at every width down to the 320-pixel floor, refitting whenever the window or the editor's own box resizes ([DR-041](../decisions/041-chrome-that-fits.md)):
+While the role-binding editor [[playbook-library-4](#playbook-library-4)] stands open, the Playbooks surface — where a role's tuning is pinned — and a project's Playbooks tab shall keep it inside the box that must show it — the surface's or the tab's own scroll box — at every width down to the 320-pixel floor, refitting whenever the window or the editor's own box resizes ([DR-041](../decisions/041-chrome-that-fits.md), [DR-176](../decisions/176-global-playbooks-and-a-placed-playbook-runs.md)):
 
 - that box bounds the editor's width, and a control late in a wrapping roles row moves the editor along the box's edge rather than past it, so a form surface never scrolls sideways to reach it.
 
@@ -937,7 +937,7 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 - the open stage's box carries a grip that names the stage, and a drag of it leaves the box taller with the height still standing after a reload [[playbook-library-22](#playbook-library-22)];
 - the rail's Playbooks entry opens the Playbooks surface, listing the global spec packages, each with the playbooks it places beneath it, "Add…", the Authoring section and "New playbook", and no project's playbook, a role's ✎ there writing the global config [[playbook-library-122](#playbook-library-122)] [[playbook-library-4](#playbook-library-4)], while Remove in a spec package's row overflow carries its consequence as its tooltip [[playbook-library-92](#playbook-library-92)];
 - the tabs and the surface name things and acts in the reader's words — "Global", "Same as global", Add, Remove, Update — and none reads Enable, Disable, "Enabled", "Available" or "Personal" [[playbook-library-26](#playbook-library-26)];
-- a role's binding editor opened at the 320-pixel viewport floor stands wholly inside the tab's box both on opening and after discovery followed by pinning a custom model, with the tab scrolling in neither direction [[playbook-library-43](#playbook-library-43)], its model and effort stacked there and side by side at 1280 pixels [[playbook-library-4](#playbook-library-4)].
+- a role's binding editor opened on the Playbooks surface at the 320-pixel viewport floor stands wholly inside the surface's box both on opening and after discovery followed by pinning a custom model, with the surface scrolling in neither direction [[playbook-library-43](#playbook-library-43)], its model and effort stacked there and side by side at 1280 pixels [[playbook-library-4](#playbook-library-4)].
 
 #### playbook-library-77
 

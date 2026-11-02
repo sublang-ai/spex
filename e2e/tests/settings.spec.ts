@@ -9,6 +9,8 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { parse } from "yaml";
 
+import { AUTHORING_SOURCE } from "@sublang/spex-core/testing";
+
 import { test, expect, open, nav, clonePath } from "../src/harness";
 
 test.use({ appOptions: { project: true } });
@@ -176,14 +178,43 @@ test("settings-29: the Captain row's editor round-trips the shared config", asyn
   await expect(chip).toContainText("claude-opus-5-5");
 });
 
-test.describe("a player the project names", () => {
-  test.use({ appOptions: { project: true, homeConfig: true } });
+test.describe("players to set up", () => {
+  test.use({
+    appOptions: {
+      project: true,
+      homeConfig: true,
+      // A playbook of the project's own, authored and compiled on the
+      // passing stub (playbook-library-7).
+      authoring: { slc: "ok", phaseDelayMs: 50, script: { fallback: { deltas: ["Compiled."], result: "Compiled." } } },
+    },
+  });
 
-  test("settings-46: a player the project names and your own roster lacks is added here from the neutral block", async ({
+  test("settings-47: a player a binding names and your roster lacks plays on the Captain's agent until Add creates it from the Captain's block", async ({
     page,
     app,
   }) => {
+    test.setTimeout(120_000);
     const projectConfig = join(clonePath(app.dataDir, app.projectId!), "config", "playbook.config.yaml");
+    // The project's own package places /triage, running on its default
+    // players, which no written entry names: added, then its entry
+    // taken out again (core-service-2).
+    const projectId = app.projectId!;
+    const org = projectId.split("/")[0]!;
+    const { instance } = await app.core.command("draft.create", { projectId, draftId: "triage", org, license: "Apache-2.0" });
+    await app.core.command("draft.source.write", { projectId, draftId: "triage", instance: instance!, content: AUTHORING_SOURCE.replaceAll("<id>", "triage") });
+    await app.core.command("draft.compile", { projectId, draftId: "triage", instance: instance! });
+    await expect
+      .poll(async () => (await app.core.command("draft.list", {})).find((draft) => draft.id === "triage")?.state, { timeout: 60_000 })
+      .toBe("compiled");
+    await app.core.command("draft.register", {
+      projectId,
+      draftId: "triage",
+      instance: instance!,
+      command: "triage",
+      intent: "Sort incoming issues",
+      bindings: { Triager: "dev.coder", Verifier: "dev.reviewer" },
+    });
+    await app.core.command("config.edit", { repository: projectId, op: { kind: "playbook.delete", playbookId: "triage" } });
     await open(page, app);
     await nav(page, "Settings").click();
     await expect(page.getByTestId("players-section")).toBeVisible();
@@ -191,9 +222,12 @@ test.describe("a player the project names", () => {
     // The project's config binds review's reviewer to a player your
     // own group's roster lacks, by name alone (core-service-2), as a
     // teammate's file arrives while the core runs: it reloads on the
-    // change, with no restart.
+    // change, with no restart. The global environment places /inspect,
+    // which no entry binds: its role plays the default `dev.inspector`,
+    // which the roster lacks too.
     mkdirSync(dirname(projectConfig), { recursive: true });
     writeFileSync(projectConfig, "playbooks:\n  review:\n    roles:\n      coder: dev.coder\n      reviewer: dev.auditor\n");
+    expect(parse(app.readConfig()).playbooks.inspect).toBeUndefined();
 
     // The surface names the file it writes — your own group's — by its
     // path alone: no spex repository, and no project file offered as
@@ -203,16 +237,35 @@ test.describe("a player the project names", () => {
     await expect(page.getByText(/Your own group's config|edited in Playbooks/)).toHaveCount(0);
     await expect(page.locator('[title*="edited in Playbooks"]')).toHaveCount(0);
 
-    // The roster shows the missing player, named by its project, with
-    // Add (settings-46).
-    const missing = page.getByTestId("player-missing-dev.auditor");
-    await expect(missing).toBeVisible();
-    await expect(missing.getByTestId("player-missing-note-dev.auditor")).toHaveText("Named by demo-project, not set up here");
-    await expect(missing.getByTestId("player-missing-note-dev.auditor")).toHaveAttribute("title", "Answers review.reviewer");
-    expect(parse(app.readConfig()).players["dev.auditor"]).toBeUndefined();
-    await missing.getByTestId("player-missing-add-dev.auditor").click();
-    await expect.poll(() => parse(app.readConfig()).players["dev.auditor"]).toMatchObject({ adapter: "claude" });
-    await expect(missing).toHaveCount(0);
-    await expect(page.getByTestId("players-section").getByTestId("player-row-dev.auditor")).toBeVisible();
+    // The roster shows each as a player to set up, playing on the
+    // Captain's agent, with Add (settings-46); no "not set up here" row
+    // names a project.
+    const captain = parse(app.readConfig()).captain;
+    for (const [player, position] of [
+      ["dev.inspector", "inspect.inspector"],
+      ["dev.auditor", "review.reviewer"],
+      // The defaults of a playbook the project alone places
+      // (settings-46).
+      ["dev.triager", "triage.Triager"],
+      ["dev.verifier", "triage.Verifier"],
+    ] as const) {
+      const row = page.getByTestId(`player-row-${player}`);
+      await expect(row).toHaveAttribute("data-to-set-up", "true");
+      await expect(row.getByTestId(`player-setup-${player}`)).toHaveText("Plays on the Captain's agent");
+      await expect(row.getByTestId(`player-setup-${player}`)).toHaveAttribute("title", new RegExp(position.replace(".", "\\.")));
+      expect(parse(app.readConfig()).players[player]).toBeUndefined();
+    }
+    await expect(page.getByText("not set up here")).toHaveCount(0);
+
+    // Add creates the player from the Captain's block, and its row
+    // leaves the players to set up.
+    for (const player of ["dev.auditor", "dev.inspector"]) {
+      const row = page.getByTestId(`player-row-${player}`);
+      await row.getByTestId(`player-setup-add-${player}`).click();
+      await expect.poll(() => parse(app.readConfig()).players[player]).toMatchObject({ adapter: captain.adapter, model: captain.model });
+      await expect(row).not.toHaveAttribute("data-to-set-up", "true");
+      await expect(row.getByTestId(`player-setup-${player}`)).toHaveCount(0);
+      await expect(row.getByTestId(`player-edit-${player}`)).toBeVisible();
+    }
   });
 });

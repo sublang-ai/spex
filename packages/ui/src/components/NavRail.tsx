@@ -39,15 +39,17 @@ const RECENT_WINDOW = 5;
 export type Surface =
   | "Dashboard"
   | "Workspace"
+  | "Playbooks"
   | "Space"
   | "Settings";
 
-/** The sidebar's order; Cmd/Ctrl+1..4 walk it (run-view-49). The
- * Playbooks entry retired into the project's Playbooks and Packages
- * tabs (DR-172). */
+/** The sidebar's order; Cmd/Ctrl+1..5 walk it (run-view-49,
+ * run-view-67). Playbooks is the global page: the playbooks of your
+ * global packages, which run in every project of yours (DR-176). */
 export const SURFACES: readonly Surface[] = [
   "Dashboard",
   "Workspace",
+  "Playbooks",
   "Space",
   "Settings",
 ];
@@ -61,6 +63,11 @@ export const SURFACES: readonly Surface[] = [
 export const SURFACE_LABELS: Record<Surface, () => string> = {
   Dashboard: () => i18n._("Dashboard"),
   Workspace: () => i18n._("Projects"),
+  Playbooks: () =>
+    i18n._({
+      id: "Playbooks",
+      comment: "the rail's Playbooks destination: the global playbooks, which run in every project of yours",
+    }),
   Space: () => i18n._({ id: "Space", comment: "the Space destination: groups, projects and their shared records" }),
   Settings: () => i18n._("Settings"),
 };
@@ -77,6 +84,7 @@ const INACTIVE =
 const SURFACE_ICONS: Record<Surface, IconName> = {
   Dashboard: "grid",
   Workspace: "folder",
+  Playbooks: "book",
   Space: "people",
   Settings: "gear",
 };
@@ -1019,8 +1027,8 @@ export function NavRail(props: NavRailProps) {
         <>
           {surfaceEntry("Workspace")}
           {paletteControl}
-          {/* Entries keep their places across the fold: Space and
-              Settings stay at the foot in both states. */}
+          {/* Entries keep their places across the fold: Playbooks,
+              Space and Settings stay at the foot in both states. */}
           <div className="flex-1" />
         </>
       ) : (
@@ -1045,6 +1053,7 @@ export function NavRail(props: NavRailProps) {
         </section>
       )}
 
+      {surfaceEntry("Playbooks")}
       {surfaceEntry("Space")}
       {surfaceEntry("Settings")}
 

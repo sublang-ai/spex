@@ -75,6 +75,30 @@ playbooks:
       reviewer: dev.coder
 `;
 
+/** VALID_CONFIG with an entry for every built-in the global environment
+ * places, so none runs on a default binding: a session Spex creates from
+ * it is one Playbook's launcher composes alike, as a CLI writer
+ * continuing it, or one Spex continues, needs (core-service-16,
+ * DR-176). */
+const EVERY_BUILTIN_CONFIG = `${VALID_CONFIG.replace("playbooks:\n", "  dev.reviewer:\n    adapter: claude\n    model: claude-test\nplaybooks:\n").trimEnd()}
+  decide:
+    roles:
+      coder: dev.coder
+      reviewer: dev.reviewer
+  dev:
+    roles:
+      analyst: dev.coder
+  branch:
+    roles:
+      coder: dev.coder
+  pr:
+    roles:
+      coder: dev.coder
+  inspect:
+    roles:
+      inspector: dev.coder
+`;
+
 class Client {
   private readonly socket: WebSocket;
   readonly messages: ServerMessage[] = [];
@@ -530,9 +554,12 @@ test("CORE-19: fake-adapter session end to end over the WebSocket", async () => 
   const session = await client.expectOk("session.create", {
     projectId: project.id,
   });
+  // The roster's player, then each player the built-ins no entry binds
+  // play by default, in first-reference order: decide's reviewer, dev's
+  // analyst and inspect's inspector (core-service-2).
   assert.deepEqual(
     session.players.map((p) => p.id),
-    ["dev.coder"],
+    ["dev.coder", "dev.reviewer", "dev.analyst", "dev.inspector"],
   );
 
   await client.expectOk("subscribe", {
@@ -682,11 +709,6 @@ const DEFECT_CONFIGS: { name: string; pattern: RegExp; config: string }[] = [
     config: VALID_CONFIG.replace("    model: claude-test\nplaybooks:", "    model: claude-test\n    skills: [./team-guide]\nplaybooks:"),
   },
   {
-    name: "a playbook no environment of the session places",
-    pattern: /playbooks\.triage is enabled, but no package of tester\/tester-spex places a playbook triage/,
-    config: VALID_CONFIG.replace('  code:\n', "  triage:\n"),
-  },
-  {
     name: "reserved captain role",
     pattern: /roles\.captain binds local role "captain"/,
     config: VALID_CONFIG.replace(
@@ -703,11 +725,6 @@ const DEFECT_CONFIGS: { name: string; pattern: RegExp; config: string }[] = [
     name: "bindings miss a required role",
     pattern: /roles must exactly cover requiredRoleIds/,
     config: VALID_CONFIG.replace("    roles:\n      coder: dev.coder\n", "    roles: {}\n"),
-  },
-  {
-    name: "a binding names an absent player",
-    pattern: /names absent session player/,
-    config: VALID_CONFIG.replace("coder: dev.coder", "coder: dev.missing"),
   },
   {
     name: "the removed per-playbook players block",
@@ -782,6 +799,49 @@ test("CORE-21: each launcher defect class yields a named config error and blocks
       defect.name,
     );
 
+    client.close();
+    await harness.service.stop();
+  }
+});
+
+test("core-service-2: a written entry no environment places stands aside, and a player the roster lacks plays on the Captain's block, each blocking no session", async () => {
+  // Neither is a config error any more (DR-176): the entry composes
+  // nothing and is reported; the player is composed from the Captain's
+  // block without its instruction and flagged to set up (settings-46).
+  const config = VALID_CONFIG.replace("  code:\n", "  triage:\n    roles:\n      triager: dev.coder\n  code:\n").replace("      reviewer: dev.coder\n", "      reviewer: dev.missing\n");
+  const harness = await startHarness(config);
+  const client = new Client(harness.service.port());
+  await client.open();
+  try {
+    const state = await client.expectOk("config.get", {});
+    assert.equal(state.status, "valid");
+    if (state.status !== "valid") return;
+    assert.deepEqual(state.summary.standsAside.filter((entry) => entry.playbook === "triage"), [{ playbook: "triage", reason: `playbooks.triage: no package of ${OWN}/${OWN}-spex places a playbook triage` }], "[core-service-2] the entry stands aside, named");
+    assert.ok(!state.summary.playbooks.some((playbook) => playbook.id === "triage"));
+    const missing = state.summary.players.find((player) => player.id === "dev.missing");
+    assert.equal(missing?.toSetUp, true, "[core-service-2] a player to set up");
+    assert.equal(missing?.agent.adapter, state.summary.captain.adapter, "[core-service-2] on the Captain's agent");
+    assert.equal(missing?.agent.model, state.summary.captain.model);
+    assert.ok(missing?.boundBy.includes("review.reviewer"));
+    const project = await client.expectOk("project.register", { path: harness.projectDir });
+    const session = await client.expectOk("session.create", { projectId: project.id });
+    assert.ok(session.players.some((player) => player.id === "dev.missing"), "[core-service-2] the session opens with it");
+    const manifest = (await readSessionManifest(join(projectSessions(harness.dataDir, project.id), session.id + ".json"))) as { lastAppliedExecutionProjection: { players: { id: string; adapter: string; instruction?: string }[]; catalog: Record<string, unknown> } };
+    const standIn = manifest.lastAppliedExecutionProjection.players.find((player) => player.id === "dev.missing");
+    assert.equal(standIn?.adapter, "claude", "[core-service-16] the launcher receives it as a written player");
+    assert.equal(standIn?.instruction, undefined);
+    assert.ok(!("triage" in manifest.lastAppliedExecutionProjection.catalog));
+    // A built-in the global environment places and no entry binds runs on
+    // its default binding, `dev.<role>`, launched as a written one is
+    // (core-service-2, environments-9).
+    const dev = state.summary.playbooks.find((playbook) => playbook.id === "dev");
+    assert.deepEqual([dev?.origin, dev?.package, dev?.repository], ["default", "sublang/playbooks", `${OWN}/${OWN}-spex`]);
+    const devRoles = Object.entries(dev?.roles ?? {});
+    assert.ok(devRoles.length > 0 && devRoles.every(([role, binding]) => binding.playerId === `dev.${role.toLowerCase()}`), JSON.stringify(dev?.roles));
+    const launched = manifest.lastAppliedExecutionProjection.catalog.dev as { roles: Record<string, { playerId: string }> } | undefined;
+    assert.deepEqual(Object.fromEntries(Object.entries(launched?.roles ?? {}).map(([role, binding]) => [role, binding.playerId])), Object.fromEntries(devRoles.map(([role, binding]) => [role, binding.playerId])), "[environments-9] the default reaches the launcher");
+    for (const [, binding] of devRoles) assert.ok(session.players.some((player) => player.id === binding.playerId));
+  } finally {
     client.close();
     await harness.service.stop();
   }
@@ -1033,22 +1093,25 @@ test("CORE-23: readiness is adapter-keyed with positions and requirements", asyn
     readiness.map((entry: ReadinessEntry) => [entry.adapter, entry]),
   );
   assert.equal(byAdapter.get("claude")?.ready, true);
-  // A position is a player lane and the roles it serves.
+  // A position is a player lane and the roles it serves — the written
+  // entries' first, then each built-in no entry binds, on its default
+  // `dev.<role>` (core-service-2).
   assert.deepEqual(byAdapter.get("claude")?.usedBy, [
-    "dev.coder (code.coder, review.coder)",
+    "dev.coder (code.coder, review.coder, branch.coder, decide.coder, pr.coder)",
   ]);
   assert.equal(byAdapter.get("codex")?.ready, false);
   assert.match(byAdapter.get("codex")?.requirement ?? "", /OPENAI_API_KEY/);
   assert.deepEqual(byAdapter.get("codex")?.usedBy, [
-    "dev.reviewer (review.reviewer)",
+    "dev.reviewer (review.reviewer, decide.reviewer)",
   ]);
   assert.ok(
     !readiness.some((entry: ReadinessEntry) => entry.adapter === "kimi"),
     "an unbound player never enters the readiness gate",
   );
-  // No preflight rule for gemini: unknown, verify yourself.
+  // No preflight rule for gemini: unknown, verify yourself. The players
+  // the roster lacks play on the Captain's agent (core-service-2).
   assert.equal(byAdapter.get("gemini")?.ready, null);
-  assert.deepEqual(byAdapter.get("gemini")?.usedBy, ["captain"]);
+  assert.deepEqual(byAdapter.get("gemini")?.usedBy, ["captain", "dev.analyst (dev.analyst)", "dev.inspector (inspect.inspector)"]);
 
   client.close();
   await harness.service.stop();
@@ -1321,16 +1384,18 @@ test("CORE-28: scalar shorthands compose and share adapter entries", async () =>
     );
     assert.deepEqual(reviewer?.agent, { adapter: "codex" });
     assert.equal(reviewer?.display, "codex");
-    assert.deepEqual(reviewer?.boundBy, ["review.reviewer"]);
+    // decide, which no entry binds, plays it by default (core-service-2).
+    assert.deepEqual(reviewer?.boundBy, ["review.reviewer", "decide.reviewer"]);
     assert.equal(
       state.summary.playbooks[1].roles.reviewer.playerId,
       "dev.reviewer",
     );
-    // dev.coder answers both playbooks: one lane, one conversation.
+    // dev.coder answers every playbook's coder: one lane, one
+    // conversation.
     const coder = state.summary.players.find(
       (player) => player.id === "dev.coder",
     );
-    assert.deepEqual(coder?.boundBy, ["code.coder", "review.coder"]);
+    assert.deepEqual(coder?.boundBy, ["code.coder", "review.coder", "branch.coder", "decide.coder", "pr.coder"]);
   }
 
   const readiness = await client.expectOk("readiness.get", {});
@@ -1342,7 +1407,9 @@ test("CORE-28: scalar shorthands compose and share adapter entries", async () =>
   assert.equal(claude[0].ready, true);
   assert.deepEqual(claude[0].usedBy, [
     "captain",
-    "dev.coder (code.coder, review.coder)",
+    "dev.coder (code.coder, review.coder, branch.coder, decide.coder, pr.coder)",
+    "dev.analyst (dev.analyst)",
+    "dev.inspector (inspect.inspector)",
   ]);
   const codex = readiness.find(
     (entry: ReadinessEntry) => entry.adapter === "codex",
@@ -4113,14 +4180,15 @@ test("core-service-77: continuation summaries follow current configuration witho
     (await client.expectOk("session.list", {})).find((entry) => entry.id === session.id);
   const configPath = join(harness.dir, "playbook.config.yaml");
 
-  // Own tuning, session tuning and an unrelated playbook all preserve
-  // the stored-member projection. The config broadcast carries it too.
+  // Own tuning, session tuning and an entry binding what a playbook's
+  // default binds all preserve the stored-member projection
+  // (core-service-2). The config broadcast carries it too.
   writeFileSync(configPath, base.replace("model: claude-test", "model: claude-tuned"));
   await service.reloadConfig();
   assert.equal((await listed())?.continuable, true);
   await client.expectOk("session.agent.set", {sessionId: session.id, agentId: "dev.coder", model: "claude-session"});
   assert.equal((await listed())?.continuable, true);
-  writeFileSync(configPath, base + "  review:\n    roles:\n      coder: dev.coder\n      reviewer: dev.coder\n");
+  writeFileSync(configPath, base + "  review:\n    roles:\n      coder: dev.coder\n      reviewer: dev.reviewer\n");
   await service.reloadConfig();
   assert.equal((await listed())?.continuable, true);
   await unchanged();
@@ -4396,8 +4464,9 @@ export default { id:'probe',command:'probe',intent:'exercise classified continua
 test("core-service-77: the real shell continues from its token-free snapshot, ledger intact, and refuses config drift", async (t) => {
   const dir = scratchDir("spex-shell-continue-");
   const configPath = join(dir, "playbook.config.yaml");
-  // This session engages no packaged playbook, so its catalog stays code
-  // alone and the later addition of review reads as unrelated.
+  // This session engages no packaged playbook beyond the built-ins: code
+  // by its entry, every other on its default binding (core-service-2),
+  // so a later entry binding what a default binds reads as unrelated.
   const base = VALID_CONFIG.slice(0, VALID_CONFIG.indexOf("  review:\n"));
   writeFileSync(configPath, base);
   const projectDir = join(dir, "project");
@@ -4439,7 +4508,7 @@ test("core-service-77: the real shell continues from its token-free snapshot, le
   const text = JSON.stringify(await readSessionManifest(manifest));
   assert.ok(!text.includes("resumeToken"), "no token key in the manifest");
   assert.ok(!text.includes("fake-resume-"), "no token value in the manifest");
-  const snapshot = (JSON.parse(text) as {
+  const parsed = JSON.parse(text) as {
     snapshot: {
 
         schemaVersion: number;
@@ -4447,7 +4516,11 @@ test("core-service-77: the real shell continues from its token-free snapshot, le
         captain: { conversation: { kind: string } };
         effectLedger: unknown;
     };
-  }).snapshot;
+    structuralProjection: { catalog: Record<string, unknown>; players: { id: string }[] };
+  };
+  const snapshot = parsed.snapshot;
+  const startedWith = { catalog: Object.keys(parsed.structuralProjection.catalog), players: parsed.structuralProjection.players.map((player) => player.id) };
+  assert.ok(startedWith.catalog.includes("code") && startedWith.catalog.includes("review"), JSON.stringify(startedWith));
   assert.equal(snapshot.schemaVersion, 4);
   assert.ok(snapshot.journal.length > 0, "the journal is kept for the reseed");
   assert.equal(snapshot.captain.conversation.kind, "needsSeeding");
@@ -4482,9 +4555,10 @@ test("core-service-77: the real shell continues from its token-free snapshot, le
   assert.ok(JSON.stringify((after as unknown as { lastAppliedExecutionProjection: { captain: unknown } }).lastAppliedExecutionProjection.captain).includes("claude-tuned"), "the new model was applied");
   await client.waitFor((m) => m.type === "session.state" && m.session.id === session.id && m.session.turns === 2 && m.session.live === false);
 
-  // An unrelated addition changes nothing (core-service-92): a second
-  // playbook with its own player enters the config, the session keeps
-  // its stored members, and a third message continues it.
+  // An unrelated addition changes nothing (core-service-92): an entry
+  // binding what review's default binds, with that player set up, enters
+  // the config, the session keeps its stored members, and a third
+  // message continues it.
   writeFileSync(configPath, base
     .replace("  model: claude-test\nplayers:", "  model: claude-tuned\nplayers:")
     .replace("    model: claude-test\nplaybooks:", "    model: claude-test\n  dev.reviewer:\n    adapter: claude\n    model: claude-test\nplaybooks:")
@@ -4493,8 +4567,8 @@ test("core-service-77: the real shell continues from its token-free snapshot, le
   await client.expectOk("turn.submit", { sessionId: session.id, text: "and again" });
   await client.waitFor((m) => m.type === "session.state" && m.session.id === session.id && m.session.turns === 3 && m.session.live === false);
   const narrowed = (await readSessionManifest(manifest)) as { structuralProjection: { catalog: Record<string, unknown>; players: { id: string }[] } };
-  assert.deepEqual(Object.keys(narrowed.structuralProjection.catalog), ["code"], "the stored catalog is the session's own");
-  assert.deepEqual(narrowed.structuralProjection.players.map((player) => player.id), ["dev.coder"]);
+  assert.deepEqual(Object.keys(narrowed.structuralProjection.catalog), startedWith.catalog, "the stored catalog is the session's own");
+  assert.deepEqual(narrowed.structuralProjection.players.map((player) => player.id), startedWith.players);
 
   // Structural drift: the roster changed since, so the refusal names the
   // change and offers a new session, which the project then accepts
@@ -4909,7 +4983,11 @@ test("playbook-library-32: compile.run binds derived roles however the form case
   // The new player joined your own roster first (playbook-library-3).
   assert.match(readFileSync(join(harness.dir, "playbook.config.yaml"), "utf8"), /dev\.reviewer:\n\s+adapter: claude/);
   const listed = await client.expectOk("environment.playbooks", { projectId: project.id });
-  assert.deepEqual(listed.project?.find((row) => row.id === "pair")?.enabled, ["project"]);
+  const pair = listed.project?.find((row) => row.id === "pair");
+  assert.deepEqual(pair?.entry, ["project"], "[playbook-library-69] the project's entry written");
+  assert.equal(pair?.runs, true);
+  assert.deepEqual(pair?.placedBy, ["project"]);
+  assert.deepEqual(Object.fromEntries(Object.entries(pair?.bindings ?? {}).map(([role, binding]) => [role, [binding.playerId, binding.from]])), { Coder: ["dev.coder", "project"], Reviewer: ["dev.reviewer", "project"] });
 
   // The new playbook's artifacts serve its machine.
   const artifacts = await client.expectOk("playbook.artifacts", {
@@ -5095,7 +5173,7 @@ test("core-service-84: a writer stopped mid-step restores to its saved step and 
   mkdirSync(projectPath);
   execFileSync("git", ["init", "-q", projectPath]);
   seedRepository(projectPath);
-  writeFileSync(configPath, VALID_CONFIG);
+  writeFileSync(configPath, EVERY_BUILTIN_CONFIG);
   // The CLI writes into the session store of the spex repository the
   // project pairs with (storage-6).
   const { sessionsDir } = pairedHome(dataDir, projectPath);
@@ -5160,7 +5238,7 @@ test("core-service-84: a restore bringing back a run the Boss stopped himself ra
   mkdirSync(projectPath);
   execFileSync("git", ["init", "-q", projectPath]);
   seedRepository(projectPath);
-  writeFileSync(configPath, VALID_CONFIG);
+  writeFileSync(configPath, EVERY_BUILTIN_CONFIG);
   const { imports } = fakeAdapterImports(parkingScript({ held: true }));
   const service = await CoreService.start({ token: "test", configPath, dataDir, adapterImports: imports, adapterRuntime: () => ({ usable: true }), env: {}, home: join(dir, "home"), watchConfig: false });
   t.after(async () => { await service.stop(); });
@@ -5217,7 +5295,7 @@ test("core-service-84: a restore whose core stopped before recording the positio
   mkdirSync(projectPath);
   execFileSync("git", ["init", "-q", projectPath]);
   seedRepository(projectPath);
-  writeFileSync(configPath, VALID_CONFIG);
+  writeFileSync(configPath, EVERY_BUILTIN_CONFIG);
   // The CLI writes into the session store of the spex repository the
   // project pairs with (storage-6).
   const { sessionsDir } = pairedHome(dataDir, projectPath);
@@ -5892,9 +5970,9 @@ test("core-service-112: the core's own prose re-derives in the home's language",
   const REQUIREMENT_EN =
     "sign in by running claude in a terminal, or set ANTHROPIC_API_KEY";
   const REQUIREMENT_ZH = "在终端运行 claude 登录，或设置 ANTHROPIC_API_KEY";
-  const CONFIG_ERROR_EN = "playbooks must enable at least one playbook";
-  const CONFIG_ERROR_ZH = "playbooks 必须至少启用一个规程";
-  const BROKEN_CONFIG = "playbooks: {}\n";
+  const CONFIG_ERROR_EN = "playbooks must be an object";
+  const CONFIG_ERROR_ZH = "playbooks 必须是一个对象";
+  const BROKEN_CONFIG = "playbooks: []\n";
 
   const dir = scratchDir("spex-core-prose-");
   const configPath = join(dir, "playbook.config.yaml");
@@ -6171,6 +6249,11 @@ function offered(state: import("./protocol.js").ConfigState | undefined): string
   return state?.status === "valid" ? state.summary.playbooks.map((playbook) => `/${playbook.command}`).sort() : [];
 }
 
+/** The entry a playbook composes by in a config state (core-service-2). */
+function originIn(state: import("./protocol.js").ConfigState | undefined, id: string): string | undefined {
+  return state?.status === "valid" ? state.summary.playbooks.find((playbook) => playbook.id === id)?.origin : undefined;
+}
+
 test("core-service-2: config.get with a project answers its composition, and the broadcast carries every project's", async (t) => {
   const harness = await startHarness(OWN_CODE_ONLY);
   const client = new Client(harness.service.port());
@@ -6178,37 +6261,44 @@ test("core-service-2: config.get with a project answers its composition, and the
   await client.open();
   const project = await client.expectOk("project.register", { path: harness.projectDir });
 
-  // No file of its own: the project runs with yours.
+  // No file of its own: the project runs with yours, every placed
+  // playbook your own file writes no entry for on its default binding.
   const before = await client.expectOk("config.get", { projectId: project.id });
   assert.equal(before.status, "valid", JSON.stringify(before));
-  assert.deepEqual(offered(before), ["/code"]);
+  assert.ok(offered(before).includes("/code") && offered(before).includes("/review"), JSON.stringify(offered(before)));
+  assert.deepEqual([originIn(before, "code"), originIn(before, "review")], ["own", "default"]);
 
-  // Enabling a playbook in the project's file: the project's composition
-  // offers it, yours does not, and the broadcast says both.
+  // An entry in the project's file: the project's composition runs the
+  // playbook by it, yours by the default, and the broadcast says both.
   const seen = client.messages.length;
   await client.expectOk("config.edit", {
     repository: project.id,
     op: { kind: "playbook.add", playbookId: "review", roles: { coder: "dev.coder", reviewer: "dev.coder" } },
   });
-  assert.deepEqual(offered(await client.expectOk("config.get", { projectId: project.id })), ["/code", "/review"]);
-  assert.deepEqual(offered(await client.expectOk("config.get", {})), ["/code"]);
+  assert.equal(originIn(await client.expectOk("config.get", { projectId: project.id }), "review"), "project");
+  assert.equal(originIn(await client.expectOk("config.get", {}), "review"), "default");
   const announced = await client.waitFor((message) => client.messages.indexOf(message) >= seen &&
     message.type === "config.state" && message.projects?.[project.id] !== undefined);
   assert.ok(announced.type === "config.state");
-  assert.deepEqual(offered(announced.state), ["/code"]);
-  assert.deepEqual(offered(announced.projects?.[project.id]), ["/code", "/review"]);
+  assert.equal(originIn(announced.state, "review"), "default");
+  assert.equal(originIn(announced.projects?.[project.id], "review"), "project");
   const composed = announced.projects?.[project.id];
   assert.ok(composed?.status === "valid");
   assert.equal(composed.summary.captain.adapter, "claude", "your own group's captain");
 
-  // A project's file naming a player yours lacks: that project reads
-  // invalid naming it, yours stays valid.
+  // A project's file naming a player yours lacks: the player plays on
+  // the Captain's block, flagged to set up, and refuses nothing
+  // (core-service-2, settings-46).
   const projectConfig = join(clonePath(harness.dataDir, project.id), "config", "playbook.config.yaml");
   writeFileSync(projectConfig, "playbooks:\n  review:\n    roles:\n      coder: dev.coder\n      reviewer: dev.auditor\n");
   await harness.service.reloadConfig();
-  const refused = await client.expectOk("config.get", { projectId: project.id });
-  assert.equal(refused.status, "invalid", JSON.stringify(refused));
-  if (refused.status === "invalid") assert.match(refused.errors.join("\n"), /dev\.auditor/);
+  const flagged = await client.expectOk("config.get", { projectId: project.id });
+  assert.equal(flagged.status, "valid", JSON.stringify(flagged));
+  if (flagged.status === "valid") {
+    const auditor = flagged.summary.players.find((player) => player.id === "dev.auditor");
+    assert.equal(auditor?.toSetUp, true, "[settings-46] a player to set up");
+    assert.equal(auditor?.agent.adapter, flagged.summary.captain.adapter);
+  }
   assert.equal((await client.expectOk("config.get", {})).status, "valid");
 
   // A project the home does not hold is named not found.
@@ -6233,7 +6323,7 @@ test("core-service-2: a project's config file changed on disk reloads without a 
   let seen = client.messages.length;
   mkdirSync(configDir, { recursive: true });
   writeFileSync(projectConfig, "playbooks:\n  review:\n    roles:\n      coder: dev.coder\n      reviewer: dev.coder\n");
-  await announcedAfter(seen, (state) => offered(state).includes("/review"));
+  await announcedAfter(seen, (state) => originIn(state, "review") === "project");
 
   // A player your own roster lacks is reported as the file changes
   // (settings-46), with no restart.
@@ -6244,10 +6334,10 @@ test("core-service-2: a project's config file changed on disk reloads without a 
   assert.ok(missing.type === "config.state" && missing.state.status === "valid");
   assert.deepEqual(missing.state.missingPlayers, [{ player: "dev.auditor", repository: project.id, roles: [{ playbook: "review", role: "reviewer" }] }]);
 
-  // Disabled there again, the project offers yours alone.
+  // Its entry gone again, the project runs review on the default.
   seen = client.messages.length;
   writeFileSync(projectConfig, "playbooks: {}\n");
-  await announcedAfter(seen, (state) => state.status === "valid" && !offered(state).includes("/review"));
+  await announcedAfter(seen, (state) => state.status === "valid" && originIn(state, "review") === "default");
 });
 
 // ---------------------------------------------------------------------------

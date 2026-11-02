@@ -260,10 +260,10 @@ msgstr "{host} 以另一个账户登录 — 请以 @{login} 登录"
 msgid "{id} changed meanwhile; retry"
 msgstr "{id} 期间已更改，请重试"
 
-#. Refusal: the id offered for a new playbook is one an installed package exports, in this project or among the packages Spex keeps for you alone
+#. Refusal: the id offered for a new playbook is one an installed package exports, in this project or among your global packages, which every project of yours runs
 #: src/authoring.ts
-msgid "{id} is already a playbook of this project or of your Personal packages — pick another id"
-msgstr "{id} 已是本项目或你的个人规约包中的规程 — 请换一个 id"
+msgid "{id} is already a playbook of this project or of your global packages — pick another id"
+msgstr "{id} 已是本项目或你的全局规约包中的规程 — 请换一个 id"
 
 #. Refusal: the id offered for a new playbook is another project's authoring session
 #: src/service.ts
@@ -285,7 +285,7 @@ msgstr "{name} {version} 已在 {registry} 上 — 请在 meta.yaml 中提高其
 msgid "{name} {version} is too large for {registry} — leave out what it does not need, then Retry"
 msgstr "{name} {version} 超出 {registry} 接受的大小 — 请去掉不需要的内容，然后重试"
 
-#. A completed step of an enabling: the package written into spex.yaml
+#. A completed step of an Add: the package written into spex.yaml
 #: src/service.ts
 msgid "{name} added to spex.yaml"
 msgstr "已将 {name} 添加到 spex.yaml"
@@ -487,6 +487,11 @@ msgstr "{name}：spex.lock 没有为它记录注册中心地址 — 更新会重
 msgid "{org} is not yours to publish to at {registry} — claim it there, or publish under one of your orgs"
 msgstr "你不能在 {registry} 上发布到 {org} — 请在那里认领它，或发布到你自己的 org 下"
 
+#. Why a placed playbook stands aside, composing nothing: its spec package is not installed here; {package} is its name, org/pkg
+#: src/config.ts
+msgid "{package} places {id}, but its files are not on this computer"
+msgstr "{package} 放入了 {id}，但它的文件不在这台电脑上"
+
 #. A stopped sync: the Space renamed or moved the project's records, and the folder on this computer they would move to is taken; {path} is that folder
 #: src/space.ts
 msgid "{path} already exists, so these records cannot move there"
@@ -684,11 +689,6 @@ msgstr "{path} 不能同时设置 effort 和它的旧别名 reasoningEffort"
 msgid "{path} must resolve an adapter"
 msgstr "{path} 必须解析出一个适配器"
 
-#. Config error: a role binds a player the roster does not define
-#: src/config.ts
-msgid "{path} names absent session player \"{playerId}\""
-msgstr "{path} 指向不存在的会话 Player“{playerId}”"
-
 #. Refusal: a folder inside a Personal package's folder, which Git does not ignore, cannot be read; {entry} is its path in the records
 #: src/environments.ts
 msgid "{path}: {entry} cannot be read to confirm it syncs with your Personal records — check its permissions, then Retry"
@@ -871,6 +871,11 @@ msgstr "{what} 已在此期间更改；请重试"
 #: src/session.ts
 msgid "{who}'s {field} changed"
 msgstr "{who} 的 {field} 已更改"
+
+#. Why a playbook stands aside, composing nothing: another playbook answers its slash command; {winner} is that playbook's spec package, org/pkg
+#: src/config.ts
+msgid "/{command} is {winner}'s"
+msgstr "/{command} 属于 {winner}"
 
 #. Draft thread status line: the compile was canceled; the ◇ stays
 #: src/authoring.ts
@@ -1088,6 +1093,11 @@ msgstr "请先把它加入群组"
 msgid "Add this computer's SSH key to your account, accept a new host key in a terminal, then Retry"
 msgstr "把本机的 SSH 密钥添加到你的账户，在终端中接受新的主机密钥，然后重试"
 
+#. Refusal of an Add after some of its writes, which stand; {done} lists them, each itself a message, and {error} is the refusal's own words
+#: src/service.ts
+msgid "adding stopped after {done}: {error}"
+msgstr "添加在完成 {done} 后停止：{error}"
+
 #. Refusal on a team server of opening another team server from it: a server opens no server of its own; the person opens it from their own computer
 #: src/service.ts
 msgid "Already on a server — open it from your computer"
@@ -1285,13 +1295,13 @@ msgstr "注册前请先成功编译该草稿"
 
 #. Refusal after a successful compile; `error` is the config validation's own words
 #: src/service.ts
-msgid "compiled, but creating session player \"{playerId}\" was refused: {error}"
-msgstr "已编译，但创建会话 Player“{playerId}”被拒绝：{error}"
+msgid "compiled, but adding was refused: {error}"
+msgstr "已编译，但添加被拒绝：{error}"
 
 #. Refusal after a successful compile; `error` is the config validation's own words
 #: src/service.ts
-msgid "compiled, but enabling was refused: {error}"
-msgstr "已编译，但启用被拒绝：{error}"
+msgid "compiled, but creating session player \"{playerId}\" was refused: {error}"
+msgstr "已编译，但创建会话 Player“{playerId}”被拒绝：{error}"
 
 #. Refusal after a successful compile; `error` is the config validation's own words
 #: src/service.ts
@@ -1406,22 +1416,10 @@ msgstr "草稿不可用。"
 msgid "duplicate binding {projectId}"
 msgstr "项目 {projectId} 绑定重复"
 
-#. Config error: two playbooks answer to the same slash command
-#. Config error: two playbooks answer to the same slash command
-#: src/config.ts
-#: src/service.ts
-msgid "duplicate effective command \"{command}\""
-msgstr "生效命令“{command}”重复"
-
 #. Storage diagnostic: two open intents hold one issue or pull request
 #: src/storage-git.ts
 msgid "duplicate open source {source}"
 msgstr "未结意图的来源 {source} 重复"
-
-#. Config error: two entries enable the same playbook
-#: src/config.ts
-msgid "duplicate playbook id \"{playbookId}\""
-msgstr "规程 id“{playbookId}”重复"
 
 #. Storage diagnostic: the registry lists one project twice
 #: src/app-storage.ts
@@ -1445,11 +1443,6 @@ msgstr "记录 id {id} 重复：{first} 与 {second}"
 #: src/service.ts
 msgid "edit rejected"
 msgstr "编辑被拒绝"
-
-#. Refusal of an enabling after some of its writes, which stand; {done} lists them, each itself a message, and {error} is the refusal's own words
-#: src/service.ts
-msgid "enabling stopped after {done}: {error}"
-msgstr "启用在完成 {done} 后停止：{error}"
 
 #. Refusal of a sign-in: what the reader entered is not a Space's address alone — not a URL, a scheme other than https (or http on this computer), a user or password, a path, a query, a fragment, a host outside letters, digits, hyphens and dots, or port 0; https://spex.sublang.ai is an example address and stays as it is
 #: src/space.ts
@@ -2011,9 +2004,15 @@ msgid "No longer shared with you"
 msgstr "已不再与你共享"
 
 #. Stands where a role binds no player at all
+#. Stands where a role binds no player at all
 #: src/session.ts
 msgid "no one"
 msgstr "无人"
+
+#. Refusal of a new session: no environment of the project or your global packages places a playbook that composes; {name} is the project's name
+#: src/session.ts
+msgid "No playbook runs in {name} — add a package that provides one"
+msgstr "{name} 中没有可运行的规程 — 请添加一个提供规程的规约包"
 
 #. Refusal: no project of this id is registered
 #. Refusal: no project of this id is registered
@@ -2157,7 +2156,7 @@ msgstr "org {org} 不合规则：只能用小写字母、数字和单个连字�
 msgid "Package"
 msgstr "打包"
 
-#. A completed step of an enabling: the project's installed packages replaced, those the added package needs among them
+#. A completed step of an Add: the project's installed packages replaced, those the added package needs among them
 #: src/service.ts
 msgid "packages installed"
 msgstr "规约包已安装"
@@ -2208,7 +2207,7 @@ msgstr "规程 {playbookId} 已不再启用"
 msgid "playbook {playbookId} joined the session"
 msgstr "规程 {playbookId} 加入了本会话"
 
-#. A completed step of an enabling: the playbook's entry written to the config
+#. A completed step of an Add: the playbook's entry written to the config
 #: src/service.ts
 msgid "playbook {playbookId} written"
 msgstr "规程 {playbookId} 已写入"
@@ -2218,6 +2217,7 @@ msgstr "规程 {playbookId} 已写入"
 msgid "playbook {playbookId}'s {field} changed"
 msgstr "规程 {playbookId} 的 {field} 已更改"
 
+#. One settings drift: a role changed lanes; the ids are the config file's own
 #. One settings drift: a role changed lanes; the ids are the config file's own
 #: src/session.ts
 msgid "playbook {playbookId}'s {role} role now binds {player} instead of {before}"
@@ -2229,17 +2229,7 @@ msgstr "规程 {playbookId} 的 {role} 角色现在绑定 {player}，而非 {bef
 msgid "playbooks must be an object"
 msgstr "playbooks 必须是一个对象"
 
-#. Config error; `playbooks` is the config file's own field name and stays as it is
-#: src/config.ts
-msgid "playbooks must enable at least one playbook"
-msgstr "playbooks 必须至少启用一个规程"
-
-#. Config error: no environment of the session places the enabled playbook; {repository} is the spex repository's key
-#: src/config.ts
-msgid "playbooks.{id} is enabled, but no package of {repository} places a playbook {id}"
-msgstr "playbooks.{id} 已启用，但 {repository} 没有规约包放入规程 {id}"
-
-#. Config error: the key enabling a playbook differs from the id its module declares
+#. Config error: the key naming a playbook differs from the id its module declares
 #: src/config.ts
 msgid "playbooks.{id} key must equal the module manifest id \"{manifestId}\""
 msgstr "playbooks.{id} 的键必须等于模块清单中的 id“{manifestId}”"
@@ -2260,6 +2250,11 @@ msgstr "playbooks.{id} 需要本地角色“captain”，而该角色为 tmux-pl
 msgid "playbooks.{id} runs roles {roles} concurrently, so they must bind to distinct players"
 msgstr "playbooks.{id} 并发运行角色 {roles}，因此它们必须绑定到不同的 Player"
 
+#. Why a written playbook entry stands aside, composing nothing: the spec package placing the playbook is not installed here; {package} is its name, org/pkg
+#: src/config.ts
+msgid "playbooks.{id}: {package} places it, but its files are not on this computer"
+msgstr "playbooks.{id}：{package} 放入了它，但它的文件不在这台电脑上"
+
 #. Config error: the module the environment installs is no compiled playbook
 #: src/config.ts
 msgid "playbooks.{id}: its module \"{from}\" exposes no valid registry entry"
@@ -2272,8 +2267,13 @@ msgstr "playbooks.{id}：其模块“{from}”导入失败：{message}"
 
 #. Config error; "Playbooks" is the app's own surface
 #: src/config.ts
-msgid "playbooks.{id}: its module \"{from}\" is not compatible with this version of Spex; compile its source in Playbooks to enable \"{id}\""
-msgstr "playbooks.{id}：其模块“{from}”与此版本的 Spex 不兼容；请在“规程”中编译其源文本以启用“{id}”"
+msgid "playbooks.{id}: its module \"{from}\" is not compatible with this version of Spex; compile its source in Playbooks to run \"{id}\""
+msgstr "playbooks.{id}：其模块“{from}”与此版本的 Spex 不兼容；请在“规程”中编译其源文本以运行“{id}”"
+
+#. Why a written playbook entry stands aside, composing nothing: no environment of the session places the playbook; {repository} is the spex repository's key
+#: src/config.ts
+msgid "playbooks.{id}: no package of {repository} places a playbook {id}"
+msgstr "playbooks.{id}：{repository} 没有规约包放入规程 {id}"
 
 #. Config error; `playbooks.<id>.from` is the config file's own field name, retired by environments
 #: src/config.ts
@@ -2326,7 +2326,7 @@ msgstr "Player {playerId} 已不再被本会话的规程绑定"
 msgid "player {playerId} joined the roster"
 msgstr "Player {playerId} 加入了名单"
 
-#. A completed step of an enabling: a new session player written to your own settings
+#. A completed step of an Add: a new session player written to your own settings
 #: src/service.ts
 msgid "player {playerId} written"
 msgstr "Player {playerId} 已写入"
@@ -2712,7 +2712,7 @@ msgstr "spex.lock 来自更新版本的 Spex（格式 {format}）— 请更新 S
 msgid "spex.lock names no registry address — Update writes spex.lock again"
 msgstr "spex.lock 没有记录注册中心地址 — 更新会重新写入 spex.lock"
 
-#. A completed step of an enabling: spex.lock written with the versions chosen
+#. A completed step of an Add: spex.lock written with the versions chosen
 #: src/service.ts
 msgid "spex.lock written"
 msgstr "已写入 spex.lock"
@@ -3166,15 +3166,15 @@ msgstr "此文件夹已包含 Git 仓库，但尚无初始提交。请在终端�
 msgid "This folder already contains a Git repository. Use Add to register it."
 msgstr "此文件夹已包含 Git 仓库。请使用“添加”注册该仓库。"
 
-#. Refusal of Enable: a project's package is added from a folder only inside its project folder (environments-2), and this package lies elsewhere
+#. Refusal of Add: a project's package is added from a folder only inside its project folder (environments-2), and this package lies elsewhere
 #: src/service.ts
-msgid "This package's folder is outside the project folder — enable it in that project, or publish it and add it from the registry"
-msgstr "此规约包的文件夹不在项目文件夹内 — 请在那个项目中启用它，或发布后从注册中心添加"
+msgid "This package's folder is outside the project folder — add it in that project, or publish it and add it from the registry"
+msgstr "此规约包的文件夹不在项目文件夹内 — 请在那个项目中添加它，或发布后从注册中心添加"
 
-#. Refusal of Enable: a Personal package is added from a folder only inside what Spex keeps for you alone (environments-2), and this package lies elsewhere
+#. Refusal of Add: a global package is added from a folder only inside what Spex keeps for you alone, your global records (environments-2), and this package lies elsewhere
 #: src/service.ts
-msgid "This package's folder is outside your Personal records — enable it in the project, or publish it and add it from the registry"
-msgstr "此规约包的文件夹不在你的个人记录内 — 请在项目中启用它，或发布后从注册中心添加"
+msgid "This package's folder is outside your global records — add it in the project, or publish it and add it from the registry"
+msgstr "此规约包的文件夹不在你的全局记录内 — 请在项目中添加它，或发布后从注册中心添加"
 
 #. Refusal: the recovery the reader activated is no longer advertised; the id is the runtime's own
 #: src/session.ts
@@ -3410,6 +3410,11 @@ msgstr "你停止了传输；你的提交仍然保留。"
 #: src/space-git.ts
 msgid "You stopped the transfer; your commits stand. Git runs without prompts, so a helper that prompts fails instead of hanging."
 msgstr "你已停止传输；你的提交仍然有效。Git 以无交互方式运行，因此需要交互的凭据助手会直接失败，而不会一直挂起。"
+
+#. Refusal: a new global playbook — one every project of yours runs — while the records that hold your global packages are not on this computer
+#: src/service.ts
+msgid "Your global packages' folder is not on this computer"
+msgstr "你的全局规约包所在的文件夹不在这台电脑上"
 
 #. Guidance under a send the Space refused twice because its records moved meanwhile
 #: src/space.ts

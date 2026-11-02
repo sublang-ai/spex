@@ -152,7 +152,7 @@ function copyAssets(fromDir: string, toDir: string, assetIds: string[]): void {
  * interrupted run resumes from its receipt, verifying what it already
  * wrote and never overwriting a destination that diverged.
  */
-export async function migrateFormerHome(root: string, options: { env?: NodeJS.ProcessEnv; own?: string; libraryDir?: string; prepareRepository?: (dir: string, key: string, registryOrigin: string, space: string | null) => void } = {}): Promise<GroupsReceipt> {
+export async function migrateFormerHome(root: string, options: { env?: NodeJS.ProcessEnv; own?: string; libraryDir?: string; prepareRepository?: (dir: string, key: string, registryOrigin: string, space: string | null, global: boolean) => void } = {}): Promise<GroupsReceipt> {
   const migrations = migrationsDir(root);
   mkdirSync(migrations, { recursive: true, mode: 0o700 });
 
@@ -401,18 +401,19 @@ export async function migrateFormerHome(root: string, options: { env?: NodeJS.Pr
   Home.load(root);
   parsePrefs(readJsonFile(join(root, "local", "prefs.json")), join(root, "local", "prefs.json"));
   const keys = [...new Set([...Object.values(plan!), home.own()])];
-  // Your own group's environment requests the built-in spec package
-  // before its first history is written, and each project's working
-  // folder holding neither environment file gets its own at its root,
-  // never in the clone (environments-26), locked at the default
-  // instance's registry, as no clone lies at an instance yet (storage-9,
-  // environments-11).
+  // Your own group's environment — the global — requests the built-in
+  // spec package before its first history is written, as the home it
+  // becomes is made, locked at the default instance's registry, as no
+  // clone lies at an instance yet; each project's working folder holding
+  // neither environment file gets its own at its root, requesting
+  // nothing, never in the clone (storage-9, environments-11,
+  // environments-26).
   for (const key of keys) {
-    if (key === home.own()) { options.prepareRepository?.(home.clonePath(key), key, home.defaultInstance().origin, null); continue; }
+    if (key === home.own()) { options.prepareRepository?.(home.clonePath(key), key, home.defaultInstance().origin, null, true); continue; }
     const folder = home.folderOf(key)?.path;
     if (!folder || !existsSync(folder) || !statSync(folder).isDirectory()) continue;
     if (existsSync(join(folder, "spex.yaml")) || existsSync(join(folder, "spex.lock"))) continue;
-    options.prepareRepository?.(folder, key, home.defaultInstance().origin, null);
+    options.prepareRepository?.(folder, key, home.defaultInstance().origin, null, false);
   }
   for (const key of keys) {
     await validateStorageTree(home.clonePath(key), { own: key === home.own(), ...(options.libraryDir ? { libraryDir: options.libraryDir } : {}) });

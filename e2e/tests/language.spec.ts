@@ -26,10 +26,12 @@ import {
 } from "../src/harness";
 import { HEIGHTS, TALL, measure, record } from "../src/fit";
 
-/** The rail's four entries as the `zh` catalog translates them. */
+/** The rail's five entries as the `zh` catalog translates them
+ * (localization-4, run-view-67). */
 const RAIL_ZH: [SurfaceName, string][] = [
   ["Dashboard", "仪表盘"],
   ["Workspace", "项目"],
+  ["Playbooks", "规程"],
   ["Space", "Space"],
   ["Settings", "设置"],
 ];
@@ -38,6 +40,7 @@ const RAIL_ZH: [SurfaceName, string][] = [
 const RAIL_EN: [SurfaceName, string][] = [
   ["Dashboard", "Dashboard"],
   ["Workspace", "Projects"],
+  ["Playbooks", "Playbooks"],
   ["Space", "Space"],
   ["Settings", "Settings"],
 ];
@@ -304,6 +307,7 @@ test.describe("the Chinese interface at the floor", () => {
       ["Dashboard", "dashboard", "dashboard-scroll"],
       ["Settings", "settings", "captain-section"],
       ["Space", "space", "space-header"],
+      ["Playbooks", "playbooks-surface", "playbooks-surface"],
       ["Workspace", "projects", "captain-home"],
     ];
     for (const [surface, name, ready] of surfaces) {
@@ -311,9 +315,10 @@ test.describe("the Chinese interface at the floor", () => {
       await expect(page.getByTestId(ready)).toBeVisible();
       await shoot(page, `${name}-1024`);
     }
-    // The project's Playbooks tab (run-view-58).
+    // The project's Playbooks tab (run-view-58), its global playbooks
+    // under 全局 (localization-6).
     await projectTab(page, "Playbooks");
-    await expect(page.getByTestId("playbooks-enabled")).toBeVisible();
+    await expect(page.getByTestId("playbooks-global").getByRole("heading").first()).toHaveText("全局");
     await shoot(page, "playbooks-1024");
 
     // The floor is stated with the sidebar collapsed (DR-041).

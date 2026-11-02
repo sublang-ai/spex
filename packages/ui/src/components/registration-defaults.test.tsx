@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// playbook-library-88: rendered Enable defaults reach the real typed
-// command boundary. No compiler, provider or config writer is substituted.
+// playbook-library-88, playbook-library-61: the Add form's rendered
+// defaults reach the real typed command boundary, naming no environment —
+// the playbook is added to the one its authoring session belongs to
+// (DR-176). No compiler, provider or config writer is substituted.
 import { useState } from "react";
 import { afterEach, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
@@ -10,7 +12,7 @@ import { commandSchema } from "@sublang/spex-core/protocol";
 import type { DraftInfo, SessionPlayerSummary } from "@sublang/spex-core/protocol";
 import { useAppStore, type DraftRegisterForm } from "../state/store.js";
 import { DraftRegisterTab, type RegisterInput } from "./DraftRegisterTab.js";
-import { OWN_KEY, PROJECT, home } from "../fixtures/playbooks.js";
+import { PROJECT, home } from "../fixtures/playbooks.js";
 
 afterEach(() => {
   cleanup();
@@ -186,24 +188,18 @@ test("explicit equal existing-lane choices preserve deliberate sharing", async (
   expect((await form.submit()).newPlayers).toBeUndefined();
 });
 
-test("Enable for defaults to the project by its name and offers Personal, each a typed Enable command", async () => {
+test("the Add form asks no destination, and its typed command names none", async () => {
   useAppStore.setState({ projects: [PROJECT], space: home() });
   const form = renderForm(["Coder"], { roster: ["dev.coder"] });
-  const field = screen.getByTestId("register-repository") as HTMLSelectElement;
-  expect(field.value).toBe(PROJECT.id);
-  expect([...field.options].map((option) => [option.value, option.textContent])).toEqual([
-    [PROJECT.id, "demo"],
-    [OWN_KEY, "Personal (every project of yours)"],
-  ]);
-  fireEvent.change(field, { target: { value: OWN_KEY } });
-  expect((await form.submit()).repository).toBe(OWN_KEY);
-});
-
-test("by default the Enable command names the project", async () => {
-  const form = renderForm(["Coder"], { roster: ["dev.coder"] });
-  // With no own group known yet, the project alone is offered.
-  expect([...(screen.getByTestId("register-repository") as HTMLSelectElement).options].map((option) => option.value)).toEqual(["me/demo-spex"]);
-  expect((await form.submit()).repository).toBe("me/demo-spex");
+  // "Enable for" and "Personal (every project of yours)" are retired.
+  expect(screen.queryByTestId("register-repository")).toBeNull();
+  expect(document.body.textContent).not.toContain("Enable for");
+  expect(document.body.textContent).not.toContain("Personal");
+  const button = screen.getByTestId("register-submit");
+  expect(button.textContent).toBe("Add");
+  const input = await form.submit();
+  expect(input).not.toHaveProperty("repository");
+  expect(input.bindings).toEqual({ Coder: "dev.coder" });
 });
 
 test("ordinary uncontested named roster selection remains unchanged", async () => {

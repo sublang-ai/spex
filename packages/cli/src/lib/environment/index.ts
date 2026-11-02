@@ -29,6 +29,7 @@ export {
   builtinLock,
   stagedBuiltinPackage,
   prepareBuiltinEnvironment,
+  prepareProjectEnvironment,
   rehomeBuiltinLock,
   builtinRegistrySource,
   compositeRegistry,

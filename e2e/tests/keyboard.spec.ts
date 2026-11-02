@@ -49,16 +49,20 @@ test("run-view-101: palette, surfaces, sidebar, and composer by keyboard", async
   expect(await focusedIn()).toBe("surface");
 
   // Surfaces by number in the sidebar's order — Dashboard, Projects,
-  // Space, Settings, the modifier with 3 opening Space — and by comma;
-  // each lands focus inside the surface it opened, never on the body
-  // (run-view-49, run-view-50).
+  // Playbooks, Space, Settings, the modifier with 3 opening the
+  // Playbooks surface and with 4 Space — and by comma; each lands focus
+  // inside the surface it opened, never on the body (run-view-49,
+  // run-view-50, run-view-101).
   await page.keyboard.press(`${MOD}+1`);
   await expect(page.getByTestId("attention-all-clear")).toBeVisible();
   expect(await focusedIn()).toBe("surface");
   await page.keyboard.press(`${MOD}+3`);
-  await expect(page.getByTestId("space-surface")).toBeVisible();
+  await expect(page.getByTestId("playbooks-surface")).toBeVisible();
   expect(await focusedIn()).toBe("surface");
   await page.keyboard.press(`${MOD}+4`);
+  await expect(page.getByTestId("space-surface")).toBeVisible();
+  expect(await focusedIn()).toBe("surface");
+  await page.keyboard.press(`${MOD}+5`);
   await expect(page.getByTestId("captain-section")).toBeVisible();
   expect(await focusedIn()).toBe("surface");
   await page.keyboard.press(`${MOD}+1`);

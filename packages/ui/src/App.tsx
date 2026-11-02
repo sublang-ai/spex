@@ -44,6 +44,7 @@ import { RunView } from "./components/RunView.js";
 import { CaptainHome } from "./components/CaptainHome.js";
 import { DashboardSurface } from "./components/DashboardSurface.js";
 import { PlaybooksTab } from "./components/PlaybooksTab.js";
+import { PlaybooksSurface } from "./components/PlaybooksSurface.js";
 import { PackagesTab } from "./components/PackagesTab.js";
 import { SettingsSurface } from "./components/SettingsSurface.js";
 import { SpaceSurface } from "./components/SpaceSurface.js";
@@ -1005,12 +1006,12 @@ function WorkspaceSurface({
               : pinned === "playbooks"
                 ? i18n._({
                     id: "What a session in this project can run",
-                    comment: "tooltip of the project's Playbooks tab: the playbooks enabled and available here",
+                    comment: "tooltip of the project's Playbooks tab: the playbooks that run here, the project's and the global ones",
                   })
                 : pinned === "packages"
                   ? i18n._({
-                      id: "This project's packages and your Personal ones",
-                      comment: "tooltip of the project's Packages tab: the packages the project's spex.yaml names, and those added for yourself",
+                      id: "This project's packages",
+                      comment: "tooltip of the project's Packages tab: the packages the project's spex.yaml names",
                     })
                   : i18n._(
                       "This project's overview: history, now, up next, sources, repo state",
@@ -1062,7 +1063,7 @@ function WorkspaceSurface({
           ) : pinned === "packages" ? (
             i18n._({
               id: "Packages",
-              comment: "tab name: the spec packages this project and your own group install",
+              comment: "tab name: the spec packages this project installs",
             })
           ) : (
             i18n._({
@@ -1183,6 +1184,9 @@ function WorkspaceSurface({
           }}
           coreUrl={coreUrl}
           connected={connection === "open"}
+          // A global package's row stands on the Playbooks surface
+          // (applets-1, DR-176).
+          onShowGlobal={() => onNavigate("Playbooks")}
         />
       ) : tab === "overview" ? (
         <OverviewTab
@@ -1251,19 +1255,7 @@ export function App() {
       ? (stored as Surface)
       : "Workspace";
   });
-  // The retired Playbooks surface (DR-172): a remembered one opens
-  // Projects with the current project's Playbooks tab, the stored value
-  // replaced by Projects as the page mounts, so it is read only once.
-  const [retiredPlaybooks, setRetiredPlaybooks] = useState(
-    () => safeStorageGet(SURFACE_KEY) === "Playbooks",
-  );
-  useEffect(() => {
-    if (safeStorageGet(SURFACE_KEY) === "Playbooks") safeStorageSet(SURFACE_KEY, "Workspace");
-  }, []);
   const setSurface = useCallback((next: Surface) => {
-    // The reader chose where to stand: a remembered Playbooks surface
-    // owes nothing more.
-    setRetiredPlaybooks(false);
     setSurfaceState(next);
     safeStorageSet(SURFACE_KEY, next);
   }, []);
@@ -1303,7 +1295,7 @@ export function App() {
   useEffect(() => {
     if (shown.place.key !== shownPlace) setShownPlace(LOCAL_PLACE_KEY);
   }, [shown, shownPlace]);
-  // The place Settings and Space show, as the place selector names it
+  // The place Playbooks, Settings and Space show, as the place selector names it
   // (run-view-168): this computer's until the reader picks a seat, and
   // again once a seat it showed is closed; a project's tabs stand at the
   // project's place (DR-172).
@@ -1319,10 +1311,10 @@ export function App() {
   // The agent a failure asked Settings to open at (run-view-179,
   // settings-52), until that place's Settings has opened its row.
   const [agentAsk, setAgentAsk] = useState<{ place: string; agent: string }>();
-  /** Go to a surface on behalf of `store`'s place: Settings and Space
-   * open at that place (run-view-168). */
+  /** Go to a surface on behalf of `store`'s place: Playbooks, Settings
+   * and Space open at that place (run-view-168). */
   const navigateFrom = (store: AppStore) => (next: Surface) => {
-    if (next === "Settings" || next === "Space") {
+    if (next === "Playbooks" || next === "Settings" || next === "Space") {
       setConfiguredPlace(store.place.key);
     }
     setSurface(next);
@@ -1347,19 +1339,6 @@ export function App() {
     connection: state.connection,
   }));
   const local = placeStates[0]!.value;
-  // A remembered Playbooks surface lands on the Playbooks tab of the
-  // project current at this computer once one is (run-view-67); once the
-  // projects are read and none is there, it owes nothing, so a project
-  // added later opens as any other.
-  useEffect(() => {
-    if (!retiredPlaybooks) return;
-    if (local.currentProjectId) {
-      setRetiredPlaybooks(false);
-      useAppStore.getState().setWorkspaceTab(local.currentProjectId, "playbooks");
-    } else if (local.projectsRead && local.projects.length === 0) {
-      setRetiredPlaybooks(false);
-    }
-  }, [retiredPlaybooks, local.currentProjectId, local.projectsRead, local.projects.length]);
   // The seats the local core holds, each with its sign-in at its
   // instance (core-service-142): the palette says where one still runs.
   const seatStates = useAppStore((state) => state.seats);
@@ -1875,9 +1854,10 @@ export function App() {
           aria-label={SURFACE_LABELS[surface]()}
           className="flex min-h-0 min-w-0 flex-1 flex-col outline-none"
         >
-          {surface === "Settings" || surface === "Space" ? (
-            // Settings and Space show one place at a time, the one the
-            // selector names (run-view-168); with no seat open there is
+          {surface === "Playbooks" || surface === "Settings" || surface === "Space" ? (
+            // Playbooks, Settings and Space show one place at a time, the
+            // one the selector names (run-view-168, DR-176): a seat has a
+            // global environment of its own. With no seat open there is
             // none to pick. A project's tabs stand at its place.
             <PlaceStoreContext.Provider value={configured}>
               {stores.length > 1 ? (
@@ -1887,7 +1867,9 @@ export function App() {
                   onShow={(store) => setConfiguredPlace(store.place.key)}
                 />
               ) : null}
-              {surface === "Settings" ? (
+              {surface === "Playbooks" ? (
+                <PlaybooksSurface key={configured.place.key} onNavigate={navigateFrom(configured)} />
+              ) : surface === "Settings" ? (
                 <SettingsSurface
                   key={configured.place.key}
                   credentialHost={

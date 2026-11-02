@@ -56,6 +56,7 @@ On every load and reload:
 - A player a binding names, written or default, and your own group's file lacks composes as the Captain's block without its `instruction`, under that id, and is reported in the summary as a player to set up [[settings-46](settings.md#settings-46)]; it refuses no session.
 - Two placed playbooks of one command: one composes — the project's over the global, a written entry over a default, else the first by package name — and the other stands aside, reported with the one that composes; a written entry naming a playbook no environment of the session places, or whose module is absent on this device [[environments-9](environments.md#environments-9)], stands aside the same way, reported with its cause, and composes nothing.
 - A playbook both environments place, by one id, composes once: by the project's entry where one stands, else the global.
+- While no playbook composes for a project, a session there is refused naming it: "No playbook runs in ⟨project⟩ — add a package that provides one".
 
 - On success, the resulting config state is broadcast to all connected clients.
 - On failure, a config error naming the offending entry and the violated rule is broadcast, and session creation requests are rejected while no valid config is active.
@@ -1062,6 +1063,7 @@ Where a scratch home's global environment and a project's environment each place
 - a written entry naming a playbook no environment places stands aside, reported with its cause, and the other playbooks compose and launch [[core-service-2](#core-service-2)];
 - two placed playbooks of one command compose one — the project's over the global, a written entry over a default, else the first by package name — the other reported standing aside with the winner [[core-service-2](#core-service-2)];
 - a playbook both environments place by one id composes once, by the project's entry where one stands, else the global [[core-service-2](#core-service-2)];
+- a project for which no playbook composes refuses a session there, naming the project: "No playbook runs in ⟨project⟩ — add a package that provides one" [[core-service-2](#core-service-2)];
 - the defaulted entries and composed players reach the launcher while both files are byte-identical before and after [[core-service-16](#core-service-16)].
 
 ### Interface Language Coverage
