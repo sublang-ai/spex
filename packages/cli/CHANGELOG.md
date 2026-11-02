@@ -44,6 +44,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The stand-in registry of `@sublang/spex/testing` describes itself at
   `/api/v1/registry` and names a scripted account at `/api/v1/whoami`.
 
+### Fixed
+
+- A Git source's files are read as the repository holds them, whatever
+  this computer's Git line-ending settings, so a `spex.lock` resolved
+  on Windows installs on macOS and Linux, and the reverse.
+
 ## [5.0.0] - 2026-10-31
 
 ### Added
