@@ -16,7 +16,7 @@ import { resolveMachineIdentity } from "@sublang/playbook/machine-identity";
 import { closeSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync, type Dirent } from "node:fs";
 import { homedir, hostname, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import { type StorageDiagnostic } from "./app-storage.js";
+import { parseProjectFile, type StorageDiagnostic } from "./app-storage.js";
 import { heldSessionLease, occupied, pruneEmptyFolders } from "./clone-moves.js";
 import { canonicalHost } from "./code-credentials.js";
 import { portable, readJsonFile, sha256, StorageFormatError, UUID, writeApplicationFile } from "@sublang/spex/files";
@@ -3556,6 +3556,28 @@ class RepositorySync {
     return undefined;
   }
 
+  /** Capture published code changes only at Save, never during reads. */
+  private async refreshCodeRemote(): Promise<void> {
+    const paired = this.host.store.home.folderOf(this.key);
+    if (!paired || !existsSync(join(paired.path, ".git")) || !existsSync(this.repository.projectFile)) return;
+    const git = new SpaceGit(paired.path, this.host.env);
+    const root = await git.ok(["rev-parse", "--show-toplevel"]);
+    if (realpathSync(root) !== realpathSync(paired.path)) return;
+    const remotes = await git.ok(["remote"]);
+    const remote = remotes.split(/\r?\n/).includes("origin")
+      ? await git.ok(["remote", "get-url", "origin"]) : null;
+    if (remote !== null) {
+      const checked = validateRemoteUrl(remote);
+      if (!checked.ok) throw new SpaceStopped("save", { cause: "validation", message: checked.reason, guidance: retryGuidance(), retry: false });
+    }
+    // A pair or clone may move while Git runs. Never write an old pair,
+    // and read the latest file here so another writer's name survives.
+    if (this.host.store.home.folderOf(this.key)?.path !== paired.path) return;
+    const file = this.repository.projectFile;
+    const project = parseProjectFile(readJsonFile(file), file);
+    if (project.remote !== remote) writeApplicationFile(file, { ...project, remote });
+  }
+
   /** Step 1 — Save: refresh the rules, stage, refuse a leak, validate,
    * commit when anything is staged (space-12). */
   private async save(): Promise<string | null> {
@@ -3572,6 +3594,7 @@ class RepositorySync {
       id: "Nothing was saved. Fix the sync rules file, then sync again.",
       comment: "Guidance where the sync rules file could not be refreshed",
     })); }
+    await this.refreshCodeRemote();
     await this.writeUnheldPlacements();
     await this.git.ok(["add", "-A", "--", "."]);
     const staged = (await this.git.ok(["diff", "--cached", "--name-only", "-z"])).split("\0").filter(Boolean);

@@ -79,6 +79,7 @@ The home file shall encode `home.yaml` as exactly `{format: 2, device, origin, i
 
 The project file shall encode `<clone>/project.json` as exactly `{format: 1, name, remote}`: the project's name, and the code's remote URL as the working folder's `origin` reported it, or `null` where the folder has none, a credential embedded in the URL never written [[space-5](space.md#space-5)]:
 
+- a sync refreshes the remote from its safely paired working folder before saving [[space-12](space.md#space-12)];
 - the store reads the file as it stands when a command needs it, with no reload ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)).
 
 ### storage-4
