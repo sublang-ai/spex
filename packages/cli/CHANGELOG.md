@@ -90,6 +90,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   A lock resolved earlier from a `spex.yaml` with CRLF line endings reads
   stale once, and `spex install` resolves it again.
 
+### Fixed
+
+- A Git source's files are read as the repository holds them, whatever
+  this computer's Git line-ending settings, so a `spex.lock` resolved
+  on Windows installs on macOS and Linux, and the reverse.
+
 ## [5.0.0] - 2026-10-31
 
 ### Added

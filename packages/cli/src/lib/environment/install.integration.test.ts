@@ -18,6 +18,7 @@ import { fileVersion } from "../files.js";
 import { makeRelease, startStandinRegistry, type ReleaseFixture, type StandinRegistry } from "../../testing/index.js";
 import {
   ContentStore,
+  defaultRunGit,
   gitSource,
   ENGINE_LINKS_EXCLUDE,
   install,
@@ -25,6 +26,7 @@ import {
   publishRelease,
   RegistryClient,
   resolve,
+  sha256Hex,
   writeLock,
   type InstallEngine,
 } from "./index.js";
@@ -148,4 +150,40 @@ test("cli-14: the same install given an engine hands it every playbook folder", 
   assert.deepEqual(report.installed, ["acme/ship-kit"]);
   assert.deepEqual(prepared, ["acme/ship-kit/playbooks/en/ship#ship"]);
   assert.deepEqual(linked, ["tools/local/playbooks/en/walk"]);
+});
+
+test("environments-45: a Git source's files are read as the repository holds them, whatever this device's Git line-ending settings", async () => {
+  // Git for Windows sets core.autocrlf=true, which `git archive` applies
+  // even from a bare mirror: resolved there, a lock would hold CRLF
+  // digests that no other device's bytes match. The lock's digests are
+  // of the bytes the repository holds, so the lock installs anywhere.
+  const repo = join(scratch("spex-cli-git-"), "kit");
+  await makeRelease(repo, manifestOf("acme/git-kit", "0.1.0", { ride: { kind: "playbook", language: "en" } }), playbookFiles("ride"));
+  const committed = filesUnder(repo);
+  assert.ok(Object.values(committed).every((text) => text.includes("\n") && !text.includes("\r")), "the fixture's files end their lines with LF");
+  const gitIn = (...args: string[]): void => { execFileSync("git", ["-c", "core.autocrlf=false", "-c", "commit.gpgsign=false", "-c", "user.name=Spex", "-c", "user.email=spex@example.invalid", "-C", repo, ...args], { stdio: "pipe" }); };
+  gitIn("init", "--quiet", "--initial-branch=main");
+  gitIn("add", "-A");
+  gitIn("commit", "--quiet", "-m", "Release");
+
+  // Resolved on a device whose Git is set to write CRLF.
+  const crlfDevice = { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "core.autocrlf", GIT_CONFIG_VALUE_0: "true" };
+  const first = scratch("spex-cli-home-");
+  const onCrlfDevice = gitSource(join(first, "cache"), { runGit: (args, options) => defaultRunGit(args, { env: { ...(options?.env ?? {}), ...crlfDevice } }) });
+  const workingFolder = scratch("spex-cli-wf-");
+  const text = `format: 1\npackages:\n  acme/git-kit: ${JSON.stringify({ git: repo, rev: "main" })}\n`;
+  writeFileSync(join(workingFolder, "spex.yaml"), text);
+  const result = await resolve({ requests: parseRequests(text), requestsText: text, registry: client, pathRoot: workingFolder, git: onCrlfDevice });
+  if (!result.ok) assert.fail(`resolution failed: ${JSON.stringify(result.conflicts)}`);
+  const locked = result.lock.packages["acme/git-kit"]!.files;
+  assert.ok(locked.length > 0, "the lock selects the release's files");
+  for (const file of locked) assert.equal(file.sha256, sha256Hex(committed[file.path]!), `[environments-45] ${file.path} is locked at the digest of the bytes the repository holds`);
+  await writeLock(join(workingFolder, "spex.lock"), result.lock);
+
+  // Installed from that lock on a second device, this one as it is.
+  const second = scratch("spex-cli-home-");
+  const report = await install({ root: workingFolder, lock: result.lock, lockVersion: fileVersion(join(workingFolder, "spex.lock")), store: new ContentStore(second), cache: join(second, "cache"), registry: client, git: gitSource(join(second, "cache")), pathRoot: workingFolder });
+  assert.deepEqual(report.installed, ["acme/git-kit"], "[environments-45] the second device installs the first's lock");
+  const installed = join(workingFolder, ".spex", "packages", "acme", "git-kit");
+  for (const file of locked) assert.equal(readFileSync(join(installed, ...file.path.split("/")), "utf8"), committed[file.path], `[environments-45] ${file.path} is installed as the repository holds it`);
 });
