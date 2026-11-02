@@ -2116,6 +2116,39 @@ describe("playbook-library-120/121: Org suggests the orgs the registry account m
     expect((screen.getByTestId("new-playbook-org") as HTMLInputElement).value).toBe("my-choice");
   });
 
+  test.each(["absent", "opens", "refuses", "rejects"] as const)(
+    "the claim link keeps its full native action with no Spaces when the opener %s",
+    async (bridge) => {
+      const origin = "https://registry.example:8443";
+      environmentInstance = origin;
+      const nativeWindow = window as { spexNative?: unknown };
+      const previous = nativeWindow.spexNative;
+      const openExternal = vi.fn<(url: string) => Promise<boolean>>().mockImplementation(async () => {
+        if (bridge === "rejects") throw new Error("Could not open the browser");
+        return bridge === "opens";
+      });
+      if (bridge === "absent") delete nativeWindow.spexNative;
+      else nativeWindow.spexNative = { openExternal };
+      try {
+        seed({
+          space: groupsState({ instances: [] }),
+          registryAccounts: { [origin]: { origin, displayName: "Registry", account: null, signIn: { phase: "idle" }, error: null } },
+        });
+        render(<PlaybooksTab project={PROJECT} />);
+        await defaultsShown();
+        const link = screen.getByRole("link", { name: "Claim an org" }) as HTMLAnchorElement;
+        expect(link.href).toBe(`${origin}/account/orgs`);
+        expect(link.target).toBe("_blank");
+        expect(link.rel).toBe("noreferrer");
+        expect(fireEvent.click(link)).toBe(true);
+        expect(openExternal).not.toHaveBeenCalled();
+      } finally {
+        if (previous === undefined) delete nativeWindow.spexNative;
+        else nativeWindow.spexNative = previous;
+      }
+    },
+  );
+
   test("account changes refresh untouched defaults and ignore former-account replies while preserving edits", async () => {
     const origin = "https://spex.example";
     const registry = { origin, displayName: "Registry", account: null, signIn: { phase: "idle" as const }, error: null };

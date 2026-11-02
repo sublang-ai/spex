@@ -23,7 +23,6 @@ import {
   packageOrgRuleText,
 } from "../lib/drafts.js";
 import { i18n } from "../i18n.js";
-import { openExternalBridge } from "../lib/space.js";
 import { phaseLabel } from "../lib/compile-log.js";
 import { absoluteTitle, relativeAge } from "../lib/time.js";
 import { useClock } from "../lib/useClock.js";
@@ -497,12 +496,6 @@ function NewPlaybookField({
             target="_blank"
             rel="noreferrer"
             className="underline"
-            onClick={(event) => {
-              const open = openExternalBridge();
-              if (!open) return;
-              event.preventDefault();
-              void open(claimUrl).catch(() => false);
-            }}
           >{i18n._({ id: "Claim an org", comment: "Open the selected registry's account page to claim a publishing name" })}</a></> : null}
         </span>
       ) : null}
