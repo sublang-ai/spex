@@ -307,14 +307,14 @@ describe("GROUPS: signing in (space-3, space-6, space-29)", () => {
     const control = screen.getByTestId("space-signin") as HTMLButtonElement;
     await waitFor(() => expect(control.textContent).toBe("Signing in…"));
     expect(control.disabled).toBe(true);
-    // "Continue in your browser" with the page offered again through the
-    // bridge, named by the Space (space-3).
+    // "Continue in your browser" with an ordinary link to the same page,
+    // named by the Space (space-3, app-shell-21).
     expect(screen.getByTestId("space-signin-finish").textContent).toBe("Continue in your browser·Open spex.example");
     const again = screen.getByTestId("space-signin-link") as HTMLAnchorElement;
     expect(again.textContent).toBe("Open spex.example");
     expect(again.href).toBe("https://spex.example/login/app?client_id=spex&state=s");
-    fireEvent.click(again);
-    expect(openExternal).toHaveBeenCalledTimes(2);
+    expect(fireEvent.click(again)).toBe(true);
+    expect(openExternal).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("button", { name: "Cancel" })).toBeTruthy();
     // The core reports the flow running, then its end with the account.
     deliver(signedOut({ signIn: { phase: "running", instance: ORIGIN, flow: "browser", since: NOW } }));
@@ -330,20 +330,30 @@ describe("GROUPS: signing in (space-3, space-6, space-29)", () => {
     await waitFor(() => expect(document.activeElement).toBe(signOut));
   });
 
-  test("with no bridge, or one that refuses, the browser flow's page stands as a link to finish at", async () => {
-    await renderGroups(signedOut(), { open: false });
-    fireEvent.click(screen.getByTestId("space-signin"));
-    const link = (await screen.findByTestId("space-signin-link")) as HTMLAnchorElement;
-    expect(link.href).toBe("https://spex.example/login/app?client_id=spex&state=s");
-    expect(link.textContent).toBe("Open spex.example");
-    expect(screen.getByTestId("space-signin-finish").textContent).toBe("Continue in your browser·Open spex.example");
-    cleanup();
-    const openExternal = vi.fn<(url: string) => Promise<boolean>>().mockResolvedValue(false);
-    (window as { spexNative?: unknown }).spexNative = { pickDirectory: vi.fn(), openExternal };
-    await renderGroups(signedOut(), { open: false });
-    fireEvent.click(screen.getByTestId("space-signin"));
-    expect(((await screen.findByTestId("space-signin-link")) as HTMLAnchorElement).href).toContain("/login/app");
-  });
+  test.each(["absent", "opens", "refuses", "rejects"] as const)(
+    "space-66: the browser sign-in link keeps its native action when the bridge %s",
+    async (bridge) => {
+      const openExternal = vi.fn<(url: string) => Promise<boolean>>().mockImplementation(async () => {
+        if (bridge === "rejects") throw new Error("Could not open the browser");
+        return bridge === "opens";
+      });
+      if (bridge !== "absent") (window as { spexNative?: unknown }).spexNative = { openExternal };
+      await renderGroups(signedOut(), { open: false });
+      fireEvent.click(screen.getByTestId("space-signin"));
+      const link = (await screen.findByTestId("space-signin-link")) as HTMLAnchorElement;
+      const url = "https://spex.example/login/app?client_id=spex&state=s";
+      expect(link.href).toBe(url);
+      expect(link.target).toBe("_blank");
+      expect(link.rel).toBe("noreferrer");
+      expect(link.textContent).toBe("Open spex.example");
+      expect(screen.getByTestId("space-signin-finish").textContent).toBe("Continue in your browser·Open spex.example");
+      if (bridge !== "absent") expect(openExternal).toHaveBeenCalledExactlyOnceWith(url);
+      // A manual attempt must not be swallowed by another bridge call.
+      expect(fireEvent.click(link)).toBe(true);
+      expect(openExternal).toHaveBeenCalledTimes(bridge === "absent" ? 0 : 1);
+      expect(calls("space.signin.start")).toEqual([{ url: ORIGIN }]);
+    },
+  );
 
   test("Cancel stops the flow and Sign in stands again", async () => {
     await renderGroups(signedOut(), { open: false });

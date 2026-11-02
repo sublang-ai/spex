@@ -897,6 +897,10 @@ source; run source with `npm ci` and `npm start` (desktop) or
 
 ### Fixed
 
+- Registry sign-in opens the browser on a home with no Space account.
+  The manual sign-in link stays usable when automatic opening is refused
+  or fails, preserving the complete sign-in URL.
+
 - Published playbooks omit slc's generated verification tests and the
   compile-time FSM bundle, retaining the files needed to run, inspect
   and rebuild them.

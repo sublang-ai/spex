@@ -194,6 +194,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   setClientForTests(undefined);
+  delete (window as { spexNative?: unknown }).spexNative;
 });
 
 describe("playbook-library-94: each heading and its rows", () => {
@@ -1326,6 +1327,42 @@ describe("playbook-library-94: nothing waits on the core's other work", () => {
 });
 
 describe("playbook-library-119: each heading's registry and the account there", () => {
+  test.each(["absent", "opens", "refuses", "rejects"] as const)(
+    "playbook-library-120: registry browser sign-in needs no Space and its link keeps its native action when the bridge %s",
+    async (bridge) => {
+      const url = `${REGISTRY}/login/app?client_id=spex&state=registry-flow&redirect_uri=http%3A%2F%2F127.0.0.1%3A4311%2Fcallback`;
+      const openExternal = vi.fn<(url: string) => Promise<boolean>>().mockImplementation(async () => {
+        if (bridge === "rejects") throw new Error("Could not open the browser");
+        return bridge === "opens";
+      });
+      if (bridge !== "absent") (window as { spexNative?: unknown }).spexNative = { openExternal };
+      const base = commandMock.getMockImplementation()!;
+      commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) =>
+        type === "registry.signin.start" ? { flow: "browser", url } : base(type, params),
+      );
+      const space = home({ account: null });
+      await renderTab({ space, registryAccounts: { [REGISTRY]: account(false) } });
+      expect(space.instances).toEqual([]);
+      fireEvent.click(projectSection().getByTestId("registry-signin"));
+      const link = (await projectSection().findByTestId("registry-signin-link")) as HTMLAnchorElement;
+      expect(commandMock).toHaveBeenCalledWith("registry.signin.start", { origin: REGISTRY });
+      expect(link.href).toBe(url);
+      expect(link.target).toBe("_blank");
+      expect(link.rel).toBe("noreferrer");
+      expect(link.textContent).toBe("Open Spex Example");
+      expect(projectSection().getByTestId("registry-signin").textContent).toBe("Signing in…");
+      expect(projectSection().getByTestId("registry-signin")).toHaveProperty("disabled", true);
+      expect(projectSection().getByTestId("registry-cancel")).toBeTruthy();
+      if (bridge !== "absent") await vi.waitFor(() => expect(openExternal).toHaveBeenCalledExactlyOnceWith(url));
+      // The complete flow URL remains usable after a refused or failed
+      // automatic open, without passing the click through that bridge.
+      expect(fireEvent.click(link)).toBe(true);
+      expect(openExternal).toHaveBeenCalledTimes(bridge === "absent" ? 0 : 1);
+      expect(useAppStore.getState().space).toBe(space);
+      expect(commandMock).not.toHaveBeenCalledWith("space.signin.start", expect.anything());
+    },
+  );
+
   test("the chooser lists the public registry, the one spex.yaml names where that is another, and Other…, reading no directory", async () => {
     await renderBoth();
     const entries = () => [...projectSection().getByTestId("registry-chooser-menu").querySelectorAll("button")].map((entry) => entry.textContent);

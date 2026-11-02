@@ -247,8 +247,8 @@ async function main(): Promise<void> {
   };
 
   // Native bridge (DR-008): OS affordances only, one invoke channel
-  // each — the directory picker, the path reveal (DR-057), and the Git
-  // host's sign-in page opened in the system browser (DR-103).
+  // each — the directory picker, the path reveal (DR-057), and Space
+  // or registry sign-in opened in the system browser (DR-188).
   ipcMain.handle("spex:pick-directory", async () => {
     if (!window) return null;
     const result = await dialog.showOpenDialog(window, {
@@ -265,13 +265,12 @@ async function main(): Promise<void> {
     shell.showItemInFolder(target);
     return true;
   });
-  // An open hands the system browser a URL at the origin of an instance
-  // the home lists or is signing in to, read at the moment of the ask,
-  // and changes no state (app-shell-37, app-shell-20); any other URL, or
-  // one the OS fails to open, is false, and the page shows it as a link
-  // instead.
+  // Read the permitted origins at the ask: listed Spaces and running
+  // Space or registry sign-ins (app-shell-37, app-shell-20). A refused
+  // URL or an OS failure returns false. The page's ordinary continuation
+  // link remains usable independently of this automatic opener.
   ipcMain.handle("spex:open-external", (_event, requested: unknown) =>
-    openInstanceUrl(service?.instanceOrigins() ?? [], requested, (url) => shell.openExternal(url)),
+    openInstanceUrl(service?.externalSignInOrigins() ?? [], requested, (url) => shell.openExternal(url)),
   );
 
   window = new BrowserWindow({

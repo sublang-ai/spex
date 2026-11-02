@@ -2454,11 +2454,17 @@ export class CoreService {
     return this.authToken;
   }
 
-  /** The origins of every instance the home lists and of the one a
-   * running sign-in names: those whose sign-in pages a shell may open in
-   * the system browser (app-shell-37, app-shell-20). */
+  /** The origins of every Space the home lists and of the one a
+   * running Space sign-in names. Registry sign-ins create no Space. */
   instanceOrigins(): string[] {
     return this.space.instanceOrigins();
+  }
+
+  /** The shell's sign-in origins, read at each open request: listed
+   * Spaces and running Space or registry flows (app-shell-37). Each
+   * flow contributes only while it runs, without changing Space state. */
+  externalSignInOrigins(): string[] {
+    return [...new Set([...this.instanceOrigins(), ...this.registry.signInOrigins()])];
   }
 
   private async listen(port: number): Promise<void> {
