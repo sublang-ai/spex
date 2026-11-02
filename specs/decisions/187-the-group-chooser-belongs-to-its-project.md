@@ -9,6 +9,8 @@ Accepted (2026-11-02) on the owner's request to integrate the group chooser with
 Amends [DR-180](180-choose-a-group-before-adding.md) in the chooser's visual attachment and scale; destination selection, sharing review and explicit confirmation remain.
 Applies [DR-010](010-interface-craft.md)'s one visual grammar and [DR-041](041-chrome-that-fits.md)'s container fit to the existing inline form.
 
+Amended by [DR-188](188-consistent-inline-group-actions.md) in the shared attached presentation and opening and closing behavior of group-management panels.
+
 ## Context
 
 The group chooser was structurally inside its project row but looked like a separate elevated card.

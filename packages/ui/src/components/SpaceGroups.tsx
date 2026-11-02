@@ -118,6 +118,7 @@ import {
 import { AddInstance, InstanceSection } from "./SpaceInstance.js";
 import { GroupServers, InstanceServers } from "./SpaceServers.js";
 import { MembersPanel } from "./SpaceMembers.js";
+import { ATTACHED_OWNER, ATTACHED_PANEL } from "./SpacePanel.js";
 import { MenuButton, MoreMenu, type MenuEntry } from "./SpaceMenu.js";
 import { CombineConfirm, SharingConfirm, combineLabel, combiningLabel, continueLabel, entryName, placementGroupName } from "./SpacePlacements.js";
 import type { SignInFlow } from "./SpaceSignIn.js";
@@ -526,6 +527,8 @@ function GroupSection({
   const spaceGroupRestore = store((state) => state.spaceGroupRestore);
   const spaceGroupDeletionCheck = store((state) => state.spaceGroupDeletionCheck);
   const [opened, setOpened] = useState<"members" | "delete">();
+  const [membersPending, setMembersPending] = useState(false);
+  const [membersFocus, setMembersFocus] = useState(0);
   const [deleting, setDeleting] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [review, setReview] = useState<Awaited<ReturnType<AppState["spaceGroupDeletionCheck"]>>>();
@@ -558,7 +561,7 @@ function GroupSection({
   const Heading = local ? "h2" : "h3";
   const members = instance && group.login === null ? memberCount(instance, group) : null;
   const close = () => {
-    if (deletePending.current) return;
+    if (deletePending.current || membersPending) return;
     setOpened(undefined);
     setDeleteError(undefined);
     // Closing never strands focus (DR-010 §6).
@@ -657,14 +660,23 @@ function GroupSection({
           {
             label: i18n._({ id: "Members", comment: "list the people who read a project's records, or a group's members, at the Space" }),
             testId: `space-group-members-${group.fullPath}`,
-            onSelect: () => setOpened((was) => (was === "members" ? undefined : "members")),
+            onSelect: () => {
+              if (deletePending.current || membersPending) return;
+              if (opened === "members") setMembersFocus((value) => value + 1);
+              else setOpened("members");
+            },
           },
           ...(group.can.delete && !group.pendingDeletion ? [{
-            label: i18n._({ id: "Delete group…", comment: "a group's overflow action: check that the group is empty before confirming deletion" }),
+            label: i18n._({ id: "Delete group", comment: "a group's overflow action: review its contents and confirm deletion without entering more details" }),
             testId: `space-group-delete-${group.fullPath}`,
             disabled: deleteReason !== undefined,
             hint: deleteReason,
             onSelect: () => {
+              if (deletePending.current || membersPending) return;
+              if (opened === "delete") {
+                deleteCancelRef.current?.focus();
+                return;
+              }
               setDeleteError(undefined);
               setReview(undefined);
               setOpened("delete");
@@ -689,113 +701,118 @@ function GroupSection({
       {/* The name owns the slack; what stands beside it follows the
           separator in the secondary tone (space-1). Below @md the
           heading keeps its own row above its act (space-28). */}
-      <div className="flex min-w-0 flex-wrap items-center gap-1">
-        <Heading className="flex min-w-0 flex-1 basis-40 items-baseline gap-2 text-sm font-medium">
-          <span className="min-w-0 truncate" title={group.login === null && !local ? group.fullPath : name}>
-            {name}
-          </span>
-          {beside !== null ? " " : null}
-          {beside !== null ? (
-            <span
-              data-testid={`space-heading-beside-${testKey}`}
-              className="min-w-0 truncate text-xs font-normal text-neutral-500"
-              title={beside}
-            >
-              <span aria-hidden>· </span>
-              {beside}
+      <div data-testid={`space-group-panel-frame-${group.fullPath}`} className={`flex min-w-0 flex-col gap-2 ${opened ? ATTACHED_OWNER : ""}`}>
+        <div className={`flex min-w-0 flex-wrap items-center gap-1 ${opened ? "px-2 pt-1" : ""}`}>
+          <Heading className="flex min-w-0 flex-1 basis-40 items-baseline gap-2 text-sm font-medium">
+            <span className="min-w-0 truncate" title={group.login === null && !local ? group.fullPath : name}>
+              {name}
             </span>
-          ) : null}
-          {members !== null ? " " : null}
-          {members !== null ? (
-            <span data-testid={`space-group-count-${group.fullPath}`} className="shrink-0 text-xs font-normal text-neutral-500">
-              <span aria-hidden>· </span>
-              {i18n._("{count, plural, one {# member} other {# members}}", { count: members })}
-            </span>
-          ) : null}
-        </Heading>
-        <MoreMenu of={group.fullPath} testId={`space-group-more-${group.fullPath}`} buttonRef={moreRef} entries={entries} disabled={!connected || deleting || restoring} />
+            {beside !== null ? " " : null}
+            {beside !== null ? (
+              <span
+                data-testid={`space-heading-beside-${testKey}`}
+                className="min-w-0 truncate text-xs font-normal text-neutral-500"
+                title={beside}
+              >
+                <span aria-hidden>· </span>
+                {beside}
+              </span>
+            ) : null}
+            {members !== null ? " " : null}
+            {members !== null ? (
+              <span data-testid={`space-group-count-${group.fullPath}`} className="shrink-0 text-xs font-normal text-neutral-500">
+                <span aria-hidden>· </span>
+                {i18n._("{count, plural, one {# member} other {# members}}", { count: members })}
+              </span>
+            ) : null}
+          </Heading>
+          <MoreMenu of={group.fullPath} testId={`space-group-more-${group.fullPath}`} buttonRef={moreRef} entries={entries} disabled={!connected || deleting || restoring || membersPending} />
+        </div>
+        {group.pendingDeletion ? (
+          <div role="status" data-testid={`space-group-pending-${group.fullPath}`} className="mx-2 flex min-w-0 flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50/50 p-3 dark:border-amber-900 dark:bg-amber-950/20">
+            <div className="min-w-0 flex-1 basis-44">
+              <p className="text-sm font-medium">{i18n._("Scheduled for deletion")}</p>
+              <p className="mt-1 text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">{group.deletionRoot && group.deletionRoot !== group.fullPath
+                ? i18n._("An owner can restore {group} to keep this group.", { group: group.deletionRoot })
+                : group.can.restore ? i18n._("You can restore this group before deletion takes effect.")
+                  : i18n._("A group owner can restore it before deletion takes effect.")}</p>
+            </div>
+            {group.can.restore ? (
+              <button ref={restoreRef} type="button" className={SECONDARY} disabled={!connected || deleting || restoring} onClick={() => void restoreGroup()}>
+                {restoring ? i18n._("Restoring…") : i18n._("Restore group")}
+              </button>
+            ) : null}
+            {deleteError ? <p role="alert" className="w-full break-words text-xs text-red-600 dark:text-red-400">{deleteError}</p> : null}
+          </div>
+        ) : null}
+        {opened === "delete" && hostGroup !== null && instance ? (
+          <div
+            ref={deleteConfirmRef}
+            role="group"
+            aria-labelledby={deleteTitle}
+            aria-describedby={deleteDescription}
+            aria-busy={deleting}
+            data-testid={`space-group-delete-confirm-${group.fullPath}`}
+            className={`flex max-w-xl min-w-0 flex-col gap-3 ${ATTACHED_PANEL}`}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.stopPropagation();
+                close();
+              }
+            }}
+          >
+            <h4 id={deleteTitle} className="break-words text-sm font-medium">
+              {i18n._({ id: "Delete {group} at {space}?", values: { group: review?.group.name ?? name, space: instanceName(instance) }, comment: "group deletion confirmation naming exactly the group and its Space" })}
+            </h4>
+            <div id={deleteDescription} className="text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">
+              {checking ? <p role="status">{i18n._("Checking group contents…")}</p> : review ? review.contents.length > 0 ? (
+                <>
+                  <p>{i18n._("This group isn't empty. Remove these items before deleting it:")}</p>
+                  <ul className="mt-2 list-inside list-disc space-y-1 break-words">
+                    {review.contents.map((item, index) => <li key={`${item.kind}:${index}`}>{item.kind === "records"
+                      ? i18n._("Group sessions")
+                      : item.kind === "project" ? i18n._("Project: {name}", { name: item.name })
+                        : item.kind === "group" ? i18n._("Group: {name}", { name: item.name })
+                          : i18n._("Server: {name}", { name: item.name })}</li>)}
+                  </ul>
+                </>
+              ) : <p>{i18n._("This group is empty. Deleting it removes the group for all members.")}</p> : null}
+            </div>
+            {deleteReason ? <p className="text-xs text-neutral-600 dark:text-neutral-400">{deleteReason}</p> : null}
+            {deleteError ? <p role="alert" className="break-words text-xs text-red-600 dark:text-red-400">{deleteError}</p> : null}
+            <div className="flex flex-wrap justify-end gap-2">
+              {(deleteError || (review && review.contents.length > 0)) ? <button type="button" className={`${SECONDARY} mr-auto`} disabled={!connected || checking || deleting} onClick={() => { setDeleteError(undefined); setReviewAgain((value) => value + 1); }}>{i18n._("Check again")}</button> : null}
+              <button ref={deleteCancelRef} autoFocus type="button" className={SECONDARY} disabled={deleting} onClick={close}>
+                {i18n._("Cancel")}
+              </button>
+              <button
+                type="button"
+                className="min-h-7 rounded bg-red-600 px-3 py-1 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-red-700 dark:hover:bg-red-600"
+                disabled={!connected || deleting || checking || deleteReason !== undefined || !confirmed}
+                onClick={() => void removeGroup()}
+              >
+                {deleting ? i18n._({ id: "Deleting…", comment: "busy group deletion action" }) : i18n._({ id: "Delete group", comment: "confirm deletion of the named empty group" })}
+              </button>
+            </div>
+          </div>
+        ) : null}
+        {opened === "members" && hostGroup !== null && instance ? (
+          <MembersPanel
+            embedded
+            focusRequest={membersFocus}
+            onPendingChange={setMembersPending}
+            instance={instance}
+            target={{ instance: instance.origin, group: hostGroup }}
+            id={`group:${group.fullPath}`}
+            name={name}
+            canManage={group.can.manageMembers && !group.pendingDeletion}
+            connected={connected}
+            refreshes={refreshes}
+            onClose={close}
+            onNote={onNote}
+          />
+        ) : null}
       </div>
-      {group.pendingDeletion ? (
-        <div role="status" data-testid={`space-group-pending-${group.fullPath}`} className="mx-2 flex min-w-0 flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50/50 p-3 dark:border-amber-900 dark:bg-amber-950/20">
-          <div className="min-w-0 flex-1 basis-44">
-            <p className="text-sm font-medium">{i18n._("Scheduled for deletion")}</p>
-            <p className="mt-1 text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">{group.deletionRoot && group.deletionRoot !== group.fullPath
-              ? i18n._("An owner can restore {group} to keep this group.", { group: group.deletionRoot })
-              : group.can.restore ? i18n._("You can restore this group before deletion takes effect.")
-                : i18n._("A group owner can restore it before deletion takes effect.")}</p>
-          </div>
-          {group.can.restore ? (
-            <button ref={restoreRef} type="button" className={SECONDARY} disabled={!connected || deleting || restoring} onClick={() => void restoreGroup()}>
-              {restoring ? i18n._("Restoring…") : i18n._("Restore group")}
-            </button>
-          ) : null}
-          {deleteError ? <p role="alert" className="w-full break-words text-xs text-red-600 dark:text-red-400">{deleteError}</p> : null}
-        </div>
-      ) : null}
-      {opened === "delete" && hostGroup !== null && instance ? (
-        <div
-          ref={deleteConfirmRef}
-          role="group"
-          aria-labelledby={deleteTitle}
-          aria-describedby={deleteDescription}
-          aria-busy={deleting}
-          data-testid={`space-group-delete-confirm-${group.fullPath}`}
-          className="mx-2 flex max-w-lg min-w-0 flex-col gap-3 rounded-lg border border-red-200 bg-red-50/40 p-4 dark:border-red-900 dark:bg-red-950/20"
-          onKeyDown={(event) => {
-            if (event.key === "Escape") {
-              event.stopPropagation();
-              close();
-            }
-          }}
-        >
-          <h4 id={deleteTitle} className="break-words text-sm font-semibold">
-            {i18n._({ id: "Delete {group} at {space}?", values: { group: review?.group.name ?? name, space: instanceName(instance) }, comment: "group deletion confirmation naming exactly the group and its Space" })}
-          </h4>
-          <div id={deleteDescription} className="text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">
-            {checking ? <p role="status">{i18n._("Checking group contents…")}</p> : review ? review.contents.length > 0 ? (
-              <>
-                <p>{i18n._("This group isn't empty. Remove these items before deleting it:")}</p>
-                <ul className="mt-2 list-inside list-disc space-y-1 break-words">
-                  {review.contents.map((item, index) => <li key={`${item.kind}:${index}`}>{item.kind === "records"
-                    ? i18n._("Group sessions")
-                    : item.kind === "project" ? i18n._("Project: {name}", { name: item.name })
-                      : item.kind === "group" ? i18n._("Group: {name}", { name: item.name })
-                        : i18n._("Server: {name}", { name: item.name })}</li>)}
-                </ul>
-              </>
-            ) : <p>{i18n._("This group is empty. Deleting it removes the group for all members.")}</p> : null}
-          </div>
-          {deleteReason ? <p className="text-xs text-neutral-600 dark:text-neutral-400">{deleteReason}</p> : null}
-          {deleteError ? <p role="alert" className="break-words text-xs text-red-600 dark:text-red-400">{deleteError}</p> : null}
-          <div className="flex flex-wrap justify-end gap-2">
-            {(deleteError || (review && review.contents.length > 0)) ? <button type="button" className={`${SECONDARY} mr-auto`} disabled={!connected || checking || deleting} onClick={() => { setDeleteError(undefined); setReviewAgain((value) => value + 1); }}>{i18n._("Check again")}</button> : null}
-            <button ref={deleteCancelRef} autoFocus type="button" className={SECONDARY} disabled={deleting} onClick={close}>
-              {i18n._("Cancel")}
-            </button>
-            <button
-              type="button"
-              className="min-h-7 rounded bg-red-600 px-3 py-1 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-red-700 dark:hover:bg-red-600"
-              disabled={!connected || deleting || checking || deleteReason !== undefined || !confirmed}
-              onClick={() => void removeGroup()}
-            >
-              {deleting ? i18n._({ id: "Deleting…", comment: "busy group deletion action" }) : i18n._({ id: "Delete group", comment: "confirm deletion of the named empty group" })}
-            </button>
-          </div>
-        </div>
-      ) : null}
-      {opened === "members" && hostGroup !== null && instance ? (
-        <MembersPanel
-          instance={instance}
-          target={{ instance: instance.origin, group: hostGroup }}
-          id={`group:${group.fullPath}`}
-          name={name}
-          canManage={group.can.manageMembers && !group.pendingDeletion}
-          connected={connected}
-          refreshes={refreshes}
-          onClose={close}
-          onNote={onNote}
-        />
-      ) : null}
       {lines}
       {rows.length > 0 || placed.length > 0 ? (
         <ul className="flex min-w-0 flex-col gap-0.5">
@@ -901,6 +918,9 @@ function RepositoryRow({
   const isSelected = selected === repo.key;
   const [opened, setOpened] = useState<Opened>();
   const [pickerPending, setPickerPending] = useState(false);
+  const [membersPending, setMembersPending] = useState(false);
+  const [pickerFocus, setPickerFocus] = useState(0);
+  const [membersFocus, setMembersFocus] = useState(0);
   const pickerId = useId();
   // What runs from this row: a sync — asked plainly, as a combining, or
   // as a retry — an open, or a read of the Spaces.
@@ -932,6 +952,13 @@ function RepositoryRow({
   const governing = governingOf(groups, repo);
   const groupRepository = isGroupRepository(group, repo);
   const name = rowName(group, repo);
+  const openTask = (task: "pick" | "members") => {
+    if (pickerPending || membersPending) return;
+    if (opened === task) {
+      if (task === "pick") setPickerFocus((value) => value + 1);
+      else setMembersFocus((value) => value + 1);
+    } else setOpened(task);
+  };
   const close = (focus: "primary" | "more" | "act" = "more") => {
     setOpened(undefined);
     // Closing never strands focus (DR-010 §6): a control gone or busy
@@ -1092,7 +1119,7 @@ function RepositoryRow({
     }
   };
 
-  const disabled = !connected || pickerPending;
+  const disabled = !connected || pickerPending || membersPending;
   const working = busy !== undefined || accepted !== undefined || running;
   const readOnly = repo.state === "read-only";
   const here = cloneHere(repo);
@@ -1273,7 +1300,7 @@ function RepositoryRow({
           aria-controls={opened === "pick" ? pickerId : undefined}
           title={signedOut ? signInFirstLabel() : undefined}
           disabled={disabled || signedOut}
-          onClick={() => setOpened((was) => (was === "pick" ? undefined : "pick"))}
+          onClick={() => openTask("pick")}
         >
           {addToGroupLabel()}
         </button>
@@ -1386,7 +1413,7 @@ function RepositoryRow({
     more.push({
       label: i18n._({ id: "Members", comment: "list the people who read a project's records, or a group's members, at the Space" }),
       testId: `space-row-members-${repo.key}`,
-      onSelect: () => setOpened("members"),
+      onSelect: () => openTask("members"),
     });
   }
   // Your own sessions on this computer alone carry no control (space-1).
@@ -1401,7 +1428,7 @@ function RepositoryRow({
     more.push({
       label: addToGroupLabel(),
       testId: `space-row-pick-${repo.key}`,
-      onSelect: () => setOpened("pick"),
+      onSelect: () => openTask("pick"),
     });
   }
 
@@ -1465,8 +1492,8 @@ function RepositoryRow({
 
   return (
     <li data-testid={`space-row-${repo.key}`} data-state={repo.state}
-      className={`@container flex min-w-0 flex-col gap-1 ${opened === "pick"
-        ? "rounded-md border-l-2 border-brand-300 bg-neutral-100/60 dark:border-brand-700 dark:bg-neutral-900/60"
+      className={`@container flex min-w-0 flex-col gap-1 ${opened === "pick" || opened === "members"
+        ? ATTACHED_OWNER
         : ""}`}>
       {/* The name owns the slack; below @xs the row's controls wrap
           beneath it, its primary control and overflow last (space-28,
@@ -1602,11 +1629,14 @@ function RepositoryRow({
         </div>
       ) : null}
       {opened === "pick" ? (
-        <GroupPicker id={pickerId} embedded groups={groups} repo={repo} connected={connected}
+        <GroupPicker id={pickerId} embedded focusRequest={pickerFocus} groups={groups} repo={repo} connected={connected}
           onClose={() => close(pickInMore ? "more" : "primary")} onNote={onNote} onPendingChange={setPickerPending} />
       ) : null}
       {opened === "members" && showMembers && keyGoverning && keyLine?.instance ? (
         <MembersPanel
+          embedded
+          focusRequest={membersFocus}
+          onPendingChange={setMembersPending}
           instance={keyGoverning}
           target={{ repository: repo.key, instance: keyLine.instance }}
           id={`${repo.key}@${keyLine.instance}`}
@@ -1773,10 +1803,11 @@ interface PickSection {
  * Reading and selecting never mutate the project. The current Space's
  * destinations are resolved again on every render, so a removed group
  * or signed-out Space cannot leave an actionable stale selection. */
-export function GroupPicker({ id, embedded = false, groups, repo, connected, onClose, onNote, onPendingChange }: {
+export function GroupPicker({ id, embedded = false, focusRequest, groups, repo, connected, onClose, onNote, onPendingChange }: {
   /** The row opener's controlled form; the palette owns its own dialog. */
   id?: string;
   embedded?: boolean;
+  focusRequest?: number;
   groups: GroupsState;
   repo: RepositoryState;
   connected: boolean;
@@ -1817,8 +1848,9 @@ export function GroupPicker({ id, embedded = false, groups, repo, connected, onC
   const title = i18n._({ id: "Add {name} to a group", values: { name: project }, comment: "visible heading of the local project's destination form" });
 
   useEffect(() => {
-    pickerRef.current?.querySelector<HTMLElement>("select, input, button")?.focus();
-  }, []);
+    const panel = pickerRef.current;
+    (panel?.querySelector<HTMLElement>("input:checked") ?? panel?.querySelector<HTMLElement>("select, input, button"))?.focus();
+  }, [focusRequest]);
   useLayoutEffect(() => {
     if (busy) pickerRef.current?.focus();
     if (!busy && refocus.current) {
@@ -1884,7 +1916,7 @@ export function GroupPicker({ id, embedded = false, groups, repo, connected, onC
     <div id={id} ref={pickerRef} tabIndex={-1} role="group" aria-labelledby={ids + "-title"} aria-busy={busy}
       data-testid={"space-picker-" + repo.key}
       className={`flex min-w-0 max-w-xl flex-col gap-3 ${embedded
-        ? "mx-2 mb-2 border-t border-neutral-200 pt-3 dark:border-neutral-800"
+        ? ATTACHED_PANEL
         : "p-3"}`}
       onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
         if (event.key === "Escape") {

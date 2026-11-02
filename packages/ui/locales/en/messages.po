@@ -2129,6 +2129,11 @@ msgstr "Clear the search (Escape)"
 msgid "client not connected"
 msgstr "client not connected"
 
+#. close the members panel and return to its opener
+#: src/components/SpaceMembers.tsx
+msgid "Close"
+msgstr "Close"
+
 #: src/lib/shortcuts.ts
 msgid "Close the focused session tab"
 msgstr "Close the focused session tab"
@@ -2791,15 +2796,11 @@ msgstr "Delete authoring session {id}"
 msgid "delete failed"
 msgstr "delete failed"
 
+#. a group's overflow action: review its contents and confirm deletion without entering more details
 #. confirm deletion of the named empty group
 #: src/components/SpaceGroups.tsx
 msgid "Delete group"
 msgstr "Delete group"
-
-#. a group's overflow action: check that the group is empty before confirming deletion
-#: src/components/SpaceGroups.tsx
-msgid "Delete group…"
-msgstr "Delete group…"
 
 #: src/components/NavRail.tsx
 msgid "Delete session {title}"
@@ -4002,8 +4003,8 @@ msgstr "Invalid: {reason}"
 
 #. open the form to add people to this group or project's records
 #: src/components/SpaceMembers.tsx
-msgid "Invite members"
-msgstr "Invite members"
+msgid "Invite members…"
+msgstr "Invite members…"
 
 #: src/components/SpaceMembers.tsx
 msgid "Invite to {name}"
@@ -4479,10 +4480,10 @@ msgstr "new"
 msgid "New folder path"
 msgstr "New folder path"
 
-#. create a group at the root of the Space whose heading carries it
+#. open the name and path editor for a group at this Space
 #: src/components/SpaceInstance.tsx
-msgid "New group"
-msgstr "New group"
+msgid "New group…"
+msgstr "New group…"
 
 #. start writing a playbook of one's own
 #. start writing a playbook of one's own

@@ -22,11 +22,12 @@ import { i18n } from "../i18n.js";
 import { instanceName } from "../lib/instances.js";
 import { nameList } from "../lib/placements.js";
 import { InlineConfirm } from "./InlineConfirm.js";
+import { ATTACHED_PANEL } from "./SpacePanel.js";
 import { PRIMARY, SECONDARY, type Note } from "./SpaceSurface.js";
 
 const EDITOR = "flex min-w-0 flex-col gap-1 rounded border border-neutral-300 p-2 dark:border-neutral-700";
 const FIELD =
-  "min-w-0 flex-1 rounded border border-neutral-300 bg-white px-1.5 py-0.5 text-xs dark:border-neutral-700 dark:bg-neutral-900";
+  "min-w-0 flex-1 rounded border border-neutral-300 bg-white px-1.5 py-0.5 text-sm dark:border-neutral-700 dark:bg-neutral-900";
 const REFUSAL = "min-w-0 text-xs text-red-600 dark:text-red-400";
 
 /** Focus a control once the editor or confirm that stood in its place
@@ -60,6 +61,8 @@ export function GroupNameEditor({
   connected,
   onClose,
   onNote,
+  focusRequest,
+  onPendingChange,
 }: {
   testId: string;
   /** The Space, by its origin, the group is made at (space-68). */
@@ -70,6 +73,8 @@ export function GroupNameEditor({
   /** Close the editor; the caller returns focus to its control. */
   onClose(): void;
   onNote: Note;
+  focusRequest?: number;
+  onPendingChange?(pending: boolean): void;
 }) {
   const store = usePlaceStore();
   const spaceGroupCreate = store((state) => state.spaceGroupCreate);
@@ -83,7 +88,7 @@ export function GroupNameEditor({
   const inFlight = useRef(false);
   useEffect(() => {
     fieldRef.current?.focus();
-  }, []);
+  }, [focusRequest]);
 
   const chosen = name.trim();
   const chosenPath = path.trim();
@@ -91,6 +96,7 @@ export function GroupNameEditor({
     if (!chosen || !chosenPath || inFlight.current) return;
     inFlight.current = true;
     setBusy(true);
+    onPendingChange?.(true);
     setRefusal(undefined);
     try {
       await spaceGroupCreate(instance, chosen, chosenPath, parent);
@@ -103,6 +109,7 @@ export function GroupNameEditor({
     } finally {
       inFlight.current = false;
       setBusy(false);
+      onPendingChange?.(false);
     }
   };
 
@@ -160,11 +167,15 @@ export function GroupNameEditor({
           className={FIELD}
         />
       </label>
-      <div className="flex flex-wrap items-center gap-2">
+      {refusal ? <p role="alert" className={REFUSAL}>{refusal}</p> : null}
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <button type="button" data-testid={`${testId}-cancel`} className={SECONDARY} disabled={busy} onClick={onClose}>
+          {i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}
+        </button>
         <button
           type="button"
           data-testid={`${testId}-create`}
-          className={SECONDARY}
+          className={PRIMARY}
           disabled={!connected || busy || !chosen || !chosenPath}
           onClick={() => void submit()}
         >
@@ -172,14 +183,6 @@ export function GroupNameEditor({
             ? i18n._({ id: "Creating…", comment: "the Create control, while the Space creates the group" })
             : i18n._({ id: "Create", comment: "create the group named in the field at the Space" })}
         </button>
-        <button type="button" data-testid={`${testId}-cancel`} className={SECONDARY} disabled={busy} onClick={onClose}>
-          {i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}
-        </button>
-        {refusal ? (
-          <span role="alert" className={REFUSAL}>
-            {refusal}
-          </span>
-        ) : null}
       </div>
     </div>
   );
@@ -204,6 +207,9 @@ export function MembersPanel({
   refreshes,
   onClose,
   onNote,
+  embedded = false,
+  focusRequest,
+  onPendingChange,
 }: {
   /** The Space that lists the group or governs the records: its roles
    * and its display name (space-69). */
@@ -224,6 +230,9 @@ export function MembersPanel({
   refreshes: number;
   onClose(): void;
   onNote: Note;
+  embedded?: boolean;
+  focusRequest?: number;
+  onPendingChange?(pending: boolean): void;
 }) {
   const store = usePlaceStore();
   const spaceMembers = store((state) => state.spaceMembers);
@@ -233,6 +242,8 @@ export function MembersPanel({
   const [sharing, setSharing] = useState(false);
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState(false);
+  const [inviteFocus, setInviteFocus] = useState(0);
+  const panelRef = useRef<HTMLElement>(null);
   const shareRef = useRef<HTMLButtonElement>(null);
   const editorId = useId();
   // A read a share or a removal overtook is discarded: the reply after
@@ -240,6 +251,10 @@ export function MembersPanel({
   const reads = useRef(0);
   const targetKey =
     "group" in target ? `group:${target.instance} ${target.group}` : `repository:${target.repository}@${target.instance ?? ""}`;
+
+  useEffect(() => { panelRef.current?.focus(); }, [focusRequest]);
+  useEffect(() => { onPendingChange?.(adding || removing); }, [adding, removing, onPendingChange]);
+  useEffect(() => () => { onPendingChange?.(false); }, [onPendingChange]);
 
   useEffect(() => {
     const read = (reads.current += 1);
@@ -272,9 +287,11 @@ export function MembersPanel({
 
   return (
     <section
+      ref={panelRef}
+      tabIndex={-1}
       data-testid={`space-members-${id}`}
       aria-label={i18n._("Members of {name}", { name })}
-      className="@container flex min-w-0 flex-col gap-3 rounded-lg border border-neutral-200 bg-white/50 p-3 text-sm dark:border-neutral-800 dark:bg-neutral-900/40"
+      className={`@container flex min-w-0 max-w-xl flex-col gap-3 text-sm ${embedded ? ATTACHED_PANEL : "p-3"}`}
       onKeyDown={(event) => {
         if (event.key === "Escape") {
           event.stopPropagation();
@@ -291,23 +308,32 @@ export function MembersPanel({
             </p>
           ) : null}
         </div>
-        {canManage ? (
-          <button
-            ref={shareRef}
-            type="button"
-            data-testid={`space-share-${id}`}
-            aria-expanded={sharing}
-            aria-controls={sharing ? editorId : undefined}
-            className={`${SECONDARY} shrink-0 px-2.5 py-1.5`}
-            disabled={!connected || sharing || removing}
-            onClick={() => {
-              setOutcome(undefined);
-              setSharing(true);
-            }}
-          >
-            {i18n._({ id: "Invite members", comment: "open the form to add people to this group or project's records" })}
+        <div className="flex flex-wrap items-center gap-2">
+          {canManage ? (
+            <button
+              ref={shareRef}
+              type="button"
+              data-testid={`space-share-${id}`}
+              aria-expanded={sharing}
+              aria-controls={sharing ? editorId : undefined}
+              className={`${SECONDARY} shrink-0`}
+              disabled={!connected || adding || removing}
+              onClick={() => {
+                if (sharing) {
+                  setInviteFocus((value) => value + 1);
+                  return;
+                }
+                setOutcome(undefined);
+                setSharing(true);
+              }}
+            >
+              {i18n._({ id: "Invite members…", comment: "open the form to add people to this group or project's records" })}
+            </button>
+          ) : null}
+          <button type="button" data-testid={`space-members-close-${id}`} className={SECONDARY} disabled={adding || removing} onClick={onClose}>
+            {i18n._({ id: "Close", comment: "close the members panel and return to its opener" })}
           </button>
-        ) : null}
+        </div>
       </header>
       {alsoPlacedAt.length > 0 ? (
         // Every Space's members see that the records are kept elsewhere
@@ -327,6 +353,7 @@ export function MembersPanel({
           id={id}
           name={name}
           editorId={editorId}
+          focusRequest={inviteFocus}
           connected={connected && !removing}
           onBusy={setAdding}
           onMembers={(reply) => {
@@ -375,7 +402,7 @@ export function MembersPanel({
                 onRemoved={(reply) => {
                   answered(reply, i18n._("@{login} removed", { login: member.login }));
                   // The row is gone; focus stays in the panel.
-                  focusLater(shareRef);
+                  setTimeout(() => (shareRef.current ?? panelRef.current)?.focus(), 0);
                 }}
                 onNote={onNote}
               />
@@ -541,6 +568,7 @@ function InviteEditor({
   id,
   name,
   editorId,
+  focusRequest,
   connected,
   onBusy,
   onMembers,
@@ -552,6 +580,7 @@ function InviteEditor({
   id: string;
   name: string;
   editorId: string;
+  focusRequest?: number;
   connected: boolean;
   onBusy(busy: boolean): void;
   onMembers(reply: SpaceMembersReply): void;
@@ -581,6 +610,7 @@ function InviteEditor({
       onBusy(false);
     };
   }, [onBusy]);
+  useEffect(() => { fieldRef.current?.focus(); }, [focusRequest]);
 
   const chosen = [...new Set([...recipients, ...usernames(draft)])];
   const commit = (text: string) => {
@@ -652,7 +682,7 @@ function InviteEditor({
       data-testid={`space-share-${id}-editor`}
       aria-labelledby={`${editorId}-title`}
       aria-busy={busy}
-      className="flex w-full min-w-0 max-w-xl flex-col gap-4 rounded-lg border border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-700 dark:bg-neutral-900"
+      className="flex w-full min-w-0 max-w-xl flex-col gap-3 border-l-2 border-neutral-200 pl-3 dark:border-neutral-700"
       onSubmit={(event) => {
         event.preventDefault();
         void submit();
@@ -664,7 +694,7 @@ function InviteEditor({
       }}
     >
       <div className="min-w-0">
-        <h5 id={`${editorId}-title`} className="break-words text-sm font-semibold">
+        <h5 id={`${editorId}-title`} className="break-words text-sm font-medium">
           {i18n._("Invite to {name}", { name })}
         </h5>
         <p className="mt-1 text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">
@@ -739,7 +769,7 @@ function InviteEditor({
           value={role}
           onChange={(event) => setRole(event.target.value)}
           disabled={busy || roles.length === 0}
-          className={`${FIELD} w-full px-3 py-2 text-sm`}
+          className={`${FIELD} w-full px-2 py-1`}
         >
           {!selectedRole ? <option value="">{i18n._("Choose a role")}</option> : null}
           {roles.map((entry) => (
@@ -763,7 +793,10 @@ function InviteEditor({
       <div className="flex min-w-0 flex-col gap-2 border-t border-neutral-200 pt-3 dark:border-neutral-700">
         <p className="text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">{i18n._("Access starts immediately when you add them.")}</p>
         {progress ? <p role="status" className="text-xs text-neutral-600 dark:text-neutral-400">{i18n._("Adding {current} of {total}…", progress)}</p> : null}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <button type="button" data-testid={`space-share-${id}-cancel`} className={SECONDARY} disabled={busy} onClick={onClose}>
+            {i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}
+          </button>
           <button
             type="submit"
             data-testid={`space-share-${id}-add`}
@@ -772,9 +805,6 @@ function InviteEditor({
           >
             {busy ? i18n._({ id: "Adding…", comment: "the members are being added at the Space" }) : chosen.length > 1
               ? i18n._("Add members") : i18n._({ id: "Add member", comment: "immediately give this account the selected access" })}
-          </button>
-          <button type="button" data-testid={`space-share-${id}-cancel`} className={`${SECONDARY} px-3 py-1.5`} disabled={busy} onClick={onClose}>
-            {i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}
           </button>
         </div>
       </div>

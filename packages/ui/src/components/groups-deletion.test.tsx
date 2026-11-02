@@ -28,7 +28,7 @@ function menu(path = "scratch") {
   return within(screen.getByTestId(`space-group-more-${path}-menu`));
 }
 async function confirm() {
-  fireEvent.click(menu().getByRole("menuitem", { name: "Delete group…" }));
+  fireEvent.click(menu().getByRole("menuitem", { name: "Delete group" }));
   const panel = await screen.findByTestId("space-group-delete-confirm-scratch");
   await waitFor(() => expect(within(panel).queryByText("Checking group contents…")).toBeNull());
   return panel;
@@ -36,7 +36,7 @@ async function confirm() {
 
 test("permission controls the action, and a personal namespace never offers it", async () => {
   await renderGroups(withInstance(home(emptyGroup()), { groups: [{ ...namespace("jane"), can: emptyGroup().can }, emptyGroup({ can: { ...emptyGroup().can, delete: false } })] }), { open: false });
-  expect(menu().queryByRole("menuitem", { name: "Delete group…" })).toBeNull();
+  expect(menu().queryByRole("menuitem", { name: "Delete group" })).toBeNull();
   expect(screen.queryByTestId("space-group-more-jane")).toBeNull();
   expect(calls("space.group.deletionCheck")).toEqual([]);
 });
@@ -45,7 +45,7 @@ test("fresh review gates deletion; Owner membership and stale cached rows do not
   let resolve!: (value: unknown) => void;
   commandMock.mockImplementation((type, fields) => type === "space.group.deletionCheck" ? new Promise((yes) => { resolve = yes; }) : respond(type, fields));
   await renderGroups(home(emptyGroup({ repositories: [repo({ key: "@spex.example/scratch/old-spex", name: "old-spex" })], placed: [{ key: "@old.example/scratch/old-spex", name: "old-spex" }] })), { open: false });
-  fireEvent.click(menu().getByRole("menuitem", { name: "Delete group…" }));
+  fireEvent.click(menu().getByRole("menuitem", { name: "Delete group" }));
   const panel = screen.getByTestId("space-group-delete-confirm-scratch");
   expect(panel.textContent).toContain("Checking group contents…");
   expect((within(panel).getByRole("button", { name: "Delete group" }) as HTMLButtonElement).disabled).toBe(true);
@@ -82,6 +82,24 @@ test("confirmation names the reviewed group and Space; Cancel and Escape return 
   fireEvent.click(within(panel).getByRole("button", { name: "Cancel" }));
   expect(screen.queryByTestId("space-group-delete-confirm-scratch")).toBeNull();
   expect(calls("space.group.delete")).toEqual([]);
+});
+
+test.each([false, true])("repeating Delete focuses the same review without clearing its result or error (refused: %s)", async (refused) => {
+  commandMock.mockImplementation((type, fields) => type === "space.group.deletionCheck"
+    ? refused ? Promise.reject(new Error("Contents could not be checked")) : Promise.resolve(emptyReview)
+    : respond(type, fields));
+  await renderGroups(home(emptyGroup()), { open: false });
+  const panel = await confirm();
+  const before = panel.textContent;
+  fireEvent.click(menu().getByRole("menuitem", { name: "Delete group" }));
+  expect(screen.getByTestId("space-group-delete-confirm-scratch")).toBe(panel);
+  expect(panel.textContent).toBe(before);
+  expect(calls("space.group.deletionCheck")).toHaveLength(1);
+  expect(document.activeElement).toBe(within(panel).getByRole("button", { name: "Cancel" }));
+  fireEvent.click(within(panel).getByRole("button", { name: "Cancel" }));
+  await confirm();
+  expect(calls("space.group.deletionCheck")).toHaveLength(2);
+  expect(calls("space.group.delete")).toHaveLength(0);
 });
 
 test("one deletion sends the reviewed path; a race refusal keeps the group and lets the owner recheck", async () => {
@@ -126,7 +144,7 @@ test("a failed review can be retried; cancelling discards a late review", async 
   let resolve!: (value: unknown) => void;
   commandMock.mockImplementation((type, fields) => type === "space.group.deletionCheck" ? new Promise((yes, no) => { resolve = yes; reject = no; }) : respond(type, fields));
   await renderGroups(home(emptyGroup()), { open: false });
-  fireEvent.click(menu().getByRole("menuitem", { name: "Delete group…" }));
+  fireEvent.click(menu().getByRole("menuitem", { name: "Delete group" }));
   const panel = screen.getByTestId("space-group-delete-confirm-scratch");
   reject(new Error("The Space could not be reached."));
   await waitFor(() => expect(within(panel).getByRole("alert").textContent).toBe("The Space could not be reached."));
@@ -153,7 +171,7 @@ test("an empty group's scheduled deletion stays visible and can be restored with
   const banner = screen.getByTestId("space-group-pending-scratch");
   expect(banner.textContent).toContain("Scheduled for deletion");
   await waitFor(() => expect(document.activeElement).toBe(within(banner).getByRole("button", { name: "Restore group" })));
-  expect(menu().queryByRole("menuitem", { name: "Delete group…" })).toBeNull();
+  expect(menu().queryByRole("menuitem", { name: "Delete group" })).toBeNull();
   fireEvent.keyDown(window, { key: "Escape" });
   const restore = within(banner).getByRole("button", { name: "Restore group" });
   restore.focus();

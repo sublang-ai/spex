@@ -980,6 +980,10 @@ describe("GROUPS: Add to a group… (space-58, space-29)", () => {
     open();
     const team = selected("space-pick-group-acme/team");
     fireEvent.click(team);
+    const openedPicker = picker();
+    open();
+    expect(picker()).toBe(openedPicker);
+    expect(document.activeElement).toBe(team);
     expect(team.checked).toBe(true);
     expect(submit().disabled).toBe(false);
     expect(calls("space.pick")).toEqual([]);
@@ -1062,6 +1066,10 @@ describe("GROUPS: Add to a group… (space-58, space-29)", () => {
     expect(submit().disabled).toBe(false);
     expect(opener.disabled).toBe(false);
     expect(more.disabled).toBe(false);
+    open();
+    expect(within(picker()).getByRole("alert").textContent).toBe("academy is taken in Personal");
+    expect(selected("space-pick-group-@jane").checked).toBe(true);
+    expect(document.activeElement).toBe(selected("space-pick-group-@jane"));
     commandMock.mockImplementation(answer);
     fireEvent.click(submit());
     await waitFor(() => expect(screen.queryByTestId(`space-picker-${KEY}`)).toBeNull());
@@ -1311,7 +1319,7 @@ describe("GROUPS: the instance's entries (space-1, space-58, space-61, DR-120)",
     fireEvent.click(within(lineAt("@spex.example/bob/notes-spex")).getByTestId("space-line-members"));
     const members = await screen.findByTestId(`space-members-@spex.example/bob/notes-spex@${ORIGIN}`);
     await within(members).findByTestId("space-member-jane");
-    expect(within(members).getByTestId(`space-share-@spex.example/bob/notes-spex@${ORIGIN}`).textContent).toBe("Invite members");
+    expect(within(members).getByTestId(`space-share-@spex.example/bob/notes-spex@${ORIGIN}`).textContent).toBe("Invite members…");
     // The group named like your login: its own entry, its row
     // unreachable with the cause, Retry its one control (space-61).
     const apart = screen.getByTestId("space-group-jane");
