@@ -24,46 +24,40 @@ env:
   ELECTRON_SKIP_BINARY_DOWNLOAD: 1
 
 jobs:
-  # What a pull request changed (release-34, DR-166): documentation
-  # alone -- docs/, specs/ and Markdown -- keeps the spec gates here,
-  # the CLI's own tests and the spec lint, and the suites below are
-  # skipped, a stand-in reporting their required names (DR-169); any
-  # other change runs them. A push to main and the nightly schedule run
-  # everything. This job is a required check, so a failure here blocks
-  # the merge rather than skipping the suites past it.
+  # The reach of a pull request's change (release-34, DR-166, DR-185):
+  # documentation alone -- docs/, specs/ and Markdown outside the
+  # workspaces -- keeps the spec
+  # gates here, the CLI's own tests and the spec lint, and the suites
+  # below are skipped, a stand-in reporting their required names
+  # (DR-169); any other change names what it reaches -- all for a path
+  # outside every workspace, else the changed workspaces and their
+  # dependents -- and the test job runs those suites alone. A push to
+  # main and the nightly schedule reach everything. This job is a
+  # required check, so a failure here blocks the merge rather than
+  # skipping the suites past it.
   changes:
     runs-on: ubuntu-latest
     outputs:
       docs-only: ${{ steps.classify.outputs.docs-only }}
+      affected: ${{ steps.classify.outputs.affected }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - id: classify
-        shell: bash
-        run: |
-          docs_only=false
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            changed="$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")"
-            if [ -n "$changed" ]; then
-              docs_only=true
-              while IFS= read -r file; do
-                case "$file" in
-                  docs/*|specs/*|*.md) ;;
-                  *) docs_only=false ;;
-                esac
-              done <<< "$changed"
-            fi
-          fi
-          echo "docs-only=$docs_only" >> "$GITHUB_OUTPUT"
-          echo "docs-only=$docs_only"
-
       - uses: actions/setup-node@v4
-        if: steps.classify.outputs.docs-only == 'true'
         with:
           node-version: 22
           cache: npm
+
+      - id: classify
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            node scripts/affected-tests.mjs --base "origin/${{ github.base_ref }}" --github-output | tee -a "$GITHUB_OUTPUT"
+          else
+            printf '%s\n' docs-only=false affected=all | tee -a "$GITHUB_OUTPUT"
+          fi
 
       - name: Documentation alone keeps the spec gates
         if: steps.classify.outputs.docs-only == 'true'
@@ -88,9 +82,10 @@ jobs:
         # them by the workflow audit.
         check:
           - test (ubuntu-latest, 22)
-          - test (ubuntu-latest, 24)
           - test (windows-latest, 22)
-          - journeys (ubuntu-latest)
+          - journeys (ubuntu-latest, 1)
+          - journeys (ubuntu-latest, 2)
+          - journeys (ubuntu-latest, 3)
           - desktop-browser (ubuntu-latest)
     name: ${{ matrix.check }}
     runs-on: ubuntu-latest
@@ -111,10 +106,10 @@ jobs:
         # Windows keeps the single Node whose better-sqlite3 win32 prebuild
         # the lockfile is known to resolve: a source build there trips
         # node-gyp's VS detection. A pull request runs Linux and Windows
-        # alone -- the macOS test job took an hour, twice the Linux one;
-        # main and the nightly run take the full matrix (release-34,
-        # DR-145, DR-166).
-        exclude: ${{ github.event_name == 'pull_request' && fromJSON('[{"os":"windows-latest","node-version":24},{"os":"macos-latest","node-version":22},{"os":"macos-latest","node-version":24}]') || fromJSON('[{"os":"windows-latest","node-version":24}]') }}
+        # alone, on Node 22 alone -- the macOS test job took an hour, twice
+        # the Linux one; main and the nightly run take the full matrix
+        # (release-34, DR-145, DR-166, DR-185).
+        exclude: ${{ github.event_name == 'pull_request' && fromJSON('[{"os":"windows-latest","node-version":24},{"os":"macos-latest","node-version":22},{"os":"macos-latest","node-version":24},{"os":"ubuntu-latest","node-version":24}]') || fromJSON('[{"os":"windows-latest","node-version":24}]') }}
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -136,26 +131,31 @@ jobs:
         if: runner.os != 'Windows'
         run: git lfs version
 
-      - name: Complete app and scaffold tests
+      # The script tests, then the suites the change reaches: every
+      # workspace's for all, else each reached workspace's (release-34,
+      # DR-185).
+      - name: Tests the change reaches
         if: runner.os != 'Windows'
-        run: npm test
+        run: node scripts/affected-tests.mjs --run "${{ needs.changes.outputs.affected }}"
 
+      # Each Windows suite runs where the change reaches its workspace.
       - name: Windows scaffold tests
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && (needs.changes.outputs.affected == 'all' || contains(needs.changes.outputs.affected, 'packages/cli'))
         run: npm test -w packages/cli
 
       - name: Windows UI tests
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && (needs.changes.outputs.affected == 'all' || contains(needs.changes.outputs.affected, 'packages/ui'))
         run: npm test -w packages/ui
 
       - name: Windows native storage and unsupported-host refusal
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && (needs.changes.outputs.affected == 'all' || contains(needs.changes.outputs.affected, 'packages/core'))
         run: node --test packages/core/dist/platform.integration.test.js packages/core/dist/windows-storage.integration.test.js
 
   # The browser journeys (DR-039): the served UI driven in Chromium
   # against a real core with substitute agents, on Linux and on macOS,
   # the desktop's platform — the fit journeys measure real fonts, which
-  # differ between the two (DR-086).
+  # differ between the two (DR-086). Each runs as three shards, a third
+  # of the journeys apiece, side by side (release-34, DR-185).
   journeys:
     needs: changes
     if: needs.changes.result == 'success' && needs.changes.outputs.docs-only != 'true'
@@ -164,6 +164,7 @@ jobs:
       matrix:
         # Linux alone on a pull request; the full matrix on main and nightly (release-34).
         os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-latest"]') || fromJSON('["ubuntu-latest", "macos-latest"]') }}
+        shard: [1, 2, 3]
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -212,12 +213,12 @@ jobs:
           sudo apparmor_parser -r "$RUNNER_TEMP/spex-browser-apparmor"
 
       - name: Browser journeys
-        run: npm run e2e
+        run: npm run e2e -- --shard=${{ matrix.shard }}/3
 
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: journey-report-${{ matrix.os }}
+          name: journey-report-${{ matrix.os }}-${{ matrix.shard }}
           path: |
             e2e/playwright-report/
             e2e/test-results/
