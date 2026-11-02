@@ -116,15 +116,16 @@ export interface StoreOptions {
   relocateConfig?: (configPath: string) => void;
   /** Internal: Store.open runs the migration the constructor defers. */
   deferMigration?: boolean;
-  /** Write the environment at `root` requesting the built-in spec
-   * package, locked at `registryOrigin`, the environment's registry
-   * (storage-6, environments-11, DR-127), and naming `space` as the
+  /** Write the environment at `root`, naming `space` as the
    * environment's instance wherever the spex repository is placed at one
-   * (environments-2, DR-165): your own group's clone at every open,
-   * before its first commit, and a new project's working folder at its
-   * registration where it holds neither file (environments-26). The
-   * migration calls it for each environment it makes. */
-  prepareRepository?: (dir: string, key: string, registryOrigin: string, space: string | null) => void;
+   * (environments-2, DR-165): `global`, your own group's clone, when the
+   * home is made — as its config is seeded, before its first commit —
+   * requesting the built-in spec package, locked at `registryOrigin`, the
+   * environment's registry (environments-11, DR-127, DR-176); else a new
+   * project's working folder at its registration where it holds neither
+   * file, requesting nothing (storage-6, environments-26). The migration
+   * calls it for each environment it makes. */
+  prepareRepository?: (dir: string, key: string, registryOrigin: string, space: string | null, global: boolean) => void;
 }
 
 /** One spex repository's clone and the files it holds (storage-1). */
@@ -656,7 +657,9 @@ export class Store {
   }
 
   /** Your own group's clone always stands, its config seeded from the
-   * starter and its `spex` branch begun with one commit (storage-6). */
+   * starter and its `spex` branch begun with one commit (storage-6); the
+   * seed's run requests the built-in spec package in the global
+   * environment, once, so a later removal stands (environments-11). */
   private ensureOwnRepository(): void {
     const dir = this.homeFile.clonePath(this.homeFile.own());
     const empty = !existsSync(dir) || readdirSync(dir).length === 0;
@@ -673,7 +676,7 @@ export class Store {
       this.seededConfig = version !== null;
       if (version !== null) this.recordSeed(config, version);
     } catch { /* reported as a missing config */ }
-    const prepared = this.prepareRepository(dir, this.homeFile.own());
+    const prepared = this.seededConfig && this.prepareRepository(dir, this.homeFile.own(), dir, true);
     const generatedBootstrap = empty && this.seededConfig && prepared
       && existsSync(join(dir, "spex.yaml")) && existsSync(join(dir, "spex.lock"));
     this.initializeRepository(dir, generatedBootstrap);
@@ -685,7 +688,7 @@ export class Store {
    * so your own group's is the one its remote names (storage-31) — else
    * the default instance's (environments-5, environments-11); its
    * failure leaves the folder as it is, reported, never failing the open. */
-  private prepareRepository(dir: string, key: string, root = dir): boolean {
+  private prepareRepository(dir: string, key: string, root: string, global: boolean): boolean {
     try {
       // Recovery owns both environment files until its pending plan is
       // complete. Store opens before EnvironmentManager resumes that plan.
@@ -697,7 +700,7 @@ export class Store {
       // instance, the default one included; one local only names none
       // (environments-11).
       const space = placed !== null ? canonicalOrigin(placed) : null;
-      this.options.prepareRepository?.(root, key, registryOrigin, space);
+      this.options.prepareRepository?.(root, key, registryOrigin, space, global);
       return true;
     }
     catch (error) { console.error(`spex: ${key} was not prepared: ${error instanceof Error ? error.message : String(error)}`); return false; }
@@ -1583,7 +1586,7 @@ export class Store {
     // the working folder's root where it holds no `spex.yaml`, a stray
     // lock left as it is, a folder holding one being installed from it,
     // never in the clone (storage-6).
-    if (!existsSync(join(normalized, "spex.yaml"))) this.prepareRepository(dir, key, normalized);
+    if (!existsSync(join(normalized, "spex.yaml"))) this.prepareRepository(dir, key, normalized, false);
     this.initializeRepository(dir);
     this.homeFile.pair(normalized, key);
     this.saveHome();

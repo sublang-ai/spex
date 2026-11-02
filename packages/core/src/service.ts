@@ -122,6 +122,7 @@ import {
   isSkillName,
   playbookModuleCandidates,
   prepareBuiltinEnvironment,
+  prepareProjectEnvironment,
   readManifest,
   writeExcludeBlock,
   type BuiltinPackage,
@@ -898,9 +899,10 @@ export class CoreService {
     const spaceHost: SpaceHost & SpaceEnvironmentHooks = {
       environmentChanged: (key: string) => this.environments.applied(key),
       environmentMoved: (oldKey: string, newKey: string) => this.environments.moved(oldKey, newKey),
-      // A clone a join paired requests the built-in spec package at its
-      // instance's registry, then installs and exports; one a pick placed
-      // at an instance locks it there (environments-11, environments-31).
+      // A clone a join paired is written an environment naming its
+      // instance and requesting nothing where its folder holds none, then
+      // installs and exports; one a pick placed at an instance names it
+      // (storage-6, environments-11, environments-31).
       environmentPaired: (key: string) => { void this.environments.paired(key).catch(() => {}); },
       environmentPlaced: (key: string) => { void this.environments.placed(key).catch(() => {}); },
       home: this.store.dir,
@@ -1501,9 +1503,11 @@ export class CoreService {
       }
     }
     // The home opens under its lease, migrating the former layout once
-    // before any writer is admitted (storage-9, core-service-15). Every
-    // clone the store makes requests the built-in spec package before
-    // its first commit (storage-6, environments-11).
+    // before any writer is admitted (storage-9, core-service-15). Your own
+    // group's clone requests the built-in spec package as the home is
+    // made, before its first commit, and a project paired here is
+    // written an environment requesting nothing (storage-6,
+    // environments-11, DR-176).
     const builtin = CoreService.shippedBuiltin(options);
     // A seat reads its credentials into the environment before the
     // store seeds your own group's config from them (core-service-126,
@@ -1523,7 +1527,10 @@ export class CoreService {
         ...(options.home !== undefined ? { home: options.home } : {}),
         ...(options.dataDir ? { libraryDir: options.libraryDir ?? join(options.dataDir, "playbooks") } : {}),
         ...(relocateConfig ? { relocateConfig } : {}),
-        ...(builtin ? { prepareRepository: (dir: string, _key: string, registryOrigin: string, space: string | null) => { prepareBuiltinEnvironment(dir, builtin, registryOrigin, space); } } : {}),
+        prepareRepository: (dir: string, _key: string, registryOrigin: string, space: string | null, global: boolean) => {
+          if (!global) prepareProjectEnvironment(dir, space);
+          else if (builtin) prepareBuiltinEnvironment(dir, builtin, registryOrigin, space);
+        },
       });
     } catch (error) { seat?.environment.restore(); throw error; }
     let service: CoreService;
@@ -4479,8 +4486,8 @@ export class CoreService {
   private afterRepositoriesChanged(): void {
     if (this.options.watchConfig !== false) this.watchRepositories();
     this.authors.republish();
-    // A new clone's environment — requesting the built-in spec package
-    // since the store made it (storage-6) — resolves and installs.
+    // A new clone's environment — written by the store as it made it
+    // (storage-6) — resolves and installs.
     this.environments.settleUnresolved();
   }
 

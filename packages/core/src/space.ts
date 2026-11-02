@@ -152,10 +152,10 @@ export interface SpaceHost {
   /** The environment's exports beneath a moved clone are rewritten
    * (space-60): the `.git/info/exclude` blocks naming its paths. */
   environmentMoved?: (oldKey: string, newKey: string) => void | Promise<void>;
-  /** A join paired its clone with a working folder (space-63): a clone
-   * holding no environment requests the built-in spec package at its
-   * instance's registry (environments-11, DR-127), written before this
-   * returns. */
+  /** A join paired its clone with a working folder (space-63): a folder
+   * holding no environment is written one naming its instance and
+   * requesting nothing (storage-6, environments-11, DR-176), written
+   * before this returns. */
   environmentPaired?: (key: string) => void;
   /** A pick placed a local-only project's clone at an instance
    * (storage-35), moved or not: the built-in spec package its pairing
