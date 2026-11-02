@@ -766,6 +766,13 @@ export function ProjectPalette(props: ProjectPaletteProps) {
   /** The dialog's own keys: Escape closes from anywhere inside it,
    * and Tab wraps so focus never leaves it (DR-010 §6). */
   function dialogKeydown(event: React.KeyboardEvent): void {
+    // The application shortcut toggles this dialog, so pending group
+    // submission must guard it as it guards Escape and the backdrop.
+    if (pickerPending.current && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "p") {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
