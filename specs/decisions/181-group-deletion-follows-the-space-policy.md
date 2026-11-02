@@ -7,7 +7,7 @@
 
 Accepted (2026-11-02) on the owner's request to keep the empty-group safeguard and explain every blocking content item.
 Amends [DR-120](120-the-instance-is-the-space.md) and [DR-178](178-membership-with-a-clear-scope.md) in the deletion check, confirmation and outcome; the empty-group restriction remains.
-Amended by [DR-185](185-unavailable-group-operations.md) in the explanation of a recognized unavailable deletion or restoration operation.
+Amended by [DR-186](186-unavailable-group-operations.md) in the explanation of a recognized unavailable deletion or restoration operation.
 
 ## Context
 

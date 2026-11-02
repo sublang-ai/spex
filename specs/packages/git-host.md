@@ -241,7 +241,7 @@ When the host answers a call with anything but success, the core shall relay it 
 
 #### git-host-35
 
-When a group deletion check [[git-host-34](#git-host-34)], deletion request [[git-host-19](#git-host-19)] or restoration [[git-host-33](#git-host-33)] receives a recognized missing-operation response, the core shall refuse `invalid_request` in the reader's language with "Group deletion isn’t available at <display name>. Contact the Space administrator." or its "Group restoration" counterpart, preserving the group and sending no fallback request ([DR-185](../decisions/185-unavailable-group-operations.md)):
+When a group deletion check [[git-host-34](#git-host-34)], deletion request [[git-host-19](#git-host-19)] or restoration [[git-host-33](#git-host-33)] receives a recognized missing-operation response, the core shall refuse `invalid_request` in the reader's language with "Group deletion isn’t available at <display name>. Contact the Space administrator." or its "Group restoration" counterpart, preserving the group and sending no fallback request ([DR-186](../decisions/186-unavailable-group-operations.md)):
 
 - recognized responses are HTTP 404 with `route_not_found`, or HTTP 404 with `not_found` and the older fallback message exactly "Package management is available at https://spex.sublang.ai";
 - another status, a genuine missing-resource message or a permission refusal retains the ordinary explanation [[git-host-11](#git-host-11)].

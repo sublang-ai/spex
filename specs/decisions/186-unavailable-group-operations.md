@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-185: Unavailable Group Operations
+# DR-186: Unavailable Group Operations
 
 ## Status
 
