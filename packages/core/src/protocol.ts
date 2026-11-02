@@ -1659,9 +1659,6 @@ export const commandSchema = z.discriminatedUnion("type", [
     bindings: z.record(z.string(), playerIdSchema),
     /** Lanes to create for bindings naming a player the roster lacks. */
     newPlayers: z.record(playerIdSchema, agentBlockSchema).optional(),
-    /** The spex repository to enable in — the project's, the default,
-     * or your own group's (playbook-library-7, playbook-library-61). */
-    repository: repositoryKeySchema.optional(),
   }),
   z.object({
     type: z.literal("draft.player.set"),
@@ -1874,8 +1871,8 @@ export type DraftState =
   | "interrupted"
   | "compiled"
   | "changed"
-  /** Enabled in a config, the session kept to work on (playbook-library-61). */
-  | "enabled";
+  /** Added to its environment, the session kept to work on (playbook-library-61). */
+  | "added";
 
 export type DraftCompileOutcome =
   | "running"
@@ -1940,11 +1937,11 @@ export interface DraftInfo {
   /** The playbook artifact's `<id>.md`, relative to the working folder
    * (playbook-library-56). */
   sourcePath?: string;
-  /** The playbook is enabled: an environment of the project or your own
-   * group requests this session's spec package by path and that spex
-   * repository's config enables its id (playbook-library-69); the state
-   * then reads "enabled" unless a compile, a failure or a change stands. */
-  enabled?: boolean;
+  /** The playbook is added: the session's environment — the project's,
+   * or the global — requests this session's spec package by path, so the
+   * playbook runs there (playbook-library-69); the state then reads
+   * "added" unless a compile, a failure or a change stands. */
+  added?: boolean;
   /** `turn` while its turn runs, else `compiling` while its compile
    * runs, else `idle`. */
   activity: DraftActivity;

@@ -967,12 +967,16 @@ export class CoreService {
     });
     // Authoring sessions live in the spex repository of their project
     // (storage-23); their spec packages in its working folder
-    // (environments-10).
+    // (environments-10). The global environment's sessions live with
+    // your own group's records, its clone their working folder
+    // (core-service-96).
     this.drafts = new DraftStore(() =>
       this.store.listRepositories().map((repository) => ({
         key: repository.key,
         authoringDir: repository.authoringDir,
-        workingFolder: this.store.home.folderOf(repository.key)?.path ?? null,
+        workingFolder: repository.key === this.store.home.own()
+          ? (existsSync(repository.dir) ? repository.dir : null)
+          : this.store.home.folderOf(repository.key)?.path ?? null,
       })));
     const service = this;
     this.authors = new AuthorManager({
@@ -994,7 +998,7 @@ export class CoreService {
       // An id either environment exports is taken (playbook-library-51).
       reservedIds: (projectId) => this.reservedPlaybookIds(projectId),
       homeLanguage: () => this.homeLanguage(),
-      enabled: (id) => this.draftEnabled(id),
+      added: (id) => this.draftAdded(id),
       excludeEngineLinks: (workingFolder) => excludeEngineLinks(workingFolder),
       device: () => this.store.home.device,
       importInto: (prepare, place) => this.media.importInto(prepare, place),
@@ -1167,28 +1171,18 @@ export class CoreService {
     return [...ids];
   }
 
-  /** Whether an authoring session's playbook is enabled: a config of
-   * the session's project or your own group enables its id, and that
-   * spex repository's environment requests the session's spec package
-   * by path (playbook-library-69). */
-  private draftEnabled(id: string): boolean {
-    const projectId = this.drafts.projectOf(id);
+  /** Whether an authoring session's playbook is added: the environment
+   * the session belongs to — its project's, or the global — requests the
+   * session's spec package by path, so the playbook runs there
+   * (playbook-library-69, core-service-2). */
+  private draftAdded(id: string): boolean {
+    const key = this.drafts.projectOf(id);
     const draftFolder = this.drafts.workingFolder(id);
-    if (!projectId || draftFolder === null) return false;
+    if (!key || draftFolder === null || !this.store.repository(key)) return false;
     const packageDir = resolve(draftFolder, this.drafts.packagePath(id));
-    for (const key of new Set([projectId, this.store.home.own()])) {
-      const repository = this.store.repository(key);
-      const folder = this.environments.pathRoot(key);
-      if (!repository || folder === null) continue;
-      const requested = [...this.environments.pathRequests(key).values()].some((path) => resolve(folder, path) === packageDir);
-      if (!requested) continue;
-      const configPath = key === this.store.home.own() ? this.configPath : repository.configPath;
-      try {
-        const top = existsSync(configPath) ? parseYaml(readFileSync(configPath, "utf8")) as { playbooks?: Record<string, unknown> } | null : null;
-        if (top?.playbooks && Object.hasOwn(top.playbooks, id)) return true;
-      } catch { /* an unreadable config enables nothing */ }
-    }
-    return false;
+    const folder = this.environments.pathRoot(key);
+    if (folder === null) return false;
+    return [...this.environments.pathRequests(key).values()].some((path) => resolve(folder, path) === packageDir);
   }
 
   /** An environment's files or exports changed (environments-17): your
@@ -3398,14 +3392,16 @@ export class CoreService {
             throw new CoreError("invalid_request", message);
           }
           // The one-shot form is a draft-style compile followed by the
-          // enabling path a session takes (playbook-library-69).
-          return await this.enableCompiled({
+          // Add path a session takes (playbook-library-69), into the
+          // project's environment unless another is named.
+          return await this.addCompiled({
             playbookId: command.playbookId,
             result,
             bindings: command.bindings,
             newPlayers: command.newPlayers,
-            projectId: project.id,
-            ...(command.repository !== undefined ? { repository: command.repository } : {}),
+            repository: command.repository === undefined || command.repository === this.store.home.own() || command.repository === project.id
+              ? command.repository ?? project.id
+              : (() => { throw noProject(command.repository!); })(),
             packageDir,
           });
         } finally {
@@ -3846,20 +3842,21 @@ export class CoreService {
       case "draft.list":
         return this.authors.list();
       case "draft.defaults": {
-        // What New playbook fills in, read from the project and the
-        // registry of its instance now, asked once (playbook-library-103).
-        const { project, repository } = this.draftHome(command.projectId);
-        return newPackageDefaults(repository.key, project.path, await this.environments.publishableOrgs(repository.key));
+        // What New playbook fills in, read from the project — or the
+        // global environment — and the registry of its instance now,
+        // asked once (playbook-library-103).
+        const { repository, workingFolder } = this.draftHome(command.projectId);
+        return newPackageDefaults(repository.key, workingFolder, await this.environments.publishableOrgs(repository.key));
       }
       case "draft.create": {
         // The ids the config enables are taken (playbook-library-51), as
         // its files stand (DR-111).
         await this.settledConfig();
-        const { project, repository } = this.draftHome(command.projectId);
+        const { repository, workingFolder } = this.draftHome(command.projectId);
         // The id names the spec package, the file and the command: the
         // Agent Skills name rule (playbook-library-51).
         if (!isSkillName(command.draftId)) throw invalidPlaybookId(command.draftId);
-        if (this.drafts.exists(command.draftId) && this.drafts.projectOf(command.draftId) !== project.id) {
+        if (this.drafts.exists(command.draftId) && this.drafts.projectOf(command.draftId) !== repository.key) {
           throw new CoreError("invalid_request", i18n._({
             id: "{id} is already an authoring session of another project; pick another id",
             values: { id: command.draftId },
@@ -3884,7 +3881,7 @@ export class CoreService {
         }
         return this.authors.create(
           command.draftId,
-          { key: repository.key, authoringDir: repository.authoringDir, workingFolder: project.path },
+          { key: repository.key, authoringDir: repository.authoringDir, workingFolder },
           { org: command.org, license: command.license },
         );
       }
@@ -3921,22 +3918,22 @@ export class CoreService {
           }));
         }
         // Re-package with the confirmed command and intent, one job over
-        // the artifact folder (playbook-library-99), then enable through
-        // the shared path; the session is not held and stays after,
-        // enabled; a refused write leaves it standing with its artifacts
-        // (playbook-library-69).
+        // the artifact folder (playbook-library-99), then add through the
+        // shared path to the environment the session belongs to — its
+        // project's, or the global (core-service-96); the session is not
+        // held and stays after, added; a refused write leaves it standing
+        // with its artifacts (playbook-library-69).
         return await this.authors.register(
           command.draftId,
           command.instance,
           command.command,
           command.intent,
-          (result, location) => this.enableCompiled({
+          (result, location) => this.addCompiled({
             playbookId: command.draftId,
             result,
             bindings: command.bindings,
             newPlayers: command.newPlayers,
-            projectId: command.projectId,
-            ...(command.repository !== undefined ? { repository: command.repository } : {}),
+            repository: command.projectId,
             packageDir: location.packageDir,
           }),
         );
@@ -4263,32 +4260,32 @@ export class CoreService {
   }
 
   /**
-   * The tail of a compile (playbook-library-69), shared by the one-shot
-   * `compile.run` and an authoring session's enabling: re-key the
-   * bindings onto the compiled entry's derived roles; check the whole
-   * enabling against the config's fail-closed rules before anything is
-   * written (playbook-library-15, playbook-library-20); request the spec
-   * package by path from the chosen spex repository's environment and
-   * install it; write the players your own group's roster lacks; write
-   * the `playbooks.<id>` entry, no `from`, into that spex repository's
-   * config; reload. Each write is versioned on its own file; one refused
-   * after others leaves them written, named in the refusal (DR-111).
+   * The Add path (playbook-library-69), shared by the one-shot
+   * `compile.run` and an authoring session's Add: re-key the bindings
+   * onto the compiled entry's derived roles; check the whole Add against
+   * the config's fail-closed rules before anything is written
+   * (playbook-library-15, playbook-library-20); request the spec package
+   * by path from the environment named — the session's, the project's or
+   * the global — and install it; write the players your own group's
+   * roster lacks; write the `playbooks.<id>` entry, no `from`, into that
+   * environment's config; reload. Each write is versioned on its own
+   * file; one refused after others leaves them written, named in the
+   * refusal (DR-111).
    */
-  private async enableCompiled(input: {
+  private async addCompiled(input: {
     playbookId: string;
     result: CompileResult;
     bindings: Record<string, string>;
     newPlayers: Record<string, AgentBlock> | undefined;
-    projectId: string;
-    /** The spex repository to enable in: the project's, by default, or your own group's. */
-    repository?: string;
+    /** The environment to add to: a project's spex repository, or your
+     * own group's — the global (core-service-96). */
+    repository: string;
     packageDir: string;
   }): Promise<ConfigState> {
     const { playbookId, result } = input;
     const roles = this.rekeyRoles(result, input.bindings);
     const own = this.store.home.own();
-    const targetKey = input.repository ?? input.projectId;
-    if (targetKey !== own && targetKey !== input.projectId) throw noProject(targetKey);
+    const targetKey = input.repository;
     const target = this.store.repository(targetKey);
     if (!target) throw noProject(targetKey);
     // A request by path is relative to the environment's path root:
@@ -4298,12 +4295,12 @@ export class CoreService {
     if (targetFolder === null || relativePath === undefined || relativePath === "" || relativePath.startsWith("..") || isAbsolute(relativePath)) {
       throw new CoreError("invalid_request", targetKey === own
         ? i18n._({
-          id: "This package's folder is outside your Personal records — enable it in the project, or publish it and add it from the registry",
-          comment: "Refusal of Enable: a Personal package is added from a folder only inside what Spex keeps for you alone (environments-2), and this package lies elsewhere",
+          id: "This package's folder is outside your global records — add it in the project, or publish it and add it from the registry",
+          comment: "Refusal of Add: a global package is added from a folder only inside what Spex keeps for you alone, your global records (environments-2), and this package lies elsewhere",
         })
         : i18n._({
-          id: "This package's folder is outside the project folder — enable it in that project, or publish it and add it from the registry",
-          comment: "Refusal of Enable: a project's package is added from a folder only inside its project folder (environments-2), and this package lies elsewhere",
+          id: "This package's folder is outside the project folder — add it in that project, or publish it and add it from the registry",
+          comment: "Refusal of Add: a project's package is added from a folder only inside its project folder (environments-2), and this package lies elsewhere",
         }));
     }
     const packagePath = relativePath.split(sep).join("/");
@@ -4314,9 +4311,9 @@ export class CoreService {
     const entryOp: ConfigEditOp = { kind: "playbook.add", playbookId, roles };
     const playerOps: ConfigEditOp[] = Object.entries(input.newPlayers ?? {}).map(([playerId, block]) => ({ kind: "player.set", playerId, patch: block }));
 
-    // Nothing is written until the whole enabling passes the config's
-    // own rules, the new module standing in for the one the environment
-    // will export (playbook-library-15).
+    // Nothing is written until the whole Add passes the config's own
+    // rules, the new module standing in for the one the environment will
+    // place (playbook-library-15).
     const base = this.modules(targetKey === own ? null : targetKey);
     const overlay: PlaybookModules = {
       repository: base.repository,
@@ -4345,7 +4342,7 @@ export class CoreService {
     if (validationFailure) {
       const { error } = validationFailure;
       throw new CoreError("invalid_config", i18n._({
-        id: "compiled, but enabling was refused: {error}",
+        id: "compiled, but adding was refused: {error}",
         comment: "Refusal after a successful compile; `error` is the config validation's own words",
         values: { error: error instanceof Error ? error.message : String(error) },
       }));
@@ -4361,14 +4358,14 @@ export class CoreService {
       // config names its playbook (playbook-library-69, environments-15).
       const requested = await this.environments.ensureRequested(targetKey, name, { path: packagePath });
       if (requested) {
-        done.push(i18n._({ id: "{name} added to spex.yaml", comment: "A completed step of an enabling: the package written into spex.yaml", values: { name } }));
+        done.push(i18n._({ id: "{name} added to spex.yaml", comment: "A completed step of an Add: the package written into spex.yaml", values: { name } }));
       }
       const progress = { lockWritten: false, installed: false };
       try {
         await this.environments.installNow(targetKey, requested, progress);
       } finally {
-        if (progress.lockWritten) done.push(i18n._({ id: "spex.lock written", comment: "A completed step of an enabling: spex.lock written with the versions chosen" }));
-        if (progress.installed) done.push(i18n._({ id: "packages installed", comment: "A completed step of an enabling: the project's installed packages replaced, those the added package needs among them" }));
+        if (progress.lockWritten) done.push(i18n._({ id: "spex.lock written", comment: "A completed step of an Add: spex.lock written with the versions chosen" }));
+        if (progress.installed) done.push(i18n._({ id: "packages installed", comment: "A completed step of an Add: the project's installed packages replaced, those the added package needs among them" }));
       }
 
       // Lanes the bindings name but the roster lacks are created first,
@@ -4383,7 +4380,7 @@ export class CoreService {
             values: { playerId, error: minted.error },
           }));
         }
-        done.push(i18n._({ id: "player {playerId} written", comment: "A completed step of an enabling: a new session player written to your own settings", values: { playerId } }));
+        done.push(i18n._({ id: "player {playerId} written", comment: "A completed step of an Add: a new session player written to your own settings", values: { playerId } }));
       }
       const edit = targetKey === own
         ? await editConfigFile(this.configPath, entryOp, this.options.loadModule, { modules: this.modules(null) })
@@ -4396,37 +4393,49 @@ export class CoreService {
           values: { error: edit.error },
         }));
       }
-      done.push(i18n._({ id: "playbook {playbookId} written", comment: "A completed step of an enabling: the playbook's entry written to the config", values: { playbookId } }));
+      done.push(i18n._({ id: "playbook {playbookId} written", comment: "A completed step of an Add: the playbook's entry written to the config", values: { playbookId } }));
       await this.reloadConfig();
-      // The state the files stand at, or the enabling reports what it did.
+      // The state the files stand at, or the Add reports what it did.
       await this.settledConfig();
       this.authors.republish();
     } catch (error) {
       if (done.length === 0) throw error;
       const failure = coreErrorOf(error);
       throw new CoreError(failure.code, i18n._({
-        id: "enabling stopped after {done}: {error}",
-        comment: "Refusal of an enabling after some of its writes, which stand; {done} lists them, each itself a message, and {error} is the refusal's own words",
+        id: "adding stopped after {done}: {error}",
+        comment: "Refusal of an Add after some of its writes, which stand; {done} lists them, each itself a message, and {error} is the refusal's own words",
         values: { done: listed(done), error: failure.message },
       }), failure.details);
     }
     return this.configState;
   }
 
-  /** The project a new authoring session would live in, with its spex
-   * repository, or `invalid_request` where its working folder is not on
-   * this device (core-service-96). */
-  private draftHome(projectId: string): { project: ProjectInfo; repository: SpexRepository } {
-    const project = this.store.getProject(projectId);
-    const repository = this.store.repository(projectId);
+  /** The environment a new authoring session would belong to — a
+   * project's, or the global, named by your own group's key — with its
+   * spex repository and its working folder: the project's, or your own
+   * group's clone; `invalid_request` where that folder is not on this
+   * device (core-service-96). */
+  private draftHome(key: string): { repository: SpexRepository; workingFolder: string } {
+    if (key === this.store.home.own()) {
+      const repository = this.store.repository(key);
+      if (!repository || !existsSync(repository.dir)) {
+        throw new CoreError("invalid_request", i18n._({
+          id: "Your global packages' folder is not on this computer",
+          comment: "Refusal: a new global playbook — one every project of yours runs — while the records that hold your global packages are not on this computer",
+        }));
+      }
+      return { repository, workingFolder: repository.dir };
+    }
+    const project = this.store.getProject(key);
+    const repository = this.store.repository(key);
     if (!project || !repository) {
       throw new CoreError("invalid_request", i18n._({
         id: "{name} has no project folder on this computer — Open here first",
         comment: "Refusal: package work in a project not opened on this computer, so its spex.yaml has no folder here; 'Open here' is the project's control on the Space surface",
-        values: { name: splitKey(projectId).name.replace(/-spex$/, "") },
+        values: { name: splitKey(key).name.replace(/-spex$/, "") },
       }));
     }
-    return { project, repository };
+    return { repository, workingFolder: project.path };
   }
 
   /** An authoring session of the named project, or `not_found`
