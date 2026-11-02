@@ -15,7 +15,7 @@ The caller supplies:
 - optional notes on what this release is for.
 
 `release` prepares one app release of the repository in the current directory, which must be the Spex repository on the branch to release: it reconciles the changelog with the commits, bumps the shell manifests, runs every gate the release rules require for that kind, records their outcomes, and stops before the tag.
-It never pushes and never tags: the Boss pushes the prepared commits and tags once CI is green, as the release rules say.
+It never pushes and never tags: the Boss puts the prepared commits on `main` and pushes the tag after preparation passes; the tag workflow then requires full app validation of that exact tagged tree before publication, as the release rules say.
 
 When the caller gives the request, Captain shall relay the complete caller input in quotes (`>`) to Releaser, along with the following instruction:
 

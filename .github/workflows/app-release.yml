@@ -13,46 +13,19 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  require-ci-green:
-    runs-on: ubuntu-latest
+  validate:
+    uses: ./.github/workflows/ci.yml
     permissions:
-      actions: read
-    steps:
-      - name: Require CI to be green for the release commit
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          echo "Waiting for CI (ci.yml) to succeed for commit $SHA"
-          for attempt in $(seq 1 60); do
-            line="$(gh api \
-              "repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$SHA&per_page=1" \
-              --jq '(.workflow_runs[0].status // "missing") + " " + (.workflow_runs[0].conclusion // "none")')"
-            status="${line%% *}"
-            conclusion="${line##* }"
-            echo "attempt $attempt/60: status=$status conclusion=$conclusion"
-            if [ "$status" = "completed" ]; then
-              if [ "$conclusion" = "success" ]; then
-                echo "CI is green for $SHA."
-                exit 0
-              fi
-              echo "::error::CI for $SHA concluded '$conclusion'; refusing to release."
-              exit 1
-            fi
-            sleep 30
-          done
-          echo "::error::Timed out waiting for CI to complete for $SHA; refusing to release."
-          exit 1
+      contents: read
+    with:
+      full: true
+      channel: app
 
   prepare:
-    needs: require-ci-green
+    needs: validate
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    env:
-      ELECTRON_SKIP_BINARY_DOWNLOAD: 1
     outputs:
       version: ${{ steps.version.outputs.version }}
       title: ${{ steps.version.outputs.title }}
@@ -64,7 +37,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
       - name: Verify version matches tag
         id: version
         run: node scripts/release-notes.mjs check --tag="$GITHUB_REF_NAME"
@@ -76,10 +48,6 @@ jobs:
           --out=release-notes.md
       - name: Require published runtime dependencies
         run: node scripts/dependency-closure.mjs --registry-only
-      - run: npm ci
-      - run: npm run build
-      - name: Tests
-        run: npm test
       - uses: actions/upload-artifact@v4
         with:
           name: app-release-notes
@@ -122,7 +90,7 @@ jobs:
           if-no-files-found: error
 
   release:
-    needs: [prepare, package]
+    needs: [validate, prepare, package]
     runs-on: ubuntu-latest
     permissions:
       contents: write
