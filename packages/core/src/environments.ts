@@ -119,7 +119,7 @@ import { migrateEnvironments, type MigratedRepository } from "./migrate-environm
 import { gitEnvironment } from "./storage-git.js";
 import { splitKey } from "./home.js";
 import { canonicalOrigin } from "@sublang/spex/instance";
-import type { PlaybookModules } from "./config.js";
+import type { PlacedPlaybook, PlaybookModule, PlaybookModules } from "./config.js";
 import type { EnvironmentPackage, EnvironmentRequest, EnvironmentRequestSummary, EnvironmentState, PublishedPackage, PublishPreview } from "./protocol.js";
 import { CoreError } from "./session.js";
 import type { Store } from "./store.js";
@@ -1943,25 +1943,39 @@ export class EnvironmentManager {
   }
 
   /** Where a session's playbooks come from (environments-9): the
-   * project's environment, else your own group's; a module missing on
-   * this device counts as none. */
+   * project's environment, else your own group's — the global; a module
+   * missing on this device counts as none for `find`, while `placed`
+   * lists every playbook either places, the project's first, so each
+   * runs on its default binding where no entry binds it
+   * (core-service-2). */
   modulesFor(projectKey: string | null): PlaybookModules {
     const own = this.store.home.own();
     const ownLocations = this.locations(own);
     const project = projectKey !== null && projectKey !== own ? this.locations(projectKey) : null;
-    const pick = (locations: Map<string, ModuleLocation> | null, id: string): ModuleLocation | undefined => {
+    const placedOf = (locations: Map<string, ModuleLocation> | null, environment: "project" | "own", repository: string): PlacedPlaybook[] =>
+      [...(locations?.values() ?? [])].map((location) => ({
+        id: location.id,
+        module: location.module,
+        builtin: location.builtin,
+        package: location.package,
+        version: location.version,
+        environment,
+        repository,
+        present: location.present,
+      }));
+    const placed = [...placedOf(project, "project", projectKey ?? own), ...placedOf(ownLocations, "own", own)];
+    const pick = (locations: Map<string, ModuleLocation> | null, environment: "project" | "own", repository: string, id: string): PlaybookModule | undefined => {
       if (!locations) return undefined;
-      const named = locations.get(id);
-      if (named?.present) return named;
-      for (const location of locations.values()) if (location.id === id && location.present) return location;
-      return undefined;
+      let location = locations.get(id);
+      if (!location?.present) location = [...locations.values()].find((entry) => entry.id === id && entry.present);
+      return location
+        ? { module: location.module, builtin: location.builtin, package: location.package, version: location.version, environment, repository }
+        : undefined;
     };
     return {
       repository: project ? projectKey! : own,
-      find: (id) => {
-        const location = pick(project, id) ?? pick(ownLocations, id);
-        return location ? { module: location.module, builtin: location.builtin } : undefined;
-      },
+      find: (id) => pick(project, "project", projectKey ?? own, id) ?? pick(ownLocations, "own", own, id),
+      placed: () => placed.map((entry) => ({ ...entry })),
     };
   }
 

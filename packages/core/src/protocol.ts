@@ -13,7 +13,7 @@ import type { AgentCapabilities, ApprovalDecision, ApprovalRequest, BrowserSetup
 import type { SessionRecord as RuntimeRecord } from "@sublang/playbook/session-assets";
 import { LANGUAGES, type Language } from "./language.js";
 
-export const PROTOCOL_VERSION = 31;
+export const PROTOCOL_VERSION = 32;
 
 /** The compile pipeline's phases and their human names, shared so the
  * core's thread lines and the UI's band name a phase alike. */
@@ -195,7 +195,7 @@ export interface AgentSummary {
 }
 
 /** A session player: an identity-bearing lane, with the roles that
- * bind to it across every enabled playbook (DR-032). */
+ * bind to it across every playbook that runs (DR-032). */
 export interface SessionPlayerSummary {
   id: string;
   agent: AgentSummary;
@@ -204,6 +204,25 @@ export interface SessionPlayerSummary {
   /** `<playbook>.<role>` for every binding naming this player — the
    * evidence that a lane is shared, and by whom. */
   boundBy: string[];
+  /** A player a binding names — a written entry's, or the default
+   * `dev.<role>` of a placed playbook no entry binds — that your own
+   * group's roster lacks: it plays on the Captain's block without its
+   * instruction until it is set up (core-service-2, settings-46). */
+  toSetUp?: boolean;
+}
+
+/** The player that plays a role by default where no entry binds it
+ * (core-service-2, playbook-library-61): `dev.<role>`, the role
+ * lowercased with each run outside ASCII letters, digits, `_` and `-`
+ * replaced by `-`, kept whole where it starts with a letter, else its
+ * boundary `-` and `_` trimmed and `role-` prefixed, `role` where
+ * nothing remains — so two playbooks naming one role share one player
+ * (DR-032, DR-176). */
+export function defaultPlayerId(role: string): string {
+  const normalized = role.toLowerCase().replace(/[^a-z0-9_-]+/gu, "-");
+  if (/^[a-z]/u.test(normalized)) return `dev.${normalized}`;
+  const suffix = normalized.replace(/^[-_]+|[-_]+$/gu, "");
+  return suffix ? `dev.role-${suffix}` : "dev.role";
 }
 
 /** One role's binding: which player answers it, and that role's own
@@ -245,12 +264,40 @@ export type SessionAgentSettingsMap = Record<string, SessionAgentSettings>;
  * either kind of agent; composition refuses it as a player id. */
 export const CAPTAIN_AGENT_ID = "captain";
 
+/** Where a composed playbook's bindings come from (core-service-2): the
+ * project's entry, the global one — your own group's — or the default
+ * binding of each role to `dev.<role>`. */
+export type PlaybookOrigin = "project" | "own" | "default";
+
 export interface PlaybookSummary {
   id: string;
   from: string;
   command: string;
   intent: string;
   roles: Record<string, RoleBindingSummary>;
+  /** The entry the playbook composed by, or the default (core-service-2). */
+  origin: PlaybookOrigin;
+  /** The spec package placing it, its version, and the spex repository
+   * whose environment places it (environments-9); absent where the
+   * module's place is not known. */
+  package?: string;
+  version?: string;
+  repository?: string;
+}
+
+/** A playbook that composes nothing (core-service-2): a written entry
+ * naming one no environment of the session places, or whose module is
+ * absent on this device; a placed playbook whose default would not
+ * compose; or one of two playbooks of one command, `winner` naming the
+ * spec package whose playbook runs instead. */
+export interface PlaybookStandingAside {
+  playbook: string;
+  /** The spec package placing it, where one does. */
+  package?: string;
+  /** The cause, phrased for the reader. */
+  reason: string;
+  /** The spec package whose playbook takes its command. */
+  winner?: string;
 }
 
 export interface PlaybookArtifacts {
@@ -304,9 +351,15 @@ export interface MachineGraph {
 export interface ConfigSummary {
   path: string;
   captain: AgentSummary;
-  /** The session roster, in first-reference order (DR-032). */
+  /** Every player your own group's file declares, then each player a
+   * binding names that the file lacks, flagged `toSetUp` (DR-032,
+   * settings-46). */
   players: SessionPlayerSummary[];
+  /** Every playbook that runs: each written entry and each placed
+   * playbook's default (core-service-2). */
   playbooks: PlaybookSummary[];
+  /** The playbooks that stand aside, each with its cause. */
+  standsAside: PlaybookStandingAside[];
   notifications?: Record<string, string>;
   theme?: string;
 }
@@ -456,8 +509,9 @@ export interface EnvironmentPackage {
   };
 }
 
-/** A playbook an environment exports, as the Playbooks surface lists it
- * (playbook-library-1). */
+/** A playbook an environment places, as the Playbooks surfaces list it
+ * (playbook-library-1, playbook-library-122): read from the composition
+ * a session there runs with (core-service-2). */
 export interface PlaybookAvailability {
   /** The exported name: the playbook's id or its alias. */
   name: string;
@@ -468,24 +522,38 @@ export interface PlaybookAvailability {
   package: string;
   version: string;
   source: "registry" | "path" | "git" | "builtin";
-  /** The spex repository whose environment exports it. */
+  /** The spex repository whose environment places it. */
   repository: string;
-  /** Where it is enabled: the project's config, your own group's, or neither. */
-  enabled: ("project" | "own")[];
+  /** It composes: a session there runs it (core-service-2). */
+  runs: boolean;
+  /** Why it composes nothing, and the spec package whose playbook takes
+   * its command where that is the cause. */
+  standsAside?: { reason: string; winner?: string };
+  /** The environments placing a playbook of this id: the project's, the
+   * global — your own group's — or both. */
+  placedBy: ("project" | "own")[];
+  /** The configs holding a written entry for it: the project's, the
+   * global, both or neither. */
+  entry: ("project" | "own")[];
   /** The module is present on this device (a path source may be missing). */
   present: boolean;
-  /** Each enabling config's role bindings: a project's names players
-   * alone, your own group's may carry tuning; `display` says what the
-   * binding effectively runs (playbook-library-1). */
-  bindings?: { project?: Record<string, RoleBindingSummary>; own?: Record<string, RoleBindingSummary> };
+  /** Each required role's effective binding — the player playing it and
+   * what that runs (`display`) — and where it comes from: the project's
+   * entry, the global entry, or the default `dev.<role>`
+   * (core-service-2, playbook-library-1). */
+  bindings: Record<string, RoleBindingSummary & { from: PlaybookOrigin }>;
+  /** Each written entry's own role bindings, for editing: a project's
+   * names players alone, the global may carry tuning. */
+  written?: { project?: Record<string, RoleBindingSummary>; own?: Record<string, RoleBindingSummary> };
   /** The installed playbook artifact's folder on this device, or the
    * path source's (playbook-library-29). */
   folder?: string;
 }
 
-/** A configured entry failing validation (playbook-library-2): an
- * unresolved required role, a duplicate command, or a playbook no
- * environment of the session exports. */
+/** A written entry failing validation (playbook-library-2): an
+ * unresolved required role, an option the entry may not carry, or a
+ * playbook no environment of the session places or whose module is
+ * absent on this device. */
 export interface InvalidPlaybookEntry {
   config: "project" | "own";
   playbook: string;
@@ -1705,8 +1773,9 @@ export interface CommandResults {
   "environment.playbooks": {
     project: PlaybookAvailability[] | null;
     own: PlaybookAvailability[];
-    /** Enabled entries failing the fail-closed validation
-     * (playbook-library-2), each with the specific failure. */
+    /** Written entries failing the fail-closed validation, or naming a
+     * playbook no environment places (playbook-library-2), each with
+     * the specific failure. */
     invalid?: InvalidPlaybookEntry[];
   };
   "registry.get": RegistryState;
