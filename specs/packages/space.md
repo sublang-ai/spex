@@ -362,13 +362,13 @@ When the core reports the home's diagnostics, it shall fold every diagnostic a f
 - a preview carrying a session identity opens that conversation's stored history directly in its reader [[run-view-33](run-view.md#run-view-33)], without choosing a project folder or starting a turn; an older preview without an identity remains text, and a preview whose session is no longer listed keeps the reader on Space with a Refresh instruction;
 - different saved-record groups remain separate even when their project names match, and opening or locating a folder for one affects none of the others;
 - one chosen folder applies to every conversation held by that repository, with every previously used directory labelled explicitly rather than implied to be missing;
-- repairs stand before unfolded diagnostics, blocking ones first, then unanswered before postponed tasks [[space-54](#space-54)], then by session count descending, name and path, with no reordering while an editor is open.
+- repairs stand before unfolded diagnostics, blocking ones first, then by session count descending, name and path, with no reordering while an editor is open; dismissed items stand in their own section [[space-124](#space-124)].
 
 #### space-47
 
-When the user locates a repair's existing project folder or postpones the task, the Space surface shall settle that choice in place ([DR-183](../decisions/183-read-saved-conversations-before-locating-files.md)):
+When the user locates a repair's existing project folder or dismisses the reminder, the Space surface shall settle that choice in place ([DR-183](../decisions/183-read-saved-conversations-before-locating-files.md)):
 
-- the shared introduction explains the folder task's purpose [[space-55](#space-55)] without promising continuation after relocation [[core-service-73](core-service.md#core-service-73)]; "Locate folder…" opens the editor, "Use <folder>" may directly accept a checked proposal [[space-53](#space-53)], and "Not now" postpones it [[space-49](#space-49)];
+- the shared introduction explains the folder task's purpose [[space-55](#space-55)] without promising continuation after relocation [[core-service-73](core-service.md#core-service-73)]; "Locate folder…" opens the editor, "Use <folder>" may directly accept a checked proposal [[space-53](#space-53)], and Dismiss sets the reminder aside [[space-49](#space-49)];
 - the editor asks where the files for that project or saved work are, labels its field "Project folder on this computer", starts with only the checked proposal or an empty value, offers Browse… where a directory picker exists, and states that the existing-folder selection creates or downloads no project and applies to all conversations in that group alone;
 - Use this folder confirms the candidate, Cancel and Escape cancel without changing it, and a refusal stays beside the field with its value kept;
 - confirmation applies the existing-identity folder choice [[core-service-85](core-service.md#core-service-85)], recording the previous directories as aliases so those conversations remain readable with the chosen folder [[storage-6](storage.md#storage-6)];
@@ -390,8 +390,8 @@ When a repair's folder is saved with its recorded directories attached [[space-4
 While a task stands unanswered, the core shall count it as an unresolved task, only this device's reader's act settling it ([DR-065](../decisions/065-repairs-the-reader-answers.md), [DR-182](../decisions/182-saved-work-is-a-choice-not-setup-debt.md)):
 
 - drawing the task, opening review or re-reading state settles nothing;
-- Not now postpones optional recovery, keeps saved conversations and reduces the header count by that task alone, leaving unrelated notices counted and confirming the Locate project files sidebar return path once visibly and through the live region [[run-view-67](run-view.md#run-view-67)], without claiming the project is absent from this computer ([DR-184](../decisions/184-a-review-count-and-a-way-back.md));
-- the postponed task remains reachable as "For later", with its folder choice still available;
+- Dismiss keeps saved conversations and reduces the header count by that task alone, leaving unrelated active notices counted and moving the task to Dismissed [[space-124](#space-124)], without claiming the project is absent from this computer ([DR-185](../decisions/185-dismiss-reminders-without-losing-history.md));
+- the dismissed task remains reachable with its folder choice and Show again still available [[space-124](#space-124)];
 - resolving removes the repair, and postponement lapses only when its recorded facts change, not when a folder appears or disappears.
 
 #### space-53
@@ -424,12 +424,11 @@ While this device's reader has postponed a repair's folder choice, the core shal
 
 While saved-work diagnostics exist, the Space surface shall offer a review that distinguishes optional recovery from work requiring attention ([DR-182](../decisions/182-saved-work-is-a-choice-not-setup-debt.md)):
 
-- nonblocking review stays initially closed and neutral, opened by Review [[space-1](#space-1)] or the sidebar's place-specific Locate project files action [[run-view-67](run-view.md#run-view-67)], with the panel titled Locate project files while folder tasks exist, otherwise Review notices;
+- nonblocking review stays initially closed and neutral, opened by Review [[space-1](#space-1)] or the sidebar's place-specific Locate project files action [[run-view-67](run-view.md#run-view-67)], with active folder tasks and their explanation under Locate project files, standalone active diagnostics under a separate Review notices heading, and dismissed items in their own section [[space-124](#space-124)];
 - one introduction above repository folder tasks says the conversation history is saved on this computer, or on the named server [[space-112](#space-112)], that identified conversations can be read now and further project work needs the files; where no task contains conversations, it explains only the required files; where no preview can open history, it makes no read-now promise, and no version claims the project files are absent or repeats the explanation under each project [DR-184](../decisions/184-a-review-count-and-a-way-back.md);
 - a blocking diagnostic opens review automatically and gives the panel the Needs attention heading and attention styling, without turning unrelated optional tasks into blockers;
 - each task has one recognizable heading and its controls, separated by spacing or dividers rather than one large warning field;
-- postponed tasks read For later and retain Locate folder, the sidebar return surviving a zero count, reload or later visit [[space-54](#space-54)]; resolved tasks show the saved-folder outcome [[space-48](#space-48)];
-- a postponed task keeps its place until the reader's Refresh [[space-2](#space-2)] or leaving the surface, then stands after unanswered tasks [[space-46](#space-46)].
+- dismissed folder tasks retain Locate folder, the sidebar return surviving a zero count, reload or later visit [[space-54](#space-54)] and revealing the dismissed tasks [[space-124](#space-124)]; resolved tasks show the saved-folder outcome [[space-48](#space-48)].
 
 #### space-121
 
@@ -443,6 +442,16 @@ While an unfolded storage diagnostic other than a pending merge stands, the Spac
 
 - no instruction asks the person to share details through an unspecified support route, and nonblocking impact is not repeated on every row;
 - technical paths and reasons wrap without widening the surface.
+
+#### space-124
+
+When the reader changes an optional item's dismissal, the Space surface shall move that item between active review and one collapsed Dismissed section only after the core confirms the change ([DR-185](../decisions/185-dismiss-reminders-without-losing-history.md)):
+
+- folder reminders offer Dismiss through their existing local acknowledgement [[space-54](#space-54)], and nonblocking standalone older-conversation notices offer Dismiss only where the core supplies the matching capability [[core-service-148](core-service.md#core-service-148)];
+- Dismissed shows its own item count, grouping folder reminders and notices outside the active sections and warning count; each item offers Show again, which restores its active count, while folder reminders retain their conversation and folder actions;
+- an ordinary Review visit starts with Dismissed collapsed, the control remaining available when its contents alone stand at zero pending notices [[space-1](#space-1)]; the sidebar's Locate project files request [[run-view-67](run-view.md#run-view-67)] reveals dismissed folder items;
+- a successful dismissal confirms that the original saved work is kept, visibly and through the live region; a refusal keeps the item, its count and an adjacent error, and pending commands disable repeated actions;
+- keyboard focus remains on a useful review control after the acted-on item moves, and technical details remain available inside either list [[space-121](#space-121)].
 
 ### Changes
 
@@ -1262,15 +1271,15 @@ Where the Space surface uses the production store over a controlled command conn
 
 #### space-56
 
-Where the Space surface renders over a home whose issues list holds three unanswered repairs, each proposing its recorded folder, when the reader declines the first, activates the third's "Use <folder>", lets the core deliver a re-read, activates Refresh, then the second's "Use <folder>" and then the declined first's, the core reporting after each act what then remains, the test suite shall assert through the surface:
+Where the Space surface renders over a home whose issues list holds three unanswered repairs, each proposing its recorded folder, when the reader dismisses the first, activates the third's "Use <folder>", lets the core deliver a re-read, activates Refresh, then the second's "Use <folder>" and then the dismissed first's, the core reporting after each act what then remains, the test suite shall assert through the surface:
 
-- the postponed row keeps the first place, reading "For later", and the review remains neutral and Review shows the remaining unresolved count [[space-55](#space-55)] [[space-49](#space-49)] [[space-1](#space-1)];
+- the dismissed row moves to Dismissed with its folder action available, and the review remains neutral and Review shows the remaining unresolved count [[space-124](#space-124)] [[space-49](#space-49)] [[space-1](#space-1)];
 - the third row gives way in its own place to an outcome confirming the chosen folder and a live-region announcement of that outcome [[space-48](#space-48)];
 - focus rests on the second repair's "Use <folder>", wrapping past the declined row [[space-48](#space-48)];
-- the core's re-read leaves the three rows in their places [[space-48](#space-48)] [[space-55](#space-55)];
-- after Refresh the outcome is gone and the declined row stands after the second [[space-48](#space-48)] [[space-55](#space-55)];
+- the core's re-read retains the active outcome and remaining task in their places and the dismissed task in Dismissed [[space-48](#space-48)] [[space-124](#space-124)];
+- after Refresh the outcome is gone, the second task remains active and the dismissed first task remains under Dismissed [[space-48](#space-48)] [[space-124](#space-124)];
 - the second's "Use <folder>" leaves the live region confirming its saved folder and focus on its outcome's Open project, which opens that project [[space-48](#space-48)];
-- the declined repair's "Use <folder>" leaves both outcomes in their places with the core reporting no diagnostic, focus on the new outcome's Open project, until Refresh closes the list [[space-48](#space-48)].
+- the dismissed repair's "Use <folder>" leaves both outcomes in active review with the core reporting no diagnostic, focus on the new outcome's Open project, until Refresh closes the list [[space-48](#space-48)].
 
 #### space-70
 
@@ -1437,7 +1446,7 @@ Where the Space surface renders over a signed-in home whose instance lists a gro
 - `alpha`'s primary control reads "Show", offering "Open on lab-1" beside it, `beta`'s "Open here", offering "Show on lab-1", and `acme-spex`'s "Open here" asking for the folder its sessions run in; "Open here" on `beta` sends `space.join` with the folder the picker returns, "Open on lab-1" on `alpha` sends that seat's client `space.join` with no folder once the seat's `signIn` reads `signedIn`, the row reading "Opening on lab-1…" meanwhile, and nothing while it reads `running` [[space-111](#space-111)] [[space-63](#space-63)];
 - a local-only project, once added, stands under "This computer" with no phrase and "Add to a group…", whose form visibly names the project and labels the Space, its "Choose group" listing "Personal" first and then `acme` and "Research", with no destination selected or command sent before confirmation [[space-61](#space-61)] [[space-58](#space-58)];
 - over a placement ended in choices needed, `alpha` reads "1 to send" while it holds a local unit and otherwise "Changed here and at <display name>" with Resolve, Resolve showing the picker beneath the row with "Keep this computer's", "Take <display name>'s", "All here" and "All <display name>'s", while a placement started separately reads "Started separately at <display name>" with "Combine…" and its confirmation [[space-120](#space-120)] [[space-14](#space-14)] [[space-17](#space-17)] [[space-13](#space-13)];
-- a repair identifies saved conversations rather than storage names, labels the previously used folder, offers "Use <folder>" for its checked proposal, "Locate folder…" and "Not now", postponing sending `space.repair.decline` [[space-46](#space-46)] [[space-47](#space-47)] [[space-49](#space-49)];
+- a repair identifies saved conversations rather than storage names, labels the previously used folder, offers "Use <folder>" for its checked proposal, "Locate folder…" and Dismiss, setting aside the reminder through `space.repair.decline` [[space-46](#space-46)] [[space-47](#space-47)] [[space-49](#space-49)];
 - shown at the seat's place, the same surface reads "Not on lab-1", "Keep lab-1's" and "Spex keeps lab-1's files in <home>" [[space-112](#space-112)];
 - every new control follows the label budget or its fixed-phrase exception and fits at the 320-pixel floor [[space-28](#space-28)].
 
@@ -1454,6 +1463,7 @@ Where the Space surface renders over a controlled command connection reporting f
 - named projects have separate groups, including equal names at distinct identities, and unnamed history shows Earlier conversations with every previous folder; previews have conversation icons and known-date or untitled fallbacks [[space-46](#space-46)];
 - opening an identified conversation shows its saved transcript with no registered project or folder choice, starts no turn and sends no folder change; previews without an identity remain text and a removed session's stale preview stays on Space with a Refresh instruction [[space-46](#space-46)];
 - Locate folder opens the selected group's existing-folder editor, explains why files are needed and that none are created or downloaded, starts empty when the recorded folder is unusable, keeps the candidate on refusal and sends only that group's confirmed choice, leaving the other groups unchanged and Cancel and Escape sending nothing [[space-47](#space-47)];
-- Not now lowers the count once, preserves unrelated notices and confirms the sidebar return path, with all-postponed tasks still reachable at zero [[space-49](#space-49)], and a saved-folder outcome does not claim all imports succeeded [[space-48](#space-48)];
+- Dismiss lowers the count once and preserves unrelated active notices, with all-dismissed tasks still reachable at zero [[space-49](#space-49)], and a saved-folder outcome does not claim all imports succeeded [[space-48](#space-48)];
 - a dependent older-session diagnostic remains in its folder task's details without becoming another task [[space-46](#space-46)];
-- import, upgrade, missing-folder and unknown-code diagnostics show only their supported meanings, with technical evidence collapsed and expandable [[space-121](#space-121)].
+- import, upgrade, missing-folder and unknown-code diagnostics show only their supported meanings, with technical evidence collapsed and expandable [[space-121](#space-121)];
+- eligible older-history notices offer dismissal separately from folder instructions; successful Dismiss and Show again move only their item between active review and collapsed Dismissed and update the count, failures retain the item with an error, blocking and unknown diagnostics offer no dismissal, and sidebar return reveals dismissed folder choices [[space-124](#space-124)].

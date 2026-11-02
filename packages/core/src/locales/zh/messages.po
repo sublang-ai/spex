@@ -3176,6 +3176,11 @@ msgstr "此文件夹已包含 Git 仓库，但尚无初始提交。请在终端�
 msgid "This folder already contains a Git repository. Use Add to register it."
 msgstr "此文件夹已包含 Git 仓库。请使用“添加”注册该仓库。"
 
+#. Refusal when a dismissal names no currently dismissible saved-conversation notice
+#: src/space.ts
+msgid "This notice has changed. Refresh to review it."
+msgstr "此提示已发生变化。请刷新后查看。"
+
 #. Refusal of Add: a project's package is added from a folder only inside its project folder (environments-2), and this package lies elsewhere
 #: src/service.ts
 msgid "This package's folder is outside the project folder — add it in that project, or publish it and add it from the registry"

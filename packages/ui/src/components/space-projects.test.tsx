@@ -92,7 +92,7 @@ const WORDS = {
     folderRetry: "Choose its project folder, then restart Spex to retry",
     repairFolder: "Previously used folder~/code/delta",
     chooseFolder: "Locate folder…",
-    notHere: "Not now",
+    notHere: "Dismiss",
     notOnLab: "Not on lab-1",
     keepOnLab: "Keep lab-1's",
     labFiles: "Spex keeps lab-1's files in ~/.spex",
@@ -148,7 +148,7 @@ const WORDS = {
     folderRetry: "选择其项目文件夹，然后重启 Spex 重试",
     repairFolder: "之前使用的文件夹~/code/delta",
     chooseFolder: "查找文件夹…",
-    notHere: "暂不处理",
+    notHere: "忽略",
     notOnLab: "不在 lab-1 上",
     keepOnLab: "保留 lab-1 的",
     labFiles: "Spex 将 lab-1 的文件保存在 ~/.spex",
@@ -691,7 +691,7 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
     expect(within(repair).getByTestId("space-repair-folder").textContent).toBe(words.repairFolder);
     // [space-47] "Use <folder>" where the core proposes one.
     expect(within(repair).getByTestId("space-repair-use").textContent).toBe(words.use);
-    // [space-47] [space-49] "Locate folder…" and "Not now",
+    // [space-47] [space-49] "Locate folder…" and "Dismiss",
     // declining sending `space.repair.decline`.
     expect(within(repair).getByTestId("space-repair-choose").textContent).toBe(words.chooseFolder);
     const decline = within(repair).getByTestId("space-repair-decline");

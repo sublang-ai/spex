@@ -16,9 +16,11 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, s
 import { hostname } from "node:os";
 import { basename, join } from "node:path";
 import { createSessionStore } from "@sublang/playbook/session-store";
+import { WebSocket } from "ws";
 import { seedHistorySession } from "./testing/demo.js";
 import { Home } from "./home.js";
-import type { Command } from "./protocol.js";
+import type { SpaceHost } from "./space.js";
+import type { Command, GroupsState, ServerMessage } from "./protocol.js";
 import { clonePath, createSpaceHarness, OWN, OWN_KEY, ownClone, placementOf, prefsOf, repositoryOf, rowsOf } from "./testing/space-harness.js";
 
 const fixture = createSpaceHarness();
@@ -765,4 +767,205 @@ test("space-51: deferred folder review survives restart and changed checks, with
   assert.equal(listed?.projectId, key);
   const history = await home.client.expectOk("history.get", { sessionId });
   assert.ok(history.records.some((r) => r.record.type === "turn_started"));
+});
+
+test("core-service-149: dismissing an older-conversation notice preserves its source and survives restart without hiding changed failures", async (t) => {
+  const userHome = mkdtempSync(join(scratch, "notice-home-"));
+  const dataDir = join(userHome, ".spex");
+  const stateDir = join(userHome, "state");
+  const legacyDir = join(stateDir, "playbook", "sessions");
+  mkdirSync(legacyDir, { recursive: true });
+  const source = join(legacyDir, `${randomUUID()}.json`);
+  const otherSource = join(legacyDir, `${randomUUID()}.json`);
+  const original = JSON.stringify({ schemaVersion: 1, title: "An earlier conversation" });
+  writeFileSync(source, original, { mode: 0o600 });
+  writeFileSync(otherSource, original, { mode: 0o600 });
+  const options = { dataDir, project: false, env: { HOME: userHome, XDG_STATE_HOME: stateDir }, extra: { home: userHome } };
+  let home = await startHome("notice", options);
+  t.after(() => home.stop());
+  const { key: projectKey } = await addFolder(home, gitFolder("notice-project"));
+  await home.stop();
+  const unpaired = Home.load(dataDir); unpaired.unpair(projectKey); unpaired.save();
+  home = await startHome("notice-unpaired", options);
+  const noticeIn = (state: GroupsState, file = source) => state.diagnostics.find((entry) => entry.file === file);
+  const all = await home.client.expectOk("space.get", {});
+  const folderTask = all.diagnostics.find((entry) => entry.repair?.repository === projectKey)?.repair;
+  assert.ok(folderTask);
+  const before = await home.client.expectOk("space.repair.decline", { repair: folderTask.key, declined: true });
+  assert.equal(before.issues, all.issues - 1, "dismissing the folder task leaves both independent notices counted");
+  const notice = noticeIn(before);
+  assert.equal(notice?.code, "session-import");
+  assert.equal(notice.blocking, false);
+  assert.match(notice.reason, /unsupported legacy schema 1/);
+  assert.ok(notice.notice?.key);
+  assert.equal(notice.notice.dismissed, undefined);
+  const key = notice.notice.key;
+  assert.deepEqual((await home.client.expectOk("storage.diagnostics", {})).find((entry) => entry.file === source)?.notice, { key }, "the diagnostics command exposes the same dismissal capability");
+  const status = git(ownClone(dataDir), "status", "--porcelain");
+  const observed: GroupsState[] = [];
+  const observe = async () => {
+    const socket = new WebSocket(`ws://127.0.0.1:${home.service.port()}/?token=test`);
+    socket.on("message", (bytes) => {
+      const message = JSON.parse(String(bytes)) as ServerMessage;
+      if (message.type === "space.state") observed.push(message.state);
+    });
+    await new Promise<void>((resolve, reject) => { socket.once("open", resolve); socket.once("error", reject); });
+    return socket;
+  };
+  let observer = await observe();
+  t.after(() => observer.close());
+  const waitObserved = async (check: (state: GroupsState) => boolean) => {
+    const deadline = Date.now() + 5_000;
+    while (!observed.some(check) && Date.now() < deadline) await sleep(10);
+    assert.ok(observed.some(check), "another connected reader receives the updated dismissal and count");
+  };
+  const dismissed = await home.client.expectOk("space.notice.dismiss", { notice: key, dismissed: true });
+  const dismissedAt = noticeIn(dismissed)?.notice?.dismissed;
+  assert.equal(typeof dismissedAt, "number");
+  assert.equal(dismissed.issues, before.issues - 1, "only the chosen notice leaves the count");
+  await waitObserved((state) => state.issues === dismissed.issues && noticeIn(state)?.notice?.dismissed === dismissedAt);
+  assert.equal(noticeIn(dismissed, otherSource)?.notice?.dismissed, undefined, "the other unsupported conversation still counts");
+  assert.equal(readFileSync(source, "utf8"), original, "dismissal does not convert or delete the old conversation");
+  assert.equal(readFileSync(otherSource, "utf8"), original);
+  assert.equal(git(ownClone(dataDir), "status", "--porcelain"), status, "dismissal changes no tracked data");
+  assert.deepEqual(prefsOf(dataDir)[`space:notice:${key}`], { dismissed: dismissedAt });
+  assert.deepEqual((await home.client.expectOk("storage.diagnostics", {})).find((entry) => entry.file === source)?.notice, { key, dismissed: dismissedAt }, "both diagnostic surfaces report the stored answer");
+  assert.equal((await home.client.expectOk("space.get", {})).issues, dismissed.issues, "a fresh read preserves dismissal");
+
+  observer.close();
+  await home.stop();
+  home = await startHome("notice-restart", options);
+  observed.length = 0;
+  observer = await observe();
+  const restarted = await home.client.expectOk("space.get", {});
+  assert.deepEqual(noticeIn(restarted)?.notice, { key, dismissed: dismissedAt });
+  assert.equal(typeof restarted.diagnostics.find((entry) => entry.repair?.key === folderTask.key)?.repair?.declined, "number");
+  assert.equal(restarted.issues, dismissed.issues);
+  assert.equal(readFileSync(source, "utf8"), original, "restart retains the unsupported source unchanged");
+  const restored = await home.client.expectOk("space.notice.dismiss", { notice: key, dismissed: false });
+  assert.equal(restored.issues, before.issues, "Show again restores exactly this notice to the count");
+  assert.equal(noticeIn(restored)?.notice?.dismissed, undefined);
+  await waitObserved((state) => state.issues === before.issues && noticeIn(state)?.notice?.key === key && noticeIn(state)?.notice?.dismissed === undefined);
+  assert.equal(prefsOf(dataDir)[`space:notice:${key}`], undefined);
+  await home.client.expectError("space.notice.dismiss", { notice: "unknown-notice", dismissed: true }, "invalid_request");
+  await home.client.expectOk("space.notice.dismiss", { notice: key, dismissed: true });
+
+  // The same source path can now hold different work. The old answer
+  // must neither hide it nor authorize a stale dismissal command.
+  writeFileSync(source, JSON.stringify({ schemaVersion: 1, title: "Different earlier work" }));
+  const changed = await home.client.expectOk("space.get", {});
+  const changedKey = noticeIn(changed)?.notice?.key;
+  assert.ok(changedKey && changedKey !== key);
+  assert.equal(noticeIn(changed)?.notice?.dismissed, undefined);
+  assert.equal(changed.issues, before.issues);
+  await home.client.expectError("space.notice.dismiss", { notice: key, dismissed: true }, "invalid_request");
+  await home.client.expectError("space.notice.dismiss", { notice: key, dismissed: false }, "invalid_request");
+
+  // A linked source is not a verified regular source, even when it
+  // points to the same bytes. It cannot retain a dismissible identity.
+  const aside = `${source}.retained`;
+  renameSync(source, aside);
+  symlinkSync(aside, source);
+  try {
+    const linked = await home.client.expectOk("space.get", {});
+    assert.equal(noticeIn(linked)?.notice, undefined);
+    assert.equal(linked.issues, before.issues);
+    await home.client.expectError("space.notice.dismiss", { notice: changedKey, dismissed: true }, "invalid_request");
+  } finally {
+    rmSync(source);
+    renameSync(aside, source);
+  }
+
+  // Unrelated malformed storage and an actual blocker remain outside
+  // the dismissal contract, even while a prior dismissal is stored.
+  const projectFile = join(ownClone(dataDir), "project.json");
+  writeFileSync(projectFile, "{}");
+  const unsupported = await home.client.expectOk("space.get", {});
+  assert.equal(noticeIn(unsupported, projectFile)?.notice, undefined);
+  assert.ok(noticeIn(unsupported, projectFile));
+  await home.client.expectError("space.notice.dismiss", { notice: projectFile, dismissed: true }, "invalid_request");
+  const homeFile = join(dataDir, "home.yaml");
+  const homeBytes = readFileSync(homeFile);
+  writeFileSync(homeFile, "format: invalid\n");
+  try {
+    const blocked = await home.client.expectOk("space.get", {});
+    assert.ok(blocked.diagnostics.some((entry) => entry.blocking));
+    assert.ok(blocked.diagnostics.filter((entry) => entry.blocking).every((entry) => !entry.notice));
+    await home.client.expectError("space.notice.dismiss", { notice: homeFile, dismissed: true }, "invalid_request");
+  } finally {
+    writeFileSync(homeFile, homeBytes);
+  }
+});
+
+test("core-service-149: overlapping notice answers cannot publish stale counts or source capabilities", async (t) => {
+  const userHome = mkdtempSync(join(scratch, "overlapping-notices-"));
+  const stateDir = join(userHome, "state");
+  const legacyDir = join(stateDir, "playbook", "sessions");
+  mkdirSync(legacyDir, { recursive: true });
+  const sources = [join(legacyDir, `${randomUUID()}.json`), join(legacyDir, `${randomUUID()}.json`)];
+  const original = JSON.stringify({ schemaVersion: 1 });
+  for (const source of sources) writeFileSync(source, original, { mode: 0o600 });
+  const home = await startHome("overlapping-notices", { dataDir: join(userHome, ".spex"), project: false,
+    env: { HOME: userHome, XDG_STATE_HOME: stateDir }, extra: { home: userHome } });
+  t.after(() => home.stop());
+  const before = await home.client.expectOk("space.get", {});
+  const keys = sources.map((file) => {
+    const key = before.diagnostics.find((entry) => entry.file === file)?.notice?.key;
+    assert.ok(key);
+    return key;
+  });
+  // Hold a real Space read after it has captured its diagnostic facts;
+  // all commands, preferences and broadcasts still use the real core.
+  const host = (home.service as unknown as { space: { host: SpaceHost } }).space.host;
+  const checkRepairs = host.checkRepairs;
+  let waiting: { enter(): void; released: Promise<void> } | undefined;
+  const releases: (() => void)[] = [];
+  t.after(() => { for (const release of releases) release(); host.checkRepairs = checkRepairs; });
+  host.checkRepairs = async (diagnostics) => {
+    const hold = waiting;
+    waiting = undefined;
+    const checked = await checkRepairs(diagnostics);
+    if (hold) { hold.enter(); await hold.released; }
+    return checked;
+  };
+  const holdNextRead = () => {
+    let entered = false;
+    let release!: () => void;
+    const released = new Promise<void>((resolve) => { release = resolve; });
+    waiting = { enter: () => { entered = true; }, released };
+    releases.push(release);
+    return { release, async entered() {
+      const deadline = Date.now() + 5_000;
+      while (!entered && Date.now() < deadline) await sleep(10);
+      assert.ok(entered, "the first command reached its held diagnostic read");
+    } };
+  };
+  for (const dismissed of [true, false]) {
+    const hold = holdNextRead();
+    const earlier = home.client.expectOk("space.notice.dismiss", { notice: keys[0]!, dismissed });
+    await hold.entered();
+    const later = await home.client.expectOk("space.notice.dismiss", { notice: keys[1]!, dismissed });
+    const expectedCount = before.issues - (dismissed ? 2 : 0);
+    assert.equal(later.issues, expectedCount);
+    const from = home.client.mark();
+    hold.release();
+    const finishedLast = await earlier;
+    assert.equal(finishedLast.issues, expectedCount, "finishing an older read does not undo either answer");
+    const broadcasts = home.client.messages.slice(from).filter((message) => message.type === "space.state");
+    assert.ok(broadcasts.length > 0, "the held command broadcasts after the newer answer");
+    for (const message of broadcasts) {
+      assert.equal(message.state.issues, expectedCount);
+      for (const key of keys) assert.equal(message.state.diagnostics.find((entry) => entry.notice?.key === key)?.notice?.dismissed !== undefined, dismissed);
+    }
+  }
+  for (const source of sources) assert.equal(readFileSync(source, "utf8"), original);
+  const hold = holdNextRead();
+  const earlier = home.client.expectOk("space.get", {});
+  await hold.entered();
+  writeFileSync(sources[0]!, `${original}\n`);
+  hold.release();
+  const changed = await earlier;
+  const changedNotice = changed.diagnostics.find((entry) => entry.file === sources[0])?.notice;
+  assert.ok(changedNotice?.key && changedNotice.key !== keys[0], "a source changed during the read receives a fresh capability");
+  assert.equal(changedNotice.dismissed, undefined);
 });

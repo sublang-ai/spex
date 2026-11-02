@@ -2932,6 +2932,8 @@ msgstr "断开连接"
 
 #. act: close the error strip
 #. close the error strip above the composer
+#. move this folder task or saved-file notice to Dismissed without deleting saved work
+#. move this folder task or saved-file notice to Dismissed without deleting saved work
 #. put this outcome card away
 #. put this outcome card away
 #. put this outcome card away
@@ -2939,6 +2941,7 @@ msgstr "断开连接"
 #: src/components/Composer.tsx
 #: src/components/DraftConversation.tsx
 #: src/components/SpaceGroups.tsx
+#: src/components/SpaceRepairs.tsx
 #: src/components/SpaceSync.tsx
 msgid "Dismiss"
 msgstr "忽略"
@@ -2947,6 +2950,11 @@ msgstr "忽略"
 #: src/components/DraftConversation.tsx
 msgid "Dismiss error"
 msgstr "忽略错误"
+
+#. collapsed folder choices and saved-file notices that no longer contribute to the warning count
+#: src/components/SpaceRepairs.tsx
+msgid "Dismissed ({count})"
+msgstr "已忽略（{count}）"
 
 #. shortcut table column: what the keys do
 #: src/components/SettingsSurface.tsx
@@ -3527,11 +3535,6 @@ msgstr "本机上运行其会话的文件夹"
 #: src/components/CaptainHome.tsx
 msgid "For example:"
 msgstr "例如："
-
-#. this optional task has been deferred
-#: src/components/SpaceRepairs.tsx
-msgid "For later"
-msgstr "稍后处理"
 
 #: src/components/RunView.tsx
 msgid "For new sessions"
@@ -4153,11 +4156,6 @@ msgstr "最后输出：{age}"
 msgid "Last refreshed {age}"
 msgstr "上次刷新：{age}"
 
-#. deferring this recovery task never deletes saved work
-#: src/components/SpaceRepairs.tsx
-msgid "Leave this for later; saved conversations are kept"
-msgstr "留待以后处理，已保存的会话仍保留"
-
 #. field of New playbook: the SPDX license its spec package is published under
 #: src/components/PlaybookAuthoring.tsx
 msgid "License"
@@ -4419,6 +4417,11 @@ msgstr "以其他方式打开 {name}"
 msgid "Move the focused Up next row"
 msgstr "移动“接下来”中选中的行"
 
+#. confirms a folder task was dismissed without deleting saved conversations
+#: src/components/SpaceRepairs.tsx
+msgid "Moved to Dismissed. Your conversations are kept."
+msgstr "已移至“已忽略”。会话仍会保留。"
+
 #. the folder field's refusal of an empty path
 #. the folder field's refusal of an empty path
 #: src/components/ProjectPalette.tsx
@@ -4426,6 +4429,7 @@ msgstr "移动“接下来”中选中的行"
 msgid "Name a folder"
 msgstr "请填写文件夹"
 
+#. saved data currently blocks an operation
 #. saved data currently blocks an operation
 #: src/components/DashboardSurface.tsx
 #: src/components/SpaceRepairs.tsx
@@ -4818,11 +4822,6 @@ msgstr "未安装"
 msgid "Not installed · private"
 msgstr "未安装 · 私有"
 
-#. leave optional saved-work recovery for later
-#: src/components/SpaceRepairs.tsx
-msgid "Not now"
-msgstr "暂不处理"
-
 #. a project's records, or a copy of them at a Space, not on the team server whose Space is shown; {place} is the server's name
 #: src/lib/space.ts
 msgid "Not on {place}"
@@ -4922,6 +4921,11 @@ msgstr "本机没有要发送的内容"
 #: src/components/SpaceSync.tsx
 msgid "Nothing to stop"
 msgstr "没有可停止的操作"
+
+#. confirms only the warning was dismissed, never its original saved file
+#: src/components/SpaceRepairs.tsx
+msgid "Notice dismissed. The saved file is kept."
+msgstr "已忽略提示。原始文件仍会保留。"
 
 #: src/components/SettingsSurface.tsx
 msgid "Notifications"
@@ -6275,6 +6279,8 @@ msgid "review committed changes"
 msgstr "审阅已提交改动"
 
 #. stored-data notices that do not offer a project folder choice
+#. stored-data notices that do not offer a project folder choice
+#. stored-data notices that do not offer a project folder choice
 #: src/components/SpaceRepairs.tsx
 msgid "Review notices"
 msgstr "查看提示"
@@ -6729,6 +6735,12 @@ msgstr "显示更早的 {rest} 条中的 {count} 条"
 msgid "Show {shown} of {total} earlier entries"
 msgstr "显示更早的 {total} 条中的 {shown} 条"
 
+#. restore a dismissed folder task or saved-file notice to active review
+#. restore a dismissed folder task or saved-file notice to active review
+#: src/components/SpaceRepairs.tsx
+msgid "Show again"
+msgstr "重新显示"
+
 #. turn every item group back on
 #: src/components/SpecView.tsx
 msgid "Show all"
@@ -6779,6 +6791,12 @@ msgstr "显示侧栏"
 #: src/components/NavRail.tsx
 msgid "Show the sidebar ({keys})"
 msgstr "显示侧栏（{keys}）"
+
+#. a dismissed folder task or notice is active and counted again
+#. a dismissed folder task or notice is active and counted again
+#: src/components/SpaceRepairs.tsx
+msgid "Shown again."
+msgstr "已重新显示。"
 
 #: src/components/SpecItemRows.tsx
 msgid "shown despite filter"
@@ -8315,12 +8333,6 @@ msgstr "你"
 #: src/components/SpaceGroups.tsx
 msgid "You can restore this group before deletion takes effect."
 msgstr "您可以在删除生效前恢复此群组。"
-
-#. after postponing a folder choice, explains the persistent way back at this place
-#. after postponing a folder choice, explains the persistent way back at this place
-#: src/components/SpaceRepairs.tsx
-msgid "You can return through Locate project files in the sidebar."
-msgstr "之后可以从侧栏中的“查找项目文件”回到这里。"
 
 #. a deletion confirmation whose Space permissions changed while it was open
 #: src/components/SpaceGroups.tsx

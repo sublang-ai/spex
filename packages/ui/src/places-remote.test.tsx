@@ -618,7 +618,7 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
     expect(within(there).queryByText("Browse…")).toBeNull();
     expect(pathEntries(there)).toEqual([]);
     // Postponing this choice does not assert where a project belongs.
-    expect(within(there).getByTestId("space-repair-decline").textContent).toBe("Not now");
+    expect(within(there).getByTestId("space-repair-decline").textContent).toBe("Dismiss");
     expect(pickDirectory).not.toHaveBeenCalled();
     expect(callsOf(alpha, "project.rebind")).toEqual([]);
   });

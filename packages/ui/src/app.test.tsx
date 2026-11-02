@@ -566,7 +566,7 @@ describe("postponed folder choices remain reachable (DR-184)", () => {
     expect(screen.getByTestId("space-issues-list")).toBeTruthy();
     expect(screen.getByTestId("space-issues").textContent).toContain("Review (3)");
     for (const remaining of [2, 1, 0]) {
-      await act(async () => fireEvent.click(screen.getAllByRole("button", { name: "Not now" })[0]!));
+      await act(async () => fireEvent.click(screen.getAllByRole("button", { name: "Dismiss" })[0]!));
       expect(useAppStore.getState().space?.issues).toBe(remaining);
     }
     expect(screen.getByTestId("space-issues").textContent).toBe("Review");

@@ -14,6 +14,8 @@ Amended by [DR-183](183-read-saved-conversations-before-locating-files.md) in so
 
 Amended by [DR-184](184-a-review-count-and-a-way-back.md) in the header review count and persistent return path.
 
+Amended by [DR-185](185-dismiss-reminders-without-losing-history.md) in unified dismissal, separated active and dismissed items, and preserved-history notice acknowledgement.
+
 ## Context
 
 The previous repair screen made storage diagnostics into mandatory setup work after sign-in.

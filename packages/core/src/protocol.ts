@@ -1591,6 +1591,7 @@ export const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("space.tree"), id, repository: repositoryKeySchema, path: z.string().optional() }).strict(),
   z.object({ type: z.literal("space.read"), id, repository: repositoryKeySchema, path: z.string().min(1) }).strict(),
   z.object({ type: z.literal("space.repair.decline"), id, repair: z.string().min(1), declined: z.boolean() }).strict(),
+  z.object({ type: z.literal("space.notice.dismiss"), id, notice: z.string().min(1), dismissed: z.boolean() }).strict(),
   // Team servers (core-service-128, DR-133): the servers each signed-in
   // instance lists, and a seat on one opened or closed, the server named
   // by its instance's origin and its id there. `consented`: the client
@@ -1820,6 +1821,7 @@ export interface CommandResults {
   "space.tree": { path: string; entries: SpaceEntry[] };
   "space.read": SpaceReadResult;
   "space.repair.decline": GroupsState;
+  "space.notice.dismiss": GroupsState;
   "server.list": ServerListing;
   /** The seat's place and its lease's expiry in Unix milliseconds; never
    * its endpoint or its bearer (core-service-128). */
@@ -2112,6 +2114,9 @@ export interface StorageDiagnostic {
   reason: string;
   blocking: boolean;
   repair?: DiagnosticRepair;
+  /** A nonblocking older-conversation notice the reader can dismiss on
+   * this device. Its opaque identity changes with its source or cause. */
+  notice?: { key: string; dismissed?: number };
   code?: "session-import" | "session-upgrade" | "session-folder-required";
   /** The repository whose folder selection can resolve this diagnostic. */
   repository?: string;

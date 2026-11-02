@@ -371,6 +371,9 @@ export interface AppState extends AttachmentState {
   /** Decline a repair, or undo that (space-54): the reader's own act,
    * never rendering; the reply is the new state. */
   spaceRepairDecline(repair: string, declined: boolean): Promise<void>;
+  /** Dismiss or restore a supported stored-file notice; the core's
+   * reply supplies the authoritative notice state and count. */
+  spaceNoticeDismiss(notice: string, dismissed: boolean): Promise<void>;
   /** Point a project the space carries at a folder on this device
    * (space-47), preserving its identity: the recorded directories ride
    * as aliases so every session under them resolves. */
@@ -1959,6 +1962,13 @@ function placeState(
     async spaceRepairDecline(repair: string, declined: boolean): Promise<void> {
       const read = (spaceReads += 1);
       const space = await getClient().command("space.repair.decline", { repair, declined });
+      if (read !== spaceReads) return;
+      set({ space, spaceError: undefined, spaceReadAt: Date.now() });
+    },
+
+    async spaceNoticeDismiss(notice: string, dismissed: boolean): Promise<void> {
+      const read = (spaceReads += 1);
+      const space = await getClient().command("space.notice.dismiss", { notice, dismissed });
       if (read !== spaceReads) return;
       set({ space, spaceError: undefined, spaceReadAt: Date.now() });
     },

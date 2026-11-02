@@ -42,13 +42,13 @@ function TechnicalDetails({ entries, children }: {
 
 /** One saved-work group: read its conversations or locate its files.
  * Names from the storage layout never stand in for a user's project. */
-function RepairRow({ repair, disabled, focusSeq, onResolved, onDeferred, onNote, onOpenSession }: {
+function RepairRow({ repair, disabled, canDismiss, focusSeq, onResolved, onDismissalChanged, onOpenSession }: {
   repair: DiagnosticRepair;
   disabled: boolean;
+  canDismiss: boolean;
   focusSeq?: number;
   onResolved(key: string, summary: string, projectId?: string): void;
-  onDeferred(): void;
-  onNote: Note;
+  onDismissalChanged(key: string, dismissed: boolean): void;
   onOpenSession(sessionId: string): void;
 }) {
   const store = usePlaceStore();
@@ -75,7 +75,7 @@ function RepairRow({ repair, disabled, focusSeq, onResolved, onDeferred, onNote,
   const fieldId = useId();
   const helpId = `${fieldId}-help`;
   const errorId = `${fieldId}-error`;
-  const declined = repair.declined !== undefined;
+  const declined = canDismiss && repair.declined !== undefined;
 
   useEffect(() => {
     if (focusSeq !== undefined) firstRef.current?.focus();
@@ -133,11 +133,12 @@ function RepairRow({ repair, disabled, focusSeq, onResolved, onDeferred, onNote,
     }
   };
   const defer = async (): Promise<void> => {
+    if (busy || disabled || !canDismiss) return;
     setBusy(true);
+    setRefusal(undefined);
     try {
-      await decline(repair.key, true);
-      onDeferred();
-      onNote(i18n._({ id: "You can return through Locate project files in the sidebar.", comment: "after postponing a folder choice, explains the persistent way back at this place" }));
+      await decline(repair.key, !declined);
+      onDismissalChanged(repair.key, !declined);
     } catch (cause) {
       setRefusal((cause as Error).message);
     } finally {
@@ -192,11 +193,11 @@ function RepairRow({ repair, disabled, focusSeq, onResolved, onDeferred, onNote,
           {i18n._({ id: "Locate folder…", comment: "locate the existing project files for this saved conversation group" })}
         </button>
       ) : null}
-      {!declined ? (
-        <button ref={first === "defer" ? firstRef : undefined} type="button" data-testid="space-repair-decline" className={LINK} disabled={disabled || busy} title={i18n._({ id: "Leave this for later; saved conversations are kept", comment: "deferring this recovery task never deletes saved work" })} onClick={() => void defer()}>
-          {i18n._({ id: "Not now", comment: "leave optional saved-work recovery for later" })}
-        </button>
-      ) : null}
+      {canDismiss ? <button ref={first === "defer" ? firstRef : undefined} type="button" data-testid="space-repair-decline" className={LINK} disabled={disabled || busy} onClick={() => void defer()}>
+          {declined
+            ? i18n._({ id: "Show again", comment: "restore a dismissed folder task or saved-file notice to active review" })
+            : i18n._({ id: "Dismiss", comment: "move this folder task or saved-file notice to Dismissed without deleting saved work" })}
+        </button> : null}
       {refusalLine}
     </div>
   );
@@ -253,7 +254,6 @@ function RepairRow({ repair, disabled, focusSeq, onResolved, onDeferred, onNote,
             : repair.projectName || (hasConversations
               ? i18n._({ id: "Earlier conversations", comment: "saved conversations whose actual project name is unknown" })
               : i18n._({ id: "Earlier saved work", comment: "saved work with no known project name or indexed conversations" }))}</h3>
-          {declined ? <span className="text-xs text-neutral-500">{i18n._({ id: "For later", comment: "this optional task has been deferred" })}</span> : null}
         </div>
         {!folderRepair && hasConversations ? <p className="text-xs text-neutral-500">{i18n._({
           id: "{count, plural, one {# saved conversation} other {# saved conversations}}",
@@ -359,8 +359,42 @@ function RepairOutcomeRow({
 
 type IssueEntry = GroupsState["diagnostics"][number];
 
+/** Only the core's explicit capability permits dismissing a notice. */
+const dismissibleNotice = (entry: IssueEntry): boolean =>
+  !entry.blocking && !entry.repair && entry.notice !== undefined &&
+  (entry.code === "session-import" || entry.code === "session-upgrade");
+const dismissedNotice = (entry: IssueEntry): boolean =>
+  dismissibleNotice(entry) && entry.notice?.dismissed !== undefined;
+
 /** Known operations supply the cause; error prose never selects a remedy. */
-function DiagnosticRow({ entry }: { entry: IssueEntry }) {
+function DiagnosticRow({ entry, disabled, focusSeq, onNoticeChanged }: {
+  entry: IssueEntry;
+  disabled: boolean;
+  focusSeq?: number;
+  onNoticeChanged(key: string, dismissed: boolean): void;
+}) {
+  const store = usePlaceStore();
+  const dismiss = store((state) => state.spaceNoticeDismiss);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const actionRef = useRef<HTMLButtonElement>(null);
+  const dismissed = dismissedNotice(entry);
+  useEffect(() => {
+    if (focusSeq !== undefined) actionRef.current?.focus();
+  }, [focusSeq]);
+  const changeNotice = async (): Promise<void> => {
+    if (!entry.notice || busy || disabled) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      await dismiss(entry.notice.key, !dismissed);
+      onNoticeChanged(entry.notice.key, !dismissed);
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
   const folderRequired = entry.code === "session-folder-required";
   const olderSession = folderRequired || entry.code === "session-import" || entry.code === "session-upgrade";
   const summary = folderRequired
@@ -378,6 +412,14 @@ function DiagnosticRow({ entry }: { entry: IssueEntry }) {
         {i18n._({ id: "This must be resolved before using the affected data.", comment: "the problem blocks operations depending on this data, not all work" })}
       </p> : null}
       <TechnicalDetails entries={[entry]} />
+      {dismissibleNotice(entry) ? <div className="flex flex-wrap items-center gap-2">
+        <button ref={actionRef} type="button" data-testid="space-notice-dismiss" className={LINK} disabled={disabled || busy} onClick={() => void changeNotice()}>
+          {dismissed
+            ? i18n._({ id: "Show again", comment: "restore a dismissed folder task or saved-file notice to active review" })
+            : i18n._({ id: "Dismiss", comment: "move this folder task or saved-file notice to Dismissed without deleting saved work" })}
+        </button>
+        {error ? <p role="alert" className="text-xs text-red-600 dark:text-red-400">{error}</p> : null}
+      </div> : null}
     </li>
   );
 }
@@ -394,6 +436,7 @@ export function IssuesList({
   groups,
   connected,
   open,
+  revealDismissed,
   refreshes,
   onOpenProject,
   onOpenSession,
@@ -403,6 +446,8 @@ export function IssuesList({
   connected: boolean;
   /** The header's control opened it. */
   open: boolean;
+  /** A sidebar request reveals the folder tasks it led here to find. */
+  revealDismissed?: number;
   /** How many times the reader's own Refresh has re-read the state. */
   refreshes: number;
   onOpenProject(projectId: string): void;
@@ -411,13 +456,14 @@ export function IssuesList({
 }) {
   const store = usePlaceStore();
   const seat = seatName(store.place);
-  // A resolved repair's outcome stands in its row's place, and a
-  // declined row keeps its place, until the reader's own Refresh or his
-  // leaving the surface (space-48, space-55), so no list reflows under
-  // the pointer. The layout is the order the list last drew, ids of
-  // rows gone meanwhile kept so an outcome landing late finds its place.
+  // Outcomes keep the active task's position until Refresh. Dismissal
+  // deliberately moves a task into the separate, collapsed section.
   const [outcomes, setOutcomes] = useState<Record<string, RepairOutcome>>({});
-  const [hasDeferredChoice, setHasDeferredChoice] = useState(false);
+  const [dismissalNote, setDismissalNote] = useState<string>();
+  const [dismissedOpen, setDismissedOpen] = useState(false);
+  const seenReveal = useRef<number | undefined>(undefined);
+  const [noticeFocus, setNoticeFocus] = useState<{ key: string; dismissed: boolean; seq: number }>();
+  const dismissedSummaryRef = useRef<HTMLElement>(null);
   const layout = useRef<string[]>([]);
   const [focusTo, setFocusTo] = useState<{ id: string; seq: number }>();
   const seenRefreshes = useRef(refreshes);
@@ -426,18 +472,31 @@ export function IssuesList({
     seenRefreshes.current = refreshes;
     layout.current = [];
     setOutcomes({});
-    setHasDeferredChoice(false);
+    setDismissalNote(undefined);
+    setNoticeFocus(undefined);
     setFocusTo(undefined);
   }, [refreshes]);
+  useEffect(() => {
+    if (noticeFocus?.dismissed) dismissedSummaryRef.current?.focus();
+  }, [noticeFocus]);
+  const hasDismissedRepairs = groups.diagnostics.some((entry) => !entry.blocking && entry.repair?.declined !== undefined);
+  useEffect(() => {
+    if (!open) {
+      setDismissedOpen(false);
+      return;
+    }
+    if (revealDismissed === undefined || seenReveal.current === revealDismissed) return;
+    seenReveal.current = revealDismissed;
+    if (hasDismissedRepairs) setDismissedOpen(true);
+  }, [open, revealDismissed, hasDismissedRepairs]);
 
   // Optional recovery stays neutral; only a blocking diagnostic needs
   // immediate attention. Deferred tasks remain available.
   const blocking = groups.diagnostics.some((entry) => entry.blocking);
-  // The rows as a fresh layout orders them: the core's order, a
-  // declined repair after those still unanswered (space-46).
-  const fresh = [...groups.diagnostics].sort(
-    (a, b) => Number(a.repair?.declined !== undefined) - Number(b.repair?.declined !== undefined),
-  );
+  const fresh = groups.diagnostics.filter((entry) => entry.repair);
+  const notices = groups.diagnostics.filter((entry) => !entry.repair);
+  const activeNotices = notices.filter((entry) => !dismissedNotice(entry));
+  const dismissedNotices = notices.filter(dismissedNotice);
   const rows = new Map<string, { outcomeKey: string } | { entry: IssueEntry }>();
   for (const entry of fresh) {
     rows.set(
@@ -452,6 +511,12 @@ export function IssuesList({
   // Each row keeps the place it last had; a row new since then follows.
   const arrived = [...rows.keys()].filter((id) => !layout.current.includes(id));
   const placed = [...layout.current.filter((id) => rows.has(id)), ...arrived];
+  const activeRepairs = placed.filter((id) => {
+    const row = rows.get(id)!;
+    return "outcomeKey" in row || row.entry.blocking || row.entry.repair?.declined === undefined;
+  });
+  const dismissedRepairs = placed.filter((id) => !activeRepairs.includes(id));
+  const dismissedCount = dismissedRepairs.length + dismissedNotices.length;
   const nextLayout = [...layout.current, ...arrived];
   // What a resolution reads when its act lands: the store has often
   // re-read the state by then, the repair's row already gone.
@@ -460,7 +525,7 @@ export function IssuesList({
     layout.current = nextLayout;
     latest.current = { groups, outcomes };
   });
-  const listOpen = rows.size > 0 && (open || blocking);
+  const listOpen = (rows.size > 0 || notices.length > 0) && (open || blocking);
 
   /** The reader's act resolved a repair (space-48): its outcome takes
    * the row's place, and focus and the live region move on. */
@@ -469,7 +534,7 @@ export function IssuesList({
     const unanswered = (entry: IssueEntry): boolean =>
       entry.repair !== undefined &&
       entry.repair.key !== key &&
-      entry.repair.declined === undefined &&
+      (entry.blocking || entry.repair.declined === undefined) &&
       !done[entry.repair.key];
     // Focus moves to the next unanswered repair below, wrapping to the
     // top, or else onto this outcome's Open project. The layout still
@@ -484,78 +549,103 @@ export function IssuesList({
     onNote(summary);
   };
   const focusSeq = (id: string): number | undefined => (focusTo?.id === id ? focusTo.seq : undefined);
+  const confirmDismissal = (message: string): void => {
+    setDismissalNote(message);
+    onNote(message);
+  };
+  const onRepairDismissalChanged = (key: string, dismissed: boolean): void => {
+    if (dismissed) setNoticeFocus((was) => ({ key, dismissed: true, seq: (was?.seq ?? 0) + 1 }));
+    else setFocusTo((was) => ({ id: outcomeRowId(key), seq: (was?.seq ?? 0) + 1 }));
+    confirmDismissal(dismissed
+      ? i18n._({ id: "Moved to Dismissed. Your conversations are kept.", comment: "confirms a folder task was dismissed without deleting saved conversations" })
+      : i18n._({ id: "Shown again.", comment: "a dismissed folder task or notice is active and counted again" }));
+  };
+  const onNoticeChanged = (key: string, dismissed: boolean): void => {
+    setNoticeFocus((was) => ({ key, dismissed, seq: (was?.seq ?? 0) + 1 }));
+    confirmDismissal(dismissed
+      ? i18n._({ id: "Notice dismissed. The saved file is kept.", comment: "confirms only the warning was dismissed, never its original saved file" })
+      : i18n._({ id: "Shown again.", comment: "a dismissed folder task or notice is active and counted again" }));
+  };
 
   if (!listOpen) return null;
-  const folderTasks = groups.diagnostics.filter((entry) => entry.repair?.kind === "repository");
-  const hasHistory = folderTasks.some((entry) => (entry.repair?.sessions ?? 0) > 0);
-  const readable = folderTasks.some((entry) => entry.repair?.conversations?.some((conversation) => conversation.id));
-  const title = blocking
+  const folderTasks = fresh.filter((entry) => entry.repair?.kind === "repository" && !outcomes[entry.repair.key]);
+  const activeFolderTasks = folderTasks.filter((entry) => entry.blocking || entry.repair?.declined === undefined);
+  const introTasks = activeFolderTasks.length > 0 ? activeFolderTasks : folderTasks;
+  const hasHistory = introTasks.some((entry) => (entry.repair?.sessions ?? 0) > 0);
+  const readable = introTasks.some((entry) => entry.repair?.conversations?.some((conversation) => conversation.id));
+  const repairsBlocking = fresh.some((entry) => entry.blocking);
+  const noticesBlocking = activeNotices.some((entry) => entry.blocking);
+  const repairTitle = repairsBlocking
     ? i18n._({ id: "Needs attention", comment: "saved data currently blocks an operation" })
     : folderTasks.length > 0
       ? i18n._({ id: "Locate project files", comment: "review the project folders needed for saved conversations" })
       : i18n._({ id: "Review notices", comment: "stored-data notices that do not offer a project folder choice" });
+  const noticeTitle = noticesBlocking
+    ? i18n._({ id: "Needs attention", comment: "saved data currently blocks an operation" })
+    : i18n._({ id: "Review notices", comment: "stored-data notices that do not offer a project folder choice" });
+  const title = activeNotices.length > 0 || activeRepairs.length === 0 ? noticeTitle : repairTitle;
+  const panelClass = (needsAttention: boolean): string =>
+    `flex min-w-0 flex-col gap-4 rounded-lg border p-4 ${needsAttention
+      ? "border-amber-300 dark:border-amber-700"
+      : "border-neutral-200 dark:border-neutral-800"}`;
+  const introduction = introTasks.length > 0 ? <p className="text-sm text-neutral-500">{!hasHistory
+    ? seat === undefined
+      ? i18n._({ id: "To work on a project, locate its files.", comment: "folder tasks contain no saved conversations, so explain only the need for project files" })
+      : i18n._({ id: "To work on a project, its files must be available on {place}.", values: { place: seat }, comment: "folder tasks on the named server contain no saved conversations" })
+    : seat === undefined
+      ? readable
+        ? i18n._({ id: "Conversation history is saved on this computer. You can read the conversations now. To work on a project again, locate its files.", comment: "one explanation for all project-folder choices, without claiming the files are absent" })
+        : i18n._({ id: "Conversation history is saved on this computer. To work on a project again, locate its files.", comment: "older cores without readable conversation links still explain why project files are needed" })
+      : readable
+        ? i18n._({ id: "Conversation history is saved on {place}. You can read the conversations now. Project files must be available there for further work.", values: { place: seat }, comment: "saved history and required files belong to the named server, which allocates its folders" })
+        : i18n._({ id: "Conversation history is saved on {place}. Project files must be available there for further work.", values: { place: seat }, comment: "server-side folder requirement where no readable conversation links are available" })}</p> : null;
+  const renderRepair = (id: string) => {
+    const row = rows.get(id)!;
+    if ("outcomeKey" in row) return <RepairOutcomeRow key={id} outcome={outcomes[row.outcomeKey]!}
+      focusSeq={focusSeq(id)} onOpenProject={onOpenProject} />;
+    return row.entry.repair ? <RepairRow key={id} repair={row.entry.repair} disabled={!connected} canDismiss={!row.entry.blocking}
+      focusSeq={focusSeq(id)} onResolved={onResolved} onDismissalChanged={onRepairDismissalChanged}
+      onOpenSession={onOpenSession} /> : null;
+  };
+  const renderNotice = (entry: IssueEntry) => entry.file.endsWith(MERGE_HEAD_FILE)
+    ? <li key={issueRowId(entry)} title={entry.file}>
+      {i18n._({ id: "Finish or abort the merge in your terminal", comment: "a Git merge started in a terminal is pending in a project's records" })}
+    </li>
+    : <DiagnosticRow key={entry.notice?.key ?? issueRowId(entry)} entry={entry} disabled={!connected}
+      focusSeq={!noticeFocus?.dismissed && noticeFocus?.key === entry.notice?.key ? noticeFocus?.seq : undefined}
+      onNoticeChanged={onNoticeChanged} />;
+  const listClass = "flex min-w-0 flex-col divide-y divide-neutral-200 dark:divide-neutral-800";
   return (
-    <section data-testid="space-issues-list" aria-label={title}
-      className={`flex min-w-0 flex-col gap-4 rounded-lg border p-4 text-sm ${blocking
-        ? "border-amber-300 dark:border-amber-700"
-        : "border-neutral-200 dark:border-neutral-800"}`}
-    >
-      <div className="flex flex-col gap-1">
-        <h2 data-testid="space-issues-heading" className={`font-medium ${blocking ? "text-amber-800 dark:text-amber-200" : ""}`}>{title}</h2>
-        {folderTasks.length > 0 ? <p className="text-sm text-neutral-500">{!hasHistory
-          ? seat === undefined
-            ? i18n._({ id: "To work on a project, locate its files.", comment: "folder tasks contain no saved conversations, so explain only the need for project files" })
-            : i18n._({ id: "To work on a project, its files must be available on {place}.", values: { place: seat }, comment: "folder tasks on the named server contain no saved conversations" })
-          : seat === undefined
-          ? readable
-            ? i18n._({ id: "Conversation history is saved on this computer. You can read the conversations now. To work on a project again, locate its files.", comment: "one explanation for all project-folder choices, without claiming the files are absent" })
-            : i18n._({ id: "Conversation history is saved on this computer. To work on a project again, locate its files.", comment: "older cores without readable conversation links still explain why project files are needed" })
-          : readable
-            ? i18n._({ id: "Conversation history is saved on {place}. You can read the conversations now. Project files must be available there for further work.", values: { place: seat }, comment: "saved history and required files belong to the named server, which allocates its folders" })
-            : i18n._({ id: "Conversation history is saved on {place}. Project files must be available there for further work.", values: { place: seat }, comment: "server-side folder requirement where no readable conversation links are available" })}</p> : null}
-      </div>
-      {hasDeferredChoice ? <p data-testid="space-deferred-notice" className="text-sm text-neutral-500">{i18n._({
-        id: "You can return through Locate project files in the sidebar.",
-        comment: "after postponing a folder choice, explains the persistent way back at this place",
-      })}</p> : null}
-      <ul className="flex min-w-0 flex-col divide-y divide-neutral-200 dark:divide-neutral-800">
-        {placed.map((id) => {
-          const row = rows.get(id)!;
-          if ("outcomeKey" in row) {
-            return (
-              <RepairOutcomeRow
-                key={id}
-                outcome={outcomes[row.outcomeKey]!}
-                focusSeq={focusSeq(id)}
-                onOpenProject={onOpenProject}
-              />
-            );
-          }
-          const entry = row.entry;
-          if (entry.file.endsWith(MERGE_HEAD_FILE)) {
-            return (
-              <li key={id} title={entry.file}>
-                {i18n._({ id: "Finish or abort the merge in your terminal", comment: "a Git merge started in a terminal is pending in a project's records" })}
-              </li>
-            );
-          }
-          if (entry.repair) {
-            return (
-              <RepairRow
-                key={id}
-                repair={entry.repair}
-                disabled={!connected}
-                focusSeq={focusSeq(id)}
-                onResolved={onResolved}
-                onDeferred={() => setHasDeferredChoice(true)}
-                onOpenSession={onOpenSession}
-                onNote={onNote}
-              />
-            );
-          }
-          return <DiagnosticRow key={id} entry={entry} />;
-        })}
-      </ul>
+    <section data-testid="space-issues-list" aria-label={title} className="flex min-w-0 flex-col gap-4 text-sm">
+      {activeRepairs.length > 0 ? <div data-testid="space-folder-review" className={panelClass(repairsBlocking)}>
+        <div className="flex flex-col gap-1">
+          <h2 data-testid="space-issues-heading" className={`font-medium ${repairsBlocking ? "text-amber-800 dark:text-amber-200" : ""}`}>{repairTitle}</h2>
+          {activeFolderTasks.length > 0 ? introduction : null}
+        </div>
+        <ul className={listClass}>{activeRepairs.map(renderRepair)}</ul>
+      </div> : null}
+      {activeNotices.length > 0 ? <div data-testid="space-notice-review" className={panelClass(noticesBlocking)}>
+        <h2 data-testid={activeRepairs.length > 0 ? undefined : "space-issues-heading"} className={`font-medium ${noticesBlocking ? "text-amber-800 dark:text-amber-200" : ""}`}>{noticeTitle}</h2>
+        <ul data-testid="space-active-notices" className={listClass}>{activeNotices.map(renderNotice)}</ul>
+      </div> : null}
+      {dismissalNote ? <p data-testid="space-deferred-notice" className="text-sm text-neutral-500">{dismissalNote}</p> : null}
+      {dismissedCount > 0 ? <details data-testid="space-dismissed" className="min-w-0 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800"
+        open={dismissedOpen} onToggle={(event) => setDismissedOpen(event.currentTarget.open)}>
+        <summary ref={dismissedSummaryRef} className="cursor-pointer font-medium text-neutral-500">{i18n._({
+          id: "Dismissed ({count})", values: { count: dismissedCount },
+          comment: "collapsed folder choices and saved-file notices that no longer contribute to the warning count",
+        })}</summary>
+        <div className="mt-4 flex min-w-0 flex-col gap-4">
+          {dismissedRepairs.length > 0 ? <div data-testid="space-dismissed-folders" className="flex min-w-0 flex-col gap-4">
+            {activeFolderTasks.length === 0 ? introduction : null}
+            <ul className={listClass}>{dismissedRepairs.map(renderRepair)}</ul>
+          </div> : null}
+          {dismissedNotices.length > 0 ? <div data-testid="space-dismissed-notices" className="flex min-w-0 flex-col gap-4">
+            {dismissedRepairs.length > 0 ? <h3 className="font-medium">{i18n._({ id: "Review notices", comment: "stored-data notices that do not offer a project folder choice" })}</h3> : null}
+            <ul className={listClass}>{dismissedNotices.map(renderNotice)}</ul>
+          </div> : null}
+        </div>
+      </details> : null}
     </section>
   );
 }

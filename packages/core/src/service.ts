@@ -2875,7 +2875,7 @@ export class CoreService {
         return project;
       }
       case "storage.diagnostics":
-        return foldDiagnostics([...this.migrationDiagnostics, ...this.store.storageDiagnostics(), ...this.store.sessionDiagnostics(), ...this.authors.diagnostics(), ...this.credentialDiagnostics()]);
+        return this.space.markDiagnostics(foldDiagnostics([...this.migrationDiagnostics, ...this.store.storageDiagnostics(), ...this.store.sessionDiagnostics(), ...this.authors.diagnostics(), ...this.credentialDiagnostics()]));
       case "project.create": {
         const path = expandPath(command.path, this.home);
         const registered = this.store.getProjectByPath(path);
@@ -3854,6 +3854,8 @@ export class CoreService {
         return this.requireSpace().read(command.repository, command.path);
       case "space.repair.decline":
         return this.requireSpace().decline(command.repair, command.declined);
+      case "space.notice.dismiss":
+        return this.requireSpace().dismissNotice(command.notice, command.dismissed);
       // Authoring sessions (DR-058, core-service-96): each in its
       // project's spex repository, one activity per session, Boss
       // messages queue, the manager holds the matrix.

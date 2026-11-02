@@ -9,6 +9,8 @@ Accepted (2026-11-02) on the owner's request for one shared explanation, a meani
 Amends [DR-182](182-saved-work-is-a-choice-not-setup-debt.md) in the header's attention marker and count, and [DR-183](183-read-saved-conversations-before-locating-files.md) in explanation placement and deferred navigation.
 Amends [DR-175](175-projects-shown-where-they-are-open.md) in sidebar availability: a place with a saved-record folder task has a useful review entry even without a registered project.
 
+Amended by [DR-185](185-dismiss-reminders-without-losing-history.md) in unified dismissal, separated active and dismissed items, and preserved-history notice acknowledgement.
+
 ## Context
 
 Saved work names neither the problem nor an action.

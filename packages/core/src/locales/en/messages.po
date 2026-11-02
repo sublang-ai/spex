@@ -3176,6 +3176,11 @@ msgstr "This folder already contains a Git repository without an initial commit.
 msgid "This folder already contains a Git repository. Use Add to register it."
 msgstr "This folder already contains a Git repository. Use Add to register it."
 
+#. Refusal when a dismissal names no currently dismissible saved-conversation notice
+#: src/space.ts
+msgid "This notice has changed. Refresh to review it."
+msgstr "This notice has changed. Refresh to review it."
+
 #. Refusal of Add: a project's package is added from a folder only inside its project folder (environments-2), and this package lies elsewhere
 #: src/service.ts
 msgid "This package's folder is outside the project folder — add it in that project, or publish it and add it from the registry"

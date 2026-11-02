@@ -19,7 +19,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "nod
 import { type StorageDiagnostic } from "./app-storage.js";
 import { heldSessionLease, occupied, pruneEmptyFolders } from "./clone-moves.js";
 import { canonicalHost } from "./code-credentials.js";
-import { portable, readJsonFile, StorageFormatError, UUID, writeApplicationFile } from "@sublang/spex/files";
+import { portable, readJsonFile, sha256, StorageFormatError, UUID, writeApplicationFile } from "@sublang/spex/files";
 import { withGitCredential, type GitCredentialHandle } from "./git-credential.js";
 import {
   anotherAccountError, CredentialChanged, HostError, SignInBusyError, type BrowserSignIn, type DeviceSignIn, type GitHostClient, type HostAccount, type HostGroup,
@@ -1121,15 +1121,34 @@ function authoringTitle(bytes: Buffer | undefined): string | undefined {
   } catch { return undefined; }
 }
 
-/** What the header counts (space-1): a repair the reader has not
- * answered, and every diagnostic no repair folds. A resolved repair is
- * already gone, because the core stops reporting it. */
+/** What the header counts (space-1): unanswered repairs and notices,
+ * with blocking damage always counted. Resolved findings are already
+ * gone because the core stops reporting them. */
 function countIssues(diagnostics: StorageDiagnostic[]): number {
-  return diagnostics.filter((entry) => entry.repair?.declined === undefined).length;
+  return diagnostics.filter((entry) => entry.blocking ||
+    (entry.repair?.declined === undefined && entry.notice?.dismissed === undefined)).length;
 }
 
 /** One repair's record in this device's preferences (space-54). */
 const repairPref = (key: string): string => `space:repair:${key}`;
+const noticePref = (key: string): string => `space:notice:${key}`;
+
+/** A dismissal belongs to this exact reported failure and the source
+ * file version, never to a path forever. Stat only: no conversation
+ * contents or linked file are opened to prepare the review. A source
+ * that cannot be verified remains visible but cannot be dismissed. */
+function noticeKey(entry: StorageDiagnostic): string | undefined {
+  if (entry.blocking || entry.repair ||
+    (entry.code !== "session-import" && entry.code !== "session-upgrade")) return;
+  try {
+    const source = lstatSync(entry.file, { bigint: true });
+    if (!source.isFile()) return;
+    return sha256(JSON.stringify([
+      entry.file, entry.code, entry.reason,
+      ...[source.dev, source.ino, source.mode, source.size, source.mtimeNs, source.ctimeNs].map(String),
+    ]));
+  } catch { return; }
+}
 /** Whether a listed repository may have members besides the account: a
  * count above one, or none where the host's read lacked it (space-57,
  * git-host-5). */
@@ -8090,16 +8109,37 @@ export class SpaceManager {
     return machine;
   }
 
-  /** The store's, session and migration diagnostics, each repair marked
-   * with what this device's reader answered (space-54). */
+  /** The store's, session and migration diagnostics, marked with this
+   * device's explicit answers (space-54, core-service-148). */
   storageDiagnostics(): StorageDiagnostic[] {
-    const mark = (entry: StorageDiagnostic): StorageDiagnostic => {
-      if (!entry.repair) return entry;
+    return this.markDiagnostics(this.host.diagnostics());
+  }
+
+  /** Space state and the diagnostics command share the same capability
+   * and acknowledgement, while retaining all of each caller's findings. */
+  markDiagnostics(diagnostics: StorageDiagnostic[]): StorageDiagnostic[] {
+    const mark = (reported: StorageDiagnostic): StorageDiagnostic => {
+      // These fields are derived now, never inherited from an earlier
+      // read that waited while another command or source file changed.
+      const entry = { ...reported };
+      delete entry.notice;
+      if (entry.repair) {
+        entry.repair = { ...entry.repair };
+        delete entry.repair.declined;
+      }
+      if (!entry.repair) {
+        const key = noticeKey(entry);
+        if (key === undefined) return entry;
+        const stored = this.host.store.getPref<{ dismissed?: unknown }>(noticePref(key));
+        const dismissed = stored && typeof stored.dismissed === "number" && Number.isFinite(stored.dismissed)
+          ? stored.dismissed : undefined;
+        return { ...entry, notice: { key, ...(dismissed === undefined ? {} : { dismissed }) } };
+      }
       const stored = this.host.store.getPref<{ declined?: unknown }>(repairPref(entry.repair.key));
       const declined = stored && typeof stored.declined === "number" ? stored.declined : undefined;
       return declined === undefined ? entry : { ...entry, repair: { ...entry.repair, declined } };
     };
-    return this.host.diagnostics().map(mark);
+    return diagnostics.map(mark);
   }
 
   private diagnostics(): StorageDiagnostic[] {
@@ -8123,8 +8163,8 @@ export class SpaceManager {
     }
   }
 
-  /** Only the reader's own act settles a repair (space-54): declining
-   * says this is not a project on this device, and is a preference,
+  /** Only the reader's own act settles a repair (space-54): dismissal
+   * leaves its folder choice available and is a device-local preference,
    * which never syncs. Rendering never writes here. */
   async decline(repair: string, declined: boolean): Promise<GroupsState> {
     const known = this.diagnostics().some((entry) => entry.repair?.key === repair);
@@ -8138,6 +8178,24 @@ export class SpaceManager {
     if (declined) this.host.store.setPref(repairPref(repair), { declined: Date.now() });
     else this.host.store.deletePref(repairPref(repair));
     return this.state();
+  }
+
+  /** Dismiss only a currently offered nonblocking notice. Re-reading
+   * its source identity here refuses a choice made against stale facts;
+   * the preference changes no saved conversation (core-service-148). */
+  async dismissNotice(notice: string, dismissed: boolean): Promise<GroupsState> {
+    const known = this.storageDiagnostics().some((entry) => entry.notice?.key === notice);
+    if (!known) {
+      throw new CoreError("invalid_request", i18n._({
+        id: "This notice has changed. Refresh to review it.",
+        comment: "Refusal when a dismissal names no currently dismissible saved-conversation notice",
+      }));
+    }
+    if (dismissed) this.host.store.setPref(noticePref(notice), { dismissed: Date.now() });
+    else this.host.store.deletePref(noticePref(notice));
+    const state = await this.state();
+    this.host.broadcast(state);
+    return state;
   }
 
   /** The Space state (space-30), every repository recomputed. */
@@ -8194,8 +8252,11 @@ export class SpaceManager {
     const held = clones.flatMap((clone) => clone.held);
     const repositories = reads.map(({ placed, read }) => this.withFiled(placed, read.files, held));
     repositories.push(...this.absentRows(clones));
-    const diagnostics = await this.host.checkRepairs(this.diagnostics());
+    const checkedDiagnostics = await this.host.checkRepairs(this.diagnostics());
     const git = await this.probe.version();
+    // A later dismissal, Show again or source-file change must not be
+    // overwritten when an older asynchronous read finishes last.
+    const diagnostics = this.markDiagnostics(checkedDiagnostics);
     // The headings and their groups are read from the home at one
     // instant, with no await between, so a sign-out landing meanwhile
     // never leaves a signed-in heading without its namespace (space-30).

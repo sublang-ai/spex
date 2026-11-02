@@ -274,9 +274,11 @@ export function SpaceSurface({ onOpenSession, onOpenProject, onAddCredential, re
   // (space-1).
   const [tab, setTab] = useState<SpaceTab>("sync");
   const [issuesOpen, setIssuesOpen] = useState(false);
+  const [revealDismissed, setRevealDismissed] = useState<number>();
   useEffect(() => {
     if (reviewRequest === undefined) return;
     setIssuesOpen(true);
+    setRevealDismissed(reviewRequest);
     onReviewOpened?.();
   }, [reviewRequest, onReviewOpened]);
   // The reader's own Refresh (space-2), counted: it lets the issues
@@ -439,7 +441,7 @@ export function SpaceSurface({ onOpenSession, onOpenProject, onAddCredential, re
               refreshError={refreshError}
               onRefresh={() => void refresh()}
               issuesOpen={issuesOpen}
-              onIssuesOpen={setIssuesOpen}
+              onIssuesOpen={(open) => { setIssuesOpen(open); setRevealDismissed(undefined); }}
             />
           ) : null}
         </div>
@@ -454,6 +456,7 @@ export function SpaceSurface({ onOpenSession, onOpenProject, onAddCredential, re
               groups={groups}
               connected={connected}
               open={issuesOpen}
+              revealDismissed={revealDismissed}
               refreshes={refreshes}
               onOpenProject={onOpenProject}
               onOpenSession={onOpenSession}
