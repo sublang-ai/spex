@@ -75,7 +75,8 @@ export const publish: Command = async (args) => {
   const target = env.registryOf(read?.requests ?? null);
   const instance = target.origin;
   const registryName = await env.registryName(instance);
-  if (!dryRun && (await env.tokenAt(instance, "registry").catch(() => "")) === null) {
+  const signedIn = (await env.tokenAt(instance, "registry").catch(() => "")) !== null;
+  if (!dryRun && !signedIn) {
     // `spex login` from this folder signs in at its registry for
     // publishing (cli-10).
     throw new Refusal(`not signed in at ${registryName} to publish — spex login, then retry`);
@@ -95,8 +96,17 @@ export const publish: Command = async (args) => {
   const missing = publishIssues(manifest);
   if (missing.length > 0) throw new Refusal(`${path} cannot be published: ${issuesText(missing)} — add it to its meta.yaml`);
 
+  if (signedIn) {
+    try {
+      await env.registryClientAt(instance).checkPublishOrg(held);
+    } catch (error) {
+      throw await env.registryRefusal(error, { origin: instance, scope: "registry", operation: "publish", version: manifest.version });
+    }
+  }
+
   console.log(`Publishing ${held}@${manifest.version} to ${registryName}`);
   if (dryRun) {
+    if (!signedIn) console.log(`Org not checked — sign in to ${registryName} with spex login to check publishing rights`);
     console.log(["Files (dry run, nothing published):", ...files.map((file) => `  ${file}`)].join("\n"));
     return;
   }

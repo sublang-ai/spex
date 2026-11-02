@@ -484,8 +484,8 @@ msgstr "{name}：spex.lock 没有为它记录注册中心地址 — 更新会重
 
 #. Refusal of Publish: the registry refuses this account the package's org, a package name's first half; {registry} is the registry's display name
 #: src/environments.ts
-msgid "{org} is not yours to publish to at {registry} — claim it there, or publish under one of your orgs"
-msgstr "你不能在 {registry} 上发布到 {org} — 请在那里认领它，或发布到你自己的 org 下"
+msgid "{org} is not yours to publish to at {registry} — claim it at {url}, or publish under one of your orgs"
+msgstr "你不能在 {registry} 上发布到 {org} — 请前往 {url} 认领它，或发布到你自己的 org 下"
 
 #. Why a placed playbook stands aside, composing nothing: its spec package is not installed here; {package} is its name, org/pkg
 #: src/config.ts

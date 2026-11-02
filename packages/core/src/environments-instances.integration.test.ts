@@ -731,6 +731,8 @@ test("environments-34, environments-17, environments-12: environment.search for 
 
 test("environments-34, environments-10, environments-17, environments-5: a publish from the second's project lands at the second's registry as the second's account and one from the local-only project at the first's; once the second registry is signed out, a publish from its project is refused as not signed in there, naming it, and nothing is uploaded; the first then forgotten, your own group's environment, whose own repository was created at the first and now syncs with the second, resolves at the second's registry, its lock recording the second's origin, and a publish from it lands there", { timeout: 300_000 }, async (t) => {
   const { R1, R2, first, second, home, south, local } = await twoInstances(t, "publish");
+  R1.script.setOrgs(first.url, [{ name: "acme", path: "acme", role: "Owner" }]);
+  R2.script.setOrgs(second.url, [{ name: "acme", path: "acme", role: "Owner" }]);
   await registrySignIn(home, first);
   await registrySignIn(home, second);
   // Each upload a registry received after a mark: its path, the instance

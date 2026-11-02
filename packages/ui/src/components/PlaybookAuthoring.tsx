@@ -205,8 +205,8 @@ function DraftRow({
  * filled with that environment's defaults as the core reads them, then
  * the person's; and the orgs the registry account there may publish to.
  * A change of environment clears both and forgets what the person typed;
- * a default arriving later, or read again on a reconnect, fills only a
- * field the person has not edited since. */
+ * defaults read again on a reconnect or registry/account change fill
+ * only a field the person has not edited since. */
 export function useNewPackageFields(repository: string | undefined) {
   const store = usePlaceStore();
   const connection = store((state) => state.connection);
@@ -267,7 +267,7 @@ export function useNewPackageFields(repository: string | undefined) {
     return () => {
       current = false;
     };
-  }, [connected, repository, loadDraftDefaults]);
+  }, [connected, repository, registryOrigin, registryAccount, loadDraftDefaults]);
   const editOrg = useCallback((value: string) => {
     touched.current.org = true;
     setOrg(value);
@@ -287,6 +287,7 @@ export function useNewPackageFields(repository: string | undefined) {
     orgs,
     orgsStatus,
     orgsError,
+    registryOrigin,
     retryOrgs: () => setOrgsAttempt((attempt) => attempt + 1),
   };
 }
@@ -321,7 +322,7 @@ function NewPlaybookField({
   /** The request was honored: focus lands here once, not on every return. */
   onAutoFocused: () => void;
 }) {
-  const { org, license, orgs, orgsStatus, orgsError } = fields;
+  const { org, license, orgs, orgsStatus, orgsError, registryOrigin } = fields;
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -404,7 +405,13 @@ function NewPlaybookField({
       <span id="new-playbook-org-note" data-testid="new-playbook-org-note" className="text-xs text-amber-700 dark:text-amber-300">
         {i18n._({ id: "not yours to publish to", comment: "beneath New playbook's Org: the registry account may not publish to the org typed" })}
       </span>
+    ) : orgsStatus === "idle" ? (
+      <span id="new-playbook-org-note" data-testid="new-playbook-org-note" className="text-xs text-neutral-500">
+        {i18n._({ id: "Publishing rights not checked", comment: "New playbook's Org has no successful registry account check" })}
+      </span>
     ) : null;
+  const orgVerified = orgsStatus === "ready" && !!typedOrg && orgs.some((entry) => entry.name === typedOrg);
+  const claimUrl = registryOrigin ? new URL("/account/orgs", registryOrigin).href : undefined;
 
   return (
     <div
@@ -444,7 +451,7 @@ function NewPlaybookField({
             onKeyDown={onKeyDown}
             spellCheck={false}
             autoComplete="off"
-            aria-describedby={orgNote ? "new-playbook-org-note" : undefined}
+            aria-describedby={[orgNote && "new-playbook-org-note", !orgVerified && "new-playbook-org-guidance"].filter(Boolean).join(" ") || undefined}
             className={field}
           />
           {/* The suggestions: the orgs the account may publish to, as
@@ -481,6 +488,17 @@ function NewPlaybookField({
           {busy ? i18n._({ id: "Opening…", comment: "an authoring session is being opened" }) : i18n._({ id: "New playbook", comment: "start writing a playbook of one's own" })}
         </button>
       </div>
+      {!orgVerified ? (
+        <span id="new-playbook-org-guidance" data-testid="new-playbook-org-guidance" className="text-xs text-neutral-500">
+          {i18n._({ id: "To publish, use an org you can claim at this registry.", comment: "Local package names do not establish publishing rights at the selected registry" })}
+          {claimUrl ? <> <a
+            href={claimUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="underline"
+          >{i18n._({ id: "Claim an org", comment: "Open the selected registry's account page to claim a publishing name" })}</a></> : null}
+        </span>
+      ) : null}
       <span id="new-playbook-caption" data-testid="new-playbook-caption" className="text-xs text-neutral-500">
         {draftIdCaption(isDraftId(value.trim()) ? value.trim() : "triage")}
       </span>

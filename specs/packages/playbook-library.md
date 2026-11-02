@@ -174,7 +174,12 @@ When the user activates "New playbook" — at the Authoring section's foot of th
 
 #### playbook-library-121
 
-When the new-playbook form shows its "Org" field [[playbook-library-51](#playbook-library-51)], the form shall offer it as one field suggesting the orgs its selected registry account may publish to [[environments-27](environments.md#environments-27)], read only while that account is signed in, a typed org a read list omits wearing "not yours to publish to", showing loading, successful emptiness or an error with Retry in place, preserving manually entered names and ignoring responses for a former project, registry or account, with a project-group match only an initial suggestion rather than a filter or required Space association ([DR-168](../decisions/168-independent-package-registry.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)).
+When the new-playbook form shows its "Org" field [[playbook-library-51](#playbook-library-51)], the form shall present its selected registry's publishing-name suggestions and authorization state, permitting local authoring without a verified name ([DR-168](../decisions/168-independent-package-registry.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md), [DR-200](../decisions/200-publishing-names-need-registry-authority.md)):
+
+- Suggestions are the orgs its registry account may publish to [[environments-27](environments.md#environments-27)], read only while that account is signed in; a project-group match is only an initial suggestion, never a filter or required Space association.
+- Loading, successful emptiness and an error with Retry stand in place; a typed org a nonempty successful answer omits wears "not yours to publish to", and the signed-out field reads "Publishing rights not checked".
+- A name without a successful authorization result carries guidance to use a claimable org and an ordinary link to the selected registry's `/account/orgs`, whose activation follows external-link navigation [[app-shell-21](app-shell.md#app-shell-21)] without cancelling navigation or invoking the automatic opener.
+- Suggestions and untouched defaults refresh on registry or account changes, preserving manually entered names and ignoring former-project, former-registry and former-account replies.
 
 #### playbook-library-52
 
@@ -301,6 +306,7 @@ When the Boss activates an authoring session row's Delete, the Playbooks tab sha
 
 While an authoring session's last compile succeeded and the home holds a registry grant at its environment's package registry [[environments-38](environments.md#environments-38)] — the Add tab shall offer "Publish" beneath the form, beside a link "Its package" opening the package's row on the Packages tab once it has one [[playbook-library-92](#playbook-library-92)], which publishes the spec package under development, named `<org>/<pkg>` [[environments-10](environments.md#environments-10)], to that registry as its registry account after showing, inline, "Publish ⟨org⟩/⟨pkg⟩ ⟨version⟩ to ⟨registry⟩" — ⟨registry⟩ the actual destination registry's display name, its origin in the tooltip — over "⟨count⟩ files" listing the files it will upload and "as @⟨login⟩ in ⟨org⟩", with Publish and Cancel ([DR-104](../decisions/104-spec-package-format-and-client-environments.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)):
 
+- a preview checks publishing rights at the selected registry [[environments-47](environments.md#environments-47)]; one reporting unchecked rights names the need to sign in and disables Publish, preserving Cancel;
 - a refusal from the core's checks or the registry shows its issues in place; success reads the published version with a link to its page at the registry;
 - a retained receipt from a previous publish does not establish success of a later attempt, and a later settled refusal remains visible even when its text repeats an earlier refusal ([DR-151](../decisions/151-publish-local-spec-packages.md));
 - a home without that registry grant shows one button "Sign in to publish" in place of Publish, starting the registry sign-in in place [[playbook-library-119](#playbook-library-119)], the grant judged only once the account there is read, "Loading registry…" standing until then and a failed read standing as no grant with its cause.
@@ -633,7 +639,8 @@ When an integration suite drives a project's Packages tab and its new-playbook f
 | Registry sign-in and sign-out at a Space's origin | The registry account changes independently of Space account state [[playbook-library-119](#playbook-library-119)]. |
 | Registry selected from the chooser or through "Other…" | The environment's registry remains separate from the project's Space [[playbook-library-119](#playbook-library-119)]. |
 | Browser sign-in on a home with no Spaces, with the native opener absent, successful, refusing or rejecting | The available opener receives the complete sign-in URL once on starting; in every case, manual activation follows the ordinary link's complete URL without cancelling navigation or invoking the bridge again [[playbook-library-119](#playbook-library-119)]. |
-| Org suggestions | Suggestions wait for the registry account; loading and failure stay visible through retry; successful empty and complete authorized lists display; a typed org outside them reads "not yours to publish to"; manual names survive and former-account responses are ignored [[playbook-library-121](#playbook-library-121)]. |
+| Claiming an org on a home with no Spaces, with the native opener absent, successful, refusing or rejecting | Activating the claim link follows the selected registry's complete `/account/orgs` URL without cancelling navigation or invoking the opener [[playbook-library-121](#playbook-library-121)]. |
+| Org suggestions | Suggestions wait for the registry account; loading and failure stay visible through retry; successful empty and complete authorized lists display; a typed org outside a nonempty list reads "not yours to publish to"; manual names survive, untouched defaults refresh on account or registry changes, and former-account responses are ignored; unsigned, failed, empty and unowned states explain the publishing constraint with the selected registry's claim link [[playbook-library-121](#playbook-library-121)]. |
 
 ### Compile Coverage
 
@@ -991,6 +998,10 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 #### playbook-library-95
 
 Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell signed in to two stand-in instances, each with its stand-in host and a registry of its own display name, the first the home's default instance, with a compiled authoring session added in a project whose independently chosen registry is the second and whose registry grant is signed in, when the journey activates Publish on the Add tab, confirms the inline summary, and then, on a second scratch home whose environment selects the second registry, adds the published spec package through the Packages tab's Add…, the test suite shall assert through the page that the summary names the second registry by its display name, its origin in the tooltip, before confirmation and the published version reads with its link to that instance's registry, the first's registry holding no such release [[playbook-library-93](#playbook-library-93)], that the second home's search finds it and Add requests it, its receipt offering no further act, and that its playbook lists at once on the Playbooks tab under the project's name from the registry source [[playbook-library-92](#playbook-library-92)] [[playbook-library-1](#playbook-library-1)] [[playbook-library-29](#playbook-library-29)], and that the first home retains publication after signing out of the second Space, then offers "Sign in to publish" after signing out of that registry [[playbook-library-93](#playbook-library-93)].
+
+#### playbook-library-124
+
+Where the Add tab renders a compiled authoring session with a signed-in account view, when the preview reports unchecked publishing rights, the UI integration suite shall assert that the preview explains the need to sign in, disables Publish, keeps Cancel available and sends no upload when confirmation is attempted [[playbook-library-93](#playbook-library-93)].
 
 #### playbook-library-114
 

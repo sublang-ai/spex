@@ -552,6 +552,7 @@ describe("playbook-library-51: New playbook asks for the id", () => {
     seed();
     render(<PlaybooksTab project={PROJECT} />);
     await vi.waitFor(() => expect(release).toBeDefined());
+    await vi.waitFor(() => expect(useAppStore.getState().environments[PROJECT_ID]?.registry?.origin).toBe("https://spex.example"));
     const org = screen.getByTestId("new-playbook-org") as HTMLInputElement;
     fireEvent.change(org, { target: { value: "typed" } });
     // The default lands after the typing: Org keeps the typing, License takes the default.
@@ -1705,6 +1706,7 @@ describe("playbook-library-61: the Add tab", () => {
 describe("playbook-library-93: Publish beneath the Add form", () => {
   const PREVIEW = {
     instance: { origin: "https://spex.example", name: "Spex Example" },
+    orgVerified: true,
     name: "acme/triage",
     version: "0.1.0",
     files: ["meta.yaml", "playbooks/en/triage/triage.md", "playbooks/en/triage/triage.playbook/triage.fsm.ts"],
@@ -1735,7 +1737,7 @@ describe("playbook-library-93: Publish beneath the Add form", () => {
     fireEvent.click(within(publish).getByTestId("publish-button"));
     // The checks run first and upload nothing.
     await vi.waitFor(() =>
-      expect(commandMock).toHaveBeenCalledWith("environment.publish", { repository: PROJECT_ID, name: "acme/triage", dryRun: true }),
+      expect(commandMock).toHaveBeenCalledWith("environment.publish", { repository: PROJECT_ID, name: "acme/triage", dryRun: true }, { timeoutMs: 35_000 }),
     );
     const summary = await screen.findByTestId("publish-summary");
     // The registry by its display name, its origin in the tooltip, over
@@ -1753,7 +1755,7 @@ describe("playbook-library-93: Publish beneath the Add form", () => {
     fireEvent.click(screen.getByTestId("publish-button"));
     fireEvent.click(await screen.findByTestId("publish-confirm"));
     await vi.waitFor(() =>
-      expect(commandMock).toHaveBeenCalledWith("environment.publish", { repository: PROJECT_ID, name: "acme/triage" }),
+      expect(commandMock).toHaveBeenCalledWith("environment.publish", { repository: PROJECT_ID, name: "acme/triage" }, { timeoutMs: 35_000 }),
     );
     expect(commandMock.mock.calls.filter(([type, params]) => type === "environment.publish" && !params.dryRun)).toHaveLength(1);
 
@@ -1771,6 +1773,22 @@ describe("playbook-library-93: Publish beneath the Add form", () => {
     });
     expect(screen.getByTestId("publish-done").textContent).toBe("Published 0.1.0");
     expect(screen.getByTestId("publish-link").getAttribute("href")).toBe("https://spex.example/acme/triage/0.1.0");
+  });
+
+  test("an unchecked preview explains the missing publishing check and cannot confirm", async () => {
+    const base = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) =>
+      type === "environment.publish" && params?.dryRun
+        ? { accepted: true, preview: { ...PREVIEW, orgVerified: false } }
+        : base(type, params),
+    );
+    await openAdd();
+    fireEvent.click(screen.getByTestId("publish-button"));
+    expect((await screen.findByTestId("publish-org-unchecked")).textContent).toBe("Org not checked — sign in to Spex Example to check publishing rights");
+    const confirm = screen.getByTestId("publish-confirm") as HTMLButtonElement;
+    expect(confirm.disabled).toBe(true);
+    fireEvent.click(confirm);
+    expect(commandMock.mock.calls.filter(([type, params]) => type === "environment.publish" && !params.dryRun)).toHaveLength(0);
   });
 
   test("a refusal from the checks or the registry shows its issues in place", async () => {
@@ -2054,6 +2072,7 @@ describe("playbook-library-120/121: Org suggests the orgs the registry account m
     fireEvent.change(screen.getByTestId("new-playbook-org"), { target: { value: "manual-org" } });
     await act(async () => held[0]!.reject(new Error("Registry unavailable")));
     expect((await screen.findByRole("alert")).textContent).toContain("Registry unavailable");
+    expect(screen.getByRole("link", { name: "Claim an org" }).getAttribute("href")).toBe("https://spex.example/account/orgs");
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     await vi.waitFor(() => expect(note()?.textContent).toBe("Loading…"));
     await act(async () => held[1]!.resolve({ orgs: [{ name: "alpha", path: "alpha", role: "Owner" }, { name: "zeta", path: "zeta", role: "Owner", provider: "github" }] }));
@@ -2061,9 +2080,11 @@ describe("playbook-library-120/121: Org suggests the orgs the registry account m
     // What was typed stands, and wears that it is not the account's.
     expect((screen.getByTestId("new-playbook-org") as HTMLInputElement).value).toBe("manual-org");
     expect(note()?.textContent).toBe("not yours to publish to");
+    expect(screen.getByTestId("new-playbook-org-guidance").textContent).toContain("To publish, use an org you can claim at this registry.");
     expect(screen.queryByRole("alert")).toBeNull();
     fireEvent.change(screen.getByTestId("new-playbook-org"), { target: { value: "zeta" } });
     expect(note()).toBeNull();
+    expect(screen.queryByTestId("new-playbook-org-guidance")).toBeNull();
   });
 
   test("waits for a registry account, ignores its late answer after sign-out, and distinguishes a valid empty answer", async () => {
@@ -2078,20 +2099,101 @@ describe("playbook-library-120/121: Org suggests the orgs the registry account m
     await defaultsShown();
     await vi.waitFor(() => expect(useAppStore.getState().environments[PROJECT_ID]?.registry?.origin).toBe(origin));
     expect(commandMock.mock.calls.filter(([type]) => type === "registry.orgs")).toEqual([]);
-    expect(note()).toBeNull();
+    expect(note()?.textContent).toBe("Publishing rights not checked");
+    expect(screen.getByRole("link", { name: "Claim an org" }).getAttribute("href")).toBe(`${origin}/account/orgs`);
     act(() => useAppStore.setState({ registryAccounts: { [origin]: { ...registry, account: { id: "old", login: "old" } } } }));
     await vi.waitFor(() => expect(note()?.textContent).toBe("Loading…"));
     fireEvent.change(screen.getByTestId("new-playbook-org"), { target: { value: "my-choice" } });
     act(() => useAppStore.setState({ registryAccounts: { [origin]: registry } }));
     await act(async () => held[0]!({ orgs: [{ name: "former-account", path: "former-account", role: "Owner" }] }));
     expect(suggestions()).toEqual([]);
-    expect(note()).toBeNull();
+    expect(note()?.textContent).toBe("Publishing rights not checked");
     act(() => useAppStore.setState({ registryAccounts: { [origin]: { ...registry, account: { id: "new", login: "new" } } } }));
     await vi.waitFor(() => expect(note()?.textContent).toBe("Loading…"));
     await act(async () => held[1]!({ orgs: [] }));
     await vi.waitFor(() => expect(note()?.textContent).toBe("No orgs to publish to"));
     expect(screen.queryByRole("alert")).toBeNull();
     expect((screen.getByTestId("new-playbook-org") as HTMLInputElement).value).toBe("my-choice");
+  });
+
+  test.each(["absent", "opens", "refuses", "rejects"] as const)(
+    "the claim link keeps its full native action with no Spaces when the opener %s",
+    async (bridge) => {
+      const origin = "https://registry.example:8443";
+      environmentInstance = origin;
+      const nativeWindow = window as { spexNative?: unknown };
+      const previous = nativeWindow.spexNative;
+      const openExternal = vi.fn<(url: string) => Promise<boolean>>().mockImplementation(async () => {
+        if (bridge === "rejects") throw new Error("Could not open the browser");
+        return bridge === "opens";
+      });
+      if (bridge === "absent") delete nativeWindow.spexNative;
+      else nativeWindow.spexNative = { openExternal };
+      try {
+        seed({
+          space: groupsState({ instances: [] }),
+          registryAccounts: { [origin]: { origin, displayName: "Registry", account: null, signIn: { phase: "idle" }, error: null } },
+        });
+        render(<PlaybooksTab project={PROJECT} />);
+        await defaultsShown();
+        const link = screen.getByRole("link", { name: "Claim an org" }) as HTMLAnchorElement;
+        expect(link.href).toBe(`${origin}/account/orgs`);
+        expect(link.target).toBe("_blank");
+        expect(link.rel).toBe("noreferrer");
+        expect(fireEvent.click(link)).toBe(true);
+        expect(openExternal).not.toHaveBeenCalled();
+      } finally {
+        if (previous === undefined) delete nativeWindow.spexNative;
+        else nativeWindow.spexNative = previous;
+      }
+    },
+  );
+
+  test("account changes refresh untouched defaults and ignore former-account replies while preserving edits", async () => {
+    const origin = "https://spex.example";
+    const registry = { origin, displayName: "Registry", account: null, signIn: { phase: "idle" as const }, error: null };
+    const original = commandMock.getMockImplementation()!;
+    const held: { account: string | undefined; resolve: (value: unknown) => void }[] = [];
+    commandMock.mockImplementation((type, ...args) => type === "draft.defaults"
+        ? new Promise((resolve) => held.push({ account: useAppStore.getState().registryAccounts?.[origin]?.account?.id, resolve }))
+      : original(type, ...args));
+    seed({ registryAccounts: { [origin]: registry } });
+    render(<PlaybooksTab project={PROJECT} />);
+    await vi.waitFor(() => expect(useAppStore.getState().environments[PROJECT_ID]?.registry?.origin).toBe(origin));
+    await act(async () => held.forEach(({ resolve }) => resolve({ org: "os-user", license: "MIT" })));
+    await defaultsShown("os-user", "MIT");
+    act(() => useAppStore.setState({ registryAccounts: { [origin]: { ...registry, account: { id: "old", login: "old" } } } }));
+    await vi.waitFor(() => expect(held.some((entry) => entry.account === "old")).toBe(true));
+    act(() => useAppStore.setState({ registryAccounts: { [origin]: { ...registry, account: { id: "new", login: "new" } } } }));
+    await vi.waitFor(() => expect(held.some((entry) => entry.account === "new")).toBe(true));
+    await act(async () => held.find((entry) => entry.account === "new")!.resolve({ org: "personal-name", license: "MIT" }));
+    await defaultsShown("personal-name", "MIT");
+    await act(async () => held.find((entry) => entry.account === "old")!.resolve({ org: "former-account", license: "MIT" }));
+    await defaultsShown("personal-name", "MIT");
+    fireEvent.change(screen.getByTestId("new-playbook-org"), { target: { value: "manual-name" } });
+    act(() => useAppStore.setState({ registryAccounts: { [origin]: registry } }));
+    await vi.waitFor(() => expect(held.at(-1)?.account).toBeUndefined());
+    await act(async () => held.at(-1)!.resolve({ org: "os-user", license: "MIT" }));
+    await defaultsShown("manual-name", "MIT");
+  });
+
+  test("unverified guidance follows the interface language and still permits explicit local authoring", async () => {
+    const origin = "https://spex.example";
+    seed({ registryAccounts: { [origin]: { origin, displayName: "Registry", account: null, signIn: { phase: "idle" }, error: null } } });
+    activateLanguage("zh");
+    try {
+      render(<PlaybooksTab project={PROJECT} />);
+      await defaultsShown();
+      expect(note()?.textContent).toBe("尚未验证发布权限");
+      expect(screen.getByTestId("new-playbook-org-guidance").textContent).toContain("要发布规约包，请使用你能在此注册中心认领的组织名。");
+      expect(screen.getByRole("link", { name: "认领组织名" }).getAttribute("href")).toBe(`${origin}/account/orgs`);
+      fireEvent.change(screen.getByTestId("new-playbook-org"), { target: { value: "local-choice" } });
+      fireEvent.change(screen.getByTestId("new-playbook-id"), { target: { value: "triage" } });
+      fireEvent.click(screen.getByTestId("new-playbook-button"));
+      await vi.waitFor(() => expect(commandMock).toHaveBeenCalledWith("draft.create", { projectId: PROJECT_ID, draftId: "triage", org: "local-choice", license: "Apache-2.0" }));
+    } finally {
+      activateLanguage("en");
+    }
   });
 });
 

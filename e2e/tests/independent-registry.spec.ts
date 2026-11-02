@@ -39,6 +39,12 @@ test("playbook-library-120/space-116: independent same-origin registry account, 
   await signInCore(app);
   const key = (await refreshProjectKey(app))!;
   await open(page, app);
+  // A local name is not proof that the registry account owns it.
+  await projectTab(page, "Playbooks");
+  await expect(page.getByTestId("new-playbook-org-note")).toHaveText("Publishing rights not checked");
+  await expect(page.getByTestId("new-playbook-org-guidance")).toContainText("To publish, use an org you can claim at this registry.");
+  const unsignedRegistry = (await app.core.command("environment.get", { repository: key })).registry!.origin;
+  await expect(page.getByRole("link", { name: "Claim an org" })).toHaveAttribute("href", `${unsignedRegistry}/account/orgs`);
   // The "Packages" heading carries its registry as "Registry:
   // <registry>", a chooser offering the public registry by its display
   // name, the registry the project's spex.yaml names where that is
@@ -105,18 +111,27 @@ test("playbook-library-120/space-116: independent same-origin registry account, 
   const note = page.getByTestId("new-playbook-org-note");
   const retry = page.getByTestId("new-playbook-orgs-retry");
   await expect(retry).toBeVisible();
+  await expect(page.getByRole("link", { name: "Claim an org" })).toHaveAttribute("href", `${host.url}/account/orgs`);
   await retry.click();
   await expect(note).toHaveText("Loading…");
   await expect.poll(() => orgSuggestions(page)).toEqual(["acme", "other"]);
   app.registry!.script.delayOrgs(0);
   await org.fill("other");
   await expect(form).not.toContainText("not yours to publish to");
+  await expect(page.getByTestId("new-playbook-org-guidance")).toBeHidden();
   await org.fill("elsewhere");
   await expect(form).toContainText("not yours to publish to");
+  await expect(page.getByRole("link", { name: "Claim an org" })).toHaveAttribute("href", `${host.url}/account/orgs`);
   await expect(org).toHaveValue("elsewhere");
   await org.fill("other");
   await expect(form).not.toContainText("not yours to publish to");
   await expect(org).toHaveValue("other");
+  // A successful empty read still explains where to claim a name.
+  app.registry!.script.setOrgs(host.url, []);
+  await projectTab(page, "Packages");
+  await projectTab(page, "Playbooks");
+  await expect(note).toHaveText("No orgs to publish to");
+  await expect(page.getByRole("link", { name: "Claim an org" })).toHaveAttribute("href", `${host.url}/account/orgs`);
   // Signing out of the registry leaves the Space signed in.
   await projectTab(page, "Packages");
   await signOut.click();

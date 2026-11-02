@@ -1037,14 +1037,18 @@ test("storage-16: Git validation refuses a dispatch outside its session's turns,
   } finally { dispose(); }
 });
 
-test("storage-22: the rebind command pairs a clone no folder pairs, and every session it holds lists again", async () => {
+test("storage-22: the rebind command pairs a clone while preserving its readable saved history", async () => {
   const { root, home, key, clone, folder, sessionId, dispose } = setup();
   try {
     const unpaired = Home.load(home); unpaired.unpair(key); unpaired.save();
     let store = new Store({ machineIdentity, dir: home, env: gitEnv });
     try {
       await store.initializeSessions();
-      assert.equal(store.listSessions().length, 0, "a clone no folder pairs lists nothing");
+      const listed = store.listSessions();
+      assert.deepEqual(listed.map(({ id, projectId }) => ({ id, projectId })), [{ id: sessionId, projectId: key }]);
+      assert.equal(listed[0]?.continuable, undefined, "unpaired saved history offers no continuation");
+      assert.deepEqual(store.getRecords(sessionId).map(({ record }) => record), [{ futureKind: "base" }]);
+      assert.equal(store.getProject(key), undefined, "reading history does not pair a working folder");
       const repair = store.storageDiagnostics().find((d) => d.repair?.repository === key);
       assert.equal(repair?.repair?.kind, "repository");
       assert.deepEqual(repair?.repair?.directories, [folder]);
@@ -1054,7 +1058,12 @@ test("storage-22: the rebind command pairs a clone no folder pairs, and every se
     const output = cli(home, key, "rebind", key, checkout, "--alias", folder);
     assert.equal(output.project.id, key); assert.equal(output.project.path, checkout); assert.deepEqual(output.diagnostics, []);
     store = new Store({ machineIdentity, dir: home, env: gitEnv });
-    try { await store.initializeSessions(); assert.equal(store.listSessions()[0]?.id, sessionId); assert.equal(store.listSessions()[0]?.projectId, key); }
+    try {
+      await store.initializeSessions();
+      assert.deepEqual(store.listSessions().map(({ id, projectId }) => ({ id, projectId })), [{ id: sessionId, projectId: key }]);
+      assert.deepEqual(store.getRecords(sessionId).map(({ record }) => record), [{ futureKind: "base" }]);
+      assert.equal(store.getProject(key)?.path, checkout);
+    }
     finally { store.close(); }
     const before = readFileSync(join(home, "home.yaml")); const child = join(checkout, "child"); mkdirSync(child);
     cliFails(home, key, ["rebind", key, child], /not the root/);
