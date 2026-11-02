@@ -9,6 +9,8 @@ Accepted (2026-09-28) on the owner's ask to distinguish beta app releases from r
 Amends [DR-040](040-source-only-app-releases.md) (the app channel gains a pre-release form with its own gates and notes) and [DR-056](056-release-naming.md) (a beta's release title carries its pre-release version).
 Rests on the tiers of [DR-086](086-tests-in-tiers.md).
 
+Amended by [DR-190](190-release-gated-full-validation.md) in the CI gate: the tagged tree runs full app validation before publication, without requiring a prior CI run before tagging.
+
 ## Context
 
 - The regression that a regular app release runs costs hours of real agents; a build meant for early trial should not wait on it, yet it must still install, start and reach a real agent.

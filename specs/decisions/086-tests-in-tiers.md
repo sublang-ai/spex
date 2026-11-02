@@ -13,6 +13,8 @@ Amended by [DR-089](089-every-fresh-user-scenario-walked-for-real.md) in what th
 Extended by [DR-145](145-merge-on-green.md) in the CI check tier: the check is the gate every merge into `main` passes through, run once per pull-request head.
 Extended by [DR-149](149-the-privileged-lane-runs-on-ci.md) in the tiers: the hub's privileged lane runs on CI's Linux runner nightly and on a push to `main` touching the hub, gating no merge.
 
+Amended by [DR-190](190-release-gated-full-validation.md) in the hermetic check tier: affected checks gate pull requests; full channel validation gates publication or runs on explicit request, with no automatic main or nightly run.
+
 ## Context
 
 - The owner named three scenarios every fresh user meets: compile a new simple playbook and run it, by chatting or by pasting its source; start from a new project and develop through a few typical cycles with the existing playbooks; install in a brand-new environment and see that everything works.

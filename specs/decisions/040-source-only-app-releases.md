@@ -12,6 +12,8 @@ Amended by [DR-086](086-tests-in-tiers.md) in how a tag is prepared: the hermeti
 Amended by [DR-087](087-beta-app-releases.md): the app channel gains the pre-release form `app-vX.Y.Z-beta.N`, gated on CI, the smoke and the live smoke, its notes taken from `[Unreleased]`.
 Amended by [DR-184](184-native-desktop-tag-packages.md) for distribution: app tags now attach native macOS and Windows downloads after both builds pass; source instructions and existing gates remain.
 
+Amended by [DR-190](190-release-gated-full-validation.md) in the publication gate: the tagged tree runs full reusable validation, and downstream release jobs do not repeat its test suites.
+
 ## Context
 
 - The `app-v*` channel was specified to build an unsigned macOS arm64 zip with electron-builder and attach it to a GitHub release; no such tag has ever been pushed, and the workflow neither gates on CI nor writes release notes.

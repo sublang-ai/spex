@@ -70,10 +70,11 @@ When the release workflow completes publishing, it shall create a GitHub release
 
 #### release-18
 
-When a release tag is pushed, the release workflow shall confirm the CI workflow concluded `success` for the tagged commit before publishing to npm or creating a GitHub release, waiting up to a bounded timeout for the CI workflow to complete:
+When a release tag is pushed, its release workflow shall require a successful reusable CI invocation with `full: true` and its `app` or `cli` channel on the exact tagged tree before publishing to npm or creating a release [[release-34](#release-34)] [[release-44](#release-44)] ([DR-190](../decisions/190-release-gated-full-validation.md)):
 
-- the CI workflow concludes `success` — publishing proceeds;
-- the CI workflow concludes with any other result, or the timeout elapses without a successful conclusion — the release workflow fails without publishing to npm or creating a GitHub release.
+- publication depends directly on that invocation; failed, cancelled or skipped validation permits no publication;
+- no prior CI run, local result or reduced pull-request result substitutes for that invocation;
+- downstream release jobs retain package builds and validation but do not repeat the test suites that invocation completed.
 
 #### release-19
 
@@ -104,7 +105,7 @@ Before installing app-tag build dependencies, the release workflow shall require
 The released package's `package.json` shall keep the published tarball to runtime files and gate publishing on a green build:
 
 - the `files` field excludes test files and build artifacts not required at runtime from the published tarball, keeping every module its `exports` field names;
-- the `prepublishOnly` script builds and runs tests before publishing.
+- the `prepublishOnly` script builds and runs tests for standalone publication; the release workflow may bypass that lifecycle only after its full validation succeeds [[release-18](#release-18)] and it explicitly builds the same tagged CLI package.
 
 #### release-13
 
@@ -118,9 +119,7 @@ The published package shall include a `README.md` that documents what the tool d
 
 #### release-15
 
-When preparing a release tag, the developer/agent shall verify that all changes are committed and pushed to `main` and that the CI workflow concluded `success` for the commit to be tagged:
-
-- a local test run is not that verification: CI covers platforms and versions a developer's machine does not, and [[release-18](#release-18)] fails the release on a red commit, so tagging one only defers the failure.
+When preparing a release tag, the developer/agent shall verify that all changes are committed and pushed to `main`, with full channel validation required after the tag is pushed and before publication [[release-18](#release-18)], rather than requiring a prior CI run for the commit to be tagged ([DR-190](../decisions/190-release-gated-full-validation.md)).
 
 #### release-16
 
@@ -139,7 +138,7 @@ When preparing a release tag, the developer/agent shall run the automated smoke 
 
 - the fresh install clones the committed tree into a scratch directory, installs it with `npm ci` on an empty npm cache, and launches both shells by the README's own commands on a scratch Spex home: `npm run start:server`, given only the home and an ephemeral port, is walked over its printed token URL — the page served, the config seeded at your own group's spex repository's `config/playbook.config.yaml` and valid with every template playbook, the built-in catalog and the `/code` artifacts served, the readiness of the Captain's and each bound player's adapter reported, the compiler check naming the installed compiler, the Academy example seeded and its tree parsed — and stopped by SIGTERM; `npm start` renders the desktop in acceptance mode, its home storing English so the render's clicks by name hold on any system, and exits clean;
 - the smoke refuses a working tree with uncommitted changes outside the release records under `docs/releases/` unless `--allow-dirty` is given: the build, the lint and the CLI user pass read the working tree while the fresh install clones the committed one, and a release's record is written while its gates run;
-- the smoke re-runs neither the unit and integration suites nor the browser journeys: CI's success for the tagged commit [[release-15](#release-15)] is that evidence, and a local repeat adds none;
+- the smoke re-runs neither the unit and integration suites nor the browser journeys: the release's full channel validation supplies that evidence before publication [[release-18](#release-18)];
 - with `--live` ([DR-089](../decisions/089-every-fresh-user-scenario-walked-for-real.md)), a `live` stage follows the CLI user pass: the live desktop smoke [[release-22](#release-22)], its driver taken from the fresh install's clone and run inside it on the machine's signed-in agents and a scratch Spex home;
 - a stage's scratch tree is removed on success and kept, its path printed, on failure or interrupt — under `--live`, the fresh install's tree passes to the `live` stage, which makes the app's scratch home, user data and project inside it, and the `live` stage's outcome decides;
 - `--from=<stage>` resumes at a stage only after every earlier stage has passed on the current inputs, and under `--live` only at a stage up to the fresh install, whose clone the `live` stage needs;
@@ -182,11 +181,11 @@ When preparing a regular app release tag, the developer/agent shall run the regr
 
 #### release-26
 
-When preparing a beta app release tag (`app-vMAJOR.MINOR.PATCH-beta.N`) ([DR-087](../decisions/087-beta-app-releases.md)), the developer/agent shall verify CI green for the commit to be tagged [[release-15](#release-15)], run the smoke with its live stage [[release-20](#release-20)] [[release-22](#release-22)], and tag without the regression [[release-25](#release-25)] or the manual checklist [[release-21](#release-21)].
+When preparing a beta app release tag (`app-vMAJOR.MINOR.PATCH-beta.N`) ([DR-087](../decisions/087-beta-app-releases.md)), the developer/agent shall verify the committed release tree is on `main` [[release-15](#release-15)], run the smoke with its live stage [[release-20](#release-20)] [[release-22](#release-22)], and tag without the regression [[release-25](#release-25)] or the manual checklist [[release-21](#release-21)].
 
 #### release-27
 
-When a beta app release tag is pushed ([DR-087](../decisions/087-beta-app-releases.md)), the app release workflow shall confirm CI green for the tagged commit as for any app tag [[release-18](#release-18)], verify that both shell manifests carry the tag's pre-release version [[release-16](#release-16)], take the release notes from the app changelog's `[Unreleased]` section — refusing empty notes — under a line naming the beta and the release it leads to, and create the GitHub release as a pre-release titled by [[release-11](#release-11)], its run-from-source instructions followed by a line stating that a beta ran the smoke and the live smoke but not the regression:
+When a beta app release tag is pushed ([DR-087](../decisions/087-beta-app-releases.md)), the app release workflow shall require full app validation of the tagged tree as for any app tag [[release-18](#release-18)], verify that both shell manifests carry the tag's pre-release version [[release-16](#release-16)], take the release notes from the app changelog's `[Unreleased]` section — refusing empty notes — under a line naming the beta and the release it leads to, and create the GitHub release as a pre-release titled by [[release-11](#release-11)], its run-from-source instructions followed by a line stating that a beta ran the smoke and the live smoke but not the regression:
 
 - a tag whose pre-release identifier is not `beta.N` is refused without a release;
 - the changelog gains no section for a beta [[release-3](#release-3)]: the regular release that follows moves `[Unreleased]` into its version section [[release-5](#release-5)], folding the betas' notes into it.
@@ -195,30 +194,55 @@ When a beta app release tag is pushed ([DR-087](../decisions/087-beta-app-releas
 
 #### release-29
 
-When a pull request into `main` is ready, the maintainer shall ask GitHub to merge it on green, and the repository shall merge it with a merge commit once every job of the CI workflow has passed on the pull request's head, requiring no job to be re-run for a later move of `main` ([DR-145](../decisions/145-merge-on-green.md)):
+When a pull request into `main` is ready, the maintainer shall ask for a merge on green, and the repository shall merge it with a merge commit once its CI `checks` result succeeds on the pull request's head [[release-44](#release-44)], requiring no re-run for a later move of `main` ([DR-145](../decisions/145-merge-on-green.md), [DR-190](../decisions/190-release-gated-full-validation.md)):
 
-- `main` is a protected branch whose required status checks are exactly the check names a pull request's run reports for the classifier and the suites [[release-34](#release-34)], with the branch not required to be up to date;
-- a base branch is never deleted while a pull request still targets it.
+- `checks` is the sole required status check, with the branch not required to be up to date;
+- a base branch is never deleted while a pull request still targets it;
 - a conflicting pull request merges only once the branch merges `main` and its checks pass again on that head;
-- where the repository can hold no protection, `npm run merge-on-green -- <number>` waits for the checks of the head's newest run — a commit status among them judged by its state — and merges the moment they are green, naming the head it checked so that no other head merges, refusing to act once the head moved or one of them is not green.
+- where the repository can hold no protection, `npm run merge-on-green -- <number>` waits for the head's newest CI run and successful `checks` result, then merges naming the head it checked, refusing to act once that head moved or the gate is not green.
 
 #### release-30
 
-When a push reaches a pull request's branch, the CI workflow shall cancel the run of the head that push supersedes and run the new head once, cancelling no run of a push to `main` ([DR-145](../decisions/145-merge-on-green.md)).
+When a push reaches a pull request's branch, the CI workflow shall cancel the run of the head that push supersedes and run the new head once, while preserving explicitly requested and release validation runs ([DR-145](../decisions/145-merge-on-green.md), [DR-190](../decisions/190-release-gated-full-validation.md)).
 
 #### release-34
 
-When the CI workflow runs for a pull request, it shall first classify the pull request's changed paths in a `changes` job that is itself a required check, naming documentation alone and the reach of the change, then run the `test` job on Linux with Node 22 and on Windows, `journeys` in three shards and `desktop-browser` on Linux, each only where the classifier succeeded and found more than documentation, the `test` job running the scripts' tests and the suites of the workspaces the change reaches, and a stand-in reporting success under the suites' required names where it found documentation alone, and when it runs for a push to `main` or on its nightly schedule, every job of the full matrix with macOS and Node 24 and every suite ([DR-145](../decisions/145-merge-on-green.md), [DR-166](../decisions/166-pull-requests-run-without-macos.md), [DR-169](../decisions/169-documentation-alone-reports-the-suites-names.md), [DR-185](../decisions/185-the-suites-a-change-reaches.md)):
+The CI workflow shall offer validation for pull requests targeting `main`, reusable invocations and explicit manual requests, with no scheduled or automatic push-to-`main` run, selecting work by this plan ([DR-190](../decisions/190-release-gated-full-validation.md)):
 
-- documentation alone is a pull request whose every changed path lies under `docs/` or `specs/` or is a Markdown file outside every workspace; the classifier then runs the CLI package's tests and `spex lint` itself, the suites are skipped, and the stand-in reports success under each of the suites' required names, which the merge rule takes as green [[release-29](#release-29)];
-- the reach of a change: a path under `docs/` or `specs/`, or a Markdown file outside every workspace, reaches nothing; a path in a workspace, its Markdown included, reaches that workspace and, transitively, every workspace whose `package.json` names it among its dependencies, development, peer or optional ones; any other path reaches every workspace; the classifier passes the reached workspaces, or all, to the `test` job, which runs `npm test` of each with the scripts' tests;
-- a push to `main` and the nightly schedule never count as documentation alone and reach every workspace;
-- each journeys shard runs one third of the journeys by Playwright's sharding and reports as `journeys (<os>, <shard>)`;
-- the Linux `test` job requires an available Git LFS executable for real LFS transport and local materialization coverage, with no skip when it is unavailable.
+| Invocation | Validation |
+| --- | --- |
+| Pull request changing documentation alone | CLI build and tests, plus spec lint |
+| Other pull request | Build, type, catalog and spec gates; script tests and selected workspace suites on Linux Node 22; Windows Node 22 only where the selection reaches the CLI, UI or core, running the selected CLI/UI suites and core native-storage/platform coverage |
+| Full app, requested manually or by a reusable call with `full: true`, `channel: app` | On Linux and macOS, every workspace suite and script tests; on Windows, the CLI/UI suites and core native-storage/platform coverage; all browser journeys in three shards on Linux and macOS; native browser acceptance on Linux and macOS; privileged hub lane [[release-36](#release-36)] |
+| Full CLI, requested manually or by a reusable call with `full: true`, `channel: cli` | CLI tests on every supported platform/Node row, with script tests on Linux and macOS only; no app journeys, native browser acceptance or hub lane |
+
+- the full supported matrix is Linux and macOS on Node 22 and 24, and Windows on Node 22;
+- a full invocation validates the exact tree named by its caller or manual ref, never a separately selected mutable branch;
+- the classifier reads changed paths against the merge base with the comparison ref, `origin/main` locally, including staged, unstaged and untracked local files and both sides of renames;
+- documentation is a path under `docs/` or `specs/`, or a Markdown file outside every workspace; documentation alone contains at least one changed path and no other kind;
+- a workspace path, including its Markdown, selects its workspace and transitively every workspace that declares it among its dependencies, development, peer or optional dependencies;
+- an exactly listed root tool selects its declared owners and their transitive dependents, or script tests alone where no owner is named, under the ownership table below; a missing named workspace, root dependency or localization configuration, or any unlisted non-documentation root path selects every workspace;
+- Linux suite execution that selects the core requires Git LFS for real transport and materialization coverage, with no skip for its absence;
+- the final result is evaluated by the shared `checks` gate [[release-44](#release-44)].
+
+| Exact root paths | Owner seeds |
+| --- | --- |
+| `.github/workflows/ci.yml`, `.github/workflows/app-release.yml`, `.github/workflows/release.yml`, `.github/workflows/hub-lane.yml` | Script tests alone |
+| `scripts/affected-tests.mjs`, `scripts/affected-tests.test.mjs`, `scripts/ci-verdict.mjs`, `scripts/ci-workflow.test.mjs`, `scripts/app-release-workflow.test.mjs`, `scripts/prepush.sh`, `scripts/merge-on-green.sh`, `scripts/test-linux.sh`, `scripts/linux-ci/Dockerfile` | Script tests alone |
+| `scripts/release-notes.mjs`, `scripts/release-notes.test.mjs`, `scripts/smoke.mjs`, `scripts/smoke.test.mjs`, `scripts/install-smoke.mjs`, `scripts/cli-smoke.mjs`, `scripts/desktop-smoke.mjs`, `scripts/migration-smoke.mjs` | Script tests alone |
+| `scripts/desktop-runner.test.mjs`, `scripts/source-launch.integration.test.mjs`, `scripts/live-output.test.mjs`, `scripts/inspection-browser-cache.test.mjs`, `scripts/inspection-evidence.test.mjs`, `scripts/team-server-local.test.mjs` | Script tests alone |
+| `scripts/start-desktop.mjs`, `scripts/desktop-runner.mjs` | `apps/desktop` |
+| `scripts/start-server.mjs` | `apps/server` |
+| `scripts/storage-git.mjs`, `scripts/native-approval-stage.mjs` | `packages/core` |
+| `scripts/browser-preparation.ts` | `apps/desktop`, `e2e` |
+
+#### release-44
+
+When a CI invocation reaches its final result, its `checks` job shall evaluate the selected plan even after a dependency fails or is skipped, succeeding only when classification and every selected job succeeded and every unselected job was skipped [[release-34](#release-34)], with any failure, cancellation, missing result or unexpected skip blocking success and no stand-in job impersonating a suite ([DR-190](../decisions/190-release-gated-full-validation.md)).
 
 #### release-36
 
-When the hub lane workflow runs — on its nightly schedule, on a push to `main` that touches `apps/hub/` or `apps/server/`, on a pull request that changes the workflow itself, or on request — it shall run the hub's privileged lane as root on the Linux runner, the commit's tree unpacked outside any home and the install script's own requirements met by the newest Node 22 placed under root's own directories [[hub-7](hub.md#hub-7)], keep the lane's output as the run's artifact, and be no required check of a pull request ([DR-149](../decisions/149-the-privileged-lane-runs-on-ci.md)).
+When the privileged hub lane is invoked by full app validation [[release-34](#release-34)] or explicitly on request, it shall run as root on the Linux runner, the invocation's exact tree unpacked outside any home and the install script's own requirements met by the newest Node 22 placed under root's own directories [[hub-7](hub.md#hub-7)], keeping the lane's output as the run's artifact, with no scheduled, push or pull-request trigger ([DR-149](../decisions/149-the-privileged-lane-runs-on-ci.md), [DR-190](../decisions/190-release-gated-full-validation.md)).
 
 #### release-35
 
@@ -226,7 +250,7 @@ When the developer/agent is about to push, they shall run `npm run prepush`, whi
 
 #### release-43
 
-When the developer/agent runs `npm run test:affected`, the repository shall run the scripts' tests and the suites of the workspaces the working tree's changes against `main` reach, by the classifier's own rule [[release-34](#release-34)], so a change is tested before a push by what it can break and nothing else ([DR-185](../decisions/185-the-suites-a-change-reaches.md)).
+When the developer/agent runs `npm run test:affected`, the repository shall execute the same changed-path selection used for pull requests [[release-34](#release-34)] on the local platform, running CLI tests and spec lint for documentation alone and otherwise script tests followed by the selected workspace suites, with untracked files included and no implicit journeys, native browser acceptance or privileged hub lane ([DR-190](../decisions/190-release-gated-full-validation.md)).
 
 #### release-31
 
@@ -274,7 +298,7 @@ When a release candidate tarball is inspected via `npm pack --dry-run`, the insp
 
 #### release-40
 
-When the repository-system audit reads the app release workflow and desktop packaging commands, the test suite shall assert the tag-only trigger, unchanged CI-green prerequisite, native macOS and Windows jobs installing and building the tagged tree, versioned artifact names and missing-file failures, non-publishing package commands and the final release's dependency on both builds, required files, checksums and exclusive release-write permission [[release-39](#release-39)] [[release-19](#release-19)].
+When the repository-system audit reads the app release workflow and desktop packaging commands, the test suite shall assert the tag-only trigger, full app validation prerequisite [[release-18](#release-18)], native macOS and Windows jobs installing and building the tagged tree, versioned artifact names and missing-file failures, non-publishing package commands and the final release's dependency on both builds, required files, checksums and exclusive release-write permission [[release-39](#release-39)] [[release-19](#release-19)].
 
 #### release-42
 
@@ -294,7 +318,25 @@ When the app release workflow's tag check and notes assembly run, as the workflo
 
 #### release-33
 
-When the repository-system audit reads the CI workflow, the hub lane workflow and the Linux parity script, it shall assert that the workflow's concurrency groups a pull request's runs by its number and cancels the run in progress for a pull request and not for a push to `main` [[release-30](#release-30)], that the required checks the repository's merge rule names are exactly the check names a pull request's run reports for the classifier and the suites [[release-29](#release-29)] [[release-34](#release-34)], that for documentation alone a stand-in reports success under exactly the suites' required names and under no other condition [[release-34](#release-34)], that the matrix narrows for a pull request — the Linux `test` job on Node 22 alone and the journeys in three shards — and is whole for a push to `main` and for the nightly schedule, that the classifier names the reach of a pull request's change through the selection script, whose rule the audit exercises over fixture workspaces and the repository's own — documentation reaching nothing, a workspace's path reaching it and its transitive dependents, any other path reaching every workspace — and that the `test` job runs the suites the classifier names, its Windows steps guarded by the same reach and the Linux `test` job requiring Git LFS without a conditional skip [[release-34](#release-34)], that `npm run test:affected` runs the same script's selection over the working tree against `main` [[release-43](#release-43)], that `npm run prepush` refuses a conflict marker [[release-35](#release-35)], that `npm run merge-on-green` merges only a head whose newest run's checks are all green, a commit status judged by its state, naming the head it checked to the merge [[release-29](#release-29)], that `npm run test:linux` names the runners' Node and Git versions [[release-32](#release-32)], and that the hub lane workflow runs on its nightly schedule, on a push to `main` touching the hub or the server shell, on a pull request changing the workflow itself and on request, on no other pull request, running the lane's script as root and keeping its output as an artifact [[release-36](#release-36)].
+When the repository-system audit reads the CI and hub workflows, merge script and selection commands and exercises them over repository and isolated Git fixtures, the suite shall assert this validation-plan matrix:
+
+| Case | Assertions |
+| --- | --- |
+| Pull-request lifecycle | A newer head cancels its prior run; full/manual validation is not cancelled by that rule [[release-30](#release-30)]. |
+| Documentation alone | CLI tests and spec lint run; the ordinary `checks` gate succeeds with unselected jobs skipped and no stand-in [[release-34](#release-34)] [[release-44](#release-44)]. |
+| Workspace and root ownership | Changed workspace fixtures reach every declared transitive dependent; each exact root-tool mapping selects its specified owners; unknown paths, missing mapped owners and root dependency/localization configuration select all workspaces [[release-34](#release-34)]. |
+| Local working-tree selection | Committed, staged, unstaged and untracked changes and both sides of renames contribute; documentation and code use the same selection and test commands as CI [[release-43](#release-43)]. |
+| Pull-request matrix | Linux Node 22 runs the selected suites and fast gates; Windows Node 22 runs only for selected CLI/UI/core work; journeys, native browser acceptance and the hub lane are skipped [[release-34](#release-34)]. |
+| Full app | The supported platform/Node suites, all journey shards, native browser acceptance and privileged hub lane are selected [[release-34](#release-34)] [[release-36](#release-36)]. |
+| Full CLI | CLI suites run on every supported platform/Node row and script suites on Linux and macOS only, with app journeys, native browser acceptance and the hub lane skipped [[release-34](#release-34)]. |
+| Final gate | Successful classification and selected jobs with expected skips pass; failed, cancelled, missing or unexpectedly skipped selected work fails, and the gate runs after failed dependencies [[release-44](#release-44)]. |
+| Merge | Only successful `checks` on the newest run's exact head permits merge, with the sole required status named `checks` [[release-29](#release-29)]. |
+| Automatic triggers | CI and the hub lane have no schedules or push-to-main trigger; the hub lane accepts only reusable full-app invocation or explicit requests [[release-34](#release-34)] [[release-36](#release-36)]. |
+| Existing local gates | Prepush rejects conflict markers [[release-35](#release-35)], Linux parity names the runner's Node and Git versions [[release-32](#release-32)], and Linux suite execution selecting the core requires Git LFS [[release-34](#release-34)]. |
+
+#### release-45
+
+When the repository-system audit reads both channel release workflows and their reusable validation dependencies, the suite shall verify that each invokes full validation with its own channel on the exact tagged tree, without a mutable-ref override or conditional bypass, and that publication depends on successful validation, with no prior-run polling or downstream repetition of the completed suites [[release-18](#release-18)], while the CLI explicitly builds before bypassing the standalone publication lifecycle [[release-12](#release-12)].
 
 ## References
 

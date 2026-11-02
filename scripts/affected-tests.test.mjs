@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The suites a change reaches (release-34, release-43, DR-185): the
+// The suites a change reaches (release-34, release-43, DR-190): the
 // classifier run as CI and `npm run test:affected` run it, over a fixture
 // monorepo, over this repository's own workspaces and with a stand-in npm.
 import assert from "node:assert/strict";
@@ -69,13 +69,38 @@ test("a workspace reaches itself and every transitive dependent, through each de
   assert.deepEqual(reach(dir, ["tools/bin/run.mjs", "apps/leaf/x.ts"]).workspaces, ["apps/leaf", "tools"]);
 });
 
-test("a root path reaches everything", () => {
+test("dependency tooling and unknown root paths still reach everything", () => {
   const dir = fixture();
-  for (const path of [".github/workflows/ci.yml", "package-lock.json", "scripts/x.mjs", "packages/notes/README.txt", "packages/base2/x.ts"]) {
+  for (const path of [".github/workflows/unknown.yml", "package.json", "package-lock.json", "scripts/dependency-closure.mjs", "scripts/i18n-check.mjs", "scripts/x.mjs", "scripts/ci-verdict.mjs.bak", "packages/notes/README.txt", "packages/base2/x.ts"]) {
     const result = reach(dir, [path, "apps/leaf/x.ts"]);
     assert.equal(result.all, true, path);
     assert.equal(result.docsOnly, false, path);
   }
+});
+
+test("known workflows and root tooling select script tests alone, without hiding product changes", () => {
+  for (const path of [
+    ".github/workflows/ci.yml", ".github/workflows/app-release.yml", ".github/workflows/release.yml", ".github/workflows/hub-lane.yml",
+    "scripts/affected-tests.mjs", "scripts/affected-tests.test.mjs", "scripts/ci-verdict.mjs", "scripts/ci-workflow.test.mjs", "scripts/app-release-workflow.test.mjs",
+    "scripts/prepush.sh", "scripts/merge-on-green.sh", "scripts/test-linux.sh", "scripts/linux-ci/Dockerfile",
+    "scripts/release-notes.mjs", "scripts/release-notes.test.mjs", "scripts/smoke.mjs", "scripts/smoke.test.mjs", "scripts/install-smoke.mjs", "scripts/cli-smoke.mjs", "scripts/desktop-smoke.mjs", "scripts/migration-smoke.mjs",
+    "scripts/desktop-runner.test.mjs", "scripts/source-launch.integration.test.mjs", "scripts/live-output.test.mjs", "scripts/inspection-browser-cache.test.mjs", "scripts/inspection-evidence.test.mjs", "scripts/team-server-local.test.mjs",
+  ]) {
+    assert.deepEqual(reach(root, [path, "specs/packages/release.md"]), { docsOnly: false, all: false, workspaces: [] }, path);
+  }
+  assert.deepEqual(reach(root, [".github/workflows/ci.yml", "scripts/prepush.sh", "packages/ui/src/App.tsx"]), { docsOnly: false, all: false, workspaces: ["packages/ui"] });
+});
+
+test("root runtime helpers select their owners and every dependent; a missing owner falls back to all", () => {
+  for (const [paths, expected] of [
+    [["scripts/start-desktop.mjs", "scripts/desktop-runner.mjs"], ["apps/desktop"]],
+    [["scripts/start-server.mjs"], ["apps/server", "e2e"]],
+    [["scripts/storage-git.mjs", "scripts/native-approval-stage.mjs"], ["apps/desktop", "apps/server", "e2e", "packages/core", "packages/ui"]],
+    [["scripts/browser-preparation.ts"], ["apps/desktop", "e2e"]],
+  ]) {
+    for (const path of paths) assert.deepEqual(reach(root, [path]), { docsOnly: false, all: false, workspaces: expected }, path);
+  }
+  assert.equal(reach(fixture(), ["scripts/start-server.mjs"]).all, true, "a stale ownership entry must never skip the suites");
 });
 
 test("documentation beside code is no documentation alone and adds nothing to the reach", () => {
@@ -89,8 +114,9 @@ test("--github-output writes docs-only and affected: all, the folders or empty",
   assert.deepEqual(reach(dir, ["packages/mid/x.ts"], "--github-output"), ["docs-only=false", "affected=apps/app packages/mid"]);
 });
 
-test("the changed paths are the working tree's against the merge base, both sides of a rename", () => {
+test("the changed paths include both sides of renames, tracked edits and untracked files, respecting Git ignores", () => {
   const dir = fixture();
+  write(join(dir, ".gitignore"), "ignored/\n");
   write(join(dir, "apps/leaf/src/a.ts"), "export const a = 1;\n");
   write(join(dir, "apps/app/src/b.ts"), "export const b = 1;\n");
   const git = (...args) => execFileSync("git", ["-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "-c", "commit.gpgsign=false", ...args], { cwd: dir, encoding: "utf8" });
@@ -114,6 +140,17 @@ test("the changed paths are the working tree's against the merge base, both side
   const run = spawnSync(process.execPath, [script, "--root", dir, "--base", "main"], { encoding: "utf8" });
   assert.equal(run.status, 0, run.stderr);
   assert.deepEqual(JSON.parse(run.stdout), { docsOnly: false, all: false, workspaces: ["apps/app", "apps/leaf", "tools"] });
+  // A new local source file counts before git add; ignored build output
+  // does not turn the selective run into every workspace's suite.
+  write(join(dir, "packages/mid/src/new.ts"), "export const added = true;\n");
+  write(join(dir, "ignored/output.js"), "generated\n");
+  const withUntracked = spawnSync(process.execPath, [script, "--root", dir, "--base", "main"], { encoding: "utf8" });
+  assert.equal(withUntracked.status, 0, withUntracked.stderr);
+  assert.deepEqual(JSON.parse(withUntracked.stdout), { docsOnly: false, all: false, workspaces: ["apps/app", "apps/leaf", "packages/mid", "tools"] });
+  write(join(dir, "unknown.config"), "new root configuration\n");
+  const withUnknown = spawnSync(process.execPath, [script, "--root", dir, "--base", "main"], { encoding: "utf8" });
+  assert.equal(withUnknown.status, 0, withUnknown.stderr);
+  assert.equal(JSON.parse(withUnknown.stdout).all, true);
 });
 
 /** This repository's workspaces and what each depends on, read from its own package.json files. */
@@ -197,6 +234,63 @@ test("--run without an argument runs what the change reaches", { skip: posixOnly
   assert.deepEqual(computed.calls, ["run test:scripts", "test -w apps/app --if-present", "test -w packages/mid --if-present"]);
 });
 
+test("computed local runs and CI's explicit selection execute the same suites", { skip: posixOnly }, () => {
+  for (const paths of [[".github/workflows/ci.yml"], ["scripts/start-server.mjs"], ["scripts/prepush.sh", "packages/ui/src/App.tsx"], ["package-lock.json"]]) {
+    const list = join(mkdtempSync(join(tmpdir(), "spex-affected-paths-")), "paths.txt");
+    writeFileSync(list, `${paths.join("\n")}\n`);
+    const output = reach(root, paths, "--github-output");
+    const affected = output.find((line) => line.startsWith("affected=")).slice("affected=".length);
+    const local = runWithNpm(["--run", "--paths", list]);
+    const ci = runWithNpm(["--run", affected]);
+    assert.equal(local.status, 0, local.stderr);
+    assert.equal(ci.status, 0, ci.stderr);
+    assert.deepEqual(local.calls, ci.calls, paths.join(", "));
+  }
+});
+
+function documentationFixture() {
+  const dir = fixture();
+  const list = join(dir, "paths.txt");
+  writeFileSync(list, "specs/packages/example.md\n");
+  // An executable CLI fixture verifies the real Node process, cwd and
+  // arguments used after npm's tests, and can fail the lint independently.
+  write(join(dir, "packages/cli/dist/cli.js"), [
+    'const assert = require("node:assert/strict");',
+    'assert.deepEqual(process.argv.slice(2), ["lint"]);',
+    'require("node:fs").appendFileSync(process.env.NPM_LOG, "lint\\n");',
+    'process.exit(process.env.NPM_FAIL_ON === "lint" ? 7 : 0);',
+    "",
+  ].join("\n"));
+  return { dir, list };
+}
+
+test("a computed documentation-only run executes CLI tests then spec lint; explicit selections keep their meaning", { skip: posixOnly }, () => {
+  const { dir, list } = documentationFixture();
+  const computed = runWithNpm(["--root", dir, "--run", "--paths", list]);
+  assert.equal(computed.status, 0, computed.stderr);
+  assert.deepEqual(computed.calls, ["test -w packages/cli", "lint"]);
+  const explicit = runWithNpm(["--root", dir, "--run", "", "--paths", list]);
+  assert.equal(explicit.status, 0, explicit.stderr);
+  assert.deepEqual(explicit.calls, ["run test:scripts"]);
+});
+
+test("documentation validation propagates test and lint failures without running past a failed gate", { skip: posixOnly }, () => {
+  const { dir, list } = documentationFixture();
+  const args = ["--root", dir, "--run", "--paths", list];
+  const testsFailed = runWithNpm(args, "test -w packages/cli");
+  assert.equal(testsFailed.status, 3);
+  assert.deepEqual(testsFailed.calls, ["test -w packages/cli"]);
+  const lintFailed = runWithNpm(args, "lint");
+  assert.equal(lintFailed.status, 7);
+  assert.deepEqual(lintFailed.calls, ["test -w packages/cli", "lint"]);
+});
+
+test("a failed classification executes no suite", { skip: posixOnly }, () => {
+  const failed = runWithNpm(["--root", fixture(), "--run", "--base", "missing-ref"]);
+  assert.equal(failed.status, 2);
+  assert.deepEqual(failed.calls, []);
+});
+
 test("npm run test:affected runs what the change reaches, and the script tests run these tests", () => {
   const scripts = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).scripts;
   assert.equal(scripts["test:affected"], "node scripts/affected-tests.mjs --run");
@@ -204,6 +298,9 @@ test("npm run test:affected runs what the change reaches, and the script tests r
 });
 
 test("--run ends with the first failing command's status and runs nothing after it", { skip: posixOnly }, () => {
+  const scriptsFailed = runWithNpm(["--run", "packages/core packages/ui"], "run test:scripts");
+  assert.equal(scriptsFailed.status, 3);
+  assert.deepEqual(scriptsFailed.calls, ["run test:scripts"]);
   const failed = runWithNpm(["--run", "packages/core packages/ui"], "test -w packages/core --if-present");
   assert.equal(failed.status, 3);
   assert.deepEqual(failed.calls, ["run test:scripts", "test -w packages/core --if-present"]);

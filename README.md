@@ -289,9 +289,15 @@ permissions, workflow questions, Codex's access-to-Spex prompt, and OS grants.
 | [`apps/server`](apps/server) | Server shell for remote browser access, specified in [server-shell](specs/packages/server-shell.md) |
 | [`demo/`](demo) | Academy example and spec-package case study |
 
-For development: `npm ci`, `npm run build`, `npm test`; `npm run e2e` drives
-the served UI through its user journeys in Chromium (after a one-time
-`npx playwright install chromium`). Maintainers also use the
+For development: `npm ci`, `npm run build`, then `npm run test:affected` runs
+the suites reached by your changes, including untracked files. Run
+`npm run prepush` before pushing for build, type, catalog and spec checks.
+Pull requests use the same affected-suite selection; full platform checks,
+browser journeys, native browser acceptance and the privileged hub lane gate
+app releases or run on explicit request. There are no nightly checks or
+duplicate runs after merging. CLI releases validate the CLI across platforms.
+For a focused browser investigation, `npm run e2e` drives the served UI in
+Chromium (after a one-time `npx playwright install chromium`). Maintainers use the
 [release smoke checklist](docs/release-smoke.md).
 
 Contributions are welcome through
