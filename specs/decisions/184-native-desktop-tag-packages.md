@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-176: Native Desktop Packages from App Tags
+# DR-184: Native Desktop Packages from App Tags
 
 ## Status
 

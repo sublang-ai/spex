@@ -6,7 +6,7 @@
 ## Status
 
 Accepted (2026-10-31) on the owner's request for installer downloads for Mac M-series and Windows x86 computers.
-Amends [DR-176](176-native-desktop-tag-packages.md) for the macOS download format; platform architectures and publication gates remain.
+Amends [DR-184](184-native-desktop-tag-packages.md) for the macOS download format; platform architectures and publication gates remain.
 
 ## Context
 

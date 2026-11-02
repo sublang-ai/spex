@@ -1,8 +1,10 @@
-# DR-175: Bounded Codex commands on native Windows
+# DR-183: Bounded Codex commands on native Windows
 
 ## Status
 
 Accepted (2026-10-31). Extends [DR-178](178-native-windows-private-storage.md) in the supplied Agent runtime, without adding application business rules.
+
+Superseded by [DR-182](182-published-desktop-runtime-adoption.md) for runtime launch and platform hints: the published adapter uses the official SDK directly without forced MXC or fixed shell instructions.
 
 ## Context
 

@@ -17,6 +17,8 @@ source; run source with `npm ci` and `npm start` (desktop) or
 
 ### Changed
 
+- Fork beta.24 rebases the native desktop changes onto official `e1cc06f1`, retaining upstream Git-source bytes/LF behavior and project navigation. Conflicting unreleased decision and test-item IDs are reassigned without changing official IDs. See [the verification record](docs/releases/0.9.0-beta.24-fork-latest-rebase.md).
+
 - Desktop and server builds adopt registry-published Cligent 0.36.2 and Playbook 18.1.1 with checksum-locked shared runtimes; app tags no longer consume local vendor archives.
 
 ### Added
@@ -41,7 +43,7 @@ source; run source with `npm ci` and `npm start` (desktop) or
   installer on native runners. Both builds must succeed before the
   release publishes both downloads and SHA-256 checksums; source
   instructions remain available. Builds are unsigned and the macOS app
-  is not notarized ([DR-176](specs/decisions/176-native-desktop-tag-packages.md)).
+  is not notarized ([DR-184](specs/decisions/184-native-desktop-tag-packages.md)).
 
 - Applets in the IDE ([DR-161](specs/decisions/161-an-applet-is-a-page-the-ide-serves.md)).
   A spec package's applet is a static web page entered at

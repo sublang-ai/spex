@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { defaultRunGit, gitSource } from "@sublang/spex/environment";
 
-test("environments-44: Windows Git fetches and reuses a long package mirror without changing source configuration", { skip: process.platform !== "win32" }, async () => {
+test("environments-46: Windows Git fetches and reuses a long package mirror without changing source configuration", { skip: process.platform !== "win32" }, async () => {
   const scratch = mkdtempSync(join(tmpdir(), "spex-git-longpaths-"));
   try {
     const origin = join(scratch, "origin");
