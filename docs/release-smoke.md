@@ -6,9 +6,14 @@
 What to run before tagging, by tier
 ([DR-086](../specs/decisions/086-tests-in-tiers.md),
 [DR-089](../specs/decisions/089-every-fresh-user-scenario-walked-for-real.md)).
-The checks — unit, integration and browser journeys, on Linux and
-macOS — are CI's: tag only a commit whose CI run concluded `success`
-(release-15). Nothing below repeats them.
+Full automated validation belongs to the release workflow: pushing a tag
+runs the channel's full CI on that exact tree before publication
+(release-18, [DR-199](../specs/decisions/199-release-gated-full-validation.md)).
+App validation includes the platform matrix, browser journeys, native
+browser acceptance and privileged hub lane; CLI validation runs its CLI
+suite across the platform matrix and script suites on Linux and macOS.
+Nothing below repeats those suites, and a prior CI run is not required
+before tagging.
 
 | Tag | Smoke | Live smoke | Regression | Manual residue |
 | --- | --- | --- | --- | --- |
@@ -218,9 +223,9 @@ A beta ships for early trial without the regression
   workflow refuses any other pre-release identifier.
 - Bump `apps/desktop` and `apps/server` together to `X.Y.Z-beta.N`,
   verbatim.
-- Gates: CI green for the tagged commit and `npm run smoke -- --live` —
-  the smoke with the live smoke as its last stage. No regression, no
-  manual residue.
+- Before tagging: `npm run smoke -- --live`, the smoke with the live
+  smoke as its last stage. The tag workflow then requires full app
+  validation before publication. No regression, no manual residue.
 - Notes: the changelog's `[Unreleased]` section as it stands at the tag,
   which must not be empty. The changelog gains no section for a beta:
   the regular release that follows moves `[Unreleased]` into its version
@@ -242,8 +247,8 @@ clean-tree check exempts that directory, so a gate re-run needs no
 
 Push `app-vX.Y.Z` or `app-vX.Y.Z-beta.N` only after the preparation gates
 above pass. The tag must match both shell manifests exactly.
-The app release workflow waits for that commit's green CI, validates the
-version and notes, then builds on macOS and Windows native runners.
+The app release workflow runs full app validation on that tagged commit,
+validates the version and notes, then builds on macOS and Windows native runners.
 Only after both succeed does one release publish:
 
 - `Spex-<version>-mac-arm64.dmg` — macOS Apple Silicon.
@@ -254,4 +259,5 @@ Packaging commands use `--publish never`; only the final workflow job
 publishes. Missing downloads or a failed build prevent that job.
 The builds are unsigned and the macOS app is not notarized; the release
 notes disclose this. Agent authentication remains the user's own setup.
-The CLI release workflow is unchanged.
+CLI tags require full CLI validation before building and inspecting the CLI
+tarball and publishing it; they do not run the app's browser or hub checks.

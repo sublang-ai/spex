@@ -91,6 +91,9 @@ test("space-29, space-82, space-98, space-99: a space command names the instance
     { type: "space.group.create", id: "i7", instance, name: "Acme", path: "acme", parent: null },
     { type: "space.group.rename", id: "i8", instance, group: "7", name: "Acme Corp" },
     { type: "space.group.delete", id: "i9", instance, group: "7" },
+    { type: "space.group.delete", id: "i9a", instance, group: "7", confirmPath: "team/research" },
+    { type: "space.group.restore", id: "i9b", instance, group: "7" },
+    { type: "space.group.deletionCheck", id: "i9c", instance, group: "7" },
     { type: "space.share", id: "i10", instance, group: "7", login: "bob", role: "30" },
     { type: "space.unshare", id: "i11", instance, group: "7", login: "bob" },
     { type: "space.members", id: "i12", repository },
@@ -124,6 +127,9 @@ test("space-29, space-82, space-98, space-99: a space command names the instance
     { type: "space.group.create", id: "d7", name: "Acme", path: "acme", parent: null },
     { type: "space.group.rename", id: "d8", group: "7", name: "Acme Corp" },
     { type: "space.group.delete", id: "d9", group: "7" },
+    { type: "space.group.delete", id: "d9a", instance, group: "7", confirmPath: 3 },
+    { type: "space.group.restore", id: "d9b", group: "7" },
+    { type: "space.group.deletionCheck", id: "d9c", group: "7" },
   ]) {
     const parsed = parseCommand(command);
     assert.ok(!parsed.ok, JSON.stringify(command));

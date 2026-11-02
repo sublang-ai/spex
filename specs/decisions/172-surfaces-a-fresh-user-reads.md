@@ -5,12 +5,19 @@
 
 ## Status
 
+Amended by [DR-194](194-saved-work-is-a-choice-not-setup-debt.md) in repairs: a neutral Saved work review, recognizable conversations, existing-folder selection and Not now replace the issue-first presentation.
+
+Amended by [DR-189](189-repairs-explain-the-next-step.md) in repair wording and storage-failure presentation: unconnected folders are not called missing, and technical evidence stays behind Details with a plain next step above it.
+
 Accepted (2026-10-31) on the owner's direction to make every package and Space operation easy to understand for a person who installed Spex today, favoring simple and reliable over complete.
 Amends [DR-011](011-project-workspace.md) in the rail and the workspace's tabs, [DR-057](057-space-surface.md) and [DR-063](063-space-setup-and-repair.md) in the sign-in card, [DR-104](104-spec-package-format-and-client-environments.md) and [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) in where packages are managed and in the two verbs, [DR-114](114-groups-and-sharing-from-spex.md), [DR-120](120-the-instance-is-the-space.md) and [DR-159](159-projects-in-groups-opened-where-you-work.md) in the headings, the rows and the acts offered, [DR-128](128-a-spex-repository-placed-at-several-instances.md) in the acts offered, [DR-151](151-publish-local-spec-packages.md) in where Publish stands, [DR-168](168-independent-package-registry.md) in how a site's two faces show, [DR-058](058-chat-assisted-playbook-authoring.md) in the Enable tab's words, and [DR-078](078-the-interface-speaks-the-readers-language.md) in the glossary; extends [DR-069](069-key-phrases-not-sentences.md); builds on [DR-171](171-personal-names-are-space-logins.md), whose logins name people on every surface here.
 Amended by [DR-173](173-the-registry-is-no-face-of-a-space.md): the registry stands nowhere on the Space surface, and the Packages tab's chooser reads no directory for registries.
 Amended by [DR-174](174-what-a-package-provides-is-placed.md) in its vocabulary, its Packages tab and one accepted loss: "place" is the word for what an install writes for agents and into `specs/`, a row's spec line says where the spec stands, and the command line's `export` closes the "New package…" loss.
 Amended by [DR-175](175-projects-shown-where-they-are-open.md) in its vocabulary: the code glyph's phrase for code on no Git host.
 Amended by [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md) in its map, its vocabulary, its Packages and Playbooks tabs and one accepted loss: the rail regains Playbooks as the global page, and a remembered Playbooks surface opens it; "Global" is the word for what applies to every project of yours, "Personal" staying the name of your own group on Space; the Packages tab holds the project's packages alone, the built-in playbooks one package among the rest; a package row's playbook line carries no act; with no project open the global page stands.
+
+Amended by [DR-190](190-membership-with-a-clear-scope.md) in the group overflow: Delete group returns for permitted empty groups, with confirmation and a visible reason while contents or a server prevent it; the members panel separates Invite members from member rows and explains the choice.
+Amended by [DR-192](192-choose-a-group-before-adding.md) in the group picker: a visible task title, labelled Space, radio choices and explicit Add to group replace the immediate "Share into" actions.
 
 ## Context
 

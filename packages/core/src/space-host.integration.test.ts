@@ -2268,14 +2268,14 @@ test("space-38, space-52: the stand-in's 401 stops reauth, its refusal names onl
   assert.ok(reauth.sync.phase === "stopped" && reauth.sync.cause === "reauth" && reauth.sync.message === "Sign in again", JSON.stringify(reauth.sync));
   assert.match(reauth.sync.guidance, /^Sign in again, then Retry\.$/);
   host.script.unauthorizeTransport(false);
-  // A refusal names the host's own words and Share, claims no role and
+  // A refusal names the Space's own words and Invite members, claims no role and
   // offers no act the host did not name (space-50).
   const words = "Your account is blocked: contact support.";
   host.script.refuseTransport(words);
   const refused = await home.client.settle("space.sync", { repository: HOST_OWN });
   assert.ok(refused.sync.phase === "stopped" && refused.sync.cause === "refused", JSON.stringify(refused.sync));
   assert.equal(refused.sync.message, `${HOST_NAME} refused: ${words}`);
-  assert.equal(refused.sync.guidance, "Membership decides who may send here: use Share, or ask a member who may share it.");
+  assert.equal(refused.sync.guidance, "Membership decides who may send here: use Invite members, or ask someone who can manage members.");
   assert.doesNotMatch(`${refused.sync.message} ${refused.sync.guidance}`, /\b(Owner|Maintainer|Developer|Reporter|Guest|role)\b|SSH key|gh auth|credential helper/);
   assert.deepEqual([refused.state, refused.reason], ["read-only", refused.sync.message]);
   host.script.refuseTransport(null);

@@ -9,6 +9,8 @@ Accepted (2026-10-31) on the owner's direction to fix the merge gate without add
 Amends [DR-166](166-pull-requests-run-without-macos.md) in how a pull request changing documentation alone satisfies the required checks: a stand-in reports the suites' names; the classifier, the gates it runs and the suites' skip are unchanged.
 Amended by [DR-185](185-the-suites-a-change-reaches.md) in the stand-in's names, which follow that decision's pull request matrix.
 
+Superseded by [DR-199](199-release-gated-full-validation.md): one required `checks` result evaluates the selected jobs, including documentation gates, without stand-ins for skipped suite names.
+
 ## Context
 
 DR-166 let a pull request changing documentation alone skip the suites and expected them to report skipped, which the merge rule takes as green.

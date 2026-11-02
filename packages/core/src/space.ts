@@ -19,7 +19,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "nod
 import { type StorageDiagnostic } from "./app-storage.js";
 import { heldSessionLease, occupied, pruneEmptyFolders } from "./clone-moves.js";
 import { canonicalHost } from "./code-credentials.js";
-import { portable, readJsonFile, StorageFormatError, UUID, writeApplicationFile } from "@sublang/spex/files";
+import { portable, readJsonFile, sha256, StorageFormatError, UUID, writeApplicationFile } from "@sublang/spex/files";
 import { withGitCredential, type GitCredentialHandle } from "./git-credential.js";
 import {
   anotherAccountError, CredentialChanged, HostError, SignInBusyError, type BrowserSignIn, type DeviceSignIn, type GitHostClient, type HostAccount, type HostGroup,
@@ -57,9 +57,9 @@ import {
   signInAgain, SpaceGit, validateRemoteUrl, withoutHostUrls, type GitFailure, type GitRun, type GitRunOptions,
 } from "./space-git.js";
 import {
-  callbackPages, collidingGroup, groupNameTaken, groupNamedLikeYourLogin, groupNotEmpty, groupNotListed, hostKey, listingFor, namedLikeYourLogin,
+  callbackPages, collidingGroup, confirmGroupPath, groupNameTaken, groupNamedLikeYourLogin, groupNotListed, hostKey, listingFor, namedLikeYourLogin,
   namedLogins, nameOneTarget, nameTaken, nameTheGroup, nameTheLogin, notARole, notFoundAt, ownNameFor, pathTheGroup, readHostCatalog, readHostListing, readHostView, relayHostError,
-  renameNothing, repositoryDescription, repositoryFor, sameLogin, sameOrigin, signInFailure, takenIn, underOrigin, userGroup, waitingPhrase,
+  renameNothing, repositoryDescription, repositoryFor, sameLogin, sameOrigin, signInFailure, takenIn, unavailableGroupOperation, underOrigin, userGroup, waitingPhrase,
   type HostCatalog, type HostListing, type HostView,
 } from "./space-groups.js";
 import {
@@ -1121,15 +1121,34 @@ function authoringTitle(bytes: Buffer | undefined): string | undefined {
   } catch { return undefined; }
 }
 
-/** What the header counts (space-1): a repair the reader has not
- * answered, and every diagnostic no repair folds. A resolved repair is
- * already gone, because the core stops reporting it. */
+/** What the header counts (space-1): unanswered repairs and notices,
+ * with blocking damage always counted. Resolved findings are already
+ * gone because the core stops reporting them. */
 function countIssues(diagnostics: StorageDiagnostic[]): number {
-  return diagnostics.filter((entry) => entry.repair?.declined === undefined).length;
+  return diagnostics.filter((entry) => entry.blocking ||
+    (entry.repair?.declined === undefined && entry.notice?.dismissed === undefined)).length;
 }
 
 /** One repair's record in this device's preferences (space-54). */
 const repairPref = (key: string): string => `space:repair:${key}`;
+const noticePref = (key: string): string => `space:notice:${key}`;
+
+/** A dismissal belongs to this exact reported failure and the source
+ * file version, never to a path forever. Stat only: no conversation
+ * contents or linked file are opened to prepare the review. A source
+ * that cannot be verified remains visible but cannot be dismissed. */
+function noticeKey(entry: StorageDiagnostic): string | undefined {
+  if (entry.blocking || entry.repair ||
+    (entry.code !== "session-import" && entry.code !== "session-upgrade")) return;
+  try {
+    const source = lstatSync(entry.file, { bigint: true });
+    if (!source.isFile()) return;
+    return sha256(JSON.stringify([
+      entry.file, entry.code, entry.reason,
+      ...[source.dev, source.ino, source.mode, source.size, source.mtimeNs, source.ctimeNs].map(String),
+    ]));
+  } catch { return; }
+}
 /** Whether a listed repository may have members besides the account: a
  * count above one, or none where the host's read lacked it (space-57,
  * git-host-5). */
@@ -4321,6 +4340,12 @@ class RepositorySync {
   }
 }
 
+/** Group IDs stay authoritative when a pending original and its
+ * replacement share a public path (git-host-5). */
+function hostGroupKey(group: HostGroup): string {
+  return group.kind === "user" ? `login:${group.fullPath.toLowerCase()}` : group.id !== null ? `id:${group.id}` : `path:${group.fullPath}`;
+}
+
 /** One instance the core talks to, known by its canonical origin
  * (git-host intent, DR-127): its own client, which keeps that
  * instance's app token current, refreshes it one at a time and holds
@@ -4358,7 +4383,7 @@ class HostInstance {
    * held (git-host-5). */
   readonly attached = new Map<string, HostListing>();
   /** The groups this core created there since its view's read began, as
-   * it answered them, by full path: listed, like `attached`, until its
+   * it answered them, by identity: listed, like `attached`, until its
    * next read is held (git-host-5, git-host-15). */
   readonly created = new Map<string, HostGroup>();
   /** The login of the account it signed this device out of
@@ -5581,7 +5606,8 @@ export class SpaceManager {
    * next read is held (git-host-5, git-host-15). */
   private listedGroups(instance: HostInstance, view: Pick<HostView, "groups"> | undefined): HostGroup[] {
     const groups = view?.groups ?? [];
-    const held = [...instance.created.values()].filter((group) => !groups.some((entry) => entry.fullPath === group.fullPath || (group.id !== null && entry.id === group.id)));
+    const listed = new Set(groups.map(hostGroupKey));
+    const held = [...instance.created.values()].filter((group) => !listed.has(hostGroupKey(group)));
     return [...groups, ...held];
   }
 
@@ -6999,7 +7025,7 @@ export class SpaceManager {
     // is begun here: the host's listing may lag behind its creation
     // (git-host-5).
     instance.changedAfter = instance.readsBegun;
-    if (this.signedInAt(instance)) instance.created.set(created.fullPath, created);
+    if (this.signedInAt(instance)) instance.created.set(hostGroupKey(created), created);
     await this.publish();
     return { group: { id: created.id ?? "", fullPath: created.fullPath, name: created.name } };
   }
@@ -7009,8 +7035,8 @@ export class SpaceManager {
   // A misplacement is undone as the person: a group of the instance
   // renamed or deleted, a spex repository moved to another group. The
   // host is asked whatever the view said the person may do; only what it
-  // cannot be asked — a blank field, a place the view does not list, a
-  // group the view lists anything under — is refused before it is.
+  // cannot be asked — a blank field, a place the view does not list, or
+  // a deletion without exact path confirmation — is refused before it is.
 
   /** Rename a group of the instance at the host — its name, its path
    * segment, or both (git-host-18) — holding it as the host answered,
@@ -7038,14 +7064,20 @@ export class SpaceManager {
       throw this.hostWriteRefusal(instance, error);
     }
     const to = renamed.fullPath;
-    const here = (group: Pick<HostGroup, "id" | "fullPath">): boolean => group.id === id || group.fullPath === from;
+    const here = (group: Pick<HostGroup, "id" | "fullPath">): boolean => group.id !== null ? group.id === id : group.fullPath === from;
     const inside = (fullPath: string): string => fullPath.startsWith(`${from}/`) ? `${to}${fullPath.slice(from.length)}` : fullPath;
+    const descendant = (group: HostGroup): HostGroup => {
+      // A pending original can share the replacement's public path.
+      // Its inherited subtree belongs to that original, not this rename.
+      if (group.pendingDeletion && !group.deletionRoot?.startsWith(`${from}/`)) return group;
+      return { ...group, fullPath: inside(group.fullPath), ...(group.deletionRoot ? { deletionRoot: inside(group.deletionRoot) } : {}) };
+    };
     this.holdChange(instance, {
-      group: (group) => group.kind !== "group" ? group : here(group) ? { ...renamed, id, kind: "group" } : { ...group, fullPath: inside(group.fullPath) },
+      group: (group) => group.kind !== "group" ? group : here(group) ? { ...renamed, id, kind: "group" } : descendant(group),
       listing: (listing) => {
         const group = listing.repository.group;
         if (group.kind !== "group") return listing;
-        const next = here(group) ? { ...group, fullPath: to, name: renamed.name } : { ...group, fullPath: inside(group.fullPath) };
+        const next = here(group) ? { ...group, fullPath: to, name: renamed.name } : descendant(group);
         return { ...listing, repository: { ...listing.repository, group: next } };
       },
     });
@@ -7053,24 +7085,65 @@ export class SpaceManager {
     return { group: { id, fullPath: to, name: renamed.name } };
   }
 
-  /** Delete a group of the instance at the host (git-host-19), only
-   * where the view lists nothing under it, since the host deletes
-   * whatever a group holds with it; the group is held as gone until a
-   * read begun after the deletion is held (git-host-5), announced before
-   * the reply. */
-  async deleteGroup(named: string, id: string): Promise<{ deleted: true }> {
+  /** Request normal group deletion after exact path confirmation
+   * (git-host-19). The Space decides whether this schedules or completes
+   * deletion for an empty group; the Space checks contents afresh. */
+  async deleteGroup(named: string, id: string, confirmPath?: string): Promise<{ status: "scheduled" | "deleted" }> {
     const instance = this.instanceAt(this.namedInstance(named));
     if (!this.signedInAt(instance)) throw new CoreError("invalid_request", signInFirst());
     const listed = this.instanceGroup(instance, id);
-    if (this.holdsAnything(instance, listed)) throw new CoreError("invalid_request", groupNotEmpty(listed.fullPath));
+    if (confirmPath === undefined || confirmPath.trim().length === 0) throw new CoreError("invalid_request", confirmGroupPath(listed.fullPath));
+    let answer: Awaited<ReturnType<GitHostClient["deleteGroup"]>>;
     try {
-      await instance.client.deleteGroup(id);
+      answer = await instance.client.deleteGroup(id, confirmPath);
     } catch (error) {
-      throw this.hostWriteRefusal(instance, error);
+      throw this.hostWriteRefusal(instance, error, "delete");
     }
-    this.holdChange(instance, { group: (group) => group.kind === "group" && (group.id === id || group.fullPath === listed.fullPath) ? null : group });
+    if (answer.status === "scheduled") this.holdGroupLifecycle(instance, id, answer.group);
+    else this.holdChange(instance, { group: (group) => group.id === id ? null : group });
     await this.publish();
-    return { deleted: true };
+    return { status: answer.status };
+  }
+
+  /** Inspect current contents at the Space. Cached clone paths and
+   * member lists cannot decide whether a group is empty. */
+  async checkGroupDeletion(named: string, id: string): Promise<{ group: { id: string; fullPath: string; name: string }; contents: { kind: "project" | "group" | "records" | "server"; name: string }[] }> {
+    const instance = this.instanceAt(this.namedInstance(named));
+    if (!this.signedInAt(instance)) throw new CoreError("invalid_request", signInFirst());
+    this.instanceGroup(instance, id);
+    try {
+      const { group, contents } = await instance.client.inspectGroupDeletion(id);
+      return { group: { id, fullPath: group.fullPath, name: group.name }, contents };
+    } catch (error) { throw this.hostWriteRefusal(instance, error, "delete"); }
+  }
+
+  /** Hold the response before a post-restore read. Only the root's
+   * restored permissions are known from that response: descendants may
+   * have independent scheduled deletions, so the read decides theirs. */
+  async restoreGroup(named: string, id: string): Promise<{ group: { id: string; fullPath: string; name: string } }> {
+    const instance = this.instanceAt(this.namedInstance(named));
+    if (!this.signedInAt(instance)) throw new CoreError("invalid_request", signInFirst());
+    this.instanceGroup(instance, id);
+    let restored: HostGroup;
+    try { restored = await instance.client.restoreGroup(id); }
+    catch (error) { throw this.hostWriteRefusal(instance, error, "restore"); }
+    this.holdGroupLifecycle(instance, id, restored);
+    await this.publish();
+    // A successful write remains successful if the follow-up read
+    // fails: the instance exposes that read's failure for Refresh.
+    await this.readHost(instance).catch(() => undefined);
+    await this.publish();
+    return { group: { id, fullPath: restored.fullPath, name: restored.name } };
+  }
+
+  /** Hold the empty group's returned path and lifecycle by stable id.
+   * Saved records from a different group at the same path stay separate. */
+  private holdGroupLifecycle(instance: HostInstance, id: string, answer: HostGroup): void {
+    const map = (group: HostGroup): HostGroup => group.kind === "group" && group.id === id ? answer : group;
+    this.holdChange(instance, {
+      group: map,
+      listing: (listing) => ({ ...listing, repository: { ...listing.repository, group: map(listing.repository.group) } }),
+    });
   }
 
   /** Move a spex repository's placement, by its key and the placement's
@@ -7116,17 +7189,6 @@ export class SpaceManager {
     return group;
   }
 
-  /** Whether the view lists a spex repository or a group under a group
-   * of the instance (git-host-19), its paths compared ignoring case as
-   * the host's are. */
-  private holdsAnything(instance: HostInstance, group: HostGroup): boolean {
-    const path = group.fullPath.toLowerCase();
-    const under = (fullPath: string, self: boolean): boolean => (self && fullPath.toLowerCase() === path) || fullPath.toLowerCase().startsWith(`${path}/`);
-    if (this.listedGroups(instance, instance.view).some((entry) => entry.kind === "group" && entry.id !== group.id && under(entry.fullPath, false))) return true;
-    return [...(instance.view?.listings ?? []), ...instance.attached.values()].some(({ repository }) =>
-      repository.group.kind === "group" && (repository.group.id === group.id || under(repository.group.fullPath, true)));
-  }
-
   /**
    * Hold a change this core made at the host (git-host-5): the view, and
    * what was created or attached since its read began, read as the
@@ -7150,7 +7212,7 @@ export class SpaceManager {
     if (change.group) {
       const held = groups([...instance.created.values()]);
       instance.created.clear();
-      for (const group of held) instance.created.set(group.fullPath, group);
+      for (const group of held) instance.created.set(hostGroupKey(group), group);
     }
     if (change.listing) for (const [id, listing] of [...instance.attached]) instance.attached.set(id, change.listing(listing));
     for (const target of instance.targets.values()) {
@@ -7306,7 +7368,9 @@ export class SpaceManager {
    * git-host-15..17): `not_found` with the host's words, which name what
    * it found no trace of; anything else `invalid_request`, a refusal in
    * the host's words. */
-  private hostWriteRefusal(instance: HostInstance, error: unknown): CoreError {
+  private hostWriteRefusal(instance: HostInstance, error: unknown, groupOperation?: "delete" | "restore"): CoreError {
+    const unavailable = groupOperation && unavailableGroupOperation(error, this.nameOf(instance), groupOperation);
+    if (unavailable) return new CoreError("invalid_request", unavailable);
     if (error instanceof HostError && error.kind === "not_found") return new CoreError("not_found", notFoundAt(this.nameOf(instance), error.words));
     return new CoreError("invalid_request", relayHostError(error, this.nameOf(instance)));
   }
@@ -8058,16 +8122,37 @@ export class SpaceManager {
     return machine;
   }
 
-  /** The store's, session and migration diagnostics, each repair marked
-   * with what this device's reader answered (space-54). */
+  /** The store's, session and migration diagnostics, marked with this
+   * device's explicit answers (space-54, core-service-148). */
   storageDiagnostics(): StorageDiagnostic[] {
-    const mark = (entry: StorageDiagnostic): StorageDiagnostic => {
-      if (!entry.repair) return entry;
+    return this.markDiagnostics(this.host.diagnostics());
+  }
+
+  /** Space state and the diagnostics command share the same capability
+   * and acknowledgement, while retaining all of each caller's findings. */
+  markDiagnostics(diagnostics: StorageDiagnostic[]): StorageDiagnostic[] {
+    const mark = (reported: StorageDiagnostic): StorageDiagnostic => {
+      // These fields are derived now, never inherited from an earlier
+      // read that waited while another command or source file changed.
+      const entry = { ...reported };
+      delete entry.notice;
+      if (entry.repair) {
+        entry.repair = { ...entry.repair };
+        delete entry.repair.declined;
+      }
+      if (!entry.repair) {
+        const key = noticeKey(entry);
+        if (key === undefined) return entry;
+        const stored = this.host.store.getPref<{ dismissed?: unknown }>(noticePref(key));
+        const dismissed = stored && typeof stored.dismissed === "number" && Number.isFinite(stored.dismissed)
+          ? stored.dismissed : undefined;
+        return { ...entry, notice: { key, ...(dismissed === undefined ? {} : { dismissed }) } };
+      }
       const stored = this.host.store.getPref<{ declined?: unknown }>(repairPref(entry.repair.key));
       const declined = stored && typeof stored.declined === "number" ? stored.declined : undefined;
       return declined === undefined ? entry : { ...entry, repair: { ...entry.repair, declined } };
     };
-    return this.host.diagnostics().map(mark);
+    return diagnostics.map(mark);
   }
 
   private diagnostics(): StorageDiagnostic[] {
@@ -8091,8 +8176,8 @@ export class SpaceManager {
     }
   }
 
-  /** Only the reader's own act settles a repair (space-54): declining
-   * says this is not a project on this device, and is a preference,
+  /** Only the reader's own act settles a repair (space-54): dismissal
+   * leaves its folder choice available and is a device-local preference,
    * which never syncs. Rendering never writes here. */
   async decline(repair: string, declined: boolean): Promise<GroupsState> {
     const known = this.diagnostics().some((entry) => entry.repair?.key === repair);
@@ -8106,6 +8191,24 @@ export class SpaceManager {
     if (declined) this.host.store.setPref(repairPref(repair), { declined: Date.now() });
     else this.host.store.deletePref(repairPref(repair));
     return this.state();
+  }
+
+  /** Dismiss only a currently offered nonblocking notice. Re-reading
+   * its source identity here refuses a choice made against stale facts;
+   * the preference changes no saved conversation (core-service-148). */
+  async dismissNotice(notice: string, dismissed: boolean): Promise<GroupsState> {
+    const known = this.storageDiagnostics().some((entry) => entry.notice?.key === notice);
+    if (!known) {
+      throw new CoreError("invalid_request", i18n._({
+        id: "This notice has changed. Refresh to review it.",
+        comment: "Refusal when a dismissal names no currently dismissible saved-conversation notice",
+      }));
+    }
+    if (dismissed) this.host.store.setPref(noticePref(notice), { dismissed: Date.now() });
+    else this.host.store.deletePref(noticePref(notice));
+    const state = await this.state();
+    this.host.broadcast(state);
+    return state;
   }
 
   /** The Space state (space-30), every repository recomputed. */
@@ -8162,8 +8265,11 @@ export class SpaceManager {
     const held = clones.flatMap((clone) => clone.held);
     const repositories = reads.map(({ placed, read }) => this.withFiled(placed, read.files, held));
     repositories.push(...this.absentRows(clones));
-    const diagnostics = await this.host.checkRepairs(this.diagnostics());
+    const checkedDiagnostics = await this.host.checkRepairs(this.diagnostics());
     const git = await this.probe.version();
+    // A later dismissal, Show again or source-file change must not be
+    // overwritten when an older asynchronous read finishes last.
+    const diagnostics = this.markDiagnostics(checkedDiagnostics);
     // The headings and their groups are read from the home at one
     // instant, with no await between, so a sign-out landing meanwhile
     // never leaves a signed-in heading without its namespace (space-30).
@@ -8242,12 +8348,14 @@ export class SpaceManager {
       }
       return entry;
     };
-    const unlisted = (heading: Heading, path: string): InstanceGroupState => {
-      let entry = heading.byPath.get(path);
+    const unlisted = (heading: Heading, path: string, group?: HostGroup): InstanceGroupState => {
+      const id = group?.id ?? null;
+      let entry = id !== null ? heading.byId.get(id) : heading.byPath.get(path);
       if (!entry) {
-        entry = { id: null, login: null, mine: false, fullPath: path, name: path.split("/").pop() ?? path, can: noCan(), placed: [], repositories: [] };
+        entry = { id, login: null, mine: false, fullPath: path, name: group?.name ?? path.split("/").pop() ?? path, can: noCan(), ...(group?.pendingDeletion ? { pendingDeletion: true } : {}), ...(group?.deletionRoot ? { deletionRoot: group.deletionRoot } : {}), placed: [], repositories: [] };
         heading.entries.push(entry);
-        heading.byPath.set(path, entry);
+        if (id !== null) heading.byId.set(id, entry);
+        if (!heading.byPath.has(path)) heading.byPath.set(path, entry);
       }
       return entry;
     };
@@ -8264,7 +8372,7 @@ export class SpaceManager {
       for (const group of this.listedGroups(at, view)) {
         if (group.kind === "user") continue;
         const can = group.can;
-        const entry: InstanceGroupState = { id: group.id, login: null, mine: false, fullPath: group.fullPath, name: group.name, can: { createSubgroup: can.createSubgroup, manageMembers: can.manageMembers, rename: can.rename, delete: can.delete }, placed: [], repositories: [] };
+        const entry: InstanceGroupState = { id: group.id, login: null, mine: false, fullPath: group.fullPath, name: group.name, can: { createSubgroup: can.createSubgroup, manageMembers: can.manageMembers, rename: can.rename, delete: can.delete, ...(can.restore ? { restore: true } : {}) }, ...(group.pendingDeletion ? { pendingDeletion: true } : {}), ...(group.deletionRoot ? { deletionRoot: group.deletionRoot } : {}), placed: [], repositories: [] };
         heading.entries.push(entry);
         if (group.id !== null) heading.byId.set(group.id, entry);
         if (!heading.byPath.has(group.fullPath)) heading.byPath.set(group.fullPath, entry);
@@ -8273,7 +8381,7 @@ export class SpaceManager {
     // The entry a listed group stands as under its instance's heading.
     const entryOf = (heading: Heading, group: HostGroup): InstanceGroupState => group.kind === "user"
       ? namespace(heading, group.fullPath)
-      : (group.id !== null && heading.byId.get(group.id)?.fullPath === group.fullPath ? heading.byId.get(group.id)! : unlisted(heading, group.fullPath));
+      : unlisted(heading, group.fullPath, group);
     const own: RepositoryState[] = [];
     // The rows a read lists first, so every login's entry stands before
     // a row no read lists falls back to its key.

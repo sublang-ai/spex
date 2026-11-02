@@ -366,6 +366,11 @@ export interface AppState extends AttachmentState {
    * its root or inside the group whose host id is `parent` (space-68);
    * the state listing it arrives before the reply. */
   spaceGroupCreate(instance: string, name: string, path: string, parent: string | null): Promise<CommandResults["space.group.create"]>;
+  /** Ask the Space to delete an empty group; the state without the
+   * group arrives before the reply (space-29). */
+  spaceGroupDeletionCheck(instance: string, group: string): Promise<CommandResults["space.group.deletionCheck"]>;
+  spaceGroupDelete(instance: string, group: string, confirmPath: string): Promise<CommandResults["space.group.delete"]>;
+  spaceGroupRestore(instance: string, group: string): Promise<CommandResults["space.group.restore"]>;
   /** Add the account of `login` to a group or a spex repository's
    * placement at one of its instance's roles, by its id (space-69); the
    * reply lists the members after the addition. */
@@ -376,6 +381,9 @@ export interface AppState extends AttachmentState {
   /** Decline a repair, or undo that (space-54): the reader's own act,
    * never rendering; the reply is the new state. */
   spaceRepairDecline(repair: string, declined: boolean): Promise<void>;
+  /** Dismiss or restore a supported stored-file notice; the core's
+   * reply supplies the authoritative notice state and count. */
+  spaceNoticeDismiss(notice: string, dismissed: boolean): Promise<void>;
   /** Point a project the space carries at a folder on this device
    * (space-47), preserving its identity: the recorded directories ride
    * as aliases so every session under them resolves. */
@@ -1993,6 +2001,10 @@ function placeState(
 
     spaceGroupCreate: (instance, name, path, parent) => getClient().command("space.group.create", { instance, name, path, parent }),
 
+    spaceGroupDeletionCheck: (instance, group) => getClient().command("space.group.deletionCheck", { instance, group }),
+    spaceGroupDelete: (instance, group, confirmPath) => getClient().command("space.group.delete", { instance, group, confirmPath }),
+    spaceGroupRestore: (instance, group) => getClient().command("space.group.restore", { instance, group }),
+
     spaceShare: (target, login, role) => getClient().command("space.share", { ...target, login, role }),
 
     spaceUnshare: (target, login) => getClient().command("space.unshare", { ...target, login }),
@@ -2000,6 +2012,13 @@ function placeState(
     async spaceRepairDecline(repair: string, declined: boolean): Promise<void> {
       const read = (spaceReads += 1);
       const space = await getClient().command("space.repair.decline", { repair, declined });
+      if (read !== spaceReads) return;
+      set({ space, spaceError: undefined, spaceReadAt: Date.now() });
+    },
+
+    async spaceNoticeDismiss(notice: string, dismissed: boolean): Promise<void> {
+      const read = (spaceReads += 1);
+      const space = await getClient().command("space.notice.dismiss", { notice, dismissed });
       if (read !== spaceReads) return;
       set({ space, spaceError: undefined, spaceReadAt: Date.now() });
     },
@@ -2512,9 +2531,8 @@ function placeState(
     },
 
     async focusSession(sessionId: string): Promise<void> {
-      if (!get().views[sessionId]) {
-        await ensureSubscribed(sessionId);
-      }
+      // Select before loading so a failed first read has a visible
+      // transcript error and Retry, including without project files.
       set({ activeSessionId: sessionId });
       // Focusing a session always carries its project context along
       // (DR-011): sidebar rows, Dashboard rows and palette rows route
@@ -2524,6 +2542,9 @@ function placeState(
         get().setCurrentProject(session.projectId);
         get().openTab(session.projectId, sessionId);
         get().setWorkspaceTab(session.projectId, sessionId);
+      }
+      if (!get().views[sessionId]) {
+        await ensureSubscribed(sessionId);
       }
     },
 

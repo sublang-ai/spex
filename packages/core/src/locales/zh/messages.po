@@ -64,6 +64,11 @@ msgstr "；未知角色 {roles}"
 msgid "\"{id}\" is not a playbook id: lowercase letters, digits and single hyphens, at most 64 characters"
 msgstr "“{id}”不是有效的规程 id：只能用小写字母、数字和单个连字符，最多 64 个字符"
 
+#. Folder selection refusal: names the selected path and explains that this action does not create a Git project
+#: src/service.ts
+msgid "“{path}” is not a Git project folder. Choose an existing project folder; this action does not create one."
+msgstr "“{path}”不是 Git 项目文件夹。请选择已有的项目文件夹；此操作不会创建项目。"
+
 #. A session's own title, quoted
 #: src/session.ts
 msgid "“{title}”"
@@ -166,11 +171,6 @@ msgstr "{group} 中已有 {name}"
 #: src/space-groups.ts
 msgid "{group} is a group named like your login"
 msgstr "{group} 是一个与你的用户名同名的群组"
-
-#. Refusal of a group's deletion: it still holds a project's records or a group; {group} is the group's path at the Space
-#: src/space-groups.ts
-msgid "{group} is not empty"
-msgstr "{group} 不为空"
 
 #. A package Git source failed without a recognized status; raw backing-host or unclassified stderr stays inside the core
 #: src/space.ts
@@ -602,11 +602,6 @@ msgstr "不允许使用 {path}：技能来自 spex.yaml 添加的规约包"
 #: src/space.ts
 msgid "{path} is not part of {name}"
 msgstr "{path} 不属于 {name}"
-
-#. Refusal: the folder offered for rebinding is no git repository
-#: src/service.ts
-msgid "{path} is not the root of a git work tree"
-msgstr "{path} 不是 git 工作树的根目录"
 
 #. Refusal: a package added or published from a folder names one outside the project folder
 #: src/environments.ts
@@ -1589,6 +1584,16 @@ msgstr "请为群组填写路径"
 msgid "Give this computer access, then Retry"
 msgstr "给本机访问权限，然后重试"
 
+#. The Space has no group deletion operation; the group is kept
+#: src/space-groups.ts
+msgid "Group deletion isn’t available at {host}. Contact the Space administrator."
+msgstr "{host} 暂不支持删除群组。请联系空间管理员。"
+
+#. The Space has no group restoration operation; the group remains scheduled for deletion
+#: src/space-groups.ts
+msgid "Group restoration isn’t available at {host}. Contact the Space administrator."
+msgstr "{host} 暂不支持恢复群组。请联系空间管理员。"
+
 #. Spec notice; `H1` is the markdown top heading and both names are the file's own
 #: src/specs.ts
 msgid "H1 identifier \"{identifier}\" disagrees with basename \"{basename}\""
@@ -1889,10 +1894,10 @@ msgstr "媒体读取的起始位置超出文件长度。"
 msgid "Media storage has stopped."
 msgstr "媒体存储服务已停止。"
 
-#. Guidance under a transfer the Space refused; Share is the control in the members panel; it claims no role
+#. Guidance under a transfer the Space refused; Invite members is the control in the members panel; it claims no role
 #: src/space-git.ts
-msgid "Membership decides who may send here: use Share, or ask a member who may share it."
-msgstr "谁可以向这里发送由成员身份决定：使用“共享”，或请一位可以共享它的成员帮忙。"
+msgid "Membership decides who may send here: use Invite members, or ask someone who can manage members."
+msgstr "成员权限决定谁可以在此发送更改：请使用“邀请成员”，或联系有权管理成员的人。"
 
 #. Migration diagnostic: the file changed under the migration, which wrote nothing
 #. Migration diagnostic: the file changed under the migration, which wrote nothing
@@ -2461,6 +2466,11 @@ msgstr "请重试；若再次失败，在终端中执行同一步骤查看详情
 #: src/space.ts
 msgid "Retry; if it fails again, run the step in a terminal for detail."
 msgstr "请重试；若再次失败，在终端中执行该步骤查看详情。"
+
+#. Refusal of group deletion without a reviewed public group path; no changes were sent
+#: src/space-groups.ts
+msgid "Review {group} before deleting it"
+msgstr "删除 {group} 前请先检查"
 
 #. Why an intent cannot run on a team server's seat: it names no runtime, captured before runtimes were recorded or by the Playbook CLI, and a seat runs only what is assigned to it
 #: src/session.ts
@@ -3186,6 +3196,11 @@ msgstr "此文件夹已包含 Git 仓库，但尚无初始提交。请在终端�
 #: src/forge.ts
 msgid "This folder already contains a Git repository. Use Add to register it."
 msgstr "此文件夹已包含 Git 仓库。请使用“添加”注册该仓库。"
+
+#. Refusal when a dismissal names no currently dismissible saved-conversation notice
+#: src/space.ts
+msgid "This notice has changed. Refresh to review it."
+msgstr "此提示已发生变化。请刷新后查看。"
 
 #. Refusal of Add: a project's package is added from a folder only inside its project folder (environments-2), and this package lies elsewhere
 #: src/service.ts

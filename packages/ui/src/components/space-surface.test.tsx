@@ -20,7 +20,8 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { GroupsState, RepositoryState, SessionInfo } from "@sublang/spex-core/protocol";
 
-import { activateLanguage } from "../i18n.js";
+import { SpaceSurface } from "./SpaceSurface.js";
+import { activateLanguage, i18n } from "../i18n.js";
 import { deliverServerMessageForTests, setClientForTests, useAppStore } from "../state/store.js";
 import {
   BRANCH,
@@ -81,6 +82,7 @@ describe("GROUPS: re-reads on events, never on a timer (space-2)", () => {
     { command: "space.signout", invoke: () => useAppStore.getState().spaceSignOut(ORIGIN) },
     { command: "space.forget", invoke: () => useAppStore.getState().spaceForget(ORIGIN) },
     { command: "space.repair.decline", invoke: () => useAppStore.getState().spaceRepairDecline("repair", true) },
+    { command: "space.notice.dismiss", invoke: () => useAppStore.getState().spaceNoticeDismiss("notice", true) },
   ])("space-106: $command keeps a newer broadcast over its delayed reply and applies a current reply", async ({ command, invoke }) => {
     const old = repoState({ sync: { phase: "running", op: "sync", step: "push", since: NOW, cancelable: true } });
     const done = repoState({ sync: { phase: "done", at: NOW, sent: 1, received: 0, pushed: true } });
@@ -167,6 +169,7 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     kind: "repository" as const,
     repository: "jane/infra-spex",
     name: "infra-spex",
+    projectName: "Infra",
     group: "jane",
     directories: ["/code/infra"],
     sessions: 5,
@@ -176,7 +179,7 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     ...over,
   });
 
-  test("'⚠ <n> to fix' opens 'To fix (<n>)' in place, a pending merge read in plain words and the merge noted in the Sync tab", async () => {
+  test("Review counts notices and opens a neutral review, with a pending merge read in plain words", async () => {
     await renderGroups(
       repoState(
         { mergePending: true },
@@ -189,13 +192,14 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
       ),
     );
     const issues = screen.getByTestId("space-issues");
-    expect(issues.textContent).toBe("⚠2 to fix");
+    expect(issues.textContent).toBe("⚠Review (2)");
     expect(issues.className).toContain("amber");
     expect(screen.queryByTestId("space-issues-list")).toBeNull();
     fireEvent.click(issues);
     const list = screen.getByTestId("space-issues-list");
-    expect(screen.getByRole("region", { name: "To fix" })).toBe(list);
-    expect(screen.getByTestId("space-issues-heading").textContent).toBe("To fix (2)");
+    expect(screen.getByRole("region", { name: "Review notices" })).toBe(list);
+    expect(list.className).not.toContain("amber");
+    expect(screen.getByTestId("space-issues-heading").textContent).toBe("Review notices");
     expect(list.textContent).toContain("Finish or abort the merge in your terminal");
     expect(list.textContent).not.toContain("MERGE_HEAD");
     expect(within(list).getAllByRole("listitem")).toHaveLength(2);
@@ -203,7 +207,67 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     expect(screen.getByTestId("space-merge-note").textContent).toContain("Finish or abort the merge in your terminal");
   });
 
-  test("records no project folder pairs read '<project> · <group> — Folder missing on this computer', propose the folder the core checked, and 'Use <folder>' pairs it in one gesture (space-46, space-53, space-47)", async () => {
+  test.each(["en", "zh"] as const)("storage diagnostics in %s explain the next step by code and disclose technical details only on request", async (language) => {
+    activateLanguage(language);
+    const words = {
+      heading: `⚠${i18n._("Review ({count})", { count: 5 })}`,
+      older: i18n._("An older conversation can’t be opened"),
+      folder: i18n._("A saved conversation needs a project folder"),
+      generic: i18n._("Saved data needs attention"),
+      preserved: i18n._("Spex could not read this saved conversation. The original file is still saved."),
+      repair: i18n._("Spex could not use this saved file."),
+      blocking: i18n._("This must be resolved before using the affected data."),
+      details: i18n._("Technical details"),
+    };
+    const diagnostics: GroupsState["diagnostics"] = [
+      { code: "session-import", file: "/old/sessions/one.json", reason: "unsupported legacy schema 1", blocking: false },
+      { code: "session-upgrade", file: "/records/sessions/two.spex.json", reason: "旧版会话无法转换", blocking: false },
+      { code: "session-folder-required", file: "/records/sessions/three.spex.json", reason: "invalid sidecar or missing cwd", blocking: false },
+      // The same technical text must not choose a session repair when
+      // the producer supplied no known classification.
+      { file: "/records/home.yaml", reason: "unsupported legacy schema 1", blocking: true },
+      { code: "future-diagnostic" as GroupsState["diagnostics"][number]["code"], file: "/records/other.json", reason: "<script>diagnostic text</script>", blocking: false },
+    ];
+    await renderGroups(repoState({}, { diagnostics }), { open: false });
+    expect(screen.getByTestId("space-issues").textContent).toBe(words.heading);
+    expect(screen.getByTestId("space-issues").getAttribute("aria-expanded")).toBe("true");
+    const rows = screen.getAllByTestId("space-diagnostic");
+    expect(rows).toHaveLength(diagnostics.length);
+    const summaries = [
+      words.older,
+      words.older,
+      words.folder,
+      words.generic,
+      words.generic,
+    ];
+    const guidance = [
+      words.preserved,
+      words.preserved,
+      words.preserved,
+      words.repair,
+      words.repair,
+    ];
+    for (const [index, row] of rows.entries()) {
+      const entry = diagnostics[index]!;
+      expect(within(row).getByText(summaries[index]!).closest("details")).toBeNull();
+      expect(within(row).getByText(guidance[index]!).closest("details")).toBeNull();
+      const impact = within(row).queryByTestId("space-diagnostic-impact");
+      if (entry.blocking) expect(impact?.textContent).toBe(words.blocking);
+      else expect(impact).toBeNull();
+      const details = row.querySelector("details")!;
+      expect(details.open).toBe(false);
+      expect(within(row).getByText(entry.file).closest("details")).toBe(details);
+      expect(within(row).getByText(entry.reason).closest("details")).toBe(details);
+      fireEvent.click(within(row).getByText(words.details));
+      expect(details.open).toBe(true);
+      expect(details.textContent).toContain(entry.file);
+      expect(details.textContent).toContain(entry.reason);
+    }
+    expect(screen.getByTestId("space-issues-list").querySelector("script")).toBeNull();
+    expect(calls("project.rebind")).toHaveLength(0);
+  });
+
+  test("a named project groups saved work and proposes only the existing folder the core checked (space-46, space-53, space-47)", async () => {
     commandMock.mockImplementation(async (type: string, fields: Record<string, unknown> = {}) => {
       if (type === "project.rebind") return { id: "jane/infra-spex", name: "infra", path: fields.path, registeredAt: 1 };
       if (type === "project.list") return [];
@@ -214,21 +278,22 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
       { open: false },
     );
     // Displaying it settles nothing: it still counts (space-54).
-    expect(screen.getByTestId("space-issues").textContent).toBe("⚠1 to fix");
+    expect(screen.getByTestId("space-issues").textContent).toBe("⚠Review (1)");
     fireEvent.click(screen.getByTestId("space-issues"));
     const row = screen.getByTestId("space-repair");
     expect(row.dataset.kind).toBe("repository");
-    // Named by the project and its group, the folder it last ran in
-    // secondary, no sentence (space-46, DR-159, DR-069).
-    expect(within(row).getByTestId("space-repair-title").textContent).toBe("infra · jane — Folder missing on this computer");
+    // The actual project name heads its conversation group; the
+    // historical folder is separate evidence (space-46).
+    expect(within(row).getByTestId("space-repair-title").textContent).toBe("Infra");
     expect(row.textContent).not.toContain("infra-spex");
-    expect(within(row).getByTestId("space-repair-folder").textContent).toBe("/code/infra · 5 sessions ran there");
-    expect(row.querySelectorAll("p")).toHaveLength(1);
+    expect(within(row).getByTestId("space-repair-folder").textContent).toBe("Previously used folder/code/infra");
+    expect(screen.getByTestId("space-issues-list").textContent).toContain("Conversation history is saved on this computer. To work on a project again, locate its files.");
+    expect(row.textContent).not.toContain("To work on");
     // Its controls, in their order (space-47).
     expect(within(row).getAllByRole("button").map((button) => button.textContent)).toEqual([
       "Use /code/infra",
-      "Choose folder…",
-      "Not on this computer",
+      "Locate folder…",
+      "Dismiss",
     ]);
 
     // One gesture pairs the records with the folder, their key naming the
@@ -240,9 +305,143 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
       ]),
     );
     const resolved = await screen.findByTestId("space-repair-resolved");
-    expect(resolved.textContent).toContain("infra · now a project at /code/infra, 5 sessions listed");
+    expect(resolved.textContent).toContain("Project folder saved: /code/infra");
     fireEvent.click(within(resolved).getByRole("button", { name: "Open project" }));
     expect(onOpenProject).toHaveBeenCalledWith("jane/infra-spex");
+  });
+
+  test("saved work is optional, recognizable, and one folder choice includes every conversation", async () => {
+    const repair = unpaired({
+      name: "slalph-spex", group: "slalph", projectName: undefined,
+      sessions: 5, proposal: undefined,
+      directories: ["/Users/jane/Projects", "/old/other"],
+      checked: [{ path: "/Users/jane/Projects", here: true, repo: false }],
+      conversations: [
+        { id: "onboarding", title: "Plan the onboarding flow", updatedAt: NOW },
+        { updatedAt: NOW - 86_400_000 },
+        {},
+      ],
+      details: [{ file: "/records/older.spex.json", reason: "legacy session needs a cwd" }],
+    });
+    await renderGroups(repoState({}, { diagnostics: [{ file: "workspace/slalph/slalph-spex", reason: "no working folder", blocking: false, repair }] }), { open: false });
+    const review = screen.getByRole("button", { name: "Review 1 notice" });
+    expect(review.className).toContain("amber");
+    expect(screen.queryByTestId("space-issues-list")).toBeNull();
+    fireEvent.click(review);
+    const row = screen.getByTestId("space-repair");
+    expect(screen.getAllByTestId("space-repair")).toHaveLength(1);
+    expect(row.textContent).not.toContain("slalph");
+    expect(within(row).getByTestId("space-repair-title").textContent).toBe("Earlier conversations");
+    expect(row.textContent).toContain("5 saved conversations");
+    expect(screen.getByTestId("space-issues-list").textContent).toContain("Conversation history is saved on this computer. You can read the conversations now. To work on a project again, locate its files.");
+    expect(screen.getByTestId("space-issues-list").className).not.toContain("amber");
+    expect(row.textContent).not.toContain("You can read");
+    expect(screen.getByTestId("space-issues-list").textContent).not.toContain("If you don’t have");
+    expect(within(row).getByTestId("space-repair-folder").textContent).toBe("Previously used folders~/Projects/old/other");
+    expect(row.textContent).toContain("Plan the onboarding flow");
+    expect(row.textContent).toContain("Conversation saved");
+    expect(row.textContent).toContain("Untitled conversation");
+    expect(row.textContent).toContain("and 2 more");
+    const conversations = within(row).getByRole("list", { name: "Saved conversations" });
+    expect(within(conversations).getAllByRole("listitem")).toHaveLength(3);
+    expect(conversations.querySelectorAll('svg[aria-hidden="true"]')).toHaveLength(3);
+    expect(within(conversations).getAllByRole("button")).toHaveLength(1);
+    const details = row.querySelector("details")!;
+    expect(details.open).toBe(false);
+    expect(within(row).getByText("This is not the main folder of a Git project.").closest("details")).toBe(details);
+    expect(within(row).getByText("legacy session needs a cwd").closest("details")).toBe(details);
+    fireEvent.click(within(row).getByRole("button", { name: "Locate folder…" }));
+    const field = within(row).getByLabelText("Project folder on this computer") as HTMLInputElement;
+    expect(field.value).toBe("");
+    expect(row.textContent).toContain("Select the existing folder used for this work. This does not create or download a project.");
+    expect(row.textContent).toContain("This folder will be used for all 5 conversations listed here.");
+    fireEvent.keyDown(field, { key: "Escape" });
+    await waitFor(() => expect(document.activeElement).toBe(within(row).getByRole("button", { name: "Locate folder…" })));
+    expect(calls("project.rebind")).toHaveLength(0);
+  });
+
+  test("each named project keeps its own conversation history and folder choice, even when names match", async () => {
+    const first = unpaired({ repository: "one/atlas-spex", key: "one-atlas", projectName: "Atlas", proposal: undefined, directories: ["/code/first-atlas"], sessions: 1, conversations: [{ id: "first-chat", title: "Plan the Atlas release", updatedAt: NOW }] });
+    const second = unpaired({ repository: "two/atlas-spex", key: "two-atlas", projectName: "Atlas", proposal: undefined, directories: ["/code/second-atlas"], sessions: 2, conversations: [{ id: "second-chat", title: "Review the project guide", updatedAt: NOW }] });
+    const unknown = unpaired({ repository: "jane/jane-spex", key: "earlier-work", projectName: undefined, proposal: undefined, directories: ["/code/other"], sessions: 1, conversations: [{ id: "earlier-chat", title: "Explore an idea" }] });
+    const diagnostics = [first, second, unknown].map((repair) => ({ file: `workspace/${repair.repository}`, reason: "no working folder", blocking: false, repair }));
+    commandMock.mockImplementation(async (type: string, fields: Record<string, unknown> = {}) => {
+      if (type === "project.rebind") return { id: fields.projectId, name: "Atlas", path: fields.path, registeredAt: 1 };
+      if (type === "project.list") return [];
+      return answer(type, fields);
+    });
+    const indexed: SessionInfo[] = ([[first, "first-chat"], [second, "second-chat"], [unknown, "earlier-chat"]] as const).map(([repair, id]) => ({
+      id, projectId: repair.repository, projectPath: repair.directories[0]!,
+      createdAt: NOW, live: false, endedAt: NOW, players: [], initialVisible: [], turns: 1, failed: false,
+    }));
+    useAppStore.setState({ sessions: indexed });
+    const { onOpenSession } = await renderGroups(repoState({}, { diagnostics }), { open: false });
+    fireEvent.click(screen.getByTestId("space-issues"));
+    const rows = screen.getAllByTestId("space-repair");
+    expect(rows.map((row) => within(row).getByTestId("space-repair-title").textContent)).toEqual(["Atlas", "Atlas", "Earlier conversations"]);
+    expect(rows[0]!.querySelector('svg[aria-hidden="true"]')).toBeTruthy();
+    // Reading a conversation needs no folder selection, even when its project is unpaired.
+    fireEvent.click(within(rows[1]!).getByRole("button", { name: "Review the project guide" }));
+    expect(onOpenSession).toHaveBeenCalledWith("second-chat");
+    expect(calls("project.rebind")).toHaveLength(0);
+    expect(screen.queryByTestId("space-repair-path")).toBeNull();
+    // A later removal leaves the old Space preview visible until Refresh.
+    // It must stay on Space, never opening a previously selected conversation.
+    act(() => deliverServerMessageForTests({ type: "session.removed", sessionId: "second-chat", projectId: "two/atlas-spex" }));
+    fireEvent.click(within(rows[1]!).getByRole("button", { name: "Review the project guide" }));
+    expect(onOpenSession).toHaveBeenCalledTimes(1);
+    expect(within(rows[1]!).getByTestId("space-conversation-error").textContent).toBe("This conversation is no longer listed. Refresh this list and try again.");
+    expect(calls("project.rebind")).toHaveLength(0);
+    act(() => useAppStore.setState({ sessions: indexed }));
+    fireEvent.click(within(rows[1]!).getByRole("button", { name: "Review the project guide" }));
+    expect(onOpenSession).toHaveBeenCalledTimes(2);
+    expect(within(rows[1]!).queryByTestId("space-conversation-error")).toBeNull();
+    fireEvent.click(within(rows[1]!).getByRole("button", { name: "Locate folder…" }));
+    expect(rows[1]!.textContent).toContain("Where are this project’s files?");
+    expect(rows[1]!.textContent).toContain("This folder will be used for all 2 conversations listed here.");
+    fireEvent.change(within(rows[1]!).getByLabelText("Project folder on this computer"), { target: { value: "/restored/atlas" } });
+    fireEvent.click(within(rows[1]!).getByRole("button", { name: "Use this folder" }));
+    await screen.findByTestId("space-repair-resolved");
+    expect(calls("project.rebind")).toEqual([{ projectId: "two/atlas-spex", path: "/restored/atlas", aliases: ["/code/second-atlas"] }]);
+    expect(screen.getAllByTestId("space-repair")).toEqual([rows[0], rows[2]]);
+    expect(within(rows[0]!).getByRole("button", { name: "Plan the Atlas release" })).toBeTruthy();
+    expect(within(rows[2]!).getByRole("button", { name: "Explore an idea" })).toBeTruthy();
+    expect(calls("space.repair.decline")).toHaveLength(0);
+  });
+
+  test("a folder choice keeps validation beside that field, preserves the draft, and prevents duplicate submission", async () => {
+    let resolve!: (value: unknown) => void;
+    let reject!: (reason: Error) => void;
+    commandMock.mockImplementation(async (type: string, fields: Record<string, unknown> = {}) => {
+      if (type === "project.rebind") return new Promise((yes, no) => { resolve = yes; reject = no; });
+      if (type === "project.list") return [];
+      return answer(type, fields);
+    });
+    await renderGroups(repoState({}, { diagnostics: [{ file: "workspace/jane/infra-spex", reason: "no folder", blocking: false, repair: unpaired({ proposal: undefined }) }] }), { open: false });
+    fireEvent.click(screen.getByTestId("space-issues"));
+    const row = screen.getByTestId("space-repair");
+    fireEvent.click(within(row).getByRole("button", { name: "Locate folder…" }));
+    const field = within(row).getByLabelText("Project folder on this computer") as HTMLInputElement;
+    fireEvent.change(field, { target: { value: "/code/parent" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+    fireEvent.keyDown(field, { key: "Enter" });
+    expect(calls("project.rebind")).toHaveLength(1);
+    expect(field.disabled).toBe(true);
+    expect((within(row).getByRole("button", { name: "Cancel" }) as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => reject(new Error("/code/parent is not the main folder of a Git project. Choose an existing project folder.")));
+    const error = within(row).getByRole("alert");
+    expect(field.value).toBe("/code/parent");
+    expect(field.getAttribute("aria-invalid")).toBe("true");
+    expect(field.getAttribute("aria-describedby")).toContain(error.id);
+    fireEvent.change(field, { target: { value: "/code/parent/infra" } });
+    expect(field.getAttribute("aria-invalid")).toBeNull();
+    fireEvent.click(within(row).getByRole("button", { name: "Use this folder" }));
+    await act(async () => resolve({ id: "jane/infra-spex", name: "infra", path: "/code/parent/infra", registeredAt: 1 }));
+    expect((await screen.findByTestId("space-repair-resolved")).textContent).toContain("Project folder saved: /code/parent/infra");
+    expect(calls("project.rebind")).toEqual([
+      { projectId: "jane/infra-spex", path: "/code/parent", aliases: ["/code/infra"] },
+      { projectId: "jane/infra-spex", path: "/code/parent/infra", aliases: ["/code/infra"] },
+    ]);
   });
 
   test("a repair stays answerable while its spex repository syncs: the sync refuses nothing (space-47, space-21)", async () => {
@@ -263,7 +462,7 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     const row = screen.getByTestId("space-repair");
     const add = within(row).getByTestId("space-repair-use") as HTMLButtonElement;
     expect(add.disabled).toBe(false);
-    expect((within(row).getByRole("button", { name: "Choose folder…" }) as HTMLButtonElement).disabled).toBe(false);
+    expect((within(row).getByRole("button", { name: "Locate folder…" }) as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(add);
     await waitFor(() => expect(calls("project.rebind")).toEqual([{ projectId: KEY, path: "/code/infra", aliases: ["/code/infra"] }]));
   });
@@ -290,7 +489,7 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     const row = screen.getByTestId("space-repair");
     expect(row.dataset.kind).toBe("folder");
     expect(row.textContent).toContain("/code/old");
-    expect(row.textContent).toContain("Records not on this computer");
+    expect(row.textContent).toContain("The saved work for this folder is no longer on this computer.");
     expect(within(row).queryByTestId("space-repair-use")).toBeNull();
     // The Overview tab's word for the same act (projects-9, DR-172).
     expect(within(row).getByTestId("space-repair-remove").textContent).toBe("Remove project");
@@ -307,36 +506,43 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     expect(within(resolved).queryByRole("button", { name: "Open project" })).toBeNull();
   });
 
-  test("a folder the core did not find proposes nothing, the row saying the folder is missing (space-53)", async () => {
+  test.each([
+    { here: false, unknown: false, finding: "a missing folder" },
+    { here: true, unknown: false, finding: "a parent folder that is not a Git project" },
+    { here: true, unknown: true, finding: "a folder whose check timed out" },
+  ])("$finding offers the folder editor without claiming that files were deleted (space-53)", async ({ here, unknown }) => {
     const repair = unpaired({
       directories: ["/gone/worktree"],
       sessions: 2,
       key: "jane/infra-spex|/gone/worktree",
-      checked: [{ path: "/gone/worktree", here: false, repo: false }],
+      checked: [{ path: "/gone/worktree", here, repo: false, ...(unknown ? { unknown: true } : {}) }],
       proposal: undefined,
     });
     await renderGroups(repoState({}, { diagnostics: [{ file: "workspace/jane/infra-spex", reason: "no working folder pairs it", blocking: false, repair }] }), { open: false });
     fireEvent.click(screen.getByTestId("space-issues"));
     const row = screen.getByTestId("space-repair");
-    expect(within(row).getByTestId("space-repair-title").textContent).toBe("infra · jane — Folder missing on this computer");
+    expect(within(row).getByTestId("space-repair-title").textContent).toBe("Infra");
+    expect(within(row).queryByText("This is not the main folder of a Git project.") !== null).toBe(here && !unknown);
+    expect(within(row).queryByText("This folder was not found.") !== null).toBe(!here && !unknown);
     expect(within(row).queryByTestId("space-repair-use")).toBeNull();
-    expect(within(row).getAllByRole("button").map((button) => button.textContent)).toEqual(["Choose folder…", "Not on this computer"]);
-    // "Choose folder…" opens the row as an editor over the recorded path:
+    expect(within(row).getAllByRole("button").map((button) => button.textContent)).toEqual(["Locate folder…", "Dismiss"]);
+    // "Locate folder…" opens the row as an editor over the recorded path:
     // "Use this folder" and Cancel, Escape cancelling, its note a phrase
     // (space-47).
-    fireEvent.click(within(row).getByRole("button", { name: "Choose folder…" }));
-    const path = within(row).getByLabelText("Project folder of infra") as HTMLInputElement;
-    expect(path.value).toBe("/gone/worktree");
-    expect(row.textContent).toContain("Kept on this computer only; never synced");
+    fireEvent.click(within(row).getByRole("button", { name: "Locate folder…" }));
+    const path = within(row).getByLabelText("Project folder on this computer") as HTMLInputElement;
+    expect(path.value).toBe("");
+    expect(row.textContent).toContain("Select the existing folder used for this work. This does not create or download a project.");
     expect(within(row).getByTestId("space-repair-submit").textContent).toBe("Use this folder");
     fireEvent.change(path, { target: { value: "" } });
     fireEvent.click(within(row).getByTestId("space-repair-submit"));
-    expect(within(row).getByRole("alert").textContent).toBe("Name a folder");
+    expect(within(row).getByRole("alert").textContent).toBe("Choose an existing project folder");
     fireEvent.keyDown(path, { key: "Escape" });
     expect(within(row).queryByTestId("space-repair-submit")).toBeNull();
+    expect(calls("project.rebind")).toHaveLength(0);
   });
 
-  test("a repair set aside stands in the list, marked 'set aside', and counts no more, the header's control reading '⚠' alone, titled 'Nothing to fix' (space-1, space-54, space-55)", async () => {
+  test("dismissed saved work stays in a collapsed neutral section with a way to show it again", async () => {
     const repair = unpaired({
       checked: [{ path: "/code/infra", here: false, repo: false }],
       proposal: undefined,
@@ -346,132 +552,262 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     // It counts as no issue, but the control stays reachable — and
     // with nothing unanswered it stops wearing attention's colour.
     const issues = screen.getByTestId("space-issues");
-    expect(issues.textContent).toBe("⚠");
-    expect(issues.title).toBe("Nothing to fix");
-    expect(issues.getAttribute("aria-label")).toBe("Nothing to fix");
+    expect(issues.textContent).toBe("Review");
+    expect(issues.title).toBe("");
+    expect(issues.getAttribute("aria-label")).toBe("Review");
+    expect(issues.className).not.toContain("amber");
     expect(issues.className).not.toContain("amber");
     fireEvent.click(issues);
     expect(screen.getByTestId("space-issues-list").className).not.toContain("amber");
+    const dismissed = screen.getByTestId("space-dismissed") as HTMLDetailsElement;
+    expect(dismissed.open).toBe(false);
+    expect(dismissed.querySelector("summary")?.textContent).toBe("Dismissed (1)");
+    expect(screen.queryByTestId("space-folder-review")).toBeNull();
+    fireEvent.click(dismissed.querySelector("summary")!);
     const row = screen.getByTestId("space-repair-declined");
-    expect(within(row).getByTestId("space-repair-title").textContent).toBe("infra · jane — Folder missing on this computer · set aside");
-    // Its condition is named for assistive technology, by mark and word
-    // (space-55).
-    expect(row.textContent).toContain("Set aside");
-    // Declining strips nothing: the row still offers what it offered.
-    expect(within(row).getByRole("button", { name: "Choose folder…" })).toBeTruthy();
-    expect(within(row).queryByRole("button", { name: "Not on this computer" })).toBeNull();
-    expect(screen.getByTestId("space-issues-heading").textContent).toBe("To fix (0) · 1 set aside");
+    expect(within(row).getByTestId("space-repair-title").textContent).toBe("Infra");
+    expect(row.textContent).not.toContain("For later");
+    expect(within(row).getByRole("button", { name: "Locate folder…" })).toBeTruthy();
+    expect(within(row).queryByRole("button", { name: "Dismiss" })).toBeNull();
+    expect(within(row).getByRole("button", { name: "Show again" })).toBeTruthy();
   });
 
-  test("space-56: an outcome and a declined row hold their places until the reader's Refresh, as focus and the count move on", async () => {
-    const proposed = (path: string) => ({
-      directories: [path],
-      checked: [{ path, here: true, repo: true }],
-      proposal: { path, from: "recorded" as const },
+  test("Dismiss reduces the core count, keeps unrelated notices, and sidebar requests reopen deferred tasks", async () => {
+    const repairs = [unpaired(), unpaired({ repository: "jane/docs-spex", key: "docs", projectName: "Docs" })];
+    const deferred = new Set<string>();
+    let otherNotice = true;
+    const report = (): GroupsState => repoState({}, { diagnostics: [
+      ...repairs.map((repair) => ({ file: `workspace/${repair.repository}`, reason: "no folder", blocking: false,
+        repair: deferred.has(repair.key) ? { ...repair, declined: NOW } : repair })),
+      ...(otherNotice ? [{ file: "/older.json", reason: "unsupported format", blocking: false }] : []),
+    ] });
+    commandMock.mockImplementation(async (type: string, fields: Record<string, unknown> = {}) => {
+      if (type === "space.repair.decline") {
+        deferred.add(String(fields.repair));
+        home.current = report();
+        return home.current;
+      }
+      return answer(type, fields);
     });
-    const pair = (name: string, sessions: number) => ({
-      file: `workspace/jane/${name}-spex`,
-      reason: `${name}-spex has no working folder here`,
-      blocking: false,
-      repair: {
-        kind: "repository" as const,
-        repository: `jane/${name}-spex`,
-        name: `${name}-spex`,
-        group: "jane",
-        sessions,
-        key: `jane/${name}-spex|/code/${name}`,
-        ...proposed(`/code/${name}`),
-      },
+    const { view, onOpenSession, onOpenProject } = await renderGroups(report(), { open: false });
+    expect(screen.getByTestId("space-issues").textContent).toBe("⚠Review (3)");
+    fireEvent.click(screen.getByTestId("space-issues"));
+    fireEvent.click(within(screen.getAllByTestId("space-repair")[0]!).getByRole("button", { name: "Dismiss" }));
+    await waitFor(() => expect(screen.getByTestId("space-issues").textContent).toBe("⚠Review (2)"));
+    const notice = screen.getByTestId("space-deferred-notice");
+    expect(notice.textContent).toBe("Moved to Dismissed. Your conversations are kept.");
+    expect(notice.closest(".sr-only")).toBeNull();
+    fireEvent.click(within(screen.getByTestId("space-repair")).getByRole("button", { name: "Dismiss" }));
+    await waitFor(() => expect(screen.getByTestId("space-issues").textContent).toBe("⚠Review (1)"));
+    expect(screen.getByTestId("space-diagnostic")).toBeTruthy();
+    expect(screen.getAllByTestId("space-deferred-notice")).toHaveLength(1);
+    otherNotice = false;
+    deliver(report());
+    expect(screen.getByTestId("space-issues").textContent).toBe("Review");
+    fireEvent.click(screen.getByTestId("space-issues"));
+    expect(screen.queryByTestId("space-issues-list")).toBeNull();
+    const consume = vi.fn();
+    view.rerender(<SpaceSurface onOpenSession={onOpenSession} onOpenProject={onOpenProject} reviewRequest={1} onReviewOpened={consume} />);
+    expect((screen.getByTestId("space-dismissed") as HTMLDetailsElement).open).toBe(true);
+    expect(consume).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByTestId("space-repair-declined")).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Locate folder…" })).toHaveLength(2);
+    view.rerender(<SpaceSurface onOpenSession={onOpenSession} onOpenProject={onOpenProject} onReviewOpened={consume} />);
+    fireEvent.click(screen.getByTestId("space-issues"));
+    expect(screen.queryByTestId("space-issues-list")).toBeNull();
+    view.rerender(<SpaceSurface onOpenSession={onOpenSession} onOpenProject={onOpenProject} reviewRequest={2} onReviewOpened={consume} />);
+    expect((screen.getByTestId("space-dismissed") as HTMLDetailsElement).open).toBe(true);
+    expect(consume).toHaveBeenCalledTimes(2);
+    expect(calls("project.rebind")).toHaveLength(0);
+  });
+
+  test("folder choices and supported notices share Dismissed, persist across visits, and show again independently", async () => {
+    let folderDismissed = false;
+    let noticeDismissed = false;
+    let releaseNotice!: (state: GroupsState) => void;
+    const firstNoticeReply = new Promise<GroupsState>((resolve) => { releaseNotice = resolve; });
+    let holdNotice = true;
+    const report = (): GroupsState => repoState({}, { diagnostics: [
+      { file: "/records/infra", reason: "no working folder", blocking: false,
+        repair: unpaired({ ...(folderDismissed ? { declined: NOW } : {}) }) },
+      { file: "/older/session.json", reason: "unsupported legacy schema 1", code: "session-import", blocking: false,
+        notice: { key: "old-file", ...(noticeDismissed ? { dismissed: NOW } : {}) } },
+    ] });
+    commandMock.mockImplementation(async (type: string, fields: Record<string, unknown> = {}) => {
+      if (type === "space.notice.dismiss") {
+        noticeDismissed = Boolean(fields.dismissed);
+        if (holdNotice) { holdNotice = false; return firstNoticeReply; }
+        return home.current = report();
+      }
+      if (type === "space.repair.decline") {
+        folderDismissed = Boolean(fields.declined);
+        return home.current = report();
+      }
+      return answer(type, fields);
     });
-    const rows = { infra: pair("infra", 5), slc: pair("slc", 2), docs: pair("docs", 1) };
+    const initial = await renderGroups(report(), { open: false });
+    // A sidebar request made before anything is dismissed is consumed
+    // once; a later dismissal must not expand the new section.
+    initial.view.rerender(<SpaceSurface onOpenSession={initial.onOpenSession} onOpenProject={initial.onOpenProject} reviewRequest={10} />);
+    expect(screen.getByTestId("space-issues").textContent).toBe("⚠Review (2)");
+    expect(within(screen.getByTestId("space-folder-review")).queryByTestId("space-diagnostic")).toBeNull();
+    expect(screen.getByTestId("space-notice-review").textContent).not.toContain("To work on a project");
+    const dismissNotice = screen.getByTestId("space-notice-dismiss") as HTMLButtonElement;
+    fireEvent.click(dismissNotice);
+    expect(dismissNotice.disabled).toBe(true);
+    expect(screen.getByTestId("space-issues").textContent).toBe("⚠Review (2)");
+    expect(screen.queryByTestId("space-dismissed")).toBeNull();
+    expect(live()).not.toContain("Notice dismissed");
+    await act(async () => { home.current = report(); releaseNotice(home.current); });
+    await waitFor(() => expect(screen.getByTestId("space-issues").textContent).toBe("⚠Review (1)"));
+    expect(live()).toBe("Notice dismissed. The saved file is kept.");
+    expect((screen.getByTestId("space-dismissed") as HTMLDetailsElement).open).toBe(false);
+    expect(screen.queryByTestId("space-notice-review")).toBeNull();
+    expect(screen.getByTestId("space-dismissed-notices").textContent).toContain("/older/session.json");
+
+    initial.view.unmount();
+    await renderGroups(report(), { open: false });
+    expect(screen.queryByTestId("space-issues-list")).toBeNull();
+    fireEvent.click(screen.getByTestId("space-issues"));
+    expect((screen.getByTestId("space-dismissed") as HTMLDetailsElement).open).toBe(false);
+    fireEvent.click(within(screen.getByTestId("space-folder-review")).getByRole("button", { name: "Dismiss" }));
+    await waitFor(() => expect(screen.getByTestId("space-issues").textContent).toBe("Review"));
+    const dismissed = screen.getByTestId("space-dismissed") as HTMLDetailsElement;
+    const summary = dismissed.querySelector("summary")!;
+    expect(summary.textContent).toBe("Dismissed (2)");
+    expect(dismissed.open).toBe(false);
+    expect(screen.queryByTestId("space-folder-review")).toBeNull();
+    expect(screen.queryByTestId("space-active-notices")).toBeNull();
+    expect(dismissed.textContent).not.toContain("For later");
+    await waitFor(() => expect(document.activeElement).toBe(summary));
+    fireEvent.click(summary);
+    fireEvent.click(within(screen.getByTestId("space-dismissed-notices")).getByRole("button", { name: "Show again" }));
+    await waitFor(() => expect(screen.getByTestId("space-issues").textContent).toBe("⚠Review (1)"));
+    expect(summary.textContent).toBe("Dismissed (1)");
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("space-notice-dismiss")));
+    expect(live()).toBe("Shown again.");
+    fireEvent.click(within(screen.getByTestId("space-dismissed-folders")).getByRole("button", { name: "Show again" }));
+    await waitFor(() => expect(screen.queryByTestId("space-dismissed")).toBeNull());
+    expect(screen.getByTestId("space-issues").textContent).toBe("⚠Review (2)");
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("space-repair-use")));
+    expect(calls("space.notice.dismiss")).toEqual([{ notice: "old-file", dismissed: true }, { notice: "old-file", dismissed: false }]);
+    expect(calls("space.repair.decline")).toEqual([
+      { repair: "jane/infra-spex|/code/infra", declined: true },
+      { repair: "jane/infra-spex|/code/infra", declined: false },
+    ]);
+    expect(calls("project.rebind")).toHaveLength(0);
+  });
+
+  test.each([false, true])("a refused notice change keeps its original count and placement (dismissed: %s)", async (dismissed) => {
+    commandMock.mockImplementation(async (type: string, fields: Record<string, unknown> = {}) => {
+      if (type === "space.notice.dismiss") throw new Error("This notice has changed. Refresh to review it.");
+      return answer(type, fields);
+    });
+    await renderGroups(repoState({}, { diagnostics: [{
+      file: "/old/session.json", reason: "unsupported format", code: "session-upgrade", blocking: false,
+      notice: { key: "notice", ...(dismissed ? { dismissed: NOW } : {}) },
+    }] }), { open: false });
+    fireEvent.click(screen.getByTestId("space-issues"));
+    if (dismissed) fireEvent.click(screen.getByTestId("space-dismissed").querySelector("summary")!);
+    const control = screen.getByTestId("space-notice-dismiss") as HTMLButtonElement;
+    fireEvent.click(control);
+    await screen.findByText("This notice has changed. Refresh to review it.");
+    expect(control.disabled).toBe(false);
+    expect(screen.getByTestId("space-issues").textContent).toBe(dismissed ? "Review" : "⚠Review (1)");
+    expect(screen.queryByTestId("space-active-notices") === null).toBe(dismissed);
+    expect(live()).toBe("");
+    expect(screen.queryByTestId("space-deferred-notice")).toBeNull();
+  });
+
+  test("unknown, unsupported and blocking diagnostics have no dismissal control, including an old declined blocker", async () => {
+    const diagnostics: GroupsState["diagnostics"] = [
+      { file: "/old/no-capability.json", reason: "unsupported format", code: "session-import", blocking: false },
+      { file: "/unknown.json", reason: "unsupported legacy schema 1", blocking: false, notice: { key: "unknown", dismissed: NOW } },
+      { file: "/folder.json", reason: "missing folder", code: "session-folder-required", blocking: false, notice: { key: "folder" } },
+      { file: "/blocked.json", reason: "blocked import", code: "session-upgrade", blocking: true, notice: { key: "blocked", dismissed: NOW } },
+      { file: "/blocked-repair", reason: "blocked folder", blocking: true, repair: unpaired({ declined: NOW }) },
+    ];
+    await renderGroups(repoState({}, { diagnostics, issues: 5 }), { open: false });
+    expect(screen.getByTestId("space-issues").textContent).toBe("⚠Review (5)");
+    expect(screen.queryByTestId("space-dismissed")).toBeNull();
+    expect(screen.getAllByTestId("space-diagnostic")).toHaveLength(4);
+    expect(screen.queryByTestId("space-notice-dismiss")).toBeNull();
+    expect(screen.queryByTestId("space-repair-decline")).toBeNull();
+    expect(screen.getByTestId("space-repair")).toBeTruthy();
+    expect(screen.getByTestId("space-folder-review").className).toContain("amber");
+  });
+
+  test("active outcomes keep their places and focus while dismissed repairs move into their own section", async () => {
+    const pair = (name: string) => ({
+      file: `workspace/jane/${name}-spex`, reason: "no working folder", blocking: false,
+      repair: unpaired({ repository: `jane/${name}-spex`, projectName: name, key: name,
+        directories: [`/code/${name}`], proposal: { path: `/code/${name}`, from: "recorded" as const } }),
+    });
+    const rows = { infra: pair("infra"), slc: pair("slc"), docs: pair("docs") };
     type Name = keyof typeof rows;
-    // What the core still reports, in its own order: a pairing resolves
-    // a repair, and a decline marks it.
     const standing = new Map<Name, "open" | "declined">([["infra", "open"], ["slc", "open"], ["docs", "open"]]);
     const report = (): GroupsState => repoState({}, {
       diagnostics: [...standing].map(([name, how]) =>
         how === "declined" ? { ...rows[name], repair: { ...rows[name].repair, declined: NOW } } : rows[name]),
     });
-    const nameOf = (key: unknown) => (Object.keys(rows) as Name[]).find((name) => rows[name].repair.key === key)!;
-    const { answer } = await import("../fixtures/groups.js");
     commandMock.mockImplementation(async (type: string, fields: Record<string, unknown> = {}) => {
-      switch (type) {
-        case "space.repair.decline":
-          standing.set(nameOf(fields.repair), "declined");
-          home.current = report();
-          return home.current;
-        case "project.rebind": {
-          const name = (Object.keys(rows) as Name[]).find((entry) => rows[entry].repair.repository === fields.projectId)!;
-          standing.delete(name);
-          home.current = report();
-          return { id: fields.projectId, name, path: fields.path, registeredAt: 1 };
-        }
-        case "project.list":
-          return [];
-        default:
-          return answer(type, fields);
+      if (type === "space.repair.decline") {
+        standing.set(fields.repair as Name, fields.declined ? "declined" : "open");
+        return home.current = report();
       }
+      if (type === "project.rebind") {
+        const name = (Object.keys(rows) as Name[]).find((entry) => rows[entry].repair.repository === fields.projectId)!;
+        standing.delete(name);
+        home.current = report();
+        return { id: fields.projectId, name, path: fields.path, registeredAt: 1 };
+      }
+      if (type === "project.list") return [];
+      return answer(type, fields);
     });
     const { onOpenProject } = await renderGroups(report(), { open: false });
-    expect(screen.getByTestId("space-issues").textContent).toBe("⚠3 to fix");
     fireEvent.click(screen.getByTestId("space-issues"));
-    const items = () => within(screen.getByTestId("space-issues-list")).getAllByRole("listitem");
+    const items = () => within(screen.getByTestId("space-folder-review")).getAllByRole("listitem");
     const at = (index: number) => items()[index]!;
-    const [infra, , docs] = screen.getAllByTestId("space-repair");
-
-    // A declined row keeps its place, and counts no more.
-    fireEvent.click(within(infra!).getByRole("button", { name: "Not on this computer" }));
-    await waitFor(() => expect(at(0).dataset.testid).toBe("space-repair-declined"));
-    expect(at(0).textContent).toContain("infra");
-    expect(at(0).textContent).toContain("set aside");
-    expect(screen.getByTestId("space-issues").textContent).toBe("⚠2 to fix");
-    expect(screen.getByTestId("space-issues-heading").textContent).toBe("To fix (2) · 1 set aside");
-    expect(live()).toBe("infra set aside");
-
-    // The last row gives way to its outcome in its own place.
-    fireEvent.click(within(docs!).getByTestId("space-repair-use"));
-    await waitFor(() => expect(at(2).dataset.testid).toBe("space-repair-resolved"));
-    expect(at(2).textContent).toContain("docs · now a project at /code/docs, 1 session listed");
-    // The count falls, the live region counts what the header does —
-    // the declined row not among them — and focus wraps to the next
-    // unanswered repair's first control.
-    expect(screen.getByTestId("space-issues").textContent).toBe("⚠1 to fix");
-    expect(live()).toBe("1 left to fix.");
-    await waitFor(() => expect(document.activeElement).toBe(within(at(1)).getByTestId("space-repair-use")));
-    expect(at(1).textContent).toContain("slc");
-
-    // A re-read the core delivers moves nothing.
-    deliver(home.current);
-    expect(items().map((item) => item.dataset.testid)).toEqual(["space-repair-declined", "space-repair", "space-repair-resolved"]);
-
-    // The reader's Refresh lays the list out afresh: the outcome leaves
-    // and the declined row follows the unanswered one.
-    fireEvent.click(screen.getByTestId("space-refresh"));
-    await waitFor(() => expect(items().map((item) => item.dataset.testid)).toEqual(["space-repair", "space-repair-declined"]));
+    fireEvent.click(within(at(0)).getByRole("button", { name: "Dismiss" }));
+    await waitFor(() => expect(screen.getByTestId("space-issues").textContent).toBe("⚠Review (2)"));
+    const dismissed = screen.getByTestId("space-dismissed") as HTMLDetailsElement;
+    expect(dismissed.open).toBe(false);
+    expect(items()).toHaveLength(2);
     expect(at(0).textContent).toContain("slc");
+    expect(live()).toBe("Moved to Dismissed. Your conversations are kept.");
+    await waitFor(() => expect(document.activeElement).toBe(dismissed.querySelector("summary")));
 
-    // With no unanswered repair left, focus lands on the outcome's own
-    // Open project, the one way off the surface.
+    fireEvent.click(within(at(1)).getByTestId("space-repair-use"));
+    await waitFor(() => expect(at(1).dataset.testid).toBe("space-repair-resolved"));
+    expect(at(1).textContent).toContain("Project folder saved: /code/docs");
+    expect(screen.getByTestId("space-issues").textContent).toBe("⚠Review (1)");
+    await waitFor(() => expect(document.activeElement).toBe(within(at(0)).getByTestId("space-repair-use")));
+    deliver(home.current);
+    expect(items().map((item) => item.dataset.testid)).toEqual(["space-repair", "space-repair-resolved"]);
+
+    fireEvent.click(screen.getByTestId("space-refresh"));
+    await waitFor(() => expect(items()).toHaveLength(1));
+    expect(at(0).textContent).toContain("slc");
     fireEvent.click(within(at(0)).getByTestId("space-repair-use"));
     await waitFor(() => expect(at(0).dataset.testid).toBe("space-repair-resolved"));
-    expect(live()).toBe("Nothing left to fix.");
+    expect(screen.getByTestId("space-issues").textContent).toBe("Review");
     const openSlc = within(at(0)).getByRole("button", { name: "Open project" });
     await waitFor(() => expect(document.activeElement).toBe(openSlc));
     fireEvent.click(openSlc);
     expect(onOpenProject).toHaveBeenCalledWith("jane/slc-spex");
 
-    // The last repair resolved, the list stands with every outcome
-    // though the core reports nothing, until the reader's Refresh.
-    fireEvent.click(within(at(1)).getByTestId("space-repair-use"));
-    await waitFor(() => expect(at(1).dataset.testid).toBe("space-repair-resolved"));
-    expect(at(1).textContent).toContain("infra · now a project at /code/infra, 5 sessions listed");
-    expect(live()).toBe("Nothing left to fix.");
-    await waitFor(() => expect(document.activeElement).toBe(within(at(1)).getByRole("button", { name: "Open project" })));
+    fireEvent.click(dismissed.querySelector("summary")!);
+    fireEvent.click(within(screen.getByTestId("space-repair-declined")).getByTestId("space-repair-use"));
+    await waitFor(() => expect(screen.queryByTestId("space-dismissed")).toBeNull());
+    const infraOutcome = items().find((row) => row.textContent?.includes("/code/infra"))!;
+    expect(infraOutcome.dataset.testid).toBe("space-repair-resolved");
+    await waitFor(() => expect(document.activeElement).toBe(within(infraOutcome).getByRole("button", { name: "Open project" })));
     expect(home.current.diagnostics).toEqual([]);
     expect(items()).toHaveLength(2);
     fireEvent.click(screen.getByTestId("space-refresh"));
     await waitFor(() => expect(screen.queryByTestId("space-issues-list")).toBeNull());
   });
+
 });
 
 describe("SPACE: changes (space-7, space-8, space-10)", () => {
@@ -753,9 +1089,9 @@ describe("SPACE: syncing from the row (space-11, space-12, space-15, space-16, s
     // Titled by the group the records are in — "Personal" for your own —
     // and the Space, over three phrases, no sentence (space-57).
     expect(notice.textContent).toContain("Share with Personal at Spex Example?");
-    expect(notice.textContent).toContain("Every session, whole, attachments included");
-    expect(notice.textContent).toContain("Past and future records");
-    expect(notice.textContent).toContain("Members keep what they download");
+    expect(notice.textContent).toContain("All sessions: conversations, agent activity, and attachments");
+    expect(notice.textContent).toContain("Existing and future project records");
+    expect(notice.textContent).toContain("Removing access won’t erase copies members already saved");
     expect(notice.textContent).not.toContain("Public: anyone can read");
     expect(document.activeElement).toBe(within(notice).getByRole("button", { name: "Cancel" }));
     fireEvent.keyDown(document.activeElement!, { key: "Escape" });
@@ -781,7 +1117,7 @@ describe("SPACE: syncing from the row (space-11, space-12, space-15, space-16, s
     // have others: it says so too.
     await renderGroups(repoState({ members: null, noticed: false, lastSync: null }));
     fireEvent.click(syncControl());
-    expect(screen.getByTestId("space-notice-confirm").textContent).toContain("Every session, whole, attachments included");
+    expect(screen.getByTestId("space-notice-confirm").textContent).toContain("All sessions: conversations, agent activity, and attachments");
     cleanup();
     for (const over of [{ members: 3, noticed: true }, { members: 1, noticed: false }, { members: null, noticed: false }]) {
       commandMock.mockClear();

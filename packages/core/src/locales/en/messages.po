@@ -64,6 +64,11 @@ msgstr "; unknown {roles}"
 msgid "\"{id}\" is not a playbook id: lowercase letters, digits and single hyphens, at most 64 characters"
 msgstr "\"{id}\" is not a playbook id: lowercase letters, digits and single hyphens, at most 64 characters"
 
+#. Folder selection refusal: names the selected path and explains that this action does not create a Git project
+#: src/service.ts
+msgid "“{path}” is not a Git project folder. Choose an existing project folder; this action does not create one."
+msgstr "“{path}” is not a Git project folder. Choose an existing project folder; this action does not create one."
+
 #. A session's own title, quoted
 #: src/session.ts
 msgid "“{title}”"
@@ -166,11 +171,6 @@ msgstr "{group} already holds {name}"
 #: src/space-groups.ts
 msgid "{group} is a group named like your login"
 msgstr "{group} is a group named like your login"
-
-#. Refusal of a group's deletion: it still holds a project's records or a group; {group} is the group's path at the Space
-#: src/space-groups.ts
-msgid "{group} is not empty"
-msgstr "{group} is not empty"
 
 #. A package Git source failed without a recognized status; raw backing-host or unclassified stderr stays inside the core
 #: src/space.ts
@@ -602,11 +602,6 @@ msgstr "{path} is not allowed: skills reach agents from the packages spex.yaml a
 #: src/space.ts
 msgid "{path} is not part of {name}"
 msgstr "{path} is not part of {name}"
-
-#. Refusal: the folder offered for rebinding is no git repository
-#: src/service.ts
-msgid "{path} is not the root of a git work tree"
-msgstr "{path} is not the root of a git work tree"
 
 #. Refusal: a package added or published from a folder names one outside the project folder
 #: src/environments.ts
@@ -1589,6 +1584,16 @@ msgstr "Give the group a path"
 msgid "Give this computer access, then Retry"
 msgstr "Give this computer access, then Retry"
 
+#. The Space has no group deletion operation; the group is kept
+#: src/space-groups.ts
+msgid "Group deletion isn’t available at {host}. Contact the Space administrator."
+msgstr "Group deletion isn’t available at {host}. Contact the Space administrator."
+
+#. The Space has no group restoration operation; the group remains scheduled for deletion
+#: src/space-groups.ts
+msgid "Group restoration isn’t available at {host}. Contact the Space administrator."
+msgstr "Group restoration isn’t available at {host}. Contact the Space administrator."
+
 #. Spec notice; `H1` is the markdown top heading and both names are the file's own
 #: src/specs.ts
 msgid "H1 identifier \"{identifier}\" disagrees with basename \"{basename}\""
@@ -1889,10 +1894,10 @@ msgstr "Media read begins beyond the file length."
 msgid "Media storage has stopped."
 msgstr "Media storage has stopped."
 
-#. Guidance under a transfer the Space refused; Share is the control in the members panel; it claims no role
+#. Guidance under a transfer the Space refused; Invite members is the control in the members panel; it claims no role
 #: src/space-git.ts
-msgid "Membership decides who may send here: use Share, or ask a member who may share it."
-msgstr "Membership decides who may send here: use Share, or ask a member who may share it."
+msgid "Membership decides who may send here: use Invite members, or ask someone who can manage members."
+msgstr "Membership decides who may send here: use Invite members, or ask someone who can manage members."
 
 #. Migration diagnostic: the file changed under the migration, which wrote nothing
 #. Migration diagnostic: the file changed under the migration, which wrote nothing
@@ -2461,6 +2466,11 @@ msgstr "Retry; if it fails again, run the same step in a terminal for detail."
 #: src/space.ts
 msgid "Retry; if it fails again, run the step in a terminal for detail."
 msgstr "Retry; if it fails again, run the step in a terminal for detail."
+
+#. Refusal of group deletion without a reviewed public group path; no changes were sent
+#: src/space-groups.ts
+msgid "Review {group} before deleting it"
+msgstr "Review {group} before deleting it"
 
 #. Why an intent cannot run on a team server's seat: it names no runtime, captured before runtimes were recorded or by the Playbook CLI, and a seat runs only what is assigned to it
 #: src/session.ts
@@ -3186,6 +3196,11 @@ msgstr "This folder already contains a Git repository without an initial commit.
 #: src/forge.ts
 msgid "This folder already contains a Git repository. Use Add to register it."
 msgstr "This folder already contains a Git repository. Use Add to register it."
+
+#. Refusal when a dismissal names no currently dismissible saved-conversation notice
+#: src/space.ts
+msgid "This notice has changed. Refresh to review it."
+msgstr "This notice has changed. Refresh to review it."
 
 #. Refusal of Add: a project's package is added from a folder only inside its project folder (environments-2), and this package lies elsewhere
 #: src/service.ts

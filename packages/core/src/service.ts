@@ -660,7 +660,7 @@ export class CoreService {
    * and the member's own credentials (storage-44). */
   private readonly seatEnvironment?: SeatEnvironment;
   /** Claude Code's user-settings variables, in the environment every run
-   * inherits (core-service-151). */
+   * inherits (core-service-153). */
   private readonly claudeSettings?: ClaudeSettingsEnvironment;
   private readonly codeCredentials?: CodeCredentialStore;
   /** The adapter imports every agent run loads: on a seat, each run
@@ -727,7 +727,7 @@ export class CoreService {
   private credentialPushes = 0;
   /** The reload in flight, awaited before a runtime opens (core-service-92). */
   private reloading?: Promise<void>;
-  private readonly migrationDiagnostics: {file: string; reason: string; blocking: boolean}[] = [];
+  private readonly migrationDiagnostics: StorageDiagnostic[] = [];
   private stopping = false;
   /** The endpoint file this process wrote under the home
    * (core-service-143), removed at stop; unset while none stands. */
@@ -773,7 +773,7 @@ export class CoreService {
     if (options.seat) {
       // A seat's runs take the member's or the shared credentials alone,
       // as its readiness reads them: the server account's own settings
-      // are written into no run (core-service-151).
+      // are written into no run (core-service-153).
       const { credentials, environment } = seat ?? CoreService.seatCredentials(options, store.dir);
       this.codeCredentials = credentials;
       this.seatEnvironment = environment;
@@ -781,7 +781,7 @@ export class CoreService {
     } else {
       // Applied now, so discovery and readiness read what a run
       // inherits, and again before each run, as Claude Code applies its
-      // settings over the variables it inherits (core-service-151). Runs
+      // settings over the variables it inherits (core-service-153). Runs
       // inherit the process's environment.
       const claudeSettings = new ClaudeSettingsEnvironment(process.env, () => claudeSettingsEnv(this.env, this.home));
       this.claudeSettings = claudeSettings;
@@ -1112,7 +1112,7 @@ export class CoreService {
     }
     this.claudeSettings?.apply();
     // A run spawned with an environment of its own takes the settings'
-    // variables over it too (core-service-151); the process's own
+    // variables over it too (core-service-153); the process's own
     // already holds them.
     const settings = claudeSettingsEnv(this.env, this.home);
     return this.env === process.env || Object.keys(settings).length === 0 ? this.env : { ...this.env, ...settings };
@@ -1553,7 +1553,7 @@ export class CoreService {
     let credentials: SeedCredentials;
     try {
       // The seed counts the credentials confirmed now, never a home
-      // folder alone (core-service-3, DR-190).
+      // folder alone (core-service-3, DR-201).
       credentials = await seedCredentials(seat ? seat.environment.envFor(env) : env, seat ? null : options.home ?? env.HOME ?? homedir(), options.agentSignIn);
       store = await Store.open({
         seedCredentials: credentials,
@@ -1647,8 +1647,11 @@ export class CoreService {
    */
   private adoptScan: Promise<void> = Promise.resolve();
 
-  private syncForeignSessions(): Promise<void> {
-    const scan = this.adoptScan.then(() => this.scanSessions());
+  private syncForeignSessions(beforeScan?: () => Promise<void>): Promise<void> {
+    const scan = this.adoptScan.then(async () => {
+      await beforeScan?.();
+      await this.scanSessions();
+    });
     this.adoptScan = scan.catch(() => {});
     return scan;
   }
@@ -1709,6 +1712,7 @@ export class CoreService {
     const result = await this.store.sessionStore().migrateLegacyDefault({env:this.env,homeDir:this.home});
     for (const entry of result.skipped) this.migrationDiagnostics.push({
       file:join(result.sourceDir,`${entry.sessionId}.json`), reason:entry.reason, blocking:false,
+      code: "session-import",
     });
   }
 
@@ -2450,7 +2454,7 @@ export class CoreService {
 
   async readiness(signIn = this.options.agentSignIn): Promise<ReadinessEntry[]> {
     // A variable the settings no longer set leaves the environment
-    // before it is read (core-service-151).
+    // before it is read (core-service-153).
     this.claudeSettings?.apply();
     // Adapter-keyed and deduplicated (DR-019): readiness is a
     // property of the adapter's auth, not of any one agent block.
@@ -2458,7 +2462,7 @@ export class CoreService {
     // points somewhere concrete. Claude and Codex stand whether or not
     // a position uses them, so a reader sees the other agent's state
     // too — with no config to read, they are all there is, and no
-    // earlier config's positions carry over (core-service-9, DR-189).
+    // earlier config's positions carry over (core-service-9, DR-200).
     const positions = new Map<AdapterName, string[]>([["claude", []], ["codex", []]]);
     const note = (adapter: AdapterName, position: string): void => {
       const list = positions.get(adapter);
@@ -2485,7 +2489,7 @@ export class CoreService {
       ? (adapter: AdapterName) => seatCredentialHalf(adapter, sources, seat.runValues(adapter), this.runCommand)
       : undefined;
     // Manual steps are written for the computer that follows them; a
-    // seat's base URL is its own and none of the reader's (DR-189).
+    // seat's base URL is its own and none of the reader's (DR-200).
     const shell = this.env.SHELL ? basename(this.env.SHELL) : undefined;
     const host = { platform: process.platform, ...(shell ? { shell } : {}) };
     return Promise.all(
@@ -2926,10 +2930,10 @@ export class CoreService {
         const path = expandPath(command.path, this.home);
         if (!(await isWorkTreeRoot(path, this.runCommand))) {
           throw new CoreError("invalid_request", i18n._({
-            id: "{path} is not the root of a git work tree",
-            comment: "Refusal: the folder offered for rebinding is no git repository",
+            id: "“{path}” is not a Git project folder. Choose an existing project folder; this action does not create one.",
+            comment: "Folder selection refusal: names the selected path and explains that this action does not create a Git project",
             values: { path },
-          }));
+          }), { issue: "project_folder", path });
         }
         if (this.sessions.listSessions().some((session) => session.projectId === command.projectId && session.live)) {
           throw new CoreError("busy", i18n._({
@@ -2943,7 +2947,7 @@ export class CoreService {
         // (environments-31); a session started meanwhile does not wait
         // for it.
         void this.environments.paired(project.id).catch(() => {});
-        await this.syncForeignSessions();
+        await this.syncForeignSessions(() => this.store.retryLegacySessions(project.id));
         for (const session of this.sessions.listSessions()) {
           if (session.projectId !== project.id) continue;
           this.broadcast({type: "session.state", session});
@@ -2953,7 +2957,7 @@ export class CoreService {
         return project;
       }
       case "storage.diagnostics":
-        return foldDiagnostics([...this.migrationDiagnostics, ...this.store.storageDiagnostics(), ...this.store.sessionDiagnostics(), ...this.authors.diagnostics(), ...this.credentialDiagnostics()]);
+        return this.space.markDiagnostics(foldDiagnostics([...this.migrationDiagnostics, ...this.store.storageDiagnostics(), ...this.store.sessionDiagnostics(), ...this.authors.diagnostics(), ...this.credentialDiagnostics()]));
       case "project.create": {
         const path = expandPath(command.path, this.home);
         const registered = this.store.getProjectByPath(path);
@@ -3337,7 +3341,7 @@ export class CoreService {
       }
       case "config.batch": {
         // Your own group's file alone, all or none, against the config
-        // the client saw (core-service-44, DR-189).
+        // the client saw (core-service-44, DR-200).
         const result = await editConfigBatch(
           this.configPath,
           command.ops as ConfigBatchOp[],
@@ -3926,7 +3930,11 @@ export class CoreService {
           ...(command.path !== undefined ? { path: command.path } : {}),
         });
       case "space.group.delete":
-        return this.requireSpace().deleteGroup(command.instance, command.group);
+        return this.requireSpace().deleteGroup(command.instance, command.group, command.confirmPath);
+      case "space.group.deletionCheck":
+        return this.requireSpace().checkGroupDeletion(command.instance, command.group);
+      case "space.group.restore":
+        return this.requireSpace().restoreGroup(command.instance, command.group);
       case "space.repository.move":
         return this.requireSpace().moveRepository(command.repository, command.groupId, command.instance);
       case "space.share":
@@ -3954,6 +3962,8 @@ export class CoreService {
         return this.requireSpace().read(command.repository, command.path);
       case "space.repair.decline":
         return this.requireSpace().decline(command.repair, command.declined);
+      case "space.notice.dismiss":
+        return this.requireSpace().dismissNotice(command.notice, command.dismissed);
       // Authoring sessions (DR-058, core-service-96): each in its
       // project's spex repository, one activity per session, Boss
       // messages queue, the manager holds the matrix.

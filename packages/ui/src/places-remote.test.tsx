@@ -510,8 +510,9 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
     expect(within(palette).getByTestId(`palette-project-p2@${ALPHA.place}`).textContent).toContain("build-box");
     expect(within(palette).queryByTestId(`palette-project-places-p2@${ALPHA.place}`)).toBeNull();
     expect(within(palette).queryByTestId("palette-project-places-p1")).toBeNull();
-    // [run-view-168] the palette reads no seat's groups.
-    expect(callsOf(beta, "space.get")).toEqual([]);
+    // The shell reads once for the persistent folder-review shortcut;
+    // the palette adds no separate seat-group read (DR-196).
+    expect(callsOf(beta, "space.get")).toHaveLength(1);
 
     // [run-view-171] [run-view-168] with every project of the groups
     // open here, the list says so; with the groups listing none, that
@@ -545,6 +546,38 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
     expect(within(overview).queryByText("Open folder…")).toBeNull();
   });
 
+  test("a deferred-only server keeps its sidebar return with no project or warning count", async () => {
+    const deferred = { ...REPAIR_ISSUE, repair: { ...REPAIR_ISSUE.repair!, declined: 123 } };
+    const pending = { ...placeGroups(undefined, [deferred]), issues: 0 };
+    beta.answers["space.get"] = pending;
+    betaStore.setState({ space: undefined, projects: [] });
+    render(<App />);
+    await settle();
+    const testId = `sidebar-locate-files@${BETA.place}`;
+    const link = screen.getByTestId(testId);
+    expect(link.getAttribute("aria-label")).toBe("Locate project files on gpu-box");
+    fireEvent.click(link);
+    await settle();
+    expect(screen.getByTestId("space-issues-list")).toBeTruthy();
+    expect(screen.getByTestId("space-issues").textContent).toBe("Review");
+    expect(screen.getByTestId("space-repair-declined")).toBeTruthy();
+    expect(screen.getByText("Conversation history is saved on gpu-box. Project files must be available there for further work.")).toBeTruthy();
+    expect(screen.queryByTestId("space-repair-choose")).toBeNull();
+    expect(betaStore.getState().projects).toEqual([]);
+    expect(useAppStore.getState().space?.issues ?? 0).toBe(0);
+    fireEvent.click(screen.getByRole("button", { name: "Dashboard" }));
+    act(() => useAppStore.setState({ railCollapsed: true }));
+    const collapsed = screen.getByTestId(testId);
+    expect(collapsed.tagName).toBe("BUTTON");
+    expect(collapsed.getAttribute("aria-label")).toBe("Locate project files on gpu-box");
+    fireEvent.click(collapsed);
+    await settle();
+    expect(screen.getByTestId("space-repair-declined")).toBeTruthy();
+    expect(callsOf(beta, "project.rebind")).toEqual([]);
+    expect(callsOf(beta, "space.repair.decline")).toEqual([]);
+    expect(callsOf(local, "project.rebind")).toEqual([]);
+  });
+
   test("a repair row: this computer's offers the proposed folder and a path, a seat's neither", async () => {
     local.answers["space.get"] = placeGroups(undefined, [REPAIR_ISSUE]);
     alpha.answers["space.get"] = placeGroups("git.example.com", [REPAIR_ISSUE]);
@@ -553,40 +586,39 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
     goTo("Space");
     await settle();
 
-    // This computer: the proposal's "Use <folder>", and Choose folder…
+    // This computer: the proposal's "Use <folder>", and Locate folder…
     // opening the path editor with the shell's picker (space-47).
     fireEvent.click(screen.getByTestId("space-issues"));
     const here = screen.getByTestId("space-repair");
     expect(within(here).getByTestId("space-repair-use").textContent).toBe("Use /code/infra");
     fireEvent.click(within(here).getByTestId("space-repair-choose"));
     expect(within(here).getByTestId("space-repair-path")).toBeTruthy();
-    expect(within(here).getByRole("button", { name: "Open folder…" })).toBeTruthy();
+    expect(within(here).getByRole("button", { name: "Browse…" })).toBeTruthy();
 
     // The seat: the same repair, at its own core.
     pick("build-box");
     await settle();
     fireEvent.click(screen.getByTestId("space-issues"));
     const there = screen.getByTestId("space-repair");
-    // Named by the project and its group, the folder it remembers
-    // secondary, the server named where this computer would be
-    // (space-46, space-112).
-    expect(within(there).getByTestId("space-repair-title").textContent).toBe(
-      "infra · acme — Folder missing on build-box",
-    );
-    expect(within(there).getByTestId("space-repair-folder").textContent).toBe("/code/infra · 2 sessions ran there");
+    // Saved conversations identify the task; its explanation names the
+    // server and its previous folder is explicitly labelled (DR-194).
+    expect(within(there).getByTestId("space-repair-title").textContent).toBe("Earlier conversations");
+    expect(screen.getByText("Conversation history is saved on build-box. Project files must be available there for further work.")).toBeTruthy();
+    const previousFolder = within(within(there).getByTestId("space-repair-folder"));
+    expect(previousFolder.getByText("Previously used folder")).toBeTruthy();
+    expect(previousFolder.getByText("/code/infra")).toBeTruthy();
     // [run-view-171] [run-view-169] a remote place's repair row offers
     // no folder: neither its proposal's "Use <folder>" nor "Choose
-    // folder…", no path editor and no picker (space-47, space-103).
+    // project…", no path editor and no picker (space-47, space-103).
     expect(within(there).queryByTestId("space-repair-use")).toBeNull();
     expect(within(there).queryByText(/^Use /)).toBeNull();
     expect(within(there).queryByTestId("space-repair-choose")).toBeNull();
-    expect(within(there).queryByText("Choose folder…")).toBeNull();
+    expect(within(there).queryByText("Locate folder…")).toBeNull();
     expect(within(there).queryByTestId("space-repair-path")).toBeNull();
-    expect(within(there).queryByText("Open folder…")).toBeNull();
+    expect(within(there).queryByText("Browse…")).toBeNull();
     expect(pathEntries(there)).toEqual([]);
-    // Declining names no folder, and stands, naming the server
-    // (space-112).
-    expect(within(there).getByTestId("space-repair-decline").textContent).toBe("Not on build-box");
+    // Postponing this choice does not assert where a project belongs.
+    expect(within(there).getByTestId("space-repair-decline").textContent).toBe("Dismiss");
     expect(pickDirectory).not.toHaveBeenCalled();
     expect(callsOf(alpha, "project.rebind")).toEqual([]);
   });

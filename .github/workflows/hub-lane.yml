@@ -4,32 +4,16 @@
 # The hub's privileged lane on CI (release-36, DR-149): hub-10 run as
 # root on GitHub's Ubuntu runner — a disposable Linux host booted by
 # systemd with passwordless sudo — from the commit's tree unpacked
-# outside any home, as apps/hub/deploy/LANE.md has it by hand. It runs
-# on the nightly schedule, on a push to main that touches the hub or the
-# server shell it runs, on a pull request that changes this workflow
-# itself, and on request; it is no required check of a pull request
-# (DR-145). The lane's output, redacted of every secret, is the run's
-# artifact.
+# outside any home, as apps/hub/deploy/LANE.md has it by hand. Full app
+# validation calls this workflow; it can also run on request (DR-199).
+# The lane's output, redacted of every secret, is the run's artifact.
 name: Hub Lane
 
 on:
-  schedule:
-    # Half an hour after CI's nightly, so the two never share a minute.
-    - cron: '47 3 * * *'
-  push:
-    branches: [main]
-    paths:
-      - 'apps/hub/**'
-      - 'apps/server/**'
-      - '.github/workflows/hub-lane.yml'
-  # A change to the lane's own workflow is exercised before it merges;
-  # no other pull request runs the lane.
-  pull_request:
-    paths:
-      - '.github/workflows/hub-lane.yml'
+  workflow_call:
   workflow_dispatch:
 
-# One lane at a time per ref; a push to main cancels nothing.
+# One lane at a time per ref; a run cancels nothing.
 concurrency:
   group: hub-lane-${{ github.ref }}
   cancel-in-progress: false

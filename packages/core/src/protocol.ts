@@ -804,7 +804,7 @@ export interface ReadinessEntry {
   /** Unmet requirement, present when ready is false: the faults'
    * requirements joined, kept for clients that read one line. */
   requirement?: string;
-  /** Each unmet half by its kind (core-service-9, DR-189), so guidance
+  /** Each unmet half by its kind (core-service-9, DR-200), so guidance
    * tells reinstalling the app from setting a key. */
   faults?: ReadinessFault[];
   /** On `claude` alone: where its requests go, by
@@ -1585,7 +1585,9 @@ export const commandSchema = z.discriminatedUnion("type", [
       path: z.string().min(1).optional(),
     })
     .strict(),
-  z.object({ type: z.literal("space.group.delete"), id, instance: instanceOriginSchema, group: z.string().min(1) }).strict(),
+  z.object({ type: z.literal("space.group.delete"), id, instance: instanceOriginSchema, group: z.string().min(1), confirmPath: z.string().optional() }).strict(),
+  z.object({ type: z.literal("space.group.deletionCheck"), id, instance: instanceOriginSchema, group: z.string().min(1) }).strict(),
+  z.object({ type: z.literal("space.group.restore"), id, instance: instanceOriginSchema, group: z.string().min(1) }).strict(),
   /** `instance`: the placement's, its first where omitted (space-29, DR-128). */
   z.object({ type: z.literal("space.repository.move"), id, repository: repositoryKeySchema, instance: instanceOriginSchema.optional(), groupId: z.string().min(1).nullable() }).strict(),
   z
@@ -1644,6 +1646,7 @@ export const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("space.tree"), id, repository: repositoryKeySchema, path: z.string().optional() }).strict(),
   z.object({ type: z.literal("space.read"), id, repository: repositoryKeySchema, path: z.string().min(1) }).strict(),
   z.object({ type: z.literal("space.repair.decline"), id, repair: z.string().min(1), declined: z.boolean() }).strict(),
+  z.object({ type: z.literal("space.notice.dismiss"), id, notice: z.string().min(1), dismissed: z.boolean() }).strict(),
   // Team servers (core-service-128, DR-133): the servers each signed-in
   // instance lists, and a seat on one opened or closed, the server named
   // by its instance's origin and its id there. `consented`: the client
@@ -1761,7 +1764,7 @@ export interface CommandResults {
   "agent.options": AgentOptions;
   "project.list": ProjectInfo[];
   "project.rebind": ProjectInfo;
-  "storage.diagnostics": { file: string; reason: string; blocking: boolean; repair?: DiagnosticRepair }[];
+  "storage.diagnostics": StorageDiagnostic[];
   "project.register": ProjectInfo;
   "project.remove": null;
   "project.create": ProjectInfo;
@@ -1858,7 +1861,9 @@ export interface CommandResults {
   "space.members": { members: HostMemberInfo[] };
   "space.group.create": { group: { id: string; fullPath: string; name: string } };
   "space.group.rename": { group: { id: string; fullPath: string; name: string } };
-  "space.group.delete": { deleted: true };
+  "space.group.delete": { status: "scheduled" | "deleted" };
+  "space.group.deletionCheck": { group: { id: string; fullPath: string; name: string }; contents: { kind: "project" | "group" | "records" | "server"; name: string }[] };
+  "space.group.restore": { group: { id: string; fullPath: string; name: string } };
   /** `fullPath`: the repository's path in the instance after the move. */
   "space.repository.move": { repository: { id: string; fullPath: string } };
   "space.share": { members: HostMemberInfo[] };
@@ -1872,6 +1877,7 @@ export interface CommandResults {
   "space.tree": { path: string; entries: SpaceEntry[] };
   "space.read": SpaceReadResult;
   "space.repair.decline": GroupsState;
+  "space.notice.dismiss": GroupsState;
   "server.list": ServerListing;
   /** The seat's place and its lease's expiry in Unix milliseconds; never
    * its endpoint or its bearer (core-service-128). */
@@ -2157,6 +2163,21 @@ export interface BuiltinPlaybookInfo {
 // Groups (space-30, DR-103)
 // ---------------------------------------------------------------------------
 
+/** A stored-file problem, with optional facts for human guidance. The
+ * code describes the operation that failed, never a parsed reason. */
+export interface StorageDiagnostic {
+  file: string;
+  reason: string;
+  blocking: boolean;
+  repair?: DiagnosticRepair;
+  /** A nonblocking older-conversation notice the reader can dismiss on
+   * this device. Its opaque identity changes with its source or cause. */
+  notice?: { key: string; dismissed?: number };
+  code?: "session-import" | "session-upgrade" | "session-folder-required";
+  /** The repository whose folder selection can resolve this diagnostic. */
+  repository?: string;
+}
+
 /** What a folder on this device would repair (space-46): a spex
  * repository no working folder here pairs, or a working folder whose
  * clone is missing. */
@@ -2168,6 +2189,13 @@ export interface DiagnosticRepair {
   /** The spex repository's name and its group, for an unpaired clone. */
   name?: string;
   group?: string;
+  /** A real project's recorded name, never inferred from storage names. */
+  projectName?: string;
+  /** At most three recent conversations, recognizable without displaying
+   * internal ids; an id permits reading existing history without a folder. */
+  conversations?: { id?: string; title?: string; updatedAt?: number }[];
+  /** Related import failures resolved by this same folder-selection task. */
+  details?: { file: string; reason: string }[];
   /** The working directories its sessions record, or the folder. */
   directories: string[];
   sessions: number;
@@ -2505,7 +2533,7 @@ export interface GroupsState {
   own: { name: string; named: boolean; repositories: RepositoryState[] };
   /** Every instance the home lists, in its order (space-1). */
   instances: InstanceState[];
-  diagnostics: { file: string; reason: string; blocking: boolean; repair?: DiagnosticRepair }[];
+  diagnostics: StorageDiagnostic[];
   /** What the header counts (space-1): the repairs this device's
    * reader has not answered, plus every diagnostic no repair folds.
    * Carried as one number so header and list cannot disagree. */
@@ -2554,7 +2582,9 @@ export interface InstanceGroupState {
   name: string;
   /** What its last read said the person may do there; all false until
    * one is held, and in a namespace. */
-  can: { createSubgroup: boolean; manageMembers: boolean; rename: boolean; delete: boolean };
+  can: { createSubgroup: boolean; manageMembers: boolean; rename: boolean; delete: boolean; restore?: boolean };
+  pendingDeletion?: boolean;
+  deletionRoot?: string;
   /** The rows standing elsewhere one of whose placements this group or
    * namespace holds, each shown as one line (space-1, DR-128). */
   placed: { key: string; name: string }[];

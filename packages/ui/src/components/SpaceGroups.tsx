@@ -10,7 +10,8 @@
 // computer", what stands in no group: your sessions before any sign-in
 // and each project not yet shared. A group's heading carries its name,
 // its path where the two differ, its member count where read, and one
-// overflow control, "More", holding Members alone; beneath it, one line
+// overflow control, "More", holding Members and permitted group
+// deletion (DR-193); beneath it, one line
 // per team server of that group (run-view-170), then its rows, then one
 // quiet line, with no control, per row standing elsewhere a placement of
 // which its listing holds, naming the row and where it stands (DR-128).
@@ -117,11 +118,12 @@ import {
 import { AddInstance, InstanceSection } from "./SpaceInstance.js";
 import { GroupServers, InstanceServers } from "./SpaceServers.js";
 import { MembersPanel } from "./SpaceMembers.js";
+import { ATTACHED_OWNER, ATTACHED_PANEL } from "./SpacePanel.js";
 import { MenuButton, MoreMenu, type MenuEntry } from "./SpaceMenu.js";
 import { CombineConfirm, SharingConfirm, combineLabel, combiningLabel, continueLabel, entryName, placementGroupName } from "./SpacePlacements.js";
 import type { SignInFlow } from "./SpaceSignIn.js";
 import { ChoicesContext, ConflictsPicker, stoppedRetryInput } from "./SpaceSync.js";
-import { SECONDARY, syncRefusal, type Note } from "./SpaceSurface.js";
+import { PRIMARY, SECONDARY, syncRefusal, type Note } from "./SpaceSurface.js";
 
 /** An entry's identity under its Space's heading (space-1, DR-127): a
  * group by its id, a namespace by its login, a group no read lists by
@@ -415,9 +417,16 @@ function groupTree(entries: InstanceGroupState[]): GroupNode[] {
   for (const group of sorted) {
     const node = nodes.get(group)!;
     const path = group.fullPath.toLowerCase();
-    const parent = sorted
-      .filter((other) => other !== group && path.startsWith(`${other.fullPath.toLowerCase()}/`))
-      .sort((a, b) => b.fullPath.length - a.fullPath.length)[0];
+    const parents = sorted
+      .filter((other) => {
+        if (other === group || !path.startsWith(`${other.fullPath.toLowerCase()}/`)) return false;
+        if (other.pendingDeletion) return group.pendingDeletion && !!group.deletionRoot && group.deletionRoot === other.deletionRoot;
+        return !group.pendingDeletion || group.deletionRoot?.toLowerCase().startsWith(`${other.fullPath.toLowerCase()}/`);
+      })
+      .sort((a, b) => b.fullPath.length - a.fullPath.length);
+    // Distinct IDs may share a public path. Without a unique parent,
+    // keep the group separate rather than attach it to the first one.
+    const parent = parents[0]?.fullPath.length === parents[1]?.fullPath.length ? undefined : parents[0];
     if (parent) nodes.get(parent)!.children.push(node);
     else roots.push(node);
   }
@@ -503,7 +512,8 @@ interface Shared {
 /** One entry of the list (space-1): "This computer", where `instance` is
  * none, or "Personal", a group or another account's login under a
  * Space's heading. Its heading — a group of a signed-in Space carrying
- * one "More" holding Members, the others none (DR-114, DR-172) — then
+ * one "More" holding Members and permitted deletion, the others none
+ * (DR-114, DR-172, DR-190) — then
  * its servers' lines, its rows, and the groups inside it. */
 function GroupSection({
   instance,
@@ -518,9 +528,36 @@ function GroupSection({
   subgroups: GroupNode[];
 }) {
   const { connected, refreshes, servers, onNote } = shared;
-  const seat = seatName(usePlaceStore().place);
-  const [opened, setOpened] = useState<"members">();
+  const store = usePlaceStore();
+  const seat = seatName(store.place);
+  const spaceGroupDelete = store((state) => state.spaceGroupDelete);
+  const spaceGroupRestore = store((state) => state.spaceGroupRestore);
+  const spaceGroupDeletionCheck = store((state) => state.spaceGroupDeletionCheck);
+  const [opened, setOpened] = useState<"members" | "delete">();
+  const [membersPending, setMembersPending] = useState(false);
+  const [membersFocus, setMembersFocus] = useState(0);
+  const [deleting, setDeleting] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [review, setReview] = useState<Awaited<ReturnType<AppState["spaceGroupDeletionCheck"]>>>();
+  const [checking, setChecking] = useState(false);
+  const [reviewAgain, setReviewAgain] = useState(0);
+  const [deleteError, setDeleteError] = useState<string>();
+  const deletePending = useRef(false);
+  const deleteConfirmRef = useRef<HTMLDivElement>(null);
+  const deleteCancelRef = useRef<HTMLButtonElement>(null);
   const moreRef = useRef<HTMLButtonElement>(null);
+  const deleteTitle = useId();
+  const deleteDescription = useId();
+  const restoreRef = useRef<HTMLButtonElement>(null);
+  const settledFocus = useRef<(() => void) | undefined>(undefined);
+  // A timer can run before React reenables these controls. Move focus
+  // after the settled render, when the surviving target can receive it.
+  useLayoutEffect(() => {
+    if (deleting || restoring) return;
+    const focus = settledFocus.current;
+    settledFocus.current = undefined;
+    focus?.();
+  });
   const { name, beside } = groupReading(group, instance);
   // A group a signed-in Space lists names its members; "Personal",
   // another account's login and "This computer" carry no act (DR-114,
@@ -531,9 +568,96 @@ function GroupSection({
   const Heading = local ? "h2" : "h3";
   const members = instance && group.login === null ? memberCount(instance, group) : null;
   const close = () => {
+    if (deletePending.current || membersPending) return;
     setOpened(undefined);
+    setDeleteError(undefined);
     // Closing never strands focus (DR-010 §6).
     setTimeout(() => moreRef.current?.focus(), 0);
+  };
+
+  const serverCount = instance
+    ? (servers?.servers ?? []).filter((server) => server.instance === instance.origin && server.group.toLowerCase() === group.fullPath.toLowerCase()).length
+    : 0;
+  const deleteReason = !group.can.delete
+    ? i18n._({ id: "You no longer have permission to delete this group.", comment: "a deletion confirmation whose Space permissions changed while it was open" })
+    : group.pendingDeletion
+      ? i18n._("This group is already scheduled for deletion.")
+      : undefined;
+  const confirmed = review?.group.id === hostGroup && review.contents.length === 0;
+  useEffect(() => {
+    if (opened !== "delete" || !instance || hostGroup === null) return;
+    let cancelled = false;
+    setReview(undefined);
+    setChecking(connected);
+    if (connected) spaceGroupDeletionCheck(instance.origin, hostGroup)
+      .then((result) => { if (!cancelled) setReview(result); })
+      .catch((cause: Error) => { if (!cancelled) setDeleteError(cause.message); })
+      .finally(() => { if (!cancelled) setChecking(false); });
+    return () => { cancelled = true; };
+  }, [opened, instance?.origin, hostGroup, refreshes, connected, reviewAgain, spaceGroupDeletionCheck]);
+
+  const removeGroup = async () => {
+    if (deletePending.current || !connected || !instance || hostGroup === null || deleteReason || !confirmed || checking) return;
+    deletePending.current = true;
+    setDeleting(true);
+    setDeleteError(undefined);
+    // The successful state arrives before the reply and removes this
+    // whole section. Keep a destination in its surviving Space heading.
+    const fallback = moreRef.current?.closest("[data-signed-in]")?.querySelector<HTMLButtonElement>(
+      '[data-testid="space-new-group"]:not(:disabled), [data-testid="space-signout"]',
+    );
+    const panel = deleteConfirmRef.current;
+    const focusIsOurs = () => document.activeElement === document.body || document.activeElement === null || panel?.contains(document.activeElement);
+    try {
+      const reply = await spaceGroupDelete(instance.origin, hostGroup, review!.group.fullPath);
+      setOpened(undefined);
+      onNote(reply.status === "scheduled"
+        ? i18n._("{group} is scheduled for deletion.", { group: name })
+        : i18n._("{group} deleted.", { group: name }));
+      const focus = () => {
+        if (focusIsOurs()) (restoreRef.current ?? moreRef.current ?? fallback)?.focus();
+      };
+      if (reply.status === "scheduled") settledFocus.current = focus;
+      // Immediate deletion unmounts this section, so its layout effect
+      // cannot return focus to the surviving Space heading.
+      else setTimeout(() => { if (focusIsOurs()) fallback?.focus(); }, 0);
+    } catch (cause) {
+      const message = (cause as Error).message;
+      setDeleteError(message);
+      setReview(undefined);
+      onNote(message);
+      settledFocus.current = () => {
+        if (focusIsOurs()) deleteCancelRef.current?.focus();
+      };
+    } finally {
+      deletePending.current = false;
+      setDeleting(false);
+    }
+  };
+
+  const restoreGroup = async () => {
+    if (deletePending.current || !connected || !instance || hostGroup === null || !group.can.restore || !group.pendingDeletion) return;
+    deletePending.current = true;
+    setRestoring(true);
+    setDeleteError(undefined);
+    const button = restoreRef.current;
+    try {
+      await spaceGroupRestore(instance.origin, hostGroup);
+      onNote(i18n._("{group} restored.", { group: name }));
+      settledFocus.current = () => {
+        if (document.activeElement === document.body || document.activeElement === button) moreRef.current?.focus();
+      };
+    } catch (cause) {
+      const message = (cause as Error).message;
+      setDeleteError(message);
+      onNote(message);
+      settledFocus.current = () => {
+        if (document.activeElement === document.body || document.activeElement === button) restoreRef.current?.focus();
+      };
+    } finally {
+      deletePending.current = false;
+      setRestoring(false);
+    }
   };
 
   const entries: MenuEntry[] =
@@ -543,8 +667,28 @@ function GroupSection({
           {
             label: i18n._({ id: "Members", comment: "list the people who read a project's records, or a group's members, at the Space" }),
             testId: `space-group-members-${group.fullPath}`,
-            onSelect: () => setOpened((was) => (was === "members" ? undefined : "members")),
+            onSelect: () => {
+              if (deletePending.current || membersPending) return;
+              if (opened === "members") setMembersFocus((value) => value + 1);
+              else setOpened("members");
+            },
           },
+          ...(group.can.delete && !group.pendingDeletion ? [{
+            label: i18n._({ id: "Delete group", comment: "a group's overflow action: review its contents and confirm deletion without entering more details" }),
+            testId: `space-group-delete-${group.fullPath}`,
+            disabled: deleteReason !== undefined,
+            hint: deleteReason,
+            onSelect: () => {
+              if (deletePending.current || membersPending) return;
+              if (opened === "delete") {
+                deleteCancelRef.current?.focus();
+                return;
+              }
+              setDeleteError(undefined);
+              setReview(undefined);
+              setOpened("delete");
+            },
+          }] : []),
         ];
 
   const rows = group.repositories;
@@ -554,10 +698,6 @@ function GroupSection({
   const lines = instance && servers ? (
     <GroupServers instance={instance} group={group.fullPath} listing={servers} connected={connected} onNote={onNote} />
   ) : null;
-  const serverCount = instance
-    ? (servers?.servers ?? []).filter((server) => server.instance === instance.origin && server.group.toLowerCase() === group.fullPath.toLowerCase()).length
-    : 0;
-
   return (
     <div
       role="group"
@@ -568,45 +708,118 @@ function GroupSection({
       {/* The name owns the slack; what stands beside it follows the
           separator in the secondary tone (space-1). Below @md the
           heading keeps its own row above its act (space-28). */}
-      <div className="flex min-w-0 flex-wrap items-center gap-1">
-        <Heading className="flex min-w-0 flex-1 basis-40 items-baseline gap-2 text-sm font-medium">
-          <span className="min-w-0 truncate" title={group.login === null && !local ? group.fullPath : name}>
-            {name}
-          </span>
-          {beside !== null ? " " : null}
-          {beside !== null ? (
-            <span
-              data-testid={`space-heading-beside-${testKey}`}
-              className="min-w-0 truncate text-xs font-normal text-neutral-500"
-              title={beside}
-            >
-              <span aria-hidden>· </span>
-              {beside}
+      <div data-testid={`space-group-panel-frame-${group.fullPath}`} className={`flex min-w-0 flex-col gap-2 ${opened ? ATTACHED_OWNER : ""}`}>
+        <div className={`flex min-w-0 flex-wrap items-center gap-1 ${opened ? "px-2 pt-1" : ""}`}>
+          <Heading className="flex min-w-0 flex-1 basis-40 items-baseline gap-2 text-sm font-medium">
+            <span className="min-w-0 truncate" title={group.login === null && !local ? group.fullPath : name}>
+              {name}
             </span>
-          ) : null}
-          {members !== null ? " " : null}
-          {members !== null ? (
-            <span data-testid={`space-group-count-${group.fullPath}`} className="shrink-0 text-xs font-normal text-neutral-500">
-              <span aria-hidden>· </span>
-              {i18n._("{count, plural, one {# member} other {# members}}", { count: members })}
-            </span>
-          ) : null}
-        </Heading>
-        <MoreMenu of={group.fullPath} testId={`space-group-more-${group.fullPath}`} buttonRef={moreRef} entries={entries} disabled={!connected} />
+            {beside !== null ? " " : null}
+            {beside !== null ? (
+              <span
+                data-testid={`space-heading-beside-${testKey}`}
+                className="min-w-0 truncate text-xs font-normal text-neutral-500"
+                title={beside}
+              >
+                <span aria-hidden>· </span>
+                {beside}
+              </span>
+            ) : null}
+            {members !== null ? " " : null}
+            {members !== null ? (
+              <span data-testid={`space-group-count-${group.fullPath}`} className="shrink-0 text-xs font-normal text-neutral-500">
+                <span aria-hidden>· </span>
+                {i18n._("{count, plural, one {# member} other {# members}}", { count: members })}
+              </span>
+            ) : null}
+          </Heading>
+          <MoreMenu of={group.fullPath} testId={`space-group-more-${group.fullPath}`} buttonRef={moreRef} entries={entries} disabled={!connected || deleting || restoring || membersPending} />
+        </div>
+        {group.pendingDeletion ? (
+          <div role="status" data-testid={`space-group-pending-${group.fullPath}`} className="mx-2 flex min-w-0 flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50/50 p-3 dark:border-amber-900 dark:bg-amber-950/20">
+            <div className="min-w-0 flex-1 basis-44">
+              <p className="text-sm font-medium">{i18n._("Scheduled for deletion")}</p>
+              <p className="mt-1 text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">{group.deletionRoot && group.deletionRoot !== group.fullPath
+                ? i18n._("An owner can restore {group} to keep this group.", { group: group.deletionRoot })
+                : group.can.restore ? i18n._("You can restore this group before deletion takes effect.")
+                  : i18n._("A group owner can restore it before deletion takes effect.")}</p>
+            </div>
+            {group.can.restore ? (
+              <button ref={restoreRef} type="button" className={SECONDARY} disabled={!connected || deleting || restoring} onClick={() => void restoreGroup()}>
+                {restoring ? i18n._("Restoring…") : i18n._("Restore group")}
+              </button>
+            ) : null}
+            {deleteError ? <p role="alert" className="w-full break-words text-xs text-red-600 dark:text-red-400">{deleteError}</p> : null}
+          </div>
+        ) : null}
+        {opened === "delete" && hostGroup !== null && instance ? (
+          <div
+            ref={deleteConfirmRef}
+            role="group"
+            aria-labelledby={deleteTitle}
+            aria-describedby={deleteDescription}
+            aria-busy={deleting}
+            data-testid={`space-group-delete-confirm-${group.fullPath}`}
+            className={`flex max-w-xl min-w-0 flex-col gap-3 ${ATTACHED_PANEL}`}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.stopPropagation();
+                close();
+              }
+            }}
+          >
+            <h4 id={deleteTitle} className="break-words text-sm font-medium">
+              {i18n._({ id: "Delete {group} at {space}?", values: { group: review?.group.name ?? name, space: instanceName(instance) }, comment: "group deletion confirmation naming exactly the group and its Space" })}
+            </h4>
+            <div id={deleteDescription} className="text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">
+              {checking ? <p role="status">{i18n._("Checking group contents…")}</p> : review ? review.contents.length > 0 ? (
+                <>
+                  <p>{i18n._("This group isn't empty. Remove these items before deleting it:")}</p>
+                  <ul className="mt-2 list-inside list-disc space-y-1 break-words">
+                    {review.contents.map((item, index) => <li key={`${item.kind}:${index}`}>{item.kind === "records"
+                      ? i18n._("Group sessions")
+                      : item.kind === "project" ? i18n._("Project: {name}", { name: item.name })
+                        : item.kind === "group" ? i18n._("Group: {name}", { name: item.name })
+                          : i18n._("Server: {name}", { name: item.name })}</li>)}
+                  </ul>
+                </>
+              ) : <p>{i18n._("This group is empty. Deleting it removes the group for all members.")}</p> : null}
+            </div>
+            {deleteReason ? <p className="text-xs text-neutral-600 dark:text-neutral-400">{deleteReason}</p> : null}
+            {deleteError ? <p role="alert" className="break-words text-xs text-red-600 dark:text-red-400">{deleteError}</p> : null}
+            <div className="flex flex-wrap justify-end gap-2">
+              {(deleteError || (review && review.contents.length > 0)) ? <button type="button" className={`${SECONDARY} mr-auto`} disabled={!connected || checking || deleting} onClick={() => { setDeleteError(undefined); setReviewAgain((value) => value + 1); }}>{i18n._("Check again")}</button> : null}
+              <button ref={deleteCancelRef} autoFocus type="button" className={SECONDARY} disabled={deleting} onClick={close}>
+                {i18n._("Cancel")}
+              </button>
+              <button
+                type="button"
+                className="min-h-7 rounded bg-red-600 px-3 py-1 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-red-700 dark:hover:bg-red-600"
+                disabled={!connected || deleting || checking || deleteReason !== undefined || !confirmed}
+                onClick={() => void removeGroup()}
+              >
+                {deleting ? i18n._({ id: "Deleting…", comment: "busy group deletion action" }) : i18n._({ id: "Delete group", comment: "confirm deletion of the named empty group" })}
+              </button>
+            </div>
+          </div>
+        ) : null}
+        {opened === "members" && hostGroup !== null && instance ? (
+          <MembersPanel
+            embedded
+            focusRequest={membersFocus}
+            onPendingChange={setMembersPending}
+            instance={instance}
+            target={{ instance: instance.origin, group: hostGroup }}
+            id={`group:${group.fullPath}`}
+            name={name}
+            canManage={group.can.manageMembers && !group.pendingDeletion}
+            connected={connected}
+            refreshes={refreshes}
+            onClose={close}
+            onNote={onNote}
+          />
+        ) : null}
       </div>
-      {opened === "members" && hostGroup !== null && instance ? (
-        <MembersPanel
-          instance={instance}
-          target={{ instance: instance.origin, group: hostGroup }}
-          id={`group:${group.fullPath}`}
-          name={group.fullPath}
-          canManage={group.can.manageMembers}
-          connected={connected}
-          refreshes={refreshes}
-          onClose={close}
-          onNote={onNote}
-        />
-      ) : null}
       {lines}
       {rows.length > 0 || placed.length > 0 ? (
         <ul className="flex min-w-0 flex-col gap-0.5">
@@ -711,6 +924,11 @@ function RepositoryRow({
   const dismissed = dismissedByKey[repo.key];
   const isSelected = selected === repo.key;
   const [opened, setOpened] = useState<Opened>();
+  const [pickerPending, setPickerPending] = useState(false);
+  const [membersPending, setMembersPending] = useState(false);
+  const [pickerFocus, setPickerFocus] = useState(0);
+  const [membersFocus, setMembersFocus] = useState(0);
+  const pickerId = useId();
   // What runs from this row: a sync — asked plainly, as a combining, or
   // as a retry — an open, or a read of the Spaces.
   const [busy, setBusy] = useState<"sync" | "combine" | "retry" | "join" | "refresh">();
@@ -741,6 +959,13 @@ function RepositoryRow({
   const governing = governingOf(groups, repo);
   const groupRepository = isGroupRepository(group, repo);
   const name = rowName(group, repo);
+  const openTask = (task: "pick" | "members") => {
+    if (pickerPending || membersPending) return;
+    if (opened === task) {
+      if (task === "pick") setPickerFocus((value) => value + 1);
+      else setMembersFocus((value) => value + 1);
+    } else setOpened(task);
+  };
   const close = (focus: "primary" | "more" | "act" = "more") => {
     setOpened(undefined);
     // Closing never strands focus (DR-010 §6): a control gone or busy
@@ -901,7 +1126,7 @@ function RepositoryRow({
     }
   };
 
-  const disabled = !connected;
+  const disabled = !connected || pickerPending || membersPending;
   const working = busy !== undefined || accepted !== undefined || running;
   const readOnly = repo.state === "read-only";
   const here = cloneHere(repo);
@@ -1079,9 +1304,10 @@ function RepositoryRow({
           data-testid={`space-row-pick-${repo.key}`}
           className={`${SECONDARY} shrink-0 whitespace-nowrap`}
           aria-expanded={opened === "pick"}
+          aria-controls={opened === "pick" ? pickerId : undefined}
           title={signedOut ? signInFirstLabel() : undefined}
           disabled={disabled || signedOut}
-          onClick={() => setOpened((was) => (was === "pick" ? undefined : "pick"))}
+          onClick={() => openTask("pick")}
         >
           {addToGroupLabel()}
         </button>
@@ -1194,7 +1420,7 @@ function RepositoryRow({
     more.push({
       label: i18n._({ id: "Members", comment: "list the people who read a project's records, or a group's members, at the Space" }),
       testId: `space-row-members-${repo.key}`,
-      onSelect: () => setOpened("members"),
+      onSelect: () => openTask("members"),
     });
   }
   // Your own sessions on this computer alone carry no control (space-1).
@@ -1209,7 +1435,7 @@ function RepositoryRow({
     more.push({
       label: addToGroupLabel(),
       testId: `space-row-pick-${repo.key}`,
-      onSelect: () => setOpened("pick"),
+      onSelect: () => openTask("pick"),
     });
   }
 
@@ -1272,7 +1498,10 @@ function RepositoryRow({
   const actExpanded = act?.kind === "resolve" ? opened === "resolve" : act?.kind === "combine" ? opened === "combine" : act?.kind === "continue" ? opened === "notice" : undefined;
 
   return (
-    <li data-testid={`space-row-${repo.key}`} data-state={repo.state} className="@container flex min-w-0 flex-col gap-1">
+    <li data-testid={`space-row-${repo.key}`} data-state={repo.state}
+      className={`@container flex min-w-0 flex-col gap-1 ${opened === "pick" || opened === "members"
+        ? ATTACHED_OWNER
+        : ""}`}>
       {/* The name owns the slack; below @xs the row's controls wrap
           beneath it, its primary control and overflow last (space-28,
           DR-041). */}
@@ -1407,10 +1636,14 @@ function RepositoryRow({
         </div>
       ) : null}
       {opened === "pick" ? (
-        <GroupPicker groups={groups} repo={repo} connected={connected} onClose={() => close(pickInMore ? "more" : "primary")} onNote={onNote} />
+        <GroupPicker id={pickerId} embedded focusRequest={pickerFocus} groups={groups} repo={repo} connected={connected}
+          onClose={() => close(pickInMore ? "more" : "primary")} onNote={onNote} onPendingChange={setPickerPending} />
       ) : null}
       {opened === "members" && showMembers && keyGoverning && keyLine?.instance ? (
         <MembersPanel
+          embedded
+          focusRequest={membersFocus}
+          onPendingChange={setMembersPending}
           instance={keyGoverning}
           target={{ repository: repo.key, instance: keyLine.instance }}
           id={`${repo.key}@${keyLine.instance}`}
@@ -1565,279 +1798,237 @@ function FolderEditor({
 
 /** One Space a pick offers (space-58): the spex repositories it lists
  * for the same code, each with the entry it stands in, and where new
- * records may go — "Personal" first, then each group it lists, never
- * another account's login. */
+ * records may go — "Personal" first, then each active group it lists,
+ * never another account's login or a group pending deletion. */
 interface PickSection {
   instance: InstanceState;
   listed: { group: InstanceGroupState; repo: RepositoryState; placement: PlacementState | undefined }[];
   creatable: InstanceGroupState[];
 }
 
-/** Where a project in no group goes (space-58): in one picker, one
- * section per signed-in Space under its display name — the clone's
- * Space alone where its key lies under one — each holding "Join the
- * records already in", the spex repositories that Space lists for the
- * same code, each with its group, read as the list reads it, and its
- * members' count, and "Share into", "Personal" first and then every
- * group it lists; the new records take the folder's name, no field
- * naming them. Picking a listed one that may have other members says
- * the sharing confirm beneath it first, and joins with `noticed` only on
- * Share (space-57). A choice names the Space of its section
- * (space-29). */
-export function GroupPicker({
-  groups,
-  repo,
-  connected,
-  onClose,
-  onNote,
-}: {
+/** Adding a project is a choice, review and explicit submission (DR-192).
+ * Reading and selecting never mutate the project. The current Space's
+ * destinations are resolved again on every render, so a removed group
+ * or signed-out Space cannot leave an actionable stale selection. */
+export function GroupPicker({ id, embedded = false, focusRequest, groups, repo, connected, onClose, onNote, onPendingChange }: {
+  /** The row opener's controlled form; the palette owns its own dialog. */
+  id?: string;
+  embedded?: boolean;
+  focusRequest?: number;
   groups: GroupsState;
   repo: RepositoryState;
   connected: boolean;
   onClose(): void;
   onNote: Note;
+  onPendingChange?(pending: boolean): void;
 }) {
   const store = usePlaceStore();
   const spacePick = store((state) => state.spacePick);
-  const sections: PickSection[] = pickInstances(groups, repo).map((instance) => {
-    // "Personal" is always offered: a Space lists your namespace only
-    // once it holds something there.
-    const mine = namespaceOf(instance) ?? {
-      id: null,
-      login: instance.account.login,
-      mine: true,
-      fullPath: instance.account.login,
-      name: instance.account.login,
+  const sections: PickSection[] = pickInstances(groups, repo).map((instance) => ({
+    instance,
+    listed: instance.groups.filter((group) => !group.pendingDeletion).flatMap((group) => group.repositories
+      .filter((other) => other.key !== repo.key && other.id !== null && other.state !== "local-only" && sameCode(other, repo))
+      .map((other) => ({ group, repo: other, placement: placementAt(other, instance.origin) ?? rowPlacement(other) }))),
+    creatable: [namespaceOf(instance) ?? {
+      id: null, login: instance.account.login, mine: true,
+      fullPath: instance.account.login, name: instance.account.login,
       can: { createSubgroup: false, manageMembers: false, rename: false, delete: false },
-      placed: [],
-      repositories: [],
-    };
-    return {
-      instance,
-      // The listed ones are the Space's: a host id, a state it read.
-      listed: instance.groups.flatMap((group) =>
-        group.repositories
-          .filter((other) => other.key !== repo.key && other.id !== null && other.state !== "local-only" && sameCode(other, repo))
-          // Its members and visibility are its placement's there
-          // (space-30).
-          .map((other) => ({ group, repo: other, placement: placementAt(other, instance.origin) ?? rowPlacement(other) })),
-      ),
-      // GroupsState names no right to create a repository, so every
-      // group is offered and a refusal waits on the row (space-64).
-      creatable: [mine, ...instance.groups.filter((group) => group.id !== null && group.login === null).sort((a, b) => a.fullPath.localeCompare(b.fullPath))],
-    };
-  });
-  // The new records take the folder's name (space-58).
-  const name = repo.folder ? lastSegment(repo.folder) : repo.name.replace(/-spex$/, "");
-  const [busy, setBusy] = useState<string>();
+      placed: [], repositories: [],
+    }, ...instance.groups.filter((group) => group.id !== null && group.login === null && !group.pendingDeletion)
+      .sort((a, b) => a.fullPath.localeCompare(b.fullPath))],
+  }));
+  const [origin, setOrigin] = useState(() => sections[0]?.instance.origin);
+  const [selection, setSelection] = useState<{ origin: string; kind: "create" | "join"; key: string; identity: string }>();
+  const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string>();
-  // The listed spex repository whose sharing confirm stands (space-57).
-  const [notice, setNotice] = useState<string>();
-  // Each section's headings are named by ids no other picker shares.
-  const ids = useId();
+  const submitting = useRef(false);
+  const refocus = useRef(false);
   const pickerRef = useRef<HTMLDivElement>(null);
-  const firstRef = useRef<HTMLButtonElement>(null);
-  // Where focus goes once a refused pick re-enables the picker: its
-  // controls are disabled while the pick is asked (DR-010 §6).
-  const refocus = useRef<() => void>(undefined);
+  const submitRef = useRef<HTMLButtonElement>(null);
+  const ids = useId();
+  const section = sections.find((entry) => entry.instance.origin === origin);
+  const selected = selection?.origin === section?.instance.origin ? selection : undefined;
+  const existing = selected?.kind === "join" ? section?.listed.find((entry) => entry.repo.key === selected.key && entry.repo.id === selected.identity) : undefined;
+  const target = selected?.kind === "create" ? section?.creatable.find((entry) => groupTestKey(entry) === selected.key && entryKey(entry) === selected.identity) : existing?.group;
+  const disabled = !connected || busy;
+  const project = projectName(repo.name);
+  const title = i18n._({ id: "Add {name} to a group", values: { name: project }, comment: "visible heading of the local project's destination form" });
+
   useEffect(() => {
-    firstRef.current?.focus();
-  }, []);
+    const panel = pickerRef.current;
+    (panel?.querySelector<HTMLElement>("input:checked") ?? panel?.querySelector<HTMLElement>("select, input, button"))?.focus();
+  }, [focusRequest]);
   useLayoutEffect(() => {
-    if (busy !== undefined || !refocus.current) return;
-    const focus = refocus.current;
-    refocus.current = undefined;
-    focus();
+    if (busy) pickerRef.current?.focus();
+    if (!busy && refocus.current) {
+      refocus.current = false;
+      submitRef.current?.focus();
+    }
   }, [busy]);
-
-  const optionOf = (key: string) =>
-    pickerRef.current?.querySelector<HTMLButtonElement>(`[data-testid="space-pick-repo-${key}"], [data-testid="space-pick-group-${key}"]`);
-
-  /** Cancel starts nothing; focus returns to the option (DR-010 §6). */
-  const closeNotice = (key: string) => {
-    setNotice(undefined);
-    setTimeout(() => optionOf(key)?.focus(), 0);
-  };
-
-  const pick = async (id: string, choice: SpaceGroupChoice, noticed = false, focusKey = id) => {
-    setBusy(id);
+  // A removed Space never silently changes where the pending choice goes.
+  useEffect(() => {
+    if (sections.some((entry) => entry.instance.origin === origin)) return;
+    setOrigin(sections[0]?.instance.origin);
+    setSelection(undefined);
     setRefusal(undefined);
+  }, [groups, origin]);
+  // A destination that disappears or becomes pending deletion needs a
+  // fresh choice if it returns, even when its identity is unchanged.
+  useEffect(() => {
+    if (!busy && selection && !target) setSelection(undefined);
+  }, [busy, selection, target]);
+
+  const select = (kind: "create" | "join", key: string, identity: string) => {
+    if (!section || submitting.current) return;
+    setSelection({ origin: section.instance.origin, kind, key, identity });
+    setRefusal(undefined);
+  };
+  const submit = async () => {
+    if (disabled || submitting.current || !section || !selected || !target) return;
+    submitting.current = true;
+    onPendingChange?.(true);
+    setBusy(true);
+    setRefusal(undefined);
+    const space = instanceName(section.instance);
+    const choice: SpaceGroupChoice = existing
+      ? { kind: "join", instance: section.instance.origin, hostId: existing.repo.id! }
+      : { kind: "create", instance: section.instance.origin, groupId: target.mine ? null : target.id,
+          name: repo.folder ? lastSegment(repo.folder) : project };
+    // The visible review answers the existing project's sharing notice.
+    // A newly created destination still gets its fresh first-sync check:
+    // its visibility and recipients are not known before creation.
+    const noticed = existing && !existing.placement?.noticed && (existing.placement?.members == null || existing.placement.members > 1);
     try {
       await (noticed ? spacePick(repo.key, choice, true) : spacePick(repo.key, choice));
+      onNote(existing
+        ? i18n._({ id: "Connecting {name} at {space}", values: { name: project, space }, comment: "acknowledges an accepted connection; the project row reports completion" })
+        : i18n._({ id: "Adding {name} to {group} at {space}", values: { name: project, group: entryName(target), space }, comment: "acknowledges an accepted request; the project row reports completion or a wait" }));
       onClose();
     } catch (cause) {
       const message = (cause as Error).message;
       setRefusal(message);
       onNote(message);
-      // A refused pick hands focus back to its option, its confirm
-      // closed (space-58).
-      setNotice(undefined);
-      refocus.current = () => optionOf(focusKey)?.focus();
+      refocus.current = true;
     } finally {
-      setBusy(undefined);
+      submitting.current = false;
+      onPendingChange?.(false);
+      setBusy(false);
     }
   };
-
-  /** Join a listed spex repository at its Space (space-58): one whose
-   * only member is the account joins at once; one with others, or whose
-   * count the Space's last read lacks, says the sharing confirm first
-   * unless this computer's reader has answered it for that placement
-   * (space-57). */
-  const join = (instance: InstanceState, other: RepositoryState) => {
-    const listed = placementAt(other, instance.origin) ?? rowPlacement(other);
-    const members = listed?.members ?? null;
-    if (!listed?.noticed && (members === null || members > 1)) {
-      setRefusal(undefined);
-      setNotice(other.key);
-      return;
-    }
-    void pick(other.key, { kind: "join", instance: instance.origin, hostId: other.id! });
-  };
-
-  /** Create `<name>-spex` in an entry at its Space (space-58): your
-   * namespace named by none, a group by its host id. */
-  const create = (instance: InstanceState, group: InstanceGroupState) => {
-    setNotice(undefined);
-    void pick(
-      `${instance.origin} ${groupTestKey(group)}`,
-      { kind: "create", instance: instance.origin, groupId: group.mine ? null : group.id, name },
-      false,
-      groupTestKey(group),
-    );
-  };
-
-  const option =
-    "flex w-full min-w-0 items-center gap-2 rounded border border-neutral-200 px-2 py-1 text-left text-sm hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-800 dark:hover:bg-neutral-800";
-  const disabled = !connected || busy !== undefined;
-  let first = true;
-  const takeFirst = () => {
-    if (!first) return undefined;
-    first = false;
-    return firstRef;
-  };
+  const rowClass = (checked: boolean) => "flex min-w-0 cursor-pointer items-start gap-2 px-2 py-2 transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-inset has-[:focus-visible]:ring-brand-500 " +
+    (checked ? "bg-brand-50 dark:bg-brand-950/50" : "hover:bg-neutral-100 dark:hover:bg-neutral-800") +
+    (disabled ? " pointer-events-none opacity-60" : "");
 
   return (
-    <div
-      ref={pickerRef}
-      role="group"
-      aria-label={i18n._({
-        id: "Add {name} to a group",
-        values: { name: projectName(repo.name) },
-        comment: "the name of the group picker \"Add to a group…\" opens; {name} is the project's name",
-      })}
-      data-testid={`space-picker-${repo.key}`}
-      className="ml-6 flex min-w-0 flex-col gap-2 rounded border border-neutral-300 p-2 dark:border-neutral-700"
+    <div id={id} ref={pickerRef} tabIndex={-1} role="group" aria-labelledby={ids + "-title"} aria-busy={busy}
+      data-testid={"space-picker-" + repo.key}
+      className={`flex min-w-0 max-w-xl flex-col gap-3 ${embedded
+        ? ATTACHED_PANEL
+        : "p-3"}`}
       onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
         if (event.key === "Escape") {
+          event.preventDefault();
           event.stopPropagation();
-          onClose();
+          if (!submitting.current) onClose();
         }
-      }}
-    >
-      {sections.map(({ instance, listed, creatable }, index) => {
-        const heading = `${ids}-${index}`;
-        return (
-          <div
-            key={instance.origin}
-            role="group"
-            aria-labelledby={heading}
-            data-testid={`space-pick-instance-${instance.origin}`}
-            className="flex min-w-0 flex-col gap-2"
-          >
-            <h3
-              id={heading}
-              className="min-w-0 truncate text-xs font-semibold text-neutral-700 dark:text-neutral-300"
-              title={instanceName(instance)}
-            >
-              {instanceName(instance)}
-            </h3>
-            {listed.length > 0 ? (
-              <section aria-labelledby={`${heading}-listed`} className="flex min-w-0 flex-col gap-1">
-                <h4 id={`${heading}-listed`} className="text-xs font-medium text-neutral-500">
-                  {i18n._({
-                    id: "Join the records already in",
-                    comment: "the picker's heading, inside one Space's section, over the projects that Space already holds for the folder's code, each with its group",
-                  })}
-                </h4>
-                <ul className="flex min-w-0 flex-col gap-1">
-                  {listed.map(({ group, repo: other, placement }) => (
-                    <li key={other.key} className="min-w-0">
-                      <button
-                        ref={takeFirst()}
-                        type="button"
-                        data-testid={`space-pick-repo-${other.key}`}
-                        className={option}
-                        disabled={disabled}
-                        onClick={() => join(instance, other)}
-                      >
-                        <span className="min-w-0 flex-1 truncate font-medium" title={projectName(other.name)}>
-                          {rowName(group, other)}
-                        </span>
-                        <span
-                          data-testid={`space-pick-listed-group-${other.key}`}
-                          className="flex min-w-0 max-w-[40%] items-baseline gap-1 text-xs text-neutral-500"
-                        >
-                          <GroupOptionLabel entry={group} />
-                        </span>
-                        {placement && placement.members !== null ? (
-                          <span className="shrink-0 text-xs text-neutral-500">
-                            {i18n._("{count, plural, one {# member} other {# members}}", { count: placement.members })}
-                          </span>
-                        ) : null}
-                      </button>
-                      {notice === other.key ? (
-                        <div data-testid={`space-pick-notice-${repo.key}`} className="mt-1 pl-2">
-                          <SharingConfirm
-                            group={entryName(group)}
-                            name={instanceName(instance)}
-                            visibility={placement?.visibility ?? null}
-                            disabled={disabled}
-                            onShare={() => void pick(other.key, { kind: "join", instance: instance.origin, hostId: other.id! }, true)}
-                            onCancel={() => closeNotice(other.key)}
-                          />
-                        </div>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ) : null}
-            <section aria-labelledby={`${heading}-create`} className="flex min-w-0 flex-col gap-1">
-              <h4 id={`${heading}-create`} className="text-xs font-medium text-neutral-500">
-                {i18n._({
-                  id: "Share into",
-                  comment: "the picker's heading, inside one Space's section, over Personal and the groups the project's records may be shared into",
+      }}>
+      <h3 id={ids + "-title"} className="min-w-0 break-words text-sm font-medium">{title}</h3>
+      <div data-testid={"space-pick-context-" + repo.key} className="flex min-w-0 items-baseline gap-2">
+        <label id={ids + "-space-label"} htmlFor={sections.length > 1 ? ids + "-space" : undefined} className="shrink-0 text-xs font-medium text-neutral-600 dark:text-neutral-400">
+          {i18n._({ id: "Space", comment: "label identifying the Space that holds the destination groups" })}<span aria-hidden>:</span>
+        </label>
+        {sections.length > 1 ? (
+          <select id={ids + "-space"} value={origin ?? ""} disabled={disabled}
+            className="min-h-8 min-w-0 flex-1 rounded border border-neutral-300 bg-white px-2 py-1 text-sm focus:border-brand-500 dark:border-neutral-600 dark:bg-neutral-900"
+            onChange={(event) => { setOrigin(event.target.value); setSelection(undefined); setRefusal(undefined); }}>
+            {sections.map(({ instance }) => <option key={instance.origin} value={instance.origin}>{instanceName(instance)}</option>)}
+          </select>
+        ) : <p aria-labelledby={ids + "-space-label"} className="min-w-0 break-words text-sm">{section ? instanceName(section.instance) : i18n._("Sign in to a Space first")}</p>}
+      </div>
+      {section ? (
+        <div role="group" aria-label={instanceName(section.instance)} data-testid={"space-pick-instance-" + section.instance.origin} className="min-w-0">
+          <fieldset disabled={disabled} className="min-w-0">
+            <legend className="mb-1 text-xs font-medium text-neutral-600 dark:text-neutral-400">{i18n._({ id: "Choose group", comment: "legend of the single-choice destination list" })}</legend>
+            <ul className="min-w-0 divide-y divide-neutral-200 overflow-hidden rounded border border-neutral-300 dark:divide-neutral-700 dark:border-neutral-700">
+              {section.creatable.map((group, index) => {
+                const key = groupTestKey(group);
+                const id = ids + "-group-" + index;
+                const checked = selected?.kind === "create" && selected.key === key && selected.identity === entryKey(group);
+                return <li key={key} className="min-w-0">
+                  <label className={rowClass(checked)}>
+                    <input type="radio" name={ids + "-destination"} value={"create:" + key} checked={checked}
+                      aria-labelledby={id + "-name"} aria-describedby={group.mine ? id + "-description" : undefined}
+                      data-testid={"space-pick-group-" + key} className="mt-0.5 h-4 w-4 shrink-0 accent-brand-600 dark:accent-brand-400"
+                      onChange={() => select("create", key, entryKey(group))} />
+                    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <span id={id + "-name"} className="flex min-w-0 flex-wrap items-baseline gap-x-1 text-sm"><GroupOptionLabel entry={group} /></span>
+                      {group.mine ? <span id={id + "-description"} className="text-xs text-neutral-500">{i18n._({ id: "Your personal group", comment: "Personal's explanation in the group picker, without promising private visibility" })}</span> : null}
+                    </span>
+                  </label>
+                </li>;
+              })}
+            </ul>
+            {section.listed.length > 0 ? <div className="mt-3 min-w-0">
+              <h4 className="mb-1 text-xs font-medium text-neutral-600 dark:text-neutral-400">{i18n._({ id: "Connect to an existing project", comment: "matching projects already in the selected Space; connecting combines their records" })}</h4>
+              <ul className="min-w-0 divide-y divide-neutral-200 overflow-hidden rounded border border-neutral-300 dark:divide-neutral-700 dark:border-neutral-700">
+                {section.listed.map(({ group, repo: other, placement }, index) => {
+                  const id = ids + "-existing-" + index;
+                  const checked = selected?.kind === "join" && selected.key === other.key && selected.identity === other.id;
+                  return <li key={other.key} className="min-w-0">
+                    <label className={rowClass(checked)}>
+                      <input type="radio" name={ids + "-destination"} value={"join:" + other.key} checked={checked}
+                        aria-labelledby={id + "-name " + id + "-group"} aria-describedby={id + "-description"}
+                        data-testid={"space-pick-repo-" + other.key} className="mt-0.5 h-4 w-4 shrink-0 accent-brand-600 dark:accent-brand-400"
+                        onChange={() => select("join", other.key, other.id!)} />
+                      <span className="flex min-w-0 flex-1 flex-col gap-1">
+                        <span id={id + "-name"} className="break-words text-sm">{rowName(group, other)}</span>
+                        <span id={id + "-group"} data-testid={"space-pick-listed-group-" + other.key} className="flex min-w-0 flex-wrap items-baseline gap-x-1 text-xs text-neutral-500"><GroupOptionLabel entry={group} /></span>
+                        <span id={id + "-description"} className="text-xs text-neutral-500">{placement?.members != null ? i18n._("{count, plural, one {# member} other {# members}}", { count: placement.members }) : null}</span>
+                      </span>
+                    </label>
+                  </li>;
                 })}
-              </h4>
-              <ul className="flex min-w-0 flex-col gap-1">
-                {creatable.map((group) => (
-                  <li key={groupTestKey(group)} className="min-w-0">
-                    <button
-                      ref={takeFirst()}
-                      type="button"
-                      data-testid={`space-pick-group-${groupTestKey(group)}`}
-                      className={option}
-                      disabled={disabled}
-                      onClick={() => create(instance, group)}
-                    >
-                      <GroupOptionLabel entry={group} />
-                    </button>
-                  </li>
-                ))}
               </ul>
-            </section>
+            </div> : null}
+          </fieldset>
+        </div>
+      ) : null}
+      {section && target ? (
+        <div data-testid={"space-pick-review-" + repo.key} className="flex min-w-0 flex-col gap-2 border-l-2 border-neutral-200 pl-3 text-xs dark:border-neutral-700">
+          <div className="min-w-0">
+            <h4 className="mb-1 font-medium text-neutral-600 dark:text-neutral-400">{i18n._({ id: "Destination", comment: "review of the project group's destination before confirmation" })}</h4>
+            {existing ? <p className="mb-1 break-words text-sm">{rowName(target, existing.repo)}</p> : null}
+            <p className="flex min-w-0 flex-wrap items-baseline gap-x-1 text-sm"><GroupOptionLabel entry={target} /><span aria-hidden>·</span><span className="min-w-0 break-words">{instanceName(section.instance)}</span></p>
           </div>
-        );
-      })}
-      <div className="flex flex-wrap items-center gap-2">
-        <button type="button" data-testid={`space-pick-cancel-${repo.key}`} className={SECONDARY} onClick={onClose}>
+          {existing ? <p className="font-medium">{i18n._({ id: "Combines this project's local and existing records", comment: "consequence of connecting a matching project" })}</p> : null}
+          <div>
+            <p className="mb-1 font-medium">{i18n._({ id: "Project records", comment: "what adding a project to a group syncs" })}</p>
+            <ul className="list-disc space-y-1 pl-4 text-neutral-600 dark:text-neutral-300">
+              <li>{i18n._({ id: "All sessions: conversations, agent activity, and attachments", comment: "sharing scope: all conversation messages, agent actions and results, and attachments" })}</li>
+              <li>{i18n._({ id: "Existing and future project records", comment: "the sharing confirm: the records made before and after the share both go" })}</li>
+              <li>{i18n._({ id: "Removing access won’t erase copies members already saved", comment: "sharing consequence: revoking access does not erase copies members already saved" })}</li>
+            </ul>
+          </div>
+          <p className="text-neutral-600 dark:text-neutral-300">{target.login !== null
+            ? i18n._({ id: "Access follows this project's members and visibility", comment: "Personal does not imply that a project is private" })
+            : i18n._({ id: "Group members can access these records", comment: "effect of adding the project's records to a group" })}</p>
+          {existing?.placement?.visibility === "public" ? <p className="font-medium text-amber-800 dark:text-amber-300">{i18n._({ id: "Public: anyone can read", comment: "the sharing confirm, on records at a public place of the Space" })}</p> : null}
+        </div>
+      ) : null}
+      {refusal ? <p role="alert" className="break-words text-sm text-red-600 dark:text-red-400">{refusal}</p> : null}
+      <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 border-t border-neutral-200 pt-2 dark:border-neutral-700">
+        <button type="button" data-testid={"space-pick-cancel-" + repo.key} className={SECONDARY} disabled={busy} onClick={onClose}>
           {i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}
         </button>
-        {refusal ? (
-          <span role="alert" className="min-w-0 text-xs text-red-600 dark:text-red-400">
-            {refusal}
-          </span>
-        ) : null}
+        <button ref={submitRef} type="button" data-testid={"space-pick-submit-" + repo.key} className={PRIMARY} disabled={disabled || !target}
+          onClick={() => void submit()}>
+          {busy ? existing
+            ? i18n._({ id: "Connecting…", comment: "connecting this local project's records to an existing group project" })
+            : i18n._({ id: "Adding…", comment: "adding this project to the selected group" })
+            : existing
+              ? i18n._({ id: "Connect project", comment: "confirm connecting this local project to the selected existing project" })
+              : i18n._({ id: "Add to group", comment: "confirm adding the local project's records to the selected group" })}
+        </button>
       </div>
     </div>
   );

@@ -3,7 +3,7 @@
 
 // Groups and members on the Space surface (DR-114, DR-127, DR-172): a
 // group created on a Space's heading (space-68), and a group's or a
-// project's members panel (space-62) with Share (space-69) and Remove
+// project's members panel (space-62) with Invite members (space-69) and Remove
 // (space-72), each at the Space that lists the group or governs the
 // records (DR-128); a project's panel names the other Spaces its records
 // are kept at. An act stands exactly where the Space's last read says
@@ -22,11 +22,12 @@ import { i18n } from "../i18n.js";
 import { instanceName } from "../lib/instances.js";
 import { nameList } from "../lib/placements.js";
 import { InlineConfirm } from "./InlineConfirm.js";
-import { SECONDARY, type Note } from "./SpaceSurface.js";
+import { ATTACHED_PANEL } from "./SpacePanel.js";
+import { PRIMARY, SECONDARY, type Note } from "./SpaceSurface.js";
 
 const EDITOR = "flex min-w-0 flex-col gap-1 rounded border border-neutral-300 p-2 dark:border-neutral-700";
 const FIELD =
-  "min-w-0 flex-1 rounded border border-neutral-300 bg-white px-1.5 py-0.5 text-xs dark:border-neutral-700 dark:bg-neutral-900";
+  "min-w-0 flex-1 rounded border border-neutral-300 bg-white px-1.5 py-0.5 text-sm dark:border-neutral-700 dark:bg-neutral-900";
 const REFUSAL = "min-w-0 text-xs text-red-600 dark:text-red-400";
 
 /** Focus a control once the editor or confirm that stood in its place
@@ -60,6 +61,8 @@ export function GroupNameEditor({
   connected,
   onClose,
   onNote,
+  focusRequest,
+  onPendingChange,
 }: {
   testId: string;
   /** The Space, by its origin, the group is made at (space-68). */
@@ -70,6 +73,8 @@ export function GroupNameEditor({
   /** Close the editor; the caller returns focus to its control. */
   onClose(): void;
   onNote: Note;
+  focusRequest?: number;
+  onPendingChange?(pending: boolean): void;
 }) {
   const store = usePlaceStore();
   const spaceGroupCreate = store((state) => state.spaceGroupCreate);
@@ -83,7 +88,7 @@ export function GroupNameEditor({
   const inFlight = useRef(false);
   useEffect(() => {
     fieldRef.current?.focus();
-  }, []);
+  }, [focusRequest]);
 
   const chosen = name.trim();
   const chosenPath = path.trim();
@@ -91,6 +96,7 @@ export function GroupNameEditor({
     if (!chosen || !chosenPath || inFlight.current) return;
     inFlight.current = true;
     setBusy(true);
+    onPendingChange?.(true);
     setRefusal(undefined);
     try {
       await spaceGroupCreate(instance, chosen, chosenPath, parent);
@@ -103,6 +109,7 @@ export function GroupNameEditor({
     } finally {
       inFlight.current = false;
       setBusy(false);
+      onPendingChange?.(false);
     }
   };
 
@@ -160,11 +167,15 @@ export function GroupNameEditor({
           className={FIELD}
         />
       </label>
-      <div className="flex flex-wrap items-center gap-2">
+      {refusal ? <p role="alert" className={REFUSAL}>{refusal}</p> : null}
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <button type="button" data-testid={`${testId}-cancel`} className={SECONDARY} disabled={busy} onClick={onClose}>
+          {i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}
+        </button>
         <button
           type="button"
           data-testid={`${testId}-create`}
-          className={SECONDARY}
+          className={PRIMARY}
           disabled={!connected || busy || !chosen || !chosenPath}
           onClick={() => void submit()}
         >
@@ -172,14 +183,6 @@ export function GroupNameEditor({
             ? i18n._({ id: "Creating…", comment: "the Create control, while the Space creates the group" })
             : i18n._({ id: "Create", comment: "create the group named in the field at the Space" })}
         </button>
-        <button type="button" data-testid={`${testId}-cancel`} className={SECONDARY} disabled={busy} onClick={onClose}>
-          {i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}
-        </button>
-        {refusal ? (
-          <span role="alert" className={REFUSAL}>
-            {refusal}
-          </span>
-        ) : null}
       </div>
     </div>
   );
@@ -190,7 +193,7 @@ export function GroupNameEditor({
  * share and removal answers, held nowhere else. Each member reads its
  * login, the Space's own role name and, where the membership comes
  * through a group, "via <group>"; where the Space's last read says the
- * person may manage the members, Share stands in the panel and Remove on
+ * person may manage the members, Invite members stands in the panel and Remove on
  * each member held directly. A project's panel says which other Spaces
  * its records are also kept at, linking none. */
 export function MembersPanel({
@@ -204,6 +207,9 @@ export function MembersPanel({
   refreshes,
   onClose,
   onNote,
+  embedded = false,
+  focusRequest,
+  onPendingChange,
 }: {
   /** The Space that lists the group or governs the records: its roles
    * and its display name (space-69). */
@@ -212,7 +218,7 @@ export function MembersPanel({
   /** What the panel's test ids carry: a placement's
    * `<key>@<instance origin>`, or `group:<full path>`. */
   id: string;
-  /** The group's full path or the repository's name. */
+  /** The group's or project's display name. */
   name: string;
   /** What the Space's last read says: the person may manage these
    * members. */
@@ -224,6 +230,9 @@ export function MembersPanel({
   refreshes: number;
   onClose(): void;
   onNote: Note;
+  embedded?: boolean;
+  focusRequest?: number;
+  onPendingChange?(pending: boolean): void;
 }) {
   const store = usePlaceStore();
   const spaceMembers = store((state) => state.spaceMembers);
@@ -231,12 +240,21 @@ export function MembersPanel({
   const [error, setError] = useState<string>();
   const [outcome, setOutcome] = useState<string>();
   const [sharing, setSharing] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [inviteFocus, setInviteFocus] = useState(0);
+  const panelRef = useRef<HTMLElement>(null);
   const shareRef = useRef<HTMLButtonElement>(null);
+  const editorId = useId();
   // A read a share or a removal overtook is discarded: the reply after
   // the act is the newer list.
   const reads = useRef(0);
   const targetKey =
     "group" in target ? `group:${target.instance} ${target.group}` : `repository:${target.repository}@${target.instance ?? ""}`;
+
+  useEffect(() => { panelRef.current?.focus(); }, [focusRequest]);
+  useEffect(() => { onPendingChange?.(adding || removing); }, [adding, removing, onPendingChange]);
+  useEffect(() => () => { onPendingChange?.(false); }, [onPendingChange]);
 
   useEffect(() => {
     const read = (reads.current += 1);
@@ -269,16 +287,54 @@ export function MembersPanel({
 
   return (
     <section
+      ref={panelRef}
+      tabIndex={-1}
       data-testid={`space-members-${id}`}
       aria-label={i18n._("Members of {name}", { name })}
-      className="@container ml-6 flex min-w-0 flex-col gap-1 rounded border border-neutral-200 p-2 text-sm dark:border-neutral-800"
+      className={`@container flex min-w-0 max-w-xl flex-col gap-3 text-sm ${embedded ? ATTACHED_PANEL : "p-3"}`}
       onKeyDown={(event) => {
         if (event.key === "Escape") {
           event.stopPropagation();
-          onClose();
+          if (!adding && !removing) onClose();
         }
       }}
     >
+      <header className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 basis-36">
+          <h4 className="break-words font-medium">{i18n._("Members of {name}", { name })}</h4>
+          {result ? (
+            <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">
+              {i18n._("{count, plural, one {# member} other {# members}}", { count: result.members.length })}
+            </p>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {canManage ? (
+            <button
+              ref={shareRef}
+              type="button"
+              data-testid={`space-share-${id}`}
+              aria-expanded={sharing}
+              aria-controls={sharing ? editorId : undefined}
+              className={`${SECONDARY} shrink-0`}
+              disabled={!connected || adding || removing}
+              onClick={() => {
+                if (sharing) {
+                  setInviteFocus((value) => value + 1);
+                  return;
+                }
+                setOutcome(undefined);
+                setSharing(true);
+              }}
+            >
+              {i18n._({ id: "Invite members…", comment: "open the form to add people to this group or project's records" })}
+            </button>
+          ) : null}
+          <button type="button" data-testid={`space-members-close-${id}`} className={SECONDARY} disabled={adding || removing} onClick={onClose}>
+            {i18n._({ id: "Close", comment: "close the members panel and return to its opener" })}
+          </button>
+        </div>
+      </header>
       {alsoPlacedAt.length > 0 ? (
         // Every Space's members see that the records are kept elsewhere
         // too (DR-128); the Spaces are named, never linked.
@@ -290,6 +346,35 @@ export function MembersPanel({
           })}
         </p>
       ) : null}
+      {sharing && canManage ? (
+        <InviteEditor
+          instance={instance}
+          target={target}
+          id={id}
+          name={name}
+          editorId={editorId}
+          focusRequest={inviteFocus}
+          connected={connected && !removing}
+          onBusy={setAdding}
+          onMembers={(reply) => {
+            reads.current += 1;
+            setResult(reply);
+            setError(undefined);
+          }}
+          onFinished={(line, complete) => {
+            setOutcome(line);
+            onNote(line);
+            if (complete) {
+              setSharing(false);
+              focusLater(shareRef);
+            }
+          }}
+          onClose={() => {
+            setSharing(false);
+            focusLater(shareRef);
+          }}
+        />
+      ) : null}
       {error ? (
         <p role="alert" className={REFUSAL}>
           {error}
@@ -298,62 +383,31 @@ export function MembersPanel({
         <p className="text-xs text-neutral-500">{i18n._("Reading members…")}</p>
       ) : (
         <>
-          <ul className="flex min-w-0 flex-col gap-0.5">
+          {outcome ? (
+            <p data-testid={`space-members-outcome-${id}`} className="text-xs text-neutral-600 dark:text-neutral-400">
+              {outcome}
+            </p>
+          ) : null}
+          <ul className="flex min-w-0 flex-col divide-y divide-neutral-200 dark:divide-neutral-800">
             {result.members.map((member) => (
               <MemberRow
                 key={member.id}
                 member={member}
+                isYou={member.login === instance.account.login}
                 target={target}
                 place={name}
                 removable={canManage && member.direct}
-                connected={connected}
+                connected={connected && !adding && !removing}
+                onBusy={setRemoving}
                 onRemoved={(reply) => {
                   answered(reply, i18n._("@{login} removed", { login: member.login }));
                   // The row is gone; focus stays in the panel.
-                  focusLater(shareRef);
+                  setTimeout(() => (shareRef.current ?? panelRef.current)?.focus(), 0);
                 }}
                 onNote={onNote}
               />
             ))}
           </ul>
-          {outcome ? (
-            <p data-testid={`space-members-outcome-${id}`} className="text-xs text-neutral-500">
-              {outcome}
-            </p>
-          ) : null}
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            {canManage ? (
-              <button
-                ref={shareRef}
-                type="button"
-                data-testid={`space-share-${id}`}
-                aria-expanded={sharing}
-                className={`${SECONDARY} shrink-0 whitespace-nowrap`}
-                disabled={!connected}
-                onClick={() => setSharing((was) => !was)}
-              >
-                {i18n._({ id: "Share", comment: "add a person at the Space to a group or a project's records" })}
-              </button>
-            ) : null}
-          </div>
-          {sharing ? (
-            <ShareEditor
-              instance={instance}
-              target={target}
-              id={id}
-              connected={connected}
-              onShared={(reply, line) => {
-                answered(reply, line);
-                setSharing(false);
-                focusLater(shareRef);
-              }}
-              onClose={() => {
-                setSharing(false);
-                focusLater(shareRef);
-              }}
-              onNote={onNote}
-            />
-          ) : null}
         </>
       )}
     </section>
@@ -367,20 +421,24 @@ export function MembersPanel({
  * refusal standing on it with the member kept. */
 function MemberRow({
   member,
+  isYou,
   target,
   place,
   removable,
   connected,
+  onBusy,
   onRemoved,
   onNote,
 }: {
   member: HostMemberInfo;
+  isYou: boolean;
   target: SpaceMembersTarget;
-  /** The group's full path or the repository's name, as the confirm
+  /** The group's or project's display name, as the confirm
    * names what the member leaves. */
   place: string;
   removable: boolean;
   connected: boolean;
+  onBusy(busy: boolean): void;
   onRemoved(reply: SpaceMembersReply): void;
   onNote: Note;
 }) {
@@ -391,10 +449,14 @@ function MemberRow({
   const [refusal, setRefusal] = useState<string>();
   const removeRef = useRef<HTMLButtonElement>(null);
   const refusalId = useId();
+  const inFlight = useRef(false);
 
   const remove = async () => {
+    if (!connected || !removable || inFlight.current) return;
+    inFlight.current = true;
     setConfirming(false);
     setBusy(true);
+    onBusy(true);
     setRefusal(undefined);
     try {
       onRemoved(await spaceUnshare(target, member.login));
@@ -404,17 +466,20 @@ function MemberRow({
       onNote(message);
       focusLater(removeRef);
     } finally {
+      inFlight.current = false;
       setBusy(false);
+      onBusy(false);
     }
   };
 
   const inherited = !member.direct && member.via !== null;
   return (
-    <li data-testid={`space-member-${member.login}`} className="flex min-w-0 flex-col gap-0.5">
+    <li data-testid={`space-member-${member.login}`} className="flex min-w-0 flex-col gap-1 py-2">
       <div className="flex min-w-0 items-center gap-2">
         <span className="min-w-0 truncate font-medium" title={member.login}>
           {member.login}
         </span>
+        {isYou ? <span className="shrink-0 text-xs text-neutral-500 dark:text-neutral-400">{i18n._("You")}</span> : null}
         {inherited ? (
           <span
             data-testid={`space-member-via-${member.login}`}
@@ -452,6 +517,7 @@ function MemberRow({
             question={i18n._("Remove @{login} from {place}?", { login: member.login, place })}
             confirmLabel={i18n._({ id: "Remove", comment: "confirm: take the member out at the Space" })}
             cancelLabel={i18n._({ id: "Keep", comment: "cancel a removal: leave it as it is" })}
+            disabled={!connected || busy || !removable}
             onConfirm={() => void remove()}
             onCancel={() => {
               setConfirming(false);
@@ -469,134 +535,279 @@ function MemberRow({
   );
 }
 
-/** Share, asked in place (space-69): "Login at <Space>", a listbox of
- * the Space's own roles in its order — the least that may push chosen —
- * Add and Cancel, Escape cancelling. Add stays disabled while the login
- * is empty, reads "Adding…" while the Space is asked and takes no second
- * submission; a refusal stands in the editor with the login kept. */
-function ShareEditor({
+/** Familiar role summaries explain the choice without supplying the role
+ * list or authorizing anything. Unknown or inconsistent roles use only
+ * the capability the Space actually reports (DR-190). */
+function roleDescription(role: InstanceState["roles"][number], group: boolean): string {
+  if (!role.mayPush) {
+    if (role.name === "Guest") return i18n._("Limited access; cannot read or sync private shared records.");
+    if (role.name === "Reporter") return i18n._("View and download shared records; cannot send changes.");
+    return i18n._("Cannot sync changes to shared records.");
+  }
+  switch (role.name) {
+    case "Developer": return i18n._("View, download, and contribute shared records.");
+    case "Maintainer": return i18n._("Contribute shared records and manage projects and their members.");
+    case "Owner": return group
+      ? i18n._("Full control of this group, including its members and deletion.")
+      : i18n._("Full control of this project, including its members and deletion.");
+    default: return i18n._("Can sync changes to shared records.");
+  }
+}
+
+/** Username entries stay separate from account lookup: normalization only
+ * removes presentation and separators, never invents an identity. */
+function usernames(text: string): string[] {
+  return text.split(/[,\r\n]+/).map((value) => value.trim().replace(/^@/, "").trim()).filter(Boolean);
+}
+
+/** Several existing Space accounts, one role, independent outcomes
+ * (space-69, DR-191). Successful additions are never retried here. */
+function InviteEditor({
   instance,
   target,
   id,
+  name,
+  editorId,
+  focusRequest,
   connected,
-  onShared,
+  onBusy,
+  onMembers,
+  onFinished,
   onClose,
-  onNote,
 }: {
   instance: InstanceState;
   target: SpaceMembersTarget;
   id: string;
+  name: string;
+  editorId: string;
+  focusRequest?: number;
   connected: boolean;
-  onShared(reply: SpaceMembersReply, line: string): void;
+  onBusy(busy: boolean): void;
+  onMembers(reply: SpaceMembersReply): void;
+  onFinished(line: string, complete: boolean): void;
   onClose(): void;
-  onNote: Note;
 }) {
   const store = usePlaceStore();
   const spaceShare = store((state) => state.spaceShare);
   const roles = instance.roles;
-  const [login, setLogin] = useState("");
+  const [draft, setDraft] = useState("");
+  const [recipients, setRecipients] = useState<string[]>([]);
   const [role, setRole] = useState(() => (roles.find((entry) => entry.mayPush) ?? roles[0])?.id ?? "");
   const [busy, setBusy] = useState(false);
-  const [refusal, setRefusal] = useState<string>();
+  const [failures, setFailures] = useState<{ login: string; message: string }[]>([]);
+  const [progress, setProgress] = useState<{ current: number; total: number }>();
   const fieldRef = useRef<HTMLInputElement>(null);
   const inFlight = useRef(false);
+  const mounted = useRef(true);
+  const fieldId = useId();
+  const roleId = useId();
+  const selectedRole = roles.find((entry) => entry.id === role);
   useEffect(() => {
+    mounted.current = true;
     fieldRef.current?.focus();
-  }, []);
+    return () => {
+      mounted.current = false;
+      onBusy(false);
+    };
+  }, [onBusy]);
+  useEffect(() => { fieldRef.current?.focus(); }, [focusRequest]);
 
-  // A login is the Space's, typed as the reader knows it; a leading "@"
-  // is how the surface writes one, not part of it.
-  const chosen = login.trim().replace(/^@/, "");
+  const chosen = [...new Set([...recipients, ...usernames(draft)])];
+  const commit = (text: string) => {
+    if (inFlight.current) return;
+    setRecipients((previous) => [...new Set([...previous, ...usernames(text)])]);
+    setDraft("");
+  };
+  const remove = (login: string) => {
+    if (inFlight.current) return;
+    setRecipients((previous) => previous.filter((entry) => entry !== login));
+    setFailures((previous) => previous.filter((entry) => entry.login !== login));
+    fieldRef.current?.focus();
+  };
   const submit = async () => {
-    if (!chosen || !role || inFlight.current) return;
+    if (!connected || chosen.length === 0 || !selectedRole || inFlight.current) return;
     inFlight.current = true;
     setBusy(true);
-    setRefusal(undefined);
+    onBusy(true);
+    setRecipients(chosen);
+    setDraft("");
+    setFailures([]);
+    const failed: { login: string; message: string }[] = [];
+    let added = 0;
     try {
-      const reply = await spaceShare(target, chosen, role);
-      const roleName = roles.find((entry) => entry.id === role)?.name ?? role;
-      onShared(reply, i18n._("@{login} added as {role}", { login: chosen, role: roleName }));
-    } catch (cause) {
-      const message = (cause as Error).message;
-      setRefusal(message);
-      onNote(message);
-      fieldRef.current?.focus();
+      for (let index = 0; index < chosen.length; index += 1) {
+        if (!mounted.current) return;
+        if (store.getState().connection !== "open") {
+          const message = i18n._("Connection lost. Reconnect to add the remaining members.");
+          failed.push(...chosen.slice(index).map((login) => ({ login, message })));
+          break;
+        }
+        const login = chosen[index]!;
+        setProgress({ current: index + 1, total: chosen.length });
+        try {
+          const reply = await spaceShare(target, login, role);
+          added += 1;
+          if (!mounted.current) return;
+          onMembers(reply);
+          setRecipients((previous) => previous.filter((entry) => entry !== login));
+        } catch (cause) {
+          failed.push({ login, message: (cause as Error).message });
+        }
+      }
+      if (!mounted.current) return;
+      setFailures(failed);
+      setRecipients(failed.map((entry) => entry.login));
+      const line = failed.length > 0
+        ? added > 0
+          ? i18n._("{added, plural, one {# member added} other {# members added}}; {remaining} still to add.", { added, remaining: failed.length })
+          : chosen.length === 1 ? failed[0]!.message : i18n._("No members added. Review the usernames below.")
+        : chosen.length === 1
+          ? i18n._("@{login} added as {role}", { login: chosen[0], role: selectedRole.name })
+          : i18n._("{count, plural, one {# member added} other {# members added}} as {role}", { count: added, role: selectedRole.name });
+      onFinished(line, failed.length === 0);
+      if (failed.length > 0) fieldRef.current?.focus();
     } finally {
       inFlight.current = false;
-      setBusy(false);
+      if (mounted.current) {
+        setBusy(false);
+        setProgress(undefined);
+        onBusy(false);
+      }
     }
   };
 
   return (
-    <div
+    <form
+      id={editorId}
       data-testid={`space-share-${id}-editor`}
-      className={EDITOR}
-      onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
+      aria-labelledby={`${editorId}-title`}
+      aria-busy={busy}
+      className="flex w-full min-w-0 max-w-xl flex-col gap-3 border-l-2 border-neutral-200 pl-3 dark:border-neutral-700"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void submit();
+      }}
+      onKeyDown={(event) => {
         if (event.key !== "Escape") return;
         event.stopPropagation();
         if (!busy) onClose();
       }}
     >
-      <label className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
-        <span className="shrink-0 text-neutral-500">
-          {i18n._({
-            id: "Login at {space}",
-            comment: "the field for a person's login at the Space, named by the Space's display name",
-            values: { space: instanceName(instance) },
-          })}
-        </span>
-        <input
-          ref={fieldRef}
-          data-testid={`space-share-${id}-login`}
-          value={login}
-          onChange={(event) => setLogin(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") void submit();
-          }}
-          readOnly={busy}
-          spellCheck={false}
-          autoCapitalize="off"
-          autoComplete="off"
-          className={FIELD}
-        />
-      </label>
-      <select
-        data-testid={`space-share-${id}-role`}
-        aria-label={i18n._({ id: "Role", comment: "the Space's role a person is added at" })}
-        // A listbox: every role the Space grants stands in view.
-        size={Math.max(roles.length, 2)}
-        value={role}
-        onChange={(event) => setRole(event.target.value)}
-        disabled={busy}
-        className="max-w-full self-start rounded border border-neutral-300 bg-white px-1 py-0.5 text-xs dark:border-neutral-700 dark:bg-neutral-900"
-      >
-        {roles.map((entry) => (
-          <option key={entry.id} value={entry.id}>
-            {entry.name}
-          </option>
-        ))}
-      </select>
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          data-testid={`space-share-${id}-add`}
-          className={SECONDARY}
-          disabled={!connected || busy || !chosen || !role}
-          onClick={() => void submit()}
-        >
-          {busy
-            ? i18n._({ id: "Adding…", comment: "the Add control, while the Space adds the person" })
-            : i18n._({ id: "Add", comment: "add the person at the chosen role at the Space" })}
-        </button>
-        <button type="button" data-testid={`space-share-${id}-cancel`} className={SECONDARY} disabled={busy} onClick={onClose}>
-          {i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}
-        </button>
-        {refusal ? (
-          <span role="alert" className={REFUSAL}>
-            {refusal}
-          </span>
-        ) : null}
+      <div className="min-w-0">
+        <h5 id={`${editorId}-title`} className="break-words text-sm font-medium">
+          {i18n._("Invite to {name}", { name })}
+        </h5>
+        <p className="mt-1 text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">
+          {"group" in target
+            ? i18n._("Membership applies to this group and the projects and groups inside it.")
+            : i18n._("Membership applies to this project's records at {space}.", { space: instanceName(instance) })}
+        </p>
       </div>
-    </div>
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <label htmlFor={fieldId} className="text-xs font-medium">{i18n._("Usernames")}</label>
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5 rounded border border-neutral-300 bg-white p-2 focus-within:ring-2 focus-within:ring-brand-500 dark:border-neutral-700 dark:bg-neutral-900">
+          {recipients.map((login) => (
+            <span key={login} data-testid="space-invite-recipient" className={`inline-flex min-w-0 max-w-full items-center gap-1 rounded border px-2 py-0.5 text-sm ${failures.some((entry) => entry.login === login) ? "border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950" : "border-neutral-200 bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-800"}`}>
+              <span className="min-w-0 truncate" title={login}>{login}</span>
+              <button
+                type="button"
+                aria-label={i18n._("Remove @{login} from invitation", { login })}
+                className="flex size-6 shrink-0 items-center justify-center rounded text-neutral-500 hover:bg-neutral-200 disabled:opacity-50 dark:text-neutral-400 dark:hover:bg-neutral-700"
+                disabled={busy}
+                onClick={() => remove(login)}
+              >
+                <svg aria-hidden viewBox="0 0 16 16" className="size-3" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="m4 4 8 8M12 4l-8 8" /></svg>
+              </button>
+            </span>
+          ))}
+          <input
+            id={fieldId}
+            ref={fieldRef}
+            data-testid={`space-share-${id}-login`}
+            aria-describedby={`${fieldId}-hint${failures.length > 0 ? ` ${editorId}-error` : ""}`}
+            placeholder={recipients.length ? i18n._("Add another username") : i18n._("e.g. alex, sam")}
+            value={draft}
+            onChange={(event) => {
+              const value = event.target.value;
+              if (/[,\r\n]/.test(value)) {
+                const parts = value.split(/[,\r\n]+/);
+                const tail = parts.pop() ?? "";
+                commit(parts.join(","));
+                setDraft(tail);
+              } else setDraft(value);
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+              event.preventDefault();
+              if (!busy) commit(draft);
+            }}
+            onPaste={(event) => {
+              const text = event.clipboardData.getData("text");
+              if (!/[,\r\n]/.test(text) || busy) return;
+              event.preventDefault();
+              const input = event.currentTarget;
+              commit(draft.slice(0, input.selectionStart ?? draft.length) + text + draft.slice(input.selectionEnd ?? draft.length));
+            }}
+            readOnly={busy}
+            spellCheck={false}
+            autoCapitalize="off"
+            autoComplete="off"
+            className="min-w-0 flex-1 basis-36 bg-transparent px-1 py-1 text-sm outline-none"
+          />
+        </div>
+        <p id={`${fieldId}-hint`} className="text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">
+          {i18n._("Use Enter or commas between usernames.")}{" "}
+          {i18n._("They need an account at {space}.", { space: instanceName(instance) })}
+        </p>
+      </div>
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <label htmlFor={roleId} className="text-xs font-medium">{i18n._({ id: "Role", comment: "the access granted to every selected member" })}</label>
+        <select
+          id={roleId}
+          data-testid={`space-share-${id}-role`}
+          aria-describedby={`${roleId}-hint`}
+          value={role}
+          onChange={(event) => setRole(event.target.value)}
+          disabled={busy || roles.length === 0}
+          className={`${FIELD} w-full px-2 py-1`}
+        >
+          {!selectedRole ? <option value="">{i18n._("Choose a role")}</option> : null}
+          {roles.map((entry) => (
+            <option key={entry.id} value={entry.id}>{entry.name}</option>
+          ))}
+        </select>
+        <div id={`${roleId}-hint`} className="text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">
+          <p>{selectedRole ? roleDescription(selectedRole, "group" in target) : roles.length > 0 ? i18n._("Choose a role") : i18n._("No role available. Refresh to check your access.")}</p>
+          {chosen.length > 1 ? <p>{i18n._("This role applies to everyone you add.")}</p> : null}
+        </div>
+      </div>
+      {failures.length > 0 ? (
+        <div id={`${editorId}-error`} role="alert" className={`${REFUSAL} break-words`}>
+          {failures.length === 1 ? failures[0]!.message : (
+            <ul className="flex flex-col gap-1">
+              {failures.map(({ login, message }) => <li key={login}>{i18n._("@{login}: {message}", { login, message })}</li>)}
+            </ul>
+          )}
+        </div>
+      ) : null}
+      <div className="flex min-w-0 flex-col gap-2 border-t border-neutral-200 pt-3 dark:border-neutral-700">
+        <p className="text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">{i18n._("Access starts immediately when you add them.")}</p>
+        {progress ? <p role="status" className="text-xs text-neutral-600 dark:text-neutral-400">{i18n._("Adding {current} of {total}…", progress)}</p> : null}
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <button type="button" data-testid={`space-share-${id}-cancel`} className={SECONDARY} disabled={busy} onClick={onClose}>
+            {i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}
+          </button>
+          <button
+            type="submit"
+            data-testid={`space-share-${id}-add`}
+            className={PRIMARY}
+            disabled={!connected || busy || chosen.length === 0 || !selectedRole}
+          >
+            {busy ? i18n._({ id: "Adding…", comment: "the members are being added at the Space" }) : chosen.length > 1
+              ? i18n._("Add members") : i18n._({ id: "Add member", comment: "immediately give this account the selected access" })}
+          </button>
+        </div>
+      </div>
+    </form>
   );
 }

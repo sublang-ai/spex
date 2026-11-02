@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Workshop agents in one pass (DR-189), over the protocol against real
+// Workshop agents in one pass (DR-200), over the protocol against real
 // config files: readiness always naming Claude and Codex with
 // Playbook's credential forms, faults by kind, Claude's base-URL state
 // and the core's platform and shell (core-service-9, settings-14); the
@@ -297,7 +297,7 @@ test("core-service-23: readiness with the config missing, and again invalid, hol
   }
 });
 
-test("core-service-148: config.get, the config.state broadcast and each write's reply carry one revision for one state, a new one after any writer's change", { timeout: 120_000 }, async () => {
+test("core-service-150: config.get, the config.state broadcast and each write's reply carry one revision for one state, a new one after any writer's change", { timeout: 120_000 }, async () => {
   const harness = await start(WORKSHOP_CONFIG);
   const { client } = harness;
   try {
@@ -328,7 +328,7 @@ test("core-service-148: config.get, the config.state broadcast and each write's 
   }
 });
 
-test("core-service-149: a batch refused as a conflict, a violation or a request error leaves the file's bytes as they were", { timeout: 180_000 }, async () => {
+test("core-service-151: a batch refused as a conflict, a violation or a request error leaves the file's bytes as they were", { timeout: 180_000 }, async () => {
   const harness = await start(WORKSHOP_CONFIG);
   const { client, configPath } = harness;
   try {
@@ -423,7 +423,7 @@ test("core-service-149: a batch refused as a conflict, a violation or a request 
   }
 });
 
-test("core-service-150: one batch sets the Captain, a player and a binding to Provider default, keeping comments and hand-written fields", { timeout: 120_000 }, async () => {
+test("core-service-152: one batch sets the Captain, a player and a binding to Provider default, keeping comments and hand-written fields", { timeout: 120_000 }, async () => {
   const harness = await start(WORKSHOP_CONFIG);
   const { client, configPath } = harness;
   try {

@@ -29,6 +29,7 @@ vi.mock("./state/store.js", async (importOriginal) => {
 });
 
 import { Root } from "./Root.js";
+import { groupsState } from "./fixtures/groups-state.js";
 import {
   LANGUAGE_KEY,
   SURFACE_KEY,
@@ -285,6 +286,7 @@ function serveLedger(ledger: unknown): void {
       if (type === "readiness.get") return [];
       if (type === "project.list") return PROJECTS;
       if (type === "session.list") return servedSessions;
+      if (type === "space.get") return groupsState();
       if (type === "history.get") {
         return { records: servedHistory[fields.sessionId as string] ?? [] };
       }
@@ -686,7 +688,7 @@ describe("settings-37: the Saved mark outlives the re-rendering", () => {
 describe("localization-11: a change of choice re-reads the core's prose", () => {
   /** Stand where a Space the page already holds would (space-2): the
    * store re-reads one only when it holds one. */
-  const SPACE = { diagnostics: [], units: [] } as never;
+  const SPACE = groupsState();
 
   /** Let the surfaces finish their own arrival reads and forget them:
    * what follows is the change's doing alone. */

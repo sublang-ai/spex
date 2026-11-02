@@ -12,108 +12,123 @@ const root = resolve(import.meta.dirname, "..");
 const workflow = parse(readFileSync(join(root, ".github/workflows/ci.yml"), "utf8"));
 const laneWorkflow = parse(readFileSync(join(root, ".github/workflows/hub-lane.yml"), "utf8"));
 
-/** The check names the merge rule requires (release-29): what the suites report on a pull request, and what the stand-in reports for documentation alone (release-34, DR-185). */
-const PULL_REQUEST_CHECKS = [
-  "changes",
-  "test (ubuntu-latest, 22)", "test (windows-latest, 22)",
-  "journeys (ubuntu-latest, 1)", "journeys (ubuntu-latest, 2)", "journeys (ubuntu-latest, 3)",
-  "desktop-browser (ubuntu-latest)",
-];
-/** The classifier's reach of a change, as the test job reads it (release-34, DR-185). */
 const AFFECTED = "needs.changes.outputs.affected";
-/** The suites run only where the classifier succeeded and found more than documentation (release-34). */
 const SUITE_CONDITION = "needs.changes.result == 'success' && needs.changes.outputs.docs-only != 'true'";
-/** The stand-in runs only where the classifier succeeded and found documentation alone (release-34, DR-169). */
-const STAND_IN_CONDITION = "needs.changes.result == 'success' && needs.changes.outputs.docs-only == 'true'";
+const FULL_APP_CONDITION = "needs.changes.result == 'success' && needs.changes.outputs.full == 'true' && needs.changes.outputs.channel == 'app'";
+const invokeVerdict = (needs) => spawnSync(process.execPath, [join(root, "scripts/ci-verdict.mjs")], {
+  encoding: "utf8", env: { ...process.env, CI_NEEDS: JSON.stringify(needs) },
+});
+const selected = ({ full = false, channel = "app", docsOnly = false, affected = "" } = {}) => ({
+  changes: { result: "success", outputs: { full: String(full), channel, "docs-only": String(docsOnly), ...(affected ? { affected } : {}), "affected-json": JSON.stringify(affected) } },
+  test: { result: docsOnly ? "skipped" : "success" },
+  journeys: { result: full && channel === "app" ? "success" : "skipped" },
+  "desktop-browser": { result: full && channel === "app" ? "success" : "skipped" },
+  "hub-lane": { result: full && channel === "app" ? "success" : "skipped" },
+});
 
-test("release-33: one run per pull-request head, cancelled by its next push and never for main (release-30)", () => {
+test("release-33: PRs cancel only their superseded run; CI has reusable/manual full validation and no nightly or main push (release-30, release-34)", () => {
   assert.equal(workflow.concurrency.group, "ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}");
   assert.equal(workflow.concurrency["cancel-in-progress"], "${{ github.event_name == 'pull_request' }}");
-  assert.ok(Array.isArray(workflow.on.schedule) && workflow.on.schedule.length === 1, "a nightly schedule runs the full matrix");
+  assert.deepEqual(Object.keys(workflow.on).sort(), ["pull_request", "workflow_call", "workflow_dispatch"]);
+  assert.deepEqual(workflow.on.pull_request, { branches: ["main"] });
+  assert.deepEqual(workflow.on.workflow_call.inputs, {
+    full: { type: "boolean", default: false }, channel: { type: "string", default: "app" },
+  });
+  assert.equal(workflow.on.workflow_dispatch.inputs.full.default, true);
+  assert.deepEqual(workflow.on.workflow_dispatch.inputs.channel.options, ["app", "cli"]);
+  assert.deepEqual(workflow.permissions, { contents: "read" });
 });
 
-test("release-33: a pull request runs the reduced matrix on one Node with the journeys in three shards, main and the nightly the whole; the required checks are that run's jobs (release-29, release-34, DR-185)", () => {
-  // The matrices narrow by event through expressions: a job-level `if`
-  // cannot read the matrix, so each matrix picks its own rows.
-  const byEvent = (expression) => {
-    const m = /^\$\{\{ github\.event_name == 'pull_request' && fromJSON\('(.*)'\) \|\| fromJSON\('(.*)'\) \}\}$/.exec(expression);
-    assert.ok(m, `a matrix picked by event: ${expression}`);
-    return { pullRequest: JSON.parse(m[1]), other: JSON.parse(m[2]) };
+test("release-33: the matrix runs affected Linux/Windows PR suites and retains every full platform row (release-34)", () => {
+  const matrix = (full, affected) => {
+    const run = spawnSync(process.execPath, [join(root, "scripts/ci-verdict.mjs"), "--matrix"], {
+      encoding: "utf8", env: { ...process.env, CI_FULL: String(full), CI_AFFECTED: affected },
+    });
+    assert.equal(run.status, 0, run.stderr);
+    return JSON.parse(run.stdout.trim().replace(/^matrix=/, ""));
   };
-  const test = workflow.jobs.test;
-  const lfs = test.steps.find((step) => step.run === "git lfs version");
-  assert.ok(lfs, "complete app tests require real Git LFS");
-  const reach = test.steps.find((step) => step.name === "Tests the change reaches");
-  assert.ok(reach, "the app tests run where the change reaches");
-  assert.equal(lfs.if, reach.if, "the prerequisite runs wherever complete app tests run");
-  assert.equal(lfs.if, "runner.os != 'Windows'");
-  // A pull request runs Node 22 alone: Linux and Windows, no macOS and no Node 24.
-  const exclude = byEvent(test.strategy.matrix.exclude);
-  assert.deepEqual(exclude.pullRequest, [{ os: "windows-latest", "node-version": 24 }, { os: "macos-latest", "node-version": 22 }, { os: "macos-latest", "node-version": 24 }, { os: "ubuntu-latest", "node-version": 24 }]);
-  assert.deepEqual(exclude.other, [{ os: "windows-latest", "node-version": 24 }]);
+  const row = (os, version) => ({ os, "node-version": version });
+  const linux = row("ubuntu-latest", 22);
+  const windows = row("windows-latest", 22);
+  for (const affected of ["", "apps/desktop", "apps/server", "e2e"]) {
+    assert.deepEqual(matrix(false, affected), { include: [linux] }, affected);
+  }
+  for (const affected of ["all", "packages/cli", "packages/core apps/desktop", "packages/ui", "packages/ui-extra packages/cli"]) {
+    assert.deepEqual(matrix(false, affected), { include: [linux, windows] }, affected);
+  }
+  assert.deepEqual(matrix(false, "packages/ui-extra"), { include: [linux] });
+  for (const affected of ["all", "packages/cli"]) assert.deepEqual(matrix(true, affected), { include: [
+    linux, row("ubuntu-latest", 24), row("macos-latest", 22), row("macos-latest", 24), windows,
+  ] });
+  assert.equal(workflow.jobs.test.strategy.matrix, "${{ fromJSON(needs.changes.outputs.matrix) }}");
+  assert.equal(workflow.jobs.changes.outputs.matrix, "${{ steps.matrix.outputs.matrix }}");
+  const step = workflow.jobs.changes.steps.find((step) => step.id === "matrix");
+  assert.equal(step.run, 'node scripts/ci-verdict.mjs --matrix >> "$GITHUB_OUTPUT"');
+  assert.deepEqual(step.env, { CI_FULL: "${{ steps.classify.outputs.full }}", CI_AFFECTED: "${{ steps.classify.outputs.affected }}" });
   for (const name of ["journeys", "desktop-browser"]) {
-    const os = byEvent(workflow.jobs[name].strategy.matrix.os);
-    assert.deepEqual(os.pullRequest, ["ubuntu-latest"], name);
-    assert.deepEqual(os.other, ["ubuntu-latest", "macos-latest"], name);
+    assert.equal(workflow.jobs[name].needs, "changes");
+    assert.equal(workflow.jobs[name].if, FULL_APP_CONDITION);
+    assert.deepEqual(workflow.jobs[name].strategy.matrix.os, ["ubuntu-latest", "macos-latest"]);
   }
-  // The journeys run as three shards on every event; the other suites are not sharded.
-  assert.deepEqual(Object.keys(workflow.jobs.journeys.strategy.matrix), ["os", "shard"], "the shard follows the os in the job's name");
   assert.deepEqual(workflow.jobs.journeys.strategy.matrix.shard, [1, 2, 3]);
-  assert.deepEqual(Object.keys(workflow.jobs["desktop-browser"].strategy.matrix), ["os"]);
-  // Every name the suites report on a pull request is a required check, and nothing else is.
-  const excluded = new Set(exclude.pullRequest.map((row) => `${row.os}:${row["node-version"]}`));
-  const onPullRequest = [];
-  for (const os of test.strategy.matrix.os) for (const node of test.strategy.matrix["node-version"]) {
-    if (excluded.has(`${os}:${node}`)) continue;
-    onPullRequest.push(`test (${os}, ${node})`);
-  }
-  for (const os of byEvent(workflow.jobs.journeys.strategy.matrix.os).pullRequest) for (const shard of workflow.jobs.journeys.strategy.matrix.shard) onPullRequest.push(`journeys (${os}, ${shard})`);
-  for (const os of byEvent(workflow.jobs["desktop-browser"].strategy.matrix.os).pullRequest) onPullRequest.push(`desktop-browser (${os})`);
-  onPullRequest.push("changes");
-  assert.deepEqual(PULL_REQUEST_CHECKS.slice().sort(), onPullRequest.sort());
+  assert.deepEqual(workflow.jobs["hub-lane"], {
+    needs: "changes", if: FULL_APP_CONDITION, uses: "./.github/workflows/hub-lane.yml", permissions: { contents: "read" },
+  });
 });
 
-test("release-33: the classifier names the reach of a pull request's change; documentation alone keeps the spec gates and skips the suites behind it (release-34, DR-185)", () => {
+test("release-33: classification chooses the exact full channel and keeps shared documentation gates; app provenance precedes installs (release-34, release-41)", () => {
   const changes = workflow.jobs.changes;
   assert.equal(changes["runs-on"], "ubuntu-latest");
-  assert.deepEqual(changes.outputs, { "docs-only": "${{ steps.classify.outputs.docs-only }}", affected: "${{ steps.classify.outputs.affected }}" });
+  for (const output of ["docs-only", "affected", "full", "channel"]) {
+    assert.equal(changes.outputs[output], `\${{ steps.classify.outputs.${output} }}`);
+  }
+  assert.equal(changes.outputs["affected-json"], "${{ toJSON(steps.classify.outputs.affected) }}", "an empty selection survives job-output serialization");
   const classifyAt = changes.steps.findIndex((step) => step.id === "classify");
-  assert.ok(classifyAt >= 0, "a classify step");
   const classify = changes.steps[classifyAt];
-  const nodeAt = changes.steps.findIndex((step) => typeof step.uses === "string" && step.uses.startsWith("actions/setup-node@"));
-  assert.ok(nodeAt >= 0 && nodeAt < classifyAt, "Node is set up before the classifier runs");
-  assert.equal(changes.steps[nodeAt].if, undefined, "on every event");
+  const nodeAt = changes.steps.findIndex((step) => step.uses?.startsWith("actions/setup-node@"));
+  assert.ok(nodeAt >= 0 && nodeAt < classifyAt);
   assert.equal(changes.steps[nodeAt].with["node-version"], 22);
-  assert.equal(classify.shell, "bash", "a failing classifier fails its pipe");
-  assert.match(classify.run, /github\.event_name \}\}" = "pull_request"/, "a pull request's change is classified");
-  assert.match(classify.run, /node scripts\/affected-tests\.mjs --base "origin\/\$\{\{ github\.base_ref \}\}" --github-output \| tee -a "\$GITHUB_OUTPUT"/, "the pull request's own changes against its base");
-  // A push to main and the nightly reach everything and never count as documentation alone.
-  for (const event of ["push", "schedule"]) {
+  assert.equal(classify.shell, "bash");
+  assert.deepEqual(classify.env, { FULL: "${{ inputs.full || false }}", CHANNEL: "${{ inputs.channel || 'app' }}", BASE: "${{ github.base_ref || 'main' }}" });
+  assert.match(classify.run, /node scripts\/affected-tests\.mjs --base "origin\/\$BASE" --github-output \| tee -a "\$GITHUB_OUTPUT"/);
+  for (const channel of ["app", "cli", "unknown"]) {
     const dir = mkdtempSync(join(tmpdir(), "spex-classify-"));
     const output = join(dir, "output");
     writeFileSync(output, "");
-    const run = spawnSync("bash", ["-e", "-o", "pipefail", "-c", classify.run.replaceAll("${{ github.event_name }}", event).replaceAll("${{ github.base_ref }}", "main")], {
-      cwd: root, encoding: "utf8", env: { ...process.env, GITHUB_OUTPUT: output },
+    const run = spawnSync("bash", ["-e", "-o", "pipefail", "-c", classify.run], {
+      cwd: root, encoding: "utf8", env: { ...process.env, FULL: "true", CHANNEL: channel, BASE: "main", GITHUB_OUTPUT: output },
     });
-    assert.equal(run.status, 0, `${event}: ${run.stderr}`);
-    assert.equal(readFileSync(output, "utf8"), "docs-only=false\naffected=all\n", event);
+    if (channel === "unknown") assert.notEqual(run.status, 0);
+    else {
+      assert.equal(run.status, 0, run.stderr);
+      assert.equal(readFileSync(output, "utf8"), `full=true\nchannel=${channel}\ndocs-only=false\naffected=${channel === "app" ? "all" : "packages/cli"}\n`);
+    }
   }
+  const guardAt = changes.steps.findIndex((step) => step.run === "node scripts/dependency-closure.mjs --registry-only");
+  assert.ok(guardAt > classifyAt);
+  assert.equal(changes.steps[guardAt].if, "steps.classify.outputs.full == 'true' && steps.classify.outputs.channel == 'app'");
+  assert.ok(changes.steps.slice(0, guardAt).every((step) => !/npm ci/.test(step.run ?? "")));
   const gates = changes.steps.find((step) => step.name === "Documentation alone keeps the spec gates");
-  assert.ok(gates && gates.if === "steps.classify.outputs.docs-only == 'true'", "the gates run for documentation alone");
-  for (const command of ["npm test -w packages/cli", "node packages/cli/dist/cli.js lint"]) assert.ok(gates.run.includes(command), command);
-  for (const name of ["test", "journeys", "desktop-browser"]) {
-    assert.equal(workflow.jobs[name].needs, "changes", `${name} waits for the classifier`);
-    assert.equal(workflow.jobs[name].if, SUITE_CONDITION, `${name} runs past the classifier alone`);
-    assert.equal(workflow.jobs[name].name, undefined, `${name} reports under its job id and matrix values`);
-  }
+  assert.equal(gates.if, "steps.classify.outputs.docs-only == 'true'");
+  assert.match(gates.run, /npm run build -w packages\/cli/);
+  assert.match(gates.run, /node scripts\/affected-tests\.mjs --base "origin\/\$BASE" --run/);
+  assert.equal(gates.env.BASE, "${{ github.base_ref || 'main' }}");
+  assert.equal(workflow.jobs.test.needs, "changes");
+  assert.equal(workflow.jobs.test.if, SUITE_CONDITION);
 });
 
-test("release-33: the test job runs the suites the change reaches, and each Windows suite where the change reaches its workspace (release-34, DR-185)", () => {
+test("release-33: fast gates precede selected suites; Windows retains its supported subset (release-34)", () => {
   const steps = workflow.jobs.test.steps;
-  const reach = steps.find((step) => step.name === "Tests the change reaches");
-  assert.equal(reach.run, `node scripts/affected-tests.mjs --run "\${{ ${AFFECTED} }}"`);
-  assert.equal(reach.if, "runner.os != 'Windows'");
-  assert.ok(!steps.some((step) => /^npm test\s*$/.test(step.run ?? "")), "no step runs every suite regardless of the reach");
+  const gateAt = steps.findIndex((step) => step.name === "Build, catalogs, types and specifications");
+  assert.ok(gateAt > steps.findIndex((step) => step.run === "npm ci"));
+  assert.equal(steps[gateAt].shell, "bash", "Windows stops after any failed gate command");
+  assert.equal(steps[gateAt].run.trim(), "npm run build\nnode packages/cli/dist/cli.js lint\nnpm run typecheck -w e2e");
+  const reachAt = steps.findIndex((step) => step.name === "Tests the change reaches");
+  assert.ok(reachAt > gateAt);
+  assert.equal(steps[reachAt].run, `node scripts/affected-tests.mjs --run "\${{ ${AFFECTED} }}"`);
+  assert.equal(steps[reachAt].if, "runner.os != 'Windows'");
+  const lfs = steps.find((step) => step.run === "git lfs version");
+  assert.equal(lfs.if, `runner.os != 'Windows' && (${AFFECTED} == 'all' || contains(${AFFECTED}, 'packages/core'))`);
   const windows = [
     ["Windows scaffold tests", "packages/cli", "npm test -w packages/cli"],
     ["Windows UI tests", "packages/ui", "npm test -w packages/ui"],
@@ -121,11 +136,55 @@ test("release-33: the test job runs the suites the change reaches, and each Wind
   ];
   for (const [name, folder, run] of windows) {
     const step = steps.find((candidate) => candidate.name === name);
-    assert.ok(step, name);
     assert.equal(step.run, run, name);
     assert.equal(step.if, `runner.os == 'Windows' && (${AFFECTED} == 'all' || contains(${AFFECTED}, '${folder}'))`, name);
   }
-  assert.deepEqual(steps.filter((step) => /Windows/.test(step.if ?? "") && step.if !== "runner.os != 'Windows'").map((step) => step.name), windows.map(([name]) => name), "no other Windows step");
+  assert.ok(!steps.some((step) => /^npm test\s*$/.test(step.run ?? "")));
+});
+
+test("release-33: one checks gate always evaluates every job with no stand-in or conditionally bypassed verdict (release-44)", () => {
+  const checks = workflow.jobs.checks;
+  assert.equal(checks.if, "always()");
+  assert.deepEqual(checks.needs.slice().sort(), Object.keys(workflow.jobs).filter((name) => name !== "checks").sort());
+  assert.deepEqual(checks.needs.slice().sort(), ["changes", "desktop-browser", "hub-lane", "journeys", "test"]);
+  assert.equal(checks["continue-on-error"], undefined);
+  assert.equal(checks.name, undefined);
+  const verify = checks.steps.find((step) => step.run === "node scripts/ci-verdict.mjs");
+  assert.deepEqual(verify.env, { CI_NEEDS: "${{ toJSON(needs) }}" });
+  assert.equal(verify.if, undefined);
+  assert.equal(verify["continue-on-error"], undefined);
+  assert.ok(Object.values(workflow.jobs).every((job) => !job.name), "no job impersonates another check");
+});
+
+test("release-33: the real verdict accepts the selected PR, documentation and full channel plans and refuses failed, cancelled, skipped or missing work (release-44)", () => {
+  const plans = [selected(), selected({ affected: "packages/ui" }), selected({ docsOnly: true }),
+    selected({ full: true, affected: "all" }), selected({ full: true, channel: "cli", affected: "packages/cli" })];
+  for (const plan of plans) {
+    const pass = invokeVerdict(plan);
+    assert.equal(pass.status, 0, pass.stderr);
+    for (const name of Object.keys(plan)) {
+      for (const result of ["failure", "cancelled", "skipped", "success", undefined]) {
+        if (plan[name].result === result) continue;
+        const broken = structuredClone(plan);
+        if (result === undefined) delete broken[name];
+        else broken[name].result = result;
+        const run = invokeVerdict(broken);
+        assert.notEqual(run.status, 0, `${name} ${result}: ${run.stdout}`);
+      }
+    }
+  }
+  for (const outputs of [undefined, {}, { full: "maybe" },
+    { full: "true", channel: "app", "docs-only": "false", "affected-json": '"packages/ui"' },
+    { full: "true", channel: "cli", "docs-only": "false", "affected-json": '"all"' },
+    { full: "false", channel: "app", "docs-only": "true", "affected-json": '"packages/ui"' },
+    { full: "false", channel: "unknown", "docs-only": "false", "affected-json": '""' },
+    { full: "false", channel: "app", "docs-only": "false" },
+    { full: "false", channel: "app", "docs-only": "false", "affected-json": 'null' },
+    { full: "false", channel: "app", "docs-only": "false", "affected-json": '' }]) {
+    const plan = selected();
+    plan.changes.outputs = outputs;
+    assert.notEqual(invokeVerdict(plan).status, 0, JSON.stringify(outputs));
+  }
 });
 
 test("release-33: each journey shard runs its third of the journeys and keeps its own report (release-34, DR-185)", () => {
@@ -139,28 +198,8 @@ test("release-33: each journey shard runs its third of the journeys and keeps it
   assert.equal(report.with.name, "journey-report-${{ matrix.os }}-${{ matrix.shard }}", "one artifact name per shard");
 });
 
-test("release-33: documentation alone reports success under each of the suites' required names through a stand-in, and under no other condition (release-34)", () => {
-  const standIn = workflow.jobs["documentation-alone"];
-  assert.ok(standIn, "a stand-in job");
-  assert.equal(standIn.needs, "changes", "the stand-in waits for the classifier");
-  assert.equal(standIn.if, STAND_IN_CONDITION, "documentation alone and nothing else");
-  assert.equal(standIn.name, "${{ matrix.check }}", "each row reports under the name it carries");
-  assert.equal(standIn["runs-on"], "ubuntu-latest");
-  assert.deepEqual(standIn.strategy.matrix.check.slice().sort(), PULL_REQUEST_CHECKS.filter((name) => name !== "changes").sort(), "exactly the suites' required names");
-  assert.equal(standIn.steps.length, 1, "one step");
-  assert.equal(standIn.steps[0].uses, undefined, "no action runs");
-  assert.match(standIn.steps[0].run.trim(), /^echo "[^"\n]*"$/, "one echo line, nothing of the suites");
-});
-
-test("release-33: the hub lane runs nightly, on a push to main touching the hub, on a pull request changing its workflow and on request, as root, keeping its output (release-36)", () => {
-  // YAML reads the bare `on` key as the boolean true.
-  const on = laneWorkflow.on ?? laneWorkflow[true];
-  assert.ok(Array.isArray(on.schedule) && on.schedule.length === 1, "one nightly schedule");
-  assert.notEqual(on.schedule[0].cron, workflow.on.schedule[0].cron, "a minute of its own, apart from CI's nightly");
-  assert.deepEqual(on.push.branches, ["main"]);
-  assert.ok(on.push.paths.includes("apps/hub/**") && on.push.paths.includes("apps/server/**"), "a push to main touching the hub or the server shell");
-  assert.ok("workflow_dispatch" in on, "runs on request");
-  assert.deepEqual(on.pull_request, { paths: [".github/workflows/hub-lane.yml"] }, "a pull request runs it only where it changes the lane's own workflow");
+test("release-33: the hub lane is reusable or manual only, runs as root and keeps its output (release-36)", () => {
+  assert.deepEqual(Object.keys(laneWorkflow.on).sort(), ["workflow_call", "workflow_dispatch"]);
   assert.equal(laneWorkflow.concurrency["cancel-in-progress"], false);
   const jobs = Object.values(laneWorkflow.jobs);
   assert.equal(jobs.length, 1);
@@ -197,13 +236,14 @@ test("release-33: the Linux parity script names the runners' Node and Git (relea
   assert.equal(JSON.parse(readFileSync(join(root, "package.json"), "utf8")).scripts["test:linux"], "bash scripts/test-linux.sh");
 });
 
-test("release-33: the merge-on-green script merges only a head whose newest run's checks are all green (release-29)", () => {
+test("release-33: the merge-on-green script requires the newest CI checks gate and other checks to be green (release-29)", () => {
   const script = readFileSync(join(root, "scripts/merge-on-green.sh"), "utf8");
   assert.match(script, /group_by\(\.workflowName\)/, "each workflow's checks grouped");
   assert.match(script, /\(map\(\.run\) \| max\) as \$m \| map\(select\(\.run == \$m\)\)/, "only each workflow's newest run kept");
   assert.match(script, /--jq "\(\$newest\)"' as \$checks \| \{head: \.headRefOid, mergeable, done: \(\(\$checks\|length\) > 0 and \(\[\$checks\[\] \| \.status\]/, "done read over the newest runs");
-  assert.match(script, /green: \(\(\$checks\|length\) > 0 and \(\[\$checks\[\] \| \.conclusion\] \| all\(\. == "SUCCESS" or \. == "SKIPPED" or \. == "NEUTRAL"\)\)\)/, "every newest check green");
-  assert.match(script, /--jq "\(\$newest\)"' \| \.\[\] \| select\(\.conclusion != "SUCCESS"/, "the failing checks listed from the newest runs");
+  assert.match(script, /green: \(any\(\$checks\[\]; \.workflowName == "CI" and \.name == "checks" and \.status == "COMPLETED" and \.conclusion == "SUCCESS"\)/, "the newest CI run's checks gate must succeed");
+  assert.match(script, /and \(\[\$checks\[\] \| \.conclusion\] \| all\(\. == "SUCCESS" or \. == "SKIPPED" or \. == "NEUTRAL"\)\)/, "every other newest check green");
+  assert.match(script, /--jq "\(\$newest\)"' \| \.\[\] \| select\(\(\.conclusion != "SUCCESS"/, "the failing checks listed from the newest runs");
   assert.doesNotMatch(script, /\.statusCheckRollup\[\]/, "no judgment over the whole rollup");
   assert.match(script, /The head moved; run again for the new head/, "a moved head is refused");
   assert.match(script, /if \[ -n "\$now" \] && \[ "\$now" != "\$head" \]; then/, "only a read naming another head is a move");
@@ -239,14 +279,15 @@ test("release-33: the merge-on-green script judges each workflow's newest run, k
     check("journeys (ubuntu-latest)", 9973185691, "COMPLETED", "CANCELLED"),
     check("test (ubuntu-latest, 22)", 39980673777, "COMPLETED", "SUCCESS"),
     check("journeys (ubuntu-latest)", 39980673777, "COMPLETED", "SUCCESS"),
+    check("checks", 39980673777, "COMPLETED", "SUCCESS"),
   ];
   const context = { __typename: "StatusContext", context: "ci/external", state: "SUCCESS", targetUrl: "https://ci.example.test/build/7" };
   const label = (entry) => `${entry.name ?? entry.context} ${entry.conclusion ?? entry.state}`;
   const [kept] = jq(newest, { statusCheckRollup: [...checks, context] });
-  assert.deepEqual(kept.map(label).sort(), ["ci/external SUCCESS", "journeys (ubuntu-latest) SUCCESS", "test (ubuntu-latest, 22) SUCCESS"]);
+  assert.deepEqual(kept.map(label).sort(), ["checks SUCCESS", "ci/external SUCCESS", "journeys (ubuntu-latest) SUCCESS", "test (ubuntu-latest, 22) SUCCESS"]);
   const pr = { headRefOid: "b6bd25a7", mergeable: "MERGEABLE", statusCheckRollup: checks };
   assert.deepEqual(jq(`(${newest})${state}`, pr), [{ head: "b6bd25a7", mergeable: "MERGEABLE", done: true, green: true }]);
-  const red = { statusCheckRollup: [...checks.slice(0, 3), check("journeys (ubuntu-latest)", 39980673777, "COMPLETED", "FAILURE")] };
+  const red = { statusCheckRollup: [...checks.slice(0, 3), check("journeys (ubuntu-latest)", 39980673777, "COMPLETED", "FAILURE"), checks.at(-1)] };
   assert.deepEqual(jq(`(${newest})${failing}`, red), ["journeys (ubuntu-latest) FAILURE"]);
   // A commit status has no status or conclusion: its state decides both.
   assert.deepEqual(jq(`(${newest})${state}`, { ...pr, statusCheckRollup: [...checks, context] }), [{ head: "b6bd25a7", mergeable: "MERGEABLE", done: true, green: true }]);
@@ -256,6 +297,65 @@ test("release-33: the merge-on-green script judges each workflow's newest run, k
   const failed = { ...pr, statusCheckRollup: [...checks, { ...context, state: "FAILURE" }] };
   assert.deepEqual(jq(`(${newest})${state}`, failed), [{ head: "b6bd25a7", mergeable: "MERGEABLE", done: true, green: false }]);
   assert.deepEqual(jq(`(${newest})${failing}`, failed), ["ci/external FAILURE"]);
+  // An earlier successful gate, an unrelated workflow's namesake or an
+  // optional status context cannot supply a missing gate in the newest CI run.
+  for (const substitute of [
+    check("checks", 9973185691, "COMPLETED", "SUCCESS"),
+    { ...check("checks", 39980673778, "COMPLETED", "SUCCESS"), workflowName: "Other" },
+    { ...context, context: "checks" },
+  ]) {
+    assert.deepEqual(jq(`(${newest})${state}`, { ...pr, statusCheckRollup: [...checks.slice(0, -1), substitute] }), [{ head: "b6bd25a7", mergeable: "MERGEABLE", done: true, green: false }]);
+  }
+  for (const conclusion of ["SKIPPED", "NEUTRAL", "FAILURE", "CANCELLED"]) {
+    const blocked = { ...pr, statusCheckRollup: [...checks.slice(0, -1), check("checks", 39980673777, "COMPLETED", conclusion)] };
+    assert.deepEqual(jq(`(${newest})${state}`, blocked), [{ head: "b6bd25a7", mergeable: "MERGEABLE", done: true, green: false }], conclusion);
+    assert.deepEqual(jq(`(${newest})${failing}`, blocked), [`checks ${conclusion}`]);
+  }
+});
+
+test("release-33: merge-on-green refuses missing or skipped CI checks gates even when every other result passes (release-29)", (t) => {
+  if (spawnSync("jq", ["--version"]).error) {
+    t.skip("jq is not on PATH: the script's jq filters cannot run");
+    return;
+  }
+  const dir = mkdtempSync(join(tmpdir(), "spex-merge-required-gate-"));
+  const bin = join(dir, "bin");
+  mkdirSync(bin);
+  writeFileSync(join(bin, "gh"), [
+    "#!/usr/bin/env bash",
+    '[ "$2" = merge ] && { echo "$*" >> "$GH_LOG"; exit 0; }',
+    'while [ "$#" -gt 0 ]; do',
+    '  if [ "$1" = --jq ]; then shift; jq -r "$1" "$GH_PR"; exit; fi',
+    '  shift',
+    'done',
+    'exit 1',
+    "",
+  ].join("\n"), { mode: 0o755 });
+  const check = (name, conclusion, run = 2) => ({
+    __typename: "CheckRun", workflowName: "CI", name, status: "COMPLETED", conclusion,
+    detailsUrl: `https://github.com/sublang-ai/spex/actions/runs/${run}/job/21`,
+  });
+  for (const [name, gate] of [
+    ["missing", []],
+    ["earlier successful gate only", [check("checks", "SUCCESS", 1)]],
+    ["skipped", [check("checks", "SKIPPED")]],
+  ]) {
+    const fixture = join(dir, `${name}.json`);
+    const log = join(dir, `${name}.log`);
+    writeFileSync(log, "");
+    writeFileSync(fixture, JSON.stringify({
+      headRefOid: "2b11055a", mergeable: "MERGEABLE",
+      statusCheckRollup: [check("changes", "SUCCESS"), check("test", "SUCCESS"), ...gate],
+    }));
+    const run = spawnSync("bash", [join(root, "scripts/merge-on-green.sh"), "232"], {
+      encoding: "utf8", timeout: 10000,
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GH_PR: fixture, GH_LOG: log },
+    });
+    assert.equal(run.status, 1, `${name}: ${run.stderr}`);
+    assert.match(run.stderr, /without a successful CI checks gate/, name);
+    assert.equal(readFileSync(log, "utf8"), "", `${name}: no merge was attempted`);
+    assert.doesNotMatch(run.stdout, /Merged #232/, name);
+  }
 });
 
 test("release-33: the merge-on-green script polls again after a failed or empty read, refuses only another head and merges only the head it checked (release-29)", () => {

@@ -9,6 +9,8 @@ Accepted (2026-10-24) on the owner's question whether a check needing a Linux ho
 Extends [DR-086](086-tests-in-tiers.md) in its tiers: the hub's privileged lane joins the checks' platform as a tier of its own, run by CI on its own schedule and gating no merge.
 Extends [DR-145](145-merge-on-green.md) in what a pull request's run holds: the lane is no required check.
 
+Amended by [DR-199](199-release-gated-full-validation.md) in its triggers and gate: the lane runs through full app validation or on explicit request, gates app publication, and has no schedule or automatic push or pull-request trigger.
+
 ## Context
 
 - The hub's privileged lane proves on a real Linux host with systemd and sudo what no hermetic suite can: the install script, the helper run through sudo, the units, the seats' isolation, the stop at a lease's end and, since [DR-148](148-a-lapsed-seat-is-stopped-by-a-sweep.md), the sweep [[hub-10](../packages/hub.md#hub-10)].

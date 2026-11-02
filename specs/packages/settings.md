@@ -131,7 +131,7 @@ When the core receives `agent.options` for a known adapter, it shall return Clig
 - Adapter effort values, fast-mode support, subagent-model support and the adapter's subagent efforts — its effort values less its orchestration values, none where it serves no subagent model — accompany the discovery result ([DR-093](../decisions/093-a-players-subagent-model.md), [DR-095](../decisions/095-a-subagents-effort-and-the-agents-own-model.md)).
 - Available results carry Cligent's optional `unreportedEffortValues` separately from each model's effort list: adapter efforts the discovery interface cannot report.
 - Available results carry each model's optional `description` and the result's optional `defaultModel` — the model the runtime runs when none is configured — as Cligent reported them, absent where it reported none ([DR-091](../decisions/091-models-named-by-the-runtime.md)).
-- Where Cligent reports no `defaultModel` for `claude` while the environment a run inherits sets `ANTHROPIC_MODEL` — Claude Code's user settings included [[core-service-151](core-service.md#core-service-151)] — the result's `defaultModel` is that value, the model a run then selects ([DR-201](../decisions/201-agent-cards-read-alike.md)).
+- Where Cligent reports no `defaultModel` for `claude` while the environment a run inherits sets `ANTHROPIC_MODEL` — Claude Code's user settings included [[core-service-153](core-service.md#core-service-153)] — the result's `defaultModel` is that value, the model a run then selects ([DR-201](../decisions/201-agent-cards-read-alike.md)).
 - Unknown adapters are rejected by the protocol.
 - Discovery failure is returned as unavailable; config load and save do not depend on discovery.
 

@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-192: The Outline Gives Its Width to the Intent
+# DR-203: The Outline Gives Its Width to the Intent
 
 ## Status
 
