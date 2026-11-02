@@ -7,6 +7,7 @@
 
 Accepted (2026-11-02) for the publishing-name gap reported in issue #328.
 Amends [DR-168](168-independent-package-registry.md) in authoring guidance and publish preflight, [DR-174](174-what-a-package-provides-is-placed.md) in export guidance, and [DR-151](151-publish-local-spec-packages.md) in publication previews.
+Amended by [DR-202](202-registry-guidance-keeps-account-scope.md) in namespace-management links: the registry account is selected explicitly with `scope=registry`.
 
 ## Context
 

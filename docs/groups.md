@@ -1,20 +1,83 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# Set up a team or a workshop
+# Groups and collaboration
 
-Space shows Personal, the groups you belong to, and their projects.
+Use a Space to share project records with a team and work on team servers.
+In the IDE, **Space** shows **Personal**, the groups you belong to, and
+their projects. A Space sign-in is separate from the registry sign-in
+used to publish packages or install private ones.
 
-1. **Sign in** to your Space.
-2. **New group** makes a group for your workshop or team.
-3. Open the group's **More → Members**, then **Invite members**.
-4. Enter **Usernames**, using Enter or commas between them, or paste a comma- or line-separated list. Each person needs an account at that Space. Remove any unwanted username token, then choose one **Role** for everyone listed, using its description to understand the access it grants. **Add members** gives each person access as their addition succeeds, including access through the group to its projects and groups within it.
-5. **Create or add a project**, then open **Add to a group…** on its Space row. Check the labelled **Space**, select the team under **Choose group**, and review the records and access before **Add to group**. Selecting a row alone changes nothing. **Personal** means your personal group. If the same project already appears in that Space, **Connect to an existing project** lets you review and combine its records before **Connect project**. A first sync may still ask you to confirm sharing after checking access.
+## Share a project
+
+1. Open **Space** in the IDE and **Sign in** to the Space where your team
+   works. Choose it from the list, or use **Other Space…** to enter its
+   website address. Use **Add a Space…** if another Space is already listed.
+2. Use a group you belong to, or choose **New group…** to create one where
+   your Space permits it.
+3. Open the group's **More → Members**, then **Invite members…** if you
+   can manage its membership.
+4. Enter **Usernames**, using Enter or commas between them, or paste a
+   comma- or line-separated list. Each person needs an account at that
+   Space. Remove any unwanted username token, then choose one **Role**
+   for everyone listed, using its description to understand the access
+   it grants. **Add member**, or **Add members** for several usernames,
+   gives each person access as their addition succeeds, including access
+   through the group to its projects and groups within it.
+5. Create or add a project, then open **Add to a group…** on its Space
+   row. Check the labelled **Space**, select the team under **Choose
+   group**, and review the records and access before **Add to group**.
+   Selecting a row alone changes nothing. **Personal** means your
+   personal group. If the same project already appears in that Space,
+   **Connect to an existing project** lets you review and combine its
+   records before **Connect project**. A first sync may still ask you
+   to confirm sharing after checking access.
 
 If some additions fail, successful members appear in the list and only failed or unsent usernames remain in the form. Correct those entries and submit again; successful additions are not repeated. If the connection drops, reconnect before submitting the remaining usernames.
 
+Sharing includes existing and future conversations, agent activity and
+attachments. Removing someone's access cannot erase copies they already
+saved. The confirmation names public visibility when anyone can read the
+records.
+
+On another computer, sign in to the same Space and choose **Open here**
+on the project. This downloads its records and code separately; access
+to private code still needs that repository's permission and credentials.
+Reading a session elsewhere does not move its running agents there.
+
+## Work on a team server
+
+A project with a code remote can offer **Open on ⟨server⟩**. At Spex
+Space, Developer access or higher on the server's group or one of its
+subgroups lets you use it, without granting access to the parent group's
+records. Review the server's terms when you first open it. Each member
+gets a separate seat; the administrator can access its files and act with
+credentials used there. Private packages need a registry sign-in on that
+seat too.
+
+To run one, a group Owner registers the server through **Servers** on
+the Space's website, then installs and starts it on the machine. Follow
+[Run a server for your group](getting-started.md#run-a-server-for-your-group).
+
+## Manage membership and groups
+
 To remove a member, use **Remove** on their row and confirm. Membership inherited from another group is identified by **via <group>** and must be managed in that group.
 
-To delete an empty group, open **More → Delete group…**. The Space checks its current contents and names any projects, groups, shared records or servers that prevent deletion. Members do not make a group nonempty, and a newly created group is empty until content is added. When the check finds no contents, review the group and Space, then choose **Delete group** or **Cancel**. The Space checks again before requesting deletion and refuses if that check finds contents.
+To delete an empty group, open **More → Delete group** where your Space
+permits it. The Space checks its current contents and names any projects,
+groups, shared records or servers that prevent deletion. Members do not
+make a group nonempty, and a newly created group is empty until content is
+added. When the check finds no contents, review the group and Space, then
+choose **Delete group** or **Cancel**. The Space checks again before
+requesting deletion and refuses if that check finds contents.
 
 The Space decides when deletion takes effect. A group marked **Scheduled for deletion** offers **Restore** while the Space permits it; no recovery deadline is assumed.
+
+## Publish packages separately
+
+A Space group shares records and grants team-server access. Publishing
+uses a namespace authorized by your registry account, whether personal
+or an organization. At Spex Space, check
+[Your orgs](https://spex.sublang.ai/account/orgs?scope=registry) for those
+names. Creating a group here grants no publishing namespace there. See
+[Publish specs, skills, and playbooks](getting-started.md#publish-specs-skills-and-playbooks).

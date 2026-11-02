@@ -681,7 +681,7 @@ export class EnvironmentManager {
       return i18n._({ id: "Your orgs at {registry} could not be read — check the connection, then Retry", comment: "Refusal: the registry gave no answer listing the orgs this account may publish to; {registry} is its display name", values: { registry } });
     }
     if (error.kind === "forbidden") {
-      return i18n._({ id: "{org} is not yours to publish to at {registry} — claim it at {url}, or publish under one of your orgs", comment: "Refusal of Publish: the registry refuses this account the package's org, a package name's first half; {registry} is the registry's display name", values: { org: name.split("/")[0]!, registry, url: `${this.refusedAt(error, origin)}/account/orgs` } });
+      return i18n._({ id: "{org} is not yours to publish to at {registry} — claim it at {url}, or publish under one of your orgs", comment: "Refusal of Publish: the registry refuses this account the package's org, a package name's first half; {registry} is the registry's display name", values: { org: name.split("/")[0]!, registry, url: `${this.refusedAt(error, origin)}/account/orgs?scope=registry` } });
     }
     if (error.kind === "rejected" && status === 409) {
       return i18n._({ id: "{name} {version} is already at {registry} — raise its version in meta.yaml, then Retry", comment: "Refusal of Publish: the registry holds this version already and never takes it twice; {registry} is the registry's display name", values: { name, version, registry } });

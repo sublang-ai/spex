@@ -52,7 +52,9 @@ Follow [Start using Spex](docs/getting-started.md) to open a project,
 install a spec package, use its skills and playbooks, and author and
 publish a workflow of your own.
 
-To set up a team or a workshop — where groups are made, who shares what, where a package publishes — read [docs/groups.md](docs/groups.md).
+To share project records, manage members or work on a team server, read
+[Groups and collaboration](docs/groups.md). Package publishing uses your
+registry account, separately from a Space's groups.
 
 Requires Node.js 22.19 or later. The desktop compiles playbooks on the Node
 inside its Electron; the server shell compiles them only when its Node, or a

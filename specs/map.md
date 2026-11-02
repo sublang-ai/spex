@@ -218,8 +218,9 @@ meta.md       The spec of specs
 | [DR-197](decisions/197-dismiss-reminders-without-losing-history.md) | 197-dismiss-reminders-without-losing-history.md | Consistent Dismiss and Show again for folder reminders and older-history notices, one collapsed dismissed section, persistent source-bound acknowledgement and preserved files |
 | [DR-198](decisions/198-consistent-inline-group-actions.md) | 198-consistent-inline-group-actions.md | Shared attached group panels, repeat-open focus and preserved drafts, explicit dismissal, mutation guards and consistent ellipses |
 | [DR-199](decisions/199-release-gated-full-validation.md) | 199-release-gated-full-validation.md | Selected workspace checks gate pull requests; full app or CLI validation gates publication or runs on request; one checks result, shared local selection, no main or nightly runs |
-| [DR-200](decisions/200-publishing-names-need-registry-authority.md) | 200-publishing-names-need-registry-authority.md | Unchecked local names explained before release, refreshed account suggestions, and fresh registry authorization in publish previews and uploads |
+| [DR-200](decisions/200-publishing-names-need-registry-authority.md) | 200-publishing-names-need-registry-authority.md | Unchecked local names explained before release, refreshed account suggestions, and fresh registry authorization in publish previews and uploads; registry account scope in guidance by DR-202 |
 | [DR-201](decisions/201-shared-codex-subscription-access.md) | 201-shared-codex-subscription-access.md | Shared ChatGPT subscription access through private per-seat access-only Codex snapshots; administrator-only refresh |
+| [DR-202](decisions/202-registry-guidance-keeps-account-scope.md) | 202-registry-guidance-keeps-account-scope.md | Registry namespace guidance explicitly selects the registry account, with matching CLI and IDE visitor instructions; amends DR-200 |
 
 ## Packages
 

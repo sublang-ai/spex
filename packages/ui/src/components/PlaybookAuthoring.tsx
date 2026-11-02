@@ -411,7 +411,7 @@ function NewPlaybookField({
       </span>
     ) : null;
   const orgVerified = orgsStatus === "ready" && !!typedOrg && orgs.some((entry) => entry.name === typedOrg);
-  const claimUrl = registryOrigin ? new URL("/account/orgs", registryOrigin).href : undefined;
+  const claimUrl = registryOrigin ? new URL("/account/orgs?scope=registry", registryOrigin).href : undefined;
 
   return (
     <div

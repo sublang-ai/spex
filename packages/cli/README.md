@@ -62,8 +62,12 @@ builds `spex-packages/my-org/my-skill/` by copying the skill, which
 stays in `.claude/skills/` for your agent; it adds nothing to
 `spex.yaml`. After you edit the skill, `spex export my-org/my-skill`
 refreshes the copy. The dry run shows the registry, the version and the
-files, and publishes nothing. Publishing needs an org that is yours at
-that registry.
+files, and publishes nothing. Replace `my-org` with a namespace your
+registry account can use; check
+[Your orgs](https://spex.sublang.ai/account/orgs?scope=registry) when using
+Spex Space. Your personal namespace may already be available after
+sign-in, so creating a Space group or claiming an organization is not a
+prerequisite.
 
 ## spex.yaml and spex.lock
 
@@ -109,6 +113,11 @@ packages:
 - A version is exact (`1.2.3`), caret (`^1.2.3`: any 1.x from 1.2.3) or
   tilde (`~1.2.3`: any 1.2.x from 1.2.3).
 
+To choose another registry, edit `registry` in `spex.yaml`, preserving
+the other fields. `spex search`, `spex add` and `spex publish` use that
+choice and take no `--registry` option. `spex login --registry <url>`
+signs in at an address without changing the project's configuration.
+
 `spex install` installs what `spex.lock` records, so every clone
 installs the same files. It updates `spex.lock` first only where the
 file is missing or out of date: `spex.yaml` changed since, or a folder
@@ -137,12 +146,13 @@ app, before or after you use the CLI, and its **Packages** tab shows the
 same packages. What one writes, the other reads at its next use. Only
 the app:
 
-- enables a playbook, by choosing a player for each role, and runs it
-  in a session;
+- runs an installed playbook in a session, with a default player for
+  each role and choices on the **Playbooks** tab;
 - prepares each installed playbook to run on its engine;
 - holds the built-in playbooks, `sublang/playbooks`, which come with
-  Spex. `spex install` uses a copy the app keeps in the same home, or a
-  registry, where it can; otherwise it leaves them to the app and says so.
+  Spex as a global package. `spex install` uses a copy the app keeps in
+  the same home, or a registry, where it can; otherwise it leaves them
+  to the app and says so.
 
 ## Commands
 
@@ -257,6 +267,9 @@ them in full.
   is, and anything not found is reported and left as it was.
 - Every rule is checked before anything is written. A refusal writes
   nothing.
+- Export works without signing in or contacting a registry. Its
+  publishing-rights notice reminds you to check the namespace with the
+  registry; creating a local package grants no right to publish it.
 
 ### `spex publish`
 
@@ -266,9 +279,17 @@ them in full.
   several.
 - It publishes to the registry `spex.yaml` names, as the account you
   signed in with there. Signed out, it refuses and names `spex login`.
-- The org must be yours at that registry; at Spex Space, claim it on
-  `https://spex.sublang.ai/account/orgs`. A Space group gives you no
-  org.
+- The org is the namespace before `/` in the package's name. At Spex
+  Space, check [Your orgs](https://spex.sublang.ai/account/orgs?scope=registry)
+  in your registry account. A valid, available sign-in name becomes your
+  personal namespace automatically; you can also claim an organization
+  you own. A Space group grants no publishing namespace.
+- Packages are public by default. **Private packages** restricts a
+  namespace's packages to its personal owner or organization members.
+- A signed-in dry run and every publication check that the registry
+  authorizes your account to publish under the namespace. An unsigned
+  dry run still validates local files, and reports that publishing
+  rights are unchecked.
 - `meta.yaml` needs a `description` and a `license`.
 - `--dry-run` prints `Publishing <org>/<pkg>@<version> to <registry>`
   and the files, and publishes nothing. A publish prints the same first
@@ -294,6 +315,8 @@ spex logout --registry https://spex.sublang.ai
   names, or on the public registry where there is no `spex.yaml`.
   `--registry <url>` or `--space <url>` picks another; the two cannot be
   combined.
+- These flags choose where to sign in or out, not the registry used by
+  package commands. Set `registry` in `spex.yaml` to change that.
 - `spex login` signs in with a code in your browser: it prints an
   address and a code, and waits until you approve or deny there, or the
   code expires. Ctrl-C stops it and saves nothing.
@@ -341,7 +364,7 @@ name, and ends in what to do where there is something to do:
 ```text
 acme/secret: not at Spex Space, or private — spex login, then retry
 Spex Space could not be reached — check the connection, then retry
-my-org is not yours at Spex Space — claim it at https://spex.sublang.ai/account/orgs
+my-org is not yours at Spex Space — claim it at https://spex.sublang.ai/account/orgs?scope=registry
 sign-in expired at Spex Space — spex login
 spex.lock is from a newer Spex — update Spex
 ```
@@ -352,14 +375,15 @@ already accepted.
 
 ## Limits
 
-- The CLI acts on a project folder's packages. Your Personal packages,
-  available in every project of yours, are managed in the app.
+- The CLI acts on a project folder's packages. Global packages, available
+  in every project of yours, are managed on **Playbooks** in the app.
 - No command adds a Git source. A `git` package you write in `spex.yaml`
   by hand is installed as written. The Space `spex.yaml` names, else your
   default Space, lends its Git access to the repositories it holds while
   you are signed in there; other repositories use this computer's Git
   access. A registry sign-in gives no Git access.
-- The built-in playbooks, `sublang/playbooks`, come with the Spex app.
+- The built-in playbooks, `sublang/playbooks`, come with the Spex app as a
+  global package, removable there like any other package.
   `spex install` installs them from the copy the app keeps in the same
   home, where there is one, or from the registry, else leaves them to
   the app.
