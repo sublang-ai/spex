@@ -184,7 +184,6 @@ export function RegistryFlowLine({ running, name, testId }: { running: RegistryF
         testId={testId}
         link={running.flow === "browser" ? running.url : running.verificationUri}
         space={name}
-        bridge={running.flow === "browser"}
       />
     </div>
   );

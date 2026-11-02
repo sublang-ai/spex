@@ -57,7 +57,7 @@ While a project's Packages tab is shown, the tab shall present the project's env
 
 #### playbook-library-119
 
-While a project's Packages tab or the Playbooks surface [[playbook-library-122](#playbook-library-122)] is shown, its heading shall carry the registry of its environment as "Registry: ⟨registry⟩", a chooser offering the public registry by its display name [[environments-39](environments.md#environments-39)], the registry that environment's `spex.yaml` names where that is another, and a last entry "Other…" revealing a field for a registry's address, the choice written as the `registry` of that environment's `spex.yaml`, and beside it the independent registry account there — "@⟨login⟩", or "Sign in" where none — with Sign out and cancellable browser or device sign-in progress, errors shown in place and Space account state unchanged [[core-service-143](core-service.md#core-service-143)] ([DR-168](../decisions/168-independent-package-registry.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md), [DR-173](../decisions/173-the-registry-is-no-face-of-a-space.md)).
+While a project's Packages tab or the Playbooks surface [[playbook-library-122](#playbook-library-122)] is shown, its heading shall carry the registry of its environment as "Registry: ⟨registry⟩", a chooser offering the public registry by its display name [[environments-39](environments.md#environments-39)], the registry that environment's `spex.yaml` names where that is another, and a last entry "Other…" revealing a field for a registry's address, the choice written as the `registry` of that environment's `spex.yaml`, and beside it the independent registry account there — "@⟨login⟩", or "Sign in" where none — with Sign out and cancellable browser or device sign-in progress, errors shown in place and Space account state unchanged [[core-service-143](core-service.md#core-service-143)], browser sign-in attempting automatic opening through the native bridge [[app-shell-37](app-shell.md#app-shell-37)] where available and showing an ordinary external link [[app-shell-21](app-shell.md#app-shell-21)] to the complete sign-in URL regardless of that attempt's result ([DR-168](../decisions/168-independent-package-registry.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md), [DR-173](../decisions/173-the-registry-is-no-face-of-a-space.md)).
 
 #### playbook-library-113
 
@@ -626,7 +626,14 @@ When the conversation runner observes a `tool_result` event or the turn ends, it
 
 #### playbook-library-120
 
-When browser interactions use a project's Packages tab and its new-playbook form, they shall verify independent registry sign-in and sign-out at a Space's origin and a registry chosen from the chooser or through "Other…" remaining separate from the project's Space [[playbook-library-119](#playbook-library-119)], and org suggestions waiting for that registry account, loading and failure remaining visible through retry, successful empty and complete authorized suggestions, a typed org outside them wearing "not yours to publish to", manual names preserved and former-account responses ignored [[playbook-library-121](#playbook-library-121)].
+When an integration suite drives a project's Packages tab and its new-playbook form, the suite shall verify this interaction case matrix:
+
+| Case | Assertions |
+| --- | --- |
+| Registry sign-in and sign-out at a Space's origin | The registry account changes independently of Space account state [[playbook-library-119](#playbook-library-119)]. |
+| Registry selected from the chooser or through "Other…" | The environment's registry remains separate from the project's Space [[playbook-library-119](#playbook-library-119)]. |
+| Browser sign-in on a home with no Spaces, with the native opener absent, successful, refusing or rejecting | The available opener receives the complete sign-in URL once on starting; in every case, manual activation follows the ordinary link's complete URL without cancelling navigation or invoking the bridge again [[playbook-library-119](#playbook-library-119)]. |
+| Org suggestions | Suggestions wait for the registry account; loading and failure stay visible through retry; successful empty and complete authorized lists display; a typed org outside them reads "not yours to publish to"; manual names survive and former-account responses are ignored [[playbook-library-121](#playbook-library-121)]. |
 
 ### Compile Coverage
 
