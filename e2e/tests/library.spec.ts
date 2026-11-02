@@ -44,6 +44,30 @@ const BUILTINS = "sublang/playbooks";
 /** The project as its tabs name it (playbook-library-1). */
 const PROJECT = "demo-project";
 
+/** The project's config as a person left it: a comment and an entry of
+ * its own, which every override and set-back leaves byte for byte
+ * (playbook-library-21, playbook-library-16). */
+const PROJECT_CONFIG = [
+  "# The team's notes on this file stay as written.",
+  "playbooks:",
+  "  # Branches are cut by the reviewer here.",
+  "  branch:",
+  "    roles:",
+  "      coder: dev.reviewer # the reviewer cuts branches",
+  "",
+].join("\n");
+
+/** The project's config text with the `<id>` entry an override wrote
+ * taken out: the rest is what stood before it. */
+function withoutEntry(text: string, id: string): string {
+  const lines = text.split("\n");
+  const start = lines.indexOf(`  ${id}:`);
+  if (start < 0) return text;
+  let end = start + 1;
+  while (end < lines.length && lines[end]!.startsWith("    ")) end += 1;
+  return [...lines.slice(0, start), ...lines.slice(end)].join("\n");
+}
+
 /** A package of the project's own, added by folder, whose row's
  * overflow holds Remove (playbook-library-92). */
 const NOTES = "acme/notes-kit";
@@ -166,6 +190,8 @@ test("playbook-library-41: the tabs' and the surface's words, an override under 
     artifacts: { "notes-reader": { kind: "skill", language: "en" } },
   }, { "skills/en/notes-reader/SKILL.md": "---\nname: notes-reader\ndescription: Read a note\n---\nRead the note without changes.\n" });
   await app.core.command("environment.request", { repository: app.projectId!, name: NOTES, request: { kind: "path", path: NOTES_PATH } });
+  // The project's config holds a comment and an entry of its own.
+  app.writeProjectConfig(PROJECT_CONFIG);
   await open(page, app);
   const playbooks = await projectTab(page, "Playbooks");
 
@@ -235,6 +261,9 @@ test("playbook-library-41: the tabs' and the surface's words, an override under 
   await expect(editor).toBeHidden();
   await expect.poll(() => parse(app.readProjectConfig() || "{}")?.playbooks?.review?.roles).toEqual({ coder: "dev.coder", reviewer: "dev.coder" });
   expect(app.readConfig()).toBe(globalBefore);
+  // The comments and the unrelated entry stand byte for byte, the entry
+  // written aside (playbook-library-21).
+  expect(withoutEntry(app.readProjectConfig(), "review")).toBe(PROJECT_CONFIG);
   await expect(review.getByTestId("role-override-dot-review-reviewer")).toBeVisible();
   await expect(review.getByTestId("role-override-dot-review-coder")).toHaveCount(0);
   // The roles one player plays stand on one line (playbook-library-38).
@@ -247,6 +276,8 @@ test("playbook-library-41: the tabs' and the surface's words, an override under 
   await editor.getByTestId("binding-save").click();
   await expect(editor).toBeHidden();
   await expect.poll(() => parse(app.readProjectConfig() || "{}")?.playbooks?.review).toBeUndefined();
+  // Set back, the file reads as the person left it, byte for byte.
+  expect(app.readProjectConfig()).toBe(PROJECT_CONFIG);
   await expect(review.getByTestId("role-override-dot-review-reviewer")).toHaveCount(0);
   await expect(review.getByTestId("role-binding-review-reviewer")).toHaveText("Rreviewer");
 

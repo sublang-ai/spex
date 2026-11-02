@@ -786,6 +786,9 @@ export interface App {
   /** The project's own config file in its spex repository, empty when
    * none was written (core-service-2). */
   readProjectConfig(): string;
+  /** Write the project's own config file as a person editing it would
+   * (arrange only). */
+  writeProjectConfig(text: string): void;
 }
 
 async function boot(
@@ -1214,6 +1217,12 @@ async function arrangeApp(
       if (!app.projectId) return "";
       const path = join(clonePath(dataDir, app.projectId), "config", "playbook.config.yaml");
       return existsSync(path) ? readFileSync(path, "utf8") : "";
+    },
+    writeProjectConfig(text) {
+      if (!app.projectId) throw new Error("no project registered");
+      const path = join(clonePath(dataDir, app.projectId), "config", "playbook.config.yaml");
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, text);
     },
     draftDir(id) {
       // The playbook artifact of the spec package under development in

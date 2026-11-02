@@ -9,6 +9,8 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { parse } from "yaml";
 
+import { AUTHORING_SOURCE } from "@sublang/spex-core/testing";
+
 import { test, expect, open, nav, clonePath } from "../src/harness";
 
 test.use({ appOptions: { project: true } });
@@ -177,13 +179,42 @@ test("settings-29: the Captain row's editor round-trips the shared config", asyn
 });
 
 test.describe("players to set up", () => {
-  test.use({ appOptions: { project: true, homeConfig: true } });
+  test.use({
+    appOptions: {
+      project: true,
+      homeConfig: true,
+      // A playbook of the project's own, authored and compiled on the
+      // passing stub (playbook-library-7).
+      authoring: { slc: "ok", phaseDelayMs: 50, script: { fallback: { deltas: ["Compiled."], result: "Compiled." } } },
+    },
+  });
 
   test("settings-47: a player a binding names and your roster lacks plays on the Captain's agent until Add creates it from the Captain's block", async ({
     page,
     app,
   }) => {
+    test.setTimeout(120_000);
     const projectConfig = join(clonePath(app.dataDir, app.projectId!), "config", "playbook.config.yaml");
+    // The project's own package places /triage, running on its default
+    // players, which no written entry names: added, then its entry
+    // taken out again (core-service-2).
+    const projectId = app.projectId!;
+    const org = projectId.split("/")[0]!;
+    const { instance } = await app.core.command("draft.create", { projectId, draftId: "triage", org, license: "Apache-2.0" });
+    await app.core.command("draft.source.write", { projectId, draftId: "triage", instance: instance!, content: AUTHORING_SOURCE.replaceAll("<id>", "triage") });
+    await app.core.command("draft.compile", { projectId, draftId: "triage", instance: instance! });
+    await expect
+      .poll(async () => (await app.core.command("draft.list", {})).find((draft) => draft.id === "triage")?.state, { timeout: 60_000 })
+      .toBe("compiled");
+    await app.core.command("draft.register", {
+      projectId,
+      draftId: "triage",
+      instance: instance!,
+      command: "triage",
+      intent: "Sort incoming issues",
+      bindings: { Triager: "dev.coder", Verifier: "dev.reviewer" },
+    });
+    await app.core.command("config.edit", { repository: projectId, op: { kind: "playbook.delete", playbookId: "triage" } });
     await open(page, app);
     await nav(page, "Settings").click();
     await expect(page.getByTestId("players-section")).toBeVisible();
@@ -210,7 +241,14 @@ test.describe("players to set up", () => {
     // Captain's agent, with Add (settings-46); no "not set up here" row
     // names a project.
     const captain = parse(app.readConfig()).captain;
-    for (const [player, position] of [["dev.inspector", "inspect.inspector"], ["dev.auditor", "review.reviewer"]] as const) {
+    for (const [player, position] of [
+      ["dev.inspector", "inspect.inspector"],
+      ["dev.auditor", "review.reviewer"],
+      // The defaults of a playbook the project alone places
+      // (settings-46).
+      ["dev.triager", "triage.Triager"],
+      ["dev.verifier", "triage.Verifier"],
+    ] as const) {
       const row = page.getByTestId(`player-row-${player}`);
       await expect(row).toHaveAttribute("data-to-set-up", "true");
       await expect(row.getByTestId(`player-setup-${player}`)).toHaveText("Plays on the Captain's agent");
