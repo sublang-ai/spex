@@ -1583,6 +1583,16 @@ msgstr "Give the group a path"
 msgid "Give this computer access, then Retry"
 msgstr "Give this computer access, then Retry"
 
+#. The Space has no group deletion operation; the group is kept
+#: src/space-groups.ts
+msgid "Group deletion isn’t available at {host}. Contact the Space administrator."
+msgstr "Group deletion isn’t available at {host}. Contact the Space administrator."
+
+#. The Space has no group restoration operation; the group remains scheduled for deletion
+#: src/space-groups.ts
+msgid "Group restoration isn’t available at {host}. Contact the Space administrator."
+msgstr "Group restoration isn’t available at {host}. Contact the Space administrator."
+
 #. Spec notice; `H1` is the markdown top heading and both names are the file's own
 #: src/specs.ts
 msgid "H1 identifier \"{identifier}\" disagrees with basename \"{basename}\""

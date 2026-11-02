@@ -359,6 +359,9 @@ export interface StandinScript {
   /** Choose normal immediate deletion (default) or scheduled deletion
    * with Restore, without changing the client request. */
   scheduleGroupDeletion(value: boolean): void;
+  /** Override group deletion checks, deletion and restoration without
+   * mutating the group, including a deployment missing those routes. */
+  faultGroupLifecycle(fault: { status: number; code: string; message: string } | null): void;
   /** While set, moving a spex repository answers 403 `host_refused` with
    * these words (host-32). */
   refuseTransfer(message: string | null): void;
@@ -751,6 +754,7 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
   let groupRenameRefusal: string | null = null;
   let groupDeleteRefusal: string | null = null;
   let groupDeletionScheduled = false;
+  let groupLifecycleFault: { status: number; code: string; message: string } | null = null;
   let transferRefusal: string | null = null;
   type HostFault = { kind: "rate"; retryAfter: string | null } | { kind: "unavailable" } | { kind: "refused"; message: string };
   const hostFaults: HostFault[] = [];
@@ -1229,6 +1233,7 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
     refuseGroupRename: (message) => { groupRenameRefusal = message; },
     refuseGroupDelete: (message) => { groupDeleteRefusal = message; },
     scheduleGroupDeletion: (value) => { groupDeletionScheduled = value; },
+    faultGroupLifecycle: (fault) => { groupLifecycleFault = fault; },
     refuseTransfer: (message) => { transferRefusal = message; },
   };
 
@@ -1522,6 +1527,7 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
     }
     const lifecycle = /^\/api\/v1\/host\/groups\/([^/]+)\/(deletion|restore)$/.exec(path);
     if (lifecycle && (method === "POST" || (method === "GET" && lifecycle[2] === "deletion"))) {
+      if (groupLifecycleFault) return envelope(res, groupLifecycleFault.status, groupLifecycleFault.code, groupLifecycleFault.message);
       const group = script.groups.find((g) => g.kind === "group" && g.id === decodeURIComponent(lifecycle[1]));
       if (!group) return envelope(res, 404, "not_found", "The group is not known.");
       if (method === "GET") {

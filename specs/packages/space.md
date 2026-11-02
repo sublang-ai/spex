@@ -265,7 +265,7 @@ When the reader activates Remove on a member in a members panel [[space-62](#spa
 
 When the reader activates "Delete group…" in a group's overflow [[space-1](#space-1)], the surface shall open an inline confirmation naming the group and Space, read fresh contents through `space.group.deletionCheck` [[git-host-34](git-host.md#git-host-34)], and permit a safe `space.group.delete` request only after that check finds the group empty [[git-host-19](git-host.md#git-host-19)] ([DR-181](../decisions/181-group-deletion-follows-the-space-policy.md)):
 
-- the check reads "Checking…" with deletion unavailable; a failed check remains in place and does not imply emptiness;
+- the check reads "Checking…" with deletion unavailable; a failed check remains in place and does not imply emptiness, with a recognized missing operation explained as unavailable at this Space [[git-host-35](git-host.md#git-host-35)];
 - every returned blocker is shown with its public name and kind — project, group, shared records or server — and prevents deletion, including content absent from the ordinary list; members do not count, and cached local rows never block this fresh check;
 - an empty result enables "Delete group" beside Cancel, without a typed-path field, stating that the group is empty and that deletion affects all members, without hypothetical scheduling or recovery guidance; the request sends the reviewed public group path so the Space can refuse a subsequent rename, and contents found by its submit-time check refuse deletion;
 - Cancel is focused initially and Escape cancels before submission; checking or deletion cannot duplicate, and deletion reads "Deleting…" with cancellation unavailable until the response;

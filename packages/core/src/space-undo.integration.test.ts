@@ -280,6 +280,59 @@ test("git-host-19/33/34: fresh group contents ignore members and stale local pat
   assert.deepEqual(leaks(host, broadcasts(home.client.messages)), []);
 });
 
+test("git-host-19/33/34: missing lifecycle routes explain unavailable operations, preserving groups and genuine refusals in English and Chinese", async (t) => {
+  const host = await startHost();
+  const home = await startHome("missing-lifecycle", { host, project: false, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  const signInMark = home.client.mark();
+  await signIn(home, host);
+  await home.client.waitRepository(signInMark, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
+  const create = async (path: string) => (await home.client.expectOk("space.group.create", { instance: host.url, name: path, path, parent: null })).group;
+  const active = await create("active");
+  const scheduled = await create("scheduled");
+  host.script.scheduleGroupDeletion(true);
+  await home.client.expectOk("space.group.delete", { instance: host.url, group: scheduled.id, confirmPath: scheduled.fullPath });
+  const before = entriesAt(await home.client.expectOk("space.get", {}), host);
+  const operations = [
+    { type: "space.group.deletionCheck" as const, group: active.id, verb: "deletion", zhVerb: "删除", method: "GET", suffix: "deletion" },
+    { type: "space.group.delete" as const, group: active.id, confirmPath: active.fullPath, verb: "deletion", zhVerb: "删除", method: "POST", suffix: "deletion" },
+    { type: "space.group.restore" as const, group: scheduled.id, verb: "restoration", zhVerb: "恢复", method: "POST", suffix: "restore" },
+  ];
+  const legacy = "Package management is available at https://spex.sublang.ai";
+  for (const language of ["en", "zh"] as const) {
+    await home.client.expectOk("language.set", { language });
+    for (const operation of operations) {
+      const fields = { instance: host.url, group: operation.group, ...("confirmPath" in operation ? { confirmPath: operation.confirmPath } : {}) };
+      for (const fault of [
+        { status: 404, code: "route_not_found", message: "Unknown API route" },
+        { status: 404, code: "not_found", message: legacy },
+      ]) {
+        host.script.faultGroupLifecycle(fault);
+        const asked = host.script.requests.length;
+        const message = await home.client.expectError(operation.type, fields, "invalid_request");
+        assert.equal(message, language === "en"
+          ? `Group ${operation.verb} isn’t available at ${HOST_NAME}. Contact the Space administrator.`
+          : `${HOST_NAME} 暂不支持${operation.zhVerb}群组。请联系空间管理员。`);
+        assert.deepEqual(apiRequests(host, asked), [`${operation.method} /api/v1/host/groups/${operation.group}/${operation.suffix}`], "no legacy deletion or speculative retry");
+      }
+      for (const fault of [
+        { status: 404, code: "not_found", message: "The group is not known." },
+        { status: 404, code: "not_found", message: `${legacy}. Review your package.` },
+        { status: 403, code: "host_refused", message: legacy },
+        { status: 403, code: "route_not_found", message: "An administrator refused this operation." },
+      ]) {
+        host.script.faultGroupLifecycle(fault);
+        const message = await home.client.expectError(operation.type, fields, fault.status === 404 ? "not_found" : "invalid_request");
+        assert.ok(message.includes(fault.message), "a genuine missing group, refusal or different response retains its words");
+        assert.ok(!message.includes("Contact the Space administrator.") && !message.includes("请联系空间管理员。"));
+      }
+    }
+    assert.deepEqual(entriesAt(await home.client.expectOk("space.get", {}), host), before, "unsupported operations preserve the held groups");
+    assert.equal(host.script.groups.find((group) => group.id === active.id)?.pendingDeletion, undefined);
+    assert.equal(host.script.groups.find((group) => group.id === scheduled.id)?.pendingDeletion, true);
+  }
+});
+
 test("git-host-14: a rename carries the groups and repositories inside to the new path, a deletion and moves stand before their replies with no read begun; what the stand-in cannot be asked is refused before it is, its refusals in its words, in English and in Chinese", async (t) => {
   const host = await startHost();
   const research = host.script.groups.find((group) => group.fullPath === "acme/research");
