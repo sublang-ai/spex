@@ -29,6 +29,7 @@ import {
   type AdapterName,
   type AgentBlockInput,
   type ConfigEditOpInput,
+  type ConfigState,
   type CredentialList,
   type ReadinessEntry,
   type AgentSummary,
@@ -350,16 +351,30 @@ const NEW_PLAYER_BLOCK: AgentBlockInput = {
   permissions: { mode: "auto" },
 };
 
-/** Your roster with each player a project's entry names and the roster
- * lacks, as the core reports them, beside those the global bindings
- * name: each plays on the Captain's agent until it is set up
- * (settings-46). */
+/** Your roster with each player a binding names and the roster lacks —
+ * as the global composition flags them, as each project's composition
+ * flags them (a project's entry, or the default `dev.<role>` of a
+ * playbook the project places), and as the core reports a project's
+ * entries naming them — each playing on the Captain's agent until it is
+ * set up, the positions that name it merged (settings-46). */
 function withProjectNamed(
   players: SessionPlayerSummary[],
   named: readonly { player: string; roles: readonly { playbook: string; role: string }[] }[],
   captain: AgentSummary,
+  projects: readonly (ConfigState | undefined)[] = [],
 ): SessionPlayerSummary[] {
   const out = [...players];
+  for (const state of projects) {
+    if (state?.status !== "valid") continue;
+    for (const player of state.summary.players) {
+      if (!player.toSetUp) continue;
+      const held = out.findIndex((entry) => entry.id === player.id);
+      if (held < 0) out.push({ ...player, boundBy: [...player.boundBy] });
+      else if (out[held]!.toSetUp) {
+        out[held] = { ...out[held]!, boundBy: [...new Set([...out[held]!.boundBy, ...player.boundBy])] };
+      }
+    }
+  }
   for (const entry of named) {
     const positions = entry.roles.map((item) => `${item.playbook}.${item.role}`);
     const held = out.findIndex((player) => player.id === entry.player);
@@ -1041,6 +1056,19 @@ export function SettingsSurface({
   // A seat's Settings carry its Credentials section (settings-48).
   const seat = !isLocalPlace(store.place);
   const configState = store((state) => state.configState);
+  // Each project's composition names the players its bindings play on,
+  // a project's own defaults among them (settings-46).
+  const projectConfigs = store((state) => state.projectConfigs);
+  const projectIds = store((state) => state.projects.map((project) => project.id).join("\n"));
+  const connected = store((state) => state.connection === "open");
+  const loadProjectConfig = store((state) => state.loadProjectConfig);
+  // Read each project's composition the broadcasts have not brought yet.
+  useEffect(() => {
+    if (!connected) return;
+    for (const projectId of projectIds ? projectIds.split("\n") : []) {
+      if (!(projectId in store.getState().projectConfigs)) void loadProjectConfig(projectId).catch(() => {});
+    }
+  }, [connected, projectIds, loadProjectConfig, store]);
   const readiness = store((state) => state.readiness);
   const refreshReadiness = store((state) => state.refreshReadiness);
   const refresh = store((state) => state.refresh);
@@ -1265,7 +1293,7 @@ export function SettingsSurface({
       </section>
 
       <PlayerRoster
-        players={withProjectNamed(summary.players, configState.missingPlayers ?? [], summary.captain)}
+        players={withProjectNamed(summary.players, configState.missingPlayers ?? [], summary.captain, Object.values(projectConfigs ?? {}))}
         readiness={readiness}
         captain={summary.captain}
         rows={rows}

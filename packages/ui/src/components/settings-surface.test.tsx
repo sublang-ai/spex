@@ -382,6 +382,61 @@ describe("settings-46: your own group's file, and the players to set up", () => 
     );
   });
 
+  test("a project's own composition flags the default players of a playbook it alone places, merged with the global ones", async () => {
+    const captain = CONFIG.summary!.captain;
+    const toSetUp = (id: string, boundBy: string[]) => ({ id, agent: captain, display: "claude-opus-4-8", boundBy, toSetUp: true });
+    useAppStore.setState({
+      projects: [PROJECT],
+      space: home(),
+      configState: {
+        ...CONFIG,
+        summary: { ...CONFIG.summary!, players: [...CONFIG.summary!.players, toSetUp("dev.host", ["review.host"])] },
+      } as ConfigState,
+      // A package added to the project, its triage running on its
+      // default players; no written entry names them (settings-46).
+      projectConfigs: {
+        [PROJECT.id]: {
+          ...CONFIG,
+          summary: {
+            ...CONFIG.summary!,
+            players: [
+              ...CONFIG.summary!.players,
+              toSetUp("dev.host", ["review.host"]),
+              toSetUp("dev.triager", ["triage.triager"]),
+              toSetUp("dev.verifier", ["triage.verifier"]),
+            ],
+          },
+        } as ConfigState,
+      },
+      readiness: READINESS,
+      refreshReadiness: vi.fn(async () => {}),
+    });
+    render(<SettingsSurface />);
+    for (const [id, position] of [["dev.host", "review.host"], ["dev.triager", "triage.triager"], ["dev.verifier", "triage.verifier"]] as const) {
+      const rows = screen.getAllByTestId(`player-row-${id}`);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.dataset.toSetUp).toBe("true");
+      expect(within(rows[0]!).getByTestId(`player-setup-${id}`).textContent).toBe("Plays on the Captain's agent");
+      expect(within(rows[0]!).getByTestId(`player-setup-${id}`).title).toBe(`Answers ${position}`);
+    }
+    // The roster's own players stand as they are.
+    expect(screen.getByTestId("player-row-dev.coder").dataset.toSetUp).toBeUndefined();
+    fireEvent.click(screen.getByTestId("player-setup-add-dev.verifier"));
+    await vi.waitFor(() =>
+      expect(commandMock).toHaveBeenCalledWith("config.edit", {
+        op: { kind: "player.set", playerId: "dev.verifier", patch: { adapter: "claude", model: "claude-opus-4-8", effort: "high", permissions: { mode: "auto" } } },
+      }),
+    );
+    useAppStore.setState({ projectConfigs: {} });
+  });
+
+  test("Settings reads each project's composition the broadcasts have not brought", async () => {
+    useAppStore.setState({ projects: [PROJECT], space: home(), projectConfigs: {}, connection: "open" });
+    renderSettings();
+    await vi.waitFor(() => expect(commandMock).toHaveBeenCalledWith("config.get", { projectId: PROJECT.id }));
+    useAppStore.setState({ projectConfigs: {} });
+  });
+
   test("the surface names the file it writes by its path alone, offering no project's file as editable here", () => {
     useAppStore.setState({ space: home() });
     renderSettings();
