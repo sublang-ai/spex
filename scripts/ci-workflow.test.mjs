@@ -121,7 +121,7 @@ test("release-33: fast gates precede selected suites; Windows retains its suppor
   const gateAt = steps.findIndex((step) => step.name === "Build, catalogs, types and specifications");
   assert.ok(gateAt > steps.findIndex((step) => step.run === "npm ci"));
   assert.equal(steps[gateAt].shell, "bash", "Windows stops after any failed gate command");
-  assert.equal(steps[gateAt].run.trim(), "npm run build\nnpx @sublang/spex lint\nnpm run typecheck -w e2e");
+  assert.equal(steps[gateAt].run.trim(), "npm run build\nnode packages/cli/dist/cli.js lint\nnpm run typecheck -w e2e");
   const reachAt = steps.findIndex((step) => step.name === "Tests the change reaches");
   assert.ok(reachAt > gateAt);
   assert.equal(steps[reachAt].run, `node scripts/affected-tests.mjs --run "\${{ ${AFFECTED} }}"`);

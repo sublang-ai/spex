@@ -107,7 +107,7 @@ jobs:
         shell: bash
         run: |
           npm run build
-          npx @sublang/spex lint
+          node packages/cli/dist/cli.js lint
           npm run typecheck -w e2e
       - name: Require Git LFS for real transport and local Apply coverage
         if: runner.os != 'Windows' && (needs.changes.outputs.affected == 'all' || contains(needs.changes.outputs.affected, 'packages/core'))
