@@ -82,6 +82,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Folder releases leave out slc's generated verification tests and the
+  compile-time FSM bundle, alongside its build history and verifier
+  support. Publishing and new Git resolutions keep the source, runtime
+  module, rebuild inputs and editable intermediates; existing locks and
+  registry archives retain their files.
+
 - Spex writes LF, and an install pins `spex.yaml`, `spex.lock` and
   `specs/packages/*.md` to LF in the project's `.gitattributes`, so a
   checkout whose Git converts line endings — Git for Windows by default —

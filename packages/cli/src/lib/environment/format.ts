@@ -581,17 +581,22 @@ export function checkRelease(dir: string | ReadReleaseFile, manifest: Manifest, 
 const SKIPPED_DIRECTORIES = new Set([".git", "node_modules"]);
 const SKIPPED_FILES = new Set([".DS_Store"]);
 
-/** What the compiler keeps beside a playbook for itself — `.slc/`, its
- * incremental build history, and `.slc-verify/`, its verifier's
- * support — which the playbook needs not at run time: no path under a
- * playbook artifact's folder with one of these components is a release
- * file (environments-1). */
+/** The compile pipeline's history, verifier support, generated checks
+ * and introspection bundle are no folder release files (environments-1).
+ * File exclusions match the native output names and locations, leaving
+ * the author's other tests and editable intermediates intact. */
 const COMPILER_OWN = new Set([".slc", ".slc-verify"]);
+const COMPILER_CHECKS = ["fsm.coverage", "fsm.introspect", "gears-fsm", "prompt-contract"];
 
 function compilerOwn(path: string): boolean {
   const parts = path.split("/");
   // Under `playbooks/<language>/<id>/`.
-  return parts[0] === "playbooks" && parts.slice(3).some((part) => COMPILER_OWN.has(part));
+  if (parts[0] !== "playbooks" || parts.length < 4) return false;
+  if (parts.slice(3).some((part) => COMPILER_OWN.has(part))) return true;
+  const id = parts[2]!;
+  return (parts.length === 4 && parts[3] === `${id}.fsm.bundle.mjs`)
+    || (parts.length === 5 && parts[3] === `${id}.playbook`
+      && COMPILER_CHECKS.some((check) => parts[4] === `${id}.${check}.test.ts`));
 }
 
 export function sha256Hex(bytes: Uint8Array | string): string {
