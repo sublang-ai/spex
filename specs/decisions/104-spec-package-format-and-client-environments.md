@@ -27,6 +27,7 @@ Amended by [DR-127](127-a-home-signed-in-to-several-instances.md) in requests fr
 Amended by [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) in where an environment stands, in its instance, in the agent table, in publishing and in its hosts: an environment is complete in its folder, its installed files, generated skills and install record under its root's `.spex/`; its `spex.yaml` may name its Space as `space`; the agent table is the library's own data; a package is published by its name; and the package manager is one library that the CLI and the app both host.
 Amended by [DR-172](172-surfaces-a-fresh-user-reads.md) in where packages are managed and in the two verbs.
 Amended by [DR-174](174-what-a-package-provides-is-placed.md) in its manifest, its selection and its exports: a manifest declares what it `provides`; an install places each provided artifact where its kind goes, a provided spec in the project's `specs/packages/`; a release cites another release by an address that never leaves a release.
+Amended by [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md) in where a playbook is enabled: a placed playbook runs, its roles bound by default; `enable` and `disable` retire as acts and as words.
 
 ## Context
 

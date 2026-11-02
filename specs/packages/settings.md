@@ -205,9 +205,9 @@ Where the app starts on a machine whose own group holds no config file, while th
 
 #### settings-46
 
-While a project's config file names, for a role, a player your own group's file lacks [[core-service-2](core-service.md#core-service-2)], the Settings surface shall show that player in the roster as "Named by <project>, not set up here" with an Add control that creates it from the neutral block, so every member names players and each person picks their own models ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)):
+While a binding names, for a role, a player your own group's file lacks [[core-service-2](core-service.md#core-service-2)] — a project's entry, or the default `dev.<role>` of a playbook no entry binds — the Settings surface shall show that player in the roster as "Plays on the Captain's agent" with an Add control that creates it from the Captain's block, so every member names players and each person picks their own models ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md), [DR-176](../decisions/176-global-playbooks-and-a-placed-playbook-runs.md)):
 
-- the Settings surface shows the file it writes — your own group's — by its path [[settings-54](#settings-54)], naming no spex repository, and names no project file as editable here: a project's playbooks and role bindings are edited in the project's Playbooks tab [[playbook-library-1](playbook-library.md#playbook-library-1)].
+- the Settings surface shows the file it writes — your own group's — by its path [[settings-54](#settings-54)], naming no spex repository, and names no project file as editable here: a project's role overrides are edited in the project's Playbooks tab [[playbook-library-1](playbook-library.md#playbook-library-1)], and the global bindings on the Playbooks surface [[playbook-library-122](playbook-library.md#playbook-library-122)].
 
 ### Guidance
 
@@ -431,7 +431,7 @@ Where the UI holds a seat's store over a fake client, the test suite shall asser
 
 #### settings-47
 
-Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell on a home whose project's config names a player your own group's roster lacks, when the journey opens Settings through the page, the test suite shall assert that the roster shows the player as named by that project and not set up here, that Add creates it from the neutral block so the row leaves the missing list, and that the surface names the file it writes by its path and no spex repository [[settings-46](#settings-46)].
+Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-journeys.md)) boots the served shell on a home whose project's config names a player your own group's roster lacks and whose global environment places a playbook no entry binds, its role's `dev.<role>` absent from the roster, when the journey opens Settings through the page, the test suite shall assert that the roster shows each of the two players as "Plays on the Captain's agent" with Add, that Add creates the player from the Captain's block so its row leaves the players to set up, and that the surface names the file it writes by its path and no spex repository [[settings-46](#settings-46)].
 
 #### settings-29
 
