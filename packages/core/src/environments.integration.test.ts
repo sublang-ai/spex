@@ -672,16 +672,26 @@ test("environments-24: a playbook authored in a project compiles, is requested b
   const catalog = (await createSessionStore({ sessionsDir: join(clone, "sessions") }).readManifest(session.id) as { structuralProjection: { catalog: Record<string, { from: string }> } }).structuralProjection.catalog;
   assert.equal(catalog.triage?.from, pathToFileURL(join(folder, "playbooks", "en", "triage", "triage.registry.mjs")).href);
 
-  // What the compiler keeps beside the playbook for itself — its build
-  // history and its verifier's support — is no release file
-  // (environments-1).
+  // The pipeline's history, verifier support, generated checks and
+  // introspection bundle are no folder release files (environments-1).
   const playbookFolder = join(folder, "playbooks", "en", "triage");
-  const compilerOwn = [".slc/builds/0001/triage.md", "triage.playbook/.slc/latest", "triage.playbook/.slc-verify/support.mjs"];
+  const compilerOwn = [
+    ".slc/builds/0001/triage.md", "triage.playbook/.slc/latest", "triage.playbook/.slc-verify/support.mjs",
+    "triage.playbook/triage.fsm.coverage.test.ts", "triage.playbook/triage.fsm.introspect.test.ts",
+    "triage.playbook/triage.gears-fsm.test.ts", "triage.playbook/triage.prompt-contract.test.ts",
+    "triage.fsm.bundle.mjs",
+  ];
   for (const path of compilerOwn) {
     mkdirSync(dirname(join(playbookFolder, path)), { recursive: true });
-    writeFileSync(join(playbookFolder, path), `${path}\n`);
+    if (!existsSync(join(playbookFolder, path))) writeFileSync(join(playbookFolder, path), `${path}\n`);
   }
-  const ownedByCompiler = (path: string): boolean => /(^|\/)\.slc(-verify)?\//.test(path);
+  const ownedByCompiler = (path: string): boolean => compilerOwn.some((file) => path === `playbooks/en/triage/${file}`);
+  const retained = [
+    "triage.md", "triage.ts", "triage.registry.ts", "triage.registry.mjs",
+    "triage.playbook/triage.fsm.ts", "triage.playbook/triage.playbook.ts", "triage.playbook/triage.gears.md",
+    "triage.playbook/triage.gears.raw.md", "triage.playbook/triage.gears.opt1.md",
+  ];
+  for (const path of retained.slice(-2)) writeFileSync(join(playbookFolder, path), "# Editable intermediate\n");
 
   // Publishing: a manifest without the license the registry requires is
   // refused naming the field, the preview as the upload, before
@@ -719,7 +729,7 @@ test("environments-24: a playbook authored in a project compiles, is requested b
   assert.deepEqual(preview.preview, { instance: preview.preview?.instance, name: `${ORG}/triage`, version: "0.1.0", files: declared.map((file) => file.path).sort() });
   assert.ok(!preview.preview?.files.some((path) => path.includes("node_modules")), "engine links never upload");
   assert.deepEqual(preview.preview?.files.filter(ownedByCompiler), [], "the compiler's own files never upload");
-  assert.ok(preview.preview?.files.includes("playbooks/en/triage/triage.registry.mjs"), "the compiled module uploads");
+  for (const path of retained) assert.ok(preview.preview?.files.includes(`playbooks/en/triage/${path}`), `${path} uploads`);
   const from = core.client.mark();
   assert.deepEqual(await core.client.expectOk("environment.publish", { repository: project.id, name: `${ORG}/triage` }), { accepted: true });
   const published = await core.client.environment(project.id, from, (state) => state.busy === null && (state.published !== null && state.published !== undefined || state.error !== null));
@@ -742,6 +752,9 @@ test("environments-24: a playbook authored in a project compiles, is requested b
   const installed = await other.client.environment(otherProject.id, mark, (state) => state.busy === null && state.packages.some((pkg) => pkg.name === `${ORG}/triage` && pkg.installed));
   const pkg = installed.packages.find((entry) => entry.name === `${ORG}/triage`)!;
   assert.deepEqual([pkg.version, pkg.source.kind, pkg.direct], ["0.1.0", "registry", true]);
+  const installedPlaybook = join(second, "project", ".spex", "packages", ORG, "triage", "playbooks", "en", "triage");
+  for (const path of compilerOwn) assert.equal(existsSync(join(installedPlaybook, path)), false, `${path} stays out of the install`);
+  for (const path of retained) assert.ok(existsSync(join(installedPlaybook, path)), `${path} stays available after installation`);
   const playbooks = await other.client.expectOk("environment.playbooks", { projectId: otherProject.id });
   const row = playbooks.project?.find((entry) => entry.id === "triage");
   assert.deepEqual([row?.source, row?.version, row?.enabled, row?.present], ["registry", "0.1.0", [], true]);

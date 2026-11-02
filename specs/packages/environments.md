@@ -27,8 +27,14 @@ When the core reads a release — from the registry, a Git commit, a path source
 | `sources/<language>/<id>/` | source material entered at `SOURCE.md`, attachments beside it |
 | `specs/<language>/<pkg>.md` | the one spec file, with its sections, item ids and citations kept whole |
 | `skills/<language>/<id>/` | an Agent Skills folder [[1]] whose `SKILL.md` name is `<id>` |
-| `playbooks/<language>/<id>/` | a playbook in Playbook's native layout: the text the compiler reads, its compiled module and what the compiler wrote beside them, except its `.slc/` build history and `.slc-verify/` verifier support, which a folder read as a release leaves out wherever they stand in it |
+| `playbooks/<language>/<id>/` | a playbook in Playbook's native layout: the text the compiler reads, its compiled module and what the compiler wrote beside them, except the compiler-owned paths below, which a folder read as a release leaves out |
 | `applets/<id>/` | a static web application entered at `index.html`, a regular file at the folder's root, every file beside it served as it is ([DR-161](../decisions/161-an-applet-is-a-page-the-ide-serves.md)); a folder without that entry is refused naming the applet |
+
+| Compiler-owned path under `playbooks/<language>/<id>/` | Purpose |
+| --- | --- |
+| `.slc/` and `.slc-verify/` at any depth | build history and verifier support |
+| `<id>.fsm.bundle.mjs` at that folder's root | compile-time machine introspection |
+| `<id>.playbook/<id>.<check>.test.ts`, where `<check>` is `fsm.coverage`, `fsm.introspect`, `gears-fsm` or `prompt-contract` | generated verification tests |
 
 | `meta.yaml` field | Content |
 | --- | --- |
@@ -368,7 +374,7 @@ The library shall ship a stand-in registry for its own tests, the core's and the
 
 #### environments-19
 
-When an integration suite reads releases from a fixture directory, it shall assert the format's acceptance and refusals [[environments-1](#environments-1)]: a release with every kind and two languages accepted whole; a manifest without `format: 2`, an unknown field, a file under no artifact, a folder without a manifest entry, a skill whose `SKILL.md` name differs from its id, a skill and a playbook sharing an id, a translation whose item ids differ, a `provides` that is not a nonempty list of the five kinds, an applet without `index.html` at its folder's root, a non-portable path and a link each refused naming the reason.
+When an integration suite reads releases from a fixture directory, it shall assert the format's acceptance and refusals [[environments-1](#environments-1)]: a release with every kind and two languages accepted whole; a playbook's compiler-owned paths omitted while its source, module, rebuild inputs, editable intermediates and unrelated test and bundle files remain; a manifest without `format: 2`, an unknown field, a file under no artifact, a folder without a manifest entry, a skill whose `SKILL.md` name differs from its id, a skill and a playbook sharing an id, a translation whose item ids differ, a `provides` that is not a nonempty list of the five kinds, an applet without `index.html` at its folder's root, a non-portable path and a link each refused naming the reason.
 
 #### environments-20
 
@@ -391,6 +397,7 @@ When an integration suite installs locked environments on a scratch home, it sha
 - a changed `spex.yaml`, a changed path-source manifest and a path source lacking a selected artifact each mark the lock stale, install nothing new and report resolving again [[environments-7](#environments-7)];
 - a path source is used in place, a second working folder of the same project runs its own copy, and a device whose working folder lacks it reports it missing [[environments-7](#environments-7)];
 - a Git source at a branch resolves to its commit, installs from that commit through the stand-in host's credential, and the lock holds the commit alone [[environments-13](#environments-13)];
+- an existing Git lock selecting compiler-owned files installs those files at their locked digests without changing the lock, and a registry archive holding them is read and installed whole [[environments-3](#environments-3)] [[environments-7](#environments-7)];
 - a Git source resolved with this device's Git set to convert line endings to CRLF locks each file at the digest of the bytes the repository holds, and a second home installs that lock from the repository with those bytes [[environments-45](#environments-45)];
 - a project's `spex.yaml` and `spex.lock` stand at its working folder's root and its installed files under that root's `.spex/`, nothing of either in its clone, the core having staged, committed and ignored nothing outside `.spex/` [[environments-26](#environments-26)]; a working folder paired while holding a committed environment installs from it with nothing but `.spex/` written [[environments-26](#environments-26)] [[environments-7](#environments-7)]; a project's clone holding a former `packages/` and `skills/` loses them at the next install [[environments-7](#environments-7)]; an environment the command line installed in a folder the app then pairs is read installed with its install record, nothing rewritten, and one the app installed is read by the command line the same way [[environments-26](#environments-26)] [[environments-14](#environments-14)]; a lock changed by a Git checkout in the folder is installed at the next use [[environments-7](#environments-7)]; and the environment is listed as this device's while the files are untracked, still after `git add` alone, and as committed once a commit holds both [[environments-14](#environments-14)];
 - a private namespace at the stand-in registry installs with the app token of the instance it answers at and refuses without, naming the spec package, a resolution with no token ending in the registry's answer, not a conflict [[environments-12](#environments-12)] [[environments-5](#environments-5)].
@@ -430,7 +437,7 @@ When an integration suite starts a real core on a fresh scratch home with no reg
 
 #### environments-24
 
-When an integration suite runs an authoring session that writes a spec package at `spex-packages/<org>/<pkg>/` in a working folder, compiles its playbook, requests it by path, adds it and starts a session with it, then publishes it by name to the stand-in registry and requests the published version from a second scratch home, it shall assert each step's outcome, that a publish naming a package whose folder's manifest names another is refused naming both, and that the published release equals the folder's declared files [[environments-10](#environments-10)] [[environments-15](#environments-15)] [[environments-12](#environments-12)], none of them under a `.slc/` or `.slc-verify/` placed in the playbook's folder, in the preview or at the registry [[environments-1](#environments-1)], its manifest carrying a `description` and a `license`, while a dry run of the folder with `license` taken out of its `meta.yaml` was refused naming the field with nothing reaching the registry [[environments-10](#environments-10)] [[environments-17](#environments-17)].
+When an integration suite runs an authoring session that writes a spec package at `spex-packages/<org>/<pkg>/` in a working folder, compiles its playbook, requests it by path, adds it and starts a session with it, then publishes it by name to the stand-in registry and requests the published version from a second scratch home, it shall assert each step's outcome, that a publish naming a package whose folder's manifest names another is refused naming both, and that the published release equals the folder's declared files [[environments-10](#environments-10)] [[environments-15](#environments-15)] [[environments-12](#environments-12)], its compiler-owned paths absent from the preview, the registry and the second home's installed tree while its source, module, rebuild inputs and editable intermediates remain [[environments-1](#environments-1)], its manifest carrying a `description` and a `license`, while a dry run of the folder with `license` taken out of its `meta.yaml` was refused naming the field with nothing reaching the registry [[environments-10](#environments-10)] [[environments-17](#environments-17)].
 
 #### environments-25
 

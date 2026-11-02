@@ -877,6 +877,10 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Fixed
 
+- Published playbooks omit slc's generated verification tests and the
+  compile-time FSM bundle, retaining the files needed to run, inspect
+  and rebuild them.
+
 - Sync downloads incoming LFS content during authenticated, stoppable Check.
   Apply and local merge selection write the validated filtered bytes and refuse
   missing or corrupt cached content before changing files. Brokered Git
