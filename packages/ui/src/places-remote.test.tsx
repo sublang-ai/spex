@@ -553,7 +553,7 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
     goTo("Space");
     await settle();
 
-    // This computer: the proposal's "Use <folder>", and Choose folder…
+    // This computer: the proposal's "Use <folder>", and Choose project…
     // opening the path editor with the shell's picker (space-47).
     fireEvent.click(screen.getByTestId("space-issues"));
     const here = screen.getByTestId("space-repair");
@@ -567,26 +567,25 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
     await settle();
     fireEvent.click(screen.getByTestId("space-issues"));
     const there = screen.getByTestId("space-repair");
-    // Named by the project and its group, the folder it remembers
-    // secondary, the server named where this computer would be
-    // (space-46, space-112).
-    expect(within(there).getByTestId("space-repair-title").textContent).toBe(
-      "infra · acme — Project folder not connected on build-box",
-    );
-    expect(within(there).getByTestId("space-repair-folder").textContent).toBe("/code/infra · 2 sessions ran there");
+    // Saved conversations identify the task; its explanation names the
+    // server and its previous folder is explicitly labelled (DR-182).
+    expect(within(there).getByTestId("space-repair-title").textContent).toBe("Continue 2 saved conversations");
+    expect(within(there).getByText("These conversations cannot be continued on build-box yet.")).toBeTruthy();
+    const previousFolder = within(within(there).getByTestId("space-repair-folder"));
+    expect(previousFolder.getByText("Previously used folder")).toBeTruthy();
+    expect(previousFolder.getByText("/code/infra")).toBeTruthy();
     // [run-view-171] [run-view-169] a remote place's repair row offers
     // no folder: neither its proposal's "Use <folder>" nor "Choose
-    // folder…", no path editor and no picker (space-47, space-103).
+    // project…", no path editor and no picker (space-47, space-103).
     expect(within(there).queryByTestId("space-repair-use")).toBeNull();
     expect(within(there).queryByText(/^Use /)).toBeNull();
     expect(within(there).queryByTestId("space-repair-choose")).toBeNull();
-    expect(within(there).queryByText("Choose folder…")).toBeNull();
+    expect(within(there).queryByText("Choose project…")).toBeNull();
     expect(within(there).queryByTestId("space-repair-path")).toBeNull();
     expect(within(there).queryByText("Browse…")).toBeNull();
     expect(pathEntries(there)).toEqual([]);
-    // Declining names no folder, and stands, naming the server
-    // (space-112).
-    expect(within(there).getByTestId("space-repair-decline").textContent).toBe("Not on build-box");
+    // Postponing this choice does not assert where a project belongs.
+    expect(within(there).getByTestId("space-repair-decline").textContent).toBe("Not now");
     expect(pickDirectory).not.toHaveBeenCalled();
     expect(callsOf(alpha, "project.rebind")).toEqual([]);
   });
