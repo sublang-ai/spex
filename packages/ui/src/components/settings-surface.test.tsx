@@ -74,8 +74,10 @@ const CONFIG: ConfigState = {
           coder: { playerId: "dev.coder", display: "claude-opus-5[1m]" },
           reviewer: { playerId: "dev.reviewer", display: "gpt-5.6-sol" },
         },
+        origin: "own",
       },
     ],
+    standsAside: [],
   },
 };
 
@@ -320,17 +322,33 @@ describe("SET: the session-player roster", () => {
   });
 });
 
-describe("settings-46: your own group's file, and the players a project names", () => {
+describe("settings-46: your own group's file, and the players to set up", () => {
   afterEach(() => useAppStore.setState({ projects: [], space: undefined }));
 
-  test("a player a project names and the roster lacks reads so, and Add creates it from the neutral block", async () => {
+  test("a player a binding names and the roster lacks plays on the Captain's agent, and Add creates it from the Captain's block", async () => {
     useAppStore.setState({ projects: [PROJECT], space: home() });
     useAppStore.setState({
       configState: {
         ...CONFIG,
+        summary: {
+          ...CONFIG.summary!,
+          // The default `dev.<role>` of a playbook no entry binds, which
+          // the roster lacks: the composition flags it (core-service-2).
+          players: [
+            ...CONFIG.summary!.players,
+            {
+              id: "dev.inspector",
+              agent: CONFIG.summary!.captain,
+              display: "claude-opus-5[1m]",
+              boundBy: ["inspect.inspector"],
+              toSetUp: true,
+            },
+          ],
+        },
+        // A project's entry naming a player the roster lacks; one the
+        // roster holds is no player to set up.
         missingPlayers: [
           { player: "dev.triager", repository: PROJECT.id, roles: [{ playbook: "triage", role: "triager" }] },
-          // One the roster already holds is no longer missing.
           { player: "dev.coder", repository: PROJECT.id, roles: [{ playbook: "code", role: "coder" }] },
         ],
       } as ConfigState,
@@ -338,19 +356,27 @@ describe("settings-46: your own group's file, and the players a project names", 
       refreshReadiness: vi.fn(async () => {}),
     });
     render(<SettingsSurface />);
-    const row = screen.getByTestId("player-missing-dev.triager");
-    expect(within(row).getByTestId("player-missing-note-dev.triager").textContent).toBe(
-      "Named by demo, not set up here",
-    );
-    expect(within(row).getByTestId("player-missing-note-dev.triager").title).toBe("Answers triage.triager");
-    expect(screen.queryByTestId("player-missing-dev.coder")).toBeNull();
-    fireEvent.click(within(row).getByTestId("player-missing-add-dev.triager"));
+    for (const [id, position] of [["dev.inspector", "inspect.inspector"], ["dev.triager", "triage.triager"]] as const) {
+      const row = screen.getByTestId(`player-row-${id}`);
+      expect(row.dataset.toSetUp).toBe("true");
+      const note = within(row).getByTestId(`player-setup-${id}`);
+      expect(note.textContent).toBe("Plays on the Captain's agent");
+      expect(note.title).toBe(`Answers ${position}`);
+      // Nothing to edit or remove before it is set up.
+      expect(within(row).queryByTestId(`player-edit-${id}`)).toBeNull();
+      expect(within(row).queryByTestId(`player-delete-${id}`)).toBeNull();
+    }
+    // The project names no project file as editable, and no project.
+    expect(document.body.textContent).not.toContain("Named by");
+    expect(screen.getAllByTestId("player-row-dev.coder")).toHaveLength(1);
+    expect(screen.getByTestId("player-row-dev.coder").dataset.toSetUp).toBeUndefined();
+    fireEvent.click(screen.getByTestId("player-setup-add-dev.triager"));
     await vi.waitFor(() =>
       expect(commandMock).toHaveBeenCalledWith("config.edit", {
         op: {
           kind: "player.set",
           playerId: "dev.triager",
-          patch: { adapter: "claude", model: "claude-opus-5-5", effort: "high", permissions: { mode: "auto" } },
+          patch: { adapter: "claude", model: "claude-opus-4-8", effort: "high", permissions: { mode: "auto" } },
         },
       }),
     );
