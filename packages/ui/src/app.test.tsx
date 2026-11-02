@@ -770,7 +770,7 @@ describe("run-view-57: a workspace holding projects opens inside one", () => {
 });
 
 describe("run-view-172: first-project welcome route", () => {
-  test("space-58: palette feedback survives close and repeated refusals are fresh announcements", async () => {
+  test("space-58: pending palette submission survives shortcuts, and feedback survives close and repeated refusals", async () => {
     const added = {
       id: "me/gamma-spex", name: "gamma", path: "/tmp/gamma", registeredAt: 0,
       repository: { key: "me/gamma-spex", name: "gamma-spex", group: "me", own: true },
@@ -781,6 +781,7 @@ describe("run-view-172: first-project welcome route", () => {
     });
     const ledger = { intents: [], attention: [], badge: 0 };
     let picks = 0;
+    let finishPick!: () => void;
     commandMock.mockImplementation(async (type: string) => {
       if (type === "project.register") return added;
       if (type === "project.list") return [added];
@@ -788,6 +789,7 @@ describe("run-view-172: first-project welcome route", () => {
       if (type === "ledger.get") return ledger;
       if (type === "space.pick") {
         if (++picks < 3) throw new Error("Destination unavailable");
+        await new Promise<void>((resolve) => { finishPick = resolve; });
         return { accepted: true };
       }
       return defaultReply(type);
@@ -815,6 +817,17 @@ describe("run-view-172: first-project welcome route", () => {
       expect(live.firstElementChild).not.toBe(previousAnnouncement);
     });
     fireEvent.click(submit);
+    await vi.waitFor(() => expect(picks).toBe(3));
+    expect(document.activeElement).toBe(picker);
+    // These bubble to App's real palette-toggle shortcut unless the
+    // pending dialog consumes them. Neither may hide a running write.
+    for (const modifier of [{ metaKey: true }, { ctrlKey: true }]) {
+      fireEvent.keyDown(document.activeElement!, { key: "p", ...modifier });
+      expect(screen.getByTestId(`space-picker-${added.id}`)).toBe(picker);
+      expect(document.activeElement).toBe(picker);
+      expect(picks).toBe(3);
+    }
+    await act(async () => { finishPick(); });
     await vi.waitFor(() => {
       expect(screen.queryByTestId("project-palette")).toBeNull();
       expect(live.textContent).toBe("Adding gamma to Personal at Example");
