@@ -71,7 +71,7 @@ When `spex add <org>/<pkg>[@<version>]` or `spex add <org>/<pkg> --path <folder>
 
 #### cli-3
 
-When `spex remove <org>/<pkg>` or its alias `spex rm` runs, the CLI shall drop the request from `spex.yaml` [[environments-15](environments.md#environments-15)], resolve, install and place [[environments-5](environments.md#environments-5)] [[environments-7](environments.md#environments-7)] [[environments-8](environments.md#environments-8)], and print each package the lock lost, refusing before any write a name `spex.yaml` does not request and the built-in package [[environments-11](environments.md#environments-11)], the latter with "sublang/playbooks comes with Spex".
+When `spex remove <org>/<pkg>` or its alias `spex rm` runs, the CLI shall drop the request from `spex.yaml` [[environments-15](environments.md#environments-15)], resolve, install and place [[environments-5](environments.md#environments-5)] [[environments-7](environments.md#environments-7)] [[environments-8](environments.md#environments-8)], and print each package the lock lost, refusing before any write a name `spex.yaml` does not request, the built-in package removable as any other ([DR-176](../decisions/176-global-playbooks-and-a-placed-playbook-runs.md)).
 
 #### cli-4
 
@@ -203,7 +203,7 @@ When the packed CLI, installed into a scratch prefix from `npm pack`, runs with 
 - a lock recording the app's built-in package at a checksum no registry serves installs the rest and marks the built-in `built in`, and `spex list` reads it `built in` and `not installed` [[cli-4](#cli-4)] [[cli-6](#cli-6)];
 - once the registry publishes `demo/tool` 1.1.0, `spex update` moves the lock and prints both versions, and prints that nothing moved when run again [[cli-5](#cli-5)];
 - after a hand edit to `demo/spec`'s placed copy, `spex install` prints `spec edited in specs/ — left as yours` beneath `demo/spec` [[cli-4](#cli-4)], and once the registry publishes `demo/spec` 1.1.0, `spex update` prints `demo/spec` with both versions and, beneath it, `spec edited in specs/ — left as yours, 1.1.0 waiting` [[cli-5](#cli-5)];
-- `spex remove demo/other` drops the request, the files and the placement and prints the loss, a name not requested refused, and `spex remove sublang/playbooks` is refused with "sublang/playbooks comes with Spex" and nothing written [[cli-3](#cli-3)];
+- `spex remove demo/other` drops the request, the files and the placement and prints the loss, a name not requested refused, and `spex remove sublang/playbooks`, in the folder whose lock records the built-in package, drops its request and prints the loss as for any other [[cli-3](#cli-3)];
 - the environment root is found from a subfolder of the working folder, and from a working folder without `spex.yaml` at its Git top level [[cli-1](#cli-1)].
 
 #### cli-16

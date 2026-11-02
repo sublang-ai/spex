@@ -16,6 +16,8 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 - [DR-012](012-spec-package-files.md) in the specs tree: a placed spec is a one-file package the linter reads as any other, whether or not the map lists it.
 - [DR-172](172-surfaces-a-fresh-user-reads.md) in its vocabulary, its Packages tab and one accepted loss: "place" is the word for what an install writes for agents and into `specs/`; a row's spec line says where the spec stands; the command line's `export` closes the "New package…" loss.
 
+Amended by [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md) in what an install does for a playbook: a placed playbook runs, its roles bound by default; `enable` and `disable` retire as acts and as words.
+
 ## Context
 
 - A release holds one spec. [DR-115](115-a-spec-reaches-the-agents.md) exports it to agents as a generated skill; nothing puts it into a project's `specs/`, where the project's own specs could cite it, the linter could check it and a reader would look for it. A package under development at `spex-packages/<org>/<pkg>/` has the same gap: its spec is never a spec of the project developing it.

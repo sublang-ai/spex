@@ -19,6 +19,7 @@ The tri-state encoding, the player/binding ownership split, and the editor fork 
 Amended by [DR-146](146-a-lane-appears-with-its-first-call.md): a pane stands for each player a call has reached, from its first call record on, rather than for each player the bindings reference.
 Amended by [DR-155](155-players-named-delegated-and-recovered.md): a player reads by its short name and a letter mark on every surface, its id in a tooltip.
 Amended by [DR-160](160-the-captain-dispatches-in-plain-sight.md): a lane's call names the playbook and step it runs, leading back to its delegation line.
+Amended by [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md) in how a player bound by more than one playbook reads: the row groups the roles one player plays and says nothing more; the binding editor names the other playbooks.
 
 ## Context
 

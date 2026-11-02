@@ -12,6 +12,7 @@ Amends [DR-105](105-playbook-17-5-0-adoption.md) in its parity claim alone: the 
 Amended by [DR-126](126-cligent-0-34-1-slc-0-18-1-adoption.md) in its Cligent and slc floors and lock resolutions alone: Cligent `^0.34.1` and slc `^0.18.1`; Playbook and the skills decisions stand.
 Amended by [DR-130](130-playbook-17-11-0-cligent-0-36-0-slc-0-19-0-adoption.md) in its floors and lock resolutions alone: Playbook `^17.11.0`, Cligent `^0.36.0` and slc `^0.19.0`; the skills decisions stand.
 Follows [DR-081](081-the-app-supplies-the-compiler.md)'s explicit-bump rule for the compiler and [DR-024](024-app-supplied-agent-runtimes.md)'s app-supplied agent runtimes; nothing either decided changes.
+Amended by [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md) in the core's parity with the launcher: the default bindings and players the core composes for placed playbooks are its third exception, beside `from` and `skills`.
 
 ## Context
 
