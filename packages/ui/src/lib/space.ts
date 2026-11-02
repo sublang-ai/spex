@@ -533,7 +533,7 @@ export function rowPhrase(
 }
 
 /** A project's code glyph (space-1, DR-172): the core's phrase, "Code:
- * <where>" or "Code: no remote", with what it says of the remote — at a
+ * <where>" or "Code only on this computer" or "Code not on a Git host", with what it says of the remote — at a
  * Space, elsewhere, or none, a warning in the attention tone; nothing
  * while the core does not know yet, the records hold no `project.json`,
  * or the row stands under "This computer" (`local`), which nobody shares

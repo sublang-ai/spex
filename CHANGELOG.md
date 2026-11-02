@@ -365,6 +365,18 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Changed
 
+- Projects are shown where they are open ([DR-175](specs/decisions/175-projects-shown-where-they-are-open.md)).
+  The sidebar heads a server's projects only while a seat holds one, so
+  an empty server adds no heading and the server welcome page is gone.
+  The project palette lists the groups' projects once under "From your
+  groups", every row carrying its Space row's Open control ("Open here",
+  "Open on <server>", "Show"), and reads "No projects in your groups yet"
+  or "All your groups' projects are open here" when it lists none. A
+  server's line on Space offers no Connect: the seat opens on the first
+  "Open on <server>". A project whose code has no remote reads "Code only
+  on this computer" or "Code not on a Git host", its server entries are
+  disabled with "Needs the code on a Git host", and a seat refuses such
+  an open.
 - Package environments are complete in their root folder: `spex.yaml`,
   `spex.lock` and the ignored `.spex/` installation. A project's root is
   its working folder; your own group's is its records clone. The CLI and

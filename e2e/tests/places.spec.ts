@@ -9,29 +9,38 @@
 // folder, and signed in at the instance already, since a core not in
 // seat mode takes no ticket to sign in on (git-host-27). This computer and the first seat each hold a finished turn
 // nobody has read, the second seat a question, and the first seat a tool
-// approval waiting. The journey opens both seats from the Space
-// surface, where their lines stand under their group, and reads,
-// through the page alone: each place's projects under its own heading
-// and the selector naming the three places; one
-// queue carrying the three cores' attention in each band's order, the
-// badge counting them, an entry opened at its own place; an approval
-// answered at its seat; a seat whose hello carries another protocol
-// version read as mismatched alone; no bearer in any frame the page
-// received; and, after Disconnect, the seat's heading gone and its relay
-// path refused, a later Connect sending at once.
+// approval waiting. The team group holds two projects no core has.
+// The journey opens both seats by "Open on <server>" on those projects'
+// rows of the Space surface, where the servers' lines stand under their
+// group with no control of their own, and reads, through the page
+// alone: each place's projects under its own heading and the selector
+// naming the three places; one queue carrying the three cores'
+// attention in each band's order, the badge counting them, an entry
+// opened at its own place; an approval answered at its seat; a seat
+// whose hello carries another protocol version read as mismatched
+// alone; no bearer in any frame the page received; and, after
+// Disconnect, the seat's heading gone, its line reading its name alone
+// and its relay path refused, a later "Open on <server>" sending at
+// once. The stand-in seats are plain cores, not in seat mode: a join
+// clones the records there and allocates no folder (space-103), so each
+// seat lists the projects registered there alone.
 
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import type { Locator, Page } from "@playwright/test";
 import WebSocket from "ws";
 import { PROTOCOL_VERSION } from "@sublang/spex-core";
+import { seedDemoProject } from "@sublang/spex-core/testing";
 
 import {
   HOST_GROUP,
   expect,
+  hostKey,
   instanceSection,
   nav,
   open,
   registerLocalProject,
+  rowsOf,
   runTurn,
   surfaceEntry,
   tapSockets,
@@ -93,6 +102,27 @@ function opensSent(sent: readonly string[]): { instance: string; serverId: strin
   });
 }
 
+/** The menu beside a project's primary control on its Space row,
+ * holding its other places (space-1, space-111), opened where it is not
+ * standing. */
+async function otherPlaces(page: Page, key: string): Promise<Locator> {
+  const menu = page.getByTestId(`space-row-places-${key}-menu`);
+  if ((await menu.count()) === 0) await page.getByTestId(`space-row-places-${key}`).click();
+  await expect(menu).toBeVisible();
+  return menu;
+}
+
+/** A seat's clone of a group project's records once the join the page
+ * sent it landed (space-111): the stand-in seat allocates no folder
+ * (space-103), so it lists no project of it. */
+async function joinLanded(seat: App, key: string): Promise<void> {
+  await seat.core.waitSpace(
+    0,
+    (state) => rowsOf(state).some((row) => row.key === key && row.sync.phase === "idle" && row.placements.some((placement) => placement.attached)),
+    60_000,
+  );
+}
+
 /** A WebSocket at a path of the local core's endpoint with its token:
  * the status it was refused with, or "open". */
 function dial(app: App, path: string): Promise<number | "open"> {
@@ -137,30 +167,52 @@ test("run-view-173: one desktop opens two seats and reads its places, its joined
   await one.seat.core.command("turn.submit", { sessionId: asking.id, text: APPROVAL_TURN });
   await expect.poll(async () => (await one.seat.core.command("approval.list", {})).pending.length, { timeout: 30_000 }).toBe(1);
 
+  // The team group's two projects, which no core has, read by every
+  // core before the page opens: each seat opens on "Open on <server>" of
+  // one of them (run-view-170).
+  const seeded = ["lab-notes", "lab-tools"].map((name) => {
+    const code = join(dirname(app.dataDir), "code-remote", name);
+    seedDemoProject(code);
+    host.script.addRepository({ group: HOST_GROUP, name: `${name}-spex`, project: { format: 1, name, remote: code } });
+    return hostKey(host, `${HOST_GROUP}/${name}-spex`);
+  });
+  const [notes, tools] = seeded as [string, string];
+  for (const core of [one.seat.core, two.seat.core, app.core]) {
+    const from = core.mark();
+    await core.command("space.refresh", {});
+    await core.waitSpace(from, (state) => seeded.every((key) => rowsOf(state).some((row) => row.key === key)), 60_000);
+  }
+
   const tap = tapSockets(page);
   await open(page, app);
 
   // [run-view-173] [run-view-170] the Space surface lists both servers
-  // as lines under their group's heading, by name, each with Connect.
+  // as lines under their group's heading, each by its name alone, with
+  // no control while no seat is open there: a seat opens on "Open on
+  // <server>" alone.
   await nav(page, "Space").click();
-  const servers = instanceSection(page, host).getByTestId(`space-group-${HOST_GROUP}`).getByTestId(`space-group-servers-${HOST_GROUP}`);
+  const group = instanceSection(page, host).getByTestId(`space-group-${HOST_GROUP}`);
+  const servers = group.getByTestId(`space-group-servers-${HOST_GROUP}`);
   const rowOne = servers.getByTestId(`space-server-${one.place}`);
   const rowTwo = servers.getByTestId(`space-server-${two.place}`);
-  await expect(rowOne).toContainText("lab-1");
-  await expect(rowTwo).toContainText("lab-2");
+  await expect(rowOne).toHaveText("lab-1");
+  await expect(rowTwo).toHaveText("lab-2");
   const controlOne = page.getByTestId(`space-server-control-${one.place}`);
   const controlTwo = page.getByTestId(`space-server-control-${two.place}`);
   const moreOne = page.getByTestId(`space-server-more-${one.place}`);
   const moreTwo = page.getByTestId(`space-server-more-${two.place}`);
-  await expect(controlOne).toHaveText("Connect");
-  await expect(controlTwo).toHaveText("Connect");
+  await expect(controlOne).toHaveCount(0);
+  await expect(controlTwo).toHaveCount(0);
+  await expect(moreOne).toHaveCount(0);
+  await expect(moreTwo).toHaveCount(0);
 
-  // [run-view-173] [run-view-170] the first Connect shows the terms as
-  // bullets — the Space sign-in placed on the server, private packages
-  // needing a separate registry sign-in there — naming neither seat nor
-  // ticket (DR-172), and asks nothing yet; "I understand" sends
-  // `server.open` with consent.
-  await controlOne.click();
+  // [run-view-173] [run-view-170] the first "Open on lab-1", on a group
+  // project's row, shows the terms as bullets — the Space sign-in placed
+  // on the server, private packages needing a separate registry sign-in
+  // there — naming neither seat nor ticket (DR-172), and asks nothing
+  // yet; "I understand" sends `server.open` with consent.
+  await expect(group.getByTestId(`space-row-${notes}`)).toBeVisible();
+  await (await otherPlaces(page, notes)).getByTestId(`space-row-open-at-${one.place}-${notes}`).click();
   const contract = page.getByTestId(`space-server-contract-${one.place}`);
   await expect(contract.getByRole("listitem").first()).toBeVisible();
   await expect(contract).toContainText("Space sign-in on lab-1");
@@ -169,8 +221,8 @@ test("run-view-173: one desktop opens two seats and reads its places, its joined
   expect(opensSent(tap.sent)).toEqual([]);
   expect(one.hub.admissions).toEqual([]);
   await page.getByTestId(`space-server-consent-${one.place}`).getByText("I understand").click();
-  // Open, the line's Connect gives way to its overflow, which holds
-  // Disconnect (run-view-170).
+  // Open, the line holds its overflow, which holds Disconnect, and still
+  // no control of its own (run-view-170).
   await expect(moreOne).toBeVisible({ timeout: 30_000 });
   await expect(controlOne).toHaveCount(0);
   await expect.poll(() => opensSent(tap.sent)).toEqual([{ instance: host.url, serverId: one.server.id, consented: true }]);
@@ -179,15 +231,20 @@ test("run-view-173: one desktop opens two seats and reads its places, its joined
   // with no page to approve (core-service-142).
   await expect(page.getByTestId(`space-server-connected-${one.place}`)).toHaveText("Connected", { timeout: 30_000 });
   await expect(page.getByTestId(`space-server-approve-${one.place}`)).toHaveCount(0);
+  await joinLanded(one.seat, notes);
 
-  // The second server's first Connect on this computer shows its own
-  // terms (run-view-170): understood, it opens too.
-  await controlTwo.click();
+  // The second server's first "Open on lab-2" on this computer, of the
+  // other project, shows its own terms (run-view-170): understood, it
+  // opens too, reading Connected with its overflow.
+  await (await otherPlaces(page, tools)).getByTestId(`space-row-open-at-${two.place}-${tools}`).click();
   await expect(page.getByTestId(`space-server-contract-${two.place}`)).toContainText("Space sign-in on lab-2");
   await expect(page.getByTestId(`space-server-contract-${two.place}`)).toContainText("separate registry sign-in on lab-2");
   await page.getByTestId(`space-server-consent-${two.place}`).click();
   await expect(moreTwo).toBeVisible({ timeout: 30_000 });
+  await expect(controlTwo).toHaveCount(0);
   await expect.poll(() => opensSent(tap.sent).at(-1)).toEqual({ instance: host.url, serverId: two.server.id, consented: true });
+  await expect(page.getByTestId(`space-server-connected-${two.place}`)).toHaveText("Connected", { timeout: 30_000 });
+  await joinLanded(two.seat, tools);
 
   // [run-view-173] [run-view-168] the selector names the three places.
   await expect(page.getByTestId("place-selector").locator("option")).toHaveText(["This computer", "lab-1", "lab-2"]);
@@ -268,19 +325,23 @@ test("run-view-173: one desktop opens two seats and reads its places, its joined
   // A mismatched place adds nothing to the badge (dashboard-9).
   await expect(page.getByTestId("nav-attention-badge")).toHaveText("2");
 
-  // [run-view-173] [run-view-169] after Disconnect the seat's heading is gone
-  // and its relay path refused.
+  // [run-view-173] [run-view-169] [run-view-170] after Disconnect the
+  // seat's heading is gone, its line reads its name with no control,
+  // and its relay path is refused.
   await nav(page, "Space").click();
   await moreOne.click();
   await page.getByTestId(`space-server-disconnect-${one.place}`).click();
-  await expect(controlOne).toHaveText("Connect", { timeout: 30_000 });
+  await expect(moreOne).toHaveCount(0, { timeout: 30_000 });
+  await expect(rowOne).toHaveText("lab-1");
+  await expect(controlOne).toHaveCount(0);
   await expect(sidebar.getByTestId("sidebar-place-heading")).toHaveText(["This computer", "lab-2"]);
   await expect(groupOf("lab-1")).toHaveCount(0);
   expect(await dial(app, `/seats/${encodeURIComponent(one.place)}`)).toBe(401);
-  // [run-view-173] [run-view-170] a later Connect of that server on this
-  // computer sends `server.open` at once, with no terms shown.
+  // [run-view-173] [run-view-170] a later "Open on lab-1" on this
+  // computer, of the project that seat lacks, sends `server.open` at
+  // once, with no terms shown.
   const opens = opensSent(tap.sent).length;
-  await controlOne.click();
+  await (await otherPlaces(page, tools)).getByTestId(`space-row-open-at-${one.place}-${tools}`).click();
   await expect(page.getByTestId(`space-server-contract-${one.place}`)).toHaveCount(0);
   await expect(moreOne).toBeVisible({ timeout: 30_000 });
   await expect.poll(() => opensSent(tap.sent).slice(opens)).toEqual([{ instance: host.url, serverId: one.server.id, consented: true }]);
@@ -288,6 +349,7 @@ test("run-view-173: one desktop opens two seats and reads its places, its joined
   // now lists the seats (run-view-168).
   await expect(sidebar.getByTestId("sidebar-place-heading")).toHaveText(["This computer", "lab-2", "lab-1"]);
   await expect(groupOf("lab-1").getByTestId(`sidebar-project-${projectOne.key}@${one.place}`)).toBeVisible();
+  await joinLanded(one.seat, tools);
 
   // [run-view-173] [run-view-168] no frame the page received, nor any
   // URL it dialed, carries a bearer a hub minted or the seat's endpoint:

@@ -1246,6 +1246,16 @@ msgstr "代码未下载：{host} 需要你的凭据 — 请在设置中添加"
 msgid "Code not downloaded: your credential for {host} cannot be read — set it again in Settings"
 msgstr "代码未下载：无法读取你在 {host} 的凭据 — 请在设置中重新设置"
 
+#. The title of a warning glyph on a project's row while the project is not open on this computer: its records name no Git host for its code
+#: src/space.ts
+msgid "Code not on a Git host"
+msgstr "代码未托管在 Git 主机上"
+
+#. The title of a warning glyph on a project's row while the project is open on this computer: its code is on no Git host, only in its folder here
+#: src/space.ts
+msgid "Code only on this computer"
+msgstr "代码仅在本机"
+
 #. The project file's unit label: the remote of the code changed
 #: src/space.ts
 msgid "Code remote changed"
@@ -1255,11 +1265,6 @@ msgstr "代码远程仓库有更改"
 #: src/space.ts
 msgid "Code: {where}"
 msgstr "代码：{where}"
-
-#. The title of a warning glyph on a project's row: no remote is set for the project's code
-#: src/space.ts
-msgid "Code: no remote"
-msgstr "代码：无远程仓库"
 
 #. Refusal: the compile the Boss awaited was canceled
 #. The outcome of a compile the reader stopped
@@ -1923,6 +1928,11 @@ msgstr "请为群组命名"
 #: src/environments.ts
 msgid "Name the package to add"
 msgstr "请填写要添加的规约包名称"
+
+#. Refusal of opening a project on a team server: its records name no Git host for its code, so the server has no code to take; the member pushes the code to a Git host first
+#: src/space.ts
+msgid "Needs the code on a Git host"
+msgstr "需要先将代码托管在 Git 主机上"
 
 #. A stopped transfer's message; {host} is the remote's host
 #. A stopped transfer's message; {host} is the remote's host

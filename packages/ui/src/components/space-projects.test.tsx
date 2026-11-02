@@ -63,7 +63,6 @@ const WORDS = {
     groupActs: ["Members"],
     connected: "Connected",
     disconnect: "Disconnect",
-    connect: "Connect",
     groupSessions: "Group sessions",
     yourSessions: "Your sessions",
     here: "Here",
@@ -72,6 +71,7 @@ const WORDS = {
     rowActs: ["Sync now", "Members", "Explore records"],
     show: "Show",
     openOnLab: "Open on lab-1",
+    needsCodeHost: "Needs the code on a Git host",
     openHere: "Open here",
     showOnLab: "Show on lab-1",
     openingOnLab: "Opening on lab-1…",
@@ -116,7 +116,6 @@ const WORDS = {
     groupActs: ["成员"],
     connected: "已连接",
     disconnect: "断开连接",
-    connect: "连接",
     groupSessions: "群组会话",
     yourSessions: "你的会话",
     here: "这里",
@@ -125,6 +124,7 @@ const WORDS = {
     rowActs: ["立即同步", "成员", "浏览记录"],
     show: "显示",
     openOnLab: "在 lab-1 上打开",
+    needsCodeHost: "需要先将代码托管在 Git 主机上",
     openHere: "在这里打开",
     showOnLab: "在 lab-1 上显示",
     openingOnLab: "正在 lab-1 上打开…",
@@ -436,13 +436,16 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
     expect(server.textContent?.startsWith(`lab-1 · ${words.connected}`)).toBe(true);
     expect(screen.getByTestId(`space-server-connected-${PLACE}`).textContent).toBe(words.connected);
     expect(entries(`space-server-more-${PLACE}`)).toEqual([words.disconnect]);
-    // [space-1] the seat closed, the line reads "lab-1" with Connect.
+    // [space-1] the seat closed, the line reads "lab-1" with no control
+    // (run-view-170).
     local.command.mockImplementation(async (type: string) =>
       type === "server.list" ? listing(false) : type === "space.get" ? state : {},
     );
     act(() => useAppStore.setState({ seats: [] }));
-    await waitFor(() => expect(screen.getByTestId(`space-server-control-${PLACE}`).textContent).toBe(words.connect));
-    expect(screen.queryByTestId(`space-server-connected-${PLACE}`)).toBeNull();
+    await waitFor(() => expect(screen.queryByTestId(`space-server-connected-${PLACE}`)).toBeNull());
+    expect(screen.queryByTestId(`space-server-control-${PLACE}`)).toBeNull();
+    expect(screen.queryByTestId(`space-server-more-${PLACE}`)).toBeNull();
+    expect(server.textContent?.trim()).toBe("lab-1");
   });
 
   test("the rows: names, marks, the one phrase and the overflow, the placements' lines in the Sync tab", async () => {
@@ -502,6 +505,25 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
     expect(pickDirectory).toHaveBeenCalledTimes(1);
     expect(callsOf(local, "space.join")).toEqual([{ instance: ORIGIN, hostId: "22", folder: "/Users/ada/code/beta" }]);
     expect(callsOf(seat, "space.join")).toEqual([]);
+  });
+
+  test("space-111: a project whose records name no code remote offers its server entry disabled, titled Needs the code on a Git host", async () => {
+    state = home({ alpha: alpha({ code: "Code only on this computer", codeKind: "none" }) });
+    await renderHere();
+    fireEvent.click(screen.getByTestId(`space-row-places-${ALPHA_KEY}`));
+    const entry = within(screen.getByTestId(`space-row-places-${ALPHA_KEY}-menu`)).getByTestId(
+      `space-row-open-at-${PLACE}-${ALPHA_KEY}`,
+    ) as HTMLButtonElement;
+    // [space-111] the entry keeps its words, disabled, saying what it
+    // needs; no seat is opened and nothing is sent.
+    expect(entry.textContent).toBe(words.openOnLab);
+    expect(entry.disabled).toBe(true);
+    expect(entry.getAttribute("title")).toBe(words.needsCodeHost);
+    fireEvent.click(entry);
+    await settle();
+    expect(callsOf(local, "server.open")).toEqual([]);
+    expect(callsOf(seat, "space.join")).toEqual([]);
+    fireEvent.keyDown(window, { key: "Escape" });
   });
 
   test("Open on lab-1 sends the seat's join with no folder once it is signed in, nothing while it signs in", async () => {

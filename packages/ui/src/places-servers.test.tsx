@@ -2,27 +2,29 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // run-view-171: the place selector and the team servers (run-view-168,
-// run-view-170, DR-133). The local store and two seat stores, each over
-// a fake client of its own: the selector switches Settings and Space
-// between this computer's store and a seat's, each surface reading and
-// acting at the place it names, while a project's Playbooks and
-// Packages tabs stand at the project's place (DR-172); this
-// computer's Space surface lists each server an instance lets the
-// person open, one line under its group's heading, with Connect, or
-// "Connected" and Disconnect in its overflow, by whether a seat is open
-// there; "Open on <server>" on a row opens the seat where none is and
-// sends that seat's core the join once it is signed in (space-111); the
-// first Connect on this device shows the instance's contract and sends
-// `server.open` with consent only on "I understand", a later Connect
-// sending it at once; while the open runs the line says so, and past
-// ten seconds its title says the first connection can take a minute; a seat whose
-// sign-in runs reads the approval's link, the desktop asked to open it
-// once per flow, and one whose sign-in failed reads its cause with
-// "Sign in again", sending `server.signin`; Disconnect sends
-// `server.close`; a refusal reads the core's cause in place; and the
-// page waits for an open or a close as long as the admission may take.
-// A new playbook asked for from a seat's Captain home opens that seat's
-// project's Playbooks tab.
+// run-view-170, DR-133, DR-175). The local store and two seat stores,
+// each over a fake client of its own: the selector switches Settings and
+// Space between this computer's store and a seat's, each surface reading
+// and acting at the place it names, while a project's Playbooks and
+// Packages tabs stand at the project's place (DR-172); this computer's
+// Space surface lists each server an instance lets the person open, one
+// line under its group's heading, reading "Connected" with Disconnect in
+// its overflow while a seat is open there and its name alone otherwise,
+// with no Connect; "Open on <server>" on a row is what opens a seat
+// where none is, and sends that seat's core the join once it is signed
+// in (space-111); this device's first such open at a server shows the
+// instance's contract beneath its line and sends `server.open` with
+// consent only on "I understand", a later one sending it at once; while
+// the open runs the line says so, and past ten seconds its title says
+// the first connection can take a minute; a refused open reads the
+// core's cause on the line, the row's "Open on <server>" offered again;
+// a seat whose sign-in runs reads the approval's link, the desktop asked
+// to open it once per flow, and one whose sign-in failed reads its cause
+// with "Sign in again", sending `server.signin`; Disconnect sends
+// `server.close`, the line reading the server's name alone again; and
+// the page waits for an open or a close as long as the admission may
+// take. A new playbook asked for from a seat's Captain home opens that
+// seat's project's Playbooks tab.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -432,19 +434,42 @@ async function openGroups(): Promise<HTMLElement> {
 }
 
 const row = (place: string): HTMLElement => screen.getByTestId(`space-server-${place}`);
-/** A server's Connect, where no seat is open at it (run-view-170). */
-const control = (place: string): HTMLButtonElement =>
-  screen.getByTestId(`space-server-control-${place}`) as HTMLButtonElement;
 /** A server's overflow, where a seat is open at it (run-view-170). */
 const more = (place: string): HTMLButtonElement => screen.getByTestId(`space-server-more-${place}`) as HTMLButtonElement;
 /** Whether the line reads its seat open: "Connected" with Disconnect in
- * its overflow, and no Connect. */
+ * its overflow. */
 const connectedLine = (place: string): boolean =>
-  screen.queryByTestId(`space-server-more-${place}`) !== null && screen.queryByTestId(`space-server-control-${place}`) === null;
+  screen.queryByTestId(`space-server-connected-${place}`) !== null && screen.queryByTestId(`space-server-more-${place}`) !== null;
+/** The line reads the server's name alone (run-view-170): no status and
+ * no control — no Connect, no overflow. */
+function expectNameAlone(place: string, name: string): void {
+  expect(row(place).textContent).toBe(name);
+  expect(within(row(place)).queryAllByRole("button")).toEqual([]);
+  expect(screen.queryByTestId(`space-server-control-${place}`)).toBeNull();
+}
 /** Disconnect, from the line's overflow (run-view-170). */
 function disconnect(place: string): void {
   fireEvent.click(more(place));
   fireEvent.click(screen.getByTestId(`space-server-disconnect-${place}`));
+}
+
+/** The joins a fake core was sent (space-29). */
+const joinsOf = (fake: Fake): unknown[] => callsOf(fake, "space.join");
+
+/** The notes row's phrase on this computer's Space (space-87). */
+const notesPhrase = (): string => screen.getByTestId(`space-repo-state-${NOTES_KEY}`).textContent ?? "";
+
+/** Open the menu of the notes row's other places, beside its primary
+ * control, and read its entries (space-1, space-111). */
+function openMenu(): HTMLElement {
+  fireEvent.click(screen.getByTestId(`space-row-places-${NOTES_KEY}`));
+  return screen.getByTestId(`space-row-places-${NOTES_KEY}-menu`);
+}
+
+/** "Open on lab-box" on the notes row (space-111): the one act that opens
+ * a seat at a server where none is (run-view-170). */
+function openOnLab(): void {
+  fireEvent.click(within(openMenu()).getByTestId(`space-row-open-at-${LAB_BOX}-${NOTES_KEY}`));
 }
 
 /** The Space's terms for lab-box, as bullets in the words its record
@@ -498,7 +523,7 @@ describe("run-view-168: a new playbook asked for at a seat", () => {
 });
 
 describe("run-view-170: the servers under each group's heading", () => {
-  test("each server one line under its group by its name, Connect, or Connected and Disconnect in its overflow, by whether a seat is open there", async () => {
+  test("each server one line under its group by its name, reading Connected with Disconnect in its overflow while a seat is open there and its name alone otherwise", async () => {
     const instance = await openGroups();
     // [run-view-170] the listing is the local core's, read as the
     // surface opens.
@@ -527,7 +552,8 @@ describe("run-view-170: the servers under each group's heading", () => {
     // No flat list of servers stands at the instance's foot.
     expect(screen.queryByTestId(`space-servers-${SPEX}`)).toBeNull();
     // [run-view-170] by its name; "Connected" with Disconnect in its
-    // overflow where a seat is open and signed in, Connect where none is.
+    // overflow where a seat is open and signed in, its name alone where
+    // none is.
     expect(row(ALPHA.place).textContent).toMatch(/^build-box · Connected/);
     expect(row(ALPHA.place).textContent).not.toContain("acme/infra");
     expect(screen.getByTestId(`space-server-connected-${ALPHA.place}`).textContent).toBe("Connected");
@@ -540,10 +566,13 @@ describe("run-view-170: the servers under each group's heading", () => {
     fireEvent.keyDown(window, { key: "Escape" });
     expect(screen.getByTestId(`space-server-connected-${BETA.place}`).textContent).toBe("Connected");
     expect(connectedLine(BETA.place)).toBe(true);
-    expect(row(LAB_BOX).textContent).toContain("lab-box");
-    expect(control(LAB_BOX).textContent).toBe("Connect");
+    // [run-view-170] no Connect on any line: a seat opens on "Open on
+    // <server>" alone.
+    expectNameAlone(LAB_BOX, "lab-box");
     expect(screen.queryByTestId(`space-server-more-${LAB_BOX}`)).toBeNull();
     expect(screen.queryByTestId(`space-server-connected-${LAB_BOX}`)).toBeNull();
+    expect(document.querySelector('[data-testid^="space-server-control-"]')).toBeNull();
+    expect(within(instance).queryByRole("button", { name: "Connect" })).toBeNull();
     // [run-view-170] one instance's failure stands under its own
     // heading, hiding no other's servers.
     const other = screen.getByRole("group", { name: "Lab" });
@@ -569,22 +598,29 @@ describe("run-view-170: the servers under each group's heading", () => {
     expect(row(LAB_BOX).textContent).toContain("acme/lab");
   });
 
-  test("the first Connect shows the contract and sends server.open with consent only on I understand; a later Connect sends at once", async () => {
+  test("the first Open on <server> from a row shows the contract beneath the server's line and sends server.open with consent only on I understand; a later one sends at once", async () => {
+    const labSeat: SeatState = { ...ALPHA, serverId: "43", name: "lab-box", group: "acme/lab", place: LAB_BOX };
     await openGroups();
 
-    fireEvent.click(control(LAB_BOX));
-    // [run-view-171] the first Connect shows the instance's contract, in
-    // the words its record fixes, and sends nothing.
+    openOnLab();
+    await settle();
+    // [run-view-171] [run-view-170] this device's first open of a seat at
+    // the server shows the instance's contract beneath its line, in the
+    // words its record fixes, and sends nothing.
     const contract = screen.getByTestId(`space-server-contract-${LAB_BOX}`);
+    expect(row(LAB_BOX).contains(contract)).toBe(true);
     expectTerms(contract);
     expect(callsOf(local, "server.open")).toEqual([]);
-    // [run-view-171] Cancel sends nothing and remembers nothing.
+    // [run-view-171] Cancel sends nothing and remembers nothing, the line
+    // reading the server's name alone again.
     fireEvent.click(within(contract).getByRole("button", { name: "Cancel" }));
     await settle();
     expect(screen.queryByTestId(`space-server-contract-${LAB_BOX}`)).toBeNull();
     expect(callsOf(local, "server.open")).toEqual([]);
     expect([...kept.keys()].filter((key) => key.includes(LAB_BOX))).toEqual([]);
-    fireEvent.click(control(LAB_BOX));
+    expectNameAlone(LAB_BOX, "lab-box");
+    openOnLab();
+    await settle();
     const again = screen.getByTestId(`space-server-contract-${LAB_BOX}`);
     expectTerms(again);
     expect(callsOf(local, "server.open")).toEqual([]);
@@ -609,14 +645,20 @@ describe("run-view-170: the servers under each group's heading", () => {
     expect(callsOf(local, "server.list")).toHaveLength(2);
     await waitFor(() => expect(connectedLine(LAB_BOX)).toBe(true));
 
-    // [run-view-170] once its seat is closed, a later Connect on this
-    // device sends server.open at once, with no contract.
+    // [run-view-170] the seat seen, then closed — the local core's state
+    // no longer holding it, the open that waited on it undone — a later
+    // "Open on <server>" on this device sends server.open at once, with
+    // no contract.
+    serverState(ALPHA, BETA, labSeat);
+    await settle();
     local.answers["server.close"] = { closed: true };
     local.answers["server.list"] = listing({ "43": false });
     disconnect(LAB_BOX);
     await settle();
-    await waitFor(() => expect(control(LAB_BOX).textContent).toBe("Connect"));
-    fireEvent.click(control(LAB_BOX));
+    serverState(ALPHA, BETA);
+    await settle();
+    await waitFor(() => expectNameAlone(LAB_BOX, "lab-box"));
+    openOnLab();
     await settle();
     expect(screen.queryByTestId(`space-server-contract-${LAB_BOX}`)).toBeNull();
     expect(callsOf(local, "server.open")).toEqual([
@@ -628,7 +670,8 @@ describe("run-view-170: the servers under each group's heading", () => {
   test("the contract is rendered in the page's language", async () => {
     activateLanguage("zh");
     await openGroups();
-    fireEvent.click(control(LAB_BOX));
+    openOnLab();
+    await settle();
     const contract = screen.getByTestId(`space-server-contract-${LAB_BOX}`);
     // [run-view-170] the record's words, in the page's language.
     expect(contract.textContent).toContain("连接会把你的 Space 登录放到 lab-box 上");
@@ -640,7 +683,7 @@ describe("run-view-170: the servers under each group's heading", () => {
     expect(callsOf(local, "server.open")).toEqual([{ instance: SPEX, serverId: "43", consented: true }]);
   });
 
-  test("Disconnect sends server.close for the server's seat and reads the listing again", async () => {
+  test("Disconnect sends server.close for the server's seat and reads the listing again, the line reading the server's name alone", async () => {
     await openGroups();
     local.answers["server.close"] = { closed: true };
     local.answers["server.list"] = {
@@ -655,26 +698,37 @@ describe("run-view-170: the servers under each group's heading", () => {
     expect(commandsOf(alpha)).not.toContain("server.close");
     expect(screen.queryByTestId(`space-server-contract-${ALPHA.place}`)).toBeNull();
     expect(callsOf(local, "server.list")).toHaveLength(2);
-    await waitFor(() => expect(control(ALPHA.place).textContent).toBe("Connect"));
+    // [run-view-170] the line reads the server's name with no control.
+    await waitFor(() => expectNameAlone(ALPHA.place, "build-box"));
   });
 
-  test("a refusal reads the core's relayed cause beside its server", async () => {
+  test("a refusal reads the core's relayed cause beside its server, the row's Open on <server> offered again", async () => {
     await openGroups();
     local.answers["server.open"] = () => {
       throw new SpexCommandError("not_found", "No longer shared with you");
     };
-    fireEvent.click(control(LAB_BOX));
+    openOnLab();
+    await settle();
     fireEvent.click(screen.getByRole("button", { name: "I understand" }));
     await settle();
     expect(callsOf(local, "server.open")).toEqual([{ instance: SPEX, serverId: "43", consented: true }]);
-    // [run-view-170] the refusal's cause, as the core relayed it, in
-    // place by the server.
+    // [run-view-170] the refusal's cause, as the core relayed it, on the
+    // server's line.
     const refusal = within(row(LAB_BOX)).getByRole("alert");
     expect(refusal.textContent).toBe("No longer shared with you");
     expect(within(row(ALPHA.place)).queryByRole("alert")).toBeNull();
-    // A refused open leaves the server as it stood, the listing unread.
-    expect(control(LAB_BOX).textContent).toBe("Connect");
+    // A refused open leaves the server as it stood — its name, no control
+    // — the listing unread.
+    expect(within(row(LAB_BOX)).queryAllByRole("button")).toEqual([]);
+    expect(screen.queryByTestId(`space-server-control-${LAB_BOX}`)).toBeNull();
     expect(callsOf(local, "server.list")).toHaveLength(1);
+    // [run-view-170] the row's "Open on <server>" is offered again, the
+    // open that waited on the seat undone.
+    expect(notesPhrase()).toBe("");
+    const entry = within(openMenu()).getByTestId(`space-row-open-at-${LAB_BOX}-${NOTES_KEY}`) as HTMLButtonElement;
+    expect(entry.textContent).toBe("Open on lab-box");
+    expect(entry.disabled).toBe(false);
+    fireEvent.keyDown(window, { key: "Escape" });
     // A refused close reads its cause in place as well.
     local.answers["server.close"] = () => {
       throw new SpexCommandError("not_found", "Not connected to this server");
@@ -697,23 +751,30 @@ function serverState(...seats: SeatState[]): void {
 describe("run-view-170: a server's line while its seat opens and signs in", () => {
   test("while server.open runs the line reads Connecting to <server>…, titled past ten seconds that the first connection can take a minute", async () => {
     await openGroups();
-    // Understood on this device before: Connect sends at once.
+    // Understood on this device before: the row's "Open on <server>"
+    // sends at once.
     kept.set(`spex.serverContract:${LAB_BOX}`, "1");
     let answer: (value: unknown) => void = () => {};
     local.answers["server.open"] = () => new Promise((resolve) => (answer = resolve));
     local.answers["server.list"] = listing({ "43": true });
+    // The row's menu opened before the clock is faked.
+    const entry = within(openMenu()).getByTestId(`space-row-open-at-${LAB_BOX}-${NOTES_KEY}`);
     vi.useFakeTimers();
     try {
-      fireEvent.click(control(LAB_BOX));
+      fireEvent.click(entry);
       await act(async () => {
         await Promise.resolve();
       });
-      // [run-view-170] the open runs: the line says so, Connect waits.
+      // [run-view-170] the open runs, with no contract: the line says so,
+      // and the row's entry waits.
+      expect(screen.queryByTestId(`space-server-contract-${LAB_BOX}`)).toBeNull();
       const connecting = (): HTMLElement => screen.getByTestId(`space-server-connecting-${LAB_BOX}`);
       const line = (): string => connecting().textContent ?? "";
       expect(line()).toBe("Connecting to lab-box…");
       expect(connecting().getAttribute("title")).toBeNull();
-      expect(control(LAB_BOX).disabled).toBe(true);
+      expect(notesPhrase()).toBe("Opening on lab-box…");
+      expect((within(openMenu()).getByTestId(`space-row-open-at-${LAB_BOX}-${NOTES_KEY}`) as HTMLButtonElement).disabled).toBe(true);
+      fireEvent.keyDown(window, { key: "Escape" });
       act(() => vi.advanceTimersByTime(9_999));
       expect(line()).toBe("Connecting to lab-box…");
       expect(connecting().getAttribute("title")).toBeNull();
@@ -818,19 +879,6 @@ describe("run-view-170: a server's line while its seat opens and signs in", () =
     expect(screen.getByTestId(`space-server-approve-${ALPHA.place}`)).toBeTruthy();
   });
 });
-
-/** The joins a fake core was sent (space-29). */
-const joinsOf = (fake: Fake): unknown[] => callsOf(fake, "space.join");
-
-/** The notes row's phrase on this computer's Space (space-87). */
-const notesPhrase = (): string => screen.getByTestId(`space-repo-state-${NOTES_KEY}`).textContent ?? "";
-
-/** Open the menu of the notes row's other places, beside its primary
- * control, and read its entries (space-1, space-111). */
-function openMenu(): HTMLElement {
-  fireEvent.click(screen.getByTestId(`space-row-places-${NOTES_KEY}`));
-  return screen.getByTestId(`space-row-places-${NOTES_KEY}-menu`);
-}
 
 describe("run-view-171: Open on <server> on a row of this computer's Space", () => {
   test("a seat open and signed in: no seat is opened, that seat's core is sent the join with no folder, and the row reads Opening on <server>… until the seat lists the project", async () => {

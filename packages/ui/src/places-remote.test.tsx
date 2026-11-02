@@ -2,29 +2,32 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // run-view-171: the remote rules (run-view-169, space-103, settings-48,
-// DR-133). The local store and two seat stores, each over a fake client
-// of its own, with the shell's picker and reveal present: this
+// DR-133, DR-175). The local store and two seat stores, each over a fake
+// client of its own, with the shell's picker and reveal present: this
 // computer's Space rows ask the picker for an "Open here"'s folder,
 // offer "Choose folder…" for a clone whose code found none and reveal a
 // clone's path, while a seat's offer none of these — its "Open here"
 // and its "Try again" send `space.join` with no folder to that seat's core
 // alone, and a code clone that failed for want of the member's
 // credential offers "Add a credential", opening the seat's Settings at
-// its Credentials section with that host. The project palette opens a
-// seat's project by naming it among the member's groups there, sending
-// that seat's core a join with no folder, lists a seat's failed code
-// clone as joinable again, and reads a seat's groups as it connects;
-// this computer's "From your groups" stands before each seat's, one
-// opening into the folder the shell's picker took or a path named in
-// place, and this computer's welcome page opens the palette there while
-// signed in and leads to the Space surface's sign-in while not
-// (run-view-168, run-view-172). A remote place's repair row offers neither a folder nor its
-// proposal's "Add project", its environment's folder request no picker
-// — its folder named relative to its project alone — and its draft's
-// source neither a picked file nor a pasted path; the Academy example
-// is seeded on this computer alone, a seat holding no project greeting
-// the member with the server welcome page (run-view-174), which its
-// heading in the sidebar shows (run-view-168). settings-51: the Credentials
+// its Credentials section with that host. The project palette lists,
+// under one "From your groups", each project of the member's groups this
+// computer lacks, once, every row — an open project's or a group's —
+// carrying its Space row's Open control: "Open on <server>" sends that
+// seat's core a join with no folder, reads "Signing in to <Space>…",
+// disabled, while that seat's sign-in runs, and asks the server's
+// contract on this computer's Space where no seat is open there; "Show
+// on <server>" shows a seat's project; "Open here" opens into the folder
+// the shell's picker took or a path named in place; and this computer's
+// welcome page opens the palette there while signed in and leads to the
+// Space surface's sign-in while not (run-view-168, run-view-172). A seat
+// holding no project adds no heading to the sidebar and no page of its
+// own, the Projects surface showing this computer's (run-view-67). A
+// remote place's repair row offers neither a folder nor its proposal's
+// "Add project", its environment's folder request no picker — its
+// folder named relative to its project alone — and its draft's source
+// neither a picked file nor a pasted path; the Academy example is
+// seeded on this computer alone. settings-51: the Credentials
 // section says its fixed sentence, sends `credential.set` and
 // `credential.remove`, lists what is set with no secret shown, refuses
 // a blank name or value in place, shows the host a failed clone named
@@ -43,6 +46,7 @@ import type {
   ProjectInfo,
   RepositoryState,
   SeatState,
+  ServerListing,
 } from "@sublang/spex-core/protocol";
 
 import { App } from "./App.js";
@@ -51,6 +55,7 @@ import { CONFIG_STATE, environment } from "./fixtures/playbooks.js";
 import { activateLanguage } from "./i18n.js";
 import { SpexCommandError, type SpexClient } from "./lib/client.js";
 import { usePlaces } from "./state/places.js";
+import { useServerOpens } from "./state/server-opens.js";
 import {
   createAppStore,
   setClientForTests,
@@ -79,6 +84,20 @@ const ALPHA: SeatState = {
   signIn: { state: "signedIn" },
 };
 const BETA: SeatState = { ...ALPHA, serverId: "42", name: "gpu-box", place: `${SPEX}#42` };
+
+/** This computer's servers listing (core-service-128): the two seats'
+ * servers, open there, each at its seat's place, and any `more` — the
+ * palette's server entries read it (space-111). */
+function listing(...more: ServerListing["servers"]): ServerListing {
+  return {
+    servers: [
+      { instance: SPEX, id: "41", name: "build-box", group: "acme/infra", open: true },
+      { instance: SPEX, id: "42", name: "gpu-box", group: "acme/infra", open: true },
+      ...more,
+    ],
+    failures: [],
+  };
+}
 
 const BRANCH: NonNullable<PlacementState["branch"]> = {
   ahead: 0,
@@ -317,10 +336,14 @@ beforeEach(() => {
   revealPath = vi.fn(async () => true);
   (window as unknown as { spexNative?: unknown }).spexNative = { pickDirectory, revealPath };
   activateLanguage("en");
+  // The servers' flows are the page's own, one per server: each test
+  // starts with none (state/server-opens).
+  useServerOpens.setState({ lines: {}, pending: {}, landed: 0 });
   local = fakeClient();
   alpha = fakeClient();
   beta = fakeClient();
   local.answers["space.get"] = placeGroups();
+  local.answers["server.list"] = listing();
   alpha.answers["space.get"] = placeGroups("git.example.com");
   setClientForTests(local.client);
   useAppStore.setState({
@@ -453,32 +476,59 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
     expect(revealPath).not.toHaveBeenCalled();
   });
 
-  test("the palette: this computer's folder picker, a seat's projects named among its groups", async () => {
+  test("the palette: this computer's folder picker, one From your groups of what this computer lacks", async () => {
     render(<App />);
     fireEvent.keyDown(window, { key: "p", metaKey: true });
     const palette = screen.getByTestId("project-palette");
-    // Desktop adds this computer's project through its folder picker.
+    // Desktop adds this computer's project through its folder picker; a
+    // new project is always this computer's, so no footnote names where
+    // it lands.
     expect(within(palette).queryByTestId("palette-path")).toBeNull();
     expect(within(palette).getByTestId("palette-open-folder")).toBeTruthy();
-    expect(within(palette).getByTestId("palette-new-place").textContent).toBe(
-      "A new project is added on This computer.",
-    );
+    expect(within(palette).queryByTestId("palette-new-place")).toBeNull();
+    expect(within(palette).queryByText(/^A new project is added on/)).toBeNull();
     await settle();
-    // [run-view-169] a seat's add flow names the member's groups'
-    // projects there, with no path entry and no picker of its own: one
-    // not there, and one whose code clone failed there, joined again.
-    const seat = within(palette).getByTestId(`palette-groups-${ALPHA.place}`);
-    expect(screen.getByRole("group", { name: "From your groups on build-box" })).toBe(seat);
-    expect(within(seat).getAllByRole("button").map((button) => button.getAttribute("data-testid"))).toEqual([
-      `palette-join-${ABSENT_KEY}@${ALPHA.place}`,
-      `palette-join-again-${FAILED_KEY}@${ALPHA.place}`,
+    // [run-view-171] [run-view-168] one "From your groups", no section
+    // per seat: each project of the groups this computer lacks, once —
+    // its own clone whose code found no folder is paired from its Space
+    // row (space-63) — with no path entry and no picker of a seat's.
+    const groups = within(palette).getByTestId("palette-groups");
+    expect(screen.getByRole("group", { name: "From your groups" })).toBe(groups);
+    expect(within(palette).getAllByRole("group")).toEqual([groups]);
+    expect(within(palette).queryByTestId(`palette-groups-${ALPHA.place}`)).toBeNull();
+    expect(within(palette).queryByText(/^From your groups on /)).toBeNull();
+    expect(within(groups).getAllByRole("button").map((button) => button.getAttribute("data-testid"))).toEqual([
+      `palette-join-${ABSENT_KEY}`,
+      `palette-join-places-${ABSENT_KEY}`,
     ]);
-    expect(pathEntries(seat)).toEqual([]);
-    expect(within(seat).queryByText("Open folder…")).toBeNull();
-    // A seat whose groups nothing had read is read as the palette opens.
-    expect(callsOf(beta, "space.get")).toHaveLength(1);
-    const other = within(palette).getByTestId(`palette-groups-${BETA.place}`);
-    expect(other.textContent).toContain("Nothing more to open from your groups");
+    expect(within(groups).queryByTestId(`palette-join-again-${FAILED_KEY}`)).toBeNull();
+    expect(pathEntries(groups)).toEqual([]);
+    // [run-view-168] a seat's project names its place; this computer's
+    // groups list nothing of its records this computer lacks, so its row
+    // carries no Open control of another place, nor does this computer's
+    // project, which its groups list nowhere.
+    expect(within(palette).getByTestId(`palette-project-p2@${ALPHA.place}`).textContent).toContain("build-box");
+    expect(within(palette).queryByTestId(`palette-project-places-p2@${ALPHA.place}`)).toBeNull();
+    expect(within(palette).queryByTestId("palette-project-places-p1")).toBeNull();
+    // [run-view-168] the palette reads no seat's groups.
+    expect(callsOf(beta, "space.get")).toEqual([]);
+
+    // [run-view-171] [run-view-168] with every project of the groups
+    // open here, the list says so; with the groups listing none, that
+    // they list none.
+    const here = { ...absent, state: "reachable" as const, folder: "/work/alpha", branch: BRANCH };
+    act(() =>
+      useAppStore.setState({
+        space: groupsState({ instances: [instanceState(SPEX, { displayName: "spex.pub", groups: [ACME([here])] })] }),
+      }),
+    );
+    expect(within(groups).getByTestId("palette-groups-note").textContent).toBe("All your groups' projects are open here");
+    act(() =>
+      useAppStore.setState({
+        space: groupsState({ instances: [instanceState(SPEX, { displayName: "spex.pub", groups: [ACME([])] })] }),
+      }),
+    );
+    expect(within(groups).getByTestId("palette-groups-note").textContent).toBe("No projects in your groups yet");
   });
 
   test("a seat's Overview offers no picker, reveal or path entry", async () => {
@@ -651,23 +701,35 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
 
   test("the Academy example is seeded on this computer alone", async () => {
     useAppStore.setState({ projects: [], currentProjectId: undefined });
+    local.answers["project.create"] = project("p9", "spex-academy");
     render(<App />);
     // This computer's Captain home, with no project, offers the example.
     expect(screen.getByTestId("home-academy")).toBeTruthy();
 
-    // The seat's, shown from its project, which then leaves it.
+    // The seat's project shown, which then leaves it.
     fireEvent.click(screen.getByTestId(`sidebar-project-p2@${ALPHA.place}`));
+    await settle();
+    expect(screen.queryByTestId("welcome-home")).toBeNull();
     act(() => alphaStore.setState({ projects: [], currentProjectId: undefined }));
-    // [run-view-169] a seat's projects are opened among the member's
-    // groups, its core allocating every folder: no example is seeded at
-    // a folder named there, the way in being the palette.
-    expect(screen.queryByTestId("home-add-project")).toBeNull();
-    expect(screen.queryByTestId("home-academy")).toBeNull();
-    expect(screen.queryByText("Try the Academy example")).toBeNull();
-    expect(callsOf(alpha, "project.create")).toEqual([]);
-    fireEvent.click(screen.getByTestId("home-open-from-groups"));
+    // [run-view-169] [run-view-168] a seat's projects are opened among the
+    // member's groups, its core allocating every folder, and a seat
+    // holding none has no page of its own: the welcome page is this
+    // computer's, its example seeded here alone.
+    const welcome = screen.getByTestId("welcome-home");
+    expect(within(welcome).getByTestId("home-add-project")).toBeTruthy();
+    // The way in to a project on a server is the palette's "From your
+    // groups", never the add form.
+    fireEvent.click(within(welcome).getByTestId("home-open-from-groups"));
+    await settle();
     expect(screen.queryByTestId("palette-own-project")).toBeNull();
-    expect(screen.getByTestId(`palette-groups-${ALPHA.place}`)).toBeTruthy();
+    expect(screen.getByTestId("palette-groups")).toBeTruthy();
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    expect(screen.queryByTestId("project-palette")).toBeNull();
+    fireEvent.click(within(welcome).getByTestId("home-academy"));
+    await settle();
+    expect(callsOf(local, "project.create")).toEqual([{ path: "~/spex-academy", example: true }]);
+    expect(callsOf(alpha, "project.create")).toEqual([]);
+    expect(callsOf(beta, "project.create")).toEqual([]);
   });
 
   test("a seat's project with no specs offers no Academy example in its Specs tab", async () => {
@@ -693,76 +755,54 @@ function headingOf(label: string): HTMLElement {
   return headings.find((heading) => heading.textContent === label)!;
 }
 
-describe("run-view-171: a remote place holding no project shows the server welcome page", () => {
-  test("its heading shows the server form, its primary action opening the palette and its secondary Groups at that place", async () => {
-    beta.answers["space.get"] = placeGroups();
+/** The sidebar's place headings, in the order they stand. */
+const headings = (): string[] =>
+  within(screen.getByTestId("sidebar"))
+    .queryAllByTestId("sidebar-place-heading")
+    .map((heading) => heading.textContent ?? "");
+
+describe("run-view-171: a seat holding no project adds no heading and no page of its own", () => {
+  test("its heading stands once it holds or is opening a project, this computer's welcome page showing meanwhile", async () => {
+    useAppStore.setState({ projects: [], currentProjectId: undefined });
     render(<App />);
     await settle();
-    fireEvent.click(headingOf("gpu-box"));
-    await settle();
-
-    // [run-view-171] [run-view-174] the welcome page in its server form,
-    // naming the server, with the server's words in the local page's
-    // three steps.
+    // [run-view-171] [run-view-67] the seat holding no project (gpu-box)
+    // adds no heading, while the other seat's stands beside this
+    // computer's.
+    expect(headings()).toEqual(["This computer", "build-box"]);
+    // [run-view-171] [run-view-168] the Projects surface shows this
+    // computer's welcome page, in its local form alone.
     const welcome = screen.getByTestId("welcome-home");
-    expect(within(welcome).getByRole("heading", { level: 1 }).textContent).toBe("Work on gpu-box from this computer.");
-    expect([...welcome.querySelectorAll("ol > li")].map((step) => step.textContent)).toEqual([
-      "GroupsProjects here come from your groups",
-      "gpu-boxAgents run here as you",
-      "DeliveryAI builds and reviews changes, with a record of each step",
-    ]);
-    // [run-view-174] no local-folder action, no Academy example, and none
-    // of the Captain's chrome.
-    expect(screen.queryByTestId("home-add-project")).toBeNull();
-    expect(screen.queryByTestId("home-academy")).toBeNull();
-    expect(screen.queryByTestId("start-composer")).toBeNull();
-    expect(screen.queryByTestId("captain-settings")).toBeNull();
-    expect(screen.queryByTestId("captain-readiness")).toBeNull();
-    const primary = within(welcome).getByTestId("home-open-from-groups");
-    const secondary = within(welcome).getByTestId("home-open-groups");
-    expect(primary.textContent).toBe("Open a project from your groups");
-    expect(secondary.textContent).toBe("Open Space");
-    expect(within(welcome).getAllByRole("button")).toEqual([primary, secondary]);
+    expect(within(welcome).getByTestId("home-add-project")).toBeTruthy();
+    expect(within(welcome).getByRole("heading", { level: 1 }).textContent).toBe("Write clear specs. Build with playbooks.");
+    expect(welcome.textContent).not.toMatch(/gpu-box|build-box/);
 
-    // [run-view-171] [run-view-174] the primary action opens the palette,
-    // where that place's groups' projects are listed; opening one sends
-    // that place's core a join with no folder (run-view-169).
-    fireEvent.click(primary);
+    // [run-view-171] [run-view-168] the seat's project shown, then gone
+    // from it: no seat holds a project, so no heading stands, and the seat
+    // has no page of its own — this computer's welcome page shows.
+    fireEvent.click(screen.getByTestId(`sidebar-project-p2@${ALPHA.place}`));
     await settle();
-    const palette = screen.getByTestId("project-palette");
-    expect(within(palette).queryByTestId("palette-own-project")).toBeNull();
-    fireEvent.click(within(palette).getByTestId(`palette-join-${ABSENT_KEY}@${BETA.place}`));
+    expect(screen.queryByTestId("welcome-home")).toBeNull();
+    act(() => alphaStore.setState({ projects: [], currentProjectId: undefined }));
     await settle();
-    expect(callsOf(beta, "space.join")).toEqual([{ instance: SPEX, hostId: "101" }]);
-    expect(callsOf(local, "space.join")).toEqual([]);
-    expect(callsOf(alpha, "space.join")).toEqual([]);
-    expect(pickDirectory).not.toHaveBeenCalled();
-    expect(screen.queryByTestId("project-palette")).toBeNull();
+    expect(headings()).toEqual([]);
+    expect(within(screen.getByTestId("welcome-home")).getByTestId("home-add-project")).toBeTruthy();
 
-    // [run-view-171] [run-view-174] the secondary action shows the Groups
-    // surface at that place, the selector naming the server.
-    fireEvent.click(screen.getByTestId("home-open-groups"));
-    await settle();
-    expect(document.querySelector('[data-surface="Space"]')!.getAttribute("aria-current")).toBe("page");
-    expect(screen.getByTestId("space-surface")).toBeTruthy();
-    expect(shownPlace()).toBe("gpu-box");
-  });
-
-  test("its config errors stay visible with a Settings action opening that place's Settings", async () => {
-    betaStore.setState({ configState: { status: "missing", path: "/home/member/.spex/config/playbook.config.yaml" } });
-    render(<App />);
-    fireEvent.click(headingOf("gpu-box"));
-    await settle();
-    const welcome = screen.getByTestId("welcome-home");
-    expect(within(welcome).getByRole("heading", { level: 1 }).textContent).toBe("Work on gpu-box from this computer.");
-    // [run-view-174] the place's config error stands, its Settings action
-    // opening that place's Settings.
-    const alert = within(welcome).getByRole("alert");
-    expect(alert.textContent).toContain("Spex has no config file yet");
-    fireEvent.click(within(alert).getByRole("button", { name: "Open Settings →" }));
-    await settle();
-    expect(document.querySelector('[data-surface="Settings"]')!.getAttribute("aria-current")).toBe("page");
-    expect(shownPlace()).toBe("gpu-box");
+    // [run-view-171] [run-view-67] a seat opening a project, then holding
+    // one, has its heading stand, "This computer" heading its rows again.
+    const opening = groupsState({
+      instances: [
+        instanceState(SPEX, {
+          displayName: "spex.pub",
+          groups: [ACME([{ ...absent, sync: { phase: "running", op: "join", step: "code", since: Date.now(), cancelable: false } }])],
+        }),
+      ],
+    });
+    act(() => betaStore.setState({ space: opening }));
+    expect(headings()).toEqual(["This computer", "gpu-box"]);
+    act(() => betaStore.setState({ space: undefined, projects: [GPU] }));
+    expect(headings()).toEqual(["This computer", "gpu-box"]);
+    expect(screen.getByTestId(`sidebar-project-p2@${BETA.place}`)).toBeTruthy();
   });
 });
 
@@ -774,46 +814,31 @@ describe("run-view-171: a seat whose sign-in at its instance runs", () => {
     signIn: { state: "running", verificationUri: APPROVE, expiresAt: Date.now() + 600_000 },
   };
 
-  test("the server welcome page reads Signing in to <instance>… with the approval's link above its actions", async () => {
+  test("a row's entry for that seat reads Signing in to <Space>…, disabled, until its sign-in completes", async () => {
     useAppStore.setState({ seats: [ALPHA, signingIn] });
-    render(<App />);
-    await settle();
-    fireEvent.click(headingOf("gpu-box"));
-    await settle();
-    const welcome = screen.getByTestId("welcome-home");
-    // [run-view-174] the sign-in named with the instance and the server,
-    // its approval a link.
-    const line = within(welcome).getByTestId("home-seat-signin");
-    expect(line.textContent).toBe("Signing in to spex.pub… approve Spex on gpu-box in your browser");
-    const link = within(line).getByRole("link");
-    expect(link.textContent).toBe("approve Spex on gpu-box in your browser");
-    expect(link.getAttribute("href")).toBe(APPROVE);
-    // [run-view-174] above the actions.
-    const primary = within(welcome).getByTestId("home-open-from-groups");
-    expect(line.compareDocumentPosition(primary) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(within(welcome).getAllByRole("button")).toEqual([primary, within(welcome).getByTestId("home-open-groups")]);
-    // Signed in, the line goes.
-    act(() => useAppStore.setState({ seats: [ALPHA, BETA] }));
-    expect(within(welcome).queryByTestId("home-seat-signin")).toBeNull();
-  });
-
-  test("the palette reads Signing in to <instance>… under that seat's groups until its sign-in completes", async () => {
-    useAppStore.setState({ seats: [ALPHA, signingIn] });
+    alphaStore.setState({ projects: [GPU, project(ABSENT_KEY, "alpha")] });
     render(<App />);
     fireEvent.keyDown(window, { key: "p", metaKey: true });
     await settle();
-    const palette = screen.getByTestId("project-palette");
-    const note = (): string => within(palette).getByTestId(`palette-groups-note-${BETA.place}`).textContent ?? "";
-    // [run-view-168] where the seat's sign-in runs, and where it is not
-    // yet read, the palette says it signs in at the instance.
-    expect(note()).toBe("Signing in to spex.pub…");
+    fireEvent.click(screen.getByTestId(`palette-join-places-${ABSENT_KEY}`));
+    const menu = screen.getByTestId(`palette-join-places-${ABSENT_KEY}-menu`);
+    const entries = (): string[] => within(menu).getAllByRole("menuitem").map((item) => item.textContent ?? "");
+    const there = (): HTMLButtonElement =>
+      within(menu).getByTestId(`palette-open-at-${BETA.place}-${ABSENT_KEY}`) as HTMLButtonElement;
+    // [run-view-171] [run-view-168] where the seat's sign-in runs, and
+    // where it is not yet read, its entry says it signs in at the Space,
+    // disabled; the other seat, signed in and holding the project, shows
+    // it there.
+    expect(entries()).toEqual(["Show on build-box", "Signing in to spex.pub…"]);
+    expect(there().disabled).toBe(true);
     act(() => useAppStore.setState({ seats: [ALPHA, { ...BETA, signIn: { state: "pending" } }] }));
-    expect(note()).toBe("Signing in to spex.pub…");
-    // The other seat, signed in, lists its groups' projects.
-    expect(within(within(palette).getByTestId(`palette-groups-${ALPHA.place}`)).getAllByRole("button")).toHaveLength(2);
-    // Signed in, with nothing it lacks: nothing more to open.
+    expect(there().textContent).toBe("Signing in to spex.pub…");
+    expect(there().disabled).toBe(true);
+    // [run-view-168] signed in, the entry opens the project there.
     act(() => useAppStore.setState({ seats: [ALPHA, BETA] }));
-    expect(note()).toBe("Nothing more to open from your groups");
+    expect(entries()).toEqual(["Show on build-box", "Open on gpu-box"]);
+    expect(there().disabled).toBe(false);
+    expect(callsOf(beta, "space.join")).toEqual([]);
   });
 });
 
@@ -852,132 +877,137 @@ describe("run-view-171: activating a place's heading in the sidebar shows that p
     expect(screen.getByTestId("project-task-start").textContent).toContain("What would you change in home-project?");
     expect(home.getAttribute("aria-current")).toBe("location");
 
-    // [run-view-168] Space activates a heading too: the seat holding no
-    // project shows its welcome page.
-    const empty = headingOf("gpu-box");
-    empty.focus();
-    fireEvent.keyDown(empty, { key: " " });
+    // [run-view-168] Space activates a heading too: the seat's shows its
+    // project start again.
+    seat.focus();
+    fireEvent.keyDown(seat, { key: " " });
     await settle();
-    expect(within(screen.getByTestId("welcome-home")).getByRole("heading", { level: 1 }).textContent).toBe(
-      "Work on gpu-box from this computer.",
-    );
+    expect(screen.getByTestId("project-task-start").textContent).toContain("What would you change in gpu-project?");
+    expect(seat.getAttribute("aria-current")).toBe("location");
   });
 });
 
-describe("run-view-171: opening a group's project at a seat", () => {
-  test("sends space.join with no folder to that place's client alone", async () => {
+/** Open the menu of a group's row's other places in the palette, beside
+ * its own control, and hand it back (run-view-168, space-111). */
+function rowPlaces(key: string): HTMLElement {
+  fireEvent.click(screen.getByTestId(`palette-join-places-${key}`));
+  return screen.getByTestId(`palette-join-places-${key}-menu`);
+}
+
+const entriesOf = (menu: HTMLElement): string[] =>
+  within(menu)
+    .getAllByRole("menuitem")
+    .map((item) => item.textContent ?? "");
+
+describe("run-view-171: opening a group's project on a seat", () => {
+  test("Open on <server> sends space.join with no folder to that place's client alone; once the seat lists it, Show on <server> shows it there", async () => {
     render(<App />);
     fireEvent.keyDown(window, { key: "p", metaKey: true });
     await settle();
-    fireEvent.click(screen.getByTestId(`palette-join-${ABSENT_KEY}@${ALPHA.place}`));
+    // [run-view-171] [run-view-168] the group's row carries its Space
+    // row's Open control: each server of its Space.
+    const menu = rowPlaces(ABSENT_KEY);
+    expect(entriesOf(menu)).toEqual(["Open on build-box", "Open on gpu-box"]);
+    const entry = within(menu).getByTestId(`palette-open-at-${ALPHA.place}-${ABSENT_KEY}`) as HTMLButtonElement;
+    expect(entry.disabled).toBe(false);
+    fireEvent.click(entry);
     await settle();
-    // [run-view-171] [run-view-169] the join names the instance and the
-    // host id, and no folder: the seat allocates it (space-103).
+    // [run-view-171] [run-view-169] the seat open and signed in, none is
+    // opened: the join names the instance and the host id, and no
+    // folder, the seat allocating it (space-103).
+    expect(callsOf(local, "server.open")).toEqual([]);
     expect(callsOf(alpha, "space.join")).toEqual([{ instance: SPEX, hostId: "101" }]);
     expect(callsOf(local, "space.join")).toEqual([]);
     expect(callsOf(beta, "space.join")).toEqual([]);
     expect(pickDirectory).not.toHaveBeenCalled();
-    // Accepted, the palette closes; the join reports on the seat's row.
+    // Accepted, the palette closes; the open reports on the Space row.
     expect(screen.queryByTestId("project-palette")).toBeNull();
-  });
 
-  test("a refused join reads the core's words in the palette", async () => {
-    alpha.answers["space.join"] = () => {
-      throw new SpexCommandError("invalid_request", "No longer shared with you");
-    };
-    render(<App />);
+    // [run-view-168] while that open runs, its entry is not offered
+    // twice.
     fireEvent.keyDown(window, { key: "p", metaKey: true });
     await settle();
-    fireEvent.click(screen.getByTestId(`palette-join-${ABSENT_KEY}@${ALPHA.place}`));
-    await settle();
-    expect(callsOf(alpha, "space.join")).toEqual([{ instance: SPEX, hostId: "101" }]);
-    expect(screen.getByTestId("palette-error").textContent).toBe("No longer shared with you");
-  });
+    expect((within(rowPlaces(ABSENT_KEY)).getByTestId(`palette-open-at-${ALPHA.place}-${ABSENT_KEY}`) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.keyDown(window, { key: "Escape" });
 
-  test("a seat's project whose code clone failed is listed to join again, and joins again with no folder", async () => {
-    render(<App />);
-    fireEvent.keyDown(window, { key: "p", metaKey: true });
+    // [run-view-171] [run-view-168] the seat lists the project: the
+    // group's row shows it there, and the seat's own row, which this
+    // computer lacks, offers Open here.
+    act(() => alphaStore.setState({ projects: [GPU, project(ABSENT_KEY, "alpha")] }));
     await settle();
-    // [run-view-169] cloned at the seat with its code clone failed, it is
-    // no project there yet and stays openable: listed to join again,
-    // never dropped from both lists.
-    expect(screen.queryByTestId(`palette-project-${FAILED_KEY}@${ALPHA.place}`)).toBeNull();
-    expect(screen.queryByTestId(`palette-join-${FAILED_KEY}@${ALPHA.place}`)).toBeNull();
-    const again = screen.getByTestId(`palette-join-again-${FAILED_KEY}@${ALPHA.place}`);
-    // [run-view-168] named as its code is, never as its spex repository
-    // (DR-159).
-    expect(again.textContent).toContain("beta");
-    expect(again.textContent).not.toContain("beta-spex");
-    expect(again.textContent).toContain("Try again");
-    fireEvent.click(again);
+    expect(screen.getByTestId(`palette-project-places-${ABSENT_KEY}@${ALPHA.place}`)).toBeTruthy();
+    const shown = rowPlaces(ABSENT_KEY);
+    expect(entriesOf(shown)).toEqual(["Show on build-box", "Open on gpu-box"]);
+    fireEvent.click(within(shown).getByTestId(`palette-show-at-${ALPHA.place}-${ABSENT_KEY}`));
     await settle();
-    // [run-view-169] the join is sent again, with no folder, to the seat
-    // alone: its core clones the code into the folder it allocated.
-    expect(callsOf(alpha, "space.join")).toEqual([{ instance: SPEX, hostId: "102" }]);
-    expect(callsOf(local, "space.join")).toEqual([]);
-    expect(callsOf(beta, "space.join")).toEqual([]);
-    expect(pickDirectory).not.toHaveBeenCalled();
+    // [run-view-168] "Show on <server>" shows it at that place, sending
+    // nothing.
     expect(screen.queryByTestId("project-palette")).toBeNull();
-    // [run-view-171] the project is that seat's current one at once, and
-    // the Projects surface shows that place.
-    expect(alphaStore.getState().currentProjectId).toBe(FAILED_KEY);
-    expect(useAppStore.getState().currentProjectId).not.toBe(FAILED_KEY);
-    expect(
-      within(screen.getByTestId("sidebar")).getByRole("group", { name: ALPHA.name }).querySelector('[data-testid="sidebar-place-heading"]')?.getAttribute("aria-current"),
-    ).toBe("location");
+    expect(alphaStore.getState().currentProjectId).toBe(ABSENT_KEY);
+    expect(headingOf("build-box").getAttribute("aria-current")).toBe("location");
+    expect(callsOf(alpha, "space.join")).toHaveLength(1);
   });
 
-  test("a seat that connects while the palette is open has its groups read then", async () => {
-    betaStore.setState({ connection: "connecting" });
-    beta.answers["space.get"] = placeGroups();
+  test("with no seat open at the server, Open on <server> asks its contract on this computer's Space, the palette closing", async () => {
+    const LAB = `${SPEX}#43`;
+    local.answers["server.list"] = listing({ instance: SPEX, id: "43", name: "lab-box", group: "acme/lab", open: false });
+    local.answers["server.open"] = { place: LAB, leaseExpiresAt: Date.now() + 3_600_000 };
     render(<App />);
+    // From a seat's Space surface.
+    goTo("Space");
+    pick("build-box");
+    await settle();
     fireEvent.keyDown(window, { key: "p", metaKey: true });
     await settle();
-    // Not connected yet: nothing is asked of it.
-    expect(callsOf(beta, "space.get")).toEqual([]);
-    expect(screen.getByTestId(`palette-groups-${BETA.place}`).textContent).toContain("Reading your groups…");
-    // [run-view-169] connected while the palette is open, its groups are
-    // read then, so their projects are named.
-    act(() => betaStore.setState({ connection: "open" }));
+    const menu = rowPlaces(ABSENT_KEY);
+    expect(entriesOf(menu)).toEqual(["Open on build-box", "Open on gpu-box", "Open on lab-box"]);
+    fireEvent.click(within(menu).getByTestId(`palette-open-at-${LAB}-${ABSENT_KEY}`));
     await settle();
-    expect(callsOf(beta, "space.get")).toHaveLength(1);
-    expect(screen.getByTestId(`palette-join-${ABSENT_KEY}@${BETA.place}`)).toBeTruthy();
-    // Read once: a reconnect finds them read and asks nothing more.
-    act(() => betaStore.setState({ connection: "closed" }));
-    act(() => betaStore.setState({ connection: "open" }));
+    // [run-view-171] [run-view-170] this device's first open of a seat
+    // there: the palette closes on this computer's Space, the server's
+    // contract beneath its line, nothing sent yet.
+    expect(screen.queryByTestId("project-palette")).toBeNull();
+    expect(document.querySelector('[data-surface="Space"]')!.getAttribute("aria-current")).toBe("page");
+    expect(shownPlace()).toBe("This computer");
+    const contract = screen.getByTestId(`space-server-contract-${LAB}`);
+    expect(screen.getByTestId(`space-server-${LAB}`).contains(contract)).toBe(true);
+    expect(callsOf(local, "server.open")).toEqual([]);
+    // [run-view-171] "I understand" sends `server.open` with consent to
+    // the local core alone.
+    fireEvent.click(within(contract).getByTestId(`space-server-consent-${LAB}`));
     await settle();
-    expect(callsOf(beta, "space.get")).toHaveLength(1);
-    expect(callsOf(alpha, "space.get")).toEqual([]);
+    expect(callsOf(local, "server.open")).toEqual([{ instance: SPEX, serverId: "43", consented: true }]);
+    expect(callsOf(alpha, "server.open")).toEqual([]);
+    expect(callsOf(beta, "server.open")).toEqual([]);
+    expect(callsOf(alpha, "space.join")).toEqual([]);
   });
 });
 
 describe("run-view-171: opening a group's project on this computer", () => {
-  /** The palette's "From your groups" sections, by their places' keys,
-   * in the order they stand. */
+  /** The palette's "From your groups" sections, by their test ids, in
+   * the order they stand. */
   const sectionsOf = (palette: HTMLElement): (string | null)[] =>
     within(palette)
       .getAllByRole("group")
       .map((group) => group.getAttribute("data-testid"));
 
-  test("the palette lists this computer's groups' projects before each seat's, one opening into the folder the shell's picker takes", async () => {
+  test("the palette lists the groups' projects this computer lacks under one From your groups, one opening into the folder the shell's picker takes", async () => {
     render(<App />);
     fireEvent.keyDown(window, { key: "p", metaKey: true });
     await settle();
     const palette = screen.getByTestId("project-palette");
-    // [run-view-168] "From your groups" for this computer, before each
-    // seat's "From your groups on <server>".
-    const here = within(palette).getByTestId("palette-groups-local");
+    // [run-view-168] one "From your groups", and no section per seat.
+    const here = within(palette).getByTestId("palette-groups");
     expect(screen.getByRole("group", { name: "From your groups" })).toBe(here);
-    expect(sectionsOf(palette)).toEqual([
-      "palette-groups-local",
-      `palette-groups-${ALPHA.place}`,
-      `palette-groups-${BETA.place}`,
-    ]);
+    expect(within(here).getByTestId("palette-groups-heading").textContent).toBe("From your groups");
+    expect(sectionsOf(palette)).toEqual(["palette-groups"]);
     // [run-view-168] what this computer lacks, named as its code is with
-    // its group: a clone here whose code found no folder is paired from
-    // its Space row instead (space-63).
+    // its group, its Space row's Open control beside it: a clone here
+    // whose code found no folder is paired from its Space row instead
+    // (space-63).
     expect(within(here).getAllByRole("button").map((button) => button.getAttribute("data-testid"))).toEqual([
       `palette-join-${ABSENT_KEY}`,
+      `palette-join-places-${ABSENT_KEY}`,
     ]);
     const row = within(here).getByTestId(`palette-join-${ABSENT_KEY}`);
     expect(row.textContent).toContain("alpha");
@@ -998,6 +1028,30 @@ describe("run-view-171: opening a group's project on this computer", () => {
     // by its row's key, which it bears once the core lists it.
     expect(useAppStore.getState().currentProjectId).toBe(ABSENT_KEY);
     expect(alphaStore.getState().currentProjectId).not.toBe(ABSENT_KEY);
+  });
+
+  test("a seat's project this computer lacks carries Open here on its row, opening it here into the folder the shell's picker takes", async () => {
+    alphaStore.setState({ projects: [GPU, project(ABSENT_KEY, "alpha")] });
+    render(<App />);
+    fireEvent.keyDown(window, { key: "p", metaKey: true });
+    await settle();
+    // [run-view-171] [run-view-168] an open project's row carries its
+    // Space row's Open control too: on the seat's, "Open here" while this
+    // computer lacks it.
+    expect(screen.queryByTestId(`palette-project-places-p2@${ALPHA.place}`)).toBeNull();
+    fireEvent.click(screen.getByTestId(`palette-project-places-${ABSENT_KEY}@${ALPHA.place}`));
+    const menu = screen.getByTestId(`palette-project-places-${ABSENT_KEY}@${ALPHA.place}-menu`);
+    expect(entriesOf(menu)).toEqual(["Open here"]);
+    fireEvent.click(within(menu).getByTestId(`palette-open-here-${ABSENT_KEY}@${ALPHA.place}`));
+    await settle();
+    // [run-view-171] [run-view-168] the shell's picker takes the folder,
+    // and the join goes to this computer's core alone.
+    expect(pickDirectory).toHaveBeenCalledTimes(1);
+    expect(callsOf(local, "space.join")).toEqual([{ instance: SPEX, hostId: "101", folder: "/work/alpha" }]);
+    expect(callsOf(alpha, "space.join")).toEqual([]);
+    expect(callsOf(beta, "space.join")).toEqual([]);
+    expect(screen.queryByTestId("project-palette")).toBeNull();
+    expect(useAppStore.getState().currentProjectId).toBe(ABSENT_KEY);
   });
 
   test("a picker closed with no folder sends nothing; a refusal reads the core's words in the palette", async () => {

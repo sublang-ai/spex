@@ -787,12 +787,12 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
     expect(shortMoment(since)).toMatch(/月/);
   });
 
-  test("space-1: a project in a group naming no code remote reads ⚠ Code: no remote in the attention tone; one at a Space a glyph titled by its display name; none before the core knows, nor under This computer", async () => {
-    await renderGroups(base({}, [repo({ code: "Code: no remote", codeKind: "none" })]), { open: false });
+  test("space-1: a project in a group naming no code remote reads ⚠ Code only on this computer in the attention tone; one at a Space a glyph titled by its display name; none before the core knows, nor under This computer", async () => {
+    await renderGroups(base({}, [repo({ code: "Code only on this computer", codeKind: "none" })]), { open: false });
     const none = screen.getByTestId(`space-repo-code-${KEY}`);
-    expect(none.textContent).toBe("⚠ Code: no remote");
+    expect(none.textContent).toBe("⚠ Code only on this computer");
     expect(none.dataset.kind).toBe("none");
-    expect(none.getAttribute("title")).toBe("Code: no remote");
+    expect(none.getAttribute("title")).toBe("Code only on this computer");
     // The warning wears the attention tone, the row's phrase's own, not
     // a stop's red.
     expect(none.dataset.tone).toBe("attention");
@@ -801,7 +801,7 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
     cleanup();
     // Under "This computer" nobody shares the project yet: no glyph,
     // whatever the core says of its code, signed in or not.
-    for (const [kind, code] of [["none", "Code: no remote"], ["elsewhere", CODE]] as const) {
+    for (const [kind, code] of [["none", "Code not on a Git host"], ["elsewhere", CODE]] as const) {
       const localRow = repo({ state: "local-only", remote: null, id: null, code, codeKind: kind, branch: null, members: null });
       await renderGroups(base({ own: { name: "jane", named: false, repositories: [OWN_REPO, localRow] } }, []), { open: false });
       expect(within(screen.getByTestId("space-own")).getByTestId(`space-row-${KEY}`)).toBeTruthy();

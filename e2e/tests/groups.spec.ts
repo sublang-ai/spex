@@ -493,11 +493,12 @@ test.describe("first start", () => {
     await expect(page.getByTestId(`space-row-${TEAM_KEY}`)).toHaveAttribute("data-state", "reachable");
     await expect(page.getByTestId(`space-repo-${TEAM_KEY}`)).toHaveText("demo-project");
     // In a group, its code glyph stands: the project names no code
-    // remote, so "⚠ Code: no remote" in the attention tone (space-1).
+    // remote and is paired with its folder here, so "Code only on this
+    // computer" in the attention tone (space-1, DR-175).
     const codeGlyph = page.getByTestId(`space-repo-code-${TEAM_KEY}`);
     await expect(codeGlyph).toHaveAttribute("data-kind", "none");
     await expect(codeGlyph).toHaveAttribute("data-tone", "attention");
-    await expect(codeGlyph).toHaveAttribute("title", "Code: no remote");
+    await expect(codeGlyph).toHaveAttribute("title", "Code only on this computer");
     // No placement's line on the row: in its Sync tab, the row's name
     // opening it, its one placement's line names the stand-in by its
     // display name and the path there of the group it is in, never the

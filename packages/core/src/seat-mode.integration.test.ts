@@ -9,9 +9,10 @@
 // on a spent ticket as Spex Space does; a sign-in as another account, or
 // a denied code, stores nothing; your own group is placed at no instance
 // and offered no pick or remote; every
-// command naming a working folder is refused; a seat opens no seat on a
-// team server, asking nothing; and an intent holding no runtime runs
-// nowhere there.
+// command naming a working folder is refused; a project whose records
+// name no code remote is refused its open, nothing allocated; a seat
+// opens no seat on a team server, asking nothing; and an intent holding
+// no runtime runs nowhere there.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -21,7 +22,7 @@ import { join } from "node:path";
 import { credentialsPath } from "@sublang/spex/git-host";
 import { Home } from "./home.js";
 import { seatsPath } from "./seats.js";
-import { clonePath, createSpaceHarness, hostKey, instanceOf, OWN_KEY } from "./testing/space-harness.js";
+import { clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, repositoryOf, OWN_KEY } from "./testing/space-harness.js";
 import type { GroupsState } from "./protocol.js";
 
 const fixture = createSpaceHarness();
@@ -34,6 +35,7 @@ const HOST_OWN = `${LOGIN}/${LOGIN}-spex`;
 const PATH_REFUSAL = /^Projects on a server are opened from their group$/;
 const OPEN_REFUSAL = /^Already on a server — open it from your computer$/;
 const OWN_REFUSAL = /^Personal records stay on this server$/;
+const CODE_REFUSAL = /^Needs the code on a Git host$/;
 
 /** Your own group's own row in a state. */
 function ownRow(state: GroupsState) {
@@ -252,6 +254,39 @@ test("core-service-127: on a seat every command naming a working folder is refus
   assert.deepEqual(await home.client.expectOk("project.list", {}), [], "no project is registered");
   assert.equal(existsSync(fresh), false, "no folder is created");
   assert.equal(existsSync(clonePath(home.dataDir, hostKey(host, "acme/alpha-spex"))), false, "nothing is cloned");
+});
+
+test("space-103: a seat refuses the open of a project whose records name no code remote with the phrase, allocating, cloning and pairing nothing, its row reading Code not on a Git host; a group's own records, holding no project.json, open", async (t) => {
+  const host = await startHost();
+  const listed = host.script.addRepository({ group: "acme", name: "beta-spex", project: { format: 1, name: "beta", remote: null } });
+  const group = host.script.addRepository({ group: "acme", name: "acme-spex" });
+  const home = await startHome("seat-no-code", { host, project: false, extra: { seat: SEAT } });
+  t.after(() => home.stop());
+  const from = home.client.mark();
+  await signIn(home, host);
+  const read = await home.client.waitSpace(from, (state) => (instanceOf(state, host.url)?.readAt ?? null) !== null && state.signIn.phase === "idle");
+  const key = hostKey(host, "acme/beta-spex");
+  // Not open here, its code on no Git host (space-1).
+  const row = repositoryOf(read, key);
+  assert.deepEqual([row.state, row.folder, row.code, row.codeKind], ["absent", null, "Code not on a Git host", "none"]);
+
+  // Refused before anything is cloned or allocated (space-103).
+  await home.client.expectError("space.join", { instance: host.url, hostId: listed.id }, "invalid_request", CODE_REFUSAL);
+  const projects = join(home.dataDir, "projects");
+  assert.equal(existsSync(projects), false, "no folder is allocated");
+  assert.equal(existsSync(clonePath(home.dataDir, key)), false, "the records are not cloned");
+  assert.deepEqual(await home.client.expectOk("project.list", {}), [], "nothing is paired");
+  const after = repositoryOf(await home.client.expectOk("space.get", {}), key);
+  assert.deepEqual([after.state, after.folder, after.sync.phase], ["absent", null, "idle"], JSON.stringify(after.sync));
+
+  // A group's own records hold no project.json and are not refused: the
+  // seat allocates their folder and pairs it (space-103).
+  const groupKey = hostKey(host, "acme/acme-spex");
+  const opening = home.client.mark();
+  await home.client.expectOk("space.join", { instance: host.url, hostId: group.id });
+  const joined = await home.client.waitRepository(opening, groupKey, (repository) => repository.folder !== null || repository.sync.phase === "stopped", 30_000);
+  assert.deepEqual([joined.folder, joined.sync.phase], [join(projects, hostFolder(host), "acme", "acme-spex"), "idle"], JSON.stringify(joined.sync));
+  assert.equal(existsSync(join(projects, hostFolder(host), "acme", "beta-spex")), false, "still no folder for the refused project");
 });
 
 test("core-service-125: on a seat server.open is refused with the phrase before anything is asked, while server.list and server.close answer as on any core", async (t) => {

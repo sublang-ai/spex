@@ -74,7 +74,7 @@ test("space-37: a working folder added pairs with a local-only spex repository w
   assert.equal(row.state, "local-only");
   assert.equal(row.own, false);
   assert.equal(row.folder, home.projectDir);
-  assert.deepEqual([row.code, row.codeKind], ["Code: no remote", "none"], "the folder has no remote of its own");
+  assert.deepEqual([row.code, row.codeKind], ["Code only on this computer", "none"], "the folder has no remote of its own, its code only here");
   assert.equal(row.sync.phase, "idle");
   // Its clone begins on `spex` with one commit of the managed rules and
   // project.json, under the fallback identity, its environment

@@ -1757,6 +1757,14 @@ export function App() {
     onDeleteSession: (sessionId) => store.getState().deleteSession(sessionId),
   }));
 
+  // A seat holding no project has no page of its own (run-view-168): the
+  // Projects surface shows this computer's instead.
+  useEffect(() => {
+    if (shownPlace === LOCAL_PLACE_KEY) return;
+    const place = navPlaces.find((entry) => entry.key === shownPlace);
+    if (place && place.projects.length === 0 && (place.opening?.length ?? 0) === 0) setShownPlace(LOCAL_PLACE_KEY);
+  });
+
   // The rail foot's other tenant. A broken config keeps its red voice
   // in both rail states (DR-030) — a first-hour failure must not go
   // quiet because the chrome folded.
@@ -1816,19 +1824,10 @@ export function App() {
             sessions: value.sessions,
             attention: attentionAt(store.place.key),
             currentProjectId: store === shown ? value.currentProjectId : undefined,
-            // A seat's project is opened among the member's groups there,
-            // with no folder (run-view-169, space-103).
-            groups: value.space,
-            connected: value.connection === "open",
-            // Its sign-in at its instance not yet complete, the palette
-            // says it signs in there (run-view-168, core-service-142).
+            // Its sign-in at its instance not yet complete, the palette's
+            // entry for it says it signs in there (run-view-168,
+            // core-service-142).
             signingIn: signingInAt(seatStates, local.space, store.place.key),
-            onJoin: (instance, hostId) => store.getState().spaceJoin(instance, hostId),
-            onReadGroups: () => {
-              if (store.getState().connection === "open") {
-                void store.getState().loadSpace().catch(() => {});
-              }
-            },
           }))}
           onPickFolder={
             window.spexNative
@@ -1837,6 +1836,13 @@ export function App() {
           }
           onPick={(projectId) => pickProject(projectId)}
           onPickAt={(place, projectId) => pickProject(projectId, place)}
+          // A server's contract is asked beneath its line on this
+          // computer's Space (run-view-170): "Open on <server>" from the
+          // palette shows it there.
+          onShowSpace={() => {
+            setConfiguredPlace(LOCAL_PLACE_KEY);
+            setSurface("Space");
+          }}
           // A group's project opened at a place is current there at
           // once, the Projects surface showing that place (run-view-168).
           onOpened={(place, projectId) => pickProject(projectId, place)}
@@ -1934,7 +1940,7 @@ export function App() {
                 // the palette at its place's groups (run-view-172,
                 // run-view-174).
                 onOpenOwnProject={openAddProject}
-                onOpenFromGroups={() => openFromGroups(shown.place.key)}
+                onOpenFromGroups={() => openFromGroups(LOCAL_PLACE_KEY)}
                 attentionBySession={attentionBySession}
                 pendingFocus={pendingFocus}
                 onFocusHandled={() => setPendingFocus(undefined)}
