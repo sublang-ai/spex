@@ -421,6 +421,14 @@ and `npm start` (desktop) or `npm run start:server` (server).
   agent credential, it is rewritten as the seed for the sign-ins then. A
   team server seeds from its shared sign-ins, so a Codex-only server starts
   on Codex. The first change to the file, of any kind, ends this for good.
+- A new seed runs Codex on `gpt-6.1-sol` and every agent at effort
+  `medium`, except a Codex `dev.reviewer` beside Claude agents at `high`
+  ([DR-178](specs/decisions/178-playbook-18-1-2-cligent-0-37-0-slc-0-20-1-adoption.md)).
+  The app requires Playbook 18.1.2, Cligent 0.37.0, whose Codex runtime
+  floor 0.159.1 serves that model, and slc 0.20.1, which shares that
+  Cligent. The built-in playbooks stage as `sublang/playbooks` 18.1.2,
+  unchanged from 18.1.0. Existing configs you have edited keep their
+  models and efforts.
 - Require Playbook 18.1.0, the first release publishing its seed rule
   ([DR-154](specs/decisions/154-the-seed-follows-playbooks-rule.md)).
   The built-in playbooks stage as `sublang/playbooks` 18.1.0, unchanged
