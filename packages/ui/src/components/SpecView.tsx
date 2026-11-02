@@ -97,10 +97,12 @@ const GRAPH_FLOOR_PX = 320;
 const OUTLINE_FLOOR_REM = 28;
 const DIVIDER_PX = 17;
 
-const COUNT_CELL = "w-7 shrink-0 text-right @xs:w-10 @md:w-[4.5rem]";
-/** The cross-package rollup's column (spec-view-19). */
+/** The package's counts in one cell, each a labeled tally that names
+ * its own group, so no heading stands over them (spec-view-2). */
+const COUNTS_CELL = "flex shrink-0 justify-end gap-2 whitespace-nowrap text-xs tabular-nums";
+/** The cross-package rollup, labeled as the counts are (spec-view-19). */
 const ROLLUP_CELL =
-  "hidden w-24 shrink-0 whitespace-nowrap text-right @md:block";
+  "hidden shrink-0 justify-end gap-2 whitespace-nowrap text-xs tabular-nums text-neutral-500 @md:flex dark:text-neutral-400";
 /** The unresolved mark's narrow slot, under no heading and held on
  * every row so the columns before it never shift (spec-view-19). */
 const UNRESOLVED_CELL = "flex w-4 shrink-0 justify-end";
@@ -119,8 +121,13 @@ const REFRESH_SAID_MS = 2000;
 
 /** A count as the columns print it: tabular numerals with the
  * locale's separators, a zero as a dash (spec-view-2). */
-function countText(count: number): string {
-  return count === 0 ? "—" : count.toLocaleString(i18n.locale);
+/** A short label with its tally, as `Ext (7)` (spec-view-2). */
+function tally(label: string, count: number): string {
+  return i18n._({
+    id: "{label} ({count})",
+    values: { label, count: count.toLocaleString(i18n.locale) },
+    comment: "outline row: a short label and its count, as in 'Ext (7)'",
+  });
 }
 
 const COPY_BUTTON_CLASS =
@@ -320,21 +327,6 @@ export function SpecView(props: SpecViewProps) {
   // permanent and the graph joins it under one persisted toggle. The
   // selection is shared, so both projections point at one file.
   const [graphSelection, setGraphSelection] = useState<string | null>(null);
-  // The heading row's measured height: an expanded package's header
-  // pins beneath it, and a revealed row lands clear of it (spec-view-2,
-  // spec-view-43).
-  const [headHeight, setHeadHeight] = useState(0);
-  const headObserver = useRef<ResizeObserver | null>(null);
-  const headRef = useCallback((element: HTMLDivElement | null) => {
-    headObserver.current?.disconnect();
-    headObserver.current = null;
-    if (!element) return;
-    const measure = () => setHeadHeight(element.getBoundingClientRect().height);
-    measure();
-    if (typeof ResizeObserver === "undefined") return;
-    headObserver.current = new ResizeObserver(measure);
-    headObserver.current.observe(element);
-  }, []);
   // The split's live fraction while the divider is under the pointer;
   // committed to the view state on release.
   const splitRef = useRef<HTMLDivElement | null>(null);
@@ -1484,9 +1476,8 @@ export function SpecView(props: SpecViewProps) {
         key={key}
         data-testid={`file-${key}`}
         className="@container"
-        style={{ scrollMarginTop: headHeight }}
       >
-        {/* Expanded, the header pins beneath the heading row while its
+        {/* Expanded, the header pins at the outline's top while its
             contents scroll, so the package's name stays in sight; the
             selection's outline is drawn inside the row so no scroll box
             clips it (spec-view-2, spec-view-42). The whole row is the
@@ -1496,7 +1487,7 @@ export function SpecView(props: SpecViewProps) {
           data-testid={`file-row-${key}`}
           onClick={() => activateFile(key)}
           title={rollup ? i18n._("Citations: {summary}", { summary: rollup }) : undefined}
-          style={expanded ? { top: graphful ? headHeight : `calc(${headHeight}px - 1.5rem)` } : undefined}
+          style={expanded ? { top: graphful ? 0 : "-1.5rem" } : undefined}
           className={`flex cursor-pointer items-center gap-1 rounded px-1 py-1 @xs:gap-2 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-inset has-[:focus-visible]:ring-brand-600 dark:has-[:focus-visible]:ring-brand-400 ${
             expanded ? "sticky z-[1]" : ""
           } ${dimmed ? "opacity-50" : ""} ${
@@ -1517,7 +1508,7 @@ export function SpecView(props: SpecViewProps) {
               event.stopPropagation();
               toggleFile(key);
             }}
-            className="flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded hover:bg-neutral-100 dark:hover:bg-neutral-800"
+            className="flex h-6 w-4 shrink-0 cursor-pointer items-center justify-center rounded @xs:-mr-1 hover:bg-neutral-100 dark:hover:bg-neutral-800"
           >
             <Icon
               name="caretDown"
@@ -1555,13 +1546,13 @@ export function SpecView(props: SpecViewProps) {
             >
               {file.basename}
             </span>
-            {/* Collapsed keeps the truncated intent; expanded yields
+            {/* Collapsed keeps the intent to one line; expanded yields
              * to the full prose block below. */}
             {file.intent && !expanded ? (
               // The first thing to yield: below 28rem it leaves the row
               // rather than standing as a fragment (spec-view-1).
               <span
-                className="hidden min-w-0 flex-1 truncate text-xs text-neutral-500 @md:inline dark:text-neutral-400"
+                className="hidden min-w-0 flex-1 truncate text-xs text-neutral-500 @md:block dark:text-neutral-400"
                 title={linksAsText(file.intent)}
               >
                 {linksAsText(file.intent)}
@@ -1576,10 +1567,13 @@ export function SpecView(props: SpecViewProps) {
               {i18n._("shown despite search")}
             </span>
           ) : null}
-          {/* Numerals in aligned columns under the heading row, one
-              column per group still on (spec-view-2). */}
-          {GROUP_ORDER.filter((group) => viewState.filters[group]).map(
-            (group) => (
+          {/* The counts in one cell: a labeled tally per group still on
+              and holding any, in its group's color and named in full
+              to assistive tech (spec-view-2). */}
+          <span data-testid={`counts-${key}`} className={COUNTS_CELL}>
+            {GROUP_ORDER.filter(
+              (group) => viewState.filters[group] && counts[group] > 0,
+            ).map((group) => (
               <span
                 key={group}
                 data-testid={`count-${key}-${group}`}
@@ -1591,32 +1585,35 @@ export function SpecView(props: SpecViewProps) {
                   count: counts[group],
                   group: GROUP_WORD[group](),
                 })}
-                className={`${COUNT_CELL} text-xs tabular-nums ${
-                  counts[group] > 0
-                    ? `font-semibold ${GROUP_TEXT[group]}`
-                    : "text-neutral-400 dark:text-neutral-600"
-                }`}
+                className={`font-medium ${GROUP_TEXT[group]}`}
               >
-                {countText(counts[group])}
+                {tally(GROUP_SHORT[group](), counts[group])}
               </span>
-            ),
-          )}
+            ))}
+          </span>
+          {/* Cross-package citations, each direction only where it has
+              any (spec-view-19). */}
           <span
             data-testid={`rollup-${key}`}
             aria-label={
               rollup ? i18n._("Citations: {summary}", { summary: rollup }) : undefined
             }
-            className={`${ROLLUP_CELL} whitespace-nowrap text-xs tabular-nums text-neutral-500`}
+            className={ROLLUP_CELL}
           >
-            {fileCites ? (
-              <>
-                {countText(fileCites.out)}
-                <span aria-hidden="true" className="text-neutral-400 dark:text-neutral-600"> · </span>
-                {countText(fileCites.in)}
-              </>
-            ) : (
-              <span className="text-neutral-400 dark:text-neutral-600">—</span>
-            )}
+            {fileCites && fileCites.out > 0 ? (
+              <span
+                title={i18n._({ id: "{count, plural, one {Cites # item in other packages} other {Cites # items in other packages}}", values: { count: fileCites.out }, comment: "outline row: the package's citations of other packages' items" })}
+              >
+                {tally(i18n._({ id: "Cites", comment: "outline row: label of the package's citations of other packages" }), fileCites.out)}
+              </span>
+            ) : null}
+            {fileCites && fileCites.in > 0 ? (
+              <span
+                title={i18n._({ id: "{count, plural, one {Cited by # item in other packages} other {Cited by # items in other packages}}", values: { count: fileCites.in }, comment: "outline row: other packages' items citing this package" })}
+              >
+                {tally(i18n._({ id: "Cited by", comment: "outline row: label of other packages' citations of this package" }), fileCites.in)}
+              </span>
+            ) : null}
           </span>
           {/* Never yields: a package whose only citations name absent
               items must not look uncited (spec-view-19, spec-view-1). */}
@@ -2179,51 +2176,6 @@ export function SpecView(props: SpecViewProps) {
               </div>
             ) : null;
 
-          // One heading row over the package rows' columns, pinned while
-          // they scroll (spec-view-2). The chevron and name take the
-          // slack, so the cells line up with the rows' own.
-          const columnHeads =
-            tree.files.length > 0 ? (
-              <div
-                ref={headRef}
-                data-testid="outline-columns"
-                // Pinned at the scroll box's own edge: alone, the outline
-                // scrolls in the padded surface root, so the heading row
-                // rides up over that padding rather than letting rows
-                // show above it.
-                className={`sticky ${graphful ? "top-0" : "-top-6"} z-[2] flex items-end gap-1 @xs:gap-2 border-b border-neutral-200 bg-neutral-50 px-1 pb-1 pt-0.5 text-xs leading-tight text-neutral-500 dark:border-neutral-800 dark:bg-neutral-950`}
-              >
-                <span className="min-w-0 flex-1" />
-                {GROUP_ORDER.filter((group) => viewState.filters[group]).map(
-                  (group) => (
-                    <span
-                      key={group}
-                      data-testid={`column-${group}`}
-                      title={GROUP_NAME[group]()}
-                      aria-label={GROUP_NAME[group]()}
-                      className={`${COUNT_CELL} ${GROUP_TEXT[group]}`}
-                    >
-                      <span className="@md:hidden">{GROUP_SHORT[group]()}</span>
-                      <span className="hidden @md:inline">{GROUP_NAME[group]()}</span>
-                    </span>
-                  ),
-                )}
-                <span
-                  data-testid="column-rollup"
-                  title={i18n._("Citations across packages: cites · cited by")}
-                  className={ROLLUP_CELL}
-                >
-                  {i18n._({
-                    id: "cites · cited by",
-                    comment: "outline column heading: citations between packages, out and in",
-                  })}
-                </span>
-                {anyUnresolved ? (
-                  <span aria-hidden="true" className={UNRESOLVED_CELL} />
-                ) : null}
-              </div>
-            ) : null;
-
           const outline =
             tree.files.length > 0 ? (
               <>
@@ -2344,9 +2296,8 @@ export function SpecView(props: SpecViewProps) {
                 {jumpBack}
                 {hiddenLine}
                 {/* Its own scroll box only beside the graph; stacked, the
-                    split scrolls as one and the heading row pins to it. */}
+                    split scrolls as one and an expanded header pins to it. */}
                 <div className="relative min-h-0 pr-1 @min-[49rem]/split:overflow-y-auto">
-                  {columnHeads}
                   <ul data-testid="specs-outline" className="flex flex-col">
                     {outline}
                   </ul>
@@ -2363,7 +2314,6 @@ export function SpecView(props: SpecViewProps) {
               {outlineControls}
               {jumpBack}
               {hiddenLine}
-              {columnHeads}
               <ul data-testid="specs-outline" className="flex flex-col">
                 {outline}
               </ul>

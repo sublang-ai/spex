@@ -136,7 +136,7 @@ export const initialSpecViewState: SpecViewState = {
   expandedFiles: [],
   expandedItems: [],
   graph: true,
-  graphWidth: 0.4,
+  graphWidth: 1 / 3,
 };
 
 /** Coerce a possibly-stale persisted view state to the current shape.

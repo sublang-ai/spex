@@ -469,13 +469,13 @@ async function expectRevealed(page: Page, name: string): Promise<void> {
     .toBe(true);
 }
 
-/** A package selected on the graph lands in the outline under its
- * heading row, outlined whole, and its header stays in sight while
+/** A package selected on the graph lands at the outline's top,
+ * outlined whole, and its header stays in sight while
  * its contents scroll (spec-view-56). */
 test.describe("the outline beside a selection", () => {
   test.use({ appOptions: { project: true } });
 
-  test("spec-view-56: a selected package's row lands clear of the heading row and stays pinned", async ({
+  test("spec-view-56: a selected package's row lands at the outline's top and stays pinned", async ({
     page,
     app,
   }) => {
@@ -506,15 +506,14 @@ test.describe("the outline beside a selection", () => {
     const scroller = page.getByTestId("specs-outline").locator("..");
     const settled = () =>
       row.evaluate((element) => {
-        const h = document.querySelector('[data-testid="outline-columns"]')!.getBoundingClientRect();
         const r = element.getBoundingClientRect();
         const s = document.querySelector('[data-testid="specs-outline"]')!.parentElement!.getBoundingClientRect();
-        return { gap: r.top - h.bottom, left: r.left - s.left, right: s.right - r.right };
+        return { gap: r.top - s.top, left: r.left - s.left, right: s.right - r.right };
       });
-    // The reveal lands the row wholly below the heading row, with its
-    // selection outline inside the scroll box (spec-view-43, spec-view-42).
+    // The reveal lands the row at the scroll box's top, with its
+    // selection outline inside it (spec-view-43, spec-view-42).
     await expect
-      .poll(async () => (await settled()).gap, { message: "the selected row lands directly under the heading row" })
+      .poll(async () => (await settled()).gap, { message: "the selected row lands at the outline's top" })
       .toBeGreaterThanOrEqual(-TOLERANCE);
     await expect.poll(async () => (await settled()).gap).toBeLessThanOrEqual(TOLERANCE);
     const landed = await settled();
@@ -523,8 +522,8 @@ test.describe("the outline beside a selection", () => {
     const ring = await row.evaluate((element) => getComputedStyle(element).boxShadow);
     expect(ring, "the selection outline is drawn inside the row").toContain("inset");
 
-    // Partway through the package, its header stays beneath the
-    // heading row (spec-view-2).
+    // Partway through the package, its header stays pinned at the
+    // outline's top (spec-view-2).
     const pkg = await boxOf(row.locator(".."));
     await scroller.evaluate((element, by) => element.scrollBy(0, by), pkg.height / 2);
     await expect

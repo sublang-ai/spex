@@ -318,23 +318,24 @@ describe("SPECV-1/2: outline shape and file nodes", () => {
     // The package-identifier chip is the basename (SPECV-11).
     expect(within(auth).getByText("auth")).toBeTruthy();
     expect(within(auth).getByText("How users sign in.")).toBeTruthy();
-    // Counts are numerals in group columns, each naming its group in
-    // full for assistive technology (spec-view-2).
-    expect(within(auth).getByLabelText("3 external behavior items").textContent).toBe("3");
-    expect(within(auth).getByLabelText("1 internal behavior items").textContent).toBe("1");
-    expect(within(auth).getByLabelText("1 test items").textContent).toBe("1");
+    // Counts are labeled tallies, each naming its group in full for
+    // assistive technology (spec-view-2).
+    expect(within(auth).getByLabelText("3 external behavior items").textContent).toBe("Ext (3)");
+    expect(within(auth).getByLabelText("1 internal behavior items").textContent).toBe("Int (1)");
+    expect(within(auth).getByLabelText("1 test items").textContent).toBe("Test (1)");
     // Header totals across the collection.
     expect(screen.getByText("3 packages · 10 items")).toBeTruthy();
     // Files default collapsed: no item rows yet.
     expect(screen.queryByTestId("item-AUTH-2")).toBeNull();
   });
 
-  test("zero counts stay, as a dash; a root file needs no directory", () => {
+  test("a zero count leaves the cell; a root file needs no directory", () => {
     render(<Harness />);
     const courses = screen.getByTestId(`file-${CAT}`);
-    // Zero renders as a muted dash, not absent (spec-view-2).
-    expect(within(courses).getByLabelText("0 internal behavior items").textContent).toBe("—");
-    expect(within(courses).getByLabelText("0 test items").textContent).toBe("—");
+    // A group with no items is left out of the cell (spec-view-2).
+    expect(within(courses).queryByLabelText("0 internal behavior items")).toBeNull();
+    expect(within(courses).queryByLabelText("0 test items")).toBeNull();
+    expect(screen.getByTestId(`counts-${CAT}`).textContent).toMatch(/^Ext \(\d+\)$/);
     const guard = screen.getByTestId(`file-${GUARD}`);
     expect(within(guard).getByText("guard")).toBeTruthy();
     expect(
@@ -342,13 +343,16 @@ describe("SPECV-1/2: outline shape and file nodes", () => {
     ).toBeTruthy();
   });
 
-  test("expanding shows the full intent as a prose block; collapsed keeps the truncated line", () => {
+  test("expanding shows the full intent as a prose block; collapsed keeps it to one line", () => {
     render(<Harness />);
     expect(screen.queryByTestId(`intent-${AUTH}`)).toBeNull();
+    const line = within(screen.getByTestId(`file-${AUTH}`)).getByText("How users sign in.");
+    expect(line.className).toContain("truncate");
+    expect(line.getAttribute("title")).toBe("How users sign in.");
     fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
     const intent = screen.getByTestId(`intent-${AUTH}`);
     expect(intent.textContent).toBe("How users sign in.");
-    // The header's truncated copy yields to the full block: one copy.
+    // The header's two-line copy yields to the full block: one copy.
     expect(screen.getAllByText("How users sign in.").length).toBe(1);
     fireEvent.click(screen.getByTestId(`file-chevron-${AUTH}`));
     expect(screen.queryByTestId(`intent-${AUTH}`)).toBeNull();
@@ -912,9 +916,11 @@ describe("SPECV-2/19: cross-file rollups on every file row", () => {
     // auth out: none — AUTH-10 → AUTH-99 names an absent item and both
     // AUTH-1 cites are intra-file. in: CAT-1 → AUTH-2, GUARD-1 →
     // AUTH-1, GUARD-5/GUARD-6 → AUTH-8.
+    // Each direction only where it has any, named in words.
     const auth = screen.getByTestId(`rollup-${AUTH}`);
-    expect(auth.textContent).toBe("— · 4");
+    expect(auth.textContent).toBe("Cited by (4)");
     expect(auth.getAttribute("aria-label")).toBe("Citations: cited by 4");
+    expect(within(auth).getByTitle("Cited by 4 items in other packages")).toBeTruthy();
     // The dead citation stands apart, never yielding (spec-view-19).
     const unresolved = screen.getByTestId(`unresolved-${AUTH}`);
     expect(unresolved.getAttribute("aria-label")).toBe(
@@ -925,24 +931,28 @@ describe("SPECV-2/19: cross-file rollups on every file row", () => {
     expect(unresolved.getAttribute("title")).toBe("1 citation names an item absent from the tree");
     expect(unresolved.className).not.toMatch(/amber|orange|red|brand/);
     expect(screen.queryByTestId(`unresolved-${CAT}`)).toBeNull();
-    expect(screen.getByTestId(`rollup-${CAT}`).textContent).toBe("1 · 2");
+    expect(screen.getByTestId(`rollup-${CAT}`).textContent).toBe("Cites (1)Cited by (2)");
+    expect(within(screen.getByTestId(`rollup-${CAT}`)).getByTitle("Cites 1 item in other packages")).toBeTruthy();
     // guard's inbound is all intra-file: outbound side only.
-    expect(screen.getByTestId(`rollup-${GUARD}`).textContent).toBe("5 · —");
+    expect(screen.getByTestId(`rollup-${GUARD}`).textContent).toBe("Cites (5)");
     // Expansion keeps the rollup on the row.
     fireEvent.click(screen.getByTestId(`file-toggle-${AUTH}`));
-    expect(screen.getByTestId(`rollup-${AUTH}`).textContent).toBe("— · 4");
+    expect(screen.getByTestId(`rollup-${AUTH}`).textContent).toBe("Cited by (4)");
   });
 });
 
 // spec-view-65: the outline reads as a table under its filters.
 describe("spec-view-65: columns and filters", () => {
-  test("one heading row names the columns; a filtered group leaves them, said once", () => {
+  test("one cell holds a package's counts under no heading; a filtered group leaves it, said once", () => {
     render(<Harness />);
-    const heads = screen.getByTestId("outline-columns");
-    expect(within(heads).getByLabelText("External behavior")).toBeTruthy();
-    expect(within(heads).getByLabelText("Internal behavior")).toBeTruthy();
-    expect(within(heads).getByLabelText("Tests")).toBeTruthy();
-    expect(heads.className).toContain("sticky");
+    // No heading row: each tally carries its own label, named in full
+    // to assistive technology (spec-view-2).
+    expect(screen.queryByTestId("outline-columns")).toBeNull();
+    const counts = screen.getByTestId(`counts-${AUTH}`);
+    expect(counts.textContent).toBe("Ext (3)Int (1)Test (1)");
+    expect(within(counts).getByLabelText(/ external behavior items$/)).toBeTruthy();
+    expect(within(counts).getByLabelText(/ internal behavior items$/)).toBeTruthy();
+    expect(within(counts).getByLabelText(/ test items$/)).toBeTruthy();
     // The toggles: full names, a definition each, pressed as a
     // filled control with a check (spec-view-4).
     const internal = screen.getByTestId("filter-internal");
@@ -954,9 +964,9 @@ describe("spec-view-65: columns and filters", () => {
     expect(screen.queryByTestId("hidden-groups")).toBeNull();
 
     fireEvent.click(internal);
-    // The column leaves the rows and the heading row; every package
-    // stays (spec-view-2, spec-view-4).
-    expect(screen.queryByTestId("column-internal")).toBeNull();
+    // The count leaves every row's cell; every package stays
+    // (spec-view-2, spec-view-4).
+    expect(screen.getByTestId(`counts-${AUTH}`).textContent).toBe("Ext (3)Test (1)");
     expect(screen.queryByTestId(`count-${AUTH}-internal`)).toBeNull();
     expect(screen.getByTestId(`count-${AUTH}-external`)).toBeTruthy();
     expect(screen.getByTestId(`file-${GUARD}`)).toBeTruthy();
@@ -969,7 +979,7 @@ describe("spec-view-65: columns and filters", () => {
     );
     fireEvent.click(screen.getByTestId("show-all-groups"));
     expect(screen.queryByTestId("hidden-groups")).toBeNull();
-    expect(screen.getByTestId("column-internal")).toBeTruthy();
+    expect(screen.getByTestId(`count-${AUTH}-internal`)).toBeTruthy();
     expect(screen.getByTestId("filter-test").getAttribute("aria-pressed")).toBe("true");
   });
 });
@@ -1980,8 +1990,11 @@ describe("spec-view-20: citation graph beside the outline", () => {
     fireEvent.click(screen.getByTestId("file-chevron-session"));
     expect(screen.getByTestId("graph-halo-session")).toBeTruthy();
 
-    // The divider moves the split, within bounds (spec-view-20).
+    // The divider moves the split, within bounds (spec-view-20): at
+    // 800px the graph's 320px floor lies above the default third.
     const divider = screen.getByTestId("graph-split");
+    expect(graphPaneShare()).toBeCloseTo(100 / 3);
+    fireEvent.keyDown(divider, { key: "ArrowRight" });
     fireEvent.keyDown(divider, { key: "ArrowRight" });
     const wider = graphPaneShare();
     fireEvent.keyDown(divider, { key: "ArrowLeft" });
@@ -2182,7 +2195,7 @@ describe("spec-view-20: citation graph beside the outline", () => {
     // uncounted (spec-view-23).
     expect(screen.getByTestId("graph-label-auth").textContent).toBe("auth");
     expect(screen.getByTestId("graph-label-session").textContent).toBe("session");
-    expect(screen.getByTestId("rollup-billing").textContent).toBe("3 · 1");
+    expect(screen.getByTestId("rollup-billing").textContent).toBe("Cites (3)Cited by (1)");
     expect(screen.getByTestId("unresolved-billing")).toBeTruthy();
 
     // The sentence above the graph keys the two hues with samples of
