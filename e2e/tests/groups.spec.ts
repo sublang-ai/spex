@@ -1170,6 +1170,7 @@ test.describe("organizing", () => {
     await pending.screenshot({ path: testInfo.outputPath("group-pending-deletion.png") });
     await pending.getByRole("button", { name: "Restore group", exact: true }).click();
     await expect(pending).toHaveCount(0);
+    await expect(empty.getByTestId("space-group-more-empty-group")).toBeFocused();
     await expect(empty).toBeVisible();
     await expect(platform.getByTestId(`space-row-${picked}`)).toBeVisible();
     expect(standinMembers("platform")).toContain("alan:Maintainer");
