@@ -20,6 +20,7 @@ import { WebSocket } from "ws";
 import { CoreService, type CoreServiceOptions } from "./service.js";
 import type { Command, CommandResults, ConfigState, ReadinessEntry, ServerMessage } from "./protocol.js";
 import { fakeAdapterImports } from "./testing/fake-adapter.js";
+import type { SignInAnswer } from "./local-credentials.js";
 import { createScriptedCaptain } from "./testing/scripted-captain.js";
 import { scratchDir } from "./testing/scratch.js";
 
@@ -117,7 +118,7 @@ interface Harness { service: CoreService; client: Client; configPath: string; ho
 
 async function start(
   config: string,
-  options: { env?: NodeJS.ProcessEnv; adapterRuntime?: CoreServiceOptions["adapterRuntime"]; homeFolders?: string[] } = {},
+  options: { env?: NodeJS.ProcessEnv; adapterRuntime?: CoreServiceOptions["adapterRuntime"]; agentSignIn?: CoreServiceOptions["agentSignIn"]; homeFolders?: string[]; homeFiles?: Record<string, string> } = {},
 ): Promise<Harness> {
   const dir = scratchDir("spex-agent-config-");
   const configPath = join(dir, "playbook.config.yaml");
@@ -125,10 +126,14 @@ async function start(
   const home = join(dir, "user");
   mkdirSync(home);
   for (const folder of options.homeFolders ?? []) mkdirSync(join(home, folder));
+  for (const [file, text] of Object.entries(options.homeFiles ?? {})) writeFileSync(join(home, file), text);
   const { imports } = fakeAdapterImports({ rules: [], fallback: { result: "reply" } });
   const service = await CoreService.start({
     token: "test", configPath, dataDir: join(dir, "state"), adapterImports: imports,
     adapterRuntime: options.adapterRuntime ?? (() => ({ usable: true })),
+    // The agents' own status commands are faked, so the host's sign-ins
+    // never decide a verdict.
+    agentSignIn: options.agentSignIn ?? (async () => ({ state: "signed-out" })),
     env: options.env ?? {}, home, own: "tester", watchConfig: false,
     captainFactory: async () => createScriptedCaptain(async () => {}),
   });
@@ -160,21 +165,36 @@ test("settings-19: readiness takes each credential form, always names Claude and
     label: string;
     env: NodeJS.ProcessEnv;
     homeFolders?: string[];
+    homeFiles?: Record<string, string>;
     unusable?: string[];
-    claude: boolean;
-    codex: boolean;
+    signIn?: Partial<Record<"claude" | "codex", SignInAnswer>>;
+    claude: boolean | null;
+    codex: boolean | null;
     baseUrl: ReadinessEntry["baseUrl"];
   }[] = [
     { label: "token forms", env: { ANTHROPIC_AUTH_TOKEN: "sk-a", CODEX_API_KEY: "sk-c", ANTHROPIC_BASE_URL: "https://api.deepseek.com/anthropic?key=sk-secret", SHELL: "/bin/zsh" }, claude: true, codex: true, baseUrl: { state: "third-party", host: "api.deepseek.com" } },
     { label: "OAuth and access tokens", env: { CLAUDE_CODE_OAUTH_TOKEN: "t", CODEX_ACCESS_TOKEN: "t", ANTHROPIC_BASE_URL: "https://api.anthropic.com", SHELL: "/usr/local/bin/bash" }, claude: true, codex: true, baseUrl: { state: "unset" } },
     { label: "API keys", env: { ANTHROPIC_API_KEY: "k", OPENAI_API_KEY: "k", ANTHROPIC_BASE_URL: "not a url" }, claude: true, codex: true, baseUrl: { state: "unknown" } },
-    { label: "folders", env: {}, homeFolders: [".claude", ".codex"], claude: true, codex: true, baseUrl: { state: "unset" } },
+    // The runtimes make these folders on their first start: no sign-in.
+    { label: "folders alone", env: {}, homeFolders: [".claude", ".claude/skills", ".codex"], claude: false, codex: false, baseUrl: { state: "unset" } },
+    { label: "signed in", env: {}, homeFolders: [".claude", ".codex"], signIn: { claude: { state: "signed-in" }, codex: { state: "signed-in" } }, claude: true, codex: true, baseUrl: { state: "unset" } },
+    { label: "sign-in unconfirmed", env: {}, homeFolders: [".claude", ".codex"], signIn: { claude: { state: "unconfirmed", reason: "its status command did not answer in time" }, codex: { state: "unconfirmed", reason: "its status command reported an error" } }, claude: null, codex: null, baseUrl: { state: "unset" } },
+    // Claude's settings file sets variables a run applies over its own.
+    { label: "Claude's settings file", env: { ANTHROPIC_BASE_URL: "https://api.anthropic.com" }, homeFolders: [".claude"], homeFiles: { ".claude/settings.json": JSON.stringify({ env: { ANTHROPIC_BASE_URL: "https://open.bigmodel.cn/api/anthropic", ANTHROPIC_AUTH_TOKEN: "sk-g" } }) }, claude: true, codex: false, baseUrl: { state: "third-party", host: "open.bigmodel.cn" } },
+    // No folder, no sign-in: nothing is asked, so nothing is created.
     { label: "nothing, Codex's runtime unusable", env: {}, unusable: ["codex"], claude: false, codex: false, baseUrl: { state: "unset" } },
+    { label: "unconfirmed, Codex's runtime unusable", env: {}, homeFolders: [".codex"], unusable: ["codex"], signIn: { codex: { state: "unconfirmed", reason: "its status command could not start" } }, claude: false, codex: false, baseUrl: { state: "unset" } },
   ];
   for (const entry of cases) {
+    const asked: { adapter: string; home: string | undefined }[] = [];
     const harness = await start(READINESS_CONFIG, {
       env: entry.env,
       ...(entry.homeFolders ? { homeFolders: entry.homeFolders } : {}),
+      ...(entry.homeFiles ? { homeFiles: entry.homeFiles } : {}),
+      agentSignIn: async (adapter, env) => {
+        asked.push({ adapter, home: env.HOME });
+        return entry.signIn?.[adapter] ?? { state: "signed-out" };
+      },
       adapterRuntime: (adapter) => entry.unusable?.includes(adapter)
         ? { usable: false, requirement: `the ${adapter} runtime failed to load` }
         : { usable: true },
@@ -200,13 +220,44 @@ test("settings-19: readiness takes each credential form, always names Claude and
         assert.equal(each.platform, process.platform, entry.label);
         assert.equal(each.shell, entry.env.SHELL ? entry.env.SHELL.split("/").at(-1) : undefined, entry.label);
       }
-      if (entry.claude) assert.deepEqual(map.get("claude")?.faults, [], entry.label);
+      // A credential variable needs no question; without one, the
+      // agent's own status command is asked in this home (settings-14).
+      for (const adapter of ["claude", "codex"] as const) {
+        const variable = Object.keys(entry.env).some((name) => (adapter === "claude" ? /^(ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|CLAUDE_CODE_OAUTH_TOKEN)$/ : /^(OPENAI_API_KEY|CODEX_API_KEY|CODEX_ACCESS_TOKEN)$/).test(name))
+          || (adapter === "claude" && Boolean(entry.homeFiles?.[".claude/settings.json"]));
+        const questions = asked.filter((question) => question.adapter === adapter);
+        const folder = entry.homeFolders?.includes(`.${adapter}`) ?? false;
+        if (variable || !folder) assert.deepEqual(questions, [], `${entry.label}: ${adapter} asked nothing`);
+        else {
+          assert.ok(questions.length > 0, `${entry.label}: ${adapter} asked`);
+          for (const question of questions) assert.equal(question.home, harness.home, `${entry.label}: ${adapter} asked in this home`);
+        }
+      }
+      if (entry.claude === null) {
+        // Unconfirmed: null readiness with the reason, no fault, so the
+        // card asks for a re-check rather than a sign-in (settings-14).
+        for (const adapter of ["claude", "codex"] as const) {
+          assert.deepEqual(map.get(adapter)?.faults, [], `${entry.label}: ${adapter}`);
+          assert.equal(map.get(adapter)?.unconfirmed, (entry.signIn?.[adapter] as { reason: string }).reason, `${entry.label}: ${adapter}`);
+        }
+        assert.equal(map.get("gemini")?.unconfirmed, undefined, "no rule is no unconfirmed sign-in");
+      } else if (entry.signIn?.codex?.state === "unconfirmed") {
+        // An unusable runtime decides: not ready, its fault alone.
+        const codex = map.get("codex")!;
+        assert.deepEqual(codex.faults?.map((f) => f.kind), ["runtime"], entry.label);
+        assert.equal(codex.unconfirmed, undefined, entry.label);
+      } else if (entry.claude) assert.deepEqual(map.get("claude")?.faults, [], entry.label);
       else {
         // A credential fault by its kind, beside the joined requirement.
         assert.deepEqual(map.get("claude")?.faults?.map((f) => f.kind), ["credential"]);
         assert.match(map.get("claude")?.requirement ?? "", /ANTHROPIC_API_KEY/);
-        // Both halves unmet: both kinds, joined in the one line.
         const codex = map.get("codex")!;
+        if (!entry.unusable) {
+          assert.deepEqual(codex.faults?.map((f) => f.kind), ["credential"], entry.label);
+          assert.match(codex.requirement ?? "", /OPENAI_API_KEY/);
+          continue;
+        }
+        // Both halves unmet: both kinds, joined in the one line.
         assert.deepEqual(codex.faults?.map((f) => f.kind), ["runtime", "credential"]);
         assert.equal(codex.requirement, codex.faults!.map((f) => f.requirement).join("; "));
         assert.match(codex.requirement ?? "", /runtime failed to load/);

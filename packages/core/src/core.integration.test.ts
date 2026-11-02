@@ -308,6 +308,8 @@ async function startHarness(
     // DR-024: the fake-adapter harness fakes the readiness runtime half
     // too, so verdicts never depend on the host's installed runtimes.
     adapterRuntime: options.adapterRuntime ?? (() => ({ usable: true })),
+    // Likewise the sign-in half: the host's own sign-ins never decide.
+    agentSignIn: async () => ({ state: "signed-out" }),
     discoverAgentModels: options.discoverAgentModels,
     ...(options.realShell ? {} : {captainFactory: async () => captain}),
     env: options.env ?? {},
@@ -4652,33 +4654,79 @@ test("core-service-136: the first-run config takes the agents Playbook seeds for
       froms: Object.values(top.playbooks).filter((block) => Object.hasOwn(block, "from")).length,
     };
   };
-  const rows: [string, NodeJS.ProcessEnv, Record<string, string>][] = [
-    ["claude only", { ANTHROPIC_API_KEY: "a" }, { captain: "claude", "dev.reviewer": "claude", "dev.coder": "claude" }],
-    ["codex only", { OPENAI_API_KEY: "o" }, { captain: "codex", "dev.reviewer": "codex", "dev.coder": "codex" }],
-    ["both", { ANTHROPIC_API_KEY: "a", OPENAI_API_KEY: "o" }, { captain: "claude", "dev.reviewer": "codex", "dev.coder": "claude" }],
-    ["neither", {}, { captain: "claude", "dev.reviewer": "claude", "dev.coder": "claude" }],
+  // Each row: its variables, the home folders standing and what each
+  // agent's status command answers, then the variables the CLI's seed
+  // is read under for the same confirmed credentials.
+  const both = { captain: "claude", "dev.reviewer": "codex", "dev.coder": "claude" };
+  const claudeOnly = { captain: "claude", "dev.reviewer": "claude", "dev.coder": "claude" };
+  const rows: { row: string; credentials: NodeJS.ProcessEnv; folders?: string[]; signedIn?: boolean; cli?: NodeJS.ProcessEnv; expected: Record<string, string> }[] = [
+    { row: "claude only", credentials: { ANTHROPIC_API_KEY: "a" }, expected: claudeOnly },
+    { row: "codex only", credentials: { OPENAI_API_KEY: "o" }, expected: { captain: "codex", "dev.reviewer": "codex", "dev.coder": "codex" } },
+    { row: "both", credentials: { ANTHROPIC_API_KEY: "a", OPENAI_API_KEY: "o" }, expected: both },
+    { row: "neither", credentials: {}, expected: claudeOnly },
+    // A folder the runtime made, signed in or not, is no credential
+    // (DR-175): Codex's beside a Claude key moves no one to Codex.
+    { row: "a Codex folder, signed out", credentials: { ANTHROPIC_API_KEY: "a" }, folders: [".codex"], signedIn: false, cli: { ANTHROPIC_API_KEY: "a" }, expected: claudeOnly },
+    // A sign-in its status command confirms counts.
+    { row: "both signed in", credentials: {}, folders: [".claude", ".codex"], signedIn: true, cli: { ANTHROPIC_API_KEY: "a", OPENAI_API_KEY: "o" }, expected: both },
   ];
-  for (const [row, credentials, expected] of rows) {
+  for (const { row, credentials, folders = [], signedIn = false, cli: cliEnv, expected } of rows) {
     const dir = scratchDir("spex-seed-");
     const home = join(dir, "home");
     mkdirSync(home, { recursive: true });
+    for (const folder of folders) mkdirSync(join(home, folder));
     const dataDir = join(dir, "state");
     const env = { HOME: home, ...credentials };
-    const service = await CoreService.start({ token: "test", dataDir, env, home, own: OWN, watchConfig: false });
+    const agentSignIn = async () => (signedIn ? { state: "signed-in" as const } : { state: "signed-out" as const });
+    const service = await CoreService.start({ token: "test", dataDir, env, home, own: OWN, watchConfig: false, agentSignIn });
     const seeded = readFileSync(ownConfig(dataDir), "utf8");
     await service.stop();
     const got = agents(seeded);
-    const cli = agents(seedConfigText({ env, homeDir: home }).text);
+    const cliHome = join(dir, "cli-home");
+    mkdirSync(cliHome);
+    const cli = agents(seedConfigText({ env: cliEnv ? { HOME: cliHome, ...cliEnv } : env, homeDir: cliEnv ? cliHome : home }).text);
     assert.deepEqual({ captain: got.captain, players: got.players }, { captain: cli.captain, players: cli.players }, `${row}: the CLI's agent settings`);
     assert.equal(got.froms, 0, `${row}: no playbooks.<id>.from`);
     assert.equal(got.captain.adapter, expected.captain, `${row}: the Captain`);
     assert.equal(got.players["dev.reviewer"].adapter, expected["dev.reviewer"], `${row}: the reviewer`);
     assert.equal(got.players["dev.coder"].adapter, expected["dev.coder"], `${row}: the coder`);
     // A second start under the same credentials leaves it as it is.
-    const again = await CoreService.start({ token: "test", dataDir, env, home, own: OWN, watchConfig: false });
+    const again = await CoreService.start({ token: "test", dataDir, env, home, own: OWN, watchConfig: false, agentSignIn });
     await again.stop();
     assert.equal(readFileSync(ownConfig(dataDir), "utf8"), seeded, `${row}: unchanged`);
   }
+});
+
+test("core-service-136, core-service-138: behind a third-party service the seed's Claude agents take the provider default", async () => {
+  const dir = scratchDir("spex-seed-third-");
+  const home = join(dir, "home");
+  mkdirSync(home, { recursive: true });
+  const dataDir = join(dir, "state");
+  const official = { HOME: home, ANTHROPIC_API_KEY: "a", OPENAI_API_KEY: "o" };
+  const deepseek = { HOME: home, ANTHROPIC_AUTH_TOKEN: "t", ANTHROPIC_BASE_URL: "https://api.deepseek.com/anthropic", OPENAI_API_KEY: "o" };
+  const start = async (env: NodeJS.ProcessEnv) => {
+    const service = await CoreService.start({ token: "test", dataDir, env, home, own: OWN, watchConfig: false });
+    const state = service.configStateSnapshot();
+    await service.stop();
+    const text = readFileSync(ownConfig(dataDir), "utf8");
+    const top = parseYaml(text) as { captain: Record<string, unknown>; players: Record<string, Record<string, unknown>> };
+    return { text, top, reseeded: state.status === "valid" && state.reseeded === true };
+  };
+  const first = await start(official);
+  assert.equal(first.top.captain.model, "claude-opus-5-5", "Anthropic's own service keeps the official name");
+  // The base URL changed: the untouched seed is written again, its
+  // Claude agents on the provider default, Codex's model and the
+  // template's comments kept.
+  const second = await start(deepseek);
+  assert.equal(second.reseeded, true);
+  assert.equal(Object.hasOwn(second.top.captain, "model"), false, "the Captain on the provider default");
+  for (const [id, player] of Object.entries(second.top.players)) {
+    if (player.adapter === "claude") assert.equal(Object.hasOwn(player, "model"), false, `${id} on the provider default`);
+    else assert.equal(player.model, first.top.players[id]?.model, `${id} keeps its model`);
+  }
+  assert.ok(Object.values(second.top.players).some((player) => player.adapter === "codex"), "a Codex agent stands");
+  assert.match(second.text, /# The Captain\/Judge agent\./, "comments kept");
+  assert.equal((await start(deepseek)).text, second.text, "unchanged credentials, unchanged bytes");
 });
 
 test("core-service-138: an untouched seed follows the credentials until it is changed once", async () => {
@@ -4701,6 +4749,16 @@ test("core-service-138: an untouched seed follows the credentials until it is ch
   const first = await start(claude);
   assert.equal(reviewer(first.text), "claude");
   chmodSync(ownConfig(dataDir), 0o640);
+
+  // The folder Codex's runtime makes on its first start, signed out, is
+  // no credential: nothing moves (DR-175).
+  mkdirSync(join(home, ".codex"));
+  const signedOut = await CoreService.start({ token: "test", dataDir, env: claude, home, own: OWN, watchConfig: false, agentSignIn: async () => ({ state: "signed-out" }) });
+  const unmoved = signedOut.configStateSnapshot();
+  await signedOut.stop();
+  assert.equal(readFileSync(ownConfig(dataDir), "utf8"), first.text, "a Codex folder alone moves no one");
+  assert.equal(unmoved.status === "valid" && unmoved.reseeded === true, false);
+  rmSync(join(home, ".codex"), { recursive: true });
 
   // Codex added: the untouched seed becomes the both-credentials seed.
   const added = await start(both);
@@ -4739,6 +4797,60 @@ test("core-service-138: an untouched seed follows the credentials until it is ch
     const again = await CoreService.start({ token: "test", dataDir: bareData, env, home, own: OWN, watchConfig: false });
     await again.stop();
     assert.equal(readFileSync(ownConfig(bareData), "utf8"), unrecorded, "no record, no reseed");
+  }
+});
+
+test("core-service-138: a re-check reseeds an untouched seed as a start would", async () => {
+  const dir = scratchDir("spex-recheck-reseed-");
+  const home = join(dir, "home");
+  mkdirSync(home, { recursive: true });
+  const dataDir = join(dir, "state");
+  // Codex's sign-in, as its status command answers it now.
+  let codexSignedIn = false;
+  let asked = 0;
+  const agentSignIn = async (adapter: "claude" | "codex") => {
+    asked += 1;
+    return adapter === "codex" && codexSignedIn ? { state: "signed-in" as const } : { state: "signed-out" as const };
+  };
+  const service = await CoreService.start({ token: "test", dataDir, env: { HOME: home }, home, own: OWN, watchConfig: false, agentSignIn });
+  const client = new Client(service.port());
+  await client.open();
+  try {
+    const agents = () => parseYaml(readFileSync(ownConfig(dataDir), "utf8")) as { captain: Record<string, unknown>; players: Record<string, Record<string, unknown>> };
+    assert.equal(agents().captain.model, "claude-opus-5-5", "seeded with nothing set up");
+
+    // A third-party key written to Claude Code's settings after the
+    // start: the re-check reseeds, the Claude agents on the provider default.
+    mkdirSync(join(home, ".claude"));
+    writeFileSync(join(home, ".claude", "settings.json"), JSON.stringify({ env: { ANTHROPIC_AUTH_TOKEN: "t", ANTHROPIC_BASE_URL: "https://api.deepseek.com/anthropic" } }));
+    await client.expectOk("readiness.get", {});
+    assert.equal(Object.hasOwn(agents().captain, "model"), false, "the Captain on the provider default");
+    assert.equal(agents().players["dev.reviewer"].adapter, "claude");
+    const state = service.configStateSnapshot();
+    assert.equal(state.status === "valid" && state.reseeded === true, true, "reported as reseeded");
+
+    // Codex signed in after the start: the next re-check moves the reviewer.
+    mkdirSync(join(home, ".codex"));
+    codexSignedIn = true;
+    asked = 0;
+    await client.expectOk("readiness.get", {});
+    assert.equal(agents().players["dev.reviewer"].adapter, "codex", "the reviewer moves to codex");
+    assert.equal(asked, 1, "the reseed, its reload and the answer share one status command");
+    assert.equal(agents().players["dev.coder"].adapter, "claude");
+
+    // Once edited, a re-check leaves it as it is.
+    appendFileSync(ownConfig(dataDir), "# mine now\n");
+    const edited = readFileSync(ownConfig(dataDir), "utf8");
+    codexSignedIn = false;
+    await client.expectOk("readiness.get", {});
+    assert.equal(readFileSync(ownConfig(dataDir), "utf8"), edited, "an edited config stays");
+    // Its record gone, a re-check asks for the answer alone.
+    asked = 0;
+    await client.expectOk("readiness.get", {});
+    assert.equal(asked, 1, "no status command asked for a reseed");
+  } finally {
+    client.close();
+    await service.stop();
   }
 });
 

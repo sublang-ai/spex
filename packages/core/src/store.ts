@@ -43,7 +43,7 @@ import { needsBoundedSessionImport, stageBoundedHomeSessions, finishBoundedHomeS
 import { deferredMoves, migrateInstances, needsInstancesMigration, settleDeferred, type DeferredMove } from "./migrate-instances.js";
 import { gitEnvironment, initializeClone } from "./storage-git.js";
 import { canonicalOrigin, instanceFolder, isInstanceFolder } from "@sublang/spex/instance";
-import { SEED_PREF, seedConfig, type SeedRecord } from "./config.js";
+import { SEED_PREF, seedConfig, type SeedCredentials, type SeedHome, type SeedRecord } from "./config.js";
 import { createRequire } from "node:module";
 import { i18n } from "./i18n.js";
 import { isLanguage, type Language } from "./language.js";
@@ -104,8 +104,11 @@ export interface StoreOptions {
   /** The environment Git and the host URL are read from. */
   env?: NodeJS.ProcessEnv;
   /** The home whose agent sign-ins the config seed reads; defaults to
-   * the environment's `HOME` (core-service-3). */
-  home?: string;
+   * the environment's `HOME`, none on a seat (core-service-3). */
+  home?: SeedHome;
+  /** The agents the seed counts as set up, confirmed before the store
+   * opens; the credential variables alone where absent (core-service-3). */
+  seedCredentials?: SeedCredentials;
   /** Your own group's folder name for a new home; this device's user
    * name by default (storage-2). */
   own?: string;
@@ -669,7 +672,10 @@ export class Store {
     // (core-service-3); where it cannot be read, the core reports the
     // missing config itself.
     try {
-      const version = seedConfig(config, this.env, this.options.home ?? this.env.HOME ?? homedir());
+      const home = this.options.home === undefined ? this.env.HOME ?? homedir() : this.options.home;
+      const version = this.options.seedCredentials
+        ? seedConfig(config, this.env, home, this.options.seedCredentials)
+        : seedConfig(config, this.env, home);
       this.seededConfig = version !== null;
       if (version !== null) this.recordSeed(config, version);
     } catch { /* reported as a missing config */ }

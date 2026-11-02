@@ -24,8 +24,9 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { isMap, isScalar, parse as parseYaml, parseDocument } from "yaml";
@@ -49,6 +50,7 @@ import { migrateConfigFileIfRetired } from "./config-migrate.js";
 import { readVersioned, sha256, VersionConflictError, writeVersionedBytes, type FileVersion } from "@sublang/spex/files";
 import { defaultOwnName, recordedOwnName } from "./home.js";
 import { i18n } from "./i18n.js";
+import { probeSignIn, type SignInProbe } from "./local-credentials.js";
 import { canonicalWritablePath } from "./permission-paths.js";
 
 import type {
@@ -748,10 +750,95 @@ export function isSeedRecord(value: unknown): value is SeedRecord {
     && typeof (value as SeedRecord).version === "string";
 }
 
-/** Playbook's own seed for these credentials and this home, as Spex
- * writes it (core-service-3, DR-154). */
-function seedText(env: NodeJS.ProcessEnv, home: string): string {
-  return starterText(seedConfigText({ env, homeDir: home }).text);
+/** The agents a seed counts as set up (core-service-3, DR-175). */
+export type SeedCredentials = Readonly<Record<"claude" | "codex", boolean>>;
+
+/** A home with no folder in it: Playbook's rule counts an agent's home
+ * folder as a credential, which the runtime creates on its first start,
+ * signed in or not, so the seed is shown none. */
+const NO_HOME = join(tmpdir(), "spex-seed-reads-no-home", randomUUID());
+
+/** The home whose agent sign-ins and Claude user settings a seed reads;
+ * `null` on a seat, whose server account's are no member's
+ * (core-service-3, core-service-126). */
+export type SeedHome = string | null;
+
+/** Whether each agent is set up as a seed counts it (core-service-3,
+ * DR-175): a credential variable — Claude's user settings included, as
+ * a run reads them — or a sign-in its own status command confirms where
+ * its folder stands; never the folder alone. With no home, on a seat,
+ * the variables of `env` alone. */
+export async function seedCredentials(
+  env: NodeJS.ProcessEnv,
+  home: SeedHome,
+  signIn: SignInProbe = probeSignIn,
+): Promise<SeedCredentials> {
+  const one = async (adapter: "claude" | "codex"): Promise<boolean> => {
+    if (variableCredential(adapter, env, home)) return true;
+    if (home === null) return false;
+    // The status command runs only where the folder stands, since it
+    // would create it.
+    if (!existsSync(agentFolder(adapter, env, home))) return false;
+    return (await signIn(adapter, { ...env, HOME: home })).state === "signed-in";
+  };
+  const [claude, codex] = await Promise.all([one("claude"), one("codex")]);
+  return { claude, codex };
+}
+
+/** An agent's credential variable, as a run reads it (DR-174). */
+function variableCredential(adapter: "claude" | "codex", env: NodeJS.ProcessEnv, home: SeedHome): boolean {
+  const runEnv = adapter === "claude" && home !== null ? { ...env, ...claudeSettingsEnv(env, home) } : env;
+  return (LOCAL_CREDENTIAL_FORMS[adapter] ?? []).some((name) => Boolean(runEnv[name]));
+}
+
+/** An agent's configuration folder, where its sign-in is kept. */
+function agentFolder(adapter: "claude" | "codex", env: NodeJS.ProcessEnv, home: string): string {
+  return adapter === "claude"
+    ? env.CLAUDE_CONFIG_DIR?.trim() || join(home, ".claude")
+    : env.CODEX_HOME?.trim() || join(home, ".codex");
+}
+
+/** Playbook's own seed for these credentials, as Spex writes it
+ * (core-service-3, DR-154): it reads the credentials confirmed above,
+ * one variable standing for each, with no home folder (DR-175); behind
+ * a third-party service its Claude agents take the provider's default
+ * in place of an official name, which that service would map by its
+ * own rule. */
+function seedText(env: NodeJS.ProcessEnv, home: SeedHome, credentials: SeedCredentials): string {
+  const input: NodeJS.ProcessEnv = {
+    ...(credentials.claude ? { ANTHROPIC_API_KEY: "confirmed" } : {}),
+    ...(credentials.codex ? { OPENAI_API_KEY: "confirmed" } : {}),
+  };
+  const text = starterText(seedConfigText({ env: input, homeDir: NO_HOME }).text);
+  const service = anthropicBaseUrl(home === null ? env : { ...env, ...claudeSettingsEnv(env, home) });
+  return service.state === "third-party" ? withoutOfficialModels(text) : text;
+}
+
+/** Anthropic's own naming (settings-59): a `claude-` model, or one of
+ * its aliases, with or without the 1M-context suffix. */
+export function isOfficialModel(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  return /^claude-/i.test(value) || /^(opus|sonnet|haiku|fable)(\[1m\])?$/i.test(value);
+}
+
+/** The seed with each Claude agent's official `model` removed, so it
+ * runs on the provider's default; comments kept. */
+export function withoutOfficialModels(text: string): string {
+  const document = parseDocument(text);
+  if (document.errors.length > 0) return text;
+  const agents: (string | number)[][] = [["captain"]];
+  const players = document.get("players", true);
+  if (isMap(players)) {
+    for (const item of players.items) agents.push(["players", isScalar(item.key) ? String(item.key.value) : String(item.key)]);
+  }
+  let removed = false;
+  for (const path of agents) {
+    if (document.getIn([...path, "adapter"]) !== "claude") continue;
+    if (!isOfficialModel(document.getIn([...path, "model"]))) continue;
+    document.deleteIn([...path, "model"]);
+    removed = true;
+  }
+  return removed ? document.toString() : text;
 }
 
 /**
@@ -763,11 +850,13 @@ function seedText(env: NodeJS.ProcessEnv, home: string): string {
 export function seedConfig(
   path: string,
   env: NodeJS.ProcessEnv = process.env,
-  home: string = env.HOME ?? homedir(),
+  home: SeedHome = env.HOME ?? homedir(),
+  // Where no sign-in was asked, the variables alone count.
+  credentials: SeedCredentials = { claude: variableCredential("claude", env, home), codex: variableCredential("codex", env, home) },
 ): string | null {
   if (existsSync(path)) return null;
   mkdirSync(dirname(path), { recursive: true });
-  const text = seedText(env, home);
+  const text = seedText(env, home, credentials);
   writeFileSync(path, text, { flag: "wx" });
   return sha256(text);
 }
@@ -783,11 +872,12 @@ export function reseedConfig(
   path: string,
   recorded: string,
   env: NodeJS.ProcessEnv,
-  home: string,
+  home: SeedHome,
+  credentials: SeedCredentials,
 ): { outcome: "kept" } | { outcome: "rewritten"; version: string } | { outcome: "edited" } {
   const { version } = readVersioned(path);
   if (version !== recorded) return { outcome: "edited" };
-  const text = seedText(env, home);
+  const text = seedText(env, home, credentials);
   const next = sha256(text);
   if (next === version) return { outcome: "kept" };
   try {
@@ -2057,6 +2147,9 @@ export interface AdapterReadiness {
   faults: ReadinessFault[];
   /** On a seat, the credential class and its phrase (settings-49). */
   credential?: AdapterCredential;
+  /** With null readiness alone: why the agent's sign-in could not be
+   * confirmed just now (settings-14). */
+  unconfirmed?: string;
 }
 
 /** The credential half where another rule than the launcher's decides
@@ -2230,12 +2323,68 @@ export async function checkAdapterRuntime(
   };
 }
 
-/** The credential forms of Playbook's launcher (settings-14, DR-174):
- * an environment variable of these, or the agent's home folder. */
-export const LOCAL_CREDENTIAL_FORMS: Partial<Record<AdapterName, { env: readonly string[]; folder: string }>> = {
-  claude: { env: ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"], folder: ".claude" },
-  codex: { env: ["OPENAI_API_KEY", "CODEX_API_KEY", "CODEX_ACCESS_TOKEN"], folder: ".codex" },
+/** The credential variables of Playbook's launcher (settings-14,
+ * DR-174); with none set, the agent's own status command decides. */
+export const LOCAL_CREDENTIAL_FORMS: Partial<Record<AdapterName, readonly string[]>> = {
+  claude: ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"],
+  codex: ["OPENAI_API_KEY", "CODEX_API_KEY", "CODEX_ACCESS_TOKEN"],
 };
+
+/** The variables Claude Code's user settings set (the `env` of
+ * `settings.json` in its configuration folder), which a Claude run
+ * applies over those it inherits (DR-174); none where the file is
+ * absent or unreadable. */
+export function claudeSettingsEnv(env: NodeJS.ProcessEnv, home: string): Record<string, string> {
+  const folder = env.CLAUDE_CONFIG_DIR?.trim() || join(home, ".claude");
+  try {
+    const settings = JSON.parse(readFileSync(join(folder, "settings.json"), "utf8")) as { env?: unknown } | null;
+    const values = settings?.env;
+    if (!values || typeof values !== "object" || Array.isArray(values)) return {};
+    return Object.fromEntries(Object.entries(values).filter((pair): pair is [string, string] => typeof pair[1] === "string"));
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Claude Code's user-settings variables, written into the environment
+ * every run inherits (core-service-150, DR-175): a run applies them over
+ * those it inherits, but a call isolated from settings files — the
+ * Captain's control calls — reads none, and would run with no key or
+ * base URL the card counted. Each apply follows the file as it stands
+ * now; a variable it no longer sets goes back as it stood before.
+ */
+export class ClaudeSettingsEnvironment {
+  /** Each name an apply wrote, with its value before the first. */
+  private readonly baseline = new Map<string, string | undefined>();
+
+  /** `target` is the environment a run inherits; `read` the settings'
+   * variables as they stand. */
+  constructor(private readonly target: NodeJS.ProcessEnv, private readonly read: () => Record<string, string>) {}
+
+  apply(): void {
+    const values = this.read();
+    for (const [name, before] of this.baseline) {
+      if (Object.hasOwn(values, name)) continue;
+      if (before === undefined) delete this.target[name];
+      else this.target[name] = before;
+      this.baseline.delete(name);
+    }
+    for (const [name, value] of Object.entries(values)) {
+      if (!this.baseline.has(name)) this.baseline.set(name, this.target[name]);
+      this.target[name] = value;
+    }
+  }
+
+  /** Each name back as it stood before the first apply, at stop. */
+  restore(): void {
+    for (const [name, before] of this.baseline) {
+      if (before === undefined) delete this.target[name];
+      else this.target[name] = before;
+    }
+    this.baseline.clear();
+  }
+}
 
 /** Where Claude's requests go, by `ANTHROPIC_BASE_URL` (core-service-9):
  * its host name alone, so no path or secret written into it is ever
@@ -2262,6 +2411,8 @@ export async function checkAdapterReadiness(
   // On a seat the credential half is the seat's forms' (settings-14,
   // settings-49), in place of the launcher's rules below.
   credentialHalf?: (adapter: AdapterName) => Promise<CredentialHalf>,
+  // Injectable so tests spawn no status command.
+  signIn: SignInProbe = probeSignIn,
 ): Promise<AdapterReadiness> {
   // Both halves are evaluated so an adapter missing both reports both —
   // reporting one at a time sends the user round the loop twice — and
@@ -2274,16 +2425,29 @@ export async function checkAdapterReadiness(
   }
   let credentialReady: boolean | null = null;
   let credential: AdapterCredential | undefined;
+  let unconfirmed: string | undefined;
   const forms = LOCAL_CREDENTIAL_FORMS[adapter];
   if (credentialHalf) {
     const half = await credentialHalf(adapter);
     credentialReady = half.ready;
     credential = half.credential;
     if (!half.ready) faults.push({ kind: "credential", requirement: half.requirement ?? half.credential.phrase });
-  } else if (forms) {
-    credentialReady =
-      forms.env.some((name) => Boolean(env[name])) || existsSync(join(home, forms.folder));
-    if (!credentialReady) {
+  } else if (forms && (adapter === "claude" || adapter === "codex")) {
+    // A home folder is no sign-in: the runtime creates it on its first
+    // start (DR-174). With no variable set the agent's own status
+    // command, run as a run would be, answers — only where the folder
+    // stands, since no sign-in exists without it and the command would
+    // create the folder Playbook's seed reads as a credential.
+    if (variableCredential(adapter, env, home)) {
+      credentialReady = true;
+    } else if (!existsSync(agentFolder(adapter, env, home))) {
+      credentialReady = false;
+    } else {
+      const answer = await signIn(adapter, { ...env, HOME: home });
+      if (answer.state === "unconfirmed") unconfirmed = answer.reason;
+      credentialReady = answer.state === "signed-in" ? true : answer.state === "signed-out" ? false : null;
+    }
+    if (credentialReady === false) {
       faults.push({
         kind: "credential",
         requirement: adapter === "claude"
@@ -2307,7 +2471,13 @@ export async function checkAdapterReadiness(
       ...(credential ? { credential } : {}),
     };
   }
-  // The null class survives only over a usable runtime (settings-14): no
-  // credential rule exists, so the UI shows verify-yourself guidance.
-  return { adapter, ready: credentialReady === null ? null : true, faults, ...(credential ? { credential } : {}) };
+  // The null class survives only over a usable runtime (settings-14):
+  // no credential rule exists, or the sign-in could not be confirmed.
+  return {
+    adapter,
+    ready: credentialReady === null ? null : true,
+    faults,
+    ...(credential ? { credential } : {}),
+    ...(unconfirmed !== undefined ? { unconfirmed } : {}),
+  };
 }

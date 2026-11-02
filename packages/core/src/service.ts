@@ -39,6 +39,8 @@ import type { Duplex } from "node:stream";
 import {
   checkAdapterReadiness,
   anthropicBaseUrl,
+  claudeSettingsEnv,
+  ClaudeSettingsEnvironment,
   checkAdapterRuntime,
   composeConfig,
   createModuleLoader,
@@ -51,6 +53,9 @@ import {
   reseedConfig,
   SEED_PREF,
   seedConfig,
+  seedCredentials,
+  type SeedCredentials,
+  type SeedHome,
   summarizeConfig,
   validateProjectConfig,
   type ComposedConfig,
@@ -78,6 +83,7 @@ import {
 } from "./protocol.js";
 import { resolveLanguage, type Language } from "./language.js";
 import { i18n, speak } from "./i18n.js";
+import { probeSignIn, type SignInProbe } from "./local-credentials.js";
 import { CoreError, SessionManager, assertRunsHere, currentSession, executionConfig, runsElsewhereRefusal, runsNowhereRefusal, storedMembers, type CaptainFactory, type RecordEnvelope } from "./session.js";
 import { closedStats, foldConditions, foldLedger, intentTitle, queueSchedule, wasWorked } from "./ledger.js";
 import { CORE_STOP_REASON, runsElsewhere, type TurnControlKind } from "./control-record.js";
@@ -195,6 +201,10 @@ export interface CoreServiceOptions {
   adapterRuntime?: (
     adapter: AdapterName,
   ) => AdapterRuntimeCheck | Promise<AdapterRuntimeCheck>;
+  /** Injectable sign-in half of local readiness (settings-14); defaults
+   * to the agent's own status command. Hermetic tests fake it, for the
+   * same reason as `adapterRuntime`. */
+  agentSignIn?: SignInProbe;
   /** Substitute only discovery; real Cligent capabilities remain composed. */
   discoverAgentModels?: AgentModelDiscovery;
   captainFactory?: CaptainFactory;
@@ -646,6 +656,9 @@ export class CoreService {
   /** On a seat, the environment its agent runs inherit (core-service-126)
    * and the member's own credentials (storage-44). */
   private readonly seatEnvironment?: SeatEnvironment;
+  /** Claude Code's user-settings variables, in the environment every run
+   * inherits (core-service-150). */
+  private readonly claudeSettings?: ClaudeSettingsEnvironment;
   private readonly codeCredentials?: CodeCredentialStore;
   /** The adapter imports every agent run loads: on a seat, each run
    * first writes its environment (core-service-126). */
@@ -755,11 +768,23 @@ export class CoreService {
     this.home = options.home ?? this.env.HOME ?? homedir();
     this.store = store;
     if (options.seat) {
+      // A seat's runs take the member's or the shared credentials alone,
+      // as its readiness reads them: the server account's own settings
+      // are written into no run (core-service-150).
       const { credentials, environment } = seat ?? CoreService.seatCredentials(options, store.dir);
       this.codeCredentials = credentials;
       this.seatEnvironment = environment;
       this.adapterImports = seatAdapterImports(options.adapterImports ?? DEFAULT_ADAPTER_IMPORTS, () => { environment.prepare(); });
-    } else if (options.adapterImports) this.adapterImports = options.adapterImports;
+    } else {
+      // Applied now, so discovery and readiness read what a run
+      // inherits, and again before each run, as Claude Code applies its
+      // settings over the variables it inherits (core-service-150). Runs
+      // inherit the process's environment.
+      const claudeSettings = new ClaudeSettingsEnvironment(process.env, () => claudeSettingsEnv(this.env, this.home));
+      this.claudeSettings = claudeSettings;
+      claudeSettings.apply();
+      this.adapterImports = seatAdapterImports(options.adapterImports ?? DEFAULT_ADAPTER_IMPORTS, () => { claudeSettings.apply(); });
+    }
     // Your own group's config, inside its clone (storage-1, DR-103); an
     // explicit path is the operator's.
     this.configPath = options.configPath ?? store.ownRepository().configPath;
@@ -1073,9 +1098,16 @@ export class CoreService {
    * run (core-service-126). */
   private agentRunEnv(): NodeJS.ProcessEnv {
     const seat = this.seatEnvironment;
-    if (!seat) return this.env;
-    seat.prepare();
-    return seat.envFor(this.env);
+    if (seat) {
+      seat.prepare();
+      return seat.envFor(this.env);
+    }
+    this.claudeSettings?.apply();
+    // A run spawned with an environment of its own takes the settings'
+    // variables over it too (core-service-150); the process's own
+    // already holds them.
+    const settings = claudeSettingsEnv(this.env, this.home);
+    return this.env === process.env || Object.keys(settings).length === 0 ? this.env : { ...this.env, ...settings };
   }
 
   /** On a seat, write the seat account's own Git configuration naming
@@ -1505,14 +1537,19 @@ export class CoreService {
     // A start that fails before the service stands puts the environment
     // back, as a stop does (core-service-126).
     let store: Store;
+    let credentials: SeedCredentials;
     try {
+      // The seed counts the credentials confirmed now, never a home
+      // folder alone (core-service-3, DR-175).
+      credentials = await seedCredentials(seat ? seat.environment.envFor(env) : env, seat ? null : options.home ?? env.HOME ?? homedir(), options.agentSignIn);
       store = await Store.open({
+        seedCredentials: credentials,
         ...(options.dataDir ? { dir: options.dataDir } : {}),
         ...(machineIdentity !== undefined ? { machineIdentity } : {}),
         ...(options.legacyDbPath ? { legacyDbPath: options.legacyDbPath } : {}),
         ...(options.own ? { own: options.own } : {}),
         env: seat ? seat.environment.envFor(env) : env,
-        ...(options.home !== undefined ? { home: options.home } : {}),
+        ...(seat ? { home: null } : options.home !== undefined ? { home: options.home } : {}),
         ...(options.dataDir ? { libraryDir: options.libraryDir ?? join(options.dataDir, "playbooks") } : {}),
         ...(relocateConfig ? { relocateConfig } : {}),
         ...(builtin ? { prepareRepository: (dir: string, _key: string, registryOrigin: string, space: string | null) => { prepareBuiltinEnvironment(dir, builtin, registryOrigin, space); } } : {}),
@@ -1538,13 +1575,13 @@ export class CoreService {
     service.relocateLegacyLibrary();
     // The store seeds your own group's config as the clone stands up;
     // the core reports that starter as its own seed (settings-9).
-    const version = seedConfig(service.configPath, service.seedEnv(), service.home);
+    const version = seedConfig(service.configPath, service.seedEnv(), service.seedHome(), credentials);
     if (version !== null) store.recordSeed(service.configPath, version);
     service.seeded = version !== null ||
       (service.configPath === store.ownRepository().configPath && store.seededConfig);
     // An untouched seed follows the credentials it was chosen from
     // (core-service-137).
-    if (service.reseed()) service.reseeded = true;
+    if (service.reseed(credentials)) service.reseeded = true;
     if (service.options.dataDir) migrateManagedLibraryConfig(service.configPath, service.libraryDir(), service.options.dataDir);
     // An apply a crash interrupted is repaired from its marker before the
     // clone reopens (space-31); a failure stands as a blocking issue.
@@ -1926,16 +1963,17 @@ export class CoreService {
     } finally {
       bound.clear();
       // The forms go back as the process started with them, however far
-      // the stop got (core-service-126).
+      // the stop got (core-service-126), Claude's settings' first.
+      this.claudeSettings?.restore();
       this.seatEnvironment?.restore();
     }
   }
 
   // -- config ---------------------------------------------------------------
 
-  async reloadConfig(): Promise<void> {
+  async reloadConfig(signIn?: SignInProbe): Promise<void> {
     const generation = ++this.reloadGeneration;
-    const work = this.reloadNow(generation).finally(() => {
+    const work = this.reloadNow(generation, signIn).finally(() => {
       if (this.reloading === work) this.reloading = undefined;
     });
     this.reloading = work;
@@ -2263,7 +2301,7 @@ export class CoreService {
     return inputs === undefined ? this.configPath : changedInput(inputs);
   }
 
-  private async reloadNow(generation: number): Promise<void> {
+  private async reloadNow(generation: number, signIn?: SignInProbe): Promise<void> {
     // Reloads overlap: the watcher fires and forgets, two command paths
     // await their own, and external edits add more. Each reload reads the
     // file at its own start, so the newest reload holds the newest content
@@ -2288,7 +2326,7 @@ export class CoreService {
         if (generation !== this.reloadGeneration) return;
         continue;
       }
-      const entries = await this.readiness();
+      const entries = await this.readiness(signIn);
       if (generation !== this.reloadGeneration) return;
       if (changedInput(inputs) !== undefined) continue;
       this.broadcast({ type: "readiness.state", entries });
@@ -2302,14 +2340,28 @@ export class CoreService {
     return this.seatEnvironment ? this.seatEnvironment.envFor(this.env) : this.env;
   }
 
+  /** The home whose sign-ins and Claude settings a seed reads: none on
+   * a seat, whose server account's are no member's (core-service-3). */
+  private seedHome(): SeedHome {
+    return this.seatEnvironment ? null : this.home;
+  }
+
+  /** Reseed from the credentials read now, probing none where no seed
+   * is recorded (core-service-137); true where it was rewritten. */
+  private async reseedNow(signIn = this.options.agentSignIn): Promise<boolean> {
+    const record = this.store.getPref<unknown>(SEED_PREF);
+    if (!isSeedRecord(record) || record.path !== this.configPath) return false;
+    return this.reseed(await seedCredentials(this.seedEnv(), this.seedHome(), signIn));
+  }
+
   /** Reseed your own group's config while it stands at the version the
    * core seeded (core-service-137, DR-156); true where it was rewritten.
    * A file no longer at that version loses its record for good. */
-  private reseed(): boolean {
+  private reseed(credentials: SeedCredentials): boolean {
     const record = this.store.getPref<unknown>(SEED_PREF);
     if (!isSeedRecord(record) || record.path !== this.configPath) return false;
     let result: ReturnType<typeof reseedConfig>;
-    try { result = reseedConfig(this.configPath, record.version, this.seedEnv(), this.home); }
+    try { result = reseedConfig(this.configPath, record.version, this.seedEnv(), this.seedHome(), credentials); }
     catch { return false; }
     if (result.outcome === "edited") {
       try { this.store.deletePref(SEED_PREF); } catch { /* the next start drops it */ }
@@ -2377,7 +2429,10 @@ export class CoreService {
     });
   }
 
-  async readiness(): Promise<ReadinessEntry[]> {
+  async readiness(signIn = this.options.agentSignIn): Promise<ReadinessEntry[]> {
+    // A variable the settings no longer set leaves the environment
+    // before it is read (core-service-150).
+    this.claudeSettings?.apply();
     // Adapter-keyed and deduplicated (DR-019): readiness is a
     // property of the adapter's auth, not of any one agent block.
     // Each entry names the positions using the adapter so guidance
@@ -2422,6 +2477,7 @@ export class CoreService {
           this.home,
           this.options.adapterRuntime ?? checkAdapterRuntime,
           credentialHalf,
+          signIn,
         );
         this.readinessByAdapter.set(adapter, readiness.ready);
         return {
@@ -2432,7 +2488,8 @@ export class CoreService {
             : {}),
           faults: readiness.faults,
           ...(readiness.credential ? { credential: readiness.credential } : {}),
-          ...(adapter === "claude" ? { baseUrl: seat ? { state: "hidden" as const } : anthropicBaseUrl(this.env) } : {}),
+          ...(readiness.unconfirmed !== undefined ? { unconfirmed: readiness.unconfirmed } : {}),
+          ...(adapter === "claude" ? { baseUrl: seat ? { state: "hidden" as const } : anthropicBaseUrl({ ...this.env, ...claudeSettingsEnv(this.env, this.home) }) } : {}),
           ...host,
           usedBy,
           // The embedded runtime declares which adapters take fast mode
@@ -2754,7 +2811,7 @@ export class CoreService {
           // An untouched seed follows the member's credentials
           // (core-service-137), read into the environment first.
           this.seatEnvironment?.prepare();
-          if (this.reseed()) { this.reseeded = true; await this.reloadConfig(); }
+          if (await this.reseedNow()) { this.reseeded = true; await this.reloadConfig(); }
           // The agent's credential class follows (settings-49): pushed
           // unless a newer change or a reload answers after it.
           const generation = this.reloadGeneration;
@@ -2766,10 +2823,18 @@ export class CoreService {
         return credentials.list();
       }
       case "readiness.get": {
+        // A re-check finds what a start would: an untouched seed follows
+        // the credentials it reads now (core-service-137).
+        this.claudeSettings?.apply();
+        this.seatEnvironment?.prepare();
+        // One request probes each sign-in once: the seed, a reload and
+        // the answer read the same state.
+        const signIn = onceEach(this.options.agentSignIn ?? probeSignIn);
+        if (await this.reseedNow(signIn)) { this.reseeded = true; await this.reloadConfig(signIn); }
         await this.settledConfig();
         // The probes await: their answer stands only on the files it read.
         const inputs = this.configInputs;
-        const entries = await this.readiness();
+        const entries = await this.readiness(signIn);
         const changed = this.cacheChanged(inputs);
         if (changed !== undefined) throw changedMeanwhile(changed);
         return entries;
@@ -4816,3 +4881,15 @@ export class CoreService {
 }
 
 export const createCoreService = CoreService.start;
+
+/** A sign-in probe answering each agent and home once, for the probes
+ * of one request. */
+function onceEach(signIn: SignInProbe): SignInProbe {
+  const answers = new Map<string, ReturnType<SignInProbe>>();
+  return (adapter, env) => {
+    const key = JSON.stringify([adapter, env.HOME, env.CLAUDE_CONFIG_DIR, env.CODEX_HOME]);
+    let answer = answers.get(key);
+    if (!answer) { answer = signIn(adapter, env); answers.set(key, answer); }
+    return answer;
+  };
+}

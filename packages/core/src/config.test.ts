@@ -18,7 +18,9 @@ import {
   starterText,
   type ComposeOptions,
   type PlaybookModules,
+  anthropicBaseUrl,
   checkAdapterReadiness,
+  claudeSettingsEnv,
   checkAdapterRuntime,
   composeConfig,
   describeRuntimeFault,
@@ -908,30 +910,61 @@ test("core-service-2: a project's file layers on yours, naming players only", as
 // nor CLIs on PATH; the real check derives from cligent's targets.
 const usableRuntime = () => ({ usable: true });
 
-test("adapter readiness mirrors the launcher credential rules", async () => {
+test("adapter readiness takes a credential variable, else the agent's own sign-in answer", async () => {
   const home = scratchDir("spex-home-");
-  assert.equal(
-    (await checkAdapterReadiness("claude", {}, home, usableRuntime)).ready,
-    false,
-  );
-  assert.equal(
-    (await checkAdapterReadiness("claude", { ANTHROPIC_API_KEY: "k" }, home, usableRuntime))
-      .ready,
-    true,
-  );
+  // The runtime makes these folders on its first start: they are no sign-in.
+  mkdirSync(join(home, ".claude"));
   mkdirSync(join(home, ".codex"));
-  assert.equal(
-    (await checkAdapterReadiness("codex", {}, home, usableRuntime)).ready,
-    true,
-  );
-  assert.equal(
-    (await checkAdapterReadiness("gemini", {}, home, usableRuntime)).ready,
-    null,
-  );
-  assert.equal(
-    (await checkAdapterReadiness("kimi", {}, home, usableRuntime)).ready,
-    null,
-  );
+  const asked: { adapter: string; home: string | undefined }[] = [];
+  const answering = (state: "signed-in" | "signed-out") => async (adapter: "claude" | "codex", env: NodeJS.ProcessEnv) => {
+    asked.push({ adapter, home: env.HOME });
+    return { state };
+  };
+  assert.equal((await checkAdapterReadiness("claude", {}, home, usableRuntime, undefined, answering("signed-out"))).ready, false);
+  assert.equal((await checkAdapterReadiness("codex", {}, home, usableRuntime, undefined, answering("signed-in"))).ready, true);
+  assert.deepEqual(asked, [{ adapter: "claude", home }, { adapter: "codex", home }], "asked as a run would be, in this home");
+  asked.length = 0;
+  assert.equal((await checkAdapterReadiness("claude", { ANTHROPIC_API_KEY: "k" }, home, usableRuntime, undefined, answering("signed-out"))).ready, true);
+  assert.deepEqual(asked, [], "a credential variable needs no question");
+  const unsure = await checkAdapterReadiness("codex", {}, home, usableRuntime, undefined, async () => ({ state: "unconfirmed", reason: "slow" }));
+  assert.equal(unsure.ready, null);
+  assert.equal(unsure.unconfirmed, "slow");
+  assert.deepEqual(unsure.faults, []);
+  // No folder, no sign-in: nothing is asked, so the command creates none.
+  asked.length = 0;
+  const bare = scratchDir("spex-home-");
+  assert.equal((await checkAdapterReadiness("claude", {}, bare, usableRuntime, undefined, answering("signed-in"))).ready, false);
+  assert.equal((await checkAdapterReadiness("codex", {}, bare, usableRuntime, undefined, answering("signed-in"))).ready, false);
+  assert.deepEqual(asked, []);
+  // A configuration folder named elsewhere is the one looked for.
+  const elsewhere = join(bare, "claude-config");
+  mkdirSync(elsewhere);
+  assert.equal((await checkAdapterReadiness("claude", { CLAUDE_CONFIG_DIR: elsewhere }, bare, usableRuntime, undefined, answering("signed-in"))).ready, true);
+  assert.equal((await checkAdapterReadiness("codex", { CODEX_HOME: join(bare, "missing") }, home, usableRuntime, undefined, answering("signed-in"))).ready, false);
+  assert.equal((await checkAdapterReadiness("gemini", {}, home, usableRuntime)).ready, null);
+  assert.equal((await checkAdapterReadiness("gemini", {}, home, usableRuntime)).unconfirmed, undefined, "no rule is no unconfirmed sign-in");
+  assert.equal((await checkAdapterReadiness("kimi", {}, home, usableRuntime)).ready, null);
+});
+
+test("Claude's settings file counts: its credential and its base URL are a run's", async () => {
+  const home = scratchDir("spex-home-");
+  mkdirSync(join(home, ".claude"));
+  writeFileSync(join(home, ".claude", "settings.json"), JSON.stringify({
+    env: { ANTHROPIC_BASE_URL: "https://api.deepseek.com/anthropic", ANTHROPIC_AUTH_TOKEN: "k", API_TIMEOUT_MS: 3 },
+  }));
+  const asked: string[] = [];
+  const signedOut = async (adapter: "claude" | "codex") => { asked.push(adapter); return { state: "signed-out" as const }; };
+  assert.equal((await checkAdapterReadiness("claude", {}, home, usableRuntime, undefined, signedOut)).ready, true);
+  assert.deepEqual(asked, [], "a credential its settings set needs no question");
+  const settings = claudeSettingsEnv({}, home);
+  assert.deepEqual(settings, { ANTHROPIC_BASE_URL: "https://api.deepseek.com/anthropic", ANTHROPIC_AUTH_TOKEN: "k" }, "strings only");
+  // The settings win over the inherited variable, as in a run.
+  const inherited: NodeJS.ProcessEnv = { ANTHROPIC_BASE_URL: "https://api.anthropic.com" };
+  assert.deepEqual(anthropicBaseUrl({ ...inherited, ...settings }), { state: "third-party", host: "api.deepseek.com" });
+  // A file Spex cannot read sets nothing.
+  writeFileSync(join(home, ".claude", "settings.json"), "{");
+  assert.deepEqual(claudeSettingsEnv({}, home), {});
+  assert.deepEqual(claudeSettingsEnv({}, scratchDir("spex-home-")), {});
 });
 
 test("a missing or stale runtime reports not ready, whatever the credential class", async () => {
@@ -942,18 +975,22 @@ test("a missing or stale runtime reports not ready, whatever the credential clas
       "@openai/codex is not installed (requires >=x) — install with: npm install -g @openai/codex-sdk@x",
   });
   // Credentials satisfied, runtime missing: not ready, runtime named.
-  mkdirSync(join(home, ".codex"));
-  const codex = await checkAdapterReadiness("codex", {}, home, missing);
+  const codex = await checkAdapterReadiness("codex", { OPENAI_API_KEY: "k" }, home, missing);
   assert.equal(codex.ready, false);
   assert.match(codex.requirement ?? "", /npm install -g @openai\/codex-sdk/);
   // The null credential class does not survive an unusable runtime.
   const gemini = await checkAdapterReadiness("gemini", {}, home, missing);
   assert.equal(gemini.ready, false);
   // Both halves unmet report both, not the first alone.
-  const both = await checkAdapterReadiness("claude", {}, scratchDir("spex-home-"), missing);
+  const both = await checkAdapterReadiness("claude", {}, scratchDir("spex-home-"), missing, undefined, async () => ({ state: "signed-out" }));
   assert.equal(both.ready, false);
   assert.match(both.requirement ?? "", /npm install -g/);
   assert.match(both.requirement ?? "", /ANTHROPIC_API_KEY/);
+  // An unconfirmed sign-in over a missing runtime: not ready, the runtime alone named.
+  mkdirSync(join(home, ".claude"));
+  const unsure = await checkAdapterReadiness("claude", {}, home, missing, undefined, async () => ({ state: "unconfirmed", reason: "slow" }));
+  assert.equal(unsure.ready, false);
+  assert.deepEqual(unsure.faults.map((fault) => fault.kind), ["runtime"]);
 });
 
 test("supplied SDKs probe available through cligent's own loaders", async () => {

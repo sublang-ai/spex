@@ -682,8 +682,14 @@ export interface AgentOptions {
 export interface ReadinessEntry {
   adapter: AdapterName;
   /** true = ready, false = not ready, null = no preflight rule for
-   * this adapter (verify sign-in yourself). */
+   * this adapter (verify sign-in yourself), or a sign-in that could not
+   * be confirmed just now (`unconfirmed`). */
   ready: boolean | null;
+  /** With null readiness alone: why the agent's sign-in could not be
+   * confirmed just now — its status command did not start, did not
+   * answer in time, failed or answered unreadably (settings-14). A
+   * re-check asks again. */
+  unconfirmed?: string;
   /** Unmet requirement, present when ready is false: the faults'
    * requirements joined, kept for clients that read one line. */
   requirement?: string;
