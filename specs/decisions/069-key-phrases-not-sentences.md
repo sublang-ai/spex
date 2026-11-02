@@ -5,6 +5,8 @@
 
 ## Status
 
+Extended by [DR-194](194-saved-work-is-a-choice-not-setup-debt.md): a folder action states which saved conversations it affects and whether it selects an existing project before asking the reader to act.
+
 Accepted (2026-09-16) on the owner's review of the interface's copy: "I really don't like lengthy text here and there — if you put some key phrases at the right place, it is much easier to understand and saves the reader's burden."
 
 Amends [DR-010](010-interface-craft.md) with a tenth principle.
@@ -12,6 +14,9 @@ Amends [DR-068](068-an-agents-settings-where-the-agent-is.md) in its §"One agen
 Extended by [DR-075](075-a-failure-says-what-and-what-now.md): a failure's cause is a catalogue phrase where it applies.
 Extended by [DR-172](172-surfaces-a-fresh-user-reads.md) with the principles of its surfaces.
 Extended by [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md) with one principle: a page's acts match its scope.
+
+Extended by [DR-190](190-membership-with-a-clear-scope.md): invitation scope, account requirements, role capability and immediate effect are essential visible guidance beside their controls.
+Extended by [DR-192](192-choose-a-group-before-adding.md): destination and record-access consequences are visible beside the confirmation they inform.
 
 ## Context
 

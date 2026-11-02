@@ -42,6 +42,7 @@ import { cloneHere, lineOutcome, personalLabel, phraseNames, placementPhrase, se
 import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { MembersPanel } from "./SpaceMembers.js";
+import { ATTACHED_OWNER } from "./SpacePanel.js";
 import { SECONDARY, type Note } from "./SpaceSurface.js";
 
 /** How an entry an instance lists is named where records are shared
@@ -120,9 +121,9 @@ export function SharingConfirm({
             })}
           </span>
           <ul className="list-disc pl-4 text-neutral-600 dark:text-neutral-300">
-            <li>{i18n._({ id: "Every session, whole, attachments included", comment: "the sharing confirm: what goes to the group" })}</li>
-            <li>{i18n._({ id: "Past and future records", comment: "the sharing confirm: the records made before and after the share both go" })}</li>
-            <li>{i18n._({ id: "Members keep what they download", comment: "the sharing confirm: nothing recalls what the group's members downloaded" })}</li>
+            <li>{i18n._({ id: "All sessions: conversations, agent activity, and attachments", comment: "sharing scope: all conversation messages, agent actions and results, and attachments" })}</li>
+            <li>{i18n._({ id: "Existing and future project records", comment: "the sharing confirm: the records made before and after the share both go" })}</li>
+            <li>{i18n._({ id: "Removing access won’t erase copies members already saved", comment: "sharing consequence: revoking access does not erase copies members already saved" })}</li>
             {visibility === "public" ? (
               <li>{i18n._({ id: "Public: anyone can read", comment: "the sharing confirm, on records at a public place of the Space" })}</li>
             ) : null}
@@ -265,6 +266,8 @@ function PlacementLine({
   const spaceRefresh = store((state) => state.spaceRefresh);
   const spaceLastAct = store((state) => state.spaceLastAct);
   const [opened, setOpened] = useState<"members" | "notice" | "combine">();
+  const [membersPending, setMembersPending] = useState(false);
+  const [membersFocus, setMembersFocus] = useState(0);
   const [busy, setBusy] = useState<LineAct>();
   // A long command's reply is only "accepted": its control stays busy
   // until the machine's state moves (DR-010 §3, space-29).
@@ -274,6 +277,7 @@ function PlacementLine({
   // for want of the confirm held back (space-57, space-13).
   const [carried, setCarried] = useState<{ join?: true }>({});
   const nameId = useId();
+  const membersId = useId();
   const membersRef = useRef<HTMLButtonElement>(null);
   const continueRef = useRef<HTMLButtonElement>(null);
   const combineRef = useRef<HTMLButtonElement>(null);
@@ -323,6 +327,7 @@ function PlacementLine({
   const membersLabel = i18n._({ id: "Members", comment: "list the people who read a project's records, or a group's members, at the Space" });
 
   const close = (ref: { current: HTMLButtonElement | null }) => {
+    if (membersPending) return;
     setOpened(undefined);
     // Closing never strands focus (DR-010 §6).
     setTimeout(() => ref.current?.focus(), 0);
@@ -433,7 +438,7 @@ function PlacementLine({
       data-testid={`space-line-${origin}`}
       data-state={line.state}
       data-attached={String(line.attached)}
-      className="flex min-w-0 flex-col gap-1"
+      className={`flex min-w-0 flex-col gap-1 ${opened === "members" ? ATTACHED_OWNER : ""}`}
     >
       {/* Below @xs the controls wrap beneath the name and the phrase
           (DR-041). */}
@@ -472,9 +477,10 @@ function PlacementLine({
                 aria-describedby={nameId}
                 title={membersLabel}
                 aria-expanded={opened === "members"}
+                aria-controls={opened === "members" ? membersId : undefined}
                 className={`${SECONDARY} shrink-0 whitespace-nowrap`}
-                disabled={!connected}
-                onClick={() => setOpened((was) => (was === "members" ? undefined : "members"))}
+                disabled={!connected || membersPending}
+                onClick={() => { setOpened("members"); setMembersFocus((value) => value + 1); }}
               >
                 {/* Below @md the control keeps its name and shows its mark
                     (DR-041). */}
@@ -492,7 +498,7 @@ function PlacementLine({
                 aria-describedby={nameId}
                 aria-expanded={opened === "notice"}
                 className={`${SECONDARY} shrink-0 whitespace-nowrap`}
-                disabled={!connected || pending}
+                disabled={!connected || pending || membersPending}
                 onClick={() => (opened === "notice" ? close(continueRef) : askConfirm(continueRef.current))}
               >
                 {continueLabel()}
@@ -506,7 +512,7 @@ function PlacementLine({
                 aria-describedby={nameId}
                 aria-expanded={opened === "combine"}
                 className={`${SECONDARY} shrink-0 whitespace-nowrap`}
-                disabled={!connected || pending}
+                disabled={!connected || pending || membersPending}
                 onClick={() => setOpened((was) => (was === "combine" ? undefined : "combine"))}
               >
                 {workingOn("combine") ? combiningLabel() : combineLabel()}
@@ -522,7 +528,7 @@ function PlacementLine({
                 // is retried (space-2).
                 title={unreachableRetry ? i18n._({ id: "Reads every signed-in Space again", comment: "the title of Retry on records a Space could not be read for" }) : undefined}
                 className={`${SECONDARY} shrink-0 whitespace-nowrap`}
-                disabled={!connected || pending}
+                disabled={!connected || pending || membersPending}
                 onClick={retry}
               >
                 {workingOn("retry")
@@ -556,18 +562,23 @@ function PlacementLine({
         </div>
       ) : null}
       {opened === "members" && showMembers && governing && line.instance !== null ? (
-        <MembersPanel
-          instance={governing}
-          target={{ repository: repo.key, instance: line.instance }}
-          id={`${repo.key}@${line.instance}`}
-          name={rowName}
-          canManage={line.can.manageMembers}
-          alsoPlacedAt={alsoPlacedAt(groups, repo, line)}
-          connected={connected}
-          refreshes={refreshes}
-          onClose={() => close(membersRef)}
-          onNote={onNote}
-        />
+        <div id={membersId} className="min-w-0">
+          <MembersPanel
+            embedded
+            focusRequest={membersFocus}
+            onPendingChange={setMembersPending}
+            instance={governing}
+            target={{ repository: repo.key, instance: line.instance }}
+            id={`${repo.key}@${line.instance}`}
+            name={rowName}
+            canManage={line.can.manageMembers}
+            alsoPlacedAt={alsoPlacedAt(groups, repo, line)}
+            connected={connected}
+            refreshes={refreshes}
+            onClose={() => close(membersRef)}
+            onNote={onNote}
+          />
+        </div>
       ) : null}
     </li>
   );

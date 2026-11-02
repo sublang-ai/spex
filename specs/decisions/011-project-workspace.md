@@ -19,6 +19,8 @@ The Repo tab is amended by [DR-038](038-history-is-done-work.md) — it becomes 
 Amended by [DR-057](057-space-surface.md): the Workspace nav entry and sidebar section read Projects, and the taxonomy gains the Space surface.
 Amended by [DR-172](172-surfaces-a-fresh-user-reads.md) in the rail and the workspace's tabs.
 
+Amended by [DR-192](192-choose-a-group-before-adding.md) in palette dismissal: a pending group submission keeps its form open through Escape, Cmd/Ctrl+P and backdrop clicks.
+
 ## Context
 
 - The owner (2026-07-11): each project needs an interactive spec view — organized by spec packages like the `map.md` index, never by `user/`/`dev/`/`test/` at the top level, tolerating package directories, packages expanding into items, three colored group filters. And: "rethink the info arch — that's the essential point"; a project has many sessions but one spec view; the project choice belongs above the session level.

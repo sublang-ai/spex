@@ -20,7 +20,7 @@
 // space-1). Each act is checked by the command it sends.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { GroupsState, InstanceGroupState, InstanceState, RepositoryState } from "@sublang/spex-core/protocol";
 
 import { activateLanguage } from "../i18n.js";
@@ -108,12 +108,6 @@ function pickHome(): GroupsState {
     [OWN_REPO, gamma],
   );
 }
-
-/** Each option of a picker's section: its test id and how it reads. */
-const options = (section: HTMLElement, prefix: string): string[][] =>
-  within(section)
-    .getAllByTestId(new RegExp(`^${prefix}`))
-    .map((option) => [option.dataset.testid!.slice(prefix.length), option.textContent ?? ""]);
 
 /** A row's line at a Space, by its origin, in the row's Sync tab, which
  * the row's name opens where it is not open (space-87, space-1). */
@@ -215,7 +209,7 @@ describe("SPACE: each Space under its heading (space-1, git-host-5, space-3, spa
     // New group where the Space lets the person create one; disabled and
     // titled where it says not — no link, no sentence (space-1, DR-120).
     const firstNew = first.getByTestId("space-new-group") as HTMLButtonElement;
-    expect(firstNew.textContent).toBe("New group");
+    expect(firstNew.textContent).toBe("New group…");
     expect(firstNew.disabled).toBe(false);
     expect(firstNew.hasAttribute("title")).toBe(false);
     const secondNew = second.getByTestId("space-new-group") as HTMLButtonElement;
@@ -265,6 +259,69 @@ describe("SPACE: each Space under its heading (space-1, git-host-5, space-3, spa
     await renderGroups(changed(headingsHome(), ORIGIN, { readAt: null }), { open: false });
     expect(within(sectionOf(ORIGIN)).queryByTestId("space-new-group")).toBeNull();
     expect(within(sectionOf(SECOND)).getByTestId("space-new-group")).toBeTruthy();
+  });
+
+  test("space-68: repeating New group focuses the existing draft, while explicit cancellation closes it", async () => {
+    await renderGroups(headingsHome(), { open: false });
+    const first = within(sectionOf(ORIGIN));
+    const opener = first.getByTestId("space-new-group");
+    fireEvent.click(opener);
+    const editor = first.getByTestId("space-new-group-editor");
+    const name = within(editor).getByLabelText("Group name") as HTMLInputElement;
+    const path = within(editor).getByLabelText("Path") as HTMLInputElement;
+    fireEvent.change(name, { target: { value: "Research team" } });
+    fireEvent.change(path, { target: { value: "research-custom" } });
+    opener.focus();
+    fireEvent.click(opener);
+    expect(first.getByTestId("space-new-group-editor")).toBe(editor);
+    expect(name.value).toBe("Research team");
+    expect(path.value).toBe("research-custom");
+    expect(document.activeElement).toBe(name);
+    expect(document.getElementById(opener.getAttribute("aria-controls")!)?.contains(editor)).toBe(true);
+    expect(calls("space.group.create")).toEqual([]);
+    fireEvent.keyDown(name, { key: "Escape" });
+    expect(first.queryByTestId("space-new-group-editor")).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(opener));
+    fireEvent.click(opener);
+    expect((first.getByLabelText("Group name") as HTMLInputElement).value).toBe("");
+  });
+
+  test("space-68: pending creation cannot be closed or replaced through its heading", async () => {
+    let reject!: (error: Error) => void;
+    commandMock.mockImplementation((type: string, fields: Record<string, unknown> = {}) => type === "space.group.create"
+      ? new Promise((_resolve, refused) => { reject = refused; }) : answer(type, fields));
+    await renderGroups(headingsHome(), { open: false });
+    const first = within(sectionOf(ORIGIN));
+    const opener = first.getByTestId("space-new-group") as HTMLButtonElement;
+    const signout = first.getByTestId("space-signout") as HTMLButtonElement;
+    const more = first.getByTestId("space-instance-more") as HTMLButtonElement;
+    fireEvent.click(opener);
+    const editor = first.getByTestId("space-new-group-editor");
+    const name = within(editor).getByLabelText("Group name") as HTMLInputElement;
+    fireEvent.change(name, { target: { value: "Research team" } });
+    fireEvent.click(within(editor).getByRole("button", { name: "Create" }));
+    expect(opener.disabled).toBe(true);
+    expect(signout.disabled).toBe(true);
+    expect(more.disabled).toBe(true);
+    fireEvent.click(opener);
+    fireEvent.click(signout);
+    fireEvent.click(more);
+    fireEvent.keyDown(name, { key: "Escape" });
+    fireEvent.keyDown(name, { key: "Enter" });
+    expect(first.getByTestId("space-new-group-editor")).toBe(editor);
+    expect(calls("space.group.create")).toHaveLength(1);
+    expect(calls("space.signout")).toEqual([]);
+    await act(async () => { reject(new Error("Creation refused")); });
+    await waitFor(() => expect(within(editor).getByRole("alert").textContent).toBe("Creation refused"));
+    expect(opener.disabled).toBe(false);
+    expect(signout.disabled).toBe(false);
+    expect(more.disabled).toBe(false);
+    opener.focus();
+    fireEvent.click(opener);
+    expect(first.getByTestId("space-new-group-editor")).toBe(editor);
+    expect(name.value).toBe("Research team");
+    expect(document.activeElement).toBe(name);
+    expect(within(editor).getByRole("alert").textContent).toBe("Creation refused");
   });
 
   test("space-1, git-host-5: a failed read reads on its heading alone, the other's view kept, and Refresh, titled with the last read, reads until every read's outcome", async () => {
@@ -435,7 +492,7 @@ describe("SPACE: each Space under its heading (space-1, git-host-5, space-3, spa
     expect(within(lineAt(OWN_REPO.key, ORIGIN)).queryByTestId("space-line-members")).toBeNull();
   });
 
-  test("space-62, space-69: a row's members panel reads the roles and the display name of the Space the core names as governing it, its Share field 'Login at <Space>'", async () => {
+  test("space-62, space-69: a row's invitation reads the roles and the username guidance of the Space the core names as governing it", async () => {
     // Signed out of the first; the third, listed before the second and
     // signed in, does not list your own group's own records, which the
     // second governs (git-host-5).
@@ -463,8 +520,9 @@ describe("SPACE: each Space under its heading (space-1, git-host-5, space-3, spa
     expect(calls("space.members")).toEqual([{ repository: OWN_REPO.key, instance: ORIGIN }]);
     fireEvent.click(within(panel).getByTestId(`space-share-${OWN_REPO.key}@${ORIGIN}`));
     const editor = within(panel).getByTestId(`space-share-${OWN_REPO.key}@${ORIGIN}-editor`);
-    expect(within(editor).getByLabelText("Login at Second Example")).toBeTruthy();
-    expect(within(within(editor).getByRole("listbox", { name: "Role" })).getAllByRole("option").map((option) => option.textContent)).toEqual([
+    expect(within(editor).getByLabelText("Usernames")).toBeTruthy();
+    expect(editor.textContent).toContain("Second Example");
+    expect(within(within(editor).getByRole("combobox", { name: "Role" })).getAllByRole("option").map((option) => option.textContent)).toEqual([
       "Viewer",
       "Editor",
     ]);
@@ -496,7 +554,7 @@ describe("SPACE: each Space under its heading (space-1, git-host-5, space-3, spa
     fireEvent.click(within(sectionOf(ORIGIN)).getByRole("button", { name: "Sign out" }));
     await waitFor(() => expect(within(sectionOf(ORIGIN)).getByTestId("space-signout").textContent).toBe("Signing out…"));
     measure();
-    for (const label of ["New group", "Sign out", "Signing out…", "Sign in again", "Signing in…", "Cancel", "⋯More"]) {
+    for (const label of ["New group…", "Sign out", "Signing out…", "Sign in again", "Signing in…", "Cancel", "⋯More"]) {
       expect(seen, label).toContain(label);
     }
     // Each Space is a container; below 20rem its fields stack, the
@@ -642,115 +700,107 @@ describe("SPACE: the card 'Sign in to a Space' (space-3, space-115, space-66)", 
 });
 
 describe("SPACE: Add to a group… at each Space (space-58, space-29)", () => {
-  test("space-58: the picker offers each signed-in Space's Personal and groups under its display name, never another login, with no name field; a choice names its Space; records keyed under a Space are offered that Space alone", async () => {
+  test("space-58: labelled Space selection scopes the group choices and resets a destination without sending anything", async () => {
     await renderGroups(pickHome(), { open: false });
     const openPicker = (key: string): HTMLElement => {
       fireEvent.click(screen.getByTestId(`space-row-pick-${key}`));
       return screen.getByTestId(`space-picker-${key}`);
     };
-    const section = (origin: string): HTMLElement => screen.getByTestId(`space-pick-instance-${origin}`);
-    // One section per signed-in Space in the home's order, each under its
-    // display name (space-58).
     const picker = openPicker(GAMMA);
-    expect(picker).toBe(screen.getByRole("group", { name: "Add gamma to a group" }));
-    const sections = within(picker).getAllByTestId(/^space-pick-instance-/);
-    expect(sections.map((each) => each.dataset.testid)).toEqual([`space-pick-instance-${ORIGIN}`, `space-pick-instance-${SECOND}`]);
-    expect(sections.map((each) => within(each).getByRole("heading", { level: 3 }).textContent)).toEqual(["Spex Example", "Second Example"]);
-    expect(within(picker).getByRole("group", { name: "Second Example" })).toBe(sections[1]);
-    // Under each, "Personal" first, then every group it lists by its name
-    // with its path after it where the two differ; another account's
-    // login is never offered (space-58).
-    expect(options(sections[0]!, "space-pick-group-")).toEqual([
-      ["@jane", "Personal"],
-      ["acme", "Acme · acme"],
+    const opener = screen.getByTestId(`space-row-pick-${GAMMA}`);
+    const formId = picker.id;
+    expect(formId).not.toBe("");
+    expect(opener.getAttribute("aria-controls")).toBe(formId);
+    expect(picker.closest("li[data-state]")).toBe(screen.getByTestId(`space-row-${GAMMA}`));
+    const chooser = within(picker).getByRole("combobox", { name: "Space" }) as HTMLSelectElement;
+    const submit = () => within(picker).getByTestId(`space-pick-submit-${GAMMA}`) as HTMLButtonElement;
+    expect([...chooser.options].map((option) => [option.value, option.textContent])).toEqual([
+      [ORIGIN, "Spex Example"], [SECOND, "Second Example"],
     ]);
-    expect(options(sections[1]!, "space-pick-group-")).toEqual([
-      ["@jada", "Personal"],
-      ["acme", "Acme Works · acme"],
-      ["lab", "lab"],
-    ]);
-    // The records listed for the same code stand at their own Space
-    // alone, under "Join the records already in", their group read as
-    // the list reads it; the groups under "Share into" (space-58).
-    expect(within(sections[0]!).queryAllByTestId(/^space-pick-repo-/)).toEqual([]);
-    expect(within(sections[1]!).getByTestId(`space-pick-listed-group-${LISTED}`).textContent).toBe("Acme Works · acme");
-    expect(within(sections[1]!).getAllByRole("heading", { level: 4 }).map((heading) => heading.textContent)).toEqual([
-      "Join the records already in",
-      "Share into",
-    ]);
-    // No field names the new records (space-58, DR-172).
-    expect(within(picker).queryByTestId(`space-pick-name-${GAMMA}`)).toBeNull();
+    expect(chooser.value).toBe(ORIGIN);
+    expect(within(picker).getAllByTestId(/^space-pick-instance-/).map((each) => each.dataset.testid)).toEqual([`space-pick-instance-${ORIGIN}`]);
+    expect(within(picker).getAllByTestId(/^space-pick-group-/).map((option) => option.dataset.testid)).toEqual(["space-pick-group-@jane", "space-pick-group-acme"]);
+    expect(within(picker).queryByTestId(`space-pick-repo-${LISTED}`)).toBeNull();
+    fireEvent.click(within(picker).getByTestId("space-pick-group-acme"));
+    expect(submit().disabled).toBe(false);
+    fireEvent.change(chooser, { target: { value: SECOND } });
+    expect(opener.getAttribute("aria-controls")).toBe(formId);
+    expect(picker.id).toBe(formId);
+    expect(submit().disabled).toBe(true);
+    expect(within(picker).getAllByRole("radio").every((radio) => !(radio as HTMLInputElement).checked)).toBe(true);
+    expect(within(picker).getAllByTestId(/^space-pick-group-/).map((option) => option.dataset.testid)).toEqual(["space-pick-group-@jada", "space-pick-group-acme", "space-pick-group-lab"]);
+    expect(within(picker).getByTestId(`space-pick-listed-group-${LISTED}`).textContent).toBe("Acme Works · acme");
     expect(within(picker).queryByRole("textbox")).toBeNull();
-    expect(document.activeElement).toBe(within(sections[0]!).getByTestId("space-pick-group-@jane"));
-
-    // Each choice names the Space of its section: the second's acme, the
-    // first's acme under the same id, Personal at the second, and the
-    // records the second lists (space-58, space-29).
-    fireEvent.click(within(section(SECOND)).getByTestId("space-pick-group-acme"));
-    await waitFor(() =>
-      expect(calls("space.pick")).toEqual([
-        { repository: GAMMA, choice: { kind: "create", instance: SECOND, groupId: "3", name: "gamma" } },
-      ]),
-    );
-    await waitFor(() => expect(screen.queryByTestId(`space-picker-${GAMMA}`)).toBeNull());
-    openPicker(GAMMA);
-    fireEvent.click(within(section(ORIGIN)).getByTestId("space-pick-group-acme"));
-    await waitFor(() =>
-      expect(calls("space.pick")[1]).toEqual({ repository: GAMMA, choice: { kind: "create", instance: ORIGIN, groupId: "3", name: "gamma" } }),
-    );
-    await waitFor(() => expect(screen.queryByTestId(`space-picker-${GAMMA}`)).toBeNull());
-    openPicker(GAMMA);
-    fireEvent.click(within(section(SECOND)).getByTestId("space-pick-group-@jada"));
-    await waitFor(() =>
-      expect(calls("space.pick")[2]).toEqual({ repository: GAMMA, choice: { kind: "create", instance: SECOND, groupId: null, name: "gamma" } }),
-    );
-    await waitFor(() => expect(screen.queryByTestId(`space-picker-${GAMMA}`)).toBeNull());
-    openPicker(GAMMA);
-    fireEvent.click(within(section(SECOND)).getByTestId(`space-pick-repo-${LISTED}`));
-    await waitFor(() =>
-      expect(calls("space.pick")[3]).toEqual({ repository: GAMMA, choice: { kind: "join", instance: SECOND, hostId: "71" } }),
-    );
+    expect(calls("space.pick")).toEqual([]);
+    fireEvent.click(within(picker).getByTestId("space-pick-group-acme"));
+    expect(calls("space.pick")).toEqual([]);
+    fireEvent.click(submit());
+    await waitFor(() => expect(calls("space.pick")).toEqual([
+      { repository: GAMMA, choice: { kind: "create", instance: SECOND, groupId: "3", name: "gamma" } },
+    ]));
     await waitFor(() => expect(screen.queryByTestId(`space-picker-${GAMMA}`)).toBeNull());
 
-    // Records keyed under the first Space are offered that Space alone
-    // (space-58).
+    const confirm = (key: string, origin: string, option: string) => {
+      const form = openPicker(key);
+      const select = within(form).queryByRole("combobox", { name: "Space" });
+      if (select) fireEvent.change(select, { target: { value: origin } });
+      fireEvent.click(within(form).getByTestId(option));
+      fireEvent.click(within(form).getByTestId(`space-pick-submit-${key}`));
+    };
+    confirm(GAMMA, ORIGIN, "space-pick-group-acme");
+    await waitFor(() => expect(calls("space.pick")[1]).toEqual({ repository: GAMMA, choice: { kind: "create", instance: ORIGIN, groupId: "3", name: "gamma" } }));
+    await waitFor(() => expect(screen.queryByTestId(`space-picker-${GAMMA}`)).toBeNull());
+    confirm(GAMMA, SECOND, "space-pick-group-@jada");
+    await waitFor(() => expect(calls("space.pick")[2]).toEqual({ repository: GAMMA, choice: { kind: "create", instance: SECOND, groupId: null, name: "gamma" } }));
+    await waitFor(() => expect(screen.queryByTestId(`space-picker-${GAMMA}`)).toBeNull());
+    confirm(GAMMA, SECOND, `space-pick-repo-${LISTED}`);
+    await waitFor(() => expect(calls("space.pick")[3]).toEqual({ repository: GAMMA, choice: { kind: "join", instance: SECOND, hostId: "71" } }));
+    await waitFor(() => expect(screen.queryByTestId(`space-picker-${GAMMA}`)).toBeNull());
+
+    // A project already keyed under one Space offers that Space alone.
     const keyed = openPicker(KEY);
-    expect(within(keyed).getAllByTestId(/^space-pick-instance-/).map((each) => each.dataset.testid)).toEqual([
-      `space-pick-instance-${ORIGIN}`,
-    ]);
+    expect(within(keyed).queryByRole("combobox")).toBeNull();
+    expect(within(keyed).getAllByTestId(/^space-pick-instance-/).map((each) => each.dataset.testid)).toEqual([`space-pick-instance-${ORIGIN}`]);
     fireEvent.click(within(keyed).getByTestId("space-pick-group-acme"));
-    await waitFor(() =>
-      expect(calls("space.pick")[4]).toEqual({ repository: KEY, choice: { kind: "create", instance: ORIGIN, groupId: "3", name: "academy" } }),
-    );
+    fireEvent.click(within(keyed).getByTestId(`space-pick-submit-${KEY}`));
+    await waitFor(() => expect(calls("space.pick")[4]).toEqual({ repository: KEY, choice: { kind: "create", instance: ORIGIN, groupId: "3", name: "academy" } }));
     cleanup();
 
-    // Signed out of the second, the pick offers the first alone.
     commandMock.mockClear();
     await renderGroups(signedOutAt(SECOND, {}, pickHome()), { open: false });
     const alone = openPicker(GAMMA);
-    expect(within(alone).getAllByTestId(/^space-pick-instance-/).map((each) => each.dataset.testid)).toEqual([
-      `space-pick-instance-${ORIGIN}`,
-    ]);
+    expect(within(alone).queryByRole("combobox")).toBeNull();
     expect(within(alone).queryByTestId(`space-pick-repo-${LISTED}`)).toBeNull();
     cleanup();
 
-    // Signed out of the first while the second is signed in, records keyed
-    // under the first read no phrase and offer "Add to a group…" disabled,
-    // titled "Sign in to a Space first" — the one Space it would offer is
-    // signed out — and records in your own group's folder are offered the
-    // second alone (space-58, space-61).
     commandMock.mockClear();
     await renderGroups(signedOutAt(ORIGIN, {}, pickHome()), { open: false });
-    expect(screen.queryByTestId(`space-repo-state-${KEY}`)?.textContent ?? "").toBe("");
     const blocked = screen.getByTestId(`space-row-pick-${KEY}`) as HTMLButtonElement;
     expect(blocked.disabled).toBe(true);
     expect(blocked.title).toBe("Sign in to a Space first");
     const second = openPicker(GAMMA);
-    expect(within(second).getAllByTestId(/^space-pick-instance-/).map((each) => each.dataset.testid)).toEqual([
-      `space-pick-instance-${SECOND}`,
-    ]);
-    expect(within(section(SECOND)).getByTestId(`space-pick-repo-${LISTED}`)).toBeTruthy();
+    expect(within(second).queryByRole("combobox")).toBeNull();
+    expect(within(second).getAllByTestId(/^space-pick-instance-/).map((each) => each.dataset.testid)).toEqual([`space-pick-instance-${SECOND}`]);
+    expect(within(second).getByTestId(`space-pick-repo-${LISTED}`)).toBeTruthy();
   });
+
+  test("space-58: a Space signing out clears its selection before another Space is shown", async () => {
+    const home = pickHome();
+    await renderGroups(home, { open: false });
+    fireEvent.click(screen.getByTestId(`space-row-pick-${GAMMA}`));
+    const picker = screen.getByTestId(`space-picker-${GAMMA}`);
+    fireEvent.change(within(picker).getByRole("combobox", { name: "Space" }), { target: { value: SECOND } });
+    fireEvent.click(within(picker).getByTestId("space-pick-group-acme"));
+    deliver(signedOutAt(SECOND, {}, home));
+    const submit = within(picker).getByTestId(`space-pick-submit-${GAMMA}`) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    expect(within(picker).queryByRole("combobox")).toBeNull();
+    expect(within(picker).getByTestId(`space-pick-instance-${ORIGIN}`)).toBeTruthy();
+    expect(within(picker).getAllByRole("radio").every((radio) => !(radio as HTMLInputElement).checked)).toBe(true);
+    fireEvent.click(submit);
+    expect(calls("space.pick")).toEqual([]);
+  });
+
 });
 
 describe("SPACE: Open here at the row's Space (space-63, space-111, space-29)", () => {

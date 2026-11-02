@@ -356,13 +356,13 @@ export function hostRefused(host: string, words: string | null): string {
       });
 }
 
-/** Where membership decides (space-50, DR-120): Share, or a member who
- * may share, in Spex — no role claimed, no act the host did not name,
+/** Where membership decides (space-50, DR-190): Invite members, or a member who
+ * may manage access, in Spex — no role claimed, no act the host did not name,
  * and no page of the host. */
 export function membersDecide(): string {
   return i18n._({
-    id: "Membership decides who may send here: use Share, or ask a member who may share it.",
-    comment: "Guidance under a transfer the Space refused; Share is the control in the members panel; it claims no role",
+    id: "Membership decides who may send here: use Invite members, or ask someone who can manage members.",
+    comment: "Guidance under a transfer the Space refused; Invite members is the control in the members panel; it claims no role",
   });
 }
 

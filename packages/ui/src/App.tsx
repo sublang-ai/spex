@@ -350,10 +350,13 @@ function SeatBanners({ banner }: { banner: "connection" | "refresh" }) {
 
 /** One persistent polite live region (DR-010 §7): announces the
  * moments the product is built around without spamming. */
-function Announcer() {
+function Announcer({ note }: { note?: { text: string } }) {
   const connection = useAppStore((state) => state.connection);
   const everConnected = useAppStore((state) => state.everConnected);
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState({ text: "", revision: 0 });
+  const announce = useCallback((text: string) => {
+    setMessage((previous) => ({ text, revision: previous.revision + 1 }));
+  }, []);
   // The core-derived attention queue is the one derivation (DR-035),
   // joined across the places (dashboard-9).
   const joined = useJoinedAttention();
@@ -368,7 +371,7 @@ function Announcer() {
 
   useEffect(() => {
     if (blockingCount > lastCount.current) {
-      setMessage(
+      announce(
         latestDetail
           ? i18n._("A player is waiting for your reply: {detail}", {
               detail: latestDetail,
@@ -380,27 +383,33 @@ function Announcer() {
       );
     }
     lastCount.current = blockingCount;
-  }, [blockingCount, latestDetail]);
+  }, [blockingCount, latestDetail, announce]);
 
   useEffect(() => {
     if (!everConnected) return;
     if (connection !== lastConnection.current) {
       if (connection === "open") {
-        if (lost.current) setMessage(i18n._("Connection restored."));
+        if (lost.current) announce(i18n._("Connection restored."));
         lost.current = false;
       } else if (connection === "closed") {
-        setMessage(
+        announce(
           i18n._("Connection to the Spex core lost — reconnecting."),
         );
         lost.current = true;
       }
       lastConnection.current = connection;
     }
-  }, [connection, everConnected]);
+  }, [connection, everConnected, announce]);
+
+  // The palette closes after acceptance; its note must survive that
+  // unmount. A fresh event also replaces identical previous wording.
+  useEffect(() => {
+    if (note) announce(note.text);
+  }, [note, announce]);
 
   return (
-    <div aria-live="polite" role="status" className="sr-only">
-      {message}
+    <div aria-live="polite" role="status" className="sr-only" data-testid="app-live">
+      <span key={message.revision}>{message.text}</span>
     </div>
   );
 }
@@ -687,7 +696,7 @@ function WorkspaceSurface({
     } else if (isAppletTab(next)) {
       setWorkspaceTab(currentProjectId, next);
     } else {
-      void focusSession(next);
+      void focusSession(next).catch(() => {});
     }
   }
 
@@ -820,12 +829,52 @@ function WorkspaceSurface({
     tabRefs.current.get(next)?.focus();
   }
 
-  if (!project) {
-    return <div className="flex min-h-0 flex-1 flex-col">{startView}</div>;
-  }
-
   const view = pinnedTab(tab) || isAppletTab(tab) ? undefined : views[tab];
   const activeSession = open.find((session) => session.id === tab);
+
+  // Saved conversations are readable before the project files are
+  // located (DR-195). Do not route an opened transcript to project
+  // setup, or offer work controls for an unpaired project.
+  if (!project) {
+    if (!activeSession) return <div className="flex min-h-0 flex-1 flex-col">{startView}</div>;
+    const readingSession = {
+      ...activeSession,
+      continuable: undefined,
+      recovery: undefined,
+      continuationReason: activeSession.continuationReason ?? i18n._({
+        id: "Use Locate project files in the sidebar to work with these files again.",
+        comment: "saved history can be read before its project folder is located",
+      }),
+    };
+    return (
+      <div data-testid="saved-conversation-reader" className="flex min-h-0 flex-1 flex-col">
+        <div className="flex min-w-0 flex-wrap items-center gap-3 border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
+          <button type="button" onClick={() => onNavigate("Space")} className="shrink-0 rounded px-2 py-1 text-sm text-brand-600 hover:bg-brand-50 dark:text-brand-400 dark:hover:bg-neutral-800">
+            {i18n._({ id: "Back to Space", comment: "return from a saved conversation to locate files or read other saved work" })}
+          </button>
+          <h2 className="min-w-0 break-words text-sm font-medium">{sessionTitle(view, activeSession)}</h2>
+        </div>
+        {!view || view.loading ? (
+          <div className="m-auto text-sm text-neutral-500">{i18n._("Loading transcript…")}</div>
+        ) : (
+          <RunView
+            key={activeSession.id}
+            session={readingSession}
+            view={view}
+            composer={{ queued: [] }}
+            connected={connection === "open"}
+            error={runErrors[activeSession.id]}
+            readOnly
+            onRetryLoad={() => { void loadPastSession(activeSession.id, true).catch(() => {}); }}
+            onSubmit={async () => {}}
+            onAbort={() => {}}
+            onRemoveQueued={() => {}}
+            onDismissError={() => clearRunError(activeSession.id)}
+          />
+        )}
+      </div>
+    );
+  }
   const composer = activeSession
     ? (composers[activeSession.id] ?? { queued: [] })
     : { queued: [] };
@@ -1260,6 +1309,7 @@ export function App() {
     safeStorageSet(SURFACE_KEY, next);
   }, []);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteNote, setPaletteNote] = useState<{ text: string }>();
   const [paletteAddProject, setPaletteAddProject] = useState(false);
   // The place whose "From your groups" the palette opens at, by its key
   // (run-view-172, run-view-174).
@@ -1301,6 +1351,13 @@ export function App() {
   // project's place (DR-172).
   const [configuredPlace, setConfiguredPlace] = useState<string>(LOCAL_PLACE_KEY);
   const configured = storeAt(configuredPlace);
+  const [folderReview, setFolderReview] = useState<{ place: string; nonce: number }>();
+  const folderReviewSeq = useRef(0);
+  const openFolderReview = (store: AppStore): void => {
+    setConfiguredPlace(store.place.key);
+    setFolderReview({ place: store.place.key, nonce: ++folderReviewSeq.current });
+    setSurface("Space");
+  };
   useEffect(() => {
     if (configured.place.key !== configuredPlace) setConfiguredPlace(LOCAL_PLACE_KEY);
   }, [configured, configuredPlace]);
@@ -1338,6 +1395,23 @@ export function App() {
     space: state.space,
     connection: state.connection,
   }));
+  // The return path must exist after a fresh launch on any surface,
+  // before the reader has opened Space. Read once per connection;
+  // subsequent space.state reports keep the same sidebar data current.
+  const folderReviewReads = useRef(new Set<AppStore>());
+  const folderReviewSeen = useRef(new WeakSet<AppStore>());
+  useEffect(() => {
+    for (const { store, value } of placeStates) {
+      if (value.connection !== "open") { folderReviewReads.current.delete(store); continue; }
+      if (folderReviewReads.current.has(store)) continue;
+      folderReviewReads.current.add(store);
+      if (!value.space || folderReviewSeen.current.has(store)) void store.getState().loadSpace().catch(() => {});
+      folderReviewSeen.current.add(store);
+    }
+    for (const store of folderReviewReads.current) {
+      if (!placeStates.some((entry) => entry.store === store)) folderReviewReads.current.delete(store);
+    }
+  }, [placeStates]);
   const local = placeStates[0]!.value;
   // The seats the local core holds, each with its sign-in at its
   // instance (core-service-142): the palette says where one still runs.
@@ -1398,7 +1472,8 @@ export function App() {
   // is named (dashboard-9, run-view-168).
   const openSessionAndShow = (sessionId: string, turnId?: number, place?: string, focusAt?: number) => {
     const store = storeAt(place);
-    void store.getState().focusSession(sessionId);
+    // The transcript keeps a failed read and its Retry in place.
+    void store.getState().focusSession(sessionId).catch(() => {});
     setPendingFocus(
       turnId !== undefined || focusAt !== undefined ? { sessionId, turnId, at: focusAt } : undefined,
     );
@@ -1704,6 +1779,8 @@ export function App() {
     // The projects its core is opening, read from its Groups state
     // (run-view-168).
     opening: openingProjects(value.space, value.projects),
+    onLocateFiles: value.space?.diagnostics.some((entry) => entry.repair?.kind === "repository")
+      ? () => openFolderReview(store) : undefined,
     sessions: value.sessions,
     attention: attentionAt(store.place.key),
     currentProjectId: value.currentProjectId,
@@ -1786,7 +1863,7 @@ export function App() {
       <ApprovalFeedback />
       <RefreshErrorBanner store={useAppStore} />
       <SeatBanners banner="refresh" />
-      <Announcer />
+      <Announcer note={paletteNote} />
       {paletteOpen ? (
         <ProjectPalette
           addProjectOnly={paletteAddProject}
@@ -1827,6 +1904,7 @@ export function App() {
           onOpened={(place, projectId) => pickProject(projectId, place)}
           onAddPath={addProjectByPath}
           onCreatePath={(path, scaffold) => createProject(path, scaffold)}
+          onNote={(text) => setPaletteNote({ text })}
           onClose={() => {
             setPaletteOpen(false);
             setPaletteAddProject(false);
@@ -1882,6 +1960,8 @@ export function App() {
               ) : (
                 <SpaceSurface
                   key={configured.place.key}
+                  reviewRequest={folderReview?.place === configured.place.key ? folderReview.nonce : undefined}
+                  onReviewOpened={() => setFolderReview(undefined)}
                   onOpenSession={(sessionId) =>
                     openSessionAndShow(sessionId, undefined, configured.place.key)
                   }

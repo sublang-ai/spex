@@ -174,7 +174,7 @@ When the user activates "New playbook" — at the Authoring section's foot of th
 
 #### playbook-library-121
 
-When the new-playbook form shows its "Org" field [[playbook-library-51](#playbook-library-51)], the form shall present its selected registry's publishing-name suggestions and authorization state, permitting local authoring without a verified name ([DR-168](../decisions/168-independent-package-registry.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md), [DR-186](../decisions/186-publishing-names-need-registry-authority.md)):
+When the new-playbook form shows its "Org" field [[playbook-library-51](#playbook-library-51)], the form shall present its selected registry's publishing-name suggestions and authorization state, permitting local authoring without a verified name ([DR-168](../decisions/168-independent-package-registry.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md), [DR-199](../decisions/199-publishing-names-need-registry-authority.md)):
 
 - Suggestions are the orgs its registry account may publish to [[environments-27](environments.md#environments-27)], read only while that account is signed in; a project-group match is only an initial suggestion, never a filter or required Space association.
 - Loading, successful emptiness and an error with Retry stand in place; a typed org a nonempty successful answer omits wears "not yours to publish to", and the signed-out field reads "Publishing rights not checked".

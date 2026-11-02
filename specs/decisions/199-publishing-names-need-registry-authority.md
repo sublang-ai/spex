@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-186: Publishing Names Need Registry Authority
+# DR-199: Publishing Names Need Registry Authority
 
 ## Status
 

@@ -20,6 +20,9 @@ Amended by [DR-159](159-projects-in-groups-opened-where-you-work.md) in the grou
 Amended by [DR-171](171-personal-names-are-space-logins.md) in member presentation: a member is labelled by Space login alone.
 Amended by [DR-172](172-surfaces-a-fresh-user-reads.md) in the headings, the rows and the acts offered.
 
+Amended by [DR-190](190-membership-with-a-clear-scope.md) in membership guidance and empty-group deletion: guidance names Invite members, and the permission-gated Delete group action states its scope and acknowledges a deletion request.
+Amended by [DR-193](193-group-deletion-follows-the-space-policy.md) in the deletion check and outcome: the empty-group restriction remains, a fresh check names blocking contents, and the Space's scheduling and restoration policy governs the confirmed request.
+
 ## Context
 
 - A spex.pub deployment, an **instance**, keeps every group its people make inside one group of its own, its container, on the Git system behind it, run by a service identity of its own; that system is its storage [[1]].

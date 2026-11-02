@@ -926,206 +926,257 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
 });
 
 describe("GROUPS: Add to a group… (space-58, space-29)", () => {
-  test("space-66, space-58: one picker offers, under the instance's display name, \"Join the records already in\" for the same code and project, each with its group and members, then \"Share into\" with Personal first and every group, no name field", async () => {
-    // Beside your namespace and the team, a group named apart from its
-    // path, as a team named in Chinese is, and one whose name is its path.
+  const LISTED = "@spex.example/acme/team/academy-spex";
+  const picker = () => screen.getByTestId(`space-picker-${KEY}`);
+  const submit = () => within(picker()).getByTestId(`space-pick-submit-${KEY}`) as HTMLButtonElement;
+  const selected = (id: string) => screen.getByTestId(id) as HTMLInputElement;
+  const open = () => fireEvent.click(screen.getByTestId(`space-row-pick-${KEY}`));
+  const joining = (listed: RowOver): GroupsState => withGroups(
+    base({}, [repo({ state: "local-only", remote: null, id: null, code: CODE, branch: null, members: null, noticed: false })]),
+    teamGroup([repo({ key: LISTED, name: "academy-spex", id: "51", code: CODE, folder: null, members: 3, state: "absent", branch: null, noticed: false, ...listed })]),
+  );
+
+  test("space-58: visible project title, labelled Space, named group radios and a disabled confirmation separate choosing from acting", async () => {
     const home = localProject();
     const huaxin = { ...teamGroup([]), id: "5", fullPath: "acme/huaxin-mfg", name: "华芯智造" };
     const lab = { ...teamGroup([]), id: "6", fullPath: "lab", name: "lab" };
     const [mine, team] = home.instances[0]!.groups;
     await renderGroups(withInstance(home, { groups: [mine!, huaxin, team!, lab] }), { open: false });
-    const control = screen.getByTestId(`space-row-pick-${KEY}`);
-    expect(control.textContent).toBe("Add to a group…");
-    fireEvent.click(control);
-    expect(control.getAttribute("aria-expanded")).toBe("true");
-    const picker = screen.getByRole("group", { name: "Add academy to a group" });
-    // Everything stands under the instance's display name, its heading
-    // naming its section (space-58).
-    const section = within(picker).getByRole("group", { name: "Spex Example" });
-    expect(section).toBe(within(picker).getByTestId(`space-pick-instance-${ORIGIN}`));
-    expect(within(section).getByRole("heading", { level: 3 }).textContent).toBe("Spex Example");
-    // Under "Join the records already in", only the one whose code reads
-    // as the folder's and whose project is the folder's — docs, its code
-    // at the same host, is not (space-58).
-    expect(within(section).getAllByRole("heading", { level: 4 }).map((heading) => heading.textContent)).toEqual([
-      "Join the records already in",
-      "Share into",
+    open();
+    expect(picker()).toBe(screen.getByRole("group", { name: "Add academy to a group" }));
+    expect(within(picker()).getByRole("heading", { name: "Add academy to a group" })).toBeTruthy();
+    const row = screen.getByTestId(`space-row-${KEY}`);
+    const opener = within(row).getByTestId(`space-row-pick-${KEY}`);
+    expect(picker().closest("li[data-state]")).toBe(row);
+    expect(opener.getAttribute("aria-expanded")).toBe("true");
+    expect(opener.getAttribute("aria-controls")).toBe(picker().id);
+    expect(within(row).getByTestId(`space-repo-${KEY}`).textContent).toBe("academy");
+    expect(within(picker()).getByText("Space")).toBeTruthy();
+    expect(within(picker()).getByText("Spex Example")).toBeTruthy();
+    expect(within(picker()).queryByRole("combobox")).toBeNull();
+    expect(within(picker()).getByText("Choose group")).toBeTruthy();
+    expect(within(picker()).getByText("Connect to an existing project")).toBeTruthy();
+    const offered = within(picker()).getAllByTestId(/^space-pick-group-/) as HTMLInputElement[];
+    expect(offered.map((option) => option.dataset.testid)).toEqual([
+      "space-pick-group-@jane", "space-pick-group-acme/huaxin-mfg", "space-pick-group-acme/team", "space-pick-group-lab",
     ]);
-    const listed = within(section).getAllByTestId(/^space-pick-repo-/);
-    expect(listed.map((option) => option.dataset.testid)).toEqual(["space-pick-repo-@spex.example/acme/team/academy-spex"]);
-    // Named as its row is, its `-spex` dropped (space-1).
-    expect(listed[0]!.textContent).toContain("academy");
-    expect(listed[0]!.textContent).not.toContain("academy-spex");
-    // Its group reads as the group's heading reads: its name, then its
-    // path where the two differ (space-58).
-    expect(screen.getByTestId("space-pick-listed-group-@spex.example/acme/team/academy-spex").textContent).toBe("team · acme/team");
-    expect(listed[0]!.textContent).toContain("3 members");
-    expect(document.activeElement).toBe(listed[0]);
-    // Under "Share into", Personal first and every group: a group by its
-    // name with its path after the separator where the two differ, and
-    // by its name alone where they are equal (space-58).
-    const offered = within(section).getAllByTestId(/^space-pick-group-/);
-    expect(offered.map((option) => option.textContent)).toEqual([
-      "Personal",
-      "华芯智造 · acme/huaxin-mfg",
-      "team · acme/team",
-      "lab",
-    ]);
-    expect(offered[0]!.dataset.testid).toBe("space-pick-group-@jane");
-    // The separator is the eye's: the button's name says the group's
-    // name first, then its path (space-58).
-    expect(within(picker).getByRole("button", { name: "华芯智造 acme/huaxin-mfg" })).toBe(offered[1]);
-    expect(within(picker).getByRole("button", { name: "lab" })).toBe(offered[3]);
-    // No field names the new records, nor does `-spex` stand anywhere
-    // (space-58, DR-172).
-    expect(screen.queryByTestId(`space-pick-name-${KEY}`)).toBeNull();
-    expect(within(picker).queryByRole("textbox")).toBeNull();
-    expect(picker.textContent).not.toContain("-spex");
+    expect(within(picker()).getByRole("radio", { name: "Personal" })).toBe(offered[0]);
+    expect(within(picker()).getByRole("radio", { name: "华芯智造 acme/huaxin-mfg" })).toBe(offered[1]);
+    expect(within(picker()).getByRole("radio", { name: "lab" })).toBe(offered[3]);
+    expect(within(picker()).getAllByRole("radio").every((radio) => !(radio as HTMLInputElement).checked)).toBe(true);
+    expect(submit().disabled).toBe(true);
+    expect(submit().textContent).toBe("Add to group");
+    expect(within(picker()).queryByRole("textbox")).toBeNull();
+    expect(picker().textContent).not.toContain("-spex");
+    expect(picker().textContent).not.toContain("Share into");
+    expect(picker().textContent).not.toContain("Join the records already in");
+    expect(within(picker()).getAllByTestId(/^space-pick-repo-/).map((option) => option.dataset.testid)).toEqual([`space-pick-repo-${LISTED}`]);
+    expect(screen.getByTestId(`space-pick-listed-group-${LISTED}`).textContent).toBe("team · acme/team");
+    expect(calls("space.pick")).toEqual([]);
   });
 
-  test("picking a listed spex repository sends its host id; picking a group sends the group and the folder's name", async () => {
+  test("space-58: selecting a group only reviews its destination and scope; explicit confirmation sends exactly the chosen group or Personal", async () => {
     await renderGroups(localProject(), { open: false });
-    fireEvent.click(screen.getByTestId(`space-row-pick-${KEY}`));
-    fireEvent.click(screen.getByTestId("space-pick-repo-@spex.example/acme/team/academy-spex"));
-    await waitFor(() =>
-      expect(calls("space.pick")).toEqual([{ repository: KEY, choice: { kind: "join", instance: ORIGIN, hostId: "51" } }]),
-    );
+    open();
+    const team = selected("space-pick-group-acme/team");
+    fireEvent.click(team);
+    const openedPicker = picker();
+    open();
+    expect(picker()).toBe(openedPicker);
+    expect(document.activeElement).toBe(team);
+    expect(team.checked).toBe(true);
+    expect(submit().disabled).toBe(false);
+    expect(calls("space.pick")).toEqual([]);
+    expect(picker().textContent).toContain("All sessions: conversations, agent activity, and attachments");
+    expect(picker().textContent).toContain("Existing and future project records");
+    expect(picker().textContent).toContain("Removing access won’t erase copies members already saved");
+    fireEvent.click(submit());
+    await waitFor(() => expect(calls("space.pick")).toEqual([
+      { repository: KEY, choice: { kind: "create", instance: ORIGIN, groupId: "2", name: "academy" } },
+    ]));
     await waitFor(() => expect(screen.queryByTestId(`space-picker-${KEY}`)).toBeNull());
-    fireEvent.click(screen.getByTestId(`space-row-pick-${KEY}`));
-    fireEvent.click(screen.getByTestId("space-pick-group-acme/team"));
-    await waitFor(() =>
-      expect(calls("space.pick")[1]).toEqual({ repository: KEY, choice: { kind: "create", instance: ORIGIN, groupId: "2", name: "academy" } }),
-    );
-    // Your namespace is named by none, never by an id.
-    await waitFor(() => expect(screen.queryByTestId(`space-picker-${KEY}`)).toBeNull());
-    fireEvent.click(screen.getByTestId(`space-row-pick-${KEY}`));
-    fireEvent.click(screen.getByTestId("space-pick-group-@jane"));
-    await waitFor(() =>
-      expect(calls("space.pick")[2]).toEqual({ repository: KEY, choice: { kind: "create", instance: ORIGIN, groupId: null, name: "academy" } }),
-    );
+    expect(live()).toBe("Adding academy to team at Spex Example");
+    open();
+    fireEvent.click(selected("space-pick-group-@jane"));
+    expect(calls("space.pick")).toHaveLength(1);
+    fireEvent.click(submit());
+    await waitFor(() => expect(calls("space.pick")[1]).toEqual({ repository: KEY, choice: { kind: "create", instance: ORIGIN, groupId: null, name: "academy" } }));
   });
 
-  test("space-57: a pick joining records others may share asks the sharing confirm in the picker first; Share joins with noticed", async () => {
-    // A project this device's reader has not been told about, beside a
-    // team's spex repository for the same code.
-    const LISTED = "@spex.example/acme/team/academy-spex";
-    const joining = (listed: RowOver, local: RowOver = {}): GroupsState => {
-      const state = base({}, [repo({ state: "local-only", remote: null, id: null, code: CODE, branch: null, members: null, noticed: false, ...local })]);
-      const team = repo({ key: LISTED, name: "academy-spex", id: "51", code: CODE, folder: null, members: 3, state: "absent", branch: null, noticed: false, ...listed });
-      return withGroups(state, teamGroup([team]));
-    };
-    const option = () => screen.getByTestId(`space-pick-repo-${LISTED}`);
-    const notice = () => screen.getByTestId(`space-pick-notice-${KEY}`);
-
-    // With another member: the confirm stands in the picker beneath the
-    // records picked — "Share with <group> at <display name>?" over its
-    // three phrases — Cancel focused, and sends nothing until Share;
-    // Escape and Cancel close it alone, focus back on the records
-    // (space-57, space-58).
-    await renderGroups(joining({}), { open: false });
-    fireEvent.click(screen.getByTestId(`space-row-pick-${KEY}`));
-    fireEvent.click(option());
-    const picker = screen.getByTestId(`space-picker-${KEY}`);
-    expect(picker.contains(notice())).toBe(true);
-    expect(option().closest("li")!.contains(notice())).toBe(true);
-    const confirm = within(notice()).getByTestId("space-sharing-confirm");
-    expect(confirm.firstElementChild?.textContent).toBe("Share with team at Spex Example?");
-    expect(within(confirm).getAllByRole("listitem").map((item) => item.textContent)).toEqual([
-      "Every session, whole, attachments included",
-      "Past and future records",
-      "Members keep what they download",
-    ]);
-    expect(document.activeElement).toBe(within(notice()).getByRole("button", { name: "Cancel" }));
-    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
-    expect(screen.queryByTestId(`space-pick-notice-${KEY}`)).toBeNull();
-    expect(screen.getByTestId(`space-picker-${KEY}`)).toBe(picker);
-    await waitFor(() => expect(document.activeElement).toBe(option()));
-    fireEvent.click(option());
-    fireEvent.click(within(notice()).getByRole("button", { name: "Cancel" }));
-    expect(screen.queryByTestId(`space-pick-notice-${KEY}`)).toBeNull();
-    await waitFor(() => expect(document.activeElement).toBe(option()));
-    expect(calls("space.pick")).toHaveLength(0);
-    fireEvent.click(option());
-    fireEvent.click(within(notice()).getByRole("button", { name: "Share" }));
-    await waitFor(() =>
-      expect(calls("space.pick")).toEqual([{ repository: KEY, choice: { kind: "join", instance: ORIGIN, hostId: "51" }, noticed: true }]),
-    );
-    await waitFor(() => expect(screen.queryByTestId(`space-picker-${KEY}`)).toBeNull());
-    cleanup();
-
-    // With a count the Space's last read lacks: the same confirm, and
-    // public records say anyone can read them.
-    commandMock.mockClear();
-    await renderGroups(joining({ members: null, visibility: "public" }), { open: false });
-    fireEvent.click(screen.getByTestId(`space-row-pick-${KEY}`));
-    expect(option().textContent).not.toContain("member");
-    fireEvent.click(option());
-    expect(notice().textContent).toContain("Every session, whole, attachments included");
-    expect(notice().textContent).toContain("Public: anyone can read");
-    fireEvent.click(within(notice()).getByRole("button", { name: "Share" }));
-    await waitFor(() =>
-      expect(calls("space.pick")).toEqual([{ repository: KEY, choice: { kind: "join", instance: ORIGIN, hostId: "51" }, noticed: true }]),
-    );
-    cleanup();
-
-    // A refused join closes the confirm, the refusal standing in the
-    // picker and focus back on the records.
-    commandMock.mockClear();
-    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
-      if (type === "space.pick") throw new Error("No longer shared with you");
-      return answer(type, fields);
-    });
-    await renderGroups(joining({}), { open: false });
-    fireEvent.click(screen.getByTestId(`space-row-pick-${KEY}`));
-    fireEvent.click(option());
-    fireEvent.click(within(notice()).getByRole("button", { name: "Share" }));
-    await waitFor(() =>
-      expect(within(screen.getByTestId(`space-picker-${KEY}`)).getByRole("alert").textContent).toBe("No longer shared with you"),
-    );
-    expect(screen.queryByTestId(`space-pick-notice-${KEY}`)).toBeNull();
-    await waitFor(() => expect(document.activeElement).toBe(option()));
-    cleanup();
-    commandMock.mockImplementation(answer);
-
-    // The account its only member, or the confirm answered already for
-    // that placement: the pick joins at once, without noticed.
-    for (const [listed, local] of [[{ members: 1 }, {}], [{ members: 3, noticed: true }, {}], [{ members: null, noticed: true }, {}]] as const) {
-      commandMock.mockClear();
-      await renderGroups(joining(listed, local), { open: false });
-      fireEvent.click(screen.getByTestId(`space-row-pick-${KEY}`));
-      fireEvent.click(option());
-      expect(screen.queryByTestId(`space-pick-notice-${KEY}`)).toBeNull();
-      await waitFor(() => expect(calls("space.pick")).toEqual([{ repository: KEY, choice: { kind: "join", instance: ORIGIN, hostId: "51" } }]));
-      cleanup();
+  test.each([
+    { members: 3, visibility: "private" as const },
+    { members: null, visibility: "public" as const },
+  ])("space-57: an existing project's integrated review acknowledges sharing only on Connect project (%j)", async (state) => {
+    await renderGroups(joining(state), { open: false });
+    open();
+    fireEvent.click(selected(`space-pick-repo-${LISTED}`));
+    expect(calls("space.pick")).toEqual([]);
+    expect(submit().textContent).toBe("Connect project");
+    for (const fact of ["All sessions: conversations, agent activity, and attachments", "Existing and future project records", "Removing access won’t erase copies members already saved"]) {
+      expect(picker().textContent).toContain(fact);
     }
+    if (state.visibility === "public") expect(picker().textContent).toContain("Public: anyone can read");
+    fireEvent.click(submit());
+    await waitFor(() => expect(calls("space.pick")).toEqual([
+      { repository: KEY, choice: { kind: "join", instance: ORIGIN, hostId: "51" }, noticed: true },
+    ]));
+    await waitFor(() => expect(screen.queryByTestId(`space-picker-${KEY}`)).toBeNull());
   });
 
-  test("a name the Space reports taken is refused in place, focus back on the choice picked", async () => {
-    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
-      if (type === "space.pick") throw new Error("academy is taken in Personal");
-      return answer(type, fields);
-    });
+  test.each([{ members: 1 }, { members: 3, noticed: true }, { members: null, noticed: true }])(
+    "space-58: a previously acknowledged or sole-member project still needs explicit confirmation (%j)", async (state) => {
+      await renderGroups(joining(state), { open: false });
+      open();
+      fireEvent.click(selected(`space-pick-repo-${LISTED}`));
+      expect(calls("space.pick")).toEqual([]);
+      fireEvent.click(submit());
+      await waitFor(() => expect(calls("space.pick")).toEqual([{ repository: KEY, choice: { kind: "join", instance: ORIGIN, hostId: "51" } }]));
+    },
+  );
+
+  test("space-58: pending confirmation blocks duplicate submission and dismissal; refusal retains the choice and focuses retry", async () => {
+    let refuse!: (error: Error) => void;
+    commandMock.mockImplementation((type: string, fields?: Record<string, unknown>) => type === "space.pick"
+      ? new Promise((_resolve, reject) => { refuse = reject; })
+      : Promise.resolve(answer(type, fields)));
     await renderGroups(localProject(), { open: false });
-    fireEvent.click(screen.getByTestId(`space-row-pick-${KEY}`));
-    fireEvent.click(screen.getByTestId("space-pick-group-@jane"));
-    await waitFor(() =>
-      expect(within(screen.getByTestId(`space-picker-${KEY}`)).getByRole("alert").textContent).toBe("academy is taken in Personal"),
-    );
-    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("space-pick-group-@jane")));
-    expect(calls("space.pick")).toEqual([{ repository: KEY, choice: { kind: "create", instance: ORIGIN, groupId: null, name: "academy" } }]);
+    open();
+    fireEvent.click(selected("space-pick-group-@jane"));
+    fireEvent.click(submit());
+    expect(submit().textContent).toBe("Adding…");
+    expect(submit().disabled).toBe(true);
+    expect(selected("space-pick-group-@jane").matches(":disabled")).toBe(true);
+    const cancel = within(picker()).getByRole("button", { name: "Cancel" }) as HTMLButtonElement;
+    expect(cancel.disabled).toBe(true);
+    const opener = screen.getByTestId(`space-row-pick-${KEY}`) as HTMLButtonElement;
+    const more = screen.getByTestId(`space-row-more-${KEY}`) as HTMLButtonElement;
+    expect(opener.disabled).toBe(true);
+    expect(more.disabled).toBe(true);
+    fireEvent.click(opener);
+    fireEvent.click(more);
+    fireEvent.click(submit());
+    fireEvent.click(cancel);
+    fireEvent.keyDown(picker(), { key: "Escape" });
+    expect(screen.getByTestId(`space-picker-${KEY}`)).toBeTruthy();
+    expect(calls("space.pick")).toHaveLength(1);
+    refuse(new Error("academy is taken in Personal"));
+    await waitFor(() => expect(within(picker()).getByRole("alert").textContent).toBe("academy is taken in Personal"));
+    expect(selected("space-pick-group-@jane").checked).toBe(true);
+    await waitFor(() => expect(document.activeElement).toBe(submit()));
+    expect(submit().disabled).toBe(false);
+    expect(opener.disabled).toBe(false);
+    expect(more.disabled).toBe(false);
+    open();
+    expect(within(picker()).getByRole("alert").textContent).toBe("academy is taken in Personal");
+    expect(selected("space-pick-group-@jane").checked).toBe(true);
+    expect(document.activeElement).toBe(selected("space-pick-group-@jane"));
+    commandMock.mockImplementation(answer);
+    fireEvent.click(submit());
+    await waitFor(() => expect(screen.queryByTestId(`space-picker-${KEY}`)).toBeNull());
+    expect(calls("space.pick")).toHaveLength(2);
   });
 
-  test("Cancel and Escape leave the repository local only with Add to a group… offered again, focus on it", async () => {
+  test("space-58: a disappeared or replaced group cannot inherit the selected destination", async () => {
+    const home = localProject();
+    await renderGroups(home, { open: false });
+    open();
+    fireEvent.click(selected("space-pick-group-acme/team"));
+    const replacement = withInstance(home, {
+      groups: home.instances[0]!.groups.map((group) => group.fullPath === "acme/team" ? { ...group, id: "replacement" } : group),
+    });
+    deliver(replacement);
+    expect(submit().disabled).toBe(true);
+    expect(selected("space-pick-group-acme/team").checked).toBe(false);
+    fireEvent.click(submit());
+    expect(calls("space.pick")).toEqual([]);
+    fireEvent.click(selected("space-pick-group-acme/team"));
+    expect(submit().disabled).toBe(false);
+    deliver(withInstance(replacement, { groups: replacement.instances[0]!.groups.filter((group) => group.fullPath !== "acme/team") }));
+    expect(submit().disabled).toBe(true);
+    fireEvent.click(submit());
+    expect(calls("space.pick")).toEqual([]);
+  });
+
+  test.each(["create", "join"] as const)("space-58: pending groups and their projects are excluded, invalidating an earlier %s selection until chosen again", async (kind) => {
+    const active = joining({});
+    const pending = withInstance(active, {
+      groups: active.instances[0]!.groups.map((group) => group.fullPath === "acme/team" ? {
+        ...group, pendingDeletion: true, deletionRoot: "acme/team",
+        can: { createSubgroup: false, manageMembers: false, rename: false, delete: false, restore: true },
+      } : group),
+    });
+    await renderGroups(pending, { open: false });
+    open();
+    const groupId = "space-pick-group-acme/team";
+    const projectId = `space-pick-repo-${LISTED}`;
+    for (const id of [groupId, projectId]) expect(within(picker()).queryByTestId(id)).toBeNull();
+    expect(within(picker()).getByRole("radio", { name: "Personal" })).toBeTruthy();
+    expect(submit().disabled).toBe(true);
+    deliver(active);
+    const choice = kind === "create" ? groupId : projectId;
+    fireEvent.click(selected(choice));
+    expect(submit().disabled).toBe(false);
+    deliver(pending);
+    for (const id of [groupId, projectId]) expect(within(picker()).queryByTestId(id)).toBeNull();
+    expect(submit().disabled).toBe(true);
+    fireEvent.click(submit());
+    expect(calls("space.pick")).toEqual([]);
+    deliver(active);
+    expect(selected(choice).checked).toBe(false);
+    expect(submit().disabled).toBe(true);
+    fireEvent.click(selected(choice));
+    expect(submit().disabled).toBe(false);
+    expect(calls("space.pick")).toEqual([]);
+  });
+
+  test("space-58: an existing project replaced at the same path requires a new selection", async () => {
+    const home = joining({});
+    await renderGroups(home, { open: false });
+    open();
+    fireEvent.click(selected(`space-pick-repo-${LISTED}`));
+    deliver(withInstance(home, {
+      groups: home.instances[0]!.groups.map((group) => ({
+        ...group,
+        repositories: group.repositories.map((other) => other.key === LISTED ? { ...other, id: "replacement" } : other),
+      })),
+    }));
+    expect(submit().disabled).toBe(true);
+    expect(selected(`space-pick-repo-${LISTED}`).checked).toBe(false);
+    fireEvent.click(submit());
+    expect(calls("space.pick")).toEqual([]);
+    fireEvent.click(selected(`space-pick-repo-${LISTED}`));
+    expect(submit().disabled).toBe(false);
+  });
+
+  test.each(["en", "zh"] as const)("space-58: the visible form and final action read in the selected language (%s)", async (language) => {
+    activateLanguage(language);
+    const zh = language === "zh";
+    await renderGroups(localProject(), { open: false });
+    open();
+    expect(within(picker()).getByRole("heading", { name: zh ? "将 academy 加入群组" : "Add academy to a group" })).toBeTruthy();
+    expect(within(picker()).getByText(zh ? "选择群组" : "Choose group")).toBeTruthy();
+    expect(within(picker()).getByText(zh ? "连接现有项目" : "Connect to an existing project")).toBeTruthy();
+    expect(submit().textContent).toBe(zh ? "添加到群组" : "Add to group");
+    expect(submit().disabled).toBe(true);
+    fireEvent.click(selected(`space-pick-repo-${LISTED}`));
+    expect(submit().textContent).toBe(zh ? "连接项目" : "Connect project");
+    expect(picker().textContent).toContain(zh ? "所有会话：对话、智能体活动和附件" : "All sessions: conversations, agent activity, and attachments");
+    expect(picker().textContent).toContain(zh ? "现有及未来的项目记录" : "Existing and future project records");
+    expect(calls("space.pick")).toEqual([]);
+  });
+
+  test("space-58: Cancel and Escape after selection send nothing and restore the opener's focus", async () => {
     await renderGroups(localProject(), { open: false });
     const control = screen.getByTestId(`space-row-pick-${KEY}`);
-    fireEvent.click(control);
-    fireEvent.click(screen.getByTestId(`space-pick-cancel-${KEY}`));
-    expect(screen.queryByTestId(`space-picker-${KEY}`)).toBeNull();
-    await waitFor(() => expect(document.activeElement).toBe(control));
-    fireEvent.click(control);
-    fireEvent.keyDown(screen.getByTestId("space-pick-group-@jane"), { key: "Escape" });
-    expect(screen.queryByTestId(`space-picker-${KEY}`)).toBeNull();
-    expect(calls("space.pick")).toHaveLength(0);
+    for (const cancel of [true, false]) {
+      fireEvent.click(control);
+      fireEvent.click(selected("space-pick-group-acme/team"));
+      if (cancel) fireEvent.click(screen.getByTestId(`space-pick-cancel-${KEY}`));
+      else fireEvent.keyDown(selected("space-pick-group-acme/team"), { key: "Escape" });
+      expect(screen.queryByTestId(`space-picker-${KEY}`)).toBeNull();
+      await waitFor(() => expect(document.activeElement).toBe(control));
+    }
+    expect(calls("space.pick")).toEqual([]);
     expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("");
   });
 });
@@ -1213,6 +1264,33 @@ describe("GROUPS: Open here (space-63, space-111, space-29)", () => {
 });
 
 describe("GROUPS: the instance's entries (space-1, space-58, space-61, DR-120)", () => {
+  test("same-path pending and replacement groups keep their own children, and ambiguous parents are not guessed", async () => {
+    const group = (id: string, fullPath: string, name: string, deletionRoot?: string): InstanceGroupState => ({
+      id, fullPath, name, login: null, mine: false, can: NO_CAN, placed: [], repositories: [],
+      ...(deletionRoot ? { pendingDeletion: true, deletionRoot } : {}),
+    });
+    await renderGroups(withGroups(base(),
+      group("old", "team", "Old team", "team"),
+      group("new", "team", "Current team"),
+      group("old-child", "team/old-child", "Old child", "team"),
+      group("new-child", "team/new-child", "Current child"),
+      group("pending-child", "team/pending-child", "Pending child", "team/pending-child"),
+      group("ambiguous-1", "ambiguous", "First parent"),
+      group("ambiguous-2", "ambiguous", "Second parent"),
+      group("unplaced", "ambiguous/child", "Separate child"),
+    ), { open: false });
+    const section = (name: string) => screen.getByRole("heading", { name: new RegExp(`^${name}\\b`) }).closest('[role="group"]')! as HTMLElement;
+    const old = section("Old team");
+    const current = section("Current team");
+    expect(old.contains(section("Old child"))).toBe(true);
+    expect(old.contains(section("Current child"))).toBe(false);
+    expect(current.contains(section("Current child"))).toBe(true);
+    expect(current.contains(section("Old child"))).toBe(false);
+    expect(current.contains(section("Pending child"))).toBe(true);
+    expect(section("First parent").contains(section("Separate child"))).toBe(false);
+    expect(section("Second parent").contains(section("Separate child"))).toBe(false);
+  });
+
   /** Your own group; acme; another account's login under which the host
    * lists a repository; and a group named like your login. */
   function instanceHome(): GroupsState {
@@ -1268,7 +1346,7 @@ describe("GROUPS: the instance's entries (space-1, space-58, space-61, DR-120)",
     fireEvent.click(within(lineAt("@spex.example/bob/notes-spex")).getByTestId("space-line-members"));
     const members = await screen.findByTestId(`space-members-@spex.example/bob/notes-spex@${ORIGIN}`);
     await within(members).findByTestId("space-member-jane");
-    expect(within(members).getByTestId(`space-share-@spex.example/bob/notes-spex@${ORIGIN}`).textContent).toBe("Share");
+    expect(within(members).getByTestId(`space-share-@spex.example/bob/notes-spex@${ORIGIN}`).textContent).toBe("Invite members…");
     // The group named like your login: its own entry, its row
     // unreachable with the cause, Retry its one control (space-61).
     const apart = screen.getByTestId("space-group-jane");
@@ -1306,7 +1384,7 @@ describe("GROUPS: the instance's entries (space-1, space-58, space-61, DR-120)",
     fireEvent.click(screen.getByTestId(`space-row-pick-${KEY}`));
     const picker = await screen.findByTestId(`space-picker-${KEY}`);
     const options = within(picker).getAllByTestId(/^space-pick-group-/);
-    expect(options.map((button) => button.textContent)).toEqual(["Personal", "Acme · acme", "Jane's team · jane"]);
+    expect(options.map((button) => (button as HTMLInputElement).labels?.[0]?.textContent)).toEqual([expect.stringContaining("Personal"), expect.stringContaining("Acme · acme"), expect.stringContaining("Jane's team · jane")]);
     expect(options.map((button) => button.dataset.testid)).toEqual(["space-pick-group-@jane", "space-pick-group-acme", "space-pick-group-jane"]);
     expect(within(picker).queryByTestId("space-pick-group-bob")).toBeNull();
     expect(within(picker).queryByTestId("space-pick-group-@bob")).toBeNull();

@@ -60,7 +60,7 @@ const WORDS = {
     members: "4 members",
     research: "Research · acme/research",
     more: (name: string) => `More for ${name}`,
-    groupActs: ["Members"],
+    groupActs: ["Members", "Delete group"],
     connected: "Connected",
     disconnect: "Disconnect",
     groupSessions: "Group sessions",
@@ -86,10 +86,13 @@ const WORDS = {
     apart: "Started separately at Spex Example",
     combine: "Combine…",
     combineConfirm: "Combine",
-    repair: "delta · acme — Folder missing on this computer",
-    repairFolder: "~/code/delta · 3 sessions ran there",
-    chooseFolder: "Choose folder…",
-    notHere: "Not on this computer",
+    repair: "Delta",
+    recoveryHelp: "Spex could not read this saved conversation. The original file is still saved.",
+    savedOnLab: "Conversation history is saved on lab-1. Project files must be available there for further work.",
+    folderRetry: "Choose its project folder, then restart Spex to retry",
+    repairFolder: "Previously used folder~/code/delta",
+    chooseFolder: "Locate folder…",
+    notHere: "Dismiss",
     notOnLab: "Not on lab-1",
     keepOnLab: "Keep lab-1's",
     labFiles: "Spex keeps lab-1's files in ~/.spex",
@@ -99,7 +102,7 @@ const WORDS = {
     cancel: "Cancel",
     signInTitle: "Sign in to a Space",
     heading: "Spex Example · @ada",
-    newGroup: "New group",
+    newGroup: "New group…",
     signOut: "Sign out",
     removeFromList: "Remove from this list",
     toSend: "1 to send",
@@ -113,7 +116,7 @@ const WORDS = {
     members: "4 名成员",
     research: "Research · acme/research",
     more: (name: string) => `${name} 的更多操作`,
-    groupActs: ["成员"],
+    groupActs: ["成员", "删除群组"],
     connected: "已连接",
     disconnect: "断开连接",
     groupSessions: "群组会话",
@@ -139,10 +142,13 @@ const WORDS = {
     apart: "在 Spex Example 上各自开始",
     combine: "合并…",
     combineConfirm: "合并",
-    repair: "delta · acme — 本机缺少文件夹",
-    repairFolder: "~/code/delta · 3 个会话曾在此运行",
-    chooseFolder: "选择文件夹…",
-    notHere: "不在本机上",
+    repair: "Delta",
+    recoveryHelp: "Spex 无法读取这段会话，原始文件仍然保留。",
+    savedOnLab: "会话历史保存在 lab-1 上。继续工作需要该服务器上有项目文件。",
+    folderRetry: "选择其项目文件夹，然后重启 Spex 重试",
+    repairFolder: "之前使用的文件夹~/code/delta",
+    chooseFolder: "查找文件夹…",
+    notHere: "忽略",
     notOnLab: "不在 lab-1 上",
     keepOnLab: "保留 lab-1 的",
     labFiles: "Spex 将 lab-1 的文件保存在 ~/.spex",
@@ -152,7 +158,7 @@ const WORDS = {
     cancel: "取消",
     signInTitle: "登录到 Space",
     heading: "Spex Example · @ada",
-    newGroup: "新建群组",
+    newGroup: "新建群组…",
     signOut: "退出登录",
     removeFromList: "从列表中移除",
     toSend: "1 项待发送",
@@ -376,6 +382,36 @@ function pick(trigger: string, entry: string): void {
 
 const phrase = (key: string): string => screen.getByTestId(`space-repo-state-${key}`).textContent ?? "";
 
+test.each([
+  { server: false, purpose: "To work on a project, locate its files." },
+  { server: true, purpose: "To work on a project, its files must be available on lab-1." },
+])("folder tasks with no conversations explain only project files (server: $server)", async ({ server, purpose }) => {
+  activateLanguage("en");
+  state = home({
+    diagnostics: ["Delta", "Epsilon"].map((name) => ({
+      file: `/records/${name.toLowerCase()}`, reason: "no working folder", blocking: false,
+      repair: {
+        kind: "repository", repository: `acme/${name.toLowerCase()}-spex`, projectName: name,
+        key: `repair-${name.toLowerCase()}`, directories: [], sessions: 0,
+      },
+    })),
+  });
+  seat.command.mockImplementation(async (type: string) => type === "space.get" ? state : {});
+  render(
+    <PlaceStoreContext.Provider value={server ? seatStore : useAppStore}>
+      <SpaceSurface onOpenSession={vi.fn()} onOpenProject={vi.fn()} />
+    </PlaceStoreContext.Provider>,
+  );
+  fireEvent.click(await screen.findByTestId("space-issues"));
+  const review = screen.getByTestId("space-issues-list");
+  expect(within(review).getAllByText(purpose)).toHaveLength(1);
+  expect(review.textContent).not.toContain("Conversation history is saved");
+  expect(review.textContent).not.toContain("You can read");
+  expect(within(review).getAllByTestId("space-repair")).toHaveLength(2);
+  expect(within(review).queryAllByRole("button", { name: "Locate folder…" })).toHaveLength(server ? 0 : 2);
+  expect(callsOf(server ? seat : local, "project.rebind")).toHaveLength(0);
+});
+
 describe.each(["en", "zh"] as const)("space-113: the Space surface reads as projects in groups (%s)", (language: Language) => {
   const words = WORDS[language];
   beforeEach(() => activateLanguage(language));
@@ -425,9 +461,14 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
     const computer = screen.getByTestId("space-own");
     expect(instance.contains(computer)).toBe(false);
     expect(within(computer).getByRole("heading", { level: 2 }).textContent).toBe(words.thisComputer);
-    // [space-1] acme's heading carries one "More" holding Members alone.
+    // [space-1] [space-77] acme's More offers Members and deletion,
+    // with its contents reviewed in a separate confirmation.
     expect(screen.getByTestId("space-group-more-acme").getAttribute("aria-label")).toBe(words.more("acme"));
     expect(entries("space-group-more-acme")).toEqual(words.groupActs);
+    fireEvent.click(screen.getByTestId("space-group-more-acme"));
+    const groupMenu = screen.getByTestId("space-group-more-acme-menu");
+    expect((within(groupMenu).getByTestId("space-group-delete-acme") as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.keyDown(window, { key: "Escape" });
     // [space-1] [run-view-170] beneath acme's heading, before its rows,
     // one line "lab-1 · Connected" with Disconnect in its overflow.
     const server = screen.getByTestId(`space-server-${PLACE}`);
@@ -563,8 +604,8 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
     expect(add.textContent).toBe(words.addToGroup);
     fireEvent.click(add);
     const section = within(screen.getByTestId(`space-picker-${GAMMA_KEY}`)).getByTestId(`space-pick-instance-${ORIGIN}`);
-    const options = within(section).getAllByTestId(/^space-pick-group-/).map((option) => option.textContent ?? "");
-    expect(options[0]).toBe(words.personal);
+    const options = within(section).getAllByTestId(/^space-pick-group-/).map((option) => (option as HTMLInputElement).labels?.[0]?.textContent ?? "");
+    expect(options[0]).toContain(words.personal);
     expect(options[1]).toBe("acme");
     expect(options[2]?.startsWith("Research")).toBe(true);
   });
@@ -619,7 +660,7 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
     expect(callsOf(local, "space.sync")).toEqual([{ repository: ALPHA_KEY, placement: ORIGIN, join: true }]);
   });
 
-  test("a repair names the project and its group, the folder beneath; Not on this computer declines it", async () => {
+  test("saved work names its actual project, with its previous folder and optional postponement", async () => {
     state = home({
       diagnostics: [
         {
@@ -630,6 +671,7 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
             kind: "repository",
             repository: "@spex.example/acme/delta-spex",
             name: "delta-spex",
+            projectName: "Delta",
             group: "acme",
             directories: ["/Users/ada/code/delta"],
             sessions: 3,
@@ -643,13 +685,13 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
     await renderHere();
     fireEvent.click(screen.getByTestId("space-issues"));
     const repair = screen.getByTestId("space-repair");
-    // [space-46] "<project> · acme — Folder missing on this computer",
-    // the folder beneath it.
+    // [space-46] The actual project name heads the saved-work group,
+    // with its previously used folder beneath it.
     expect(within(repair).getByTestId("space-repair-title").textContent).toBe(words.repair);
     expect(within(repair).getByTestId("space-repair-folder").textContent).toBe(words.repairFolder);
     // [space-47] "Use <folder>" where the core proposes one.
     expect(within(repair).getByTestId("space-repair-use").textContent).toBe(words.use);
-    // [space-47] [space-49] "Choose folder…" and "Not on this computer",
+    // [space-47] [space-49] "Locate folder…" and "Dismiss",
     // declining sending `space.repair.decline`.
     expect(within(repair).getByTestId("space-repair-choose").textContent).toBe(words.chooseFolder);
     const decline = within(repair).getByTestId("space-repair-decline");
@@ -664,6 +706,17 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
     const seatState = groupsState({
       home: HOME,
       defaultInstance: ORIGIN,
+      diagnostics: [{
+        code: "session-folder-required",
+        file: "/records/sessions/older.spex.json",
+        reason: "missing cwd",
+        blocking: false,
+      }, {
+        file: "/records/delta", reason: "no working folder", blocking: false,
+        repair: { kind: "repository", repository: "acme/delta-spex", projectName: "Delta",
+          key: "server-delta", directories: ["/projects/delta"], sessions: 1 },
+      }],
+      issues: 2,
       own: { name: "ada", named: false, repositories: [] },
       instances: [
         instanceState(ORIGIN, {
@@ -688,6 +741,14 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
       </PlaceStoreContext.Provider>,
     );
     await screen.findByTestId(`space-row-${BETA_KEY}`);
+    // A server allocates its own project folders: the local retry
+    // guidance must not tell its reader to pick a folder or restart.
+    fireEvent.click(screen.getByTestId("space-issues"));
+    const diagnostic = screen.getByTestId("space-diagnostic");
+    expect(within(screen.getByTestId("space-issues-list")).getByText(words.savedOnLab)).toBeTruthy();
+    expect(within(screen.getByTestId("space-repair")).queryByRole("button", { name: words.chooseFolder })).toBeNull();
+    expect(within(diagnostic).getByText(words.recoveryHelp)).toBeTruthy();
+    expect(within(diagnostic).queryByText(words.folderRetry)).toBeNull();
     // [space-112] "Not on lab-1".
     fireEvent.click(screen.getByTestId(`space-repo-${BETA_KEY}`));
     expect(within(await screen.findByTestId("space-repository")).getAllByText(words.notOnLab).length).toBeGreaterThan(0);

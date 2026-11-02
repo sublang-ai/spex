@@ -203,6 +203,8 @@ export interface ProjectPaletteProps {
   /** Show this computer's Space surface, where a server's contract is
    * asked beneath its line (run-view-170). */
   onShowSpace?: () => void;
+  /** Forward group-operation feedback to a region that survives this dialog. */
+  onNote?: (message: string) => void;
   onClose: () => void;
 }
 
@@ -359,9 +361,10 @@ function JoinFolder({
 }
 
 /** The controls Tab walks inside the dialog, in document order. */
-const FOCUSABLE = "button:not([disabled]), input:not([disabled])";
+const FOCUSABLE = "button, input, select";
 
 export function ProjectPalette(props: ProjectPaletteProps) {
+  const pickerPending = useRef(false);
   const [query, setQuery] = useState("");
   const [index, setIndex] = useState(0);
   const [pathDraft, setPathDraft] = useState("");
@@ -763,17 +766,27 @@ export function ProjectPalette(props: ProjectPaletteProps) {
   /** The dialog's own keys: Escape closes from anywhere inside it,
    * and Tab wraps so focus never leaves it (DR-010 §6). */
   function dialogKeydown(event: React.KeyboardEvent): void {
+    // The application shortcut toggles this dialog, so pending group
+    // submission must guard it as it guards Escape and the backdrop.
+    if (pickerPending.current && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "p") {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
-      props.onClose();
+      if (!pickerPending.current) props.onClose();
       return;
     }
     if (event.key !== "Tab") return;
     const nodes = Array.from(
       dialogRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [],
-    );
-    if (nodes.length === 0) return;
+    ).filter((node) => !node.matches(":disabled"));
+    if (nodes.length === 0) {
+      event.preventDefault();
+      return;
+    }
     const first = nodes[0];
     const last = nodes[nodes.length - 1];
     const active = document.activeElement;
@@ -821,7 +834,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
       // the window with nothing able to scroll to what it hides.
       className="fixed inset-0 z-30 flex items-start justify-center bg-black/20 p-4 pt-[min(18vh,4rem)]"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) props.onClose();
+        if (event.target === event.currentTarget && !pickerPending.current) props.onClose();
       }}
     >
       <div
@@ -843,7 +856,8 @@ export function ProjectPalette(props: ProjectPaletteProps) {
               repo={pickingRepo}
               connected={connected}
               onClose={props.onClose}
-              onNote={() => {}}
+              onPendingChange={(pending) => { pickerPending.current = pending; }}
+              onNote={(message) => props.onNote?.(message)}
             />
           </div>
         ) : addProjectOnly ? (

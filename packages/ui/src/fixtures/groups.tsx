@@ -292,7 +292,7 @@ export function base(over: HomeOver = {}, repos: RepositoryState[] = [repo()]): 
     issues: 0,
     ...rest,
     ...(rest.diagnostics
-      ? { issues: rest.issues ?? rest.diagnostics.filter((d) => d.repair?.declined === undefined).length }
+      ? { issues: rest.issues ?? rest.diagnostics.filter((d) => d.blocking || (d.repair?.declined === undefined && d.notice?.dismissed === undefined)).length }
       : {}),
   };
 }
@@ -578,6 +578,7 @@ export async function answer(type: string, fields: Record<string, unknown> = {})
   switch (type) {
     case "space.get":
     case "space.repair.decline":
+    case "space.notice.dismiss":
     case "space.signout":
     case "space.forget":
       return home.current;

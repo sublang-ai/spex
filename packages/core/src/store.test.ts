@@ -1142,7 +1142,7 @@ test("storage-12: an unpaired clone and a pair whose clone is missing are repair
   const reopened = new Store({ machineIdentity, dir, own: "tester" });
   const repairs = reopened.storageDiagnostics().map((entry) => entry.repair);
   assert.deepEqual(repairs.find((repair) => repair?.kind === "repository"),
-    { kind: "repository", repository: kept.id, name: "kept-spex", group: "tester", directories: [], sessions: 0, key: `${kept.id}|` });
+    { kind: "repository", repository: kept.id, name: "kept-spex", group: "tester", projectName: "kept", directories: [], sessions: 0, key: `${kept.id}|` });
   assert.deepEqual(repairs.find((repair) => repair?.kind === "folder"),
     { kind: "folder", repository: lost.id, directories: [join(tmpdir(), "spex-lost")], sessions: 0, key: `${lost.id}|${join(tmpdir(), "spex-lost")}` });
   assert.deepEqual(reopened.listProjects(), []);

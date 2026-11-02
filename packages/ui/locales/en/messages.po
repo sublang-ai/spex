@@ -23,11 +23,6 @@ msgstr " — called /{playbookId}"
 msgid " — runs {role}"
 msgstr " — runs {role}"
 
-#. follows the folder a repair remembers: how many sessions ran in it
-#: src/components/SpaceRepairs.tsx
-msgid " · {count, plural, one {# session ran there} other {# sessions ran there}}"
-msgstr " · {count, plural, one {# session ran there} other {# sessions ran there}}"
-
 #. how old the listed data is; follows the Sources summary
 #: src/components/SourcesTabs.tsx
 msgid "— {age}"
@@ -112,6 +107,10 @@ msgstr "{actor} · Turn {turn}"
 #: src/components/DraftConversation.tsx
 msgid "{adapter} is not ready — check Settings"
 msgstr "{adapter} is not ready — check Settings"
+
+#: src/components/SpaceMembers.tsx
+msgid "{added, plural, one {# member added} other {# members added}}; {remaining} still to add."
+msgstr "{added, plural, one {# member added} other {# members added}}; {remaining} still to add."
 
 #: src/lib/space.ts
 msgid "{ahead, plural, one {# commit} other {# commits}} ahead, {behind, plural, one {# commit} other {# commits}} behind · checked {at}"
@@ -211,7 +210,12 @@ msgstr "{count, plural, one {# link waits} other {# links wait}} for {name}"
 msgid "{count, plural, one {# match} other {# matches}}"
 msgstr "{count, plural, one {# match} other {# matches}}"
 
+#: src/components/SpaceMembers.tsx
+msgid "{count, plural, one {# member added} other {# members added}} as {role}"
+msgstr "{count, plural, one {# member added} other {# members added}} as {role}"
+
 #: src/components/SpaceGroups.tsx
+#: src/components/SpaceMembers.tsx
 msgid "{count, plural, one {# member} other {# members}}"
 msgstr "{count, plural, one {# member} other {# members}}"
 
@@ -251,6 +255,11 @@ msgstr "{count, plural, one {# review round} other {# review rounds}}"
 #: src/components/ProjectPalette.tsx
 msgid "{count, plural, one {# running session} other {# running sessions}}"
 msgstr "{count, plural, one {# running session} other {# running sessions}}"
+
+#. number of conversations belonging to this project or unnamed saved-work group
+#: src/components/SpaceRepairs.tsx
+msgid "{count, plural, one {# saved conversation} other {# saved conversations}}"
+msgstr "{count, plural, one {# saved conversation} other {# saved conversations}}"
 
 #: src/components/ProjectPalette.tsx
 msgid "{count, plural, one {# session needs you} other {# sessions need you}}"
@@ -319,11 +328,6 @@ msgstr "{count, plural, one {The same failure # time in this turn} other {The sa
 msgid "{count} {group} items"
 msgstr "{count} {group} items"
 
-#. the live note once a repair is fixed: how many still wait for an answer
-#: src/components/SpaceRepairs.tsx
-msgid "{count} left to fix."
-msgstr "{count} left to fix."
-
 #: src/components/ForgeItemRow.tsx
 msgid "{count} more labels: {rest}"
 msgstr "{count} more labels: {rest}"
@@ -331,11 +335,6 @@ msgstr "{count} more labels: {rest}"
 #: src/components/ProjectPalette.tsx
 msgid "{count} running"
 msgstr "{count} running"
-
-#. the header's control after its warning glyph: how many repairs and problems wait for an answer; opens the list
-#: src/components/SpaceSurface.tsx
-msgid "{count} to fix"
-msgstr "{count} to fix"
 
 #. a project's row: how many of its records this computer changed that are not sent yet; Sync now in its overflow sends them
 #: src/lib/space.ts
@@ -346,11 +345,6 @@ msgstr "{count} to send"
 #: src/lib/time.ts
 msgid "{days}d ago"
 msgstr "{days}d ago"
-
-#. the heading of the list of what needs fixing: {count} wait for an answer; '# set aside' counts the repairs the reader answered Not on this computer
-#: src/components/SpaceRepairs.tsx
-msgid "{declined, plural, =0 {To fix ({count})} other {To fix ({count}) · # set aside}}"
-msgstr "{declined, plural, =0 {To fix ({count})} other {To fix ({count}) · # set aside}}"
 
 #: src/components/PlaybookAuthoring.tsx
 msgid "{diagnostic} — delete the session, or repair the file and restart Spex"
@@ -388,6 +382,18 @@ msgstr "{from} cites {to} {count, plural, one {# time} other {# times}}"
 #: src/components/SpecView.tsx
 msgid "{group} ({count})"
 msgstr "{group} ({count})"
+
+#: src/components/SpaceGroups.tsx
+msgid "{group} deleted."
+msgstr "{group} deleted."
+
+#: src/components/SpaceGroups.tsx
+msgid "{group} is scheduled for deletion."
+msgstr "{group} is scheduled for deletion."
+
+#: src/components/SpaceGroups.tsx
+msgid "{group} restored."
+msgstr "{group} restored."
 
 #. what failed, then what the agent said about it
 #: src/lib/failure-catalogue.ts
@@ -488,14 +494,6 @@ msgstr "{name} · in Personal at {space}"
 msgid "{name} · not listed publicly"
 msgstr "{name} · not listed publicly"
 
-#: src/components/SpaceRepairs.tsx
-msgid "{name} · now a project at {path}"
-msgstr "{name} · now a project at {path}"
-
-#: src/components/SpaceRepairs.tsx
-msgid "{name} · now a project at {path}, {count, plural, one {# session} other {# sessions}} listed"
-msgstr "{name} · now a project at {path}, {count, plural, one {# session} other {# sessions}} listed"
-
 #. a quiet line, with no control, on a team server's Space: a copy of records standing under the server's own heading; {name} is the row's name, {place} the server's name
 #: src/components/SpaceGroups.tsx
 msgid "{name} · on {place}"
@@ -524,11 +522,6 @@ msgstr "{name} agent"
 #: src/components/SpaceSync.tsx
 msgid "{name} holds no records yet; Sync will send these"
 msgstr "{name} holds no records yet; Sync will send these"
-
-#. the live note once "Not on this computer" set a repair aside; {name} is the project
-#: src/components/SpaceRepairs.tsx
-msgid "{name} set aside"
-msgstr "{name} set aside"
 
 #: src/components/AgentSettings.tsx
 msgid "{name} settings for this conversation"
@@ -574,7 +567,7 @@ msgstr "{packages, plural, one {# package} other {# packages}} · {items} items"
 msgid "{path} — needs you"
 msgstr "{path} — needs you"
 
-#. a folder repair's outcome: the project whose records were missing is removed, its folder's files kept; {path} is the folder
+#. the project was removed from the list; its folder's files remain
 #: src/components/SpaceRepairs.tsx
 msgid "{path} · removed"
 msgstr "{path} · removed"
@@ -670,26 +663,6 @@ msgstr "{span} ago"
 msgid "{stage} not found beside this playbook's module"
 msgstr "{stage} not found beside this playbook's module"
 
-#. a repair row of a project in no group on a team server's Space; {place} is the server's name; 'set aside' follows once the reader answered Not on the server
-#: src/components/SpaceRepairs.tsx
-msgid "{state, select, aside {{project} — Folder missing on {place} · set aside} other {{project} — Folder missing on {place}}}"
-msgstr "{state, select, aside {{project} — Folder missing on {place} · set aside} other {{project} — Folder missing on {place}}}"
-
-#. a repair row of a project in no group: its records are here, its folder on this computer is not; 'set aside' follows once the reader answered Not on this computer
-#: src/components/SpaceRepairs.tsx
-msgid "{state, select, aside {{project} — Folder missing on this computer · set aside} other {{project} — Folder missing on this computer}}"
-msgstr "{state, select, aside {{project} — Folder missing on this computer · set aside} other {{project} — Folder missing on this computer}}"
-
-#. a repair row on a team server's Space; {project} is the project, {group} the group holding its records, {place} the server's name; 'set aside' follows once the reader answered Not on the server
-#: src/components/SpaceRepairs.tsx
-msgid "{state, select, aside {{project} · {group} — Folder missing on {place} · set aside} other {{project} · {group} — Folder missing on {place}}}"
-msgstr "{state, select, aside {{project} · {group} — Folder missing on {place} · set aside} other {{project} · {group} — Folder missing on {place}}}"
-
-#. a repair row: the project's records are here, its folder on this computer is not; {project} is the project, {group} the group holding its records; 'set aside' follows once the reader answered Not on this computer
-#: src/components/SpaceRepairs.tsx
-msgid "{state, select, aside {{project} · {group} — Folder missing on this computer · set aside} other {{project} · {group} — Folder missing on this computer}}"
-msgstr "{state, select, aside {{project} · {group} — Folder missing on this computer · set aside} other {{project} · {group} — Folder missing on this computer}}"
-
 #: src/lib/space.ts
 msgid "{state} · last synced {at}"
 msgstr "{state} · last synced {at}"
@@ -781,6 +754,10 @@ msgstr "@{login} added as {role}"
 #: src/components/SpaceMembers.tsx
 msgid "@{login} removed"
 msgstr "@{login} removed"
+
+#: src/components/SpaceMembers.tsx
+msgid "@{login}: {message}"
+msgstr "@{login}: {message}"
 
 #: src/components/Composer.tsx
 msgid "/ for playbooks · Enter sends"
@@ -918,6 +895,10 @@ msgstr "A credential you place on {server} stays there until you remove it"
 msgid "A follow-up message continues this intent."
 msgstr "A follow-up message continues this intent."
 
+#: src/components/SpaceGroups.tsx
+msgid "A group owner can restore it before deletion takes effect."
+msgstr "A group owner can restore it before deletion takes effect."
+
 #: src/lib/failure-catalogue.ts
 msgid "A nested workflow failed"
 msgstr "A nested workflow failed"
@@ -950,6 +931,11 @@ msgstr "A player per role, a command and an intent"
 #: src/components/Composer.tsx
 msgid "A reply is needed. Answer or ask Captain to explain."
 msgstr "A reply is needed. Answer or ask Captain to explain."
+
+#. a folder requirement not associated with an actionable recovery card
+#: src/components/SpaceRepairs.tsx
+msgid "A saved conversation needs a project folder"
+msgstr "A saved conversation needs a project folder"
 
 #: src/state/dashboard.ts
 msgid "A session failed"
@@ -1015,6 +1001,15 @@ msgstr "Aborting…"
 msgid "Accepts {provider} accounts"
 msgstr "Accepts {provider} accounts"
 
+#. Personal does not imply that a project is private
+#: src/components/SpaceGroups.tsx
+msgid "Access follows this project's members and visibility"
+msgstr "Access follows this project's members and visibility"
+
+#: src/components/SpaceMembers.tsx
+msgid "Access starts immediately when you add them."
+msgstr "Access starts immediately when you add them."
+
 #: src/components/ProjectGroup.tsx
 msgid "Actions for {title}"
 msgstr "Actions for {title}"
@@ -1042,7 +1037,6 @@ msgstr "Adapter option; model support unverified"
 msgid "Adapter option; model support unverified."
 msgstr "Adapter option; model support unverified."
 
-#. add the person at the chosen role at the Space
 #. add this package to spex.yaml and install it
 #. create this player in your own roster
 #. register the typed path as an existing repository
@@ -1053,12 +1047,11 @@ msgstr "Adapter option; model support unverified."
 #: src/components/DraftRegisterTab.tsx
 #: src/components/ProjectPalette.tsx
 #: src/components/SettingsSurface.tsx
-#: src/components/SpaceMembers.tsx
 #: src/lib/environments.ts
 msgid "Add"
 msgstr "Add"
 
-#. the name of the group picker "Add to a group…" opens; {name} is the project's name
+#. visible heading of the local project's destination form
 #: src/components/SpaceGroups.tsx
 msgid "Add {name} to a group"
 msgstr "Add {name} to a group"
@@ -1107,9 +1100,22 @@ msgstr "Add an existing Git repository or create a new project."
 msgid "Add an intent to {project}"
 msgstr "Add an intent to {project}"
 
+#: src/components/SpaceMembers.tsx
+msgid "Add another username"
+msgstr "Add another username"
+
 #: src/components/ProjectGroup.tsx
 msgid "Add intent…"
 msgstr "Add intent…"
+
+#. immediately give this account the selected access
+#: src/components/SpaceMembers.tsx
+msgid "Add member"
+msgstr "Add member"
+
+#: src/components/SpaceMembers.tsx
+msgid "Add members"
+msgstr "Add members"
 
 #: src/components/SettingsSurface.tsx
 msgid "Add player"
@@ -1132,6 +1138,11 @@ msgstr "Add this to the project's Up next without sending it"
 #: src/components/SpaceGroups.tsx
 msgid "Add to a group…"
 msgstr "Add to a group…"
+
+#. confirm adding the local project's records to the selected group
+#: src/components/SpaceGroups.tsx
+msgid "Add to group"
+msgstr "Add to group"
 
 #: src/components/CaptainHome.tsx
 #: src/components/Composer.tsx
@@ -1178,18 +1189,25 @@ msgstr "Added /{command}"
 msgid "Added to Up next — see the project's Overview."
 msgstr "Added to Up next — see the project's Overview."
 
-#. a repair's control while the folder is paired with the project
-#. a repair's control while the folder is paired with the project
-#. the Add control, while the Space adds the person
+#: src/components/SpaceMembers.tsx
+msgid "Adding {current} of {total}…"
+msgstr "Adding {current} of {total}…"
+
+#. acknowledges an accepted request; the project row reports completion or a wait
+#: src/components/SpaceGroups.tsx
+msgid "Adding {name} to {group} at {space}"
+msgstr "Adding {name} to {group} at {space}"
+
+#. adding this project to the selected group
 #. the Add form's request is in flight: the playbook is being added
 #. the Use this folder control, while the folder is paired
+#. the members are being added at the Space
 #. the package is being added to spex.yaml
 #. the request is being written
 #: src/components/DraftRegisterTab.tsx
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceMembers.tsx
-#: src/components/SpaceRepairs.tsx
 #: src/lib/environments.ts
 msgid "Adding…"
 msgstr "Adding…"
@@ -1313,6 +1331,13 @@ msgstr "All here"
 msgid "All projects"
 msgstr "All projects"
 
+#. sharing scope: all conversation messages, agent actions and results, and attachments
+#. sharing scope: all conversation messages, agent actions and results, and attachments
+#: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
+msgid "All sessions: conversations, agent activity, and attachments"
+msgstr "All sessions: conversations, agent activity, and attachments"
+
 #. project palette: every project of the member's groups is open on this computer already
 #: src/components/ProjectPalette.tsx
 msgid "All your groups' projects are open here"
@@ -1321,11 +1346,6 @@ msgstr "All your groups' projects are open here"
 #: src/components/ApprovalInbox.tsx
 msgid "Allow this tool operation?"
 msgstr "Allow this tool operation?"
-
-#. a repair's evidence: the folder it last ran in is another project's; {project} is that project
-#: src/components/SpaceRepairs.tsx
-msgid "Already the project folder of {project}"
-msgstr "Already the project folder of {project}"
 
 #. a short mark beside a role's player in the Add form: the player plays in this other playbook too; {playbook} is it, such as /code
 #: src/components/DraftRegisterTab.tsx
@@ -1351,6 +1371,25 @@ msgstr "always"
 #: src/lib/failure-catalogue.ts
 msgid "An agent failed"
 msgstr "An agent failed"
+
+#. the historical folder was checked as an existing Git project root
+#: src/components/SpaceRepairs.tsx
+msgid "An existing project was found in this folder."
+msgstr "An existing project was found in this folder."
+
+#. this version could not read an older saved conversation
+#: src/components/SpaceRepairs.tsx
+msgid "An older conversation can’t be opened"
+msgstr "An older conversation can’t be opened"
+
+#: src/components/SpaceGroups.tsx
+msgid "An owner can restore {group} to keep this group."
+msgstr "An owner can restore {group} to keep this group."
+
+#. additional saved conversations beyond the preview; every conversation is included in the folder choice
+#: src/components/SpaceRepairs.tsx
+msgid "and {count} more"
+msgstr "and {count} more"
 
 #: src/components/ParkedRun.tsx
 msgid "Answer below, or drop the run"
@@ -1544,6 +1583,11 @@ msgstr "back to {id}"
 msgid "back to {name}'s intent"
 msgstr "back to {name}'s intent"
 
+#. return from a saved conversation to locate files or read other saved work
+#: src/App.tsx
+msgid "Back to Space"
+msgstr "Back to Space"
+
 #: src/components/AuthoringWorkspace.tsx
 msgid "Back to the playbook list — the session stays as it is"
 msgstr "Back to the playbook list — the session stays as it is"
@@ -1575,11 +1619,6 @@ msgstr "binary file · {size}"
 msgid "Bind {role}"
 msgstr "Bind {role}"
 
-#. mark on a problem that stops a sync
-#: src/components/SpaceRepairs.tsx
-msgid "blocking"
-msgstr "blocking"
-
 #: src/components/SettingsSurface.tsx
 msgid "bound to no role yet"
 msgstr "bound to no role yet"
@@ -1597,6 +1636,11 @@ msgstr "Brings a file in as the source, then asks to adapt it"
 #: src/components/SpaceGroups.tsx
 msgid "Brings back anything new; sends nothing"
 msgstr "Brings back anything new; sends nothing"
+
+#. open the system picker for an existing project folder
+#: src/components/SpaceRepairs.tsx
+msgid "Browse…"
+msgstr "Browse…"
 
 #: src/components/BrowserControl.tsx
 #: src/components/ConfiguredBrowserTools.tsx
@@ -1678,6 +1722,10 @@ msgstr "C"
 msgid "call /{playbookId}"
 msgstr "call /{playbookId}"
 
+#: src/components/SpaceMembers.tsx
+msgid "Can sync changes to shared records."
+msgstr "Can sync changes to shared records."
+
 #. banner: a team server's seat never answered; {server} is the server's name
 #: src/App.tsx
 msgid "Can't reach {server} — retrying every second."
@@ -1687,6 +1735,7 @@ msgstr "Can't reach {server} — retrying every second."
 msgid "Can't reach the Spex core at {endpoint} — retrying every second. On a served page, check the link's token; on the desktop, restart the app."
 msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a served page, check the link's token; on the desktop, restart the app."
 
+#. cancel choosing a project folder
 #. default cancel button: back out of the act
 #. default cancel button: back out of the act
 #. leave an editor without saving
@@ -1694,7 +1743,6 @@ msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a 
 #. leave an editor without saving
 #. leave an editor without saving
 #. leave an editor without saving
-#. leave the editor without changing anything
 #. leave the editor without changing anything
 #. leave the editor without changing anything
 #. leave the editor without changing anything
@@ -1744,6 +1792,10 @@ msgstr "Canceled {age}"
 #: src/lib/useBrowserTools.ts
 msgid "Cancelling browser setup…"
 msgstr "Cancelling browser setup…"
+
+#: src/components/SpaceMembers.tsx
+msgid "Cannot sync changes to shared records."
+msgstr "Cannot sync changes to shared records."
 
 #. the agent that routes the Boss's message to a playbook
 #. the agent that routes the Boss's message to a playbook
@@ -1835,6 +1887,10 @@ msgstr "chat"
 msgid "Check"
 msgstr "Check"
 
+#: src/components/SpaceGroups.tsx
+msgid "Check again"
+msgstr "Check again"
+
 #: src/components/CaptainPane.tsx
 msgid "Check agent readiness"
 msgstr "Check agent readiness"
@@ -1864,6 +1920,10 @@ msgstr "Checking browser runtime…"
 #: src/lib/useBrowserTools.ts
 msgid "Checking browser support…"
 msgstr "Checking browser support…"
+
+#: src/components/SpaceGroups.tsx
+msgid "Checking group contents…"
+msgstr "Checking group contents…"
 
 #. sync step running: reading what the Space holds
 #. sync step running: reading what the Space holds
@@ -1917,23 +1977,35 @@ msgstr "Choose a project"
 msgid "Choose a project folder…"
 msgstr "Choose a project folder…"
 
+#: src/components/SpaceMembers.tsx
+msgid "Choose a role"
+msgstr "Choose a role"
+
+#. the folder-choice form needs a path before it can save
+#: src/components/SpaceRepairs.tsx
+msgid "Choose an existing project folder"
+msgstr "Choose an existing project folder"
+
 #. empty choice of the reasoning-effort select
 #: src/components/TuningField.tsx
 msgid "Choose effort…"
 msgstr "Choose effort…"
 
-#. on a repair: name the project's folder on this computer
 #. open the system's folder picker
 #. pick the project folder on this computer that a project's records pair with
 #: src/components/EnvironmentSection.tsx
 #: src/components/SpaceGroups.tsx
-#: src/components/SpaceRepairs.tsx
 msgid "Choose folder…"
 msgstr "Choose folder…"
 
 #: src/components/SpaceSync.tsx
 msgid "Choose for {count, plural, one {# conflict} other {# conflicts}}"
 msgstr "Choose for {count, plural, one {# conflict} other {# conflicts}}"
+
+#. legend of the single-choice destination list
+#: src/components/SpaceGroups.tsx
+msgid "Choose group"
+msgstr "Choose group"
 
 #. a step: the analyst chooses which workflows the request takes
 #: src/lib/step-words.ts
@@ -2056,6 +2128,11 @@ msgstr "Clear the search (Escape)"
 msgid "client not connected"
 msgstr "client not connected"
 
+#. close the members panel and return to its opener
+#: src/components/SpaceMembers.tsx
+msgid "Close"
+msgstr "Close"
+
 #: src/lib/shortcuts.ts
 msgid "Close the focused session tab"
 msgstr "Close the focused session tab"
@@ -2149,6 +2226,11 @@ msgstr "Combine both sets of records into one?"
 #: src/components/SpacePlacements.tsx
 msgid "Combine…"
 msgstr "Combine…"
+
+#. consequence of connecting a matching project
+#: src/components/SpaceGroups.tsx
+msgid "Combines this project's local and existing records"
+msgstr "Combines this project's local and existing records"
 
 #. the Combine… control while both sets of records are brought into one
 #: src/components/SpacePlacements.tsx
@@ -2326,6 +2408,16 @@ msgstr "Confirm the command, intent and players, then add it"
 msgid "Confirming…"
 msgstr "Confirming…"
 
+#. confirm connecting this local project to the selected existing project
+#: src/components/SpaceGroups.tsx
+msgid "Connect project"
+msgstr "Connect project"
+
+#. matching projects already in the selected Space; connecting combines their records
+#: src/components/SpaceGroups.tsx
+msgid "Connect to an existing project"
+msgstr "Connect to an existing project"
+
 #: src/components/CaptainHome.tsx
 msgid "Connect to read project specs"
 msgstr "Connect to read project specs"
@@ -2344,6 +2436,11 @@ msgstr "Connected to {server}, but {reason}"
 msgid "Connected, but {reason}"
 msgstr "Connected, but {reason}"
 
+#. acknowledges an accepted connection; the project row reports completion
+#: src/components/SpaceGroups.tsx
+msgid "Connecting {name} at {space}"
+msgstr "Connecting {name} at {space}"
+
 #. a term shown before the first connection to a team server; {server} is its name
 #: src/components/SpaceServers.tsx
 msgid "Connecting puts your Space sign-in on {server}"
@@ -2354,16 +2451,22 @@ msgstr "Connecting puts your Space sign-in on {server}"
 msgid "Connecting to {server}…"
 msgstr "Connecting to {server}…"
 
+#. connecting this local project's records to an existing group project
 #. the page is reaching for the core
 #: src/components/CaptainHome.tsx
 #: src/components/Composer.tsx
 #: src/components/DraftConversation.tsx
+#: src/components/SpaceGroups.tsx
 msgid "Connecting…"
 msgstr "Connecting…"
 
 #: src/lib/client.ts
 msgid "connection closed"
 msgstr "connection closed"
+
+#: src/components/SpaceMembers.tsx
+msgid "Connection lost. Reconnect to add the remaining members."
+msgstr "Connection lost. Reconnect to add the remaining members."
 
 #: src/App.tsx
 msgid "Connection restored."
@@ -2382,6 +2485,35 @@ msgstr "Continue"
 #: src/components/SpaceSignIn.tsx
 msgid "Continue in your browser"
 msgstr "Continue in your browser"
+
+#: src/components/SpaceMembers.tsx
+msgid "Contribute shared records and manage projects and their members."
+msgstr "Contribute shared records and manage projects and their members."
+
+#. server-side folder requirement where no readable conversation links are available
+#: src/components/SpaceRepairs.tsx
+msgid "Conversation history is saved on {place}. Project files must be available there for further work."
+msgstr "Conversation history is saved on {place}. Project files must be available there for further work."
+
+#. saved history and required files belong to the named server, which allocates its folders
+#: src/components/SpaceRepairs.tsx
+msgid "Conversation history is saved on {place}. You can read the conversations now. Project files must be available there for further work."
+msgstr "Conversation history is saved on {place}. You can read the conversations now. Project files must be available there for further work."
+
+#. older cores without readable conversation links still explain why project files are needed
+#: src/components/SpaceRepairs.tsx
+msgid "Conversation history is saved on this computer. To work on a project again, locate its files."
+msgstr "Conversation history is saved on this computer. To work on a project again, locate its files."
+
+#. one explanation for all project-folder choices, without claiming the files are absent
+#: src/components/SpaceRepairs.tsx
+msgid "Conversation history is saved on this computer. You can read the conversations now. To work on a project again, locate its files."
+msgstr "Conversation history is saved on this computer. You can read the conversations now. To work on a project again, locate its files."
+
+#. an untitled conversation identified by its actual saved date
+#: src/components/SpaceRepairs.tsx
+msgid "Conversation saved {date}"
+msgstr "Conversation saved {date}"
 
 #: src/components/ApprovalInbox.tsx
 msgid "Conversation: {name}"
@@ -2476,6 +2608,11 @@ msgstr "could not inspect"
 #: src/components/SpecView.tsx
 msgid "Could not open {path}"
 msgstr "Could not open {path}"
+
+#. the native picker failed; the typed-path alternative remains available
+#: src/components/SpaceRepairs.tsx
+msgid "Could not open the folder picker. Enter the folder path instead."
+msgstr "Could not open the folder picker. Enter the folder path instead."
 
 #: src/components/SpecView.tsx
 msgid "could not read the file"
@@ -2645,6 +2782,11 @@ msgstr "decision records {count}"
 msgid "Delete"
 msgstr "Delete"
 
+#. group deletion confirmation naming exactly the group and its Space
+#: src/components/SpaceGroups.tsx
+msgid "Delete {group} at {space}?"
+msgstr "Delete {group} at {space}?"
+
 #: src/components/PlaybookAuthoring.tsx
 msgid "Delete authoring session {id}"
 msgstr "Delete authoring session {id}"
@@ -2652,6 +2794,12 @@ msgstr "Delete authoring session {id}"
 #: src/components/NavRail.tsx
 msgid "delete failed"
 msgstr "delete failed"
+
+#. a group's overflow action: review its contents and confirm deletion without entering more details
+#. confirm deletion of the named empty group
+#: src/components/SpaceGroups.tsx
+msgid "Delete group"
+msgstr "Delete group"
 
 #: src/components/NavRail.tsx
 msgid "Delete session {title}"
@@ -2700,8 +2848,10 @@ msgstr "Deletes the session and its conversation · its package folder stays"
 msgid "deleting…"
 msgstr "deleting…"
 
+#. busy group deletion action
 #. the delete request is in flight
 #: src/components/PlaybookAuthoring.tsx
+#: src/components/SpaceGroups.tsx
 msgid "Deleting…"
 msgstr "Deleting…"
 
@@ -2738,6 +2888,11 @@ msgstr "Describe your goal. AI helps write specs for how the system should work 
 #: src/components/SettingsSurface.tsx
 msgid "desktop"
 msgstr "desktop"
+
+#. review of the project group's destination before confirmation
+#: src/components/SpaceGroups.tsx
+msgid "Destination"
+msgstr "Destination"
 
 #. a call's outcome: no pull request was opened
 #: src/lib/step-words.ts
@@ -2777,6 +2932,8 @@ msgstr "Disconnect"
 
 #. act: close the error strip
 #. close the error strip above the composer
+#. move this folder task or saved-file notice to Dismissed without deleting saved work
+#. move this folder task or saved-file notice to Dismissed without deleting saved work
 #. put this outcome card away
 #. put this outcome card away
 #. put this outcome card away
@@ -2784,6 +2941,7 @@ msgstr "Disconnect"
 #: src/components/Composer.tsx
 #: src/components/DraftConversation.tsx
 #: src/components/SpaceGroups.tsx
+#: src/components/SpaceRepairs.tsx
 #: src/components/SpaceSync.tsx
 msgid "Dismiss"
 msgstr "Dismiss"
@@ -2792,6 +2950,11 @@ msgstr "Dismiss"
 #: src/components/DraftConversation.tsx
 msgid "Dismiss error"
 msgstr "Dismiss error"
+
+#. collapsed folder choices and saved-file notices that no longer contribute to the warning count
+#: src/components/SpaceRepairs.tsx
+msgid "Dismissed ({count})"
+msgstr "Dismissed ({count})"
 
 #. shortcut table column: what the keys do
 #: src/components/SettingsSurface.tsx
@@ -2937,6 +3100,10 @@ msgstr "Dropping…"
 msgid "e.g. .git, docs/generated"
 msgstr "e.g. .git, docs/generated"
 
+#: src/components/SpaceMembers.tsx
+msgid "e.g. alex, sam"
+msgstr "e.g. alex, sam"
+
 #. the hint inside the new-playbook license field; an SPDX license id
 #: src/components/PlaybookAuthoring.tsx
 msgid "e.g. Apache-2.0"
@@ -2955,6 +3122,16 @@ msgstr "Each record states a design decision's context and reasons; spec items c
 #: src/components/SettingsSurface.tsx
 msgid "Each role of a playbook is played by a player; add one to tune its agent"
 msgstr "Each role of a playbook is played by a player; add one to tune its agent"
+
+#. saved conversations whose actual project name is unknown
+#: src/components/SpaceRepairs.tsx
+msgid "Earlier conversations"
+msgstr "Earlier conversations"
+
+#. saved work with no known project name or indexed conversations
+#: src/components/SpaceRepairs.tsx
+msgid "Earlier saved work"
+msgstr "Earlier saved work"
 
 #. editor mode: the plain text field
 #. open the whole-file editor on the source
@@ -3068,11 +3245,6 @@ msgstr "Every record stays on {place}"
 msgid "Every record stays on this computer"
 msgstr "Every record stays on this computer"
 
-#. the sharing confirm: what goes to the group
-#: src/components/SpacePlacements.tsx
-msgid "Every session, whole, attachments included"
-msgstr "Every session, whole, attachments included"
-
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
 #: src/lib/space.ts
@@ -3087,6 +3259,13 @@ msgstr "Example"
 #: src/components/PlaybooksTab.tsx
 msgid "Example: {title}"
 msgstr "Example: {title}"
+
+#. the sharing confirm: the records made before and after the share both go
+#. the sharing confirm: the records made before and after the share both go
+#: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
+msgid "Existing and future project records"
+msgstr "Existing and future project records"
 
 #: src/components/ProjectPalette.tsx
 msgid "Existing project"
@@ -3333,11 +3512,6 @@ msgstr "Fix the findings"
 msgid "Fix the player in Settings"
 msgstr "Fix the player in Settings"
 
-#. a repair's condition, for assistive technology: answered and resolved
-#: src/components/SpaceRepairs.tsx
-msgid "Fixed"
-msgstr "Fixed"
-
 #. a tab of Add…: add a package from a folder in the project
 #: src/components/EnvironmentSection.tsx
 msgid "Folder"
@@ -3485,6 +3659,14 @@ msgstr "From the registry · {range}"
 msgid "From your groups"
 msgstr "From your groups"
 
+#: src/components/SpaceMembers.tsx
+msgid "Full control of this group, including its members and deletion."
+msgstr "Full control of this group, including its members and deletion."
+
+#: src/components/SpaceMembers.tsx
+msgid "Full control of this project, including its members and deletion."
+msgstr "Full control of this project, including its members and deletion."
+
 #. pipeline stage: the compiled spec items
 #. pipeline stage: the compiler's normative spec items (a proper name)
 #. pipeline stage: the compiler's normative spec items (a proper name)
@@ -3538,15 +3720,25 @@ msgstr "Global"
 msgid "Go to Dashboard, Projects, Playbooks, Space, Settings"
 msgstr "Go to Dashboard, Projects, Playbooks, Space, Settings"
 
+#. effect of adding the project's records to a group
+#: src/components/SpaceGroups.tsx
+msgid "Group members can access these records"
+msgstr "Group members can access these records"
+
 #. the field naming a new group at the Space
 #: src/components/SpaceMembers.tsx
 msgid "Group name"
 msgstr "Group name"
 
 #. the row of a group's own records: the group's sessions outside any project
+#: src/components/SpaceGroups.tsx
 #: src/lib/space.ts
 msgid "Group sessions"
 msgstr "Group sessions"
+
+#: src/components/SpaceGroups.tsx
+msgid "Group: {name}"
+msgstr "Group: {name}"
 
 #. a delegation line: the Captain gave this call to the named player
 #: src/components/CallLines.tsx
@@ -3809,6 +4001,15 @@ msgstr "Interrupted turn"
 msgid "Invalid: {reason}"
 msgstr "Invalid: {reason}"
 
+#. open the form to add people to this group or project's records
+#: src/components/SpaceMembers.tsx
+msgid "Invite members…"
+msgstr "Invite members…"
+
+#: src/components/SpaceMembers.tsx
+msgid "Invite to {name}"
+msgstr "Invite to {name}"
+
 #: src/lib/media.ts
 msgid "Invocation {call}"
 msgstr "Invocation {call}"
@@ -3870,11 +4071,6 @@ msgstr "its page"
 msgid "Its specs/ tree holds an earlier layout's directories: the user/, dev/, test/ or items/ groups, or an interactions/ or compositions/ collection."
 msgstr "Its specs/ tree holds an earlier layout's directories: the user/, dev/, test/ or items/ groups, or an interactions/ or compositions/ collection."
 
-#. the picker's heading, inside one Space's section, over the projects that Space already holds for the folder's code, each with its group
-#: src/components/SpaceGroups.tsx
-msgid "Join the records already in"
-msgstr "Join the records already in"
-
 #. a return line's tag: the Captain is judging what the call came back with
 #: src/components/CallLines.tsx
 msgid "judging"
@@ -3935,11 +4131,6 @@ msgstr "Keep this computer's"
 msgid "kept at {space}"
 msgstr "kept at {space}"
 
-#. the repair editor's note: where a project's folder is, is recorded on this computer alone and never syncs
-#: src/components/SpaceRepairs.tsx
-msgid "Kept on this computer only; never synced"
-msgstr "Kept on this computer only; never synced"
-
 #: src/components/SettingsSurface.tsx
 msgid "Keyboard shortcuts"
 msgstr "Keyboard shortcuts"
@@ -3970,6 +4161,10 @@ msgstr "Last refreshed {age}"
 #: src/components/PlaybookAuthoring.tsx
 msgid "License"
 msgstr "License"
+
+#: src/components/SpaceMembers.tsx
+msgid "Limited access; cannot read or sync private shared records."
+msgstr "Limited access; cannot read or sync private shared records."
 
 #. compile phase: slc links the machine
 #: src/lib/compile-log.ts
@@ -4040,10 +4235,23 @@ msgstr "loading…"
 msgid "Loading…"
 msgstr "Loading…"
 
-#. the field for a person's login at the Space, named by the Space's display name
-#: src/components/SpaceMembers.tsx
-msgid "Login at {space}"
-msgstr "Login at {space}"
+#. locate the existing project files for this saved conversation group
+#: src/components/SpaceRepairs.tsx
+msgid "Locate folder…"
+msgstr "Locate folder…"
+
+#. review the project folders needed for saved conversations
+#. sidebar return to unfinished project folder choices, including those left for later
+#. sidebar return to unfinished project folder choices, including those left for later
+#: src/components/NavRail.tsx
+#: src/components/SpaceRepairs.tsx
+msgid "Locate project files"
+msgstr "Locate project files"
+
+#. accessible name and tooltip of a place-specific folder review shortcut
+#: src/components/NavRail.tsx
+msgid "Locate project files on {place}"
+msgstr "Locate project files on {place}"
 
 #: src/components/SpecGraph.tsx
 msgid "Lower the threshold"
@@ -4110,14 +4318,17 @@ msgstr "Media unavailable"
 msgid "Members"
 msgstr "Members"
 
-#. the sharing confirm: nothing recalls what the group's members downloaded
-#: src/components/SpacePlacements.tsx
-msgid "Members keep what they download"
-msgstr "Members keep what they download"
-
 #: src/components/SpaceMembers.tsx
 msgid "Members of {name}"
 msgstr "Members of {name}"
+
+#: src/components/SpaceMembers.tsx
+msgid "Membership applies to this group and the projects and groups inside it."
+msgstr "Membership applies to this group and the projects and groups inside it."
+
+#: src/components/SpaceMembers.tsx
+msgid "Membership applies to this project's records at {space}."
+msgstr "Membership applies to this project's records at {space}."
 
 #. a step: the coder merges both proposals into specs and commits
 #: src/lib/step-words.ts
@@ -4207,16 +4418,22 @@ msgstr "More ways to open {name}"
 msgid "Move the focused Up next row"
 msgstr "Move the focused Up next row"
 
+#. confirms a folder task was dismissed without deleting saved conversations
+#: src/components/SpaceRepairs.tsx
+msgid "Moved to Dismissed. Your conversations are kept."
+msgstr "Moved to Dismissed. Your conversations are kept."
+
 #. the folder field's refusal of an empty path
 #. the folder field's refusal of an empty path
-#. the repair editor's refusal of an empty path
 #: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
-#: src/components/SpaceRepairs.tsx
 msgid "Name a folder"
 msgstr "Name a folder"
 
+#. saved data currently blocks an operation
+#. saved data currently blocks an operation
 #: src/components/DashboardSurface.tsx
+#: src/components/SpaceRepairs.tsx
 msgid "Needs attention"
 msgstr "Needs attention"
 
@@ -4263,10 +4480,10 @@ msgstr "new"
 msgid "New folder path"
 msgstr "New folder path"
 
-#. create a group at the root of the Space whose heading carries it
+#. open the name and path editor for a group at this Space
 #: src/components/SpaceInstance.tsx
-msgid "New group"
-msgstr "New group"
+msgid "New group…"
+msgstr "New group…"
 
 #. start writing a playbook of one's own
 #. start writing a playbook of one's own
@@ -4381,6 +4598,10 @@ msgstr "no items in active groups"
 msgid "no items match the search"
 msgstr "no items match the search"
 
+#: src/components/SpaceMembers.tsx
+msgid "No members added. Review the usernames below."
+msgstr "No members added. Review the usernames below."
+
 #: src/components/NavRail.tsx
 #: src/components/ProjectGroup.tsx
 msgid "no messages yet"
@@ -4467,6 +4688,10 @@ msgstr "No projects yet · <0>Add a project</0>"
 #: src/components/FailureCard.tsx
 msgid "No reason was reported"
 msgstr "No reason was reported"
+
+#: src/components/SpaceMembers.tsx
+msgid "No role available. Refresh to check your access."
+msgstr "No role available. Refresh to check your access."
 
 #. draft state chip, at most 14 characters: nothing written to the draft's source file yet
 #: src/lib/drafts.ts
@@ -4599,15 +4824,11 @@ msgid "Not installed · private"
 msgstr "Not installed · private"
 
 #. a project's records, or a copy of them at a Space, not on the team server whose Space is shown; {place} is the server's name
-#. on a repair at a team server's Space: answer that this project is not kept on the server; {place} is the server's name
-#: src/components/SpaceRepairs.tsx
 #: src/lib/space.ts
 msgid "Not on {place}"
 msgstr "Not on {place}"
 
 #. a project's records, or a copy of them at a Space, not on this computer
-#. on a repair: answer that this project is not kept on this computer, so it stops counting as something to fix
-#: src/components/SpaceRepairs.tsx
 #: src/lib/space.ts
 msgid "Not on this computer"
 msgstr "Not on this computer"
@@ -4667,11 +4888,6 @@ msgstr "Nothing in {project} needs attention."
 msgid "Nothing is repeated"
 msgstr "Nothing is repeated"
 
-#. the live note once the last repair waiting for an answer is fixed
-#: src/components/SpaceRepairs.tsx
-msgid "Nothing left to fix."
-msgstr "Nothing left to fix."
-
 #. a Sync tab's incoming section after a check: the Space holds nothing this computer lacks; {name} is its display name
 #: src/components/SpaceSync.tsx
 msgid "Nothing new at {name}"
@@ -4693,11 +4909,6 @@ msgstr "Nothing queued — name the next intent…"
 msgid "Nothing running."
 msgstr "Nothing running."
 
-#. the title of the header's "To fix" control once every repair is answered
-#: src/components/SpaceSurface.tsx
-msgid "Nothing to fix"
-msgstr "Nothing to fix"
-
 #. a Sync tab's To send list on a team server's Space, nothing in it; {place} is the server's name
 #: src/components/SpaceSync.tsx
 msgid "Nothing to send from {place}"
@@ -4711,6 +4922,11 @@ msgstr "Nothing to send from this computer"
 #: src/components/SpaceSync.tsx
 msgid "Nothing to stop"
 msgstr "Nothing to stop"
+
+#. confirms only the warning was dismissed, never its original saved file
+#: src/components/SpaceRepairs.tsx
+msgid "Notice dismissed. The saved file is kept."
+msgstr "Notice dismissed. The saved file is kept."
 
 #: src/components/SettingsSurface.tsx
 msgid "Notifications"
@@ -4855,9 +5071,7 @@ msgstr "Open Add"
 msgid "Open and send a message to pick it up."
 msgstr "Open and send a message to pick it up."
 
-#. the repair editor's control: opens the system folder picker
 #: src/components/ProjectPalette.tsx
-#: src/components/SpaceRepairs.tsx
 msgid "Open folder…"
 msgstr "Open folder…"
 
@@ -5098,11 +5312,6 @@ msgstr "Package name"
 msgid "Packages"
 msgstr "Packages"
 
-#. the sharing confirm: the records made before and after the share both go
-#: src/components/SpacePlacements.tsx
-msgid "Past and future records"
-msgstr "Past and future records"
-
 #. bring in a source of one's own
 #. bring in a source of one's own
 #: src/components/DraftSourceTab.tsx
@@ -5293,6 +5502,16 @@ msgstr "Previous page"
 msgid "Previous tab in Projects"
 msgstr "Previous tab in Projects"
 
+#. the historical folder below is evidence, not the new folder selection
+#: src/components/SpaceRepairs.tsx
+msgid "Previously used folder"
+msgstr "Previously used folder"
+
+#. all historical working folders for this saved conversation group
+#: src/components/SpaceRepairs.tsx
+msgid "Previously used folders"
+msgstr "Previously used folders"
+
 #. a term shown before the first connection to a team server: the registry sign-in is its own grant; {server} is its name
 #: src/components/SpaceServers.tsx
 msgid "Private packages need a separate registry sign-in on {server}"
@@ -5303,19 +5522,30 @@ msgstr "Private packages need a separate registry sign-in on {server}"
 msgid "Project folder"
 msgstr "Project folder"
 
-#. the repair editor's field caption: the folder on this computer that is this project; {name} is the project
-#: src/components/SpaceRepairs.tsx
-msgid "Project folder of {name}"
-msgstr "Project folder of {name}"
-
 #. the field a project's records ask for: the folder its code is in, or is downloaded to
+#. the local folder containing the project files, separate from saved conversation history
 #: src/components/SpaceGroups.tsx
+#: src/components/SpaceRepairs.tsx
 msgid "Project folder on this computer"
 msgstr "Project folder on this computer"
+
+#. the folder choice succeeded; an older conversation may still have a separate import problem
+#: src/components/SpaceRepairs.tsx
+msgid "Project folder saved: {path}"
+msgstr "Project folder saved: {path}"
 
 #: src/components/ProjectPalette.tsx
 msgid "Project path"
 msgstr "Project path"
+
+#. what adding a project to a group syncs
+#: src/components/SpaceGroups.tsx
+msgid "Project records"
+msgstr "Project records"
+
+#: src/components/SpaceGroups.tsx
+msgid "Project: {name}"
+msgstr "Project: {name}"
 
 #. Dashboard band heading: one group per project
 #: src/components/DashboardSurface.tsx
@@ -5371,6 +5601,8 @@ msgid "PRs"
 msgstr "PRs"
 
 #. the sharing confirm, on records at a public place of the Space
+#. the sharing confirm, on records at a public place of the Space
+#: src/components/SpaceGroups.tsx
 #: src/components/SpacePlacements.tsx
 msgid "Public: anyone can read"
 msgstr "Public: anyone can read"
@@ -5600,16 +5832,6 @@ msgstr "Reconnecting…"
 msgid "Records"
 msgstr "Records"
 
-#. a folder repair's evidence on a team server's Space; {place} is the server's name
-#: src/components/SpaceRepairs.tsx
-msgid "Records not on {place}"
-msgstr "Records not on {place}"
-
-#. a folder repair's evidence: the project's records are gone from this computer
-#: src/components/SpaceRepairs.tsx
-msgid "Records not on this computer"
-msgstr "Records not on this computer"
-
 #: src/lib/failure-catalogue.ts
 msgid "Recover them from your editor's history, if it keeps one"
 msgstr "Recover them from your editor's history, if it keeps one"
@@ -5705,11 +5927,11 @@ msgstr "Reloading…"
 #. a playbook entry that failed: delete it
 #. confirm: forget this project, leaving the repo on disk
 #. confirm: forget this project, leaving the repo on disk
-#. confirm: remove a project whose records are gone from this computer
 #. confirm: take the member out at the Space
 #. confirm: take this player out of the roster
 #. confirm: take this row off the record
 #. queue row control: take this row out of the queue
+#. remove the project from the list
 #. row menu item: take this row out of the queue
 #. take a member out of a group or a project's records at the Space
 #. take the member's credential for a code host or an agent off the team server
@@ -5752,6 +5974,10 @@ msgstr "Remove @{login}"
 msgid "Remove @{login} from {place}?"
 msgstr "Remove @{login} from {place}?"
 
+#: src/components/SpaceMembers.tsx
+msgid "Remove @{login} from invitation"
+msgstr "Remove @{login} from invitation"
+
 #: src/components/ProjectsSurface.tsx
 msgid "Remove from Spex (repo stays on disk)"
 msgstr "Remove from Spex (repo stays on disk)"
@@ -5765,7 +5991,7 @@ msgstr "Remove from Spex? The repo stays on disk."
 msgid "Remove from this list"
 msgstr "Remove from this list"
 
-#. on a repair: remove a project whose records are missing, as the Overview tab's Remove does; its files stay
+#. remove a project whose saved work is missing; its project files stay
 #: src/components/ProjectsSurface.tsx
 #: src/components/SpaceRepairs.tsx
 msgid "Remove project"
@@ -5797,7 +6023,7 @@ msgstr "Remove this message"
 msgid "Remove this player from the roster"
 msgstr "Remove this player from the roster"
 
-#. confirm removing a project whose records are gone from this computer; its folder and files stay
+#. confirm removing a project whose saved work is missing
 #: src/components/SpaceRepairs.tsx
 msgid "Remove this project? Its files stay."
 msgstr "Remove this project? Its files stay."
@@ -5825,6 +6051,13 @@ msgstr "Removes {name} from spex.yaml and uninstalls it"
 #: src/components/SpaceServers.tsx
 msgid "Removing {server}, or revoking its access at {space}, stops new use; a credential already there lasts until it expires"
 msgstr "Removing {server}, or revoking its access at {space}, stops new use; a credential already there lasts until it expires"
+
+#. sharing consequence: revoking access does not erase copies members already saved
+#. sharing consequence: revoking access does not erase copies members already saved
+#: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
+msgid "Removing access won’t erase copies members already saved"
+msgstr "Removing access won’t erase copies members already saved"
 
 #. queue row control, busy: the removal is in flight
 #. the removal is in flight
@@ -5930,6 +6163,10 @@ msgstr "Resolve"
 msgid "Restore"
 msgstr "Restore"
 
+#: src/components/SpaceGroups.tsx
+msgid "Restore group"
+msgstr "Restore group"
+
 #: src/lib/failure-catalogue.ts
 msgid "Restore the branch yourself"
 msgstr "Restore the branch yourself"
@@ -5943,6 +6180,7 @@ msgid "Restore the interrupted turn before sending."
 msgstr "Restore the interrupted turn before sending."
 
 #: src/components/SessionRecovery.tsx
+#: src/components/SpaceGroups.tsx
 msgid "Restoring…"
 msgstr "Restoring…"
 
@@ -6021,9 +6259,21 @@ msgid "Return (Alt+Left)"
 msgstr "Return (Alt+Left)"
 
 #. a step: the reviewer reviews the change
+#. reopen notices and postponed project-folder choices
+#: src/components/SpaceSurface.tsx
 #: src/lib/step-words.ts
 msgid "Review"
 msgstr "Review"
+
+#. review the pending notices; postponed folder choices do not count
+#: src/components/SpaceSurface.tsx
+msgid "Review ({count})"
+msgstr "Review ({count})"
+
+#. accessible name for the notice review control
+#: src/components/SpaceSurface.tsx
+msgid "Review {count, plural, one {# notice} other {# notices}}"
+msgstr "Review {count, plural, one {# notice} other {# notices}}"
 
 #. the built-in /review playbook's intent, as its registry entry states it
 #: src/lib/playbook-intent.ts
@@ -6039,6 +6289,13 @@ msgstr "Review again"
 msgid "review committed changes"
 msgstr "review committed changes"
 
+#. stored-data notices that do not offer a project folder choice
+#. stored-data notices that do not offer a project folder choice
+#. stored-data notices that do not offer a project folder choice
+#: src/components/SpaceRepairs.tsx
+msgid "Review notices"
+msgstr "Review notices"
+
 #. a step: the reviewer reviews the coder's fixes
 #: src/lib/step-words.ts
 msgid "Review the fixes"
@@ -6053,7 +6310,7 @@ msgstr "Reviewed"
 msgid "Rewrote history"
 msgstr "Rewrote history"
 
-#. the Space's role a person is added at
+#. the access granted to every selected member
 #: src/components/SpaceMembers.tsx
 msgid "Role"
 msgstr "Role"
@@ -6137,6 +6394,16 @@ msgstr "Save"
 msgid "Save ({key})"
 msgstr "Save ({key})"
 
+#. the requested folder choice was saved
+#: src/components/SpaceRepairs.tsx
+msgid "Saved"
+msgstr "Saved"
+
+#. the conversation's actual saved date
+#: src/components/SpaceRepairs.tsx
+msgid "Saved {date}"
+msgstr "Saved {date}"
+
 #: src/components/SpecView.tsx
 msgid "Saved {path}"
 msgstr "Saved {path}"
@@ -6145,6 +6412,16 @@ msgstr "Saved {path}"
 #: src/components/SettingsSurface.tsx
 msgid "Saved ✓"
 msgstr "Saved ✓"
+
+#. preview list of conversations in this saved-work group
+#: src/components/SpaceRepairs.tsx
+msgid "Saved conversations"
+msgstr "Saved conversations"
+
+#. a stored file could not be used; the technical cause is in Details
+#: src/components/SpaceRepairs.tsx
+msgid "Saved data needs attention"
+msgstr "Saved data needs attention"
 
 #: src/components/SessionRecovery.tsx
 msgid "Saved input"
@@ -6160,6 +6437,11 @@ msgstr "Saved on {place}, not sent yet"
 msgid "Saved on this computer, not sent yet"
 msgstr "Saved on this computer, not sent yet"
 
+#. the project's saved conversations are no longer present
+#: src/components/SpaceRepairs.tsx
+msgid "Saved work is missing"
+msgstr "Saved work is missing"
+
 #. sync step's name: saving this computer's changes to the records
 #: src/lib/space.ts
 msgid "Saving"
@@ -6168,11 +6450,14 @@ msgstr "Saving"
 #. a save is in flight
 #. a save is in flight
 #. a save is in flight
+#. saving the project folder for saved conversations
+#. saving the project folder for saved conversations
 #. sync step running: saving this computer's changes to the records
 #. the Save control, while the save is in flight
 #: src/components/AgentEditor.tsx
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
+#: src/components/SpaceRepairs.tsx
 #: src/components/SpecEditor.tsx
 #: src/lib/space.ts
 msgid "Saving…"
@@ -6181,6 +6466,10 @@ msgstr "Saving…"
 #: src/components/SpecView.tsx
 msgid "Scaffold one in the project directory:"
 msgstr "Scaffold one in the project directory:"
+
+#: src/components/SpaceGroups.tsx
+msgid "Scheduled for deletion"
+msgstr "Scheduled for deletion"
 
 #. the hint inside Add…'s registry search field: search the registry, or type a package's full name
 #: src/components/EnvironmentSection.tsx
@@ -6217,6 +6506,11 @@ msgstr "Seeding…"
 #: src/components/SpaceExplorer.tsx
 msgid "Select an entry to preview"
 msgstr "Select an entry to preview"
+
+#. folder selection uses files already present on this computer
+#: src/components/SpaceRepairs.tsx
+msgid "Select the existing folder used for this work. This does not create or download a project."
+msgstr "Select the existing folder used for this work. This does not create or download a project."
 
 #: src/state/attachments.ts
 msgid "Select up to 16 files and 256 MiB per message."
@@ -6294,6 +6588,10 @@ msgstr "sends when this turn ends"
 msgid "sent to the agent"
 msgstr "sent to the agent"
 
+#: src/components/SpaceGroups.tsx
+msgid "Server: {name}"
+msgstr "Server: {name}"
+
 #. the team servers of a Space this computer can connect to
 #: src/components/SpaceServers.tsx
 msgid "Servers"
@@ -6369,11 +6667,6 @@ msgstr "Sessions"
 msgid "Sessions and project views"
 msgstr "Sessions and project views"
 
-#. a repair's condition, for assistive technology: the reader answered that it is not kept here
-#: src/components/SpaceRepairs.tsx
-msgid "Set aside"
-msgstr "Set aside"
-
 #. an agent chip's title: the model and effort the agent is set to run, then the specific model its runtime reported running
 #: src/components/AgentSettings.tsx
 msgid "set to {set}, runtime reports {model}"
@@ -6412,17 +6705,10 @@ msgstr "Settings backup"
 msgid "Settled — {title}"
 msgstr "Settled — {title}"
 
-#. add a person at the Space to a group or a project's records
 #. the sharing confirm's control: send the records to the group
-#: src/components/SpaceMembers.tsx
 #: src/components/SpacePlacements.tsx
 msgid "Share"
 msgstr "Share"
-
-#. the picker's heading, inside one Space's section, over Personal and the groups the project's records may be shared into
-#: src/components/SpaceGroups.tsx
-msgid "Share into"
-msgstr "Share into"
 
 #. the sharing confirm's title, before a project's records first go to a group others read; {group} is the group's name, or Personal; {name} the Space's display name
 #: src/components/SpacePlacements.tsx
@@ -6459,6 +6745,12 @@ msgstr "Show {count} of {rest} earlier entries"
 #: src/components/DraftConversation.tsx
 msgid "Show {shown} of {total} earlier entries"
 msgstr "Show {shown} of {total} earlier entries"
+
+#. restore a dismissed folder task or saved-file notice to active review
+#. restore a dismissed folder task or saved-file notice to active review
+#: src/components/SpaceRepairs.tsx
+msgid "Show again"
+msgstr "Show again"
 
 #. turn every item group back on
 #: src/components/SpecView.tsx
@@ -6510,6 +6802,12 @@ msgstr "Show the sidebar"
 #: src/components/NavRail.tsx
 msgid "Show the sidebar ({keys})"
 msgstr "Show the sidebar ({keys})"
+
+#. a dismissed folder task or notice is active and counted again
+#. a dismissed folder task or notice is active and counted again
+#: src/components/SpaceRepairs.tsx
+msgid "Shown again."
+msgstr "Shown again."
 
 #: src/components/SpecItemRows.tsx
 msgid "shown despite filter"
@@ -6662,11 +6960,13 @@ msgstr "Sources: GitHub not connected · {records, plural, one {# open record} o
 msgid "Sources: Loading GitHub… · {records, plural, one {# open record} other {# open records}}"
 msgstr "Sources: Loading GitHub… · {records, plural, one {# open record} other {# open records}}"
 
+#. label identifying the Space that holds the destination groups
 #. the Space destination: groups, projects and their shared records
 #. the Space destination: groups, projects and their shared records
 #. the accessible name of the sign-in card's chooser of Spaces
 #: src/components/NavRail.tsx
 #: src/components/SpaceDirectory.tsx
+#: src/components/SpaceGroups.tsx
 #: src/components/SpaceSurface.tsx
 msgid "Space"
 msgstr "Space"
@@ -6749,9 +7049,19 @@ msgstr "Spex could not create a starter config at <0>{path}</0> — check the fo
 msgid "Spex could not read this block — {reason}"
 msgstr "Spex could not read this block — {reason}"
 
+#. the failed old-conversation import preserves its original file
+#: src/components/SpaceRepairs.tsx
+msgid "Spex could not read this saved conversation. The original file is still saved."
+msgstr "Spex could not read this saved conversation. The original file is still saved."
+
 #: src/state/store.ts
 msgid "Spex could not read what this would publish."
 msgstr "Spex could not read what this would publish."
+
+#. generic storage failure without guessing a remedy from technical text
+#: src/components/SpaceRepairs.tsx
+msgid "Spex could not use this saved file."
+msgstr "Spex could not use this saved file."
 
 #: src/components/CaptainHome.tsx
 msgid "Spex has no config file yet — playbooks are unavailable."
@@ -7048,6 +7358,11 @@ msgstr "Take the task out of the message"
 msgid "Take this task out of the queue — Undo puts it back"
 msgstr "Take this task out of the queue — Undo puts it back"
 
+#. expand the evidence behind a saved-work problem
+#: src/components/SpaceRepairs.tsx
+msgid "Technical details"
+msgstr "Technical details"
+
 #: src/components/DraftConversation.tsx
 msgid "Tell the agent what the playbook does, who does what, and when it is done"
 msgstr "Tell the agent what the playbook does, who does what, and when it is done"
@@ -7088,11 +7403,6 @@ msgstr "Tests"
 #: src/lib/spec-view-model.ts
 msgid "Tests verifying the two kinds above"
 msgstr "Tests verifying the two kinds above"
-
-#. a repair's evidence: the folder it last ran in is here but holds no Git repository
-#: src/components/SpaceRepairs.tsx
-msgid "That folder is not a Git repository"
-msgstr "That folder is not a Git repository"
 
 #: src/components/ParkedRun.tsx
 msgid "The /{command} workflow failed and is waiting for you."
@@ -7236,6 +7546,16 @@ msgstr "the reload failed"
 msgid "the save failed"
 msgstr "the save failed"
 
+#. a server's saved project records are gone
+#: src/components/SpaceRepairs.tsx
+msgid "The saved work for this folder is no longer on {place}."
+msgstr "The saved work for this folder is no longer on {place}."
+
+#. a project whose saved records disappeared, without claiming its project files are gone
+#: src/components/SpaceRepairs.tsx
+msgid "The saved work for this folder is no longer on this computer."
+msgstr "The saved work for this folder is no longer on this computer."
+
 #. the sign-in card: the core answered the start with no flow
 #: src/components/SpaceSignIn.tsx
 msgid "The sign-in did not start"
@@ -7290,10 +7610,9 @@ msgstr "The workflow was aborted"
 msgid "These records are also placed at {names}"
 msgstr "These records are also placed at {names}"
 
-#. stands where a project name would, for sessions with no folder
-#: src/components/SpaceRepairs.tsx
-msgid "these sessions"
-msgstr "these sessions"
+#: src/components/SpaceMembers.tsx
+msgid "They need an account at {space}."
+msgstr "They need an account at {space}."
 
 #. collapsed card: the agent's own reasoning summary
 #: src/components/PlayerPane.tsx
@@ -7336,6 +7655,11 @@ msgstr "this computer's sign-in to each Space"
 msgid "This conversation is in use elsewhere — its settings read only."
 msgstr "This conversation is in use elsewhere — its settings read only."
 
+#. the saved-work preview is older than the current session list; this does not assert that any file was deleted
+#: src/components/SpaceRepairs.tsx
+msgid "This conversation is no longer listed. Refresh this list and try again."
+msgstr "This conversation is no longer listed. Refresh this list and try again."
+
 #: src/components/AgentSettings.tsx
 msgid "This conversation only"
 msgstr "This conversation only"
@@ -7351,6 +7675,48 @@ msgstr "This file changed on disk since you opened it."
 #: src/lib/media-client.ts
 msgid "This file is too large to preview."
 msgstr "This file is too large to preview."
+
+#. the historical folder has no completed check
+#: src/components/SpaceRepairs.tsx
+msgid "This folder could not be checked."
+msgstr "This folder could not be checked."
+
+#. the exact historical path displayed above belongs to another saved project
+#: src/components/SpaceRepairs.tsx
+msgid "This folder is already used by another project."
+msgstr "This folder is already used by another project."
+
+#. the exact historical path displayed above was checked and is absent
+#: src/components/SpaceRepairs.tsx
+msgid "This folder was not found."
+msgstr "This folder was not found."
+
+#. the folder choice affects only this saved conversation group, including previews not shown
+#: src/components/SpaceRepairs.tsx
+msgid "This folder will be used for {count, plural, one {the conversation} other {all # conversations}} listed here."
+msgstr "This folder will be used for {count, plural, one {the conversation} other {all # conversations}} listed here."
+
+#: src/components/SpaceGroups.tsx
+msgid "This group is already scheduled for deletion."
+msgstr "This group is already scheduled for deletion."
+
+#: src/components/SpaceGroups.tsx
+msgid "This group is empty. Deleting it removes the group for all members."
+msgstr "This group is empty. Deleting it removes the group for all members."
+
+#: src/components/SpaceGroups.tsx
+msgid "This group isn't empty. Remove these items before deleting it:"
+msgstr "This group isn't empty. Remove these items before deleting it:"
+
+#. the exact historical path displayed above is not a Git worktree root
+#: src/components/SpaceRepairs.tsx
+msgid "This is not the main folder of a Git project."
+msgstr "This is not the main folder of a Git project."
+
+#. the problem blocks operations depending on this data, not all work
+#: src/components/SpaceRepairs.tsx
+msgid "This must be resolved before using the affected data."
+msgstr "This must be resolved before using the affected data."
 
 #: src/components/ProjectsSurface.tsx
 msgid "This project is no longer registered."
@@ -7373,6 +7739,10 @@ msgstr "This project's packages"
 msgid "This record is not in the project's specs tree"
 msgstr "This record is not in the project's specs tree"
 
+#: src/components/SpaceMembers.tsx
+msgid "This role applies to everyone you add."
+msgstr "This role applies to everyone you add."
+
 #: src/components/DeliveryCard.tsx
 msgid "This session has ended — the replay is read-only"
 msgstr "This session has ended — the replay is read-only"
@@ -7389,12 +7759,6 @@ msgstr "this stage was not found for this playbook"
 msgid "three in a row — tell the agent how to proceed"
 msgstr "three in a row — tell the agent how to proceed"
 
-#. a repair's condition, for assistive technology: it waits for an answer
-#. the accessible name of the Space surface's list of what needs fixing
-#: src/components/SpaceRepairs.tsx
-msgid "To fix"
-msgstr "To fix"
-
 #. Local package names do not establish publishing rights at the selected registry
 #: src/components/PlaybookAuthoring.tsx
 msgid "To publish, use an org you can claim at this registry."
@@ -7404,6 +7768,16 @@ msgstr "To publish, use an org you can claim at this registry."
 #: src/components/SpaceSync.tsx
 msgid "To send ({count})"
 msgstr "To send ({count})"
+
+#. folder tasks on the named server contain no saved conversations
+#: src/components/SpaceRepairs.tsx
+msgid "To work on a project, its files must be available on {place}."
+msgstr "To work on a project, its files must be available on {place}."
+
+#. folder tasks contain no saved conversations, so explain only the need for project files
+#: src/components/SpaceRepairs.tsx
+msgid "To work on a project, locate its files."
+msgstr "To work on a project, locate its files."
 
 #: src/components/SpecView.tsx
 msgid "Toggle {name}"
@@ -7583,6 +7957,11 @@ msgstr "Unreadable draft — delete it, or repair the file and restart Spex"
 msgid "unresolved"
 msgstr "unresolved"
 
+#. no saved title or date is available
+#: src/components/SpaceRepairs.tsx
+msgid "Untitled conversation"
+msgstr "Untitled conversation"
+
 #. a session with no title of its own
 #: src/components/SpaceExplorer.tsx
 msgid "untitled session"
@@ -7669,7 +8048,7 @@ msgstr "uploads not yet attached"
 msgid "Use"
 msgstr "Use"
 
-#. on a repair: make the folder the core found this project's folder; {folder} is its path
+#. use the existing project folder the core checked for these conversations
 #: src/components/SpaceRepairs.tsx
 msgid "Use {folder}"
 msgstr "Use {folder}"
@@ -7692,17 +8071,30 @@ msgstr "Use browser setting from Settings"
 msgid "Use default"
 msgstr "Use default"
 
+#: src/components/SpaceMembers.tsx
+msgid "Use Enter or commas between usernames."
+msgstr "Use Enter or commas between usernames."
+
+#. saved history can be read before its project folder is located
+#: src/App.tsx
+msgid "Use Locate project files in the sidebar to work with these files again."
+msgstr "Use Locate project files in the sidebar to work with these files again."
+
 #. a package name typed in Add… breaks the rule; keep org/name as it is
 #: src/components/EnvironmentSection.tsx
 msgid "Use org/name: lowercase words joined by hyphens"
 msgstr "Use org/name: lowercase words joined by hyphens"
 
+#. confirm the existing folder for this saved work
 #. pair a project's records with the folder named
-#. the repair editor's control: make the folder named the project's folder
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceRepairs.tsx
 msgid "Use this folder"
 msgstr "Use this folder"
+
+#: src/components/SpaceMembers.tsx
+msgid "Usernames"
+msgstr "Usernames"
 
 #. the accessible name of a version choice in Add…; {name} is the package
 #. the accessible name of a version choice in Add…; {name} is the package
@@ -7716,6 +8108,10 @@ msgstr "Version of {name}"
 msgid "via {group}"
 msgstr "via {group}"
 
+#: src/components/SpaceMembers.tsx
+msgid "View and download shared records; cannot send changes."
+msgstr "View and download shared records; cannot send changes."
+
 #: src/components/CaptainHome.tsx
 msgid "View details"
 msgstr "View details"
@@ -7727,6 +8123,10 @@ msgstr "View diff"
 #: src/components/CaptainHome.tsx
 msgid "View specs"
 msgstr "View specs"
+
+#: src/components/SpaceMembers.tsx
+msgid "View, download, and contribute shared records."
+msgstr "View, download, and contribute shared records."
 
 #: src/components/SpaceSurface.tsx
 msgid "Views of {name}"
@@ -7825,6 +8225,16 @@ msgstr "What the package promises its users — people or other packages"
 #: src/components/CaptainHome.tsx
 msgid "What would you change in {project}?"
 msgstr "What would you change in {project}?"
+
+#. locate the original files for saved conversations without a known project name
+#: src/components/SpaceRepairs.tsx
+msgid "Where are the files used in these conversations?"
+msgstr "Where are the files used in these conversations?"
+
+#. locate the files belonging to the named project above
+#: src/components/SpaceRepairs.tsx
+msgid "Where are this project’s files?"
+msgstr "Where are this project’s files?"
 
 #. a file family that stays on this computer
 #: src/lib/space.ts
@@ -7932,6 +8342,19 @@ msgstr "Writing…"
 msgid "Written by Spex from {name} {version} — an edit makes it yours"
 msgstr "Written by Spex from {name} {version} — an edit makes it yours"
 
+#: src/components/SpaceMembers.tsx
+msgid "You"
+msgstr "You"
+
+#: src/components/SpaceGroups.tsx
+msgid "You can restore this group before deletion takes effect."
+msgstr "You can restore this group before deletion takes effect."
+
+#. a deletion confirmation whose Space permissions changed while it was open
+#: src/components/SpaceGroups.tsx
+msgid "You no longer have permission to delete this group."
+msgstr "You no longer have permission to delete this group."
+
 #. the choices note; {name} is that placement's Space's display name, or the path placement's remote
 #: src/components/SpaceSync.tsx
 msgid "Your changes are saved; nothing is sent to {name} yet"
@@ -7950,6 +8373,11 @@ msgstr "Your groups"
 #: src/components/PlaybookAuthoring.tsx
 msgid "Your orgs could not be read"
 msgstr "Your orgs could not be read"
+
+#. Personal's explanation in the group picker, without promising private visibility
+#: src/components/SpaceGroups.tsx
+msgid "Your personal group"
+msgstr "Your personal group"
 
 #: src/components/CaptainHome.tsx
 msgid "your project"
