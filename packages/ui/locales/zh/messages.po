@@ -7183,11 +7183,6 @@ msgstr "上一轮失败。发送消息即可接续。"
 msgid "The ledger could not be loaded: {reason}"
 msgstr "无法加载意图台账：{reason}"
 
-#. the title of the Playbooks page's heading
-#: src/components/EnvironmentSection.tsx
-msgid "The playbooks of your global packages, which run in every project of yours"
-msgstr "你的全局规约包中的规程，在你的每个项目中运行"
-
 #. the title of Add…'s disabled Folder tab under Packages: the project's folder, which a folder package lies in, is not on this computer, as for a project on a server
 #: src/components/EnvironmentSection.tsx
 msgid "The project folder is not on this computer"

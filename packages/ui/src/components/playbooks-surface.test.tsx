@@ -407,6 +407,17 @@ describe("playbook-library-4/39: ✎ writes the global entry, with each role's t
     );
   });
 
+  test("Save with nothing changed and no entry writes nothing", async () => {
+    await renderSurface();
+    fireEvent.click(screen.getByTestId("role-bind-note-editor"));
+    const editor = screen.getByTestId("binding-editor-editor");
+    await within(editor).findByText("Model list unavailable: Fixture");
+    expect((within(editor).getByTestId("binding-player") as HTMLSelectElement).value).toBe("dev.editor");
+    fireEvent.click(within(editor).getByTestId("binding-save"));
+    await vi.waitFor(() => expect(screen.queryByTestId("binding-editor-editor")).toBeNull());
+    expect(edits()).toEqual([]);
+  });
+
   test("the first edit of a playbook on its default binding writes its entry whole, then the role's tuning", async () => {
     await renderSurface();
     fireEvent.click(screen.getByTestId("role-bind-note-editor"));

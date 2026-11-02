@@ -7183,11 +7183,6 @@ msgstr "The last turn failed. Send a message to pick it up."
 msgid "The ledger could not be loaded: {reason}"
 msgstr "The ledger could not be loaded: {reason}"
 
-#. the title of the Playbooks page's heading
-#: src/components/EnvironmentSection.tsx
-msgid "The playbooks of your global packages, which run in every project of yours"
-msgstr "The playbooks of your global packages, which run in every project of yours"
-
 #. the title of Add…'s disabled Folder tab under Packages: the project's folder, which a folder package lies in, is not on this computer, as for a project on a server
 #: src/components/EnvironmentSection.tsx
 msgid "The project folder is not on this computer"

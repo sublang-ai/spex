@@ -785,13 +785,7 @@ export function EnvironmentSection({
         {global ? (
           // The surface's own header (playbook-library-122): its global
           // packages are what it lists.
-          <h1
-            className="shrink-0 text-lg font-semibold"
-            title={i18n._({
-              id: "The playbooks of your global packages, which run in every project of yours",
-              comment: "the title of the Playbooks page's heading",
-            })}
-          >
+          <h1 className="shrink-0 text-lg font-semibold">
             {i18n._({ id: "Playbooks", comment: "the Playbooks page's heading: the global playbooks" })}
           </h1>
         ) : (

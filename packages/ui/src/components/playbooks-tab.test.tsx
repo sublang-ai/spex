@@ -117,6 +117,7 @@ function seed(over: Partial<ReturnType<typeof useAppStore.getState>> = {}) {
     compileProgress: {},
     activeCompile: undefined,
     workspaceTabs: {},
+    projectConfigs: {},
     ...over,
   });
 }
@@ -222,6 +223,9 @@ describe("playbook-library-1: what runs in the project, under the project's name
     expect(triage.textContent).toContain("sort incoming issues");
     // The built-in package's playbooks read as any other's (playbook-library-29).
     expect(within(cardOf("review")).getByTestId("playbook-from-review").textContent).toBe("from sublang/playbooks 17.4.1");
+    // Its tooltip names its folder alone: "built in" names a source only
+    // on the Packages tab's glyph (DR-176).
+    expect(within(cardOf("review")).getByTestId("playbook-from-review").title).toBe("From the registry");
     // Its roles and the players they run on: the default dev.<role>.
     expect(within(lineOf("triage", "triager")).getByTestId("role-binding-triage-triager").title).toContain("dev.triager");
     expect(within(lineOf("review", "host")).getByTestId("role-binding-review-host").textContent).toBe("Hhost");
@@ -352,8 +356,9 @@ describe("playbook-library-3/4: ✎ writes the project's config", () => {
     expect(within(editor).getByTestId("binding-tuning-note").textContent).toBe("Tuning lives in your players, in Settings");
     expect(within(editor).queryByTestId("binding-tuning-rows")).toBeNull();
     expect(within(editor).queryByTestId("binding-fast-mode")).toBeNull();
-    // The roster, and no "Same as global" under the project's name.
-    expect(choices(editor)).toEqual(["dev.coder", "dev.reviewer"]);
+    // The roster and the player that plays the role now, and no "Same
+    // as global" under the project's name.
+    expect(choices(editor)).toEqual(["dev.coder", "dev.reviewer", "dev.triager"]);
     fireEvent.change(within(editor).getByTestId("binding-player"), { target: { value: "dev.coder" } });
     fireEvent.click(within(editor).getByTestId("binding-save"));
     await vi.waitFor(() =>
@@ -527,6 +532,7 @@ describe("playbook-library-3/4: ✎ writes the project's config", () => {
       return base(type, params);
     });
     fireEvent.click(screen.getByTestId("role-bind-triage-triager"));
+    fireEvent.change(screen.getByTestId("binding-player"), { target: { value: "dev.coder" } });
     fireEvent.click(screen.getByTestId("binding-save"));
     await vi.waitFor(() =>
       expect(screen.getByTestId("binding-editor-triager").textContent).toContain("dev.ghost is not a player"),
@@ -540,6 +546,110 @@ describe("playbook-library-3/4: ✎ writes the project's config", () => {
     fireEvent.change(within(editor).getByTestId("binding-player"), { target: { value: "dev.coder" } });
     // dev.coder plays code's coder and fix's: one conversation.
     expect(within(editor).getByTestId("binding-shared-note").textContent).toBe("Also plays in /code and /fix");
+  });
+});
+
+describe("playbook-library-3/4: Save with nothing changed and no entry writes nothing", () => {
+  test("under the project's name, the default player saved as it stands writes no entry", async () => {
+    await renderTab();
+    fireEvent.click(screen.getByTestId("role-bind-triage-triager"));
+    const editor = screen.getByTestId("binding-editor-triager");
+    expect((within(editor).getByTestId("binding-player") as HTMLSelectElement).value).toBe("dev.triager");
+    fireEvent.click(within(editor).getByTestId("binding-save"));
+    await vi.waitFor(() => expect(screen.queryByTestId("binding-editor-triager")).toBeNull());
+    expect(edits()).toEqual([]);
+  });
+});
+
+describe("playbook-library-1/38: the tab reads the players as a session in the project composes them", () => {
+  /** The project's composition: dev.coder playing code's coder and the
+   * project's triage's triager, the project overriding code's reviewer
+   * onto dev.coder — so dev.reviewer plays nothing there — and the
+   * triage verifier's default player, which only the project names. */
+  function projectComposition(): ConfigState {
+    const summary = (CONFIG_STATE as Extract<ConfigState, { status: "valid" }>).summary;
+    return {
+      ...CONFIG_STATE,
+      summary: {
+        ...summary,
+        players: [
+          { ...summary.players[0]!, boundBy: ["code.coder", "code.reviewer", "triage.triager"] },
+          { ...summary.players[1]!, boundBy: [] },
+          { id: "dev.verifier", agent: summary.captain, display: "claude-opus-4-8", boundBy: ["triage.verifier"], toSetUp: true },
+        ],
+      },
+    } as ConfigState;
+  }
+
+  beforeEach(() => {
+    const base = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation(async (type: string, params?: Record<string, unknown>) =>
+      type === "config.get" && params?.projectId === PROJECT_ID ? projectComposition() : base(type, params),
+    );
+  });
+
+  test("a player only the project names gets its lane, and the editor names the project's playbooks a player plays in, not the overridden global ones", async () => {
+    await renderTab({
+      project: [
+        {
+          ...TRIAGE,
+          entry: ["project"],
+          bindings: {
+            triager: { playerId: "dev.coder", display: "claude-opus-5 @ high", from: "project" },
+            verifier: { playerId: "dev.verifier", display: "claude-opus-4-8", from: "default" },
+          },
+          written: { project: { triager: { playerId: "dev.coder", display: "claude-opus-5 @ high" } } },
+        },
+      ],
+    });
+    await vi.waitFor(() => expect(commandMock).toHaveBeenCalledWith("config.get", { projectId: PROJECT_ID }));
+    // dev.verifier plays on the Captain's agent: its chip stands.
+    await vi.waitFor(() =>
+      expect(within(lineOf("triage", "verifier")).getByLabelText(/^dev\.verifier: claude/)).toBeTruthy(),
+    );
+    fireEvent.click(screen.getByTestId("role-bind-triage-verifier"));
+    const editor = screen.getByTestId("binding-editor-verifier");
+    // Offered: the roster, and the player now playing the role.
+    expect(choices(editor)).toEqual(["dev.coder", "dev.reviewer", "dev.verifier"]);
+    fireEvent.change(within(editor).getByTestId("binding-player"), { target: { value: "dev.coder" } });
+    // As the project composes it, dev.coder plays code's roles and
+    // triage's triager — not fix's, which the global roster names.
+    expect(within(editor).getByTestId("binding-shared-note").textContent).toBe("Also plays in /code");
+    fireEvent.change(within(editor).getByTestId("binding-player"), { target: { value: "dev.reviewer" } });
+    // The project overrides code's reviewer: dev.reviewer plays nothing there.
+    expect(within(editor).queryByTestId("binding-shared-note")).toBeNull();
+  });
+
+  test("with Same as global chosen, the editor names the playbooks the global player plays in", async () => {
+    await renderTab({
+      own: [
+        {
+          ...CODE_GLOBAL,
+          entry: ["project", "own"],
+          bindings: {
+            coder: { playerId: "dev.coder", display: "claude-opus-5 @ high", from: "project" },
+            reviewer: { playerId: "dev.coder", display: "claude-opus-5 @ high", from: "project" },
+          },
+          written: {
+            ...CODE_GLOBAL.written,
+            project: {
+              coder: { playerId: "dev.coder", display: "claude-opus-5 @ high" },
+              reviewer: { playerId: "dev.coder", display: "claude-opus-5 @ high" },
+            },
+          },
+        },
+      ],
+    });
+    await vi.waitFor(() => expect(commandMock).toHaveBeenCalledWith("config.get", { projectId: PROJECT_ID }));
+    fireEvent.click(screen.getByTestId("role-bind-code-reviewer"));
+    const editor = screen.getByTestId("binding-editor-reviewer");
+    expect((within(editor).getByTestId("binding-player") as HTMLSelectElement).value).toBe("dev.coder");
+    // The project's player plays triage's triager too.
+    expect(within(editor).getByTestId("binding-shared-note").textContent).toBe("Also plays in /triage");
+    // Set back, the role plays on dev.reviewer, the global binding's
+    // player, which plays in no other playbook here.
+    fireEvent.change(within(editor).getByTestId("binding-player"), { target: { value: "" } });
+    expect(within(editor).queryByTestId("binding-shared-note")).toBeNull();
   });
 });
 

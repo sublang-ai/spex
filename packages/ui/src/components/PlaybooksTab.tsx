@@ -158,6 +158,8 @@ export function PlaybooksTab({
   const consumeNewPlaybookRequest = store((state) => state.consumeNewPlaybookRequest);
   const newPlaybookRequested = store((state) => state.newPlaybookRequested);
   const readLists = store((state) => state.playbookLists);
+  const composed = store((state) => state.projectConfigs[project.id]);
+  const loadProjectConfig = store((state) => state.loadProjectConfig);
   const loadPlaybookLists = store((state) => state.loadPlaybookLists);
 
   const projectId = project.id;
@@ -184,7 +186,10 @@ export function PlaybooksTab({
     // (playbook-library-1).
     void listDrafts().catch(() => {});
     reloadLists();
-  }, [connected, listDrafts, reloadLists]);
+    // The players a session in the project runs with, and the positions
+    // each plays there (core-service-2).
+    void loadProjectConfig(projectId).catch(() => {});
+  }, [connected, listDrafts, reloadLists, loadProjectConfig, projectId]);
 
   // The slash menu's request lands on the id field (playbook-library-51).
   useEffect(() => {
@@ -220,8 +225,12 @@ export function PlaybooksTab({
   }, [createDraft, openDraft, setDraftSourceMode, fields.fields.org, fields.fields.license, projectId, store]);
 
   if (!configState || configState.status !== "valid") return <ConfigGate onNavigate={onNavigate} />;
-  // Your roster: every row's bindings name its players.
-  const roster = configState.summary.players ?? [];
+  // The players as a session in the project composes them: your roster,
+  // each player a binding there names that it lacks, and the positions
+  // each plays in the project — its overrides and its own playbooks
+  // counted; the global composition while the project's is not read
+  // (playbook-library-1, playbook-library-38).
+  const roster = (composed?.status === "valid" ? composed.summary.players : configState.summary.players) ?? [];
 
   // An authoring session of this project replaces the list with its
   // workspace (playbook-library-52); it stays open in the core while the

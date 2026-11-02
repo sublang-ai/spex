@@ -252,7 +252,9 @@ describe("playbook-library-94: each heading and its rows", () => {
     const heading = globalSection().getByRole("heading");
     expect(heading.tagName).toBe("H1");
     expect(heading.textContent).toBe("Playbooks");
-    expect(heading.title).toBe("The playbooks of your global packages, which run in every project of yours");
+    // A heading explains nothing (DR-069), and no reach is named but
+    // Global (playbook-library-26).
+    expect(heading.title).toBe("");
     const section = screen.getByTestId("surface-packages");
     expect(section.textContent).not.toContain(OWN_KEY);
     expect(section.textContent).not.toContain("-spex");

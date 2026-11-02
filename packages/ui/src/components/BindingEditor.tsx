@@ -47,6 +47,7 @@ export function BindingEditorPopover({
   players,
   playerOnly = false,
   sameAsGlobal,
+  lanes = players,
   anchorRef,
   onSave,
   onClose,
@@ -62,8 +63,12 @@ export function BindingEditorPopover({
   playerOnly?: boolean;
   /** Under a project's Global heading (playbook-library-4): "Same as
    * global" stands first, chosen while the project names no other
-   * player for the role. */
-  sameAsGlobal?: { selected: boolean };
+   * player for the role; `playerId` is the player the global binding
+   * names, which that choice plays on. */
+  sameAsGlobal?: { selected: boolean; playerId: string };
+  /** Every player the composition holds, with the positions each plays:
+   * where a choice's lane is read, an offered one or not. */
+  lanes?: SessionPlayerSummary[];
   anchorRef: RefObject<HTMLButtonElement | null>;
   onSave(next: BindingChange): Promise<unknown>;
   onClose(): void;
@@ -86,8 +91,9 @@ export function BindingEditorPopover({
   // pane or far along the roles row its control sits
   // (playbook-library-43, DR-041 §9).
   useFitInBox(boxRef);
-  // "Same as global" runs the global binding's player, the one shown.
-  const lane = players.find((player) => player.id === (draft.playerId === SAME_AS_GLOBAL ? binding.playerId : draft.playerId));
+  // "Same as global" plays on the global binding's player.
+  const chosen = draft.playerId === SAME_AS_GLOBAL ? (sameAsGlobal?.playerId ?? binding.playerId) : draft.playerId;
+  const lane = lanes.find((player) => player.id === chosen) ?? players.find((player) => player.id === chosen);
   const discovery = useAgentOptions(lane?.agent.adapter ?? "claude");
   const effectiveModel = draft.model === false ? "" : draft.model ?? lane?.agent.model ?? "";
   const tuning = modelTuning(discovery.options, effectiveModel);
@@ -141,6 +147,14 @@ export function BindingEditorPopover({
               {player.id} · {player.display}
             </option>
           ))}
+          {/* The player the role plays on now, where the list offers it
+              not — a default the roster has yet to hold — so the choice
+              shown is the one that stands. */}
+          {binding.playerId && !players.some((player) => player.id === binding.playerId) ? (
+            <option value={binding.playerId}>
+              {[binding.playerId, binding.display].filter(Boolean).join(" · ")}
+            </option>
+          ) : null}
         </select>
         {others.length > 0 ? (
           <span

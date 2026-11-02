@@ -91,8 +91,16 @@ export async function writeBinding(
   role: string,
   change: BindingChange,
 ): Promise<void> {
+  // Where no entry of the scope stands, saving the player that already
+  // plays the role, with nothing pinned, changes nothing and writes
+  // nothing (playbook-library-3, playbook-library-4).
+  const tuned = [change.model, change.subagentModel, change.effort, change.subagentEffort, change.fastMode].some(
+    (value) => value !== undefined && value !== null,
+  );
+  const unchanged = change.playerId === effectivePlayers(entry)[role];
   if (scope.kind === "global") {
     if (!entry.entry.includes("own")) {
+      if (unchanged && !tuned) return;
       // The first edit of a playbook on its default binding writes its
       // entry whole: this role as chosen, each other as the default
       // binds it.
@@ -100,9 +108,6 @@ export async function writeBinding(
         repository: scope.repository,
         op: { kind: "playbook.add", playbookId: entry.id, roles: { ...effectivePlayers(entry), [role]: change.playerId } },
       });
-      const tuned = [change.model, change.subagentModel, change.effort, change.subagentEffort, change.fastMode].some(
-        (value) => value !== undefined && value !== null,
-      );
       if (!tuned) return;
     }
     await bindRole(entry.id, role, change, scope.repository, client as SpexClient);
@@ -115,6 +120,7 @@ export async function writeBinding(
       await bindRole(entry.id, role, { playerId: change.playerId }, repository, client as SpexClient);
       return;
     }
+    if (unchanged) return;
     await client.command("config.edit", {
       repository,
       op: { kind: "playbook.add", playbookId: entry.id, roles: { ...effectivePlayers(entry), [role]: change.playerId } },
@@ -249,12 +255,14 @@ export function withCode(phrase: (slot: string) => string, value: string): React
 
 /** Where a row's playbook comes from (playbook-library-29): "from
  * <package> <version>" for every package, the built-in one's as any
- * other's; the source and the installed folder in its tooltip. */
+ * other's; the source and the installed folder in its tooltip — the
+ * built-in package's by its folder alone, "built in" naming a source
+ * only on the Packages tab's glyph (DR-176). */
 function FromLabel({ entry }: { entry: PlaybookAvailability }) {
   // The source in the Packages tab's words (playbook-library-92).
   const source =
     entry.source === "builtin"
-      ? i18n._({ id: "Built in", comment: "the tooltip of a package's source glyph: the app ships it" })
+      ? entry.folder ?? i18n._({ id: "From the registry", comment: "tooltip: a package taken from the registry" })
       : entry.source === "path"
         ? i18n._({
             id: "From folder {path}",
@@ -264,7 +272,7 @@ function FromLabel({ entry }: { entry: PlaybookAvailability }) {
         : entry.source === "git"
           ? i18n._({ id: "From Git", comment: "tooltip: a package taken from a Git repository" })
           : i18n._({ id: "From the registry", comment: "tooltip: a package taken from the registry" });
-  const title = entry.folder && entry.source !== "path" ? `${source} · ${entry.folder}` : source;
+  const title = entry.folder && entry.source !== "path" && entry.source !== "builtin" ? `${source} · ${entry.folder}` : source;
   return (
     <span className="flex min-w-0 items-center gap-1 text-xs text-neutral-500">
       <span data-testid={`playbook-from-${entry.id}`} title={title} className="min-w-0 truncate">
@@ -388,8 +396,9 @@ function RoleLine({
           position={`${entry.id}.${open}`}
           binding={entry.bindings[open] ?? binding}
           players={offered}
+          lanes={roster}
           playerOnly={scope.kind !== "global"}
-          {...(scope.kind === "override" ? { sameAsGlobal: { selected: !overridden(entry, open) } } : {})}
+          {...(scope.kind === "override" ? { sameAsGlobal: { selected: !overridden(entry, open), playerId: globalPlayer(entry, open) } } : {})}
           anchorRef={anchorRef}
           onSave={(next) =>
             writeBinding(store.getClient(), scope, entry, open, next).then(() => {
