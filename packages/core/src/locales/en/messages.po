@@ -1271,6 +1271,11 @@ msgstr "Code remote changed"
 msgid "Code: {where}"
 msgstr "Code: {where}"
 
+#. Refusal of malformed access-only Codex subscription credentials; never repeats their contents
+#: src/service.ts
+msgid "Codex subscription credentials are invalid."
+msgstr "Codex subscription credentials are invalid."
+
 #. Refusal: the compile the Boss awaited was canceled
 #. The outcome of a compile the reader stopped
 #: src/authoring.ts

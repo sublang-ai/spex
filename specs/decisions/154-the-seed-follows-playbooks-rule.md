@@ -11,6 +11,8 @@ Amends [DR-153](153-playbook-18-0-1-cligent-0-36-1-slc-0-19-1-adoption.md) in th
 Amends [DR-037](037-playbook-12-adoption.md) in its seeding: the first-run config is no longer the installed template copied as written, and the two hosts' files are no longer identical by construction; only their agent settings are.
 Amended by [DR-156](156-an-untouched-seed-follows-the-credentials.md): a seeded file still at the bytes the core wrote is reseeded when the credentials change; the exclusive first create and the text stand.
 
+Amended by [DR-201](201-shared-codex-subscription-access.md) only for a seed-only presence projection of a materialized access-only Codex snapshot; the launcher still chooses every agent setting.
+
 ## Context
 
 - Spex seeds your own group's config from Playbook's bundled starter template, as written but for `playbooks.*.from`.

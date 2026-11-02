@@ -413,6 +413,10 @@ When a session read completes after its clone's location has changed [[storage-3
 
 The registry account metadata store shall keep only each registry's canonical origin, display name and public account identity in owner-only `local/registry-accounts.json`, with registry credentials exclusively in their purpose-scoped slots [[storage-19](#storage-19)], never creating or modifying a Space entry in `home.yaml` ([DR-168](../decisions/168-independent-package-registry.md)).
 
+### storage-53
+
+Where a seat materializes a Codex access-only credential [[core-service-150](core-service.md#core-service-150)], the storage layout shall reserve `local/codex/` as that seat's private persistent native Codex home, whose directory has owner-only access and whose generated `auth.json` has owner-only read and write access, with no refresh token and with no link followed when writing it ([DR-201](../decisions/201-shared-codex-subscription-access.md)).
+
 ## Verification
 
 ### storage-52
@@ -566,6 +570,10 @@ When the root-lease integration suite runs the core's store and the storage Git 
 ### storage-46
 
 Where a home opens, closes and reopens seats against a stand-in instance and a stand-in hub, the test suite shall assert the seats file [[storage-45](#storage-45)]: written at an open with owner-only permissions under a `local/` of the same, read back at the next start with every entry, removed at the close of its last entry, a file of another format refused at an open and a close and left byte for byte as it was, and the bearer in no reply, event or log.
+
+### storage-54
+
+Where two seat homes materialize subscription access, the integration suite shall assert that their native Codex directories and credential files are distinct and owner-only, hold no refresh token, and are replaced atomically, and that a symlink at the directory or credential path is refused without touching its target [[storage-53](#storage-53)].
 
 ## References
 
