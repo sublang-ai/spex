@@ -8,7 +8,7 @@
 Accepted; the config schema's `profiles` map is retired upstream and amended by [DR-019](019-inline-agent-configuration.md) — every agent carries its settings inline, and profiles-era files migrate in place at load.
 Amended by [DR-036](036-file-state-store.md): the app-local SQLite store gives way to plain files under one shared state root, and session persistence moves to the shared playbook session store; the config-ownership, no-secrets, and credential rules stand.
 Amended by [DR-132](132-team-servers.md) in its credentials and readiness: on a seat the core reads a shared credential file before each run, readiness recognizes the injected forms, and a member's code-host token is kept under `local/`.
-Amended by [DR-174](174-workshop-agents-in-one-pass.md) in its readiness: the local credential forms follow Playbook's, faults are reported by kind, and `claude` and `codex` are always reported, the config missing or invalid included.
+Amended by [DR-174](174-workshop-agents-in-one-pass.md) in its readiness: the local credential variables follow Playbook's, a home folder alone is no credential and the agent's own sign-in status decides without a variable, faults are reported by kind, and `claude` and `codex` are always reported, the config missing or invalid included.
 
 ## Context
 

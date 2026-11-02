@@ -6,8 +6,10 @@
 ## Status
 
 Accepted (2026-11-01) on the owner's go-ahead after five review rounds.
-Amends [DR-004](004-config-and-persistence.md) in its readiness: the credential forms follow Playbook's, readiness reports its faults by kind, and `claude` and `codex` are always reported.
+Amends [DR-004](004-config-and-persistence.md) in its readiness: the credential variables follow Playbook's, a home folder alone is no credential and the agent's own sign-in status decides without a variable, readiness reports its faults by kind, and `claude` and `codex` are always reported.
 Amends [DR-024](024-app-supplied-agent-runtimes.md) in how a runtime fault is reported: a kind of its own, never joined to the credential's reason.
+Amended by [DR-175](175-agent-cards-read-alike.md): one not-ready tone whoever uses the agent, one frame for every card, a Recommended tag until Claude is ready, the section's verdict, what is missing in plain text, and the online service's action enabled before its address; Claude Code's user settings reach every run through the core, since a run isolated from settings files reads none.
+Amended by [DR-176](176-the-workshop-points-to-its-guide.md): a not-ready card offers the setup guide alone, with no online service.
 
 ## Context
 
@@ -15,6 +17,8 @@ Amends [DR-024](024-app-supplied-agent-runtimes.md) in how a runtime fault is re
   A setup script outside the app — tested before it writes, writing environment variables only — brings each to a configured agent; inside the app the attendee must see each agent's state, make every agent use the chosen model, and know the next step when it is not ready.
 - Readiness listed only the adapters the config references, so an attendee never saw the other agent's state or how to configure it, and listed nothing at all while the config was missing or invalid.
 - The local credential rule recognized `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` alone, while Playbook's launcher also takes `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN`, `CODEX_API_KEY` and `CODEX_ACCESS_TOKEN`; an attendee with a third-party key in `ANTHROPIC_AUTH_TOKEN` and no `~/.claude` read as not ready.
+- The credential rule also counted `~/.claude` and `~/.codex` as signed in, as Playbook's launcher does; each runtime creates its folder on its first start, signed in or not, so an attendee who never signed in read as ready once Spex had opened.
+  Each agent's own status command — `claude auth status`, `codex login status` — answers within a second, and Claude's counts its environment variables, `settings.json` and `apiKeyHelper`; Codex's counts no API key variable, and creates `~/.codex` where it runs in a home without one, as Claude's creates `~/.claude`.
 - A runtime fault and a credential fault were joined into one string, so guidance could not tell reinstalling the app from setting a key.
 - The first-run config pins `claude-opus-5-5` or `gpt-6-sol` on the Captain and every player; a third-party Anthropic-compatible service maps such a name by its own rule — DeepSeek runs `claude-opus*` as its Pro model and bills it so — so an attendee who chose another model silently runs and pays for a different one.
 - Cligent's Claude discovery reports `ANTHROPIC_MODEL` as the default model where it is set, and reads nothing from `~/.claude/settings.json`.
@@ -27,8 +31,12 @@ Amends [DR-024](024-app-supplied-agent-runtimes.md) in how a runtime fault is re
 
 - `claude` and `codex` are always reported, each with the positions using it, none where no position does; while the config is missing or invalid they are the only entries, with no positions.
   Other adapters are reported only where referenced, as before.
-- The local credential half follows Playbook's credential forms: `claude` takes `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN` or `~/.claude`; `codex` takes `OPENAI_API_KEY`, `CODEX_API_KEY`, `CODEX_ACCESS_TOKEN` or `~/.codex`.
-  Ready still means only that the runtime loads and a credential form is present; nothing is sent to the provider.
+- The local credential half takes Playbook's credential variables: `claude` takes `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN` or `CLAUDE_CODE_OAUTH_TOKEN`; `codex` takes `OPENAI_API_KEY`, `CODEX_API_KEY` or `CODEX_ACCESS_TOKEN`.
+- Claude Code's user settings file — `settings.json` in `CLAUDE_CONFIG_DIR` or `~/.claude` — sets variables a Claude run applies over those it inherits, so its `env` counts for the credential and the base URL alike; a card reading only the core's environment would call a run sent to a third party Anthropic's.
+- With none set, the agent's own status command decides, run as an agent run would be and only where the agent's configuration folder exists, so it never creates the folder Playbook's seed reads; a home folder alone is no credential.
+  Spex's readiness thereby departs from Playbook's launcher, which still counts the folders.
+- A status command that cannot answer — it does not start, runs past five seconds, fails otherwise or says what is not read — leaves the sign-in unconfirmed: neither ready nor not ready, with its reason and a re-check, since calling it signed out would send a signed-in reader to sign in again.
+  Ready still means only that the runtime loads and a credential is present; nothing is sent to the provider.
 - Each entry lists its faults by kind — `runtime` or `credential` — beside the former joined requirement, which stays.
 - The `claude` entry carries the state of `ANTHROPIC_BASE_URL` — unset or Anthropic's own host, a third-party host, a value that does not parse, or hidden on a seat — with the host name alone, never a path or a secret.
 - Each entry carries the core's platform and the user's shell, so manual guidance is written for the computer it is followed on.
@@ -54,9 +62,19 @@ Amends [DR-024](024-app-supplied-agent-runtimes.md) in how a runtime fault is re
 
 ### Workshop scope
 
-- A constant in the interface's code, on by default, limits adapter choices to `claude` and `codex` and offers the setup script first in each card's configuration steps; a configuration naming another adapter still loads and shows, and may be changed back.
+- A constant in the interface's code, on by default, limits adapter choices to `claude` and `codex` and gives a not-ready card the Workshop's two routes; a configuration naming another adapter still loads and shows, and may be changed back.
   Turning it off in a later release restores every adapter and leaves only manual steps, with nothing for an attendee or an assistant to do.
+- The routes are the temporary online model service we provide, the primary one since most attendees hold no key, and the agent's own subscription or API key on this computer; they stand side by side, each over its own action and joined by "or", and each says whom it is for, so the attendee picks by their own situation rather than by guessing what a button does.
+  The service has no address yet, so its action is disabled and says it is not open yet until one is set, rather than a primary action doing nothing.
+  The local route opens the configuration document at the attendee's platform, at Codex's own section on the Codex card, rather than short steps in the card, since clearing an earlier setup is what short steps leave out; the setup script is not offered while it is not ready for attendees.
+  Codex's local route names only OpenAI's subscription and key, since Codex takes no third-party key.
+- A not-ready card first says what is missing, as a warning apart from the routes, so "not ready" has a meaning, in amber rather than red since it is a step still to take rather than an error; it hides its model settings, which have nothing to act on before the agent runs.
+  Those settings are the adapter-wide model and the official-name fix, not a role's editor, so a ready card says a single role's model is set in its player.
 - Guidance follows the fault's kind and, for Claude, the base URL's state; on a seat it points to the Credentials section and names no local command.
+- A sign-in is read by the status command at each re-check, while a variable reaches the core only from a new start; reopening Spex covers both, so the Workshop card closes on that one step, once per card, and the section's heading keeps the control alone.
+- The core's requirement repeats the card's guidance in other words, so it stays in the guidance's tooltip; it shows only where it is the guidance itself.
+- A card no position uses keeps its not-ready state and its tone, since a tone changing with use made one state look like two ([DR-175](175-agent-cards-read-alike.md)).
+- A blocked task start is explained where the attendee acts: the start control stays enabled and a press re-checks, starting the task once the Captain's agent is ready, otherwise bringing the notice forward with its way to the Captain's agent card.
 
 ### Windows
 
@@ -69,7 +87,9 @@ Amends [DR-024](024-app-supplied-agent-runtimes.md) in how a runtime fault is re
 
 ## Consequences
 
-- settings-5 shows two standing agent cards with their configuration steps; settings-14 and core-service-9 take the new forms, the fault kinds, the base URL's state and the platform; settings-23, settings-34 and settings-39 follow; settings-56 to settings-61 are new.
+- settings-5 shows two standing agent cards with their configuration steps and an unconfirmed sign-in; settings-14 and core-service-9 take the new forms, the sign-in status, the fault kinds, the base URL's state and the platform; settings-23, settings-34 and settings-39 follow; settings-56 to settings-61, settings-68 and settings-69 are new; run-view-45 opens Settings at the agent card and keeps the start control enabled.
 - core-service-44 adds `config.batch` and core-service-45 the config state's revision; core-service-26 and core-service-143 follow.
 - shared-config-roundtrip-1, -3 and -4 cover the batch.
 - The setup script and the Workshop materials live outside the app's release.
+- A known limit: Playbook's launcher and its seed still count `~/.claude` and `~/.codex`.
+  Spex's status commands never create either folder, so only a runtime that ran once without a sign-in leaves one, and an untouched seed reseeded at the next start ([DR-156](156-an-untouched-seed-follows-the-credentials.md)) may then pick that agent.
