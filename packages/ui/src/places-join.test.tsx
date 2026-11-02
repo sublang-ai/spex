@@ -279,7 +279,7 @@ describe("run-view-171: the sidebar holds a heading per place", () => {
     expect(within(sidebar).queryByTestId(`sidebar-project-p1@${ALPHA.place}`)).toBeNull();
   });
 
-  test("the project palette names each project's place and the place of a new one", () => {
+  test("the project palette names each project's place", () => {
     render(<App />);
     fireEvent.keyDown(window, { key: "p", metaKey: true });
     const palette = screen.getByTestId("project-palette");
@@ -295,10 +295,6 @@ describe("run-view-171: the sidebar holds a heading per place", () => {
       "build-box",
       "gpu-box",
     ]);
-    // [run-view-168] a project added here lands on this computer.
-    expect(within(palette).getByTestId("palette-new-place").textContent).toBe(
-      "A new project is added on This computer.",
-    );
 
     // [run-view-168] picking a seat's project makes it current at that
     // place alone, and the Projects surface shows it there.
@@ -593,13 +589,13 @@ describe("run-view-168: a Dashboard link opens a project at its place", () => {
     expect(screen.getByTestId(`sidebar-session-s-alpha@${ALPHA.place}`).getAttribute("aria-selected")).toBe("false");
   });
 
-  test("the empty state's Projects link shows this computer's place", async () => {
+  test("the empty state's Add a project link shows this computer's place", async () => {
     useAppStore.setState({ projects: [], sessions: [], currentProjectId: undefined });
     render(<App />);
     await showSeat();
     fireEvent.click(document.querySelector<HTMLElement>('[data-surface="Dashboard"]')!);
     const empty = screen.getByTestId("projects-empty");
-    fireEvent.click(within(empty).getByRole("button", { name: "Projects" }));
+    fireEvent.click(within(empty).getByRole("button", { name: "Add a project" }));
     await settle();
     // [run-view-168] the Projects surface shows the place whose
     // projects the Dashboard lists: this computer's, with none yet.

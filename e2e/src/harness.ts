@@ -786,6 +786,9 @@ export interface App {
   /** The project's own config file in its spex repository, empty when
    * none was written (core-service-2). */
   readProjectConfig(): string;
+  /** Write the project's own config file as a person editing it would
+   * (arrange only). */
+  writeProjectConfig(text: string): void;
 }
 
 async function boot(
@@ -1214,6 +1217,12 @@ async function arrangeApp(
       if (!app.projectId) return "";
       const path = join(clonePath(dataDir, app.projectId), "config", "playbook.config.yaml");
       return existsSync(path) ? readFileSync(path, "utf8") : "";
+    },
+    writeProjectConfig(text) {
+      if (!app.projectId) throw new Error("no project registered");
+      const path = join(clonePath(dataDir, app.projectId), "config", "playbook.config.yaml");
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, text);
     },
     draftDir(id) {
       // The playbook artifact of the spec package under development in
@@ -1850,19 +1859,52 @@ async function load(page: Page, app: App, path: string): Promise<void> {
 }
 
 /** The surfaces as the rail names them in its own attributes: the rail
- * holds Dashboard, Projects, Space and Settings (run-view-67, DR-172). */
+ * holds Dashboard, Projects, Playbooks, Space and Settings
+ * (run-view-67, DR-176). */
 export type SurfaceName =
   | "Dashboard"
   | "Workspace"
+  | "Playbooks"
   | "Space"
   | "Settings";
 
 /** The sidebar entry for a surface, by its English name. */
 export function nav(
   page: Page,
-  name: "Dashboard" | "Projects" | "Space" | "Settings",
+  name: "Dashboard" | "Projects" | "Playbooks" | "Space" | "Settings",
 ) {
-  return page.getByRole("button", { name, exact: true });
+  return page.getByTestId("sidebar").getByRole("button", { name, exact: true });
+}
+
+/**
+ * Request the built-in spec package in the project's environment too, at
+ * the release the global environment holds (environments-11), as a
+ * project paired before DR-176 still requests it: its playbooks then
+ * stand placed by both environments, listed once, under Global
+ * (playbook-library-1).
+ */
+export async function requestBuiltinsInProject(app: App): Promise<void> {
+  const own = await app.core.command("environment.get", { repository: app.ownKey });
+  const version = own.packages.find((pkg) => pkg.name === "sublang/playbooks")?.version;
+  if (!version) throw new Error("the global environment holds no built-in release");
+  await app.core.command("environment.request", {
+    repository: app.projectId!,
+    name: "sublang/playbooks",
+    request: { kind: "registry", version: `^${version}` },
+    wait: true,
+  });
+}
+
+/**
+ * Open the Playbooks surface — the global page, the rail's Playbooks
+ * entry (playbook-library-122) — and return it once its packages read.
+ */
+export async function playbooksSurface(page: Page): Promise<Locator> {
+  await surfaceEntry(page, "Playbooks").click();
+  await expect(surfaceEntry(page, "Playbooks")).toHaveAttribute("aria-current", "page");
+  const surface = page.getByTestId("playbooks-surface");
+  await expect(surface).toBeVisible();
+  return surface;
 }
 
 /** The project's pinned tabs this harness opens by name: beside Specs
@@ -1890,10 +1932,10 @@ export async function projectTab(page: Page, name: ProjectTabName): Promise<Loca
   return page.getByTestId(`${name.toLowerCase()}-tab`);
 }
 
-/** Whose packages a half of the Packages tab holds: the project's
- * environment's, or your own group's, which the tab calls Personal
- * (playbook-library-92). */
-export type PackagesHalf = "project" | "personal";
+/** Whose packages a list holds: the project's environment's, on its
+ * Packages tab (playbook-library-92), or the global environment's, on
+ * the Playbooks surface (playbook-library-122). */
+export type PackagesHalf = "project" | "global";
 
 /** A playbook's one row on the Playbooks tab: a playbook both
  * environments export is listed once by its id (playbook-library-1). */
@@ -1901,13 +1943,14 @@ export function playbookCard(scope: Page | Locator, id: string): Locator {
   return scope.getByTestId(`playbook-card-${id}`);
 }
 
-/** One heading's half of the Packages tab: the project's packages under
- * "Packages", or those you added for yourself beneath them under
- * "Personal" (playbook-library-92). Each half holds its heading line —
- * "Registry: <registry>" with the account there and one "Add…"
- * (playbook-library-119) — its chips, its rows and its built-in line. */
+/** One environment's packages: the project's under "Packages" on its
+ * Packages tab (playbook-library-92), or the global ones under the
+ * Playbooks surface's header (playbook-library-122). Each holds its
+ * heading line — "Registry: <registry>" with the account there and one
+ * "Add…" (playbook-library-119) — its chips and its rows, the built-in
+ * spec package's among them. */
 export function packagesSection(page: Page, whose: PackagesHalf): Locator {
-  return page.getByTestId(`packages-${whose}`);
+  return whose === "project" ? page.getByTestId("packages-project") : page.getByTestId("surface-packages");
 }
 
 /** A package's row in one heading's half of the Packages tab: its name,
@@ -1922,14 +1965,6 @@ export function packageRow(section: Locator, name: string): Locator {
  * "From Git <repository> at <rev>" or "Built in" (playbook-library-92). */
 export function packageSource(row: Locator, name: string): Locator {
   return row.getByTestId(`env-source-${name}`);
-}
-
-/** The built-in playbooks' one quiet line of a heading's half
- * (playbook-library-92): "Built-in playbooks <locked>", with "· <shipped>
- * shipped with this app" and "Update to <shipped>" where the app ships a
- * newer release — never a removable row. */
-export function builtinLine(section: Locator): Locator {
-  return section.getByText(/^Built-in playbooks \d+\.\d+\.\d+/).first();
 }
 
 /** A heading's registry chooser (playbook-library-119): the control

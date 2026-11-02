@@ -121,7 +121,7 @@ function RecordsLine({ project, now }: { project: ProjectInfo; now: number }) {
   const group = !entry
     ? undefined
     : entry.login !== null && entry.mine
-      ? i18n._({ id: "Personal", comment: "your own records and packages at a Space, never \"your namespace\"" })
+      ? i18n._({ id: "Personal", comment: "your own group at a Space, the place your own records go; never \"your namespace\"" })
       : entry.login !== null
         ? i18n._({
             id: "Shared by @{login}",

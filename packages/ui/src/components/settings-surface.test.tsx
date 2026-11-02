@@ -74,8 +74,10 @@ const CONFIG: ConfigState = {
           coder: { playerId: "dev.coder", display: "claude-opus-5[1m]" },
           reviewer: { playerId: "dev.reviewer", display: "gpt-5.6-sol" },
         },
+        origin: "own",
       },
     ],
+    standsAside: [],
   },
 };
 
@@ -322,17 +324,33 @@ describe("SET: the session-player roster", () => {
   });
 });
 
-describe("settings-46: your own group's file, and the players a project names", () => {
+describe("settings-46: your own group's file, and the players to set up", () => {
   afterEach(() => useAppStore.setState({ projects: [], space: undefined }));
 
-  test("a player a project names and the roster lacks reads so, and Add creates it from the neutral block", async () => {
+  test("a player a binding names and the roster lacks plays on the Captain's agent, and Add creates it from the Captain's block", async () => {
     useAppStore.setState({ projects: [PROJECT], space: home() });
     useAppStore.setState({
       configState: {
         ...CONFIG,
+        summary: {
+          ...CONFIG.summary!,
+          // The default `dev.<role>` of a playbook no entry binds, which
+          // the roster lacks: the composition flags it (core-service-2).
+          players: [
+            ...CONFIG.summary!.players,
+            {
+              id: "dev.inspector",
+              agent: CONFIG.summary!.captain,
+              display: "claude-opus-5[1m]",
+              boundBy: ["inspect.inspector"],
+              toSetUp: true,
+            },
+          ],
+        },
+        // A project's entry naming a player the roster lacks; one the
+        // roster holds is no player to set up.
         missingPlayers: [
           { player: "dev.triager", repository: PROJECT.id, roles: [{ playbook: "triage", role: "triager" }] },
-          // One the roster already holds is no longer missing.
           { player: "dev.coder", repository: PROJECT.id, roles: [{ playbook: "code", role: "coder" }] },
         ],
       } as ConfigState,
@@ -340,22 +358,85 @@ describe("settings-46: your own group's file, and the players a project names", 
       refreshReadiness: vi.fn(async () => {}),
     });
     render(<SettingsSurface />);
-    const row = screen.getByTestId("player-missing-dev.triager");
-    expect(within(row).getByTestId("player-missing-note-dev.triager").textContent).toBe(
-      "Named by demo, not set up here",
-    );
-    expect(within(row).getByTestId("player-missing-note-dev.triager").title).toBe("Answers triage.triager");
-    expect(screen.queryByTestId("player-missing-dev.coder")).toBeNull();
-    fireEvent.click(within(row).getByTestId("player-missing-add-dev.triager"));
+    for (const [id, position] of [["dev.inspector", "inspect.inspector"], ["dev.triager", "triage.triager"]] as const) {
+      const row = screen.getByTestId(`player-row-${id}`);
+      expect(row.dataset.toSetUp).toBe("true");
+      const note = within(row).getByTestId(`player-setup-${id}`);
+      expect(note.textContent).toBe("Plays on the Captain's agent");
+      expect(note.title).toBe(`Answers ${position}`);
+      // Nothing to edit or remove before it is set up.
+      expect(within(row).queryByTestId(`player-edit-${id}`)).toBeNull();
+      expect(within(row).queryByTestId(`player-delete-${id}`)).toBeNull();
+    }
+    // The project names no project file as editable, and no project.
+    expect(document.body.textContent).not.toContain("Named by");
+    expect(screen.getAllByTestId("player-row-dev.coder")).toHaveLength(1);
+    expect(screen.getByTestId("player-row-dev.coder").dataset.toSetUp).toBeUndefined();
+    fireEvent.click(screen.getByTestId("player-setup-add-dev.triager"));
     await vi.waitFor(() =>
       expect(commandMock).toHaveBeenCalledWith("config.edit", {
         op: {
           kind: "player.set",
           playerId: "dev.triager",
-          patch: { adapter: "claude", model: "claude-opus-5-5", effort: "high", permissions: { mode: "auto" } },
+          patch: { adapter: "claude", model: "claude-opus-4-8", effort: "high", permissions: { mode: "auto" } },
         },
       }),
     );
+  });
+
+  test("a project's own composition flags the default players of a playbook it alone places, merged with the global ones", async () => {
+    const captain = CONFIG.summary!.captain;
+    const toSetUp = (id: string, boundBy: string[]) => ({ id, agent: captain, display: "claude-opus-4-8", boundBy, toSetUp: true });
+    useAppStore.setState({
+      projects: [PROJECT],
+      space: home(),
+      configState: {
+        ...CONFIG,
+        summary: { ...CONFIG.summary!, players: [...CONFIG.summary!.players, toSetUp("dev.host", ["review.host"])] },
+      } as ConfigState,
+      // A package added to the project, its triage running on its
+      // default players; no written entry names them (settings-46).
+      projectConfigs: {
+        [PROJECT.id]: {
+          ...CONFIG,
+          summary: {
+            ...CONFIG.summary!,
+            players: [
+              ...CONFIG.summary!.players,
+              toSetUp("dev.host", ["review.host"]),
+              toSetUp("dev.triager", ["triage.triager"]),
+              toSetUp("dev.verifier", ["triage.verifier"]),
+            ],
+          },
+        } as ConfigState,
+      },
+      readiness: READINESS,
+      refreshReadiness: vi.fn(async () => {}),
+    });
+    render(<SettingsSurface />);
+    for (const [id, position] of [["dev.host", "review.host"], ["dev.triager", "triage.triager"], ["dev.verifier", "triage.verifier"]] as const) {
+      const rows = screen.getAllByTestId(`player-row-${id}`);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.dataset.toSetUp).toBe("true");
+      expect(within(rows[0]!).getByTestId(`player-setup-${id}`).textContent).toBe("Plays on the Captain's agent");
+      expect(within(rows[0]!).getByTestId(`player-setup-${id}`).title).toBe(`Answers ${position}`);
+    }
+    // The roster's own players stand as they are.
+    expect(screen.getByTestId("player-row-dev.coder").dataset.toSetUp).toBeUndefined();
+    fireEvent.click(screen.getByTestId("player-setup-add-dev.verifier"));
+    await vi.waitFor(() =>
+      expect(commandMock).toHaveBeenCalledWith("config.edit", {
+        op: { kind: "player.set", playerId: "dev.verifier", patch: { adapter: "claude", model: "claude-opus-4-8", effort: "high", permissions: { mode: "auto" } } },
+      }),
+    );
+    useAppStore.setState({ projectConfigs: {} });
+  });
+
+  test("Settings reads each project's composition the broadcasts have not brought", async () => {
+    useAppStore.setState({ projects: [PROJECT], space: home(), projectConfigs: {}, connection: "open" });
+    renderSettings();
+    await vi.waitFor(() => expect(commandMock).toHaveBeenCalledWith("config.get", { projectId: PROJECT.id }));
+    useAppStore.setState({ projectConfigs: {} });
   });
 
   test("the surface names the file it writes by its path alone, offering no project's file as editable here", () => {

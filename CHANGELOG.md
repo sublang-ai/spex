@@ -9,13 +9,25 @@ CLI keeps its own changelog under `packages/cli`.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-App releases ship as source under `app-v*` tags; run them with `npm ci`
-and `npm start` (desktop) or `npm run start:server` (server).
+App releases use `app-v*` tags and include native desktop downloads and
+source; run source with `npm ci` and `npm start` (desktop) or
+`npm run start:server` (server).
 
 ## [Unreleased]
 
+### Changed
+
+- Fork beta.24 rebases the native desktop changes onto official `e1cc06f1`, retaining upstream Git-source bytes/LF behavior and project navigation. Conflicting unreleased decision and test-item IDs are reassigned without changing official IDs. See [the verification record](docs/releases/0.9.0-beta.24-fork-latest-rebase.md).
+
+- Desktop and server builds adopt registry-published Cligent 0.36.2 and Playbook 18.1.1 with checksum-locked shared runtimes; app tags no longer consume local vendor archives.
+
 ### Added
 
+- Fork verification build rebased onto upstream `82961686`, preserving
+  native Windows execution and tag-built macOS arm64 / Windows x64
+  installers together with the upstream package-install and Playbooks UI.
+  DR-180 names the Windows Git-source long-path decision independently
+  from upstream DR-173. See [the rebase record](docs/releases/0.9.0-beta.22-fork-rebase.md).
 - Agents configured for a Workshop in one pass ([DR-189](specs/decisions/189-workshop-agents-in-one-pass.md)).
   Settings always shows a Claude and a Codex card with readiness,
   model service, default model and how to configure each on this
@@ -24,7 +36,7 @@ and `npm start` (desktop) or `npm run start:server` (server).
   every agent on its adapter one model in one validated write, and
   behind a third-party Claude service lists the roles still naming an
   official model and sets them to Provider default. While the Workshop
-  switch is on, adapter choices are Claude and Codex. Protocol 32.
+  switch is on, adapter choices are Claude and Codex. Protocol 33.
 - Independent package registries ([DR-168](specs/decisions/168-independent-package-registry.md)).
   Library offers a registry setting and separate registry sign-in; the
   public registry lists available Spaces beside the custom Space URL.
@@ -34,6 +46,12 @@ and `npm start` (desktop) or `npm run start:server` (server).
   A server seat needs its own registry sign-in for private packages.
   Existing manifests and lock sources remain preserved until explicitly
   changed.
+- App tags build a macOS Apple Silicon DMG and a Windows x64 per-user
+  installer on native runners. Both builds must succeed before the
+  release publishes both downloads and SHA-256 checksums; source
+  instructions remain available. Builds are unsigned and the macOS app
+  is not notarized ([DR-184](specs/decisions/184-native-desktop-tag-packages.md)).
+
 - Applets in the IDE ([DR-161](specs/decisions/161-an-applet-is-a-page-the-ide-serves.md)).
   A spec package's applet is a static web page entered at
   `applets/<id>/index.html`; a folder without that entry is refused.
@@ -374,6 +392,18 @@ and `npm start` (desktop) or `npm run start:server` (server).
 
 ### Changed
 
+- Projects are shown where they are open ([DR-175](specs/decisions/175-projects-shown-where-they-are-open.md)).
+  The sidebar heads a server's projects only while a seat holds one, so
+  an empty server adds no heading and the server welcome page is gone.
+  The project palette lists the groups' projects once under "From your
+  groups", every row carrying its Space row's Open control ("Open here",
+  "Open on <server>", "Show"), and reads "No projects in your groups yet"
+  or "All your groups' projects are open here" when it lists none. A
+  server's line on Space offers no Connect: the seat opens on the first
+  "Open on <server>". A project whose code has no remote reads "Code only
+  on this computer" or "Code not on a Git host", its server entries are
+  disabled with "Needs the code on a Git host", and a seat refuses such
+  an open.
 - Package environments are complete in their root folder: `spex.yaml`,
   `spex.lock` and the ignored `.spex/` installation. A project's root is
   its working folder; your own group's is its records clone. The CLI and
@@ -881,6 +911,14 @@ and `npm start` (desktop) or `npm run start:server` (server).
   4.1 and 4.2 no longer connect to this app.
 
 ### Fixed
+
+- Registry sign-in opens the browser on a home with no Space account.
+  The manual sign-in link stays usable when automatic opening is refused
+  or fails, preserving the complete sign-in URL.
+
+- Published playbooks omit slc's generated verification tests and the
+  compile-time FSM bundle, retaining the files needed to run, inspect
+  and rebuild them.
 
 - Sync downloads incoming LFS content during authenticated, stoppable Check.
   Apply and local merge selection write the validated filtered bytes and refuse

@@ -3144,8 +3144,8 @@ describe("dashboard-8/21/22/32: empty states, no takeover, the filter", () => {
     // The attention queue still renders (dashboard-21): no takeover.
     expect(screen.getByTestId("attention-all-clear")).toBeTruthy();
     const empty = screen.getByTestId("projects-empty");
-    expect(empty.textContent).toContain("register");
-    fireEvent.click(within(empty).getByRole("button", { name: "Projects" }));
+    expect(empty.textContent).toBe("No projects yet · Add a project");
+    fireEvent.click(within(empty).getByRole("button", { name: "Add a project" }));
     // This computer's place, whose projects the band lists (run-view-168).
     expect(onNavigate).toHaveBeenCalledWith("Workspace", useAppStore);
   });

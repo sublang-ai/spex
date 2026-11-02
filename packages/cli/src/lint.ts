@@ -19,6 +19,7 @@ import {
   plainHeadingText,
   visit,
 } from "./markdown.js";
+import { parsePlacedMarker } from "./lib/environment/marker.js";
 import { resolveBase } from "./resolve-base.js";
 
 export type LintSeverity = "error" | "warning";
@@ -1351,6 +1352,15 @@ function lintMap(ctx: LintContext): void {
     // The map indexes decisions and packages (DR-000), so both are
     // checked; intent records are outside it (meta-18).
     if (!isUnder(file.relPath, "packages") && !isUnder(file.relPath, "decisions")) {
+      continue;
+    }
+    // A spec an install placed opens with the marker it writes
+    // (environments-41, DR-174), which a fresh clone carries without
+    // the install record: the map need not list it.
+    if (
+      isUnder(file.relPath, "packages") &&
+      parsePlacedMarker(file.lines[0] ?? "") !== null
+    ) {
       continue;
     }
     if (!listed.has(file.relPath)) {

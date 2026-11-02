@@ -402,6 +402,10 @@ export async function setRequest(file: string, name: string, request: Request | 
   }
   return editRequests(file, (doc) => {
     if (!doc.has("packages") || !isMap(doc.get("packages", true))) doc.set("packages", doc.createNode({}));
+    // An empty map reads `{}`, which YAML can only write in flow style:
+    // its first request takes block style, as every other file's do.
+    const packages = doc.get("packages", true);
+    if (isMap(packages) && packages.items.length === 0) packages.flow = false;
     if (request === null) doc.deleteIn(["packages", name]);
     else if (doc.hasIn(["packages", name])) syncNode(doc, ["packages", name], requestValue(request));
     else doc.setIn(["packages", name], doc.createNode(requestValue(request)));

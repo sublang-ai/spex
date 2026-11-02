@@ -116,11 +116,13 @@ test("space-114: Open on <server> opens the seat, sends that seat's core the joi
     tap.sockets.filter((socket) => new URL(socket.url).pathname !== relay).flatMap((socket) => commandsSent(socket.sent, type));
 
   // [space-1] [run-view-170] the server stands as one line under its
-  // group's heading, with Connect, no seat open there yet.
+  // group's heading, by its name, with no control while no seat is open
+  // there: the seat opens on "Open on lab-4" alone (DR-175).
   const group = section.getByTestId(`space-group-${HOST_GROUP}`);
   const line = group.getByTestId(`space-server-${lab.place}`);
   await expect(line).toContainText("lab-4");
-  await expect(line.getByTestId(`space-server-control-${lab.place}`)).toHaveText("Connect");
+  await expect(line.getByTestId(`space-server-control-${lab.place}`)).toHaveCount(0);
+  await expect(line.getByTestId(`space-server-more-${lab.place}`)).toHaveCount(0);
 
   // [space-1] [space-111] the project's row offers this computer as its
   // primary control, "Open here", and the server beside it.

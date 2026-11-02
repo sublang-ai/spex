@@ -267,11 +267,49 @@ function tunedExecution(composed: ComposedConfig, cwd: string, members: StoredMe
   try { return keepStoredModules(executionConfig(composed, cwd, members, tuning), stored); }
   catch (error) {
     if (!stored || error instanceof SettingsDriftError) throw error;
-    const untuned = executionConfig(composed, cwd, members);
+    let untuned: SessionExecutionProjection;
+    try { untuned = executionConfig(composed, cwd, members); }
+    catch (cause) {
+      // A stored playbook's role rebound to a player outside the session's
+      // own leaves no projection to compare: the rebinding is the drift,
+      // a stored player another playbook still binds staying a member
+      // (core-service-92, core-service-2).
+      const rebound = reboundRoles(composed, stored);
+      if (rebound.length > 0) throw new SettingsDriftError(rebound);
+      throw cause;
+    }
     try { assertCaptainSessionExecutionCompatible(stored, untuned); }
     catch { throw new SettingsDriftError(describeStructuralDrift(stored, projectCaptainSessionStructure(untuned))); }
     throw error;
   }
+}
+
+/** Each role of a stored playbook the current config binds to another
+ * player than the session stored, in the drift's own words. */
+function reboundRoles(composed: ComposedConfig, stored: SessionStructuralProjection): string[] {
+  const changes: string[] = [];
+  for (const [id, before] of Object.entries(stored.catalog as Record<string, { roles?: Record<string, { playerId?: unknown }> }>)) {
+    const after = composed.captainOptions.playbooks[id];
+    if (!after) continue;
+    for (const [role, binding] of Object.entries(before.roles ?? {})) {
+      const now = after.roles[role]?.playerId;
+      if (now === binding.playerId) continue;
+      changes.push(i18n._({
+        id: "playbook {playbookId}'s {role} role now binds {player} instead of {before}",
+        comment:
+          "One settings drift: a role changed lanes; the ids are the config file's own",
+        values: {
+          playbookId: id,
+          role,
+          player: now === undefined
+            ? i18n._({ id: "no one", comment: "Stands where a role binds no player at all" })
+            : now,
+          before: String(binding.playerId),
+        },
+      }));
+    }
+  }
+  return changes;
 }
 
 /**
@@ -488,6 +526,16 @@ export class SessionManager {
   }
 
   async createSession(project: ProjectInfo, composed: ComposedConfig, assertCurrent?: () => void): Promise<SessionInfo> {
+    // A session runs a playbook: where none composes — none placed, or
+    // every one standing aside — none opens, said in the reader's words
+    // rather than the runtime's (core-service-2).
+    if (composed.playbooks.length === 0) {
+      throw new CoreError("invalid_config", i18n._({
+        id: "No playbook runs in {name} — add a package that provides one",
+        comment: "Refusal of a new session: no environment of the project or your global packages places a playbook that composes; {name} is the project's name",
+        values: { name: project.name },
+      }));
+    }
     return this.open(project, composed, randomUUID(), "new", assertCurrent);
   }
   async continueSession(project: ProjectInfo, composed: ComposedConfig, session: SessionInfo): Promise<SessionInfo> {

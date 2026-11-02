@@ -7,16 +7,17 @@
 // export — the shapes the core answers over the protocol, so a test
 // drives the real store and tabs against a stand-in client.
 
-import type {
-  ConfigState,
-  EnvironmentPackage,
-  EnvironmentState,
-  GroupsState,
-  InstanceState,
-  PlaybookAvailability,
-  ProjectInfo,
-  ReadinessEntry,
-  RepositoryState,
+import {
+  defaultPlayerId,
+  type ConfigState,
+  type EnvironmentPackage,
+  type EnvironmentState,
+  type GroupsState,
+  type InstanceState,
+  type PlaybookAvailability,
+  type ProjectInfo,
+  type ReadinessEntry,
+  type RepositoryState,
 } from "@sublang/spex-core/protocol";
 
 import { groupsState, instanceState, namespace, rowOf, type RowOver } from "./groups-state.js";
@@ -60,6 +61,7 @@ export const CONFIG_STATE: ConfigState = {
       },
     ],
     playbooks: [],
+    standsAside: [],
   },
 };
 
@@ -138,19 +140,26 @@ export function home(
   });
 }
 
-/** A playbook an environment exports, enabled nowhere unless told. */
+/** A playbook the global environment places, running on its default
+ * binding — each role on `dev.<role>` — unless told (core-service-2). */
 export function available(over: Partial<PlaybookAvailability> & { id: string }): PlaybookAvailability {
+  const roles = over.roles ?? ["coder"];
   return {
     name: over.id,
     command: over.id,
     intent: `${over.id} intent`,
-    roles: ["coder"],
+    roles,
     package: "sublang/playbooks",
     version: "17.4.1",
     source: "builtin",
     repository: OWN_KEY,
-    enabled: [],
+    runs: true,
+    placedBy: ["own"],
+    entry: [],
     present: true,
+    bindings: Object.fromEntries(
+      roles.map((role) => [role, { playerId: defaultPlayerId(role), display: "claude-opus-4-8 @ high", from: "default" as const }]),
+    ),
     ...over,
   };
 }
@@ -200,8 +209,8 @@ export const PROJECT_ENVIRONMENT = environment({
       name: "acme/triage",
       version: "1.2.3",
       artifacts: [
-        { id: "triage", kind: "playbook", language: "zh-Hans", fallback: false },
-        { id: "triage-spec", kind: "spec", language: "en", fallback: true },
+        { id: "triage", kind: "playbook", language: "zh-Hans", fallback: false, provided: true },
+        { id: "triage-spec", kind: "spec", language: "en", fallback: true, provided: true },
       ],
       exports: [{ name: "triage", artifact: "triage" }],
     }),
@@ -210,14 +219,14 @@ export const PROJECT_ENVIRONMENT = environment({
       version: "0.4.0",
       direct: false,
       requiredBy: ["acme/triage"],
-      artifacts: [{ id: "labels", kind: "skill", language: "en", fallback: true }],
+      artifacts: [{ id: "labels", kind: "skill", language: "en", fallback: true, provided: true }],
       installed: false,
     }),
     specPackage({
       name: "acme/local-tools",
       version: "0.1.0",
       source: { kind: "path", detail: "spex-packages/local-tools" },
-      artifacts: [{ id: "lint", kind: "skill", language: "en", fallback: false }],
+      artifacts: [{ id: "lint", kind: "skill", language: "en", fallback: false, provided: true }],
       installed: false,
       missingPath: "spex-packages/local-tools",
     }),
@@ -225,7 +234,7 @@ export const PROJECT_ENVIRONMENT = environment({
       name: "sublang/playbooks",
       version: "17.4.1",
       source: { kind: "builtin", detail: "the app" },
-      artifacts: [{ id: "code", kind: "playbook", language: "en", fallback: false }],
+      artifacts: [{ id: "code", kind: "playbook", language: "en", fallback: false, provided: true }],
     }),
   ],
 });
@@ -240,8 +249,8 @@ export const OWN_ENVIRONMENT = environment({
       version: "17.4.1",
       source: { kind: "builtin", detail: "the app" },
       artifacts: [
-        { id: "code", kind: "playbook", language: "en", fallback: false },
-        { id: "review", kind: "playbook", language: "en", fallback: false },
+        { id: "code", kind: "playbook", language: "en", fallback: false, provided: true },
+        { id: "review", kind: "playbook", language: "en", fallback: false, provided: true },
       ],
     }),
   ],

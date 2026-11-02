@@ -7,6 +7,7 @@
 
 Accepted; the mechanical migration is superseded by [DR-022](022-prompt-based-migration.md) — the one-file package layout and the linter stand, but `--update` restructures no legacy content.
 Amended by [DR-046](046-decision-record-evolution.md): future substantive changes to framework DRs use successor records; the earlier in-place rewrites remain historical.
+Amended by [DR-174](174-what-a-package-provides-is-placed.md) in the specs tree: a spec an install placed is a one-file package the linter reads as any other, whether or not the map lists it.
 
 ## Context
 

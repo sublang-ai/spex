@@ -206,8 +206,12 @@ test("settings-19: readiness takes each credential form, always names Claude and
       // (settings-14).
       assert.deepEqual(entries.map((e) => e.adapter).sort(), ["claude", "codex", "gemini"], entry.label);
       assert.deepEqual(map.get("codex")?.usedBy, [], entry.label);
-      assert.deepEqual(map.get("claude")?.usedBy, ["dev.coder (code.coder, review.coder, review.reviewer)"], entry.label);
-      assert.deepEqual(map.get("gemini")?.usedBy, ["captain"], entry.label);
+      // The built-ins the config names no entry for compose on their
+      // default bindings too (core-service-2).
+      assert.deepEqual(map.get("claude")?.usedBy, ["dev.coder (code.coder, review.coder, review.reviewer, branch.coder, decide.coder, pr.coder)"], entry.label);
+      // The players those defaults name and the roster lacks stand in on
+      // the Captain's block (core-service-2).
+      assert.deepEqual(map.get("gemini")?.usedBy, ["captain", "dev.reviewer (decide.reviewer)", "dev.analyst (dev.analyst)", "dev.inspector (inspect.inspector)"], entry.label);
       assert.equal(map.get("claude")?.ready, entry.claude, `${entry.label}: claude`);
       assert.equal(map.get("codex")?.ready, entry.codex, `${entry.label}: codex`);
       // No preflight rule: unknown, verify yourself (settings-14).
@@ -293,7 +297,7 @@ test("core-service-23: readiness with the config missing, and again invalid, hol
   }
 });
 
-test("core-service-147: config.get, the config.state broadcast and each write's reply carry one revision for one state, a new one after any writer's change", { timeout: 120_000 }, async () => {
+test("core-service-148: config.get, the config.state broadcast and each write's reply carry one revision for one state, a new one after any writer's change", { timeout: 120_000 }, async () => {
   const harness = await start(WORKSHOP_CONFIG);
   const { client } = harness;
   try {
@@ -324,7 +328,7 @@ test("core-service-147: config.get, the config.state broadcast and each write's 
   }
 });
 
-test("core-service-148: a batch refused as a conflict, a violation or a request error leaves the file's bytes as they were", { timeout: 180_000 }, async () => {
+test("core-service-149: a batch refused as a conflict, a violation or a request error leaves the file's bytes as they were", { timeout: 180_000 }, async () => {
   const harness = await start(WORKSHOP_CONFIG);
   const { client, configPath } = harness;
   try {
@@ -419,7 +423,7 @@ test("core-service-148: a batch refused as a conflict, a violation or a request 
   }
 });
 
-test("core-service-149: one batch sets the Captain, a player and a binding to Provider default, keeping comments and hand-written fields", { timeout: 120_000 }, async () => {
+test("core-service-150: one batch sets the Captain, a player and a binding to Provider default, keeping comments and hand-written fields", { timeout: 120_000 }, async () => {
   const harness = await start(WORKSHOP_CONFIG);
   const { client, configPath } = harness;
   try {

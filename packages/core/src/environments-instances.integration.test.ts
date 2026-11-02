@@ -27,6 +27,7 @@ import { parse as parseYaml, parseDocument } from "yaml";
 
 import {
   BUILTIN_PACKAGE_NAME,
+  builtinLock,
   PUBLIC_REGISTRY_ORIGIN,
   gitSource,
   parseLock,
@@ -41,6 +42,7 @@ import {
   type RegistrySourceLock,
   type Resolution,
 } from "@sublang/spex/environment";
+import { builtinPackage } from "./builtins.js";
 import type { EnvironmentState, GroupsState, RepositoryState } from "./protocol.js";
 import { credentialsPath, fileCredentialStore, GitHostClient, type StoredCredential } from "@sublang/spex/git-host";
 import { holdingFetch } from "./testing/holding-fetch.js";
@@ -64,24 +66,25 @@ async function startHome(name: string, options: Parameters<typeof fixture.startH
 }
 function seedLegacy(clone: string): void {
   mkdirSync(clone, { recursive: true });
-  writeFileSync(join(clone, "spex.yaml"), "format: 1\npackages: {}\n");
+  // Your own group's environment as an earlier core left it: the
+  // built-in spec package requested, no registry setting, no lock yet
+  // (environments-11).
+  writeFileSync(join(clone, "spex.yaml"), `format: 1\npackages:\n  ${BUILTIN_PACKAGE_NAME}:\n    version: ^${builtinPackage().version}\n`);
 }
 async function addFolder(home: Home, path: string) {
   const added = await fixture.addFolder(home, path);
-  // Restore a pre-migration project snapshot after allocating its real key.
-  // Precreating its directory would make registration allocate another key.
+  // Restore a pre-migration project snapshot after allocating its real key:
+  // the environment a pairing wrote before the independent registry and
+  // the global built-ins (DR-168, DR-176) — the built-in spec package
+  // requested with no registry setting, locked at the default instance's
+  // registry. Precreating its directory would make registration allocate
+  // another key.
   const root = environmentRoot(home.dataDir, added.key);
-  const yaml = join(root, "spex.yaml");
-  const doc = parseDocument(readFileSync(yaml, "utf8"));
-  doc.delete("registry");
-  const text = doc.toString({ lineWidth: 0 });
-  const lock = parseLock(readFileSync(join(root, "spex.lock"), "utf8"));
-  const builtin = lock.packages[BUILTIN_PACKAGE_NAME]!;
+  const pkg = builtinPackage();
+  const text = `format: 1\npackages:\n  ${BUILTIN_PACKAGE_NAME}:\n    version: ^${pkg.version}\n`;
   const origin = (await home.client.expectOk("space.get", {})).defaultInstance!;
-  writeFileSync(yaml, text);
-  writeFileSync(join(root, "spex.lock"), serializeLock({ ...lock, requests: requestsDigest(text), packages: {
-    ...lock.packages, [BUILTIN_PACKAGE_NAME]: { ...builtin, source: { ...(builtin.source as RegistrySourceLock), registry: origin } },
-  } }));
+  writeFileSync(join(root, "spex.yaml"), text);
+  writeFileSync(join(root, "spex.lock"), serializeLock(builtinLock(pkg, origin, text)));
   return added;
 }
 async function registrySignIn(home: Home, host: StandinHost): Promise<void> {
@@ -192,6 +195,19 @@ function spaceOf(home: Home, key: string): string | undefined {
   return parseRequests(readFileSync(join(environmentRoot(home.dataDir, key), "spex.yaml"), "utf8")).space;
 }
 
+/** An environment's `spex.yaml` as it reads (environments-2). */
+function requestsOf(home: Home, key: string): ReturnType<typeof parseRequests> {
+  return parseRequests(readFileSync(join(environmentRoot(home.dataDir, key), "spex.yaml"), "utf8"));
+}
+
+/** A pairing's environment as it writes one (storage-6, DR-176): the
+ * public registry named, nothing requested, its lock resolved. */
+function pairedAlone(home: Home, key: string): boolean {
+  const requests = requestsOf(home, key);
+  return requests.registry === PUBLIC_REGISTRY_ORIGIN && Object.keys(requests.packages).length === 0
+    && existsSync(join(environmentRoot(home.dataDir, key), "spex.lock"));
+}
+
 /** Pick a project into your namespace at an instance (space-58), its
  * clone moved under that instance's folder (storage-35): its key. */
 async function pickAt(home: Home, local: string, host: StandinHost, name: string): Promise<string> {
@@ -286,6 +302,8 @@ test("environments-34, environments-5, environments-12, environments-3, environm
   assert.deepEqual(receivedFor(R2, two, "team/kit"), [
     ["/api/v1/packages/team/kit", second.url, LOGIN, true],
     ["/api/v1/packages/team/kit/1.0.0", second.url, LOGIN, true],
+    // The release's manifest, for what it provides (environments-6).
+    ["/team/kit/1.0.0/meta.yaml", second.url, LOGIN, true],
     ["/api/v1/packages/team/kit/1.0.0", second.url, LOGIN, true],
     ["/api/v1/packages/team/kit/1.0.0/download", second.url, LOGIN, true],
   ]);
@@ -323,6 +341,7 @@ test("environments-34, environments-5, environments-12, environments-3, environm
   assert.deepEqual(receivedFor(R2, two, "team/kit").map(([path, instance]) => [path, instance]), [
     ["/api/v1/packages/team/kit", second.url],
     ["/api/v1/packages/team/kit/1.0.0", second.url],
+    ["/team/kit/1.0.0/meta.yaml", second.url],
   ]);
   assert.deepEqual(receivedFor(R1, one, "team/kit"), []);
 
@@ -346,25 +365,23 @@ test("environments-34, environments-5, environments-12, environments-3, environm
 
   // A repository joined at the second with its working folder paired,
   // and one joined bare and paired by a rebind, hold no environment
-  // until paired; each new pairing locks the built-in at the public registry
-  // (environments-11).
+  // until paired; each new pairing writes one naming the public
+  // registry and its Space, requesting nothing — the built-in spec
+  // package is global (environments-11, storage-6).
   const joined = await joinAt(home, second, "acme/joined-spex", gitFolder("joined"));
-  await environmentOf(home, joined, (candidate) => installedFrom(candidate, BUILTIN_PACKAGE_NAME, PUBLIC_REGISTRY_ORIGIN));
-  assert.equal(registryOf(lockOf(home, joined), BUILTIN_PACKAGE_NAME), PUBLIC_REGISTRY_ORIGIN);
+  await environmentOf(home, joined, () => pairedAlone(home, joined));
   assert.equal(spaceOf(home, joined), second.url, "[environments-11] the pairing names the second as space");
   const rebound = await joinAt(home, second, "acme/rebound-spex");
   assert.equal(existsSync(join(clonePath(home.dataDir, rebound), "spex.yaml")), false, "a bare join requests nothing");
   assert.equal((await home.client.expectOk("environment.get", { repository: rebound })).committed, null, "[environments-14] no working folder on this device: committed is unknown, not false");
   await home.client.expectOk("project.rebind", { projectId: rebound, path: gitFolder("rebound") });
-  await environmentOf(home, rebound, (candidate) => installedFrom(candidate, BUILTIN_PACKAGE_NAME, PUBLIC_REGISTRY_ORIGIN));
-  assert.equal(registryOf(lockOf(home, rebound), BUILTIN_PACKAGE_NAME), PUBLIC_REGISTRY_ORIGIN);
+  await environmentOf(home, rebound, () => pairedAlone(home, rebound));
   assert.equal(spaceOf(home, rebound), second.url, "[environments-11] the pairing names the second as space");
   // One joined at the first, the default instance, with its working
   // folder paired records that Space separately and uses the public registry
   // (environments-11, environments-2).
   const atFirst = await joinAt(home, first, "acme/at-first-spex", gitFolder("at-first"));
-  await environmentOf(home, atFirst, (candidate) => installedFrom(candidate, BUILTIN_PACKAGE_NAME, PUBLIC_REGISTRY_ORIGIN));
-  assert.equal(registryOf(lockOf(home, atFirst), BUILTIN_PACKAGE_NAME), PUBLIC_REGISTRY_ORIGIN);
+  await environmentOf(home, atFirst, () => pairedAlone(home, atFirst));
   assert.equal(spaceOf(home, atFirst), first.url, "a fresh independent environment records collaboration separately from its public registry");
   // A local-only project picked into the first, the default instance,
   // names it as space all the same (environments-11).
@@ -861,7 +878,7 @@ test("environments-34, environments-27: the orgs asked for the second's project 
   assert.deepEqual(orgsAsked(R2, two), []);
 });
 
-test("environments-34, environments-11, storage-31: with the first, the default instance, signed out and your own group's own repository following the second by its remote, a start finding your own group's environment gone requests the built-in spec package at the public registry with the second still selected for collaboration", { timeout: 300_000 }, async (t) => {
+test("environments-34, environments-11, storage-31: with the first, the default instance, signed out and your own group's own repository following the second by its remote, a start finding your own group's environment gone makes it again, requesting the built-in spec package at the public registry with the second still selected for collaboration", { timeout: 300_000 }, async (t) => {
   const { first, second, home } = await twoInstances(t, "own-prepare");
 
   // The first signed out, the second read again: your own group's own
@@ -893,10 +910,10 @@ test("environments-34, environments-11, storage-31: with the first, the default 
   assert.deepEqual([instanceOf(state, first.url)?.signedIn, instanceOf(state, second.url)?.signedIn], [false, true]);
   assert.equal(rowOf(state, HOST_OWN).instance, second.url);
 
-  // The start requests the built-in spec package in your own group's
+  // A home holding no global environment has it made, as a home is:
+  // the start requests the built-in spec package in your own group's
   // environment again, locked at the public registry while its Space
-  // still follows the remote at the second
-  // (environments-11).
+  // still follows the remote at the second (environments-11).
   assert.ok(parseRequests(readFileSync(join(ownClone(again.dataDir), "spex.yaml"), "utf8")).packages[BUILTIN_PACKAGE_NAME], "the built-in is requested");
   assert.equal(spaceOf(again, HOST_OWN), second.url, "[environments-11] with space naming the second, not the default");
   assert.equal(registryOf(lockOf(again, HOST_OWN), BUILTIN_PACKAGE_NAME), PUBLIC_REGISTRY_ORIGIN);

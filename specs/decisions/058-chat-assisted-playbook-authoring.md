@@ -15,6 +15,7 @@ Amended by [DR-103](103-the-home-and-its-groups.md) and [DR-104](104-spec-packag
 Clarified by [DR-112](112-authoring-permissions-use-the-package-working-directory.md) in the authoring agent's permission projection and the limits of adapter enforcement.
 Amended by [DR-111](111-the-core-coordinates-as-git-does.md) in one activity per draft: a draft's compile may run beside its turn, messages still queue, and a duplicate compile is refused per artifact destination, where it was per playbook id.
 Amended by [DR-172](172-surfaces-a-fresh-user-reads.md) in the Enable tab's words.
+Amended by [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md) in the workspace's last tab: "Add" in "Enable"'s place, writing the players and requesting the package from the environment of the page the playbook was created on.
 
 ## Context
 

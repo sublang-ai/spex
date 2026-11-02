@@ -195,17 +195,17 @@ function providerGlyph(provider: string): ReactNode {
   }
 }
 
-/** A Space's sign-in providers as icons titled with their names
- * (space-115): "Sign in with GitHub". */
+/** A Space's sign-in providers as icons, each titled with the accounts
+ * it takes (space-115): "Accepts GitHub accounts"; no icon is a control. */
 export function ProviderIcons({ providers }: { providers: readonly string[] }) {
   if (providers.length === 0) return null;
   return (
     <span data-testid="space-signin-providers" className="flex shrink-0 items-center gap-1 text-neutral-500">
       {providers.map((provider) => {
         const label = i18n._({
-          id: "Sign in with {provider}",
+          id: "Accepts {provider} accounts",
           values: { provider: providerName(provider) },
-          comment: "the title of a sign-in provider's icon beside a Space in the sign-in card's chooser; {provider} is its name, such as GitHub",
+          comment: "the title of a sign-in provider's icon beside a Space in the sign-in card's chooser, an icon and not a button: the Space takes accounts of that provider; {provider} is its name, such as GitHub",
         });
         return (
           <span key={provider} role="img" aria-label={label} title={label} data-provider={provider} className="inline-flex">

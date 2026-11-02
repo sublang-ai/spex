@@ -860,9 +860,10 @@ export function DashboardSurface({
             className="rounded-lg border border-dashed border-neutral-300 px-4 py-5 text-center text-sm text-neutral-500 dark:border-neutral-700"
           >
             <Rich
-              text={i18n._(
-                "No projects yet — register a repository in the <0>Projects</0> to put its work here.",
-              )}
+              text={i18n._({
+                id: "No projects yet · <0>Add a project</0>",
+                comment: "the Dashboard's Projects band with no project: the link opens Projects, where a project is added",
+              })}
               components={[workspaceLink]}
             />
           </div>

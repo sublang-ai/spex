@@ -16,7 +16,9 @@ A **runtime** is one core on one home, named by the home's `device` [[storage-2]
 
 #### core-service-89
 
-When started on a native platform other than macOS or Linux, the core service shall refuse before creating or migrating config or storage, naming the supported hosts and Windows' scaffold CLI and browser alternatives ([DR-049](../decisions/049-supported-app-hosts.md)):
+When started on a native platform other than macOS, Linux or Windows, the core service shall refuse before creating or migrating config or storage, naming the supported hosts ([DR-178](../decisions/178-native-windows-private-storage.md)):
+
+- Windows storage admission verifies the private-storage policy before config or storage is created or migrated.
 
 - Supported hosts require a filesystem that enforces the shared store's private permissions [[1]].
 
@@ -49,13 +51,17 @@ Where your own group's spex repository holds its `config/playbook.config.yaml` [
 
 On every load and reload:
 
-- Your own group's file holds the captain, the players with what each runs on, the playbooks it enables with the player each role uses, notifications, theme and layout; a project's or another group's file holds only the playbooks it enables with the player each role uses, by name, and an option slice per playbook — a `captain`, `players` or model field in it, a `from` in any file, or a `skills` list at the top of your own group's file, on its Captain or on a player, is a config error naming the entry.
-- A player the project's file names and your own group's lacks is reported before a session of that project starts, as a config error that names the player and offers to add it [[settings-46](settings.md#settings-46)]; sessions of other spex repositories are unaffected.
+- Your own group's file — the global config — holds the captain, the players with what each runs on, the playbook entries it writes with the player each role uses, notifications, theme and layout; a project's or another group's file holds only playbook entries with the player each role uses, by name, and an option slice per playbook — a `captain`, `players` or model field in it, a `from` in any file, or a `skills` list at the top of your own group's file, on its Captain or on a player, is a config error naming the entry.
+- Every playbook the project's environment or the global places [[environments-9](environments.md#environments-9)] composes — by the project's entry where one stands, else the global entry, else a default binding of each required role to the player `dev.<role>`: the role lowercased, runs outside ASCII letters, digits, `_` and `-` replaced by `-`, a suffix kept that starts with a letter, else boundary `-` and `_` trimmed and `role-` prefixed, `role` when nothing remains — so two playbooks naming one role share one player by default ([DR-032](../decisions/032-session-players.md), [DR-176](../decisions/176-global-playbooks-and-a-placed-playbook-runs.md)); the defaults are composed, written to no file, and reach the launcher as `from` does [[core-service-16](#core-service-16)].
+- A player a binding names, written or default, and your own group's file lacks composes as the Captain's block without its `instruction`, under that id, and is reported in the summary as a player to set up [[settings-46](settings.md#settings-46)]; it refuses no session.
+- Two placed playbooks of one command: one composes — the project's over the global, a written entry over a default, else the first by package name — and the other stands aside, reported with the one that composes; a written entry naming a playbook no environment of the session places, or whose module is absent on this device [[environments-9](environments.md#environments-9)], stands aside the same way, reported with its cause, and composes nothing.
+- A playbook both environments place, by one id, composes once: by the project's entry where one stands, else the global.
+- While no playbook composes for a project, a session there is refused naming it: "No playbook runs in ⟨project⟩ — add a package that provides one".
 
 - On success, the resulting config state is broadcast to all connected clients.
 - On failure, a config error naming the offending entry and the violated rule is broadcast, and session creation requests are rejected while no valid config is active.
 - A turn in flight keeps the config it opened with; the next message opens with the current config, or is refused naming the config error [[core-service-73](#core-service-73)] ([DR-051](../decisions/051-runtime-held-for-a-turn.md)).
-- The state is a cache of the files it was composed from — both config files, the environments' locks and install records, the presence of selected registry and Git files that establishes module availability [[environments-9](environments.md#environments-9)], each module entry those locks place an enabled playbook at, a missing one as absent, and the home's pairing where a selected project's folder supplies option context — at the versions read: a command, turn or compile taking anything from it checks them first and reads again where one changed, with or without a watcher's notice, while what was already broadcast stays as broadcast ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)).
+- The state is a cache of the files it was composed from — both config files, the environments' locks and install records, the presence of selected registry and Git files that establishes module availability [[environments-9](environments.md#environments-9)], each module entry those locks place a playbook at, a missing one as absent, and the home's pairing where a selected project's folder supplies option context — at the versions read: a command, turn or compile taking anything from it checks them first and reads again where one changed, with or without a watcher's notice, while what was already broadcast stays as broadcast ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)).
 - A project config write or new-session admission whose selected pairing changes during validation is refused as `conflict` before the config is written or the session host opens.
 - A load, composition, broadcast or readiness probe whose files changed while it ran publishes nothing it read, valid or not: it may read once more, else the command is refused as `conflict`, "changed meanwhile; retry".
 - Where the file is a profiles-era config, the load migrates it in place per the launcher's semantics ([DR-019](../decisions/019-inline-agent-configuration.md)): named profiles inline into agent blocks, the `profiles` map is deleted, the pre-migration file is backed up beside the config with comments surviving, and a `profile` naming a missing entry is a config error that leaves the file untouched.
@@ -209,7 +215,7 @@ When a client requests the session list, the core service shall reply with every
 - each entry says whether a Boss message continues it, using the shared checkpoint, replay and execution checks [[core-service-73](#core-service-73)], with a reason when history-only;
 - an entry whose session is assigned to another runtime [[storage-43](storage.md#storage-43)] carries `runsOn` with that runtime's label, is not continuable, with the reason "Runs on <label>", and carries no `recovery`, whatever its checkpoint holds ([DR-134](../decisions/134-execution-ownership.md));
 - a settled checkpoint whose current working-folder binding or stored-member configuration refuses continuation is history-only with that refusal's reason; listing and reporting this reading open no runtime, acquire no session lease, consume no provider hints and change no session files;
-- this reading follows current bindings and configuration, including changes since the preceding listing or report; unprovable current inputs produce no positive reading, compatible tuning changes and unrelated enabled playbooks remain continuable [[core-service-92](#core-service-92)], and submission still checks admission afresh [[core-service-73](#core-service-73)];
+- this reading follows current bindings and configuration, including changes since the preceding listing or report; unprovable current inputs produce no positive reading, compatible tuning changes and unrelated playbooks remain continuable [[core-service-92](#core-service-92)], and submission still checks admission afresh [[core-service-73](#core-service-73)];
 - each uncertain entry carries `recovery: {state: "uncertain", input, discardable}` with the exact saved input and whether Playbook's shared discard predicate [[2]] allows Discard — no recorded step, no abandonment, unchanged repository evidence ([DR-088](../decisions/088-playbook-17-slc-0-12-cligent-0-27-adoption.md)); uncertainty is never reported as normal continuability;
 - while this core runs a turn of the session — from its acceptance until the turn transaction settles or fails — the entry carries no `recovery` and no continuation reason: Playbook marks the checkpoint uncertain as the turn begins and settles it only with the turn, the evidence a turn cut off leaves, so the uncertain entry is one whose last turn was cut off with no turn running ([DR-047](../decisions/047-explicit-session-recovery.md));
 - external session leases are observed through Playbook's shared API [[1]]: an active writer reports liveness, and active or unprovable ownership reports `externalWriter` and withholds recovery controls until ownership is idle;
@@ -349,7 +355,7 @@ When a client sends `session.discard` with only a `sessionId`, the core shall di
 
 #### core-service-96
 
-The core service shall accept the authoring command family — `draft.list`, `draft.defaults`, `draft.create`, `draft.open`, `draft.send`, `draft.abort`, `draft.source.write`, `draft.compile`, `draft.register`, `draft.player.set`, `draft.delete`, `draft.artifacts` — each naming the project whose spex repository holds the authoring session [[storage-23](storage.md#storage-23)], validated as every command is [[core-service-13](#core-service-13)], stream a session's records as `draft.record` messages to the subscribers of its `draft` channel and its state as `draft.state` to every client, and run at most one turn per authoring session instance, refusing a command because other work runs only as the table and the cases below say ([DR-058](../decisions/058-chat-assisted-playbook-authoring.md), [DR-104](../decisions/104-spec-package-format-and-client-environments.md), [DR-111](../decisions/111-the-core-coordinates-as-git-does.md)):
+The core service shall accept the authoring command family — `draft.list`, `draft.defaults`, `draft.create`, `draft.open`, `draft.send`, `draft.abort`, `draft.source.write`, `draft.compile`, `draft.register`, `draft.player.set`, `draft.delete`, `draft.artifacts` — each naming the project whose spex repository holds the authoring session, or the global environment, whose own records hold it [[storage-23](storage.md#storage-23)], validated as every command is [[core-service-13](#core-service-13)], stream a session's records as `draft.record` messages to the subscribers of its `draft` channel and its state as `draft.state` to every client, and run at most one turn per authoring session instance, refusing a command because other work runs only as the table and the cases below say ([DR-058](../decisions/058-chat-assisted-playbook-authoring.md), [DR-104](../decisions/104-spec-package-format-and-client-environments.md), [DR-111](../decisions/111-the-core-coordinates-as-git-does.md)):
 
 | Command | While a turn runs | While a compile runs |
 | --- | --- | --- |
@@ -360,10 +366,10 @@ The core service shall accept the authoring command family — `draft.list`, `dr
 
 - a draft compile is an ordinary process with a cancel handle of its instance's, running beside a turn, a source write or a deletion; a `compile.abort` naming the instance cancels its compile and replies `not_found` where none runs, one naming no instance cancelling one-shot compiles alone [[core-service-25](#core-service-25)]; its `compile.progress` lines name the instance;
 - a session made again under an id is another session, whose turn may run beside a former instance's in the same working folder;
-- `draft.compile` and `draft.register` are refused `busy`, naming the folder and the work running there, while another job of the core writes the session's artifact folder — a former instance's compile, a one-shot compile of its id, or an enabling's repackaging — whatever turn runs [[playbook-library-99](playbook-library.md#playbook-library-99)];
+- `draft.compile` and `draft.register` are refused `busy`, naming the folder and the work running there, while another job of the core writes the session's artifact folder — a former instance's compile, a one-shot compile of its id, or an Add's repackaging — whatever turn runs [[playbook-library-99](playbook-library.md#playbook-library-99)];
 - a session's state carries its recorded instance [[storage-23](storage.md#storage-23)], or, where its file will not read, that file's version instead, and its `activity` — `turn` while its turn runs, else `compiling` while its compile runs, else `idle` — beside `compiling`, true while its compile runs, so a turn and a compile running at once are each reported; `draft.record` and `draft.source` name the instance, and `draft.removed` names it where the file read; every command but `draft.list`, `draft.defaults`, `draft.create`, `draft.open` and `draft.artifacts` names the instance it read, `draft.delete` the version where it read none, and replies `conflict`, changed meanwhile, where the session's file no longer records it;
-- `draft.create` names the new spec package's `org` and `license` and replies `invalid_request` for an id a playbook of the project's or your own group's environment holds, an org outside the manifest's name rule [[environments-1](environments.md#environments-1)], an empty license, or a project with no working folder on this device, `draft.defaults` refusing the last alike; `draft.open` and every other command reply `not_found` for an unknown session; `draft.register` before a successful compile replies `invalid_request`; `draft.source.write` with a stale version replies `conflict`;
-- a deleted session is announced to every client as `draft.removed`, so no client keeps a trace of it; an enabled one stays and reads enabled;
+- `draft.create` names the new spec package's `org` and `license` and replies `invalid_request` for an id a playbook of the project's or your own group's environment holds, an org outside the manifest's name rule [[environments-1](environments.md#environments-1)], an empty license, a project with no working folder on this device, or the global environment while its clone is not on this device, `draft.defaults` refusing the last two alike; `draft.open` and every other command reply `not_found` for an unknown session; `draft.register` before a successful compile replies `invalid_request`; `draft.source.write` with a stale version replies `conflict`;
+- a deleted session is announced to every client as `draft.removed`, so no client keeps a trace of it; an added one stays and reads added;
 - `draft.send` replies when the message is accepted, never when the turn ends; the protocol version bumps [[core-service-12](#core-service-12)].
 
 #### core-service-118
@@ -561,7 +567,7 @@ When a client requests adapter readiness, the core service shall report an entry
 - Every entry carries the core's platform and the file name of the environment's `SHELL`, where set.
 - When the active config changes, refreshed readiness is broadcast to connected clients; a reload superseded by a newer one — before committing, or while its runtime probes are in flight — commits and broadcasts nothing, so the state and readiness clients hold always correspond to the newest configuration read.
 
-#### core-service-150
+#### core-service-151
 
 Where the core service runs off a seat and the `env` of Claude Code's user settings file — `settings.json` in `CLAUDE_CONFIG_DIR` or `~/.claude` — sets variables, when the core service starts, and before each agent run and each readiness report [[core-service-9](#core-service-9)], the core service shall write them into the environment its adapters inherit, over the values inherited, so that a call reading no settings file — the Captain's control calls — runs with the key, base URL and model a run reading them would ([DR-190](../decisions/190-agent-cards-read-alike.md)):
 
@@ -739,7 +745,7 @@ While a seat is open [[core-service-128](#core-service-128)], the core service s
 
 ### core-service-143
 
-The core service shall expose independent registry commands `registry.get`, `registry.signin.start`, `registry.signin.cancel`, `registry.signout`, `registry.directory` and `registry.orgs`, plus `environment.registry.set`, using protocol version 32 and broadcasting `registry.state` for account changes ([DR-168](../decisions/168-independent-package-registry.md)):
+The core service shall expose independent registry commands `registry.get`, `registry.signin.start`, `registry.signin.cancel`, `registry.signout`, `registry.directory` and `registry.orgs`, plus `environment.registry.set`, using protocol version 33 and broadcasting `registry.state` for account changes ([DR-168](../decisions/168-independent-package-registry.md)):
 
 - `registry.get` names an origin or an environment, defaulting to the public registry, and reports its origin, display name, account without credentials, sign-in progress and read error;
 - sign-in uses the shell's existing browser or device flow with registry purpose, no seat ticket, and stores no Space entry or placement;
@@ -790,12 +796,12 @@ The core package shall own Spex application files through the versioned encoding
 
 #### core-service-16
 
-The core package shall compose the session-player roster, the playbook registry, and runtime options from the shared config with the same fail-closed validation rules as the playbook launcher — as recorded in [DR-004](../decisions/004-config-and-persistence.md) and amended by [DR-019](../decisions/019-inline-agent-configuration.md) and [DR-032](../decisions/032-session-players.md) — so that any config the launcher accepts or rejects is accepted or rejected identically by the core package, a playbook's `from` and a `skills` list excepted ([DR-105](../decisions/105-playbook-17-5-0-adoption.md), [DR-123](../decisions/123-playbook-17-10-1-cligent-0-34-0-slc-0-18-0-adoption.md)):
+The core package shall compose the session-player roster, the playbook registry, and runtime options from the shared config with the same fail-closed validation rules as the playbook launcher — as recorded in [DR-004](../decisions/004-config-and-persistence.md) and amended by [DR-019](../decisions/019-inline-agent-configuration.md) and [DR-032](../decisions/032-session-players.md) — so that any config the launcher accepts or rejects is accepted or rejected identically by the core package — a playbook's `from`, a `skills` list, and the default entries and players the core composes for placed playbooks [[core-service-2](#core-service-2)] excepted ([DR-105](../decisions/105-playbook-17-5-0-adoption.md), [DR-123](../decisions/123-playbook-17-10-1-cligent-0-34-0-slc-0-18-0-adoption.md), [DR-176](../decisions/176-global-playbooks-and-a-placed-playbook-runs.md)):
 
 | Rule | Composition |
 | --- | --- |
 | Roster | a top-level `players` map of player id to inline agent block; a scalar adapter id normalizes to a bare-adapter block; an id outside `^[a-z][a-z0-9_-]*(?:\.[a-z][a-z0-9_-]*)*$`, or the reserved `captain`, is refused |
-| Bindings | `playbooks.<id>.roles` maps every id in the entry's `requiredRoleIds` to a roster player, as a bare player id or a block naming `player` with `model`/`subagentModel`/`effort`/`subagentEffort`/`fastMode`; a role left unbound, or bound to an absent player, is refused naming it |
+| Bindings | `playbooks.<id>.roles` maps every id in the entry's `requiredRoleIds` to a roster player, as a bare player id or a block naming `player` with `model`/`subagentModel`/`effort`/`subagentEffort`/`fastMode`; a role a written entry leaves unbound is refused naming it, and a player it names that the roster lacks composes as the Captain's block [[core-service-2](#core-service-2)] |
 | Binding keys | `adapter`, `permissions`, `instruction` and `workspace` inside a binding are refused: they belong to the player's envelope |
 | Tuning | an omitted `model`/`subagentModel`/`effort`/`subagentEffort`/`fastMode` inherits the player's; for the first four, `false` selects the provider's current default and a string pins it, while a `fastMode` boolean is a literal request; the composed selection is complete on every call; a `subagentModel` string is accepted only where Cligent serves one for the player's adapter, refused in Cligent's own words otherwise ([DR-093](../decisions/093-a-players-subagent-model.md)) |
 | Delegation | an agent block's `subagentModel` is a model, the literal `inherit` — the agent's own model — or `false`, Off; where Cligent serves a subagent model for the adapter, an unset one composes as `inherit`, with or without a subagent effort beside it, at the Captain, at each player and at each binding inheriting it, as Playbook's launcher resolves it, while the configuration and its summary keep the omission; an Off is carried as itself through composition and the session's own tuning [[core-service-100](#core-service-100)], a binding omitting the field inheriting it as Off, and is sent as no subagent model only once the projection is built ([DR-095](../decisions/095-a-subagents-effort-and-the-agents-own-model.md)) |
@@ -805,7 +811,7 @@ The core package shall compose the session-player roster, the playbook registry,
 | Roster scope | only players some binding references reach the composed session, so an unused roster entry gates no run |
 | Legacy | a surviving `playbooks.<id>.players` block is refused in the launcher's own words |
 | Module | a `playbooks.<id>.from` is refused [[core-service-2](#core-service-2)], while the launcher accepts one and takes ahead of it each playbook's module supplied at launch [[3]], so a configuration naming no `from` composes in both — in the launcher with each module supplied at launch, or on a record-backed reopen with the module the session records [[4]] |
-| Skills | a `skills` list at the top level, on the Captain or on a player is refused [[core-service-2](#core-service-2)], while the launcher accepts one; a session's agents carry no supplied skills, and skills reach agents from the environments that export them [[environments-8](environments.md#environments-8)] |
+| Skills | a `skills` list at the top level, on the Captain or on a player is refused [[core-service-2](#core-service-2)], while the launcher accepts one; a session's agents carry no supplied skills, and skills reach agents from the environments that place them [[environments-8](environments.md#environments-8)] |
 | Custom options | composition for a paired project validates each entry's options with its actual working folder, naming the playbook and retaining the validator's reason on refusal, before reporting valid or accepting a project config write; global composition without a working folder defers this check, and authored option slices stay unchanged for the shell's validation and normalization at construction |
 
 - For an omitted `cwd`, the existing successful `cwd: "/"` capability probe requires validation with the actual project folder and its rejection cannot fall back to the raw slice; where that probe rejects, a successful actual-folder candidate establishes injection, otherwise the raw slice must validate and retains the existing non-injected behavior without inferring an opaque validator's reason for rejecting either candidate [[core-service-29](#core-service-29)].
@@ -1014,9 +1020,9 @@ Where the core seeded the shared config path under Claude credentials alone, the
 - started with nothing set up, a readiness request after Claude Code's user settings gain a third-party key and base URL reseeds it with no `model` on the Captain, connected clients told it was reseeded, one after Codex's status command answers signed in places `dev.reviewer` alone on `codex` with that command asked once, one after a config edit leaves the edited bytes as they are, and a further one asks it once again [[core-service-137](#core-service-137)];
 - seeded under Anthropic's own service with a Codex credential beside, a restart with a third-party base URL reseeds it with no `model` on the Captain or any Claude player, each Codex player keeping its model and the template's comments kept, and a further restart leaves its bytes as they are [[core-service-3](#core-service-3)] [[core-service-137](#core-service-137)].
 
-#### core-service-151
+#### core-service-152
 
-Where Claude Code's user settings file in the core's home sets a key, a third-party base URL and `ANTHROPIC_MODEL`, none of them in the process environment, the test suite shall run a turn over the fixture adapter and fail unless the Captain's control call and the player's run each start with all three, a turn after the file drops the base URL and the model starts with neither and with the file's replaced key, and a stop leaves none of the names in the process environment; and on a seat whose server account's settings set a key, a token and a base URL, fail unless every run of a turn, the Captain's control call among them, starts with the member's own key and neither of the others, a replaced key standing after the file then drops a name [[core-service-150](#core-service-150)].
+Where Claude Code's user settings file in the core's home sets a key, a third-party base URL and `ANTHROPIC_MODEL`, none of them in the process environment, the test suite shall run a turn over the fixture adapter and fail unless the Captain's control call and the player's run each start with all three, a turn after the file drops the base URL and the model starts with neither and with the file's replaced key, and a stop leaves none of the names in the process environment; and on a seat whose server account's settings set a key, a token and a base URL, fail unless every run of a turn, the Captain's control call among them, starts with the member's own key and neither of the others, a replaced key standing after the file then drops a name [[core-service-151](#core-service-151)].
 
 #### core-service-139
 
@@ -1086,7 +1092,19 @@ Where a config file with a comment and a non-default mode sits at a former locat
 
 #### core-service-69
 
-Where the core service runs with the installed playbook's real captain shell and registries over a git-initialized project, the test suite shall create a session and assert the capability contract of [[core-service-67](#core-service-67)]: the session starts with a capability covering every enabled playbook [[core-service-17](#core-service-17)], and a Boss turn round-trips the Captain's reply after reconciliation.
+Where the core service runs with the installed playbook's real captain shell and registries over a git-initialized project, the test suite shall create a session and assert the capability contract of [[core-service-67](#core-service-67)]: the session starts with a capability covering every playbook that runs [[core-service-17](#core-service-17)], and a Boss turn round-trips the Captain's reply after reconciliation.
+
+#### core-service-147
+
+Where a scratch home's global environment and a project's environment each place playbooks, when the core composes the project's config, the test suite shall assert the composition of [[core-service-2](#core-service-2)]:
+
+- a placed playbook no entry binds composes with each required role bound to `dev.<role>`, two playbooks naming one role sharing that player, and launches [[core-service-2](#core-service-2)];
+- a player a written or default binding names and the global file lacks composes as the Captain's block without `instruction`, flagged in the summary as a player to set up, and the session is admitted [[core-service-2](#core-service-2)];
+- a written entry naming a playbook no environment places stands aside, reported with its cause, and the other playbooks compose and launch [[core-service-2](#core-service-2)];
+- two placed playbooks of one command compose one — the project's over the global, a written entry over a default, else the first by package name — the other reported standing aside with the winner [[core-service-2](#core-service-2)];
+- a playbook both environments place by one id composes once, by the project's entry where one stands, else the global [[core-service-2](#core-service-2)];
+- a project for which no playbook composes refuses a session there, naming the project: "No playbook runs in ⟨project⟩ — add a package that provides one" [[core-service-2](#core-service-2)];
+- the defaulted entries and composed players reach the launcher while both files are byte-identical before and after [[core-service-16](#core-service-16)].
 
 ### Interface Language Coverage
 
@@ -1243,11 +1261,11 @@ Where readiness is evaluated for the `claude` and `codex` adapters with credenti
 
 ### Batch Edit Coverage
 
-#### core-service-147
+#### core-service-148
 
 Where a client reads your own group's valid config, edits it with `config.edit` and then with `config.batch`, and another writer then changes the file, the test suite shall assert that `config.get`'s reply, the `config.state` broadcast after each write and each write's reply carry one revision for one state, a new one after each write, and that the revision read after the outside write differs from the one before it [[core-service-45](#core-service-45)].
 
-#### core-service-148
+#### core-service-149
 
 Where your own group's commented config holds a Captain and players on `claude` and `codex`, the test suite shall submit `config.batch` for each case below and assert its refusal, with the file's bytes unchanged in every case:
 
@@ -1260,7 +1278,7 @@ Where your own group's commented config holds a Captain and players on `claude` 
 | the file changed by another writer while the batch composes | `conflict` [[core-service-44](#core-service-44)] |
 | an operation of another kind, or no operation | refused as malformed [[core-service-44](#core-service-44)] |
 
-#### core-service-149
+#### core-service-150
 
 Where your own group's real config carries comments and hand-written fields, when one `config.batch` holds a `captain.set` and a `player.set` removing each `model` and a `playbook.role.bind` writing `model: false`, the test suite shall assert that the three `model` fields changed as asked with every comment and hand-written field kept, that the reply carries the reloaded state, and that the reloaded config resolves the Captain's and each role's model to Provider default [[core-service-44](#core-service-44)].
 
@@ -1285,7 +1303,7 @@ Where the core service runs with the scripted fake adapter and a compile spawner
 
 #### core-service-90
 
-Where CI runs on Windows, the integration suite shall invoke core startup in a native Node process and assert the platform refusal leaves its absent config and data paths uncreated [[core-service-89](#core-service-89)].
+Where CI runs on Windows, the integration suite shall exercise real Windows private storage and assert unsafe existing permissions refuse without creating config or migrating data [[core-service-89](#core-service-89)].
 
 #### core-service-38
 

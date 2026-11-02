@@ -152,7 +152,7 @@ describe("contextual browser controls through the core client", () => {
 
   test("session overrides preserve false and reset browser to configuration with null", async () => {
     const command = fixture();
-    const summary = { path: "/tmp/spex.yaml", captain: { ...agent, browser: true }, players: [], playbooks: [] };
+    const summary = { path: "/tmp/spex.yaml", captain: { ...agent, browser: true }, players: [], playbooks: [], standsAside: [] };
     const [captain] = sessionAgents({ players: [], agentSettings: {} }, summary as Parameters<typeof sessionAgents>[1]);
     const onSave = vi.fn(async () => {});
     const view = render(<AgentSettingsPopover agent={captain!} context={context} readOnly={false} anchorRef={createRef()} onSave={onSave} onClose={() => {}} />);
@@ -230,7 +230,7 @@ describe("contextual browser controls through the core client", () => {
 
   test("a conversation keeps its configured browser while saving an effort its support check could not confirm", async () => {
     fixture((type) => type === "agent.capabilities" ? { browser: { status: "unknown" } } : undefined);
-    const summary = { path: "/tmp/spex.yaml", captain: { ...agent, browser: true }, players: [], playbooks: [] };
+    const summary = { path: "/tmp/spex.yaml", captain: { ...agent, browser: true }, players: [], playbooks: [], standsAside: [] };
     const [captain] = sessionAgents({ players: [], agentSettings: {} }, summary as Parameters<typeof sessionAgents>[1]);
     const onSave = vi.fn(async () => {});
     render(<AgentSettingsPopover agent={captain!} context={context} readOnly={false} anchorRef={createRef()} onSave={onSave} onClose={() => {}} />);

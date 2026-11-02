@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The open-URL bridge (app-shell-20, app-shell-37, DR-127): the main
-// process opens a URL in the system browser only at the origin of an
-// instance the home lists or is signing in to — `https`, or `http` on
-// this device's loopback as a stand-in instance is — with no credential
+// The open-URL bridge (app-shell-20, app-shell-37, DR-188): the main
+// process opens a URL in the system browser only at the origin of a
+// listed Space or a running Space or registry sign-in — `https`, or
+// `http` on this device's loopback as a stand-in instance is — with no credential
 // in it; and the browser sign-in URLs a real core started by the
 // shell's own option builder composes are the ones it opens
 // (app-shell-38).
@@ -15,7 +15,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { CoreService, type GroupsState } from "@sublang/spex-core";
+import { CoreService, type GroupsState, type RegistryState } from "@sublang/spex-core";
 import { startStandinHost } from "@sublang/spex-core/testing";
 
 import { desktopCoreOptions } from "./core-options.js";
@@ -88,16 +88,16 @@ test("app-shell-37: the open channel hands only an allowed URL to the browser, a
   assert.equal(await openInstanceUrl(["https://spex.pub"], "https://spex.pub/login/app", async () => { throw new Error("no browser"); }), false);
 });
 
-test("app-shell-20: the main process serves the open channel behind the instance rule, and the preload exposes it", () => {
+test("app-shell-20: the main process serves the open channel behind the sign-in origin rule, and the preload exposes it", () => {
   const source = readFileSync(new URL("../src/main.ts", import.meta.url), "utf8");
   assert.match(source, /ipcMain\.handle\("spex:open-external"/);
-  assert.match(source, /openInstanceUrl\(service\?\.instanceOrigins\(\) \?\? \[\], requested, \(url\) => shell\.openExternal\(url\)\)/);
+  assert.match(source, /openInstanceUrl\(service\?\.externalSignInOrigins\(\) \?\? \[\], requested, \(url\) => shell\.openExternal\(url\)\)/);
   assert.doesNotMatch(source, /hostUrl\(\)/);
   const preload = readFileSync(new URL("../preload.cjs", import.meta.url), "utf8");
   assert.match(preload, /openExternal: \(url\) => ipcRenderer\.invoke\("spex:open-external", url\)/);
 });
 
-test("app-shell-38: the desktop's real core opens the sign-in pages of the instances it lists and signs in to, and nothing else", { timeout: 120_000 }, async (t) => {
+test("app-shell-38: the desktop's real core opens Space and active registry sign-in pages, and nothing else", { timeout: 120_000 }, async (t) => {
   const first = await startStandinHost({ dir: scratchDir("spex-desktop-first-") });
   t.after(() => first.close());
   const second = await startStandinHost({ dir: scratchDir("spex-desktop-second-"), displayName: "Second stand-in" });
@@ -139,9 +139,11 @@ test("app-shell-38: the desktop's real core opens the sign-in pages of the insta
   t.after(() => socket.close());
   type Reply = { ok: boolean; result?: unknown; error?: { message: string } };
   const replies = new Map<string, (reply: Reply) => void>();
+  const registryStates = new Map<string, RegistryState>();
   socket.addEventListener("message", (event) => {
-    const message = JSON.parse(String(event.data)) as { type: string; id?: string } & Reply;
+    const message = JSON.parse(String(event.data)) as { type: string; id?: string; state?: RegistryState } & Reply;
     if (message.type === "reply" && message.id) replies.get(message.id)?.(message);
+    if (message.type === "registry.state" && message.state) registryStates.set(message.state.origin, message.state);
   });
   await new Promise<void>((resolveOpen, rejectOpen) => {
     socket.addEventListener("open", () => resolveOpen(), { once: true });
@@ -161,11 +163,61 @@ test("app-shell-38: the desktop's real core opens the sign-in pages of the insta
   // The channel exactly as main.ts serves it, the browser a spy.
   const opened: string[] = [];
   const channel = (requested: unknown) =>
-    openInstanceUrl(service.instanceOrigins(), requested, async (url) => { opened.push(url); });
+    openInstanceUrl(service.externalSignInOrigins(), requested, async (url) => { opened.push(url); });
 
-  // A home that lists no instance opens nothing until a sign-in names one.
+  // Merely reading a registry does not authorize its origin. A registry
+  // sign-in works with no Space and leaves the home's Space state alone.
+  const homeBeforeRegistry = readFileSync(join(scratch, "home", "home.yaml"), "utf8");
   assert.deepEqual(service.instanceOrigins(), []);
+  assert.equal(((await command("space.get")) as GroupsState).instances.length, 0);
+  await command("registry.get", { origin: first.url });
   assert.equal(await channel(`${first.url}/login/app`), false);
+  type BrowserFlow = { flow: string; url: string };
+  const registryFirst = (await command("registry.signin.start", { origin: first.url })) as BrowserFlow;
+  const registrySecond = (await command("registry.signin.start", { origin: second.url })) as BrowserFlow;
+  for (const flow of [registryFirst, registrySecond]) {
+    assert.equal(flow.flow, "browser");
+    const url = new URL(flow.url);
+    assert.equal(url.pathname, "/login/app");
+    assert.equal(url.searchParams.get("scope"), "registry");
+    assert.ok(url.searchParams.get("state"));
+    assert.ok(url.searchParams.get("code_challenge"));
+    assert.ok(url.searchParams.get("redirect_uri"));
+    assert.equal(await channel(flow.url), true, "an active registry sign-in opens without any Space");
+  }
+  assert.deepEqual(opened, [registryFirst.url, registrySecond.url], "the full authorization URLs reach the browser unchanged");
+  assert.deepEqual(service.instanceOrigins(), [], "registry flows are never Space origins");
+  await command("registry.signin.cancel", { origin: first.url });
+  assert.equal(await channel(registryFirst.url), false);
+  assert.equal(await channel(registrySecond.url), true, "cancelling one flow leaves the other permitted");
+
+  const waitForRegistry = async (origin: string, predicate: (state: RegistryState) => boolean): Promise<RegistryState> => {
+    const deadline = Date.now() + 30_000;
+    for (;;) {
+      const state = registryStates.get(origin);
+      if (state && predicate(state)) return state;
+      assert.ok(Date.now() < deadline, `registry state never settled: ${JSON.stringify(state)}`);
+      await new Promise((resolveWait) => setTimeout(resolveWait, 20));
+    }
+  };
+  await (await fetch(registrySecond.url)).text();
+  await waitForRegistry(second.url, (state) => state.signIn.phase === "idle" && state.account !== null);
+  assert.equal(await channel(registrySecond.url), false, "a saved registry account grants no browser-opening permission");
+
+  first.script.browser = "deny";
+  const denied = (await command("registry.signin.start", { origin: first.url })) as BrowserFlow;
+  assert.equal(await channel(denied.url), true);
+  await (await fetch(denied.url)).text();
+  await waitForRegistry(first.url, (state) => state.signIn.phase === "idle" && state.error !== null);
+  assert.equal(await channel(denied.url), false, "a failed flow no longer permits its origin");
+  first.script.browser = "approve";
+  assert.deepEqual(service.instanceOrigins(), []);
+  assert.equal(((await command("space.get")) as GroupsState).instances.length, 0);
+  assert.equal(readFileSync(join(scratch, "home", "home.yaml"), "utf8"), homeBeforeRegistry);
+  opened.length = 0;
+
+  // A home that lists no instance opens a Space's page once its own
+  // sign-in names one, and keeps it permitted once the Space is listed.
   const atFirst = (await command("space.signin.start", { url: first.url })) as { flow: string; url: string };
   // The desktop runs the browser flow (app-shell-15, git-host-2).
   assert.equal(atFirst.flow, "browser");
@@ -185,6 +237,10 @@ test("app-shell-38: the desktop's real core opens the sign-in pages of the insta
     await new Promise((resolveWait) => setTimeout(resolveWait, 100));
   }
   assert.deepEqual(service.instanceOrigins(), [first.url]);
+  const sameOrigin = (await command("registry.signin.start", { origin: first.url })) as BrowserFlow;
+  assert.deepEqual(service.externalSignInOrigins(), [first.url], "a shared origin is listed once");
+  await command("registry.signin.cancel", { origin: first.url });
+  assert.equal(await channel(sameOrigin.url), true, "ending a registry flow preserves a listed Space's permission");
 
   // While a sign-in to the second runs, its page opens, and so does one
   // at the first the home lists.
@@ -195,7 +251,7 @@ test("app-shell-38: the desktop's real core opens the sign-in pages of the insta
   assert.deepEqual(service.instanceOrigins(), [first.url, second.url]);
   assert.equal(await channel(atSecond.url), true);
   assert.equal(await channel(`${first.url}/login/app`), true);
-  const allowed = [new URL(atFirst.url).href, new URL(atSecond.url).href, `${first.url}/login/app`];
+  const allowed = [new URL(atFirst.url).href, sameOrigin.url, new URL(atSecond.url).href, `${first.url}/login/app`];
   assert.deepEqual(opened, allowed);
 
   // An origin the home neither lists nor signs in to — the first's host

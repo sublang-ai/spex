@@ -17,6 +17,7 @@ import { parse as parseYaml } from "yaml";
 import { requestsDigest, serializeLock } from "@sublang/spex/environment";
 import { WebSocket } from "ws";
 
+import { builtinPackage } from "./builtins.js";
 import { CoreService } from "./service.js";
 import { fakeAdapterImports } from "./testing/fake-adapter.js";
 import { createScriptedCaptain } from "./testing/scripted-captain.js";
@@ -118,7 +119,7 @@ async function boot(dataDir: string, home: string): Promise<{ service: CoreServi
   return { service, client };
 }
 
-test("storage-6, environments-11, environments-26: a folder holding a stray spex.lock and no spex.yaml is paired with spex.yaml written at its root requesting the built-in spec package, nothing in the clone, the lock left as it was and read as stale", async () => {
+test("storage-6, environments-11, environments-26: a folder holding a stray spex.lock and no spex.yaml is paired with spex.yaml written at its root requesting nothing, nothing in the clone, the lock left as it was and read as stale", async () => {
   const scratch = scratchDir("spex-project-stray-lock-");
   const dataDir = join(scratch, "home");
   const home = join(scratch, "user");
@@ -140,8 +141,12 @@ test("storage-6, environments-11, environments-26: a folder holding a stray spex
   const { service, client } = await boot(dataDir, home);
   const project = await client.ok("project.register", { path: folder });
   assert.ok(existsSync(join(folder, "spex.yaml")), "[storage-6] spex.yaml written at the folder's root, a stray lock notwithstanding");
-  const manifest = parseYaml(readFileSync(join(folder, "spex.yaml"), "utf8")) as { packages: Record<string, unknown> };
-  assert.ok(manifest.packages["sublang/playbooks"], "[environments-11] the built-in spec package requested at the folder's root");
+  // The built-in spec package is global: a pairing requests nothing, the
+  // file naming the public registry as every new one does and no space
+  // for a project placed nowhere (environments-11, environments-38,
+  // DR-170, DR-176).
+  const manifest = parseYaml(readFileSync(join(folder, "spex.yaml"), "utf8")) as Record<string, unknown>;
+  assert.deepEqual(manifest, { format: 1, registry: "https://spex.sublang.ai", packages: {} }, "[storage-6] spex.yaml requesting nothing");
   assert.ok(!existsSync(join(dataDir, "workspace", "tester", "fixture-spex", "spex.yaml")), "[environments-26] nothing of the environment in the clone");
   // The stray lock is the reader's: left as it is, read as stale against
   // the new requests for the reader to resolve, never rewritten unasked.
@@ -153,7 +158,7 @@ test("storage-6, environments-11, environments-26: a folder holding a stray spex
   assert.equal(state.error, null, "the environment settles");
   assert.ok(state.stale !== null && state.stale.length > 0, "[environments-11] the stray lock reads stale against the request written");
   assert.equal(readFileSync(join(folder, "spex.lock"), "utf8"), stray, "[storage-6] the lock stands as it was");
-  assert.ok(JSON.stringify(state.requests).includes("sublang/playbooks"), "[environments-11] the built-in spec package requested");
+  assert.deepEqual(state.requests, {}, "[environments-11] the built-in spec package not requested in a project");
   client.close();
   await service.stop();
 });
@@ -185,6 +190,10 @@ test("projects-21: removal deletes the clone behind a second confirm naming its 
   const project = await client.ok("project.register", { path: folder });
   const clone = join(dataDir, "workspace", "tester", "fixture-spex");
   assert.ok(existsSync(clone));
+  // A package the project requests, whose skills its environment exports
+  // into the folder (environments-8): the built-in spec package, as a
+  // project paired before it became global still requests it.
+  await client.ok("environment.request", { repository: project.id, name: "sublang/playbooks", request: { kind: "registry", version: `^${builtinPackage().version}` }, wait: true });
   // One session in the local-only spex repository.
   const session = await client.ok("session.create", { projectId: project.id });
   await client.ok("turn.submit", { sessionId: session.id, text: "Read the fixture" });
@@ -204,7 +213,7 @@ test("projects-21: removal deletes the clone behind a second confirm naming its 
   // The environment as the removal finds it — its two files and its
   // installed tree — stays with the folder byte for byte
   // (environments-26).
-  const inSpex = ([path]: [string, string]): boolean => path === ".spex" || path.startsWith(`.spex${sep}`) || path === "spex.yaml" || path === "spex.lock";
+  const inSpex = ([path]: [string, string]): boolean => path === ".spex" || path.startsWith(`.spex${sep}`) || path === "spex.yaml" || path === "spex.lock" || path === ".gitattributes";
   const spexBefore = new Map([...snapshot(folder)].filter(inSpex));
   assert.ok(spexBefore.size > 1, "the installed tree stands under .spex/");
 

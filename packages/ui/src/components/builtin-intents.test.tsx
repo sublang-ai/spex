@@ -7,28 +7,33 @@
 // the built-in spec package — so a Playbook whose intent moved, or a
 // catalog key that drifted from it by a byte, fails here rather than
 // reading English to a Chinese team. With `zh` resolved, the
-// slash menu and the project's Playbooks tab each show
-// a built-in's intent as the catalog translates that English text,
-// while a team's own playbook keeps its own words — even words the
-// catalog happens to hold for a label of its own.
+// slash menu, the project's Playbooks tab under its Global heading
+// (全局) and the Playbooks surface each show a built-in's intent as the
+// catalog translates that English text, while a team's own playbook
+// keeps its own words — even words the catalog happens to hold for a
+// label of its own (DR-176).
 
 import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type { CommandResults, PlaybookSummary } from "@sublang/spex-core/protocol";
 
 import { CaptainHome } from "./CaptainHome.js";
+import { PlaybooksSurface } from "./PlaybooksSurface.js";
 import { PlaybooksTab } from "./PlaybooksTab.js";
 import { activateLanguage, i18n } from "../i18n.js";
 import { setClientForTests, useAppStore } from "../state/store.js";
 import {
   CONFIG_STATE,
   OWN_ENVIRONMENT,
+  OWN_KEY,
   PROJECT,
   PROJECT_ENVIRONMENT,
   PROJECT_ID,
   READINESS,
   available,
+  environment,
   home,
+  specPackage,
 } from "../fixtures/playbooks.js";
 
 /** The built-in spec package's playbooks, in the order it carries them. */
@@ -76,6 +81,7 @@ function summaries(): PlaybookSummary[] {
     command: id,
     intent: id === TEAM.id ? TEAM.intent : builtinIntents[id],
     roles: {},
+    origin: "own" as const,
   }));
 }
 
@@ -127,7 +133,7 @@ describe("localization-4: slash menu discovery", () => {
   });
 });
 
-describe("localization-4: the project's Playbooks tab", () => {
+describe("localization-4: the project's Playbooks tab and the Playbooks surface", () => {
   const commandMock = vi.fn();
 
   beforeEach(() => {
@@ -150,7 +156,16 @@ describe("localization-4: the project's Playbooks tab", () => {
         case "environment.playbooks":
           return lists;
         case "environment.get":
-          return params?.repository === PROJECT_ID ? PROJECT_ENVIRONMENT : OWN_ENVIRONMENT;
+          return params?.repository === PROJECT_ID
+            ? PROJECT_ENVIRONMENT
+            : environment({
+                ...OWN_ENVIRONMENT,
+                requests: { ...OWN_ENVIRONMENT.requests, "me/team-playbooks": { kind: "path", path: "spex-packages/me/team-playbooks" } },
+                packages: [
+                  ...OWN_ENVIRONMENT.packages,
+                  specPackage({ name: "me/team-playbooks", version: "0.1.0", source: { kind: "path", detail: "spex-packages/me/team-playbooks" } }),
+                ],
+              });
         case "draft.list":
           return [];
         default:
@@ -192,5 +207,29 @@ describe("localization-4: the project's Playbooks tab", () => {
     }
     const team = screen.getByTestId(`playbook-card-${TEAM.id}`);
     expect(within(team).getByText(TEAM.intent).getAttribute("title")).toBe(TEAM.intent);
+    // They stand under the Global heading, in the reader's language
+    // (localization-9, DR-176).
+    const global = screen.getByTestId("playbooks-global");
+    expect(global.querySelector("h2")!.textContent).toBe("全局");
+    for (const id of [...BUILTIN_IDS, TEAM.id]) {
+      expect(global.contains(screen.getByTestId(`playbook-card-${id}`))).toBe(true);
+    }
+  });
+
+  test("with zh resolved the Playbooks surface reads each built-in's intent in Chinese and the team's as given", async () => {
+    activateLanguage("zh");
+    render(<PlaybooksSurface />);
+    await vi.waitFor(() => expect(useAppStore.getState().playbookLists?.projectId).toBeNull());
+    for (const id of BUILTIN_IDS) {
+      const card = await screen.findByTestId(`playbook-card-${id}`);
+      expect(within(card).getByText(chinese(id)).getAttribute("title")).toBe(chinese(id));
+      expect(card.textContent).not.toContain(builtinIntents[id]);
+      // Beneath the built-in spec package's row.
+      expect(screen.getByTestId("surface-playbooks-sublang/playbooks").contains(card)).toBe(true);
+    }
+    const team = await screen.findByTestId(`playbook-card-${TEAM.id}`);
+    expect(within(team).getByText(TEAM.intent).getAttribute("title")).toBe(TEAM.intent);
+    expect(screen.getByTestId("surface-playbooks-me/team-playbooks").contains(team)).toBe(true);
+    expect(commandMock).toHaveBeenCalledWith("environment.get", { repository: OWN_KEY });
   });
 });

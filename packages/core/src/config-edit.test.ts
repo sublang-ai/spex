@@ -228,10 +228,23 @@ playbooks:
   assert.match(player, /dev\.coder:\n\s+adapter: claude\n\s+effort: xhigh/);
 });
 
+test("settings-46: a binding naming a player the roster lacks is written, and player.set sets that player up from a full block", async () => {
+  const path = templateFile();
+  // The player plays on the Captain's block meanwhile, refusing nothing
+  // (core-service-2).
+  const bound = await edit(path, { kind: "playbook.role.bind", playbookId: "code", role: "coder", playerId: "team.missing" }, stubLoader);
+  assert.equal(bound.ok, true, bound.error ?? "");
+  assert.match(readFileSync(path, "utf8"), /coder: team\.missing/);
+  const set = await edit(path, { kind: "player.set", playerId: "team.missing", patch: { adapter: "claude", model: "claude-opus-4-7", permissions: { mode: "auto" } } }, stubLoader);
+  assert.equal(set.ok, true, set.error ?? "");
+  const players = (parse(readFileSync(path, "utf8")) as { players: Record<string, { adapter: string; model?: string }> }).players;
+  assert.deepEqual({ adapter: players["team.missing"]?.adapter, model: players["team.missing"]?.model }, { adapter: "claude", model: "claude-opus-4-7" });
+});
+
 test("playbook.add binds its roles to session players", async () => {
   const path = templateFile();
-  // A binding may only name a lane that exists, so the lane is minted
-  // first — the order the compile flow uses (DR-032).
+  // The lane is minted first, so the binding names a player the roster
+  // holds — the order the compile flow uses (DR-032).
   const minted = await edit(
     path,
     { kind: "player.set", playerId: "dev.helper", patch: { adapter: "claude" } },
@@ -254,7 +267,7 @@ test("playbook.add binds its roles to session players", async () => {
   const after = readFileSync(path, "utf8");
   assert.doesNotMatch(after, /from:/);
   assert.match(after, /other:\n\s+roles:/);
-  // Enabling binds roles to lanes; the lanes live in their own map.
+  // An entry binds roles to lanes; the lanes live in their own map.
   assert.match(after, /roles:\n\s+helper: dev\.helper/);
   assert.match(after, /committer: helper/);
 });

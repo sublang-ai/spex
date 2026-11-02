@@ -127,9 +127,17 @@ export function releaseNotes({ changelog, release, repository }) {
     beta ? `Beta ${n} on the way to ${base} — everything unreleased at this tag.\n\n` : "",
     pinLinks(notes, repository, tag),
     "\n",
+    "## Desktop downloads\n",
+    "\n",
+    `- macOS (M-series, arm64): [Spex-${version}-mac-arm64.dmg](https://github.com/${repository}/releases/download/${tag}/Spex-${version}-mac-arm64.dmg) — open the DMG and drag Spex.app to Applications.\n`,
+    `- Windows (Intel/AMD x86-64): [Spex-${version}-win-x64.exe](https://github.com/${repository}/releases/download/${tag}/Spex-${version}-win-x64.exe) — run the per-user installer; WSL is not required.\n`,
+    `- [SHA256SUMS](https://github.com/${repository}/releases/download/${tag}/SHA256SUMS) verifies both downloads.\n`,
+    "\n",
+    "These builds are unsigned and the macOS app is not notarized; the operating system may require approval before opening. Agent sign-in and model access are configured separately.\n",
+    "\n",
     "## Run from source\n",
     "\n",
-    "This release ships no binaries: build it on macOS or Linux with Node.js 22.19 or later and a native build toolchain. Storage requires private POSIX permissions. Windows users can run the scaffold CLI or access a Spex server in their browser.\n",
+    "Build it on macOS, Linux or native Windows with Node.js 22.19 or later and the platform build tools. Storage requires private POSIX permissions or a supported private Windows ACL.\n",
     "\n",
     "```bash\n",
     `git clone https://github.com/${repository}.git\n`,
@@ -143,7 +151,7 @@ export function releaseNotes({ changelog, release, repository }) {
     `Agent sign-in, GitHub, and playbook-compile prerequisites are in the [README](${blob}/README.md).\n`,
     beta
       ? "\n" +
-        "This beta ran CI, the smoke and the live smoke; the regression and the manual checklist run before the regular release " +
+        "Beta preparation requires CI, the smoke and the live smoke; the regression and the manual checklist run before the regular release " +
         `([DR-087](${blob}/specs/decisions/087-beta-app-releases.md)).\n`
       : "",
   ].join("");

@@ -134,7 +134,9 @@ export function SpecItemRows({
   /** The card a citation entry raises, where the host holds one
    * (spec-view-61); without it an entry only jumps. */
   preview?: CitationAnchors;
-  /** Open an item's file in the editor (spec-view-48). */
+  /** Open an item's file in the editor (spec-view-48); absent where
+   * the host wires no write or the tree marks the file placed
+   * (spec-view-3). */
   onEditItem?: (item: SpecItemInfo) => void;
   /** The last failed open, keyed by the control that asked. */
   editFailure?: { anchor: string; message: string } | null;

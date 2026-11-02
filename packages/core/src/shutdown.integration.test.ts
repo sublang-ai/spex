@@ -566,8 +566,8 @@ async function stubbornTurn(t: TestContext, wedged: boolean, stop: { settleMs: n
   const walks: number[][] = [];
   const started = harness.service["startedProcesses"];
   const walk = started.pids.bind(started);
-  started.pids = () => {
-    const pids = walk();
+  started.pids = async () => {
+    const pids = await walk();
     walks.push(pids);
     return pids;
   };

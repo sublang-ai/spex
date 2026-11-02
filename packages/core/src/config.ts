@@ -7,7 +7,9 @@
 // config the launcher accepts or rejects is treated identically here,
 // with the same error messages wherever the rule exists upstream —
 // except a playbook's `from` and any `skills` list, which name a path on
-// one device and are refused here (DR-105, DR-123).
+// one device and are refused here (DR-105, DR-123), and the default
+// entries and players composed for placed playbooks, which no file
+// holds (DR-176).
 
 import {
   chmodSync,
@@ -53,33 +55,61 @@ import { i18n } from "./i18n.js";
 import { probeSignIn, type SignInProbe } from "./local-credentials.js";
 import { canonicalWritablePath } from "./permission-paths.js";
 
-import type {
-  AdapterCredential,
-  AdapterName,
-  AgentSummary,
-  BaseUrlState,
-  ConfigSummary,
-  ReadinessFault,
+import {
+  defaultPlayerId,
+  type AdapterCredential,
+  type AdapterName,
+  type AgentSummary,
+  type BaseUrlState,
+  type ConfigSummary,
+  type PlaybookOrigin,
+  type PlaybookStandingAside,
+  type ReadinessFault,
 } from "./protocol.js";
 
 export const PLAYBOOK_CAPTAIN_MODULE = "@sublang/playbook/playbook-captain";
 
-/** An enabled playbook's module, as an environment exports it
- * (environments-9): the installed artifact's registry module, absolute,
- * and whether it is the app's built-in spec package's, whose modules
- * carry no registry-contract marker (playbook-library-33). */
+/** A playbook's module, as an environment places it (environments-9):
+ * the installed artifact's registry module, absolute, and whether it is
+ * the app's built-in spec package's, whose modules carry no
+ * registry-contract marker (playbook-library-33); with the spec package
+ * placing it, its version, the environment — the project's or the
+ * global — and that environment's spex repository, where known. */
 export interface PlaybookModule {
   module: string;
   builtin: boolean;
+  package?: string;
+  version?: string;
+  environment?: "project" | "own";
+  repository?: string;
 }
 
-/** Where composition finds each enabled playbook's module: the
- * environments of the session's spex repositories, the project's before
- * your own group's (environments-9). A shared file names no path. */
+/** A playbook an environment of the session places (environments-9),
+ * present on this device or not. */
+export interface PlacedPlaybook extends PlaybookModule {
+  /** The playbook's own id. */
+  id: string;
+  package: string;
+  version: string;
+  environment: "project" | "own";
+  repository: string;
+  /** Its module file stands on this device. */
+  present: boolean;
+}
+
+/** Where composition finds each playbook's module: the environments of
+ * the session's spex repositories, the project's before your own
+ * group's — the global (environments-9). A shared file names no path. */
 export interface PlaybookModules {
+  /** The module of a playbook of this id present on this device, the
+   * project's before the global. */
   find(id: string): PlaybookModule | undefined;
+  /** Every playbook the environments place, the project's first, then
+   * the global's; absent, none is placed beyond what `find` finds. */
+  placed?(): PlacedPlaybook[];
   /** The spex repository whose environment lacks a playbook no
-   * environment of the session exports, named in that config error. */
+   * environment of the session places, named where its entry stands
+   * aside. */
   repository: string;
 }
 
@@ -91,9 +121,12 @@ export interface ComposeOptions {
   project?: { top: unknown; path: string };
   /** The paired project's actual folder; absent for global composition. */
   cwd?: string;
+  /** False composes the written entries alone, no placed playbook's
+   * default: an entry checked on its own (playbook-library-2). */
+  defaults?: boolean;
 }
 
-/** No environment at all: every enabled playbook is missing. */
+/** No environment at all: every written entry stands aside. */
 const NO_MODULES: PlaybookModules = { find: () => undefined, repository: "" };
 
 /** Fields a project's file may not hold: what each player runs on is
@@ -318,6 +351,15 @@ export interface ComposedPlaybook {
   /** True when the entry takes a `cwd` option the config leaves
    * unset, so sessions may inject the project path (DR-014). */
   acceptsCwdOption: boolean;
+  /** The entry it composed by: the project's, the global, or the
+   * default binding of each role to `dev.<role>` (core-service-2). */
+  origin: PlaybookOrigin;
+  /** The spec package placing it, its version, the environment and its
+   * spex repository, where known (environments-9). */
+  package?: string;
+  version?: string;
+  environment?: "project" | "own";
+  repository?: string;
 }
 
 export interface ComposedConfig {
@@ -352,6 +394,12 @@ export interface ComposedConfig {
   roster: ComposedPlayer[];
   initialVisible: string[];
   playbooks: ComposedPlaybook[];
+  /** The players a binding names that the roster lacks, each playing on
+   * the Captain's block without its instruction (core-service-2). */
+  toSetUp: string[];
+  /** The playbooks that compose nothing, each with its cause
+   * (core-service-2). */
+  standsAside: PlaybookStandingAside[];
   notifications?: unknown;
   theme?: unknown;
   layout?: Record<string, unknown>;
@@ -1452,6 +1500,156 @@ function sessionAgentOf(agent: ResolvedAgent): SessionAgentBlock {
   };
 }
 
+/** A playbook to compose: a written entry, or a placed playbook's
+ * default (core-service-2), with its registry entry loaded. */
+interface Candidate {
+  id: string;
+  written: boolean;
+  origin: PlaybookOrigin;
+  block: Record<string, unknown>;
+  located: PlaybookModule;
+  entry: RegistryEntryLike;
+  command: string;
+  commandOverride: string | undefined;
+}
+
+/** What one entry composes into, nothing yet shared with the session. */
+interface ComposedEntry {
+  playbook: ComposedPlaybook;
+  host: ComposedConfig["captainOptions"]["playbooks"][string];
+  /** The players its bindings name, in role order. */
+  players: string[];
+}
+
+/** The cause of a module that will not serve, as its config error says
+ * it (core-service-2); a default standing aside gives the same words. */
+const importFailure = (id: string, from: string, error: unknown): RegistryError =>
+  new RegistryError(
+    "unavailable",
+    i18n._({
+      id: "playbooks.{id}: its module \"{from}\" failed to import: {message}",
+      comment:
+        "Config error; `message` is the import failure's own words, relayed",
+      values: { id, from, message: error instanceof Error ? error.message : String(error) },
+    }),
+    `playbooks.${id}`,
+  );
+
+const noRegistryEntry = (id: string, from: string): Error =>
+  new ConfigViolation("registry", `playbooks.${id}`,
+    i18n._({
+      id: "playbooks.{id}: its module \"{from}\" exposes no valid registry entry",
+      comment:
+        "Config error: the module the environment installs is no compiled playbook",
+      values: { id, from },
+    }),
+  );
+
+const staleModule = (id: string, from: string): RegistryError =>
+  new RegistryError(
+    "stale",
+    i18n._({
+      id: "playbooks.{id}: its module \"{from}\" is not compatible with this version of Spex; compile its source in Playbooks to run \"{id}\"",
+      comment:
+        "Config error; \"Playbooks\" is the app's own surface",
+      values: { id, from },
+    }),
+    `playbooks.${id}`,
+  );
+
+const keyMismatch = (id: string, manifestId: string): Error =>
+  new ConfigViolation("registry", `playbooks.${id}`,
+    i18n._({
+      id: "playbooks.{id} key must equal the module manifest id \"{manifestId}\"",
+      comment:
+        "Config error: the key naming a playbook differs from the id its module declares",
+      values: { id, manifestId },
+    }),
+  );
+
+const reservedCaptainRole = (id: string): Error =>
+  new ConfigViolation("registry", `playbooks.${id}`,
+    i18n._({
+      id: "playbooks.{id} requires local role \"captain\", which is reserved for the tmux-play Captain",
+      comment:
+        "Config error; `captain` is the reserved role id and `tmux-play` the runtime's name",
+      values: { id },
+    }),
+  );
+
+/** Load a playbook's registry entry from its module, refusing one that
+ * cannot serve as the launcher would (core-service-16). */
+async function loadEntry(id: string, located: PlaybookModule, loadModule: LoadModule): Promise<RegistryEntryLike> {
+  const from = located.module;
+  let moduleValue: unknown;
+  try {
+    moduleValue = await loadModule(from);
+  } catch (error) {
+    throw importFailure(id, from, error);
+  }
+  const entry = (moduleValue as { default?: unknown } | undefined)?.default;
+  if (!isValidRegistryEntry(entry)) throw noRegistryEntry(id, from);
+  // A compiled playbook's module is a Spex-generated bundle; one
+  // without the DR-014 contract marker predates the playbook 2.0
+  // runtime and would fail mid-turn — refuse it at load with
+  // recompile guidance. The built-in spec package's modules ship with
+  // their runtime and need no marker (playbook-library-33).
+  if (
+    !located.builtin &&
+    (moduleValue as { spexRegistryContract?: unknown }).spexRegistryContract !==
+      REGISTRY_CONTRACT
+  ) {
+    throw staleModule(id, from);
+  }
+  if (entry.id !== id) throw keyMismatch(id, entry.id);
+  if (entry.requiredRoleIds.includes(RESERVED_CAPTAIN_ROLE_ID)) throw reservedCaptainRole(id);
+  return entry;
+}
+
+/** Why a written entry stands aside (core-service-2, environments-9): no
+ * environment of the session places its playbook, or its module is not
+ * on this device. */
+function unplacedReason(id: string, modules: PlaybookModules, placed: readonly PlacedPlaybook[]): string {
+  const absent = placed.find((location) => location.id === id);
+  return absent
+    ? i18n._({
+        id: "playbooks.{id}: {package} places it, but its files are not on this computer",
+        comment:
+          "Why a written playbook entry stands aside, composing nothing: the spec package placing the playbook is not installed here; {package} is its name, org/pkg",
+        values: { id, package: absent.package },
+      })
+    : i18n._({
+        id: "playbooks.{id}: no package of {repository} places a playbook {id}",
+        comment:
+          "Why a written playbook entry stands aside, composing nothing: no environment of the session places the playbook; {repository} is the spex repository's key",
+        values: { id, repository: modules.repository },
+      });
+}
+
+/** Two playbooks of one command: the order deciding which composes —
+ * the project's over the global, a written entry over a default, else
+ * the first by spec package name (core-service-2). */
+function clashRank(candidate: Candidate): [number, number, string, string] {
+  return [
+    candidate.located.environment === "project" ? 0 : 1,
+    candidate.written ? 0 : 1,
+    candidate.located.package ?? "￿",
+    candidate.id,
+  ];
+}
+
+function compareRank(a: Candidate, b: Candidate): number {
+  const left = clashRank(a);
+  const right = clashRank(b);
+  for (let index = 0; index < left.length; index += 1) {
+    const x = left[index]!;
+    const y = right[index]!;
+    if (x === y) continue;
+    return typeof x === "number" && typeof y === "number" ? x - y : String(x) < String(y) ? -1 : 1;
+  }
+  return 0;
+}
+
 export async function composeConfig(
   ownTop: unknown,
   loadModule: LoadModule = (specifier) => import(isAbsolute(specifier) ? pathToFileURL(specifier).href : specifier),
@@ -1485,7 +1683,9 @@ export async function composeConfig(
     );
   }
 
-  if (!isPlainObject(top.playbooks)) {
+  // No written entry is no error: every playbook an environment places
+  // runs on its default binding (core-service-2, DR-176).
+  if (top.playbooks !== undefined && top.playbooks !== null && !isPlainObject(top.playbooks)) {
     throw new ConfigViolation("structure", "playbooks",
       i18n._({
         id: "playbooks must be an object",
@@ -1494,16 +1694,18 @@ export async function composeConfig(
       }),
     );
   }
-  const playbookBlocks = top.playbooks;
-  if (Object.keys(playbookBlocks).length === 0) {
-    throw new ConfigViolation("structure", "playbooks",
-      i18n._({
-        id: "playbooks must enable at least one playbook",
-        comment:
-          "Config error; `playbooks` is the config file's own field name and stays as it is",
-      }),
-    );
-  }
+  const playbookBlocks: Record<string, unknown> = isPlainObject(top.playbooks) ? top.playbooks : {};
+  // Which file each written entry's roles come from: the project's where
+  // its entry names them, else yours (core-service-2).
+  const projectEntries = options.project && isPlainObject(options.project.top) && isPlainObject(options.project.top.playbooks)
+    ? options.project.top.playbooks
+    : {};
+  const ownEntries = isPlainObject(ownTop.playbooks) ? ownTop.playbooks : {};
+  const originOf = (id: string): PlaybookOrigin => {
+    if (!Object.hasOwn(projectEntries, id)) return "own";
+    const entry = projectEntries[id];
+    return isPlainObject(entry) && entry.roles === undefined && Object.hasOwn(ownEntries, id) ? "own" : "project";
+  };
 
   const captainBlock = resolveAgent(top.captain, "captain");
   if (
@@ -1580,16 +1782,28 @@ export async function composeConfig(
       sessionPlayers.set(playerId, toResolvedAgent(resolved, path));
     }
   }
-  // Only a referenced player enters the roster and the readiness gate;
-  // an unused entry is legal and inert (DR-032).
-  const referenced = new Set<string>();
+  // A player a binding names that the roster lacks plays on the
+  // Captain's block without its instruction until it is set up
+  // (core-service-2, settings-46): it refuses no session.
+  const { instruction: _captainInstruction, ...standIn } = captainAgent;
+  const playerOf = (playerId: string): ResolvedAgent => sessionPlayers.get(playerId) ?? standIn;
 
-  const players: ComposedPlayer[] = [];
-  const playbooks: ComposedPlaybook[] = [];
-  const seenIds = new Set<string>();
-  const seenCommands = new Set<string>();
-  let initialVisible: string[] = [];
+  const standsAside: PlaybookStandingAside[] = [];
+  const aside = (id: string, located: PlaybookModule | undefined, reason: string, winner?: string): void => {
+    standsAside.push({
+      playbook: id,
+      ...(located?.package !== undefined ? { package: located.package } : {}),
+      reason,
+      ...(winner !== undefined ? { winner } : {}),
+    });
+  };
+  const reasonOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
+  // Every written entry, with its module: one naming a playbook no
+  // environment places, or whose module is not on this device, stands
+  // aside and blocks nothing; every other rule stays fail-closed.
+  const candidates: Candidate[] = [];
+  const placed = options.defaults === false ? [] : (modules.placed?.() ?? []);
   for (const [id, blockValue] of Object.entries(playbookBlocks)) {
     if (!isPlainObject(blockValue)) {
       throw new ConfigViolation("structure", `playbooks.${id}`,
@@ -1616,338 +1830,350 @@ export async function composeConfig(
     }
     const located = modules.find(id);
     if (!located) {
-      throw new RegistryError(
-        "unavailable",
-        i18n._({
-          id: "playbooks.{id} is enabled, but the environment of {repository} exports no playbook {id}",
-          comment:
-            "Config error: no environment of the session installs the enabled playbook; {repository} is the spex repository's key",
-          values: { id, repository: modules.repository },
-        }),
-        `playbooks.${id}`,
-      );
+      const everyPlaced = modules.placed?.() ?? placed;
+      aside(id, everyPlaced.find((location) => location.id === id), unplacedReason(id, modules, everyPlaced));
+      continue;
     }
-    const from = located.module;
-    let moduleValue: unknown;
-    try {
-      moduleValue = await loadModule(from);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new RegistryError(
-        "unavailable",
-        i18n._({
-          id: "playbooks.{id}: its module \"{from}\" failed to import: {message}",
-          comment:
-            "Config error; `message` is the import failure's own words, relayed",
-          values: { id, from, message },
-        }),
-        `playbooks.${id}`,
-      );
-    }
-    const entry = (moduleValue as { default?: unknown } | undefined)?.default;
-    if (!isValidRegistryEntry(entry)) {
-      throw new ConfigViolation("registry", `playbooks.${id}`,
-        i18n._({
-          id: "playbooks.{id}: its module \"{from}\" exposes no valid registry entry",
-          comment:
-            "Config error: the module the environment installs is no compiled playbook",
-          values: { id, from },
-        }),
-      );
-    }
-    // A compiled playbook's module is a Spex-generated bundle; one
-    // without the DR-014 contract marker predates the playbook 2.0
-    // runtime and would fail mid-turn — refuse it at load with
-    // recompile guidance. The built-in spec package's modules ship with
-    // their runtime and need no marker (playbook-library-33).
-    if (
-      !located.builtin &&
-      (moduleValue as { spexRegistryContract?: unknown }).spexRegistryContract !==
-        REGISTRY_CONTRACT
-    ) {
-      throw new RegistryError(
-        "stale",
-        i18n._({
-          id: "playbooks.{id}: its module \"{from}\" is not compatible with this version of Spex; compile its source in Playbooks to enable \"{id}\"",
-          comment:
-            "Config error; \"Playbooks\" is the app's own surface",
-          values: { id, from },
-        }),
-        `playbooks.${id}`,
-      );
-    }
-    if (entry.id !== id) {
-      throw new ConfigViolation("registry", `playbooks.${id}`,
-        i18n._({
-          id: "playbooks.{id} key must equal the module manifest id \"{manifestId}\"",
-          comment:
-            "Config error: the key enabling a playbook differs from the id its module declares",
-          values: { id, manifestId: entry.id },
-        }),
-      );
-    }
-    if (seenIds.has(entry.id)) {
-      throw new ConfigViolation("registry", `playbooks.${id}`,
-        i18n._({
-          id: "duplicate playbook id \"{playbookId}\"",
-          comment: "Config error: two entries enable the same playbook",
-          values: { playbookId: entry.id },
-        }),
-      );
-    }
-    seenIds.add(entry.id);
-
+    const entry = await loadEntry(id, located, loadModule);
     const commandOverride =
       typeof block.command === "string" && block.command.length > 0
         ? block.command
         : undefined;
-    const command = commandOverride ?? entry.command;
-    if (seenCommands.has(command)) {
-      throw new ConfigViolation("registry", `playbooks.${id}`,
-        i18n._({
-          id: "duplicate effective command \"{command}\"",
-          comment:
-            "Config error: two playbooks answer to the same slash command",
-          values: { command },
-        }),
-      );
+    candidates.push({
+      id,
+      written: true,
+      origin: originOf(id),
+      block,
+      located,
+      entry,
+      command: commandOverride ?? entry.command,
+      commandOverride,
+    });
+  }
+  // Every placed playbook no entry binds, on its default binding, once
+  // by its id — the project's where both environments place it, a copy
+  // present here before one that is not (core-service-2). Any failure
+  // makes it stand aside; none invalidates the config.
+  const seen = new Set(Object.keys(playbookBlocks));
+  for (const location of placed) {
+    if (seen.has(location.id)) continue;
+    seen.add(location.id);
+    const chosen = location.present ? location : (placed.find((other) => other.id === location.id && other.present) ?? location);
+    if (!chosen.present) {
+      aside(chosen.id, chosen, i18n._({
+        id: "{package} places {id}, but its files are not on this computer",
+        comment: "Why a placed playbook stands aside, composing nothing: its spec package is not installed here; {package} is its name, org/pkg",
+        values: { id: chosen.id, package: chosen.package },
+      }));
+      continue;
     }
-    seenCommands.add(command);
+    let entry: RegistryEntryLike;
+    try { entry = await loadEntry(chosen.id, chosen, loadModule); }
+    catch (error) { aside(chosen.id, chosen, reasonOf(error)); continue; }
+    candidates.push({
+      id: chosen.id,
+      written: false,
+      origin: "default",
+      block: {},
+      located: chosen,
+      entry,
+      command: entry.command,
+      commandOverride: undefined,
+    });
+  }
 
-    if (entry.requiredRoleIds.includes(RESERVED_CAPTAIN_ROLE_ID)) {
-      throw new ConfigViolation("registry", `playbooks.${id}`,
-        i18n._({
-          id: "playbooks.{id} requires local role \"captain\", which is reserved for the tmux-play Captain",
-          comment:
-            "Config error; `captain` is the reserved role id and `tmux-play` the runtime's name",
-          values: { id },
-        }),
-      );
+  // One command, two playbooks: one composes, the other stands aside
+  // naming the spec package that runs (core-service-2).
+  const losers = new Set<Candidate>();
+  const byCommand = new Map<string, Candidate[]>();
+  for (const candidate of candidates) {
+    const list = byCommand.get(candidate.command) ?? [];
+    list.push(candidate);
+    byCommand.set(candidate.command, list);
+  }
+  for (const [command, list] of byCommand) {
+    if (list.length < 2) continue;
+    const [winner, ...rest] = [...list].sort(compareRank);
+    const winnerName = winner!.located.package ?? winner!.id;
+    for (const loser of rest) {
+      losers.add(loser);
+      aside(loser.id, loser.located, i18n._({
+        id: "/{command} is {winner}'s",
+        comment: "Why a playbook stands aside, composing nothing: another playbook answers its slash command; {winner} is that playbook's spec package, org/pkg",
+        values: { command, winner: winnerName },
+      }), winner!.located.package ?? winner!.id);
     }
+  }
 
-    // v8 binds roles to session players (DR-032); a surviving
-    // per-playbook players block is the removed shape and rejects with
-    // the launcher's own wording rather than a paraphrase.
-    if (block.players !== undefined) {
-      throw new ConfigViolation("legacy", `playbooks.${id}.players`,
-        i18n._({
-          id: "playbooks.{id}.players was removed in the explicit-session-player major release: define stable ids in top-level players and bind them explicitly under playbooks.<id>.roles; automatic migration would choose which prior conversations share a session",
-          comment:
-            "Config error; `players`, `playbooks.<id>.roles` are the config file's own field names",
-          values: { id },
-        }),
+  // Only a referenced player enters the roster and the readiness gate;
+  // an unused entry is legal and inert (DR-032).
+  const referenced = new Set<string>();
+  const players: ComposedPlayer[] = [];
+  const toSetUp: string[] = [];
+  const playbooks: ComposedPlaybook[] = [];
+  for (const candidate of candidates) {
+    if (losers.has(candidate)) continue;
+    let composed: ComposedEntry;
+    if (candidate.written) composed = composeEntry(candidate, playerOf, options.cwd);
+    else {
+      try { composed = composeEntry(candidate, playerOf, options.cwd); }
+      catch (error) { aside(candidate.id, candidate.located, reasonOf(error)); continue; }
+    }
+    for (const playerId of composed.players) {
+      if (referenced.has(playerId)) continue;
+      referenced.add(playerId);
+      // Roster order follows first reference, so panes appear in the
+      // order the playbooks that run introduce them.
+      const player = playerOf(playerId);
+      players.push({ id: playerId, ...player });
+      captainOptions.sessionAgents.players[playerId] = sessionAgentOf(player);
+      if (!sessionPlayers.has(playerId)) toSetUp.push(playerId);
+    }
+    captainOptions.playbooks[candidate.id] = composed.host;
+    playbooks.push(composed.playbook);
+  }
+
+  return {
+    captainAgent,
+    captainOptions,
+    players,
+    roster: [...sessionPlayers].map(([id, agent]) => ({ id, ...agent })),
+    // Every referenced player is visible by default, in roster order;
+    // a roleless catalog is a legal session with no player panes.
+    initialVisible: players.map((player) => player.id),
+    playbooks,
+    toSetUp,
+    standsAside,
+    ...(top.notifications !== undefined
+      ? { notifications: top.notifications }
+      : {}),
+    ...(top.theme !== undefined ? { theme: top.theme } : {}),
+    ...(isPlainObject(top.layout) ? { layout: top.layout } : {}),
+  };
+}
+
+/** One playbook's composition (core-service-16): its bindings — the
+ * written entry's, or each required role on `dev.<role>` — its
+ * concurrency and its options, each refused with the launcher's words;
+ * nothing shared is touched until it composes whole. */
+function composeEntry(
+  candidate: Candidate,
+  playerOf: (playerId: string) => ResolvedAgent,
+  cwd: string | undefined,
+): ComposedEntry {
+  const { id, block, entry } = candidate;
+  const from = candidate.located.module;
+  // v8 binds roles to session players (DR-032); a surviving
+  // per-playbook players block is the removed shape and rejects with
+  // the launcher's own wording rather than a paraphrase.
+  if (block.players !== undefined) {
+    throw new ConfigViolation("legacy", `playbooks.${id}.players`,
+      i18n._({
+        id: "playbooks.{id}.players was removed in the explicit-session-player major release: define stable ids in top-level players and bind them explicitly under playbooks.<id>.roles; automatic migration would choose which prior conversations share a session",
+        comment:
+          "Config error; `players`, `playbooks.<id>.roles` are the config file's own field names",
+        values: { id },
+      }),
+    );
+  }
+  // The default binds each required role to `dev.<role>` (core-service-2).
+  const roleBlocks: unknown = candidate.written
+    ? block.roles
+    : Object.fromEntries(entry.requiredRoleIds.map((role) => [role, defaultPlayerId(role)]));
+  if (!isPlainObject(roleBlocks)) {
+    throw new ConfigViolation("bindings", `playbooks.${id}.roles`,
+      i18n._({
+        id: "playbooks.{id}.roles must be an object",
+        comment:
+          "Config error; `playbooks.<id>.roles` is the config file's own field name",
+        values: { id },
+      }),
+    );
+  }
+  if (RESERVED_CAPTAIN_ROLE_ID in roleBlocks) {
+    throw new ConfigViolation("bindings", `playbooks.${id}.roles.captain`,
+      i18n._({
+        id: "playbooks.{id}.roles.captain binds local role \"captain\", which is reserved for the tmux-play Captain",
+        comment:
+          "Config error; `captain` is the reserved role id and `tmux-play` the runtime's name",
+        values: { id },
+      }),
+    );
+  }
+  // Bindings cover requiredRoleIds exactly: a missing role has no
+  // agent and an extra one names work the manifest never declares.
+  const bound = Object.keys(roleBlocks);
+  const required = new Set(entry.requiredRoleIds);
+  const missing = entry.requiredRoleIds.filter((role) => !(role in roleBlocks));
+  const extra = bound.filter((role) => !required.has(role));
+  if (missing.length > 0 || extra.length > 0) {
+    // The two clauses are messages of their own, so a language can
+    // punctuate its own list (core-service-111); English is unchanged.
+    const listed = (roles: string[]): string =>
+      roles.join(i18n._({ id: ", ", comment: "Separates names listed in one message" }));
+    throw new ConfigViolation("bindings", `playbooks.${id}.roles`,
+      i18n._({
+        id: "playbooks.{id}.roles must exactly cover requiredRoleIds{missing}{unknown}",
+        comment:
+          "Config error; `requiredRoleIds` is the manifest's own field name, and the two clauses are themselves messages",
+        values: {
+          id,
+          missing:
+            missing.length > 0
+              ? i18n._({
+                  id: "; missing {roles}",
+                  comment:
+                    "Clause of the role-coverage config error: the roles no binding names",
+                  values: { roles: listed(missing) },
+                })
+              : "",
+          unknown:
+            extra.length > 0
+              ? i18n._({
+                  id: "; unknown {roles}",
+                  comment:
+                    "Clause of the role-coverage config error: the bound roles the manifest never declares",
+                  values: { roles: listed(extra) },
+                })
+              : "",
+        },
+      }),
+    );
+  }
+
+  const roleBindings: Record<string, ResolvedBinding> = {};
+  const hostBindings: Record<string, HostRoleBinding> = {};
+  const named: string[] = [];
+  for (const role of entry.requiredRoleIds) {
+    const path = `playbooks.${id}.roles.${role}`;
+    const binding = resolveBinding(roleBlocks[role], path);
+    roleBindings[role] = binding;
+    if (!named.includes(binding.playerId)) named.push(binding.playerId);
+    // Inheritance resolves here, once: omitted takes the player's
+    // default, `false` takes the provider's, a string pins. The
+    // shell is told the outcome, never asked to infer it.
+    const player = playerOf(binding.playerId);
+    const select = (
+      override: string | false | undefined,
+      fallback: string | undefined,
+    ): TuningSelection =>
+      override === false
+        ? providerDefault
+        : tuningOf(override ?? fallback);
+    // An omitted subagent tuning takes the player's as the file says
+    // it — its `false` an Off still — and the delegation default then
+    // resolves as the launcher's does; a binding's `false` is Off for
+    // the model and the agent's own choice for the effort, so an
+    // effort beside an Off, at either tier, is refused (DR-093,
+    // DR-095).
+    if (typeof binding.subagentModel === "string") {
+      assertSubagentModel(binding.subagentModel, player.adapter, path);
+    }
+    const subagentEffort =
+      binding.subagentEffort === false
+        ? undefined
+        : (binding.subagentEffort ?? player.subagentEffort);
+    const subagentModel = delegationOf(
+      player.adapter,
+      binding.subagentModel ?? player.subagentModel,
+    );
+    if (subagentEffort !== undefined) {
+      assertSubagentEffort(
+        subagentEffort,
+        player.adapter,
+        subagentModel === false ? undefined : subagentModel,
+        path,
       );
     }
-    if (!isPlainObject(block.roles)) {
-      throw new ConfigViolation("bindings", `playbooks.${id}.roles`,
+    // Playbook builds a role's call from its binding alone, so a bare
+    // binding takes its player's fast mode here, as the launcher's
+    // `binding ?? player` does; `false` stays a literal request.
+    const fastMode = binding.fastMode ?? player.fastMode;
+    hostBindings[role] = {
+      playerId: binding.playerId,
+      model: select(binding.model, player.model),
+      effort: select(binding.effort, player.effort),
+      ...(fastMode !== undefined ? { fastMode } : {}),
+      ...(subagentModel !== undefined ? { subagentModel } : {}),
+      ...(subagentEffort !== undefined ? { subagentEffort } : {}),
+    };
+  }
+  // Roles a manifest may run at once must be distinct lanes: one
+  // player cannot hold two simultaneous calls (playbook DR-032 §3).
+  for (const set of entry.concurrentRoleSets ?? []) {
+    const ids = set.map((role: string) => roleBindings[role]?.playerId);
+    const distinct = new Set(
+      ids.filter((value: string | undefined) => value !== undefined),
+    );
+    if (distinct.size < ids.length) {
+      throw new ConfigViolation("concurrency", `playbooks.${id}.roles`,
         i18n._({
-          id: "playbooks.{id}.roles must be an object",
+          id: "playbooks.{id} runs roles {roles} concurrently, so they must bind to distinct players",
           comment:
-            "Config error; `playbooks.<id>.roles` is the config file's own field name",
-          values: { id },
-        }),
-      );
-    }
-    const roleBlocks = block.roles;
-    if (RESERVED_CAPTAIN_ROLE_ID in roleBlocks) {
-      throw new ConfigViolation("bindings", `playbooks.${id}.roles.captain`,
-        i18n._({
-          id: "playbooks.{id}.roles.captain binds local role \"captain\", which is reserved for the tmux-play Captain",
-          comment:
-            "Config error; `captain` is the reserved role id and `tmux-play` the runtime's name",
-          values: { id },
-        }),
-      );
-    }
-    // Bindings cover requiredRoleIds exactly: a missing role has no
-    // agent and an extra one names work the manifest never declares.
-    const bound = Object.keys(roleBlocks);
-    const required = new Set(entry.requiredRoleIds);
-    const missing = entry.requiredRoleIds.filter((role) => !(role in roleBlocks));
-    const extra = bound.filter((role) => !required.has(role));
-    if (missing.length > 0 || extra.length > 0) {
-      // The two clauses are messages of their own, so a language can
-      // punctuate its own list (core-service-111); English is unchanged.
-      const listed = (roles: string[]): string =>
-        roles.join(i18n._({ id: ", ", comment: "Separates names listed in one message" }));
-      throw new ConfigViolation("bindings", `playbooks.${id}.roles`,
-        i18n._({
-          id: "playbooks.{id}.roles must exactly cover requiredRoleIds{missing}{unknown}",
-          comment:
-            "Config error; `requiredRoleIds` is the manifest's own field name, and the two clauses are themselves messages",
+            "Config error: two roles that run at once are bound to one player",
           values: {
             id,
-            missing:
-              missing.length > 0
-                ? i18n._({
-                    id: "; missing {roles}",
-                    comment:
-                      "Clause of the role-coverage config error: the roles no binding names",
-                    values: { roles: listed(missing) },
-                  })
-                : "",
-            unknown:
-              extra.length > 0
-                ? i18n._({
-                    id: "; unknown {roles}",
-                    comment:
-                      "Clause of the role-coverage config error: the bound roles the manifest never declares",
-                    values: { roles: listed(extra) },
-                  })
-                : "",
+            roles: set.join(
+              i18n._({ id: ", ", comment: "Separates names listed in one message" }),
+            ),
           },
         }),
       );
     }
+  }
 
-    const roleBindings: Record<string, ResolvedBinding> = {};
-    const hostBindings: Record<string, HostRoleBinding> = {};
-    for (const role of entry.requiredRoleIds) {
-      const path = `playbooks.${id}.roles.${role}`;
-      const binding = resolveBinding(roleBlocks[role], path);
-      if (!sessionPlayers.has(binding.playerId)) {
-        throw new ConfigViolation("bindings", path,
-          i18n._({
-            id: "{path} names absent session player \"{playerId}\"",
-            comment:
-              "Config error: a role binds a player the roster does not define",
-            values: { path, playerId: binding.playerId },
-          }),
-        );
-      }
-      roleBindings[role] = binding;
-      // Inheritance resolves here, once: omitted takes the player's
-      // default, `false` takes the provider's, a string pins. The
-      // shell is told the outcome, never asked to infer it.
-      const player = sessionPlayers.get(binding.playerId) as ResolvedAgent;
-      const select = (
-        override: string | false | undefined,
-        fallback: string | undefined,
-      ): TuningSelection =>
-        override === false
-          ? providerDefault
-          : tuningOf(override ?? fallback);
-      // An omitted subagent tuning takes the player's as the file says
-      // it — its `false` an Off still — and the delegation default then
-      // resolves as the launcher's does; a binding's `false` is Off for
-      // the model and the agent's own choice for the effort, so an
-      // effort beside an Off, at either tier, is refused (DR-093,
-      // DR-095).
-      if (typeof binding.subagentModel === "string") {
-        assertSubagentModel(binding.subagentModel, player.adapter, path);
-      }
-      const subagentEffort =
-        binding.subagentEffort === false
-          ? undefined
-          : (binding.subagentEffort ?? player.subagentEffort);
-      const subagentModel = delegationOf(
-        player.adapter,
-        binding.subagentModel ?? player.subagentModel,
-      );
-      if (subagentEffort !== undefined) {
-        assertSubagentEffort(
-          subagentEffort,
-          player.adapter,
-          subagentModel === false ? undefined : subagentModel,
-          path,
-        );
-      }
-      // Playbook builds a role's call from its binding alone, so a bare
-      // binding takes its player's fast mode here, as the launcher's
-      // `binding ?? player` does; `false` stays a literal request.
-      const fastMode = binding.fastMode ?? player.fastMode;
-      hostBindings[role] = {
-        playerId: binding.playerId,
-        model: select(binding.model, player.model),
-        effort: select(binding.effort, player.effort),
-        ...(fastMode !== undefined ? { fastMode } : {}),
-        ...(subagentModel !== undefined ? { subagentModel } : {}),
-        ...(subagentEffort !== undefined ? { subagentEffort } : {}),
-      };
-      if (!referenced.has(binding.playerId)) {
-        referenced.add(binding.playerId);
-        // Roster order follows first reference, so panes appear in the
-        // order the enabled playbooks introduce them.
-        players.push({ id: binding.playerId, ...player });
-        captainOptions.sessionAgents.players[binding.playerId] =
-          sessionAgentOf(player);
-      }
+  const optionSlice: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(block)) {
+    if (!PLAYBOOK_LAUNCHER_KEYS.includes(key)) optionSlice[key] = value;
+  }
+  // Probe whether the entry accepts a `cwd` option (DR-014): script
+  // gears default to the host process cwd, so sessions inject the
+  // project path for entries that take it and configs that leave it
+  // unset. validateOptions is fail-closed, making the probe safe.
+  let acceptsCwdOption = false;
+  if (optionSlice.cwd === undefined) {
+    try {
+      entry.validateOptions({ ...optionSlice, cwd: "/" });
+      acceptsCwdOption = true;
+    } catch {
+      acceptsCwdOption = false;
     }
-    // Roles a manifest may run at once must be distinct lanes: one
-    // player cannot hold two simultaneous calls (playbook DR-032 §3).
-    for (const set of entry.concurrentRoleSets ?? []) {
-      const ids = set.map((role: string) => roleBindings[role]?.playerId);
-      const distinct = new Set(
-        ids.filter((value: string | undefined) => value !== undefined),
-      );
-      if (distinct.size < ids.length) {
-        throw new ConfigViolation("concurrency", `playbooks.${id}.roles`,
-          i18n._({
-            id: "playbooks.{id} runs roles {roles} concurrently, so they must bind to distinct players",
-            comment:
-              "Config error: two roles that run at once are bound to one player",
-            values: {
-              id,
-              roles: set.join(
-                i18n._({ id: ", ", comment: "Separates names listed in one message" }),
-              ),
-            },
-          }),
-        );
+  }
+  if (cwd !== undefined) {
+    try {
+      let validated = false;
+      // A validator can require the real folder and reject the capability
+      // probe. A successful real candidate establishes injection too.
+      if (optionSlice.cwd === undefined && !acceptsCwdOption) {
+        try {
+          entry.validateOptions({ ...optionSlice, cwd });
+          acceptsCwdOption = true;
+          validated = true;
+        } catch { /* With no positive capability evidence, check the raw slice. */ }
       }
+      if (!validated) entry.validateOptions({
+        ...optionSlice,
+        ...(acceptsCwdOption ? { cwd } : {}),
+      });
+    } catch (error) {
+      throw new ConfigViolation("custom-options", `playbooks.${id}`, i18n._({
+        id: "{file}: {reason}", comment: "A storage fault as one line: the file, then the reason — itself a message",
+        values: { file: `playbooks.${id}`, reason: error instanceof Error ? error.message : String(error) },
+      }));
     }
-
-    const optionSlice: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(block)) {
-      if (!PLAYBOOK_LAUNCHER_KEYS.includes(key)) optionSlice[key] = value;
-    }
-    // Probe whether the entry accepts a `cwd` option (DR-014): script
-    // gears default to the host process cwd, so sessions inject the
-    // project path for entries that take it and configs that leave it
-    // unset. validateOptions is fail-closed, making the probe safe.
-    let acceptsCwdOption = false;
-    if (optionSlice.cwd === undefined) {
-      try {
-        entry.validateOptions({ ...optionSlice, cwd: "/" });
-        acceptsCwdOption = true;
-      } catch {
-        acceptsCwdOption = false;
-      }
-    }
-    if (options.cwd !== undefined) {
-      try {
-        let validated = false;
-        // A validator can require the real folder and reject the capability
-        // probe. A successful real candidate establishes injection too.
-        if (optionSlice.cwd === undefined && !acceptsCwdOption) {
-          try {
-            entry.validateOptions({ ...optionSlice, cwd: options.cwd });
-            acceptsCwdOption = true;
-            validated = true;
-          } catch { /* With no positive capability evidence, check the raw slice. */ }
-        }
-        if (!validated) entry.validateOptions({
-          ...optionSlice,
-          ...(acceptsCwdOption ? { cwd: options.cwd } : {}),
-        });
-      } catch (error) {
-        throw new ConfigViolation("custom-options", `playbooks.${id}`, i18n._({
-          id: "{file}: {reason}", comment: "A storage fault as one line: the file, then the reason — itself a message",
-          values: { file: `playbooks.${id}`, reason: error instanceof Error ? error.message : String(error) },
-        }));
-      }
-    }
-    captainOptions.playbooks[id] = {
+  }
+  const located = candidate.located;
+  return {
+    host: {
       from,
-      ...(commandOverride ? { command: commandOverride } : {}),
+      ...(candidate.commandOverride ? { command: candidate.commandOverride } : {}),
       roles: hostBindings,
       options: optionSlice,
-    };
-
-    playbooks.push({
+    },
+    playbook: {
       id: entry.id,
       manifestCommand: entry.command,
-      command,
+      command: candidate.command,
       intent: entry.intent,
       requiredRoleIds: entry.requiredRoleIds,
       concurrentRoleSets: entry.concurrentRoleSets ?? [],
@@ -1955,25 +2181,13 @@ export async function composeConfig(
       from,
       roles: roleBindings,
       acceptsCwdOption,
-    });
-  }
-
-  // Every referenced player is visible by default, in roster order;
-  // a roleless catalog is a legal session with no player panes.
-  initialVisible = players.map((player) => player.id);
-
-  return {
-    captainAgent,
-    captainOptions,
-    players,
-    roster: [...sessionPlayers].map(([id, agent]) => ({ id, ...agent })),
-    initialVisible,
-    playbooks,
-    ...(top.notifications !== undefined
-      ? { notifications: top.notifications }
-      : {}),
-    ...(top.theme !== undefined ? { theme: top.theme } : {}),
-    ...(isPlainObject(top.layout) ? { layout: top.layout } : {}),
+      origin: candidate.origin,
+      ...(located.package !== undefined ? { package: located.package } : {}),
+      ...(located.version !== undefined ? { version: located.version } : {}),
+      ...(located.environment !== undefined ? { environment: located.environment } : {}),
+      ...(located.repository !== undefined ? { repository: located.repository } : {}),
+    },
+    players: named,
   };
 }
 
@@ -2080,8 +2294,12 @@ export function summarizeConfig(loaded: LoadedConfig): ConfigSummary {
       boundBy.set(binding.playerId, list);
     }
   }
+  // The roster, and each player a binding names that it lacks, which
+  // plays on the Captain's block until it is set up (settings-46).
+  const toSetUp = new Set(loaded.composed.toSetUp);
+  const standIns = loaded.composed.players.filter((player) => toSetUp.has(player.id));
   const playerAgents = new Map(
-    loaded.composed.roster.map((player) => [player.id, player]),
+    [...loaded.composed.roster, ...standIns].map((player) => [player.id, player]),
   );
   return {
     path: loaded.path,
@@ -2089,17 +2307,30 @@ export function summarizeConfig(loaded: LoadedConfig): ConfigSummary {
     // Every declared player, bound or not: Settings lists an unbound
     // lane as bound to no role (settings-26), and a draft may pick it
     // as its agent (playbook-library-55); sessions keep `players`.
-    players: loaded.composed.roster.map((player) => ({
-      id: player.id,
-      agent: agentSummary(player),
-      display: player.model ?? player.adapter,
-      boundBy: boundBy.get(player.id) ?? [],
-    })),
+    players: [
+      ...loaded.composed.roster.map((player) => ({
+        id: player.id,
+        agent: agentSummary(player),
+        display: player.model ?? player.adapter,
+        boundBy: boundBy.get(player.id) ?? [],
+      })),
+      ...standIns.map((player) => ({
+        id: player.id,
+        agent: agentSummary(player),
+        display: player.model ?? player.adapter,
+        boundBy: boundBy.get(player.id) ?? [],
+        toSetUp: true,
+      })),
+    ],
     playbooks: loaded.composed.playbooks.map((playbook) => ({
       id: playbook.id,
       from: playbook.from,
       command: playbook.command,
       intent: playbook.intent,
+      origin: playbook.origin,
+      ...(playbook.package !== undefined ? { package: playbook.package } : {}),
+      ...(playbook.version !== undefined ? { version: playbook.version } : {}),
+      ...(playbook.repository !== undefined ? { repository: playbook.repository } : {}),
       roles: Object.fromEntries(
         Object.entries(playbook.roles).map(([role, binding]) => {
           const player = playerAgents.get(binding.playerId);
@@ -2128,6 +2359,7 @@ export function summarizeConfig(loaded: LoadedConfig): ConfigSummary {
         }),
       ),
     })),
+    standsAside: loaded.composed.standsAside.map((entry) => ({ ...entry })),
     ...(isPlainObject(top.notifications)
       ? { notifications: top.notifications as Record<string, string> }
       : {}),
@@ -2348,7 +2580,7 @@ export function claudeSettingsEnv(env: NodeJS.ProcessEnv, home: string): Record<
 
 /**
  * Claude Code's user-settings variables, written into the environment
- * every run inherits (core-service-150, DR-190): a run applies them over
+ * every run inherits (core-service-151, DR-190): a run applies them over
  * those it inherits, but a call isolated from settings files — the
  * Captain's control calls — reads none, and would run with no key or
  * base URL the card counted. Each apply follows the file as it stands

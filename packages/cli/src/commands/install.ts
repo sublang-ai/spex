@@ -2,16 +2,17 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // `spex install`, or `spex i` (cli-4, environments-7): install what
-// `spex.lock` records and place the skills for the agents, writing the
-// lock first where it is missing or `spex.yaml` changed, and print each
-// package installed with its version and where each of its skills went.
-// A lock installing as it stands rewrites no file. The app's built-in
-// package that no seed and no registry serves is named as the Spex
-// app's to install.
+// `spex.lock` records and place the skills for the agents and the specs
+// in `specs/`, writing the lock first where it is missing or `spex.yaml`
+// changed, and print each package installed with its version, where its
+// spec stands — an edited copy left as the reader's — and where each of
+// its skills went. A lock installing as it stands rewrites no file. The
+// app's built-in package that no seed and no registry serves is named as
+// the Spex app's to install.
 
 import { isPathSource } from "../lib/environment/index.js";
 import { Environment } from "./environment.js";
-import { leftToAppLine, packageStates, settle, skillLines, versionOf } from "./settle.js";
+import { leftToAppLine, packageStates, settle, skillLines, specLines, versionOf } from "./settle.js";
 import { parsed, Refusal, type Command } from "./run.js";
 
 export const install: Command = async (args) => {
@@ -36,7 +37,7 @@ export const install: Command = async (args) => {
     } else {
       lines.push(report.installed.includes(name) ? `Installed ${name} ${version}` : `Already installed ${name} ${version}`);
     }
-    lines.push(...skillLines(env.root, lock, name, states.get(name)!));
+    lines.push(...specLines(settled.exported.specs, name), ...skillLines(env.root, lock, name, states.get(name)!));
   }
   if (names.length === 0) lines.push("Nothing added yet — spex add <org>/<pkg>");
   console.log(lines.join("\n"));

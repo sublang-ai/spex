@@ -54,7 +54,7 @@ export const publish: Command = async (args) => {
   let name = positionals[0];
   if (name === undefined) {
     const found = developed(env.root);
-    if (found.length === 0) throw new Refusal(`no package in spex-packages/ here — spex new <org>/<pkg> makes one`);
+    if (found.length === 0) throw new Refusal("no package in spex-packages/ here — spex export <org>/<pkg> --spec <file> | --skill <folder> builds one");
     if (found.length > 1) throw new Refusal(`spex-packages/ holds ${found.length} packages: ${found.join(", ")} — name one: spex publish <org>/<pkg>`);
     name = found[0]!;
   }
@@ -67,7 +67,7 @@ export const publish: Command = async (args) => {
   const folder = resolve(env.root, path);
   const inside = relative(env.root, folder);
   if (inside === "" || isAbsolute(inside) || inside.split(sep).includes("..")) throw new Refusal(`${path} lies outside this project folder, ${env.root} — keep the package inside it`);
-  if (!isDirectory(folder)) throw new Refusal(`no folder for ${name} at ${path} — spex new ${name} starts one`);
+  if (!isDirectory(folder)) throw new Refusal(`no folder for ${name} at ${path} — spex export ${name} --spec <file> | --skill <folder> builds one`);
 
   // The registry: this folder's, as the account signed in
   // there for publishing (environments-10, DR-168), named by its own

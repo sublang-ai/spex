@@ -73,6 +73,7 @@ const UNIFY: Valid = {
   revision: "rev-1",
   summary: {
     path: "/tmp/playbook.config.yaml",
+    standsAside: [],
     captain: { adapter: "claude", model: "claude-opus-5-5" },
     players: [
       { id: "dev.coder", agent: { adapter: "claude", model: "claude-opus-5-5" }, display: "claude-opus-5-5", boundBy: ["code.coder", "review.coder"] },
@@ -80,9 +81,9 @@ const UNIFY: Valid = {
       { id: "dev.reviewer", agent: { adapter: "codex", model: "gpt-6-sol" }, display: "gpt-6-sol", boundBy: ["review.reviewer"] },
     ],
     playbooks: [
-      { id: "code", from: "", command: "code", intent: "", roles: { coder: { playerId: "dev.coder", display: "claude-opus-5-5" } } },
+      { id: "code", from: "", origin: "own", command: "code", intent: "", roles: { coder: { playerId: "dev.coder", display: "claude-opus-5-5" } } },
       {
-        id: "review", from: "", command: "review", intent: "",
+        id: "review", from: "", origin: "own", command: "review", intent: "",
         roles: {
           coder: { playerId: "dev.coder", model: "claude-opus-5-5", display: "claude-opus-5-5" },
           reviewer: { playerId: "dev.reviewer", display: "gpt-6-sol" },
@@ -99,6 +100,7 @@ const CROSSED: Valid = {
   revision: "rev-7",
   summary: {
     path: "/tmp/playbook.config.yaml",
+    standsAside: [],
     captain: { adapter: "claude", model: "claude-opus-5-5" },
     players: [
       { id: "dev.coder", agent: { adapter: "claude", model: "claude-opus-5-5" }, display: "", boundBy: ["code.coder"] },
@@ -110,7 +112,7 @@ const CROSSED: Valid = {
     ],
     playbooks: [
       {
-        id: "code", from: "", command: "code", intent: "",
+        id: "code", from: "", origin: "own", command: "code", intent: "",
         roles: {
           // An official player, a third-party binding: not listed.
           coder: { playerId: "dev.coder", model: "deepseek-v4-pro", display: "" },
@@ -118,7 +120,7 @@ const CROSSED: Valid = {
           reviewer: { playerId: "dev.writer", model: "claude-sonnet-5", display: "" },
         },
       },
-      { id: "review", from: "", command: "review", intent: "", roles: { coder: { playerId: "dev.official", display: "" } } },
+      { id: "review", from: "", origin: "own", command: "review", intent: "", roles: { coder: { playerId: "dev.official", display: "" } } },
     ],
   },
 };
@@ -135,7 +137,7 @@ function projectComposition(own: Valid, roles: Record<string, string> = { coder:
       ...own.summary,
       playbooks: [
         ...own.summary.playbooks,
-        { id: "fix", from: "", command: "fix", intent: "", roles: Object.fromEntries(Object.entries(roles).map(([role, playerId]) => [role, { playerId, display: "" }])) },
+        { id: "fix", from: "", origin: "own", command: "fix", intent: "", roles: Object.fromEntries(Object.entries(roles).map(([role, playerId]) => [role, { playerId, display: "" }])) },
       ],
     },
   } as Valid;

@@ -121,10 +121,10 @@ export function draftChipWord(draft: DraftInfo): string {
         id: "Changed",
         comment: "draft state chip, at most 14 characters: the source changed after the last compile",
       });
-    case "enabled":
+    case "added":
       return i18n._({
-        id: "Enabled",
-        comment: "authoring state chip, at most 14 characters: the compiled playbook is enabled in a config",
+        id: "Added",
+        comment: "authoring state chip, at most 14 characters: the compiled playbook is added to the packages of the page it was made on, so it runs there",
       });
   }
 }
@@ -137,7 +137,7 @@ export function draftChipTone(draft: DraftInfo): StatusTone {
   switch (draft.state) {
     case "compiling":
     case "compiled":
-    case "enabled":
+    case "added":
       return "emerald";
     case "failed":
       return "red";
@@ -215,14 +215,6 @@ function normalizedRole(role: string): string {
 export function existingRolePlayerId(role: string): string | undefined {
   const normalized = normalizedRole(role);
   return /^[a-z]/u.test(normalized) ? `dev.${normalized}` : undefined;
-}
-
-/** The valid base a role's new lane would mint (DR-032). */
-export function newPlayerId(role: string): string {
-  const normalized = normalizedRole(role);
-  if (/^[a-z]/u.test(normalized)) return `dev.${normalized}`;
-  const suffix = normalized.replace(/^[-_]+|[-_]+$/gu, "");
-  return suffix ? `dev.role-${suffix}` : "dev.role";
 }
 
 /** The intent's derived default (playbook-library-61): the source's

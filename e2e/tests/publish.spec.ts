@@ -5,17 +5,17 @@
 // (playbook-library-95, DR-104, DR-127): a home signed in to two
 // stand-in instances, each fronting a stand-in registry of its own at
 // its own origin as spex.pub serves both, the first its default
-// instance, holds a compiled authoring session enabled in a project
+// instance, holds a compiled authoring session added to a project
 // picked into its namespace at the second; Publish uploads its spec
 // package under development to the second's registry alone, as the
 // account there, and a second scratch home signed in to the second
-// instance alone finds it by search, requests it, and enables its
-// playbook in place from its row; the first home, signed out of the
-// second Space, still publishes, and signed out of the second's
+// instance alone finds it by search and adds it, its playbook running
+// at once on its default players (DR-176); the first home, signed out
+// of the second Space, still publishes, and signed out of the second's
 // registry offers "Sign in to publish" in Publish's place (DR-172).
 
 import type { Locator, Page } from "@playwright/test";
-import { cpSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
 import { AUTHORING_SOURCE } from "@sublang/spex-core/testing";
@@ -24,7 +24,6 @@ import {
   HOST_LOGIN,
   SECOND_HOST_NAME,
   addPackages,
-  builtinLine,
   expect,
   instanceSection,
   nav,
@@ -53,11 +52,11 @@ import {
 const ID = "triage";
 const PACKAGE = `${HOST_LOGIN}/${ID}`;
 
-/** A compiled authoring session enabled in the project, arranged over
+/** A compiled authoring session added to the project, arranged over
  * the protocol (playbook-library-7): created, its source written,
- * compiled by the passing stub `slc`, and enabled with a roster player
+ * compiled by the passing stub `slc`, and added with a roster player
  * per role. */
-async function arrangeEnabled(app: App): Promise<void> {
+async function arrangeAdded(app: App): Promise<void> {
   const projectId = app.projectId!;
   const { instance } = await app.core.command("draft.create", { projectId, draftId: ID, org: HOST_LOGIN, license: "Apache-2.0" });
   await app.core.command("draft.source.write", {
@@ -84,7 +83,7 @@ async function arrangeEnabled(app: App): Promise<void> {
     .poll(async () => (await app.core.command("draft.list", {})).find((draft) => draft.id === ID)?.state, {
       timeout: 30_000,
     })
-    .toBe("enabled");
+    .toBe("added");
 }
 
 /** The project as its tabs name it (playbook-library-1). */
@@ -103,13 +102,13 @@ async function expectPreview(summary: Locator, name: string, registry: string, o
   await expect(summary).not.toContainText(`Publish to ${origin}`);
 }
 
-/** Open the authoring session's Enable tab (playbook-library-61) from
- * the project's Playbooks tab. */
-async function openEnableTab(page: Page): Promise<void> {
+/** Open the authoring session's Add tab (playbook-library-61) from the
+ * project's Playbooks tab. */
+async function openAddTab(page: Page): Promise<void> {
   await projectTab(page, "Playbooks");
   await page.getByTestId(`draft-open-${ID}`).click();
   await expect(page.getByTestId("authoring-workspace")).toBeVisible();
-  await page.getByRole("tablist", { name: "Draft artifacts" }).getByRole("tab", { name: "Enable", exact: true }).click();
+  await page.getByRole("tablist", { name: "Draft artifacts" }).getByRole("tab", { name: "Add", exact: true }).click();
   await expect(page.getByTestId("register-form")).toBeVisible();
 }
 
@@ -122,7 +121,7 @@ test.use({
   },
 });
 
-test("playbook-library-95: Publish from a project at the second instance reads the version with its link to the second's registry, the first's holding no such release; a home signed in to the second alone installs and enables it; Space sign-out preserves publication while registry sign-out asks for its own grant", async ({
+test("playbook-library-95: Publish from a project at the second instance reads the version with its link to the second's registry, the first's holding no such release; a home signed in to the second alone installs it, its playbook running at once; Space sign-out preserves publication while registry sign-out asks for its own grant", async ({
   page,
   app,
 }) => {
@@ -138,9 +137,9 @@ test("playbook-library-95: Publish from a project at the second instance reads t
   await selectRegistryCore(app, second.url, project.key);
   await signInRegistryCore(app, second);
   expect(project.instance).toBe(second.url);
-  await arrangeEnabled(app);
+  await arrangeAdded(app);
   await open(page, app);
-  await openEnableTab(page);
+  await openAddTab(page);
 
   // Publish shows, inline, "Publish <org>/<pkg> <version> to
   // <registry>" — the second's registry by its display name, its origin
@@ -170,10 +169,11 @@ test("playbook-library-95: Publish from a project at the second instance reads t
 
   // A second scratch home signed in to the second instance alone finds
   // it by search in its project's Add…, Add adds it with the receipt
-  // naming what arrived, its row reads its version, its source glyph and
-  // its standing, its playbook enables in place from the expanded row,
-  // and lists on the Playbooks tab from the registry source
-  // (playbook-library-92, playbook-library-3, playbook-library-34).
+  // naming what arrived and no further act, its row reads its version,
+  // its source glyph and its standing, its playbook's line carries no
+  // act, and the playbook lists at once on the Playbooks tab under the
+  // project's name from the registry source, on its default players
+  // (playbook-library-92, playbook-library-1, core-service-2).
   const other = await startApp({ project: true, host: { share: { host: second, registry: secondRegistry } }, signedIn: true });
   try {
     const listed = (await other.core.command("space.get", {})).instances;
@@ -189,43 +189,37 @@ test("playbook-library-95: Publish from a project at the second instance reads t
     await result.getByTestId(`registry-add-${PACKAGE}`).click();
     const receipt = packages.getByTestId("add-receipt");
     await expect(receipt.getByTestId("add-note")).toHaveText(`Added ${PACKAGE} 0.1.0 · 1 playbook`, { timeout: 30_000 });
-    // The receipt's Enable is the playbook's own, in place (playbook-library-92).
-    await expect(receipt.getByRole("button", { name: `Enable /${ID}` })).toHaveText("Enable");
+    await expect(receipt.getByRole("button")).toHaveCount(0);
     const added = packageRow(packages, PACKAGE);
     await expect(added.getByTestId(`env-version-${PACKAGE}`)).toHaveText("0.1.0", { timeout: 30_000 });
     await expect(packageSource(added, PACKAGE)).toHaveAttribute("title", /^From the registry · /);
     await expect(added).toContainText("1 playbook");
     await expect(added.getByTestId(`env-installed-${PACKAGE}`)).toHaveText("Installed");
     // The row expands, through its disclosure, to one line per artifact
-    // with its one act — the playbook's "/triage · Enable" — so adding
-    // is never mistaken for enabling; Enable writes the project's config
-    // in place, a player per role, and the line then reads where it is
-    // enabled (playbook-library-92, playbook-library-3).
+    // — the playbook's "/triage", carrying no act: it runs with its
+    // package (playbook-library-92).
     const disclosure = added.getByRole("button", { name: `What ${PACKAGE} provides` });
     await expect(disclosure).toHaveAttribute("aria-expanded", "false");
     await disclosure.click();
     await expect(disclosure).toHaveAttribute("aria-expanded", "true");
     const line = added.getByTestId(`env-artifact-${PACKAGE}-${ID}`);
-    await expect(line).toContainText(`/${ID}`);
-    const enable = line.getByRole("button", { name: `Enable /${ID}` });
-    await expect(enable).toHaveText("Enable");
-    await enable.click();
-    await expect(line.getByTestId(`env-enabled-${PACKAGE}-${ID}`)).toHaveText(`Enabled in ${PROJECT}`);
-    await expect(enable).toHaveCount(0);
-    // The receipt reads where it is enabled too, its Enable gone.
-    await expect(receipt.getByTestId("add-note-enabled")).toHaveText(`Enabled in ${PROJECT}`);
-    await expect(receipt.getByTestId("add-note-enable")).toHaveCount(0);
-    await expect
-      .poll(() => (parse(other.readProjectConfig()) as { playbooks?: Record<string, { roles: Record<string, string> }> | null }).playbooks?.[ID]?.roles)
-      .toEqual({ Triager: "dev.triager", Verifier: "dev.verifier" });
-    expect((parse(other.readConfig()) as { playbooks?: Record<string, unknown> | null } | null)?.playbooks?.[ID]).toBeUndefined();
-    // The Playbooks tab lists it among the enabled, "in <project>", from
-    // the registry source (playbook-library-1, playbook-library-34).
+    await expect(line).toHaveText(`/${ID}`);
+    await expect(line.getByRole("button")).toHaveCount(0);
+    // Nothing is written: the playbook runs on its default players,
+    // `dev.<role>`, composed and written to no config (core-service-2).
+    const entryOf = (text: string) => (parse(text || "{}") as { playbooks?: Record<string, unknown> | null } | null)?.playbooks?.[ID];
+    expect(entryOf(other.readProjectConfig())).toBeUndefined();
+    expect(entryOf(other.readConfig())).toBeUndefined();
+    // The Playbooks tab lists it under the project's name, from the
+    // registry source, each role on its default player
+    // (playbook-library-1, playbook-library-29).
     await projectTab(page, "Playbooks");
-    const enabled = playbookCard(page.getByTestId("playbooks-enabled"), ID);
-    await expect(enabled).toContainText(`/${ID}`);
-    await expect(enabled.getByTestId(`playbook-enabled-${ID}`)).toHaveText(`in ${PROJECT}`);
-    await expect(enabled.getByTestId(`playbook-from-${ID}`)).toHaveText(new RegExp(`^from\\s*${PACKAGE} 0\\.1\\.0$`));
+    const card = playbookCard(page.getByTestId("playbooks-project"), ID);
+    await expect(card).toContainText(`/${ID}`);
+    await expect(page.getByTestId("playbooks-project").getByRole("heading").first()).toHaveText(PROJECT);
+    await expect(card.getByTestId(`playbook-from-${ID}`)).toHaveText(new RegExp(`^from\\s*${PACKAGE} 0\\.1\\.0$`));
+    await expect(card.getByTestId(`role-binding-${ID}-Triager`)).toHaveAttribute("title", /^dev\.triager · /);
+    await expect(card.getByTestId(`role-binding-${ID}-Verifier`)).toHaveAttribute("title", /^dev\.verifier · /);
   } finally {
     await other.close();
   }
@@ -240,7 +234,7 @@ test("playbook-library-95: Publish from a project at the second instance reads t
   await secondSection.getByTestId("space-signout").click();
   await expect(secondSection.getByTestId("space-signin-again")).toHaveText("Sign in again");
   await expect(instanceSection(page, first).getByTestId("space-account")).toContainText(`@${HOST_LOGIN}`);
-  await openEnableTab(page);
+  await openAddTab(page);
   await expect(page.getByTestId("publish-button")).toBeVisible();
   await app.core.command("registry.signout", { origin: second.url });
   await expect(page.getByTestId("publish").getByRole("button", { name: "Sign in to publish", exact: true })).toBeVisible();
@@ -275,16 +269,14 @@ test("playbook-library-114: a local spec-and-skill package publishes without a p
   const packages = packagesSection(page, "project");
   const row = packageRow(packages, name);
   // The folder package's row offers Publish in its overflow with no
-  // authoring session or compilation, and the built-in line none
-  // (playbook-library-113).
+  // authoring session or compilation (playbook-library-113).
   await expect(packageSource(row, name)).toHaveAttribute("title", `From folder ${path}`);
   await expect(row).toContainText("1 spec · 1 skill");
   await expect(await rowAct(row, "Publish")).toBeVisible();
   await expect(await rowAct(row, "Remove")).toBeVisible();
   await page.keyboard.press("Escape");
-  // The built-in spec package stands as the one quiet line, never a
-  // row with an overflow of its own (playbook-library-92).
-  await expect(builtinLine(packages)).toBeVisible();
+  // The built-in spec package is a global one, which a project's
+  // spex.yaml requests no more (environments-11, playbook-library-92).
   await expect(packageRow(packages, "sublang/playbooks")).toHaveCount(0);
   // The preview names the destination registry by its display name, the
   // package, version, file count and org; Cancel uploads nothing
@@ -347,11 +339,12 @@ test("playbook-library-114: a local spec-and-skill package publishes without a p
     await expect(packageSource(installed, name)).toHaveAttribute("title", /^From the registry · /);
     await expect(installed).toContainText("1 spec · 1 skill");
     await expect(installed.getByTestId(`env-installed-${name}`)).toHaveText("Installed");
-    // Expanded, the row lists the installed spec and skill, each placed
-    // for the agents (playbook-library-92).
+    // Expanded, the row lists the installed spec, placed in the
+    // project's scaffolded specs/, and the skill, placed for the agents
+    // (playbook-library-92, DR-174).
     await installed.getByRole("button", { name: `What ${name} provides` }).click();
     const lines = installed.getByTestId(`env-artifacts-${name}`);
-    await expect(lines.getByTestId(`env-artifact-${name}-${id}`)).toHaveText("spec · placed as a skill");
+    await expect(lines.getByTestId(`env-artifact-${name}-${id}`)).toHaveText(`spec · in specs/packages/${id}.md`);
     await expect(lines.getByTestId(`env-skills-placed-${name}`)).toHaveText("skill: notes-summary · placed for your agents");
     await expect(lines.getByTestId(`env-skills-unplaced-${name}`)).toHaveCount(0);
     const acts = await rowMenu(installed);
@@ -360,7 +353,8 @@ test("playbook-library-114: a local spec-and-skill package publishes without a p
     await page.keyboard.press("Escape");
     await expect(installed.getByTestId("publish")).toHaveCount(0);
     expect(readFileSync(join(other.projectDir, ".agents", "skills", "notes-summary", "SKILL.md"), "utf8")).toBe(skill);
-    expect(readFileSync(join(other.projectDir, ".agents", "skills", `${HOST_LOGIN}-${id}`, `${id}.md`), "utf8")).toBe(spec);
+    expect(readFileSync(join(other.projectDir, "specs", "packages", `${id}.md`), "utf8")).toBe(`<!-- Placed by Spex from ${name} 0.1.0; an edit makes this file yours. -->\n\n${spec}`);
+    expect(existsSync(join(other.projectDir, ".agents", "skills", `${HOST_LOGIN}-${id}`))).toBe(false);
   } finally { await other.close(); }
 
   // Signed out of the second Space, the row still publishes; signed out

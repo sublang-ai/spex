@@ -15,7 +15,7 @@ import { appendFileSync, chmodSync, cpSync, existsSync, lstatSync, mkdirSync, re
 import { createServer, request as httpRequest } from "node:http";
 import type { AddressInfo } from "node:net";
 import { dirname, isAbsolute, join } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { WebSocket } from "ws";
 import { parse as parseYaml, parseDocument, stringify as stringifyYaml } from "yaml";
 
@@ -272,19 +272,20 @@ test("environments-23: a fresh home with no registry reachable seeds the built-i
   assert.deepEqual(ownState.packages.map((pkg) => [pkg.name, pkg.version, pkg.source.kind, pkg.installed]), [["sublang/playbooks", shipped.version, "builtin", true]]);
   assert.equal(ownState.stale, null);
 
-  // A new project's environment requests it at its working folder's
-  // root, the clone's first commit holding none of it (environments-26).
+  // A new project's environment requests nothing at its working folder's
+  // root — the built-in spec package is global — the clone's first commit
+  // holding none of it (storage-6, environments-11, environments-26).
   const project = await core.client.expectOk("project.register", { path: gitFolder(join(dir, "project")) });
   const projectClone = clonePath(core.dataDir, project.id);
   const projectRoot = join(dir, "project");
   const firstCommit = execFileSync("git", ["-C", projectClone, "show", "--name-only", "--format=", "HEAD"], { encoding: "utf8" });
   assert.doesNotMatch(firstCommit, /^spex\.(yaml|lock)$/m);
-  assert.deepEqual(parseYaml(readFileSync(join(projectRoot, "spex.yaml"), "utf8")), { format: 1, registry: "https://spex.sublang.ai", packages: { "sublang/playbooks": { version: `^${shipped.version}` } } });
-  assert.ok(existsSync(join(projectRoot, "spex.lock")));
+  assert.deepEqual(parseYaml(readFileSync(join(projectRoot, "spex.yaml"), "utf8")), { format: 1, registry: "https://spex.sublang.ai", packages: {} });
   const config = await core.client.expectOk("config.get", {});
   assert.equal(config.status, "valid", JSON.stringify(config));
 
-  // Every built-in playbook launches from the project's installed package.
+  // Every built-in playbook launches in the project from the global
+  // environment's installed package (environments-9).
   const session = await core.client.expectOk("session.create", { projectId: project.id });
   await core.client.expectOk("turn.submit", { sessionId: session.id, text: "Hello" });
   await core.client.waitFor((m) => m.type === "session.state" && m.session.id === session.id && m.session.turns === 1 && m.session.turnActive === false, 60_000);
@@ -292,33 +293,31 @@ test("environments-23: a fresh home with no registry reachable seeds the built-i
   const ids = ["branch", "code", "decide", "dev", "inspect", "pr", "review"];
   assert.deepEqual(Object.keys(manifest.structuralProjection.catalog).sort(), ids);
   for (const id of ids) {
-    assert.ok(manifest.structuralProjection.catalog[id]!.from.startsWith(pathToFileURL(join(dir, "project", ".spex", "packages", "sublang", "playbooks", "playbooks", "en", id)).href), id);
+    assert.ok(manifest.structuralProjection.catalog[id]!.from.startsWith(pathToFileURL(join(ownClone, ".spex", "packages", "sublang", "playbooks", "playbooks", "en", id)).href), id);
   }
-  // The built-ins' skills are exported where claude reads them.
-  assert.ok(existsSync(join(dir, "project", ".claude", "skills", "code", "SKILL.md")));
-  assert.ok(existsSync(join(dir, "user", ".claude", "skills", "review", "SKILL.md")));
+  // The built-ins' skills are exported where your agents read them in
+  // your home folder, and into no project (environments-8).
+  assert.ok(existsSync(join(dir, "user", ".claude", "skills", "review", "SKILL.md")), "[environments-1] a playbook a playbook requires is a peer, its skill placed");
+  assert.equal(existsSync(join(dir, "project", ".claude", "skills", "code")), false);
 
-  // A newer built-in release seeds beside the older; neither lock moves.
-  const locks = [ownClone, projectRoot].map((root) => readFileSync(join(root, "spex.lock"), "utf8"));
+  // A newer built-in release seeds beside the older; the lock moves not.
+  const locks = [ownClone].map((root) => readFileSync(join(root, "spex.lock"), "utf8"));
   await core.stop();
   const newer = newerBuiltin();
   core = await startCore(dir, { hostUrl: UNREACHABLE, realShell: true, extra: { builtinPackage: newer } });
   assert.ok(existsSync(join(core.dataDir, "cache", "builtins", `${shipped.version}.json`)), "the older stays seeded");
   assert.ok(existsSync(join(core.dataDir, "cache", "builtins", `${newer.version}.json`)), "the newer is seeded beside it");
-  assert.deepEqual([ownClone, projectRoot].map((root) => readFileSync(join(root, "spex.lock"), "utf8")), locks, "an app update changes no lock");
-  const still = await core.client.expectOk("environment.get", { repository: project.id });
-  assert.deepEqual(still.packages.map((pkg) => [pkg.version, pkg.installed]), [[shipped.version, true]]);
-  // [environments-11] each state names the newer release beside the
+  assert.deepEqual([ownClone].map((root) => readFileSync(join(root, "spex.lock"), "utf8")), locks, "an app update changes no lock");
+  // [environments-11] the state names the newer release beside the
   // older its lock selects, the caret request admitting the newer.
-  assert.deepEqual(still.builtinUpdate, { shipped: newer.version, locked: shipped.version });
   const ownBefore = await core.client.expectOk("environment.get", { repository: own });
   assert.deepEqual(ownBefore.builtinUpdate, { shipped: newer.version, locked: shipped.version });
-  // A new environment takes the newer release, and its state names none.
+  // A new project's environment still requests nothing, and its state
+  // names no update.
   const later = await core.client.expectOk("project.register", { path: gitFolder(join(dir, "later")) });
-  const laterLock = parseYaml(readFileSync(join(dir, "later", "spex.lock"), "utf8")) as { packages: Record<string, { source: { version: string } }> };
-  assert.equal(laterLock.packages["sublang/playbooks"]!.source.version, newer.version);
+  assert.deepEqual(parseYaml(readFileSync(join(dir, "later", "spex.yaml"), "utf8")).packages, {});
   const laterState = await core.client.expectOk("environment.get", { repository: later.id });
-  assert.ok(!("builtinUpdate" in laterState), "[environments-11] a lock selecting the shipped release names no update");
+  assert.ok(!("builtinUpdate" in laterState), "[environments-11] no update where the built-in is not requested");
 
   // [environments-11] resolving again — what Update sends — moves the
   // lock to the newer release, and the state names none.
@@ -328,7 +327,8 @@ test("environments-23: a fresh home with no registry reachable seeds the built-i
   assert.deepEqual(updated.packages.map((pkg) => [pkg.name, pkg.version, pkg.source.kind, pkg.installed]), [["sublang/playbooks", newer.version, "builtin", true]]);
   assert.ok(!("builtinUpdate" in updated), "[environments-11] the lock selects the shipped release");
 
-  // [environments-11] a request admitting only the older release names
+  // [environments-11] a project requesting the built-in spec package
+  // itself, at an exact version admitting only the older release, names
   // no update, its lock still selecting the older.
   mark = core.client.mark();
   await core.client.expectOk("environment.request", { repository: project.id, name: "sublang/playbooks", request: { kind: "registry", version: shipped.version } });
@@ -336,6 +336,36 @@ test("environments-23: a fresh home with no registry reachable seeds the built-i
     && JSON.stringify(state.requests["sublang/playbooks"]) === JSON.stringify({ kind: "registry", version: shipped.version }));
   assert.deepEqual(exact.packages.map((pkg) => [pkg.version, pkg.installed]), [[shipped.version, true]]);
   assert.ok(!("builtinUpdate" in exact), "[environments-11] the request admits only the older release");
+});
+
+test("environments-11: the global environment requests the built-in spec package once, when the home is made; removed, it stays removed across a restart, the entries written for its playbooks standing aside", { timeout: 180_000 }, async (t) => {
+  const dir = scratchDir("spex-env-builtin-removed-");
+  let core = await startCore(dir, { hostUrl: UNREACHABLE });
+  t.after(() => core.stop());
+  const own = `${OWN}/${OWN}-spex`;
+  const requests = (): Record<string, unknown> => (parseYaml(readFileSync(join(clonePath(core.dataDir, own), "spex.yaml"), "utf8")) as { packages: Record<string, unknown> }).packages;
+  assert.ok(requests()["sublang/playbooks"], "[environments-11] requested as the home is made");
+  assert.equal((await core.client.expectOk("config.get", {})).status, "valid");
+  assert.deepEqual(await core.client.expectOk("environment.remove", { repository: own, name: "sublang/playbooks", wait: true }), { completed: true });
+  assert.deepEqual(requests(), {}, "[environments-15] removed as any other package");
+  await core.stop();
+  core = await startCore(dir, { hostUrl: UNREACHABLE });
+  assert.deepEqual(requests(), {}, "[environments-11] a removal stands: a start requests it no more");
+  // The entries the config writes for its playbooks stand aside, each
+  // named, and block nothing (core-service-2, playbook-library-2).
+  const state = await core.client.expectOk("config.get", {});
+  assert.equal(state.status, "valid", JSON.stringify(state));
+  if (state.status === "valid") {
+    assert.deepEqual(state.summary.playbooks, []);
+    assert.ok(state.summary.standsAside.some((entry) => entry.playbook === "code" && /no package of .+ places a playbook code/.test(entry.reason)), JSON.stringify(state.summary.standsAside));
+  }
+  const listed = await core.client.expectOk("environment.playbooks", {});
+  assert.deepEqual(listed.own, []);
+  assert.ok(listed.invalid?.some((entry) => entry.config === "own" && entry.playbook === "code"), "[playbook-library-2] the entry listed with its failure");
+  // With no playbook composing, a new session is refused in the
+  // reader's words (core-service-2).
+  const project = await core.client.expectOk("project.register", { path: gitFolder(join(dir, "project")) });
+  await core.client.expectError("session.create", { projectId: project.id }, "invalid_config", /^No playbook runs in project — add a package that provides one$/);
 });
 
 test("environments-23, environments-7, environments-11: a lock records the archive checksum the seed packs to; with no registry reachable, a lock of the seeded release at another device's archive checksum with the same files' digests installs from the seed, and one recording another digest for a file fails naming the spec package", { timeout: 120_000 }, async (t) => {
@@ -429,7 +459,8 @@ test("environments-7, environments-21, environments-26: a home of the former lay
     const state = await core.client.expectOk("environment.get", { repository: key });
     assert.ok(state.packages.length > 0 && state.packages.every((pkg) => pkg.installed), `${key} reads installed: ${JSON.stringify(state.packages)}`);
     assert.equal(readFileSync(join(root, ".spex", ".gitignore"), "utf8"), "*\n", "[environments-26] .spex/ ignores everything in it");
-    assert.ok(existsSync(join(root, ".spex", "packages", "sublang", "playbooks", "meta.yaml")), `${key}: the built-in stands under .spex/packages/`);
+    const name = key === own ? "sublang/playbooks" : "acme/kit";
+    assert.ok(existsSync(join(root, ".spex", "packages", ...name.split("/"), "meta.yaml")), `${key}: ${name} stands under .spex/packages/`);
   }
   assert.equal(readFileSync(join(working, ".spex", "packages", "acme", "kit", "skills", "en", "tidy", "SKILL.md"), "utf8"), installed);
   assert.ok(existsSync(join(working, ".spex", "skills", "tidy", "SKILL.md")), "the generated skills stand under .spex/skills/");
@@ -448,7 +479,9 @@ test("environments-9, environments-7, playbook-library-46: an installed playbook
   const working = gitFolder(join(dir, "project"));
   const project = await core.client.expectOk("project.register", { path: working });
   await settledProject(core.client, project.id);
-  const links = join(working, ".spex", "packages", "sublang", "playbooks", "playbooks", "en", "code", "node_modules");
+  // The global environment's built-in a session in the project runs
+  // (environments-9).
+  const links = join(clonePath(core.dataDir, `${OWN}/${OWN}-spex`), ".spex", "packages", "sublang", "playbooks", "playbooks", "en", "code", "node_modules");
   assert.ok(lstatSync(join(links, "xstate")).isSymbolicLink(), "the app's install prepared the folder");
   rmSync(links, { recursive: true, force: true });
   const session = await core.client.expectOk("session.create", { projectId: project.id });
@@ -466,6 +499,9 @@ test("environments-9, environments-7, playbook-library-46: installed playbook fo
   const working = gitFolder(join(dir, "project"));
   const project = await core.client.expectOk("project.register", { path: working });
   await settledProject(core.client, project.id);
+  // The project requests the built-in spec package itself, as one paired
+  // before it became global still does (environments-11).
+  await core.client.expectOk("environment.request", { repository: project.id, name: "sublang/playbooks", request: { kind: "registry", version: `^${builtinPackage().version}` }, wait: true });
   const linksOf = (root: string): string => join(root, ".spex", "packages", "sublang", "playbooks", "playbooks", "en", "code", "node_modules");
   const ownLinks = linksOf(clonePath(core.dataDir, own));
   const projectLinks = linksOf(working);
@@ -518,7 +554,8 @@ test("environments-7, environments-26, environments-21: environment.get finding 
   // main line (environments-26).
   const gitIn = (...args: string[]): string => execFileSync("git", ["-C", working, "-c", "user.name=Spex Test", "-c", "user.email=test@spex.invalid", "-c", "commit.gpgsign=false", ...args], { encoding: "utf8" });
   gitIn("checkout", "-q", "-b", "both");
-  gitIn("add", "spex.yaml", "spex.lock");
+  writeFileSync(join(working, ".gitattributes"), "spex.yaml text eol=lf\nspex.lock text eol=lf\nspecs/packages/*.md text eol=lf\n");
+  gitIn("add", "spex.yaml", "spex.lock", ".gitattributes");
   gitIn("commit", "-q", "-m", "Request kit and tool");
   const both = { requests: readFileSync(join(working, "spex.yaml")), lock: readFileSync(join(working, "spex.lock")) };
   gitIn("checkout", "-q", "-b", "kit");
@@ -576,6 +613,13 @@ test("environments-22 through a real core: retained files of another lock are no
   assert.ok(before.error, "the failed restoration remains visible");
   const configBefore = await core.client.expectOk("config.get", {});
   const importedBefore = loaded.length;
+  // Whether code composes: its entry stands aside, blocking nothing,
+  // while its module is not on this device (core-service-2).
+  const codeRuns = async (): Promise<boolean> => {
+    const state = await core.client.expectOk("config.get", {});
+    assert.equal(state.status, "valid", JSON.stringify(state));
+    return state.status === "valid" && state.summary.playbooks.some((playbook) => playbook.id === "code");
+  };
 
   // One normal resolve selects the seeded release, installs it and
   // prepares the engine links before the first registry import.
@@ -583,9 +627,9 @@ test("environments-22 through a real core: retained files of another lock are no
   await core.client.expectOk("environment.resolve", { repository: own });
   const after = await core.client.environment(own, mark, (state) => state.busy === null && state.packages[0]?.installed === true);
   assert.equal(after.error, null);
-  assert.equal((await core.client.expectOk("config.get", {})).status, "valid", "a successful resolve repairs config without restarting the core");
-  assert.equal(configBefore.status, "invalid");
-  assert.match(JSON.stringify(configBefore), /exports no playbook code/);
+  assert.equal(await codeRuns(), true, "a successful resolve brings code back without restarting the core");
+  assert.equal(configBefore.status, "valid", "an entry whose module is not here blocks nothing");
+  assert.match(JSON.stringify(configBefore), /places it, but its files are not on this computer/);
   assert.equal(importedBefore, 0, "no retained registry was imported while its package was uninstalled");
   assert.ok(loaded.length > 0, "the installed registries were imported after recovery");
 
@@ -595,16 +639,16 @@ test("environments-22 through a real core: retained files of another lock are no
   const recordPath = join(clone, ".spex", "packages", INSTALL_RECORD);
   const record = readFileSync(recordPath);
   rmSync(recordPath);
-  assert.equal((await core.client.expectOk("config.get", {})).status, "invalid");
+  assert.equal(await codeRuns(), false);
   writeFileSync(recordPath, record);
-  assert.equal((await core.client.expectOk("config.get", {})).status, "valid");
+  assert.equal(await codeRuns(), true);
 
   const machinePath = join(clone, ".spex", "packages", "sublang", "playbooks", "playbooks", "en", "code", "code.playbook", "code.fsm.js");
   const machine = readFileSync(machinePath);
   rmSync(machinePath);
-  assert.equal((await core.client.expectOk("config.get", {})).status, "invalid", "a missing selected non-entry file invalidates cached availability");
+  assert.equal(await codeRuns(), false, "a missing selected non-entry file invalidates cached availability");
   writeFileSync(machinePath, machine);
-  assert.equal((await core.client.expectOk("config.get", {})).status, "valid");
+  assert.equal(await codeRuns(), true);
 
   // A Git source at another commit is equally unavailable: the retained
   // registry files never establish that the new locked source installed.
@@ -613,10 +657,10 @@ test("environments-22 through a real core: retained files of another lock are no
   gitLock.packages["sublang/playbooks"]!.source = { git: pathToFileURL(join(dir, "not-fetched.git")).href, commit: "0".repeat(40) };
   const beforeGitRead = loaded.length;
   writeFileSync(lockPath, stringifyYaml(gitLock));
-  assert.equal((await core.client.expectOk("config.get", {})).status, "invalid");
+  assert.equal(await codeRuns(), false);
   assert.equal(loaded.length, beforeGitRead, "no files retained for a different Git source are imported");
   writeFileSync(lockPath, installedLock);
-  assert.equal((await core.client.expectOk("config.get", {})).status, "valid");
+  assert.equal(await codeRuns(), true);
   assert.equal(readFileSync(core.configPath, "utf8"), CONFIG, "recovery preserves the authored configuration");
   assert.equal(readFileSync(join(clone, "spex.yaml"), "utf8"), requests, "resolving again preserves the authored version requirement");
   assert.deepEqual(readdirSync(join(clone, "sessions")), [], "no workflow or provider turn was needed");
@@ -656,13 +700,13 @@ test("environments-24: a playbook authored in a project compiles, is requested b
   // The engine links stay out of the working folder's Git.
   assert.match(readFileSync(join(working, ".git", "info", "exclude"), "utf8"), /^\*\*\/playbooks\/\*\/\*\/node_modules\/$/m);
 
-  // Enabling requests it by path, installs and writes the project's entry.
+  // Add requests it by path, installs and writes the project's entry.
   await core.client.expectOk("draft.register", {
     projectId: project.id, draftId: "triage", instance, command: "triage", intent: "Label new issues",
     bindings: { Triager: "dev.coder", Verifier: "dev.coder" },
   });
   assert.equal((parseYaml(readFileSync(join(working, "spex.yaml"), "utf8")) as { packages: Record<string, unknown> }).packages[`${ORG}/triage`] !== undefined, true);
-  await until(() => latest()?.state === "enabled", 10_000, "the enabled chip");
+  await until(() => latest()?.state === "added", 10_000, "the added chip");
   // A session of the project launches it from the working folder.
   const session = await core.client.expectOk("session.create", { projectId: project.id });
   const manifestFile = join(clone, "sessions", `${session.id}.json`);
@@ -670,16 +714,26 @@ test("environments-24: a playbook authored in a project compiles, is requested b
   const catalog = (await createSessionStore({ sessionsDir: join(clone, "sessions") }).readManifest(session.id) as { structuralProjection: { catalog: Record<string, { from: string }> } }).structuralProjection.catalog;
   assert.equal(catalog.triage?.from, pathToFileURL(join(folder, "playbooks", "en", "triage", "triage.registry.mjs")).href);
 
-  // What the compiler keeps beside the playbook for itself — its build
-  // history and its verifier's support — is no release file
-  // (environments-1).
+  // The pipeline's history, verifier support, generated checks and
+  // introspection bundle are no folder release files (environments-1).
   const playbookFolder = join(folder, "playbooks", "en", "triage");
-  const compilerOwn = [".slc/builds/0001/triage.md", "triage.playbook/.slc/latest", "triage.playbook/.slc-verify/support.mjs"];
+  const compilerOwn = [
+    ".slc/builds/0001/triage.md", "triage.playbook/.slc/latest", "triage.playbook/.slc-verify/support.mjs",
+    "triage.playbook/triage.fsm.coverage.test.ts", "triage.playbook/triage.fsm.introspect.test.ts",
+    "triage.playbook/triage.gears-fsm.test.ts", "triage.playbook/triage.prompt-contract.test.ts",
+    "triage.fsm.bundle.mjs",
+  ];
   for (const path of compilerOwn) {
     mkdirSync(dirname(join(playbookFolder, path)), { recursive: true });
-    writeFileSync(join(playbookFolder, path), `${path}\n`);
+    if (!existsSync(join(playbookFolder, path))) writeFileSync(join(playbookFolder, path), `${path}\n`);
   }
-  const ownedByCompiler = (path: string): boolean => /(^|\/)\.slc(-verify)?\//.test(path);
+  const ownedByCompiler = (path: string): boolean => compilerOwn.some((file) => path === `playbooks/en/triage/${file}`);
+  const retained = [
+    "triage.md", "triage.ts", "triage.registry.ts", "triage.registry.mjs",
+    "triage.playbook/triage.fsm.ts", "triage.playbook/triage.playbook.ts", "triage.playbook/triage.gears.md",
+    "triage.playbook/triage.gears.raw.md", "triage.playbook/triage.gears.opt1.md",
+  ];
+  for (const path of retained.slice(-2)) writeFileSync(join(playbookFolder, path), "# Editable intermediate\n");
 
   // Publishing: a manifest without the license the registry requires is
   // refused naming the field, the preview as the upload, before
@@ -706,7 +760,7 @@ test("environments-24: a playbook authored in a project compiles, is requested b
   }
   rmSync(impostor, { recursive: true, force: true });
   await core.client.expectError("environment.publish", { repository: project.id, name: `${ORG}/absent`, dryRun: true },
-    "invalid_request", new RegExp(`^No folder for ${ORG}/absent at spex-packages/${ORG}/absent — npx @sublang/spex new ${ORG}/absent starts one$`));
+    "invalid_request", new RegExp(`^No folder for ${ORG}/absent at spex-packages/${ORG}/absent — npx @sublang/spex export ${ORG}/absent \\[--spec <file>\\] \\[--skill <folder>\\]… builds one$`));
   assert.deepEqual(registry.script.requests.filter((request) => request.startsWith("PUT ")), [], "nothing was uploaded");
 
   // The dry run names what would go, then the upload.
@@ -717,7 +771,7 @@ test("environments-24: a playbook authored in a project compiles, is requested b
   assert.deepEqual(preview.preview, { instance: preview.preview?.instance, name: `${ORG}/triage`, version: "0.1.0", files: declared.map((file) => file.path).sort() });
   assert.ok(!preview.preview?.files.some((path) => path.includes("node_modules")), "engine links never upload");
   assert.deepEqual(preview.preview?.files.filter(ownedByCompiler), [], "the compiler's own files never upload");
-  assert.ok(preview.preview?.files.includes("playbooks/en/triage/triage.registry.mjs"), "the compiled module uploads");
+  for (const path of retained) assert.ok(preview.preview?.files.includes(`playbooks/en/triage/${path}`), `${path} uploads`);
   const from = core.client.mark();
   assert.deepEqual(await core.client.expectOk("environment.publish", { repository: project.id, name: `${ORG}/triage` }), { accepted: true });
   const published = await core.client.environment(project.id, from, (state) => state.busy === null && (state.published !== null && state.published !== undefined || state.error !== null));
@@ -740,16 +794,25 @@ test("environments-24: a playbook authored in a project compiles, is requested b
   const installed = await other.client.environment(otherProject.id, mark, (state) => state.busy === null && state.packages.some((pkg) => pkg.name === `${ORG}/triage` && pkg.installed));
   const pkg = installed.packages.find((entry) => entry.name === `${ORG}/triage`)!;
   assert.deepEqual([pkg.version, pkg.source.kind, pkg.direct], ["0.1.0", "registry", true]);
+  const installedPlaybook = join(second, "project", ".spex", "packages", ORG, "triage", "playbooks", "en", "triage");
+  for (const path of compilerOwn) assert.equal(existsSync(join(installedPlaybook, path)), false, `${path} stays out of the install`);
+  for (const path of retained) assert.ok(existsSync(join(installedPlaybook, path)), `${path} stays available after installation`);
   const playbooks = await other.client.expectOk("environment.playbooks", { projectId: otherProject.id });
   const row = playbooks.project?.find((entry) => entry.id === "triage");
-  assert.deepEqual([row?.source, row?.version, row?.enabled, row?.present], ["registry", "0.1.0", [], true]);
+  // Placed with no entry, it runs on its default binding (core-service-2,
+  // environments-9).
+  assert.deepEqual([row?.source, row?.version, row?.entry, row?.runs, row?.placedBy, row?.present], ["registry", "0.1.0", [], true, ["project"], true]);
+  assert.deepEqual(Object.fromEntries(Object.entries(row?.bindings ?? {}).map(([role, binding]) => [role, [binding.playerId, binding.from]])), { triager: ["dev.triager", "default"], verifier: ["dev.verifier", "default"] });
 });
 
 // ---------------------------------------------------------------------------
-// environments-22: a spec package's spec exported through a real core
+// environments-22: a spec package's spec placed through a real core
 // ---------------------------------------------------------------------------
 
-test("environments-22 through a real core: a spec-only spec package requested from the registry exports its spec where claude reads skills, your own group's to the user home, and leaves once removed", { timeout: 180_000 }, async (t) => {
+/** The command line this checkout builds, which scaffolds a `specs/`. */
+const SPEX_CLI = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "cli", "dist", "cli.js");
+
+test("environments-22 through a real core: a spec-only spec package requested from the registry places its spec in the project's specs/ and into no agent folder, your own group's as a generated skill in the user home, and leaves once removed", { timeout: 180_000 }, async (t) => {
   const registry = await startStandinRegistry({ dir: scratchDir("spex-env-spec-registry-") });
   t.after(() => registry.close());
   const spec = "# trip-split: Trip Split\n\n## Intent\n\nSplit a trip's costs.\n\n## External Behavior\n\n### trip-split-1\n\nThe splitter shall divide each cost among the travellers who shared it.\n\n## Verification\n\n### trip-split-2\n\nWhen a cost is shared, the suite shall assert its division [[trip-split-1](#trip-split-1)].\n";
@@ -764,34 +827,40 @@ test("environments-22 through a real core: a spec-only spec package requested fr
   const core = await startCore(dir, { hostUrl: registry.url });
   t.after(() => core.stop());
   const { client } = core;
+  // A project whose working folder holds specs/, as one scaffolded.
   const working = gitFolder(join(dir, "project"));
+  // The working folder holds `specs/`, as one scaffolded, where a
+  // project's provided spec is placed (environments-41).
+  execFileSync(process.execPath, [SPEX_CLI, "scaffold", working], { stdio: "ignore" });
+  assert.ok(existsSync(join(working, "specs", "meta.md")), "the working folder holds a scaffolded specs/");
   const { id: key } = await client.expectOk("project.register", { path: working });
   const own = `${OWN}/${OWN}-spex`;
+  const placed = join(working, "specs", "packages", "trip-split.md");
   const exported = join(working, ".claude", "skills", "acme-trip-split");
   const shared = join(working, ".agents", "skills", "acme-trip-split");
   const atHome = join(dir, "user", ".claude", "skills", "acme-trip-split");
-  const exclude = (): string => readFileSync(join(working, ".git", "info", "exclude"), "utf8");
+  const excludeFile = join(working, ".git", "info", "exclude");
+  const exclude = (): string => (existsSync(excludeFile) ? readFileSync(excludeFile, "utf8") : "");
   const request = { kind: "registry", version: "^1.0.0" } as const;
   const holds = (state: EnvironmentState): boolean => state.packages.some((pkg) => pkg.name === "acme/trip-split" && pkg.installed);
 
-  // Requested in the project: the generated skill stands where claude
-  // reads skills, the release's spec file in it byte for byte.
+  // Requested in the project: the spec placed in its specs/ under the
+  // marker line, the release's file after it — its one citation a
+  // same-file one, which stays — and into no agent folder.
   let mark = client.mark();
   await client.expectOk("environment.request", { repository: key, name: "acme/trip-split", request });
   const requested = await client.environment(key, mark, (state) => state.busy === null && holds(state));
+  // The lock still names the spec's skill name (environments-6); the
+  // core's state of the placement under specs/ follows in its change.
   assert.deepEqual(requested.packages.find((pkg) => pkg.name === "acme/trip-split")?.exports, [{ name: "acme-trip-split", artifact: "trip-split" }]);
-  assert.deepEqual(readdirSync(exported).sort(), ["SKILL.md", "trip-split.md"]);
-  assert.ok(readFileSync(join(exported, "trip-split.md")).equals(released), "the spec file is the release's, byte for byte");
-  const skill = readFileSync(join(exported, "SKILL.md"), "utf8");
-  assert.match(skill, /^---\nname: acme-trip-split\n/);
-  assert.match(skill, /`acme\/trip-split` — org `acme`, name `trip-split`, version `1\.0\.0`: Split a trip's costs fairly/);
-  assert.match(exclude(), /^\/\.claude\/skills\/acme-trip-split\/$/m);
-  // The same skill stands where Codex, Gemini CLI, Kimi Code and OpenCode
-  // read skills, whatever agents this device has (environments-16).
-  assert.deepEqual(readdirSync(shared).sort(), ["SKILL.md", "trip-split.md"]);
-  assert.ok(readFileSync(join(shared, "trip-split.md")).equals(released), "the shared folder's copy is the release's too");
-  assert.match(exclude(), /^\/\.agents\/skills\/acme-trip-split\/$/m);
-  assert.equal(execFileSync("git", ["-C", working, "status", "--porcelain", "--untracked-files=all", "--", ".claude", ".agents"], { encoding: "utf8" }), "", "Git ignores the export");
+  assert.equal(readFileSync(placed, "utf8"), `<!-- Placed by Spex from acme/trip-split 1.0.0; an edit makes this file yours. -->\n\n${spec}`,
+    "[environments-41] the marker line, a blank line, then the release's spec");
+  assert.equal((JSON.parse(readFileSync(join(working, ".spex", "placed.json"), "utf8")) as { specs: Record<string, { version: string }> }).specs["acme/trip-split"]?.version, "1.0.0", "[environments-41] recorded with the release's version");
+  assert.equal(readFileSync(join(working, ".gitattributes"), "utf8"), "spex.yaml text eol=lf\nspex.lock text eol=lf\nspecs/packages/*.md text eol=lf\n", "[environments-44] the three LF rules in the project's .gitattributes");
+  for (const folder of [exported, shared]) assert.equal(existsSync(folder), false, `[environments-8] into no agent folder: ${folder}`);
+  assert.doesNotMatch(exclude(), /acme-trip-split|specs/, "[environments-41] nothing of it in Git's exclude");
+  assert.equal(execFileSync("git", ["-C", working, "status", "--porcelain", "--untracked-files=all", "--", "specs/packages/trip-split.md"], { encoding: "utf8" }),
+    "?? specs/packages/trip-split.md\n", "[environments-41] the placed spec left for the reader to commit, not ignored");
   assert.equal(existsSync(atHome), false, "a project's spec stays in its working folder");
 
   // Requested in your own group's environment: your agents' home folder holds it.
@@ -815,19 +884,123 @@ test("environments-22 through a real core: a spec-only spec package requested fr
   assert.deepEqual(readdirSync(sharedAtHome).sort(), ["SKILL.md", "trip-split.md"]);
   for (const folder of [".codex", ".gemini", ".kimi-code", ".config"]) assert.equal(existsSync(join(dir, "user", folder)), false, folder);
 
-  // Removed and installed again: the skill, its exclude line and the
-  // home folder's copy leave with the spec package.
+  // Removed and installed again: the placed spec, and the home folder's
+  // skill and its copy, leave with the spec package.
   mark = client.mark();
   await client.expectOk("environment.remove", { repository: key, name: "acme/trip-split" });
   await client.environment(key, mark, (state) => state.busy === null && !holds(state));
-  assert.equal(existsSync(exported), false, "the removed spec package's skill is gone");
-  assert.equal(existsSync(shared), false, "and so is its copy in the shared folder");
-  assert.doesNotMatch(exclude(), /acme-trip-split/);
+  assert.equal(existsSync(placed), false, "[environments-41] the unedited placed spec is gone");
+  assert.ok(existsSync(join(working, "specs", "meta.md")), "and the project's own specs stand");
+  assert.equal(existsSync(exported), false);
+  assert.equal(existsSync(shared), false);
   mark = client.mark();
   await client.expectOk("environment.remove", { repository: own, name: "acme/trip-split" });
   await client.environment(own, mark, (state) => state.busy === null && !holds(state));
   assert.equal(existsSync(atHome), false, "your own group's copy is gone");
   assert.equal(existsSync(sharedAtHome), false, "and so is its copy in the shared user folder");
+});
+
+test("environments-14, environments-41 through a real core: environment.get says which artifacts a release provides and where its spec stands in a project's specs/ — placed with the links waiting for a package it cites, edited by a hand edit with the newer release waiting, blocked by a project file of its name, waiting for specs/ in a folder holding none — and gives your own group's environment no placement", { timeout: 180_000 }, async (t) => {
+  const registry = await startStandinRegistry({ dir: scratchDir("spex-env-place-registry-") });
+  t.after(() => registry.close());
+  // The spec cites twice a package no environment here requests, by its
+  // address inside the release (environments-42).
+  const spec = "# fare: Fare Split\n\n## Intent\n\nSplit a fare.\n\n## External Behavior\n\n### fare-1\n\nThe splitter shall round each share as the ledger rounds [[ledger-1](spex:acme/ledger#ledger-1)].\n\n### fare-2\n\nThe splitter shall post each share to the ledger [[ledger-2](spex:acme/ledger#ledger-2)].\n\n## Verification\n\n### fare-3\n\nWhen a fare is split, the suite shall assert each share's rounding [[fare-1](#fare-1)] and posting [[fare-2](#fare-2)].\n";
+  const publishFare = async (version: string): Promise<void> => {
+    const releaseDir = await makeRelease(join(scratchDir("spex-env-place-release-"), "fare"), {
+      format: 2, org: "acme", name: "fare", version, description: "Split a fare", license: "Apache-2.0",
+      // The spec is what the package offers; its skill is support,
+      // installed and placed nowhere (environments-1, environments-6).
+      provides: ["spec"],
+      artifacts: { fare: { kind: "spec", language: "en" }, "fare-notes": { kind: "skill", language: "en" } },
+    }, {
+      "specs/en/fare.md": spec,
+      "skills/en/fare-notes/SKILL.md": "---\nname: fare-notes\ndescription: Notes on splitting a fare.\n---\n\nRound each share down.\n",
+    });
+    await publishRelease(new RegistryClient({ url: registry.url }), releaseDir);
+  };
+  await publishFare("1.0.0");
+
+  const dir = scratchDir("spex-env-place-");
+  const core = await startCore(dir, { hostUrl: registry.url });
+  t.after(() => core.stop());
+  const { client } = core;
+  const working = gitFolder(join(dir, "project"));
+  execFileSync(process.execPath, [SPEX_CLI, "scaffold", working], { stdio: "ignore" });
+  assert.ok(existsSync(join(working, "specs", "meta.md")), "the working folder holds a scaffolded specs/");
+  const { id: key } = await client.expectOk("project.register", { path: working });
+  const request = { kind: "registry", version: "^1.0.0" } as const;
+  const fareOf = async (repository: string) => (await client.expectOk("environment.get", { repository })).packages.find((pkg) => pkg.name === "acme/fare");
+  const provision = (pkg: Awaited<ReturnType<typeof fareOf>>) => pkg?.artifacts.map(({ id, kind, provided }) => ({ id, kind, provided }));
+  const offered = [{ id: "fare", kind: "spec", provided: true }, { id: "fare-notes", kind: "skill", provided: false }];
+  const copy = join(working, "specs", "packages", "fare.md");
+
+  // Installed in the project: the spec stands in its specs/, placed
+  // from the working folder as the environment's root, with no skill
+  // for it or for its support (environments-8, environments-41).
+  await client.expectOk("environment.request", { repository: key, name: "acme/fare", request, wait: true });
+  const placed = await fareOf(key);
+  assert.equal(placed?.installed, true);
+  assert.deepEqual(provision(placed), offered, "[environments-14] the spec provided, its support skill not");
+  assert.deepEqual(placed?.placement, { spec: { state: "placed", path: "specs/packages/fare.md", waiting: [{ name: "acme/ledger", count: 2 }] } },
+    "[environments-14] placed at its path, two links waiting for the package it cites");
+  assert.match(readFileSync(copy, "utf8"), /^<!-- Placed by Spex from acme\/fare 1\.0\.0; an edit makes this file yours\. -->\n\n# fare: Fare Split\n/);
+  for (const folder of [".claude/skills", ".agents/skills"]) {
+    for (const name of ["acme-fare", "fare-notes"]) assert.equal(existsSync(join(working, folder, name)), false, `${folder}/${name}`);
+  }
+
+  // A hand edit makes the copy the reader's: read edited at once, with
+  // no install (environments-14).
+  appendFileSync(copy, "\nA note of ours.\n");
+  assert.deepEqual((await fareOf(key))?.placement, { spec: { state: "edited", path: "specs/packages/fare.md", waiting: [] } },
+    "[environments-14] edited, no newer release waiting");
+  // A newer release resolved and installed leaves the edited copy
+  // standing, its version waiting under .spex/ (environments-41).
+  const edited = readFileSync(copy);
+  await publishFare("1.1.0");
+  await client.expectOk("environment.resolve", { repository: key, wait: true });
+  const newer = await fareOf(key);
+  assert.equal(newer?.version, "1.1.0");
+  assert.deepEqual(newer?.placement, { spec: { state: "edited", path: "specs/packages/fare.md", waiting: [], waitingVersion: "1.1.0" } },
+    "[environments-14] edited, the newer release's version waiting");
+  assert.ok(readFileSync(copy).equals(edited), "the edited copy stands");
+
+  // Rewritten without its marker line, the copy the record names is
+  // still the package's: edited, not blocked (environments-41).
+  const ours = "# fare: Our Own Fare Rules\n\n## Intent\n\nOurs.\n";
+  writeFileSync(copy, ours);
+  assert.deepEqual((await fareOf(key))?.placement, { spec: { state: "edited", path: "specs/packages/fare.md", waiting: [], waitingVersion: "1.1.0" } },
+    "[environments-14] the recorded copy read edited, the newer release's version waiting");
+
+  // A project file of that name that is not the copy holds the place.
+  const owned = gitFolder(join(dir, "owned"));
+  execFileSync(process.execPath, [SPEX_CLI, "scaffold", owned], { stdio: "ignore" });
+  const theirs = join(owned, "specs", "packages", "fare.md");
+  writeFileSync(theirs, ours);
+  const { id: ownedKey } = await client.expectOk("project.register", { path: owned });
+  await client.expectOk("environment.request", { repository: ownedKey, name: "acme/fare", request, wait: true });
+  assert.deepEqual((await fareOf(ownedKey))?.placement, { spec: { state: "blocked", path: "specs/packages/fare.md", waiting: [] } },
+    "[environments-14] blocked by a file of its name");
+  assert.equal(readFileSync(theirs, "utf8"), ours, "the project's file as it was");
+
+  // A working folder holding no specs/ waits for one; none is made.
+  const bare = gitFolder(join(dir, "bare"));
+  const { id: bareKey } = await client.expectOk("project.register", { path: bare });
+  await client.expectOk("environment.request", { repository: bareKey, name: "acme/fare", request, wait: true });
+  const waiting = await fareOf(bareKey);
+  assert.equal(waiting?.installed, true);
+  assert.deepEqual(waiting?.placement, { spec: { state: "no-specs", path: "specs/packages/fare.md", waiting: [] } },
+    "[environments-14] waiting for specs/");
+  assert.equal(existsSync(join(bare, "specs")), false, "no specs/ is made");
+
+  // Your own group's environment places its spec as a skill: what it
+  // provides is said, and no placement under specs/ (environments-8).
+  const own = `${OWN}/${OWN}-spex`;
+  await client.expectOk("environment.request", { repository: own, name: "acme/fare", request, wait: true });
+  const ownFare = await fareOf(own);
+  assert.equal(ownFare?.installed, true);
+  assert.deepEqual(provision(ownFare), offered, "[environments-14] your own group's: the spec provided, its support skill not");
+  assert.equal(ownFare?.placement, undefined, "[environments-14] no placement in your own group's environment");
 });
 
 test("environments-22 through a real core: a project rebound to a second working folder is exported there, and its state names what the export left out until an install exports it", { timeout: 180_000 }, async (t) => {
@@ -1317,8 +1490,9 @@ test("environments-25: every environment command replies and refuses as its tabl
   assert.deepEqual(Object.keys(initial).sort(), ["busy", "committed", "conflicts", "error", "instance", "language", "packages", "pathRoot", "published", "registry", "repository", "requests", "stale"]);
   assert.equal(initial.committed, false, "a project's environment its code does not hold is this device's (environments-14)");
   assert.equal(initial.pathRoot, project.path, "a project's paths are relative to its working folder (environments-2)");
-  assert.deepEqual(Object.keys(initial.packages[0]!).sort(), ["artifacts", "direct", "exports", "installed", "missingPath", "name", "requiredBy", "source", "version"]);
-  assert.deepEqual(initial.requests["sublang/playbooks"], { kind: "registry", version: `^${builtinPackage().version}` });
+  // A pairing writes the project's environment requesting nothing: the
+  // built-in spec package is global (storage-6, environments-11).
+  assert.deepEqual([initial.requests, initial.packages], [{}, []]);
 
   // environment.search through the registry of the named spex
   // repository's environment; a key naming no clone is refused.
@@ -1336,6 +1510,7 @@ test("environments-25: every environment command replies and refuses as its tabl
   let mark = client.mark();
   assert.deepEqual(await client.expectOk("environment.request", { repository: key, name: "acme/lint", request: { kind: "registry", version: "^1.0.0" } }), { accepted: true });
   const requested = await client.environment(key, mark, (state) => state.busy === null && state.packages.some((pkg) => pkg.name === "acme/lint" && pkg.installed));
+  assert.deepEqual(Object.keys(requested.packages[0]!).sort(), ["artifacts", "direct", "exports", "installed", "missingPath", "name", "requiredBy", "source", "version"]);
   assert.deepEqual(requested.packages.find((pkg) => pkg.name === "acme/lint")?.exports, [{ name: "tidy", artifact: "tidy" }]);
   assert.ok(existsSync(join(working, ".claude", "skills", "tidy", "SKILL.md")), "the skill is exported where claude reads it");
 
@@ -1427,14 +1602,18 @@ test("environments-25: every environment command replies and refuses as its tabl
   await client.expectError("environment.publish", { repository: key, name: "acme/none" }, "invalid_request",
     new RegExp(`^Sign in to ${new URL(registry.url).host.replace(/\./g, "\\.")} to publish$`));
   await client.expectError("environment.publish", { repository: key, name: "acme/none", dryRun: true }, "invalid_request", /^spex-packages\/acme\/none is not a package Spex can publish: .+ — fix them, then Retry$/);
-  await client.expectError("environment.publish", { repository: key, name: "acme/absent", dryRun: true }, "invalid_request", /^No folder for acme\/absent at spex-packages\/acme\/absent — npx @sublang\/spex new acme\/absent starts one$/);
+  await client.expectError("environment.publish", { repository: key, name: "acme/absent", dryRun: true }, "invalid_request", /^No folder for acme\/absent at spex-packages\/acme\/absent — npx @sublang\/spex export acme\/absent \[--spec <file>\] \[--skill <folder>\]… builds one$/);
   await client.expectError("environment.publish", { repository: key, name: "none", dryRun: true }, "invalid_request", /^none is not a package name — name it like acme\/triage$/);
 
-  // The playbooks both environments export, with where each is enabled.
+  // The playbooks both environments place, each with the entries
+  // written for it and the bindings a session in the project runs it
+  // with (playbook-library-1, core-service-2).
   const listed = await client.expectOk("environment.playbooks", { projectId: key });
-  const code = listed.project?.find((row) => row.id === "code");
-  assert.deepEqual([code?.source, code?.enabled, code?.present], ["builtin", ["own"], true]);
-  assert.equal(code?.bindings?.own?.coder?.playerId, "dev.coder");
+  assert.equal(listed.project?.some((row) => row.id === "code"), false, "the project's environment places no built-in");
+  const code = listed.own.find((row) => row.id === "code");
+  assert.deepEqual([code?.source, code?.entry, code?.runs, code?.placedBy, code?.present], ["builtin", ["own"], true, ["own"], true]);
+  assert.equal(code?.written?.own?.coder?.playerId, "dev.coder");
+  assert.deepEqual([code?.bindings.coder?.playerId, code?.bindings.coder?.from], ["dev.coder", "own"]);
   assert.ok(code?.folder?.endsWith(join("packages", "sublang", "playbooks", "playbooks", "en", "code")));
   assert.ok(listed.own.some((row) => row.id === "review"));
 
@@ -1549,6 +1728,8 @@ test("environments-21, environments-26, environments-14: a project's spex.yaml a
   const project = await core.client.expectOk("project.register", { path: working });
   const clone = clonePath(core.dataDir, project.id);
   await settledProject(core.client, project.id);
+  // A package the project requests itself, installed (environments-7).
+  await core.client.expectOk("environment.request", { repository: project.id, name: "sublang/playbooks", request: { kind: "registry", version: `^${builtinPackage().version}` }, wait: true });
 
   // [environments-26] the two files at the working folder's root, the
   // installed files under its .spex/, nothing of either in the clone.
@@ -1558,7 +1739,7 @@ test("environments-21, environments-26, environments-14: a project's spex.yaml a
   // [environments-26] the core staged and committed nothing in the
   // code's Git and ignored neither file: both read untracked, and
   // .spex/ ignores itself.
-  assert.deepEqual(codeStatus(working), ["?? spex.lock", "?? spex.yaml"]);
+  assert.deepEqual(codeStatus(working), ["?? .gitattributes", "?? spex.lock", "?? spex.yaml"], "[environments-44] .gitattributes beside the two files, untracked too");
   assert.equal(codeGit(working, "rev-list", "--all").trim(), "", "no commit was made");
   for (const file of ["spex.yaml", "spex.lock"]) {
     assert.throws(() => codeGit(working, "check-ignore", "-q", file), `${file} is not ignored`);
@@ -1574,6 +1755,132 @@ test("environments-21, environments-26, environments-14: a project's spex.yaml a
   codeGit(working, "commit", "-q", "-m", "Add the environment");
   assert.equal((await core.client.expectOk("environment.get", { repository: project.id })).committed, true, "a commit holds both");
   assert.equal((await core.client.expectOk("environment.get", { repository: `${OWN}/${OWN}-spex` })).committed, null, "your own group's syncs with its clone");
+});
+
+test("environments-14, environments-1, environments-6, environments-41: environment.get marks what each release provides, a sibling's support not, and reads where a project's provided spec stands under specs/ from its files, its marker and the record of placed specs", { timeout: 120_000 }, async (t) => {
+  const dir = scratchDir("spex-env-provided-");
+  const core = await startCore(dir, { hostUrl: UNREACHABLE });
+  t.after(() => core.stop());
+  const { client } = core;
+  const working = gitFolder(join(dir, "project"));
+  mkdirSync(join(working, "specs", "packages"), { recursive: true });
+  const { id: key } = await client.expectOk("project.register", { path: working });
+  await settledProject(client, key);
+  const own = `${OWN}/${OWN}-spex`;
+  const skill = (name: string): string => `---\nname: ${name}\ndescription: The ${name} skill.\n---\n\nUse it.\n`;
+  const spec = (pkg: string): string => `# ${pkg}: ${pkg}\n\n## Intent\n\nWords.\n\n## External Behavior\n\n### ${pkg}-1\n\nThe tool shall run.\n\n## Verification\n\n### ${pkg}-2\n\nWhen it runs, the suite shall assert it [[${pkg}-1](#${pkg}-1)].\n`;
+  // acme/kit: its spec the source a skill is made `from`, a skill a skill
+  // requires its peer, a source a skill requires its support.
+  await makeRelease(join(working, "kits", "kit"), {
+    format: 2, org: "acme", name: "kit", version: "0.1.0",
+    artifacts: {
+      kit: { kind: "spec", language: "en" },
+      fmt: { kind: "skill", language: "en", from: "kit" },
+      lint: { kind: "skill", language: "en", requires: ["helper", "style"] },
+      helper: { kind: "skill", language: "en" },
+      style: { kind: "source", language: "en" },
+    },
+  }, {
+    "specs/en/kit.md": spec("kit"),
+    "skills/en/fmt/SKILL.md": skill("fmt"),
+    "skills/en/lint/SKILL.md": skill("lint"),
+    "skills/en/helper/SKILL.md": skill("helper"),
+    "sources/en/style/SOURCE.md": "# Style\n",
+  });
+  // acme/terms cites twice a package no environment here requests, and
+  // once another, by their addresses inside a release (environments-42).
+  const cites = "The tool shall tidy as tidying does [[tidy-1](spex:acme/tidy#tidy-1)] and again [[tidy-2](spex:acme/tidy#tidy-2)], in the glossary's words [[glossary-1](spex:acme/glossary#glossary-1)].";
+  const released = { terms: spec("terms").replace("The tool shall run.", cites), rules: spec("rules") };
+  for (const pkg of ["terms", "rules"] as const) {
+    await makeRelease(join(working, "kits", pkg), {
+      format: 2, org: "acme", name: pkg, version: "0.1.0",
+      artifacts: { [pkg]: { kind: "spec", language: "en" } },
+    }, { [`specs/en/${pkg}.md`]: released[pkg] });
+  }
+  const installed = (state: EnvironmentState, names: string[]): boolean =>
+    state.busy === null && names.every((name) => state.packages.some((pkg) => pkg.name === name && pkg.installed));
+  const names = ["acme/kit", "acme/terms", "acme/rules"];
+  for (const name of names) {
+    const mark = client.mark();
+    await client.expectOk("environment.request", { repository: key, name, request: { kind: "path", path: `kits/${name.split("/")[1]}` } });
+    await client.environment(key, mark, (state) => installed(state, names.slice(0, names.indexOf(name) + 1)));
+  }
+  const read = async (name: string) => (await client.expectOk("environment.get", { repository: key })).packages.find((pkg) => pkg.name === name)!;
+
+  // [environments-1] [environments-6] what the release provides, by id.
+  const kit = await read("acme/kit");
+  assert.deepEqual(Object.fromEntries(kit.artifacts.map((artifact) => [artifact.id, artifact.provided])), {
+    fmt: true, helper: true, kit: false, lint: true, style: false,
+  }, "a spec a sibling is made from, and a source a skill requires, are support; a skill a skill requires is a peer");
+  assert.equal(kit.placement, undefined, "[environments-14] its spec is support: no placement");
+
+  // [environments-41] the copy the install wrote under its marker, and
+  // the record vouches for, reads placed at its path, its links waiting
+  // for the packages its release cites, with their count.
+  const marker = (version: string): string => `<!-- Placed by Spex from acme/terms ${version}; an edit makes this file yours. -->`;
+  const termsFile = join(working, "specs", "packages", "terms.md");
+  const record = (version: string, bytes: string, waiting: Record<string, number> = {}): void => {
+    writeFileSync(join(working, ".spex", "placed.json"), JSON.stringify({
+      format: 1,
+      specs: { "acme/terms": { path: "specs/packages/terms.md", version, sha256: sha256Hex(bytes), waiting } },
+    }));
+  };
+  const copy = readFileSync(termsFile, "utf8");
+  assert.ok(copy.startsWith(`${marker("0.1.0")}\n\n# terms: terms\n`), "the install placed the copy under its marker");
+  const waiting = [{ name: "acme/glossary", count: 1 }, { name: "acme/tidy", count: 2 }];
+  assert.deepEqual((await read("acme/terms")).placement, { spec: { state: "placed", path: "specs/packages/terms.md", waiting } });
+
+  // [environments-41] no copy written under specs/ yet: none read, the
+  // next install writing it.
+  rmSync(termsFile);
+  assert.equal((await read("acme/terms")).placement, undefined);
+  writeFileSync(termsFile, copy);
+
+  // [environments-41] other bytes under its marker at the version the
+  // record holds: edited, no newer release waiting.
+  writeFileSync(termsFile, `${copy}\nA note of ours.\n`);
+  assert.deepEqual((await read("acme/terms")).placement, { spec: { state: "edited", path: "specs/packages/terms.md", waiting: [] } });
+
+  // [environments-14] an edited copy of an older release: the locked
+  // release's version waits under .spex/.
+  const olderCopy = copy.replace(marker("0.1.0"), marker("0.0.9"));
+  writeFileSync(termsFile, `${olderCopy}\nA note of ours.\n`);
+  record("0.0.9", olderCopy);
+  assert.deepEqual((await read("acme/terms")).placement, {
+    spec: { state: "edited", path: "specs/packages/terms.md", waiting: [], waitingVersion: "0.1.0" },
+  });
+
+  // [environments-41] as on a fresh clone, no record: a copy holding the
+  // derivation from the locked release is the package's.
+  rmSync(join(working, ".spex", "placed.json"));
+  writeFileSync(termsFile, copy);
+  assert.deepEqual((await read("acme/terms")).placement, { spec: { state: "placed", path: "specs/packages/terms.md", waiting } });
+
+  // [environments-41] a project file of the spec's name blocks it.
+  writeFileSync(join(working, "specs", "packages", "rules.md"), spec("rules"));
+  assert.deepEqual((await read("acme/rules")).placement, { spec: { state: "blocked", path: "specs/packages/rules.md", waiting: [] } });
+
+  // [environments-41] a root holding no specs/ places no spec: each waits for it.
+  rmSync(join(working, "specs"), { recursive: true });
+  for (const name of ["acme/terms", "acme/rules"]) {
+    const pkg = name.split("/")[1];
+    assert.deepEqual((await read(name)).placement, { spec: { state: "no-specs", path: `specs/packages/${pkg}.md`, waiting: [] } }, name);
+  }
+  assert.equal((await read("acme/kit")).placement, undefined, "its support spec waits for nothing");
+
+  // [environments-14] your own group's environment, whose root holds no
+  // specs/, places its spec as a skill: no placement under specs/.
+  const ownClone = clonePath(core.dataDir, own);
+  await makeRelease(join(ownClone, "mine", "notes"), {
+    format: 2, org: OWN, name: "notes", version: "0.1.0",
+    artifacts: { notes: { kind: "spec", language: "en" } },
+  }, { "specs/en/notes.md": spec("notes") });
+  const mark = client.mark();
+  await client.expectOk("environment.request", { repository: own, name: `${OWN}/notes`, request: { kind: "path", path: "mine/notes" } });
+  const ownState = await client.environment(own, mark, (state) => installed(state, [`${OWN}/notes`]));
+  const notes = ownState.packages.find((pkg) => pkg.name === `${OWN}/notes`)!;
+  assert.deepEqual(notes.artifacts.map((artifact) => [artifact.id, artifact.provided]), [["notes", true]]);
+  assert.equal(notes.placement, undefined);
 });
 
 test("environments-21, environments-26, environments-7, environments-14: a working folder paired while holding a committed environment installs from it with nothing but .spex/ written; an environment the command line's install placed in a folder the app then pairs reads installed with its record, nothing rewritten; and one the app installed reads installed to the command line's library the same way", { timeout: 180_000 }, async (t) => {
@@ -1619,7 +1926,8 @@ test("environments-21, environments-26, environments-7, environments-14: a worki
   // A working folder cloned with its environment committed, as a
   // reader's code holds it.
   const committed = await withEnvironment("committed");
-  codeGit(committed.folder, "add", "spex.yaml", "spex.lock");
+  writeFileSync(join(committed.folder, ".gitattributes"), "spex.yaml text eol=lf\nspex.lock text eol=lf\nspecs/packages/*.md text eol=lf\n");
+  codeGit(committed.folder, "add", "spex.yaml", "spex.lock", ".gitattributes");
   codeGit(committed.folder, "commit", "-q", "-m", "The environment");
   const head = codeGit(committed.folder, "rev-parse", "HEAD").trim();
   const files = ["spex.yaml", "spex.lock"].map((file) => readFileSync(join(committed.folder, file)));
@@ -1821,7 +2129,13 @@ async function settledProject(client: Client, key: string): Promise<void> {
   const start = Date.now();
   for (;;) {
     const state = await client.expectOk("environment.get", { repository: key });
-    if (state.busy === null && state.packages.some((pkg) => pkg.name === "sublang/playbooks" && pkg.installed)) return;
+    // The global environment holds the built-in spec package; a project's,
+    // as its pairing wrote it, requests nothing and is resolved
+    // (environments-11, storage-6).
+    const settled = key === `${OWN}/${OWN}-spex`
+      ? state.packages.some((pkg) => pkg.name === "sublang/playbooks" && pkg.installed)
+      : state.pathRoot !== null && existsSync(join(state.pathRoot, "spex.lock")) && state.stale === null;
+    if (state.busy === null && settled) return;
     if (Date.now() - start > 60_000) throw new Error(`timeout waiting for ${key} to settle`);
     await sleep(25);
   }
@@ -1996,8 +2310,10 @@ test("environments-21 through a real core: an install whose lock or requests cha
     const root = join(dir, "project");
     await settledProject(client, key);
     const installedVersion = (): string => (parseYaml(readFileSync(join(root, ".spex", "packages", "acme", "kit", "meta.yaml"), "utf8")) as { version: string }).version;
+    // An install's download, not the manifest a resolution reads for
+    // what the release provides (environments-6).
     const download = (version: string) => (path: string): boolean =>
-      path === `/api/v1/packages/acme/kit/${version}/download` || path.startsWith(`/acme/kit/${version}/`);
+      path === `/api/v1/packages/acme/kit/${version}/download` || (path.startsWith(`/acme/kit/${version}/`) && path !== `/acme/kit/${version}/meta.yaml`);
     const kitOf = (state: EnvironmentState) => state.packages.find((pkg) => pkg.name === "acme/kit");
 
     let mark = client.mark();
@@ -2309,7 +2625,7 @@ test("shared-config-roundtrip-3: a config edit whose file another writer changes
   }
 });
 
-test("playbook-library-98: an enabling refused after some of its writes names them, they stand, nothing else is overwritten, and a retry enables from what stands", { timeout: 180_000 }, async (t) => {
+test("playbook-library-98: an Add refused after some of its writes names them, they stand, nothing else is overwritten, and a retry adds from what stands", { timeout: 180_000 }, async (t) => {
   const dir = scratchDir("spex-env-enable-");
   const core = await startCore(dir, { hostUrl: UNREACHABLE, script: authoringScript(), slc: stubSlcSource("['triager', 'verifier']") });
   t.after(() => core.stop());
@@ -2329,8 +2645,8 @@ test("playbook-library-98: an enabling refused after some of its writes names th
     bindings: { Triager: "dev.triager", Verifier: "dev.coder" }, newPlayers: { "dev.triager": { adapter: "claude" } } };
 
   // The project's config folder is a file another writer placed: the
-  // entry, the enabling's last write, fails after the request, the lock
-  // and the new player were written.
+  // entry, the Add's last write, fails after the request, the lock and
+  // the new player were written.
   const configDir = join(clone, "config");
   const aside = join(clone, "config.aside");
   const hadConfig = existsSync(configDir);
@@ -2352,9 +2668,9 @@ test("playbook-library-98: an enabling refused after some of its writes names th
     rmSync(configDir, { force: true });
     if (hadConfig) renameSync(aside, configDir);
   }
-  assert.ok(failure, "the enabling is refused");
+  assert.ok(failure, "the Add is refused");
   assert.equal(failure.code, "internal", failure.message);
-  assert.match(failure.message, /^enabling stopped after /);
+  assert.match(failure.message, /^adding stopped after /);
   for (const step of [/local\/triage added to spex\.yaml|\/triage added to spex\.yaml/, /spex\.lock written/, /player dev\.triager written/]) assert.match(failure.message, step);
   assert.match(failure.message, /ENOTDIR/);
   assert.doesNotMatch(failure.message, /playbook triage written/);
@@ -2365,14 +2681,14 @@ test("playbook-library-98: an enabling refused after some of its writes names th
   assert.equal(afterFailure!.foreign, foreign);
 
   // A retry, the folder back, reads what stands: no request written
-  // again, the entry written, the session enabled.
+  // again, the entry written, the session added.
   await client.expectOk("draft.register", register);
   assert.equal(readFileSync(join(working, "spex.yaml"), "utf8"), afterFailure!.requests, "the standing request is not written again");
   assert.match(readFileSync(join(clone, "config", "playbook.config.yaml"), "utf8"), /triage:\n\s+roles:/);
-  await until(() => latest()?.state === "enabled", 10_000, "the enabled chip");
+  await until(() => latest()?.state === "added", 10_000, "the added chip");
 });
 
-test("playbook-library-110: an authoring session whose spec package lies in your own group's clone enables in your own group's environment by its path there", { timeout: 180_000 }, async (t) => {
+test("playbook-library-110: an authoring session of the global environment keeps its spec package in your own group's clone and adds it in the global environment by its path there", { timeout: 180_000 }, async (t) => {
   const dir = scratchDir("spex-env-enable-own-");
   const core = await startCore(dir, { hostUrl: UNREACHABLE, script: authoringScript(), slc: stubSlcSource("['triager', 'verifier']") });
   t.after(() => core.stop());
@@ -2381,10 +2697,9 @@ test("playbook-library-110: an authoring session whose spec package lies in your
   const clone = ownClone(core.dataDir);
   await settledProject(client, ownKey);
 
-  // Your own group's spex repository paired with its own clone as its
-  // working folder: an authoring session there makes its spec package
-  // folder inside the clone.
-  await client.expectOk("project.rebind", { projectId: ownKey, path: clone });
+  // The global environment, named by your own group's key, takes an
+  // authoring session whose spec package folder lies in its clone
+  // (core-service-96).
   const created = await client.expectOk("draft.create", { projectId: ownKey, draftId: "triage", org: OWN, license: "Apache-2.0" });
   const { instance } = created;
   assert.ok(instance, "the session's recorded instance");
@@ -2394,9 +2709,9 @@ test("playbook-library-110: an authoring session whose spec package lies in your
   const latest = () => client.messages.filter((m) => m.type === "draft.state" && m.draft.id === "triage").map((m) => (m as { draft: CommandResults["draft.create"] }).draft).at(-1);
   await until(() => latest()?.activity === "idle" && latest()?.proposal !== undefined, 120_000, "the compiled proposal");
 
-  // Enabled in your own group's environment by its path in the clone
+  // Added in the global environment by its path in the clone
   // (playbook-library-7).
-  await client.expectOk("draft.register", { projectId: ownKey, draftId: "triage", instance, repository: ownKey,
+  await client.expectOk("draft.register", { projectId: ownKey, draftId: "triage", instance,
     command: "triage", intent: "Label new issues", bindings: { Triager: "dev.triager", Verifier: "dev.coder" }, newPlayers: { "dev.triager": { adapter: "claude" } } });
   const requests = parseYaml(readFileSync(join(clone, "spex.yaml"), "utf8")) as { packages: Record<string, unknown> };
   assert.deepEqual(requests.packages[`${OWN}/triage`], { path: `spex-packages/${OWN}/triage` }, "[playbook-library-7] requested by its path in your own group's clone");
@@ -2404,7 +2719,8 @@ test("playbook-library-110: an authoring session whose spec package lies in your
   assert.equal((lock.packages[`${OWN}/triage`]?.source as { path?: string } | undefined)?.path, `spex-packages/${OWN}/triage`, "[playbook-library-7] resolved there");
   const own = parseYaml(readFileSync(core.configPath, "utf8")) as { playbooks: Record<string, unknown> };
   // Keyed by the roles the stub compile derived.
-  assert.deepEqual(own.playbooks.triage, { roles: { triager: "dev.triager", verifier: "dev.coder" } }, "[playbook-library-7] enabled in your own group's config");
+  assert.deepEqual(own.playbooks.triage, { roles: { triager: "dev.triager", verifier: "dev.coder" } }, "[playbook-library-7] written in the global config");
+  await until(() => latest()?.state === "added", 10_000, "the added chip");
 });
 
 

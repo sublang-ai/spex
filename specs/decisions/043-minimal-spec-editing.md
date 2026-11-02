@@ -7,6 +7,7 @@
 
 Accepted (2026-09-02) on the owner's ask for basic editing of spec items, decision records, and intent records — plain text with a markdown preview, nothing more.
 Amends [DR-011](011-project-workspace.md): the spec view is no longer read-only.
+Amended by [DR-174](174-what-a-package-provides-is-placed.md) in what the spec view edits: a spec an install placed is read there, not edited.
 
 ## Context
 

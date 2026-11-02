@@ -1043,8 +1043,18 @@ function RepositoryRow({
                 values: { server: server.name },
                 comment: "a project's Open entry for a team server: opens the member's seat there where none is, then the project on it; {server} is the server's name",
               }),
+              // No server can fetch code its records name no remote for
+              // (space-111): the entry says what it needs.
+              ...(repo.codeKind === "none"
+                ? {
+                    title: i18n._({
+                      id: "Needs the code on a Git host",
+                      comment: "the title of a disabled Open on <server> entry: the project's records name no code remote, so the server cannot fetch its code; the member pushes the code to a Git host first",
+                    }),
+                  }
+                : {}),
               testId: `space-row-open-at-${at}-${repo.key}`,
-              disabled: waiting !== undefined || disabled,
+              disabled: waiting !== undefined || disabled || repo.codeKind === "none",
               onSelect: () => openOnServer(store, server, { key: repo.key, hostId }),
             },
     });

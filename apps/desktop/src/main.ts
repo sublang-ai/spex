@@ -107,6 +107,7 @@ if (!singleInstance) {
   // as a dialog naming the cause.
   void main().catch((error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
+    console.error("Spex could not start:", message);
     const i18n = reader();
     dialog.showErrorBox(i18n._("Spex could not start"), message);
     app.exit(1);
@@ -171,6 +172,16 @@ async function main(): Promise<void> {
   // any adapter readiness check (SHELL-12, DR-004).
   const captured = await captureLoginShellEnv();
   mergeEnv(process.env, captured);
+  if (process.platform === "win32") {
+    const { setupEnvironment } = await import("dugite");
+    const { env, gitLocation } = setupEnvironment({});
+    const { dirname, delimiter } = await import("node:path");
+    Object.assign(process.env, env);
+    const pathKey = Object.keys(process.env).find(key => key.toLowerCase() === "path") ?? "PATH";
+    // MinGit ships POSIX command helpers at the Git root, outside ucrt64.
+    const gitHelpers = join(dirname(dirname(gitLocation)), "usr", "bin");
+    process.env[pathKey] = `${dirname(process.execPath)}${delimiter}${dirname(gitLocation)}${delimiter}${gitHelpers}${delimiter}${process.env[pathKey] ?? ""}`;
+  }
 
   // The shared state root (DR-036, SHELL-15): plain files under
   // ${SPEX_HOME:-~/.spex}; userData keeps only the renderer profile.
@@ -236,8 +247,8 @@ async function main(): Promise<void> {
   };
 
   // Native bridge (DR-008): OS affordances only, one invoke channel
-  // each — the directory picker, the path reveal (DR-057), and the Git
-  // host's sign-in page opened in the system browser (DR-103).
+  // each — the directory picker, the path reveal (DR-057), and Space
+  // or registry sign-in opened in the system browser (DR-188).
   ipcMain.handle("spex:pick-directory", async () => {
     if (!window) return null;
     const result = await dialog.showOpenDialog(window, {
@@ -254,13 +265,12 @@ async function main(): Promise<void> {
     shell.showItemInFolder(target);
     return true;
   });
-  // An open hands the system browser a URL at the origin of an instance
-  // the home lists or is signing in to, read at the moment of the ask,
-  // and changes no state (app-shell-37, app-shell-20); any other URL, or
-  // one the OS fails to open, is false, and the page shows it as a link
-  // instead.
+  // Read the permitted origins at the ask: listed Spaces and running
+  // Space or registry sign-ins (app-shell-37, app-shell-20). A refused
+  // URL or an OS failure returns false. The page's ordinary continuation
+  // link remains usable independently of this automatic opener.
   ipcMain.handle("spex:open-external", (_event, requested: unknown) =>
-    openInstanceUrl(service?.instanceOrigins() ?? [], requested, (url) => shell.openExternal(url)),
+    openInstanceUrl(service?.externalSignInOrigins() ?? [], requested, (url) => shell.openExternal(url)),
   );
 
   window = new BrowserWindow({

@@ -9,6 +9,7 @@ Accepted (2026-11-02) on the owner's direction for P0-6, so a Workshop attendee'
 Amends [DR-154](154-the-seed-follows-playbooks-rule.md) in the Playbook floor and built-in release alone; its seeding rule stands.
 Amends [DR-153](153-playbook-18-0-1-cligent-0-36-1-slc-0-19-1-adoption.md) in the Cligent floor and lock resolution alone.
 Amends [DR-167](167-the-compiler-shares-the-apps-engine.md) in the slc and shell Playbook floors alone; its shared-engine gate stands.
+Amends [DR-182](182-published-desktop-runtime-adoption.md) in the Playbook, Cligent and slc floors alone: Cligent 0.37.0 and Playbook 18.1.2 carry its published Windows fixes, and slc 0.20.0 no longer admits that Cligent.
 
 ## Context
 

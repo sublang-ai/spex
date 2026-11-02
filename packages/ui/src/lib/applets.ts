@@ -2,13 +2,15 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The applet tabs of a project's workspace (applets-1, DR-161): one per
-// applet the project's environment or your own group's installs with
-// its files on this device, the project's first, each environment's in
+// applet its release provides that the project's environment or your own
+// group's installs with its files on this device, the project's first, each environment's in
 // spec package and applet order. A tab's id names its environment and
 // applet, so two environments installing one id give two tabs. Pure
 // functions; the workspace renders them.
 
 import type { EnvironmentState } from "@sublang/spex-core/protocol";
+
+import { isProvided } from "./environments.js";
 
 /** One applet tab: `applet:<repository>:<id>`. */
 export interface AppletTab {
@@ -33,7 +35,9 @@ export function isAppletTab(tab: string | undefined): tab is string {
 
 /** The applet tabs of a project (applets-1): the applets each listed
  * environment installs whose files stand here — installed as locked, a
- * path source not missing (environments-14) — in the order given. */
+ * path source not missing (environments-14) — in the order given; an
+ * applet its release does not provide, a sibling's support, is placed
+ * nowhere and has none (environments-6). */
 export function appletTabs(environments: readonly (EnvironmentState | undefined)[]): AppletTab[] {
   const tabs: AppletTab[] = [];
   const seen = new Set<string>();
@@ -42,7 +46,7 @@ export function appletTabs(environments: readonly (EnvironmentState | undefined)
     for (const pkg of environment.packages ?? []) {
       if (!pkg.installed || pkg.missingPath !== null) continue;
       for (const artifact of pkg.artifacts ?? []) {
-        if (artifact.kind !== "applet") continue;
+        if (artifact.kind !== "applet" || !isProvided(artifact)) continue;
         const tab = appletTabId(environment.repository, artifact.id);
         if (seen.has(tab)) continue;
         seen.add(tab);

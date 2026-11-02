@@ -25,7 +25,7 @@ Ignored files can contain durable local state.
 | `home.yaml` | This device's id, the instance it was created with, every instance it has signed in to with its account (the first is the default), your own group's folder name, and each working folder with its spex repository and recorded `cwd` aliases. | Outside any clone |
 | `<clone>/project.json` | The project's name and its code's remote URL. | Tracked |
 | `<clone>/placements/<folder>.yaml` | One placement of the spex repository at an instance, named by that instance's folder: the instance's origin and the host's id for the repository there. | Tracked |
-| `<clone>/config/playbook.config.yaml` | Your own group's Captain, player and playbook settings; in a project's clone, only the playbooks it enables and the player each role uses. | Tracked |
+| `<clone>/config/playbook.config.yaml` | In your own group's clone, the global config: the Captain, your players and the playbook entries every project uses; in a project's clone, only playbook entries, naming each role's player by name. | Tracked |
 | `<clone>/spex.yaml`, `<clone>/spex.lock` | A group's own environment's requests and lock. A project's stand at its working folder's root, committed with its code; the app moves them there from a project's clone once. | Tracked, one unit |
 | `<clone>/intents/<id>.json` | One intent: text, capture time, attachments, source, dispatch and close. | Tracked |
 | `<clone>/intents/<id>.assets/` | Immutable uploaded files retained by that intent. | Tracked with its intent |

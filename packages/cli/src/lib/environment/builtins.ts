@@ -16,7 +16,7 @@ import { Document, isMap, parseDocument } from "yaml";
 import { readVersioned, VersionConflictError, writeApplicationBytes, writeVersionedBytes } from "../files.js";
 import { packFiles } from "./archive.js";
 import { BUILTIN_PACKAGE_NAME, specExportName } from "./exports.js";
-import { artifactLanguages, inArtifact, parseManifestText, readRelease, ROOT_FILES, sha256Hex, type Manifest, type ReleaseFile } from "./format.js";
+import { artifactLanguages, inArtifact, parseManifestText, providedArtifacts, readRelease, ROOT_FILES, sha256Hex, type Manifest, type ReleaseFile } from "./format.js";
 import { isRegistrySource, parseLock, serializeLock, type Lock, type LockedFile } from "./lock.js";
 import { RegistryError, type RegistrySource, type SearchResult, type VersionIndex, type VersionIndexEntry, type VersionResource } from "./registry.js";
 import { parseRequests, PUBLIC_REGISTRY_ORIGIN, setRegistryIn, requestsDigest, setSpaceIn } from "./requests.js";
@@ -295,8 +295,9 @@ function pkgPathOf(dir: string, path: string): string {
  * The lock an environment requesting only the built-in spec package
  * resolves to, computed from the release this app ships without any
  * source or network (environments-3, environments-6): every artifact in
- * its original language, every file of theirs, each playbook exported
- * under its id. A clone the store makes holds it from its first commit.
+ * its original language, every file of theirs, each playbook it
+ * provides exported under its id. A clone the store makes holds it from
+ * its first commit.
  */
 export function builtinLock(pkg: BuiltinPackage, registryUrl: string, requestsText: string): Lock {
   const key = `${pkg.dir}\u0000${pkg.version}\u0000${registryUrl}`;
@@ -320,9 +321,11 @@ function builtinResolution(pkg: BuiltinPackage, registryUrl: string): Lock["pack
   const artifacts: Lock["packages"][string]["artifacts"] = {};
   const exports: Record<string, string> = {};
   const ids = Object.keys(manifest.artifacts).sort();
+  const provided = providedArtifacts(manifest);
   for (const id of ids) {
     const artifact = manifest.artifacts[id]!;
     artifacts[id] = { language: artifact.kind === "applet" ? null : artifact.language ?? null, fallback: false };
+    if (!provided.has(id)) continue;
     if (artifact.kind === "playbook" || artifact.kind === "skill") exports[id] = id;
     else if (artifact.kind === "spec") exports[specExportName(BUILTIN_PACKAGE_NAME)] = id;
   }
@@ -458,6 +461,30 @@ export function ensureBuiltinRequest(root: string, version: string, space: strin
   const next = doc.toString({ lineWidth: 0 });
   parseRequests(next);
   writeVersionedBytes(file, next, read.version);
+  return true;
+}
+
+/**
+ * A new project's environment at its pairing (storage-6, DR-176): where
+ * the working folder holds no `spex.yaml`, one naming the public
+ * registry as every new file does (environments-38), `space` where the
+ * project's spex repository is placed at an instance (DR-170), and
+ * requesting nothing — the built-in spec package is a global package,
+ * never a project's request (environments-11). Created exclusively, so a
+ * file written meanwhile stands; a root that does not exist is left as
+ * it is. Returns whether it wrote.
+ */
+export function prepareProjectEnvironment(root: string, space: string | null = null): boolean {
+  if (!existsSync(root)) return false;
+  const doc = new Document({ format: 1, ...(space !== null ? { space } : {}), registry: PUBLIC_REGISTRY_ORIGIN, packages: {} });
+  const text = doc.toString({ lineWidth: 0 });
+  parseRequests(text);
+  try {
+    writeVersionedBytes(join(root, "spex.yaml"), text, null);
+  } catch (error) {
+    if (error instanceof VersionConflictError) return false;
+    throw error;
+  }
   return true;
 }
 

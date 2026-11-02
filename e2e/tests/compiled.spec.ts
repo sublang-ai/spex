@@ -5,8 +5,8 @@
 // app's own example as the real `slc` compiled it — the committed
 // fixture under e2e/fixtures/compiled/, captured by the regression's
 // live journey (playbook-library-86) — is placed by a stub `slc`,
-// packaged by the app as any compile is, enabled on the Enable
-// tab's defaults, and run by the real Captain shell to a finished turn
+// packaged by the app as any compile is, added on the Add tab's
+// defaults, and run by the real Captain shell to a finished turn
 // on substitute agents. A stub-compiled machine would prove nothing of
 // the run path (DR-086), so without a captured fixture the journey
 // skips, naming the capture; a fixture of another engine generation
@@ -44,7 +44,7 @@ test.describe("the compiled example", () => {
     },
   });
 
-  test("playbook-library-87: the example as slc compiled it enables and runs to its finish", async ({
+  test("playbook-library-87: the example as slc compiled it is added and runs to its finish", async ({
     page,
     app,
   }) => {
@@ -65,14 +65,14 @@ test.describe("the compiled example", () => {
     await expect(page.getByTestId("compile-roles")).toHaveText(/^roles: coder, reviewer$/i);
     await expect(page.getByTestId("draft-working")).toHaveCount(0);
 
-    // Enabled on the Enable tab's defaults: nothing typed or chosen.
+    // Added on the Add tab's defaults: nothing typed or chosen.
     const tabs = page.getByRole("tablist", { name: "Draft artifacts" });
-    await tabs.getByRole("tab", { name: "Enable", exact: true }).click();
+    await tabs.getByRole("tab", { name: "Add", exact: true }).click();
     await expect(page.getByTestId("register-form")).toContainText("Prefilled from the source and the compiled roles");
     await page.getByTestId("register-submit").click();
-    // The surface lists it among the enabled playbooks (playbook-library-10),
+    // The tab lists it under the project's name (playbook-library-10),
     // its spec package requested by path in the project's environment.
-    const card = page.getByTestId("playbooks-enabled").getByTestId(`playbook-card-${EXAMPLE_ID}`);
+    const card = page.getByTestId("playbooks-project").getByTestId(`playbook-card-${EXAMPLE_ID}`);
     await expect(card).toBeVisible();
     await expect(card).toContainText(`/${EXAMPLE_ID}`);
     const config = parse(app.readProjectConfig()) as { playbooks: Record<string, { roles: Record<string, string> }> };

@@ -61,7 +61,12 @@ When a UI flow asks to reveal a path lying inside the state root, the app shall 
 
 #### app-shell-37
 
-When a UI flow asks to open an instance's sign-in URL, the app shall open that URL in the operating system's default browser and change no state ([DR-103](../decisions/103-the-home-and-its-groups.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)): a URL not at the origin of an instance the home lists [[storage-2](storage.md#storage-2)] or is signing in to [[git-host-2](git-host.md#git-host-2)], or one carrying a credential, is refused with no browser opened, and a deployment without the bridge shows the URL as a link to open instead.
+When a UI flow asks the native bridge to open a sign-in URL, the app shall open that URL in the operating system's default browser and return success only under this policy, changing no state ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-188](../decisions/188-registry-sign-in-opens-the-browser.md)):
+
+- the URL's exact origin is one the home lists for a Space [[storage-2](storage.md#storage-2)], one being signed in to through the Space's browser flow [[git-host-2](git-host.md#git-host-2)], or one at which the core runs an independent registry sign-in [[core-service-143](core-service.md#core-service-143)];
+- a registry's permission lasts only while its flow runs, independently of other flows and listed Spaces; its configuration, cached metadata or saved account alone permits nothing;
+- the URL uses HTTPS, or HTTP on loopback, and carries no username or password;
+- a refused URL opens nothing and returns false, as does a URL the operating system fails to open.
 
 ### Quit
 
@@ -117,7 +122,8 @@ Where `npm ci` has installed the repository dependencies and built `better-sqlit
 2. Once the Electron rebuild is attempted, normal app exit, command failure, SIGINT, and SIGTERM each lead through the Node rebuild before the command returns.
 3. An interrupted or failed build, Electron rebuild, or app launch returns non-zero after any required restore.
 4. A failed Node rebuild reports the restore failure with an actionable warning and any preceding stage failure, then selects the command outcome in this order: a signal that interrupted an active stage returns 130 or 143; otherwise, a preceding stage failure keeps its status; otherwise, a signal first received during restoration returns 130 or 143 even when restoration fails; otherwise, the restore failure returns 1.
-5. On a POSIX host, a signal forwarded to the launch stage's process group is followed, 15 seconds later if that stage has not exited, by `SIGKILL` to the same group, so the Node rebuild is never held by an app that ignores the signal ([DR-108](../decisions/108-the-root-lease-names-the-machine.md)).
+5. On Windows, the ABI rebuild stages return without rebuilding an addon, since legacy database reads use bundled Node SQLite ([DR-178](../decisions/178-native-windows-private-storage.md)).
+6. On a POSIX host, a signal forwarded to the launch stage's process group is followed, 15 seconds later if that stage has not exited, by `SIGKILL` to the same group, so the Node rebuild is never held by an app that ignores the signal ([DR-108](../decisions/108-the-root-lease-names-the-machine.md)).
 
 #### app-shell-31
 
@@ -147,8 +153,9 @@ The shell shall create renderer windows with the Chromium sandbox enabled, Node 
 
 #### app-shell-12
 
-When the app starts, the shell shall capture the user's login-shell environment once and pass it to the core before the core runs any adapter readiness check or spawns any agent process, so credentials exported in shell profiles are visible to the GUI-launched app:
+When the app starts, the shell shall pass its inherited launch environment to the core, merged on POSIX with the user's login-shell environment captured once, before the core runs any adapter readiness check or spawns any agent process ([DR-178](../decisions/178-native-windows-private-storage.md)):
 
+- On Windows, the inherited PATH follows the application directory, the bundled Git command directory and its actual root `usr/bin` helper directory, so supplied helpers such as `env.exe` are callable without WSL or a global tool installation.
 - The shell persists no captured environment values and does not refresh the snapshot while running, so shell-profile changes take effect on the next launch.
 
 ### Supplied Runtimes
@@ -157,6 +164,8 @@ When the app starts, the shell shall capture the user's login-shell environment 
 
 The desktop shell shall declare the `claude`, `codex` and `opencode` agent SDKs at the unconstrained range ([DR-024](../decisions/024-app-supplied-agent-runtimes.md)), the playbook compiler `@sublang/slc` at a caret on its CLI contract ([DR-081](../decisions/081-the-app-supplies-the-compiler.md)), and its host engine `@sublang/playbook` at a range compatible with the core and compiler ([DR-167](../decisions/167-the-compiler-shares-the-apps-engine.md)) as its `apps/desktop` package's own dependencies, and shall start the core it embeds with its own Electron binary as the compile runtime and the module directories above its own module [[playbook-library-83](playbook-library.md#playbook-library-83)] — each inside the asar archive named by its asar-unpacked copy [[app-shell-13](#app-shell-13)], so the engine links an install provisions [[environments-11](environments.md#environments-11)] resolve on the real file system — and with the checkout's own scaffold CLI `@sublang/spex` found there, on that binary run as Node, as the scaffold command [[projects-31](projects.md#projects-31)] ([DR-096](../decisions/096-the-app-supplies-the-scaffold.md)), so compiles and scaffolds run on the app's own Node and find the compiler, the scaffold CLI and the SDKs the app ships:
 
+- Codex calls on both platforms use the supplied adapter's official SDK path, preserving declared permission and approval values without a shell wrapper or forced Windows backend ([DR-182](../decisions/182-published-desktop-runtime-adoption.md));
+- the shell declares the same shared Playbook dependency as its embedded core, so packaging keeps an older compiler-private runtime from becoming the engine linked into installed playbooks ([DR-178](../decisions/178-native-windows-private-storage.md));
 - the shell also ships the built-in spec package the core seeds at start [[environments-11](environments.md#environments-11)], staged from the `@sublang/playbook` it depends on at build time, so the built-in playbooks work offline from the first start ([DR-104](../decisions/104-spec-package-format-and-client-environments.md)).
 
 ### Packaging
@@ -169,11 +178,13 @@ Where the app is packaged, the packaged app shall ship its complete `node_module
 
 #### app-shell-14
 
-When a tag matching `app-v*` is pushed, the app release workflow shall create a GitHub release for that tag carrying the version's notes from the app changelog and the run-from-source instructions, attaching no build artifacts ([DR-040](../decisions/040-source-only-app-releases.md)):
+When a valid tag matching `app-v*` is pushed, the app release workflow shall create a GitHub release for that tag carrying the version's notes from the app changelog, the run-from-source instructions and both native desktop downloads ([DR-184](../decisions/184-native-desktop-tag-packages.md)):
 
 - the workflow confirms the CI workflow concluded `success` for the tagged commit, verifies the tag's version against both shells' `package.json`, and builds and tests the tree before creating the release — empty notes or a mismatch fail it without a release;
 - the release names Node.js 22.19 or later and, from a checkout of its tag, `npm ci`, `npm start` for the desktop, and `npm run start:server` for the server shell as the way to run it;
 - the desktop package names its Electron version exactly, never as a range: the local packager (`npm run package -w apps/desktop`, electron-builder [[3]]) downloads the platform binaries of one release and refuses a range outright;
+- the downloads are a macOS Apple Silicon DMG and a Windows x64 per-user NSIS installer ([DR-177](../decisions/177-native-desktop-installers.md)), named with version, platform and architecture, with SHA-256 checksums and notes identifying unsigned and non-notarized status;
+- native runners build both downloads with the shipped physical dependency tree [[app-shell-13](#app-shell-13)], and the workflow publishes only after both packaging jobs succeed [[release-37](release.md#release-37)];
 - the workflow does not publish to npm and does not run for CLI tags, keeping the release channels disjoint [[release-19](release.md#release-19)].
 
 ### App Data
@@ -190,9 +201,7 @@ The shell shall start the core against the shared state root of [DR-036](../deci
 
 #### app-shell-20
 
-The desktop package shall expose the native bridge of [DR-008](../decisions/008-native-shell-bridge.md) as a `contextBridge` API from a sandboxed preload, limited to OS affordances impossible from a sandboxed web page (directory picking, path reveal, and opening the Git host's sign-in URL in the system browser [[git-host-2](git-host.md#git-host-2)], one invoke channel each), carrying no application feature, and absent by design in non-Electron deployments so the UI's feature detection selects the manual fallback:
-
-- the open-URL channel accepts only a URL at the origin of an instance the home lists or is signing in to [[app-shell-37](#app-shell-37)], refusing any other ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)).
+The desktop package shall expose the native bridge of [DR-008](../decisions/008-native-shell-bridge.md) as a `contextBridge` API from a sandboxed preload, limited to OS affordances impossible from a sandboxed web page (directory picking, path reveal, and opening a permitted sign-in URL in the system browser [[app-shell-37](#app-shell-37)], one invoke channel each), carrying no application feature, and absent by design in non-Electron deployments so the UI's feature detection selects the manual fallback.
 
 #### app-shell-22
 
@@ -275,7 +284,13 @@ Where the fresh-install smoke ([DR-086](../decisions/086-tests-in-tiers.md)) has
 
 #### app-shell-38
 
-When the desktop's test suite starts a real core through the shell's own option builder with a home listing the first of two stand-in instances and drives the open-URL channel while a sign-in to the second runs, the test suite shall assert that the core was started with the browser sign-in flow and the Electron binary as the helper's runtime [[app-shell-15](#app-shell-15)], that the channel opens the core's own browser sign-in URL at the second instance and a URL at the first [[app-shell-37](#app-shell-37)], and that it refuses one at an origin the home neither lists nor is signing in to — the first's host at another port among them — one carrying a credential, and, once that sign-in is cancelled, one at the second, returning false and opening nothing [[app-shell-37](#app-shell-37)] [[app-shell-20](#app-shell-20)].
+When the desktop's integration suite starts a real core through the shell's own option builder on a home with no listed instances and drives registry and Space sign-in against two stand-in origins, the suite shall assert:
+
+- the core starts with the browser sign-in flow and the Electron binary as the helper's runtime [[app-shell-15](#app-shell-15)];
+- reading a registry's metadata permits no opening, starting registry browser flows at both origins permits their complete sign-in URLs, and cancelling one leaves the other's URL permitted [[app-shell-37](#app-shell-37)];
+- completing a registry flow leaves its saved account but removes its opening permission, a denied flow also removes its permission, and opening registry sign-in URLs adds no Space entry [[app-shell-37](#app-shell-37)];
+- a completed Space sign-in leaves its listed origin permitted, a running Space sign-in permits the second origin until cancellation, and cancelling a registry flow at the listed Space's origin leaves that Space's permission intact [[app-shell-37](#app-shell-37)];
+- an unpermitted origin, including another port on the same host, and a URL carrying a username or password return false without reaching the browser [[app-shell-37](#app-shell-37)] [[app-shell-20](#app-shell-20)].
 
 #### app-shell-42
 
@@ -288,6 +303,7 @@ When the desktop's test suite starts a real core through the shell's own option 
 When the app release workflow's tag check and notes assembly run, as the workflow runs them, over a checkout holding a changelog and both shell manifests for an `app-vMAJOR.MINOR.PATCH` tag, the test suite shall assert the regular release's checks and instructions:
 
 - the notes end with the run-from-source instructions, which name Node.js 22.19 — the root manifest's engine floor — or later and check out that tag before `npm ci`, `npm start` and `npm run start:server` [[app-shell-14](#app-shell-14)];
+- the notes link both versioned native downloads and their checksums, identify unsigned and non-notarized status, and include native Windows in the source instructions [[app-shell-14](#app-shell-14)];
 - either shell's manifest off the tag's version refuses the release [[app-shell-14](#app-shell-14)];
 - a version with no changelog section is refused as empty notes [[app-shell-14](#app-shell-14)].
 

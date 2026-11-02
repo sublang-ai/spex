@@ -22,6 +22,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, w
 import { basename, dirname, join, relative } from "node:path";
 import { createSessionStore } from "@sublang/playbook/session-store";
 import { stringify as stringifyYaml } from "yaml";
+import { builtinPackage } from "./builtins.js";
 import { Home, orderRemotes, remoteOrderOf } from "./home.js";
 import type { GroupsState, SpaceUnit } from "./protocol.js";
 import { bareOf, clonePath, createSpaceHarness, hostFolder, hostKey, instanceOf, placementOf, prefsOf, repositoryOf, syncRecordsOf, remoteNamesOf } from "./testing/space-harness.js";
@@ -705,6 +706,10 @@ test("storage-39, storage-36, storage-34, storage-1, storage-31, storage-6, stor
   // exported into its working folder (storage-36, storage-1, storage-31).
   const code = gitFolder("atlas");
   const { key: local } = await addFolder(home, code);
+  // A package of its own whose skills its environment exports: the
+  // built-in spec package, as a project paired before it became global
+  // still requests it (environments-11).
+  await home.client.expectOk("environment.request", { repository: local, name: "sublang/playbooks", request: { kind: "registry", version: `^${builtinPackage().version}` }, wait: true });
   mark = home.client.mark();
   await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: first.url, groupId: "2002", name: "atlas" } });
   const key = hostKey(first, "acme/atlas-spex");

@@ -17,7 +17,8 @@ afterEach(cleanup);
 
 import { ProjectPalette } from "./ProjectPalette.js";
 import { SpexCommandError } from "../lib/client.js";
-import { useAppStore } from "../state/store.js";
+import { setClientForTests, useAppStore } from "../state/store.js";
+import { useServerOpens } from "../state/server-opens.js";
 import {
   applyRecords,
   initialSessionView,
@@ -536,22 +537,62 @@ describe("run-view-168: this computer's From your groups", () => {
     useAppStore.setState({ connection: "open", space: undefined, loadSpace: vi.fn(async () => {}) });
     renderPalette();
     // Unread: nothing stands until the read says where it is signed in.
-    expect(screen.queryByTestId("palette-groups-local")).toBeNull();
+    expect(screen.queryByTestId("palette-groups")).toBeNull();
     expect(useAppStore.getState().loadSpace).toHaveBeenCalledOnce();
     cleanup();
     useAppStore.setState({ space: signedIn([ABSENT], false) });
     renderPalette();
-    expect(screen.queryByTestId("palette-groups-local")).toBeNull();
+    expect(screen.queryByTestId("palette-groups")).toBeNull();
     cleanup();
-    // [run-view-168] signed in, with nothing this computer lacks.
+    // [run-view-168] signed in, with no project in the groups at all.
     useAppStore.setState({ space: signedIn([]) });
     renderPalette();
-    expect(screen.getByTestId("palette-groups-note-local").textContent).toBe("Nothing more to open from your groups");
+    expect(screen.getByTestId("palette-groups-note").textContent).toBe("No projects in your groups yet");
     cleanup();
     // [projects-22] the add form keeps to adding a local project.
     useAppStore.setState({ space: signedIn([ABSENT]) });
     renderPalette({ addProjectOnly: true, onPickFolder: vi.fn(async () => null) });
-    expect(screen.queryByTestId("palette-groups-local")).toBeNull();
+    expect(screen.queryByTestId("palette-groups")).toBeNull();
+  });
+
+  test("a row's places: Open on <server> from the Space's servers, disabled and titled Needs the code on a Git host while its records name no code remote; a first open asks the contract on Space and closes the palette", async () => {
+    const listing = { servers: [{ instance: SPEX, id: "9", name: "lab-9", group: "acme", open: false }], failures: [] };
+    const command = vi.fn(async (type: string) => (type === "server.list" ? listing : {}));
+    setClientForTests({ command, subscribe: vi.fn(async () => null), unsubscribe: vi.fn(async () => null), close: vi.fn() } as never);
+    useServerOpens.setState({ lines: {}, pending: {}, landed: 0 });
+    const place = `${SPEX}#9`;
+    try {
+      // [run-view-168] [space-111] its records name no code remote: the
+      // entry stands disabled with what it needs.
+      useAppStore.setState({ connection: "open", space: signedIn([{ ...ABSENT, code: "Code not on a Git host", codeKind: "none" }]) });
+      renderPalette();
+      fireEvent.click(await screen.findByTestId(`palette-join-places-${ABSENT.key}`));
+      const entry = screen.getByTestId(`palette-open-at-${place}-${ABSENT.key}`) as HTMLButtonElement;
+      expect(entry.textContent).toBe("Open on lab-9");
+      expect(entry.disabled).toBe(true);
+      expect(entry.getAttribute("title")).toBe("Needs the code on a Git host");
+      fireEvent.keyDown(window, { key: "Escape" });
+      cleanup();
+      // [run-view-168] [run-view-170] with a remote, the entry opens the
+      // seat: this device's first open asks the contract beneath the
+      // server's line on this computer's Space, which the palette shows,
+      // closing.
+      useAppStore.setState({ space: signedIn([{ ...ABSENT, code: "Code: github.com", codeKind: "elsewhere" }]) });
+      const onShowSpace = vi.fn();
+      const { onClose } = renderPalette({ onShowSpace });
+      fireEvent.click(await screen.findByTestId(`palette-join-places-${ABSENT.key}`));
+      const open = screen.getByTestId(`palette-open-at-${place}-${ABSENT.key}`) as HTMLButtonElement;
+      expect(open.disabled).toBe(false);
+      fireEvent.click(open);
+      expect(useServerOpens.getState().lines[place]?.asking).toBe(true);
+      expect(useServerOpens.getState().pending[`${place}|301`]?.stage).toBe("seat");
+      expect(onShowSpace).toHaveBeenCalledOnce();
+      expect(onClose).toHaveBeenCalledOnce();
+      expect(command).not.toHaveBeenCalledWith("server.open", expect.anything());
+    } finally {
+      setClientForTests(undefined);
+      useServerOpens.setState({ lines: {}, pending: {}, landed: 0 });
+    }
   });
 
   test("the arrows reach its rows from the filter, and Enter on one asks its folder in place where no picker exists", async () => {
@@ -586,9 +627,9 @@ describe("run-view-168: this computer's From your groups", () => {
     renderPalette();
     const row = (key: string) => screen.getByTestId(`palette-join-${key}`);
     // Name and group, no tooltip of the records' key (run-view-168).
-    expect(row(ABSENT.key).textContent).toBe("gammaacme");
-    expect(row(MINE.key).textContent).toBe("notesPersonal");
-    expect(row(BOBS.key).textContent).toBe("demoShared by @bob");
+    expect(row(ABSENT.key).textContent).toBe("gammaacmeOpen here");
+    expect(row(MINE.key).textContent).toBe("notesPersonalOpen here");
+    expect(row(BOBS.key).textContent).toBe("demoShared by @bobOpen here");
     for (const key of [ABSENT.key, MINE.key, BOBS.key]) {
       expect(row(key).hasAttribute("title")).toBe(false);
       expect(row(key).textContent).not.toContain("-spex");

@@ -151,10 +151,10 @@ msgstr "{command} failed at {step}"
 msgid "{command} is not installed"
 msgstr "{command} is not installed"
 
-#. a hint on a built-in playbook's card: it runs only once /review is enabled too; {command} is its command, such as /code
-#: src/components/PlaybooksTab.tsx
-msgid "{command} needs /review enabled"
-msgstr "{command} needs /review enabled"
+#. a hint on a built-in playbook's card: it runs only once /review runs too; the tagged /review shows /review's row; {command} is its command, such as /code
+#: src/components/PlaybookCard.tsx
+msgid "{command} needs <0>/review</0> to run"
+msgstr "{command} needs <0>/review</0> to run"
 
 #: src/lib/client.ts
 msgid "{command} timed out"
@@ -202,6 +202,11 @@ msgstr "{count, plural, one {# file} other {# files}} · the session's file, its
 msgid "{count, plural, one {# item} other {# items}}"
 msgstr "{count, plural, one {# item} other {# items}}"
 
+#. beneath a package's spec line on the Packages tab: the placed spec's links to another package's spec, dropped until that package is added; {name} is that package, such as acme/glossary
+#: src/components/PackageArtifacts.tsx
+msgid "{count, plural, one {# link waits} other {# links wait}} for {name}"
+msgstr "{count, plural, one {# link waits} other {# links wait}} for {name}"
+
 #: src/components/SpecView.tsx
 msgid "{count, plural, one {# match} other {# matches}}"
 msgstr "{count, plural, one {# match} other {# matches}}"
@@ -224,7 +229,6 @@ msgid "{count, plural, one {# package} other {# packages}} sharing citations wit
 msgstr "{count, plural, one {# package} other {# packages}} sharing citations with {name}"
 
 #. what a package provides: its count of playbooks
-#: src/App.tsx
 #: src/lib/environments.ts
 msgid "{count, plural, one {# playbook} other {# playbooks}}"
 msgstr "{count, plural, one {# playbook} other {# playbooks}}"
@@ -358,7 +362,7 @@ msgstr "{days}d ago"
 msgid "{declined, plural, =0 {To fix ({count})} other {To fix ({count}) · # set aside}}"
 msgstr "{declined, plural, =0 {To fix ({count})} other {To fix ({count}) · # set aside}}"
 
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "{diagnostic} — delete the session, or repair the file and restart Spex"
 msgstr "{diagnostic} — delete the session, or repair the file and restart Spex"
 
@@ -377,7 +381,7 @@ msgid "{effort} (unsupported)"
 msgstr "{effort} (unsupported)"
 
 #. joins the two playbook names the /dev hint asks for
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookCard.tsx
 msgid "{first} and {second}"
 msgstr "{first} and {second}"
 
@@ -422,11 +426,7 @@ msgstr "{hours}h {minutes}m"
 msgid "{hours}h ago"
 msgstr "{hours}h ago"
 
-#: src/components/PlaybooksTab.tsx
-msgid "{id} is a built-in — enable it instead"
-msgstr "{id} is a built-in — enable it instead"
-
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "{id} is already a playbook of {package}"
 msgstr "{id} is already a playbook of {package}"
 
@@ -498,8 +498,8 @@ msgstr "{name} · in {group} at {space}"
 msgid "{name} · in Personal at {space}"
 msgstr "{name} · in Personal at {space}"
 
-#. Add…'s registry tab: a package name typed in full that the registry's search does not list, as for a private package
-#: src/components/EnvironmentSection.tsx
+#. a package name in full that the registry's search does not list, as for a private package: Add…'s registry tab, or a spec's waiting links whose Add found no such package
+#: src/lib/environments.ts
 msgid "{name} · not listed publicly"
 msgstr "{name} · not listed publicly"
 
@@ -532,7 +532,6 @@ msgid "{name} ({requirements})"
 msgstr "{name} ({requirements})"
 
 #: src/components/DraftRegisterTab.tsx
-#: src/components/PlaybooksTab.tsx
 msgid "{name} agent"
 msgstr "{name} agent"
 
@@ -640,10 +639,6 @@ msgstr "{received} received; nothing sent"
 #: src/components/EnvironmentSection.tsx
 msgid "{requirement} by {requirer}"
 msgstr "{requirement} by {requirer}"
-
-#: src/components/PlaybooksTab.tsx
-msgid "{role} needs a player id: lowercase segments joined by dots"
-msgstr "{role} needs a player id: lowercase segments joined by dots"
 
 #: src/components/BindingEditor.tsx
 msgid "{role} runs as"
@@ -927,7 +922,7 @@ msgid "✗ failed"
 msgstr "✗ failed"
 
 #. examples of exact, caret and tilde registry requirements; preserve the syntax
-#: src/components/EnvironmentSection.tsx
+#: src/components/PackageArtifacts.tsx
 msgid "1.2.3, ^1.2.3, ~1.2.3"
 msgstr "1.2.3, ^1.2.3, ~1.2.3"
 
@@ -952,11 +947,6 @@ msgstr "A follow-up message continues this intent."
 msgid "A nested workflow failed"
 msgstr "A nested workflow failed"
 
-#. project palette: where a project added or created by path lands; {place} is the place's name, "This computer"
-#: src/components/ProjectPalette.tsx
-msgid "A new project is added on {place}."
-msgstr "A new project is added on {place}."
-
 #: src/lib/failure-catalogue.ts
 msgid "A Playbook defect"
 msgstr "A Playbook defect"
@@ -977,7 +967,7 @@ msgstr "A player is waiting for your reply: {detail}"
 msgid "A player named {id} already exists — edit it above instead."
 msgstr "A player named {id} already exists — edit it above instead."
 
-#. tooltip of the Enable form's held Enable: what it waits for
+#. tooltip of the Add form's held Add: what it waits for
 #: src/components/DraftRegisterTab.tsx
 msgid "A player per role, a command and an intent"
 msgstr "A player per role, a command and an intent"
@@ -1045,6 +1035,11 @@ msgstr "Aborted at {step}"
 msgid "Aborting…"
 msgstr "Aborting…"
 
+#. the title of a sign-in provider's icon beside a Space in the sign-in card's chooser, an icon and not a button: the Space takes accounts of that provider; {provider} is its name, such as GitHub
+#: src/components/SpaceDirectory.tsx
+msgid "Accepts {provider} accounts"
+msgstr "Accepts {provider} accounts"
+
 #: src/components/ProjectGroup.tsx
 msgid "Actions for {title}"
 msgstr "Actions for {title}"
@@ -1077,16 +1072,16 @@ msgstr "Adapter option; model support unverified."
 #. create this player in your own roster
 #. register the typed path as an existing repository
 #. register the typed path as an existing repository
-#: src/components/EnvironmentSection.tsx
+#. the Add form's act: add the compiled playbook to the packages of the page it was made on, with these players
+#. the authoring workspace's last tab: add the compiled playbook to the packages of the page it was made on, with a player per role
+#: src/components/AuthoringWorkspace.tsx
+#: src/components/DraftRegisterTab.tsx
 #: src/components/ProjectPalette.tsx
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceMembers.tsx
+#: src/lib/environments.ts
 msgid "Add"
 msgstr "Add"
-
-#: src/components/SettingsSurface.tsx
-msgid "Add {id} with the neutral agent, then tune it here"
-msgstr "Add {id} with the neutral agent, then tune it here"
 
 #. the name of the group picker "Add to a group…" opens; {name} is the project's name
 #: src/components/SpaceGroups.tsx
@@ -1187,6 +1182,16 @@ msgstr "Add to Up next"
 msgid "Add…"
 msgstr "Add…"
 
+#. authoring state chip, at most 14 characters: the compiled playbook is added to the packages of the page it was made on, so it runs there
+#: src/lib/drafts.ts
+msgid "Added"
+msgstr "Added"
+
+#. after adding an authored playbook: sessions already running do not offer it until restarted
+#: src/components/PlaybookAuthoring.tsx
+msgid "Added · restart running sessions to use it"
+msgstr "Added · restart running sessions to use it"
+
 #. the receipt after Add…, while the package's version is still being picked
 #: src/components/EnvironmentSection.tsx
 msgid "Added {name}"
@@ -1202,6 +1207,11 @@ msgstr "Added {name} {version}"
 msgid "Added {name} {version} · {provides}"
 msgstr "Added {name} {version} · {provides}"
 
+#. said by the live region once an authored playbook is added
+#: src/components/PlaybooksTab.tsx
+msgid "Added /{command}"
+msgstr "Added /{command}"
+
 #: src/components/CaptainHome.tsx
 #: src/components/Composer.tsx
 msgid "Added to Up next — see the project's Overview."
@@ -1210,21 +1220,33 @@ msgstr "Added to Up next — see the project's Overview."
 #. a repair's control while the folder is paired with the project
 #. a repair's control while the folder is paired with the project
 #. the Add control, while the Space adds the person
+#. the Add form's request is in flight: the playbook is being added
 #. the Use this folder control, while the folder is paired
 #. the package is being added to spex.yaml
 #. the request is being written
-#: src/components/EnvironmentSection.tsx
+#: src/components/DraftRegisterTab.tsx
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceMembers.tsx
 #: src/components/SpaceRepairs.tsx
+#: src/lib/environments.ts
 msgid "Adding…"
 msgstr "Adding…"
 
+#. the title of Add on a player to set up: it creates the player from the Captain's agent block; {id} is the player
+#: src/components/SettingsSurface.tsx
+msgid "Adds {id} with the Captain's agent, to tune here"
+msgstr "Adds {id} with the Captain's agent, to tune here"
+
 #. the title of Add in Add…'s registry tab: its consequence; {name} is the package
-#: src/components/EnvironmentSection.tsx
+#: src/lib/environments.ts
 msgid "Adds {name} to spex.yaml and installs it"
 msgstr "Adds {name} to spex.yaml and installs it"
+
+#. above the Add form: the playbook added is the one the last compile made, and its source has changed since
+#: src/components/DraftRegisterTab.tsx
+msgid "Adds the last compile — the source changed since."
+msgstr "Adds the last compile — the source changed since."
 
 #. a failure's way back: open this agent's settings for this conversation
 #: src/components/RunView.tsx
@@ -1293,11 +1315,6 @@ msgstr "Agents"
 msgid "Agents on {server} run on the sign-ins its administrator set up, unless you set your own"
 msgstr "Agents on {server} run on the sign-ins its administrator set up, unless you set your own"
 
-#. the second step on the welcome page at a team server, beside its label, the server's name; "here" is that server
-#: src/components/CaptainHome.tsx
-msgid "Agents run here as you"
-msgstr "Agents run here as you"
-
 #: src/components/ProjectsSurface.tsx
 msgid "ahead of upstream"
 msgstr "ahead of upstream"
@@ -1340,6 +1357,11 @@ msgstr "All here"
 msgid "All projects"
 msgstr "All projects"
 
+#. project palette: every project of the member's groups is open on this computer already
+#: src/components/ProjectPalette.tsx
+msgid "All your groups' projects are open here"
+msgstr "All your groups' projects are open here"
+
 #: src/components/ApprovalInbox.tsx
 msgid "Allow this tool operation?"
 msgstr "Allow this tool operation?"
@@ -1349,13 +1371,17 @@ msgstr "Allow this tool operation?"
 msgid "Already the project folder of {project}"
 msgstr "Already the project folder of {project}"
 
+#. a short mark beside a role's player in the Add form: the player plays in this other playbook too; {playbook} is it, such as /code
 #: src/components/DraftRegisterTab.tsx
-msgid "also {position}"
-msgstr "also {position}"
+msgid "also in {playbook}"
+msgstr "also in {playbook}"
 
+#. beneath a role's player choice: the player plays roles of these other playbooks too, one conversation across them; {playbooks} names them, such as /code and /fix
+#. beneath a role's player choice: the player plays roles of these other playbooks too, one conversation across them; {playbooks} names them, such as /code and /fix
 #: src/components/BindingEditor.tsx
-msgid "Also answers {positions}"
-msgstr "Also answers {positions}"
+#: src/components/DraftRegisterTab.tsx
+msgid "Also plays in {playbooks}"
+msgstr "Also plays in {playbooks}"
 
 #: src/components/AgentSettings.tsx
 msgid "Also sets {positions}"
@@ -1522,8 +1548,8 @@ msgid "Attachments"
 msgstr "Attachments"
 
 #. heading over a project's changed authoring sessions
-#. section heading: playbooks being written in this project
-#: src/components/PlaybooksTab.tsx
+#. section heading: playbooks being written here
+#: src/components/PlaybookAuthoring.tsx
 #: src/lib/space.ts
 msgid "Authoring"
 msgstr "Authoring"
@@ -1561,11 +1587,6 @@ msgstr "auto (protected)"
 msgid "auto: the agent works on its own inside the repo, with the adapter's own protections on"
 msgstr "auto: the agent works on its own inside the repo, with the adapter's own protections on"
 
-#. section heading: playbooks a package provides that neither the project's config nor your Personal one enables
-#: src/components/PlaybooksTab.tsx
-msgid "Available"
-msgstr "Available"
-
 #: src/components/SpecView.tsx
 msgid "back to {id}"
 msgstr "back to {id}"
@@ -1601,7 +1622,7 @@ msgid "binary file · {size}"
 msgstr "binary file · {size}"
 
 #: src/components/BindingEditor.tsx
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookCard.tsx
 msgid "Bind {role}"
 msgstr "Bind {role}"
 
@@ -1679,32 +1700,10 @@ msgstr "bug fixed"
 msgid "build and review step by step"
 msgstr "build and review step by step"
 
-#. a playbook row: it comes with Spex, from no package of yours
-#: src/components/PlaybooksTab.tsx
-msgid "built in"
-msgstr "built in"
-
 #. the tooltip of a package's source glyph: the app ships it
-#. the tooltip of a package's source glyph: the app ships it
-#: src/components/PlaybooksTab.tsx
 #: src/lib/environments.ts
 msgid "Built in"
 msgstr "Built in"
-
-#. the built-in playbooks' line on the Packages tab, while spex.lock records no version of them
-#: src/components/EnvironmentSection.tsx
-msgid "Built-in playbooks"
-msgstr "Built-in playbooks"
-
-#. the built-in playbooks' line on the Packages tab: {locked} is the version spex.lock records
-#: src/components/EnvironmentSection.tsx
-msgid "Built-in playbooks {locked}"
-msgstr "Built-in playbooks {locked}"
-
-#. the built-in playbooks' line while the app ships a newer release: {locked} is the version spex.lock records, {shipped} the one this app ships
-#: src/components/EnvironmentSection.tsx
-msgid "Built-in playbooks {locked} · {shipped} shipped with this app"
-msgstr "Built-in playbooks {locked} · {shipped} shipped with this app"
 
 #. permission mode: no prompts at all
 #: src/components/AgentEditor.tsx
@@ -2006,9 +2005,10 @@ msgstr "Choose the approach"
 msgid "Choose which agent answers"
 msgstr "Choose which agent answers"
 
-#: src/components/PlaybooksTab.tsx
-msgid "Choose which session player answers {role}"
-msgstr "Choose which session player answers {role}"
+#. tooltip of a role's ✎ on a playbook row; {role} is the role
+#: src/components/PlaybookCard.tsx
+msgid "Choose who plays {role}"
+msgstr "Choose who plays {role}"
 
 #. a call's outcome: the analyst chose the code path
 #: src/lib/step-words.ts
@@ -2216,8 +2216,8 @@ msgstr "Combine…"
 msgid "Combining…"
 msgstr "Combining…"
 
-#. after enabling an authored playbook: {folder} is its package's folder in the project folder, e.g. spex-packages/acme/triage
-#: src/components/PlaybooksTab.tsx
+#. after adding an authored playbook to a project: {folder} is its package's folder in the project folder, e.g. spex-packages/acme/triage
+#: src/components/PlaybookAuthoring.tsx
 msgid "Commit {folder} with your code"
 msgstr "Commit {folder} with your code"
 
@@ -2286,11 +2286,11 @@ msgstr "Compile"
 msgid "Compile canceled"
 msgstr "Compile canceled"
 
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "Compile failed at {phase}"
 msgstr "Compile failed at {phase}"
 
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "Compile failed at an unknown phase"
 msgstr "Compile failed at an unknown phase"
 
@@ -2312,7 +2312,7 @@ msgstr "Compiled {age}"
 msgid "Compiled {age}; the source changed since"
 msgstr "Compiled {age}; the source changed since"
 
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "Compiled {id}"
 msgstr "Compiled {id}"
 
@@ -2329,7 +2329,7 @@ msgstr "Compiles first"
 msgid "Compiling"
 msgstr "Compiling"
 
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "Compiling {id}"
 msgstr "Compiling {id}"
 
@@ -2359,7 +2359,6 @@ msgid "Config file invalid"
 msgstr "Config file invalid"
 
 #: src/components/DraftRegisterTab.tsx
-#: src/components/PlaybooksTab.tsx
 msgid "Configure {name}"
 msgstr "Configure {name}"
 
@@ -2378,9 +2377,10 @@ msgstr "Configure the Captain agent"
 msgid "Confirm"
 msgstr "Confirm"
 
+#. the title of the authoring workspace's Add tab
 #: src/components/AuthoringWorkspace.tsx
-msgid "Confirm the command, intent, players and where to enable it"
-msgstr "Confirm the command, intent, players and where to enable it"
+msgid "Confirm the command, intent and players, then add it"
+msgstr "Confirm the command, intent and players, then add it"
 
 #. verdict control, busy: the verdict is in flight
 #. verdict control, busy: the verdict is in flight
@@ -2388,11 +2388,6 @@ msgstr "Confirm the command, intent, players and where to enable it"
 #: src/components/DeliveryCard.tsx
 msgid "Confirming…"
 msgstr "Confirming…"
-
-#. connect this computer to a team server, where projects open and agents run as you
-#: src/components/SpaceServers.tsx
-msgid "Connect"
-msgstr "Connect"
 
 #. The route on the Claude card in the Workshop, over the button opening the setup guide
 #: src/lib/agent-cards.ts
@@ -2724,11 +2719,11 @@ msgstr "decision records {count}"
 #. confirm: remove the authoring session for good
 #. remove the authoring session for good
 #: src/components/NavRail.tsx
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "Delete"
 msgstr "Delete"
 
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "Delete authoring session {id}"
 msgstr "Delete authoring session {id}"
 
@@ -2740,7 +2735,7 @@ msgstr "delete failed"
 msgid "Delete session {title}"
 msgstr "Delete session {title}"
 
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "Delete this authoring session? Its spec package folder stays."
 msgstr "Delete this authoring session? Its spec package folder stays."
 
@@ -2769,12 +2764,12 @@ msgstr "Delete this session? It was run from the terminal; its history goes too.
 msgid "deleted"
 msgstr "deleted"
 
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "Deleted {id}; its spec package folder stays at {path}"
 msgstr "Deleted {id}; its spec package folder stays at {path}"
 
 #. tooltip of an authoring session's Delete on the Playbooks tab: the session and its conversation go, its package folder stays in the project
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "Deletes the session and its conversation · its package folder stays"
 msgstr "Deletes the session and its conversation · its package folder stays"
 
@@ -2784,7 +2779,7 @@ msgid "deleting…"
 msgstr "deleting…"
 
 #. the delete request is in flight
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "Deleting…"
 msgstr "Deleting…"
 
@@ -2827,30 +2822,11 @@ msgstr "desktop"
 msgid "did not publish"
 msgstr "did not publish"
 
-#. stop offering this playbook in this config
-#. stop offering this playbook in this config
-#: src/components/PlaybooksTab.tsx
-msgid "Disable"
-msgstr "Disable"
-
-#: src/components/PlaybooksTab.tsx
-msgid "Disable {id}"
-msgstr "Disable {id}"
-
-#: src/components/PlaybooksTab.tsx
-msgid "Disable /{command}"
-msgstr "Disable /{command}"
-
-#. in a playbook's overflow: stop offering it from your Personal config, in every project of yours
-#: src/components/PlaybooksTab.tsx
-msgid "Disable for Personal"
-msgstr "Disable for Personal"
-
-#. the disable request is in flight
-#. the disable request is in flight
-#: src/components/PlaybooksTab.tsx
-msgid "Disabling…"
-msgstr "Disabling…"
+#. the dot on a role under a project's Global heading: the project plays it on another player than the global binding
+#. the dot on a role under a project's Global heading: the project plays it on another player than the global binding
+#: src/components/PlaybookCard.tsx
+msgid "differs from global"
+msgstr "differs from global"
 
 #. act: throw the interrupted attempt away
 #. confirm: drop the unsaved draft
@@ -3044,18 +3020,23 @@ msgid "e.g. .git, docs/generated"
 msgstr "e.g. .git, docs/generated"
 
 #. the hint inside the new-playbook license field; an SPDX license id
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "e.g. Apache-2.0"
 msgstr "e.g. Apache-2.0"
 
 #. the hint inside the new-playbook id field; triage is an example id
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "e.g. triage"
 msgstr "e.g. triage"
 
 #: src/components/SpecView.tsx
 msgid "Each record states a design decision's context and reasons; spec items cite them by their DR number."
 msgstr "Each record states a design decision's context and reasons; spec items cite them by their DR number."
+
+#. tooltip of Settings' empty players list: what players are for
+#: src/components/SettingsSurface.tsx
+msgid "Each role of a playbook is played by a player; add one to tune its agent"
+msgstr "Each role of a playbook is played by a player; add one to tune its agent"
 
 #. editor mode: the plain text field
 #. open the whole-file editor on the source
@@ -3129,88 +3110,6 @@ msgstr "effort"
 #: src/components/BindingEditor.tsx
 msgid "Effort options apply to the adapter; support for this model is unverified."
 msgstr "Effort options apply to the adapter; support for this model is unverified."
-
-#. enable a playbook: name a player for each of its roles
-#. enable this playbook in this config
-#. enable this playbook in this config
-#. enable this playbook in this config
-#. enable this playbook in this config
-#: src/components/AuthoringWorkspace.tsx
-#: src/components/DraftRegisterTab.tsx
-#: src/components/EnvironmentSection.tsx
-#: src/components/PackageArtifacts.tsx
-#: src/components/PlaybooksTab.tsx
-msgid "Enable"
-msgstr "Enable"
-
-#: src/components/PackageArtifacts.tsx
-#: src/components/PlaybooksTab.tsx
-msgid "Enable /{command}"
-msgstr "Enable /{command}"
-
-#. accessible name of Enable for <project>
-#: src/components/PlaybooksTab.tsx
-msgid "Enable /{command} for {project}"
-msgstr "Enable /{command} for {project}"
-
-#. field of the Enable form: the project, or Personal for every project of yours
-#: src/components/DraftRegisterTab.tsx
-msgid "Enable for"
-msgstr "Enable for"
-
-#. on a playbook your Personal packages list too: enable it in the project's config, for every member; {project} is the project's name
-#: src/components/PlaybooksTab.tsx
-msgid "Enable for {project}"
-msgstr "Enable for {project}"
-
-#. in a playbook's overflow: enable it in your Personal config, for every project of yours
-#: src/components/PlaybooksTab.tsx
-msgid "Enable for Personal"
-msgstr "Enable for Personal"
-
-#. authoring state chip, at most 14 characters: the compiled playbook is enabled in a config
-#. section heading: the playbooks the project's config or your own group's enables
-#: src/components/PlaybooksTab.tsx
-#: src/lib/drafts.ts
-msgid "Enabled"
-msgstr "Enabled"
-
-#. a package's playbook line on the Packages tab: enabled in your Personal config, for every project of yours
-#: src/components/PackageArtifacts.tsx
-msgid "Enabled · Personal"
-msgstr "Enabled · Personal"
-
-#. after enabling an authored playbook: sessions already running do not offer it until restarted
-#: src/components/PlaybooksTab.tsx
-msgid "Enabled · restart running sessions to use it"
-msgstr "Enabled · restart running sessions to use it"
-
-#: src/components/PlaybooksTab.tsx
-msgid "Enabled /{command}"
-msgstr "Enabled /{command}"
-
-#. a package's playbook line on the Packages tab: enabled in the project's config, for every member; {project} is the project's name
-#: src/components/PackageArtifacts.tsx
-msgid "Enabled in {project}"
-msgstr "Enabled in {project}"
-
-#: src/components/DraftRegisterTab.tsx
-msgid "Enables the last compile — the source changed since."
-msgstr "Enables the last compile — the source changed since."
-
-#. tooltip of Settings' empty players list: where players come from
-#: src/components/SettingsSurface.tsx
-msgid "Enabling a playbook on a project's Playbooks tab adds the players its roles need"
-msgstr "Enabling a playbook on a project's Playbooks tab adds the players its roles need"
-
-#. the enable request is in flight
-#. the enable request is in flight
-#. the enable request is in flight
-#: src/components/DraftRegisterTab.tsx
-#: src/components/PackageArtifacts.tsx
-#: src/components/PlaybooksTab.tsx
-msgid "Enabling…"
-msgstr "Enabling…"
 
 #: src/components/ParkedRun.tsx
 msgid "End this run. It will not be resumed."
@@ -3562,21 +3461,6 @@ msgstr "For publishing and private packages"
 msgid "For this conversation, from the next message"
 msgstr "For this conversation, from the next message"
 
-#. tooltip of Enable on a playbook the project's packages list: it is written to the project's config
-#. tooltip of Enable on a playbook the project's packages list: it is written to the project's config
-#: src/components/PackageArtifacts.tsx
-#: src/components/PlaybooksTab.tsx
-msgid "For you and every member of {project}"
-msgstr "For you and every member of {project}"
-
-#. tooltip of Enable on a playbook your Personal packages list: it is written to your Personal config
-#. tooltip of Enable on a playbook your Personal packages list: it is written to your Personal config
-#. tooltip of Enable on a playbook your Personal packages list: it is written to your Personal config
-#: src/components/PackageArtifacts.tsx
-#: src/components/PlaybooksTab.tsx
-msgid "For you, in every project of yours"
-msgstr "For you, in every project of yours"
-
 #: src/components/AgentCards.tsx
 msgid "Found a sign-in or key; whether it works is checked on your first task."
 msgstr "Found a sign-in or key; whether it works is checked on your first task."
@@ -3614,8 +3498,13 @@ msgstr "From {name} ({count})"
 msgid "from {name} {version}"
 msgstr "from {name} {version}"
 
+#. a placed spec's package node, where its Edit control would stand: {name} is the spec package it came from, as org/pkg, {version} that package's version
+#: src/components/SpecView.tsx
+msgid "From {name} {version} · placed by Spex"
+msgstr "From {name} {version} · placed by Spex"
+
 #. a playbook row: the package and version it comes from, e.g. from acme/triage 1.2.0
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookCard.tsx
 msgid "from {package}"
 msgstr "from {package}"
 
@@ -3627,13 +3516,13 @@ msgstr "from {state}"
 #. the tooltip of a package's source glyph: it comes from a folder; {path} is the folder, such as spex-packages/acme/triage
 #. the tooltip of a package's source glyph: it comes from a folder; {path} is the folder, such as spex-packages/acme/triage
 #. tooltip: a package taken from a folder; {path} is that folder
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookCard.tsx
 #: src/lib/environments.ts
 msgid "From folder {path}"
 msgstr "From folder {path}"
 
 #. tooltip: a package taken from a Git repository
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookCard.tsx
 msgid "From Git"
 msgstr "From Git"
 
@@ -3670,7 +3559,8 @@ msgstr "from the compile before this change"
 
 #. the tooltip of a package's source glyph, for a package another package requires: it comes from the registry
 #. tooltip: a package taken from the registry
-#: src/components/PlaybooksTab.tsx
+#. tooltip: a package taken from the registry
+#: src/components/PlaybookCard.tsx
 #: src/lib/environments.ts
 msgid "From the registry"
 msgstr "From the registry"
@@ -3684,11 +3574,6 @@ msgstr "From the registry · {range}"
 #: src/components/ProjectPalette.tsx
 msgid "From your groups"
 msgstr "From your groups"
-
-#. project palette: heading over the projects of the member's groups a team server can open; {place} is the server's name
-#: src/components/ProjectPalette.tsx
-msgid "From your groups on {place}"
-msgstr "From your groups on {place}"
 
 #. pipeline stage: the compiled spec items
 #. pipeline stage: the compiler's normative spec items (a proper name)
@@ -3734,9 +3619,14 @@ msgstr "GitHub: {state}"
 msgid "Give the player an id first."
 msgstr "Give the player an id first."
 
+#. heading on a project's Playbooks tab: the playbooks of your global packages, which run in every project of yours
+#: src/components/PlaybooksTab.tsx
+msgid "Global"
+msgstr "Global"
+
 #: src/lib/shortcuts.ts
-msgid "Go to Dashboard, Projects, Space, Settings"
-msgstr "Go to Dashboard, Projects, Space, Settings"
+msgid "Go to Dashboard, Projects, Playbooks, Space, Settings"
+msgstr "Go to Dashboard, Projects, Playbooks, Space, Settings"
 
 #. the field naming a new group at the Space
 #: src/components/SpaceMembers.tsx
@@ -3747,11 +3637,6 @@ msgstr "Group name"
 #: src/lib/space.ts
 msgid "Group sessions"
 msgstr "Group sessions"
-
-#. label of the first step on the welcome page at a team server: your groups at the Space, whose projects open there
-#: src/components/CaptainHome.tsx
-msgid "Groups"
-msgstr "Groups"
 
 #. a delegation line: the Captain gave this call to the named player
 #: src/components/CallLines.tsx
@@ -3853,16 +3738,6 @@ msgstr "implement a coding intent in reviewed, one-commit phases, using an inten
 #: src/lib/step-words.ts
 msgid "Implement an IR task"
 msgstr "Implement an IR task"
-
-#. where a playbook is enabled: in the project's config, for every member; {project} is the project's name
-#: src/components/PlaybooksTab.tsx
-msgid "in {project}"
-msgstr "in {project}"
-
-#. where a playbook is enabled: in the project's config and in your Personal one; {project} is the project's name
-#: src/components/PlaybooksTab.tsx
-msgid "in {project} · Personal"
-msgstr "in {project} · Personal"
 
 #: src/App.tsx
 #: src/components/NavRail.tsx
@@ -4024,7 +3899,7 @@ msgstr "interrupted sync"
 msgid "Interrupted turn"
 msgstr "Interrupted turn"
 
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookCard.tsx
 msgid "Invalid: {reason}"
 msgstr "Invalid: {reason}"
 
@@ -4071,11 +3946,11 @@ msgstr "its endpoint"
 #. a package left out of the agents' folders because its files are not on this computer
 #. a playbook whose package folder is missing here
 #: src/components/EnvironmentSection.tsx
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookCard.tsx
 msgid "Its files are not on this computer"
 msgstr "Its files are not on this computer"
 
-#. link beside Publish: opens this playbook's package row on the Packages tab
+#. link beside Publish: opens this playbook's package row, on the project's Packages tab or on the Playbooks page
 #: src/components/DraftRegisterTab.tsx
 msgid "Its package"
 msgstr "Its package"
@@ -4129,7 +4004,7 @@ msgstr "just now"
 #: src/components/EnvironmentSection.tsx
 #: src/components/NavRail.tsx
 #: src/components/ParkedRun.tsx
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 #: src/components/ProjectGroup.tsx
 #: src/components/ProjectsSurface.tsx
 #: src/components/SettingsSurface.tsx
@@ -4186,7 +4061,7 @@ msgid "Last refreshed {age}"
 msgstr "Last refreshed {age}"
 
 #. field of New playbook: the SPDX license its spec package is published under
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "License"
 msgstr "License"
 
@@ -4238,8 +4113,11 @@ msgstr "Loading transcript…"
 #. a request for this pane's content is in flight
 #. a request for this pane's content is in flight
 #. a request for this pane's content is in flight
+#. a request for this pane's content is in flight
 #: src/components/AuthoringWorkspace.tsx
 #: src/components/EnvironmentSection.tsx
+#: src/components/PlaybookCard.tsx
+#: src/components/PlaybooksSurface.tsx
 #: src/components/PlaybooksTab.tsx
 msgid "loading…"
 msgstr "loading…"
@@ -4250,7 +4128,7 @@ msgstr "loading…"
 #. a read is still in flight
 #. a read is still in flight
 #: src/components/DashboardSurface.tsx
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 #: src/components/ProjectGroup.tsx
 #: src/components/SpaceExplorer.tsx
 msgid "Loading…"
@@ -4335,11 +4213,6 @@ msgstr "Members keep what they download"
 msgid "Members of {name}"
 msgstr "Members of {name}"
 
-#. tooltip of Enable for <project> on a playbook enabled for you alone
-#: src/components/PlaybooksTab.tsx
-msgid "Members of {project} get it too"
-msgstr "Members of {project} get it too"
-
 #. a step: the coder merges both proposals into specs and commits
 #: src/lib/step-words.ts
 msgid "Merge the proposals"
@@ -4375,7 +4248,7 @@ msgstr "migration receipts and inputs"
 msgid "Minimum citations per pair"
 msgstr "Minimum citations per pair"
 
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookCard.tsx
 msgid "missing stages: {stages}"
 msgstr "missing stages: {stages}"
 
@@ -4417,6 +4290,9 @@ msgid "More for {name}"
 msgstr "More for {name}"
 
 #. the accessible name of the menu beside a project's primary control, listing the other servers, or this computer, it may be opened on; {name} is the project's name
+#. the accessible name of the menu beside a project's primary control, listing the other servers, or this computer, it may be opened on; {name} is the project's name
+#. the accessible name of the menu beside a project's primary control, listing the other servers, or this computer, it may be opened on; {name} is the project's name
+#: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
 msgid "More ways to open {name}"
 msgstr "More ways to open {name}"
@@ -4433,10 +4309,6 @@ msgstr "Move the focused Up next row"
 #: src/components/SpaceRepairs.tsx
 msgid "Name a folder"
 msgstr "Name a folder"
-
-#: src/components/SettingsSurface.tsx
-msgid "Named by {project}, not set up here"
-msgstr "Named by {project}, not set up here"
 
 #. the positions a not-ready agent card's adapter is set for follow
 #: src/components/AgentCards.tsx
@@ -4459,6 +4331,13 @@ msgstr "Needs attention"
 #: src/App.tsx
 msgid "needs recovery"
 msgstr "needs recovery"
+
+#. the title of a disabled Open on <server> entry: the project's records name no code remote, so the server cannot fetch its code; the member pushes the code to a Git host first
+#. the title of a disabled Open on <server> entry: the project's records name no code remote, so the server cannot fetch its code; the member pushes the code to a Git host first
+#: src/components/ProjectPalette.tsx
+#: src/components/SpaceGroups.tsx
+msgid "Needs the code on a Git host"
+msgstr "Needs the code on a Git host"
 
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
@@ -4499,7 +4378,7 @@ msgstr "New group"
 
 #. start writing a playbook of one's own
 #. start writing a playbook of one's own
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "New playbook"
 msgstr "New playbook"
 
@@ -4625,7 +4504,7 @@ msgid "No open pull requests."
 msgstr "No open pull requests."
 
 #. the registry account may publish to no org
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "No orgs to publish to"
 msgstr "No orgs to publish to"
 
@@ -4639,12 +4518,16 @@ msgstr "No package matches"
 msgid "No packages yet"
 msgstr "No packages yet"
 
-#. the task start's link to the project's Playbooks tab while no playbook is enabled
+#. the task start's link to the project's Playbooks tab while no playbook runs in the project
 #: src/components/CaptainHome.tsx
 msgid "No playbooks available"
 msgstr "No playbooks available"
 
+#. a Playbooks list while no package places a playbook
+#. a Playbooks list while no package places a playbook
 #: src/App.tsx
+#: src/components/EnvironmentSection.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "No playbooks yet"
 msgstr "No playbooks yet"
 
@@ -4675,9 +4558,15 @@ msgstr "No project specs yet"
 msgid "No projects here yet"
 msgstr "No projects here yet"
 
+#. project palette: the member's groups list no project to open
+#: src/components/ProjectPalette.tsx
+msgid "No projects in your groups yet"
+msgstr "No projects in your groups yet"
+
+#. the Dashboard's Projects band with no project: the link opens Projects, where a project is added
 #: src/components/DashboardSurface.tsx
-msgid "No projects yet — register a repository in the <0>Projects</0> to put its work here."
-msgstr "No projects yet — register a repository in the <0>Projects</0> to put its work here."
+msgid "No projects yet · <0>Add a project</0>"
+msgstr "No projects yet · <0>Add a project</0>"
 
 #: src/components/FailureCard.tsx
 msgid "No reason was reported"
@@ -4864,7 +4753,7 @@ msgid "Not yet shared"
 msgstr "Not yet shared"
 
 #. beneath New playbook's Org: the registry account may not publish to the org typed
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "not yours to publish to"
 msgstr "not yours to publish to"
 
@@ -4876,11 +4765,6 @@ msgstr "Nothing done here yet · finished conversations are in the sidebar; work
 #: src/components/ProjectGroup.tsx
 msgid "Nothing done here yet."
 msgstr "Nothing done here yet."
-
-#. the Playbooks tab's Enabled section while neither config enables a playbook
-#: src/components/PlaybooksTab.tsx
-msgid "Nothing enabled yet"
-msgstr "Nothing enabled yet"
 
 #. why a control published by the parked run would do nothing
 #: src/lib/failure-catalogue.ts
@@ -4900,11 +4784,6 @@ msgstr "Nothing is repeated"
 #: src/components/SpaceRepairs.tsx
 msgid "Nothing left to fix."
 msgstr "Nothing left to fix."
-
-#. project palette: a place's groups list no project it lacks
-#: src/components/ProjectPalette.tsx
-msgid "Nothing more to open from your groups"
-msgstr "Nothing more to open from your groups"
 
 #. a Sync tab's incoming section after a check: the Space holds nothing this computer lacks; {name} is its display name
 #: src/components/SpaceSync.tsx
@@ -5040,7 +4919,7 @@ msgid "Only pairs with ≥ {field} {count, plural, one {citation} other {citatio
 msgstr "Only pairs with ≥ {field} {count, plural, one {citation} other {citations}}"
 
 #. open this authoring session's workspace
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "Open"
 msgstr "Open"
 
@@ -5078,8 +4957,7 @@ msgstr "Open {title} — {reason}"
 msgid "Open {title} — running in {project}"
 msgstr "Open {title} — running in {project}"
 
-#. welcome page action: opens the project palette at the projects of your groups that place can open
-#. welcome page action: opens the project palette at the projects of your groups that place can open
+#. welcome page action: opens the project palette at the projects of your groups this computer can open
 #: src/components/CaptainHome.tsx
 msgid "Open a project from your groups"
 msgstr "Open a project from your groups"
@@ -5089,13 +4967,14 @@ msgstr "Open a project from your groups"
 msgid "Open a pull request"
 msgstr "Open a pull request"
 
+#. on the agent's proposal card: opens the authoring workspace's Add tab
+#: src/components/DraftConversation.tsx
+msgid "Open Add"
+msgstr "Open Add"
+
 #: src/components/DashboardSurface.tsx
 msgid "Open and send a message to pick it up."
 msgstr "Open and send a message to pick it up."
-
-#: src/components/DraftConversation.tsx
-msgid "Open Enable"
-msgstr "Open Enable"
 
 #. the repair editor's control: opens the system folder picker
 #: src/components/ProjectPalette.tsx
@@ -5105,17 +4984,20 @@ msgstr "Open folder…"
 
 #. a project's primary control for the place shown: downloads its records and its code there
 #. project palette: open a project of the member's groups on this computer, downloading its records and code into the folder named beside
+#. project palette: open a project of the member's groups on this computer, downloading its records and code into the folder named beside
 #: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
 msgid "Open here"
 msgstr "Open here"
 
-#. tooltip of an applet's from-line: shows the package's row on the Packages tab
+#. tooltip of an applet's from-line: shows the package's row on the Packages tab, or on the Playbooks page for a global package
 #: src/components/AppletTab.tsx
 msgid "Open its package"
 msgstr "Open its package"
 
 #. a project's Open entry for a team server: opens the member's seat there where none is, then the project on it; {server} is the server's name
+#. a project's Open entry for a team server: opens the member's seat there where none is, then the project on it; {server} is the server's name
+#: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
 msgid "Open on {server}"
 msgstr "Open on {server}"
@@ -5147,7 +5029,6 @@ msgstr "Open Settings →"
 msgid "Open Settings to see what's wrong"
 msgstr "Open Settings to see what's wrong"
 
-#. secondary action of the welcome page at a team server: shows the Space surface at that server
 #: src/components/CaptainHome.tsx
 msgid "Open Space"
 msgstr "Open Space"
@@ -5222,6 +5103,7 @@ msgstr "Opening the applet…"
 #. an authoring session is being opened
 #: src/components/CaptainHome.tsx
 #: src/components/NavRail.tsx
+#: src/components/PlaybookAuthoring.tsx
 #: src/components/PlaybooksTab.tsx
 #: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
@@ -5253,7 +5135,7 @@ msgid "Or enter an existing Git repository path"
 msgstr "Or enter an existing Git repository path"
 
 #. field of New playbook: the registry org its spec package is published under
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "Org"
 msgstr "Org"
 
@@ -5330,17 +5212,12 @@ msgstr "Package name"
 
 #. a Packages tab heading: the packages the project's spex.yaml names
 #. heading over a project's changed spex.yaml and spex.lock: the packages it adds
-#. tab name: the spec packages this project and your own group install
+#. tab name: the spec packages this project installs
 #: src/App.tsx
 #: src/components/EnvironmentSection.tsx
 #: src/lib/space.ts
 msgid "Packages"
 msgstr "Packages"
-
-#. the title of the Packages tab's heading Personal
-#: src/components/EnvironmentSection.tsx
-msgid "Packages added for yourself, available in every project"
-msgstr "Packages added for yourself, available in every project"
 
 #. the sharing confirm: the records made before and after the share both go
 #: src/components/SpacePlacements.tsx
@@ -5380,23 +5257,14 @@ msgstr "Path to an existing Git repository"
 msgid "Permission mode"
 msgstr "Permission mode"
 
-#. a Packages tab heading: the packages added for yourself, available in every project
-#. your own records and packages at a Space, never "your namespace"
-#. your own records and packages at a Space, never "your namespace"
-#. your own records and packages at a Space, never "your namespace"
+#. your own group at a Space, the place your own records go; never "your namespace"
+#. your own group at a Space, the place your own records go; never "your namespace"
 #. your own records at a Space, apart from any group: a heading, a picker's choice and where records are shared into
-#: src/components/EnvironmentSection.tsx
-#: src/components/PlaybooksTab.tsx
 #: src/components/ProjectPalette.tsx
 #: src/components/ProjectsSurface.tsx
 #: src/lib/space.ts
 msgid "Personal"
 msgstr "Personal"
-
-#. a choice of the Enable form's Enable for: your Personal config, read in every project of yours
-#: src/components/DraftRegisterTab.tsx
-msgid "Personal (every project of yours)"
-msgstr "Personal (every project of yours)"
 
 #: src/components/CaptainHome.tsx
 msgid "Pick a project first ({keys})"
@@ -5446,7 +5314,7 @@ msgid "plan the development path for a request: direct implementation, or a dura
 msgstr "plan the development path for a request: direct implementation, or a durable decision first, delivered through a pull request when the request names a GitHub issue or asks for one"
 
 #: src/components/DraftRegisterTab.tsx
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "Playbook id"
 msgstr "Playbook id"
 
@@ -5462,9 +5330,13 @@ msgstr "playbook: {playbookId}"
 #. back to the project's Playbooks tab, listing its playbooks
 #. heading of the project's Playbooks tab
 #. tab name: the playbooks a session in this project can run
+#. the Playbooks page's heading: the global playbooks
+#. the rail's Playbooks destination: the global playbooks, which run in every project of yours
 #: src/App.tsx
 #: src/components/AuthoringWorkspace.tsx
 #: src/components/CaptainHome.tsx
+#: src/components/EnvironmentSection.tsx
+#: src/components/NavRail.tsx
 #: src/components/PlaybooksTab.tsx
 msgid "Playbooks"
 msgstr "Playbooks"
@@ -5474,13 +5346,17 @@ msgid "Playbooks need a valid config — fix it in <0>Settings</0>."
 msgstr "Playbooks need a valid config — fix it in <0>Settings</0>."
 
 #: src/components/DraftRegisterTab.tsx
-#: src/components/PlaybooksTab.tsx
 msgid "Player for {role}"
 msgstr "Player for {role}"
 
 #: src/components/SettingsSurface.tsx
 msgid "Player id — lowercase, dots to group (e.g. dev.coder)"
 msgstr "Player id — lowercase, dots to group (e.g. dev.coder)"
+
+#. a player a playbook names that is not set up here: until it is added, its roles run on the Captain's agent and model
+#: src/components/SettingsSurface.tsx
+msgid "Plays on the Captain's agent"
+msgstr "Plays on the Captain's agent"
 
 #: src/components/DeliveryCard.tsx
 msgid "PR {ref}"
@@ -5572,11 +5448,6 @@ msgstr "Projects"
 msgid "Projects and sessions"
 msgstr "Projects and sessions"
 
-#. the first step on the welcome page at a team server, beside its label Groups; "here" is that server
-#: src/components/CaptainHome.tsx
-msgid "Projects here come from your groups"
-msgstr "Projects here come from your groups"
-
 #. collapsed card: the text the playbook sent the player
 #: src/components/PlayerPane.tsx
 msgid "Prompt"
@@ -5588,14 +5459,15 @@ msgstr "Prompt"
 msgid "Propose a design"
 msgstr "Propose a design"
 
+#. the card for the agent's proposal in an authoring conversation; {command} is the proposed slash command, such as /triage
+#: src/components/DraftConversation.tsx
+msgid "Proposed {command}"
+msgstr "Proposed {command}"
+
 #. a call's outcome: it gave its design proposal
 #: src/lib/step-words.ts
 msgid "proposed a design"
 msgstr "proposed a design"
-
-#: src/components/DraftConversation.tsx
-msgid "Proposed enabling"
-msgstr "Proposed enabling"
 
 #. an agent chip's model reading when the provider's own default is taken
 #: src/lib/session-agents.ts
@@ -5659,8 +5531,8 @@ msgstr "Publishes {path} to {registry}"
 msgid "Publishing…"
 msgstr "Publishing…"
 
-#. a hint on the /dev card: delivering through a pull request needs these playbooks enabled, while a plain /dev runs; {names} names them, such as /branch and /pr
-#: src/components/PlaybooksTab.tsx
+#. a hint on the /dev card: delivering through a pull request needs these playbooks to run, while a plain /dev runs; {names} names them, such as /branch and /pr
+#: src/components/PlaybookCard.tsx
 msgid "Pull requests need {names} · /dev still runs"
 msgstr "Pull requests need {names} · /dev still runs"
 
@@ -5788,7 +5660,6 @@ msgstr "Reading project specs…"
 msgid "reading specs…"
 msgstr "reading specs…"
 
-#: src/components/ProjectPalette.tsx
 #: src/components/SpaceSurface.tsx
 msgid "Reading your groups…"
 msgstr "Reading your groups…"
@@ -5962,6 +5833,7 @@ msgstr "Reloading…"
 
 #. a package's act: take it out of spex.yaml and uninstall it
 #. a package's act: take it out of spex.yaml and uninstall it
+#. a playbook entry that failed: delete it
 #. confirm: forget this project, leaving the repo on disk
 #. confirm: forget this project, leaving the repo on disk
 #. confirm: remove a project whose records are gone from this computer
@@ -5974,6 +5846,7 @@ msgstr "Reloading…"
 #. take the member's credential for a code host or an agent off the team server
 #: src/components/EnvironmentSection.tsx
 #: src/components/NextCard.tsx
+#: src/components/PlaybookCard.tsx
 #: src/components/ProjectGroup.tsx
 #: src/components/ProjectsSurface.tsx
 #: src/components/SettingsSurface.tsx
@@ -6034,6 +5907,11 @@ msgstr "Remove project"
 msgid "Remove the credential for {name}"
 msgstr "Remove the credential for {name}"
 
+#. accessible name of Remove on a playbook entry that failed: it deletes the entry; {id} is the playbook
+#: src/components/PlaybookCard.tsx
+msgid "Remove the entry for {id}"
+msgstr "Remove the entry for {id}"
+
 #: src/components/ProjectGroup.tsx
 msgid "Remove this intent from history"
 msgstr "Remove this intent from history"
@@ -6082,8 +5960,10 @@ msgstr "Removing {server}, or revoking its access at {space}, stops new use; a c
 #. queue row control, busy: the removal is in flight
 #. the removal is in flight
 #. the removal is in flight
+#. the removal is in flight
 #: src/components/EnvironmentSection.tsx
 #: src/components/NextCard.tsx
+#: src/components/PlaybookCard.tsx
 #: src/components/SpaceMembers.tsx
 msgid "Removing…"
 msgstr "Removing…"
@@ -6230,7 +6110,7 @@ msgstr "resume tokens for this computer's agent conversations; they work nowhere
 #: src/components/AgentCards.tsx
 #: src/components/ComposerAttachments.tsx
 #: src/components/DashboardSurface.tsx
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 #: src/components/RunView.tsx
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceGroups.tsx
@@ -6371,6 +6251,11 @@ msgstr "Same as agent"
 #: src/components/AgentEditor.tsx
 msgid "Same as Captain"
 msgstr "Same as Captain"
+
+#. the first choice of a role's player under a project's Global heading: play it as the global binding does
+#: src/components/BindingEditor.tsx
+msgid "Same as global"
+msgstr "Same as global"
 
 #. Credentials section: place the credential on the team server
 #. Credentials section: place the credential on the team server
@@ -6710,11 +6595,6 @@ msgstr "Share into"
 msgid "Share with {group} at {name}?"
 msgstr "Share with {group} at {name}?"
 
-#. badge: this lane answers more than one role
-#: src/components/PlaybooksTab.tsx
-msgid "shared"
-msgstr "shared"
-
 #. entry mark: this file syncs and is already sent
 #: src/lib/space.ts
 msgid "Shared"
@@ -6771,6 +6651,8 @@ msgid "Show log"
 msgstr "Show log"
 
 #. a project's Open entry where it is open on that team server already: shows it there on Projects; {server} is the server's name
+#. a project's Open entry where it is open on that team server already: shows it there on Projects; {server} is the server's name
+#: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
 msgid "Show on {server}"
 msgstr "Show on {server}"
@@ -6806,11 +6688,6 @@ msgstr "shown despite filter"
 #: src/components/SpecView.tsx
 msgid "shown despite search"
 msgstr "shown despite search"
-
-#. the title of Enable in the receipt after Add…, for a package of several playbooks: it opens the package's row to its playbooks, each enabled on its own line
-#: src/components/EnvironmentSection.tsx
-msgid "Shows its playbooks, each with Enable"
-msgstr "Shows its playbooks, each with Enable"
 
 #. sign in to a Space or a registry
 #. sign in to the Space chosen, or to a registry
@@ -6864,11 +6741,6 @@ msgstr "Sign in to publish"
 msgid "Sign in to your Space"
 msgstr "Sign in to your Space"
 
-#. the title of a sign-in provider's icon beside a Space in the sign-in card's chooser; {provider} is its name, such as GitHub
-#: src/components/SpaceDirectory.tsx
-msgid "Sign in with {provider}"
-msgstr "Sign in with {provider}"
-
 #. sign out of a Space or a registry
 #. sign this computer out of the Space whose heading carries it
 #: src/components/RegistryAccount.tsx
@@ -6904,16 +6776,11 @@ msgid "Signed out of {name}"
 msgstr "Signed out of {name}"
 
 #. a team server's line while it signs in at the Space, before any page asks the person to approve it; {space} is the Space's display name
-#. project palette: under a team server's groups while the server signs in at the Space, before which it lists nothing; {space} is the Space's display name
+#. a team server's line while it signs in at the Space, before any page asks the person to approve it; {space} is the Space's display name
 #: src/components/ProjectPalette.tsx
 #: src/components/SpaceServers.tsx
 msgid "Signing in to {space}…"
 msgstr "Signing in to {space}…"
-
-#. the welcome page at a team server while the server signs in at the Space; the tagged run links the Space's page where the person approves "Spex on <server>"; {space} is the Space's display name, {server} the server's name
-#: src/components/CaptainHome.tsx
-msgid "Signing in to {space}… <0>approve Spex on {server} in your browser</0>"
-msgstr "Signing in to {space}… <0>approve Spex on {server} in your browser</0>"
 
 #. the Sign in control, while the sign-in runs
 #: src/components/SpaceSignIn.tsx
@@ -6998,10 +6865,35 @@ msgstr "Space"
 msgid "Space address"
 msgstr "Space address"
 
+#. a package's spec line on the Packages tab: its placed copy in specs/ was edited, so installs leave it as the project's own; keep specs/ as it is
+#: src/components/PackageArtifacts.tsx
+msgid "spec · edited in specs/ — left as yours"
+msgstr "spec · edited in specs/ — left as yours"
+
+#. a package's spec line on the Packages tab: its placed copy in specs/ was edited, so installs leave it as the project's own; {version} is the package's newer release, waiting for someone to merge it into that file; keep specs/ as it is
+#: src/components/PackageArtifacts.tsx
+msgid "spec · edited in specs/ — left as yours · {version} waiting"
+msgstr "spec · edited in specs/ — left as yours · {version} waiting"
+
+#. a package's spec line on the Packages tab: an install placed its spec in the project's specs/ at {path}, such as specs/packages/glossary.md; keep the path as it is
+#: src/components/PackageArtifacts.tsx
+msgid "spec · in {path}"
+msgstr "spec · in {path}"
+
+#. a package's spec line on the Packages tab: the project has no specs/ folder to place its spec in, and scaffolding the project's specs makes one; keep specs/ as it is
+#: src/components/PackageArtifacts.tsx
+msgid "spec · needs specs/ — scaffold first"
+msgstr "spec · needs specs/ — scaffold first"
+
 #. a package's spec line on the Packages tab: its spec is not in the agents' folders
 #: src/components/PackageArtifacts.tsx
 msgid "spec · not placed"
 msgstr "spec · not placed"
+
+#. a package's spec line on the Packages tab: its spec is not placed because a file of the same name, {file} such as glossary.md, already stands in the project's specs/; keep specs/ and the file name as they are
+#: src/components/PackageArtifacts.tsx
+msgid "spec · not placed — specs/ holds {file} already"
+msgstr "spec · not placed — specs/ holds {file} already"
 
 #. a package's spec line on the Packages tab: its spec stands in the agents' folders as a skill
 #: src/components/PackageArtifacts.tsx
@@ -7089,6 +6981,16 @@ msgstr "spex.yaml, spex.lock not committed"
 #: src/lib/failure-catalogue.ts
 msgid "Squash or reset them yourself"
 msgstr "Squash or reset them yourself"
+
+#. a playbook row in place of its roles: it does not run, and why
+#: src/components/PlaybookCard.tsx
+msgid "Stands aside · {reason}"
+msgstr "Stands aside · {reason}"
+
+#. a playbook row in place of its roles: another package's playbook takes its command, so this one does not run; {package} names that package, such as acme/triage
+#: src/components/PlaybookCard.tsx
+msgid "Stands aside · /{command} is {package}'s"
+msgstr "Stands aside · /{command} is {package}'s"
 
 #. queue row control: begin this queued intent
 #. queue row control: begin this queued intent
@@ -7219,17 +7121,6 @@ msgstr "Stopped before it finished"
 #: src/components/SpaceSync.tsx
 msgid "Stopping…"
 msgstr "Stopping…"
-
-#. tooltip of Disable on a playbook the project's config enables
-#: src/components/PlaybooksTab.tsx
-msgid "Stops /{command} for every member of {project}; the package stays"
-msgstr "Stops /{command} for every member of {project}; the package stays"
-
-#. tooltip of Disable on a playbook your Personal config enables
-#. tooltip of Disable on a playbook your Personal config enables
-#: src/components/PlaybooksTab.tsx
-msgid "Stops /{command} in every project of yours; the package stays"
-msgstr "Stops /{command} in every project of yours; the package stays"
 
 #. the tuning editor's field for the reasoning effort an agent's subagents run at
 #: src/components/TuningField.tsx
@@ -7511,6 +7402,11 @@ msgstr "The file's conversation is unavailable."
 msgid "The first connection can take a minute"
 msgstr "The first connection can take a minute"
 
+#. the title of Add…'s disabled Folder tab on the Playbooks page: the folder holding your global packages, which a folder package lies in, is not on this computer
+#: src/components/EnvironmentSection.tsx
+msgid "The folder of your global packages is not on this computer"
+msgstr "The folder of your global packages is not on this computer"
+
 #: src/components/RunView.tsx
 msgid "The last turn failed. Send a message to pick it up."
 msgstr "The last turn failed. Send a message to pick it up."
@@ -7704,11 +7600,6 @@ msgstr "This file changed on disk since you opened it."
 msgid "This file is too large to preview."
 msgstr "This file is too large to preview."
 
-#: src/components/DraftRegisterTab.tsx
-#: src/components/PlaybooksTab.tsx
-msgid "This lane also answers {positions} — one conversation across them"
-msgstr "This lane also answers {positions} — one conversation across them"
-
 #: src/components/ProjectsSurface.tsx
 msgid "This project is no longer registered."
 msgstr "This project is no longer registered."
@@ -7721,10 +7612,10 @@ msgstr "This project uses a legacy specs layout"
 msgid "This project's overview: history, now, up next, sources, repo state"
 msgstr "This project's overview: history, now, up next, sources, repo state"
 
-#. tooltip of the project's Packages tab: the packages the project's spex.yaml names, and those added for yourself
+#. tooltip of the project's Packages tab: the packages the project's spex.yaml names
 #: src/App.tsx
-msgid "This project's packages and your Personal ones"
-msgstr "This project's packages and your Personal ones"
+msgid "This project's packages"
+msgstr "This project's packages"
 
 #: src/components/ProjectGroup.tsx
 msgid "This record is not in the project's specs tree"
@@ -7738,7 +7629,7 @@ msgstr "This session has ended — the replay is read-only"
 msgid "this stage was not found for this draft"
 msgstr "this stage was not found for this draft"
 
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookCard.tsx
 msgid "this stage was not found for this playbook"
 msgstr "this stage was not found for this playbook"
 
@@ -7842,9 +7733,10 @@ msgstr "Try the Academy example"
 msgid "Try the example"
 msgstr "Try the example"
 
+#. in a role's editor on a project's Playbooks tab: the project names a player alone, and each person tunes their own players in Settings
 #: src/components/BindingEditor.tsx
-msgid "Tuning is personal — set it in Settings"
-msgstr "Tuning is personal — set it in Settings"
+msgid "Tuning lives in your players, in Settings"
+msgstr "Tuning lives in your players, in Settings"
 
 #: src/lib/media.ts
 msgid "Turn {turn}"
@@ -7864,7 +7756,6 @@ msgid "Turn workflows written in plain language into steps AI can run"
 msgstr "Turn workflows written in plain language into steps AI can run"
 
 #: src/components/DraftRegisterTab.tsx
-#: src/components/PlaybooksTab.tsx
 msgid "Tweak the {name} agent in place"
 msgstr "Tweak the {name} agent in place"
 
@@ -7880,11 +7771,6 @@ msgstr "Type <0>/</0> in the task box to see {count, plural, one {# playbook} ot
 #: src/components/AgentCards.tsx
 msgid "Unavailable"
 msgstr "Unavailable"
-
-#. a required role no player answers yet
-#: src/components/PlaybooksTab.tsx
-msgid "unbound"
-msgstr "unbound"
 
 #: src/components/ProjectsSurface.tsx
 msgid "uncommitted changes"
@@ -7976,7 +7862,7 @@ msgstr "Up next: <0>{title}</0>"
 msgid "Update"
 msgstr "Update"
 
-#. the built-in playbooks' line: update to the release this app ships; {version} is that release
+#. on the built-in package's row: update to the release this app ships; {version} is that release
 #: src/components/EnvironmentSection.tsx
 msgid "Update to {version}"
 msgstr "Update to {version}"
@@ -8093,6 +7979,7 @@ msgstr "Used by {first} and {count, plural, one {# more role} other {# more role
 #. the accessible name of a version choice in Add…; {name} is the package
 #. the accessible name of a version choice in Add…; {name} is the package
 #: src/components/EnvironmentSection.tsx
+#: src/components/PackageArtifacts.tsx
 msgid "Version of {name}"
 msgstr "Version of {name}"
 
@@ -8194,7 +8081,7 @@ msgstr "waiting for your verdict"
 msgid "What {name} provides"
 msgstr "What {name} provides"
 
-#. tooltip of the project's Playbooks tab: the playbooks enabled and available here
+#. tooltip of the project's Playbooks tab: the playbooks that run here, the project's and the global ones
 #: src/App.tsx
 msgid "What a session in this project can run"
 msgstr "What a session in this project can run"
@@ -8252,11 +8139,6 @@ msgstr "which process is writing right now"
 #: src/components/SpaceServers.tsx
 msgid "Whoever runs {server} can act as you: in your groups, in your records, and with your {space} account, wherever it reaches"
 msgstr "Whoever runs {server} can act as you: in your groups, in your records, and with your {space} account, wherever it reaches"
-
-#. headline of the welcome page at a team server where you have no project yet; {server} is the server's name
-#: src/components/CaptainHome.tsx
-msgid "Work on {server} from this computer."
-msgstr "Work on {server} from this computer."
 
 #: src/components/DraftSourceTab.tsx
 msgid "Workflow source"
@@ -8317,6 +8199,11 @@ msgstr "Writing a reply"
 msgid "Writing…"
 msgstr "Writing…"
 
+#. tooltip on a placed spec's provenance: Spex wrote the file from the spec package {name} (org/pkg) at {version}, and editing the file makes it the project's own
+#: src/components/SpecView.tsx
+msgid "Written by Spex from {name} {version} — an edit makes it yours"
+msgstr "Written by Spex from {name} {version} — an edit makes it yours"
+
 #: src/components/AgentCards.tsx
 msgid "Written, but these roles still name an official model:"
 msgstr "Written, but these roles still name an official model:"
@@ -8336,14 +8223,9 @@ msgid "Your groups"
 msgstr "Your groups"
 
 #. the registry did not answer which orgs the account may publish to
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "Your orgs could not be read"
 msgstr "Your orgs could not be read"
-
-#. the title of Add…'s disabled Folder tab under Personal: the folder holding your Personal records, which a folder package lies in, is not on this computer
-#: src/components/EnvironmentSection.tsx
-msgid "Your Personal records are not on this computer"
-msgstr "Your Personal records are not on this computer"
 
 #: src/components/CaptainHome.tsx
 msgid "your project"

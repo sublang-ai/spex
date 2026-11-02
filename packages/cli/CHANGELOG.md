@@ -16,6 +16,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   each with one line saying what it is for. `spex <command> --help`,
   `-h` or `spex help <command>` prints a command's lines and every
   option it takes; `spex --version` (`-V`) prints the installed version.
+- `spex export <org>/<pkg>` builds `spex-packages/<org>/<pkg>/` by
+  copying `--spec` and `--skill` files, which stay where they are, and
+  adds nothing to `spex.yaml`. A first export writes `meta.yaml` with
+  `provides` listing the kinds given; run again, it keeps `meta.yaml`
+  and refreshes the spec from `specs/` and each skill from the agent
+  folders. The spec's citations are rewritten for the package: another
+  package's spec by its address, a spec of no package dropped and a
+  decision record's link reduced to its text, each with a warning.
+- `meta.yaml` takes `provides`, the kinds a package offers a project —
+  `[spec]`, `[skill]`, `[playbook, skill]` — every kind it holds where
+  absent; an empty list is refused.
+- An install places a provided spec in the project's
+  `specs/packages/<pkg>.md`, opening with a marker line naming its
+  package and version, for you to commit with the code. Its citations
+  of other packages' placed specs become relative links; the rest are
+  dropped, their words kept, until that package is added. An unedited
+  copy follows its package and leaves with it; an edited one is left as
+  yours, the newer version waiting; a file of yours by that name keeps
+  it out.
+- `spex lint` reads the marker line, so a placed spec `specs/map.md` does
+  not list draws no warning.
+- `spex list` says beneath each package where its spec stands in
+  `specs/` — placed, edited and left as yours, kept out by a file of
+  yours, or waiting for `spex scaffold` — and each package its links
+  wait for, with `spex add <org>/<pkg>`; `spex add`, `spex install` and
+  `spex update` say the same of what they placed.
 
 ### Changed
 
@@ -43,6 +69,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   folder holds the package before writing `spex.yaml`.
 - The stand-in registry of `@sublang/spex/testing` describes itself at
   `/api/v1/registry` and names a scripted account at `/api/v1/whoami`.
+- Only what a package provides is placed. A support artifact — one a
+  sibling names in `from`, or one a sibling of another kind names in
+  `requires` — is installed but placed nowhere, so a playbook's support
+  skill no longer reaches the agent folders.
+- In a project, a package's spec is no longer placed as a generated
+  `<org>-<pkg>` skill; a Personal package's spec still is.
+
+### Removed
+
+- **Breaking:** `spex new` and its `--move`, replaced by `spex export`.
+
+### Fixed
+
+- Folder releases leave out slc's generated verification tests and the
+  compile-time FSM bundle, alongside its build history and verifier
+  support. Publishing and new Git resolutions keep the source, runtime
+  module, rebuild inputs and editable intermediates; existing locks and
+  registry archives retain their files.
+
+- Spex writes LF, and an install pins `spex.yaml`, `spex.lock` and
+  `specs/packages/*.md` to LF in the project's `.gitattributes`, so a
+  checkout whose Git converts line endings — Git for Windows by default —
+  installs from the committed files to no diff.
+
+### Fixed
+
+- A Git source's files are read as the repository holds them, whatever
+  this computer's Git line-ending settings, so a `spex.lock` resolved
+  on Windows installs on macOS and Linux, and the reverse.
 
 ## [5.0.0] - 2026-10-31
 

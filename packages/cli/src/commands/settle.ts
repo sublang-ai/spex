@@ -12,10 +12,12 @@
 // announcements or catalog: every write is a versioned write, refused
 // where its file changed meanwhile (DR-111). What it prints speaks a
 // project's Packages tab's words (DR-172): added, installed, updated,
-// removed, the registry by its name, skills for agents.
+// removed, the registry by its name, skills for agents, and beneath a
+// package providing a spec where that spec stands in `specs/` with the
+// packages its links wait for (cli-6, environments-41, DR-174).
 
 import { existsSync, lstatSync, readFileSync } from "node:fs";
-import { isAbsolute, join } from "node:path";
+import { isAbsolute, join, posix } from "node:path";
 
 import {
   AGENT_FOLDERS,
@@ -34,6 +36,7 @@ import {
   packageRoot,
   installedDir,
   parseManifestText,
+  providedArtifacts,
   recordedPackages,
   RegistryError,
   resolve,
@@ -47,6 +50,7 @@ import {
   type Manifest,
   type Requests,
   type Resolution,
+  type SpecPlacement,
 } from "../lib/environment/index.js";
 import { fileVersion, sha256, VersionConflictError, type FileVersion } from "../lib/files.js";
 import type { AuthScope } from "../lib/git-host.js";
@@ -360,11 +364,26 @@ export interface SkillPlace { skill: string; placed: string[]; yours: string[]; 
 
 export function skillPlaces(root: string, lock: Lock, name: string, state: PackageState): SkillPlace[] {
   const resolution = lock.packages[name]!;
-  const skills = Object.keys(resolution.exports).sort();
-  if (skills.length === 0) return [];
+  if (Object.keys(resolution.exports).length === 0) return [];
   const dir = packageRoot(name, resolution, installedDir(root), root);
   let manifest: Manifest | null = null;
   try { manifest = dir === null ? null : pathManifest(dir, "."); } catch { manifest = null; }
+  // A skill for the agents of what the release provides alone, and
+  // never a provided spec's: the command line's root is a project's,
+  // where a spec stands in `specs/packages/` or nowhere (environments-6,
+  // environments-8); a release not here is read as its lock names it,
+  // its spec by the file the lock selects, or a folder's by its id
+  // `<pkg>` (environments-1).
+  const provided = manifest === null ? null : providedArtifacts(manifest);
+  const pkg = name.slice(name.indexOf("/") + 1);
+  const lockedSpec = (id: string): boolean => (isPathSource(resolution.source)
+    ? id === pkg
+    : resolution.files.some((file) => file.path.startsWith("specs/") && file.path.endsWith(`/${id}.md`)));
+  const skills = Object.keys(resolution.exports).sort().filter((skill) => {
+    const id = resolution.exports[skill]!;
+    if (manifest === null || provided === null) return !lockedSpec(id);
+    return provided.has(id) && manifest.artifacts[id]?.kind !== "spec";
+  });
   const folders = projectFolders().map((entry) => ({ ...entry, skills: new Set(exportedIn(root, entry.folder)) }));
   return skills.map((skill) => {
     const playbook = manifest?.artifacts[resolution.exports[skill]!]?.kind === "playbook";
@@ -406,6 +425,29 @@ export function table(rows: string[][]): string[] {
  * it stands for the agents (cli-2, cli-4). */
 export function skillLines(root: string, lock: Lock, name: string, state: PackageState): string[] {
   return table(skillPlaces(root, lock, name, state).map((place) => [place.skill, placeText(place)]));
+}
+
+/** A provided spec's place as a line, in a project's Packages tab's
+ * words (cli-6, environments-41), an edited copy naming the newer
+ * release's version where one waits; an edited copy its package no
+ * longer places, the project's own now, reads as edited too (DR-172). */
+export function specText(placement: SpecPlacement): string {
+  switch (placement.state) {
+    case "placed": return `spec in ${placement.path}`;
+    case "edited": return `spec edited in specs/ — left as yours${placement.waitingVersion ? `, ${placement.waitingVersion} waiting` : ""}`;
+    case "blocked": return `spec not placed — specs/ holds ${posix.basename(placement.path)} already`;
+    case "no-specs": return "spec needs specs/ — spex scaffold";
+  }
+}
+
+/** The lines beneath a package of its provided spec (cli-2, cli-4,
+ * cli-6): where it stands, then one line per package its links wait
+ * for, with the command adding it. */
+export function specLines(placements: readonly SpecPlacement[], name: string, indent = "  "): string[] {
+  return placements.filter((placement) => placement.name === name).flatMap((placement) => [
+    `${indent}${specText(placement)}`,
+    ...placement.waiting.map((wait) => `${indent}${wait.count === 1 ? "1 link waits" : `${wait.count} links wait`} for ${wait.name} — spex add ${wait.name}`),
+  ]);
 }
 
 /** Each change from one lock to the next: a package gained, updated from
@@ -456,12 +498,13 @@ export function changeLine(change: LockChange, lock?: Lock, added?: ReadonlySet<
 }
 
 /** The lines naming each package gained, updated or removed, with where
- * each one's skills went for the agents (cli-2, cli-3). */
+ * each one's spec and skills went — a removed package's edited copy left
+ * as the project's own (cli-2, cli-3, environments-41). */
 export function gainedLines(root: string, settled: Settled, added: ReadonlySet<string>): string[] {
   const lines: string[] = [];
   const states = packageStates(root, settled.lock);
   for (const change of lockChanges(root, settled.before, settled.lock)) {
-    lines.push(changeLine(change, settled.lock, added));
+    lines.push(changeLine(change, settled.lock, added), ...specLines(settled.exported.specs, change.name));
     if (change.to === null) continue;
     lines.push(...skillLines(root, settled.lock, change.name, states.get(change.name)!));
   }

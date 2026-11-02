@@ -316,7 +316,7 @@ test("core-service-127, core-service-126: a member's own credential displaces it
   }
 });
 
-test("core-service-151, core-service-126: on a seat the server account's Claude settings reach no run, whatever order the member's credential and the file change in", async (t) => {
+test("core-service-152, core-service-126: on a seat the server account's Claude settings reach no run, whatever order the member's credential and the file change in", async (t) => {
   const shared = join(scratch, "shared-settings.env");
   writeShared(shared, "CODEX_ACCESS_TOKEN=codex-shared\n");
   const server = mkdtempSync(join(scratch, "seat-settings-home-"));

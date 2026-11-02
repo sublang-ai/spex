@@ -30,8 +30,8 @@ Packages in this folder (spex.yaml, spex.lock, .spex/)
   search <query>                   Find packages at the registry
 
 Your packages
-  new <org>/<pkg> [--skill <folder>]… [--spec <file>]   Start a package in spex-packages/<org>/<pkg>/
-  publish [<org>/<pkg>] [--dry-run]                     Publish it to the registry
+  export <org>/<pkg> [--spec <file>] [--skill <folder>]…   Build it in spex-packages/<org>/<pkg>/ from your files
+  publish [<org>/<pkg>] [--dry-run]                         Publish it to the registry
 
 Sign-in
   login [--registry <url> | --space <url>]              Sign in with a code in your browser
@@ -75,16 +75,15 @@ const HELP: Readonly<Record<string, Help>> = {
   update: { usage: "spex update", options: [] },
   list: { usage: "spex list", options: [] },
   search: { usage: "spex search <query>", words: "<query>", options: [] },
-  new: {
-    usage: "spex new <org>/<pkg> [--skill <folder>]… [--spec <file>] [options]",
+  export: {
+    usage: "spex export <org>/<pkg> [--spec <file>] [--skill <folder>]… [options]",
     words: "<org>/<pkg>",
     options: [
-      ["--skill <folder>", "A skill folder to put in the package; repeat for more", "a folder"],
-      ["--spec <file>", "A spec file, named <pkg>.md", "a file"],
-      ["--language <tag>", "The language of its skills and spec (en by default)", "a language tag"],
-      ["--description <text>", "What the package is for (by default from its first skill, else its spec)", "a description"],
-      ["--license <id>", "Its license (by default from this project's LICENSE, else Apache-2.0)", "a license id"],
-      ["--move", "Move the skill folders in, in place of copying them"],
+      ["--spec <file>", "Your spec file to build it from, named <pkg>.md", "a file"],
+      ["--skill <folder>", "Your skill folder to build it from; repeat for more", "a folder"],
+      ["--language <tag>", "The language of what it adds (en by default)", "a language tag"],
+      ["--description <text>", "What it is for, on a first export (by default from its first skill, else its spec)", "a description"],
+      ["--license <id>", "Its license, on a first export (by default from this project's LICENSE, else Apache-2.0)", "a license id"],
     ],
   },
   publish: {

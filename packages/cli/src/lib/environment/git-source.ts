@@ -5,8 +5,11 @@
 // tag or commit into a bare mirror under `cache/git/`, and the commit's
 // tree exported once under `cache/git-trees/<commit>`. Resolution reads
 // the manifest there and digests every file; installing reads the same
-// tree at the locked commit. A credential, where one is given, reaches
-// Git only through the caller's credential arguments.
+// tree at the locked commit. The tree is the repository's own: Git converts
+// line endings only as the repository's attributes direct, never as this
+// device is set, so the lock's digests match on every device
+// (environments-45). A credential, where one is given, reaches Git only
+// through the caller's credential arguments.
 
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -54,7 +57,10 @@ export class GitSourceError extends Error {
 
 export const defaultRunGit: RunGit = (args, options = {}) =>
   new Promise<GitRun>((resolve, reject) => {
-    const child = spawn("git", args, {
+    // Git for Windows otherwise rejects pack/ref files below long cache roots.
+    // Keep this on the command, never in the user's or mirror's configuration.
+    const commandArgs = process.platform === "win32" ? ["-c", "core.longpaths=true", ...args] : args;
+    const child = spawn("git", commandArgs, {
       env: {
         ...process.env,
         GIT_TERMINAL_PROMPT: "0",
@@ -116,7 +122,10 @@ export function gitSource(cacheDir: string, options: GitSourceOptions = {}): Git
   async function exportTree(repo: string, mirror: string, commit: string): Promise<string> {
     const dir = join(trees, commit);
     if (existsSync(dir)) return dir;
-    const tar = await git(repo, ["-C", mirror, "archive", "--format=tar", commit]);
+    // `git archive` applies this device's core.autocrlf and core.eol even
+    // from a bare mirror; the digests are of the repository's own bytes, so
+    // neither applies, and only the repository's own attributes do.
+    const tar = await git(repo, ["-c", "core.autocrlf=false", "-c", "core.eol=lf", "-C", mirror, "archive", "--format=tar", commit]);
     const staging = join(trees, `.${commit}.${randomUUID()}`);
     mkdirSync(staging, { recursive: true });
     try {

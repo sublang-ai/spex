@@ -3,3 +3,6 @@
 # bytes on Windows too.
 packages/ui/src/examples/slc-demo/* text eol=lf
 packages/core/assets/playbook-sources/*.md text eol=lf
+spex.yaml text eol=lf
+spex.lock text eol=lf
+specs/packages/*.md text eol=lf

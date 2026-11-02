@@ -21,12 +21,10 @@ import type { AgentPatch } from "../lib/config-ops.js";
 import { keyLabel } from "../lib/shortcuts.js";
 import { playbookIntent } from "../lib/playbook-intent.js";
 import { treeCounts } from "../lib/spec-view-model.js";
-import { isLocalPlace, placeLabel, useAppStore, type StagedIntent } from "../state/store.js";
+import { isLocalPlace, useAppStore, type StagedIntent } from "../state/store.js";
 import { usePlaceStore } from "../state/place-context.js";
-import { usePlaces } from "../state/places.js";
-import { anySignedIn, instanceNameAt } from "../lib/instances.js";
+import { anySignedIn } from "../lib/instances.js";
 import { STEP_LINES, stoppedPhrase, type OpeningProject } from "../lib/space.js";
-import { ApprovalLink } from "./SpaceServers.js";
 import { SlashMenuList, slashMatches } from "./SlashMenu.js";
 import { AgentChip, agentChipText, fastModeWord, readinessWord, unconfirmedNote } from "./AgentChip.js";
 import { agentName, faultGuidance, faultsOf } from "../lib/agent-cards.js";
@@ -261,23 +259,16 @@ export function CaptainHome(props: CaptainHomeProps) {
   // With nothing registered the greeting itself carries the ways in
   // (run-view-25); seeding is the store action the palette uses. The
   // example is seeded at a folder this page names, so it is this
-  // computer's alone: a seat greets the member with the server form,
-  // its projects opened among the member's groups and its core
-  // allocating every folder (run-view-169, run-view-174).
+  // computer's alone (run-view-169).
   const openAcademyExample = store((state) => state.openAcademyExample);
-  const local = isLocalPlace(store.place);
-  // A seat's sign-in at its instance, as the local core's `server.state`
-  // names it, and the instance as this computer's Groups names it
-  // (run-view-174, core-service-142).
-  const seat = usePlaces((state) => (local ? undefined : state.seats.find((entry) => entry.seat.place === store.place.key)?.seat));
   const localGroups = useAppStore((state) => state.space);
   const loadLocalSpace = useAppStore((state) => state.loadSpace);
   const [seeding, setSeeding] = useState(false);
-  // This computer's welcome page offers the groups' projects while the
-  // home is signed in to an instance and the sign-in while it is not
-  // (run-view-172): its Groups state is read where nothing has read it
-  // yet, the action waiting on that read.
-  const localWelcome = local && !props.hasProject && !props.hasProjects;
+  // The welcome page offers the groups' projects while the home is
+  // signed in to an instance and the sign-in while it is not
+  // (run-view-172): this computer's Groups state is read where nothing
+  // has read it yet, the action waiting on that read.
+  const localWelcome = !props.hasProject && !props.hasProjects;
   const groupsUnread = localGroups === undefined;
   useEffect(() => {
     if (localWelcome && connected && groupsUnread) void loadLocalSpace().catch(() => {});
@@ -466,151 +457,70 @@ export function CaptainHome(props: CaptainHomeProps) {
   }
 
   if (!props.hasProject && !props.hasProjects) {
-    // The third step reads the same at every place.
+    // The welcome page has its local form alone (run-view-172, DR-175): a
+    // seat holding no project has no page of its own.
     const delivery: WelcomeStep = {
       label: i18n._("Delivery"),
       text: i18n._("AI builds and reviews changes, with a record of each step"),
     };
-    const server = placeLabel(store.place);
-    // While the seat's sign-in at its instance runs, the server form says
-    // so above its actions, with the page where the person approves it
-    // (run-view-174, core-service-142).
-    const signingIn = seat?.signIn?.state === "running" ? seat.signIn : undefined;
     return (
       <WelcomeFrame
-        notice={
-          signingIn && seat ? (
-            <p data-testid="home-seat-signin">
-              <Rich
-                text={i18n._({
-                  id: "Signing in to {space}… <0>approve Spex on {server} in your browser</0>",
-                  values: { space: instanceNameAt(localGroups, seat.instance), server },
-                  comment: "the welcome page at a team server while the server signs in at the Space; the tagged run links the Space's page where the person approves \"Spex on <server>\"; {space} is the Space's display name, {server} the server's name",
-                })}
-                components={[<ApprovalLink key="approve" href={signingIn.verificationUri} testId="home-seat-approve" />]}
-              />
-            </p>
-          ) : undefined
-        }
-        headline={
-          local
-            ? i18n._("Write clear specs. Build with playbooks.")
-            : i18n._({
-                id: "Work on {server} from this computer.",
-                values: { server },
-                comment: "headline of the welcome page at a team server where you have no project yet; {server} is the server's name",
-              })
-        }
-        steps={
-          local
-            ? [
-                { label: i18n._("Specs"), text: i18n._("Describe how the system should work and how to check it") },
-                { label: i18n._("Playbooks"), text: i18n._("Turn workflows written in plain language into steps AI can run") },
-                delivery,
-              ]
-            : [
-                {
-                  label: i18n._({
-                    id: "Groups",
-                    comment: "label of the first step on the welcome page at a team server: your groups at the Space, whose projects open there",
-                  }),
-                  text: i18n._({
-                    id: "Projects here come from your groups",
-                    comment: "the first step on the welcome page at a team server, beside its label Groups; \"here\" is that server",
-                  }),
-                },
-                {
-                  // The second step is labelled by the server's own name
-                  // (run-view-174).
-                  label: server,
-                  text: i18n._({
-                    id: "Agents run here as you",
-                    comment: "the second step on the welcome page at a team server, beside its label, the server's name; \"here\" is that server",
-                  }),
-                },
-                delivery,
-              ]
-        }
+        headline={i18n._("Write clear specs. Build with playbooks.")}
+        steps={[
+          { label: i18n._("Specs"), text: i18n._("Describe how the system should work and how to check it") },
+          { label: i18n._("Playbooks"), text: i18n._("Turn workflows written in plain language into steps AI can run") },
+          delivery,
+        ]}
         actions={
-          local ? (
-            <>
-              <button
-                type="button"
-                data-testid="home-add-project"
-                onClick={props.onOpenOwnProject ?? props.onOpenPalette}
-                className={WELCOME_PRIMARY}
-              >
-                {i18n._("Add a local project")}
-              </button>
-              <button
-                type="button"
-                data-testid="home-academy"
-                disabled={seeding || !connected}
-                onClick={() => void runAcademy()}
-                className={WELCOME_SECONDARY}
-              >
-                {seeding
-                  ? i18n._("Opening…")
-                  : i18n._("Open the Academy example")}
-              </button>
-              {/* Beside them, the member's groups (run-view-172): their
-                  projects while the home is signed in to an instance,
-                  the Space surface's sign-in while it is not. */}
-              {localGroups === undefined ? null : anySignedIn(localGroups) ? (
-                <button
-                  type="button"
-                  data-testid="home-open-from-groups"
-                  onClick={props.onOpenFromGroups ?? props.onOpenPalette}
-                  className={WELCOME_SECONDARY}
-                >
-                  {i18n._({
-                    id: "Open a project from your groups",
-                    comment: "welcome page action: opens the project palette at the projects of your groups that place can open",
-                  })}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  data-testid="home-sign-in"
-                  onClick={() => props.onNavigate("Space")}
-                  className={WELCOME_SECONDARY}
-                >
-                  {i18n._({
-                    id: "Sign in to your Space",
-                    comment: "welcome page action while this computer is signed in to no Space: shows the Space surface, where the sign-in is",
-                  })}
-                </button>
-              )}
-            </>
-          ) : (
-            // A seat's projects are its member's groups' spex
-            // repositories, opened from the palette with no folder
-            // (run-view-169), or from that place's Groups.
-            <>
+          <>
+            <button
+              type="button"
+              data-testid="home-add-project"
+              onClick={props.onOpenOwnProject ?? props.onOpenPalette}
+              className={WELCOME_PRIMARY}
+            >
+              {i18n._("Add a local project")}
+            </button>
+            <button
+              type="button"
+              data-testid="home-academy"
+              disabled={seeding || !connected}
+              onClick={() => void runAcademy()}
+              className={WELCOME_SECONDARY}
+            >
+              {seeding
+                ? i18n._("Opening…")
+                : i18n._("Open the Academy example")}
+            </button>
+            {/* Beside them, the member's groups (run-view-172): their
+                projects while the home is signed in to an instance, the
+                Space surface's sign-in while it is not. */}
+            {localGroups === undefined ? null : anySignedIn(localGroups) ? (
               <button
                 type="button"
                 data-testid="home-open-from-groups"
                 onClick={props.onOpenFromGroups ?? props.onOpenPalette}
-                className={WELCOME_PRIMARY}
+                className={WELCOME_SECONDARY}
               >
                 {i18n._({
                   id: "Open a project from your groups",
-                  comment: "welcome page action: opens the project palette at the projects of your groups that place can open",
+                  comment: "welcome page action: opens the project palette at the projects of your groups this computer can open",
                 })}
               </button>
+            ) : (
               <button
                 type="button"
-                data-testid="home-open-groups"
+                data-testid="home-sign-in"
                 onClick={() => props.onNavigate("Space")}
                 className={WELCOME_SECONDARY}
               >
                 {i18n._({
-                  id: "Open Space",
-                  comment: "secondary action of the welcome page at a team server: shows the Space surface at that server",
+                  id: "Sign in to your Space",
+                  comment: "welcome page action while this computer is signed in to no Space: shows the Space surface, where the sign-in is",
                 })}
               </button>
-            </>
-          )
+            )}
+          </>
         }
       >
         {configBroken ? (
@@ -786,7 +696,7 @@ export function CaptainHome(props: CaptainHomeProps) {
               {/* The next step its agent card gives (settings-61). */}
               {captainReadiness
                 ? faultsOf(captainReadiness).map((fault) => {
-                    const guidance = faultGuidance(captainReadiness, fault, { workshop: WORKSHOP, seat: !local });
+                    const guidance = faultGuidance(captainReadiness, fault, { workshop: WORKSHOP, seat: !isLocalPlace(store.place) });
                     return (
                       <span key={`${fault.kind}:${fault.requirement}`} title={guidance.text ? guidance.core : undefined}>
                         {" "}
@@ -1099,7 +1009,7 @@ export function CaptainHome(props: CaptainHomeProps) {
                 // The way to the project's Playbooks tab, as a key phrase
                 // (DR-069, DR-172).
                 <button type="button" data-testid="start-no-playbooks" onClick={() => props.onNavigate("Playbooks")} className="font-medium text-brand-700 hover:underline dark:text-brand-300">
-                  {i18n._({ id: "No playbooks available", comment: "the task start's link to the project's Playbooks tab while no playbook is enabled" })}
+                  {i18n._({ id: "No playbooks available", comment: "the task start's link to the project's Playbooks tab while no playbook runs in the project" })}
                 </button>
               )}
             </div>

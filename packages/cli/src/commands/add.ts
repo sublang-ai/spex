@@ -5,7 +5,8 @@
 // <folder>` (cli-2, environments-15): write the package into
 // `spex.yaml` — made explicitly naming the public registry where the
 // root holds none — then resolve, install and export, printing each
-// package added or updated and where its skills went for the agents.
+// package added or updated, where its spec stands in `specs/` with the
+// packages its links wait for, and where its skills went for the agents.
 // Every refusal comes before any write: a folder given by `--path` holds
 // the package named, its `meta.yaml` read, before `spex.yaml` is written.
 
@@ -77,7 +78,7 @@ function folderRefusal(root: string, path: string, given: string, name: string):
   const dir = join(root, ...path.split("/"));
   if (!existsSync(dir)) throw new Refusal(`--path ${given}: no folder there — give the folder holding the package's meta.yaml`);
   const file = join(dir, "meta.yaml");
-  if (!existsSync(file)) throw new Refusal(`--path ${given} has no meta.yaml, so it is no package — spex new ${name} starts one`);
+  if (!existsSync(file)) throw new Refusal(`--path ${given} has no meta.yaml, so it is no package — spex export ${name} --spec <file> | --skill <folder> builds one`);
   const { manifest, issues } = parseManifestText(readFileSync(file, "utf8"));
   if (!manifest) throw new Refusal(`--path ${given}: its meta.yaml cannot be read: ${issues.map((issue) => issue.message).join("; ")} — fix it, then retry`);
   const found = `${manifest.org}/${manifest.name}`;

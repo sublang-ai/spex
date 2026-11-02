@@ -39,15 +39,17 @@ const RECENT_WINDOW = 5;
 export type Surface =
   | "Dashboard"
   | "Workspace"
+  | "Playbooks"
   | "Space"
   | "Settings";
 
-/** The sidebar's order; Cmd/Ctrl+1..4 walk it (run-view-49). The
- * Playbooks entry retired into the project's Playbooks and Packages
- * tabs (DR-172). */
+/** The sidebar's order; Cmd/Ctrl+1..5 walk it (run-view-49,
+ * run-view-67). Playbooks is the global page: the playbooks of your
+ * global packages, which run in every project of yours (DR-176). */
 export const SURFACES: readonly Surface[] = [
   "Dashboard",
   "Workspace",
+  "Playbooks",
   "Space",
   "Settings",
 ];
@@ -61,6 +63,11 @@ export const SURFACES: readonly Surface[] = [
 export const SURFACE_LABELS: Record<Surface, () => string> = {
   Dashboard: () => i18n._("Dashboard"),
   Workspace: () => i18n._("Projects"),
+  Playbooks: () =>
+    i18n._({
+      id: "Playbooks",
+      comment: "the rail's Playbooks destination: the global playbooks, which run in every project of yours",
+    }),
   Space: () => i18n._({ id: "Space", comment: "the Space destination: groups, projects and their shared records" }),
   Settings: () => i18n._("Settings"),
 };
@@ -77,6 +84,7 @@ const INACTIVE =
 const SURFACE_ICONS: Record<Surface, IconName> = {
   Dashboard: "grid",
   Workspace: "folder",
+  Playbooks: "book",
   Space: "people",
   Settings: "gear",
 };
@@ -275,7 +283,17 @@ function placed(place: NavPlace, key: string): string {
 type Buckets = Map<string, { live: SessionInfo[]; idle: SessionInfo[] }>;
 
 export function NavRail(props: NavRailProps) {
-  const { surface, onSurface, attentionCount, collapsed, onCollapsed, places } = props;
+  const { surface, onSurface, attentionCount, collapsed, onCollapsed, places: allPlaces } = props;
+  // A place stands in the tree while a seat holds a project or is
+  // opening one (run-view-67, run-view-168): this computer always, a
+  // seat only then, so a seat holding nothing adds no heading.
+  const places = useMemo(
+    () =>
+      allPlaces.filter(
+        (place) => place.key === LOCAL_PLACE_KEY || place.projects.length > 0 || (place.opening?.length ?? 0) > 0,
+      ),
+    [allPlaces],
+  );
   // Keyed by each row's placed key (run-view-168): a project or a
   // session at two places keeps two of each.
   const [showAll, setShowAll] = useState<Record<string, boolean>>({});
@@ -294,7 +312,8 @@ export function NavRail(props: NavRailProps) {
   const typeahead = useRef({ text: "", at: 0 });
   // One clock per render keeps every row's age consistent.
   const now = Date.now();
-  // A heading per place where any seat is open (run-view-67).
+  // A heading per place while any seat holds a project or is opening
+  // one (run-view-67): one place alone needs no heading.
   const headed = places.length > 1;
 
   const isExpanded = (place: NavPlace, projectId: string): boolean =>
@@ -1008,8 +1027,8 @@ export function NavRail(props: NavRailProps) {
         <>
           {surfaceEntry("Workspace")}
           {paletteControl}
-          {/* Entries keep their places across the fold: Space and
-              Settings stay at the foot in both states. */}
+          {/* Entries keep their places across the fold: Playbooks,
+              Space and Settings stay at the foot in both states. */}
           <div className="flex-1" />
         </>
       ) : (
@@ -1034,6 +1053,7 @@ export function NavRail(props: NavRailProps) {
         </section>
       )}
 
+      {surfaceEntry("Playbooks")}
       {surfaceEntry("Space")}
       {surfaceEntry("Settings")}
 

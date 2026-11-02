@@ -249,21 +249,17 @@ export const opensInBrowser = (space: string): string =>
 export const causePhrase = (cause: string): string => cause.replace(/[.。]\s*$/, "");
 
 /** "Continue in your browser" with the link "Open <Space>" (space-3):
- * the sign-in page on the desktop, opened through the bridge as the
- * start opened it (app-shell-37), or the device flow's verification page
- * in a new tab, whose URL carries the code — never shown. A flow another
- * client runs links nothing it does not know. */
+ * an ordinary external link (app-shell-21) to the complete sign-in or
+ * verification URL. It works independently of the automatic bridge
+ * attempt (app-shell-37). The verification code is never shown, and a
+ * flow another client runs links nothing it does not know. */
 export function ContinueInBrowser({
   link,
   space,
-  bridge,
   testId = "space-signin",
 }: {
   link: string | undefined;
   space: string;
-  /** The link opens through the bridge where it exists (a browser
-   * flow's page). */
-  bridge: boolean;
   testId?: string;
 }) {
   return (
@@ -278,13 +274,6 @@ export function ContinueInBrowser({
             target="_blank"
             rel="noreferrer"
             className={LINK_CLASS}
-            onClick={(event) => {
-              if (!bridge) return;
-              const open = openExternalBridge();
-              if (!open) return;
-              event.preventDefault();
-              void open(link).catch(() => false);
-            }}
           >
             {i18n._({
               id: "Open {space}",
@@ -307,7 +296,7 @@ export function signInLines(signIn: SignInFlow, space: string): ReactNode {
   const running = signIn.running;
   if (running) {
     const link = running.flow === "browser" ? running.url : running.verificationUri;
-    return <ContinueInBrowser link={link} space={space} bridge={running.flow === "browser"} />;
+    return <ContinueInBrowser link={link} space={space} />;
   }
   if (signIn.failure !== undefined) {
     return (

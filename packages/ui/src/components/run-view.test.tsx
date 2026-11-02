@@ -565,6 +565,7 @@ describe("run-view-143/144: cumulative active time stays with its agent", () => 
         boundBy: [],
       })),
       playbooks: [],
+      standsAside: [],
     },
     seeded: false,
   };
@@ -3025,6 +3026,7 @@ describe("run-view-131: the failed-workflow notice and its recovery request", ()
     command: "code",
     intent: "Implement a change",
     roles: {},
+    origin: "own",
   };
 
   function failedView(...more: FixtureEntry[][]) {
@@ -3855,6 +3857,7 @@ describe("run-view-133: at rest the chip reads the leaf, not the last reporter",
     command: "code",
     intent: "Implement a change",
     roles: {},
+    origin: "own",
   };
 
   function props(view: SessionView) {

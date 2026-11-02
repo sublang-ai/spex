@@ -11,6 +11,7 @@ Amends [DR-010](010-interface-craft.md) with a tenth principle.
 Amends [DR-068](068-an-agents-settings-where-the-agent-is.md) in its §"One agent's control opens one agent's settings" alone: the editor's two sentences become one phrase.
 Extended by [DR-075](075-a-failure-says-what-and-what-now.md): a failure's cause is a catalogue phrase where it applies.
 Extended by [DR-172](172-surfaces-a-fresh-user-reads.md) with the principles of its surfaces.
+Extended by [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md) with one principle: a page's acts match its scope.
 
 ## Context
 

@@ -83,7 +83,7 @@ Amended by [DR-191](191-the-workshop-points-to-its-guide.md): a not-ready card o
 
 ### Protocol
 
-- The protocol version moves from 31 to 32: a client meeting an older core marks it mismatched and sends it no batch.
+- The protocol version moves from 32, which DR-176 took, to 33: a client meeting an older core marks it mismatched and sends it no batch.
 
 ## Consequences
 

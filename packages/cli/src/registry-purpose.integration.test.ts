@@ -157,7 +157,10 @@ test("registry manifests preserve legacy sources and new CLI manifests explicitl
     const work = join(scratch, "work"); mkdirSync(work);
     const skill = join(work, "greet"); mkdirSync(skill);
     writeFileSync(join(skill, "SKILL.md"), "---\nname: greet\ndescription: Greet the reader.\n---\nHello.\n");
-    const result = await cli(join(scratch, "home"), work, "new", "acme/hello", "--skill", "greet");
+    const exported = await cli(join(scratch, "home"), work, "export", "acme/hello", "--skill", "greet");
+    assert.equal(exported.code, 0, exported.out);
+    assert.equal(existsSync(join(work, "spex.yaml")), false, "export requests nothing");
+    const result = await cli(join(scratch, "home"), work, "add", "acme/hello", "--path", "spex-packages/acme/hello");
     assert.equal(result.code, 0, result.out);
     const manifest = parse(readFileSync(join(work, "spex.yaml"), "utf8"));
     assert.equal(manifest.registry, PUBLIC_REGISTRY_ORIGIN);
