@@ -31,8 +31,8 @@ import {
   type ConfigEditOpInput,
   type CredentialList,
   type ReadinessEntry,
+  type AgentSummary,
   type SessionPlayerSummary,
-  type MissingPlayer,
 } from "@sublang/spex-core/protocol";
 
 import { usePlaceStore } from "../state/place-context.js";
@@ -40,6 +40,7 @@ import { isLocalPlace } from "../state/store.js";
 import { i18n, type Language } from "../i18n.js";
 import { allRepositories } from "../lib/instances.js";
 import { patchPlayer, setCaptain } from "../lib/config-ops.js";
+import { agentBlockOf } from "../lib/drafts.js";
 import { NOTIFICATION_LABELS } from "../lib/labels.js";
 import {
   PLAIN_SHORTCUTS,
@@ -349,38 +350,83 @@ const NEW_PLAYER_BLOCK: AgentBlockInput = {
   permissions: { mode: "auto" },
 };
 
-/** A player a project's config names for a role and your own group's
- * roster lacks (settings-46): named by its project, with Add creating
- * it from the neutral block, so each person picks their own models. */
-function MissingPlayerRow({ entry }: { entry: MissingPlayer }) {
+/** Your roster with each player a project's entry names and the roster
+ * lacks, as the core reports them, beside those the global bindings
+ * name: each plays on the Captain's agent until it is set up
+ * (settings-46). */
+function withProjectNamed(
+  players: SessionPlayerSummary[],
+  named: readonly { player: string; roles: readonly { playbook: string; role: string }[] }[],
+  captain: AgentSummary,
+): SessionPlayerSummary[] {
+  const out = [...players];
+  for (const entry of named) {
+    const positions = entry.roles.map((item) => `${item.playbook}.${item.role}`);
+    const held = out.findIndex((player) => player.id === entry.player);
+    if (held < 0) {
+      out.push({ id: entry.player, agent: captain, display: captain.model ?? captain.adapter, boundBy: positions, toSetUp: true });
+    } else if (out[held]!.toSetUp) {
+      out[held] = { ...out[held]!, boundBy: [...new Set([...out[held]!.boundBy, ...positions])] };
+    }
+  }
+  return out;
+}
+
+/** The block a player to set up is created with (settings-46): the
+ * Captain's, which it plays on until then, less its instruction. */
+function captainBlock(captain: AgentSummary): AgentBlockInput {
+  const block = agentBlockOf(captain);
+  if (captain.fastMode !== undefined) block.fastMode = captain.fastMode;
+  return block;
+}
+
+/** A player a binding names — a project's entry, or the default
+ * `dev.<role>` of a playbook no entry binds — and your roster lacks
+ * (settings-46): it plays on the Captain's agent, and Add creates it
+ * from the Captain's block, so each person picks their own models. */
+function PlayerToSetUpRow({
+  player,
+  name,
+  captain,
+}: {
+  player: SessionPlayerSummary;
+  name: string;
+  captain: AgentSummary;
+}) {
   const store = usePlaceStore();
-  const project = store((state) => state.projects.find((item) => item.id === entry.repository));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
-  const positions = entry.roles.map((item) => `${item.playbook}.${item.role}`).join(", ");
   return (
     <div
-      data-testid={`player-missing-${entry.player}`}
+      data-testid={`player-row-${player.id}`}
+      data-to-set-up="true"
       className="flex flex-col gap-1 rounded-lg border border-dashed border-amber-300 bg-white px-3 py-2 text-sm dark:border-amber-800 dark:bg-neutral-900"
     >
       <div className="flex flex-wrap items-center gap-2">
-        <span className="font-mono font-medium">{entry.player}</span>
+        <PlayerName id={player.id} name={name} nameClassName="font-medium" testId={`player-name-${player.id}`} />
         <span
-          data-testid={`player-missing-note-${entry.player}`}
-          title={positions ? i18n._("Answers {positions}", { positions }) : undefined}
+          data-testid={`player-setup-${player.id}`}
+          title={player.boundBy.length > 0 ? i18n._("Answers {positions}", { positions: player.boundBy.join(", ") }) : undefined}
           className="min-w-0 flex-1 truncate text-xs text-amber-800 dark:text-amber-200"
         >
-          {i18n._("Named by {project}, not set up here", { project: project?.name ?? entry.repository })}
+          {i18n._({
+            id: "Plays on the Captain's agent",
+            comment: "a player a playbook names that is not set up here: until it is added, its roles run on the Captain's agent and model",
+          })}
         </span>
         <button
           type="button"
-          data-testid={`player-missing-add-${entry.player}`}
+          data-testid={`player-setup-add-${player.id}`}
           disabled={busy}
-          title={i18n._("Add {id} with the neutral agent, then tune it here", { id: entry.player })}
+          title={i18n._({
+            id: "Adds {id} with the Captain's agent, to tune here",
+            comment: "the title of Add on a player to set up: it creates the player from the Captain's agent block; {id} is the player",
+            values: { id: player.id },
+          })}
           onClick={() => {
             setBusy(true);
             setError(undefined);
-            void patchPlayer(entry.player, NEW_PLAYER_BLOCK, store.getClient())
+            void patchPlayer(player.id, captainBlock(captain), store.getClient())
               .catch((cause: Error) => setError(cause.message))
               .finally(() => setBusy(false));
           }}
@@ -390,7 +436,7 @@ function MissingPlayerRow({ entry }: { entry: MissingPlayer }) {
         </button>
       </div>
       {error ? (
-        <p data-testid={`player-missing-error-${entry.player}`} className="text-xs text-red-600 dark:text-red-400">
+        <p data-testid={`player-setup-error-${player.id}`} className="text-xs text-red-600 dark:text-red-400">
           {error}
         </p>
       ) : null}
@@ -747,17 +793,15 @@ function CredentialsSection({
  * what the user reads. */
 function PlayerRoster({
   players,
-  missing,
   readiness,
   captain,
   rows,
 }: {
+  /** Your roster, then each player a binding names that it lacks,
+   * flagged to set up (settings-46). */
   players: SessionPlayerSummary[];
-  /** Players a project's config names that this roster lacks
-   * (settings-46). */
-  missing: MissingPlayer[];
   readiness: ReadinessEntry[];
-  captain: AgentBlockInput;
+  captain: AgentSummary;
   rows: RowEditing;
 }) {
   const store = usePlaceStore();
@@ -790,7 +834,9 @@ function PlayerRoster({
           {i18n._("Session players")}
         </h2>
       </div>
-      {players.map((player) => (
+      {players.map((player) => player.toSetUp ? (
+        <PlayerToSetUpRow key={player.id} player={player} name={names(player.id)} captain={captain} />
+      ) : (
         <div
           key={player.id}
           data-testid={`player-row-${player.id}`}
@@ -884,17 +930,12 @@ function PlayerRoster({
           ) : null}
         </div>
       ))}
-      {missing
-        .filter((entry) => !players.some((player) => player.id === entry.player))
-        .map((entry) => (
-          <MissingPlayerRow key={`${entry.repository}:${entry.player}`} entry={entry} />
-        ))}
-      {players.length === 0 && missing.length === 0 ? (
+      {players.length === 0 ? (
         <p
           data-testid="players-empty"
           title={i18n._({
-            id: "Enabling a playbook on a project's Playbooks tab adds the players its roles need",
-            comment: "tooltip of Settings' empty players list: where players come from",
+            id: "Each role of a playbook is played by a player; add one to tune its agent",
+            comment: "tooltip of Settings' empty players list: what players are for",
           })}
           className="rounded-lg border border-dashed border-neutral-300 px-4 py-3 text-xs text-neutral-500 dark:border-neutral-700"
         >
@@ -1224,8 +1265,7 @@ export function SettingsSurface({
       </section>
 
       <PlayerRoster
-        players={summary.players}
-        missing={configState.missingPlayers ?? []}
+        players={withProjectNamed(summary.players, configState.missingPlayers ?? [], summary.captain)}
         readiness={readiness}
         captain={summary.captain}
         rows={rows}

@@ -36,7 +36,8 @@ Product names and the role names Playbook defines stay as authored; everything e
 | conversation | 对话 | |
 | project | 项目 | a Git folder Spex works in; "project folder" for its path |
 | group | 群组 | a team at a Space; a group inside a group shows by nesting, never as "subgroup" |
-| Personal | 个人 | your own records and packages; never your own group, your namespace or Only you |
+| Personal | 个人 | the place your own records go at a Space; never your own group, your namespace or Only you, nor a package's or a playbook's reach |
+| Global | 全局 | what applies to every project of yours, as npm -g; never Personal or your own group's |
 | records | 记录 | what Spex keeps for a project or a group; never spex repository, clone or unit |
 | this computer | 本机 | the local place; "Here" only as a row mark; never device or machine, nor 此设备 |
 | server | 服务器 | a team's machine, by its name; never seat or ticket |

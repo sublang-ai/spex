@@ -136,7 +136,7 @@ function groupsListProjects(groups: GroupsState): boolean {
  * group by its path at the Space. */
 function groupLabel(group: InstanceGroupState): string {
   if (group.login !== null && group.mine) {
-    return i18n._({ id: "Personal", comment: "your own records and packages at a Space, never \"your namespace\"" });
+    return i18n._({ id: "Personal", comment: "your own group at a Space, the place your own records go; never \"your namespace\"" });
   }
   if (group.login !== null) {
     return i18n._({

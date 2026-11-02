@@ -6,6 +6,10 @@
 // subagent effort (DR-095) and fast mode. Adapter, permissions
 // and workspace belong to the player's envelope and have no control
 // here, because in the released model a binding cannot carry them.
+// That the player also plays in another playbook is said here, naming
+// those playbooks, where a change to it matters (playbook-library-38).
+// Under a project's Global heading the player list opens with "Same as
+// global" (playbook-library-4, DR-176).
 
 import { useState, type RefObject } from "react";
 import type {
@@ -14,13 +18,20 @@ import type {
 } from "@sublang/spex-core/protocol";
 
 import { useAgentOptions, modelTuning } from "../lib/agent-options.js";
+import { listOf } from "../lib/environments.js";
 import { i18n } from "../i18n.js";
 import { TuningField } from "./TuningField.js";
 import { ModelDiscoveryStatus } from "./ModelDiscoveryStatus.js";
 import { useFitInBox } from "../lib/popover-fit.js";
 import { usePopover } from "../lib/usePopover.js";
 
+/** The player choice that sets a project's role back to the global
+ * binding (playbook-library-3). */
+export const SAME_AS_GLOBAL = "";
+
 export interface BindingChange {
+  /** The player chosen, or `SAME_AS_GLOBAL` under a project's Global
+   * heading. */
   playerId: string;
   model?: string | false | null;
   subagentModel?: string | false | null;
@@ -35,6 +46,7 @@ export function BindingEditorPopover({
   binding,
   players,
   playerOnly = false,
+  sameAsGlobal,
   anchorRef,
   onSave,
   onClose,
@@ -48,12 +60,16 @@ export function BindingEditorPopover({
   /** A project's entry names the player alone: tuning is personal and
    * lives in your own group's settings (playbook-library-4, DR-103). */
   playerOnly?: boolean;
+  /** Under a project's Global heading (playbook-library-4): "Same as
+   * global" stands first, chosen while the project names no other
+   * player for the role. */
+  sameAsGlobal?: { selected: boolean };
   anchorRef: RefObject<HTMLButtonElement | null>;
   onSave(next: BindingChange): Promise<unknown>;
   onClose(): void;
 }) {
   const [draft, setDraft] = useState<BindingChange>({
-    playerId: binding.playerId,
+    playerId: sameAsGlobal?.selected ? SAME_AS_GLOBAL : binding.playerId,
     model: binding.model,
     subagentModel: binding.subagentModel,
     effort: binding.effort,
@@ -70,7 +86,8 @@ export function BindingEditorPopover({
   // pane or far along the roles row its control sits
   // (playbook-library-43, DR-041 §9).
   useFitInBox(boxRef);
-  const lane = players.find((player) => player.id === draft.playerId);
+  // "Same as global" runs the global binding's player, the one shown.
+  const lane = players.find((player) => player.id === (draft.playerId === SAME_AS_GLOBAL ? binding.playerId : draft.playerId));
   const discovery = useAgentOptions(lane?.agent.adapter ?? "claude");
   const effectiveModel = draft.model === false ? "" : draft.model ?? lane?.agent.model ?? "";
   const tuning = modelTuning(discovery.options, effectiveModel);
@@ -89,9 +106,10 @@ export function BindingEditorPopover({
   // (DR-095); "Agent chooses" is the provider-default choice.
   const invalidSubagentEffort = draft.subagentEffort === ""
     || Boolean(discovery.options && typeof draft.subagentEffort === "string" && !tuning.subagentEfforts.includes(draft.subagentEffort));
-  // Every other position this lane already answers: picking it here
+  // Every other playbook this lane already plays in: picking it here
   // joins that one conversation rather than opening a new one.
-  const others = (lane?.boundBy ?? []).filter((held) => held !== position);
+  const playbookOf = (held: string): string => held.slice(0, held.indexOf(".") < 0 ? held.length : held.indexOf("."));
+  const others = [...new Set((lane?.boundBy ?? []).map(playbookOf))].filter((playbook) => playbook !== playbookOf(position));
 
   return (
     <div
@@ -113,6 +131,11 @@ export function BindingEditorPopover({
           }
           className="rounded border border-neutral-300 bg-white px-2 py-1 font-mono dark:border-neutral-700 dark:bg-neutral-900"
         >
+          {sameAsGlobal ? (
+            <option value={SAME_AS_GLOBAL}>
+              {i18n._({ id: "Same as global", comment: "the first choice of a role's player under a project's Global heading: play it as the global binding does" })}
+            </option>
+          ) : null}
           {players.map((player) => (
             <option key={player.id} value={player.id}>
               {player.id} · {player.display}
@@ -124,7 +147,11 @@ export function BindingEditorPopover({
             data-testid="binding-shared-note"
             className="text-xs text-brand-700 dark:text-brand-300"
           >
-            {i18n._("Also answers {positions}", { positions: others.join(", ") })}
+            {i18n._({
+              id: "Also plays in {playbooks}",
+              comment: "beneath a role's player choice: the player plays roles of these other playbooks too, one conversation across them; {playbooks} names them, such as /code and /fix",
+              values: { playbooks: listOf(others.map((playbook) => `/${playbook}`)) },
+            })}
           </span>
         ) : null}
       </label>
@@ -132,8 +159,8 @@ export function BindingEditorPopover({
       {playerOnly ? (
         // One phrase where the boundary applies (DR-069): a project's
         // entry names players, and each person tunes their own.
-        <p data-testid="binding-personal-note" className="text-xs text-neutral-500 dark:text-neutral-400">
-          {i18n._("Tuning is personal — set it in Settings")}
+        <p data-testid="binding-tuning-note" className="text-xs text-neutral-500 dark:text-neutral-400">
+          {i18n._({ id: "Tuning lives in your players, in Settings", comment: "in a role's editor on a project's Playbooks tab: the project names a player alone, and each person tunes their own players in Settings" })}
         </p>
       ) : <>
       {/* Each model beside its effort, stacking at the floor

@@ -103,7 +103,7 @@ export interface DraftSourceMode {
   pastePath: string;
 }
 
-/** The Boss's own edits to the Enable tab (playbook-library-61):
+/** The Boss's own edits to the Add tab (playbook-library-61):
  * they take precedence over the agent's proposal and the derived
  * defaults, so a proposal landing later never overwrites them. */
 export interface DraftRegisterForm {
@@ -113,9 +113,6 @@ export interface DraftRegisterForm {
   players: Record<string, string>;
   /** The agent block each new lane carries, once edited. */
   newPlayers: Record<string, AgentBlockInput>;
-  /** The spex repository chosen to enable in; absent, the project
-   * (playbook-library-61). */
-  repository?: string;
 }
 
 /** What `environment.playbooks` answered, and for which project. */
@@ -439,18 +436,19 @@ export interface AppState extends AttachmentState {
    * project's Playbooks tab focuses its id field on arrival
    * (playbook-library-51). */
   newPlaybookRequested: boolean;
-  /** The id of a playbook the Playbooks tab should bring into view on
-   * its next render — the one an enabling just made, listed once
-   * whichever config it was enabled in (playbook-library-1,
-   * playbook-library-61). */
+  /** The id of a playbook the Playbooks tab or surface should bring
+   * into view on its next render — the one an Add just made
+   * (playbook-library-1, playbook-library-61). */
   revealPlaybook?: string;
   /** Each spex repository's environment as last read or broadcast
    * (playbook-library-92), by the repository's key. */
   environments: Record<string, EnvironmentState>;
   /** A failed environment read, by repository. */
   environmentErrors: Record<string, string>;
-  /** The playbooks the chosen project's and your own group's
-   * environments export (playbook-library-1); undefined until read. */
+  /** The playbooks the chosen project's and the global environments
+   * place, read for that project — or, with no project, for the
+   * Playbooks surface (playbook-library-1, playbook-library-122);
+   * undefined until read. */
   playbookLists?: PlaybookLists;
   /** Read what each environment exports, the project's and your own
    * group's; the newest read wins. */
@@ -479,12 +477,12 @@ export interface AppState extends AttachmentState {
   /** What New playbook fills its Org and License with for a project
    * (playbook-library-51, playbook-library-103). */
   loadDraftDefaults(projectId: string): Promise<CommandResults["draft.defaults"]>;
-  /** Create a draft in the spex repository of the workspace's current
-   * project, else the first registered one, its spec package naming
-   * the org and license given, and open its workspace; the core
-   * refuses an id a configured playbook or built-in holds. With no
-   * project registered there is nowhere to keep it. */
-  createDraft(draftId: string, fields: { org: string; license: string }): Promise<DraftInfo>;
+  /** Create a draft in the environment `repository` names — a
+   * project's, or the global one by your own group's key — its spec
+   * package naming the org and license given, and open its workspace;
+   * the core refuses an id a playbook of either environment holds
+   * (playbook-library-51, core-service-96). */
+  createDraft(draftId: string, fields: { org: string; license: string }, repository: string): Promise<DraftInfo>;
   /** Open a draft's workspace: subscribe, replay its records and
    * source, then stream (playbook-library-62). */
   openDraft(draftId: string): Promise<void>;
@@ -501,8 +499,8 @@ export interface AppState extends AttachmentState {
   refreshDraftSource(draftId: string): Promise<DraftSourceState | null>;
   compileDraft(draftId: string): Promise<void>;
   abortDraftCompile(draftId: string): Promise<void>;
-  /** Enable the compiled playbook in a spex repository's config — the
-   * project's by default — keeping the authoring session
+  /** Add the compiled playbook to the environment the session belongs
+   * to — the project's, or the global — keeping the authoring session
    * (playbook-library-61). */
   registerDraft(
     draftId: string,
@@ -511,7 +509,6 @@ export interface AppState extends AttachmentState {
       intent: string;
       bindings: Record<string, string>;
       newPlayers?: Record<string, AgentBlockInput>;
-      repository?: string;
     },
   ): Promise<void>;
   setDraftPlayer(draftId: string, playerId: string | null): Promise<void>;
@@ -1414,7 +1411,7 @@ function placeState(
   /** Subscribe to a draft and replay its whole stored transcript and
    * source (playbook-library-62): the thread is built again from the
    * file, so a history replaced on disk replaces it, while the
-   * composer, the Source tab's edits and the Enable form stand; live
+   * composer, the Source tab's edits and the Add form stand; live
    * records arriving meanwhile buffer and apply afterwards, so a
    * reconnect can never lose the gap. */
   async function ensureDraftSubscribed(draftId: string): Promise<void> {
@@ -2891,10 +2888,8 @@ function placeState(
       return getClient().command("draft.defaults", { projectId });
     },
 
-    async createDraft(draftId: string, fields: { org: string; license: string }): Promise<DraftInfo> {
-      const projectId = workingProject(get());
-      if (!projectId) throw new Error(draftNeedsProject());
-      const draft = await getClient().command("draft.create", { projectId, draftId, org: fields.org, license: fields.license });
+    async createDraft(draftId: string, fields: { org: string; license: string }, repository: string): Promise<DraftInfo> {
+      const draft = await getClient().command("draft.create", { projectId: repository, draftId, org: fields.org, license: fields.license });
       adoptDraft(draft);
       await get().openDraft(draft.id);
       return draft;
@@ -3035,14 +3030,15 @@ function placeState(
         intent: input.intent,
         bindings: input.bindings,
         ...(input.newPlayers ? { newPlayers: input.newPlayers } : {}),
-        ...(input.repository ? { repository: input.repository } : {}),
       });
       // The session stays, to be worked on further and published; the
       // list opens with the new card in view (playbook-library-61).
       // The config it wrote is everyone's; the workspace closes only if
-      // it still shows the session that enabled.
+      // it still shows the session that added it. The lists are read
+      // again for the page that shows them — the project's tab, or the
+      // Playbooks surface.
       set({ configState });
-      void get().loadPlaybookLists(projectId).catch(() => {});
+      reloadPlaybookLists();
       if (!isShown(draftId, instance) || get().openDraftId !== draftId) return;
       set({ revealPlaybook: draftId, openDraftId: undefined });
     },

@@ -42,6 +42,7 @@ import { MediaOwnerProvider } from "./StoredMedia.js";
 import { draftMediaOwner } from "../lib/drafts.js";
 import { Segment, latestCall } from "./PlayerPane.js";
 import { RunningMark } from "./RunningMark.js";
+import { withCode } from "./PlaybookCard.js";
 
 const RENDER_WINDOW = 200;
 
@@ -165,17 +166,26 @@ function DirectiveCard({
       className="flex flex-col gap-1 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
     >
       <div className="flex flex-wrap items-center gap-2">
-        <span className="font-medium">{i18n._("Proposed enabling")}</span>
+        <span className="font-medium">
+          {withCode(
+            (slot) =>
+              i18n._({
+                id: "Proposed {command}",
+                comment: "the card for the agent's proposal in an authoring conversation; {command} is the proposed slash command, such as /triage",
+                values: { command: slot },
+              }),
+            `/${proposal.command}`,
+          )}
+        </span>
         <button
           type="button"
-          data-testid="open-enable"
+          data-testid="open-add"
           onClick={onOpenRegister}
           className="ml-auto rounded-md border border-brand-300 px-2 py-0.5 text-xs text-brand-600 hover:bg-brand-50 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950"
         >
-          {i18n._("Open Enable")}
+          {i18n._({ id: "Open Add", comment: "on the agent's proposal card: opens the authoring workspace's Add tab" })}
         </button>
       </div>
-      <div className="font-mono text-xs">/{proposal.command}</div>
       <div className="text-xs text-neutral-600 dark:text-neutral-400">{proposal.intent}</div>
       <ul className="flex flex-col gap-0.5 text-xs">
         {Object.entries(proposal.players).map(([role, playerId]) => (

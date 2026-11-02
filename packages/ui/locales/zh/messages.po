@@ -151,10 +151,10 @@ msgstr "{command} 在 {step} 失败"
 msgid "{command} is not installed"
 msgstr "未安装 {command}"
 
-#. a hint on a built-in playbook's card: it runs only once /review is enabled too; {command} is its command, such as /code
-#: src/components/PlaybooksTab.tsx
-msgid "{command} needs /review enabled"
-msgstr "{command} 需要先启用 /review"
+#. a hint on a built-in playbook's card: it runs only once /review runs too; the tagged /review shows /review's row; {command} is its command, such as /code
+#: src/components/PlaybookCard.tsx
+msgid "{command} needs <0>/review</0> to run"
+msgstr "{command} 需要 <0>/review</0> 才能运行"
 
 #: src/lib/client.ts
 msgid "{command} timed out"
@@ -352,7 +352,7 @@ msgstr "{days} 天前"
 msgid "{declined, plural, =0 {To fix ({count})} other {To fix ({count}) · # set aside}}"
 msgstr "{declined, plural, =0 {待处理（{count}）} other {待处理（{count}） · # 项暂不处理}}"
 
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "{diagnostic} — delete the session, or repair the file and restart Spex"
 msgstr "{diagnostic} — 删除该会话，或修复文件后重启 Spex"
 
@@ -371,7 +371,7 @@ msgid "{effort} (unsupported)"
 msgstr "{effort}（不支持）"
 
 #. joins the two playbook names the /dev hint asks for
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookCard.tsx
 msgid "{first} and {second}"
 msgstr "{first} 和 {second}"
 
@@ -416,11 +416,7 @@ msgstr "{hours} 小时 {minutes} 分"
 msgid "{hours}h ago"
 msgstr "{hours} 小时前"
 
-#: src/components/PlaybooksTab.tsx
-msgid "{id} is a built-in — enable it instead"
-msgstr "{id} 是内置规程 — 请直接启用它"
-
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "{id} is already a playbook of {package}"
 msgstr "{id} 已是 {package} 中的规程"
 
@@ -521,7 +517,6 @@ msgid "{name} ({requirements})"
 msgstr "{name}（{requirements}）"
 
 #: src/components/DraftRegisterTab.tsx
-#: src/components/PlaybooksTab.tsx
 msgid "{name} agent"
 msgstr "{name} 智能体"
 
@@ -629,10 +624,6 @@ msgstr "收到 {received}；未发出任何内容"
 #: src/components/EnvironmentSection.tsx
 msgid "{requirement} by {requirer}"
 msgstr "{requirer} 要求 {requirement}"
-
-#: src/components/PlaybooksTab.tsx
-msgid "{role} needs a player id: lowercase segments joined by dots"
-msgstr "{role} 需要 Player ID：用点连接的小写分段"
 
 #: src/components/BindingEditor.tsx
 msgid "{role} runs as"
@@ -951,7 +942,7 @@ msgstr "有 Player 在等待你的回复：{detail}"
 msgid "A player named {id} already exists — edit it above instead."
 msgstr "已存在名为 {id} 的 Player — 请在上方编辑。"
 
-#. tooltip of the Enable form's held Enable: what it waits for
+#. tooltip of the Add form's held Add: what it waits for
 #: src/components/DraftRegisterTab.tsx
 msgid "A player per role, a command and an intent"
 msgstr "每个角色一个 Player、一条命令和一个意图"
@@ -1056,16 +1047,16 @@ msgstr "适配器选项；模型支持未验证。"
 #. create this player in your own roster
 #. register the typed path as an existing repository
 #. register the typed path as an existing repository
+#. the Add form's act: add the compiled playbook to the packages of the page it was made on, with these players
+#. the authoring workspace's last tab: add the compiled playbook to the packages of the page it was made on, with a player per role
+#: src/components/AuthoringWorkspace.tsx
+#: src/components/DraftRegisterTab.tsx
 #: src/components/ProjectPalette.tsx
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceMembers.tsx
 #: src/lib/environments.ts
 msgid "Add"
 msgstr "添加"
-
-#: src/components/SettingsSurface.tsx
-msgid "Add {id} with the neutral agent, then tune it here"
-msgstr "以中性智能体添加 {id}，再在此调整"
 
 #. the name of the group picker "Add to a group…" opens; {name} is the project's name
 #: src/components/SpaceGroups.tsx
@@ -1152,6 +1143,16 @@ msgstr "加入“接下来”"
 msgid "Add…"
 msgstr "添加…"
 
+#. authoring state chip, at most 14 characters: the compiled playbook is added to the packages of the page it was made on, so it runs there
+#: src/lib/drafts.ts
+msgid "Added"
+msgstr "已添加"
+
+#. after adding an authored playbook: sessions already running do not offer it until restarted
+#: src/components/PlaybookAuthoring.tsx
+msgid "Added · restart running sessions to use it"
+msgstr "已添加 · 重启运行中的会话以使用"
+
 #. the receipt after Add…, while the package's version is still being picked
 #: src/components/EnvironmentSection.tsx
 msgid "Added {name}"
@@ -1167,6 +1168,11 @@ msgstr "已添加 {name} {version}"
 msgid "Added {name} {version} · {provides}"
 msgstr "已添加 {name} {version} · {provides}"
 
+#. said by the live region once an authored playbook is added
+#: src/components/PlaybooksTab.tsx
+msgid "Added /{command}"
+msgstr "已添加 /{command}"
+
 #: src/components/CaptainHome.tsx
 #: src/components/Composer.tsx
 msgid "Added to Up next — see the project's Overview."
@@ -1175,9 +1181,11 @@ msgstr "已加入“接下来” — 见项目概览。"
 #. a repair's control while the folder is paired with the project
 #. a repair's control while the folder is paired with the project
 #. the Add control, while the Space adds the person
+#. the Add form's request is in flight: the playbook is being added
 #. the Use this folder control, while the folder is paired
 #. the package is being added to spex.yaml
 #. the request is being written
+#: src/components/DraftRegisterTab.tsx
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceMembers.tsx
@@ -1186,10 +1194,20 @@ msgstr "已加入“接下来” — 见项目概览。"
 msgid "Adding…"
 msgstr "添加中…"
 
+#. the title of Add on a player to set up: it creates the player from the Captain's agent block; {id} is the player
+#: src/components/SettingsSurface.tsx
+msgid "Adds {id} with the Captain's agent, to tune here"
+msgstr "以 Captain 的智能体添加 {id}，可在此调整"
+
 #. the title of Add in Add…'s registry tab: its consequence; {name} is the package
 #: src/lib/environments.ts
 msgid "Adds {name} to spex.yaml and installs it"
 msgstr "将 {name} 添加到 spex.yaml 并安装"
+
+#. above the Add form: the playbook added is the one the last compile made, and its source has changed since
+#: src/components/DraftRegisterTab.tsx
+msgid "Adds the last compile — the source changed since."
+msgstr "添加上次编译的结果 — 源文此后已更改。"
 
 #. a failure's way back: open this agent's settings for this conversation
 #: src/components/RunView.tsx
@@ -1309,13 +1327,17 @@ msgstr "允许此工具操作？"
 msgid "Already the project folder of {project}"
 msgstr "已是 {project} 的项目文件夹"
 
+#. a short mark beside a role's player in the Add form: the player plays in this other playbook too; {playbook} is it, such as /code
 #: src/components/DraftRegisterTab.tsx
-msgid "also {position}"
-msgstr "兼 {position}"
+msgid "also in {playbook}"
+msgstr "也在 {playbook}"
 
+#. beneath a role's player choice: the player plays roles of these other playbooks too, one conversation across them; {playbooks} names them, such as /code and /fix
+#. beneath a role's player choice: the player plays roles of these other playbooks too, one conversation across them; {playbooks} names them, such as /code and /fix
 #: src/components/BindingEditor.tsx
-msgid "Also answers {positions}"
-msgstr "同时担任 {positions}"
+#: src/components/DraftRegisterTab.tsx
+msgid "Also plays in {playbooks}"
+msgstr "也在 {playbooks} 中扮演"
 
 #: src/components/AgentSettings.tsx
 msgid "Also sets {positions}"
@@ -1475,8 +1497,8 @@ msgid "Attachments"
 msgstr "附件"
 
 #. heading over a project's changed authoring sessions
-#. section heading: playbooks being written in this project
-#: src/components/PlaybooksTab.tsx
+#. section heading: playbooks being written here
+#: src/components/PlaybookAuthoring.tsx
 #: src/lib/space.ts
 msgid "Authoring"
 msgstr "编写"
@@ -1514,11 +1536,6 @@ msgstr "自动（受保护）"
 msgid "auto: the agent works on its own inside the repo, with the adapter's own protections on"
 msgstr "自动：智能体在仓库内自主工作，并启用适配器自带的保护"
 
-#. section heading: playbooks a package provides that neither the project's config nor your Personal one enables
-#: src/components/PlaybooksTab.tsx
-msgid "Available"
-msgstr "可用"
-
 #: src/components/SpecView.tsx
 msgid "back to {id}"
 msgstr "返回 {id}"
@@ -1554,7 +1571,7 @@ msgid "binary file · {size}"
 msgstr "二进制文件 · {size}"
 
 #: src/components/BindingEditor.tsx
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookCard.tsx
 msgid "Bind {role}"
 msgstr "绑定 {role}"
 
@@ -1632,32 +1649,12 @@ msgstr "已修复缺陷"
 msgid "build and review step by step"
 msgstr "逐步开发和审阅"
 
-#. a playbook row: it comes with Spex, from no package of yours
-#: src/components/PlaybooksTab.tsx
-msgid "built in"
-msgstr "内置"
-
 #. the tooltip of a package's source glyph: the app ships it
 #. the tooltip of a package's source glyph: the app ships it
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookCard.tsx
 #: src/lib/environments.ts
 msgid "Built in"
 msgstr "内置"
-
-#. the built-in playbooks' line on the Packages tab, while spex.lock records no version of them
-#: src/components/EnvironmentSection.tsx
-msgid "Built-in playbooks"
-msgstr "内置规程"
-
-#. the built-in playbooks' line on the Packages tab: {locked} is the version spex.lock records
-#: src/components/EnvironmentSection.tsx
-msgid "Built-in playbooks {locked}"
-msgstr "内置规程 {locked}"
-
-#. the built-in playbooks' line while the app ships a newer release: {locked} is the version spex.lock records, {shipped} the one this app ships
-#: src/components/EnvironmentSection.tsx
-msgid "Built-in playbooks {locked} · {shipped} shipped with this app"
-msgstr "内置规程 {locked} · 本应用附带 {shipped}"
 
 #. permission mode: no prompts at all
 #: src/components/AgentEditor.tsx
@@ -1949,9 +1946,10 @@ msgstr "判断怎么做"
 msgid "Choose which agent answers"
 msgstr "选择由哪个智能体答复"
 
-#: src/components/PlaybooksTab.tsx
-msgid "Choose which session player answers {role}"
-msgstr "选择由哪个会话 Player 担任 {role}"
+#. tooltip of a role's ✎ on a playbook row; {role} is the role
+#: src/components/PlaybookCard.tsx
+msgid "Choose who plays {role}"
+msgstr "选择谁扮演 {role}"
 
 #. a call's outcome: the analyst chose the code path
 #: src/lib/step-words.ts
@@ -2154,8 +2152,8 @@ msgstr "合并…"
 msgid "Combining…"
 msgstr "合并中…"
 
-#. after enabling an authored playbook: {folder} is its package's folder in the project folder, e.g. spex-packages/acme/triage
-#: src/components/PlaybooksTab.tsx
+#. after adding an authored playbook to a project: {folder} is its package's folder in the project folder, e.g. spex-packages/acme/triage
+#: src/components/PlaybookAuthoring.tsx
 msgid "Commit {folder} with your code"
 msgstr "把 {folder} 和代码一起提交"
 
@@ -2224,11 +2222,11 @@ msgstr "编译"
 msgid "Compile canceled"
 msgstr "编译已取消"
 
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "Compile failed at {phase}"
 msgstr "编译在 {phase} 阶段失败"
 
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "Compile failed at an unknown phase"
 msgstr "编译在未知阶段失败"
 
@@ -2250,7 +2248,7 @@ msgstr "{age}编译"
 msgid "Compiled {age}; the source changed since"
 msgstr "{age}编译；此后源文已更改"
 
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "Compiled {id}"
 msgstr "已编译 {id}"
 
@@ -2267,7 +2265,7 @@ msgstr "需先编译"
 msgid "Compiling"
 msgstr "编译中"
 
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "Compiling {id}"
 msgstr "正在编译 {id}"
 
@@ -2297,7 +2295,6 @@ msgid "Config file invalid"
 msgstr "配置文件无效"
 
 #: src/components/DraftRegisterTab.tsx
-#: src/components/PlaybooksTab.tsx
 msgid "Configure {name}"
 msgstr "配置 {name}"
 
@@ -2314,9 +2311,10 @@ msgstr "配置 Captain 智能体"
 msgid "Confirm"
 msgstr "确认"
 
+#. the title of the authoring workspace's Add tab
 #: src/components/AuthoringWorkspace.tsx
-msgid "Confirm the command, intent, players and where to enable it"
-msgstr "确认命令、意图、Player 以及启用位置"
+msgid "Confirm the command, intent and players, then add it"
+msgstr "确认命令、意图和 Player，然后添加"
 
 #. verdict control, busy: the verdict is in flight
 #. verdict control, busy: the verdict is in flight
@@ -2640,11 +2638,11 @@ msgstr "决策记录 {count}"
 #. confirm: remove the authoring session for good
 #. remove the authoring session for good
 #: src/components/NavRail.tsx
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "Delete"
 msgstr "删除"
 
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "Delete authoring session {id}"
 msgstr "删除编写会话 {id}"
 
@@ -2656,7 +2654,7 @@ msgstr "删除失败"
 msgid "Delete session {title}"
 msgstr "删除会话 {title}"
 
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "Delete this authoring session? Its spec package folder stays."
 msgstr "删除此编写会话？其规约包文件夹会保留。"
 
@@ -2685,12 +2683,12 @@ msgstr "删除此会话？它由终端运行，其历史也会一并删除。未
 msgid "deleted"
 msgstr "已删除"
 
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "Deleted {id}; its spec package folder stays at {path}"
 msgstr "已删除 {id}；其规约包文件夹保留在 {path}"
 
 #. tooltip of an authoring session's Delete on the Playbooks tab: the session and its conversation go, its package folder stays in the project
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "Deletes the session and its conversation · its package folder stays"
 msgstr "删除会话及其对话 · 规约包文件夹保留"
 
@@ -2700,7 +2698,7 @@ msgid "deleting…"
 msgstr "删除中…"
 
 #. the delete request is in flight
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "Deleting…"
 msgstr "删除中…"
 
@@ -2743,30 +2741,11 @@ msgstr "桌面通知"
 msgid "did not publish"
 msgstr "未发布"
 
-#. stop offering this playbook in this config
-#. stop offering this playbook in this config
-#: src/components/PlaybooksTab.tsx
-msgid "Disable"
-msgstr "停用"
-
-#: src/components/PlaybooksTab.tsx
-msgid "Disable {id}"
-msgstr "停用 {id}"
-
-#: src/components/PlaybooksTab.tsx
-msgid "Disable /{command}"
-msgstr "停用 /{command}"
-
-#. in a playbook's overflow: stop offering it from your Personal config, in every project of yours
-#: src/components/PlaybooksTab.tsx
-msgid "Disable for Personal"
-msgstr "为个人停用"
-
-#. the disable request is in flight
-#. the disable request is in flight
-#: src/components/PlaybooksTab.tsx
-msgid "Disabling…"
-msgstr "停用中…"
+#. the dot on a role under a project's Global heading: the project plays it on another player than the global binding
+#. the dot on a role under a project's Global heading: the project plays it on another player than the global binding
+#: src/components/PlaybookCard.tsx
+msgid "differs from global"
+msgstr "与全局不同"
 
 #. act: throw the interrupted attempt away
 #. confirm: drop the unsaved draft
@@ -2956,18 +2935,23 @@ msgid "e.g. .git, docs/generated"
 msgstr "例如 .git、docs/generated"
 
 #. the hint inside the new-playbook license field; an SPDX license id
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "e.g. Apache-2.0"
 msgstr "例如 Apache-2.0"
 
 #. the hint inside the new-playbook id field; triage is an example id
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "e.g. triage"
 msgstr "例如 triage"
 
 #: src/components/SpecView.tsx
 msgid "Each record states a design decision's context and reasons; spec items cite them by their DR number."
 msgstr "每条记录写下一个设计决定的背景和理由；规约条目以 DR 编号引用它们。"
+
+#. tooltip of Settings' empty players list: what players are for
+#: src/components/SettingsSurface.tsx
+msgid "Each role of a playbook is played by a player; add one to tune its agent"
+msgstr "规程的每个角色由一个 Player 扮演；添加一个以调整其智能体"
 
 #. editor mode: the plain text field
 #. open the whole-file editor on the source
@@ -3041,88 +3025,6 @@ msgstr "推理强度"
 #: src/components/BindingEditor.tsx
 msgid "Effort options apply to the adapter; support for this model is unverified."
 msgstr "推理强度选项适用于适配器；该模型的支持情况未验证。"
-
-#. enable a playbook: name a player for each of its roles
-#. enable this playbook in this config
-#. enable this playbook in this config
-#. enable this playbook in this config
-#. enable this playbook in this config
-#: src/components/AuthoringWorkspace.tsx
-#: src/components/DraftRegisterTab.tsx
-#: src/components/EnvironmentSection.tsx
-#: src/components/PackageArtifacts.tsx
-#: src/components/PlaybooksTab.tsx
-msgid "Enable"
-msgstr "启用"
-
-#: src/components/PackageArtifacts.tsx
-#: src/components/PlaybooksTab.tsx
-msgid "Enable /{command}"
-msgstr "启用 /{command}"
-
-#. accessible name of Enable for <project>
-#: src/components/PlaybooksTab.tsx
-msgid "Enable /{command} for {project}"
-msgstr "为 {project} 启用 /{command}"
-
-#. field of the Enable form: the project, or Personal for every project of yours
-#: src/components/DraftRegisterTab.tsx
-msgid "Enable for"
-msgstr "启用于"
-
-#. on a playbook your Personal packages list too: enable it in the project's config, for every member; {project} is the project's name
-#: src/components/PlaybooksTab.tsx
-msgid "Enable for {project}"
-msgstr "为 {project} 启用"
-
-#. in a playbook's overflow: enable it in your Personal config, for every project of yours
-#: src/components/PlaybooksTab.tsx
-msgid "Enable for Personal"
-msgstr "为个人启用"
-
-#. authoring state chip, at most 14 characters: the compiled playbook is enabled in a config
-#. section heading: the playbooks the project's config or your own group's enables
-#: src/components/PlaybooksTab.tsx
-#: src/lib/drafts.ts
-msgid "Enabled"
-msgstr "已启用"
-
-#. a package's playbook line on the Packages tab: enabled in your Personal config, for every project of yours
-#: src/components/PackageArtifacts.tsx
-msgid "Enabled · Personal"
-msgstr "已启用 · 个人"
-
-#. after enabling an authored playbook: sessions already running do not offer it until restarted
-#: src/components/PlaybooksTab.tsx
-msgid "Enabled · restart running sessions to use it"
-msgstr "已启用 · 重启运行中的会话后可用"
-
-#: src/components/PlaybooksTab.tsx
-msgid "Enabled /{command}"
-msgstr "已启用 /{command}"
-
-#. a package's playbook line on the Packages tab: enabled in the project's config, for every member; {project} is the project's name
-#: src/components/PackageArtifacts.tsx
-msgid "Enabled in {project}"
-msgstr "已在 {project} 启用"
-
-#: src/components/DraftRegisterTab.tsx
-msgid "Enables the last compile — the source changed since."
-msgstr "将启用上一次编译的结果 — 源文此后已更改。"
-
-#. tooltip of Settings' empty players list: where players come from
-#: src/components/SettingsSurface.tsx
-msgid "Enabling a playbook on a project's Playbooks tab adds the players its roles need"
-msgstr "在项目的规程标签页中启用规程，会添加其角色所需的 Player"
-
-#. the enable request is in flight
-#. the enable request is in flight
-#. the enable request is in flight
-#: src/components/DraftRegisterTab.tsx
-#: src/components/PackageArtifacts.tsx
-#: src/components/PlaybooksTab.tsx
-msgid "Enabling…"
-msgstr "启用中…"
 
 #: src/components/ParkedRun.tsx
 msgid "End this run. It will not be resumed."
@@ -3470,21 +3372,6 @@ msgstr "用于发布和私有规约包"
 msgid "For this conversation, from the next message"
 msgstr "仅限本对话，从下一条消息起生效"
 
-#. tooltip of Enable on a playbook the project's packages list: it is written to the project's config
-#. tooltip of Enable on a playbook the project's packages list: it is written to the project's config
-#: src/components/PackageArtifacts.tsx
-#: src/components/PlaybooksTab.tsx
-msgid "For you and every member of {project}"
-msgstr "供你和 {project} 的所有成员使用"
-
-#. tooltip of Enable on a playbook your Personal packages list: it is written to your Personal config
-#. tooltip of Enable on a playbook your Personal packages list: it is written to your Personal config
-#. tooltip of Enable on a playbook your Personal packages list: it is written to your Personal config
-#: src/components/PackageArtifacts.tsx
-#: src/components/PlaybooksTab.tsx
-msgid "For you, in every project of yours"
-msgstr "供你在所有项目中使用"
-
 #. a call's outcome: the review raised nothing
 #: src/lib/step-words.ts
 msgid "found no problems"
@@ -3524,7 +3411,7 @@ msgid "From {name} {version} · placed by Spex"
 msgstr "来自 {name} {version} · 由 Spex 放入"
 
 #. a playbook row: the package and version it comes from, e.g. from acme/triage 1.2.0
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookCard.tsx
 msgid "from {package}"
 msgstr "来自 {package}"
 
@@ -3536,13 +3423,13 @@ msgstr "来自 {state}"
 #. the tooltip of a package's source glyph: it comes from a folder; {path} is the folder, such as spex-packages/acme/triage
 #. the tooltip of a package's source glyph: it comes from a folder; {path} is the folder, such as spex-packages/acme/triage
 #. tooltip: a package taken from a folder; {path} is that folder
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookCard.tsx
 #: src/lib/environments.ts
 msgid "From folder {path}"
 msgstr "来自文件夹 {path}"
 
 #. tooltip: a package taken from a Git repository
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookCard.tsx
 msgid "From Git"
 msgstr "来自 Git"
 
@@ -3579,7 +3466,7 @@ msgstr "来自本次更改前的编译"
 
 #. the tooltip of a package's source glyph, for a package another package requires: it comes from the registry
 #. tooltip: a package taken from the registry
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookCard.tsx
 #: src/lib/environments.ts
 msgid "From the registry"
 msgstr "来自注册中心"
@@ -3638,9 +3525,14 @@ msgstr "GitHub：{state}"
 msgid "Give the player an id first."
 msgstr "请先为该 Player 设置 id。"
 
+#. heading on a project's Playbooks tab: the playbooks of your global packages, which run in every project of yours
+#: src/components/PlaybooksTab.tsx
+msgid "Global"
+msgstr "全局"
+
 #: src/lib/shortcuts.ts
-msgid "Go to Dashboard, Projects, Space, Settings"
-msgstr "前往仪表盘、项目、Space、设置"
+msgid "Go to Dashboard, Projects, Playbooks, Space, Settings"
+msgstr "前往仪表盘、项目、规程、Space、设置"
 
 #. the field naming a new group at the Space
 #: src/components/SpaceMembers.tsx
@@ -3748,16 +3640,6 @@ msgstr "分阶段实现编码意图，每个阶段经审阅、形成一个提交
 #: src/lib/step-words.ts
 msgid "Implement an IR task"
 msgstr "实现 IR 任务"
-
-#. where a playbook is enabled: in the project's config, for every member; {project} is the project's name
-#: src/components/PlaybooksTab.tsx
-msgid "in {project}"
-msgstr "已在 {project} 启用"
-
-#. where a playbook is enabled: in the project's config and in your Personal one; {project} is the project's name
-#: src/components/PlaybooksTab.tsx
-msgid "in {project} · Personal"
-msgstr "已在 {project} 启用 · 个人"
 
 #: src/App.tsx
 #: src/components/NavRail.tsx
@@ -3919,7 +3801,7 @@ msgstr "中断的同步"
 msgid "Interrupted turn"
 msgstr "中断的轮次"
 
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookCard.tsx
 msgid "Invalid: {reason}"
 msgstr "无效：{reason}"
 
@@ -3966,11 +3848,11 @@ msgstr "该端点"
 #. a package left out of the agents' folders because its files are not on this computer
 #. a playbook whose package folder is missing here
 #: src/components/EnvironmentSection.tsx
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookCard.tsx
 msgid "Its files are not on this computer"
 msgstr "其文件不在本机"
 
-#. link beside Publish: opens this playbook's package row on the Packages tab
+#. link beside Publish: opens this playbook's package row, on the project's Packages tab or on the Playbooks page
 #: src/components/DraftRegisterTab.tsx
 msgid "Its package"
 msgstr "其规约包"
@@ -4024,7 +3906,7 @@ msgstr "刚刚"
 #: src/components/EnvironmentSection.tsx
 #: src/components/NavRail.tsx
 #: src/components/ParkedRun.tsx
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 #: src/components/ProjectGroup.tsx
 #: src/components/ProjectsSurface.tsx
 #: src/components/SettingsSurface.tsx
@@ -4081,7 +3963,7 @@ msgid "Last refreshed {age}"
 msgstr "上次刷新：{age}"
 
 #. field of New playbook: the SPDX license its spec package is published under
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "License"
 msgstr "许可证"
 
@@ -4133,8 +4015,11 @@ msgstr "加载对话记录中…"
 #. a request for this pane's content is in flight
 #. a request for this pane's content is in flight
 #. a request for this pane's content is in flight
+#. a request for this pane's content is in flight
 #: src/components/AuthoringWorkspace.tsx
 #: src/components/EnvironmentSection.tsx
+#: src/components/PlaybookCard.tsx
+#: src/components/PlaybooksSurface.tsx
 #: src/components/PlaybooksTab.tsx
 msgid "loading…"
 msgstr "加载中…"
@@ -4145,7 +4030,7 @@ msgstr "加载中…"
 #. a read is still in flight
 #. a read is still in flight
 #: src/components/DashboardSurface.tsx
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 #: src/components/ProjectGroup.tsx
 #: src/components/SpaceExplorer.tsx
 msgid "Loading…"
@@ -4230,11 +4115,6 @@ msgstr "成员会保留他们下载的内容"
 msgid "Members of {name}"
 msgstr "{name} 的成员"
 
-#. tooltip of Enable for <project> on a playbook enabled for you alone
-#: src/components/PlaybooksTab.tsx
-msgid "Members of {project} get it too"
-msgstr "{project} 的成员也会获得"
-
 #. a step: the coder merges both proposals into specs and commits
 #: src/lib/step-words.ts
 msgid "Merge the proposals"
@@ -4270,7 +4150,7 @@ msgstr "迁移回执与输入文件"
 msgid "Minimum citations per pair"
 msgstr "每对关系的最少引用数"
 
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookCard.tsx
 msgid "missing stages: {stages}"
 msgstr "缺少阶段：{stages}"
 
@@ -4332,10 +4212,6 @@ msgstr "移动“接下来”中选中的行"
 msgid "Name a folder"
 msgstr "请填写文件夹"
 
-#: src/components/SettingsSurface.tsx
-msgid "Named by {project}, not set up here"
-msgstr "{project} 指定，此处尚未设置"
-
 #: src/components/DashboardSurface.tsx
 msgid "Needs attention"
 msgstr "需要关注"
@@ -4345,7 +4221,9 @@ msgid "needs recovery"
 msgstr "需要恢复"
 
 #. the title of a disabled Open on <server> entry: the project's records name no code remote, so the server cannot fetch its code; the member pushes the code to a Git host first
+#. the title of a disabled Open on <server> entry: the project's records name no code remote, so the server cannot fetch its code; the member pushes the code to a Git host first
 #: src/components/ProjectPalette.tsx
+#: src/components/SpaceGroups.tsx
 msgid "Needs the code on a Git host"
 msgstr "需要先将代码托管在 Git 主机上"
 
@@ -4388,7 +4266,7 @@ msgstr "新建群组"
 
 #. start writing a playbook of one's own
 #. start writing a playbook of one's own
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "New playbook"
 msgstr "新建规程"
 
@@ -4518,7 +4396,7 @@ msgid "No open pull requests."
 msgstr "没有未关闭的 PR。"
 
 #. the registry account may publish to no org
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "No orgs to publish to"
 msgstr "没有可发布的组织"
 
@@ -4532,14 +4410,18 @@ msgstr "没有匹配的规约包"
 msgid "No packages yet"
 msgstr "还没有规约包"
 
-#. the task start's link to the project's Playbooks tab while no playbook is enabled
+#. the task start's link to the project's Playbooks tab while no playbook runs in the project
 #: src/components/CaptainHome.tsx
 msgid "No playbooks available"
 msgstr "没有可用的规程"
 
+#. a Playbooks list while no package places a playbook
+#. a Playbooks list while no package places a playbook
 #: src/App.tsx
+#: src/components/EnvironmentSection.tsx
+#: src/components/PlaybooksTab.tsx
 msgid "No playbooks yet"
-msgstr "还没有规程"
+msgstr "尚无规程"
 
 #: src/lib/labels.ts
 msgid "No player named \"{player}\" — check the config"
@@ -4754,7 +4636,7 @@ msgid "Not yet shared"
 msgstr "尚未共享"
 
 #. beneath New playbook's Org: the registry account may not publish to the org typed
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "not yours to publish to"
 msgstr "你无权发布到此组织"
 
@@ -4766,11 +4648,6 @@ msgstr "这里还没有完成的工作 · 已结束的对话在侧栏；作为�
 #: src/components/ProjectGroup.tsx
 msgid "Nothing done here yet."
 msgstr "这里还没有完成的工作。"
-
-#. the Playbooks tab's Enabled section while neither config enables a playbook
-#: src/components/PlaybooksTab.tsx
-msgid "Nothing enabled yet"
-msgstr "尚未启用"
 
 #. why a control published by the parked run would do nothing
 #: src/lib/failure-catalogue.ts
@@ -4917,7 +4794,7 @@ msgid "Only pairs with ≥ {field} {count, plural, one {citation} other {citatio
 msgstr "只显示 ≥ {field} {count, plural, other {条引用的关系}}"
 
 #. open this authoring session's workspace
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "Open"
 msgstr "打开"
 
@@ -4965,13 +4842,14 @@ msgstr "从群组打开项目"
 msgid "Open a pull request"
 msgstr "开 PR"
 
+#. on the agent's proposal card: opens the authoring workspace's Add tab
+#: src/components/DraftConversation.tsx
+msgid "Open Add"
+msgstr "打开添加"
+
 #: src/components/DashboardSurface.tsx
 msgid "Open and send a message to pick it up."
 msgstr "打开并发送一条消息即可接续。"
-
-#: src/components/DraftConversation.tsx
-msgid "Open Enable"
-msgstr "打开“启用”"
 
 #. the repair editor's control: opens the system folder picker
 #: src/components/ProjectPalette.tsx
@@ -4987,7 +4865,7 @@ msgstr "打开文件夹…"
 msgid "Open here"
 msgstr "在这里打开"
 
-#. tooltip of an applet's from-line: shows the package's row on the Packages tab
+#. tooltip of an applet's from-line: shows the package's row on the Packages tab, or on the Playbooks page for a global package
 #: src/components/AppletTab.tsx
 msgid "Open its package"
 msgstr "打开其规约包"
@@ -5095,6 +4973,7 @@ msgstr "正在打开小应用…"
 #. an authoring session is being opened
 #: src/components/CaptainHome.tsx
 #: src/components/NavRail.tsx
+#: src/components/PlaybookAuthoring.tsx
 #: src/components/PlaybooksTab.tsx
 #: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
@@ -5126,7 +5005,7 @@ msgid "Or enter an existing Git repository path"
 msgstr "或手动输入已有 Git 仓库路径"
 
 #. field of New playbook: the registry org its spec package is published under
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "Org"
 msgstr "组织"
 
@@ -5203,17 +5082,12 @@ msgstr "规约包名称"
 
 #. a Packages tab heading: the packages the project's spex.yaml names
 #. heading over a project's changed spex.yaml and spex.lock: the packages it adds
-#. tab name: the spec packages this project and your own group install
+#. tab name: the spec packages this project installs
 #: src/App.tsx
 #: src/components/EnvironmentSection.tsx
 #: src/lib/space.ts
 msgid "Packages"
 msgstr "规约包"
-
-#. the title of the Packages tab's heading Personal
-#: src/components/EnvironmentSection.tsx
-msgid "Packages added for yourself, available in every project"
-msgstr "为你自己添加的规约包，在你的所有项目中可用"
 
 #. the sharing confirm: the records made before and after the share both go
 #: src/components/SpacePlacements.tsx
@@ -5253,23 +5127,14 @@ msgstr "已有 Git 仓库路径"
 msgid "Permission mode"
 msgstr "权限模式"
 
-#. a Packages tab heading: the packages added for yourself, available in every project
-#. your own records and packages at a Space, never "your namespace"
-#. your own records and packages at a Space, never "your namespace"
-#. your own records and packages at a Space, never "your namespace"
+#. your own group at a Space, the place your own records go; never "your namespace"
+#. your own group at a Space, the place your own records go; never "your namespace"
 #. your own records at a Space, apart from any group: a heading, a picker's choice and where records are shared into
-#: src/components/EnvironmentSection.tsx
-#: src/components/PlaybooksTab.tsx
 #: src/components/ProjectPalette.tsx
 #: src/components/ProjectsSurface.tsx
 #: src/lib/space.ts
 msgid "Personal"
 msgstr "个人"
-
-#. a choice of the Enable form's Enable for: your Personal config, read in every project of yours
-#: src/components/DraftRegisterTab.tsx
-msgid "Personal (every project of yours)"
-msgstr "个人（你的所有项目）"
 
 #: src/components/CaptainHome.tsx
 msgid "Pick a project first ({keys})"
@@ -5319,7 +5184,7 @@ msgid "plan the development path for a request: direct implementation, or a dura
 msgstr "为请求规划开发路径：直接实现，或先形成持久的决策；当请求指明 GitHub Issue 或要求 PR 时，经由 PR 交付"
 
 #: src/components/DraftRegisterTab.tsx
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "Playbook id"
 msgstr "规程 id"
 
@@ -5335,9 +5200,13 @@ msgstr "规程：{playbookId}"
 #. back to the project's Playbooks tab, listing its playbooks
 #. heading of the project's Playbooks tab
 #. tab name: the playbooks a session in this project can run
+#. the Playbooks page's heading: the global playbooks
+#. the rail's Playbooks destination: the global playbooks, which run in every project of yours
 #: src/App.tsx
 #: src/components/AuthoringWorkspace.tsx
 #: src/components/CaptainHome.tsx
+#: src/components/EnvironmentSection.tsx
+#: src/components/NavRail.tsx
 #: src/components/PlaybooksTab.tsx
 msgid "Playbooks"
 msgstr "规程"
@@ -5347,13 +5216,17 @@ msgid "Playbooks need a valid config — fix it in <0>Settings</0>."
 msgstr "规程需要有效的配置 — 请在<0>设置</0>中修复。"
 
 #: src/components/DraftRegisterTab.tsx
-#: src/components/PlaybooksTab.tsx
 msgid "Player for {role}"
 msgstr "{role} 的 Player"
 
 #: src/components/SettingsSurface.tsx
 msgid "Player id — lowercase, dots to group (e.g. dev.coder)"
 msgstr "Player id — 小写，用点分组（例如 dev.coder）"
+
+#. a player a playbook names that is not set up here: until it is added, its roles run on the Captain's agent and model
+#: src/components/SettingsSurface.tsx
+msgid "Plays on the Captain's agent"
+msgstr "由 Captain 的智能体扮演"
 
 #: src/components/DeliveryCard.tsx
 msgid "PR {ref}"
@@ -5456,14 +5329,15 @@ msgstr "提示词"
 msgid "Propose a design"
 msgstr "写方案"
 
+#. the card for the agent's proposal in an authoring conversation; {command} is the proposed slash command, such as /triage
+#: src/components/DraftConversation.tsx
+msgid "Proposed {command}"
+msgstr "提议的 {command}"
+
 #. a call's outcome: it gave its design proposal
 #: src/lib/step-words.ts
 msgid "proposed a design"
 msgstr "已提出方案"
-
-#: src/components/DraftConversation.tsx
-msgid "Proposed enabling"
-msgstr "拟定的启用信息"
 
 #. an agent chip's model reading when the provider's own default is taken
 #: src/lib/session-agents.ts
@@ -5527,8 +5401,8 @@ msgstr "将 {path} 发布到 {registry}"
 msgid "Publishing…"
 msgstr "发布中…"
 
-#. a hint on the /dev card: delivering through a pull request needs these playbooks enabled, while a plain /dev runs; {names} names them, such as /branch and /pr
-#: src/components/PlaybooksTab.tsx
+#. a hint on the /dev card: delivering through a pull request needs these playbooks to run, while a plain /dev runs; {names} names them, such as /branch and /pr
+#: src/components/PlaybookCard.tsx
 msgid "Pull requests need {names} · /dev still runs"
 msgstr "拉取请求需要 {names} · /dev 仍可运行"
 
@@ -5814,6 +5688,7 @@ msgstr "重新加载中…"
 
 #. a package's act: take it out of spex.yaml and uninstall it
 #. a package's act: take it out of spex.yaml and uninstall it
+#. a playbook entry that failed: delete it
 #. confirm: forget this project, leaving the repo on disk
 #. confirm: forget this project, leaving the repo on disk
 #. confirm: remove a project whose records are gone from this computer
@@ -5826,6 +5701,7 @@ msgstr "重新加载中…"
 #. take the member's credential for a code host or an agent off the team server
 #: src/components/EnvironmentSection.tsx
 #: src/components/NextCard.tsx
+#: src/components/PlaybookCard.tsx
 #: src/components/ProjectGroup.tsx
 #: src/components/ProjectsSurface.tsx
 #: src/components/SettingsSurface.tsx
@@ -5886,6 +5762,11 @@ msgstr "移除项目"
 msgid "Remove the credential for {name}"
 msgstr "移除 {name} 的凭据"
 
+#. accessible name of Remove on a playbook entry that failed: it deletes the entry; {id} is the playbook
+#: src/components/PlaybookCard.tsx
+msgid "Remove the entry for {id}"
+msgstr "移除 {id} 的条目"
+
 #: src/components/ProjectGroup.tsx
 msgid "Remove this intent from history"
 msgstr "从历史中移除此意图"
@@ -5934,8 +5815,10 @@ msgstr "移除 {server}，或在 {space} 上撤销它的访问权限，即可停
 #. queue row control, busy: the removal is in flight
 #. the removal is in flight
 #. the removal is in flight
+#. the removal is in flight
 #: src/components/EnvironmentSection.tsx
 #: src/components/NextCard.tsx
+#: src/components/PlaybookCard.tsx
 #: src/components/SpaceMembers.tsx
 msgid "Removing…"
 msgstr "移除中…"
@@ -6079,7 +5962,7 @@ msgstr "本机智能体对话的续接令牌；在别处无效"
 #: src/App.tsx
 #: src/components/ComposerAttachments.tsx
 #: src/components/DashboardSurface.tsx
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 #: src/components/RunView.tsx
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceGroups.tsx
@@ -6215,6 +6098,11 @@ msgstr "与代理相同"
 #: src/components/AgentEditor.tsx
 msgid "Same as Captain"
 msgstr "与 Captain 相同"
+
+#. the first choice of a role's player under a project's Global heading: play it as the global binding does
+#: src/components/BindingEditor.tsx
+msgid "Same as global"
+msgstr "与全局一致"
 
 #. Credentials section: place the credential on the team server
 #. Credentials section: place the credential on the team server
@@ -6527,11 +6415,6 @@ msgstr "共享到"
 msgid "Share with {group} at {name}?"
 msgstr "与 {name} 上的 {group} 共享？"
 
-#. badge: this lane answers more than one role
-#: src/components/PlaybooksTab.tsx
-msgid "shared"
-msgstr "共用"
-
 #. entry mark: this file syncs and is already sent
 #: src/lib/space.ts
 msgid "Shared"
@@ -6621,11 +6504,6 @@ msgstr "筛选外仍显示"
 #: src/components/SpecView.tsx
 msgid "shown despite search"
 msgstr "搜索外仍显示"
-
-#. the title of Enable in the receipt after Add…, for a package of several playbooks: it opens the package's row to its playbooks, each enabled on its own line
-#: src/components/EnvironmentSection.tsx
-msgid "Shows its playbooks, each with Enable"
-msgstr "显示其规程，各有启用按钮"
 
 #. sign in to a Space or a registry
 #. sign in to the Space chosen, or to a registry
@@ -6901,6 +6779,16 @@ msgstr "spex.yaml、spex.lock 未提交"
 msgid "Squash or reset them yourself"
 msgstr "自行压缩或重置这些提交"
 
+#. a playbook row in place of its roles: it does not run, and why
+#: src/components/PlaybookCard.tsx
+msgid "Stands aside · {reason}"
+msgstr "让位 · {reason}"
+
+#. a playbook row in place of its roles: another package's playbook takes its command, so this one does not run; {package} names that package, such as acme/triage
+#: src/components/PlaybookCard.tsx
+msgid "Stands aside · /{command} is {package}'s"
+msgstr "让位 · /{command} 属于 {package}"
+
 #. queue row control: begin this queued intent
 #. queue row control: begin this queued intent
 #. queue row control: begin this queued intent
@@ -7030,17 +6918,6 @@ msgstr "未完成即被停止"
 #: src/components/SpaceSync.tsx
 msgid "Stopping…"
 msgstr "停止中…"
-
-#. tooltip of Disable on a playbook the project's config enables
-#: src/components/PlaybooksTab.tsx
-msgid "Stops /{command} for every member of {project}; the package stays"
-msgstr "为 {project} 的所有成员停用 /{command}；规约包保留"
-
-#. tooltip of Disable on a playbook your Personal config enables
-#. tooltip of Disable on a playbook your Personal config enables
-#: src/components/PlaybooksTab.tsx
-msgid "Stops /{command} in every project of yours; the package stays"
-msgstr "在你的所有项目中停用 /{command}；规约包保留"
 
 #. the tuning editor's field for the reasoning effort an agent's subagents run at
 #: src/components/TuningField.tsx
@@ -7293,6 +7170,11 @@ msgstr "文件所属的对话不可用。"
 msgid "The first connection can take a minute"
 msgstr "首次连接可能需要一分钟"
 
+#. the title of Add…'s disabled Folder tab on the Playbooks page: the folder holding your global packages, which a folder package lies in, is not on this computer
+#: src/components/EnvironmentSection.tsx
+msgid "The folder of your global packages is not on this computer"
+msgstr "你的全局规约包所在的文件夹不在本机"
+
 #: src/components/RunView.tsx
 msgid "The last turn failed. Send a message to pick it up."
 msgstr "上一轮失败。发送消息即可接续。"
@@ -7300,6 +7182,11 @@ msgstr "上一轮失败。发送消息即可接续。"
 #: src/components/DashboardSurface.tsx
 msgid "The ledger could not be loaded: {reason}"
 msgstr "无法加载意图台账：{reason}"
+
+#. the title of the Playbooks page's heading
+#: src/components/EnvironmentSection.tsx
+msgid "The playbooks of your global packages, which run in every project of yours"
+msgstr "你的全局规约包中的规程，在你的每个项目中运行"
 
 #. the title of Add…'s disabled Folder tab under Packages: the project's folder, which a folder package lies in, is not on this computer, as for a project on a server
 #: src/components/EnvironmentSection.tsx
@@ -7456,11 +7343,6 @@ msgstr "打开之后，此文件在磁盘上已更改。"
 msgid "This file is too large to preview."
 msgstr "文件过大，无法预览。"
 
-#: src/components/DraftRegisterTab.tsx
-#: src/components/PlaybooksTab.tsx
-msgid "This lane also answers {positions} — one conversation across them"
-msgstr "此 Player 还担任 {positions} — 它们共用一个对话"
-
 #: src/components/ProjectsSurface.tsx
 msgid "This project is no longer registered."
 msgstr "此项目已不在注册列表中。"
@@ -7473,10 +7355,10 @@ msgstr "此项目使用旧版规约布局"
 msgid "This project's overview: history, now, up next, sources, repo state"
 msgstr "此项目的概览：历史、当前、接下来、来源、仓库状态"
 
-#. tooltip of the project's Packages tab: the packages the project's spex.yaml names, and those added for yourself
+#. tooltip of the project's Packages tab: the packages the project's spex.yaml names
 #: src/App.tsx
-msgid "This project's packages and your Personal ones"
-msgstr "本项目的规约包和你的个人规约包"
+msgid "This project's packages"
+msgstr "本项目的规约包"
 
 #: src/components/ProjectGroup.tsx
 msgid "This record is not in the project's specs tree"
@@ -7490,7 +7372,7 @@ msgstr "此会话已结束 — 回放为只读"
 msgid "this stage was not found for this draft"
 msgstr "此草稿未找到该阶段"
 
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookCard.tsx
 msgid "this stage was not found for this playbook"
 msgstr "此规程未找到该阶段"
 
@@ -7594,9 +7476,10 @@ msgstr "试试 Academy 示例"
 msgid "Try the example"
 msgstr "试试示例"
 
+#. in a role's editor on a project's Playbooks tab: the project names a player alone, and each person tunes their own players in Settings
 #: src/components/BindingEditor.tsx
-msgid "Tuning is personal — set it in Settings"
-msgstr "调优属于个人设置 — 请在“设置”中调整"
+msgid "Tuning lives in your players, in Settings"
+msgstr "调整在你的 Player 中，位于设置"
 
 #: src/lib/media.ts
 msgid "Turn {turn}"
@@ -7616,7 +7499,6 @@ msgid "Turn workflows written in plain language into steps AI can run"
 msgstr "将自然语言描述的工作流转成 AI 可执行的步骤"
 
 #: src/components/DraftRegisterTab.tsx
-#: src/components/PlaybooksTab.tsx
 msgid "Tweak the {name} agent in place"
 msgstr "就地调整 {name} 智能体"
 
@@ -7627,11 +7509,6 @@ msgstr "就地调整 Captain 智能体"
 #: src/components/CaptainHome.tsx
 msgid "Type <0>/</0> in the task box to see {count, plural, one {# playbook} other {# playbooks}}"
 msgstr "在输入框输入 <0>/</0>，查看 {count} 个规程"
-
-#. a required role no player answers yet
-#: src/components/PlaybooksTab.tsx
-msgid "unbound"
-msgstr "未绑定"
 
 #: src/components/ProjectsSurface.tsx
 msgid "uncommitted changes"
@@ -7718,7 +7595,7 @@ msgstr "接下来：<0>{title}</0>"
 msgid "Update"
 msgstr "更新"
 
-#. the built-in playbooks' line: update to the release this app ships; {version} is that release
+#. on the built-in package's row: update to the release this app ships; {version} is that release
 #: src/components/EnvironmentSection.tsx
 msgid "Update to {version}"
 msgstr "更新到 {version}"
@@ -7918,7 +7795,7 @@ msgstr "等待你的裁定"
 msgid "What {name} provides"
 msgstr "{name} 提供的内容"
 
-#. tooltip of the project's Playbooks tab: the playbooks enabled and available here
+#. tooltip of the project's Playbooks tab: the playbooks that run here, the project's and the global ones
 #: src/App.tsx
 msgid "What a session in this project can run"
 msgstr "本项目的会话可以运行的规程"
@@ -8056,14 +7933,9 @@ msgid "Your groups"
 msgstr "你的群组"
 
 #. the registry did not answer which orgs the account may publish to
-#: src/components/PlaybooksTab.tsx
+#: src/components/PlaybookAuthoring.tsx
 msgid "Your orgs could not be read"
 msgstr "无法读取你的组织"
-
-#. the title of Add…'s disabled Folder tab under Personal: the folder holding your Personal records, which a folder package lies in, is not on this computer
-#: src/components/EnvironmentSection.tsx
-msgid "Your Personal records are not on this computer"
-msgstr "你的个人记录不在本机"
 
 #: src/components/CaptainHome.tsx
 msgid "your project"

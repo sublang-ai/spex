@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The project's Packages and Playbooks tabs' reading of environments
-// (DR-104, DR-172): your own group's spex repository, where a publish
-// goes, the words for sources, version requirements, Add, what a package
+// The Packages and Playbooks pages' reading of environments (DR-104,
+// DR-176): your own group's spex repository, the global environment's
+// place, where a publish goes, the words for sources, version requirements, Add, what a package
 // provides and the core's busy states, the built-in package, lists joined
 // in the reader's language, and the two name rules the tabs check in place.
 // Pure functions; the components render them. Every phrase is read when
@@ -84,8 +84,9 @@ export function busyWord(busy: EnvironmentState["busy"]): string | undefined {
   }
 }
 
-/** The built-in spec package the app ships (environments-11): one quiet
- * line on the Packages tab, never a removable row (playbook-library-92). */
+/** The built-in spec package the app ships (environments-11): one row
+ * among the rest, its source reading "Built in" and a newer release the
+ * app ships reading "Update to <shipped>" on it (playbook-library-92). */
 export const BUILTIN_PACKAGE = "sublang/playbooks";
 
 /** Whether a package of the environment is the built-in one: the name

@@ -5,7 +5,7 @@
 // the playbook list, a header with the way back, the playbook's id
 // with its spec package's name, and its state chip; the conversation
 // on the left; on the right a pane of four tabs — Source, Gears,
-// Machine, Enable — with the Compile
+// Machine, Add — with the Compile
 // control at the strip's end and the compile watched in a band under
 // it. The house divider stands between the panes from the @2xl step
 // and turns into the horizontal grip once they stack (DR-030,
@@ -46,7 +46,7 @@ import { SplitDivider } from "./RunView.js";
 import { draftAttachmentKey, useComposerAttachments } from "../lib/useComposerAttachments.js";
 
 type Toolchain = CommandResults["compile.check"];
-type Tab = "source" | "gears" | "machine" | "enable";
+type Tab = "source" | "gears" | "machine" | "add";
 
 /** The four tabs. Each label and hint is read when the strip draws,
  * never when this module loads, so the table never freezes the
@@ -86,13 +86,13 @@ const TABS: readonly { key: Tab; label: string; icon: IconName; hint: string }[]
     },
   },
   {
-    key: "enable",
+    key: "add",
     get label() {
-      return i18n._({ id: "Enable", comment: "enable this playbook in this config" });
+      return i18n._({ id: "Add", comment: "the authoring workspace's last tab: add the compiled playbook to the packages of the page it was made on, with a player per role" });
     },
     icon: "check",
     get hint() {
-      return i18n._("Confirm the command, intent, players and where to enable it");
+      return i18n._({ id: "Confirm the command, intent and players, then add it", comment: "the title of the authoring workspace's Add tab" });
     },
   },
 ];
@@ -208,19 +208,19 @@ export function AuthoringWorkspace({
   // shown as it left them (playbook-library-58, playbook-library-60).
   const hasArtifacts = artifacts !== undefined && (artifacts.gears !== null || artifacts.fsm !== null);
   const artifactsReady = compiledOk || hasArtifacts;
-  // The Enable tab's dot stays until it is opened after the agent's
+  // The Add tab's dot stays until it is opened after the agent's
   // proposal lands (playbook-library-60).
   const registerKey =
     draft && compiledOk
       ? `${draft.compile?.at}:${JSON.stringify(draft.proposal ?? null)}`
       : undefined;
   useEffect(() => {
-    if (tab === "enable" && registerKey !== undefined) setRegisterSeen(registerKey);
+    if (tab === "add" && registerKey !== undefined) setRegisterSeen(registerKey);
   }, [tab, registerKey]);
   useEffect(() => {
     // A tab that stops being available yields to Source.
     if ((tab === "gears" || tab === "machine") && !artifactsReady) setTab("source");
-    if (tab === "enable" && !compiledOk) setTab("source");
+    if (tab === "add" && !compiledOk) setTab("source");
   }, [tab, artifactsReady, compiledOk]);
 
   if (!draft) return null;
@@ -259,7 +259,7 @@ export function AuthoringWorkspace({
     source: true,
     gears: artifactsReady,
     machine: artifactsReady,
-    enable: compiledOk,
+    add: compiledOk,
   };
   const mode = sourceMode ?? { mode: "view" as const, pasteText: "", pastePath: "" };
   // A picked file and a pasted path name this computer's disk: a remote
@@ -378,7 +378,7 @@ export function AuthoringWorkspace({
               onAbort={() => void abortDraft(draftId)}
               onPickAgent={(playerId) => setDraftPlayer(draftId, playerId)}
               onDismissError={() => clearDraftError(draftId)}
-              onOpenRegister={() => setTab("enable")}
+              onOpenRegister={() => setTab("add")}
               onUseSkill={async () => {
                 // playbook-library-84: a picked file is the source when
                 // the draft has none, else the paste mode's path for
@@ -447,7 +447,7 @@ export function AuthoringWorkspace({
                 const on = tab === entry.key;
                 const label = entry.label;
                 const dot =
-                  entry.key === "source" ? sourceDot : entry.key === "enable" ? registerDot : false;
+                  entry.key === "source" ? sourceDot : entry.key === "add" ? registerDot : false;
                 return (
                   <button
                     key={entry.key}
