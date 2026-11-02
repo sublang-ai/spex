@@ -10,10 +10,11 @@ and review through a workflow written in plain language.
 A **spec package** shares a spec and related skills or playbooks as a
 versioned package. Packages come from a registry, and
 [Spex Space](https://spex.sublang.ai) is the public one: find and publish
-packages there, and add them from a project's **Packages** tab or the
-`spex` command line. Public packages need no account to browse or
-install. Publishing and private packages need a registry sign-in,
-separate from any Space sign-in. Syncing a project's records is optional.
+packages there, and add them from a project's **Packages** tab, from
+**Playbooks** for every project of yours, or with the `spex` command
+line. Public packages need no account to browse or install. Publishing
+and private packages need a registry sign-in, separate from any Space
+sign-in. Syncing a project's records is optional.
 
 ## Open the IDE and a project
 
@@ -57,25 +58,27 @@ top as **Registry: Spex Space**, with your sign-in there beside it.
    installs it. Commit both files, and a spec it places, with your code
    so everyone on the project installs the same packages; until you do,
    the tab shows **spex.yaml, spex.lock not committed**.
-3. **Enable its playbooks.** Adding a package installs it but enables
-   nothing. Open the **Playbooks** tab, find the playbook under
-   **Available**, choose a player for each role and select **Enable**.
-   **Enable** also stands on the receipt after **Add** and on the
-   playbook's line in the package's row. Start a new task and type `/`
-   to find its command.
+3. **Run its playbooks.** A playbook the package provides runs in the
+   project at once, for everyone who pulls `spex.yaml`. Each role is
+   played by the player named after it; one you have not set up plays
+   on the Captain's agent until you add it in **Settings**. The
+   project's **Playbooks** tab lists the project's playbooks under its
+   name, and the global ones, which run in every project of yours,
+   under **Global**. Choose ✎ on a role to give it another player.
+   Start a new task and type `/` to find its command.
 4. **Publish your own.** See
    [Publish specs, skills, and playbooks](#publish-specs-skills-and-playbooks).
 
-Skills and specs need no enabling. Spex places skills in
+Skills and specs take effect at once too. Spex places skills in
 `.claude/skills/` for Claude Code and `.agents/skills/` for Codex,
 Gemini CLI, Kimi Code, and OpenCode, so each agent finds them its own
 way. Playbook launch skills are placed for Claude Code alone; with other
-agents, run enabled playbooks from Spex's `/` menu. A package's spec is
+agents, run playbooks from Spex's `/` menu. A package's spec is
 placed in `specs/packages/<pkg>.md`, beside your own specs, and agents
 and `spex lint` read it as any spec. Its first line names the package
 and version; once you edit it, it is yours: Spex leaves it, and a newer
 version waits. The spec's line in the package row says where it stands.
-Your **Personal** packages' specs reach your agents as skills instead.
+A global package's spec reaches your agents as a skill instead.
 
 Private packages never appear in search. Choose **Sign in** beside the
 registry and approve in your browser, or run `spex login`, which signs
@@ -91,10 +94,19 @@ shows **spex.yaml changed** with **Update**, which moves to the newest
 versions `spex.yaml` allows and installs them; `spex update` does the
 same. A row reading **Files missing** offers **Install**, which puts
 back what `spex.lock` records, as `spex install` does after a clone.
-**Remove** stands in a package row's overflow. The built-in playbooks
-stand as one quiet line, **Built-in playbooks** with their version: they
-come with Spex, are never removed, and offer **Update to ⟨version⟩**
-when the app ships a newer release.
+**Remove** stands in a package row's overflow; once you commit
+`spex.yaml`, its playbooks leave the project for everyone.
+
+**Playbooks**, beside **Space** and **Settings**, holds your global
+packages: their playbooks run in every project of yours. Its **Add…**
+works as the **Packages** tab's, **New playbook** starts a global
+playbook, and ✎ on a role chooses its player everywhere. The built-in
+playbooks, `sublang/playbooks`, are a global package Spex adds when it
+first starts: you can remove it and add it again like any other, and
+it offers **Update to ⟨version⟩** when the app ships a newer release.
+On a project's **Playbooks** tab, ✎ on a role under **Global** gives it
+another player in that project alone, **Same as global** sets it back,
+and a dot marks a role that differs.
 
 **Add… → Folder** adds a package folder inside the project, such as
 `spex-packages/<org>/<pkg>`, used in place, so you can try a package
@@ -151,9 +163,9 @@ sign-in, until you sign out there or it expires.
 
 ## Try a spec-first task
 
-The built-in playbooks, `sublang/playbooks`, come with Spex and supply
-starter workflows. Open **Specs** to read your project, then describe
-your goal or use a command:
+The built-in playbooks, `sublang/playbooks`, come with Spex as a global
+package and supply starter workflows to every project. Open **Specs** to
+read your project, then describe your goal or use a command:
 
 ```text
 /decide Define a small local task list's behavior and acceptance checks.
@@ -215,26 +227,29 @@ API token is needed.
 
 ### Publish a playbook
 
-1. On the **Playbooks** tab, choose **New playbook**. Enter a lowercase
-   id, **Org**, and **License**.
+1. Choose **New playbook** on the project's **Playbooks** tab for a
+   playbook of the project, or on **Playbooks** for a global one. Enter
+   a lowercase id, **Org**, and **License**.
 2. Describe what the workflow does, who does what, and when it is done.
    Inspect **Source**, or supply text with **Source → Paste → Use as source**.
 3. Select the answering agent in the conversation header, then **Compile**.
    The same agent runs the compiler, unless Spex was started with
    `SLC_AGENT`, `SLC_MODEL`, `SLC_EFFORT` or `SLC_FAST_MODE` set. Check
    the phases, **Gears**, and **Machine**.
-4. On **Enable**, choose the command and a player per role, then enable
-   it for the project. Try its command in a new task and review its work.
-5. Still on **Enable**, choose **Publish**, which reads **Sign in to
+4. On **Add**, check the command, the intent and a player per role, then
+   choose **Add**: the playbook runs where you created it. Try its
+   command in a new task and review its work.
+5. Still on **Add**, choose **Publish**, which reads **Sign in to
    publish** while you are signed out. Review the registry, the package's
    name and version, the files and the account, then confirm **Publish**.
    Success shows the published version and a link to its page; **Its
    package** opens its row on the **Packages** tab.
 
 Only what `meta.yaml` declares is published; your project and its
-`specs/` directory are not. Keep the package folder with your
-code. Another project finds a public release through **Add…** on its
-**Packages** tab, then enables its playbooks or uses its skills. The
+`specs/` directory are not. Commit a project playbook's package folder
+with your code, so the team runs it too; a global one's stays with your
+settings. Another project adds a public release through **Add…** on its
+**Packages** tab, and its playbooks run there at once. The
 [HTTP publishing guide](https://spex.sublang.ai/llms.txt) serves
 automation.
 
