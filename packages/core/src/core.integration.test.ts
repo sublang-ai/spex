@@ -5054,11 +5054,16 @@ for (const selection of ["default", "home override", "sessions override"] as con
     const sessions = await client.expectOk("session.list",{});
     if (selection === "default") {
       // storage-18: the ordinary default imports into your own group's
-      // sessions/, a clone no folder pairs, so it lists nowhere and is
-      // reported instead (storage-12).
+      // sessions/. Without a paired folder, its history remains readable
+      // but cannot continue (core-service-60, storage-12).
       const ownKey = `${OWN}/${OWN}-spex`;
       assert.ok(existsSync(join(clonePath(dataDir, ownKey), "sessions", `${sessionId}.json`)), "imported into your own group's sessions");
-      assert.equal(sessions.length,0,"a session of a clone no folder pairs is not listed");
+      assert.deepEqual(sessions.map((session) => session.id), [sessionId], "the imported session is listed for reading");
+      assert.equal(sessions[0]!.projectId, ownKey, "the session belongs to the clone holding it, not its recorded working folder");
+      assert.equal(sessions[0]!.continuable, undefined, "an unpaired session offers no continuation");
+      const history = await client.expectOk("history.get", { sessionId });
+      assert.deepEqual(history.records.filter(({ record }) => record.type === "turn_started")
+        .map(({ record }) => (record as { turn: { prompt: string } }).turn.prompt), ["Prior CLI work"], "imported conversation history can be read without its project files");
       const repair = (await client.expectOk("storage.diagnostics",{})).find((entry) => entry.repair?.kind === "repository" && entry.repair.repository === ownKey);
       assert.equal(repair?.repair?.sessions, 1, "your own group's clone is reported once it holds the session");
       const skipped = (await client.expectOk("storage.diagnostics", {})).find((entry) => entry.file === unsupported);
@@ -6521,6 +6526,7 @@ test("storage-29: session.create makes a paired clone's missing sessions/ privat
   mkdirSync(cloneOf(`${OWN}/kept-spex`), { recursive: true });
   writeFileSync(join(cloneOf(`${OWN}/kept-spex`), "project.json"), JSON.stringify({ format: 1, name: "Kept", remote: null }));
   await client.expectOk("project.rebind", { projectId: `${OWN}/kept-spex`, path: folder("kept") });
+  assert.deepEqual((await client.expectOk("session.list", {})).filter((session) => session.projectId === `${OWN}/kept-spex`), [], "a rebound clone with no sessions/ has no history");
   await opens(`${OWN}/kept-spex`);
 
   // A registered project whose sessions/ was removed.

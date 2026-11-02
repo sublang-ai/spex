@@ -1024,7 +1024,15 @@ export class Store {
     if (this.repositories.get(repository.key) !== repository) return;
     const sessionsDir = repository.sessionsDir;
     const cwd = this.homeFile.folderOf(repository.key)?.path;
-    for (const filename of readdirSync(sessionsDir)) {
+    let filenames: string[];
+    try { filenames = readdirSync(sessionsDir); }
+    catch (error) {
+      // An existing clone may have no sessions yet. Reading or rebinding
+      // it makes neither that directory nor a vanished clone (storage-2).
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+      throw error;
+    }
+    for (const filename of filenames) {
       if (this.repositories.get(repository.key) !== repository) break;
       const sidecar = filename.endsWith(".spex.json");
       if (!sidecar && !/^[0-9a-f-]{36}\.json$/.test(filename)) continue;
