@@ -126,13 +126,13 @@ project** to select an existing Git repository, or expand **Create a new
 project…** in that flow to make one with a `specs/` scaffold. **Open the
 Academy example** opens the included sample project. Once a project is
 selected, describe your goal to the Captain; type `/` in the task field
-to see enabled playbooks and their descriptions, such as `/decide`,
-`/code`, and `/review`.
+to see the playbooks that run there and their descriptions, such as
+`/decide`, `/code`, and `/review`.
 Project creation and coding workflows make Git commits, so configure
 `user.name` and `user.email` first. The issue and PR panels and the Dashboard's Sources on a
 GitHub remote need `gh auth login`. Config and sessions live in the
 Spex home — `~/.spex`, or `SPEX_HOME` — in spex repositories under
-`workspace/`: each project's records in its own, and your config at
+`workspace/`: each project's records in its own, and your global config at
 `workspace/<you>/<you>-spex/config/playbook.config.yaml`
 ([storage](docs/storage.md)).
 
@@ -151,21 +151,26 @@ from a registry, a Git repository or a folder in the project, and
 ([package format](specs/packages/environments.md)). Their skills reach
 every agent Spex runs: a project folder's `.claude/skills` for Claude
 Code and `.agents/skills` for Codex, Gemini CLI, Kimi Code and OpenCode,
-and, for your Personal packages, the same folders in your home folder.
+and, for your global packages, the same folders in your home folder.
 A package's spec is placed in the project's `specs/packages/`, beside
-its own specs. The app ships the built-in playbooks, `sublang/playbooks`,
-which hold `/code`, `/review`, `/decide` and the others: the first start
-seeds them, so they run offline, and every project has them. A
-project's **Packages** tab adds, updates, removes and publishes its
-packages; its **Playbooks** tab shows the playbooks they provide, and
-enables one when you choose a player for each of its roles.
+its own specs. A playbook runs as soon as its package is added: a
+project's in that project, for everyone who pulls its `spex.yaml`, and
+a global package's in every project of yours, each role played by the
+player named after it until you choose another. The app ships the
+built-in playbooks, `sublang/playbooks`, which hold `/code`, `/review`,
+`/decide` and the others: the first start adds them as a global
+package, so they run offline in every project. A project's **Packages**
+tab adds, updates, removes and publishes its packages; its
+**Playbooks** tab lists what runs there, the project's under its name
+and the global ones under **Global**, with ✎ on a role to give it
+another player there. **Playbooks**, beside **Space** and **Settings**,
+does the same for your global packages.
 
 **Publish and install through Spex Space.** Browse public packages
 without an account: on a project's **Packages** tab, choose **Add…**,
 search on **Registry**, pick a version and choose **Add**. Adding
-installs a package and places its skills for your agents and its spec
-in `specs/`; enable a playbook it provides on the **Playbooks** tab by
-choosing a player for each role. Author a workflow through
+installs a package, places its skills for your agents and its spec in
+`specs/`, and runs the playbooks it provides. Author a workflow through
 **New playbook**, compile it, and **Publish** it after signing in to the
 registry with access to its org.
 See the [package guide](docs/getting-started.md#install-and-use-a-package).
@@ -246,9 +251,9 @@ Authoring uses the selected agent's saved setting and offers the same setup
 check beside its selector. No MCP package or command needs to be chosen.
 
 Use `/inspect` for a task such as “Open my local app and explain its UX with
-screenshots.” An existing home finds it on **Playbooks** among the built-in
-spec package's playbooks: choose a player for its Inspector role and select
-**Enable**. Enable Browser for the worker assigned to Inspect; the Captain's
+screenshots.” It comes with the built-in playbooks and runs in every project;
+to choose who plays its Inspector role, use ✎ on that role on **Playbooks**.
+Enable Browser for the worker assigned to Inspect; the Captain's
 routing calls stay tool-free.
 Start the app first and include its
 URL. Native figures returned by a supported agent appear in the conversation
