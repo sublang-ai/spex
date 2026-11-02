@@ -977,9 +977,9 @@ describe("GROUPS: Add to a group… (space-58, space-29)", () => {
     expect(team.checked).toBe(true);
     expect(submit().disabled).toBe(false);
     expect(calls("space.pick")).toEqual([]);
-    expect(picker().textContent).toContain("Every session, whole, attachments included");
-    expect(picker().textContent).toContain("Past and future records");
-    expect(picker().textContent).toContain("Members keep what they download");
+    expect(picker().textContent).toContain("All sessions: conversations, agent activity, and attachments");
+    expect(picker().textContent).toContain("Existing and future project records");
+    expect(picker().textContent).toContain("Removing access won’t erase copies members already saved");
     fireEvent.click(submit());
     await waitFor(() => expect(calls("space.pick")).toEqual([
       { repository: KEY, choice: { kind: "create", instance: ORIGIN, groupId: "2", name: "academy" } },
@@ -1002,7 +1002,7 @@ describe("GROUPS: Add to a group… (space-58, space-29)", () => {
     fireEvent.click(selected(`space-pick-repo-${LISTED}`));
     expect(calls("space.pick")).toEqual([]);
     expect(submit().textContent).toBe("Connect project");
-    for (const fact of ["Every session, whole, attachments included", "Past and future records", "Members keep what they download"]) {
+    for (const fact of ["All sessions: conversations, agent activity, and attachments", "Existing and future project records", "Removing access won’t erase copies members already saved"]) {
       expect(picker().textContent).toContain(fact);
     }
     if (state.visibility === "public") expect(picker().textContent).toContain("Public: anyone can read");
@@ -1106,8 +1106,8 @@ describe("GROUPS: Add to a group… (space-58, space-29)", () => {
     expect(submit().disabled).toBe(true);
     fireEvent.click(selected(`space-pick-repo-${LISTED}`));
     expect(submit().textContent).toBe(zh ? "连接项目" : "Connect project");
-    expect(picker().textContent).toContain(zh ? "每个会话，完整发送，包括附件" : "Every session, whole, attachments included");
-    expect(picker().textContent).toContain(zh ? "过去和将来的记录" : "Past and future records");
+    expect(picker().textContent).toContain(zh ? "所有会话：对话、智能体活动和附件" : "All sessions: conversations, agent activity, and attachments");
+    expect(picker().textContent).toContain(zh ? "现有及未来的项目记录" : "Existing and future project records");
     expect(calls("space.pick")).toEqual([]);
   });
 

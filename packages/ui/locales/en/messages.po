@@ -1333,6 +1333,13 @@ msgstr "All here"
 msgid "All projects"
 msgstr "All projects"
 
+#. sharing scope: all conversation messages, agent actions and results, and attachments
+#. sharing scope: all conversation messages, agent actions and results, and attachments
+#: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
+msgid "All sessions: conversations, agent activity, and attachments"
+msgstr "All sessions: conversations, agent activity, and attachments"
+
 #. project palette: every project of the member's groups is open on this computer already
 #: src/components/ProjectPalette.tsx
 msgid "All your groups' projects are open here"
@@ -3117,13 +3124,6 @@ msgstr "Every record stays on {place}"
 msgid "Every record stays on this computer"
 msgstr "Every record stays on this computer"
 
-#. the sharing confirm: what goes to the group
-#. the sharing confirm: what goes to the group
-#: src/components/SpaceGroups.tsx
-#: src/components/SpacePlacements.tsx
-msgid "Every session, whole, attachments included"
-msgstr "Every session, whole, attachments included"
-
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
 #: src/lib/space.ts
@@ -3138,6 +3138,13 @@ msgstr "Example"
 #: src/components/PlaybooksTab.tsx
 msgid "Example: {title}"
 msgstr "Example: {title}"
+
+#. the sharing confirm: the records made before and after the share both go
+#. the sharing confirm: the records made before and after the share both go
+#: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
+msgid "Existing and future project records"
+msgstr "Existing and future project records"
 
 #: src/components/ProjectPalette.tsx
 msgid "Existing project"
@@ -4160,13 +4167,6 @@ msgstr "Media unavailable"
 msgid "Members"
 msgstr "Members"
 
-#. the sharing confirm: nothing recalls what the group's members downloaded
-#. the sharing confirm: nothing recalls what the group's members downloaded
-#: src/components/SpaceGroups.tsx
-#: src/components/SpacePlacements.tsx
-msgid "Members keep what they download"
-msgstr "Members keep what they download"
-
 #: src/components/SpaceMembers.tsx
 msgid "Members of {name}"
 msgstr "Members of {name}"
@@ -5145,13 +5145,6 @@ msgstr "Package name"
 msgid "Packages"
 msgstr "Packages"
 
-#. the sharing confirm: the records made before and after the share both go
-#. the sharing confirm: the records made before and after the share both go
-#: src/components/SpaceGroups.tsx
-#: src/components/SpacePlacements.tsx
-msgid "Past and future records"
-msgstr "Past and future records"
-
 #. bring in a source of one's own
 #. bring in a source of one's own
 #: src/components/DraftSourceTab.tsx
@@ -5876,6 +5869,13 @@ msgstr "Removes {name} from spex.yaml and uninstalls it"
 #: src/components/SpaceServers.tsx
 msgid "Removing {server}, or revoking its access at {space}, stops new use; a credential already there lasts until it expires"
 msgstr "Removing {server}, or revoking its access at {space}, stops new use; a credential already there lasts until it expires"
+
+#. sharing consequence: revoking access does not erase copies members already saved
+#. sharing consequence: revoking access does not erase copies members already saved
+#: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
+msgid "Removing access won’t erase copies members already saved"
+msgstr "Removing access won’t erase copies members already saved"
 
 #. queue row control, busy: the removal is in flight
 #. the removal is in flight

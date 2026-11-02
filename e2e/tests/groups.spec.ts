@@ -158,9 +158,9 @@ async function expectNoSentence(where: Locator, what: string): Promise<void> {
 
 /** The three phrases the sharing confirm stands over (space-57). */
 const SHARING_PHRASES = [
-  "Every session, whole, attachments included",
-  "Past and future records",
-  "Members keep what they download",
+  "All sessions: conversations, agent activity, and attachments",
+  "Existing and future project records",
+  "Removing access won’t erase copies members already saved",
 ];
 
 /**
@@ -687,6 +687,16 @@ test.describe("reviewing a local project's destination", () => {
     await expect(picker.getByRole("heading", { name: "Add slc to a group", exact: true })).toBeVisible();
     await expect(picker).toContainText("Space");
     await expect(picker).toContainText("spex.sublang.xyz");
+    const context = picker.getByTestId(`space-pick-context-${local.key}`);
+    const [labelBox, valueBox] = await Promise.all([
+      context.locator("label").boundingBox(),
+      context.locator("p").boundingBox(),
+    ]);
+    expect(labelBox).not.toBeNull();
+    expect(valueBox).not.toBeNull();
+    expect(valueBox!.x).toBeGreaterThanOrEqual(labelBox!.x + labelBox!.width);
+    expect(Math.min(labelBox!.y + labelBox!.height, valueBox!.y + valueBox!.height))
+      .toBeGreaterThan(Math.max(labelBox!.y, valueBox!.y));
     await expect(submit).toBeDisabled();
     await expect(picker.getByRole("radio", { checked: true })).toHaveCount(0);
     await picker.screenshot({ path: testInfo.outputPath("01-choose-group-light.png") });

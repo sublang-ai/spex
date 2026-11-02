@@ -17,11 +17,11 @@ The user could neither distinguish Space from group nor review the effect before
 
 ## Decision
 
-- One bounded inline form, visibly titled "Add <project> to a group", names the Space with a label; one eligible Space is static context, several use one selector.
+- One bounded inline form, visibly titled "Add <project> to a group", names the Space beside its label on one line, wrapping the value as needed; one eligible Space is static context, several use one selector.
 - "Choose group" is a list of radio rows, Personal first with "Your personal group" as its explanation, and no destination selected initially.
   Choosing a destination changes only the form; changing Space clears that choice.
 - A separate "Connect to an existing project" section offers matching projects already in the selected Space, naming their groups and explaining that connecting combines records.
-- The selected destination's review names its group and Space and explains the full sessions and attachments, past and future records, access and retained downloads.
+- The selected destination's review names its group and Space and names conversations, agent activity and attachments, includes existing and future records, and says that removing access cannot erase copies members already saved.
   Personal makes no unverified privacy promise; public visibility is explicit where known.
 - "Add to group", or "Connect project" for an existing project, is the sole committing action.
   The existing-project review carries its required sharing acknowledgement; creating records does not pre-acknowledge the fresh access check of the first sync.

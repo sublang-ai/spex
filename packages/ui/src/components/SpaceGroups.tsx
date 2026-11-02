@@ -1688,13 +1688,13 @@ export function GroupPicker({ groups, repo, connected, onClose, onNote, onPendin
         }
       }}>
       <h3 id={ids + "-title"} className="min-w-0 break-words text-base font-semibold">{title}</h3>
-      <div className="flex min-w-0 flex-col gap-1.5">
-        <label id={ids + "-space-label"} htmlFor={sections.length > 1 ? ids + "-space" : undefined} className="text-xs font-medium text-neutral-600 dark:text-neutral-400">
-          {i18n._({ id: "Space", comment: "label identifying the Space that holds the destination groups" })}
+      <div data-testid={"space-pick-context-" + repo.key} className="flex min-w-0 items-baseline gap-2">
+        <label id={ids + "-space-label"} htmlFor={sections.length > 1 ? ids + "-space" : undefined} className="shrink-0 text-xs font-medium text-neutral-600 dark:text-neutral-400">
+          {i18n._({ id: "Space", comment: "label identifying the Space that holds the destination groups" })}<span aria-hidden>:</span>
         </label>
         {sections.length > 1 ? (
           <select id={ids + "-space"} value={origin ?? ""} disabled={disabled}
-            className="min-h-10 w-full min-w-0 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-brand-500 dark:border-neutral-600 dark:bg-neutral-900"
+            className="min-h-10 min-w-0 flex-1 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-brand-500 dark:border-neutral-600 dark:bg-neutral-900"
             onChange={(event) => { setOrigin(event.target.value); setSelection(undefined); setRefusal(undefined); }}>
             {sections.map(({ instance }) => <option key={instance.origin} value={instance.origin}>{instanceName(instance)}</option>)}
           </select>
@@ -1759,9 +1759,9 @@ export function GroupPicker({ groups, repo, connected, onClose, onNote, onPendin
           <div>
             <p className="mb-1 font-medium">{i18n._({ id: "Project records", comment: "what adding a project to a group syncs" })}</p>
             <ul className="list-disc space-y-1 pl-4 text-neutral-600 dark:text-neutral-300">
-              <li>{i18n._({ id: "Every session, whole, attachments included", comment: "the sharing confirm: what goes to the group" })}</li>
-              <li>{i18n._({ id: "Past and future records", comment: "the sharing confirm: the records made before and after the share both go" })}</li>
-              <li>{i18n._({ id: "Members keep what they download", comment: "the sharing confirm: nothing recalls what the group's members downloaded" })}</li>
+              <li>{i18n._({ id: "All sessions: conversations, agent activity, and attachments", comment: "sharing scope: all conversation messages, agent actions and results, and attachments" })}</li>
+              <li>{i18n._({ id: "Existing and future project records", comment: "the sharing confirm: the records made before and after the share both go" })}</li>
+              <li>{i18n._({ id: "Removing access won’t erase copies members already saved", comment: "sharing consequence: revoking access does not erase copies members already saved" })}</li>
             </ul>
           </div>
           <p className="text-neutral-600 dark:text-neutral-300">{target.login !== null

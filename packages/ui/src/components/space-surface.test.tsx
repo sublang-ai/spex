@@ -753,9 +753,9 @@ describe("SPACE: syncing from the row (space-11, space-12, space-15, space-16, s
     // Titled by the group the records are in — "Personal" for your own —
     // and the Space, over three phrases, no sentence (space-57).
     expect(notice.textContent).toContain("Share with Personal at Spex Example?");
-    expect(notice.textContent).toContain("Every session, whole, attachments included");
-    expect(notice.textContent).toContain("Past and future records");
-    expect(notice.textContent).toContain("Members keep what they download");
+    expect(notice.textContent).toContain("All sessions: conversations, agent activity, and attachments");
+    expect(notice.textContent).toContain("Existing and future project records");
+    expect(notice.textContent).toContain("Removing access won’t erase copies members already saved");
     expect(notice.textContent).not.toContain("Public: anyone can read");
     expect(document.activeElement).toBe(within(notice).getByRole("button", { name: "Cancel" }));
     fireEvent.keyDown(document.activeElement!, { key: "Escape" });
@@ -781,7 +781,7 @@ describe("SPACE: syncing from the row (space-11, space-12, space-15, space-16, s
     // have others: it says so too.
     await renderGroups(repoState({ members: null, noticed: false, lastSync: null }));
     fireEvent.click(syncControl());
-    expect(screen.getByTestId("space-notice-confirm").textContent).toContain("Every session, whole, attachments included");
+    expect(screen.getByTestId("space-notice-confirm").textContent).toContain("All sessions: conversations, agent activity, and attachments");
     cleanup();
     for (const over of [{ members: 3, noticed: true }, { members: 1, noticed: false }, { members: null, noticed: false }]) {
       commandMock.mockClear();

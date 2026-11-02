@@ -863,9 +863,9 @@ describe("GROUPS: a placement's sharing confirm, combining and retry (space-57, 
     const confirm = within(notice).getByTestId("space-sharing-confirm");
     expect(confirm.firstElementChild?.textContent).toBe("Share with workshop at Second Example?");
     expect(within(confirm).getAllByRole("listitem").map((item) => item.textContent)).toEqual([
-      "Every session, whole, attachments included",
-      "Past and future records",
-      "Members keep what they download",
+      "All sessions: conversations, agent activity, and attachments",
+      "Existing and future project records",
+      "Removing access won’t erase copies members already saved",
     ]);
     expect(document.activeElement).toBe(within(notice).getByRole("button", { name: "Cancel" }));
     fireEvent.keyDown(document.activeElement!, { key: "Escape" });
@@ -912,7 +912,7 @@ describe("GROUPS: a placement's sharing confirm, combining and retry (space-57, 
     const notice = screen.getByTestId("space-notice-confirm");
     expect(screen.getByTestId(`space-row-${KEY}`).contains(notice)).toBe(true);
     expect(notice.textContent).toContain("Share with workshop at Second Example?");
-    expect(notice.textContent).toContain("Every session, whole, attachments included");
+    expect(notice.textContent).toContain("All sessions: conversations, agent activity, and attachments");
     expect(document.activeElement).toBe(within(notice).getByRole("button", { name: "Cancel" }));
     fireEvent.click(within(notice).getByRole("button", { name: "Share" }));
     await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY, placement: SECOND, noticed: true }]));

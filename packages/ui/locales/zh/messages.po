@@ -1333,6 +1333,13 @@ msgstr "全用这里的"
 msgid "All projects"
 msgstr "所有项目"
 
+#. sharing scope: all conversation messages, agent actions and results, and attachments
+#. sharing scope: all conversation messages, agent actions and results, and attachments
+#: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
+msgid "All sessions: conversations, agent activity, and attachments"
+msgstr "所有会话：对话、智能体活动和附件"
+
 #. project palette: every project of the member's groups is open on this computer already
 #: src/components/ProjectPalette.tsx
 msgid "All your groups' projects are open here"
@@ -3117,13 +3124,6 @@ msgstr "所有记录仍保留在 {place}"
 msgid "Every record stays on this computer"
 msgstr "所有记录仍保留在本机"
 
-#. the sharing confirm: what goes to the group
-#. the sharing confirm: what goes to the group
-#: src/components/SpaceGroups.tsx
-#: src/components/SpacePlacements.tsx
-msgid "Every session, whole, attachments included"
-msgstr "每个会话，完整发送，包括附件"
-
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
 #: src/lib/space.ts
@@ -3138,6 +3138,13 @@ msgstr "示例"
 #: src/components/PlaybooksTab.tsx
 msgid "Example: {title}"
 msgstr "示例：{title}"
+
+#. the sharing confirm: the records made before and after the share both go
+#. the sharing confirm: the records made before and after the share both go
+#: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
+msgid "Existing and future project records"
+msgstr "现有及未来的项目记录"
 
 #: src/components/ProjectPalette.tsx
 msgid "Existing project"
@@ -4160,13 +4167,6 @@ msgstr "媒体不可用"
 msgid "Members"
 msgstr "成员"
 
-#. the sharing confirm: nothing recalls what the group's members downloaded
-#. the sharing confirm: nothing recalls what the group's members downloaded
-#: src/components/SpaceGroups.tsx
-#: src/components/SpacePlacements.tsx
-msgid "Members keep what they download"
-msgstr "成员会保留他们下载的内容"
-
 #: src/components/SpaceMembers.tsx
 msgid "Members of {name}"
 msgstr "{name} 的成员"
@@ -5145,13 +5145,6 @@ msgstr "规约包名称"
 msgid "Packages"
 msgstr "规约包"
 
-#. the sharing confirm: the records made before and after the share both go
-#. the sharing confirm: the records made before and after the share both go
-#: src/components/SpaceGroups.tsx
-#: src/components/SpacePlacements.tsx
-msgid "Past and future records"
-msgstr "过去和将来的记录"
-
 #. bring in a source of one's own
 #. bring in a source of one's own
 #: src/components/DraftSourceTab.tsx
@@ -5876,6 +5869,13 @@ msgstr "从 spex.yaml 中移除 {name} 并卸载"
 #: src/components/SpaceServers.tsx
 msgid "Removing {server}, or revoking its access at {space}, stops new use; a credential already there lasts until it expires"
 msgstr "移除 {server}，或在 {space} 上撤销它的访问权限，即可停止新的使用；已在那里的凭据会持续到过期为止"
+
+#. sharing consequence: revoking access does not erase copies members already saved
+#. sharing consequence: revoking access does not erase copies members already saved
+#: src/components/SpaceGroups.tsx
+#: src/components/SpacePlacements.tsx
+msgid "Removing access won’t erase copies members already saved"
+msgstr "移除访问权限不会删除成员已保存的副本"
 
 #. queue row control, busy: the removal is in flight
 #. the removal is in flight

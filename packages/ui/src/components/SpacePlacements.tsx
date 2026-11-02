@@ -120,9 +120,9 @@ export function SharingConfirm({
             })}
           </span>
           <ul className="list-disc pl-4 text-neutral-600 dark:text-neutral-300">
-            <li>{i18n._({ id: "Every session, whole, attachments included", comment: "the sharing confirm: what goes to the group" })}</li>
-            <li>{i18n._({ id: "Past and future records", comment: "the sharing confirm: the records made before and after the share both go" })}</li>
-            <li>{i18n._({ id: "Members keep what they download", comment: "the sharing confirm: nothing recalls what the group's members downloaded" })}</li>
+            <li>{i18n._({ id: "All sessions: conversations, agent activity, and attachments", comment: "sharing scope: all conversation messages, agent actions and results, and attachments" })}</li>
+            <li>{i18n._({ id: "Existing and future project records", comment: "the sharing confirm: the records made before and after the share both go" })}</li>
+            <li>{i18n._({ id: "Removing access won’t erase copies members already saved", comment: "sharing consequence: revoking access does not erase copies members already saved" })}</li>
             {visibility === "public" ? (
               <li>{i18n._({ id: "Public: anyone can read", comment: "the sharing confirm, on records at a public place of the Space" })}</li>
             ) : null}
