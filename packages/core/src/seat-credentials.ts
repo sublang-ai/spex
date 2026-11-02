@@ -11,9 +11,12 @@
 // in, so the member's own wins whatever the agent's precedence. Readiness
 // on a seat counts these forms as an agent's credential half and runs the
 // agent's own status command with the run's environment. No value of
-// either file is written anywhere else or logged.
+// either file is logged. An access-only Codex snapshot alone is materialized
+// as private native credentials (core-service-150, storage-53).
 
-import { readFileSync } from "node:fs";
+import { chmodSync, lstatSync, readFileSync, rmSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { hasPrivatePermissions, makePrivateDirectory, writeApplicationBytes } from "@sublang/spex/files";
 import { locateAgentExecutable } from "@sublang/cligent";
 import type { PlayerAdapterImports } from "@sublang/cligent/tmux-play";
 import type { RunCommand } from "./forge.js";
@@ -30,8 +33,8 @@ export const AGENT_CREDENTIAL_FORMS: Readonly<Record<AdapterName, { names: reado
     keys: ["CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"],
   },
   codex: {
-    names: ["CODEX_ACCESS_TOKEN", "CODEX_API_KEY", "OPENAI_API_KEY"],
-    keys: ["CODEX_ACCESS_TOKEN", "CODEX_API_KEY", "OPENAI_API_KEY"],
+    names: ["CODEX_ACCESS_TOKEN", "CODEX_AUTH_CONTENT", "CODEX_API_KEY", "OPENAI_API_KEY"],
+    keys: ["CODEX_ACCESS_TOKEN", "CODEX_AUTH_CONTENT", "CODEX_API_KEY", "OPENAI_API_KEY"],
   },
   opencode: { names: ["OPENCODE_AUTH_CONTENT"], keys: ["OPENCODE_AUTH_CONTENT"] },
   gemini: {
@@ -46,6 +49,52 @@ export const AGENT_CREDENTIAL_FORMS: Readonly<Record<AdapterName, { names: reado
 
 const ADAPTERS = Object.keys(AGENT_CREDENTIAL_FORMS) as AdapterName[];
 const FORM_NAMES: ReadonlySet<string> = new Set(ADAPTERS.flatMap((adapter) => AGENT_CREDENTIAL_FORMS[adapter].names));
+
+/** Normalize only native external-token fields; never retain a refresh token or
+ * arbitrary supplied fields. Parsing errors never quote credential content. */
+export function codexAuthContent(value: string): string {
+  try {
+    const input = JSON.parse(value);
+    const text = (v: unknown): v is string => typeof v === "string" && v.trim() !== "" && !v.includes("\0");
+    if (input?.auth_mode !== "chatgptAuthTokens" || !text(input.last_refresh) ||
+        !text(input.tokens?.id_token) || !text(input.tokens?.access_token) || !text(input.tokens?.account_id) ||
+        (input.tokens.refresh_token !== undefined && input.tokens.refresh_token !== "")) throw new Error();
+    return JSON.stringify({ auth_mode: "chatgptAuthTokens", OPENAI_API_KEY: null,
+      tokens: { id_token: input.tokens.id_token, access_token: input.tokens.access_token,
+        account_id: input.tokens.account_id, refresh_token: "" }, last_refresh: input.last_refresh });
+  } catch {
+    throw new Error("Invalid CODEX_AUTH_CONTENT");
+  }
+}
+
+/** Do not follow a directory or credential symlink, including on cleanup. */
+function plainEntry(path: string, directory: boolean): boolean {
+  try {
+    const entry = lstatSync(path);
+    if (entry.isSymbolicLink() || !(directory ? entry.isDirectory() : entry.isFile()) ||
+        (process.getuid && entry.uid !== process.getuid())) throw new Error();
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+/** Materialize an access-only snapshot in a private native home. Throws only
+ * a fixed message, suitable for a CLI wrapper; no supplied content is echoed. */
+export function materializeCodexAuth(home: string, content: string): void {
+  try {
+    const normalized = codexAuthContent(content);
+    for (const directory of [dirname(home), home]) {
+      plainEntry(directory, true);
+      makePrivateDirectory(directory);
+      if (process.platform !== "win32") chmodSync(directory, 0o700);
+      if (!hasPrivatePermissions(directory, lstatSync(directory))) throw new Error();
+    }
+    plainEntry(join(home, "auth.json"), false);
+    writeApplicationBytes(join(home, "auth.json"), normalized);
+  } catch { throw new Error("Invalid CODEX_AUTH_CONTENT"); }
+}
 
 /** What an agent's status command answered. */
 interface StatusAnswer { code: number; stdout: string; stderr: string }
@@ -122,6 +171,7 @@ function readSharedFile(path: string): SharedRead {
  * own credentials by agent. */
 export interface SeatCredentialSources {
   shared: "none" | "read" | "unreadable";
+  codexUnreadable?: boolean;
   sharedValues: ReadonlyMap<string, string>;
   own: Readonly<Partial<Record<AdapterName, Readonly<Record<string, string>>>>>;
 }
@@ -146,8 +196,9 @@ export class SeatEnvironment {
     private readonly target: NodeJS.ProcessEnv,
     private readonly sharedFile: string | undefined,
     private readonly ownCredentials: () => Partial<Record<AdapterName, Readonly<Record<string, string>>>>,
+    private readonly codexHome?: string,
   ) {
-    for (const name of FORM_NAMES) this.baseline.set(name, target[name]);
+    for (const name of [...FORM_NAMES, "CODEX_HOME"]) this.baseline.set(name, target[name]);
   }
 
   /** Read both files and write the environment the next run inherits;
@@ -181,8 +232,39 @@ export class SeatEnvironment {
         else this.target[name] = value;
       }
     }
+    let codexUnreadable = false;
+    let home = this.baseline.get("CODEX_HOME");
+    const content = this.target.CODEX_AUTH_CONTENT;
+    try {
+      if (content !== undefined) {
+        if (!this.codexHome) throw new Error();
+        materializeCodexAuth(this.codexHome, content);
+        home = this.codexHome;
+        // A selected snapshot must not lose to inherited native token/key forms.
+        for (const name of AGENT_CREDENTIAL_FORMS.codex.names) {
+          if (name === "CODEX_AUTH_CONTENT") continue;
+          decided.set(name, undefined);
+          delete this.target[name];
+        }
+      } else this.removeCodexAuth();
+    } catch {
+      codexUnreadable = true;
+      // Refuse stale access on a failed replacement, without following links.
+      try { this.removeCodexAuth(); } catch { /* reported as unreadable */ }
+    }
+    decided.set("CODEX_HOME", home);
+    if (home === undefined) delete this.target.CODEX_HOME;
+    else this.target.CODEX_HOME = home;
     this.decided = decided;
-    return { shared, sharedValues: new Map(this.sharedValues), own };
+    return { shared, sharedValues: new Map(this.sharedValues), own, codexUnreadable };
+
+  }
+
+  private removeCodexAuth(): void {
+    if (this.codexHome && plainEntry(dirname(this.codexHome), true) && plainEntry(this.codexHome, true)) {
+      const auth = join(this.codexHome, "auth.json");
+      if (plainEntry(auth, false)) rmSync(auth);
+    }
   }
 
   /** `base` as an agent run spawned with an environment of its own
@@ -210,7 +292,7 @@ export class SeatEnvironment {
   /** The values a run of `adapter` inherits now, by form name. */
   runValues(adapter: AdapterName): Record<string, string> {
     const values: Record<string, string> = {};
-    for (const name of AGENT_CREDENTIAL_FORMS[adapter].names) {
+    for (const name of [...AGENT_CREDENTIAL_FORMS[adapter].names, ...(adapter === "codex" && this.target.CODEX_HOME ? ["CODEX_HOME"] : [])]) {
       const value = this.target[name];
       if (value !== undefined) values[name] = value;
     }
@@ -221,22 +303,24 @@ export class SeatEnvironment {
 /** Adapter imports whose every run first calls `before` (core-service-126):
  * the environment is written as the run starts, just before the adapter
  * spawns its runtime, so no adapter takes a per-run environment. */
-export function seatAdapterImports(imports: PlayerAdapterImports, before: () => void): PlayerAdapterImports {
+export function seatAdapterImports(imports: PlayerAdapterImports, before: (adapter: string) => void): PlayerAdapterImports {
   type Runner = new (...args: any[]) => { run(...args: unknown[]): unknown };
-  const wrapped = new WeakMap<Runner, Runner>();
+  const wrapped = new Map<string, WeakMap<Runner, Runner>>();
   const loaders: Record<string, () => Promise<Runner>> = {};
   for (const [adapter, load] of Object.entries(imports) as [string, () => Promise<Runner>][]) {
     loaders[adapter] = async () => {
       const Adapter = await load();
-      let Seated = wrapped.get(Adapter);
+      let cache = wrapped.get(adapter);
+      if (!cache) { cache = new WeakMap(); wrapped.set(adapter, cache); }
+      let Seated = cache.get(Adapter);
       if (!Seated) {
         Seated = class extends Adapter {
           run(...args: unknown[]): unknown {
-            before();
+            before(adapter);
             return super.run(...args);
           }
         };
-        wrapped.set(Adapter, Seated);
+        cache.set(Adapter, Seated);
       }
       return Seated;
     };
@@ -289,6 +373,10 @@ export async function seatCredentialHalf(
   const forms = AGENT_CREDENTIAL_FORMS[adapter];
   const own = sources.own[adapter] !== undefined;
   const shared = !own && sources.shared === "read" && forms.keys.some((name) => (sources.sharedValues.get(name) ?? "") !== "");
+  if (adapter === "codex" && sources.codexUnreadable) {
+    const phrase = unreadablePhrase();
+    return { ready: false, requirement: phrase, credential: { class: "unreadable", phrase } };
+  }
   if (own || shared) {
     const status = STATUS_COMMANDS[adapter];
     if (status && (adapter === "claude" || adapter === "codex")) {
@@ -314,10 +402,7 @@ export async function seatCredentialHalf(
     return { ready: true, credential: own ? { class: "own", phrase: ownPhrase() } : { class: "shared", phrase: sharedPhrase() } };
   }
   if (sources.shared === "unreadable") {
-    const phrase = i18n._({
-      id: "This server's shared sign-in cannot be read: ask its administrator",
-      comment: "Readiness on a team server's seat: the file holding the administrator's shared sign-ins cannot be read",
-    });
+    const phrase = unreadablePhrase();
     return { ready: false, requirement: phrase, credential: { class: "unreadable", phrase } };
   }
   const phrase = i18n._({
@@ -327,3 +412,8 @@ export async function seatCredentialHalf(
   });
   return { ready: false, requirement: phrase, credential: { class: "none", phrase } };
 }
+
+export const unreadablePhrase = (): string => i18n._({
+  id: "This server's shared sign-in cannot be read: ask its administrator",
+  comment: "Readiness on a team server's seat: the file holding the administrator's shared sign-ins cannot be read",
+});

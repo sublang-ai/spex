@@ -144,7 +144,7 @@ import { MediaTransferError } from "./media-transfers.js";
 import { readAgentOptions, type AgentModelDiscovery } from "./agent-options.js";
 import { DEFAULT_ADAPTER_IMPORTS } from "./agent-runtime.js";
 import { canonicalHost, codeCredentialsPath, codeCredentialStore, isAdapterName, type AgentCredential, type CodeCredentialStore, type HostCredential } from "./code-credentials.js";
-import { AGENT_CREDENTIAL_FORMS, SeatEnvironment, seatAdapterImports, seatCredentialHalf, type SeatCredentialSources } from "./seat-credentials.js";
+import { AGENT_CREDENTIAL_FORMS, codexAuthContent, unreadablePhrase, SeatEnvironment, seatAdapterImports, seatCredentialHalf, type SeatCredentialSources } from "./seat-credentials.js";
 import { RegistryManager } from "./registry.js";
 import { SpaceManager, type SpaceHost, type SpaceStepEvent } from "./space.js";
 import { Places } from "./places.js";
@@ -438,6 +438,13 @@ function agentCredentialOf(adapter: AdapterName, values: Record<string, string>)
       comment: "Refusal of an agent's credential on a team server's seat: it carries only names that accompany the agent's key, such as Kimi's model name, and not the key; `adapter` is the agent's name and `keys` lists the key's variable names, any one of which will do, both as they are",
       values: { adapter, keys: listed(keys) },
     }));
+  }
+  if (adapter === "codex" && values.CODEX_AUTH_CONTENT !== undefined) {
+    try { return { ...values, CODEX_AUTH_CONTENT: codexAuthContent(values.CODEX_AUTH_CONTENT) }; }
+    catch { throw new CoreError("invalid_request", i18n._({
+      id: "Codex subscription credentials are invalid.",
+      comment: "Refusal of malformed access-only Codex subscription credentials; never repeats their contents",
+    })); }
   }
   return { ...values };
 }
@@ -758,7 +765,10 @@ export class CoreService {
       const { credentials, environment } = seat ?? CoreService.seatCredentials(options, store.dir);
       this.codeCredentials = credentials;
       this.seatEnvironment = environment;
-      this.adapterImports = seatAdapterImports(options.adapterImports ?? DEFAULT_ADAPTER_IMPORTS, () => { environment.prepare(); });
+      this.adapterImports = seatAdapterImports(options.adapterImports ?? DEFAULT_ADAPTER_IMPORTS, (adapter) => {
+        const sources = environment.prepare();
+        if (adapter === "codex" && sources.codexUnreadable) throw new Error(unreadablePhrase());
+      });
     } else if (options.adapterImports) this.adapterImports = options.adapterImports;
     // Your own group's config, inside its clone (storage-1, DR-103); an
     // explicit path is the operator's.
@@ -1445,7 +1455,7 @@ export class CoreService {
    * (core-service-126), for the seat's home. */
   private static seatCredentials(options: CoreServiceOptions, dir: string): { credentials: CodeCredentialStore; environment: SeatEnvironment } {
     const credentials = codeCredentialStore(dir);
-    const environment = new SeatEnvironment(process.env, options.seat?.sharedCredentialFile, () => credentials.readAgents());
+    const environment = new SeatEnvironment(process.env, options.seat?.sharedCredentialFile, () => credentials.readAgents(), join(dir, "local", "codex"));
     return { credentials, environment };
   }
 

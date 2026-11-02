@@ -272,7 +272,7 @@ Where the core runs as a seat [[core-service-125](core-service.md#core-service-1
 | Agent | Shared and own forms |
 | --- | --- |
 | `claude` | `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN` |
-| `codex` | `CODEX_ACCESS_TOKEN`, `CODEX_API_KEY`, `OPENAI_API_KEY` |
+| `codex` | `CODEX_ACCESS_TOKEN` (automation token), `CODEX_AUTH_CONTENT` (access-only ChatGPT snapshot), `CODEX_API_KEY`, `OPENAI_API_KEY` |
 | `opencode` | `OPENCODE_AUTH_CONTENT` |
 | `gemini` | `GEMINI_API_KEY`, `GOOGLE_APPLICATION_CREDENTIALS`, `GOOGLE_API_KEY` |
 | `kimi` | `KIMI_MODEL_API_KEY` with `KIMI_MODEL_NAME`, `KIMI_MODEL_BASE_URL` and `KIMI_MODEL_PROVIDER_TYPE` |
@@ -284,6 +284,13 @@ Where the core runs as a seat [[core-service-125](core-service.md#core-service-1
 | `unreadable` | the shared file cannot be read | "This server's shared sign-in cannot be read: ask its administrator" |
 | `expired` | the agent's status command reports the credential expired or refused | "This server's shared sign-in has expired: ask its administrator", or "Your own credential has expired" |
 | none | no form of the agent is set | the launcher's not-ready guidance, naming the Credentials section in place of a terminal login |
+
+### settings-56
+
+Where a seat's selected Codex credential holds `CODEX_AUTH_CONTENT`, the core service shall accept only JSON with `auth_mode: "chatgptAuthTokens"`, nonblank `tokens.id_token`, `tokens.access_token`, `tokens.account_id` and `last_refresh`, and no nonempty refresh token, rejecting a malformed member-supplied value before persistence and reporting a malformed administrator value as an unreadable sign-in without repeating its contents ([DR-201](../decisions/201-shared-codex-subscription-access.md)):
+
+- a failed materialization is reported as unreadable and blocks a Codex run while leaving other agents usable;
+- the materialization selects a private native Codex home [[core-service-150](core-service.md#core-service-150)], and readiness evaluates its native status there [[settings-49](#settings-49)].
 
 ## Internal Behavior
 
@@ -426,6 +433,10 @@ Where the Settings surface renders against fixture state, the test suite shall a
 #### settings-51
 
 Where the UI holds a seat's store over a fake client, the test suite shall assert the Credentials section [[settings-48](#settings-48)]: its fixed sentence; the host form sending `credential.set` with the host and the token and the agent forms sending it with the agent's names; the listing naming the hosts and agents set with no secret shown; a remove sending `credential.remove`; a blank name or value refused in place; the host a failed clone named shown; and the section opened at that host.
+
+#### settings-57
+
+Where a seat selects a Codex subscription snapshot, the integration suite shall exercise a valid snapshot, malformed JSON, missing required fields, a nonempty refresh token, an unwritable native home and a member's replacement credential, asserting that valid access has its own or shared class and native status [[settings-49](#settings-49)], invalid member input is refused before persistence, invalid administrator input is unreadable, no response repeats a credential, and another agent remains usable [[settings-56](#settings-56)].
 
 ### Browser Journeys
 

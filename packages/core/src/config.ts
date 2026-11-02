@@ -51,6 +51,7 @@ import { migrateConfigFileIfRetired } from "./config-migrate.js";
 import { readVersioned, sha256, VersionConflictError, writeVersionedBytes, type FileVersion } from "@sublang/spex/files";
 import { defaultOwnName, recordedOwnName } from "./home.js";
 import { i18n } from "./i18n.js";
+import { codexAuthContent } from "./seat-credentials.js";
 import { canonicalWritablePath } from "./permission-paths.js";
 
 import {
@@ -784,7 +785,19 @@ export function isSeedRecord(value: unknown): value is SeedRecord {
 /** Playbook's own seed for these credentials and this home, as Spex
  * writes it (core-service-3, DR-154). */
 function seedText(env: NodeJS.ProcessEnv, home: string): string {
-  return starterText(seedConfigText({ env, homeDir: home }).text);
+  // Playbook's released presence check predates external snapshots. Project
+  // presence into this seed call alone; never place the marker in a run.
+  let seedEnv = env;
+  if (env.CODEX_AUTH_CONTENT && env.CODEX_HOME) {
+    try {
+      const auth = join(env.CODEX_HOME, "auth.json");
+      if (lstatSync(auth).isFile() && !lstatSync(auth).isSymbolicLink() &&
+          readFileSync(auth, "utf8") === codexAuthContent(env.CODEX_AUTH_CONTENT)) {
+        seedEnv = { ...env, CODEX_ACCESS_TOKEN: "credential-present" };
+      }
+    } catch { /* An invalid or unmaterialized snapshot counts no credential. */ }
+  }
+  return starterText(seedConfigText({ env: seedEnv, homeDir: home }).text);
 }
 
 /**
@@ -2479,7 +2492,7 @@ export async function checkAdapterReadiness(
     }
   } else if (adapter === "codex") {
     credentialReady =
-      Boolean(env.OPENAI_API_KEY) || existsSync(join(home, ".codex"));
+      Boolean(env.OPENAI_API_KEY) || (env.CODEX_HOME ? existsSync(join(env.CODEX_HOME, "auth.json")) : existsSync(join(home, ".codex")));
     if (!credentialReady) {
       faults.push(
         i18n._({
