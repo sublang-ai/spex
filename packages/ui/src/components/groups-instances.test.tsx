@@ -644,6 +644,11 @@ describe("SPACE: Add to a group… at each Space (space-58, space-29)", () => {
       return screen.getByTestId(`space-picker-${key}`);
     };
     const picker = openPicker(GAMMA);
+    const opener = screen.getByTestId(`space-row-pick-${GAMMA}`);
+    const formId = picker.id;
+    expect(formId).not.toBe("");
+    expect(opener.getAttribute("aria-controls")).toBe(formId);
+    expect(picker.closest("li[data-state]")).toBe(screen.getByTestId(`space-row-${GAMMA}`));
     const chooser = within(picker).getByRole("combobox", { name: "Space" }) as HTMLSelectElement;
     const submit = () => within(picker).getByTestId(`space-pick-submit-${GAMMA}`) as HTMLButtonElement;
     expect([...chooser.options].map((option) => [option.value, option.textContent])).toEqual([
@@ -656,6 +661,8 @@ describe("SPACE: Add to a group… at each Space (space-58, space-29)", () => {
     fireEvent.click(within(picker).getByTestId("space-pick-group-acme"));
     expect(submit().disabled).toBe(false);
     fireEvent.change(chooser, { target: { value: SECOND } });
+    expect(opener.getAttribute("aria-controls")).toBe(formId);
+    expect(picker.id).toBe(formId);
     expect(submit().disabled).toBe(true);
     expect(within(picker).getAllByRole("radio").every((radio) => !(radio as HTMLInputElement).checked)).toBe(true);
     expect(within(picker).getAllByTestId(/^space-pick-group-/).map((option) => option.dataset.testid)).toEqual(["space-pick-group-@jada", "space-pick-group-acme", "space-pick-group-lab"]);

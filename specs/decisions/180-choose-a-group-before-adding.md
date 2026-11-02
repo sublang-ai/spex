@@ -9,6 +9,8 @@ Accepted (2026-11-02) on the owner's approval of a visible task title, labelled 
 Amends [DR-172](172-surfaces-a-fresh-user-reads.md) in the group picker's wording and hierarchy, and [DR-159](159-projects-in-groups-opened-where-you-work.md) in the flow opened by "Add to a group…".
 Extends [DR-069](069-key-phrases-not-sentences.md): destination and record-access consequences belong beside the confirmation they inform.
 
+Amended by [DR-187](187-the-group-chooser-belongs-to-its-project.md) in the chooser’s attachment to its project row and consistent typography.
+
 ## Context
 
 "Add to a group…" opened an untitled panel headed by a Space's address and "Share into".

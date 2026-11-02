@@ -945,6 +945,12 @@ describe("GROUPS: Add to a group… (space-58, space-29)", () => {
     open();
     expect(picker()).toBe(screen.getByRole("group", { name: "Add academy to a group" }));
     expect(within(picker()).getByRole("heading", { name: "Add academy to a group" })).toBeTruthy();
+    const row = screen.getByTestId(`space-row-${KEY}`);
+    const opener = within(row).getByTestId(`space-row-pick-${KEY}`);
+    expect(picker().closest("li[data-state]")).toBe(row);
+    expect(opener.getAttribute("aria-expanded")).toBe("true");
+    expect(opener.getAttribute("aria-controls")).toBe(picker().id);
+    expect(within(row).getByTestId(`space-repo-${KEY}`).textContent).toBe("academy");
     expect(within(picker()).getByText("Space")).toBeTruthy();
     expect(within(picker()).getByText("Spex Example")).toBeTruthy();
     expect(within(picker()).queryByRole("combobox")).toBeNull();
@@ -1038,6 +1044,12 @@ describe("GROUPS: Add to a group… (space-58, space-29)", () => {
     expect(selected("space-pick-group-@jane").matches(":disabled")).toBe(true);
     const cancel = within(picker()).getByRole("button", { name: "Cancel" }) as HTMLButtonElement;
     expect(cancel.disabled).toBe(true);
+    const opener = screen.getByTestId(`space-row-pick-${KEY}`) as HTMLButtonElement;
+    const more = screen.getByTestId(`space-row-more-${KEY}`) as HTMLButtonElement;
+    expect(opener.disabled).toBe(true);
+    expect(more.disabled).toBe(true);
+    fireEvent.click(opener);
+    fireEvent.click(more);
     fireEvent.click(submit());
     fireEvent.click(cancel);
     fireEvent.keyDown(picker(), { key: "Escape" });
@@ -1048,6 +1060,8 @@ describe("GROUPS: Add to a group… (space-58, space-29)", () => {
     expect(selected("space-pick-group-@jane").checked).toBe(true);
     await waitFor(() => expect(document.activeElement).toBe(submit()));
     expect(submit().disabled).toBe(false);
+    expect(opener.disabled).toBe(false);
+    expect(more.disabled).toBe(false);
     commandMock.mockImplementation(answer);
     fireEvent.click(submit());
     await waitFor(() => expect(screen.queryByTestId(`space-picker-${KEY}`)).toBeNull());

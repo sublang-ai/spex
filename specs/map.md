@@ -215,6 +215,7 @@ meta.md       The spec of specs
 | [DR-184](decisions/184-a-review-count-and-a-way-back.md) | 184-a-review-count-and-a-way-back.md | One shared recovery explanation, a pending-notice count and persistent sidebar return after Not now |
 | [DR-185](decisions/185-dismiss-reminders-without-losing-history.md) | 185-dismiss-reminders-without-losing-history.md | Consistent Dismiss and Show again for folder reminders and older-history notices, one collapsed dismissed section, persistent source-bound acknowledgement and preserved files |
 | [DR-186](decisions/186-unavailable-group-operations.md) | 186-unavailable-group-operations.md | Explain unavailable group deletion and restoration without unrelated package guidance |
+| [DR-187](decisions/187-the-group-chooser-belongs-to-its-project.md) | 187-the-group-chooser-belongs-to-its-project.md | Compact group selection integrated with its owning project row, consistent type and controls, and guarded pending submission |
 
 ## Packages
 

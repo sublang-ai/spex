@@ -900,6 +900,8 @@ function RepositoryRow({
   const dismissed = dismissedByKey[repo.key];
   const isSelected = selected === repo.key;
   const [opened, setOpened] = useState<Opened>();
+  const [pickerPending, setPickerPending] = useState(false);
+  const pickerId = useId();
   // What runs from this row: a sync — asked plainly, as a combining, or
   // as a retry — an open, or a read of the Spaces.
   const [busy, setBusy] = useState<"sync" | "combine" | "retry" | "join" | "refresh">();
@@ -1090,7 +1092,7 @@ function RepositoryRow({
     }
   };
 
-  const disabled = !connected;
+  const disabled = !connected || pickerPending;
   const working = busy !== undefined || accepted !== undefined || running;
   const readOnly = repo.state === "read-only";
   const here = cloneHere(repo);
@@ -1268,6 +1270,7 @@ function RepositoryRow({
           data-testid={`space-row-pick-${repo.key}`}
           className={`${SECONDARY} shrink-0 whitespace-nowrap`}
           aria-expanded={opened === "pick"}
+          aria-controls={opened === "pick" ? pickerId : undefined}
           title={signedOut ? signInFirstLabel() : undefined}
           disabled={disabled || signedOut}
           onClick={() => setOpened((was) => (was === "pick" ? undefined : "pick"))}
@@ -1461,7 +1464,10 @@ function RepositoryRow({
   const actExpanded = act?.kind === "resolve" ? opened === "resolve" : act?.kind === "combine" ? opened === "combine" : act?.kind === "continue" ? opened === "notice" : undefined;
 
   return (
-    <li data-testid={`space-row-${repo.key}`} data-state={repo.state} className="@container flex min-w-0 flex-col gap-1">
+    <li data-testid={`space-row-${repo.key}`} data-state={repo.state}
+      className={`@container flex min-w-0 flex-col gap-1 ${opened === "pick"
+        ? "rounded-md border-l-2 border-brand-300 bg-neutral-100/60 dark:border-brand-700 dark:bg-neutral-900/60"
+        : ""}`}>
       {/* The name owns the slack; below @xs the row's controls wrap
           beneath it, its primary control and overflow last (space-28,
           DR-041). */}
@@ -1596,7 +1602,8 @@ function RepositoryRow({
         </div>
       ) : null}
       {opened === "pick" ? (
-        <GroupPicker groups={groups} repo={repo} connected={connected} onClose={() => close(pickInMore ? "more" : "primary")} onNote={onNote} />
+        <GroupPicker id={pickerId} embedded groups={groups} repo={repo} connected={connected}
+          onClose={() => close(pickInMore ? "more" : "primary")} onNote={onNote} onPendingChange={setPickerPending} />
       ) : null}
       {opened === "members" && showMembers && keyGoverning && keyLine?.instance ? (
         <MembersPanel
@@ -1766,7 +1773,10 @@ interface PickSection {
  * Reading and selecting never mutate the project. The current Space's
  * destinations are resolved again on every render, so a removed group
  * or signed-out Space cannot leave an actionable stale selection. */
-export function GroupPicker({ groups, repo, connected, onClose, onNote, onPendingChange }: {
+export function GroupPicker({ id, embedded = false, groups, repo, connected, onClose, onNote, onPendingChange }: {
+  /** The row opener's controlled form; the palette owns its own dialog. */
+  id?: string;
+  embedded?: boolean;
   groups: GroupsState;
   repo: RepositoryState;
   connected: boolean;
@@ -1861,14 +1871,16 @@ export function GroupPicker({ groups, repo, connected, onClose, onNote, onPendin
       setBusy(false);
     }
   };
-  const rowClass = (checked: boolean) => "flex min-w-0 cursor-pointer items-start gap-3 px-3 py-3 transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-inset has-[:focus-visible]:ring-brand-500 " +
+  const rowClass = (checked: boolean) => "flex min-w-0 cursor-pointer items-start gap-2 px-2 py-2 transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-inset has-[:focus-visible]:ring-brand-500 " +
     (checked ? "bg-brand-50 dark:bg-brand-950/50" : "hover:bg-neutral-100 dark:hover:bg-neutral-800") +
     (disabled ? " pointer-events-none opacity-60" : "");
 
   return (
-    <div ref={pickerRef} tabIndex={-1} role="group" aria-labelledby={ids + "-title"} aria-busy={busy}
+    <div id={id} ref={pickerRef} tabIndex={-1} role="group" aria-labelledby={ids + "-title"} aria-busy={busy}
       data-testid={"space-picker-" + repo.key}
-      className="mx-1 my-2 flex min-w-0 max-w-xl flex-col gap-5 rounded-xl border border-neutral-300 bg-white p-4 shadow-sm dark:border-neutral-700 dark:bg-neutral-900"
+      className={`flex min-w-0 max-w-xl flex-col gap-3 ${embedded
+        ? "mx-2 mb-2 border-t border-neutral-200 pt-3 dark:border-neutral-800"
+        : "p-3"}`}
       onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
         if (event.key === "Escape") {
           event.preventDefault();
@@ -1876,24 +1888,24 @@ export function GroupPicker({ groups, repo, connected, onClose, onNote, onPendin
           if (!submitting.current) onClose();
         }
       }}>
-      <h3 id={ids + "-title"} className="min-w-0 break-words text-base font-semibold">{title}</h3>
+      <h3 id={ids + "-title"} className="min-w-0 break-words text-sm font-medium">{title}</h3>
       <div data-testid={"space-pick-context-" + repo.key} className="flex min-w-0 items-baseline gap-2">
         <label id={ids + "-space-label"} htmlFor={sections.length > 1 ? ids + "-space" : undefined} className="shrink-0 text-xs font-medium text-neutral-600 dark:text-neutral-400">
           {i18n._({ id: "Space", comment: "label identifying the Space that holds the destination groups" })}<span aria-hidden>:</span>
         </label>
         {sections.length > 1 ? (
           <select id={ids + "-space"} value={origin ?? ""} disabled={disabled}
-            className="min-h-10 min-w-0 flex-1 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-brand-500 dark:border-neutral-600 dark:bg-neutral-900"
+            className="min-h-8 min-w-0 flex-1 rounded border border-neutral-300 bg-white px-2 py-1 text-sm focus:border-brand-500 dark:border-neutral-600 dark:bg-neutral-900"
             onChange={(event) => { setOrigin(event.target.value); setSelection(undefined); setRefusal(undefined); }}>
             {sections.map(({ instance }) => <option key={instance.origin} value={instance.origin}>{instanceName(instance)}</option>)}
           </select>
-        ) : <p aria-labelledby={ids + "-space-label"} className="min-w-0 break-words text-sm font-medium">{section ? instanceName(section.instance) : i18n._("Sign in to a Space first")}</p>}
+        ) : <p aria-labelledby={ids + "-space-label"} className="min-w-0 break-words text-sm">{section ? instanceName(section.instance) : i18n._("Sign in to a Space first")}</p>}
       </div>
       {section ? (
         <div role="group" aria-label={instanceName(section.instance)} data-testid={"space-pick-instance-" + section.instance.origin} className="min-w-0">
           <fieldset disabled={disabled} className="min-w-0">
-            <legend className="mb-2 text-sm font-medium">{i18n._({ id: "Choose group", comment: "legend of the single-choice destination list" })}</legend>
-            <ul className="min-w-0 divide-y divide-neutral-200 overflow-hidden rounded-lg border border-neutral-300 dark:divide-neutral-700 dark:border-neutral-700">
+            <legend className="mb-1 text-xs font-medium text-neutral-600 dark:text-neutral-400">{i18n._({ id: "Choose group", comment: "legend of the single-choice destination list" })}</legend>
+            <ul className="min-w-0 divide-y divide-neutral-200 overflow-hidden rounded border border-neutral-300 dark:divide-neutral-700 dark:border-neutral-700">
               {section.creatable.map((group, index) => {
                 const key = groupTestKey(group);
                 const id = ids + "-group-" + index;
@@ -1905,16 +1917,16 @@ export function GroupPicker({ groups, repo, connected, onClose, onNote, onPendin
                       data-testid={"space-pick-group-" + key} className="mt-0.5 h-4 w-4 shrink-0 accent-brand-600 dark:accent-brand-400"
                       onChange={() => select("create", key, entryKey(group))} />
                     <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                      <span id={id + "-name"} className="flex min-w-0 flex-wrap items-baseline gap-x-1 text-sm font-medium"><GroupOptionLabel entry={group} /></span>
+                      <span id={id + "-name"} className="flex min-w-0 flex-wrap items-baseline gap-x-1 text-sm"><GroupOptionLabel entry={group} /></span>
                       {group.mine ? <span id={id + "-description"} className="text-xs text-neutral-500">{i18n._({ id: "Your personal group", comment: "Personal's explanation in the group picker, without promising private visibility" })}</span> : null}
                     </span>
                   </label>
                 </li>;
               })}
             </ul>
-            {section.listed.length > 0 ? <div className="mt-4 min-w-0">
-              <h4 className="mb-2 text-sm font-medium">{i18n._({ id: "Connect to an existing project", comment: "matching projects already in the selected Space; connecting combines their records" })}</h4>
-              <ul className="min-w-0 divide-y divide-neutral-200 overflow-hidden rounded-lg border border-neutral-300 dark:divide-neutral-700 dark:border-neutral-700">
+            {section.listed.length > 0 ? <div className="mt-3 min-w-0">
+              <h4 className="mb-1 text-xs font-medium text-neutral-600 dark:text-neutral-400">{i18n._({ id: "Connect to an existing project", comment: "matching projects already in the selected Space; connecting combines their records" })}</h4>
+              <ul className="min-w-0 divide-y divide-neutral-200 overflow-hidden rounded border border-neutral-300 dark:divide-neutral-700 dark:border-neutral-700">
                 {section.listed.map(({ group, repo: other, placement }, index) => {
                   const id = ids + "-existing-" + index;
                   const checked = selected?.kind === "join" && selected.key === other.key && selected.identity === other.id;
@@ -1925,7 +1937,7 @@ export function GroupPicker({ groups, repo, connected, onClose, onNote, onPendin
                         data-testid={"space-pick-repo-" + other.key} className="mt-0.5 h-4 w-4 shrink-0 accent-brand-600 dark:accent-brand-400"
                         onChange={() => select("join", other.key, other.id!)} />
                       <span className="flex min-w-0 flex-1 flex-col gap-1">
-                        <span id={id + "-name"} className="break-words text-sm font-medium">{rowName(group, other)}</span>
+                        <span id={id + "-name"} className="break-words text-sm">{rowName(group, other)}</span>
                         <span id={id + "-group"} data-testid={"space-pick-listed-group-" + other.key} className="flex min-w-0 flex-wrap items-baseline gap-x-1 text-xs text-neutral-500"><GroupOptionLabel entry={group} /></span>
                         <span id={id + "-description"} className="text-xs text-neutral-500">{placement?.members != null ? i18n._("{count, plural, one {# member} other {# members}}", { count: placement.members }) : null}</span>
                       </span>
@@ -1938,11 +1950,11 @@ export function GroupPicker({ groups, repo, connected, onClose, onNote, onPendin
         </div>
       ) : null}
       {section && target ? (
-        <div data-testid={"space-pick-review-" + repo.key} className="flex min-w-0 flex-col gap-3 rounded-lg bg-neutral-50 p-3 text-xs dark:bg-neutral-800/70">
+        <div data-testid={"space-pick-review-" + repo.key} className="flex min-w-0 flex-col gap-2 border-l-2 border-neutral-200 pl-3 text-xs dark:border-neutral-700">
           <div className="min-w-0">
             <h4 className="mb-1 font-medium text-neutral-600 dark:text-neutral-400">{i18n._({ id: "Destination", comment: "review of the project group's destination before confirmation" })}</h4>
-            {existing ? <p className="mb-1 break-words text-sm font-medium">{rowName(target, existing.repo)}</p> : null}
-            <p className="flex min-w-0 flex-wrap items-baseline gap-x-1 text-sm font-medium"><GroupOptionLabel entry={target} /><span aria-hidden>·</span><span className="min-w-0 break-words">{instanceName(section.instance)}</span></p>
+            {existing ? <p className="mb-1 break-words text-sm">{rowName(target, existing.repo)}</p> : null}
+            <p className="flex min-w-0 flex-wrap items-baseline gap-x-1 text-sm"><GroupOptionLabel entry={target} /><span aria-hidden>·</span><span className="min-w-0 break-words">{instanceName(section.instance)}</span></p>
           </div>
           {existing ? <p className="font-medium">{i18n._({ id: "Combines this project's local and existing records", comment: "consequence of connecting a matching project" })}</p> : null}
           <div>
@@ -1960,11 +1972,11 @@ export function GroupPicker({ groups, repo, connected, onClose, onNote, onPendin
         </div>
       ) : null}
       {refusal ? <p role="alert" className="break-words text-sm text-red-600 dark:text-red-400">{refusal}</p> : null}
-      <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 border-t border-neutral-200 pt-3 dark:border-neutral-700">
-        <button type="button" data-testid={"space-pick-cancel-" + repo.key} className={SECONDARY + " min-h-9 px-3 py-1.5 text-sm"} disabled={busy} onClick={onClose}>
+      <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 border-t border-neutral-200 pt-2 dark:border-neutral-700">
+        <button type="button" data-testid={"space-pick-cancel-" + repo.key} className={SECONDARY} disabled={busy} onClick={onClose}>
           {i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}
         </button>
-        <button ref={submitRef} type="button" data-testid={"space-pick-submit-" + repo.key} className={PRIMARY + " min-h-9"} disabled={disabled || !target}
+        <button ref={submitRef} type="button" data-testid={"space-pick-submit-" + repo.key} className={PRIMARY} disabled={disabled || !target}
           onClick={() => void submit()}>
           {busy ? existing
             ? i18n._({ id: "Connecting…", comment: "connecting this local project's records to an existing group project" })
