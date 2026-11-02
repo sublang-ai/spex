@@ -14,6 +14,7 @@ Amended by [DR-174](174-what-a-package-provides-is-placed.md) in its vocabulary,
 Amended by [DR-175](175-projects-shown-where-they-are-open.md) in its vocabulary: the code glyph's phrase for code on no Git host.
 Amended by [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md) in its map, its vocabulary, its Packages and Playbooks tabs and one accepted loss: the rail regains Playbooks as the global page, and a remembered Playbooks surface opens it; "Global" is the word for what applies to every project of yours, "Personal" staying the name of your own group on Space; the Packages tab holds the project's packages alone, the built-in playbooks one package among the rest; a package row's playbook line carries no act; with no project open the global page stands.
 
+Amended by [DR-178](178-membership-with-a-clear-scope.md) in the group overflow: Delete group returns for permitted empty groups, with confirmation and a visible reason while contents or a server prevent it; the members panel separates Invite members from member rows and explains the choice.
 Amended by [DR-180](180-choose-a-group-before-adding.md) in the group picker: a visible task title, labelled Space, radio choices and explicit Add to group replace the immediate "Share into" actions.
 
 ## Context

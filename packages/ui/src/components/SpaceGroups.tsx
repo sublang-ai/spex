@@ -10,7 +10,8 @@
 // computer", what stands in no group: your sessions before any sign-in
 // and each project not yet shared. A group's heading carries its name,
 // its path where the two differ, its member count where read, and one
-// overflow control, "More", holding Members alone; beneath it, one line
+// overflow control, "More", holding Members and permitted group
+// deletion (DR-181); beneath it, one line
 // per team server of that group (run-view-170), then its rows, then one
 // quiet line, with no control, per row standing elsewhere a placement of
 // which its listing holds, naming the row and where it stands (DR-128).
@@ -503,7 +504,8 @@ interface Shared {
 /** One entry of the list (space-1): "This computer", where `instance` is
  * none, or "Personal", a group or another account's login under a
  * Space's heading. Its heading — a group of a signed-in Space carrying
- * one "More" holding Members, the others none (DR-114, DR-172) — then
+ * one "More" holding Members and permitted deletion, the others none
+ * (DR-114, DR-172, DR-178) — then
  * its servers' lines, its rows, and the groups inside it. */
 function GroupSection({
   instance,
@@ -518,9 +520,25 @@ function GroupSection({
   subgroups: GroupNode[];
 }) {
   const { connected, refreshes, servers, onNote } = shared;
-  const seat = seatName(usePlaceStore().place);
-  const [opened, setOpened] = useState<"members">();
+  const store = usePlaceStore();
+  const seat = seatName(store.place);
+  const spaceGroupDelete = store((state) => state.spaceGroupDelete);
+  const spaceGroupRestore = store((state) => state.spaceGroupRestore);
+  const spaceGroupDeletionCheck = store((state) => state.spaceGroupDeletionCheck);
+  const [opened, setOpened] = useState<"members" | "delete">();
+  const [deleting, setDeleting] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [review, setReview] = useState<Awaited<ReturnType<AppState["spaceGroupDeletionCheck"]>>>();
+  const [checking, setChecking] = useState(false);
+  const [reviewAgain, setReviewAgain] = useState(0);
+  const [deleteError, setDeleteError] = useState<string>();
+  const deletePending = useRef(false);
+  const deleteConfirmRef = useRef<HTMLDivElement>(null);
+  const deleteCancelRef = useRef<HTMLButtonElement>(null);
   const moreRef = useRef<HTMLButtonElement>(null);
+  const deleteTitle = useId();
+  const deleteDescription = useId();
+  const restoreRef = useRef<HTMLButtonElement>(null);
   const { name, beside } = groupReading(group, instance);
   // A group a signed-in Space lists names its members; "Personal",
   // another account's login and "This computer" carry no act (DR-114,
@@ -531,9 +549,89 @@ function GroupSection({
   const Heading = local ? "h2" : "h3";
   const members = instance && group.login === null ? memberCount(instance, group) : null;
   const close = () => {
+    if (deletePending.current) return;
     setOpened(undefined);
+    setDeleteError(undefined);
     // Closing never strands focus (DR-010 §6).
     setTimeout(() => moreRef.current?.focus(), 0);
+  };
+
+  const serverCount = instance
+    ? (servers?.servers ?? []).filter((server) => server.instance === instance.origin && server.group.toLowerCase() === group.fullPath.toLowerCase()).length
+    : 0;
+  const deleteReason = !group.can.delete
+    ? i18n._({ id: "You no longer have permission to delete this group.", comment: "a deletion confirmation whose Space permissions changed while it was open" })
+    : group.pendingDeletion
+      ? i18n._("This group is already scheduled for deletion.")
+      : undefined;
+  const confirmed = review?.group.id === hostGroup && review.contents.length === 0;
+  useEffect(() => {
+    if (opened !== "delete" || !instance || hostGroup === null) return;
+    let cancelled = false;
+    setReview(undefined);
+    setChecking(connected);
+    if (connected) spaceGroupDeletionCheck(instance.origin, hostGroup)
+      .then((result) => { if (!cancelled) setReview(result); })
+      .catch((cause: Error) => { if (!cancelled) setDeleteError(cause.message); })
+      .finally(() => { if (!cancelled) setChecking(false); });
+    return () => { cancelled = true; };
+  }, [opened, instance?.origin, hostGroup, refreshes, connected, reviewAgain, spaceGroupDeletionCheck]);
+
+  const removeGroup = async () => {
+    if (deletePending.current || !connected || !instance || hostGroup === null || deleteReason || !confirmed || checking) return;
+    deletePending.current = true;
+    setDeleting(true);
+    setDeleteError(undefined);
+    // The successful state arrives before the reply and removes this
+    // whole section. Keep a destination in its surviving Space heading.
+    const fallback = moreRef.current?.closest("[data-signed-in]")?.querySelector<HTMLButtonElement>(
+      '[data-testid="space-new-group"]:not(:disabled), [data-testid="space-signout"]',
+    );
+    const panel = deleteConfirmRef.current;
+    const focusIsOurs = () => document.activeElement === document.body || document.activeElement === null || panel?.contains(document.activeElement);
+    try {
+      const reply = await spaceGroupDelete(instance.origin, hostGroup, review!.group.fullPath);
+      setOpened(undefined);
+      onNote(reply.status === "scheduled"
+        ? i18n._("{group} is scheduled for deletion.", { group: name })
+        : i18n._("{group} deleted.", { group: name }));
+      setTimeout(() => {
+        if (focusIsOurs()) (restoreRef.current ?? moreRef.current ?? fallback)?.focus();
+      }, 0);
+    } catch (cause) {
+      const message = (cause as Error).message;
+      setDeleteError(message);
+      setReview(undefined);
+      onNote(message);
+      setTimeout(() => {
+        if (focusIsOurs()) deleteCancelRef.current?.focus();
+      }, 0);
+    } finally {
+      deletePending.current = false;
+      setDeleting(false);
+    }
+  };
+
+  const restoreGroup = async () => {
+    if (deletePending.current || !connected || !instance || hostGroup === null || !group.can.restore || !group.pendingDeletion) return;
+    deletePending.current = true;
+    setRestoring(true);
+    setDeleteError(undefined);
+    const button = restoreRef.current;
+    try {
+      await spaceGroupRestore(instance.origin, hostGroup);
+      onNote(i18n._("{group} restored.", { group: name }));
+      setTimeout(() => {
+        if (document.activeElement === document.body || document.activeElement === button) moreRef.current?.focus();
+      }, 0);
+    } catch (cause) {
+      const message = (cause as Error).message;
+      setDeleteError(message);
+      onNote(message);
+    } finally {
+      deletePending.current = false;
+      setRestoring(false);
+    }
   };
 
   const entries: MenuEntry[] =
@@ -545,6 +643,17 @@ function GroupSection({
             testId: `space-group-members-${group.fullPath}`,
             onSelect: () => setOpened((was) => (was === "members" ? undefined : "members")),
           },
+          ...(group.can.delete && !group.pendingDeletion ? [{
+            label: i18n._({ id: "Delete group…", comment: "a group's overflow action: check that the group is empty before confirming deletion" }),
+            testId: `space-group-delete-${group.fullPath}`,
+            disabled: deleteReason !== undefined,
+            hint: deleteReason,
+            onSelect: () => {
+              setDeleteError(undefined);
+              setReview(undefined);
+              setOpened("delete");
+            },
+          }] : []),
         ];
 
   const rows = group.repositories;
@@ -554,10 +663,6 @@ function GroupSection({
   const lines = instance && servers ? (
     <GroupServers instance={instance} group={group.fullPath} listing={servers} connected={connected} onNote={onNote} />
   ) : null;
-  const serverCount = instance
-    ? (servers?.servers ?? []).filter((server) => server.instance === instance.origin && server.group.toLowerCase() === group.fullPath.toLowerCase()).length
-    : 0;
-
   return (
     <div
       role="group"
@@ -592,15 +697,84 @@ function GroupSection({
             </span>
           ) : null}
         </Heading>
-        <MoreMenu of={group.fullPath} testId={`space-group-more-${group.fullPath}`} buttonRef={moreRef} entries={entries} disabled={!connected} />
+        <MoreMenu of={group.fullPath} testId={`space-group-more-${group.fullPath}`} buttonRef={moreRef} entries={entries} disabled={!connected || deleting || restoring} />
       </div>
+      {group.pendingDeletion ? (
+        <div role="status" data-testid={`space-group-pending-${group.fullPath}`} className="mx-2 flex min-w-0 flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50/50 p-3 dark:border-amber-900 dark:bg-amber-950/20">
+          <div className="min-w-0 flex-1 basis-44">
+            <p className="text-sm font-medium">{i18n._("Scheduled for deletion")}</p>
+            <p className="mt-1 text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">{group.deletionRoot && group.deletionRoot !== group.fullPath
+              ? i18n._("An owner can restore {group} to keep this group.", { group: group.deletionRoot })
+              : group.can.restore ? i18n._("You can restore this group before deletion takes effect.")
+                : i18n._("A group owner can restore it before deletion takes effect.")}</p>
+          </div>
+          {group.can.restore ? (
+            <button ref={restoreRef} type="button" className={SECONDARY} disabled={!connected || deleting || restoring} onClick={() => void restoreGroup()}>
+              {restoring ? i18n._("Restoring…") : i18n._("Restore group")}
+            </button>
+          ) : null}
+          {deleteError ? <p role="alert" className="w-full break-words text-xs text-red-600 dark:text-red-400">{deleteError}</p> : null}
+        </div>
+      ) : null}
+      {opened === "delete" && hostGroup !== null && instance ? (
+        <div
+          ref={deleteConfirmRef}
+          role="group"
+          aria-labelledby={deleteTitle}
+          aria-describedby={deleteDescription}
+          aria-busy={deleting}
+          data-testid={`space-group-delete-confirm-${group.fullPath}`}
+          className="mx-2 flex max-w-lg min-w-0 flex-col gap-3 rounded-lg border border-red-200 bg-red-50/40 p-4 dark:border-red-900 dark:bg-red-950/20"
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.stopPropagation();
+              close();
+            }
+          }}
+        >
+          <h4 id={deleteTitle} className="break-words text-sm font-semibold">
+            {i18n._({ id: "Delete {group} at {space}?", values: { group: review?.group.name ?? name, space: instanceName(instance) }, comment: "group deletion confirmation naming exactly the group and its Space" })}
+          </h4>
+          <div id={deleteDescription} className="text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">
+            {checking ? <p role="status">{i18n._("Checking group contents…")}</p> : review ? review.contents.length > 0 ? (
+              <>
+                <p>{i18n._("This group isn't empty. Remove these items before deleting it:")}</p>
+                <ul className="mt-2 list-inside list-disc space-y-1 break-words">
+                  {review.contents.map((item, index) => <li key={`${item.kind}:${index}`}>{item.kind === "records"
+                    ? i18n._("Group sessions")
+                    : item.kind === "project" ? i18n._("Project: {name}", { name: item.name })
+                      : item.kind === "group" ? i18n._("Group: {name}", { name: item.name })
+                        : i18n._("Server: {name}", { name: item.name })}</li>)}
+                </ul>
+              </>
+            ) : <p>{i18n._("This group is empty. Deleting it removes the group for all members.")}</p> : null}
+          </div>
+          {review?.contents.length === 0 ? <p className="text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">{i18n._("Deletion may be immediate. If scheduled, you can restore the group before deletion takes effect.")}</p> : null}
+          {deleteReason ? <p className="text-xs text-neutral-600 dark:text-neutral-400">{deleteReason}</p> : null}
+          {deleteError ? <p role="alert" className="break-words text-xs text-red-600 dark:text-red-400">{deleteError}</p> : null}
+          <div className="flex flex-wrap justify-end gap-2">
+            {(deleteError || (review && review.contents.length > 0)) ? <button type="button" className={`${SECONDARY} mr-auto`} disabled={!connected || checking || deleting} onClick={() => { setDeleteError(undefined); setReviewAgain((value) => value + 1); }}>{i18n._("Check again")}</button> : null}
+            <button ref={deleteCancelRef} autoFocus type="button" className={SECONDARY} disabled={deleting} onClick={close}>
+              {i18n._("Cancel")}
+            </button>
+            <button
+              type="button"
+              className="min-h-7 rounded bg-red-600 px-3 py-1 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-red-700 dark:hover:bg-red-600"
+              disabled={!connected || deleting || checking || deleteReason !== undefined || !confirmed}
+              onClick={() => void removeGroup()}
+            >
+              {deleting ? i18n._({ id: "Deleting…", comment: "busy group deletion action" }) : i18n._({ id: "Delete group", comment: "confirm deletion of the named empty group" })}
+            </button>
+          </div>
+        </div>
+      ) : null}
       {opened === "members" && hostGroup !== null && instance ? (
         <MembersPanel
           instance={instance}
           target={{ instance: instance.origin, group: hostGroup }}
           id={`group:${group.fullPath}`}
-          name={group.fullPath}
-          canManage={group.can.manageMembers}
+          name={name}
+          canManage={group.can.manageMembers && !group.pendingDeletion}
           connected={connected}
           refreshes={refreshes}
           onClose={close}

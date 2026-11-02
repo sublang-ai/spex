@@ -19,7 +19,7 @@
 // (space-42); fit at every width in both sidebar states (space-43); axe
 // in both themes (space-44); and a second computer opening a project a
 // peer pushed (space-36). The acts DR-172 cuts — Move, Place at, Leave,
-// Attach, Rename, Delete and New subgroup — are asserted unoffered where
+// Attach, Rename and New subgroup — are asserted unoffered where
 // a journey opens the menus that held them.
 // Every host is the in-process stand-in on loopback, every peer plain
 // Git on its bare repositories, and the exploring journey's remote a
@@ -905,12 +905,12 @@ test.describe("a folder joining a team's project", () => {
 // ---------------------------------------------------------------------------
 
 test.describe("organizing", () => {
-  test.use({ appOptions: { host: true, signedIn: true } });
+  test.use({ appOptions: { host: { displayName: "spex.sublang.xyz" }, signedIn: true } });
 
   test("space-71: a group made at the Space's heading, a project shared into it, a member added, refused twice and removed", async ({
     page,
     app,
-  }) => {
+  }, testInfo) => {
     test.setTimeout(150_000);
     const host = app.host!;
     // By default the stand-in lets the person create groups at the
@@ -943,11 +943,42 @@ test.describe("organizing", () => {
     await expect(platform.getByRole("heading").first()).toHaveText(/^Platform( · platform)?( · \d+ members?)?$/);
     await expect(platform).toHaveAttribute("aria-label", "platform");
     expect(standinGroup("platform")?.name).toBe("Platform");
-    // Its heading's "More" holds Members alone: no "New subgroup",
-    // Rename or Delete (space-1).
+    // Members and deletion belong to the group; deletion is available
+    // for the empty group the person just created (space-1).
     await expect(await menuEntry(page, "space-group-more-platform", "space-group-members-platform")).toHaveText("Members");
-    await expect(page.getByTestId("space-group-more-platform-menu").getByRole("menuitem")).toHaveCount(1);
+    await expect(page.getByTestId("space-group-more-platform-menu").getByRole("menuitem")).toHaveCount(2);
+    await expect(page.getByTestId("space-group-delete-platform")).toBeEnabled();
     await closeMenu(page);
+
+    // A throwaway empty group can be removed through the same real core
+    // and stand-in, with a safe default before any deletion is sent.
+    await newGroup.click();
+    await top.getByTestId("space-new-group-editor-name").fill("Temporary");
+    await top.getByTestId("space-new-group-editor-create").click();
+    await expect(top).toBeHidden();
+    const temporary = list.getByTestId("space-group-temporary");
+    await expect(temporary).toBeVisible();
+    await groupAct(page, "temporary", "delete");
+    const deletion = temporary.getByTestId("space-group-delete-confirm-temporary");
+    await expect(deletion.getByRole("heading")).toHaveText("Delete Temporary at spex.sublang.xyz?");
+    await expect(deletion.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+    await deletion.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(deletion).toBeHidden();
+    expect(standinGroup("temporary")).toBeDefined();
+    await groupAct(page, "temporary", "delete");
+    await expect(deletion).toContainText("This group is empty.");
+    await expect(deletion.getByRole("textbox")).toHaveCount(0);
+    await deletion.screenshot({ path: testInfo.outputPath("delete-group-desktop.png") });
+    await setRail(page, false);
+    await page.setViewportSize({ width: 320, height: TALL });
+    await deletion.screenshot({ path: testInfo.outputPath("delete-group-320.png") });
+    const emptyAccessibility = await new AxeBuilder({ page }).include('[data-testid="space-group-delete-confirm-temporary"]').analyze();
+    expect(emptyAccessibility.violations).toEqual([]);
+    await page.setViewportSize({ width: 1280, height: TALL });
+    await deletion.getByRole("button", { name: "Delete group", exact: true }).click();
+    await expect(temporary).toHaveCount(0);
+    expect(standinGroup("temporary")).toBeUndefined();
+    await expect(newGroup).toBeFocused();
 
     // A project added from the palette is offered, under the stand-in's
     // display name and "Choose group", "Personal" and then every group by
@@ -961,7 +992,7 @@ test.describe("organizing", () => {
     await palette.getByTestId("palette-add").click();
     const localKey = `${HOST_LOGIN}/demo-project-spex`;
     const picker = palette.getByTestId(`space-picker-${localKey}`);
-    const section = await pickSection(picker, host);
+    const section = await pickSection(picker, host, "spex.sublang.xyz");
     await expect(section).toContainText("Choose group");
     await expectPickOptions(section, [
       PICKED_AS[HOST_LOGIN]!,
@@ -976,8 +1007,11 @@ test.describe("organizing", () => {
     const picked = hostKey(host, "platform/demo-project-spex");
     await expect(platform.getByTestId(`space-repo-state-${picked}`)).toHaveText("Synced just now", { timeout: 30_000 });
     expect(headOf(bareOf(host, picked), "spex")).toMatch(/^[0-9a-f]{40}$/);
+    const occupiedDelete = await menuEntry(page, "space-group-more-platform", "space-group-delete-platform");
+    await expect(occupiedDelete).toBeEnabled();
+    await closeMenu(page);
 
-    // Share on the new group stands in the members panel Members in its
+    // Invite members stands in the members panel Members in its
     // heading's "More" opens, listing the person who made it (space-62,
     // space-69).
     await groupAct(page, "platform", "members");
@@ -986,54 +1020,99 @@ test.describe("organizing", () => {
     await expect(members.getByTestId(`space-member-${HOST_LOGIN}`)).toContainText("Owner");
     await expect(members.getByTestId(`space-member-${MEMBER.login}`)).toHaveCount(0);
 
-    // Share adds a login at Maintainer, its field captioned "Login at
-    // <display name>": the line says so, the panel lists the member the
-    // reply carries by login alone, and the stand-in holds them
+    // The invitation explains the target, Space usernames and one role
+    // for everyone. Enter stages a chip, without changing membership.
     // (space-69, space-62).
     const share = members.getByTestId(`space-share-${PANEL}`);
-    await expect(share).toHaveText("Share");
+    await expect(share).toHaveText("Invite members");
     await share.click();
     const editor = members.getByTestId(`space-share-${PANEL}-editor`);
-    await expect(editor).toContainText("Login at Stand-in Git host");
-    const login = editor.getByTestId(`space-share-${PANEL}-login`);
+    await expect(editor.getByRole("heading", { name: "Invite to Platform" })).toBeVisible();
+    const login = editor.getByRole("textbox", { name: "Usernames", exact: true });
+    await expect(login).toBeFocused();
+    await expect(login).toHaveAttribute("placeholder", "e.g. alex, sam");
+    await expect(login).toHaveAccessibleDescription(/spex.sublang.xyz/);
+    await expect(editor).toContainText(/account/i);
+    await expect(editor).toContainText(/immediately/i);
+    const role = editor.getByRole("combobox", { name: "Role", exact: true });
+    await expect(role.locator("option:checked")).toHaveText("Developer");
+    await expect(role).toHaveAccessibleDescription(/\S/);
+    await expect(members.getByTestId(`space-member-${HOST_LOGIN}`)).toContainText("You");
     await login.fill(MEMBER.login);
-    await editor.getByTestId(`space-share-${PANEL}-role`).selectOption({ label: "Maintainer" });
-    await editor.getByTestId(`space-share-${PANEL}-add`).click();
-    await expect(editor).toBeHidden();
-    await expect(members.getByTestId(`space-members-outcome-${PANEL}`)).toHaveText(`@${MEMBER.login} added as Maintainer`);
+    await login.press("Enter");
+    const graceChip = editor.getByRole("button", { name: `Remove @${MEMBER.login} from invitation`, exact: true });
+    await expect(graceChip).toBeVisible();
+    await expect(login).toHaveValue("");
+    expect(standinMembers("platform").some((entry) => entry.startsWith(`${MEMBER.login}:`))).toBe(false);
+    await login.fill("alan");
+    await login.press("Enter");
+    await role.selectOption({ label: "Maintainer" });
+    await expect(editor).toContainText("This role applies to everyone you add.");
+    await expect(editor.getByRole("button", { name: "Add members", exact: true })).toBeEnabled();
+    await members.screenshot({ path: testInfo.outputPath("invite-members-desktop.png") });
+    const accessibility = await new AxeBuilder({ page }).include(`[data-testid="space-members-${PANEL}"]`).analyze();
+    expect(accessibility.violations).toEqual([]);
+    // Chip removal is keyboard-operable and returns to the entry. Submit
+    // one valid and one unknown account to exercise partial completion.
+    const alanChip = editor.getByRole("button", { name: "Remove @alan from invitation", exact: true });
+    await alanChip.focus();
+    await alanChip.press("Enter");
+    await expect(login).toBeFocused();
+    await login.fill(UNKNOWN);
+    await login.press("Enter");
+    await editor.getByRole("button", { name: "Add members", exact: true }).click();
+    await expect(editor.getByRole("alert")).toContainText(`No account is named ${UNKNOWN}`);
+    await expect(graceChip).toHaveCount(0);
+    const failedChip = editor.getByRole("button", { name: `Remove @${UNKNOWN} from invitation`, exact: true });
+    await expect(failedChip).toBeVisible();
+    await expect(login).toBeFocused();
     const row = members.getByTestId(`space-member-${MEMBER.login}`);
     await expect(row).toContainText(MEMBER.login);
     await expect(row).not.toContainText(MEMBER.displayName!);
     await expect(row).toContainText("Maintainer");
     expect(standinMembers("platform")).toContain(`${MEMBER.login}:Maintainer`);
+    // Correct only the failed entry. Explicit retry must not resend grace.
+    await failedChip.click();
+    await login.fill("alan");
+    await editor.getByRole("button", { name: "Add member", exact: true }).click();
+    await expect(editor).toBeHidden();
+    await expect(members.getByTestId("space-member-alan")).toContainText("Maintainer");
+    expect(standinMembers("platform")).toContain("alan:Maintainer");
+    expect(standinMembers("platform").filter((entry) => entry.startsWith(`${MEMBER.login}:`))).toHaveLength(1);
 
     // The same login again is refused in place with the stand-in's
-    // words, the login kept (space-69).
+    // words, the username kept as a chip (space-69).
     await share.click();
     await expect(editor).toBeVisible();
     await login.fill(MEMBER.login);
     await editor.getByTestId(`space-share-${PANEL}-add`).click();
     await expect(editor.getByRole("alert")).toContainText("Member already exists");
-    await expect(login).toHaveValue(MEMBER.login);
+    await expect(graceChip).toBeVisible();
     expect(standinMembers("platform").filter((entry) => entry.startsWith(`${MEMBER.login}:`))).toHaveLength(1);
 
     // A login the stand-in knows no account for is refused naming it,
-    // the login kept (space-69).
+    // the failed username kept (space-69).
+    await graceChip.click();
     await login.fill(UNKNOWN);
     await editor.getByTestId(`space-share-${PANEL}-add`).click();
     await expect(editor.getByRole("alert")).toContainText(`No account is named ${UNKNOWN}`);
-    await expect(login).toHaveValue(UNKNOWN);
+    await expect(failedChip).toBeVisible();
     await editor.getByTestId(`space-share-${PANEL}-cancel`).click();
     await expect(editor).toBeHidden();
 
     // The new controls fit at the 320-pixel floor with the sidebar
-    // collapsed, the group editor and Share open (space-28).
+    // collapsed, the group editor and invitation open (space-28).
     await setRail(page, false);
     await page.setViewportSize({ width: 320, height: TALL });
     await newGroup.click();
     await expect(top).toBeVisible();
     await share.click();
     await expect(editor).toBeVisible();
+    await expect(members.getByTestId(`space-members-outcome-${PANEL}`)).toHaveCount(0);
+    await login.fill("alex");
+    await login.press("Enter");
+    await login.fill("robin");
+    await login.press("Enter");
     const defects: string[] = [];
     record(
       "Space organizing · 320",
@@ -1041,6 +1120,9 @@ test.describe("organizing", () => {
       defects,
     );
     expect(defects, defects.join("\n")).toEqual([]);
+    await editor.screenshot({ path: testInfo.outputPath("invite-members-320.png") });
+    const narrowAccessibility = await new AxeBuilder({ page }).include(`[data-testid="space-members-${PANEL}"]`).analyze();
+    expect(narrowAccessibility.violations).toEqual([]);
     await editor.getByTestId(`space-share-${PANEL}-cancel`).click();
     await top.getByTestId("space-new-group-editor-cancel").click();
     await page.setViewportSize({ width: 1280, height: TALL });
@@ -1056,6 +1138,41 @@ test.describe("organizing", () => {
     await expect(row).toHaveCount(0);
     await expect(members.getByTestId(`space-member-${HOST_LOGIN}`)).toBeVisible();
     expect(standinMembers("platform").some((entry) => entry.startsWith(`${MEMBER.login}:`))).toBe(false);
+
+    // Contents come from a fresh service review, not membership or
+    // cached rows. This actual project is named and prevents deletion.
+    await groupAct(page, "platform", "delete");
+    const blocked = platform.getByTestId("space-group-delete-confirm-platform");
+    await expect(blocked.getByText("Project: demo-project", { exact: true })).toBeVisible();
+    await expect(blocked).not.toContainText("-spex");
+    await expect(blocked.getByRole("button", { name: "Delete group", exact: true })).toBeDisabled();
+    await blocked.screenshot({ path: testInfo.outputPath("delete-group-blocked.png") });
+    await blocked.getByRole("button", { name: "Cancel", exact: true }).click();
+    expect(standinGroup("platform")).toBeDefined();
+
+    // An empty group follows scheduled deletion policy, remains visible
+    // across Refresh, and can be restored. Its Owner is not content.
+    await newGroup.click();
+    await top.getByTestId("space-new-group-editor-name").fill("Empty group");
+    await top.getByTestId("space-new-group-editor-create").click();
+    await expect(top).toBeHidden();
+    host.script.scheduleGroupDeletion(true);
+    const empty = list.getByTestId("space-group-empty-group");
+    await groupAct(page, "empty-group", "delete");
+    const emptyConfirmation = empty.getByTestId("space-group-delete-confirm-empty-group");
+    await expect(emptyConfirmation).toContainText("This group is empty.");
+    await emptyConfirmation.getByRole("button", { name: "Delete group", exact: true }).click();
+    const pending = empty.getByTestId("space-group-pending-empty-group");
+    await expect(pending).toContainText("Scheduled for deletion");
+    await expect(pending.getByRole("button", { name: "Restore group", exact: true })).toBeFocused();
+    await app.core.command("space.refresh", {});
+    await expect(pending).toBeVisible();
+    await pending.screenshot({ path: testInfo.outputPath("group-pending-deletion.png") });
+    await pending.getByRole("button", { name: "Restore group", exact: true }).click();
+    await expect(pending).toHaveCount(0);
+    await expect(empty).toBeVisible();
+    await expect(platform.getByTestId(`space-row-${picked}`)).toBeVisible();
+    expect(standinMembers("platform")).toContain("alan:Maintainer");
   });
 });
 

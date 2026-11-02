@@ -6,22 +6,22 @@
 // where the Space's last read says the person may take it (space-1,
 // space-62) — "New group" on the Space's heading, disabled and titled
 // "Made by the people who run <display name>" where it may not, Members
-// alone in a group's heading's one "More", Share and Remove in a members
-// panel — the group editor (space-68), Share (space-69), Remove
+// and permitted deletion in a group's heading's one "More", Invite members and Remove in a members
+// panel — the group editor (space-68), Invite members (space-69), Remove
 // (space-72), and the label budget the fit rests on (space-28); no link
-// to a page of the Space anywhere (DR-120); and renaming, deleting, a
-// group inside a group and moving a project not offered (DR-172). A spex
-// repository's Members, Share and Remove act on its placement at the
+// to a page of the Space anywhere (DR-120); and renaming, creating a
+// group inside a group and moving a project not offered (DR-172, DR-178). A spex
+// repository's Members, Invite members and Remove act on its placement at the
 // fixtures' Space, named in each command (DR-128). Each act is checked
 // by the command it sends.
 
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { GroupsState, HostMemberInfo, RepositoryState } from "@sublang/spex-core/protocol";
 
 import { activateLanguage } from "../i18n.js";
 import { SpexCommandError } from "../lib/client.js";
-import { setClientForTests } from "../state/store.js";
+import { setClientForTests, useAppStore } from "../state/store.js";
 import {
   BRANCH,
   ORIGIN,
@@ -211,15 +211,14 @@ describe("GROUPS: each act where the host's read says (space-1, space-62, space-
     expect(head.textContent).toBe("New group");
     expect(within(screen.getByTestId(`space-instance-${ORIGIN}`)).getByTestId("space-instance-heading").contains(head)).toBe(true);
     // acme: its heading's one "More", outside the heading, holds Members
-    // alone, whatever else the Space lets the person do there (space-1,
-    // DR-172).
+    // and the permitted group deletion (space-1, DR-178).
     const acme = region("acme");
     const more = within(acme).getByTestId("space-group-more-acme");
     expect(more.getAttribute("aria-label")).toBe("More for acme");
     expect(within(acme).getByRole("heading", { level: 3 }).contains(more)).toBe(false);
     expect(groupAct("acme", "members")!.textContent).toBe("Members");
     closeMenus();
-    expect(groupMenu("acme")).toEqual(["space-group-members-acme"]);
+    expect(groupMenu("acme")).toEqual(["space-group-members-acme", "space-group-delete-acme"]);
     expect(within(acme).getByRole("heading", { level: 3 }).textContent).toBe("acme");
     // other: Members alone too, its path beside its name.
     const other = region("other");
@@ -233,13 +232,13 @@ describe("GROUPS: each act where the host's read says (space-1, space-62, space-
     expect(within(own).getByTestId(`space-row-${OWN}`)).toBeTruthy();
     expect(screen.queryByTestId("space-group-more-jane")).toBeNull();
     expect(screen.queryByTestId("space-own")).toBeNull();
-    // Share stands in a members panel only, never on a heading.
-    expect(screen.queryByRole("button", { name: "Share" })).toBeNull();
+    // Invite members stands in a members panel only, never on a heading.
+    expect(screen.queryByRole("button", { name: "Invite members" })).toBeNull();
 
-    // acme's members panel: its own members, Share, and Remove on each.
+    // acme's members panel: its own members, Invite members, and Remove on each.
     const acmeList = await openGroupMembers("acme");
     expect(calls("space.members")).toEqual([{ instance: ORIGIN, group: ACME }]);
-    expect(within(acmeList).getByTestId("space-share-group:acme").textContent).toBe("Share");
+    expect(within(acmeList).getByTestId("space-share-group:acme").textContent).toBe("Invite members");
     expect(within(acmeList).getAllByRole("button", { name: /^Remove @/ }).map((button) => button.getAttribute("aria-label"))).toEqual([
       "Remove @jane",
       "Remove @bob",
@@ -247,20 +246,20 @@ describe("GROUPS: each act where the host's read says (space-1, space-62, space-
     // No page of the host is linked (space-62, DR-120).
     expect(acmeList.querySelector("a")).toBeNull();
 
-    // other's panel lists its members with no Share and no Remove.
+    // other's panel lists its members with no Invite members and no Remove.
     const otherList = await openGroupMembers("other");
     expect(calls("space.members")[1]).toEqual({ instance: ORIGIN, group: OTHER });
-    expect(within(otherList).queryByRole("button", { name: "Share" })).toBeNull();
+    expect(within(otherList).queryByRole("button", { name: "Invite members" })).toBeNull();
     expect(within(otherList).queryByRole("button", { name: /Remove/ })).toBeNull();
     expect(otherList.querySelector("a")).toBeNull();
   });
 
-  test("a-spex's panel carries Share and Remove on its own members, an inherited one reading via its group; b-spex's carries neither", async () => {
+  test("a-spex's panel carries Invite members and Remove on its own members, an inherited one reading via its group; b-spex's carries neither", async () => {
     commandMock.mockImplementation(core);
     await renderGroups(sharingHome(), { open: false });
     const a = await openPlacementMembers(A_SPEX);
     expect(calls("space.members")).toEqual([{ repository: A_SPEX, instance: ORIGIN }]);
-    expect(within(a).getByTestId(`space-share-${at(A_SPEX)}`).textContent).toBe("Share");
+    expect(within(a).getByTestId(`space-share-${at(A_SPEX)}`).textContent).toBe("Invite members");
     // jane comes through acme: "via acme", and no Remove here.
     const jane = within(a).getByTestId("space-member-jane");
     expect(within(jane).getByText("jane").getAttribute("title")).toBe("jane");
@@ -275,7 +274,7 @@ describe("GROUPS: each act where the host's read says (space-1, space-62, space-
 
     const b = await openPlacementMembers(B_SPEX);
     expect(calls("space.members")[1]).toEqual({ repository: B_SPEX, instance: ORIGIN });
-    expect(within(b).queryByRole("button", { name: "Share" })).toBeNull();
+    expect(within(b).queryByRole("button", { name: "Invite members" })).toBeNull();
     expect(within(b).queryByRole("button", { name: /Remove/ })).toBeNull();
 
     // Your own group's repositories share what is there where the host
@@ -335,13 +334,19 @@ describe("GROUPS: each act where the host's read says (space-1, space-62, space-
     expect(calls("space.members")).toEqual([{ instance: SECOND, group: ACME }]);
     fireEvent.click(within(list).getByTestId("space-share-group:acme"));
     const editor = within(list).getByTestId("space-share-group:acme-editor");
-    expect(within(editor).getByLabelText("Login at Second Example")).toBeTruthy();
-    expect(within(within(editor).getByRole("listbox", { name: "Role" })).getAllByRole("option").map((option) => option.textContent)).toEqual([
+    expect(within(editor).getByLabelText("Usernames")).toBeTruthy();
+    expect(editor.textContent).toContain("Second Example");
+    expect(within(within(editor).getByRole("combobox", { name: "Role" })).getAllByRole("option").map((option) => option.textContent)).toEqual([
       "Viewer",
       "Editor",
     ]);
-    // Its heading's More holds Members alone there too (DR-172).
-    expect(groupMenu("acme", secondSection)).toEqual(["space-group-members-acme"]);
+    const role = within(editor).getByRole("combobox", { name: "Role" });
+    expect(within(editor).getByText("Can sync changes to shared records.")).toBeTruthy();
+    fireEvent.change(role, { target: { value: "1" } });
+    expect(within(editor).getByText("Cannot sync changes to shared records.")).toBeTruthy();
+    expect(editor.textContent).not.toContain("Full control");
+    // The action remains tied to the second Space's own permission.
+    expect(groupMenu("acme", secondSection)).toEqual(["space-group-members-acme", "space-group-delete-acme"]);
   });
 
   test("nothing stands for an act the host does not let the person take, nor before sign-in", async () => {
@@ -475,8 +480,8 @@ describe("GROUPS: New group (space-68, space-29)", () => {
   });
 });
 
-describe("GROUPS: Share (space-69, space-29)", () => {
-  test("Share on acme: the login at the host, the host's roles in its order with Developer chosen, Adding… until the reply, a not-found kept in place, a success saying who was added", async () => {
+describe("GROUPS: Invite members (space-69, space-29)", () => {
+  test("the invitation names its group, explains username and role, preserves a failed entry and adds it once", async () => {
     const replies: ReturnType<typeof deferred<unknown>>[] = [];
     commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
       if (type !== "space.share") return core(type, fields);
@@ -487,12 +492,30 @@ describe("GROUPS: Share (space-69, space-29)", () => {
     await renderGroups(sharingHome(), { open: false });
     const list = await openGroupMembers("acme");
     const share = within(list).getByTestId("space-share-group:acme");
+    const currentMember = within(list).getByTestId("space-member-jane");
+    expect(within(currentMember).getByText("You")).toBeTruthy();
+    expect(share.compareDocumentPosition(currentMember) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     fireEvent.click(share);
     expect(share.getAttribute("aria-expanded")).toBe("true");
     const editor = within(list).getByTestId("space-share-group:acme-editor");
-    const login = within(editor).getByLabelText("Login at Spex Example") as HTMLInputElement;
+    expect(within(editor).getByRole("heading", { name: "Invite to acme" })).toBeTruthy();
+    expect(editor.compareDocumentPosition(currentMember) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const login = within(editor).getByLabelText("Usernames") as HTMLInputElement;
     expect(document.activeElement).toBe(login);
-    const roles = within(editor).getByRole("listbox", { name: "Role" }) as HTMLSelectElement;
+    expect(login.placeholder).toBe("e.g. alex, sam");
+    const describedBy = (element: HTMLElement) => (element.getAttribute("aria-describedby") ?? "")
+      .split(/\s+/).filter(Boolean).map((id) => document.getElementById(id)?.textContent ?? "").join(" ");
+    expect(describedBy(login)).toContain("Spex Example");
+    expect(describedBy(login)).toMatch(/account/i);
+    expect(describedBy(login)).toContain("Use Enter or commas between usernames.");
+    const roles = within(editor).getByRole("combobox", { name: "Role" }) as HTMLSelectElement;
+    expect(roles.multiple).toBe(false);
+    expect(roles.size).toBeLessThanOrEqual(1);
+    const defaultHint = describedBy(roles);
+    expect(defaultHint.length).toBeGreaterThan(0);
+    fireEvent.change(roles, { target: { value: "20" } });
+    expect(describedBy(roles)).not.toBe(defaultHint);
+    fireEvent.change(roles, { target: { value: "30" } });
     expect(within(roles).getAllByRole("option").map((option) => option.textContent)).toEqual([
       "Guest",
       "Reporter",
@@ -503,21 +526,27 @@ describe("GROUPS: Share (space-69, space-29)", () => {
     // The least role that may push is chosen.
     expect(roles.value).toBe("30");
     expect((within(roles).getByRole("option", { name: "Developer" }) as HTMLOptionElement).selected).toBe(true);
-    const add = within(editor).getByRole("button", { name: "Add" }) as HTMLButtonElement;
+    const add = within(editor).getByRole("button", { name: "Add member" }) as HTMLButtonElement;
     expect(add.disabled).toBe(true);
     fireEvent.change(login, { target: { value: "carol" } });
     expect(add.disabled).toBe(false);
     fireEvent.click(add);
     await waitFor(() => expect(add.textContent).toBe("Adding…"));
     expect(add.disabled).toBe(true);
-    fireEvent.keyDown(login, { key: "Enter" });
+    fireEvent.submit(editor);
+    fireEvent.click(share);
+    fireEvent.keyDown(login, { key: "Escape" });
+    fireEvent.keyDown(list, { key: "Escape" });
+    expect(within(list).getByTestId("space-share-group:acme-editor")).toBe(editor);
+    expect((within(editor).getByRole("button", { name: "Cancel" }) as HTMLButtonElement).disabled).toBe(true);
     expect(calls("space.share")).toEqual([{ instance: ORIGIN, group: ACME, login: "carol", role: "30" }]);
     // No account under that login: the host's words in the editor, the
     // login kept.
     replies[0]!.reject(new SpexCommandError("not_found", "Spex Example has no account named carol"));
     await waitFor(() => expect(within(editor).getByRole("alert").textContent).toBe("Spex Example has no account named carol"));
-    expect(login.value).toBe("carol");
-    expect(add.textContent).toBe("Add");
+    expect(within(editor).getByRole("button", { name: "Remove @carol from invitation" })).toBeTruthy();
+    expect(roles.value).toBe("30");
+    expect(add.textContent).toBe("Add member");
 
     // At Maintainer this time: the reply's members are listed and one
     // line says who was added as what.
@@ -535,27 +564,28 @@ describe("GROUPS: Share (space-69, space-29)", () => {
     expect(calls("space.members")).toHaveLength(1);
   });
 
-  test("Share in a-spex's members panel names the repository and lists the members the reply carries", async () => {
+  test("a project's invitation names the project and lists the members the reply carries", async () => {
     commandMock.mockImplementation(core);
     await renderGroups(sharingHome(), { open: false });
     const list = await openPlacementMembers(A_SPEX);
     fireEvent.click(within(list).getByTestId(`space-share-${at(A_SPEX)}`));
     const editor = within(list).getByTestId(`space-share-${at(A_SPEX)}-editor`);
-    fireEvent.change(within(editor).getByLabelText("Login at Spex Example"), { target: { value: "@dave" } });
-    fireEvent.click(within(editor).getByRole("button", { name: "Add" }));
+    expect(within(editor).getByRole("heading", { name: "Invite to a" })).toBeTruthy();
+    fireEvent.change(within(editor).getByLabelText("Usernames"), { target: { value: "@dave" } });
+    fireEvent.click(within(editor).getByRole("button", { name: "Add member" }));
     // The fixture's host lists the added account at the role it got.
     await waitFor(() => expect(calls("space.share")).toEqual([{ repository: A_SPEX, instance: ORIGIN, login: "dave", role: "30" }]));
     await waitFor(() => expect(within(list).getByTestId("space-member-dave").textContent).toContain("Developer"));
     expect(within(list).getByTestId(`space-members-outcome-${at(A_SPEX)}`).textContent).toBe("@dave added as Developer");
   });
 
-  test("Escape and Cancel leave the editor, sending nothing, focus on Share", async () => {
+  test("Escape and Cancel leave the editor, sending nothing, focus on Invite members", async () => {
     commandMock.mockImplementation(core);
     await renderGroups(sharingHome(), { open: false });
     const list = await openGroupMembers("acme");
     const share = within(list).getByTestId("space-share-group:acme");
     fireEvent.click(share);
-    fireEvent.keyDown(within(list).getByLabelText("Login at Spex Example"), { key: "Escape" });
+    fireEvent.keyDown(within(list).getByLabelText("Usernames"), { key: "Escape" });
     expect(within(list).queryByTestId("space-share-group:acme-editor")).toBeNull();
     // The panel itself stays open.
     expect(screen.getByTestId("space-members-group:acme")).toBeTruthy();
@@ -564,6 +594,236 @@ describe("GROUPS: Share (space-69, space-29)", () => {
     fireEvent.click(within(list).getByRole("button", { name: "Cancel" }));
     expect(within(list).queryByTestId("space-share-group:acme-editor")).toBeNull();
     expect(calls("space.share")).toEqual([]);
+  });
+
+  test("a form submission after disconnection keeps the entry and sends no membership change", async () => {
+    commandMock.mockImplementation(core);
+    await renderGroups(sharingHome(), { open: false });
+    const list = await openGroupMembers("acme");
+    fireEvent.click(within(list).getByTestId("space-share-group:acme"));
+    const editor = within(list).getByTestId("space-share-group:acme-editor");
+    const login = within(editor).getByLabelText("Usernames") as HTMLInputElement;
+    fireEvent.change(login, { target: { value: "carol" } });
+    act(() => useAppStore.setState({ connection: "closed" }));
+    expect((within(editor).getByRole("button", { name: "Add member" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.submit(editor);
+    expect(calls("space.share")).toEqual([]);
+    expect(login.value).toBe("carol");
+  });
+
+  test("Enter, comma and pasted lists stage unique usernames without granting access; removing a chip returns focus", async () => {
+    commandMock.mockImplementation(core);
+    await renderGroups(sharingHome(), { open: false });
+    const list = await openGroupMembers("acme");
+    fireEvent.click(within(list).getByTestId("space-share-group:acme"));
+    const editor = within(list).getByTestId("space-share-group:acme-editor");
+    const login = within(editor).getByLabelText("Usernames") as HTMLInputElement;
+    fireEvent.change(login, { target: { value: " @carol " } });
+    fireEvent.keyDown(login, { key: "Enter" });
+    expect(login.value).toBe("");
+    expect(within(editor).getByRole("button", { name: "Remove @carol from invitation" })).toBeTruthy();
+    fireEvent.change(login, { target: { value: "dave," } });
+    fireEvent.paste(login, { clipboardData: { getData: () => "@carol,  erin\n dave\r\n@frank, erin" } });
+    const removals = within(editor).getAllByRole("button", { name: /^Remove @.+ from invitation$/ });
+    expect(removals.map((button) => button.getAttribute("aria-label"))).toEqual([
+      "Remove @carol from invitation", "Remove @dave from invitation", "Remove @erin from invitation", "Remove @frank from invitation",
+    ]);
+    expect(calls("space.share")).toEqual([]);
+    expect(within(editor).getByRole("button", { name: "Add members" })).toBeTruthy();
+    const remove = within(editor).getByRole("button", { name: "Remove @dave from invitation" });
+    remove.focus();
+    fireEvent.click(remove);
+    await waitFor(() => expect(document.activeElement).toBe(login));
+    expect(within(editor).queryByRole("button", { name: "Remove @dave from invitation" })).toBeNull();
+    expect(calls("space.share")).toEqual([]);
+  });
+
+  test("a batch uses one role, includes the draft once, updates the roster sequentially, and retries only failed usernames", async () => {
+    const replies: ReturnType<typeof deferred<unknown>>[] = [];
+    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
+      if (type !== "space.share") return core(type, fields);
+      const reply = deferred<unknown>();
+      replies.push(reply);
+      return reply.promise;
+    });
+    await renderGroups(sharingHome(), { open: false });
+    const list = await openGroupMembers("acme");
+    const share = within(list).getByTestId("space-share-group:acme");
+    fireEvent.click(share);
+    const editor = within(list).getByTestId("space-share-group:acme-editor");
+    const login = within(editor).getByLabelText("Usernames") as HTMLInputElement;
+    fireEvent.paste(login, { clipboardData: { getData: () => "carol,dave, @carol" } });
+    // A final username need not be committed as a chip before Add.
+    fireEvent.change(login, { target: { value: "@erin" } });
+    fireEvent.change(within(editor).getByRole("combobox", { name: "Role" }), { target: { value: "40" } });
+    fireEvent.click(within(editor).getByRole("button", { name: "Add members" }));
+    expect(calls("space.share")).toEqual([{ instance: ORIGIN, group: ACME, login: "carol", role: "40" }]);
+    expect(editor.getAttribute("aria-busy")).toBe("true");
+    expect(within(editor).getByRole("status").textContent).toBe("Adding 1 of 3…");
+    fireEvent.submit(editor);
+    fireEvent.keyDown(login, { key: "Enter" });
+    expect(calls("space.share")).toHaveLength(1);
+    for (const button of within(editor).getAllByRole("button", { name: /^Remove @.+ from invitation$/ })) {
+      expect((button as HTMLButtonElement).disabled).toBe(true);
+    }
+    replies[0]!.resolve({ members: [...ACME_MEMBERS, member("carol", "Maintainer")] });
+    await waitFor(() => expect(calls("space.share")).toHaveLength(2));
+    expect(within(editor).getByRole("status").textContent).toBe("Adding 2 of 3…");
+    expect(within(list).getByTestId("space-member-carol").textContent).toContain("Maintainer");
+    replies[1]!.reject(new SpexCommandError("not_found", "Spex Example has no account named dave"));
+    await waitFor(() => expect(calls("space.share")).toHaveLength(3));
+    expect(within(editor).getByRole("status").textContent).toBe("Adding 3 of 3…");
+    replies[2]!.resolve({ members: [...ACME_MEMBERS, member("carol", "Maintainer"), member("erin", "Maintainer")] });
+    await waitFor(() => expect(editor.getAttribute("aria-busy")).toBe("false"));
+    expect(calls("space.share").map(({ login, role }) => [login, role])).toEqual([["carol", "40"], ["dave", "40"], ["erin", "40"]]);
+    expect(within(editor).getAllByRole("button", { name: /^Remove @.+ from invitation$/ }).map((button) => button.getAttribute("aria-label"))).toEqual(["Remove @dave from invitation"]);
+    expect(within(editor).getByRole("alert").textContent).toContain("Spex Example has no account named dave");
+    expect(within(list).getByTestId("space-member-erin").textContent).toContain("Maintainer");
+    expect(within(list).getByTestId("space-members-outcome-group:acme").textContent).toBe("2 members added; 1 still to add.");
+    await waitFor(() => expect(document.activeElement).toBe(login));
+    fireEvent.click(within(editor).getByRole("button", { name: "Add member" }));
+    await waitFor(() => expect(calls("space.share")).toHaveLength(4));
+    expect(calls("space.share")[3]).toEqual({ instance: ORIGIN, group: ACME, login: "dave", role: "40" });
+    replies[3]!.resolve({ members: [...ACME_MEMBERS, member("carol", "Maintainer"), member("erin", "Maintainer"), member("dave", "Maintainer")] });
+    await waitFor(() => expect(within(list).queryByTestId("space-share-group:acme-editor")).toBeNull());
+    expect(within(list).getByTestId("space-member-dave")).toBeTruthy();
+    await waitFor(() => expect(document.activeElement).toBe(share));
+  });
+
+  test("losing the connection between additions preserves unsent usernames and resumes only on explicit retry", async () => {
+    const replies: ReturnType<typeof deferred<unknown>>[] = [];
+    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
+      if (type !== "space.share") return core(type, fields);
+      const reply = deferred<unknown>();
+      replies.push(reply);
+      return reply.promise;
+    });
+    await renderGroups(sharingHome(), { open: false });
+    const list = await openGroupMembers("acme");
+    fireEvent.click(within(list).getByTestId("space-share-group:acme"));
+    const editor = within(list).getByTestId("space-share-group:acme-editor");
+    const login = within(editor).getByLabelText("Usernames") as HTMLInputElement;
+    fireEvent.paste(login, { clipboardData: { getData: () => "carol,dave,erin" } });
+    fireEvent.submit(editor);
+    expect(calls("space.share")).toHaveLength(1);
+    act(() => useAppStore.setState({ connection: "closed" }));
+    replies[0]!.resolve({ members: [...ACME_MEMBERS, member("carol", "Developer")] });
+    await waitFor(() => expect(editor.getAttribute("aria-busy")).toBe("false"));
+    expect(calls("space.share")).toHaveLength(1);
+    expect(within(list).getByTestId("space-member-carol")).toBeTruthy();
+    expect(within(editor).getAllByRole("button", { name: /^Remove @.+ from invitation$/ }).map((button) => button.getAttribute("aria-label"))).toEqual(["Remove @dave from invitation", "Remove @erin from invitation"]);
+    expect((within(editor).getByRole("button", { name: "Add members" }) as HTMLButtonElement).disabled).toBe(true);
+    act(() => useAppStore.setState({ connection: "open" }));
+    expect(calls("space.share")).toHaveLength(1);
+    fireEvent.submit(editor);
+    await waitFor(() => expect(calls("space.share")).toHaveLength(2));
+    expect(calls("space.share")[1]?.login).toBe("dave");
+    replies[1]!.resolve({ members: [...ACME_MEMBERS, member("carol", "Developer"), member("dave", "Developer")] });
+    await waitFor(() => expect(calls("space.share")).toHaveLength(3));
+    expect(calls("space.share")[2]?.login).toBe("erin");
+    replies[2]!.resolve({ members: [...ACME_MEMBERS, member("carol", "Developer"), member("dave", "Developer"), member("erin", "Developer")] });
+    await waitFor(() => expect(within(list).queryByTestId("space-share-group:acme-editor")).toBeNull());
+    expect(within(list).getByTestId("space-members-outcome-group:acme").textContent).toBe("2 members added as Developer");
+  });
+
+  test("multiple failures identify each retained username and its own cause", async () => {
+    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
+      if (type === "space.share") throw new SpexCommandError("invalid_request", fields?.login === "carol" ? "Access denied" : "No account found");
+      return core(type, fields);
+    });
+    await renderGroups(sharingHome(), { open: false });
+    const list = await openGroupMembers("acme");
+    fireEvent.click(within(list).getByTestId("space-share-group:acme"));
+    const editor = within(list).getByTestId("space-share-group:acme-editor");
+    fireEvent.paste(within(editor).getByLabelText("Usernames"), { clipboardData: { getData: () => "carol,dave" } });
+    fireEvent.submit(editor);
+    const error = await within(editor).findByRole("alert");
+    expect(error.textContent).toContain("@carol: Access denied");
+    expect(error.textContent).toContain("@dave: No account found");
+    expect(within(editor).getAllByRole("button", { name: /^Remove @.+ from invitation$/ })).toHaveLength(2);
+    expect(calls("space.share").map(({ login }) => login)).toEqual(["carol", "dave"]);
+    fireEvent.click(within(editor).getByRole("button", { name: "Cancel" }));
+    expect(within(list).getByTestId("space-members-outcome-group:acme")).toBeTruthy();
+    fireEvent.click(within(list).getByTestId("space-share-group:acme"));
+    expect(within(list).queryByTestId("space-members-outcome-group:acme")).toBeNull();
+    expect(within(list).queryByRole("alert")).toBeNull();
+  });
+
+  test("Refresh preserves the active invitation while reading members again", async () => {
+    const reread = deferred<unknown>();
+    let memberReads = 0;
+    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
+      if (type === "space.members" && ++memberReads > 1) return reread.promise;
+      return core(type, fields);
+    });
+    await renderGroups(sharingHome(), { open: false });
+    const list = await openGroupMembers("acme");
+    fireEvent.click(within(list).getByTestId("space-share-group:acme"));
+    const editor = within(list).getByTestId("space-share-group:acme-editor");
+    const login = within(editor).getByLabelText("Usernames") as HTMLInputElement;
+    fireEvent.change(login, { target: { value: "carol," } });
+    fireEvent.change(login, { target: { value: "dave" } });
+    fireEvent.click(screen.getByTestId("space-refresh"));
+    await waitFor(() => expect(calls("space.members")).toHaveLength(2));
+    expect(within(list).getByTestId("space-share-group:acme-editor")).toBe(editor);
+    expect(within(editor).getByRole("button", { name: "Remove @carol from invitation" })).toBeTruthy();
+    expect(login.value).toBe("dave");
+    // Cancel during the unresolved read returns to the still-mounted
+    // invitation action, without stranding keyboard focus.
+    fireEvent.click(within(editor).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(document.activeElement).toBe(within(list).getByTestId("space-share-group:acme")));
+    fireEvent.click(within(list).getByTestId("space-share-group:acme"));
+    const reopened = within(list).getByTestId("space-share-group:acme-editor");
+    const freshLogin = within(reopened).getByLabelText("Usernames") as HTMLInputElement;
+    fireEvent.change(freshLogin, { target: { value: "erin" } });
+    reread.resolve({ members: ACME_MEMBERS });
+    await within(list).findByTestId("space-member-jane");
+    expect(within(list).getByTestId("space-share-group:acme-editor")).toBe(reopened);
+    expect(freshLogin.value).toBe("erin");
+    expect(calls("space.share")).toEqual([]);
+  });
+
+  test("an already-open removal confirmation cannot interrupt an invitation batch", async () => {
+    const pending = deferred<unknown>();
+    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
+      if (type === "space.share") return fields?.login === "carol" ? pending.promise : { members: [...ACME_MEMBERS, member("carol", "Developer"), member("dave", "Developer")] };
+      return core(type, fields);
+    });
+    await renderGroups(sharingHome(), { open: false });
+    const list = await openGroupMembers("acme");
+    fireEvent.click(within(list).getByTestId("space-member-remove-bob"));
+    const confirmation = within(list).getByTestId("space-member-confirm-bob");
+    const remove = within(confirmation).getByRole("button", { name: "Remove" }) as HTMLButtonElement;
+    fireEvent.click(within(list).getByTestId("space-share-group:acme"));
+    const editor = within(list).getByTestId("space-share-group:acme-editor");
+    fireEvent.paste(within(editor).getByLabelText("Usernames"), { clipboardData: { getData: () => "carol,dave" } });
+    fireEvent.submit(editor);
+    expect(remove.disabled).toBe(true);
+    fireEvent.click(remove);
+    expect(calls("space.unshare")).toEqual([]);
+    pending.resolve({ members: [...ACME_MEMBERS, member("carol", "Developer")] });
+    await waitFor(() => expect(within(list).queryByTestId("space-share-group:acme-editor")).toBeNull());
+    expect(remove.disabled).toBe(false);
+    expect(calls("space.unshare")).toEqual([]);
+  });
+
+  test("leaving the panel while an addition is pending sends no later usernames", async () => {
+    const pending = deferred<unknown>();
+    commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) =>
+      type === "space.share" ? pending.promise : core(type, fields));
+    const { view } = await renderGroups(sharingHome(), { open: false });
+    const list = await openGroupMembers("acme");
+    fireEvent.click(within(list).getByTestId("space-share-group:acme"));
+    const editor = within(list).getByTestId("space-share-group:acme-editor");
+    fireEvent.paste(within(editor).getByLabelText("Usernames"), { clipboardData: { getData: () => "carol,dave" } });
+    fireEvent.submit(editor);
+    expect(calls("space.share").map(({ login }) => login)).toEqual(["carol"]);
+    view.unmount();
+    await act(async () => {
+      pending.resolve({ members: [...ACME_MEMBERS, member("carol", "Developer")] });
+      await pending.promise;
+    });
+    expect(calls("space.share").map(({ login }) => login)).toEqual(["carol"]);
   });
 });
 
@@ -627,11 +887,14 @@ describe("GROUPS: Remove (space-72, space-29)", () => {
 });
 
 describe("GROUPS: what the IDE no longer offers (space-1, DR-172)", () => {
-  test("no heading offers a group inside it, a rename or a delete, and no row or line moves a project to another group", async () => {
+  test("headings expose permitted deletion but no nested creation or rename, and no row or line moves a project", async () => {
     commandMock.mockImplementation(core);
     await renderGroups(sharingHome(), { open: false });
     for (const path of ["acme", "other", "empty"]) {
-      expect(groupMenu(path), path).toEqual([`space-group-members-${path}`]);
+      expect(groupMenu(path), path).toEqual([
+        `space-group-members-${path}`,
+        ...(path === "other" ? [] : [`space-group-delete-${path}`]),
+      ]);
     }
     expect(screen.queryByText("New subgroup")).toBeNull();
     // The row's More holds Sync now, Members and Explore records, its
@@ -651,8 +914,9 @@ describe("GROUPS: what the IDE no longer offers (space-1, DR-172)", () => {
 
 describe("GROUPS: the new controls fit (space-28)", () => {
   test("every new control reads at most 14 characters, its busy form included, and a heading's controls keep their names", async () => {
+    const addition = deferred<unknown>();
     commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) =>
-      type === "space.group.create" || type === "space.share" || type === "space.unshare" ? new Promise(() => {}) : core(type, fields),
+      type === "space.share" ? addition.promise : type === "space.group.create" || type === "space.unshare" ? new Promise(() => {}) : core(type, fields),
     );
     await renderGroups(sharingHome(), { open: false });
     const seen = new Set<string>();
@@ -686,12 +950,18 @@ describe("GROUPS: the new controls fit (space-28)", () => {
     measure();
     fireEvent.change(within(screen.getByTestId("space-new-group-editor")).getByLabelText("Group name"), { target: { value: "Workshop" } });
     fireEvent.click(within(screen.getByTestId("space-new-group-editor")).getByRole("button", { name: "Create" }));
-    fireEvent.change(within(list).getByLabelText("Login at Spex Example"), { target: { value: "carol" } });
-    fireEvent.click(within(list).getByRole("button", { name: "Add" }));
+    fireEvent.change(within(list).getByLabelText("Usernames"), { target: { value: "carol" } });
+    fireEvent.click(within(list).getByRole("button", { name: "Add member" }));
+    await within(list).findByRole("button", { name: "Adding…" });
+    measure();
+    // Membership writes are serialized; measure removal only after the
+    // invitation has completed.
+    addition.resolve({ members: [...ACME_MEMBERS, member("carol", "Developer")] });
+    await waitFor(() => expect(within(list).queryByTestId("space-share-group:acme-editor")).toBeNull());
     fireEvent.click(within(within(list).getByTestId("space-member-confirm-bob")).getByRole("button", { name: "Remove" }));
     await waitFor(() => expect(within(list).getByTestId("space-member-remove-bob").textContent).toBe("Removing…"));
     measure();
-    for (const label of ["New group", "Share", "Create", "Creating…", "Add", "Adding…", "Cancel", "Remove", "Removing…", "Keep", "⋯More"]) {
+    for (const label of ["New group", "Invite members", "Create", "Creating…", "Add member", "Adding…", "Cancel", "Remove", "Removing…", "Keep", "⋯More"]) {
       expect(seen, label).toContain(label);
     }
     for (const label of ["Members", "Sync now", "Explore records"]) {
@@ -724,7 +994,7 @@ describe("GROUPS: the new controls fit (space-28)", () => {
     closeMenus();
     const list = await openGroupMembers("acme");
     const share = within(list).getByTestId("space-share-group:acme");
-    expect(share.textContent).toBe("共享");
+    expect(share.textContent).toBe("邀请成员");
     expect(list.querySelector("a")).toBeNull();
   });
 });

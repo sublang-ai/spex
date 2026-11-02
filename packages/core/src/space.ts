@@ -57,7 +57,7 @@ import {
   signInAgain, SpaceGit, validateRemoteUrl, withoutHostUrls, type GitFailure, type GitRun, type GitRunOptions,
 } from "./space-git.js";
 import {
-  callbackPages, collidingGroup, groupNameTaken, groupNamedLikeYourLogin, groupNotEmpty, groupNotListed, hostKey, listingFor, namedLikeYourLogin,
+  callbackPages, collidingGroup, confirmGroupPath, groupNameTaken, groupNamedLikeYourLogin, groupNotListed, hostKey, listingFor, namedLikeYourLogin,
   namedLogins, nameOneTarget, nameTaken, nameTheGroup, nameTheLogin, notARole, notFoundAt, ownNameFor, pathTheGroup, readHostCatalog, readHostListing, readHostView, relayHostError,
   renameNothing, repositoryDescription, repositoryFor, sameLogin, sameOrigin, signInFailure, takenIn, underOrigin, userGroup, waitingPhrase,
   type HostCatalog, type HostListing, type HostView,
@@ -7009,8 +7009,8 @@ export class SpaceManager {
   // A misplacement is undone as the person: a group of the instance
   // renamed or deleted, a spex repository moved to another group. The
   // host is asked whatever the view said the person may do; only what it
-  // cannot be asked — a blank field, a place the view does not list, a
-  // group the view lists anything under — is refused before it is.
+  // cannot be asked — a blank field, a place the view does not list, or
+  // a deletion without exact path confirmation — is refused before it is.
 
   /** Rename a group of the instance at the host — its name, its path
    * segment, or both (git-host-18) — holding it as the host answered,
@@ -7053,24 +7053,65 @@ export class SpaceManager {
     return { group: { id, fullPath: to, name: renamed.name } };
   }
 
-  /** Delete a group of the instance at the host (git-host-19), only
-   * where the view lists nothing under it, since the host deletes
-   * whatever a group holds with it; the group is held as gone until a
-   * read begun after the deletion is held (git-host-5), announced before
-   * the reply. */
-  async deleteGroup(named: string, id: string): Promise<{ deleted: true }> {
+  /** Request normal group deletion after exact path confirmation
+   * (git-host-19). The Space decides whether this schedules or completes
+   * deletion for an empty group; the Space checks contents afresh. */
+  async deleteGroup(named: string, id: string, confirmPath?: string): Promise<{ status: "scheduled" | "deleted" }> {
     const instance = this.instanceAt(this.namedInstance(named));
     if (!this.signedInAt(instance)) throw new CoreError("invalid_request", signInFirst());
     const listed = this.instanceGroup(instance, id);
-    if (this.holdsAnything(instance, listed)) throw new CoreError("invalid_request", groupNotEmpty(listed.fullPath));
+    if (confirmPath === undefined || confirmPath.trim().length === 0) throw new CoreError("invalid_request", confirmGroupPath(listed.fullPath));
+    let answer: Awaited<ReturnType<GitHostClient["deleteGroup"]>>;
     try {
-      await instance.client.deleteGroup(id);
+      answer = await instance.client.deleteGroup(id, confirmPath);
     } catch (error) {
       throw this.hostWriteRefusal(instance, error);
     }
-    this.holdChange(instance, { group: (group) => group.kind === "group" && (group.id === id || group.fullPath === listed.fullPath) ? null : group });
+    if (answer.status === "scheduled") this.holdGroupLifecycle(instance, id, answer.group);
+    else this.holdChange(instance, { group: (group) => group.id === id ? null : group });
     await this.publish();
-    return { deleted: true };
+    return { status: answer.status };
+  }
+
+  /** Inspect current contents at the Space. Cached clone paths and
+   * member lists cannot decide whether a group is empty. */
+  async checkGroupDeletion(named: string, id: string): Promise<{ group: { id: string; fullPath: string; name: string }; contents: { kind: "project" | "group" | "records" | "server"; name: string }[] }> {
+    const instance = this.instanceAt(this.namedInstance(named));
+    if (!this.signedInAt(instance)) throw new CoreError("invalid_request", signInFirst());
+    this.instanceGroup(instance, id);
+    try {
+      const { group, contents } = await instance.client.inspectGroupDeletion(id);
+      return { group: { id, fullPath: group.fullPath, name: group.name }, contents };
+    } catch (error) { throw this.hostWriteRefusal(instance, error); }
+  }
+
+  /** Hold the response before a post-restore read. Only the root's
+   * restored permissions are known from that response: descendants may
+   * have independent scheduled deletions, so the read decides theirs. */
+  async restoreGroup(named: string, id: string): Promise<{ group: { id: string; fullPath: string; name: string } }> {
+    const instance = this.instanceAt(this.namedInstance(named));
+    if (!this.signedInAt(instance)) throw new CoreError("invalid_request", signInFirst());
+    this.instanceGroup(instance, id);
+    let restored: HostGroup;
+    try { restored = await instance.client.restoreGroup(id); }
+    catch (error) { throw this.hostWriteRefusal(instance, error); }
+    this.holdGroupLifecycle(instance, id, restored);
+    await this.publish();
+    // A successful write remains successful if the follow-up read
+    // fails: the instance exposes that read's failure for Refresh.
+    await this.readHost(instance).catch(() => undefined);
+    await this.publish();
+    return { group: { id, fullPath: restored.fullPath, name: restored.name } };
+  }
+
+  /** Hold the empty group's returned path and lifecycle by stable id.
+   * Saved records from a different group at the same path stay separate. */
+  private holdGroupLifecycle(instance: HostInstance, id: string, answer: HostGroup): void {
+    const map = (group: HostGroup): HostGroup => group.kind === "group" && group.id === id ? answer : group;
+    this.holdChange(instance, {
+      group: map,
+      listing: (listing) => ({ ...listing, repository: { ...listing.repository, group: map(listing.repository.group) } }),
+    });
   }
 
   /** Move a spex repository's placement, by its key and the placement's
@@ -7114,17 +7155,6 @@ export class SpaceManager {
     const group = this.listedGroups(instance, instance.view).find((entry) => entry.kind === "group" && entry.id === id);
     if (!group) throw new CoreError("not_found", groupNotListed(id, this.nameOf(instance)));
     return group;
-  }
-
-  /** Whether the view lists a spex repository or a group under a group
-   * of the instance (git-host-19), its paths compared ignoring case as
-   * the host's are. */
-  private holdsAnything(instance: HostInstance, group: HostGroup): boolean {
-    const path = group.fullPath.toLowerCase();
-    const under = (fullPath: string, self: boolean): boolean => (self && fullPath.toLowerCase() === path) || fullPath.toLowerCase().startsWith(`${path}/`);
-    if (this.listedGroups(instance, instance.view).some((entry) => entry.kind === "group" && entry.id !== group.id && under(entry.fullPath, false))) return true;
-    return [...(instance.view?.listings ?? []), ...instance.attached.values()].some(({ repository }) =>
-      repository.group.kind === "group" && (repository.group.id === group.id || under(repository.group.fullPath, true)));
   }
 
   /**
@@ -8264,7 +8294,7 @@ export class SpaceManager {
       for (const group of this.listedGroups(at, view)) {
         if (group.kind === "user") continue;
         const can = group.can;
-        const entry: InstanceGroupState = { id: group.id, login: null, mine: false, fullPath: group.fullPath, name: group.name, can: { createSubgroup: can.createSubgroup, manageMembers: can.manageMembers, rename: can.rename, delete: can.delete }, placed: [], repositories: [] };
+        const entry: InstanceGroupState = { id: group.id, login: null, mine: false, fullPath: group.fullPath, name: group.name, can: { createSubgroup: can.createSubgroup, manageMembers: can.manageMembers, rename: can.rename, delete: can.delete, ...(can.restore ? { restore: true } : {}) }, ...(group.pendingDeletion ? { pendingDeletion: true } : {}), ...(group.deletionRoot ? { deletionRoot: group.deletionRoot } : {}), placed: [], repositories: [] };
         heading.entries.push(entry);
         if (group.id !== null) heading.byId.set(group.id, entry);
         if (!heading.byPath.has(group.fullPath)) heading.byPath.set(group.fullPath, entry);

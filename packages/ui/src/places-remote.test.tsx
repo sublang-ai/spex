@@ -560,7 +560,7 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
     expect(within(here).getByTestId("space-repair-use").textContent).toBe("Use /code/infra");
     fireEvent.click(within(here).getByTestId("space-repair-choose"));
     expect(within(here).getByTestId("space-repair-path")).toBeTruthy();
-    expect(within(here).getByRole("button", { name: "Open folder…" })).toBeTruthy();
+    expect(within(here).getByRole("button", { name: "Browse…" })).toBeTruthy();
 
     // The seat: the same repair, at its own core.
     pick("build-box");
@@ -571,7 +571,7 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
     // secondary, the server named where this computer would be
     // (space-46, space-112).
     expect(within(there).getByTestId("space-repair-title").textContent).toBe(
-      "infra · acme — Folder missing on build-box",
+      "infra · acme — Project folder not connected on build-box",
     );
     expect(within(there).getByTestId("space-repair-folder").textContent).toBe("/code/infra · 2 sessions ran there");
     // [run-view-171] [run-view-169] a remote place's repair row offers
@@ -582,7 +582,7 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
     expect(within(there).queryByTestId("space-repair-choose")).toBeNull();
     expect(within(there).queryByText("Choose folder…")).toBeNull();
     expect(within(there).queryByTestId("space-repair-path")).toBeNull();
-    expect(within(there).queryByText("Open folder…")).toBeNull();
+    expect(within(there).queryByText("Browse…")).toBeNull();
     expect(pathEntries(there)).toEqual([]);
     // Declining names no folder, and stands, naming the server
     // (space-112).

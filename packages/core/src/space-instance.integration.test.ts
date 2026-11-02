@@ -252,7 +252,7 @@ test("space-74: a 500 stops a check, a push and a join as the host's error; a re
   assert.ok(refused.sync.phase === "stopped", JSON.stringify(refused.sync));
   const words = `${HOST_NAME} refused: Push refused for acme/lines-spex and ${HOST_NAME} by a rule.`;
   assert.deepEqual([refused.sync.cause, refused.sync.message], ["refused", words]);
-  assert.equal(refused.sync.guidance, "Membership decides who may send here: use Share, or ask a member who may share it.");
+  assert.equal(refused.sync.guidance, "Membership decides who may send here: use Invite members, or ask someone who can manage members.");
   const readOnly = await home.client.repository(key);
   assert.deepEqual([readOnly.state, readOnly.reason], ["read-only", words]);
   host.script.refusePush(null);
@@ -2370,7 +2370,7 @@ test("space-86: an explicit content-size rejection keeps access and Save, names 
   const denied = await home.client.settle("space.sync", { repository: key });
   assert.ok(denied.sync.phase === "stopped");
   assert.deepEqual([denied.sync.cause, denied.state], ["refused", "read-only"]);
-  assert.match(denied.sync.guidance, /Membership.*Share/);
+  assert.match(denied.sync.guidance, /Membership.*Invite members/);
   host.script.refuseTransport(null);
   mark = home.client.mark();
   await home.client.expectOk("space.refresh", {});
@@ -2384,7 +2384,7 @@ test("space-86: an explicit content-size rejection keeps access and Save, names 
   const mixedDenial = await home.client.settle("space.sync", { repository: key });
   assert.ok(mixedDenial.sync.phase === "stopped");
   assert.deepEqual([mixedDenial.sync.cause, mixedDenial.state], ["refused", "read-only"], "specific permission evidence keeps priority over size wording");
-  assert.match(mixedDenial.sync.guidance, /Membership.*Share/);
+  assert.match(mixedDenial.sync.guidance, /Membership.*Invite members/);
   host.script.refusePush(null);
   mark = home.client.mark();
   await home.client.expectOk("space.refresh", {});
@@ -2399,7 +2399,7 @@ test("space-86: an explicit content-size rejection keeps access and Save, names 
   const otherRule = await home.client.settle("space.sync", { repository: key });
   assert.ok(otherRule.sync.phase === "stopped");
   assert.deepEqual([otherRule.sync.cause, otherRule.state], ["refused", "read-only"]);
-  assert.match(otherRule.sync.guidance, /Membership.*Share/);
+  assert.match(otherRule.sync.guidance, /Membership.*Invite members/);
   host.script.refusePush(null);
   assert.deepEqual(leaks(host, [...broadcasts(home.client.messages), await home.client.expectOk("space.get", {})]), []);
 });

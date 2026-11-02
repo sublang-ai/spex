@@ -206,7 +206,10 @@ meta.md       The spec of specs
 | [DR-185](decisions/185-the-suites-a-change-reaches.md) | 185-the-suites-a-change-reaches.md | The suites a change reaches: the classifier names the reach of a pull request's change from the workspaces' declared dependencies, the test job runs only those suites, the Linux test job on Node 22 alone, the journeys in three shards, `npm run test:affected` locally; amends DR-145, DR-166 and DR-169 |
 | [DR-188](decisions/188-registry-sign-in-opens-the-browser.md) | 188-registry-sign-in-opens-the-browser.md | Active registry sign-ins permit automatic browser opening without a Space; shared sign-in continuation links work independently of the native opener |
 | [DR-177](decisions/177-repairs-explain-the-next-step.md) | 177-repairs-explain-the-next-step.md | Repair wording distinguishes unconnected folders from missing files; older-session failures carry structured causes, plain next steps and collapsed Details |
+| [DR-178](decisions/178-membership-with-a-clear-scope.md) | 178-membership-with-a-clear-scope.md | Membership with a clear scope: Invite members in a named panel, labelled username and role with visible guidance, immediate Add member, and permission-gated empty-group deletion with confirmation |
+| [DR-179](decisions/179-invite-several-members-together.md) | 179-invite-several-members-together.md | Invite several members together: removable username tokens, one role, sequential additions with progress and per-user results, retaining failed or unsent entries for explicit retry |
 | [DR-180](decisions/180-choose-a-group-before-adding.md) | 180-choose-a-group-before-adding.md | Choose a group before adding: visible task title and labelled Space, radio choices without side effects, destination and access review, explicit Add to group or Connect project; amends DR-172 and DR-159, extends DR-069 |
+| [DR-181](decisions/181-group-deletion-follows-the-space-policy.md) | 181-group-deletion-follows-the-space-policy.md | Transparent empty-group deletion: fresh named-content checks, simple confirmation, safe deletion requests, scheduled state and restoration |
 
 ## Packages
 

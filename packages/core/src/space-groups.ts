@@ -365,13 +365,12 @@ export function renameNothing(): string {
   return i18n._({ id: "Give the group a new name or path", comment: "Refusal of a group's rename naming neither a new name nor a new path" });
 }
 
-/** Refusal: a group the view lists something under is not deleted, since
- * the host would delete what it holds with it (git-host-19). */
-export function groupNotEmpty(group: string): string {
+/** Refusal: destructive group deletion requires its exact public path. */
+export function confirmGroupPath(group: string): string {
   return i18n._({
-    id: "{group} is not empty",
+    id: "Review {group} before deleting it",
     values: { group },
-    comment: "Refusal of a group's deletion: it still holds a project's records or a group; {group} is the group's path at the Space",
+    comment: "Refusal of group deletion without a reviewed public group path; no changes were sent",
   });
 }
 

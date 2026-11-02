@@ -746,8 +746,9 @@ describe("GROUPS: a placement's members (space-62, space-69, space-72)", () => {
     // roles, and names the spex repository with that instance (space-69).
     fireEvent.click(within(panel).getByTestId(`space-share-${KEY}@${SECOND}`));
     const editor = within(panel).getByTestId(`space-share-${KEY}@${SECOND}-editor`);
-    fireEvent.change(within(editor).getByLabelText("Login at Second Example"), { target: { value: "dave" } });
-    fireEvent.click(within(editor).getByRole("button", { name: "Add" }));
+    expect(editor.textContent).toContain("Second Example");
+    fireEvent.change(within(editor).getByLabelText("Usernames"), { target: { value: "dave" } });
+    fireEvent.click(within(editor).getByRole("button", { name: "Add member" }));
     await waitFor(() => expect(calls("space.share")).toEqual([{ repository: KEY, instance: SECOND, login: "dave", role: "30" }]));
     await waitFor(() => expect(within(panel).getByTestId(`space-members-outcome-${KEY}@${SECOND}`).textContent).toBe("@dave added as Developer"));
     // Remove names it likewise (space-72).
@@ -759,7 +760,7 @@ describe("GROUPS: a placement's members (space-62, space-69, space-72)", () => {
     fireEvent.click(within(lineOf(KEY, ORIGIN)).getByTestId("space-line-members"));
     const keyPanel = await screen.findByTestId(`space-members-${KEY}@${ORIGIN}`);
     await within(keyPanel).findAllByTestId(/^space-member-/);
-    expect(within(keyPanel).queryByRole("button", { name: "Share" })).toBeNull();
+    expect(within(keyPanel).queryByRole("button", { name: "Invite members" })).toBeNull();
     expect(within(keyPanel).queryByRole("button", { name: /^Remove @/ })).toBeNull();
   });
 
@@ -809,7 +810,8 @@ describe("GROUPS: a placement's members (space-62, space-69, space-72)", () => {
     await within(panel).findAllByTestId(/^space-member-/);
     expect(calls("space.members")).toEqual([{ repository: KEY, instance: SECOND }]);
     fireEvent.click(within(panel).getByTestId(`space-share-${KEY}@${SECOND}`));
-    expect(within(within(panel).getByTestId(`space-share-${KEY}@${SECOND}-editor`)).getByLabelText("Login at Fourth Example")).toBeTruthy();
+    expect(within(within(panel).getByTestId(`space-share-${KEY}@${SECOND}-editor`)).getByLabelText("Usernames")).toBeTruthy();
+    expect(within(panel).getByTestId(`space-share-${KEY}@${SECOND}-editor`).textContent).toContain("Fourth Example");
     // Moving the records to another group is not offered here (DR-172).
     expect(within(lineOf(KEY, SECOND)).queryByTestId("space-line-move")).toBeNull();
     cleanup();

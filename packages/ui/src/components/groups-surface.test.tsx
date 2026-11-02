@@ -1265,7 +1265,7 @@ describe("GROUPS: the instance's entries (space-1, space-58, space-61, DR-120)",
     fireEvent.click(within(lineAt("@spex.example/bob/notes-spex")).getByTestId("space-line-members"));
     const members = await screen.findByTestId(`space-members-@spex.example/bob/notes-spex@${ORIGIN}`);
     await within(members).findByTestId("space-member-jane");
-    expect(within(members).getByTestId(`space-share-@spex.example/bob/notes-spex@${ORIGIN}`).textContent).toBe("Share");
+    expect(within(members).getByTestId(`space-share-@spex.example/bob/notes-spex@${ORIGIN}`).textContent).toBe("Invite members");
     // The group named like your login: its own entry, its row
     // unreachable with the cause, Retry its one control (space-61).
     const apart = screen.getByTestId("space-group-jane");

@@ -429,7 +429,7 @@ describe("SPACE: each Space under its heading (space-1, git-host-5, space-3, spa
     expect(within(lineAt(OWN_REPO.key, ORIGIN)).queryByTestId("space-line-members")).toBeNull();
   });
 
-  test("space-62, space-69: a row's members panel reads the roles and the display name of the Space the core names as governing it, its Share field 'Login at <Space>'", async () => {
+  test("space-62, space-69: a row's invitation reads the roles and the username guidance of the Space the core names as governing it", async () => {
     // Signed out of the first; the third, listed before the second and
     // signed in, does not list your own group's own records, which the
     // second governs (git-host-5).
@@ -457,8 +457,9 @@ describe("SPACE: each Space under its heading (space-1, git-host-5, space-3, spa
     expect(calls("space.members")).toEqual([{ repository: OWN_REPO.key, instance: ORIGIN }]);
     fireEvent.click(within(panel).getByTestId(`space-share-${OWN_REPO.key}@${ORIGIN}`));
     const editor = within(panel).getByTestId(`space-share-${OWN_REPO.key}@${ORIGIN}-editor`);
-    expect(within(editor).getByLabelText("Login at Second Example")).toBeTruthy();
-    expect(within(within(editor).getByRole("listbox", { name: "Role" })).getAllByRole("option").map((option) => option.textContent)).toEqual([
+    expect(within(editor).getByLabelText("Usernames")).toBeTruthy();
+    expect(editor.textContent).toContain("Second Example");
+    expect(within(within(editor).getByRole("combobox", { name: "Role" })).getAllByRole("option").map((option) => option.textContent)).toEqual([
       "Viewer",
       "Editor",
     ]);

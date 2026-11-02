@@ -356,6 +356,11 @@ export interface AppState extends AttachmentState {
    * its root or inside the group whose host id is `parent` (space-68);
    * the state listing it arrives before the reply. */
   spaceGroupCreate(instance: string, name: string, path: string, parent: string | null): Promise<CommandResults["space.group.create"]>;
+  /** Ask the Space to delete an empty group; the state without the
+   * group arrives before the reply (space-29). */
+  spaceGroupDeletionCheck(instance: string, group: string): Promise<CommandResults["space.group.deletionCheck"]>;
+  spaceGroupDelete(instance: string, group: string, confirmPath: string): Promise<CommandResults["space.group.delete"]>;
+  spaceGroupRestore(instance: string, group: string): Promise<CommandResults["space.group.restore"]>;
   /** Add the account of `login` to a group or a spex repository's
    * placement at one of its instance's roles, by its id (space-69); the
    * reply lists the members after the addition. */
@@ -1942,6 +1947,10 @@ function placeState(
     spaceMembers: (target) => getClient().command("space.members", { ...target }),
 
     spaceGroupCreate: (instance, name, path, parent) => getClient().command("space.group.create", { instance, name, path, parent }),
+
+    spaceGroupDeletionCheck: (instance, group) => getClient().command("space.group.deletionCheck", { instance, group }),
+    spaceGroupDelete: (instance, group, confirmPath) => getClient().command("space.group.delete", { instance, group, confirmPath }),
+    spaceGroupRestore: (instance, group) => getClient().command("space.group.restore", { instance, group }),
 
     spaceShare: (target, login, role) => getClient().command("space.share", { ...target, login, role }),
 

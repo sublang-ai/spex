@@ -167,11 +167,6 @@ msgstr "{group} 中已有 {name}"
 msgid "{group} is a group named like your login"
 msgstr "{group} 是一个与你的用户名同名的群组"
 
-#. Refusal of a group's deletion: it still holds a project's records or a group; {group} is the group's path at the Space
-#: src/space-groups.ts
-msgid "{group} is not empty"
-msgstr "{group} 不为空"
-
 #. A package Git source failed without a recognized status; raw backing-host or unclassified stderr stays inside the core
 #: src/space.ts
 msgid "{host} answered with an error"
@@ -1868,10 +1863,10 @@ msgstr "媒体读取的起始位置超出文件长度。"
 msgid "Media storage has stopped."
 msgstr "媒体存储服务已停止。"
 
-#. Guidance under a transfer the Space refused; Share is the control in the members panel; it claims no role
+#. Guidance under a transfer the Space refused; Invite members is the control in the members panel; it claims no role
 #: src/space-git.ts
-msgid "Membership decides who may send here: use Share, or ask a member who may share it."
-msgstr "谁可以向这里发送由成员身份决定：使用“共享”，或请一位可以共享它的成员帮忙。"
+msgid "Membership decides who may send here: use Invite members, or ask someone who can manage members."
+msgstr "成员权限决定谁可以在此发送更改：请使用“邀请成员”，或联系有权管理成员的人。"
 
 #. Migration diagnostic: the file changed under the migration, which wrote nothing
 #. Migration diagnostic: the file changed under the migration, which wrote nothing
@@ -3258,6 +3253,11 @@ msgstr "此次上传已取消或过期，请重新上传文件。"
 #: src/media-transfers.ts
 msgid "Too many files are uploading. Finish or cancel an upload, then retry."
 msgstr "正在上传的文件过多，请先完成或取消部分上传，再重试。"
+
+#. Refusal of group deletion without a reviewed public group path; no changes were sent
+#: src/space-groups.ts
+msgid "Review {group} before deleting it"
+msgstr "删除 {group} 前请先检查"
 
 #. Config error; the field's dotted path is the config file's own
 #. Config error; the field's dotted path is the config file's own
