@@ -241,7 +241,10 @@ When a rescan replaces an indexed session's history, the core shall publish `ses
 
 #### core-service-85
 
-When a client sends `project.rebind` with `projectId`, local `path`, optional recorded `aliases` and optional Git `revision`, the core shall apply the existing-identity binding rules [[storage-6](storage.md#storage-6)] after verifying that the path is a repository root and the project has no live session — no turn in flight ([DR-051](../decisions/051-runtime-held-for-a-turn.md)).
+When a client sends `project.rebind` with `projectId`, local `path`, optional recorded `aliases` and optional Git `revision`, the core shall apply the existing-identity binding rules [[storage-6](storage.md#storage-6)] after verifying that the path is a repository root and the project has no live session — no turn in flight ([DR-051](../decisions/051-runtime-held-for-a-turn.md)):
+
+- an invalid folder refusal names the exact candidate and explains that an existing Git project folder is required and none is created;
+- after pairing, older-session imports are retried for that repository alone before the serialized session rescan publishes their results [[core-service-60](#core-service-60)], successful imports losing their old diagnostics and unresolved failures preserving their source files [[storage-12](storage.md#storage-12)] ([DR-194](../decisions/194-saved-work-is-a-choice-not-setup-debt.md)).
 
 #### core-service-86
 
@@ -250,6 +253,21 @@ When a client sends `storage.diagnostics`, the core shall report each unresolved
 - after verified migration, damaged application or session files do not refuse startup; affected commands return `invalid_request` with the failing file and reason, while unrelated operations remain available;
 - a diagnostic a local folder would repair carries that repair's own facts — the project it names with that project's registered name, the working directories recorded for it, how many sessions record them, what the core found about each folder it names, and the one folder it proposes where exactly one qualifies [[space-53](space.md#space-53)] — so a client offers the repair, and its proposal, from the data rather than from the reason's wording;
 - a diagnostic no local folder repairs carries none, and a project is named by its registered name rather than by its identifier wherever a repair names it.
+- failed former-store imports carry optional code `session-import`, and failed older desktop-session imports carry `session-folder-required` when no normalized project folder is available, otherwise `session-upgrade`, assigned at the reporting operation without classifying the reason's prose; these codes change neither preservation nor blocking ([DR-189](../decisions/189-repairs-explain-the-next-step.md)).
+- a folder repair carries a project name only from valid project metadata and previews of at most three most-recent saved conversations, titled by a single-line excerpt of at most 120 characters from the session listing’s title [[core-service-32](#core-service-32)] and carrying its real session identity for opening history [[core-service-10](#core-service-10)] and a known saved timestamp where one exists, without fabricating dates or project names ([DR-195](../decisions/195-read-saved-conversations-before-locating-files.md));
+- a `session-folder-required` diagnostic carries its repository explicitly, so the folder diagnostic's fold can keep it in the same task [[space-46](space.md#space-46)] without matching reason text.
+- an eligible older-conversation notice carries `notice: {key, dismissed?}`, the opaque identity and optional dismissal timestamp of its acknowledgement [[core-service-148](#core-service-148)]; all other diagnostics carry no dismissal capability.
+
+#### core-service-148
+
+When a client sends `space.notice.dismiss` with a notice key and a boolean `dismissed`, the core shall update only that home's preference for the currently reported eligible notice and return and broadcast the updated Space state [[space-1](space.md#space-1)] ([DR-197](../decisions/197-dismiss-reminders-without-losing-history.md)):
+
+- eligibility requires a standalone, nonblocking `session-import` or `session-upgrade` diagnostic with no folder repair and a verified regular source file; eligibility never follows reason-text matching;
+- the opaque key binds the reported file, code and reason to its verified file identity and version, stable across restart while those facts remain the same; changed facts produce a new undismissed notice, and an unverifiable source supplies no dismissal capability;
+- true records a dismissal timestamp in the home's local preferences [[storage-5](storage.md#storage-5)], false removes it, and only an undismissed notice contributes to the pending count;
+- a published state reflects the latest acknowledgements at publication, so overlapping commands or delayed reads cannot restore an older dismissal or count;
+- both operations preserve the source files and the existing limits on reading, execution and recovery [[core-service-86](#core-service-86)]; dismissal acknowledges no other notice or folder task;
+- an unknown, stale, ineligible or blocking notice is refused without writing a preference.
 
 ### Boss Turns
 
@@ -550,6 +568,7 @@ When a client requests adapter readiness, the core service shall report one dedu
 
 The core service shall persist and replay sessions through Playbook's hydrated manifest and replay API over its versioned physical session files [[1]] ([DR-144](../decisions/144-bounded-session-storage.md)), using the shared root and explicit overrides [[storage-1](storage.md#storage-1)] ([DR-045](../decisions/045-unified-session-storage.md)):
 
+- a known session's history remains readable without a paired project folder, while further work follows the continuation checks [[core-service-73](#core-service-73)] ([DR-195](../decisions/195-read-saved-conversations-before-locating-files.md));
 - restart serves the same records and visibility filtering [[core-service-8](#core-service-8)], deriving turns, summaries, usage, and per-agent active time [[core-service-102](#core-service-102)]; liveness comes from runtime/leases rather than stored flags;
 - valid opaque v1 records, including unknown/headerless objects, remain in sequence/digest accounting; unsupported presentation is skipped without damage;
 - record-write failure preserves live presentation and durable recovery, marks the manifest's replay incomplete and refuses later continuation [[core-service-73](#core-service-73)]; a restart cannot clear the marker merely because the retained bytes parse;
@@ -974,7 +993,6 @@ Where the core watches no config file and a playbook module's import or a readin
 
 Where the shared config path holds no file, the test suite shall start the core service once for each credential row of [[core-service-3](#core-service-3)] — Claude only, Codex only, both and neither, each with an explicit environment and a scratch home — and fail unless the seeded file's Captain and each player carry the `adapter`, `model`, `effort` and `writablePaths` that Playbook's seed — the one the `playbook` CLI writes — returns for that same environment and home, the both-credentials row placing `dev.reviewer` alone on `codex`, no `playbooks.<id>.from` remains, and a second start over the seeded file leaves its bytes unchanged [[core-service-3](#core-service-3)].
 
-
 #### core-service-138
 
 Where the core seeded the shared config path under Claude credentials alone, the test suite shall restart it on the same home and fail unless:
@@ -1029,7 +1047,11 @@ Where fixture sessions another host wrote [[core-service-60](#core-service-60)] 
 
 #### core-service-88
 
-When an integration suite changes stored history and folder pairs through a running core, it shall verify removal and restoration of a recorded-path alias [[core-service-85](#core-service-85)], diagnostics preserving unresolved files [[core-service-86](#core-service-86)], and history-replacement notification before the updated summary [[core-service-87](#core-service-87)].
+When an integration suite changes stored history and folder pairs through a running core, it shall verify removal and restoration of a recorded-path alias and immediate repository-scoped older-session import retries after a folder is saved, without restarting, with a remaining import failure preserved [[core-service-85](#core-service-85)], diagnostics preserving unresolved files, exposing bounded recognizable conversation previews with session identities and distinguishing skipped former-store imports, older desktop-session failures and a missing project folder through their codes [[core-service-86](#core-service-86)], history readable by a preview's session identity before any folder pairing [[core-service-10](#core-service-10)], and history-replacement notification before the updated summary [[core-service-87](#core-service-87)].
+
+#### core-service-149
+
+When an integration suite dismisses an unsupported former-store session through a real core, it shall assert that the notice leaves the pending count while its original bytes and unrelated diagnostics remain, dismissal survives a core restart, showing it again restores its count, a source-file change receives a new undismissed key, stale, unknown or ineligible requests write no preference, and overlapping delayed state reads publish the latest acknowledgements without restoring an older count [[core-service-148](#core-service-148)], with the capability and stored dismissal reported through the diagnostics protocol [[core-service-86](#core-service-86)].
 
 #### core-service-77
 

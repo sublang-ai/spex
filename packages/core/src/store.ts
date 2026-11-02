@@ -184,6 +184,10 @@ interface TurnRow {
   status: string | null;
 }
 
+function turnTitle(turn: TurnRow | undefined): string | undefined {
+  return turn?.prompt.trim() ? turn.prompt : turn?.attachmentTitle;
+}
+
 interface StoreMeta {
   version: number;
   importedLegacy?: string[];
@@ -1003,29 +1007,59 @@ export class Store {
    * index every session (core-service-60). */
   async initializeSessions(): Promise<void> {
     for (const repository of this.repositories.values()) {
-      const shared = repository.store;
-      await shared.prepare();
-      const sessionsDir = repository.sessionsDir;
-      const cwd = this.homeFile.folderOf(repository.key)?.path;
-      for (const filename of readdirSync(sessionsDir)) {
-        const sidecar = filename.endsWith(".spex.json");
-        if (!sidecar && !/^[0-9a-f-]{36}\.json$/.test(filename)) continue;
-        const id = filename.slice(0, -(sidecar ? ".spex.json" : ".json").length);
-        const sourcePath = join(sessionsDir, filename);
-        try {
-          if (!sidecar && (await shared.readManifest(id)).schemaVersion === 7) continue;
-          const source = readJson<Record<string, unknown>>(sourcePath);
-          if (!source) continue;
-          if (sidecar) this.loadSidecar(repository, id, source);
-          await shared.migrate(id, { sourcePath, ...(cwd ? { cwd } : {}) });
-        } catch (error) {
-          this.sessionLocations.set(id, repository.key);
-          this.untrackedSessions.add(id);
-          this.sessionProblems.set(id, {file:sourcePath, reason:String(error), blocking:false});
-        }
-      }
+      await this.migrateLegacySessions(repository);
     }
     await this.adoptForeignSessions();
+  }
+
+  /** Retry only the selected project's older files after its folder is
+   * saved. The service's ordinary scan indexes and broadcasts the result. */
+  async retryLegacySessions(key: string): Promise<void> {
+    await this.migrateLegacySessions(this.requireRepository(key));
+  }
+
+  private async migrateLegacySessions(repository: SpexRepository): Promise<void> {
+    const shared = repository.store;
+    await shared.prepare();
+    if (this.repositories.get(repository.key) !== repository) return;
+    const sessionsDir = repository.sessionsDir;
+    const cwd = this.homeFile.folderOf(repository.key)?.path;
+    let filenames: string[];
+    try { filenames = readdirSync(sessionsDir); }
+    catch (error) {
+      // An existing clone may have no sessions yet. Reading or rebinding
+      // it makes neither that directory nor a vanished clone (storage-2).
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+      throw error;
+    }
+    for (const filename of filenames) {
+      if (this.repositories.get(repository.key) !== repository) break;
+      const sidecar = filename.endsWith(".spex.json");
+      if (!sidecar && !/^[0-9a-f-]{36}\.json$/.test(filename)) continue;
+      const id = filename.slice(0, -(sidecar ? ".spex.json" : ".json").length);
+      if (this.localSessions.has(id) || this.sessions.get(id)?.live) continue;
+      const sourcePath = join(sessionsDir, filename);
+      try {
+        if (!sidecar && (await shared.readManifest(id)).schemaVersion === 7) continue;
+        const source = readJson<Record<string, unknown>>(sourcePath);
+        if (!source) continue;
+        if (sidecar && !this.sessions.has(id)) this.loadSidecar(repository, id, source);
+        await shared.migrate(id, { sourcePath, ...(cwd ? { cwd } : {}) });
+        if (this.sessionProblems.get(id)?.file === sourcePath) this.sessionProblems.delete(id);
+      } catch (error) {
+        this.sessionLocations.set(id, repository.key);
+        this.untrackedSessions.add(id);
+        this.sessionProblems.set(id, {
+          file: sourcePath, reason: String(error), blocking: false,
+          // A sidecar needs the project's paired folder to import.
+          // Its error also covers invalid metadata, so report the
+          // known missing prerequisite without parsing that wording.
+          ...(sidecar ? cwd && isAbsolute(cwd) && resolve(cwd) === cwd
+            ? { code: "session-upgrade" as const }
+            : { code: "session-folder-required" as const, repository: repository.key } : {}),
+        });
+      }
+    }
   }
 
   /** A legacy import's staged session, read before Playbook converts it. */
@@ -1232,7 +1266,7 @@ export class Store {
    * (storage-12): one whose file is gone since leaves, and so does the
    * mark keeping an unindexed session's files out of Git once none of
    * them stands. */
-  sessionDiagnostics(): { file: string; reason: string; blocking: boolean }[] {
+  sessionDiagnostics(): StorageDiagnostic[] {
     for (const id of [...this.sessionProblems.keys()]) this.sessionProblem(id);
     return [...this.sessionProblems.values()];
   }
@@ -1788,12 +1822,28 @@ export class Store {
       if (repository.key === this.homeFile.own() && held.length === 0) continue;
       const directories = [...new Set(held.map((meta) => meta.cwd).filter((cwd): cwd is string => typeof cwd === "string"))].sort();
       const { group, name } = splitKey(repository.key);
-      const label = this.readProjectFile(repository).file?.name ?? name;
+      const projectName = this.readProjectFile(repository).file?.name;
+      const label = projectName ?? name;
+      const conversations = held.map((meta) => {
+        const turns = [...(this.turns.get(meta.id)?.values() ?? [])].sort((a, b) => a.turnId - b.turnId);
+        const words = turnTitle(turns[0])?.replace(/\s+/g, " ").trim();
+        const title = words && words.length > 120 ? `${words.slice(0, 119)}…` : words;
+        // Older sidecars can lack an end time even though their replay
+        // has later work. Use the known activity without inventing a date.
+        const lastRecorded = (this.records.get(meta.id) ?? []).reduce((last, { record }) =>
+          hasPresentationHeader(record) && Number.isFinite(record.timestamp) ? Math.max(last, record.timestamp) : last, 0);
+        const times = [meta.createdAt, meta.endedAt, lastRecorded, ...turns.flatMap((turn) => [turn.startedAt, turn.endedAt])].filter((time): time is number =>
+          typeof time === "number" && Number.isFinite(time) && time > 0);
+        const updatedAt = times.length ? times.reduce((last, time) => Math.max(last, time), 0) : undefined;
+        return { id: meta.id, ...(title ? { title } : {}), ...(updatedAt !== undefined ? { updatedAt } : {}) };
+      }).sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0)).slice(0, 3);
       reports.push({
         file: relative(this.dir, repository.dir),
         reason: unpairedReason(label),
         blocking: false,
-        repair: { kind: "repository", repository: repository.key, name, group, directories, sessions: held.length, key: repairKey(repository.key, directories) },
+        repair: { kind: "repository", repository: repository.key, name, group,
+          ...(projectName !== undefined ? { projectName } : {}), ...(conversations.length ? { conversations } : {}),
+          directories, sessions: held.length, key: repairKey(repository.key, directories) },
       });
     }
     const cloned = new Set(repositories.map((repository) => repository.key));
@@ -1914,10 +1964,10 @@ export class Store {
     const meta = this.sessions.get(id);
     if (!meta) return undefined;
     const project = this.getProject(meta.projectId);
-    if (!project) return undefined;
+    if (!project && !this.repository(meta.projectId)) return undefined;
     // The project's read took `home.yaml` as it stands: its device is
     // this runtime's (DR-134).
-    return this.summarize(meta, project.path, this.homeFile.device);
+    return this.summarize(meta, project?.path ?? meta.cwd ?? "", this.homeFile.device, !project);
   }
 
   /** A settled checkpoint this runtime may continue: never one of a
@@ -1934,7 +1984,7 @@ export class Store {
   }
 
   /** `device` is this runtime's, read once per listing (DR-134). */
-  private summarize(meta: SessionMeta, path: string, device: string): SessionInfo {
+  private summarize(meta: SessionMeta, path: string, device: string, historyOnly = false): SessionInfo {
     const turns = [...(this.turns.get(meta.id)?.values() ?? [])].sort(
       (a, b) => a.turnId - b.turnId,
     );
@@ -1958,8 +2008,6 @@ export class Store {
       hasPresentationHeader(entry.record) && !isHidden(entry.record)));
     const agentActiveMs = complete ? foldAgentActiveMs(records) : undefined;
     const agentReportedModels = complete ? foldAgentReportedModels(records) : undefined;
-    const words = (turn: TurnRow | undefined): string | undefined =>
-      turn?.prompt.trim() ? turn.prompt : turn?.attachmentTitle;
     // The work the session is doing is named by the turn that opened
     // it, as its stand-in entries are (core-service-49, DR-119): an
     // answer sent while a question stood is a turn of that work.
@@ -1969,8 +2017,8 @@ export class Store {
     const summary = sessionInfo(
       meta,
       path,
-      words(turns[0]),
-      words(opening),
+      turnTitle(turns[0]),
+      turnTitle(opening),
       turns.length,
       failed,
       cost,
@@ -1987,6 +2035,12 @@ export class Store {
       delete summary.continuable;
       summary.continuationReason = refusal;
     }
+    // Reading saved records needs no working folder. Their original
+    // execution and ownership checks still govern any later work.
+    if (historyOnly) {
+      delete summary.continuable;
+      delete summary.recovery;
+    }
     return summary;
   }
 
@@ -1999,10 +2053,10 @@ export class Store {
       (a, b) => a.createdAt - b.createdAt,
     )) {
       const project = projects.get(meta.projectId);
-      // A session whose project left the registry stays on disk but
-      // out of the listing (DR-036).
-      if (!project) continue;
-      out.push(this.summarize(meta, project.path, device));
+      // A missing folder makes history read-only; a removed record
+      // repository remains absent, even if indexed metadata survives.
+      if (!project && !this.repositories.has(meta.projectId)) continue;
+      out.push(this.summarize(meta, project?.path ?? meta.cwd ?? "", device, !project));
     }
     return out;
   }

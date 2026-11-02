@@ -5,7 +5,7 @@
 # root on GitHub's Ubuntu runner — a disposable Linux host booted by
 # systemd with passwordless sudo — from the commit's tree unpacked
 # outside any home, as apps/hub/deploy/LANE.md has it by hand. Full app
-# validation calls this workflow; it can also run on request (DR-190).
+# validation calls this workflow; it can also run on request (DR-199).
 # The lane's output, redacted of every secret, is the run's artifact.
 name: Hub Lane
 

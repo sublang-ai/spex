@@ -5,7 +5,7 @@
 // heading, then its groups, Personal and every other account's login
 // beneath it. Signed in, the heading reads the Space's
 // display name — its host name until a read names one — beside
-// "@<login>", with "New group" where its read is held (space-68),
+// "@<login>", with "New group…" where its read is held (space-68),
 // disabled and titled "Made by the people who run <Space>" where the
 // read says the person may not create one (DR-120), one overflow "More"
 // holding "Remove from this list", disabled, and Sign out (space-6) as
@@ -117,6 +117,9 @@ function InstanceHeading({
   const [removing, setRemoving] = useState(false);
   const [removeError, setRemoveError] = useState<string>();
   const [creating, setCreating] = useState(false);
+  const [creatingPending, setCreatingPending] = useState(false);
+  const [createFocus, setCreateFocus] = useState(0);
+  const createId = useId();
   const againRef = useRef<HTMLButtonElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
   const newGroupRef = useRef<HTMLButtonElement>(null);
@@ -153,6 +156,7 @@ function InstanceHeading({
   /** Sign out of this Space (space-6): the reply is the state, the
    * heading kept, signed out, and focus moves to its "Sign in again". */
   const signOut = async () => {
+    if (!connected || signingOut || creatingPending) return;
     setSigningOut(true);
     setSignOutError(undefined);
     try {
@@ -275,7 +279,7 @@ function InstanceHeading({
     onSelect: () => void remove(),
   };
   const more = (
-    <MoreMenu key="more" of={name} testId="space-instance-more" buttonRef={moreRef} entries={[removeEntry]} />
+    <MoreMenu key="more" of={name} testId="space-instance-more" buttonRef={moreRef} entries={[removeEntry]} disabled={creatingPending} />
   );
 
   return (
@@ -317,12 +321,13 @@ function InstanceHeading({
                 type="button"
                 data-testid="space-new-group"
                 aria-expanded={creating}
+                aria-controls={creating ? createId : undefined}
                 className={`${SECONDARY} self-start whitespace-nowrap @xs:self-auto`}
-                disabled={!connected || !instance.account.canCreateGroup}
+                disabled={!connected || !instance.account.canCreateGroup || creatingPending}
                 title={instance.account.canCreateGroup ? undefined : madeBy}
-                onClick={() => setCreating((was) => !was)}
+                onClick={() => { setCreating(true); setCreateFocus((value) => value + 1); }}
               >
-                {i18n._({ id: "New group", comment: "create a group at the root of the Space whose heading carries it" })}
+                {i18n._({ id: "New group…", comment: "open the name and path editor for a group at this Space" })}
               </button>
             ) : null}
             <button
@@ -330,7 +335,7 @@ function InstanceHeading({
               type="button"
               data-testid="space-signout"
               className={`${SECONDARY} w-full whitespace-nowrap @xs:w-auto`}
-              disabled={!connected || signingOut}
+              disabled={!connected || signingOut || creatingPending}
               title={
                 seat === undefined
                   ? i18n._({
@@ -407,18 +412,22 @@ function InstanceHeading({
         </div>
       ) : null}
       {creating && instance.signedIn ? (
-        <GroupNameEditor
-          testId="space-new-group-editor"
-          instance={origin}
-          parent={null}
-          connected={connected}
-          onClose={() => {
-            setCreating(false);
-            // Closing never strands focus (DR-010 §6).
-            setTimeout(() => newGroupRef.current?.focus(), 0);
-          }}
-          onNote={onNote}
-        />
+        <div id={createId} className="min-w-0">
+          <GroupNameEditor
+            testId="space-new-group-editor"
+            instance={origin}
+            parent={null}
+            connected={connected}
+            focusRequest={createFocus}
+            onPendingChange={setCreatingPending}
+            onClose={() => {
+              setCreating(false);
+              // Closing never strands focus (DR-010 §6).
+              setTimeout(() => newGroupRef.current?.focus(), 0);
+            }}
+            onNote={onNote}
+          />
+        </div>
       ) : null}
     </div>
   );

@@ -8,7 +8,7 @@ What to run before tagging, by tier
 [DR-089](../specs/decisions/089-every-fresh-user-scenario-walked-for-real.md)).
 Full automated validation belongs to the release workflow: pushing a tag
 runs the channel's full CI on that exact tree before publication
-(release-18, [DR-190](../specs/decisions/190-release-gated-full-validation.md)).
+(release-18, [DR-199](../specs/decisions/199-release-gated-full-validation.md)).
 App validation includes the platform matrix, browser journeys, native
 browser acceptance and privileged hub lane; CLI validation runs its CLI
 suite across the platform matrix and script suites on Linux and macOS.

@@ -17,6 +17,7 @@ import { hostname } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { Store } from "./store.js";
+import { foldDiagnostics } from "./app-storage.js";
 import { WebSocket } from "ws";
 import { loadTmuxPlayConfig } from "@sublang/cligent/tmux-play";
 import { openSessionStore, createSessionStore, validateSessionManifest } from "@sublang/playbook/session-store";
@@ -3344,8 +3345,8 @@ test("core-service-60: sessions another host wrote are served, bound to their pr
   const elsewhere = "ccccccc1-3333-4333-8333-cccccccccccc";
   writeForeignSession(sessionsDir, elsewhere, join(dir, "elsewhere"), foreignTurn("elsewhere"));
   // ...and one in a clone no folder pairs — your own group's — whose
-  // records stay unlisted though its directory is the project's
-  // (storage-12).
+  // history remains readable without borrowing that project's folder
+  // (core-service-60, DR-195).
   const unpaired = "ccccccc2-3333-4333-8333-cccccccccccc";
   writeForeignSession(join(clonePath(join(dir, "state"), `${OWN}/${OWN}-spex`), "sessions"), unpaired, projectDir, foreignTurn("unpaired"));
 
@@ -3424,10 +3425,9 @@ test("core-service-60: sessions another host wrote are served, bound to their pr
     project.id,
     "a session is its clone's project's, whatever its working directory",
   );
-  assert.ok(
-    !ids.includes(unpaired),
-    "a session of a clone no folder pairs is not listed",
-  );
+  assert.ok(ids.includes(unpaired), "a session whose saved records have no project folder is listed for reading");
+  assert.equal(sessions.find((session) => session.id === unpaired)?.continuable, undefined);
+  assert.deepEqual((await client.expectOk("history.get", { sessionId: unpaired })).records.map(({ record }) => record.type), ["turn_started", "turn_finished"]);
   const served = sessions.find((s: SessionInfo) => s.id === atStartup);
   assert.equal(served?.live, false, "another host's session is never live here");
   assert.equal(served?.title, "from the terminal", "the title folds from the stream");
@@ -3623,6 +3623,21 @@ test("core-service-85: a rebind keeps the clone's sessions listed, and a recorde
     const history = await client.expectOk("history.get", { sessionId: session.id });
     const paths = ["json", "replay.json", "hints.json"].map((suffix) => join(projectSessions(harness.dataDir), `${session.id}.${suffix}`));
     const before = paths.map((path) => existsSync(path) ? readFileSync(path) : undefined);
+    const unpairedHomePath = join(harness.dataDir, "home.yaml");
+    const pairedHomeBytes = readFileSync(unpairedHomePath);
+    const unpairedHome = parseYaml(pairedHomeBytes.toString("utf8"));
+    unpairedHome.folders = [];
+    writeFileSync(unpairedHomePath, stringifyYaml(unpairedHome));
+    const historyOnly = (await client.expectOk("session.list", {})).find((entry) => entry.id === session.id);
+    assert.ok(historyOnly, "a resumable session remains readable when its folder is not paired");
+    assert.equal(historyOnly.continuable, undefined);
+    assert.deepEqual(await client.expectOk("history.get", { sessionId: session.id }), history);
+    const withoutFolder = await client.command("turn.submit", { sessionId: session.id, text: "must not run without a folder" });
+    assert.equal(withoutFolder.ok, false, "reading history never grants permission to execute without project files");
+    assert.deepEqual(await client.expectOk("history.get", { sessionId: session.id }), history);
+    assert.deepEqual(paths.map((path) => existsSync(path) ? readFileSync(path) : undefined), before, "refused execution changes no session files");
+    assert.deepEqual(parseYaml(readFileSync(unpairedHomePath, "utf8")).folders, []);
+    writeFileSync(unpairedHomePath, pairedHomeBytes);
     const relocated = join(harness.dir, "relocated-project");
     mkdirSync(relocated);
     execFileSync("git", ["init", "-q", relocated]);
@@ -3676,6 +3691,10 @@ test("core-service-85: a rebind keeps the clone's sessions listed, and a recorde
     assert.match(edited?.continuationReason ?? "", /continue it on the computer whose folder it ran in/);
     writeFileSync(homePath, homeBytes);
     assert.equal((await client.expectOk("session.list", {})).find((entry) => entry.id === session.id)?.continuable, true);
+    await client.expectOk("project.remove", { projectId: project.id, confirm: true });
+    assert.equal((await client.expectOk("session.list", {})).some((entry) => entry.id === session.id), false, "removed records never reappear as unpaired history");
+    const removedHistory = await client.command("history.get", { sessionId: session.id });
+    assert.ok(!removedHistory.ok && removedHistory.error.code === "not_found", JSON.stringify(removedHistory));
   } finally {
     client.close();
     await harness.service.stop();
@@ -5024,6 +5043,9 @@ for (const selection of ["default", "home override", "sessions override"] as con
     await seed.dispose();
     writeFileSync(source,original,{mode:0o600});
     writeFileSync(join(legacyDir,`${sessionId}.records.jsonl`),await readSessionReplay(join(seedDir,`${sessionId}.records.jsonl`)),{mode:0o600});
+    const unsupported = join(legacyDir, `${randomUUID()}.json`);
+    const unsupportedBytes = JSON.stringify({ schemaVersion: 1 });
+    writeFileSync(unsupported, unsupportedBytes, { mode: 0o600 });
     const service = await CoreService.start({token:"test",configPath,dataDir,home,own:OWN,watchConfig:false,
       env:{HOME:home,XDG_STATE_HOME:join(home,"old-state"),...(selection === "home override" ? {SPEX_HOME:dataDir} : {})}});
     t.after(async () => {await service.stop();rmSync(home,{recursive:true,force:true});});
@@ -5032,13 +5054,22 @@ for (const selection of ["default", "home override", "sessions override"] as con
     const sessions = await client.expectOk("session.list",{});
     if (selection === "default") {
       // storage-18: the ordinary default imports into your own group's
-      // sessions/, a clone no folder pairs, so it lists nowhere and is
-      // reported instead (storage-12).
+      // sessions/. Without a paired folder, its history remains readable
+      // but cannot continue (core-service-60, storage-12).
       const ownKey = `${OWN}/${OWN}-spex`;
       assert.ok(existsSync(join(clonePath(dataDir, ownKey), "sessions", `${sessionId}.json`)), "imported into your own group's sessions");
-      assert.equal(sessions.length,0,"a session of a clone no folder pairs is not listed");
+      assert.deepEqual(sessions.map((session) => session.id), [sessionId], "the imported session is listed for reading");
+      assert.equal(sessions[0]!.projectId, ownKey, "the session belongs to the clone holding it, not its recorded working folder");
+      assert.equal(sessions[0]!.continuable, undefined, "an unpaired session offers no continuation");
+      const history = await client.expectOk("history.get", { sessionId });
+      assert.deepEqual(history.records.filter(({ record }) => record.type === "turn_started")
+        .map(({ record }) => (record as { turn: { prompt: string } }).turn.prompt), ["Prior CLI work"], "imported conversation history can be read without its project files");
       const repair = (await client.expectOk("storage.diagnostics",{})).find((entry) => entry.repair?.kind === "repository" && entry.repair.repository === ownKey);
       assert.equal(repair?.repair?.sessions, 1, "your own group's clone is reported once it holds the session");
+      const skipped = (await client.expectOk("storage.diagnostics", {})).find((entry) => entry.file === unsupported);
+      assert.equal(skipped?.code, "session-import", "the skipped import carries guidance without parsing its reason");
+      assert.equal(skipped?.blocking, false);
+      assert.equal(readFileSync(unsupported, "utf8"), unsupportedBytes, "the unsupported older file is preserved");
       assert.equal(existsSync(source),false,"old active manifest retires after the new bundle is valid");
       // Retained in the destination store's receipts (storage-18).
       const migrations = join(clonePath(dataDir, ownKey),"local","migrations");
@@ -5046,6 +5077,7 @@ for (const selection of ["default", "home override", "sessions override"] as con
       assert.ok(inputs.some((path) => readFileSync(join(migrations,String(path)),"utf8") === original),"original bytes are retained locally");
     } else {
       assert.equal(sessions.length,0); assert.equal(readFileSync(source,"utf8"),original);
+      assert.equal((await client.expectOk("storage.diagnostics", {})).some((entry) => entry.file === unsupported), false);
     }
   });
 }
@@ -5628,8 +5660,8 @@ test("core-service-86: unreadable legacy sidecars and forge cache preserve unrel
   service=await CoreService.start({token:"test",dataDir:harness.dataDir,configPath:join(harness.dir,"playbook.config.yaml"),env:{},home:join(harness.dir,"home"),watchConfig:false,adapterImports:fakeAdapterImports({}).imports});
   client=new Client(service.port()); await client.open();
   const diagnostics=await client.expectOk("storage.diagnostics",{});
-  assert.ok(diagnostics.some((entry)=>entry.file===sidecar&&entry.reason.length>0));
-  assert.ok(diagnostics.some((entry)=>entry.file===malformed&&entry.reason.length>0));
+  assert.ok(diagnostics.some((entry)=>entry.file===sidecar&&entry.reason.length>0&&entry.code==="session-upgrade"));
+  assert.ok(diagnostics.some((entry)=>entry.file===malformed&&entry.reason.length>0&&entry.code==="session-upgrade"));
   assert.ok(diagnostics.some((entry)=>entry.file===cache&&!entry.blocking));
   assert.ok((await client.expectOk("session.list",{})).some((session)=>session.id===prior.id));
   await client.expectOk("config.edit",{op:{kind:"captain.set",patch:{instruction:"Still available"}}});
@@ -5638,6 +5670,105 @@ test("core-service-86: unreadable legacy sidecars and forge cache preserve unrel
   assert.equal(readFileSync(sidecar,"utf8"),"{broken sidecar");
   assert.equal(readFileSync(malformed,"utf8"),malformedBytes);
   assert.equal(readFileSync(cache,"utf8"),"{broken cache");
+});
+
+test("core-service-86: saved conversations share one folder task and import when its folder is saved", async (t) => {
+  const root = scratchDir("spex-sidecar-folder-");
+  const dataDir = join(root, "state");
+  const projectPath = join(root, "project");
+  const configPath = join(root, "playbook.config.yaml");
+  mkdirSync(projectPath);
+  execFileSync("git", ["init", "-q", projectPath]);
+  writeFileSync(configPath, VALID_CONFIG);
+  const { projectId: key, sessionsDir } = pairedHome(dataDir, projectPath);
+  const homePath = join(dataDir, "home.yaml");
+  const home = parseYaml(readFileSync(homePath, "utf8"));
+  home.folders = [];
+  writeFileSync(homePath, stringifyYaml(home));
+  const longTitle = `Saved conversation 4 ${"long description ".repeat(20)}`;
+  const older = Array.from({ length: 4 }, (_, index) => {
+    const id = randomUUID();
+    const file = join(sessionsDir, `${id}.spex.json`);
+    const original = JSON.stringify({ v: 1, id, projectId: key, createdAt: 1, endedAt: index === 3 ? null : index + 2, live: false, players: [], initialVisible: [] });
+    writeFileSync(file, original, { mode: 0o600 });
+    const records = foreignTurn(index === 3 ? longTitle : `Saved conversation ${index + 1}`)
+      .map((record) => ({ ...record, timestamp: Number(record.timestamp) + index * 1000 }));
+    writeFileSync(join(sessionsDir, `${id}.records.jsonl`), records.map((record, seq) => JSON.stringify({ v: 1, seq: seq + 1, record })).join("\n") + "\n", { mode: 0o600 });
+    return { id, file, original, records };
+  });
+  const refusedId = randomUUID();
+  const refusedFile = join(sessionsDir, `${refusedId}.spex.json`);
+  const refusedBytes = JSON.stringify({ v: 99, id: refusedId, projectId: key, createdAt: 0, endedAt: null, live: false, players: [], initialVisible: [] });
+  writeFileSync(refusedFile, refusedBytes, { mode: 0o600 });
+  const ownKey = `${OWN}/${OWN}-spex`;
+  const ownSessions = projectSessions(dataDir, ownKey);
+  const personalId = randomUUID();
+  const personalFile = join(ownSessions, `${personalId}.spex.json`);
+  const personalBytes = JSON.stringify({ v: 1, id: personalId, projectId: ownKey, createdAt: 0, endedAt: null, live: false, players: [], initialVisible: [] });
+  writeFileSync(personalFile, personalBytes, { mode: 0o600 });
+  const options = { token: "test", configPath, dataDir, home: join(root, "home"), own: OWN, env: {}, watchConfig: false };
+  const service = await CoreService.start(options);
+  const client = new Client(service.port());
+  await client.open();
+  t.after(async () => { client.close(); await service.stop(); rmSync(root, { recursive: true, force: true }); });
+  const diagnostics = await client.expectOk("storage.diagnostics", {});
+  const repairEntry = diagnostics.find((entry) => entry.repair?.repository === key)!;
+  const repair = repairEntry.repair!;
+  assert.equal(repair.projectName, "project");
+  assert.equal(repair.sessions, 5);
+  assert.deepEqual(repair.conversations, [
+    { id: older[3]!.id, title: `${longTitle.slice(0, 119)}…`, updatedAt: 5000 },
+    { id: older[2]!.id, title: "Saved conversation 3", updatedAt: 4000 },
+    { id: older[1]!.id, title: "Saved conversation 2", updatedAt: 3000 },
+  ], "bounded titles identify recent saved work even when its older sidecar has no end time");
+  assert.deepEqual(repair.details?.map((detail) => detail.file).sort(), [...older.map((entry) => entry.file), refusedFile].sort());
+  assert.equal(diagnostics.some((entry) => entry.code === "session-folder-required"), false);
+  assert.equal(diagnostics.find((entry) => entry.repair?.repository === ownKey)?.repair?.projectName, undefined, "personal records never invent a project name from their storage key");
+  assert.deepEqual(diagnostics.find((entry) => entry.repair?.repository === ownKey)?.repair?.conversations, [{ id: personalId }], "missing title and date stay unknown while the known conversation remains addressable");
+  const listedBeforePairing = await client.expectOk("session.list", {});
+  for (const preview of repair.conversations!) {
+    const original = older.find((entry) => entry.id === preview.id)!;
+    assert.ok(listedBeforePairing.some((session) => session.id === preview.id), "each linked preview identifies an indexed conversation");
+    assert.equal(listedBeforePairing.find((session) => session.id === preview.id)?.continuable, undefined, "unpaired saved history never advertises continuation");
+    const history = await client.expectOk("history.get", { sessionId: preview.id! });
+    assert.deepEqual(history.records.map(({ record }) => record), original.records.filter((record) => !("visibility" in record) || record.visibility !== "hidden"), "saved conversation history can be read before choosing a project folder, with hidden records still withheld");
+  }
+  const noFolderTurn = await client.command("turn.submit", { sessionId: older[0]!.id, text: "must not run without project files" });
+  assert.ok(!noFolderTurn.ok && noFolderTurn.error.code === "invalid_request", JSON.stringify(noFolderTurn));
+  assert.equal((await client.expectOk("session.list", {})).find((session) => session.id === older[0]!.id)?.live, false);
+  assert.deepEqual((await client.expectOk("history.get", { sessionId: older[0]!.id })).records.map(({ record }) => record), older[0]!.records.filter((record) => !("visibility" in record) || record.visibility !== "hidden"), "refusing execution appends no agent or turn records");
+  assert.deepEqual(await client.expectOk("project.list", {}), [], "reading history creates no project");
+  assert.deepEqual(parseYaml(readFileSync(homePath, "utf8")).folders, [], "reading saved history does not bind a folder");
+  for (const entry of older) assert.equal(readFileSync(entry.file, "utf8"), entry.original, "a missing folder preserves every older file");
+  const repeated = foldDiagnostics([...diagnostics, { file: older[0]!.file, reason: repair.details!.find((detail) => detail.file === older[0]!.file)!.reason, blocking: false, code: "session-folder-required", repository: key }]);
+  assert.deepEqual(repeated, diagnostics, "folding a repeated finding keeps its evidence once");
+  const blocked = { file: "blocking.json", reason: "requires repair", blocking: true, code: "session-folder-required" as const, repository: key };
+  assert.ok(foldDiagnostics([...diagnostics, blocked]).includes(blocked), "blocking damage never disappears into a folder task");
+  const independent = { file: "other.json", reason: "unsupported format", blocking: false, code: "session-upgrade" as const, repository: key };
+  assert.ok(foldDiagnostics([...diagnostics, independent]).includes(independent), "another failure remains its own task even for the same repository");
+  const groups = await client.expectOk("space.get", {});
+  assert.equal(groups.issues, 2, "five related import failures and their folder selection are one task, beside personal history");
+  assert.deepEqual(groups.diagnostics.find((entry) => entry.repair?.repository === key)?.repair?.details, repair.details);
+  const refusedFolder = await client.command("project.rebind", { projectId: key, path: root });
+  assert.equal(refusedFolder.ok, false);
+  if (!refusedFolder.ok) {
+    assert.equal(refusedFolder.error.details?.issue, "project_folder");
+    assert.equal(refusedFolder.error.details?.path, root);
+    assert.ok(refusedFolder.error.message.includes(root));
+    assert.ok(refusedFolder.error.message.includes("does not create one"));
+  }
+  assert.equal(existsSync(join(root, ".git")), false, "selecting a folder never initializes Git");
+  await client.expectOk("project.rebind", { projectId: key, path: projectPath });
+  for (const entry of older) {
+    assert.equal(existsSync(entry.file), false, "saving the folder imports the supported sidecar without a restart");
+    assert.ok((await client.expectOk("session.list", {})).some((session) => session.id === entry.id));
+    await client.waitFor((message) => message.type === "session.state" && message.session.id === entry.id);
+  }
+  const after = await client.expectOk("storage.diagnostics", {});
+  assert.equal(after.some((entry) => entry.repair?.repository === key), false);
+  assert.equal(after.find((entry) => entry.file === refusedFile)?.code, "session-upgrade", "an import that still fails remains visible with its current cause");
+  assert.equal(readFileSync(refusedFile, "utf8"), refusedBytes);
+  assert.equal(readFileSync(personalFile, "utf8"), personalBytes, "saving a folder retries no other container");
 });
 
 test("storage-15: repeated default-home startup does not grow leases for a refused sidecar", async (t) => {
@@ -6395,6 +6526,7 @@ test("storage-29: session.create makes a paired clone's missing sessions/ privat
   mkdirSync(cloneOf(`${OWN}/kept-spex`), { recursive: true });
   writeFileSync(join(cloneOf(`${OWN}/kept-spex`), "project.json"), JSON.stringify({ format: 1, name: "Kept", remote: null }));
   await client.expectOk("project.rebind", { projectId: `${OWN}/kept-spex`, path: folder("kept") });
+  assert.deepEqual((await client.expectOk("session.list", {})).filter((session) => session.projectId === `${OWN}/kept-spex`), [], "a rebound clone with no sessions/ has no history");
   await opens(`${OWN}/kept-spex`);
 
   // A registered project whose sessions/ was removed.

@@ -427,7 +427,7 @@ describe("run-view-70: the sidebar navigates, the tabs hold what is open", () =>
   });
 
   test("a foreign session opens as a read-only tab, once", async () => {
-    commandMock.mockResolvedValue({ records: [] });
+    commandMock.mockImplementation(async (type: string) => type === "history.get" ? { records: [] } : defaultReply(type));
     render(<App />);
     fireEvent.click(screen.getByTestId("sidebar-disclose-p2"));
 
@@ -528,6 +528,138 @@ describe("run-view-70: the sidebar navigates, the tabs hold what is open", () =>
       expect.anything(),
     );
     expect(screen.getByTestId("sidebar-session-a-live")).toBeTruthy();
+  });
+});
+
+describe("postponed folder choices remain reachable (DR-196)", () => {
+  test.each([false, true])("the sidebar reopens zero-count choices after leaving Space (collapsed: %s)", async (collapsed) => {
+    let space = groupsState({ diagnostics: ["Atlas", "Website", "Notes"].map((name, index) => ({
+      file: `workspace/personal/${name}`, reason: "No project folder registered", blocking: false,
+      repair: { kind: "repository" as const, repository: `personal/${name}`, projectName: name,
+        key: `${name}|/old/${name}`, directories: [`/old/${name}`], sessions: 1,
+        conversations: [{ id: `saved-${index}`, title: `${name} conversation` }] },
+    })), issues: 3 });
+    const ledger = { intents: [], attention: [], badge: 0 };
+    commandMock.mockImplementation(async (type: string, fields: Record<string, unknown> = {}) => {
+      if (type === "space.get") return space;
+      if (type === "ledger.get") return ledger;
+      if (type === "space.repair.decline") {
+        const diagnostics = space.diagnostics.map((entry) => entry.repair && entry.repair.key === fields.repair
+          ? { ...entry, repair: { ...entry.repair, declined: NOW } } : entry);
+        space = { ...space, diagnostics, issues: diagnostics.filter((entry) => !entry.repair?.declined).length };
+        return space;
+      }
+      return defaultReply(type);
+    });
+    // Bootstrap must discover the entry even before Space was visited.
+    useAppStore.setState({ projects: [], sessions: [], views: {}, space: undefined, spaceError: undefined,
+      currentProjectId: undefined, activeSessionId: undefined, openTabs: {}, workspaceTabs: {},
+      railCollapsed: collapsed, ledger: ledger as never });
+    const mounted = render(<App />);
+    await act(async () => {});
+    const entry = screen.getByTestId("sidebar-locate-files");
+    expect(entry.getAttribute("aria-label")).toBe("Locate project files on This computer");
+    await act(async () => {
+      if (collapsed) fireEvent.click(entry);
+      else { entry.focus(); fireEvent.keyDown(entry, { key: "Enter" }); }
+    });
+    expect(screen.getByTestId("space-issues-list")).toBeTruthy();
+    expect(screen.getByTestId("space-issues").textContent).toContain("Review (3)");
+    for (const remaining of [2, 1, 0]) {
+      await act(async () => fireEvent.click(screen.getAllByRole("button", { name: "Dismiss" })[0]!));
+      expect(useAppStore.getState().space?.issues).toBe(remaining);
+    }
+    expect(screen.getByTestId("space-issues").textContent).toBe("Review");
+    expect(screen.getByTestId("space-issues").textContent).not.toContain("⚠");
+    expect(screen.getByTestId("space-issues").className).not.toContain("amber");
+    expect(screen.getByTestId("sidebar-locate-files")).toBeTruthy();
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Dashboard" })));
+    await act(async () => fireEvent.click(screen.getByTestId("sidebar-locate-files")));
+    expect(screen.getAllByTestId("space-repair-declined")).toHaveLength(3);
+    expect(screen.getAllByRole("button", { name: "Locate folder…" })).toHaveLength(3);
+    expect(useAppStore.getState().space?.issues).toBe(0);
+    // A reload has no cached Space model; the durable core answer restores it.
+    mounted.unmount();
+    useAppStore.setState({ space: undefined, spaceError: undefined });
+    render(<App />);
+    await act(async () => {});
+    await act(async () => fireEvent.click(screen.getByTestId("sidebar-locate-files")));
+    expect(screen.getAllByTestId("space-repair-declined")).toHaveLength(3);
+    expect(useAppStore.getState().projects).toEqual([]);
+    expect(commandMock.mock.calls.filter(([type]) => type === "space.repair.decline")).toHaveLength(3);
+    expect(commandMock).not.toHaveBeenCalledWith("project.rebind", expect.anything());
+    // Resolving the last task removes its navigation entry too.
+    act(() => useAppStore.setState({ space: { ...space, diagnostics: [], issues: 0 } }));
+    expect(screen.queryByTestId("sidebar-locate-files")).toBeNull();
+  });
+});
+
+describe("saved conversations without project files (DR-195)", () => {
+  test.each(["ready", "retry", "removed"])("opens saved history without project setup and handles %s", async (scenario) => {
+    const failFirstRead = scenario === "retry";
+    const saved = session({
+      id: "saved-unpaired", projectId: "personal/notes-spex", projectPath: "/old/notes",
+      title: "Plan the launch", players: [], initialVisible: [], continuable: undefined,
+    });
+    const space = groupsState({ diagnostics: [{
+      file: "workspace/personal/notes-spex", reason: "No project folder is registered", blocking: false,
+      repair: {
+        kind: "repository", repository: saved.projectId, key: "notes|/old/notes",
+        projectName: "Notes", directories: [saved.projectPath], sessions: 1,
+        conversations: [{ id: saved.id, title: saved.title, updatedAt: NOW }],
+      },
+    }], issues: 1 });
+    const ledger = { intents: [], attention: [], badge: 0 };
+    let reads = 0;
+    commandMock.mockImplementation(async (type: string) => {
+      if (type === "history.get" && ++reads === 1 && failFirstRead) throw new Error("Temporary history read failure");
+      if (type === "space.get") return space;
+      if (type === "ledger.get") return ledger;
+      if (type === "history.get") return { records: [
+        { seq: 1, record: { type: "turn_started", turnId: 1, timestamp: NOW - 1000,
+          turn: { id: 1, prompt: "Plan the launch", timestamp: NOW - 1000 } } },
+        { seq: 2, record: { type: "captain_reply", turnId: 1, timestamp: NOW,
+          text: "The saved plan starts with testing sign-in." } },
+        { seq: 3, record: { type: "turn_finished", turnId: 1, timestamp: NOW } },
+      ] };
+      return defaultReply(type);
+    });
+    useAppStore.setState({
+      projects: [], sessions: [saved], views: {}, currentProjectId: undefined,
+      activeSessionId: undefined, workspaceTabs: {}, openTabs: {}, space, ledger: ledger as never,
+    });
+    render(<App />);
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Space" })));
+    fireEvent.click(screen.getByRole("button", { name: "Review 1 notice" }));
+    if (scenario === "removed") act(() => useAppStore.setState({ sessions: [] }));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Plan the launch" })));
+    if (scenario === "removed") {
+      expect(screen.getByTestId("space-surface")).toBeTruthy();
+      expect(screen.queryByTestId("saved-conversation-reader")).toBeNull();
+      expect(screen.getByRole("alert").textContent).toContain("Refresh this list and try again.");
+      expect(commandMock).not.toHaveBeenCalledWith("history.get", expect.anything());
+      return;
+    }
+    if (failFirstRead) {
+      const failed = screen.getByTestId("saved-conversation-reader");
+      expect(failed.textContent).toContain("Temporary history read failure");
+      await act(async () => fireEvent.click(within(failed).getByRole("button", { name: "Retry" })));
+      expect(reads).toBe(2);
+    }
+    const reader = screen.getByTestId("saved-conversation-reader");
+    expect(within(reader).getByText("The saved plan starts with testing sign-in.")).toBeTruthy();
+    expect(useAppStore.getState().activeSessionId).toBe(saved.id);
+    expect(useAppStore.getState().projects).toEqual([]);
+    expect(commandMock).toHaveBeenCalledWith("history.get", { sessionId: saved.id, afterSeq: 0 });
+    expect(screen.queryByTestId("boss-composer")).toBeNull();
+    expect(screen.queryByRole("button", { name: "New session" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Restore" })).toBeNull();
+    for (const [type] of commandMock.mock.calls) {
+      expect(["project.rebind", "session.open", "turn.start", "session.restore"]).not.toContain(type);
+    }
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Back to Space" })));
+    expect(screen.getByTestId("space-surface")).toBeTruthy();
+    expect(useAppStore.getState().projects).toEqual([]);
   });
 });
 
@@ -770,6 +902,71 @@ describe("run-view-57: a workspace holding projects opens inside one", () => {
 });
 
 describe("run-view-172: first-project welcome route", () => {
+  test("space-58: pending palette submission survives shortcuts, and feedback survives close and repeated refusals", async () => {
+    const added = {
+      id: "me/gamma-spex", name: "gamma", path: "/tmp/gamma", registeredAt: 0,
+      repository: { key: "me/gamma-spex", name: "gamma-spex", group: "me", own: true },
+    };
+    const space = groupsState({
+      own: { name: "me", named: true, repositories: [repositoryRow(added.id, { folder: added.path })] },
+      instances: [instanceState("https://example.test", { displayName: "Example" })],
+    });
+    const ledger = { intents: [], attention: [], badge: 0 };
+    let picks = 0;
+    let finishPick!: () => void;
+    commandMock.mockImplementation(async (type: string) => {
+      if (type === "project.register") return added;
+      if (type === "project.list") return [added];
+      if (type === "space.get") return space;
+      if (type === "ledger.get") return ledger;
+      if (type === "space.pick") {
+        if (++picks < 3) throw new Error("Destination unavailable");
+        await new Promise<void>((resolve) => { finishPick = resolve; });
+        return { accepted: true };
+      }
+      return defaultReply(type);
+    });
+    useAppStore.setState({
+      projects: [], sessions: [], views: {}, currentProjectId: undefined,
+      activeSessionId: undefined, workspaceTabs: {}, openTabs: {},
+      ledger: ledger as never, space,
+    });
+    render(<App />);
+    fireEvent.click(screen.getByTestId("home-add-project"));
+    fireEvent.change(screen.getByTestId("palette-path"), { target: { value: added.path } });
+    fireEvent.click(screen.getByTestId("palette-add"));
+    const picker = await screen.findByTestId(`space-picker-${added.id}`);
+    fireEvent.click(within(picker).getByTestId("space-pick-group-@me"));
+    const submit = within(picker).getByTestId(`space-pick-submit-${added.id}`);
+    const live = screen.getByTestId("app-live");
+    fireEvent.click(submit);
+    await vi.waitFor(() => expect(live.textContent).toBe("Destination unavailable"));
+    const previousAnnouncement = live.firstElementChild;
+    fireEvent.click(submit);
+    await vi.waitFor(() => {
+      expect(picks).toBe(2);
+      expect(live.textContent).toBe("Destination unavailable");
+      expect(live.firstElementChild).not.toBe(previousAnnouncement);
+    });
+    fireEvent.click(submit);
+    await vi.waitFor(() => expect(picks).toBe(3));
+    expect(document.activeElement).toBe(picker);
+    // These bubble to App's real palette-toggle shortcut unless the
+    // pending dialog consumes them. Neither may hide a running write.
+    for (const modifier of [{ metaKey: true }, { ctrlKey: true }]) {
+      fireEvent.keyDown(document.activeElement!, { key: "p", ...modifier });
+      expect(screen.getByTestId(`space-picker-${added.id}`)).toBe(picker);
+      expect(document.activeElement).toBe(picker);
+      expect(picks).toBe(3);
+    }
+    await act(async () => { finishPick(); });
+    await vi.waitFor(() => {
+      expect(screen.queryByTestId("project-palette")).toBeNull();
+      expect(live.textContent).toBe("Adding gamma to Personal at Example");
+    });
+    expect(live.isConnected).toBe(true);
+  });
+
   test("landing and sidebar add the same way; the switch shortcut still offers Academy", () => {
     useAppStore.setState({
       projects: [],

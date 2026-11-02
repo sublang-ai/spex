@@ -8,7 +8,7 @@
 # workflow's newest run is judged; a status context has no run, stays,
 # and is judged by its state. The newest CI run must report its aggregate
 # `checks` gate as successful; skipped or absent gates cannot authorize a
-# merge (DR-190). The merge names the head checked, so a
+# merge (DR-199). The merge names the head checked, so a
 # push between the read and the merge is refused, not merged.
 # (A close and reopen adds a run; a re-run replaces its own run's checks.)
 # Start it once the head's newest run exists: a run that has not yet

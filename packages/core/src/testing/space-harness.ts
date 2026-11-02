@@ -330,11 +330,13 @@ export function assertGroupsState(state: GroupsState): void {
       assert.ok(typeof role.id === "string" && typeof role.name === "string" && typeof role.mayPush === "boolean", JSON.stringify(role));
     }
     for (const group of instance.groups) {
-      assert.deepEqual(Object.keys(group).sort(), GROUP_ENTRY_KEYS);
+      assert.deepEqual(Object.keys(group).sort(), [...GROUP_ENTRY_KEYS, ...(group.pendingDeletion !== undefined ? ["pendingDeletion"] : []), ...(group.deletionRoot !== undefined ? ["deletionRoot"] : [])].sort());
+      if (group.pendingDeletion !== undefined) assert.equal(typeof group.pendingDeletion, "boolean");
+      if (group.deletionRoot !== undefined) assert.equal(typeof group.deletionRoot, "string");
       // The rows standing elsewhere this entry holds a placement of,
       // each by its key and name (space-1, space-30).
       assert.ok(Array.isArray(group.placed) && group.placed.every((line) => Object.keys(line).sort().join() === "key,name" && typeof line.key === "string" && typeof line.name === "string"), JSON.stringify(group.placed));
-      assert.deepEqual(Object.keys(group.can).sort(), ["createSubgroup", "delete", "manageMembers", "rename"]);
+      assert.deepEqual(Object.keys(group.can).sort(), ["createSubgroup", "delete", "manageMembers", "rename", ...(group.can.restore !== undefined ? ["restore"] : [])]);
       assert.ok(Object.values(group.can).every((value) => typeof value === "boolean"), JSON.stringify(group.can));
       // A namespace by its login, with no id and nothing to do there; a
       // group with no login, never yours.

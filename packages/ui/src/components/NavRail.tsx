@@ -101,6 +101,8 @@ export interface NavPlace {
    * after the projects, reading "Opening…" until the place's core lists
    * it, selected while it is the current project. */
   opening?: OpeningProject[];
+  /** Opens this place's unfinished folder choices, including Not now. */
+  onLocateFiles?(): void;
   sessions: SessionInfo[];
   /** Non-idle attention by session id, the same derivation the badge
    * and the tab dots use (run-view-73). */
@@ -290,7 +292,7 @@ export function NavRail(props: NavRailProps) {
   const places = useMemo(
     () =>
       allPlaces.filter(
-        (place) => place.key === LOCAL_PLACE_KEY || place.projects.length > 0 || (place.opening?.length ?? 0) > 0,
+        (place) => place.key === LOCAL_PLACE_KEY || place.projects.length > 0 || (place.opening?.length ?? 0) > 0 || place.onLocateFiles !== undefined,
       ),
     [allPlaces],
   );
@@ -431,6 +433,12 @@ export function NavRail(props: NavRailProps) {
         label: entry.name,
         activate: () => place.onPickProject(entry.id),
       });
+    }
+    if (place.onLocateFiles) {
+      const key = placed(place, "locate-files");
+      rows.push({ key, kind: "action", place, projectRow: key, projectId: "",
+        label: i18n._({ id: "Locate project files", comment: "sidebar return to unfinished project folder choices, including those left for later" }),
+        activate: place.onLocateFiles });
     }
   }
   const focused = rows.some((row) => row.key === focusKey)
@@ -943,10 +951,26 @@ export function NavRail(props: NavRailProps) {
     );
   };
 
-  /** One place's project nodes, the projects opening there after them. */
+  const locateFilesLabel = (place: NavPlace): string =>
+    i18n._({ id: "Locate project files on {place}", values: { place: place.label }, comment: "accessible name and tooltip of a place-specific folder review shortcut" });
+  const locateFilesNode = (place: NavPlace) => place.onLocateFiles ? (
+    <div key={placed(place, "locate-files")} role="treeitem" aria-selected={false}
+      data-row={placed(place, "locate-files")} data-testid={placed(place, "sidebar-locate-files")}
+      tabIndex={focused === placed(place, "locate-files") ? 0 : -1}
+      onFocus={() => setFocusKey(placed(place, "locate-files"))}
+      onClick={place.onLocateFiles} aria-label={locateFilesLabel(place)} title={locateFilesLabel(place)}
+      className={`${rowClass(false)} min-h-6 pl-3`}
+    >
+      <Icon name="folder" className="h-4 w-4 shrink-0" />
+      <span className="min-w-0 whitespace-normal text-sm">{i18n._({ id: "Locate project files", comment: "sidebar return to unfinished project folder choices, including those left for later" })}</span>
+    </div>
+  ) : null;
+
+  /** Folder choices remain a way back, not fabricated project nodes. */
   const placeNodes = (place: NavPlace) => [
     ...place.projects.map((project) => projectNode(place, project)),
     ...(place.opening ?? []).map((entry) => openingNode(place, entry)),
+    locateFilesNode(place),
   ];
 
   const tree = (
@@ -1027,6 +1051,13 @@ export function NavRail(props: NavRailProps) {
         <>
           {surfaceEntry("Workspace")}
           {paletteControl}
+          {places.filter((place) => place.onLocateFiles).map((place) => (
+            <button key={placed(place, "locate-files")} type="button"
+              data-testid={placed(place, "sidebar-locate-files")}
+              onClick={place.onLocateFiles} aria-label={locateFilesLabel(place)} title={locateFilesLabel(place)}
+              className={`flex min-h-8 items-center justify-center rounded-md px-2 ${INACTIVE}`}
+            ><Icon name="folder" className="h-4 w-4" /></button>
+          ))}
           {/* Entries keep their places across the fold: Playbooks,
               Space and Settings stay at the foot in both states. */}
           <div className="flex-1" />

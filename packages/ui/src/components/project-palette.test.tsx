@@ -419,7 +419,8 @@ describe("projects-1, space-58: a folder added while signed in asks for its grou
   test("the picker stands in the palette; picking a group creates there and closes it", async () => {
     const spacePick = vi.fn(async () => {});
     useAppStore.setState({ connection: "open", space: groups(true, [row(ADDED.id)]), spacePick });
-    const { onPick, onClose } = renderPalette({ onAddPath: vi.fn(async () => ADDED) });
+    const onNote = vi.fn();
+    const { onPick, onClose } = renderPalette({ onAddPath: vi.fn(async () => ADDED), onNote });
     add();
     await screen.findByTestId(`space-picker-${ADDED.id}`);
     // The folder is the current project already; nothing is closed yet,
@@ -431,10 +432,41 @@ describe("projects-1, space-58: a folder added while signed in asks for its grou
     // (space-58, DR-172).
     expect(screen.queryByTestId(`space-pick-name-${ADDED.id}`)).toBeNull();
     fireEvent.click(screen.getByTestId("space-pick-group-acme"));
+    expect(spacePick).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId(`space-pick-submit-${ADDED.id}`));
     await vi.waitFor(() =>
       expect(spacePick).toHaveBeenCalledWith(ADDED.id, { kind: "create", instance: HOST, groupId: "20", name: "gamma" }),
     );
     await vi.waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(onNote).toHaveBeenCalledWith("Adding gamma to acme at Host");
+  });
+
+  test("space-58: pending group submission survives backdrop and Escape; refusal keeps the selected destination available to retry", async () => {
+    let refuse!: (error: Error) => void;
+    const spacePick = vi.fn(() => new Promise<void>((_resolve, reject) => { refuse = reject; }));
+    useAppStore.setState({ connection: "open", space: groups(true, [row(ADDED.id)]), spacePick });
+    const { onClose } = renderPalette({ onAddPath: vi.fn(async () => ADDED) });
+    add();
+    const picker = await screen.findByTestId(`space-picker-${ADDED.id}`);
+    const selected = within(picker).getByTestId("space-pick-group-acme") as HTMLInputElement;
+    const submit = within(picker).getByTestId(`space-pick-submit-${ADDED.id}`) as HTMLButtonElement;
+    fireEvent.click(selected);
+    fireEvent.click(submit);
+    expect(submit.disabled).toBe(true);
+    fireEvent.mouseDown(screen.getByTestId("project-palette"));
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    fireEvent.keyDown(picker, { key: "Escape" });
+    fireEvent.click(submit);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(spacePick).toHaveBeenCalledTimes(1);
+    refuse(new Error("Could not reach Host"));
+    await vi.waitFor(() => expect(within(picker).getByRole("alert").textContent).toBe("Could not reach Host"));
+    expect(selected.checked).toBe(true);
+    expect(submit.disabled).toBe(false);
+    expect(onClose).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(document.activeElement).toBe(submit));
+    fireEvent.mouseDown(screen.getByTestId("project-palette"));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   test("Cancel leaves it local only and closes the palette", async () => {
@@ -474,17 +506,13 @@ describe("projects-1, space-58: a folder added while signed in asks for its grou
     const { onClose } = renderPalette({ onAddPath: vi.fn(async () => ADDED) });
     add();
     const picker = await screen.findByTestId(`space-picker-${ADDED.id}`);
-    // Each instance under its display name, in the home's order, each
-    // with its own acme (projects-1, space-58).
-    const sections = within(picker).getAllByTestId(/^space-pick-instance-/);
-    expect(sections.map((section) => section.dataset.testid)).toEqual([`space-pick-instance-${HOST}`, `space-pick-instance-${SECOND}`]);
-    expect(sections.map((section) => within(section).getByRole("heading", { level: 3 }).textContent)).toEqual(["Host", "Second"]);
-    // Personal first (space-58, DR-172).
-    for (const section of sections) {
-      expect(within(section).getAllByTestId(/^space-pick-group-/).map((option) => option.textContent)).toEqual(["Personal", "acme"]);
-    }
-    // Picking the second's acme creates there, by its id at the second.
-    fireEvent.click(within(sections[1]!).getByTestId("space-pick-group-acme"));
+    const chooser = within(picker).getByRole("combobox", { name: "Space" }) as HTMLSelectElement;
+    expect([...chooser.options].map((option) => option.textContent)).toEqual(["Host", "Second"]);
+    expect(within(picker).getAllByTestId(/^space-pick-group-/).map((option) => option.dataset.testid)).toEqual(["space-pick-group-@ada", "space-pick-group-acme"]);
+    fireEvent.change(chooser, { target: { value: SECOND } });
+    fireEvent.click(within(picker).getByTestId("space-pick-group-acme"));
+    expect(spacePick).not.toHaveBeenCalled();
+    fireEvent.click(within(picker).getByTestId(`space-pick-submit-${ADDED.id}`));
     await vi.waitFor(() =>
       expect(spacePick).toHaveBeenCalledWith(ADDED.id, { kind: "create", instance: SECOND, groupId: "30", name: "gamma" }),
     );

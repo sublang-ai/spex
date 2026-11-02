@@ -11,6 +11,9 @@ const PATHS: Record<string, ReactNode> = {
   folder: (
     <path d="M2.5 4.5A1.5 1.5 0 0 1 4 3h3l1.7 1.8H12A1.5 1.5 0 0 1 13.5 6.3v5.2A1.5 1.5 0 0 1 12 13H4a1.5 1.5 0 0 1-1.5-1.5v-7Z" />
   ),
+  conversation: (
+    <path d="M4 3h8a1.5 1.5 0 0 1 1.5 1.5v5A1.5 1.5 0 0 1 12 11H7l-3.5 2.5V11A1.5 1.5 0 0 1 2 9.5v-5A1.5 1.5 0 0 1 3.5 3Z" />
+  ),
   gear: (
     <>
       <circle cx="8" cy="8" r="2.2" />

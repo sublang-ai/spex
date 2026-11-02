@@ -3,7 +3,7 @@
 name: CI
 
 # PRs validate the affected workspaces. Release callers and explicit full
-# runs validate their exact commit across platforms (DR-190).
+# runs validate their exact commit across platforms (DR-199).
 on:
   pull_request:
     branches: [main]

@@ -63,6 +63,9 @@ export interface StandinGroup {
   /** The group's own members, the person among them where listed; its
    * subgroups and repositories inherit them. */
   members?: StandinMember[];
+  /** A deletion scheduled directly on this group; descendants inherit
+   * its public marker without losing any independent schedule. */
+  pendingDeletion?: boolean;
 }
 
 /** A member by the Git host's own role name (e.g. "Developer"). */
@@ -353,6 +356,12 @@ export interface StandinScript {
   /** While set, deleting a group answers 403 `host_refused` with these
    * words (host-31). */
   refuseGroupDelete(message: string | null): void;
+  /** Choose normal immediate deletion (default) or scheduled deletion
+   * with Restore, without changing the client request. */
+  scheduleGroupDeletion(value: boolean): void;
+  /** Override group deletion checks, deletion and restoration without
+   * mutating the group, including a deployment missing those routes. */
+  faultGroupLifecycle(fault: { status: number; code: string; message: string } | null): void;
   /** While set, moving a spex repository answers 403 `host_refused` with
    * these words (host-32). */
   refuseTransfer(message: string | null): void;
@@ -744,6 +753,8 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
   let membersFailing = false;
   let groupRenameRefusal: string | null = null;
   let groupDeleteRefusal: string | null = null;
+  let groupDeletionScheduled = false;
+  let groupLifecycleFault: { status: number; code: string; message: string } | null = null;
   let transferRefusal: string | null = null;
   type HostFault = { kind: "rate"; retryAfter: string | null } | { kind: "unavailable" } | { kind: "refused"; message: string };
   const hostFaults: HostFault[] = [];
@@ -808,16 +819,26 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
   const roleOf = (repo: StandinRepository): string => roleHere.get(repo) ?? repo.role;
 
   // No page URL in any answer (DR-120).
-  const groupWire = (group: StandinGroup) => ({ id: group.id, full_path: group.fullPath, name: group.name, kind: group.kind });
-  const groupCan = (group: StandinGroup): StandinGroupCan =>
+  const pendingRoot = (group: StandinGroup): StandinGroup | undefined => script.groups
+    .filter((candidate) => candidate.pendingDeletion && (candidate.id === group.id || group.fullPath.startsWith(`${candidate.fullPath}/`)))
+    .sort((left, right) => left.fullPath.length - right.fullPath.length)[0];
+  const groupWire = (group: StandinGroup) => {
+    const pending = pendingRoot(group);
+    return { id: group.id, full_path: group.fullPath, name: group.name, kind: group.kind, ...(pending ? { pending_deletion: true, deletion_root: pending.fullPath } : {}) };
+  };
+  const baseGroupCan = (group: StandinGroup): StandinGroupCan =>
     group.can ?? (group.kind === "user"
       ? { createSubgroup: false, manageMembers: false, rename: false, delete: false }
       : { createSubgroup: true, manageMembers: true, rename: true, delete: true });
+  const groupCan = (group: StandinGroup): StandinGroupCan => pendingRoot(group)
+    ? { createSubgroup: false, manageMembers: false, rename: false, delete: false }
+    : baseGroupCan(group);
   /** A group as `GET /api/v1/host/groups` lists it, with what the person
    * may do there (host-4). */
   const listedGroupWire = (group: StandinGroup) => {
     const can = groupCan(group);
-    return { ...groupWire(group), can: { create_subgroup: can.createSubgroup, manage_members: can.manageMembers, rename: can.rename, delete: can.delete } };
+    const mayRestore = pendingRoot(group)?.id === group.id && baseGroupCan(group).delete;
+    return { ...groupWire(group), can: { create_subgroup: can.createSubgroup, manage_members: can.manageMembers, rename: can.rename, delete: can.delete, ...(mayRestore ? { restore: true } : {}) } };
   };
   const repositoryCan = (repo: StandinRepository): { manageMembers: boolean; transfer: boolean } =>
     repo.can ?? { manageMembers: MANAGING_ROLES.has(roleOf(repo)), transfer: roleOf(repo) === MOVING_ROLE };
@@ -1211,6 +1232,8 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
     failMembers: (on) => { membersFailing = on; },
     refuseGroupRename: (message) => { groupRenameRefusal = message; },
     refuseGroupDelete: (message) => { groupDeleteRefusal = message; },
+    scheduleGroupDeletion: (value) => { groupDeletionScheduled = value; },
+    faultGroupLifecycle: (fault) => { groupLifecycleFault = fault; },
     refuseTransfer: (message) => { transferRefusal = message; },
   };
 
@@ -1502,11 +1525,22 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
       script.tickets.push({ ticket, serverId: server.id, personId: script.person.id, expiresAt: Date.now() + TICKET_TTL_S * 1000, spent: false, spentAt: null, signedIn: false });
       return json(res, 201, { ticket, expires_in: TICKET_TTL_S, server: { id: server.id, name: server.name, address: server.address } });
     }
+    const lifecycle = /^\/api\/v1\/host\/groups\/([^/]+)\/(deletion|restore)$/.exec(path);
+    if (lifecycle && (method === "POST" || (method === "GET" && lifecycle[2] === "deletion"))) {
+      if (groupLifecycleFault) return envelope(res, groupLifecycleFault.status, groupLifecycleFault.code, groupLifecycleFault.message);
+      const group = script.groups.find((g) => g.kind === "group" && g.id === decodeURIComponent(lifecycle[1]));
+      if (!group) return envelope(res, 404, "not_found", "The group is not known.");
+      if (method === "GET") {
+        if (!baseGroupCan(group).delete) return envelope(res, 403, "host_refused", `You are not allowed to delete ${group.fullPath}.`);
+        return json(res, 200, { group: listedGroupWire(group), contents: groupContents(group) });
+      }
+      return lifecycle[2] === "deletion" ? deleteGroup(req, res, group) : restoreGroup(res, group);
+    }
     const groupOnly = /^\/api\/v1\/host\/groups\/([^/]+)$/.exec(path);
-    if (groupOnly && (method === "PATCH" || method === "DELETE")) {
+    if (groupOnly && method === "PATCH") {
       const group = script.groups.find((g) => g.kind === "group" && g.id === decodeURIComponent(groupOnly[1]));
       if (!group) return envelope(res, 404, "not_found", "The group is not known.");
-      return method === "PATCH" ? renameGroup(req, res, group) : deleteGroup(res, group);
+      return renameGroup(req, res, group);
     }
     const groupMatch = /^\/api\/v1\/host\/groups\/([^/]+)\/members(?:\/([^/]+))?$/.exec(path);
     if (groupMatch) {
@@ -1675,7 +1709,7 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
   function groupPathTaken(fullPath: string, except: StandinGroup | null): "group" | "account" | null {
     const taken = (other: string): boolean => other.toLowerCase() === fullPath.toLowerCase();
     if (!fullPath.includes("/") && !script.admitLoginGroups && [script.person, ...script.accounts].some((account) => taken(account.login))) return "account";
-    if (script.groups.some((g) => g !== except && (g.kind === "group" || !script.admitLoginGroups) && taken(g.fullPath)) || script.takenGroups.some(taken)) return "group";
+    if (script.groups.some((g) => g !== except && !pendingRoot(g) && (g.kind === "group" || !script.admitLoginGroups) && taken(g.fullPath)) || script.takenGroups.some(taken)) return "group";
     return null;
   }
 
@@ -1702,7 +1736,10 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
       if (taken === "account") return envelope(res, 409, "name_taken", "This path is taken by an account.");
       if (taken === "group") return envelope(res, 409, "name_taken", "Failed to save group: Path has already been taken.");
       // Everything inside moves with it, on the Git system as at the host.
-      const inside = script.groups.filter((g) => g.kind === "group" && (g === group || g.fullPath.startsWith(`${from}/`)));
+      const inside = script.groups.filter((g) => {
+        const pending = pendingRoot(g);
+        return g.kind === "group" && (g === group || (g.fullPath.startsWith(`${from}/`) && (!pending || pending.fullPath.startsWith(`${from}/`))));
+      });
       const store = (fullPath: string): string => join(dir, storage, ...fullPath.split("/"));
       if (existsSync(store(from))) {
         mkdirSync(dirname(store(to)), { recursive: true });
@@ -1715,19 +1752,41 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
     json(res, 200, { group: listedGroupWire(group) });
   }
 
-  /** `DELETE /api/v1/host/groups/:id` (host-31): a group of the instance
-   * deleted with everything inside it, as the Git system deletes it. */
-  function deleteGroup(res: ServerResponse, group: StandinGroup): void {
+  /** Authoritative direct contents; members never make a group nonempty. */
+  function groupContents(group: StandinGroup): { kind: "project" | "group" | "records" | "server"; name: string }[] {
+    const childGroups = script.groups.filter((candidate) => candidate.kind === "group" && candidate.fullPath.startsWith(`${group.fullPath}/`) && candidate.fullPath.slice(group.fullPath.length + 1).indexOf("/") < 0);
+    const projects = backend.repositories.filter((repo) => repo.group.id === group.id);
+    const servers = script.servers.filter((server) => server.group === group.id || server.group === group.fullPath);
+    return [
+      ...childGroups.map((child) => ({ kind: "group" as const, name: child.name })),
+      ...projects.map((repo) => repo.path === `${group.fullPath.split("/").pop()}-spex`
+        ? { kind: "records" as const, name: "Group sessions" }
+        : { kind: "project" as const, name: repo.name.replace(/-spex$/, "") }),
+      ...servers.map((server) => ({ kind: "server" as const, name: server.name })),
+    ];
+  }
+
+  /** Normal deletion policy, with the exact public path and emptiness checked. */
+  async function deleteGroup(req: IncomingMessage, res: ServerResponse, group: StandinGroup): Promise<void> {
+    const body = await readJson(req);
+    if (!isRecord(body) || body.confirm_path !== group.fullPath) return envelope(res, 400, "bad_request", "The group was renamed. Check its contents again before deleting it.");
     if (groupDeleteRefusal !== null) return envelope(res, 403, "host_refused", groupDeleteRefusal);
     if (!groupCan(group).delete) return envelope(res, 403, "host_refused", `You are not allowed to delete ${group.fullPath}.`);
-    const inside = script.groups.filter((g) => g.kind === "group" && (g === group || g.fullPath.startsWith(`${group.fullPath}/`)));
-    for (const g of inside) {
-      script.groups.splice(script.groups.indexOf(g), 1);
-      lagging.delete(g);
+    if (groupContents(group).length > 0) return envelope(res, 403, "host_refused", "This group is not empty. Check its contents again before deleting it.");
+    if (groupDeletionScheduled) {
+      group.pendingDeletion = true;
+      return json(res, 200, { status: "scheduled", group: listedGroupWire(group) });
     }
-    for (const repo of backend.repositories) if (inside.includes(repo.group)) repo.listed = false;
+    script.groups.splice(script.groups.indexOf(group), 1);
+    lagging.delete(group);
     rmSync(join(dir, storage, ...group.fullPath.split("/")), { recursive: true, force: true });
-    res.writeHead(204, { "cache-control": "no-store" }).end();
+    json(res, 200, { status: "deleted" });
+  }
+
+  function restoreGroup(res: ServerResponse, group: StandinGroup): void {
+    if (!group.pendingDeletion || pendingRoot(group)?.id !== group.id || !baseGroupCan(group).delete) return envelope(res, 403, "host_refused", `You are not allowed to restore ${group.fullPath}.`);
+    group.pendingDeletion = false;
+    json(res, 200, { group: listedGroupWire(group) });
   }
 
   /** `POST /api/v1/host/repositories/:id/transfer` (host-32): a spex

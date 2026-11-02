@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The suites a change reaches (release-34, release-43, DR-190): changed
+// The suites a change reaches (release-34, release-43, DR-199): changed
 // workspaces and known root tools select their owners and transitive
 // dependents. Unknown root paths reach everything; documentation --
 // docs/, specs/ and Markdown outside workspaces -- reaches nothing.

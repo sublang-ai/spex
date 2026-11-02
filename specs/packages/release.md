@@ -70,7 +70,7 @@ When the release workflow completes publishing, it shall create a GitHub release
 
 #### release-18
 
-When a release tag is pushed, its release workflow shall require a successful reusable CI invocation with `full: true` and its `app` or `cli` channel on the exact tagged tree before publishing to npm or creating a release [[release-34](#release-34)] [[release-44](#release-44)] ([DR-190](../decisions/190-release-gated-full-validation.md)):
+When a release tag is pushed, its release workflow shall require a successful reusable CI invocation with `full: true` and its `app` or `cli` channel on the exact tagged tree before publishing to npm or creating a release [[release-34](#release-34)] [[release-44](#release-44)] ([DR-199](../decisions/199-release-gated-full-validation.md)):
 
 - publication depends directly on that invocation; failed, cancelled or skipped validation permits no publication;
 - no prior CI run, local result or reduced pull-request result substitutes for that invocation;
@@ -119,7 +119,7 @@ The published package shall include a `README.md` that documents what the tool d
 
 #### release-15
 
-When preparing a release tag, the developer/agent shall verify that all changes are committed and pushed to `main`, with full channel validation required after the tag is pushed and before publication [[release-18](#release-18)], rather than requiring a prior CI run for the commit to be tagged ([DR-190](../decisions/190-release-gated-full-validation.md)).
+When preparing a release tag, the developer/agent shall verify that all changes are committed and pushed to `main`, with full channel validation required after the tag is pushed and before publication [[release-18](#release-18)], rather than requiring a prior CI run for the commit to be tagged ([DR-199](../decisions/199-release-gated-full-validation.md)).
 
 #### release-16
 
@@ -194,7 +194,7 @@ When a beta app release tag is pushed ([DR-087](../decisions/087-beta-app-releas
 
 #### release-29
 
-When a pull request into `main` is ready, the maintainer shall ask for a merge on green, and the repository shall merge it with a merge commit once its CI `checks` result succeeds on the pull request's head [[release-44](#release-44)], requiring no re-run for a later move of `main` ([DR-145](../decisions/145-merge-on-green.md), [DR-190](../decisions/190-release-gated-full-validation.md)):
+When a pull request into `main` is ready, the maintainer shall ask for a merge on green, and the repository shall merge it with a merge commit once its CI `checks` result succeeds on the pull request's head [[release-44](#release-44)], requiring no re-run for a later move of `main` ([DR-145](../decisions/145-merge-on-green.md), [DR-199](../decisions/199-release-gated-full-validation.md)):
 
 - `checks` is the sole required status check, with the branch not required to be up to date;
 - a base branch is never deleted while a pull request still targets it;
@@ -203,11 +203,11 @@ When a pull request into `main` is ready, the maintainer shall ask for a merge o
 
 #### release-30
 
-When a push reaches a pull request's branch, the CI workflow shall cancel the run of the head that push supersedes and run the new head once, while preserving explicitly requested and release validation runs ([DR-145](../decisions/145-merge-on-green.md), [DR-190](../decisions/190-release-gated-full-validation.md)).
+When a push reaches a pull request's branch, the CI workflow shall cancel the run of the head that push supersedes and run the new head once, while preserving explicitly requested and release validation runs ([DR-145](../decisions/145-merge-on-green.md), [DR-199](../decisions/199-release-gated-full-validation.md)).
 
 #### release-34
 
-The CI workflow shall offer validation for pull requests targeting `main`, reusable invocations and explicit manual requests, with no scheduled or automatic push-to-`main` run, selecting work by this plan ([DR-190](../decisions/190-release-gated-full-validation.md)):
+The CI workflow shall offer validation for pull requests targeting `main`, reusable invocations and explicit manual requests, with no scheduled or automatic push-to-`main` run, selecting work by this plan ([DR-199](../decisions/199-release-gated-full-validation.md)):
 
 | Invocation | Validation |
 | --- | --- |
@@ -238,11 +238,11 @@ The CI workflow shall offer validation for pull requests targeting `main`, reusa
 
 #### release-44
 
-When a CI invocation reaches its final result, its `checks` job shall evaluate the selected plan even after a dependency fails or is skipped, succeeding only when classification and every selected job succeeded and every unselected job was skipped [[release-34](#release-34)], with any failure, cancellation, missing result or unexpected skip blocking success and no stand-in job impersonating a suite ([DR-190](../decisions/190-release-gated-full-validation.md)).
+When a CI invocation reaches its final result, its `checks` job shall evaluate the selected plan even after a dependency fails or is skipped, succeeding only when classification and every selected job succeeded and every unselected job was skipped [[release-34](#release-34)], with any failure, cancellation, missing result or unexpected skip blocking success and no stand-in job impersonating a suite ([DR-199](../decisions/199-release-gated-full-validation.md)).
 
 #### release-36
 
-When the privileged hub lane is invoked by full app validation [[release-34](#release-34)] or explicitly on request, it shall run as root on the Linux runner, the invocation's exact tree unpacked outside any home and the install script's own requirements met by the newest Node 22 placed under root's own directories [[hub-7](hub.md#hub-7)], keeping the lane's output as the run's artifact, with no scheduled, push or pull-request trigger ([DR-149](../decisions/149-the-privileged-lane-runs-on-ci.md), [DR-190](../decisions/190-release-gated-full-validation.md)).
+When the privileged hub lane is invoked by full app validation [[release-34](#release-34)] or explicitly on request, it shall run as root on the Linux runner, the invocation's exact tree unpacked outside any home and the install script's own requirements met by the newest Node 22 placed under root's own directories [[hub-7](hub.md#hub-7)], keeping the lane's output as the run's artifact, with no scheduled, push or pull-request trigger ([DR-149](../decisions/149-the-privileged-lane-runs-on-ci.md), [DR-199](../decisions/199-release-gated-full-validation.md)).
 
 #### release-35
 
@@ -250,7 +250,7 @@ When the developer/agent is about to push, they shall run `npm run prepush`, whi
 
 #### release-43
 
-When the developer/agent runs `npm run test:affected`, the repository shall execute the same changed-path selection used for pull requests [[release-34](#release-34)] on the local platform, running CLI tests and spec lint for documentation alone and otherwise script tests followed by the selected workspace suites, with untracked files included and no implicit journeys, native browser acceptance or privileged hub lane ([DR-190](../decisions/190-release-gated-full-validation.md)).
+When the developer/agent runs `npm run test:affected`, the repository shall execute the same changed-path selection used for pull requests [[release-34](#release-34)] on the local platform, running CLI tests and spec lint for documentation alone and otherwise script tests followed by the selected workspace suites, with untracked files included and no implicit journeys, native browser acceptance or privileged hub lane ([DR-199](../decisions/199-release-gated-full-validation.md)).
 
 #### release-31
 

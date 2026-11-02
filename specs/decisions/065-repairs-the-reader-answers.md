@@ -5,6 +5,8 @@
 
 ## Status
 
+Amended by [DR-194](194-saved-work-is-a-choice-not-setup-debt.md): Not now postpones optional recovery without asserting where a project belongs; recognizable conversations replace storage names, and nonblocking work uses a neutral review.
+
 Accepted (2026-09-15) on the owner's report of an issue count reading zero over three repairs he had not handled.
 Amended by [DR-159](159-projects-in-groups-opened-where-you-work.md) in a repair's naming: a repair names the project and its group, the folder it remembers secondary.
 Amends ([DR-046](046-decision-record-evolution.md)) [DR-057](057-space-surface.md) through [DR-063](063-space-setup-and-repair.md), whose repair rules this record replaces in part.

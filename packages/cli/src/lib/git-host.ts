@@ -108,12 +108,15 @@ export interface HostAccount { id: string; login: string; displayName: string | 
  * DR-120): create a group inside it, add and remove its members, rename
  * it and delete it; false where the host says nothing, as for a
  * repository's group or your own. */
-export interface HostGroupCan { createSubgroup: boolean; manageMembers: boolean; rename: boolean; delete: boolean }
+export interface HostGroupCan { createSubgroup: boolean; manageMembers: boolean; rename: boolean; delete: boolean; restore?: boolean }
 
 /** A group as the host answers it (git-host-5): `fullPath` its path in
  * the instance, taken as given (DR-120); `kind` `user` for an account's
  * own group, the person's or another's. No page of the host is held. */
-export interface HostGroup { id: string | null; fullPath: string; name: string; kind: "user" | "group"; can: HostGroupCan }
+export interface HostGroup { id: string | null; fullPath: string; name: string; kind: "user" | "group"; can: HostGroupCan; pendingDeletion?: boolean; deletionRoot?: string }
+
+export type HostGroupDeletion = { status: "scheduled"; group: HostGroup } | { status: "deleted" };
+export interface HostGroupContent { kind: "project" | "group" | "records" | "server"; name: string }
 
 /** One of the host's own roles (git-host-16): the id a client sends
  * back, the host's name for it, and whether it may push. */
@@ -936,13 +939,41 @@ export class GitHostClient {
     return groupFrom(body.group);
   }
 
-  /**
-   * `DELETE /api/v1/host/groups/:id` (git-host-19): delete a group of the
-   * instance, with whatever it holds; the host's refusal throws
-   * `host_refused` with its words.
-   */
-  async deleteGroup(id: string): Promise<void> {
-    await this.call("DELETE", `/api/v1/host/groups/${encodeURIComponent(id)}`);
+  /** Request normal deletion through the confirmation-aware route
+   * (git-host-19). Older deployments are refused, never retried through
+   * the legacy route, whose behavior may permanently delete a group. */
+  async deleteGroup(id: string, confirmPath?: string): Promise<HostGroupDeletion> {
+    if (confirmPath === undefined || confirmPath.trim().length === 0) throw new HostError("bad_request", { code: "confirmation_required", words: "Confirm the group's path before deleting it." });
+    const body = record((await this.call("POST", `/api/v1/host/groups/${encodeURIComponent(id)}/deletion`, { confirm_path: confirmPath })).json);
+    if (body.status === "deleted") return { status: "deleted" };
+    if (body.status === "scheduled") {
+      const group = groupFrom(body.group);
+      if (group.id === id && group.pendingDeletion && group.deletionRoot) return { status: "scheduled", group };
+    }
+    throw new HostError("unreachable", { code: "malformed_answer" });
+  }
+
+  /** Read the Space's current contents, including contents omitted from
+   * the records listing. Members are not contents. */
+  async inspectGroupDeletion(id: string): Promise<{ group: HostGroup; contents: HostGroupContent[] }> {
+    const body = record((await this.call("GET", `/api/v1/host/groups/${encodeURIComponent(id)}/deletion`)).json);
+    const group = groupFrom(body.group);
+    if (group.id !== id || !Array.isArray(body.contents)) throw new HostError("unreachable", { code: "malformed_answer" });
+    const contents = body.contents.map((value): HostGroupContent => {
+      const item = record(value);
+      if (!["project", "group", "records", "server"].includes(String(item.kind)) || typeof item.name !== "string" || item.name.length === 0) throw new HostError("unreachable", { code: "malformed_answer" });
+      return { kind: item.kind as HostGroupContent["kind"], name: item.name };
+    });
+    return { group, contents };
+  }
+
+  /** Restore the group's normal scheduled deletion, where the Space
+   * permits it; no retention period is inferred by the client. */
+  async restoreGroup(id: string): Promise<HostGroup> {
+    const body = record((await this.call("POST", `/api/v1/host/groups/${encodeURIComponent(id)}/restore`, {})).json);
+    const group = groupFrom(body.group);
+    if (group.id !== id || group.pendingDeletion) throw new HostError("unreachable", { code: "malformed_answer" });
+    return group;
   }
 
   /**
@@ -1371,7 +1402,9 @@ function groupFrom(value: unknown): HostGroup {
     fullPath: text(body.full_path),
     name: text(body.name),
     kind: body.kind === "user" ? "user" : "group",
-    can: { createSubgroup: flag(can.create_subgroup), manageMembers: flag(can.manage_members), rename: flag(can.rename), delete: flag(can.delete) },
+    can: { createSubgroup: flag(can.create_subgroup), manageMembers: flag(can.manage_members), rename: flag(can.rename), delete: flag(can.delete), ...(can.restore === true ? { restore: true } : {}) },
+    ...(body.pending_deletion === true ? { pendingDeletion: true } : {}),
+    ...(typeof body.deletion_root === "string" ? { deletionRoot: body.deletion_root } : {}),
   };
 }
 

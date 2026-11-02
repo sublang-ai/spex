@@ -15,14 +15,12 @@ import {
   assertPlainDirectory, readJsonFile, sha256, StorageFormatError, writeApplicationBytes, writeApplicationFile, writeVersionedBytes, UUID,
 } from "@sublang/spex/files";
 import { i18n } from "./i18n.js";
-import { mediaAttachmentsSchema, type AssignedRuntime, type DiagnosticRepair, type IntentAuthor, type IntentInfo, type IntentSource, type MediaAsset, type RepairChecked } from "./protocol.js";
+import { mediaAttachmentsSchema, type AssignedRuntime, type DiagnosticRepair, type IntentAuthor, type IntentInfo, type IntentSource, type MediaAsset, type RepairChecked, type StorageDiagnostic } from "./protocol.js";
 
 export {
   closed, isObject, knownFormat, need, readJsonFile, sha256, StorageFormatError, UUID, writeApplicationBytes, writeApplicationFile,
 };
-export type { DiagnosticRepair, RepairChecked };
-
-export interface StorageDiagnostic { file: string; reason: string; blocking: boolean; repair?: DiagnosticRepair }
+export type { DiagnosticRepair, RepairChecked, StorageDiagnostic };
 
 /** A repair's identity is the facts it names (space-49, space-54). */
 export function repairKey(repository: string | undefined, directories: string[]): string {
@@ -34,8 +32,29 @@ export function repairKey(repository: string | undefined, directories: string[])
  * diagnostics (space-46). */
 export function foldDiagnostics(diagnostics: StorageDiagnostic[]): StorageDiagnostic[] {
   const blocking = diagnostics.filter((d) => d.blocking);
-  const plain = diagnostics.filter((d) => !d.blocking && !d.repair);
-  const repairs = diagnostics.filter((d) => !d.blocking && d.repair);
+  const repairs = diagnostics.filter((d) => !d.blocking && d.repair).map((entry) => ({
+    ...entry,
+    repair: { ...entry.repair!, ...(entry.repair!.details ? { details: [...entry.repair!.details] } : {}) },
+  }));
+  const byRepository = new Map(repairs
+    .filter((entry) => entry.repair.kind === "repository" && entry.repair.repository)
+    .map((entry) => [entry.repair.repository!, entry.repair]));
+  const plain: StorageDiagnostic[] = [];
+  for (const entry of diagnostics) {
+    if (entry.blocking || entry.repair) continue;
+    const repair = entry.code === "session-folder-required" && entry.repository
+      ? byRepository.get(entry.repository) : undefined;
+    if (repair) {
+      (repair.details ??= []).push({ file: entry.file, reason: entry.reason });
+    } else plain.push(entry);
+  }
+  // A caller may fold an already-folded list alongside fresh findings.
+  // Keep each piece of evidence once without mutating the producer's data.
+  for (const { repair } of repairs) {
+    if (repair.details) repair.details = [...new Map(repair.details.map((detail) => [
+      JSON.stringify([detail.file, detail.reason]), detail,
+    ])).values()];
+  }
   repairs.sort((a, b) =>
     (b.repair!.sessions - a.repair!.sessions) ||
     (a.repair!.name ?? a.repair!.repository ?? "").localeCompare(b.repair!.name ?? b.repair!.repository ?? "") ||

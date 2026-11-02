@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The required CI verdict (release-44, DR-190). Missing, failed or
+// The required CI verdict (release-44, DR-199). Missing, failed or
 // unexpectedly skipped checks must never satisfy the merge/release gate.
 import { resolve } from "node:path";
 

@@ -322,6 +322,11 @@ const shownPlace = (): string => {
 describe("run-view-171: the selector switches Playbooks, Settings and Space", () => {
   test("each surface reads and acts at the place the selector names", async () => {
     render(<App />);
+    // The sidebar reads every place once for its saved-record folder
+    // tasks (run-view-67). Subsequent actions stay at the named place.
+    await settle();
+    expect(commandsOf(beta)).toEqual(["space.get"]);
+    const betaCommands = commandsOf(beta).length;
 
     // Settings: this computer's roster, then the seat's own.
     goTo("Settings");
@@ -383,11 +388,16 @@ describe("run-view-171: the selector switches Playbooks, Settings and Space", ()
     await settle();
     expect(callsOf(local, "environment.playbooks")).toContainEqual({});
     // A seat's state touches no other place.
-    expect(commandsOf(beta)).toEqual([]);
+    expect(commandsOf(beta).slice(betaCommands)).toEqual([]);
   });
 
   test("[run-view-168] a project's Playbooks and Packages tabs stand at the project's place, with no selector", async () => {
     render(<App />);
+    // Finish the sidebar's initial read before checking which core
+    // each project-tab action asks (run-view-67, run-view-168).
+    await settle();
+    expect(commandsOf(beta)).toEqual(["space.get"]);
+    const betaCommands = commandsOf(beta).length;
     // This computer's project: its tabs read this computer's core.
     const seatLists = callsOf(alpha, "environment.playbooks").length;
     fireEvent.click(screen.getByTestId("workspace-tab-packages"));
@@ -419,7 +429,7 @@ describe("run-view-171: the selector switches Playbooks, Settings and Space", ()
     await waitFor(() => expect(screen.getByText("acme/gpu-tools")).toBeTruthy());
     expect(screen.queryByText("acme/home-tools")).toBeNull();
     expect(callsOf(local, "environment.get").slice(localGets)).not.toContainEqual({ repository: "p2" });
-    expect(commandsOf(beta)).toEqual([]);
+    expect(commandsOf(beta).slice(betaCommands)).toEqual([]);
   });
 
   test("a seat that closes returns the selector to this computer, and with none open there is no selector", async () => {
