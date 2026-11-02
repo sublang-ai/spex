@@ -1540,7 +1540,7 @@ export class CoreService {
     let credentials: SeedCredentials;
     try {
       // The seed counts the credentials confirmed now, never a home
-      // folder alone (core-service-3, DR-175).
+      // folder alone (core-service-3, DR-190).
       credentials = await seedCredentials(seat ? seat.environment.envFor(env) : env, seat ? null : options.home ?? env.HOME ?? homedir(), options.agentSignIn);
       store = await Store.open({
         seedCredentials: credentials,
@@ -2439,7 +2439,7 @@ export class CoreService {
     // points somewhere concrete. Claude and Codex stand whether or not
     // a position uses them, so a reader sees the other agent's state
     // too — with no config to read, they are all there is, and no
-    // earlier config's positions carry over (core-service-9, DR-174).
+    // earlier config's positions carry over (core-service-9, DR-189).
     const positions = new Map<AdapterName, string[]>([["claude", []], ["codex", []]]);
     const note = (adapter: AdapterName, position: string): void => {
       const list = positions.get(adapter);
@@ -2466,7 +2466,7 @@ export class CoreService {
       ? (adapter: AdapterName) => seatCredentialHalf(adapter, sources, seat.runValues(adapter), this.runCommand)
       : undefined;
     // Manual steps are written for the computer that follows them; a
-    // seat's base URL is its own and none of the reader's (DR-174).
+    // seat's base URL is its own and none of the reader's (DR-189).
     const shell = this.env.SHELL ? basename(this.env.SHELL) : undefined;
     const host = { platform: process.platform, ...(shell ? { shell } : {}) };
     return Promise.all(
@@ -3304,7 +3304,7 @@ export class CoreService {
       }
       case "config.batch": {
         // Your own group's file alone, all or none, against the config
-        // the client saw (core-service-44, DR-174).
+        // the client saw (core-service-44, DR-189).
         const result = await editConfigBatch(
           this.configPath,
           command.ops as ConfigBatchOp[],

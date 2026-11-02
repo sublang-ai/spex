@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Workshop agents in one pass (DR-174), over the protocol against real
+// Workshop agents in one pass (DR-189), over the protocol against real
 // config files: readiness always naming Claude and Codex with
 // Playbook's credential forms, faults by kind, Claude's base-URL state
 // and the core's platform and shell (core-service-9, settings-14); the

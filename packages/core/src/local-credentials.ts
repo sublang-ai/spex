@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Whether an agent on this computer is signed in (settings-14, DR-174),
+// Whether an agent on this computer is signed in (settings-14, DR-189),
 // asked of the agent's own status command where no credential variable
 // is set. The agent's home folder says nothing: its runtime creates
 // `~/.claude` and `~/.codex` on its first start, signed in or not. Only

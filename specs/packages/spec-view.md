@@ -29,9 +29,9 @@ While an item row is displayed in a file row narrower than 28rem, the spec view 
 
 #### spec-view-2
 
-While a file node is displayed, the spec view shall present the package's header and expanded contents ([DR-158](../decisions/158-a-legible-graph-and-outline.md), [DR-177](../decisions/177-the-outline-gives-its-width-to-the-intent.md)):
+While a file node is displayed, the spec view shall present the package's header and expanded contents ([DR-158](../decisions/158-a-legible-graph-and-outline.md), [DR-192](../decisions/192-the-outline-gives-its-width-to-the-intent.md)):
 
-- the header shows the package-identifier chip, the file's intent — held to one line only while the node is collapsed, its whole text in its title, that line reading each link by its text — and the package's item counts in one right-aligned cell, one labeled count per group holding any, in fixed order, each reading the group's short name with the count in parentheses (`Ext (7)`), in the fixed group colors — external sky, internal lime, test teal ([DR-015](../decisions/015-reference-content.md), [DR-158](../decisions/158-a-legible-graph-and-outline.md), [DR-177](../decisions/177-the-outline-gives-its-width-to-the-intent.md)) — a group with no items left out, every count carrying its group's full name in its accessible name and title, and color never the only channel ([DR-010](../decisions/010-interface-craft.md) §7, §8);
+- the header shows the package-identifier chip, the file's intent — held to one line only while the node is collapsed, its whole text in its title, that line reading each link by its text — and the package's item counts in one right-aligned cell, one labeled count per group holding any, in fixed order, each reading the group's short name with the count in parentheses (`Ext (7)`), in the fixed group colors — external sky, internal lime, test teal ([DR-015](../decisions/015-reference-content.md), [DR-158](../decisions/158-a-legible-graph-and-outline.md), [DR-192](../decisions/192-the-outline-gives-its-width-to-the-intent.md)) — a group with no items left out, every count carrying its group's full name in its accessible name and title, and color never the only channel ([DR-010](../decisions/010-interface-craft.md) §7, §8);
 - no heading row stands over the rows: each count names its own group, and the group filters, in the same colors and named in full, give the short names in full [[spec-view-4](#spec-view-4)];
 - a group whose filter is off leaves every row's cell [[spec-view-4](#spec-view-4)];
 - while an expanded package's contents scroll, its header stays pinned at the outline's top until the next package's header takes its place;
@@ -59,7 +59,7 @@ While an expanded item carries citations or is cited, the spec view shall presen
 - inbound citations render as backlink rows on the cited target, every entry listed and named by the citing item ID;
 - the two rows stand in one block under the body, their labels in one column and their entries wrapping in the slack beside it;
 - every file node, collapsed included, carries a rollup counting the file's inbound and outbound cross-file item citations — those whose source and target items live in different files — from one citation index keyed by item ID that the graph's counts share [[spec-view-23](#spec-view-23)], while item rows and backlink groups keep every citation regardless of file;
-- the rollup stands after the counts under no heading, muted, labeled as the counts are — `Cites (17)` for its outbound count and `Cited by (9)` for its inbound count — each direction only where nonzero and named in full in its title, the whole in its accessible name [DR-177](../decisions/177-the-outline-gives-its-width-to-the-intent.md);
+- the rollup stands after the counts under no heading, muted, labeled as the counts are — `Cites (17)` for its outbound count and `Cited by (9)` for its inbound count — each direction only where nonzero and named in full in its title, the whole in its accessible name [DR-192](../decisions/192-the-outline-gives-its-width-to-the-intent.md);
 - a citation of an ID absent from the tree counts in neither direction: its file node carries a neutral warning mark in a narrow slot after the rollup at every width, under no heading, whose title and accessible name state how many citations name items absent from the tree;
 - a record link in an item body stays a plain link, handled per [[spec-view-6](#spec-view-6)].
 
@@ -130,7 +130,7 @@ While the spec tree renders, the spec view shall keep the outline permanent and 
 - the graph is directed, carrying one node per spec file and one edge per citing→cited file pair;
 - one selection serves both projections [[spec-view-42](#spec-view-42)], revealed in both when it changes [[spec-view-43](#spec-view-43)], and neither projection ever leaves the screen for it ([DR-009](../decisions/009-at-hand-interaction.md));
 - the two panes stand side by side only while the split's box holds a 320px graph beside a 28rem outline, and stack otherwise;
-- the boundary between the two panes starts at a third of the split's width, is draggable by pointer and by keyboard, never takes the graph below 320px or the outline below 28rem, and persists with the toggle [DR-177](../decisions/177-the-outline-gives-its-width-to-the-intent.md).
+- the boundary between the two panes starts at a third of the split's width, is draggable by pointer and by keyboard, never takes the graph below 320px or the outline below 28rem, and persists with the toggle [DR-192](../decisions/192-the-outline-gives-its-width-to-the-intent.md).
 
 #### spec-view-42
 

@@ -9,7 +9,7 @@ Accepted; [DR-033](033-remote-gui-serving.md) extends the SDK-supply duty to the
 Extended by [DR-081](081-the-app-supplies-the-compiler.md): the playbook compiler joins the runtimes both shells supply.
 Extended by [DR-090](090-readiness-names-what-cligent-finds-missing.md): the runtime half's diagnosis names the executable cligent's lookup finds missing.
 Extended by [DR-096](096-the-app-supplies-the-scaffold.md): the scaffold CLI joins the compiler and the agent SDKs both shells supply.
-Amended by [DR-174](174-workshop-agents-in-one-pass.md) in how the runtime half is reported: a runtime fault is a kind of its own, never joined to the credential's reason.
+Amended by [DR-189](189-workshop-agents-in-one-pass.md) in how the runtime half is reported: a runtime fault is a kind of its own, never joined to the credential's reason.
 
 ## Context
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The Agents section (settings-5, DR-174): a standing card for Claude
+// The Agents section (settings-5, DR-189): a standing card for Claude
 // and one for Codex whether or not a role uses them, then an entry per
 // other adapter the config names. A card says its readiness and who
 // uses it, Claude's model service and each card's default model; one
@@ -131,7 +131,7 @@ function HowToConfigure({ entry, seat }: { entry: ReadinessEntry; seat: boolean 
 /** The Workshop's one route (settings-69): whom it is for over its
  * primary action, the configuration document opened at the reader's
  * platform, then how to see the result. The online service is told in
- * the room, not offered here (DR-176). */
+ * the room, not offered here (DR-191). */
 function WorkshopRoute({ entry, local }: { entry: ReadinessEntry; local: string }) {
   return (
     <div data-testid={`agent-routes-${entry.adapter}`} className="flex flex-col gap-3">

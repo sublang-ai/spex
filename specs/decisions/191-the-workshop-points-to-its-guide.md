@@ -1,13 +1,13 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-176: The Workshop Points to Its Guide, and a Re-check Reseeds
+# DR-191: The Workshop Points to Its Guide, and a Re-check Reseeds
 
 ## Status
 
 Accepted (2026-11-02) on the owner's direction during the Workshop's manual verification.
-Amends [DR-174](174-workshop-agents-in-one-pass.md) in its routes: a not-ready card offers the configuration document alone, as its primary action, and no online service.
-Amends [DR-175](175-agent-cards-read-alike.md) in "The online service before its address": the action is removed, not enabled.
+Amends [DR-189](189-workshop-agents-in-one-pass.md) in its routes: a not-ready card offers the configuration document alone, as its primary action, and no online service.
+Amends [DR-190](190-agent-cards-read-alike.md) in "The online service before its address": the action is removed, not enabled.
 Amends [DR-156](156-an-untouched-seed-follows-the-credentials.md) in when an untouched seed is reseeded: on each readiness request too, a re-check among them, not only at start and on a seat's agent-credential change.
 
 ## Context

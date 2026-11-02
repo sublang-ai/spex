@@ -8,7 +8,7 @@
 Accepted (2026-10-29) on the owner's direction to publish a shared-engine dependency contract and enforce it in Spex.
 Amends [DR-144](144-bounded-session-storage.md) and [DR-153](153-playbook-18-0-1-cligent-0-36-1-slc-0-19-1-adoption.md) by withdrawing the compiler-only nested Playbook exception and raising the slc floor; their storage, Cligent and xstate decisions stand.
 Extends [DR-081](081-the-app-supplies-the-compiler.md): each shell supplies Playbook beside the compiler, while the existing ABI/schema refusal remains.
-Amended by [DR-178](178-playbook-18-1-2-cligent-0-37-0-slc-0-20-1-adoption.md) in the slc and shell Playbook floors.
+Amended by [DR-193](193-playbook-18-1-2-cligent-0-37-0-slc-0-20-1-adoption.md) in the slc and shell Playbook floors.
 
 ## Context
 

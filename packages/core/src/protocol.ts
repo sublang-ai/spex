@@ -693,7 +693,7 @@ export interface ReadinessEntry {
   /** Unmet requirement, present when ready is false: the faults'
    * requirements joined, kept for clients that read one line. */
   requirement?: string;
-  /** Each unmet half by its kind (core-service-9, DR-174), so guidance
+  /** Each unmet half by its kind (core-service-9, DR-189), so guidance
    * tells reinstalling the app from setting a key. */
   faults?: ReadinessFault[];
   /** On `claude` alone: where its requests go, by

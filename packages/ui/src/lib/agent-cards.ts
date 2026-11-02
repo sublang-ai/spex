@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// What the agent cards decide (settings-57 to settings-61, DR-174),
+// What the agent cards decide (settings-57 to settings-61, DR-189),
 // apart from how they draw it: the batch that gives every agent of an
 // adapter one model, the roles still naming an official Claude model
 // behind a third-party service and the batch setting them to Provider
