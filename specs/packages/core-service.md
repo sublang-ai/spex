@@ -63,7 +63,7 @@ On every load and reload:
 
 #### core-service-3
 
-Where no config file exists at the shared config path, when the core service starts, the core service shall write the installed playbook package's own seed for the core's environment and home to that path, adopt it as the active config, and report the seeding to connected clients ([DR-037](../decisions/037-playbook-12-adoption.md); [DR-154](../decisions/154-the-seed-follows-playbooks-rule.md)):
+Where no config file exists at the shared config path, when the core service starts, the core service shall write the installed playbook package's own seed for the core's environment and home to that path, adopt it as the active config, and report the seeding to connected clients ([DR-037](../decisions/037-playbook-12-adoption.md); [DR-154](../decisions/154-the-seed-follows-playbooks-rule.md); [DR-178](../decisions/178-playbook-18-1-2-cligent-0-37-0-slc-0-20-1-adoption.md)):
 
 - The text is what `@sublang/playbook/seed-config` returns for that environment and home, with every `playbooks.<id>.from` removed; the core chooses no adapter, model, effort or writable path itself, except that where Claude's base URL — read as [[core-service-9](#core-service-9)] reads it — — on a seat, the environment alone — is `third-party`, each Claude agent's `model` naming an official model [[settings-59](settings.md#settings-59)] is removed, its comments kept ([DR-175](../decisions/175-agent-cards-read-alike.md)).
 - That seed reads confirmed credentials alone — an agent's API key or token form in the environment or, for `claude`, in Claude Code's user settings, or a sign-in the agent's own status command confirms where its configuration folder stands, never that folder alone, since the runtime creates it on its first start; on a seat, the credential forms of the environment its credentials were read into first [[core-service-126](#core-service-126)], with no user settings and no sign-in of the server account the core runs as, which are no member's — so the Captain's and each player's `adapter`, `model`, `effort` and `writablePaths` equal the `playbook` CLI's seed under the same confirmed credentials, while the two files may differ ([DR-175](../decisions/175-agent-cards-read-alike.md)):
@@ -71,8 +71,8 @@ Where no config file exists at the shared config path, when the core service sta
 | Credentials | Seeded agents |
 | --- | --- |
 | Claude only, or neither | every agent as the template writes it, on `claude` |
-| Codex only | every agent on `codex` / `gpt-6-sol` with `writablePaths: ['.git']` |
-| both | `dev.reviewer` on `codex` / `gpt-6-sol` with `writablePaths: ['.git']`, every other agent as the template writes it |
+| Codex only | every agent on `codex` / `gpt-6.1-sol` at the template's effort, with `writablePaths: ['.git']` |
+| both | `dev.reviewer` on `codex` / `gpt-6.1-sol` at effort `high` with `writablePaths: ['.git']`, every other agent as the template writes it |
 
 - The file is created exclusively, and the seed's version is recorded [[storage-5](storage.md#storage-5)]; an existing config file is never overwritten, and only the reseed of [[core-service-137](#core-service-137)] rewrites the seeded file afterwards.
 
