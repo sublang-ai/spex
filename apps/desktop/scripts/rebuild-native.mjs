@@ -29,6 +29,13 @@ if (target !== "electron" && target !== "node") {
   process.exit(2);
 }
 
+// The only SQLite use is a read-only legacy import. Native Windows uses
+// node:sqlite, already supplied by both supported Node and Electron.
+if (process.platform === "win32") {
+  console.log("[rebuild-native] Windows uses bundled Node SQLite; no ABI rebuild required");
+  process.exit(0);
+}
+
 const appDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const root = resolve(appDir, "..", "..");
 const require = createRequire(import.meta.url);

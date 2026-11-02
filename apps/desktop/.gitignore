@@ -3,3 +3,6 @@ release/
 
 # Catalogs compiled from src/locales/<language>/messages.po by the build.
 src/locales/*/messages.ts
+
+# Verified Windows CRT redistributables are staged only while packaging.
+build/windows-runtime/

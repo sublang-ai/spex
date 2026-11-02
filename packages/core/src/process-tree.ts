@@ -91,12 +91,33 @@ export class StartedProcesses {
 
   /** The core's child processes still running, with their descendants;
    * never esbuild's service, which every core of this process shares. */
-  pids(): number[] {
+  async pids(): Promise<number[]> {
     this.prune();
     const roots = [...this.children]
       .filter((child) => !ESBUILD_SERVICE.test(child.spawnargs.join(" ")))
       .map((child) => child.pid as number);
-    return roots.length ? [...roots, ...descendantsOf(roots)] : [];
+    if (!roots.length) return [];
+    if (process.platform === "win32") {
+      let getProcessTree: typeof import("@vscode/windows-process-tree").getProcessTree;
+      try { ({ getProcessTree } = await import("@vscode/windows-process-tree")); }
+      catch { return roots; } // taskkill /T still reaches each owned root's descendants.
+
+      const trees = await Promise.all(roots.map(root => new Promise<number[]>((resolve) => {
+        const timer = setTimeout(() => resolve([root]), 5_000);
+        getProcessTree(root, tree => {
+          clearTimeout(timer);
+          const found = new Set<number>([root]);
+          const visit = (entry: { pid: number; children?: unknown[] }): void => {
+            found.add(entry.pid);
+            for (const child of entry.children ?? []) visit(child as typeof entry);
+          };
+          if (tree) visit(tree);
+          resolve([...found]);
+        });
+      })));
+      return [...new Set(trees.flat())];
+    }
+    return [...roots, ...descendantsOf(roots)];
   }
 
   /** Forget the children that have exited or never started: a spawn is
@@ -122,6 +143,12 @@ export function processAlive(pid: number): boolean {
 
 /** Send `signal` to `pid`, ignoring a process already gone. */
 export function signalProcess(pid: number, signal: NodeJS.Signals): void {
+  if (process.platform === "win32") {
+    // Windows Node termination signals are forceful. Delegate tree handling to
+    // the OS even where optional process enumeration is unavailable.
+    spawnSync("taskkill.exe", ["/PID", String(pid), "/T", "/F"], { windowsHide: true, timeout: 1_000, stdio: "ignore" });
+    return;
+  }
   try {
     process.kill(pid, signal);
   } catch {
@@ -135,7 +162,7 @@ export interface StopBounds {
   /** From SIGTERM to SIGKILL, after which the stop waits no longer. */
   killMs: number;
   /** The agent processes to signal, read when each signal is sent. */
-  agentProcesses: () => number[];
+  agentProcesses: () => number[] | Promise<number[]>;
 }
 
 /** One stop's bound (core-service-39, DR-134): ten seconds after the
@@ -192,10 +219,10 @@ export class StopBound {
     clearTimeout(this.killTimer);
   }
 
-  private agents(): number[] {
+  private async agents(): Promise<number[]> {
     let pids: number[];
     try {
-      pids = this.bounds.agentProcesses();
+      pids = await this.bounds.agentProcesses();
     } catch (error) {
       console.error(`spex: agent processes not listed at stop: ${String(error)}`);
       pids = [];
@@ -203,23 +230,28 @@ export class StopBound {
     return pids.filter((pid) => Number.isSafeInteger(pid) && pid > 0 && pid !== process.pid);
   }
 
-  private terminate(): void {
+  private async terminate(): Promise<void> {
     if (this.terminating || this.finished) return;
     this.terminating = true;
     clearTimeout(this.settleTimer);
-    for (const pid of this.agents()) {
+    this.killTimer = setTimeout(() => { void this.kill(); }, this.bounds.killMs);
+    const pids = await this.agents();
+    if (this.finished) return;
+    for (const pid of pids) {
       if (!processAlive(pid)) continue;
       this.signalled.add(pid);
       signalProcess(pid, "SIGTERM");
     }
-    this.killTimer = setTimeout(() => this.kill(), this.bounds.killMs);
+
   }
 
-  private kill(): void {
+  private async kill(): Promise<void> {
     if (this.finished) return;
     // What SIGTERM reached, and what a fresh walk finds: an agent's
     // child its parent's exit left elsewhere, or one started since.
-    for (const pid of new Set([...this.signalled, ...this.agents()])) {
+    const pids = await this.agents();
+    if (this.finished) return;
+    for (const pid of new Set([...this.signalled, ...pids])) {
       if (processAlive(pid)) signalProcess(pid, "SIGKILL");
     }
     this.passed = true;
