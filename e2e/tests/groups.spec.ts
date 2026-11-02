@@ -931,12 +931,15 @@ test.describe("organizing", () => {
     // which stands by its name as the editor closes, its full path naming
     // its section (space-1, space-68).
     const newGroup = instanceSection(page, host).getByTestId("space-instance-heading").getByTestId("space-new-group");
-    await expect(newGroup).toHaveText("New group");
+    await expect(newGroup).toHaveText("New group…");
     await expect(newGroup).toBeEnabled();
     await newGroup.click();
     const top = list.getByTestId("space-new-group-editor");
     await expect(top).toContainText("Group name");
     await top.getByTestId("space-new-group-editor-name").fill("Platform");
+    await newGroup.click();
+    await expect(top.getByTestId("space-new-group-editor-name")).toHaveValue("Platform");
+    await expect(top.getByTestId("space-new-group-editor-name")).toBeFocused();
     await top.getByTestId("space-new-group-editor-create").click();
     await expect(top).toBeHidden();
     const platform = list.getByTestId("space-group-platform");
@@ -967,6 +970,11 @@ test.describe("organizing", () => {
     expect(standinGroup("temporary")).toBeDefined();
     await groupAct(page, "temporary", "delete");
     await expect(deletion).toContainText("This group is empty.");
+    // Repeating the opener preserves the completed check (space-126).
+    await groupAct(page, "temporary", "delete");
+    await expect(deletion).toContainText("This group is empty.");
+    await expect(deletion.getByRole("button", { name: "Delete group", exact: true })).toBeEnabled();
+    await expect(deletion.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
     await expect(deletion.getByRole("textbox")).toHaveCount(0);
     await deletion.screenshot({ path: testInfo.outputPath("delete-group-desktop.png") });
     await setRail(page, false);
@@ -1024,7 +1032,7 @@ test.describe("organizing", () => {
     // for everyone. Enter stages a chip, without changing membership.
     // (space-69, space-62).
     const share = members.getByTestId(`space-share-${PANEL}`);
-    await expect(share).toHaveText("Invite members");
+    await expect(share).toHaveText("Invite members…");
     await share.click();
     const editor = members.getByTestId(`space-share-${PANEL}-editor`);
     await expect(editor.getByRole("heading", { name: "Invite to Platform" })).toBeVisible();
@@ -1037,6 +1045,24 @@ test.describe("organizing", () => {
     const role = editor.getByRole("combobox", { name: "Role", exact: true });
     await expect(role.locator("option:checked")).toHaveText("Developer");
     await expect(role).toHaveAccessibleDescription(/\S/);
+    // Both openers preserve the invitation; Escape closes only that
+    // editor, then Members has its own visible Close (space-126).
+    await login.fill("draft-user");
+    await share.click();
+    await expect(login).toHaveValue("draft-user");
+    await expect(login).toBeFocused();
+    await groupAct(page, "platform", "members");
+    await expect(login).toHaveValue("draft-user");
+    await login.focus();
+    await login.press("Escape");
+    await expect(editor).toBeHidden();
+    await expect(members).toBeVisible();
+    await expect(share).toBeFocused();
+    await members.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(members).toBeHidden();
+    await expect(platform.getByTestId("space-group-more-platform")).toBeFocused();
+    await groupAct(page, "platform", "members");
+    await share.click();
     await expect(members.getByTestId(`space-member-${HOST_LOGIN}`)).toContainText("You");
     await login.fill(MEMBER.login);
     await login.press("Enter");
@@ -1377,9 +1403,9 @@ test.describe("a second Space", () => {
       await expect(remove).toBeDisabled();
       await closeMenu(page);
     }
-    await expect(firstHeading.getByTestId("space-new-group")).toHaveText("New group");
+    await expect(firstHeading.getByTestId("space-new-group")).toHaveText("New group…");
     await expect(firstHeading.getByTestId("space-new-group")).toBeEnabled();
-    await expect(secondHeading.getByTestId("space-new-group")).toHaveText("New group");
+    await expect(secondHeading.getByTestId("space-new-group")).toHaveText("New group…");
     await expect(secondHeading.getByTestId("space-new-group")).toBeDisabled();
     await expect(secondHeading.getByTestId("space-new-group")).toHaveAttribute("title", `Made by the people who run ${SECOND_HOST_NAME}`);
     for (const section of [firstSection, secondSection]) {

@@ -216,6 +216,7 @@ meta.md       The spec of specs
 | [DR-185](decisions/185-dismiss-reminders-without-losing-history.md) | 185-dismiss-reminders-without-losing-history.md | Consistent Dismiss and Show again for folder reminders and older-history notices, one collapsed dismissed section, persistent source-bound acknowledgement and preserved files |
 | [DR-186](decisions/186-unavailable-group-operations.md) | 186-unavailable-group-operations.md | Explain unavailable group deletion and restoration without unrelated package guidance |
 | [DR-187](decisions/187-the-group-chooser-belongs-to-its-project.md) | 187-the-group-chooser-belongs-to-its-project.md | Compact group selection integrated with its owning project row, consistent type and controls, and guarded pending submission |
+| [DR-188](decisions/188-consistent-inline-group-actions.md) | 188-consistent-inline-group-actions.md | Shared attached group panels, repeat-open focus and preserved drafts, explicit dismissal, mutation guards and consistent ellipses |
 
 ## Packages
 

@@ -40,7 +40,7 @@
 // idle, opened and busy (space-95, space-28).
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { GroupsState, PlacementState, RepositoryState, SpaceOp } from "@sublang/spex-core/protocol";
 
 import { activateLanguage } from "../i18n.js";
@@ -59,6 +59,7 @@ import {
   INCOMING_SESSION,
   KEY,
   MIN,
+  MEMBERS,
   NOW,
   ORIGIN,
   OWN,
@@ -664,6 +665,79 @@ function withLines(row: RepositoryState, over: Partial<PlacementState>): Reposit
 }
 
 describe("GROUPS: a placement's members (space-62, space-69, space-72)", () => {
+  test("space-62: repeating a placement's Members opener preserves its invitation and focuses the open panel", async () => {
+    await renderGroups(placedAtTwo({ second: { can: { manageMembers: true, transfer: false } } }), { open: false });
+    const line = lineOf(KEY, SECOND);
+    const opener = within(line).getByTestId("space-line-members");
+    fireEvent.click(opener);
+    const panel = await screen.findByTestId(`space-members-${KEY}@${SECOND}`);
+    await within(panel).findAllByTestId(/^space-member-/);
+    fireEvent.click(within(panel).getByTestId(`space-share-${KEY}@${SECOND}`));
+    const editor = within(panel).getByTestId(`space-share-${KEY}@${SECOND}-editor`);
+    const login = within(editor).getByLabelText("Usernames") as HTMLInputElement;
+    const role = within(editor).getByLabelText("Role") as HTMLSelectElement;
+    fireEvent.change(login, { target: { value: "carol" } });
+    fireEvent.change(role, { target: { value: "40" } });
+    opener.focus();
+    fireEvent.click(opener);
+    expect(screen.getByTestId(`space-members-${KEY}@${SECOND}`)).toBe(panel);
+    expect(within(panel).getByTestId(`space-share-${KEY}@${SECOND}-editor`)).toBe(editor);
+    expect(login.value).toBe("carol");
+    expect(role.value).toBe("40");
+    expect(document.activeElement).toBe(panel);
+    expect(calls("space.members")).toHaveLength(1);
+    expect(calls("space.share")).toEqual([]);
+    expect(document.getElementById(opener.getAttribute("aria-controls")!)?.contains(panel)).toBe(true);
+    fireEvent.click(within(panel).getByRole("button", { name: "Close" }));
+    expect(screen.queryByTestId(`space-members-${KEY}@${SECOND}`)).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(opener));
+    fireEvent.click(opener);
+    await waitFor(() => expect(calls("space.members")).toHaveLength(2));
+  });
+
+  test.each(["continue", "combine", "retry"] as const)("space-62: pending membership prevents local closure or replacement through %s", async (action) => {
+    const mutation = action === "combine" ? "space.unshare" : "space.share";
+    let resolve!: (reply: unknown) => void;
+    commandMock.mockImplementation((type: string, fields: Record<string, unknown> = {}) => type === mutation
+      ? new Promise((done) => { resolve = done; }) : answer(type, fields));
+    const outcome: PlacementState["outcome"] = action === "continue"
+      ? { kind: "waiting", sent: 0, received: 0 }
+      : action === "combine" ? { kind: "unrelated", sent: 0, received: 0 }
+        : { kind: "stopped", step: "push", cause: "unreachable", message: "Offline", guidance: "Retry", retry: true };
+    await renderGroups(placedAtTwo({ second: { can: { manageMembers: true, transfer: false }, outcome } }), { open: false });
+    const line = lineOf(KEY, SECOND);
+    const opener = within(line).getByTestId("space-line-members") as HTMLButtonElement;
+    const replacing = within(line).getByTestId(`space-line-${action}`) as HTMLButtonElement;
+    fireEvent.click(opener);
+    const panel = await screen.findByTestId(`space-members-${KEY}@${SECOND}`);
+    await within(panel).findAllByTestId(/^space-member-/);
+    if (mutation === "space.share") {
+      fireEvent.click(within(panel).getByTestId(`space-share-${KEY}@${SECOND}`));
+      const editor = within(panel).getByTestId(`space-share-${KEY}@${SECOND}-editor`);
+      fireEvent.change(within(editor).getByLabelText("Usernames"), { target: { value: "carol" } });
+      fireEvent.submit(editor);
+    } else {
+      fireEvent.click(within(panel).getByRole("button", { name: "Remove @bob" }));
+      fireEvent.click(within(within(panel).getByTestId("space-member-confirm-bob")).getByRole("button", { name: "Remove" }));
+    }
+    await waitFor(() => expect(opener.disabled).toBe(true));
+    expect(replacing.disabled).toBe(true);
+    const close = within(panel).getByRole("button", { name: "Close" }) as HTMLButtonElement;
+    expect(close.disabled).toBe(true);
+    fireEvent.click(opener);
+    fireEvent.click(replacing);
+    fireEvent.click(close);
+    fireEvent.keyDown(panel, { key: "Escape" });
+    expect(screen.getByTestId(`space-members-${KEY}@${SECOND}`)).toBe(panel);
+    expect(calls(mutation)).toHaveLength(1);
+    expect(calls("space.sync")).toEqual([]);
+    expect(calls("space.refresh")).toEqual([]);
+    await act(async () => { resolve({ members: MEMBERS }); });
+    await waitFor(() => expect(opener.disabled).toBe(false));
+    expect(replacing.disabled).toBe(false);
+    expect(close.disabled).toBe(false);
+  });
+
   test.each(["en", "zh"] as const)(
     "space-62: Members on each reachable placement line reads that placement's members, sending {repository, instance}; its panel says the records are also placed at every other instance the clone's files name, by display name, else host name; one placement says nothing more (%s)",
     async (language) => {
@@ -760,7 +834,7 @@ describe("GROUPS: a placement's members (space-62, space-69, space-72)", () => {
     fireEvent.click(within(lineOf(KEY, ORIGIN)).getByTestId("space-line-members"));
     const keyPanel = await screen.findByTestId(`space-members-${KEY}@${ORIGIN}`);
     await within(keyPanel).findAllByTestId(/^space-member-/);
-    expect(within(keyPanel).queryByRole("button", { name: "Invite members" })).toBeNull();
+    expect(within(keyPanel).queryByRole("button", { name: "Invite members…" })).toBeNull();
     expect(within(keyPanel).queryByRole("button", { name: /^Remove @/ })).toBeNull();
   });
 

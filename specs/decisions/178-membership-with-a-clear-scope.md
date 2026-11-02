@@ -11,6 +11,8 @@ Extends [DR-069](069-key-phrases-not-sentences.md): the invitation's scope, requ
 Amended by [DR-179](179-invite-several-members-together.md) in the one-username limit, submission and outcome: removable username tokens share one role, additions run sequentially, and only failed or unsent entries remain for an explicit retry.
 Amended by [DR-181](181-group-deletion-follows-the-space-policy.md) in empty-group deletion: a fresh Space check names every blocking content item instead of relying on cached rows, and a safe request preserves scheduled state and restoration where allowed.
 
+Amended by [DR-188](188-consistent-inline-group-actions.md) in the Members panel’s attached presentation, visible Close, repeated activation and mutation guards.
+
 ## Context
 
 The owner's screenshot places Share directly beneath their own member row, making it read as account sharing.

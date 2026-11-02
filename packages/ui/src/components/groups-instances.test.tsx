@@ -20,7 +20,7 @@
 // space-1). Each act is checked by the command it sends.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { GroupsState, InstanceGroupState, InstanceState, RepositoryState } from "@sublang/spex-core/protocol";
 
 import { activateLanguage } from "../i18n.js";
@@ -209,7 +209,7 @@ describe("SPACE: each Space under its heading (space-1, git-host-5, space-3, spa
     // New group where the Space lets the person create one; disabled and
     // titled where it says not — no link, no sentence (space-1, DR-120).
     const firstNew = first.getByTestId("space-new-group") as HTMLButtonElement;
-    expect(firstNew.textContent).toBe("New group");
+    expect(firstNew.textContent).toBe("New group…");
     expect(firstNew.disabled).toBe(false);
     expect(firstNew.hasAttribute("title")).toBe(false);
     const secondNew = second.getByTestId("space-new-group") as HTMLButtonElement;
@@ -259,6 +259,69 @@ describe("SPACE: each Space under its heading (space-1, git-host-5, space-3, spa
     await renderGroups(changed(headingsHome(), ORIGIN, { readAt: null }), { open: false });
     expect(within(sectionOf(ORIGIN)).queryByTestId("space-new-group")).toBeNull();
     expect(within(sectionOf(SECOND)).getByTestId("space-new-group")).toBeTruthy();
+  });
+
+  test("space-68: repeating New group focuses the existing draft, while explicit cancellation closes it", async () => {
+    await renderGroups(headingsHome(), { open: false });
+    const first = within(sectionOf(ORIGIN));
+    const opener = first.getByTestId("space-new-group");
+    fireEvent.click(opener);
+    const editor = first.getByTestId("space-new-group-editor");
+    const name = within(editor).getByLabelText("Group name") as HTMLInputElement;
+    const path = within(editor).getByLabelText("Path") as HTMLInputElement;
+    fireEvent.change(name, { target: { value: "Research team" } });
+    fireEvent.change(path, { target: { value: "research-custom" } });
+    opener.focus();
+    fireEvent.click(opener);
+    expect(first.getByTestId("space-new-group-editor")).toBe(editor);
+    expect(name.value).toBe("Research team");
+    expect(path.value).toBe("research-custom");
+    expect(document.activeElement).toBe(name);
+    expect(document.getElementById(opener.getAttribute("aria-controls")!)?.contains(editor)).toBe(true);
+    expect(calls("space.group.create")).toEqual([]);
+    fireEvent.keyDown(name, { key: "Escape" });
+    expect(first.queryByTestId("space-new-group-editor")).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(opener));
+    fireEvent.click(opener);
+    expect((first.getByLabelText("Group name") as HTMLInputElement).value).toBe("");
+  });
+
+  test("space-68: pending creation cannot be closed or replaced through its heading", async () => {
+    let reject!: (error: Error) => void;
+    commandMock.mockImplementation((type: string, fields: Record<string, unknown> = {}) => type === "space.group.create"
+      ? new Promise((_resolve, refused) => { reject = refused; }) : answer(type, fields));
+    await renderGroups(headingsHome(), { open: false });
+    const first = within(sectionOf(ORIGIN));
+    const opener = first.getByTestId("space-new-group") as HTMLButtonElement;
+    const signout = first.getByTestId("space-signout") as HTMLButtonElement;
+    const more = first.getByTestId("space-instance-more") as HTMLButtonElement;
+    fireEvent.click(opener);
+    const editor = first.getByTestId("space-new-group-editor");
+    const name = within(editor).getByLabelText("Group name") as HTMLInputElement;
+    fireEvent.change(name, { target: { value: "Research team" } });
+    fireEvent.click(within(editor).getByRole("button", { name: "Create" }));
+    expect(opener.disabled).toBe(true);
+    expect(signout.disabled).toBe(true);
+    expect(more.disabled).toBe(true);
+    fireEvent.click(opener);
+    fireEvent.click(signout);
+    fireEvent.click(more);
+    fireEvent.keyDown(name, { key: "Escape" });
+    fireEvent.keyDown(name, { key: "Enter" });
+    expect(first.getByTestId("space-new-group-editor")).toBe(editor);
+    expect(calls("space.group.create")).toHaveLength(1);
+    expect(calls("space.signout")).toEqual([]);
+    await act(async () => { reject(new Error("Creation refused")); });
+    await waitFor(() => expect(within(editor).getByRole("alert").textContent).toBe("Creation refused"));
+    expect(opener.disabled).toBe(false);
+    expect(signout.disabled).toBe(false);
+    expect(more.disabled).toBe(false);
+    opener.focus();
+    fireEvent.click(opener);
+    expect(first.getByTestId("space-new-group-editor")).toBe(editor);
+    expect(name.value).toBe("Research team");
+    expect(document.activeElement).toBe(name);
+    expect(within(editor).getByRole("alert").textContent).toBe("Creation refused");
   });
 
   test("space-1, git-host-5: a failed read reads on its heading alone, the other's view kept, and Refresh, titled with the last read, reads until every read's outcome", async () => {
@@ -491,7 +554,7 @@ describe("SPACE: each Space under its heading (space-1, git-host-5, space-3, spa
     fireEvent.click(within(sectionOf(ORIGIN)).getByRole("button", { name: "Sign out" }));
     await waitFor(() => expect(within(sectionOf(ORIGIN)).getByTestId("space-signout").textContent).toBe("Signing out…"));
     measure();
-    for (const label of ["New group", "Sign out", "Signing out…", "Sign in again", "Signing in…", "Cancel", "⋯More"]) {
+    for (const label of ["New group…", "Sign out", "Signing out…", "Sign in again", "Signing in…", "Cancel", "⋯More"]) {
       expect(seen, label).toContain(label);
     }
     // Each Space is a container; below 20rem its fields stack, the

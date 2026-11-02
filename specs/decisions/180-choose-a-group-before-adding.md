@@ -11,6 +11,8 @@ Extends [DR-069](069-key-phrases-not-sentences.md): destination and record-acces
 
 Amended by [DR-187](187-the-group-chooser-belongs-to-its-project.md) in the chooser’s attachment to its project row and consistent typography.
 
+Amended by [DR-188](188-consistent-inline-group-actions.md) in repeated activation of the chooser, which focuses and preserves its existing state.
+
 ## Context
 
 "Add to a group…" opened an untitled panel headed by a Space's address and "Share into".

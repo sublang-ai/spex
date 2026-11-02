@@ -9,6 +9,8 @@ Accepted (2026-11-02) on the owner's request to keep the empty-group safeguard a
 Amends [DR-120](120-the-instance-is-the-space.md) and [DR-178](178-membership-with-a-clear-scope.md) in the deletion check, confirmation and outcome; the empty-group restriction remains.
 Amended by [DR-186](186-unavailable-group-operations.md) in the explanation of a recognized unavailable deletion or restoration operation.
 
+Amended by [DR-188](188-consistent-inline-group-actions.md) in the confirmation’s attached presentation and repeated activation without clearing or repeating its check.
+
 ## Context
 
 A freshly created group with its Owner is empty.
