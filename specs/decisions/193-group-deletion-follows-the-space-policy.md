@@ -10,6 +10,7 @@ Amends [DR-120](120-the-instance-is-the-space.md) and [DR-190](190-membership-wi
 Amended by [DR-186](186-unavailable-group-operations.md) in the explanation of a recognized unavailable deletion or restoration operation.
 
 Amended by [DR-198](198-consistent-inline-group-actions.md) in the confirmation’s attached presentation and repeated activation without clearing or repeating its check.
+Amended by [DR-202](202-groups-within-groups-and-deletion-review.md) in collecting scheduled groups in a collapsible section, explaining the wait and observing completion through Refresh.
 
 ## Context
 

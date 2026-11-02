@@ -294,7 +294,7 @@ describe("GROUPS: each act where the host's read says (space-1, space-62, space-
     expect(within(acme).getByRole("heading", { level: 3 }).contains(more)).toBe(false);
     expect(groupAct("acme", "members")!.textContent).toBe("Members");
     closeMenus();
-    expect(groupMenu("acme")).toEqual(["space-group-members-acme", "space-group-delete-acme"]);
+    expect(groupMenu("acme")).toEqual(["space-group-members-acme", "space-group-create-acme", "space-group-delete-acme"]);
     expect(within(acme).getByRole("heading", { level: 3 }).textContent).toBe("acme");
     // other: Members alone too, its path beside its name.
     const other = region("other");
@@ -422,7 +422,7 @@ describe("GROUPS: each act where the host's read says (space-1, space-62, space-
     expect(within(editor).getByText("Cannot sync changes to shared records.")).toBeTruthy();
     expect(editor.textContent).not.toContain("Full control");
     // The action remains tied to the second Space's own permission.
-    expect(groupMenu("acme", secondSection)).toEqual(["space-group-members-acme", "space-group-delete-acme"]);
+    expect(groupMenu("acme", secondSection)).toEqual(["space-group-members-acme", "space-group-create-acme", "space-group-delete-acme"]);
   });
 
   test("nothing stands for an act the host does not let the person take, nor before sign-in", async () => {
@@ -975,12 +975,13 @@ describe("GROUPS: Remove (space-72, space-29)", () => {
 });
 
 describe("GROUPS: what the IDE no longer offers (space-1, DR-172)", () => {
-  test("headings expose permitted deletion but no nested creation or rename, and no row or line moves a project", async () => {
+  test("headings expose permitted creation and deletion but no rename, and no row or line moves a project", async () => {
     commandMock.mockImplementation(core);
     await renderGroups(sharingHome(), { open: false });
     for (const path of ["acme", "other", "empty"]) {
       expect(groupMenu(path), path).toEqual([
         `space-group-members-${path}`,
+        ...(path === "other" ? [] : [`space-group-create-${path}`]),
         ...(path === "other" ? [] : [`space-group-delete-${path}`]),
       ]);
     }

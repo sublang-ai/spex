@@ -18,6 +18,7 @@ Amended by [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md) in its m
 
 Amended by [DR-190](190-membership-with-a-clear-scope.md) in the group overflow: Delete group returns for permitted empty groups, with confirmation and a visible reason while contents or a server prevent it; the members panel separates Invite members from member rows and explains the choice.
 Amended by [DR-192](192-choose-a-group-before-adding.md) in the group picker: a visible task title, labelled Space, radio choices and explicit Add to group replace the immediate "Share into" actions.
+Amended by [DR-202](202-groups-within-groups-and-deletion-review.md) in restoring creation inside a permitted group through its New group action.
 
 ## Context
 

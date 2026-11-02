@@ -418,6 +418,7 @@ function InstanceHeading({
             instance={origin}
             parent={null}
             connected={connected}
+            canCreate={instance.account.canCreateGroup}
             focusRequest={createFocus}
             onPendingChange={setCreatingPending}
             onClose={() => {

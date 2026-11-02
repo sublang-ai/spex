@@ -117,7 +117,7 @@ import {
 } from "../lib/space.js";
 import { AddInstance, InstanceSection } from "./SpaceInstance.js";
 import { GroupServers, InstanceServers } from "./SpaceServers.js";
-import { MembersPanel } from "./SpaceMembers.js";
+import { GroupNameEditor, MembersPanel } from "./SpaceMembers.js";
 import { ATTACHED_OWNER, ATTACHED_PANEL } from "./SpacePanel.js";
 import { MenuButton, MoreMenu, type MenuEntry } from "./SpaceMenu.js";
 import { CombineConfirm, SharingConfirm, combineLabel, combiningLabel, continueLabel, entryName, placementGroupName } from "./SpacePlacements.js";
@@ -359,7 +359,6 @@ export function GroupsList({
       {groups.instances.map((instance) => {
         const entries = entriesOf(instance);
         const personal = personalEntry(groups, instance, seat);
-        const tree = groupTree(entries.filter((entry) => entry.login === null));
         return (
           <InstanceSection
             key={instance.origin}
@@ -370,9 +369,7 @@ export function GroupsList({
             onNote={onNote}
           >
             {personal ? <GroupSection key={entryKey(personal)} {...shared} instance={instance} group={personal} subgroups={[]} /> : null}
-            {tree.map((node) => (
-              <GroupSection key={entryKey(node.group)} {...shared} instance={instance} group={node.group} subgroups={node.children} />
-            ))}
+            <InstanceGroups {...shared} instance={instance} entries={entries.filter((entry) => entry.login === null)} />
             {entries
               .filter((entry) => entry.login !== null && !entry.mine)
               .map((entry) => (
@@ -406,6 +403,74 @@ export function GroupsList({
 interface GroupNode {
   group: InstanceGroupState;
   children: GroupNode[];
+}
+
+interface GroupLifecycle {
+  begin(group: InstanceGroupState): void;
+  finish(group: InstanceGroupState, outcome?: "scheduled" | "deleted" | "restored", mayFocus?: () => boolean): void;
+}
+
+/** Pending groups have one quiet, revisitable place at their Space.
+ * Keep a moving group's current parent until its command replies: state
+ * arrives first, and moving it sooner would discard its busy guard. */
+function InstanceGroups({ instance, entries, ...shared }: Shared & { instance: InstanceState; entries: InstanceGroupState[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const [held, setHeld] = useState<Record<string, boolean>>({});
+  const root = useRef<HTMLDivElement>(null);
+  const disclosure = useRef<HTMLButtonElement>(null);
+  const focused = useRef<HTMLElement | null>(null);
+  const focusAfter = useRef<{ key: string; outcome: "scheduled" | "deleted" | "restored"; mayFocus: () => boolean } | undefined>(undefined);
+  const panelId = useId();
+  const pending = (group: InstanceGroupState) => held[entryKey(group)] ?? !!group.pendingDeletion;
+  const activeTree = groupTree(entries.filter((group) => !pending(group)));
+  const scheduled = entries.filter(pending);
+  const pendingTree = groupTree(scheduled);
+  const busy = Object.keys(held).length > 0;
+  const fallback = () => root.current?.closest("[data-signed-in]")?.querySelector<HTMLButtonElement>('[data-testid="space-new-group"]:not(:disabled), [data-testid="space-signout"]');
+  useLayoutEffect(() => {
+    const next = focusAfter.current;
+    focusAfter.current = undefined;
+    if (next?.mayFocus()) {
+      const group = Array.from(root.current?.querySelectorAll<HTMLElement>("[data-group-key]") ?? []).find((element) => element.dataset.groupKey === next.key);
+      (group?.querySelector<HTMLButtonElement>(next.outcome === "scheduled" ? '[data-group-restore]:not(:disabled)' : 'button[data-testid^="space-group-more-"]:not(:disabled)') ?? disclosure.current ?? fallback())?.focus();
+    } else if (focused.current && !focused.current.isConnected && document.activeElement === document.body) {
+      (disclosure.current ?? fallback())?.focus();
+    }
+  });
+  const lifecycle: GroupLifecycle = {
+    begin(group) { setHeld((previous) => ({ ...previous, [entryKey(group)]: !!group.pendingDeletion })); },
+    finish(group, outcome, mayFocus) {
+      if (outcome === "scheduled") setExpanded(true);
+      if (outcome && mayFocus) focusAfter.current = { key: entryKey(group), outcome, mayFocus };
+      setHeld((previous) => { const next = { ...previous }; delete next[entryKey(group)]; return next; });
+    },
+  };
+  const close = () => {
+    if (busy) return;
+    setExpanded(false);
+    disclosure.current?.focus();
+  };
+  const sections = (tree: GroupNode[]) => tree.map((node) => <GroupSection key={entryKey(node.group)} {...shared} lifecycle={lifecycle} instance={instance} group={node.group} subgroups={node.children} />);
+  return (
+    <div ref={root} className="flex min-w-0 flex-col gap-3" onFocusCapture={(event) => { focused.current = event.target; }}>
+      {sections(activeTree)}
+      {scheduled.length > 0 ? (
+        <div className="flex min-w-0 flex-col gap-2 border-t border-neutral-200 pt-2 dark:border-neutral-800" data-testid="space-scheduled-groups">
+          <button ref={disclosure} type="button" aria-expanded={expanded} aria-controls={panelId} disabled={busy} onClick={() => setExpanded((value) => !value)} className="flex min-h-7 items-center gap-2 self-start text-left text-sm text-neutral-600 hover:text-neutral-900 disabled:opacity-50 dark:text-neutral-400 dark:hover:text-neutral-100">
+            <span aria-hidden>{expanded ? "▾" : "▸"}</span>
+            {i18n._("Scheduled for deletion ({count})", { count: scheduled.length })}
+          </button>
+          <div id={panelId} hidden={!expanded} onKeyDown={(event) => { if (event.key === "Escape" && !event.defaultPrevented) { event.stopPropagation(); close(); } }}>
+            <div className="flex min-w-0 flex-col gap-3 pl-3">
+              <p className="text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">{i18n._("The Space controls when deletion takes effect. Refresh to check whether it has finished.")}</p>
+              {sections(pendingTree)}
+              <button type="button" className={`${SECONDARY} self-start`} disabled={busy} onClick={close}>{i18n._("Hide")}</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 /** A Space's groups as a tree in the order of their paths (space-1): a
@@ -507,6 +572,7 @@ interface Shared {
   onExplore(key: string): void;
   onOpenProject(projectId: string, place?: string): void;
   onNote: Note;
+  lifecycle?: GroupLifecycle;
 }
 
 /** One entry of the list (space-1): "This computer", where `instance` is
@@ -533,7 +599,9 @@ function GroupSection({
   const spaceGroupDelete = store((state) => state.spaceGroupDelete);
   const spaceGroupRestore = store((state) => state.spaceGroupRestore);
   const spaceGroupDeletionCheck = store((state) => state.spaceGroupDeletionCheck);
-  const [opened, setOpened] = useState<"members" | "delete">();
+  const [opened, setOpened] = useState<"members" | "delete" | "create">();
+  const [creatingPending, setCreatingPending] = useState(false);
+  const [createFocus, setCreateFocus] = useState(0);
   const [membersPending, setMembersPending] = useState(false);
   const [membersFocus, setMembersFocus] = useState(0);
   const [deleting, setDeleting] = useState(false);
@@ -568,7 +636,7 @@ function GroupSection({
   const Heading = local ? "h2" : "h3";
   const members = instance && group.login === null ? memberCount(instance, group) : null;
   const close = () => {
-    if (deletePending.current || membersPending) return;
+    if (deletePending.current || membersPending || creatingPending) return;
     setOpened(undefined);
     setDeleteError(undefined);
     // Closing never strands focus (DR-010 §6).
@@ -599,6 +667,7 @@ function GroupSection({
   const removeGroup = async () => {
     if (deletePending.current || !connected || !instance || hostGroup === null || deleteReason || !confirmed || checking) return;
     deletePending.current = true;
+    shared.lifecycle?.begin(group);
     setDeleting(true);
     setDeleteError(undefined);
     // The successful state arrives before the reply and removes this
@@ -607,7 +676,7 @@ function GroupSection({
       '[data-testid="space-new-group"]:not(:disabled), [data-testid="space-signout"]',
     );
     const panel = deleteConfirmRef.current;
-    const focusIsOurs = () => document.activeElement === document.body || document.activeElement === null || panel?.contains(document.activeElement);
+    const focusIsOurs = () => document.activeElement === document.body || document.activeElement === null || !!panel?.contains(document.activeElement);
     try {
       const reply = await spaceGroupDelete(instance.origin, hostGroup, review!.group.fullPath);
       setOpened(undefined);
@@ -617,11 +686,13 @@ function GroupSection({
       const focus = () => {
         if (focusIsOurs()) (restoreRef.current ?? moreRef.current ?? fallback)?.focus();
       };
-      if (reply.status === "scheduled") settledFocus.current = focus;
+      if (shared.lifecycle) shared.lifecycle.finish(group, reply.status, focusIsOurs);
+      else if (reply.status === "scheduled") settledFocus.current = focus;
       // Immediate deletion unmounts this section, so its layout effect
       // cannot return focus to the surviving Space heading.
       else setTimeout(() => { if (focusIsOurs()) fallback?.focus(); }, 0);
     } catch (cause) {
+      shared.lifecycle?.finish(group);
       const message = (cause as Error).message;
       setDeleteError(message);
       setReview(undefined);
@@ -638,16 +709,19 @@ function GroupSection({
   const restoreGroup = async () => {
     if (deletePending.current || !connected || !instance || hostGroup === null || !group.can.restore || !group.pendingDeletion) return;
     deletePending.current = true;
+    shared.lifecycle?.begin(group);
     setRestoring(true);
     setDeleteError(undefined);
     const button = restoreRef.current;
     try {
       await spaceGroupRestore(instance.origin, hostGroup);
       onNote(i18n._("{group} restored.", { group: name }));
-      settledFocus.current = () => {
+      if (shared.lifecycle) shared.lifecycle.finish(group, "restored", () => document.activeElement === document.body || document.activeElement === button);
+      else settledFocus.current = () => {
         if (document.activeElement === document.body || document.activeElement === button) moreRef.current?.focus();
       };
     } catch (cause) {
+      shared.lifecycle?.finish(group);
       const message = (cause as Error).message;
       setDeleteError(message);
       onNote(message);
@@ -668,18 +742,27 @@ function GroupSection({
             label: i18n._({ id: "Members", comment: "list the people who read a project's records, or a group's members, at the Space" }),
             testId: `space-group-members-${group.fullPath}`,
             onSelect: () => {
-              if (deletePending.current || membersPending) return;
+              if (deletePending.current || membersPending || creatingPending) return;
               if (opened === "members") setMembersFocus((value) => value + 1);
               else setOpened("members");
             },
           },
+          ...(group.can.createSubgroup && !group.pendingDeletion ? [{
+            label: i18n._({ id: "New group…", comment: "open the name and path editor for a group inside this group" }),
+            testId: `space-group-create-${group.fullPath}`,
+            onSelect: () => {
+              if (deletePending.current || membersPending || creatingPending) return;
+              setOpened("create");
+              setCreateFocus((value) => value + 1);
+            },
+          }] : []),
           ...(group.can.delete && !group.pendingDeletion ? [{
             label: i18n._({ id: "Delete group", comment: "a group's overflow action: review its contents and confirm deletion without entering more details" }),
             testId: `space-group-delete-${group.fullPath}`,
             disabled: deleteReason !== undefined,
             hint: deleteReason,
             onSelect: () => {
-              if (deletePending.current || membersPending) return;
+              if (deletePending.current || membersPending || creatingPending) return;
               if (opened === "delete") {
                 deleteCancelRef.current?.focus();
                 return;
@@ -703,6 +786,7 @@ function GroupSection({
       role="group"
       aria-label={group.login === null && !local ? group.fullPath : name}
       data-testid={local ? "space-own" : `space-group-${testKey}`}
+      data-group-key={entryKey(group)}
       className="@container flex min-w-0 flex-col gap-2"
     >
       {/* The name owns the slack; what stands beside it follows the
@@ -733,19 +817,19 @@ function GroupSection({
               </span>
             ) : null}
           </Heading>
-          <MoreMenu of={group.fullPath} testId={`space-group-more-${group.fullPath}`} buttonRef={moreRef} entries={entries} disabled={!connected || deleting || restoring || membersPending} />
+          <MoreMenu of={group.fullPath} testId={`space-group-more-${group.fullPath}`} buttonRef={moreRef} entries={entries} disabled={!connected || deleting || restoring || membersPending || creatingPending} />
         </div>
-        {group.pendingDeletion ? (
-          <div role="status" data-testid={`space-group-pending-${group.fullPath}`} className="mx-2 flex min-w-0 flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50/50 p-3 dark:border-amber-900 dark:bg-amber-950/20">
+        {group.pendingDeletion || restoring ? (
+          <div role="status" data-testid={`space-group-pending-${group.fullPath}`} className="flex min-w-0 flex-wrap items-center gap-3 pl-2">
             <div className="min-w-0 flex-1 basis-44">
               <p className="text-sm font-medium">{i18n._("Scheduled for deletion")}</p>
               <p className="mt-1 text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">{group.deletionRoot && group.deletionRoot !== group.fullPath
                 ? i18n._("An owner can restore {group} to keep this group.", { group: group.deletionRoot })
-                : group.can.restore ? i18n._("You can restore this group before deletion takes effect.")
+                : group.can.restore || restoring ? i18n._("You can restore this group before deletion takes effect.")
                   : i18n._("A group owner can restore it before deletion takes effect.")}</p>
             </div>
-            {group.can.restore ? (
-              <button ref={restoreRef} type="button" className={SECONDARY} disabled={!connected || deleting || restoring} onClick={() => void restoreGroup()}>
+            {group.can.restore || restoring ? (
+              <button ref={restoreRef} data-group-restore type="button" className={SECONDARY} disabled={!connected || deleting || restoring} onClick={() => void restoreGroup()}>
                 {restoring ? i18n._("Restoring…") : i18n._("Restore group")}
               </button>
             ) : null}
@@ -819,6 +903,24 @@ function GroupSection({
             onNote={onNote}
           />
         ) : null}
+        {opened === "create" && hostGroup !== null && instance ? (
+          <GroupNameEditor
+            embedded
+            testId={`space-group-create-editor-${group.fullPath}`}
+            instance={instance.origin}
+            parent={hostGroup}
+            scope={{ name, fullPath: group.fullPath, space: instanceName(instance) }}
+            connected={connected}
+            canCreate={group.can.createSubgroup && !group.pendingDeletion}
+            focusRequest={createFocus}
+            onPendingChange={setCreatingPending}
+            onClose={() => {
+              setOpened(undefined);
+              setTimeout(() => moreRef.current?.focus(), 0);
+            }}
+            onNote={onNote}
+          />
+        ) : null}
       </div>
       {lines}
       {rows.length > 0 || placed.length > 0 ? (
@@ -841,7 +943,7 @@ function GroupSection({
             </li>
           ))}
         </ul>
-      ) : serverCount === 0 && subgroups.length === 0 ? (
+      ) : !group.pendingDeletion && !restoring && serverCount === 0 && subgroups.length === 0 ? (
         <p className="pl-2 text-xs text-neutral-500">{i18n._({ id: "No projects here yet", comment: "beneath a group holding no project yet" })}</p>
       ) : null}
       {subgroups.length > 0 ? (

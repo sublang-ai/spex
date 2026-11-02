@@ -128,14 +128,26 @@ test("one deletion sends the reviewed path; a race refusal keeps the group and l
   await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("space-new-group")));
 });
 
-test.each(["permission", "connection", "pending"] as const)("a %s change disables an open confirmation", async (changed) => {
+test.each(["permission", "connection"] as const)("a %s change disables an open confirmation", async (changed) => {
   await renderGroups(home(emptyGroup()), { open: false });
   const panel = await confirm();
   if (changed === "permission") deliver(home(emptyGroup({ can: { ...emptyGroup().can, delete: false } })));
   if (changed === "connection") useAppStore.setState({ connection: "closed" });
-  if (changed === "pending") deliver(home(emptyGroup({ pendingDeletion: true })));
   await waitFor(() => expect((within(panel).getByRole("button", { name: "Delete group" }) as HTMLButtonElement).disabled).toBe(true));
   fireEvent.click(within(panel).getByRole("button", { name: "Delete group" }));
+  expect(calls("space.group.delete")).toEqual([]);
+});
+
+test("a group scheduled elsewhere leaves its stale confirmation and remains revisitable", async () => {
+  await renderGroups(home(emptyGroup()), { open: false });
+  await confirm();
+  deliver(home(emptyGroup({ pendingDeletion: true })));
+  await waitFor(() => expect(screen.queryByTestId("space-group-delete-confirm-scratch")).toBeNull());
+  const disclosure = screen.getByRole("button", { name: "Scheduled for deletion (1)" });
+  expect(disclosure.getAttribute("aria-expanded")).toBe("false");
+  fireEvent.click(disclosure);
+  expect(screen.getByText("A group owner can restore it before deletion takes effect.")).toBeTruthy();
+  expect(menu().queryByRole("menuitem", { name: "Delete group" })).toBeNull();
   expect(calls("space.group.delete")).toEqual([]);
 });
 
@@ -176,6 +188,11 @@ test("an empty group's scheduled deletion stays visible and can be restored with
   const restore = within(banner).getByRole("button", { name: "Restore group" });
   restore.focus();
   fireEvent.click(restore); fireEvent.click(restore);
+  const disclosure = screen.getByRole("button", { name: "Scheduled for deletion (1)" });
+  expect((disclosure as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole("button", { name: "Hide" }) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.keyDown(restore, { key: "Escape" });
+  expect(disclosure.getAttribute("aria-expanded")).toBe("true");
   expect(calls("space.group.restore")).toEqual([{ instance: ORIGIN, group: "90" }]);
   expect((within(banner).getByRole("button", { name: "Restoring…" }) as HTMLButtonElement).disabled).toBe(true);
   reject(new SpexCommandError("invalid_request", "Restoration refused"));
@@ -185,10 +202,58 @@ test("an empty group's scheduled deletion stays visible and can be restored with
   fireEvent.click(within(banner).getByRole("button", { name: "Restore group" }));
   deliver(home(emptyGroup()));
   await waitFor(() => expect((screen.getByTestId("space-group-more-scratch") as HTMLButtonElement).disabled).toBe(true));
+  expect((within(banner).getByRole("button", { name: "Restoring…" }) as HTMLButtonElement).disabled).toBe(true);
   resolve({ group: emptyReview.group });
   await waitFor(() => expect(screen.queryByTestId("space-group-pending-scratch")).toBeNull());
   await waitFor(() => expect(live()).toBe("Scratch team restored."));
   await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("space-group-more-scratch")));
+});
+
+test("scheduled groups start collapsed, can be hidden and revisited, and disappear after a fresh completed read", async () => {
+  const scheduled = emptyGroup({ pendingDeletion: true, deletionRoot: "scratch", can: { ...emptyGroup().can, delete: false, restore: true } });
+  await renderGroups(home(scheduled), { open: false });
+  const disclosure = screen.getByRole("button", { name: "Scheduled for deletion (1)" });
+  expect(disclosure.getAttribute("aria-expanded")).toBe("false");
+  expect(screen.queryByRole("button", { name: "Restore group" })).toBeNull();
+  fireEvent.click(disclosure);
+  expect(screen.getByRole("button", { name: "Restore group" })).toBeTruthy();
+  expect(screen.getByText("The Space controls when deletion takes effect. Refresh to check whether it has finished.")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Hide" }));
+  expect(document.activeElement).toBe(disclosure);
+  expect(disclosure.getAttribute("aria-expanded")).toBe("false");
+  deliver(home(scheduled));
+  expect(disclosure.getAttribute("aria-expanded")).toBe("false");
+  fireEvent.click(disclosure);
+  screen.getByRole("button", { name: "Restore group" }).focus();
+  fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+  expect(document.activeElement).toBe(disclosure);
+  expect(disclosure.getAttribute("aria-expanded")).toBe("false");
+  fireEvent.click(disclosure);
+  screen.getByRole("button", { name: "Restore group" }).focus();
+  deliver(home());
+  await waitFor(() => expect(screen.queryByTestId("space-scheduled-groups")).toBeNull());
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("space-new-group")));
+  expect(calls("space.group.delete")).toEqual([]);
+  expect(calls("space.group.restore")).toEqual([]);
+});
+
+test("a scheduled nested group names its root and stays separate from an active replacement at the same path", async () => {
+  await renderGroups(home(
+    emptyGroup({ id: "old", pendingDeletion: true, deletionRoot: "scratch", name: "Old group", can: { ...emptyGroup().can, restore: false } }),
+    emptyGroup({ id: "new", name: "Replacement group" }),
+    emptyGroup({ id: "child", name: "Child group", fullPath: "scratch/child", pendingDeletion: true, deletionRoot: "scratch", can: { ...emptyGroup().can, restore: false } }),
+  ), { open: false });
+  expect(screen.getByRole("heading", { name: /^Replacement group/ })).toBeTruthy();
+  expect(screen.queryByRole("heading", { name: /^Old group/ })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Scheduled for deletion (2)" }));
+  const old = screen.getByRole("heading", { name: /^Old group/ }).closest('[role="group"]')!;
+  const child = screen.getByRole("heading", { name: /^Child group/ }).closest('[role="group"]')!;
+  expect(old.contains(child)).toBe(true);
+  expect(within(child as HTMLElement).getByText("An owner can restore scratch to keep this group.")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Restore group" })).toBeNull();
+  deliver(home(emptyGroup({ id: "new", name: "Replacement group" })));
+  await waitFor(() => expect(screen.queryByTestId("space-scheduled-groups")).toBeNull());
+  expect(screen.getByRole("heading", { name: /^Replacement group/ })).toBeTruthy();
 });
 
 test("scheduled deletion and restoration preserve focus moved to another control while pending", async () => {

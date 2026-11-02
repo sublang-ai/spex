@@ -1279,6 +1279,7 @@ describe("GROUPS: the instance's entries (space-1, space-58, space-61, DR-120)",
       group("ambiguous-2", "ambiguous", "Second parent"),
       group("unplaced", "ambiguous/child", "Separate child"),
     ), { open: false });
+    fireEvent.click(screen.getByRole("button", { name: "Scheduled for deletion (3)" }));
     const section = (name: string) => screen.getByRole("heading", { name: new RegExp(`^${name}\\b`) }).closest('[role="group"]')! as HTMLElement;
     const old = section("Old team");
     const current = section("Current team");
@@ -1286,7 +1287,8 @@ describe("GROUPS: the instance's entries (space-1, space-58, space-61, DR-120)",
     expect(old.contains(section("Current child"))).toBe(false);
     expect(current.contains(section("Current child"))).toBe(true);
     expect(current.contains(section("Old child"))).toBe(false);
-    expect(current.contains(section("Pending child"))).toBe(true);
+    expect(current.contains(section("Pending child"))).toBe(false);
+    expect(screen.getByTestId("space-scheduled-groups").contains(section("Pending child"))).toBe(true);
     expect(section("First parent").contains(section("Separate child"))).toBe(false);
     expect(section("Second parent").contains(section("Separate child"))).toBe(false);
   });

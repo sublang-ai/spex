@@ -19,7 +19,7 @@
 // (space-42); fit at every width in both sidebar states (space-43); axe
 // in both themes (space-44); and a second computer opening a project a
 // peer pushed (space-36). The acts DR-172 cuts — Move, Place at, Leave,
-// Attach, Rename and New subgroup — are asserted unoffered where
+// Attach and Rename — are asserted unoffered where
 // a journey opens the menus that held them.
 // Every host is the in-process stand-in on loopback, every peer plain
 // Git on its bare repositories, and the exploring journey's remote a
@@ -907,6 +907,41 @@ test.describe("a folder joining a team's project", () => {
 test.describe("organizing", () => {
   test.use({ appOptions: { host: { displayName: "spex.sublang.xyz" }, signedIn: true } });
 
+  test("space-68: create a group inside a group, preserving its parent through Refresh", async ({ page, app }, testInfo) => {
+    const host = app.host!;
+    await open(page, app);
+    await showGroups(page);
+    const parent = page.getByTestId(`space-group-${HOST_GROUP}`);
+    await menuAct(page, `space-group-more-${HOST_GROUP}`, `space-group-create-${HOST_GROUP}`);
+    const editor = parent.getByTestId(`space-group-create-editor-${HOST_GROUP}`);
+    const parentName = host.script.groups.find((group) => group.fullPath === HOST_GROUP)!.name;
+    await expect(editor.getByRole("heading")).toHaveText(`New group in ${parentName}`);
+    await expect(editor).toContainText(`${HOST_GROUP} · spex.sublang.xyz`);
+    await expect(editor).toContainText(`Members of ${parentName} will also have access to this group.`);
+    const name = editor.getByRole("textbox", { name: "Group name", exact: true });
+    await expect(name).toBeFocused();
+    await name.fill("Systems team");
+    await expect(editor.getByRole("textbox", { name: "Path", exact: true })).toHaveValue("systems-team");
+    await menuAct(page, `space-group-more-${HOST_GROUP}`, `space-group-create-${HOST_GROUP}`);
+    await expect(name).toHaveValue("Systems team");
+    await expect(name).toBeFocused();
+    await editor.screenshot({ path: testInfo.outputPath("nested-group-desktop.png") });
+    await setRail(page, false);
+    await page.setViewportSize({ width: 320, height: TALL });
+    await editor.screenshot({ path: testInfo.outputPath("nested-group-320.png") });
+    const accessibility = await new AxeBuilder({ page }).include(`[data-testid="space-group-create-editor-${HOST_GROUP}"]`).analyze();
+    expect(accessibility.violations).toEqual([]);
+    await editor.getByRole("button", { name: "Create", exact: true }).click();
+    await expect(editor).toBeHidden();
+    const createdPath = `${HOST_GROUP}/systems-team`;
+    await expect(parent.getByTestId(`space-group-${createdPath}`)).toBeVisible();
+    expect(host.script.groups.find((group) => group.fullPath === createdPath)?.name).toBe("Systems team");
+    await expect(page.getByTestId(`space-group-more-${HOST_GROUP}`)).toBeFocused();
+    await page.getByTestId("space-refresh").click();
+    await expect(page.getByTestId("space-refresh")).toHaveText("Refresh");
+    await expect(parent.getByTestId(`space-group-${createdPath}`)).toBeVisible();
+  });
+
   test("space-71: a group made at the Space's heading, a project shared into it, a member added, refused twice and removed", async ({
     page,
     app,
@@ -949,7 +984,7 @@ test.describe("organizing", () => {
     // Members and deletion belong to the group; deletion is available
     // for the empty group the person just created (space-1).
     await expect(await menuEntry(page, "space-group-more-platform", "space-group-members-platform")).toHaveText("Members");
-    await expect(page.getByTestId("space-group-more-platform-menu").getByRole("menuitem")).toHaveCount(2);
+    await expect(page.getByTestId("space-group-more-platform-menu").getByRole("menuitem")).toHaveCount(3);
     await expect(page.getByTestId("space-group-delete-platform")).toBeEnabled();
     await closeMenu(page);
 
@@ -1194,10 +1229,37 @@ test.describe("organizing", () => {
     await app.core.command("space.refresh", {});
     await expect(pending).toBeVisible();
     await pending.screenshot({ path: testInfo.outputPath("group-pending-deletion.png") });
+    const scheduled = list.getByTestId("space-scheduled-groups");
+    const revisit = scheduled.getByRole("button", { name: "Scheduled for deletion (1)", exact: true });
+    await scheduled.getByRole("button", { name: "Hide", exact: true }).click();
+    await expect(revisit).toBeFocused();
+    await expect(pending).toBeHidden();
+    await app.core.command("space.refresh", {});
+    await expect(revisit).toHaveAttribute("aria-expanded", "false");
+    await revisit.click();
+    await expect(pending).toBeVisible();
+    await expect(scheduled).toContainText("The Space controls when deletion takes effect.");
+    await page.setViewportSize({ width: 320, height: TALL });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    const scheduledAccessibility = await new AxeBuilder({ page }).include('[data-testid="space-scheduled-groups"]').analyze();
+    expect(scheduledAccessibility.violations).toEqual([]);
+    await scheduled.screenshot({ path: testInfo.outputPath("scheduled-groups-320.png") });
+    await page.setViewportSize({ width: 1280, height: TALL });
     await pending.getByRole("button", { name: "Restore group", exact: true }).click();
     await expect(pending).toHaveCount(0);
+    await expect(scheduled).toHaveCount(0);
     await expect(empty.getByTestId("space-group-more-empty-group")).toBeFocused();
     await expect(empty).toBeVisible();
+    await groupAct(page, "empty-group", "delete");
+    await expect(emptyConfirmation).toContainText("This group is empty.");
+    await emptyConfirmation.getByRole("button", { name: "Delete group", exact: true }).click();
+    await expect(pending).toBeVisible();
+    // The Space's later deletion is learned from its next full read.
+    const completedId = standinGroup("empty-group")!.id;
+    host.script.groups = host.script.groups.filter((group) => group.id !== completedId);
+    await page.getByTestId("space-refresh").click();
+    await expect(empty).toHaveCount(0);
+    await expect(scheduled).toHaveCount(0);
     await expect(platform.getByTestId(`space-row-${picked}`)).toBeVisible();
     expect(standinMembers("platform")).toContain("alan:Maintainer");
   });

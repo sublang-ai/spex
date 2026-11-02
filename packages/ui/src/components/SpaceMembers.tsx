@@ -59,6 +59,9 @@ export function GroupNameEditor({
   instance,
   parent,
   connected,
+  canCreate = true,
+  scope,
+  embedded = false,
   onClose,
   onNote,
   focusRequest,
@@ -70,6 +73,10 @@ export function GroupNameEditor({
   /** The parent group's id at the Space; null creates at its root. */
   parent: string | null;
   connected: boolean;
+  canCreate?: boolean;
+  /** The named parent and Space when creating inside an existing group. */
+  scope?: { name: string; fullPath: string; space: string };
+  embedded?: boolean;
   /** Close the editor; the caller returns focus to its control. */
   onClose(): void;
   onNote: Note;
@@ -85,6 +92,7 @@ export function GroupNameEditor({
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string>();
   const fieldRef = useRef<HTMLInputElement>(null);
+  const titleId = useId();
   const inFlight = useRef(false);
   useEffect(() => {
     fieldRef.current?.focus();
@@ -93,7 +101,7 @@ export function GroupNameEditor({
   const chosen = name.trim();
   const chosenPath = path.trim();
   const submit = async () => {
-    if (!chosen || !chosenPath || inFlight.current) return;
+    if (!connected || !canCreate || !chosen || !chosenPath || inFlight.current) return;
     inFlight.current = true;
     setBusy(true);
     onPendingChange?.(true);
@@ -116,13 +124,21 @@ export function GroupNameEditor({
   return (
     <div
       data-testid={testId}
-      className={EDITOR}
+      role={scope ? "group" : undefined}
+      aria-labelledby={scope ? titleId : undefined}
+      aria-busy={busy}
+      className={embedded ? `flex min-w-0 flex-col gap-2 ${ATTACHED_PANEL}` : EDITOR}
       onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
         if (event.key !== "Escape") return;
         event.stopPropagation();
         if (!busy) onClose();
       }}
     >
+      {scope ? <>
+        <h4 id={titleId} className="break-words text-sm font-medium">{i18n._("New group in {group}", { group: scope.name })}</h4>
+        <p className="break-words text-xs text-neutral-500">{scope.fullPath} <span aria-hidden>·</span> {scope.space}</p>
+        <p className="text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">{i18n._("Members of {group} will also have access to this group.", { group: scope.name })}</p>
+      </> : null}
       <label className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
         <span className="shrink-0 text-neutral-500">
           {i18n._({ id: "Group name", comment: "the field naming a new group at the Space" })}
@@ -168,6 +184,7 @@ export function GroupNameEditor({
         />
       </label>
       {refusal ? <p role="alert" className={REFUSAL}>{refusal}</p> : null}
+      {!canCreate ? <p className="text-xs text-neutral-600 dark:text-neutral-400">{i18n._("You can no longer create a group here.")}</p> : null}
       <div className="flex flex-wrap items-center justify-end gap-2">
         <button type="button" data-testid={`${testId}-cancel`} className={SECONDARY} disabled={busy} onClick={onClose}>
           {i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}
@@ -176,7 +193,7 @@ export function GroupNameEditor({
           type="button"
           data-testid={`${testId}-create`}
           className={PRIMARY}
-          disabled={!connected || busy || !chosen || !chosenPath}
+          disabled={!connected || !canCreate || busy || !chosen || !chosenPath}
           onClick={() => void submit()}
         >
           {busy

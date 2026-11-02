@@ -3754,6 +3754,10 @@ msgstr "Here"
 msgid "Hidden: {groups}"
 msgstr "Hidden: {groups}"
 
+#: src/components/SpaceGroups.tsx
+msgid "Hide"
+msgstr "Hide"
+
 #: src/components/SpaceSync.tsx
 msgid "Hide diff"
 msgstr "Hide diff"
@@ -4319,6 +4323,10 @@ msgid "Members"
 msgstr "Members"
 
 #: src/components/SpaceMembers.tsx
+msgid "Members of {group} will also have access to this group."
+msgstr "Members of {group} will also have access to this group."
+
+#: src/components/SpaceMembers.tsx
 msgid "Members of {name}"
 msgstr "Members of {name}"
 
@@ -4480,7 +4488,13 @@ msgstr "new"
 msgid "New folder path"
 msgstr "New folder path"
 
+#: src/components/SpaceMembers.tsx
+msgid "New group in {group}"
+msgstr "New group in {group}"
+
 #. open the name and path editor for a group at this Space
+#. open the name and path editor for a group inside this group
+#: src/components/SpaceGroups.tsx
 #: src/components/SpaceInstance.tsx
 msgid "New group…"
 msgstr "New group…"
@@ -6471,6 +6485,10 @@ msgstr "Scaffold one in the project directory:"
 msgid "Scheduled for deletion"
 msgstr "Scheduled for deletion"
 
+#: src/components/SpaceGroups.tsx
+msgid "Scheduled for deletion ({count})"
+msgstr "Scheduled for deletion ({count})"
+
 #. the hint inside Add…'s registry search field: search the registry, or type a package's full name
 #: src/components/EnvironmentSection.tsx
 msgid "Search, or type org/name"
@@ -7561,6 +7579,10 @@ msgstr "The saved work for this folder is no longer on this computer."
 msgid "The sign-in did not start"
 msgstr "The sign-in did not start"
 
+#: src/components/SpaceGroups.tsx
+msgid "The Space controls when deletion takes effect. Refresh to check whether it has finished."
+msgstr "The Space controls when deletion takes effect. Refresh to check whether it has finished."
+
 #: src/App.tsx
 msgid "The Spex window and its core speak different protocol versions — restart the app (or update Spex) to fix this."
 msgstr "The Spex window and its core speak different protocol versions — restart the app (or update Spex) to fix this."
@@ -8345,6 +8367,10 @@ msgstr "Written by Spex from {name} {version} — an edit makes it yours"
 #: src/components/SpaceMembers.tsx
 msgid "You"
 msgstr "You"
+
+#: src/components/SpaceMembers.tsx
+msgid "You can no longer create a group here."
+msgstr "You can no longer create a group here."
 
 #: src/components/SpaceGroups.tsx
 msgid "You can restore this group before deletion takes effect."

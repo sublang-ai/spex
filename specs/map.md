@@ -220,6 +220,7 @@ meta.md       The spec of specs
 | [DR-199](decisions/199-release-gated-full-validation.md) | 199-release-gated-full-validation.md | Selected workspace checks gate pull requests; full app or CLI validation gates publication or runs on request; one checks result, shared local selection, no main or nightly runs |
 | [DR-200](decisions/200-publishing-names-need-registry-authority.md) | 200-publishing-names-need-registry-authority.md | Unchecked local names explained before release, refreshed account suggestions, and fresh registry authorization in publish previews and uploads |
 | [DR-201](decisions/201-shared-codex-subscription-access.md) | 201-shared-codex-subscription-access.md | Shared ChatGPT subscription access through private per-seat access-only Codex snapshots; administrator-only refresh |
+| [DR-202](decisions/202-groups-within-groups-and-deletion-review.md) | 202-groups-within-groups-and-deletion-review.md | Collapsible scheduled-deletion review with honest timing and Refresh; create groups inside permitted groups through the existing editor |
 
 ## Packages
 

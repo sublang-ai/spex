@@ -359,6 +359,42 @@ test("git-host-19/33/34: fresh group contents ignore members and stale local pat
   assert.deepEqual(leaks(host, broadcasts(home.client.messages)), []);
 });
 
+test("git-host-5/19: refresh removes a scheduled group after remote deletion and retains its active same-path replacement", async (t) => {
+  const host = await startHost();
+  const home = await startHome("completed-deletion", { host, project: false, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  const mark = home.client.mark();
+  await signIn(home, host);
+  await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
+  host.script.scheduleGroupDeletion(true);
+  const original = (await home.client.expectOk("space.group.create", { instance: host.url, name: "Original", path: "recoverable", parent: null })).group;
+  await home.client.expectOk("space.group.delete", { instance: host.url, group: original.id, confirmPath: original.fullPath });
+  const replacement = (await home.client.expectOk("space.group.create", { instance: host.url, name: "Replacement", path: original.fullPath, parent: null })).group;
+  const refresh = async () => {
+    const from = home.client.mark();
+    const readAt = instanceOf(await home.client.expectOk("space.get", {}), host.url)?.readAt;
+    await home.client.expectOk("space.refresh", {});
+    return home.client.waitSpace(from, (state) => instanceOf(state, host.url)?.readAt !== readAt && instanceOf(state, host.url)?.read.phase === "idle");
+  };
+  const pending = entriesAt(await refresh(), host);
+  assert.equal(pending.find((group) => group.id === original.id)?.pendingDeletion, true);
+  assert.equal(pending.find((group) => group.id === replacement.id)?.pendingDeletion, undefined);
+
+  // Complete the remote lifecycle independently. The client must learn
+  // disappearance from a successful read, without deleting or restoring again.
+  const originalIndex = host.script.groups.findIndex((group) => group.id === original.id);
+  assert.ok(originalIndex >= 0);
+  host.script.groups.splice(originalIndex, 1);
+  const asked = host.script.requests.length;
+  const completed = entriesAt(await refresh(), host);
+  assert.ok(!completed.some((group) => group.id === original.id));
+  assert.deepEqual(completed.filter((group) => group.fullPath === original.fullPath).map((group) => ({
+    id: group.id, name: group.name, pending: group.pendingDeletion,
+  })), [{ id: replacement.id, name: replacement.name, pending: undefined }]);
+  assert.ok(apiRequests(host, asked).every((request) => request.startsWith("GET ")), "refresh sends no lifecycle mutation");
+  assert.deepEqual(leaks(host, broadcasts(home.client.messages)), []);
+});
+
 test("git-host-19/33/34: missing lifecycle routes explain unavailable operations, preserving groups and genuine refusals in English and Chinese", async (t) => {
   const host = await startHost();
   const home = await startHome("missing-lifecycle", { host, project: false, extra: { signIn: "browser" } });
