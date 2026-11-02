@@ -7,8 +7,8 @@ Spex brings specs and AI workflows into one IDE. Specs describe how a
 system should work and how to check it. A playbook coordinates AI work
 and review through a workflow written in plain language.
 
-A **spec package** shares a spec and related skills or playbooks as a
-versioned package. Packages come from a registry, and
+A **spec package** shares specs, skills, playbooks or applets as a
+versioned bundle. Packages come from a registry, and
 [Spex Space](https://spex.sublang.ai) is the public one: find and publish
 packages there, and add them from a project's **Packages** tab, from
 **Playbooks** for every project of yours, or with the `spex` command

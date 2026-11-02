@@ -9,8 +9,8 @@
 
 *Specs are the source.*
 
-Spex brings specs and AI workflows into one IDE. Reuse a spec and its
-skills or playbooks as a versioned **spec package**: find and publish
+Spex brings specs and AI workflows into one IDE. Reuse specs, skills,
+playbooks or applets as versioned **spec packages**: find and publish
 packages on [Spex Space](https://spex.sublang.ai), and install them from
 the IDE. Space also offers optional project-record sharing and sync.
 
