@@ -210,6 +210,7 @@ test("real CLI installs public packages, isolates private reads and publishing, 
     await publishRelease(new RegistryClient({ url: first.url }), privateFolder);
     await publishRelease(new RegistryClient({ url: unrelated.url }), publicFolder);
     first.script.setPrivate("private", [pair.access]);
+    first.script.setOrgs(pair.access, [{ name: "private", path: "private", role: "Owner" }]);
     const text = `format: 1\nregistry: ${first.url}\nspace: ${unrelated.url}\npackages: {}\n`;
     writeFileSync(join(work, "spex.yaml"), text);
     first.script.clearRequests();
@@ -232,6 +233,7 @@ test("real CLI installs public packages, isolates private reads and publishing, 
     await makeRelease(own, { ...manifest("private"), name: "owned" }, files);
     const published = await cli(home, work, "publish", "private/owned");
     assert.equal(published.code, 0, published.out);
+    assert.ok(first.script.received.some((request) => request.path === "/api/v1/account/orgs" && request.bearer), "publishing rights are checked with the registry grant, the only grant authorized for this org");
     registryStore.replace(pair, null);
     const deniedPublish = await cli(home, work, "publish", "private/owned");
     assert.equal(deniedPublish.code, 1);
