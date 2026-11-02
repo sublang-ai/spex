@@ -1754,8 +1754,8 @@ function FolderEditor({
 
 /** One Space a pick offers (space-58): the spex repositories it lists
  * for the same code, each with the entry it stands in, and where new
- * records may go — "Personal" first, then each group it lists, never
- * another account's login. */
+ * records may go — "Personal" first, then each active group it lists,
+ * never another account's login or a group pending deletion. */
 interface PickSection {
   instance: InstanceState;
   listed: { group: InstanceGroupState; repo: RepositoryState; placement: PlacementState | undefined }[];
@@ -1778,7 +1778,7 @@ export function GroupPicker({ groups, repo, connected, onClose, onNote, onPendin
   const spacePick = store((state) => state.spacePick);
   const sections: PickSection[] = pickInstances(groups, repo).map((instance) => ({
     instance,
-    listed: instance.groups.flatMap((group) => group.repositories
+    listed: instance.groups.filter((group) => !group.pendingDeletion).flatMap((group) => group.repositories
       .filter((other) => other.key !== repo.key && other.id !== null && other.state !== "local-only" && sameCode(other, repo))
       .map((other) => ({ group, repo: other, placement: placementAt(other, instance.origin) ?? rowPlacement(other) }))),
     creatable: [namespaceOf(instance) ?? {
@@ -1786,7 +1786,7 @@ export function GroupPicker({ groups, repo, connected, onClose, onNote, onPendin
       fullPath: instance.account.login, name: instance.account.login,
       can: { createSubgroup: false, manageMembers: false, rename: false, delete: false },
       placed: [], repositories: [],
-    }, ...instance.groups.filter((group) => group.id !== null && group.login === null)
+    }, ...instance.groups.filter((group) => group.id !== null && group.login === null && !group.pendingDeletion)
       .sort((a, b) => a.fullPath.localeCompare(b.fullPath))],
   }));
   const [origin, setOrigin] = useState(() => sections[0]?.instance.origin);
@@ -1823,6 +1823,11 @@ export function GroupPicker({ groups, repo, connected, onClose, onNote, onPendin
     setSelection(undefined);
     setRefusal(undefined);
   }, [groups, origin]);
+  // A destination that disappears or becomes pending deletion needs a
+  // fresh choice if it returns, even when its identity is unchanged.
+  useEffect(() => {
+    if (!busy && selection && !target) setSelection(undefined);
+  }, [busy, selection, target]);
 
   const select = (kind: "create" | "join", key: string, identity: string) => {
     if (!section || submitting.current) return;
