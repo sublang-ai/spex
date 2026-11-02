@@ -539,6 +539,15 @@ function GroupSection({
   const deleteTitle = useId();
   const deleteDescription = useId();
   const restoreRef = useRef<HTMLButtonElement>(null);
+  const settledFocus = useRef<(() => void) | undefined>(undefined);
+  // A timer can run before React reenables these controls. Move focus
+  // after the settled render, when the surviving target can receive it.
+  useLayoutEffect(() => {
+    if (deleting || restoring) return;
+    const focus = settledFocus.current;
+    settledFocus.current = undefined;
+    focus?.();
+  });
   const { name, beside } = groupReading(group, instance);
   // A group a signed-in Space lists names its members; "Personal",
   // another account's login and "This computer" carry no act (DR-114,
@@ -595,17 +604,21 @@ function GroupSection({
       onNote(reply.status === "scheduled"
         ? i18n._("{group} is scheduled for deletion.", { group: name })
         : i18n._("{group} deleted.", { group: name }));
-      setTimeout(() => {
+      const focus = () => {
         if (focusIsOurs()) (restoreRef.current ?? moreRef.current ?? fallback)?.focus();
-      }, 0);
+      };
+      if (reply.status === "scheduled") settledFocus.current = focus;
+      // Immediate deletion unmounts this section, so its layout effect
+      // cannot return focus to the surviving Space heading.
+      else setTimeout(() => { if (focusIsOurs()) fallback?.focus(); }, 0);
     } catch (cause) {
       const message = (cause as Error).message;
       setDeleteError(message);
       setReview(undefined);
       onNote(message);
-      setTimeout(() => {
+      settledFocus.current = () => {
         if (focusIsOurs()) deleteCancelRef.current?.focus();
-      }, 0);
+      };
     } finally {
       deletePending.current = false;
       setDeleting(false);
@@ -621,13 +634,16 @@ function GroupSection({
     try {
       await spaceGroupRestore(instance.origin, hostGroup);
       onNote(i18n._("{group} restored.", { group: name }));
-      setTimeout(() => {
+      settledFocus.current = () => {
         if (document.activeElement === document.body || document.activeElement === button) moreRef.current?.focus();
-      }, 0);
+      };
     } catch (cause) {
       const message = (cause as Error).message;
       setDeleteError(message);
       onNote(message);
+      settledFocus.current = () => {
+        if (document.activeElement === document.body || document.activeElement === button) restoreRef.current?.focus();
+      };
     } finally {
       deletePending.current = false;
       setRestoring(false);
@@ -749,7 +765,6 @@ function GroupSection({
               </>
             ) : <p>{i18n._("This group is empty. Deleting it removes the group for all members.")}</p> : null}
           </div>
-          {review?.contents.length === 0 ? <p className="text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">{i18n._("Deletion may be immediate. If scheduled, you can restore the group before deletion takes effect.")}</p> : null}
           {deleteReason ? <p className="text-xs text-neutral-600 dark:text-neutral-400">{deleteReason}</p> : null}
           {deleteError ? <p role="alert" className="break-words text-xs text-red-600 dark:text-red-400">{deleteError}</p> : null}
           <div className="flex flex-wrap justify-end gap-2">

@@ -267,7 +267,7 @@ When the reader activates "Delete group…" in a group's overflow [[space-1](#sp
 
 - the check reads "Checking…" with deletion unavailable; a failed check remains in place and does not imply emptiness;
 - every returned blocker is shown with its public name and kind — project, group, shared records or server — and prevents deletion, including content absent from the ordinary list; members do not count, and cached local rows never block this fresh check;
-- an empty result enables "Delete group" beside Cancel, without a typed-path field, stating that only empty groups can be deleted and that deletion affects all members; the request sends the reviewed public group path so the Space can refuse a subsequent rename, and contents found by its submit-time check refuse deletion;
+- an empty result enables "Delete group" beside Cancel, without a typed-path field, stating that the group is empty and that deletion affects all members, without hypothetical scheduling or recovery guidance; the request sends the reviewed public group path so the Space can refuse a subsequent rename, and contents found by its submit-time check refuse deletion;
 - Cancel is focused initially and Escape cancels before submission; checking or deletion cannot duplicate, and deletion reads "Deleting…" with cancellation unavailable until the response;
 - a scheduled response leaves the group visible as "Scheduled for deletion", with Restore where permitted [[space-123](#space-123)]; a completed response follows the state without the deleted group [[git-host-19](git-host.md#git-host-19)]; no deadline or recovery period is promised;
 - a refusal stands in the confirmation with the group kept and Cancel focused; cancellation returns focus to the group's overflow, and success leaves focus on a surviving control at its Space.
@@ -279,7 +279,7 @@ While the Space reports a group scheduled for deletion [[git-host-5](git-host.md
 - the scheduled status survives Refresh and is not replaced by another Delete action; an inherited schedule names the reported deletion root as the group to restore, without offering Restore on the child;
 - Restore reads "Restoring…" until its response, prevents a duplicate and is unavailable while disconnected;
 - a successful restoration clears the scheduled presentation as the core's state reports it [[git-host-33](git-host.md#git-host-33)], announces that the group was restored and keeps focus on its surviving heading control;
-- a refusal stays beside the group with its scheduled presentation kept, and no restoration deadline is invented.
+- a refusal stays beside the group with its scheduled presentation kept and focus returned to Restore, and no restoration deadline is invented.
 
 #### space-63
 
@@ -1374,7 +1374,7 @@ Where the harness boots the served shell signed in at the stand-in host, which b
 - replacing that failed token with another known username and explicitly submitting adds the corrected account at the same role without adding the first again; a later duplicate addition is refused in place with the stand-in's words [[space-69](#space-69)];
 - the new controls fit at the 320-pixel floor [[space-28](#space-28)];
 - the member removed after the confirm no longer appears in the stand-in's members [[space-72](#space-72)];
-- an empty group's confirmed deletion, scripted for scheduling, leaves "Scheduled for deletion" visible after Refresh; Restore clears the marker in the page and the stand-in [[space-77](#space-77)] [[space-123](#space-123)].
+- an empty group's confirmed deletion, scripted for scheduling, focuses Restore and leaves "Scheduled for deletion" visible after Refresh; Restore clears the marker in the page and the stand-in, with focus on the group's surviving heading control [[space-77](#space-77)] [[space-123](#space-123)].
 
 #### space-75
 

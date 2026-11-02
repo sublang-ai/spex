@@ -2855,10 +2855,6 @@ msgstr "deleting…"
 msgid "Deleting…"
 msgstr "Deleting…"
 
-#: src/components/SpaceGroups.tsx
-msgid "Deletion may be immediate. If scheduled, you can restore the group before deletion takes effect."
-msgstr "Deletion may be immediate. If scheduled, you can restore the group before deletion takes effect."
-
 #: src/components/CaptainHome.tsx
 msgid "Delivery"
 msgstr "Delivery"
