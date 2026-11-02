@@ -8,7 +8,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { makeRelease } from "@sublang/spex-core/testing";
-import { HOST_LOGIN, addPackages, expect, open, packageRow, packageSource, packagesSection, pickGroup, projectTab, signInCore, signInRegistryCore, selectRegistryCore, test } from "../src/harness";
+import { HOST_LOGIN, addPackages, expect, open, packageRow, packageSource, packagesSection, pickGroup, playbooksSurface, projectTab, signInCore, signInRegistryCore, selectRegistryCore, test } from "../src/harness";
 
 test.use({ appOptions: { project: true, signedIn: true, host: { registry: true, second: { registry: true } } } });
 
@@ -140,12 +140,13 @@ test("playbook-library-117: install a private known package with explicit requir
   const state = await app.core.command("environment.get", { repository: project.key });
   expect(state.requests["public/notes"]).toEqual({ kind: "registry", version: "^1.0.0" });
 
-  // The Personal heading beneath holds an Add… of its own, carrying
-  // nothing of the project's (playbook-library-92).
-  const personal = packagesSection(page, "personal");
-  await expect(personal.getByTestId("add-note")).toHaveCount(0);
-  await addPackages(personal, "Registry");
-  await expect(personal.getByTestId("registry-query")).toHaveValue("");
-  await expect(personal.getByTestId("known-package-request")).toHaveCount(0);
-  await expect(personal.getByTestId("known-package-request-error")).toHaveCount(0);
+  // The Playbooks surface holds an Add… of its own for the global
+  // packages, carrying nothing of the project's (playbook-library-122).
+  await playbooksSurface(page);
+  const global = packagesSection(page, "global");
+  await expect(global.getByTestId("add-note")).toHaveCount(0);
+  await addPackages(global, "Registry");
+  await expect(global.getByTestId("registry-query")).toHaveValue("");
+  await expect(global.getByTestId("known-package-request")).toHaveCount(0);
+  await expect(global.getByTestId("known-package-request-error")).toHaveCount(0);
 });

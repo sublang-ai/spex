@@ -176,10 +176,10 @@ test("settings-29: the Captain row's editor round-trips the shared config", asyn
   await expect(chip).toContainText("claude-opus-5-5");
 });
 
-test.describe("a player the project names", () => {
+test.describe("players to set up", () => {
   test.use({ appOptions: { project: true, homeConfig: true } });
 
-  test("settings-46: a player the project names and your own roster lacks is added here from the neutral block", async ({
+  test("settings-47: a player a binding names and your roster lacks plays on the Captain's agent until Add creates it from the Captain's block", async ({
     page,
     app,
   }) => {
@@ -191,9 +191,12 @@ test.describe("a player the project names", () => {
     // The project's config binds review's reviewer to a player your
     // own group's roster lacks, by name alone (core-service-2), as a
     // teammate's file arrives while the core runs: it reloads on the
-    // change, with no restart.
+    // change, with no restart. The global environment places /inspect,
+    // which no entry binds: its role plays the default `dev.inspector`,
+    // which the roster lacks too.
     mkdirSync(dirname(projectConfig), { recursive: true });
     writeFileSync(projectConfig, "playbooks:\n  review:\n    roles:\n      coder: dev.coder\n      reviewer: dev.auditor\n");
+    expect(parse(app.readConfig()).playbooks.inspect).toBeUndefined();
 
     // The surface names the file it writes — your own group's — by its
     // path alone: no spex repository, and no project file offered as
@@ -203,16 +206,28 @@ test.describe("a player the project names", () => {
     await expect(page.getByText(/Your own group's config|edited in Playbooks/)).toHaveCount(0);
     await expect(page.locator('[title*="edited in Playbooks"]')).toHaveCount(0);
 
-    // The roster shows the missing player, named by its project, with
-    // Add (settings-46).
-    const missing = page.getByTestId("player-missing-dev.auditor");
-    await expect(missing).toBeVisible();
-    await expect(missing.getByTestId("player-missing-note-dev.auditor")).toHaveText("Named by demo-project, not set up here");
-    await expect(missing.getByTestId("player-missing-note-dev.auditor")).toHaveAttribute("title", "Answers review.reviewer");
-    expect(parse(app.readConfig()).players["dev.auditor"]).toBeUndefined();
-    await missing.getByTestId("player-missing-add-dev.auditor").click();
-    await expect.poll(() => parse(app.readConfig()).players["dev.auditor"]).toMatchObject({ adapter: "claude" });
-    await expect(missing).toHaveCount(0);
-    await expect(page.getByTestId("players-section").getByTestId("player-row-dev.auditor")).toBeVisible();
+    // The roster shows each as a player to set up, playing on the
+    // Captain's agent, with Add (settings-46); no "not set up here" row
+    // names a project.
+    const captain = parse(app.readConfig()).captain;
+    for (const [player, position] of [["dev.inspector", "inspect.inspector"], ["dev.auditor", "review.reviewer"]] as const) {
+      const row = page.getByTestId(`player-row-${player}`);
+      await expect(row).toHaveAttribute("data-to-set-up", "true");
+      await expect(row.getByTestId(`player-setup-${player}`)).toHaveText("Plays on the Captain's agent");
+      await expect(row.getByTestId(`player-setup-${player}`)).toHaveAttribute("title", new RegExp(position.replace(".", "\\.")));
+      expect(parse(app.readConfig()).players[player]).toBeUndefined();
+    }
+    await expect(page.getByText("not set up here")).toHaveCount(0);
+
+    // Add creates the player from the Captain's block, and its row
+    // leaves the players to set up.
+    for (const player of ["dev.auditor", "dev.inspector"]) {
+      const row = page.getByTestId(`player-row-${player}`);
+      await row.getByTestId(`player-setup-add-${player}`).click();
+      await expect.poll(() => parse(app.readConfig()).players[player]).toMatchObject({ adapter: captain.adapter, model: captain.model });
+      await expect(row).not.toHaveAttribute("data-to-set-up", "true");
+      await expect(row.getByTestId(`player-setup-${player}`)).toHaveCount(0);
+      await expect(row.getByTestId(`player-edit-${player}`)).toBeVisible();
+    }
   });
 });

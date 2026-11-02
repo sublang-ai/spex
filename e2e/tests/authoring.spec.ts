@@ -4,13 +4,14 @@
 // A playbook authored through the page (playbook-library-77, DR-058,
 // DR-104): the served shell with the authoring fake script and a stub
 // `slc` on the toolchain path — failing once at gears2fsm, then
-// passing — worked from "New playbook" to `/triage` enabled in the
+// passing — worked from "New playbook" to `/triage` added to the
 // project, its spec package under development requested by path from
 // the project's working folder, with the workspace measured stacked at
-// the 320px floor along the way. The paste path (playbook-library-85,
-// DR-086): the example's Prefill used as the source, compiled from the
-// workspace's own control by the passing stub, and enabled on the
-// form's derived defaults, the agent proposing nothing.
+// the 320px floor along the way (DR-176). The paste path
+// (playbook-library-85, DR-086): the example's Prefill used as the
+// source, compiled from the workspace's own control by the passing
+// stub, and added on the form's derived defaults, the agent proposing
+// nothing.
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -74,7 +75,7 @@ async function pageScrolls(page: Page): Promise<{ x: boolean; y: boolean }> {
   });
 }
 
-test("playbook-library-77: a new playbook is authored, compiled, and enabled through the page", async ({
+test("playbook-library-77: a new playbook is authored, compiled, and added through the page", async ({
   page,
   app,
 }) => {
@@ -82,7 +83,7 @@ test("playbook-library-77: a new playbook is authored, compiled, and enabled thr
   await page.setViewportSize({ width: 1280, height: 800 });
   await open(page, app);
   await projectTab(page, "Playbooks");
-  await expect(page.getByTestId("playbooks-enabled")).toBeVisible();
+  await expect(page.getByTestId("playbooks-global")).toBeVisible();
 
   // ── New playbook: the id inline beside Org and License filled with
   //    the project's defaults — its key's first segment, and the
@@ -111,10 +112,10 @@ test("playbook-library-77: a new playbook is authored, compiled, and enabled thr
   await expect(divider).toBeVisible();
   await expect(divider).toHaveAttribute("aria-orientation", "vertical");
   const tabs = page.getByRole("tablist", { name: "Draft artifacts" });
-  for (const name of ["Source", "Gears", "Machine", "Enable"]) {
+  for (const name of ["Source", "Gears", "Machine", "Add"]) {
     await expect(tabs.getByRole("tab", { name, exact: true })).toBeVisible();
   }
-  for (const name of ["Gears", "Machine", "Enable"]) {
+  for (const name of ["Gears", "Machine", "Add"]) {
     await expect(tabs.getByRole("tab", { name, exact: true })).toBeDisabled();
   }
   const compile = page.getByTestId("compile-button");
@@ -224,7 +225,7 @@ test("playbook-library-77: a new playbook is authored, compiled, and enabled thr
   // the compiled tabs stand disabled with their reason; outputs a
   // failed run leaves show as it left them (playbook-library-58,
   // playbook-library-60).
-  for (const name of ["Gears", "Machine", "Enable"]) {
+  for (const name of ["Gears", "Machine", "Add"]) {
     await expect(tabs.getByRole("tab", { name, exact: true })).toBeDisabled();
     await expect(tabs.getByRole("tab", { name, exact: true })).toHaveAttribute("title", "Compiles first");
   }
@@ -251,8 +252,8 @@ test("playbook-library-77: a new playbook is authored, compiled, and enabled thr
   await expect(queue).toHaveCount(0);
   await expect(page.getByTestId("boss-bubble").filter({ hasText: QUEUED_MESSAGE })).toBeVisible();
   const proposal = thread.locator('[data-testid="directive-card"][data-kind="register"]');
-  await expect(proposal).toContainText("Proposed enabling");
-  await expect(proposal).toContainText("/triage");
+  await expect(proposal).toContainText("Proposed /triage");
+  await expect(proposal.getByTestId("open-add")).toHaveText("Open Add");
   await expect(proposal).toContainText("dev.triager");
   await expect(page.getByTestId("draft-working")).toHaveCount(0);
   await expect(send).toHaveText("Send");
@@ -263,7 +264,7 @@ test("playbook-library-77: a new playbook is authored, compiled, and enabled thr
   await expect(page.getByTestId("item-toggle-triage-1")).toBeVisible();
   await tabs.getByRole("tab", { name: "Machine", exact: true }).click();
   await expect(page.getByTestId("stage-states-draft-triage")).toContainText("ready");
-  await expect(page.getByTestId("tab-dot-enable")).toBeVisible();
+  await expect(page.getByTestId("tab-dot-add")).toBeVisible();
   await tabs.getByRole("tab", { name: "Source", exact: true }).click();
 
   // ── Edit, Save, a forced conflict, and Paste (playbook-library-56).
@@ -342,7 +343,7 @@ test("playbook-library-77: a new playbook is authored, compiled, and enabled thr
   await expect(page.getByTestId("boss-bubble").first()).toContainText(FIRST_MESSAGE);
   await expect(page.getByTestId("boss-bubble").filter({ hasText: QUEUED_MESSAGE })).toBeVisible();
   await expect(compileCards).toHaveCount(2);
-  await expect(proposal).toContainText("Proposed enabling");
+  await expect(proposal).toContainText("Proposed /triage");
   await expect(switched).toBeVisible();
   await expect(agent).toContainText("dev.reviewer");
   await expect(source).toContainText("every proposed label was applied");
@@ -382,21 +383,20 @@ test("playbook-library-77: a new playbook is authored, compiled, and enabled thr
   expect(await pageScrolls(page)).toEqual({ x: false, y: false });
   // The tabs collapsed to icons keep their names.
   expect(await workspaceNames(page)).toEqual(wideNames);
-  for (const name of ["Source", "Gears", "Machine", "Enable"]) {
+  for (const name of ["Source", "Gears", "Machine", "Add"]) {
     await expect(tabs.getByRole("tab", { name, exact: true })).toBeVisible();
   }
   await page.setViewportSize({ width: 1280, height: 800 });
   await expect(divider).toBeVisible();
 
-  // ── Enable: the tab prefilled from the proposal, "Enable for" offering
-  //    the project by its name, its default, and Personal, the form
-  //    carrying no caption on what Enable writes and the disabled
-  //    Enable saying what it waits for; then `/triage` enabled in the
-  //    project, its card saying to commit the package with the code,
-  //    the package listed under "Packages" from its folder, the
-  //    authoring session staying (playbook-library-61,
+  // ── Add: the tab prefilled from the proposal, asking no destination,
+  //    the form carrying no caption on what Add writes and the disabled
+  //    Add saying what it waits for; then `/triage` added to the
+  //    project, listed under its name with its card saying to commit the
+  //    package with the code, the package listed under "Packages" from
+  //    its folder, the authoring session staying (playbook-library-61,
   //    playbook-library-92).
-  await tabs.getByRole("tab", { name: "Enable", exact: true }).click();
+  await tabs.getByRole("tab", { name: "Add", exact: true }).click();
   const form = page.getByTestId("register-form");
   await expect(form).toContainText("Prefilled from the agent's proposal");
   await expect(page.getByTestId("register-id")).toHaveValue("triage");
@@ -406,9 +406,9 @@ test("playbook-library-77: a new playbook is authored, compiled, and enabled thr
   );
   await expect(page.getByTestId("register-player-Triager")).toHaveValue("new:dev.triager");
   await expect(page.getByTestId("register-player-Verifier")).toHaveValue("dev.coder");
-  const enableFor = form.getByLabel("Enable for");
-  await expect(enableFor).toHaveValue(app.projectId!);
-  await expect(enableFor.locator("option")).toHaveText(["demo-project", "Personal (every project of yours)"]);
+  await expect(page.getByTestId("register-repository")).toHaveCount(0);
+  await expect(form).not.toContainText("Enable for");
+  await expect(form).not.toContainText("Personal");
   await expect(form).not.toContainText("Requests the spec package by path");
   await expect(form).not.toContainText("Every role needs a player");
   const submit = page.getByTestId("register-submit");
@@ -417,23 +417,23 @@ test("playbook-library-77: a new playbook is authored, compiled, and enabled thr
   await expect(submit).toHaveAttribute("title", "A player per role, a command and an intent");
   await page.getByTestId("register-command").fill("triage");
   await expect(submit).toBeEnabled();
-  await expect(page.getByTestId("tab-dot-enable")).toHaveCount(0);
+  await expect(submit).toHaveText("Add");
+  await expect(page.getByTestId("tab-dot-add")).toHaveCount(0);
   expect(app.readProjectConfig()).not.toContain("triage:");
   await submit.click();
-  const card = page.getByTestId("playbooks-enabled").getByTestId("playbook-card-triage");
+  const card = page.getByTestId("playbooks-project").getByTestId("playbook-card-triage");
   await expect(card).toBeVisible();
+  await expect(page.getByTestId("playbooks-project").getByRole("heading").first()).toHaveText("demo-project");
   await expect(card).toContainText("/triage");
-  await expect(card.getByTestId("playbook-enabled-triage")).toHaveText("in demo-project");
   await expect(card.getByTestId("playbook-from-triage")).toHaveText(new RegExp(`^from\\s*${org}/triage 0\\.1\\.0$`));
-  // Listed once, the project's environment alone exporting it: its act
-  // writes the project's config, with no overflow (playbook-library-1).
+  // Listed once, the project's environment alone placing it, with no
+  // switch and no scope (playbook-library-1).
   await expect(page.getByTestId("playbook-card-triage")).toHaveCount(1);
-  await expect(card.getByTestId("playbook-disable-triage")).toHaveText("Disable");
-  await expect(card.getByTestId("playbook-personal-triage")).toHaveCount(0);
-  await expect(card.getByTestId("enabled-note")).toContainText("Enabled · restart running sessions to use it");
-  await expect(card.getByTestId("enabled-commit")).toHaveText("Commit spex-packages/acme/triage with your code");
+  for (const words of ["Enable", "Disable", "in demo-project", "Personal"]) await expect(card).not.toContainText(words);
+  await expect(card.getByTestId("added-note")).toContainText("Added · restart running sessions to use it");
+  await expect(card.getByTestId("added-commit")).toHaveText("Commit spex-packages/acme/triage with your code");
   await expect(workspace).toHaveCount(0);
-  await expect(page.getByTestId("draft-row-triage").getByTestId("draft-chip")).toContainText("Enabled");
+  await expect(page.getByTestId("draft-row-triage").getByTestId("draft-chip")).toContainText("Added");
   await projectTab(page, "Packages");
   const requested = packageRow(packagesSection(page, "project"), `${org}/triage`);
   await expect(packageSource(requested, `${org}/triage`)).toHaveAttribute("title", "From folder spex-packages/acme/triage");
@@ -557,7 +557,7 @@ test.describe("the pasted example", () => {
   // The passing stub on its first run — nothing held, nothing relayed
   // — and an agent whose answer to the success turn that follows every
   // passing compile (playbook-library-68) proposes nothing, so the
-  // Enable form stands on its derived defaults alone.
+  // Add form stands on its derived defaults alone.
   test.use({
     appOptions: {
       project: true,
@@ -565,7 +565,7 @@ test.describe("the pasted example", () => {
     },
   });
 
-  test("playbook-library-85: the pasted example compiles from the Boss's control and enables", async ({
+  test("playbook-library-85: the pasted example compiles from the Boss's control and is added", async ({
     page,
     app,
   }) => {
@@ -599,12 +599,12 @@ test.describe("the pasted example", () => {
     await expect(page.getByTestId("phase-link")).toHaveAttribute("data-status", "done");
     await expect(chip).toContainText("Compiled");
 
-    // The Enable tab stands with no proposal to prefill it, on the
+    // The Add tab stands with no proposal to prefill it, on the
     // derived defaults — the session's id as the command and, the
     // example holding no prose paragraph, its title as the intent — and
     // a player per derived role (playbook-library-61, playbook-library-7).
     const tabs = page.getByRole("tablist", { name: "Draft artifacts" });
-    await tabs.getByRole("tab", { name: "Enable", exact: true }).click();
+    await tabs.getByRole("tab", { name: "Add", exact: true }).click();
     const form = page.getByTestId("register-form");
     await expect(form).toBeVisible();
     await expect(form).not.toContainText("Prefilled from the agent's proposal");
@@ -616,22 +616,22 @@ test.describe("the pasted example", () => {
     }
     await page.getByTestId("register-submit").click();
 
-    // The surface lists it among the enabled; the authoring session
-    // stays, reading Enabled (playbook-library-10, playbook-library-61).
-    const card = page.getByTestId("playbooks-enabled").getByTestId(`playbook-card-${draft.id}`);
+    // The tab lists it under the project's name; the authoring session
+    // stays, reading Added (playbook-library-10, playbook-library-61).
+    const card = page.getByTestId("playbooks-project").getByTestId(`playbook-card-${draft.id}`);
     await expect(card).toBeVisible();
     await expect(card).toContainText(`/${draft.id}`);
-    await expect(page.getByTestId(`draft-row-${draft.id}`).getByTestId("draft-chip")).toContainText("Enabled");
+    await expect(page.getByTestId(`draft-row-${draft.id}`).getByTestId("draft-chip")).toContainText("Added");
     await expect.poll(() => app.readProjectConfig()).toContain(`${draft.id}:`);
     // The new session's slash menu: see the journey below.
   });
 
-  test("playbook-library-85: a new session's slash menu offers the enabled example", async ({
+  test("playbook-library-85: a new session's slash menu offers the added example", async ({
     page,
     app,
   }) => {
     // The slash menu lists the project's composed catalog, so the
-    // example the Enable tab enables in the project's config is offered
+    // example the Add tab adds to the project is offered
     // (playbook-library-85, -41).
     await open(page, app);
     await projectTab(page, "Playbooks");
@@ -639,7 +639,7 @@ test.describe("the pasted example", () => {
     await page.getByTestId("paste-use").click();
     await page.getByTestId("compile-button").click();
     await expect(page.getByTestId("draft-chip")).toContainText("Compiled");
-    await page.getByRole("tablist", { name: "Draft artifacts" }).getByRole("tab", { name: "Enable", exact: true }).click();
+    await page.getByRole("tablist", { name: "Draft artifacts" }).getByRole("tab", { name: "Add", exact: true }).click();
     await page.getByTestId("register-submit").click();
     await expect(page.getByTestId(`playbook-card-${EXAMPLE_ID}`)).toBeVisible();
     await newTaskTab(page);

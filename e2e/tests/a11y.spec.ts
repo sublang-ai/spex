@@ -91,11 +91,17 @@ for (const theme of ["light", "dark"] as const) {
     found.push(...(await scan(page, "Specs")));
 
     await projectTab(page, "Packages");
-    await expect(packagesSection(page, "personal").getByTestId("environment-section")).toBeVisible();
+    await expect(packagesSection(page, "project").getByTestId("environment-section")).toBeVisible();
     found.push(...(await scan(page, "Packages tab")));
 
+    // The Playbooks surface: the global packages, each with its
+    // playbooks beneath it (playbook-library-122).
+    await nav(page, "Playbooks").click();
+    await expect(page.getByTestId("surface-packages").getByTestId("playbook-card-code")).toBeVisible();
+    found.push(...(await scan(page, "Playbooks surface")));
+
     await projectTab(page, "Playbooks");
-    await expect(page.getByTestId("playbooks-enabled")).toBeVisible();
+    await expect(page.getByTestId("playbooks-global")).toBeVisible();
     found.push(...(await scan(page, "Playbooks tab")));
 
     // The authoring workspace, state by state (DR-058).
@@ -138,9 +144,9 @@ for (const theme of ["light", "dark"] as const) {
     await tabs.getByRole("tab", { name: "Machine", exact: true }).click();
     await expect(page.getByTestId("stage-states-draft-triage")).toBeVisible();
     found.push(...(await scan(page, "Workspace (Machine)")));
-    await tabs.getByRole("tab", { name: "Enable", exact: true }).click();
+    await tabs.getByRole("tab", { name: "Add", exact: true }).click();
     await expect(page.getByTestId("register-form")).toBeVisible();
-    found.push(...(await scan(page, "Workspace (Enable)")));
+    found.push(...(await scan(page, "Workspace (Add)")));
     await tabs.getByRole("tab", { name: "Source", exact: true }).click();
     await page.getByTestId("source-edit").click();
     await expect(page.getByTestId("spec-editor")).toBeVisible();

@@ -12,7 +12,9 @@
 
 import type { Locator, Page } from "@playwright/test";
 
-import { test, expect, open, openTranslated, nav, projectTab } from "../src/harness";
+import { AUTHORING_SOURCE } from "@sublang/spex-core/testing";
+
+import { test, expect, open, openTranslated, nav, playbooksSurface, projectTab, type App } from "../src/harness";
 
 const FLOOR = 320;
 const SHORT = 400;
@@ -97,11 +99,27 @@ async function collapseRail(page: Page): Promise<void> {
   await expect(page.getByRole("button", { name: "Show the sidebar" })).toBeVisible();
 }
 
-test.describe("the role editors on a project's Playbooks tab", () => {
+/** A compiled authoring session of the project, arranged over the
+ * protocol (playbook-library-7): its Add tab offers a role a new player
+ * whose agent is set in place at the role's control. */
+async function arrangeCompiled(app: App, id: string): Promise<void> {
+  const projectId = app.projectId!;
+  const { instance } = await app.core.command("draft.create", { projectId, draftId: id, org: projectId.split("/")[0]!, license: "Apache-2.0" });
+  await app.core.command("draft.source.write", { projectId, draftId: id, instance: instance!, content: AUTHORING_SOURCE.replaceAll("<id>", id) });
+  await app.core.command("draft.compile", { projectId, draftId: id, instance: instance! });
+  await expect
+    .poll(async () => (await app.core.command("draft.list", {})).find((draft) => draft.id === id)?.state, { timeout: 60_000 })
+    .toBe("compiled");
+}
+
+test.describe("the role editors", () => {
   let releaseDiscovery: (() => void) | undefined;
-  // The Playbooks tab is a project's (run-view-58, DR-172).
+  // The agent editor at a role's control stands on an authoring
+  // session's Add tab; the binding editor with each role's tuning on
+  // the Playbooks surface (playbook-library-61, playbook-library-122).
   test.use({ appOptions: {
     project: true,
+    authoring: { slc: "ok", phaseDelayMs: 50, script: { fallback: { deltas: ["Compiled."], result: "Compiled." } } },
     discoverAgentModels: async () => {
       await new Promise<void>((resolve) => { releaseDiscovery = resolve; });
       return { status: "available", models: [{ id: "fixture-model", name: "Fixture model" }] };
@@ -121,17 +139,21 @@ test.describe("the role editors on a project's Playbooks tab", () => {
     page,
     app,
   }) => {
+    test.setTimeout(120_000);
+    await arrangeCompiled(app, "triage");
     await open(page, app);
     await collapseRail(page);
-    await projectTab(page, "Playbooks");
-    await expect(page.getByTestId("playbooks-enabled")).toBeVisible();
 
     for (const width of [FLOOR, 480, 1280]) {
       await page.setViewportSize({ width, height: 800 });
 
-      // The agent editor hangs from a 24px gear near the left of its
-      // card, and asks for 384px (settings-33).
-      const gear = page.getByTestId(/^enable-configure-/).first();
+      // The agent editor hangs from a 24px gear beside a role's new
+      // player on the Add tab, and asks for 384px (settings-33).
+      await projectTab(page, "Playbooks");
+      await page.getByTestId("draft-open-triage").click();
+      await page.getByRole("tablist", { name: "Draft artifacts" }).getByRole("tab", { name: "Add", exact: true }).click();
+      await expect(page.getByTestId("register-form")).toBeVisible();
+      const gear = page.getByTestId(/^register-configure-/).first();
       await gear.click();
       const popover = page.getByTestId("agent-popover");
       await expect(popover).toBeVisible();
@@ -160,10 +182,13 @@ test.describe("the role editors on a project's Playbooks tab", () => {
       await pageDoesNotScroll(page);
       await page.keyboard.press("Escape");
       await expect(popover).toHaveCount(0);
+      await page.getByTestId("workspace-back").click();
 
       // The binding editor grows rightwards from a control that sits
-      // further along a wrapping roles row (playbook-library-43).
-      const bind = page.getByTestId("role-bind-review-reviewer");
+      // further along a wrapping roles row (playbook-library-43), on the
+      // Playbooks surface, whose ✎ edits each role's tuning.
+      const surface = await playbooksSurface(page);
+      const bind = surface.getByTestId("role-bind-review-reviewer");
       await bind.scrollIntoViewIfNeeded();
       await bind.click();
       const editor = page.getByTestId("binding-editor-reviewer");
