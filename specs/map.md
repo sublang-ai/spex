@@ -210,6 +210,7 @@ meta.md       The spec of specs
 | [DR-179](decisions/179-invite-several-members-together.md) | 179-invite-several-members-together.md | Invite several members together: removable username tokens, one role, sequential additions with progress and per-user results, retaining failed or unsent entries for explicit retry |
 | [DR-180](decisions/180-choose-a-group-before-adding.md) | 180-choose-a-group-before-adding.md | Choose a group before adding: visible task title and labelled Space, radio choices without side effects, destination and access review, explicit Add to group or Connect project; amends DR-172 and DR-159, extends DR-069 |
 | [DR-181](decisions/181-group-deletion-follows-the-space-policy.md) | 181-group-deletion-follows-the-space-policy.md | Transparent empty-group deletion: fresh named-content checks, simple confirmation, safe deletion requests, scheduled state and restoration |
+| [DR-182](decisions/182-saved-work-is-a-choice-not-setup-debt.md) | 182-saved-work-is-a-choice-not-setup-debt.md | Optional saved-work recovery: recognizable conversations, explicit existing-folder choice, dependent imports folded into one task and retried immediately |
 
 ## Packages
 

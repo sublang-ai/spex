@@ -22,7 +22,7 @@ While the app is connected, the Space surface — reached from the sidebar's Spa
 | --- | --- |
 | sign-in | while the home lists no instance, the sign-in card [[space-3](#space-3)] |
 | refresh | while any instance is signed in, Refresh, which reads every signed-in instance [[git-host-5](git-host.md#git-host-5)] |
-| issues | present while any repair or diagnostic stands, reading "⚠ <n> to fix", <n> being the count the core carries — the repairs this device's reader has not answered [[space-49](#space-49)] and every diagnostic no repair folds [[core-service-86](core-service.md#core-service-86)] — and "⚠" alone, titled "Nothing to fix", where that count is none, opening the issues list in place [[space-55](#space-55)] |
+| issues | while any repair or diagnostic stands, a neutral "Saved work" control opening optional review, or "Needs attention" in the attention colour while a blocking diagnostic stands, with no warning mark or fix count for nonblocking work [[space-55](#space-55)] ([DR-182](../decisions/182-saved-work-is-a-choice-not-setup-debt.md)) |
 | Git | "Git is not installed" with install guidance, replacing every other field, where no `git` runs |
 
 | An instance's heading, while it is | Carries |
@@ -350,46 +350,47 @@ Where the surface shows a seat's place [[run-view-168](run-view.md#run-view-168)
 
 #### space-46
 
-When the core reports the home's diagnostics, it shall fold every diagnostic a folder on this device would repair into one repair each, carrying the facts the repair needs, and leave every other diagnostic unfolded [[core-service-86](core-service.md#core-service-86)] ([DR-063](../decisions/063-space-setup-and-repair.md)):
+When the core reports the home's diagnostics, it shall fold every diagnostic a folder on this device would repair into one task, carrying the facts that task needs, and leave every unrelated diagnostic unfolded [[core-service-86](core-service.md#core-service-86)] ([DR-063](../decisions/063-space-setup-and-repair.md), [DR-182](../decisions/182-saved-work-is-a-choice-not-setup-debt.md)):
 
-| Repair | Raised by | Named by |
+| Repair | Raised by | Presented as |
 | --- | --- | --- |
-| a spex repository with no working folder here | a clone under `workspace/` that no pair names [[storage-2](storage.md#storage-2)] | the project — the spex repository's name with its `-spex` dropped — with its group, "<project> · <group> — Project folder not connected on this computer", the folder it last ran in secondary ([DR-177](../decisions/177-repairs-explain-the-next-step.md), [DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)) |
-| a working folder whose clone is missing | a pair naming a clone that is not under `workspace/` | the folder's path |
+| a spex repository with no working folder here | a clone under `workspace/` that no pair names [[storage-2](storage.md#storage-2)] | saved conversations to continue, with a project name only from valid project metadata and the core's conversation previews; no storage-derived name or project/group composite |
+| a working folder whose clone is missing | a pair naming a clone that is not under `workspace/` | the named folder whose saved records are unavailable |
 
-- one spex repository's repair resolves every session it holds, however many sessions ran there;
-- a fault no folder repairs — a session working directory missing or invalid, a blocking diagnostic, a pending merge — folds into no repair and keeps its own row;
-- repairs stand before unfolded diagnostics, blocking ones first, then unanswered repairs before declined ones [[space-54](#space-54)], then by session count descending, then by name, then by path, and no row reorders while an editor is open.
+- a nonblocking `session-folder-required` diagnostic naming the same repository joins its folder task, its original file and reason kept in that task's technical details and counted no second time; blocking and unrelated diagnostics stay separate;
+- a task's conversation previews show up to three recent title excerpts and the count of further conversations, a known saved date when there is no title and an untitled label when neither is known, never a raw identifier;
+- one chosen folder applies to every conversation held by that repository, with previously used directories labelled explicitly rather than implied to be missing;
+- repairs stand before unfolded diagnostics, blocking ones first, then unanswered before postponed tasks [[space-54](#space-54)], then by session count descending, name and path, with no reordering while an editor is open.
 
 #### space-47
 
-When the user pairs a repair's spex repository with the folder proposed [[space-53](#space-53)] or with one he names, or declines to, the Space surface shall settle that repair in place, its row offering "Use <folder>", <folder> being the folder proposed, where one is, "Choose folder…" and "Not on this computer" ([DR-065](../decisions/065-repairs-the-reader-answers.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)):
+When the user chooses a repair's existing project folder or postpones the task, the Space surface shall settle that choice in place ([DR-182](../decisions/182-saved-work-is-a-choice-not-setup-debt.md)):
 
-- pairing a folder the home already pairs with that spex repository sets that pair's folder, carrying the repair's recorded directories as aliases so every session recorded under them may continue [[storage-6](storage.md#storage-6)];
-- pairing a folder the home pairs with nothing writes the pair [[storage-6](storage.md#storage-6)], and where that folder is not one the repair records, attaches those recorded directories to it as aliases;
-- naming a different folder, through "Choose folder…", opens the row as an in-place editor over the proposed or recorded path, with Use this folder, Cancel, Escape cancelling, and a Browse… control where the running deployment offers a directory picker, the field labelled "Project folder for <name>";
-- the editor reads "Folder location saved only on this computer", naming the location as what never syncs [[storage-1](storage.md#storage-1)] ([DR-177](../decisions/177-repairs-explain-the-next-step.md));
-- a refusal shows in the row with the path kept and the control offered again: a folder inside another working folder, a folder already another spex repository's, and a spex repository whose turn is still running;
-- a sync of that spex repository running meanwhile disables no repair control and refuses no rebind [[space-21](#space-21)];
-- at a remote place [[run-view-169](run-view.md#run-view-169)] a repair offers neither a folder nor "Use <folder>": a seat's core allocates every folder itself [[space-103](#space-103)].
+- a task holding conversations is headed "Continue <n> saved conversations", with the count of its saved conversations and states that choosing an existing project folder lets those conversations continue there; "Choose project…" opens the editor, "Use <folder>" may directly accept a checked proposal [[space-53](#space-53)], and "Not now" postpones it [[space-49](#space-49)];
+- the editor asks where the conversations should continue, labels its field "Existing project folder", starts with only the checked proposal or an empty value, offers Browse… where a directory picker exists, and states that the selection applies to all conversations in the task and creates no project;
+- Use this folder confirms the candidate, Cancel and Escape cancel without changing it, and a refusal stays beside the field with its value kept;
+- confirmation applies the existing-identity folder choice [[core-service-85](core-service.md#core-service-85)], recording the previous directories as aliases so those conversations resolve to the chosen folder [[storage-6](storage.md#storage-6)];
+- a different folder already paired elsewhere, a nested working folder and a running turn remain refusals [[core-service-85](core-service.md#core-service-85)];
+- sync does not disable the choice [[space-21](#space-21)];
+- at a remote place [[run-view-169](run-view.md#run-view-169)] the task names the server and offers no folder selection, since its core allocates folders [[space-103](#space-103)].
 
 #### space-48
 
-When pairing a repair's spex repository succeeds with every recorded folder attached [[space-47](#space-47)], the Space surface shall replace that row with its outcome in the row's own place, keeping the reader on the surface ([DR-009](../decisions/009-at-hand-interaction.md)) ([DR-063](../decisions/063-space-setup-and-repair.md)):
+When a repair's folder is saved with its recorded directories attached [[space-47](#space-47)], the Space surface shall replace that task in place with an outcome confirming the saved folder, without claiming that every older conversation could be opened ([DR-182](../decisions/182-saved-work-is-a-choice-not-setup-debt.md)):
 
-- the outcome names the project and the folder it is now a project at, with the count of sessions listed where any ran there, and offers Open project, which is the only control here that leaves the surface;
-- the core no longer reports the repair, so the issues count leaves it out [[space-1](#space-1)], and the live region says "<n> left to fix." as that count reads — declined repairs not among them [[space-49](#space-49)] — or "Nothing left to fix." where none is ([DR-172](../decisions/172-surfaces-a-fresh-user-reads.md));
-- focus moves to the first control of the next unanswered repair below it, wrapping to the list's top — its "Use <folder>" where it proposes a folder, else its "Choose folder…" — or, where no unanswered repair remains, to the outcome's Open project;
-- the outcome holds that place, the issues list standing with it though the core reports no diagnostic, until the reader's own Refresh [[space-2](#space-2)] or his leaving the Sync tab, when it leaves the list.
+- Open project alone leaves the review; any import still refused keeps its own diagnostic [[core-service-85](core-service.md#core-service-85)];
+- the live region confirms the saved-folder outcome;
+- focus moves to the next unanswered task's first action, wrapping to the top, or to the outcome's Open project when none remains;
+- the outcome holds its place through background reads until the reader's Refresh [[space-2](#space-2)] or leaving the surface.
 
 #### space-49
 
-While a repair stands unanswered, the Space surface shall count it as an issue [[space-1](#space-1)], only this device's reader's own act settling it ([DR-065](../decisions/065-repairs-the-reader-answers.md)):
+While a task stands unanswered, the core shall count it as an unresolved task, only this device's reader's act settling it ([DR-065](../decisions/065-repairs-the-reader-answers.md), [DR-182](../decisions/182-saved-work-is-a-choice-not-setup-debt.md)):
 
-- drawing a row, opening the list and re-reading the state settle nothing;
-- declining, with "Not on this computer", says this is not a project on this device: its tooltip says that the reminder is set aside here and saved sessions stay, and the row stands in the list, counts no more, and keeps the controls it had, so changing that answer is pairing the project rather than undoing anything ([DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md));
-- resolving a repair removes it from the list, the core no longer reporting it;
-- an answer lapses only when the repair's own recorded facts change, never because a folder appeared or vanished beneath it.
+- drawing the task, opening review or re-reading state settles nothing;
+- Not now postpones optional recovery, keeps saved conversations and stops counting that task without claiming the project is absent from this computer;
+- the postponed task remains reachable as "For later", with its folder choice still available;
+- resolving removes the repair, and postponement lapses only when its recorded facts change, not when a folder appears or disappears.
 
 #### space-53
 
@@ -406,11 +407,11 @@ When the core reports a repair, it shall check the folders that repair already n
 - exactly one folder present, a work tree root and unclaimed is the proposal; two qualifying folders propose nothing, and the row asks instead;
 - the check lists no directory and descends none, so a path never reported is a path never examined;
 - a check is bounded and one that exceeds it reports unknown, so an unreachable folder never delays the surface's read [[space-2](#space-2)];
-- the surface renders what was found before any control can accept it, an absent recorded folder reading "Last-used folder not found on this computer", an unknown check claiming no absence, and a recorded folder present but not a work tree root reading "Not a Git project folder — choose the project folder, not its parent" ([DR-177](../decisions/177-repairs-explain-the-next-step.md)).
+- the surface keeps checks beside their explicitly named previously used folders inside Technical details, with an unknown check claiming neither absence nor an invalid project; a failed candidate submission names that candidate and the existing-project requirement [[core-service-85](core-service.md#core-service-85)] ([DR-182](../decisions/182-saved-work-is-a-choice-not-setup-debt.md)).
 
 #### space-54
 
-While this device's reader has declined to pair a repair's spex repository, the core shall hold that answer in this device's preferences alone, keyed by the facts the repair names [[storage-5](storage.md#storage-5)] ([DR-065](../decisions/065-repairs-the-reader-answers.md)):
+While this device's reader has postponed a repair's folder choice, the core shall hold that answer in this device's preferences alone, keyed by the facts the repair names [[storage-5](storage.md#storage-5)] ([DR-065](../decisions/065-repairs-the-reader-answers.md)):
 
 - the record is written only when he declines, and removed when the repair is answered otherwise, never by a read or a render;
 - a repair whose recorded facts change is another repair, so it carries no record and counts afresh;
@@ -419,32 +420,26 @@ While this device's reader has declined to pair a repair's spex repository, the 
 
 #### space-55
 
-While the issues list stands, the Space surface shall tell a repair's three conditions apart by mark, by word and by weight, each named in the row's accessible description ([DR-065](../decisions/065-repairs-the-reader-answers.md)) ([DR-010](../decisions/010-interface-craft.md) §8):
+While saved-work diagnostics exist, the Space surface shall offer a review that distinguishes optional recovery from work requiring attention ([DR-182](../decisions/182-saved-work-is-a-choice-not-setup-debt.md)):
 
-| Condition | Mark | Row |
-| --- | --- | --- |
-| unanswered | a filled dot | the project and its group, where its sessions ran, what the core found, and its controls |
-| declined | a hollow dot | "set aside" after the fact, in the surface's secondary tone, its controls kept |
-| resolved | a check | the project, the folder it is now a project at and the sessions listed, with Open project [[space-48](#space-48)] |
-
-- the list's heading reads "To fix (<n>)", <n> counting the unanswered repairs, followed by " · <m> set aside" while <m> declined ones stand ([DR-172](../decisions/172-surfaces-a-fresh-user-reads.md));
-- the issues list and the header's control wear the surface's attention colour only while a repair stands unanswered, reading as settled — and staying reachable — once none does;
-- a declined row holds its place until the reader's own Refresh [[space-2](#space-2)] or his leaving the Sync tab, then standing after the unanswered repairs [[space-46](#space-46)].
+- nonblocking review is neutral, headed "Saved work", initially closed and opened by its header control [[space-1](#space-1)], with one explanation that the reader may choose what to use again and leave the rest for later;
+- a blocking diagnostic opens review and gives its heading and header control attention styling, without turning unrelated optional tasks into blocking errors;
+- each task has one recognizable heading, its necessary purpose and its controls, separated by spacing or dividers rather than one large warning field;
+- postponed tasks read "For later" in a secondary tone, and resolved tasks show the saved-folder outcome [[space-48](#space-48)];
+- a postponed task keeps its place until the reader's Refresh [[space-2](#space-2)] or leaving the surface, then stands after unanswered tasks [[space-46](#space-46)].
 
 #### space-121
 
-While an unfolded storage diagnostic other than a pending merge stands, the Space surface shall present its cause and next step in plain language, using the core's optional code rather than matching its reason [[core-service-86](core-service.md#core-service-86)], with the original file and reason inside collapsed Details ([DR-177](../decisions/177-repairs-explain-the-next-step.md)):
+While an unfolded storage diagnostic other than a pending merge stands, the Space surface shall describe what saved work is unavailable, using the core's optional code rather than matching its reason [[core-service-86](core-service.md#core-service-86)], with original file and reason inside collapsed Technical details ([DR-182](../decisions/182-saved-work-is-a-choice-not-setup-debt.md)):
 
-| Code | Summary | Next step |
-| --- | --- | --- |
-| `session-import` or `session-upgrade` | Older session not imported | Share these details for help recovering this session |
-| `session-folder-required` | Older session needs a project folder | Choose its project folder, then restart Spex to retry |
-| absent or unknown | Saved data needs attention | Share these details for help repairing this data |
+| Case | Meaning shown |
+| --- | --- |
+| `session-import` or `session-upgrade` | an older conversation cannot be opened; Spex could not read it and the original file is preserved |
+| unmatched `session-folder-required` | a saved conversation needs an existing project folder, with no instruction to restart the app or select a folder on a server |
+| absent or unknown code | saved data cannot be used, with technical details available without inventing a cause or recovery |
 
-- blocking reads "Needs repair before continuing"; nonblocking reads "Other work can continue";
-- at a remote place the missing-folder case asks to share Details for help recovering the session, offering no local folder choice [[space-47](#space-47)];
-- the code never implies that an import failed because data was corrupt, or that a repair is automatic;
-- paths and technical reasons wrap inside Details without widening the surface.
+- no instruction asks the person to share details through an unspecified support route, and nonblocking impact is not repeated on every row;
+- technical paths and reasons wrap without widening the surface.
 
 ### Changes
 
@@ -745,7 +740,7 @@ The Space surface shall fit its pane at every width down to the 320-pixel floor 
 - below 20rem the header's fields stack with the primary control last and full-width, and an instance heading's stack with its primary control full-width and its overflow after it, as in every width ([DR-172](../decisions/172-surfaces-a-fresh-user-reads.md));
 - in each repository row and change row the label owns the slack and truncates with its title, the code glyph and detail hiding below 28rem, the row's control keeping its accessible name;
 - the tree and preview stand side by side from 42rem and stack below it, the preview under the tree; the preview's box scrolls inside itself and the diff box scrolls sideways as a canvas;
-- every control reads at most 14 characters, its busy form included: Sign in, Sign in again, Signing in…, Sign out, Signing out…, Sync now, Syncing…, Check, Checking…, Stop, Open here, Opening…, Show, More, Disconnect, Resolve, Combine…, Members, Retry, Retrying…, Apply, Applying…, Cancel, Save, Saving…, Adding…, Choose folder…, Open folder…, Open project, View diff, Hide diff, All here, Open session, Show in Finder, Show in folder, Copy path, Refresh, Dismiss, New group, Share, Invite members, Add member, Add members, Delete group, Deleting…, Restore, Restoring…, Create, Creating…, Add, Keep, Add a Space…; a menu's entries and the acts a decision fixes as whole phrases — "Add to a group…", "Connect project", "Remove from this list", "Not on this computer", "Use <folder>", "Use this folder", "Open on <server>", "Show on <server>", "Keep this computer's", "Take <display name>'s", "All <display name>'s" — stand outside the budget and wrap within their row ([DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md), [DR-180](../decisions/180-choose-a-group-before-adding.md));
+- every control reads at most 14 characters, its busy form included: Sign in, Sign in again, Signing in…, Sign out, Signing out…, Sync now, Syncing…, Check, Checking…, Stop, Open here, Opening…, Show, More, Disconnect, Resolve, Combine…, Members, Retry, Retrying…, Apply, Applying…, Cancel, Save, Saving…, Adding…, Choose folder…, Open folder…, Open project, View diff, Hide diff, All here, Open session, Show in Finder, Show in folder, Copy path, Refresh, Dismiss, New group, Share, Invite members, Add member, Add members, Delete group, Deleting…, Restore, Restoring…, Create, Creating…, Add, Keep, Add a Space…; a menu's entries and the acts a decision fixes as whole phrases — "Add to a group…", "Connect project", "Choose project…", "Needs attention", "Technical details", "Remove from this list", "Not on this computer", "Use <folder>", "Use this folder", "Open on <server>", "Show on <server>", "Keep this computer's", "Take <display name>'s", "All <display name>'s" — stand outside the budget and wrap within their row ([DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md), [DR-180](../decisions/180-choose-a-group-before-adding.md));
 - the surface scrolls inside its own box and the page never scrolls.
 
 ### On a Seat
@@ -1266,12 +1261,12 @@ Where the Space surface uses the production store over a controlled command conn
 
 Where the Space surface renders over a home whose issues list holds three unanswered repairs, each proposing its recorded folder, when the reader declines the first, activates the third's "Use <folder>", lets the core deliver a re-read, activates Refresh, then the second's "Use <folder>" and then the declined first's, the core reporting after each act what then remains, the test suite shall assert through the surface:
 
-- the declined row keeps the first place, reading "set aside", the list headed "To fix (2) · 1 set aside" and the header's control reading "⚠ 2 to fix" [[space-55](#space-55)] [[space-49](#space-49)] [[space-1](#space-1)];
-- the third row gives way in its own place to an outcome naming the project, the folder it is now a project at and the sessions listed, the header's control reading "⚠ 1 to fix" and the live region "1 left to fix." [[space-48](#space-48)];
+- the postponed row keeps the first place, reading "For later", and the review and its header control remain neutral, headed "Saved work" [[space-55](#space-55)] [[space-49](#space-49)] [[space-1](#space-1)];
+- the third row gives way in its own place to an outcome confirming the chosen folder and a live-region announcement of that outcome [[space-48](#space-48)];
 - focus rests on the second repair's "Use <folder>", wrapping past the declined row [[space-48](#space-48)];
 - the core's re-read leaves the three rows in their places [[space-48](#space-48)] [[space-55](#space-55)];
 - after Refresh the outcome is gone and the declined row stands after the second [[space-48](#space-48)] [[space-55](#space-55)];
-- the second's "Use <folder>" leaves the live region reading "Nothing left to fix." and focus on its outcome's Open project, which opens that project [[space-48](#space-48)];
+- the second's "Use <folder>" leaves the live region confirming its saved folder and focus on its outcome's Open project, which opens that project [[space-48](#space-48)];
 - the declined repair's "Use <folder>" leaves both outcomes in their places with the core reporting no diagnostic, focus on the new outcome's Open project, until Refresh closes the list [[space-48](#space-48)].
 
 #### space-70
@@ -1439,7 +1434,7 @@ Where the Space surface renders over a signed-in home whose instance lists a gro
 - `alpha`'s primary control reads "Show", offering "Open on lab-1" beside it, `beta`'s "Open here", offering "Show on lab-1", and `acme-spex`'s "Open here" asking for the folder its sessions run in; "Open here" on `beta` sends `space.join` with the folder the picker returns, "Open on lab-1" on `alpha` sends that seat's client `space.join` with no folder once the seat's `signIn` reads `signedIn`, the row reading "Opening on lab-1…" meanwhile, and nothing while it reads `running` [[space-111](#space-111)] [[space-63](#space-63)];
 - a local-only project, once added, stands under "This computer" with no phrase and "Add to a group…", whose form visibly names the project and labels the Space, its "Choose group" listing "Personal" first and then `acme` and "Research", with no destination selected or command sent before confirmation [[space-61](#space-61)] [[space-58](#space-58)];
 - over a placement ended in choices needed, `alpha` reads "1 to send" while it holds a local unit and otherwise "Changed here and at <display name>" with Resolve, Resolve showing the picker beneath the row with "Keep this computer's", "Take <display name>'s", "All here" and "All <display name>'s", while a placement started separately reads "Started separately at <display name>" with "Combine…" and its confirmation [[space-120](#space-120)] [[space-14](#space-14)] [[space-17](#space-17)] [[space-13](#space-13)];
-- a repair row reads "<project> · acme — Project folder not connected on this computer" with the folder beneath it, "Use <folder>" where it proposes one, "Choose folder…" and "Not on this computer", declining sending `space.repair.decline` [[space-46](#space-46)] [[space-47](#space-47)] [[space-49](#space-49)];
+- a repair identifies saved conversations rather than storage names, labels the previously used folder, offers "Use <folder>" for its checked proposal, "Choose project…" and "Not now", postponing sending `space.repair.decline` [[space-46](#space-46)] [[space-47](#space-47)] [[space-49](#space-49)];
 - shown at the seat's place, the same surface reads "Not on lab-1", "Keep lab-1's" and "Spex keeps lab-1's files in <home>" [[space-112](#space-112)];
 - every new control follows the label budget or its fixed-phrase exception and fits at the 320-pixel floor [[space-28](#space-28)].
 
@@ -1449,8 +1444,11 @@ Where the browser journey harness ([DR-039](../decisions/039-browser-acceptance-
 
 #### space-122
 
-Where the Space surface renders over a controlled command connection reporting a folder repair and unfolded diagnostics, the integration suite shall assert the presentation in English and Chinese:
+Where the Space surface renders over a controlled command connection reporting folder recovery and unfolded diagnostics, the integration suite shall assert the English and Chinese review flow:
 
-- an existing recorded folder with no Git root asks for the project's Git folder, its editor names the folder location as saved only here, and declining's tooltip preserves saved sessions [[space-46](#space-46)] [[space-47](#space-47)] [[space-49](#space-49)] [[space-53](#space-53)];
-- the import, upgrade and missing-folder codes show their distinct guidance even when the technical reason says nothing about their cause, and an unknown code takes the generic guidance [[space-121](#space-121)];
-- Details starts collapsed and exposes the file and original reason when opened, while the visible impact distinguishes blocking from nonblocking diagnostics [[space-121](#space-121)].
+- optional recovery starts behind a neutral Saved work control while a blocking diagnostic opens attention-styled review [[space-1](#space-1)] [[space-55](#space-55)];
+- a personal history task shows conversation previews and explicitly labelled previous folders, never the container's name as a project, with known-date and untitled fallbacks and a real project name only when supplied [[space-46](#space-46)];
+- Choose project opens an existing-folder editor with an empty value when the recorded folder is unusable, keeps its candidate on refusal, explains its purpose and scope, and sends only the confirmed choice, Cancel and Escape sending nothing [[space-47](#space-47)];
+- Not now preserves the choice for later, and a saved-folder outcome does not claim all imports succeeded [[space-49](#space-49)] [[space-48](#space-48)];
+- a dependent older-session diagnostic remains in its folder task's details without becoming another task [[space-46](#space-46)];
+- import, upgrade, missing-folder and unknown-code diagnostics show only their supported meanings, with technical evidence collapsed and expandable [[space-121](#space-121)].

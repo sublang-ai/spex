@@ -23,11 +23,6 @@ msgstr " — 调用了 /{playbookId}"
 msgid " — runs {role}"
 msgstr " — 运行 {role}"
 
-#. follows the folder a repair remembers: how many sessions ran in it
-#: src/components/SpaceRepairs.tsx
-msgid " · {count, plural, one {# session ran there} other {# sessions ran there}}"
-msgstr " · {count, plural, other {# 个会话曾在此运行}}"
-
 #. how old the listed data is; follows the Sources summary
 #: src/components/SourcesTabs.tsx
 msgid "— {age}"
@@ -328,11 +323,6 @@ msgstr "{count, plural, other {本轮中同一失败出现 # 次}}"
 msgid "{count} {group} items"
 msgstr "{count} 个{group}条目"
 
-#. the live note once a repair is fixed: how many still wait for an answer
-#: src/components/SpaceRepairs.tsx
-msgid "{count} left to fix."
-msgstr "还有 {count} 项待处理。"
-
 #: src/components/ForgeItemRow.tsx
 msgid "{count} more labels: {rest}"
 msgstr "另有 {count} 个标签：{rest}"
@@ -340,11 +330,6 @@ msgstr "另有 {count} 个标签：{rest}"
 #: src/components/ProjectPalette.tsx
 msgid "{count} running"
 msgstr "{count} 个运行中"
-
-#. the header's control after its warning glyph: how many repairs and problems wait for an answer; opens the list
-#: src/components/SpaceSurface.tsx
-msgid "{count} to fix"
-msgstr "{count} 项待处理"
 
 #. a project's row: how many of its records this computer changed that are not sent yet; Sync now in its overflow sends them
 #: src/lib/space.ts
@@ -355,11 +340,6 @@ msgstr "{count} 项待发送"
 #: src/lib/time.ts
 msgid "{days}d ago"
 msgstr "{days} 天前"
-
-#. the heading of the list of what needs fixing: {count} wait for an answer; '# set aside' counts the repairs the reader answered Not on this computer
-#: src/components/SpaceRepairs.tsx
-msgid "{declined, plural, =0 {To fix ({count})} other {To fix ({count}) · # set aside}}"
-msgstr "{declined, plural, =0 {待处理（{count}）} other {待处理（{count}） · # 项暂不处理}}"
 
 #: src/components/PlaybookAuthoring.tsx
 msgid "{diagnostic} — delete the session, or repair the file and restart Spex"
@@ -509,14 +489,6 @@ msgstr "{name} · 在 {space} 的个人中"
 msgid "{name} · not listed publicly"
 msgstr "{name} · 未公开列出"
 
-#: src/components/SpaceRepairs.tsx
-msgid "{name} · now a project at {path}"
-msgstr "{name} · 已成为项目，位于 {path}"
-
-#: src/components/SpaceRepairs.tsx
-msgid "{name} · now a project at {path}, {count, plural, one {# session} other {# sessions}} listed"
-msgstr "{name} · 已成为项目，位于 {path}，已列出 {count, plural, other {# 个会话}}"
-
 #. a quiet line, with no control, on a team server's Space: a copy of records standing under the server's own heading; {name} is the row's name, {place} the server's name
 #: src/components/SpaceGroups.tsx
 msgid "{name} · on {place}"
@@ -545,11 +517,6 @@ msgstr "{name} 智能体"
 #: src/components/SpaceSync.tsx
 msgid "{name} holds no records yet; Sync will send these"
 msgstr "{name} 尚无记录；同步会把这些发出去"
-
-#. the live note once "Not on this computer" set a repair aside; {name} is the project
-#: src/components/SpaceRepairs.tsx
-msgid "{name} set aside"
-msgstr "{name} 暂不处理"
 
 #: src/components/AgentSettings.tsx
 msgid "{name} settings for this conversation"
@@ -595,7 +562,7 @@ msgstr "{packages, plural, other {# 个规约包}} · {items} 个条目"
 msgid "{path} — needs you"
 msgstr "{path} — 需要你处理"
 
-#. a folder repair's outcome: the project whose records were missing is removed, its folder's files kept; {path} is the folder
+#. the project was removed from the list; its folder's files remain
 #: src/components/SpaceRepairs.tsx
 msgid "{path} · removed"
 msgstr "{path} · 已移除"
@@ -690,26 +657,6 @@ msgstr "{span}前"
 #: src/components/PlaybookStages.tsx
 msgid "{stage} not found beside this playbook's module"
 msgstr "在该规程的模块旁未找到 {stage}"
-
-#. a repair row of a project in no group on a team server's Space; {place} is the server's name; 'set aside' follows once the reader answered Not on the server
-#: src/components/SpaceRepairs.tsx
-msgid "{state, select, aside {{project} — Project folder not connected on {place} · set aside} other {{project} — Project folder not connected on {place}}}"
-msgstr "{state, select, aside {{project} — {place} 尚未关联项目文件夹 · 暂不处理} other {{project} — {place} 尚未关联项目文件夹}}"
-
-#. a repair row of a project in no group: its records are here, no project folder is connected on this computer; 'set aside' follows once the reader answered Not on this computer
-#: src/components/SpaceRepairs.tsx
-msgid "{state, select, aside {{project} — Project folder not connected on this computer · set aside} other {{project} — Project folder not connected on this computer}}"
-msgstr "{state, select, aside {{project} — 本机尚未关联项目文件夹 · 暂不处理} other {{project} — 本机尚未关联项目文件夹}}"
-
-#. a repair row on a team server's Space; {project} is the project, {group} the group holding its records, {place} the server's name; 'set aside' follows once the reader answered Not on the server
-#: src/components/SpaceRepairs.tsx
-msgid "{state, select, aside {{project} · {group} — Project folder not connected on {place} · set aside} other {{project} · {group} — Project folder not connected on {place}}}"
-msgstr "{state, select, aside {{project} · {group} — {place} 尚未关联项目文件夹 · 暂不处理} other {{project} · {group} — {place} 尚未关联项目文件夹}}"
-
-#. a repair row: the project's records are here, no project folder is connected on this computer; {project} is the project, {group} the group holding its records; 'set aside' follows once the reader answered Not on this computer
-#: src/components/SpaceRepairs.tsx
-msgid "{state, select, aside {{project} · {group} — Project folder not connected on this computer · set aside} other {{project} · {group} — Project folder not connected on this computer}}"
-msgstr "{state, select, aside {{project} · {group} — 本机尚未关联项目文件夹 · 暂不处理} other {{project} · {group} — 本机尚未关联项目文件夹}}"
 
 #: src/lib/space.ts
 msgid "{state} · last synced {at}"
@@ -980,6 +927,11 @@ msgstr "每个角色一个 Player、一条命令和一个意图"
 msgid "A reply is needed. Answer or ask Captain to explain."
 msgstr "需要回复。请回答，或请 Captain 解释。"
 
+#. a folder requirement not associated with an actionable recovery card
+#: src/components/SpaceRepairs.tsx
+msgid "A saved conversation needs a project folder"
+msgstr "已保存的会话需要项目文件夹"
+
 #: src/state/dashboard.ts
 msgid "A session failed"
 msgstr "有会话失败"
@@ -1245,8 +1197,6 @@ msgstr "正在添加第 {current} 位，共 {total} 位…"
 msgid "Adding {name} to {group} at {space}"
 msgstr "正在将 {name} 添加到 {space} 的 {group}"
 
-#. a repair's control while the folder is paired with the project
-#. a repair's control while the folder is paired with the project
 #. adding this project to the selected group
 #. the Add form's request is in flight: the playbook is being added
 #. the Use this folder control, while the folder is paired
@@ -1257,7 +1207,6 @@ msgstr "正在将 {name} 添加到 {space} 的 {group}"
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceMembers.tsx
-#: src/components/SpaceRepairs.tsx
 #: src/lib/environments.ts
 msgid "Adding…"
 msgstr "添加中…"
@@ -1397,11 +1346,6 @@ msgstr "你的群组的项目都已在本机打开"
 msgid "Allow this tool operation?"
 msgstr "允许此工具操作？"
 
-#. a repair's evidence: the folder it last ran in is another project's; {project} is that project
-#: src/components/SpaceRepairs.tsx
-msgid "Already the project folder of {project}"
-msgstr "已是 {project} 的项目文件夹"
-
 #. a short mark beside a role's player in the Add form: the player plays in this other playbook too; {playbook} is it, such as /code
 #: src/components/DraftRegisterTab.tsx
 msgid "also in {playbook}"
@@ -1427,9 +1371,24 @@ msgstr "无条件"
 msgid "An agent failed"
 msgstr "有智能体失败"
 
+#. the historical folder was checked as an existing Git project root
+#: src/components/SpaceRepairs.tsx
+msgid "An existing project was found in this folder."
+msgstr "此文件夹中有一个现有项目。"
+
+#. this version could not read an older saved conversation
+#: src/components/SpaceRepairs.tsx
+msgid "An older conversation can’t be opened"
+msgstr "无法打开一段旧会话"
+
 #: src/components/SpaceGroups.tsx
 msgid "An owner can restore {group} to keep this group."
 msgstr "所有者可恢复 {group}，以保留此群组。"
+
+#. additional saved conversations beyond the preview; every conversation is included in the folder choice
+#: src/components/SpaceRepairs.tsx
+msgid "and {count} more"
+msgstr "另有 {count} 段会话"
 
 #: src/components/ParkedRun.tsx
 msgid "Answer below, or drop the run"
@@ -1672,7 +1631,7 @@ msgstr "把文件引入为源文，再请求改编它"
 msgid "Brings back anything new; sends nothing"
 msgstr "只取回新的内容，不发出任何内容"
 
-#. the repair editor's control: opens the system folder picker
+#. open the system picker for an existing project folder
 #: src/components/SpaceRepairs.tsx
 msgid "Browse…"
 msgstr "浏览…"
@@ -1772,6 +1731,7 @@ msgstr "无法连接 {server} — 每秒重试中。"
 msgid "Can't reach the Spex core at {endpoint} — retrying every second. On a served page, check the link's token; on the desktop, restart the app."
 msgstr "无法连接 {endpoint} 上的 Spex 核心 — 每秒重试中。网页端请检查链接中的令牌；桌面端请重启应用。"
 
+#. cancel choosing a project folder
 #. default cancel button: back out of the act
 #. default cancel button: back out of the act
 #. leave an editor without saving
@@ -1779,7 +1739,6 @@ msgstr "无法连接 {endpoint} 上的 Spex 核心 — 每秒重试中。网页�
 #. leave an editor without saving
 #. leave an editor without saving
 #. leave an editor without saving
-#. leave the editor without changing anything
 #. leave the editor without changing anything
 #. leave the editor without changing anything
 #. leave the editor without changing anything
@@ -2018,17 +1977,35 @@ msgstr "选择项目文件夹…"
 msgid "Choose a role"
 msgstr "选择角色"
 
+#. choose a project folder for saved work
+#: src/components/SpaceRepairs.tsx
+msgid "Choose an existing project"
+msgstr "选择一个现有项目"
+
+#. the folder-choice form needs a path before it can save
+#: src/components/SpaceRepairs.tsx
+msgid "Choose an existing project folder"
+msgstr "请选择现有项目的文件夹"
+
+#. explains what the project-folder choice will accomplish
+#: src/components/SpaceRepairs.tsx
+msgid "Choose an existing project folder to continue these conversations there."
+msgstr "选择一个现有项目的文件夹，在其中继续这些会话。"
+
+#. the purpose of choosing a folder when no conversation is indexed
+#: src/components/SpaceRepairs.tsx
+msgid "Choose an existing project folder to use this saved work."
+msgstr "选择一个现有项目的文件夹，以使用这些以往工作。"
+
 #. empty choice of the reasoning-effort select
 #: src/components/TuningField.tsx
 msgid "Choose effort…"
 msgstr "选择推理强度…"
 
-#. on a repair: name the project's folder on this computer
 #. open the system's folder picker
 #. pick the project folder on this computer that a project's records pair with
 #: src/components/EnvironmentSection.tsx
 #: src/components/SpaceGroups.tsx
-#: src/components/SpaceRepairs.tsx
 msgid "Choose folder…"
 msgstr "选择文件夹…"
 
@@ -2041,15 +2018,20 @@ msgstr "为 {count, plural, other {# 处冲突}}选择"
 msgid "Choose group"
 msgstr "选择群组"
 
-#. how to retry an older session import that lacks a project folder
+#. choose an existing project folder for saved work; does not create a project
 #: src/components/SpaceRepairs.tsx
-msgid "Choose its project folder, then restart Spex to retry"
-msgstr "选择其项目文件夹，然后重启 Spex 重试"
+msgid "Choose project…"
+msgstr "选择项目…"
 
 #. a step: the analyst chooses which workflows the request takes
 #: src/lib/step-words.ts
 msgid "Choose the approach"
 msgstr "判断怎么做"
+
+#. older saved work is optional and does not block new work
+#: src/components/SpaceRepairs.tsx
+msgid "Choose what you want to use again. You can leave the rest for later."
+msgstr "选择要继续使用的内容，其余可以以后再处理。"
 
 #: src/components/DraftConversation.tsx
 msgid "Choose which agent answers"
@@ -2510,6 +2492,11 @@ msgstr "与 Spex 核心的连接已断开 — 正在重连。"
 msgid "Continue"
 msgstr "继续"
 
+#. optional task naming how much saved work the folder choice applies to
+#: src/components/SpaceRepairs.tsx
+msgid "Continue {count, plural, one {# saved conversation} other {# saved conversations}}"
+msgstr "继续之前的 {count, plural, other {# 段会话}}"
+
 #. a sign-in in flight: it continues on the Space's page in the browser
 #: src/components/SpaceSignIn.tsx
 msgid "Continue in your browser"
@@ -2518,6 +2505,11 @@ msgstr "在浏览器中继续"
 #: src/components/SpaceMembers.tsx
 msgid "Contribute shared records and manage projects and their members."
 msgstr "可以修改共享记录，并管理项目及其成员。"
+
+#. an untitled conversation identified by its actual saved date
+#: src/components/SpaceRepairs.tsx
+msgid "Conversation saved {date}"
+msgstr "保存于 {date} 的会话"
 
 #: src/components/ApprovalInbox.tsx
 msgid "Conversation: {name}"
@@ -2612,6 +2604,11 @@ msgstr "无法调查"
 #: src/components/SpecView.tsx
 msgid "Could not open {path}"
 msgstr "无法打开 {path}"
+
+#. the native picker failed; the typed-path alternative remains available
+#: src/components/SpaceRepairs.tsx
+msgid "Could not open the folder picker. Enter the folder path instead."
+msgstr "无法打开文件夹选择器，请直接输入文件夹路径。"
 
 #: src/components/SpecView.tsx
 msgid "could not read the file"
@@ -2900,11 +2897,6 @@ msgstr "桌面通知"
 #: src/components/SpaceGroups.tsx
 msgid "Destination"
 msgstr "目标位置"
-
-#. expand a storage warning's original file path and technical reason
-#: src/components/SpaceRepairs.tsx
-msgid "Details"
-msgstr "详情"
 
 #. a call's outcome: no pull request was opened
 #: src/lib/step-words.ts
@@ -3265,6 +3257,11 @@ msgstr "现有及未来的项目记录"
 msgid "Existing project"
 msgstr "已有项目"
 
+#. folder field for continuing saved conversations
+#: src/components/SpaceRepairs.tsx
+msgid "Existing project folder"
+msgstr "现有项目的文件夹"
+
 #: src/components/CaptainHome.tsx
 msgid "Existing specs: {packages, plural, one {# package} other {# packages}} · {items, plural, one {# item} other {# items}}"
 msgstr "已有规约：{packages} 个规约包 · {items} 个条目"
@@ -3506,11 +3503,6 @@ msgstr "按审查意见修改"
 msgid "Fix the player in Settings"
 msgstr "在设置中修复 Player"
 
-#. a repair's condition, for assistive technology: answered and resolved
-#: src/components/SpaceRepairs.tsx
-msgid "Fixed"
-msgstr "已修复"
-
 #. a tab of Add…: add a package from a folder in the project
 #: src/components/EnvironmentSection.tsx
 msgid "Folder"
@@ -3531,14 +3523,14 @@ msgstr "运行其会话的文件夹"
 msgid "Folder its sessions run in on this computer"
 msgstr "本机上运行其会话的文件夹"
 
-#. the repair editor's note: where a project's folder is, is recorded on this computer alone and never syncs
-#: src/components/SpaceRepairs.tsx
-msgid "Folder location saved only on this computer"
-msgstr "文件夹位置仅保存在本机"
-
 #: src/components/CaptainHome.tsx
 msgid "For example:"
 msgstr "例如："
+
+#. this optional task has been deferred
+#: src/components/SpaceRepairs.tsx
+msgid "For later"
+msgstr "稍后处理"
 
 #: src/components/RunView.tsx
 msgid "For new sessions"
@@ -4160,15 +4152,10 @@ msgstr "最后输出：{age}"
 msgid "Last refreshed {age}"
 msgstr "上次刷新：{age}"
 
-#. a repair's evidence: the recorded folder is missing on a team server; {place} is the server's name
+#. deferring this recovery task never deletes saved work
 #: src/components/SpaceRepairs.tsx
-msgid "Last-used folder not found on {place}"
-msgstr "{place} 上未找到上次使用的文件夹"
-
-#. a repair's evidence: the core checked the recorded folder and confirmed that it is missing on this computer
-#: src/components/SpaceRepairs.tsx
-msgid "Last-used folder not found on this computer"
-msgstr "本机上未找到上次使用的文件夹"
+msgid "Leave this for later; saved conversations are kept"
+msgstr "留待以后处理，已保存的会话仍保留"
 
 #. field of New playbook: the SPDX license its spec package is published under
 #: src/components/PlaybookAuthoring.tsx
@@ -4415,25 +4402,22 @@ msgstr "移动“接下来”中选中的行"
 
 #. the folder field's refusal of an empty path
 #. the folder field's refusal of an empty path
-#. the repair editor's refusal of an empty path
 #: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
-#: src/components/SpaceRepairs.tsx
 msgid "Name a folder"
 msgstr "请填写文件夹"
 
+#. saved data currently blocks an operation
+#. saved data currently blocks an operation
 #: src/components/DashboardSurface.tsx
+#: src/components/SpaceRepairs.tsx
+#: src/components/SpaceSurface.tsx
 msgid "Needs attention"
 msgstr "需要关注"
 
 #: src/App.tsx
 msgid "needs recovery"
 msgstr "需要恢复"
-
-#. a storage diagnostic blocks operations that depend on this data
-#: src/components/SpaceRepairs.tsx
-msgid "Needs repair before continuing"
-msgstr "修复后才能继续相关操作"
 
 #. the title of a disabled Open on <server> entry: the project's records name no code remote, so the server cannot fetch its code; the member pushes the code to a Git host first
 #. the title of a disabled Open on <server> entry: the project's records name no code remote, so the server cannot fetch its code; the member pushes the code to a Git host first
@@ -4751,11 +4735,6 @@ msgstr "规范化"
 msgid "Normalized text: the prose as workflow markdown, in slc's normalized form"
 msgstr "规范化文本：自由文本写成的工作流 markdown，采用 slc 的规范化形式"
 
-#. a repair's evidence: the folder it last ran in is here but holds no Git repository
-#: src/components/SpaceRepairs.tsx
-msgid "Not a Git project folder — choose the project folder, not its parent"
-msgstr "不是 Git 项目文件夹 — 请选择项目文件夹，而非其上级文件夹"
-
 #. what a file is, in the records' tree: Spex did not write it
 #: src/lib/space.ts
 msgid "Not a Spex file"
@@ -4822,16 +4801,17 @@ msgstr "未安装"
 msgid "Not installed · private"
 msgstr "未安装 · 私有"
 
-#. a project's records, or a copy of them at a Space, not on the team server whose Space is shown; {place} is the server's name
-#. on a repair at a team server's Space: answer that this project is not kept on the server; {place} is the server's name
+#. leave optional saved-work recovery for later
 #: src/components/SpaceRepairs.tsx
+msgid "Not now"
+msgstr "暂不处理"
+
+#. a project's records, or a copy of them at a Space, not on the team server whose Space is shown; {place} is the server's name
 #: src/lib/space.ts
 msgid "Not on {place}"
 msgstr "不在 {place} 上"
 
 #. a project's records, or a copy of them at a Space, not on this computer
-#. on a repair: answer that this project is not kept on this computer, so it stops counting as something to fix
-#: src/components/SpaceRepairs.tsx
 #: src/lib/space.ts
 msgid "Not on this computer"
 msgstr "不在本机上"
@@ -4891,11 +4871,6 @@ msgstr "{project} 中没有需要关注的内容。"
 msgid "Nothing is repeated"
 msgstr "不会重复任何工作"
 
-#. the live note once the last repair waiting for an answer is fixed
-#: src/components/SpaceRepairs.tsx
-msgid "Nothing left to fix."
-msgstr "没有待处理的了。"
-
 #. a Sync tab's incoming section after a check: the Space holds nothing this computer lacks; {name} is its display name
 #: src/components/SpaceSync.tsx
 msgid "Nothing new at {name}"
@@ -4916,11 +4891,6 @@ msgstr "队列为空 — 写下下一个意图…"
 #: src/components/DashboardSurface.tsx
 msgid "Nothing running."
 msgstr "没有正在运行的工作。"
-
-#. the title of the header's "To fix" control once every repair is answered
-#: src/components/SpaceSurface.tsx
-msgid "Nothing to fix"
-msgstr "没有待处理"
 
 #. a Sync tab's To send list on a team server's Space, nothing in it; {place} is the server's name
 #: src/components/SpaceSync.tsx
@@ -4979,16 +4949,6 @@ msgstr "成功"
 #: src/lib/space.ts
 msgid "older session file"
 msgstr "旧版会话文件"
-
-#. an older session cannot be imported until its project has a folder
-#: src/components/SpaceRepairs.tsx
-msgid "Older session needs a project folder"
-msgstr "旧版会话需要关联项目文件夹"
-
-#. an older session's import failed; this does not imply damaged data
-#: src/components/SpaceRepairs.tsx
-msgid "Older session not imported"
-msgstr "旧版会话尚未导入"
 
 #. History pager: fetch the next page back in time
 #: src/components/ProjectGroup.tsx
@@ -5274,11 +5234,6 @@ msgstr "其他"
 msgid "Other Space…"
 msgstr "其他 Space…"
 
-#. this storage diagnostic does not block unrelated work
-#: src/components/SpaceRepairs.tsx
-msgid "Other work can continue"
-msgstr "其他工作可继续"
-
 #. a registry chooser's last entry: reveals a field for a registry the list does not hold
 #: src/components/RegistryAccount.tsx
 msgid "Other…"
@@ -5520,6 +5475,11 @@ msgstr "上一页"
 msgid "Previous tab in Projects"
 msgstr "项目中的上一个标签页"
 
+#. the historical folder below is evidence, not the new folder selection
+#: src/components/SpaceRepairs.tsx
+msgid "Previously used folder"
+msgstr "之前使用的文件夹"
+
 #. a term shown before the first connection to a team server: the registry sign-in is its own grant; {server} is its name
 #: src/components/SpaceServers.tsx
 msgid "Private packages need a separate registry sign-in on {server}"
@@ -5530,15 +5490,15 @@ msgstr "使用私有规约包需要在 {server} 上单独登录注册中心"
 msgid "Project folder"
 msgstr "项目文件夹"
 
-#. the repair editor's field caption: the folder on this computer that is this project; {name} is the project
-#: src/components/SpaceRepairs.tsx
-msgid "Project folder for {name}"
-msgstr "{name} 的项目文件夹"
-
 #. the field a project's records ask for: the folder its code is in, or is downloaded to
 #: src/components/SpaceGroups.tsx
 msgid "Project folder on this computer"
 msgstr "本机上的项目文件夹"
+
+#. the folder choice succeeded; an older conversation may still have a separate import problem
+#: src/components/SpaceRepairs.tsx
+msgid "Project folder saved: {path}"
+msgstr "已保存项目文件夹位置：{path}"
 
 #: src/components/ProjectPalette.tsx
 msgid "Project path"
@@ -5549,7 +5509,9 @@ msgstr "项目路径"
 msgid "Project records"
 msgstr "项目记录"
 
+#. actual project name from its saved metadata, never a storage name
 #: src/components/SpaceGroups.tsx
+#: src/components/SpaceRepairs.tsx
 msgid "Project: {name}"
 msgstr "项目：{name}"
 
@@ -5833,16 +5795,6 @@ msgstr "重新连接中…"
 msgid "Records"
 msgstr "记录"
 
-#. a folder repair's evidence on a team server's Space; {place} is the server's name
-#: src/components/SpaceRepairs.tsx
-msgid "Records not on {place}"
-msgstr "记录不在 {place} 上"
-
-#. a folder repair's evidence: the project's records are gone from this computer
-#: src/components/SpaceRepairs.tsx
-msgid "Records not on this computer"
-msgstr "记录不在本机"
-
 #: src/lib/failure-catalogue.ts
 msgid "Recover them from your editor's history, if it keeps one"
 msgstr "若编辑器保留历史，可从中恢复"
@@ -5938,11 +5890,11 @@ msgstr "重新加载中…"
 #. a playbook entry that failed: delete it
 #. confirm: forget this project, leaving the repo on disk
 #. confirm: forget this project, leaving the repo on disk
-#. confirm: remove a project whose records are gone from this computer
 #. confirm: take the member out at the Space
 #. confirm: take this player out of the roster
 #. confirm: take this row off the record
 #. queue row control: take this row out of the queue
+#. remove the project from the list
 #. row menu item: take this row out of the queue
 #. take a member out of a group or a project's records at the Space
 #. take the member's credential for a code host or an agent off the team server
@@ -6002,7 +5954,7 @@ msgstr "从 Spex 移除？仓库会保留在磁盘上。"
 msgid "Remove from this list"
 msgstr "从列表中移除"
 
-#. on a repair: remove a project whose records are missing, as the Overview tab's Remove does; its files stay
+#. remove a project whose saved work is missing; its project files stay
 #: src/components/ProjectsSurface.tsx
 #: src/components/SpaceRepairs.tsx
 msgid "Remove project"
@@ -6034,7 +5986,7 @@ msgstr "移除这条消息"
 msgid "Remove this player from the roster"
 msgstr "从名单中移除此 Player"
 
-#. confirm removing a project whose records are gone from this computer; its folder and files stay
+#. confirm removing a project whose saved work is missing
 #: src/components/SpaceRepairs.tsx
 msgid "Remove this project? Its files stay."
 msgstr "移除此项目？其中的文件会保留。"
@@ -6386,6 +6338,11 @@ msgstr "保存"
 msgid "Save ({key})"
 msgstr "保存（{key}）"
 
+#. the requested folder choice was saved
+#: src/components/SpaceRepairs.tsx
+msgid "Saved"
+msgstr "已保存"
+
 #: src/components/SpecView.tsx
 msgid "Saved {path}"
 msgstr "已保存 {path}"
@@ -6399,6 +6356,11 @@ msgstr "已保存 ✓"
 #: src/components/SpaceRepairs.tsx
 msgid "Saved data needs attention"
 msgstr "已保存的数据需要处理"
+
+#. confirmation after deferring an optional saved-work task
+#: src/components/SpaceRepairs.tsx
+msgid "Saved for later. Your conversations are kept."
+msgstr "已留待以后处理，会话仍保留。"
 
 #: src/components/SessionRecovery.tsx
 msgid "Saved input"
@@ -6414,6 +6376,18 @@ msgstr "已保存在 {place}，尚未发送"
 msgid "Saved on this computer, not sent yet"
 msgstr "已保存在本机，尚未发送"
 
+#. open an optional review of earlier saved work
+#. optional review of earlier work available on this computer
+#: src/components/SpaceRepairs.tsx
+#: src/components/SpaceSurface.tsx
+msgid "Saved work"
+msgstr "以往工作"
+
+#. the project's saved conversations are no longer present
+#: src/components/SpaceRepairs.tsx
+msgid "Saved work is missing"
+msgstr "找不到已保存的工作"
+
 #. sync step's name: saving this computer's changes to the records
 #: src/lib/space.ts
 msgid "Saving"
@@ -6422,11 +6396,14 @@ msgstr "保存"
 #. a save is in flight
 #. a save is in flight
 #. a save is in flight
+#. saving the project folder for saved conversations
+#. saving the project folder for saved conversations
 #. sync step running: saving this computer's changes to the records
 #. the Save control, while the save is in flight
 #: src/components/AgentEditor.tsx
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
+#: src/components/SpaceRepairs.tsx
 #: src/components/SpecEditor.tsx
 #: src/lib/space.ts
 msgid "Saving…"
@@ -6475,6 +6452,11 @@ msgstr "生成中…"
 #: src/components/SpaceExplorer.tsx
 msgid "Select an entry to preview"
 msgstr "选择一个条目以预览"
+
+#. choosing a folder is not project creation or Git initialization
+#: src/components/SpaceRepairs.tsx
+msgid "Select an existing project; this does not create one."
+msgstr "请选择一个现有项目，此操作不会创建项目。"
 
 #: src/state/attachments.ts
 msgid "Select up to 16 files and 256 MiB per message."
@@ -6631,21 +6613,6 @@ msgstr "会话"
 msgid "Sessions and project views"
 msgstr "会话与项目视图"
 
-#. a repair's condition, for assistive technology: the reader answered that it is not kept here
-#: src/components/SpaceRepairs.tsx
-msgid "Set aside"
-msgstr "暂不处理"
-
-#. a repair's decline tooltip at a team server's Space; {place} is the server's name
-#: src/components/SpaceRepairs.tsx
-msgid "Set aside this reminder on {place}; saved sessions stay"
-msgstr "暂不处理 {place} 上的此提醒；已保存的会话仍保留"
-
-#. a repair's decline tooltip: only the reminder is set aside, never the saved sessions
-#: src/components/SpaceRepairs.tsx
-msgid "Set aside this reminder on this computer; saved sessions stay"
-msgstr "暂不处理本机上的此提醒；已保存的会话仍保留"
-
 #. an agent chip's title: the model and effort the agent is set to run, then the specific model its runtime reported running
 #: src/components/AgentSettings.tsx
 msgid "set to {set}, runtime reports {model}"
@@ -6688,16 +6655,6 @@ msgstr "已裁定 — {title}"
 #: src/components/SpacePlacements.tsx
 msgid "Share"
 msgstr "共享"
-
-#. manual help is needed for an older session import; no automatic repair is promised
-#: src/components/SpaceRepairs.tsx
-msgid "Share these details for help recovering this session"
-msgstr "提供这些详情，以获取恢复此会话的帮助"
-
-#. next step for an unclassified stored-file problem
-#: src/components/SpaceRepairs.tsx
-msgid "Share these details for help repairing this data"
-msgstr "提供这些详情，以获取修复此数据的帮助"
 
 #. the sharing confirm's title, before a project's records first go to a group others read; {group} is the group's name, or Personal; {name} the Space's display name
 #: src/components/SpacePlacements.tsx
@@ -7026,9 +6983,19 @@ msgstr "Spex 无法在 <0>{path}</0> 创建初始配置 — 请确认该文件�
 msgid "Spex could not read this block — {reason}"
 msgstr "Spex 无法读取此代码块 — {reason}"
 
+#. the failed old-conversation import preserves its original file
+#: src/components/SpaceRepairs.tsx
+msgid "Spex could not read this saved conversation. The original file is still saved."
+msgstr "Spex 无法读取这段会话，原始文件仍然保留。"
+
 #: src/state/store.ts
 msgid "Spex could not read what this would publish."
 msgstr "Spex 无法读取此次将要发布的内容。"
+
+#. generic storage failure without guessing a remedy from technical text
+#: src/components/SpaceRepairs.tsx
+msgid "Spex could not use this saved file."
+msgstr "Spex 无法使用这个已保存的文件。"
 
 #: src/components/CaptainHome.tsx
 msgid "Spex has no config file yet — playbooks are unavailable."
@@ -7325,6 +7292,11 @@ msgstr "从消息中移除该任务"
 msgid "Take this task out of the queue — Undo puts it back"
 msgstr "将此任务移出队列 — 撤销可放回"
 
+#. expand the evidence behind a saved-work problem
+#: src/components/SpaceRepairs.tsx
+msgid "Technical details"
+msgstr "技术详情"
+
 #: src/components/DraftConversation.tsx
 msgid "Tell the agent what the playbook does, who does what, and when it is done"
 msgstr "告诉智能体这个规程做什么、谁做什么、何时算完成"
@@ -7508,6 +7480,16 @@ msgstr "重新加载失败"
 msgid "the save failed"
 msgstr "保存失败"
 
+#. a server's saved project records are gone
+#: src/components/SpaceRepairs.tsx
+msgid "The saved work for this folder is no longer on {place}."
+msgstr "{place} 上已没有为此文件夹保存的工作。"
+
+#. a project whose saved records disappeared, without claiming its project files are gone
+#: src/components/SpaceRepairs.tsx
+msgid "The saved work for this folder is no longer on this computer."
+msgstr "本机上已没有为此文件夹保存的工作。"
+
 #. the sign-in card: the core answered the start with no flow
 #: src/components/SpaceSignIn.tsx
 msgid "The sign-in did not start"
@@ -7557,15 +7539,15 @@ msgstr "规程编译所用的工作流 markdown"
 msgid "The workflow was aborted"
 msgstr "流程已中止"
 
+#. a server allocates folders itself, so no local picker is offered
+#: src/components/SpaceRepairs.tsx
+msgid "These conversations cannot be continued on {place} yet."
+msgstr "暂时无法在 {place} 上继续这些会话。"
+
 #. a project's members panel; {names} lists the other Spaces the records are kept at, by display name
 #: src/components/SpaceMembers.tsx
 msgid "These records are also placed at {names}"
 msgstr "这些记录也放在 {names}"
-
-#. stands where a project name would, for sessions with no folder
-#: src/components/SpaceRepairs.tsx
-msgid "these sessions"
-msgstr "这些会话"
 
 #: src/components/SpaceMembers.tsx
 msgid "They need an account at {space}."
@@ -7592,6 +7574,11 @@ msgstr "此智能体无法将截图文件返回到此对话。"
 #: src/components/BrowserControl.tsx
 msgid "This agent does not support browser tools"
 msgstr "此智能体不支持浏览器工具"
+
+#. the folder choice applies to this saved conversation group
+#: src/components/SpaceRepairs.tsx
+msgid "This choice applies to all these conversations."
+msgstr "此选择适用于这里的所有会话。"
 
 #: src/components/SpecView.tsx
 msgid "This command refreshes the spec law and prints a migration prompt for an AI agent to apply:"
@@ -7628,6 +7615,21 @@ msgstr "打开之后，此文件在磁盘上已更改。"
 msgid "This file is too large to preview."
 msgstr "文件过大，无法预览。"
 
+#. the historical folder has no completed check
+#: src/components/SpaceRepairs.tsx
+msgid "This folder could not be checked."
+msgstr "未能检查此文件夹。"
+
+#. the exact historical path displayed above belongs to another saved project
+#: src/components/SpaceRepairs.tsx
+msgid "This folder is already used by another project."
+msgstr "另一个项目已在使用此文件夹。"
+
+#. the exact historical path displayed above was checked and is absent
+#: src/components/SpaceRepairs.tsx
+msgid "This folder was not found."
+msgstr "未找到此文件夹。"
+
 #: src/components/SpaceGroups.tsx
 msgid "This group is already scheduled for deletion."
 msgstr "此群组已计划删除。"
@@ -7639,6 +7641,16 @@ msgstr "此群组为空。删除后，所有成员都将失去对此群组的访
 #: src/components/SpaceGroups.tsx
 msgid "This group isn't empty. Remove these items before deleting it:"
 msgstr "此群组不为空。请先移除以下内容，再删除群组："
+
+#. the exact historical path displayed above is not a Git worktree root
+#: src/components/SpaceRepairs.tsx
+msgid "This is not the main folder of a Git project."
+msgstr "这不是 Git 项目的主文件夹。"
+
+#. the problem blocks operations depending on this data, not all work
+#: src/components/SpaceRepairs.tsx
+msgid "This must be resolved before using the affected data."
+msgstr "解决此问题后才能使用受影响的数据。"
 
 #: src/components/ProjectsSurface.tsx
 msgid "This project is no longer registered."
@@ -7680,12 +7692,6 @@ msgstr "此规程未找到该阶段"
 #: src/components/CompileBand.tsx
 msgid "three in a row — tell the agent how to proceed"
 msgstr "连续三次 — 请告诉智能体如何继续"
-
-#. a repair's condition, for assistive technology: it waits for an answer
-#. the accessible name of the Space surface's list of what needs fixing
-#: src/components/SpaceRepairs.tsx
-msgid "To fix"
-msgstr "待处理"
 
 #. a Sync tab's heading over the records this computer changed that no Space holds yet; {count} how many
 #: src/components/SpaceSync.tsx
@@ -7870,6 +7876,11 @@ msgstr "草稿无法读取 — 请删除，或修好文件后重启 Spex"
 msgid "unresolved"
 msgstr "未解析"
 
+#. no saved title or date is available
+#: src/components/SpaceRepairs.tsx
+msgid "Untitled conversation"
+msgstr "未命名会话"
+
 #. a session with no title of its own
 #: src/components/SpaceExplorer.tsx
 msgid "untitled session"
@@ -7956,7 +7967,7 @@ msgstr "尚未附加的上传"
 msgid "Use"
 msgstr "使用"
 
-#. on a repair: make the folder the core found this project's folder; {folder} is its path
+#. use the existing project folder the core checked for these conversations
 #: src/components/SpaceRepairs.tsx
 msgid "Use {folder}"
 msgstr "使用 {folder}"
@@ -7988,8 +7999,13 @@ msgstr "用回车或逗号分隔用户名。"
 msgid "Use org/name: lowercase words joined by hyphens"
 msgstr "使用 org/name：由连字符连接的小写单词"
 
+#. optional task to choose a project for saved work with no indexed conversations
+#: src/components/SpaceRepairs.tsx
+msgid "Use saved work"
+msgstr "使用以往工作"
+
+#. confirm the existing folder for this saved work
 #. pair a project's records with the folder named
-#. the repair editor's control: make the folder named the project's folder
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceRepairs.tsx
 msgid "Use this folder"
@@ -8133,6 +8149,11 @@ msgstr "你想对 {project} 做什么改动？"
 #: src/lib/space.ts
 msgid "where projects live"
 msgstr "项目所在位置"
+
+#. the purpose of choosing an existing project folder
+#: src/components/SpaceRepairs.tsx
+msgid "Where should these conversations continue?"
+msgstr "要在哪个项目中继续这些会话？"
 
 #. what a file is, in the records' tree: it names where a project's code is
 #: src/lib/space.ts

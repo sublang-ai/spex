@@ -5,6 +5,8 @@
 
 ## Status
 
+Amended by [DR-182](182-saved-work-is-a-choice-not-setup-debt.md) in repairs: a neutral Saved work review, recognizable conversations, existing-folder selection and Not now replace the issue-first presentation.
+
 Amended by [DR-177](177-repairs-explain-the-next-step.md) in repair wording and storage-failure presentation: unconnected folders are not called missing, and technical evidence stays behind Details with a plain next step above it.
 
 Accepted (2026-10-31) on the owner's direction to make every package and Space operation easy to understand for a person who installed Spex today, favoring simple and reliable over complete.

@@ -32,8 +32,29 @@ export function repairKey(repository: string | undefined, directories: string[])
  * diagnostics (space-46). */
 export function foldDiagnostics(diagnostics: StorageDiagnostic[]): StorageDiagnostic[] {
   const blocking = diagnostics.filter((d) => d.blocking);
-  const plain = diagnostics.filter((d) => !d.blocking && !d.repair);
-  const repairs = diagnostics.filter((d) => !d.blocking && d.repair);
+  const repairs = diagnostics.filter((d) => !d.blocking && d.repair).map((entry) => ({
+    ...entry,
+    repair: { ...entry.repair!, ...(entry.repair!.details ? { details: [...entry.repair!.details] } : {}) },
+  }));
+  const byRepository = new Map(repairs
+    .filter((entry) => entry.repair.kind === "repository" && entry.repair.repository)
+    .map((entry) => [entry.repair.repository!, entry.repair]));
+  const plain: StorageDiagnostic[] = [];
+  for (const entry of diagnostics) {
+    if (entry.blocking || entry.repair) continue;
+    const repair = entry.code === "session-folder-required" && entry.repository
+      ? byRepository.get(entry.repository) : undefined;
+    if (repair) {
+      (repair.details ??= []).push({ file: entry.file, reason: entry.reason });
+    } else plain.push(entry);
+  }
+  // A caller may fold an already-folded list alongside fresh findings.
+  // Keep each piece of evidence once without mutating the producer's data.
+  for (const { repair } of repairs) {
+    if (repair.details) repair.details = [...new Map(repair.details.map((detail) => [
+      JSON.stringify([detail.file, detail.reason]), detail,
+    ])).values()];
+  }
   repairs.sort((a, b) =>
     (b.repair!.sessions - a.repair!.sessions) ||
     (a.repair!.name ?? a.repair!.repository ?? "").localeCompare(b.repair!.name ?? b.repair!.repository ?? "") ||

@@ -64,6 +64,11 @@ msgstr "；未知角色 {roles}"
 msgid "\"{id}\" is not a playbook id: lowercase letters, digits and single hyphens, at most 64 characters"
 msgstr "“{id}”不是有效的规程 id：只能用小写字母、数字和单个连字符，最多 64 个字符"
 
+#. Folder selection refusal: names the selected path and explains that this action does not create a Git project
+#: src/service.ts
+msgid "“{path}” is not a Git project folder. Choose an existing project folder; this action does not create one."
+msgstr "“{path}”不是 Git 项目文件夹。请选择已有的项目文件夹；此操作不会创建项目。"
+
 #. A session's own title, quoted
 #: src/session.ts
 msgid "“{title}”"
@@ -597,11 +602,6 @@ msgstr "不允许使用 {path}：技能来自 spex.yaml 添加的规约包"
 #: src/space.ts
 msgid "{path} is not part of {name}"
 msgstr "{path} 不属于 {name}"
-
-#. Refusal: the folder offered for rebinding is no git repository
-#: src/service.ts
-msgid "{path} is not the root of a git work tree"
-msgstr "{path} 不是 git 工作树的根目录"
 
 #. Refusal: a package added or published from a folder names one outside the project folder
 #: src/environments.ts
@@ -2436,6 +2436,11 @@ msgstr "请重试；若再次失败，在终端中执行同一步骤查看详情
 msgid "Retry; if it fails again, run the step in a terminal for detail."
 msgstr "请重试；若再次失败，在终端中执行该步骤查看详情。"
 
+#. Refusal of group deletion without a reviewed public group path; no changes were sent
+#: src/space-groups.ts
+msgid "Review {group} before deleting it"
+msgstr "删除 {group} 前请先检查"
+
 #. Why an intent cannot run on a team server's seat: it names no runtime, captured before runtimes were recorded or by the Playbook CLI, and a seat runs only what is assigned to it
 #: src/session.ts
 msgid "Runs nowhere yet"
@@ -3253,11 +3258,6 @@ msgstr "此次上传已取消或过期，请重新上传文件。"
 #: src/media-transfers.ts
 msgid "Too many files are uploading. Finish or cancel an upload, then retry."
 msgstr "正在上传的文件过多，请先完成或取消部分上传，再重试。"
-
-#. Refusal of group deletion without a reviewed public group path; no changes were sent
-#: src/space-groups.ts
-msgid "Review {group} before deleting it"
-msgstr "删除 {group} 前请先检查"
 
 #. Config error; the field's dotted path is the config file's own
 #. Config error; the field's dotted path is the config file's own

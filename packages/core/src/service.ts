@@ -1607,8 +1607,11 @@ export class CoreService {
    */
   private adoptScan: Promise<void> = Promise.resolve();
 
-  private syncForeignSessions(): Promise<void> {
-    const scan = this.adoptScan.then(() => this.scanSessions());
+  private syncForeignSessions(beforeScan?: () => Promise<void>): Promise<void> {
+    const scan = this.adoptScan.then(async () => {
+      await beforeScan?.();
+      await this.scanSessions();
+    });
     this.adoptScan = scan.catch(() => {});
     return scan;
   }
@@ -2845,10 +2848,10 @@ export class CoreService {
         const path = expandPath(command.path, this.home);
         if (!(await isWorkTreeRoot(path, this.runCommand))) {
           throw new CoreError("invalid_request", i18n._({
-            id: "{path} is not the root of a git work tree",
-            comment: "Refusal: the folder offered for rebinding is no git repository",
+            id: "“{path}” is not a Git project folder. Choose an existing project folder; this action does not create one.",
+            comment: "Folder selection refusal: names the selected path and explains that this action does not create a Git project",
             values: { path },
-          }));
+          }), { issue: "project_folder", path });
         }
         if (this.sessions.listSessions().some((session) => session.projectId === command.projectId && session.live)) {
           throw new CoreError("busy", i18n._({
@@ -2862,7 +2865,7 @@ export class CoreService {
         // (environments-31); a session started meanwhile does not wait
         // for it.
         void this.environments.paired(project.id).catch(() => {});
-        await this.syncForeignSessions();
+        await this.syncForeignSessions(() => this.store.retryLegacySessions(project.id));
         for (const session of this.sessions.listSessions()) {
           if (session.projectId !== project.id) continue;
           this.broadcast({type: "session.state", session});

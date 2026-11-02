@@ -64,6 +64,11 @@ msgstr "; unknown {roles}"
 msgid "\"{id}\" is not a playbook id: lowercase letters, digits and single hyphens, at most 64 characters"
 msgstr "\"{id}\" is not a playbook id: lowercase letters, digits and single hyphens, at most 64 characters"
 
+#. Folder selection refusal: names the selected path and explains that this action does not create a Git project
+#: src/service.ts
+msgid "“{path}” is not a Git project folder. Choose an existing project folder; this action does not create one."
+msgstr "“{path}” is not a Git project folder. Choose an existing project folder; this action does not create one."
+
 #. A session's own title, quoted
 #: src/session.ts
 msgid "“{title}”"
@@ -597,11 +602,6 @@ msgstr "{path} is not allowed: skills reach agents from the packages spex.yaml a
 #: src/space.ts
 msgid "{path} is not part of {name}"
 msgstr "{path} is not part of {name}"
-
-#. Refusal: the folder offered for rebinding is no git repository
-#: src/service.ts
-msgid "{path} is not the root of a git work tree"
-msgstr "{path} is not the root of a git work tree"
 
 #. Refusal: a package added or published from a folder names one outside the project folder
 #: src/environments.ts
@@ -2436,6 +2436,11 @@ msgstr "Retry; if it fails again, run the same step in a terminal for detail."
 msgid "Retry; if it fails again, run the step in a terminal for detail."
 msgstr "Retry; if it fails again, run the step in a terminal for detail."
 
+#. Refusal of group deletion without a reviewed public group path; no changes were sent
+#: src/space-groups.ts
+msgid "Review {group} before deleting it"
+msgstr "Review {group} before deleting it"
+
 #. Why an intent cannot run on a team server's seat: it names no runtime, captured before runtimes were recorded or by the Playbook CLI, and a seat runs only what is assigned to it
 #: src/session.ts
 msgid "Runs nowhere yet"
@@ -3253,11 +3258,6 @@ msgstr "This upload was canceled or expired. Retry the file upload."
 #: src/media-transfers.ts
 msgid "Too many files are uploading. Finish or cancel an upload, then retry."
 msgstr "Too many files are uploading. Finish or cancel an upload, then retry."
-
-#. Refusal of group deletion without a reviewed public group path; no changes were sent
-#: src/space-groups.ts
-msgid "Review {group} before deleting it"
-msgstr "Review {group} before deleting it"
 
 #. Config error; the field's dotted path is the config file's own
 #. Config error; the field's dotted path is the config file's own

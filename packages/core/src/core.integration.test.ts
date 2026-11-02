@@ -17,6 +17,7 @@ import { hostname } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { Store } from "./store.js";
+import { foldDiagnostics } from "./app-storage.js";
 import { WebSocket } from "ws";
 import { loadTmuxPlayConfig } from "@sublang/cligent/tmux-play";
 import { openSessionStore, createSessionStore, validateSessionManifest } from "@sublang/playbook/session-store";
@@ -5648,7 +5649,7 @@ test("core-service-86: unreadable legacy sidecars and forge cache preserve unrel
   assert.equal(readFileSync(cache,"utf8"),"{broken cache");
 });
 
-test("core-service-86: an older session without a project folder names that prerequisite and imports after pairing and restart", async (t) => {
+test("core-service-86: saved conversations share one folder task and import when its folder is saved", async (t) => {
   const root = scratchDir("spex-sidecar-folder-");
   const dataDir = join(root, "state");
   const projectPath = join(root, "project");
@@ -5661,30 +5662,76 @@ test("core-service-86: an older session without a project folder names that prer
   const home = parseYaml(readFileSync(homePath, "utf8"));
   home.folders = [];
   writeFileSync(homePath, stringifyYaml(home));
-  const id = randomUUID();
-  const sidecar = join(sessionsDir, `${id}.spex.json`);
-  const original = JSON.stringify({ v: 1, id, projectId: key, createdAt: 1, endedAt: 2, live: false, players: [], initialVisible: [] });
-  writeFileSync(sidecar, original, { mode: 0o600 });
+  const longTitle = `Saved conversation 4 ${"long description ".repeat(20)}`;
+  const older = Array.from({ length: 4 }, (_, index) => {
+    const id = randomUUID();
+    const file = join(sessionsDir, `${id}.spex.json`);
+    const original = JSON.stringify({ v: 1, id, projectId: key, createdAt: 1, endedAt: index === 3 ? null : index + 2, live: false, players: [], initialVisible: [] });
+    writeFileSync(file, original, { mode: 0o600 });
+    const records = foreignTurn(index === 3 ? longTitle : `Saved conversation ${index + 1}`)
+      .map((record) => ({ ...record, timestamp: Number(record.timestamp) + index * 1000 }));
+    writeFileSync(join(sessionsDir, `${id}.records.jsonl`), records.map((record, seq) => JSON.stringify({ v: 1, seq: seq + 1, record })).join("\n") + "\n", { mode: 0o600 });
+    return { id, file, original };
+  });
+  const refusedId = randomUUID();
+  const refusedFile = join(sessionsDir, `${refusedId}.spex.json`);
+  const refusedBytes = JSON.stringify({ v: 99, id: refusedId, projectId: key, createdAt: 0, endedAt: null, live: false, players: [], initialVisible: [] });
+  writeFileSync(refusedFile, refusedBytes, { mode: 0o600 });
+  const ownKey = `${OWN}/${OWN}-spex`;
+  const ownSessions = projectSessions(dataDir, ownKey);
+  const personalId = randomUUID();
+  const personalFile = join(ownSessions, `${personalId}.spex.json`);
+  const personalBytes = JSON.stringify({ v: 1, id: personalId, projectId: ownKey, createdAt: 0, endedAt: null, live: false, players: [], initialVisible: [] });
+  writeFileSync(personalFile, personalBytes, { mode: 0o600 });
   const options = { token: "test", configPath, dataDir, home: join(root, "home"), own: OWN, env: {}, watchConfig: false };
-  let service = await CoreService.start(options);
-  let client = new Client(service.port());
+  const service = await CoreService.start(options);
+  const client = new Client(service.port());
   await client.open();
   t.after(async () => { client.close(); await service.stop(); rmSync(root, { recursive: true, force: true }); });
-  const diagnostic = (await client.expectOk("storage.diagnostics", {})).find((entry) => entry.file === sidecar);
-  assert.equal(diagnostic?.code, "session-folder-required");
-  assert.equal(diagnostic?.blocking, false);
-  assert.equal(readFileSync(sidecar, "utf8"), original, "a missing folder does not damage or delete the older file");
+  const diagnostics = await client.expectOk("storage.diagnostics", {});
+  const repairEntry = diagnostics.find((entry) => entry.repair?.repository === key)!;
+  const repair = repairEntry.repair!;
+  assert.equal(repair.projectName, "project");
+  assert.equal(repair.sessions, 5);
+  assert.deepEqual(repair.conversations, [
+    { title: `${longTitle.slice(0, 119)}…`, updatedAt: 5000 },
+    { title: "Saved conversation 3", updatedAt: 4000 },
+    { title: "Saved conversation 2", updatedAt: 3000 },
+  ], "bounded titles identify recent saved work even when its older sidecar has no end time");
+  assert.deepEqual(repair.details?.map((detail) => detail.file).sort(), [...older.map((entry) => entry.file), refusedFile].sort());
+  assert.equal(diagnostics.some((entry) => entry.code === "session-folder-required"), false);
+  assert.equal(diagnostics.find((entry) => entry.repair?.repository === ownKey)?.repair?.projectName, undefined, "personal records never invent a project name from their storage key");
+  assert.deepEqual(diagnostics.find((entry) => entry.repair?.repository === ownKey)?.repair?.conversations, [{}], "missing title and date stay unknown");
+  for (const entry of older) assert.equal(readFileSync(entry.file, "utf8"), entry.original, "a missing folder preserves every older file");
+  const repeated = foldDiagnostics([...diagnostics, { file: older[0]!.file, reason: repair.details!.find((detail) => detail.file === older[0]!.file)!.reason, blocking: false, code: "session-folder-required", repository: key }]);
+  assert.deepEqual(repeated, diagnostics, "folding a repeated finding keeps its evidence once");
+  const blocked = { file: "blocking.json", reason: "requires repair", blocking: true, code: "session-folder-required" as const, repository: key };
+  assert.ok(foldDiagnostics([...diagnostics, blocked]).includes(blocked), "blocking damage never disappears into a folder task");
+  const independent = { file: "other.json", reason: "unsupported format", blocking: false, code: "session-upgrade" as const, repository: key };
+  assert.ok(foldDiagnostics([...diagnostics, independent]).includes(independent), "another failure remains its own task even for the same repository");
   const groups = await client.expectOk("space.get", {});
-  assert.equal(groups.diagnostics.find((entry) => entry.file === sidecar)?.code, "session-folder-required");
+  assert.equal(groups.issues, 2, "five related import failures and their folder selection are one task, beside personal history");
+  assert.deepEqual(groups.diagnostics.find((entry) => entry.repair?.repository === key)?.repair?.details, repair.details);
+  const refusedFolder = await client.command("project.rebind", { projectId: key, path: root });
+  assert.equal(refusedFolder.ok, false);
+  if (!refusedFolder.ok) {
+    assert.equal(refusedFolder.error.details?.issue, "project_folder");
+    assert.equal(refusedFolder.error.details?.path, root);
+    assert.ok(refusedFolder.error.message.includes(root));
+    assert.ok(refusedFolder.error.message.includes("does not create one"));
+  }
+  assert.equal(existsSync(join(root, ".git")), false, "selecting a folder never initializes Git");
   await client.expectOk("project.rebind", { projectId: key, path: projectPath });
-  client.close();
-  await service.stop();
-  service = await CoreService.start(options);
-  client = new Client(service.port());
-  await client.open();
-  assert.equal(existsSync(sidecar), false, "restart imports the sidecar with the folder now paired");
-  assert.equal((await client.expectOk("storage.diagnostics", {})).some((entry) => entry.file === sidecar), false);
-  assert.ok((await client.expectOk("session.list", {})).some((session) => session.id === id));
+  for (const entry of older) {
+    assert.equal(existsSync(entry.file), false, "saving the folder imports the supported sidecar without a restart");
+    assert.ok((await client.expectOk("session.list", {})).some((session) => session.id === entry.id));
+    await client.waitFor((message) => message.type === "session.state" && message.session.id === entry.id);
+  }
+  const after = await client.expectOk("storage.diagnostics", {});
+  assert.equal(after.some((entry) => entry.repair?.repository === key), false);
+  assert.equal(after.find((entry) => entry.file === refusedFile)?.code, "session-upgrade", "an import that still fails remains visible with its current cause");
+  assert.equal(readFileSync(refusedFile, "utf8"), refusedBytes);
+  assert.equal(readFileSync(personalFile, "utf8"), personalBytes, "saving a folder retries no other container");
 });
 
 test("storage-15: repeated default-home startup does not grow leases for a refused sidecar", async (t) => {

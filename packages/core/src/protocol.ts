@@ -2113,6 +2113,8 @@ export interface StorageDiagnostic {
   blocking: boolean;
   repair?: DiagnosticRepair;
   code?: "session-import" | "session-upgrade" | "session-folder-required";
+  /** The repository whose folder selection can resolve this diagnostic. */
+  repository?: string;
 }
 
 /** What a folder on this device would repair (space-46): a spex
@@ -2126,6 +2128,12 @@ export interface DiagnosticRepair {
   /** The spex repository's name and its group, for an unpaired clone. */
   name?: string;
   group?: string;
+  /** A real project's recorded name, never inferred from storage names. */
+  projectName?: string;
+  /** At most three recent conversations, recognizable without internal ids. */
+  conversations?: { title?: string; updatedAt?: number }[];
+  /** Related import failures resolved by this same folder-selection task. */
+  details?: { file: string; reason: string }[];
   /** The working directories its sessions record, or the folder. */
   directories: string[];
   sessions: number;

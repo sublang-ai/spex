@@ -1,68 +1,49 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// What needs fixing on the Space surface (space-1, space-46..space-56,
-// DR-065, DR-172): the list "To fix (<n>) · <m> set aside" the header's
-// "⚠ <n> to fix" opens, holding every repair the core folded and every
-// problem no repair folds. A project with no folder connected on this
-// computer reads "<project> · <group> — Project folder not connected on this computer"
-// with "Use <folder>" where the core found one, "Choose folder…" and
-// "Not on this computer"; a project folder whose records are missing
-// offers to remove the project, as the Overview tab's Remove does. An answered row keeps its place until the
-// reader's own Refresh, so nothing reflows under the pointer, and focus
-// and the live region move on. At a team server's place the server is
-// named where this computer would be, and no folder is picked or typed:
-// its core allocates every folder (space-112, space-103).
+// Saved work is reviewed only when the reader wants to use it again.
+// A folder choice is one task, with supporting evidence behind Details.
+// Outcomes keep their rows and focus until Refresh.
 
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { DiagnosticRepair, GroupsState } from "@sublang/spex-core/protocol";
 
 import { usePlaceStore } from "../state/place-context.js";
 import { isLocalPlace } from "../state/store.js";
-import { i18n } from "../i18n.js";
-import { projectName, seatName, tildify } from "../lib/space.js";
+import { currentLocale, i18n } from "../i18n.js";
+import { seatName, tildify } from "../lib/space.js";
 import { InlineConfirm } from "./InlineConfirm.js";
-import { LINK, SECONDARY, type Note } from "./SpaceSurface.js";
+import { LINK, PRIMARY, SECONDARY, type Note } from "./SpaceSurface.js";
 
 /** The pending merge's file, which a row reads in plain words. */
 const MERGE_HEAD_FILE = ".git/MERGE_HEAD";
 
-/** "Not on this computer", or "Not on <server>" at a team server's place
- * (space-49, space-112): the answer that the project is not kept here. */
-function notHereAnswer(seat?: string): string {
-  return seat === undefined
-    ? i18n._({
-        id: "Not on this computer",
-        comment: "on a repair: answer that this project is not kept on this computer, so it stops counting as something to fix",
-      })
-    : i18n._({
-        id: "Not on {place}",
-        values: { place: seat },
-        comment: "on a repair at a team server's Space: answer that this project is not kept on the server; {place} is the server's name",
-      });
+/** Technical evidence stays available without becoming the recovery task. */
+function TechnicalDetails({ entries, children }: {
+  entries?: { file: string; reason: string }[];
+  children?: ReactNode;
+}) {
+  return (
+    <details className="min-w-0 text-xs text-neutral-500">
+      <summary className="cursor-pointer">{i18n._({ id: "Technical details", comment: "expand the evidence behind a saved-work problem" })}</summary>
+      <div className="mt-2 flex min-w-0 flex-col gap-3">
+        {children}
+        {entries?.map((entry, index) => (
+          <div key={`${entry.file}:${index}`} className="flex min-w-0 flex-col gap-1">
+            <span className="break-all font-mono">{entry.file}</span>
+            <span className="whitespace-pre-wrap [overflow-wrap:anywhere]">{entry.reason}</span>
+          </div>
+        ))}
+      </div>
+    </details>
+  );
 }
 
-/**
- * A repair the core folded (space-46, space-47). Records no project
- * folder here pairs ask the one question that follows: which folder on
- * this computer is the project? Pairing one is picking a folder, so the
- * row speaks of projects and folders (DR-065). A project folder whose
- * records are missing has nothing here to pair, so its row offers to
- * remove the project, its files staying (projects-9).
- *
- * Declining leaves the row standing and quiet, still offering what it
- * offered, so changing your mind needs no separate undo.
- */
-function RepairRow({
-  repair,
-  disabled,
-  focusSeq,
-  onResolved,
-  onNote,
-}: {
+/** One optional task: choose where saved conversations should continue.
+ * Names from the storage layout never stand in for a user's project. */
+function RepairRow({ repair, disabled, focusSeq, onResolved, onNote }: {
   repair: DiagnosticRepair;
   disabled: boolean;
-  /** Set when focus moves here; a new value moves it again. */
   focusSeq?: number;
   onResolved(key: string, summary: string, projectId?: string): void;
   onNote: Note;
@@ -71,185 +52,111 @@ function RepairRow({
   const rebindProject = store((state) => state.rebindProject);
   const removeProject = store((state) => state.removeProject);
   const decline = store((state) => state.spaceRepairDecline);
-  // A remote place's core allocates every project's folder (space-103,
-  // run-view-169): no folder is named there, picked or typed; its words
-  // name the server where they would name this computer (space-112).
   const local = isLocalPlace(store.place);
   const seat = seatName(store.place);
   const proposal = repair.proposal;
   const recorded = repair.directories[0] ?? "";
   const folderRepair = repair.kind === "folder";
+  const hasConversations = repair.sessions > 0;
   const [editing, setEditing] = useState(false);
   const [removing, setRemoving] = useState(false);
-  const [path, setPath] = useState(proposal?.path ?? recorded);
+  // A historical path is evidence, not a suggestion. Only a folder the
+  // core checked and proposed is safe to prefill.
+  const [path, setPath] = useState(proposal?.path ?? "");
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string>();
   const fieldRef = useRef<HTMLInputElement>(null);
   const firstRef = useRef<HTMLButtonElement>(null);
+  const wasEditing = useRef(false);
+  const fieldId = useId();
+  const helpId = `${fieldId}-help`;
+  const errorId = `${fieldId}-error`;
+  const declined = repair.declined !== undefined;
 
   useEffect(() => {
     if (focusSeq !== undefined) firstRef.current?.focus();
   }, [focusSeq]);
-
   useEffect(() => {
-    if (!editing) return;
-    fieldRef.current?.focus();
-    fieldRef.current?.select();
+    if (editing) {
+      fieldRef.current?.focus();
+      fieldRef.current?.select();
+    } else if (wasEditing.current) firstRef.current?.focus();
+    wasEditing.current = editing;
   }, [editing]);
 
-  const declined = repair.declined !== undefined;
-  const lastSegment = (p: string): string => p.replace(/[/\\]+$/, "").split(/[/\\]/).pop() ?? p;
-  // Records' repair is named by the project — their name with its
-  // `-spex` dropped — and its group, the folder it last ran in
-  // secondary; a folder's by the folder (space-46, DR-159).
-  const named = repair.name ?? (repair.repository ? lastSegment(repair.repository) : undefined);
-  const name = folderRepair
-    ? recorded || repair.repository || ""
-    : named !== undefined
-      ? projectName(named)
-      : recorded
-        ? lastSegment(recorded)
-        : i18n._({
-            id: "these sessions",
-            comment: "stands where a project name would, for sessions with no folder",
-          });
-  const group = folderRepair ? undefined : repair.group;
-
-  /** Pairing is picking a folder: the records keep their key, and the
-   * folders their sessions recorded ride as aliases so every session
-   * under them resolves (space-47). The reader stays put. */
   const pair = async (chosen: string): Promise<void> => {
-    if (!repair.repository) return;
+    if (!repair.repository || busy) return;
     setBusy(true);
     setRefusal(undefined);
     try {
       const project = await rebindProject(repair.repository, chosen, repair.directories);
-      const summary =
-        repair.sessions > 0
-          ? i18n._(
-              "{name} · now a project at {path}, {count, plural, one {# session} other {# sessions}} listed",
-              { name: project.name, path: project.path, count: repair.sessions },
-            )
-          : i18n._("{name} · now a project at {path}", {
-              name: project.name,
-              path: project.path,
-            });
-      onResolved(repair.key, summary, project.id);
+      onResolved(repair.key, i18n._({
+        id: "Project folder saved: {path}",
+        values: { path: tildify(project.path) },
+        comment: "the folder choice succeeded; an older conversation may still have a separate import problem",
+      }), project.id);
     } catch (cause) {
       setRefusal((cause as Error).message);
     } finally {
       setBusy(false);
     }
   };
-
-  /** Remove a project whose records are missing (projects-9): there is
-   * no record here to lose, so the core is told so at once. */
   const remove = async (): Promise<void> => {
-    if (!repair.repository) return;
+    if (!repair.repository || busy) return;
     setBusy(true);
     setRefusal(undefined);
     try {
       await removeProject(repair.repository, true);
-      onResolved(
-        repair.key,
-        i18n._({
-          id: "{path} · removed",
-          values: { path: name },
-          comment: "a folder repair's outcome: the project whose records were missing is removed, its folder's files kept; {path} is the folder",
-        }),
-      );
+      onResolved(repair.key, i18n._({ id: "{path} · removed", values: { path: recorded }, comment: "the project was removed from the list; its folder's files remain" }));
     } catch (cause) {
       setRefusal((cause as Error).message);
     } finally {
       setBusy(false);
     }
   };
-
-  const setDeclined = async (next: boolean): Promise<void> => {
+  const defer = async (): Promise<void> => {
     setBusy(true);
     try {
-      await decline(repair.key, next);
-      if (next) {
-        onNote(
-          i18n._({
-            id: "{name} set aside",
-            values: { name },
-            comment: "the live note once \"Not on this computer\" set a repair aside; {name} is the project",
-          }),
-        );
-      }
+      await decline(repair.key, true);
+      onNote(i18n._({ id: "Saved for later. Your conversations are kept.", comment: "confirmation after deferring an optional saved-work task" }));
     } catch (cause) {
       setRefusal((cause as Error).message);
     } finally {
       setBusy(false);
     }
   };
-
-  // What the core found, said before any control can accept it
-  // (space-53): a found folder rides "Use <folder>" itself; a missing one
-  // the row's own words; what else it found as a phrase.
-  const checkedRecorded = (repair.checked ?? []).find((entry) => entry.path === recorded);
-  const evidence = folderRepair
-    ? seat === undefined
-      ? i18n._({ id: "Records not on this computer", comment: "a folder repair's evidence: the project's records are gone from this computer" })
-      : i18n._({
-          id: "Records not on {place}",
-          values: { place: seat },
-          comment: "a folder repair's evidence on a team server's Space; {place} is the server's name",
-        })
-    : proposal && local
-      ? undefined
-      : checkedRecorded?.claimedBy
-        ? i18n._({
-            id: "Already the project folder of {project}",
-            values: { project: projectName(checkedRecorded.claimedBy) },
-            comment: "a repair's evidence: the folder it last ran in is another project's; {project} is that project",
-          })
-        : checkedRecorded?.here && !checkedRecorded.repo && !checkedRecorded.unknown
-          ? i18n._({ id: "Not a Git project folder — choose the project folder, not its parent", comment: "a repair's evidence: the folder it last ran in is here but holds no Git repository" })
-          : checkedRecorded && !checkedRecorded.here && !checkedRecorded.unknown
-            ? seat === undefined
-              ? i18n._({ id: "Last-used folder not found on this computer", comment: "a repair's evidence: the core checked the recorded folder and confirmed that it is missing on this computer" })
-              : i18n._({
-                  id: "Last-used folder not found on {place}",
-                  values: { place: seat },
-                  comment: "a repair's evidence: the recorded folder is missing on a team server; {place} is the server's name",
-                })
-            : undefined;
-
-  const refusalLine = refusal ? (
-    <span role="alert" className="text-xs text-red-600 dark:text-red-400">
-      {refusal}
-    </span>
-  ) : null;
-
-  // The first control the row offers takes focus when it is next
-  // (space-48): "Use <folder>", else "Choose folder…", else the answer.
+  const submit = (): void => {
+    if (busy || disabled) return;
+    const chosen = path.trim();
+    if (!chosen) {
+      setRefusal(i18n._({ id: "Choose an existing project folder", comment: "the folder-choice form needs a path before it can save" }));
+      fieldRef.current?.focus();
+      return;
+    }
+    void pair(chosen);
+  };
+  const closeEditor = (): void => {
+    setEditing(false);
+    setRefusal(undefined);
+    firstRef.current?.focus();
+  };
+  const refusalLine = refusal ? <p id={errorId} role="alert" className="text-xs text-red-600 dark:text-red-400">{refusal}</p> : null;
   const showUse = proposal !== undefined && local;
-  const first = showUse ? "use" : local ? "choose" : "decline";
+  const first = showUse ? "use" : local ? "choose" : "defer";
+
   const controls = folderRepair ? (
     <div className="flex flex-wrap items-center gap-2">
       {removing ? (
         <InlineConfirm
-          question={i18n._({ id: "Remove this project? Its files stay.", comment: "confirm removing a project whose records are gone from this computer; its folder and files stay" })}
-          confirmLabel={i18n._({ id: "Remove", comment: "confirm: remove a project whose records are gone from this computer" })}
+          question={i18n._({ id: "Remove this project? Its files stay.", comment: "confirm removing a project whose saved work is missing" })}
+          confirmLabel={i18n._({ id: "Remove", comment: "remove the project from the list" })}
           disabled={busy}
-          onConfirm={() => {
-            setRemoving(false);
-            void remove();
-          }}
+          onConfirm={() => { setRemoving(false); void remove(); }}
           onCancel={() => setRemoving(false)}
         />
       ) : (
-        <button
-          type="button"
-          ref={firstRef}
-          data-testid="space-repair-remove"
-          className={SECONDARY}
-          disabled={disabled || busy || !repair.repository}
-          onClick={() => setRemoving(true)}
-        >
-          {i18n._({ id: "Remove project", comment: "on a repair: remove a project whose records are missing, as the Overview tab's Remove does; its files stay" })}
+        <button ref={firstRef} type="button" data-testid="space-repair-remove" className={SECONDARY} disabled={disabled || busy || !repair.repository} onClick={() => setRemoving(true)}>
+          {i18n._({ id: "Remove project", comment: "remove a project whose saved work is missing; its project files stay" })}
         </button>
       )}
       {refusalLine}
@@ -257,56 +164,18 @@ function RepairRow({
   ) : (
     <div className="flex flex-wrap items-center gap-2">
       {showUse && proposal ? (
-        <button
-          type="button"
-          ref={firstRef}
-          data-testid="space-repair-use"
-          className={`${SECONDARY} min-w-0 max-w-full break-all text-left`}
-          disabled={disabled || busy || !repair.repository}
-          title={proposal.path}
-          onClick={() => void pair(proposal.path)}
-        >
-          {busy
-            ? i18n._({ id: "Adding…", comment: "a repair's control while the folder is paired with the project" })
-            : i18n._({
-                id: "Use {folder}",
-                values: { folder: tildify(proposal.path) },
-                comment: "on a repair: make the folder the core found this project's folder; {folder} is its path",
-              })}
+        <button ref={firstRef} type="button" data-testid="space-repair-use" className={`${PRIMARY} min-w-0 max-w-full break-all text-left`} disabled={disabled || busy || !repair.repository} title={proposal.path} onClick={() => void pair(proposal.path)}>
+          {busy ? i18n._({ id: "Saving…", comment: "saving the project folder for saved conversations" }) : i18n._({ id: "Use {folder}", values: { folder: tildify(proposal.path) }, comment: "use the existing project folder the core checked for these conversations" })}
         </button>
       ) : null}
       {local ? (
-        <button
-          type="button"
-          ref={first === "choose" ? firstRef : undefined}
-          data-testid="space-repair-choose"
-          className={SECONDARY}
-          disabled={disabled || busy || !repair.repository}
-          onClick={() => setEditing(true)}
-        >
-          {i18n._({ id: "Choose folder…", comment: "on a repair: name the project's folder on this computer" })}
+        <button ref={first === "choose" ? firstRef : undefined} type="button" data-testid="space-repair-choose" className={showUse ? SECONDARY : PRIMARY} disabled={disabled || busy || !repair.repository} onClick={() => { setRefusal(undefined); setEditing(true); }}>
+          {i18n._({ id: "Choose project…", comment: "choose an existing project folder for saved work; does not create a project" })}
         </button>
       ) : null}
       {!declined ? (
-        <button
-          type="button"
-          ref={first === "decline" ? firstRef : undefined}
-          data-testid="space-repair-decline"
-          className={SECONDARY}
-          disabled={disabled || busy}
-          title={seat === undefined
-            ? i18n._({
-                id: "Set aside this reminder on this computer; saved sessions stay",
-                comment: "a repair's decline tooltip: only the reminder is set aside, never the saved sessions",
-              })
-            : i18n._({
-                id: "Set aside this reminder on {place}; saved sessions stay",
-                values: { place: seat },
-                comment: "a repair's decline tooltip at a team server's Space; {place} is the server's name",
-              })}
-          onClick={() => void setDeclined(true)}
-        >
-          {notHereAnswer(seat)}
+        <button ref={first === "defer" ? firstRef : undefined} type="button" data-testid="space-repair-decline" className={LINK} disabled={disabled || busy} title={i18n._({ id: "Leave this for later; saved conversations are kept", comment: "deferring this recovery task never deletes saved work" })} onClick={() => void defer()}>
+          {i18n._({ id: "Not now", comment: "leave optional saved-work recovery for later" })}
         </button>
       ) : null}
       {refusalLine}
@@ -314,146 +183,100 @@ function RepairRow({
   );
 
   const editor = (
-    <div className="flex min-w-0 flex-col gap-1 rounded border border-neutral-300 p-2 dark:border-neutral-700">
-      <label className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
-        <span className="shrink-0 text-neutral-500">
-          {i18n._({
-            id: "Project folder for {name}",
-            values: { name },
-            comment: "the repair editor's field caption: the folder on this computer that is this project; {name} is the project",
-          })}
-        </span>
-        <input
-          ref={fieldRef}
-          data-testid="space-repair-path"
-          value={path}
-          onChange={(event) => setPath(event.target.value)}
-          onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
-            if (event.key === "Escape") {
-              event.stopPropagation();
-              setEditing(false);
-            }
-            if (event.key === "Enter") void submit();
-          }}
-          spellCheck={false}
-          disabled={busy}
-          className="min-w-0 flex-1 rounded border border-neutral-300 bg-white px-1.5 py-0.5 font-mono text-xs dark:border-neutral-700 dark:bg-neutral-900"
-        />
-        {window.spexNative ? (
-          <button
-            type="button"
-            className={SECONDARY}
-            disabled={busy}
-            onClick={async () => {
-              const picked = await window.spexNative!.pickDirectory();
-              if (picked) setPath(picked);
+    <div className="flex min-w-0 flex-col gap-3 rounded-lg border border-neutral-300 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900">
+      <h3 className="font-medium">{hasConversations
+        ? i18n._({ id: "Where should these conversations continue?", comment: "the purpose of choosing an existing project folder" })
+        : i18n._({ id: "Choose an existing project", comment: "choose a project folder for saved work" })}</h3>
+      <p id={helpId} className="text-xs text-neutral-500">{i18n._({ id: "Select an existing project; this does not create one.", comment: "choosing a folder is not project creation or Git initialization" })}</p>
+      <div className="flex min-w-0 flex-col gap-1 text-xs">
+        <label htmlFor={fieldId}>{i18n._({ id: "Existing project folder", comment: "folder field for continuing saved conversations" })}</label>
+        <span className="flex min-w-0 flex-wrap items-center gap-2">
+          <input id={fieldId} ref={fieldRef} data-testid="space-repair-path" value={path} aria-describedby={refusal ? `${helpId} ${errorId}` : helpId} aria-invalid={refusal ? true : undefined} onChange={(event) => { setPath(event.target.value); setRefusal(undefined); }}
+            onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
+              if (busy) return;
+              if (event.key === "Escape") { event.stopPropagation(); closeEditor(); }
+              if (event.key === "Enter") void submit();
             }}
-          >
-            {i18n._({ id: "Browse…", comment: "the repair editor's control: opens the system folder picker" })}
-          </button>
-        ) : null}
-      </label>
-      <p className="text-xs text-neutral-500">
-        {i18n._({
-          id: "Folder location saved only on this computer",
-          comment: "the repair editor's note: where a project's folder is, is recorded on this computer alone and never syncs",
-        })}
-      </p>
+            spellCheck={false} disabled={busy} className="min-w-0 flex-1 rounded border border-neutral-300 bg-white px-2 py-1 font-mono text-xs dark:border-neutral-700 dark:bg-neutral-950"
+          />
+          {window.spexNative ? <button type="button" className={SECONDARY} disabled={busy} onClick={async () => {
+            try {
+              const picked = await window.spexNative!.pickDirectory();
+              if (picked) { setPath(picked); setRefusal(undefined); }
+              fieldRef.current?.focus();
+            } catch {
+              setRefusal(i18n._({ id: "Could not open the folder picker. Enter the folder path instead.", comment: "the native picker failed; the typed-path alternative remains available" }));
+              fieldRef.current?.focus();
+            }
+          }}>
+            {i18n._({ id: "Browse…", comment: "open the system picker for an existing project folder" })}
+          </button> : null}
+        </span>
+      </div>
+      {hasConversations ? <p className="text-xs text-neutral-500">{i18n._({ id: "This choice applies to all these conversations.", comment: "the folder choice applies to this saved conversation group" })}</p> : null}
+      {refusalLine}
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" data-testid="space-repair-submit" className={SECONDARY} disabled={busy} onClick={() => void submit()}>
-          {busy
-            ? i18n._({ id: "Adding…", comment: "a repair's control while the folder is paired with the project" })
-            : i18n._({ id: "Use this folder", comment: "the repair editor's control: make the folder named the project's folder" })}
+        <button type="button" data-testid="space-repair-submit" className={PRIMARY} disabled={busy || disabled} onClick={submit}>
+          {busy ? i18n._({ id: "Saving…", comment: "saving the project folder for saved conversations" }) : i18n._({ id: "Use this folder", comment: "confirm the existing folder for this saved work" })}
         </button>
-        <button type="button" className={SECONDARY} disabled={busy} onClick={() => setEditing(false)}>
-          {i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}
-        </button>
-        {refusalLine}
+        <button type="button" className={SECONDARY} disabled={busy} onClick={closeEditor}>{i18n._({ id: "Cancel", comment: "cancel choosing a project folder" })}</button>
       </div>
     </div>
   );
 
-  // One whole message per case, "set aside" after the fact where the
-  // reader declined it (space-55, localization-4).
-  const state = declined ? "aside" : "open";
-  const missing =
-    seat === undefined
-      ? group
-        ? i18n._({
-            id: "{state, select, aside {{project} · {group} — Project folder not connected on this computer · set aside} other {{project} · {group} — Project folder not connected on this computer}}",
-            values: { project: name, group, state },
-            comment: "a repair row: the project's records are here, no project folder is connected on this computer; {project} is the project, {group} the group holding its records; 'set aside' follows once the reader answered Not on this computer",
-          })
-        : i18n._({
-            id: "{state, select, aside {{project} — Project folder not connected on this computer · set aside} other {{project} — Project folder not connected on this computer}}",
-            values: { project: name, state },
-            comment: "a repair row of a project in no group: its records are here, no project folder is connected on this computer; 'set aside' follows once the reader answered Not on this computer",
-          })
-      : group
-        ? i18n._({
-            id: "{state, select, aside {{project} · {group} — Project folder not connected on {place} · set aside} other {{project} · {group} — Project folder not connected on {place}}}",
-            values: { project: name, group, place: seat, state },
-            comment: "a repair row on a team server's Space; {project} is the project, {group} the group holding its records, {place} the server's name; 'set aside' follows once the reader answered Not on the server",
-          })
-        : i18n._({
-            id: "{state, select, aside {{project} — Project folder not connected on {place} · set aside} other {{project} — Project folder not connected on {place}}}",
-            values: { project: name, place: seat, state },
-            comment: "a repair row of a project in no group on a team server's Space; {place} is the server's name; 'set aside' follows once the reader answered Not on the server",
-          });
-
   return (
-    <li
-      data-testid={declined ? "space-repair-declined" : "space-repair"}
-      data-kind={repair.kind}
-      className={`flex min-w-0 flex-col gap-1${declined ? " text-neutral-500" : ""}`}
-    >
+    <li data-testid={declined ? "space-repair-declined" : "space-repair"} data-kind={repair.kind} className="flex min-w-0 flex-col gap-3 py-4 first:pt-0 last:pb-0">
       <div className="flex min-w-0 flex-wrap items-center gap-2">
-        {/* The row's condition by mark, by word and by weight, named for
-            assistive technology (space-55). */}
-        <span>
-          <span aria-hidden>{declined ? "○" : "●"}</span>
-          <span className="sr-only">
-            {declined
-              ? i18n._({ id: "Set aside", comment: "a repair's condition, for assistive technology: the reader answered that it is not kept here" })
-              : i18n._({ id: "To fix", comment: "a repair's condition, for assistive technology: it waits for an answer" })}
-          </span>
-        </span>
-        <span data-testid="space-repair-title" className="min-w-0 flex-1">
-          {folderRepair ? (
-            <span className="font-mono text-xs">{name}</span>
-          ) : (
-            <span className={declined ? "" : "font-medium"}>{missing}</span>
-          )}
-        </span>
+        <h3 data-testid="space-repair-title" className="font-medium">{folderRepair
+          ? i18n._({ id: "Saved work is missing", comment: "the project's saved conversations are no longer present" })
+          : hasConversations
+            ? i18n._({ id: "Continue {count, plural, one {# saved conversation} other {# saved conversations}}", values: { count: repair.sessions }, comment: "optional task naming how much saved work the folder choice applies to" })
+            : i18n._({ id: "Use saved work", comment: "optional task to choose a project for saved work with no indexed conversations" })}</h3>
+        {declined ? <span className="text-xs text-neutral-500">{i18n._({ id: "For later", comment: "this optional task has been deferred" })}</span> : null}
       </div>
-      {!folderRepair && recorded ? (
-        // The folder it last ran in, secondary (space-46).
-        <p data-testid="space-repair-folder" className="min-w-0 truncate pl-5 text-xs text-neutral-500" title={recorded}>
-          <span className="font-mono">{tildify(recorded)}</span>
-          {repair.sessions > 0
-            ? i18n._({
-                id: " · {count, plural, one {# session ran there} other {# sessions ran there}}",
-                values: { count: repair.sessions },
-                comment: "follows the folder a repair remembers: how many sessions ran in it",
-              })
-            : ""}
-        </p>
-      ) : null}
-      {!declined && evidence ? <p className="text-xs text-neutral-500">{evidence}</p> : null}
-      {/* The editor opens from "Choose folder…" alone, which a remote
-          place never offers. */}
+      {!folderRepair && repair.projectName ? <p className="text-xs text-neutral-500">{i18n._({ id: "Project: {name}", values: { name: repair.projectName }, comment: "actual project name from its saved metadata, never a storage name" })}</p> : null}
+      {!folderRepair && repair.conversations?.length ? <div data-testid="space-repair-conversations" className="flex min-w-0 flex-col gap-1 text-sm">
+        {repair.conversations.slice(0, 3).map((conversation, index) => <p key={index} className="break-words">
+          {conversation.title || (conversation.updatedAt !== undefined
+            ? i18n._({ id: "Conversation saved {date}", values: { date: new Date(conversation.updatedAt).toLocaleDateString(currentLocale(), { dateStyle: "medium" }) }, comment: "an untitled conversation identified by its actual saved date" })
+            : i18n._({ id: "Untitled conversation", comment: "no saved title or date is available" }))}
+        </p>)}
+        {repair.sessions > repair.conversations.slice(0, 3).length ? <p className="text-xs text-neutral-500">{i18n._({
+          id: "and {count} more",
+          values: { count: repair.sessions - repair.conversations.slice(0, 3).length },
+          comment: "additional saved conversations beyond the preview; every conversation is included in the folder choice",
+        })}</p> : null}
+      </div> : null}
+      {folderRepair ? <p className="text-xs text-neutral-500">{seat === undefined
+        ? i18n._({ id: "The saved work for this folder is no longer on this computer.", comment: "a project whose saved records disappeared, without claiming its project files are gone" })
+        : i18n._({ id: "The saved work for this folder is no longer on {place}.", values: { place: seat }, comment: "a server's saved project records are gone" })}</p>
+        : !editing ? <p className="text-sm text-neutral-600 dark:text-neutral-400">{local
+          ? hasConversations
+            ? i18n._({ id: "Choose an existing project folder to continue these conversations there.", comment: "explains what the project-folder choice will accomplish" })
+            : i18n._({ id: "Choose an existing project folder to use this saved work.", comment: "the purpose of choosing a folder when no conversation is indexed" })
+          : i18n._({ id: "These conversations cannot be continued on {place} yet.", values: { place: seat }, comment: "a server allocates folders itself, so no local picker is offered" })}</p> : null}
+      {recorded ? <div data-testid="space-repair-folder" className="flex min-w-0 flex-col gap-1 text-xs text-neutral-500">
+        <span>{i18n._({ id: "Previously used folder", comment: "the historical folder below is evidence, not the new folder selection" })}</span>
+        <span className="break-all font-mono" title={recorded}>{tildify(recorded)}</span>
+      </div> : null}
       {editing ? editor : controls}
+      {(repair.directories.length > 0 || repair.details?.length) && !folderRepair ? <TechnicalDetails entries={repair.details}>
+        {repair.directories.map((directory) => {
+          const finding = repair.checked?.find((entry) => entry.path === directory);
+          const evidence = !finding || finding.unknown
+            ? i18n._({ id: "This folder could not be checked.", comment: "the historical folder has no completed check" })
+            : !finding.here
+              ? i18n._({ id: "This folder was not found.", comment: "the exact historical path displayed above was checked and is absent" })
+              : finding.claimedBy
+                ? i18n._({ id: "This folder is already used by another project.", comment: "the exact historical path displayed above belongs to another saved project" })
+                : !finding.repo
+                  ? i18n._({ id: "This is not the main folder of a Git project.", comment: "the exact historical path displayed above is not a Git worktree root" })
+                  : i18n._({ id: "An existing project was found in this folder.", comment: "the historical folder was checked as an existing Git project root" });
+          return <div key={directory} className="flex min-w-0 flex-col gap-1"><span className="break-all font-mono">{tildify(directory)}</span><p>{evidence}</p></div>;
+        })}
+      </TechnicalDetails> : null}
     </li>
   );
-
-  function submit(): void {
-    const chosen = path.trim();
-    if (!chosen) {
-      setRefusal(i18n._({ id: "Name a folder", comment: "the repair editor's refusal of an empty path" }));
-      return;
-    }
-    void pair(chosen);
-  }
 }
 
 /** What the reader's own act made of a repair (space-48): a pairing
@@ -481,10 +304,10 @@ function RepairOutcomeRow({
   }, [focusSeq]);
   const projectId = outcome.projectId;
   return (
-    <li data-testid="space-repair-resolved" className="flex min-w-0 flex-wrap items-center gap-2">
+    <li data-testid="space-repair-resolved" className="flex min-w-0 flex-wrap items-center gap-2 py-4 first:pt-0 last:pb-0">
       <span>
         <span aria-hidden>✓</span>
-        <span className="sr-only">{i18n._({ id: "Fixed", comment: "a repair's condition, for assistive technology: answered and resolved" })}</span>
+        <span className="sr-only">{i18n._({ id: "Saved", comment: "the requested folder choice was saved" })}</span>
       </span>
       <span className="min-w-0 flex-1">{outcome.summary}</span>
       {projectId ? (
@@ -498,41 +321,25 @@ function RepairOutcomeRow({
 
 type IssueEntry = GroupsState["diagnostics"][number];
 
-/** Storage operations identify known causes; technical prose never
- * determines the next step (space-121). */
+/** Known operations supply the cause; error prose never selects a remedy. */
 function DiagnosticRow({ entry }: { entry: IssueEntry }) {
-  const store = usePlaceStore();
-  const local = isLocalPlace(store.place);
   const folderRequired = entry.code === "session-folder-required";
   const olderSession = folderRequired || entry.code === "session-import" || entry.code === "session-upgrade";
   const summary = folderRequired
-    ? i18n._({ id: "Older session needs a project folder", comment: "an older session cannot be imported until its project has a folder" })
+    ? i18n._({ id: "A saved conversation needs a project folder", comment: "a folder requirement not associated with an actionable recovery card" })
     : olderSession
-      ? i18n._({ id: "Older session not imported", comment: "an older session's import failed; this does not imply damaged data" })
+      ? i18n._({ id: "An older conversation can’t be opened", comment: "this version could not read an older saved conversation" })
       : i18n._({ id: "Saved data needs attention", comment: "a stored file could not be used; the technical cause is in Details" });
-  const guidance = folderRequired && local
-    ? i18n._({ id: "Choose its project folder, then restart Spex to retry", comment: "how to retry an older session import that lacks a project folder" })
-    : olderSession
-      ? i18n._({ id: "Share these details for help recovering this session", comment: "manual help is needed for an older session import; no automatic repair is promised" })
-      : i18n._({ id: "Share these details for help repairing this data", comment: "next step for an unclassified stored-file problem" });
   return (
-    <li data-testid="space-diagnostic" className="flex min-w-0 flex-col gap-1">
-      <span className="font-medium">{summary}</span>
-      <p className="text-xs text-neutral-500">{guidance}</p>
-      <p data-testid="space-diagnostic-impact" className="text-xs text-neutral-500">
-        {entry.blocking
-          ? i18n._({ id: "Needs repair before continuing", comment: "a storage diagnostic blocks operations that depend on this data" })
-          : i18n._({ id: "Other work can continue", comment: "this storage diagnostic does not block unrelated work" })}
-      </p>
-      <details className="min-w-0 text-xs">
-        <summary className="cursor-pointer">
-          {i18n._({ id: "Details", comment: "expand a storage warning's original file path and technical reason" })}
-        </summary>
-        <div className="mt-1 flex min-w-0 flex-col gap-1">
-          <span className="break-all font-mono">{entry.file}</span>
-          <span className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{entry.reason}</span>
-        </div>
-      </details>
+    <li data-testid="space-diagnostic" className="flex min-w-0 flex-col gap-3 py-4 first:pt-0 last:pb-0">
+      <h3 className="font-medium">{summary}</h3>
+      <p className="text-sm text-neutral-600 dark:text-neutral-400">{olderSession
+        ? i18n._({ id: "Spex could not read this saved conversation. The original file is still saved.", comment: "the failed old-conversation import preserves its original file" })
+        : i18n._({ id: "Spex could not use this saved file.", comment: "generic storage failure without guessing a remedy from technical text" })}</p>
+      {entry.blocking ? <p data-testid="space-diagnostic-impact" className="text-xs text-amber-800 dark:text-amber-200">
+        {i18n._({ id: "This must be resolved before using the affected data.", comment: "the problem blocks operations depending on this data, not all work" })}
+      </p> : null}
+      <TechnicalDetails entries={[entry]} />
     </li>
   );
 }
@@ -543,12 +350,8 @@ const issueRowId = (entry: IssueEntry): string =>
   entry.repair ? `repair:${entry.repair.key}` : `diagnostic:${entry.file}:${entry.reason}`;
 const outcomeRowId = (key: string): string => `repair:${key}`;
 
-/**
- * What needs fixing (space-1, space-46..space-55): every repair the core
- * folded and every problem no repair folds, under "To fix (<n>) · <m> set
- * aside". It opens from the header's "⚠ <n> to fix", and stands by
- * itself while a blocking problem does.
- */
+/** Saved work stays behind the reader's review control. Only blocking
+ * problems open automatically. Each card describes one useful action. */
 export function IssuesList({
   groups,
   connected,
@@ -583,10 +386,8 @@ export function IssuesList({
     setFocusTo(undefined);
   }, [refreshes]);
 
-  // The core carries the count (space-1): what the reader has not
-  // answered. Rows he has set aside stand on, quietly.
-  const issueCount = groups.issues;
-  const declinedCount = groups.diagnostics.filter((entry) => entry.repair?.declined !== undefined).length;
+  // Optional recovery stays neutral; only a blocking diagnostic needs
+  // immediate attention. Deferred tasks remain available.
   const blocking = groups.diagnostics.some((entry) => entry.blocking);
   // The rows as a fresh layout orders them: the core's order, a
   // declined repair after those still unanswered (space-46).
@@ -626,9 +427,6 @@ export function IssuesList({
       entry.repair.key !== key &&
       entry.repair.declined === undefined &&
       !done[entry.repair.key];
-    // What the header will count: the other unanswered repairs, and
-    // every problem no repair folds (space-1).
-    const left = state.diagnostics.filter((entry) => !entry.repair || unanswered(entry)).length;
     // Focus moves to the next unanswered repair below, wrapping to the
     // top, or else onto this outcome's Open project. The layout still
     // holds the row's place even where its report is gone.
@@ -639,44 +437,25 @@ export function IssuesList({
     const next = [...order.slice(at + 1), ...order.slice(0, Math.max(at, 0))].find((row) => targets.has(row));
     setOutcomes((was) => ({ ...was, [key]: { summary, projectId } }));
     setFocusTo((was) => ({ id: next ?? id, seq: (was?.seq ?? 0) + 1 }));
-    onNote(
-      left
-        ? i18n._({
-            id: "{count} left to fix.",
-            values: { count: left },
-            comment: "the live note once a repair is fixed: how many still wait for an answer",
-          })
-        : i18n._({ id: "Nothing left to fix.", comment: "the live note once the last repair waiting for an answer is fixed" }),
-    );
+    onNote(summary);
   };
   const focusSeq = (id: string): number | undefined => (focusTo?.id === id ? focusTo.seq : undefined);
 
   if (!listOpen) return null;
-  const title = i18n._({ id: "To fix", comment: "the accessible name of the Space surface's list of what needs fixing" });
+  const title = blocking
+    ? i18n._({ id: "Needs attention", comment: "saved data currently blocks an operation" })
+    : i18n._({ id: "Saved work", comment: "optional review of earlier work available on this computer" });
   return (
-    <section
-      data-testid="space-issues-list"
-      aria-label={title}
-      // Amber is attention. With nothing unanswered there is none to
-      // pay, so the card stands neutral and the rows stay readable
-      // (space-55).
-      className={`flex flex-col gap-1 rounded-lg border p-3 text-sm ${
-        issueCount > 0
-          ? "border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950"
-          : "border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900"
-      }`}
+    <section data-testid="space-issues-list" aria-label={title}
+      className={`flex min-w-0 flex-col gap-4 rounded-lg border p-4 text-sm ${blocking
+        ? "border-amber-300 dark:border-amber-700"
+        : "border-neutral-200 dark:border-neutral-800"}`}
     >
-      <h2
-        data-testid="space-issues-heading"
-        className={`text-xs font-medium ${issueCount > 0 ? "text-amber-800 dark:text-amber-200" : "text-neutral-500"}`}
-      >
-        {i18n._({
-          id: "{declined, plural, =0 {To fix ({count})} other {To fix ({count}) · # set aside}}",
-          values: { count: issueCount, declined: declinedCount },
-          comment: "the heading of the list of what needs fixing: {count} wait for an answer; '# set aside' counts the repairs the reader answered Not on this computer",
-        })}
-      </h2>
-      <ul className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1">
+        <h2 data-testid="space-issues-heading" className={`font-medium ${blocking ? "text-amber-800 dark:text-amber-200" : ""}`}>{title}</h2>
+        {!blocking ? <p className="text-sm text-neutral-500">{i18n._({ id: "Choose what you want to use again. You can leave the rest for later.", comment: "older saved work is optional and does not block new work" })}</p> : null}
+      </div>
+      <ul className="flex min-w-0 flex-col divide-y divide-neutral-200 dark:divide-neutral-800">
         {placed.map((id) => {
           const row = rows.get(id)!;
           if ("outcomeKey" in row) {

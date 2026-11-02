@@ -5,6 +5,8 @@
 
 ## Status
 
+Extended by [DR-182](182-saved-work-is-a-choice-not-setup-debt.md): a folder action states which saved conversations it affects and whether it selects an existing project before asking the reader to act.
+
 Accepted (2026-09-16) on the owner's review of the interface's copy: "I really don't like lengthy text here and there — if you put some key phrases at the right place, it is much easier to understand and saves the reader's burden."
 
 Amends [DR-010](010-interface-craft.md) with a tenth principle.

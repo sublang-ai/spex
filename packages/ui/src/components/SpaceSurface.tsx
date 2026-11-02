@@ -548,9 +548,8 @@ function HomeHeader({
   issuesOpen: boolean;
   onIssuesOpen(open: boolean): void;
 }) {
-  // The core carries the count (space-1), so the header and the list
-  // beneath it cannot drift: what the reader has not answered.
-  const issueCount = groups.issues;
+  // Existing history is optional. Reserve attention for actual blockers.
+  const blocking = groups.diagnostics.some((entry) => entry.blocking);
   const reading = refreshing || groups.instances.some((instance) => instance.read.phase === "running");
   const listed = groups.instances.length > 0;
   const refresh = anySignedIn(groups);
@@ -560,35 +559,18 @@ function HomeHeader({
     .filter((instance) => instance.signedIn && instance.readAt !== null)
     .reduce<number | null>((latest, instance) => Math.max(latest ?? 0, instance.readAt!), null);
   const row = "flex min-w-0 flex-col gap-1 @xs:flex-row @xs:flex-wrap @xs:items-center @xs:gap-x-3";
-  const nothing = i18n._({ id: "Nothing to fix", comment: "the title of the header's \"To fix\" control once every repair is answered" });
-  const issues =
-    groups.diagnostics.length > 0 ? (
-      <button
-        type="button"
-        data-testid="space-issues"
-        aria-expanded={issuesOpen}
-        title={issueCount > 0 ? undefined : nothing}
-        // With nothing unanswered the glyph stands alone, named "Nothing
-        // to fix" (space-1).
-        aria-label={issueCount > 0 ? undefined : nothing}
-        // Amber says attention is owed. With nothing unanswered none is,
-        // so the control stays reachable while reading as settled
-        // (space-55).
-        className={`flex items-center gap-1 text-sm hover:underline ${
-          issueCount > 0 ? "text-amber-700 dark:text-amber-300" : "text-neutral-500"
-        }`}
-        onClick={() => onIssuesOpen(!issuesOpen)}
-      >
-        <span aria-hidden>⚠</span>
-        {issueCount > 0
-          ? i18n._({
-              id: "{count} to fix",
-              values: { count: issueCount },
-              comment: "the header's control after its warning glyph: how many repairs and problems wait for an answer; opens the list",
-            })
-          : null}
-      </button>
-    ) : null;
+  const issuesLabel = blocking
+    ? i18n._({ id: "Needs attention", comment: "saved data currently blocks an operation" })
+    : i18n._({ id: "Saved work", comment: "open an optional review of earlier saved work" });
+  const issues = groups.diagnostics.length > 0 ? (
+    <button type="button" data-testid="space-issues" aria-expanded={issuesOpen} aria-label={issuesLabel}
+      className={`flex items-center gap-1 text-sm hover:underline ${blocking ? "text-amber-700 dark:text-amber-300" : "text-neutral-500"}`}
+      onClick={() => onIssuesOpen(!issuesOpen)}
+    >
+      {blocking ? <span aria-hidden>⚠</span> : null}
+      {issuesLabel}
+    </button>
+  ) : null;
   const empty = groups.git.ok && listed && !refresh && !issues;
   return (
     <header

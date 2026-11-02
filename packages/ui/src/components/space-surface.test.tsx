@@ -20,7 +20,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { GroupsState, RepositoryState, SessionInfo } from "@sublang/spex-core/protocol";
 
-import { activateLanguage } from "../i18n.js";
+import { activateLanguage, i18n } from "../i18n.js";
 import { deliverServerMessageForTests, setClientForTests, useAppStore } from "../state/store.js";
 import {
   BRANCH,
@@ -189,13 +189,13 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
       ),
     );
     const issues = screen.getByTestId("space-issues");
-    expect(issues.textContent).toBe("⚠2 to fix");
-    expect(issues.className).toContain("amber");
+    expect(issues.textContent).toBe("Saved work");
+    expect(issues.className).not.toContain("amber");
     expect(screen.queryByTestId("space-issues-list")).toBeNull();
     fireEvent.click(issues);
     const list = screen.getByTestId("space-issues-list");
-    expect(screen.getByRole("region", { name: "To fix" })).toBe(list);
-    expect(screen.getByTestId("space-issues-heading").textContent).toBe("To fix (2)");
+    expect(screen.getByRole("region", { name: "Saved work" })).toBe(list);
+    expect(screen.getByTestId("space-issues-heading").textContent).toBe("Saved work");
     expect(list.textContent).toContain("Finish or abort the merge in your terminal");
     expect(list.textContent).not.toContain("MERGE_HEAD");
     expect(within(list).getAllByRole("listitem")).toHaveLength(2);
@@ -205,28 +205,15 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
 
   test.each(["en", "zh"] as const)("storage diagnostics in %s explain the next step by code and disclose technical details only on request", async (language) => {
     activateLanguage(language);
-    const words = language === "en" ? {
-      heading: "⚠5 to fix",
-      older: "Older session not imported",
-      folder: "Older session needs a project folder",
-      generic: "Saved data needs attention",
-      recover: "Share these details for help recovering this session",
-      choose: "Choose its project folder, then restart Spex to retry",
-      repair: "Share these details for help repairing this data",
-      blocking: "Needs repair before continuing",
-      nonblocking: "Other work can continue",
-      details: "Details",
-    } : {
-      heading: "⚠5 项待处理",
-      older: "旧版会话尚未导入",
-      folder: "旧版会话需要关联项目文件夹",
-      generic: "已保存的数据需要处理",
-      recover: "提供这些详情，以获取恢复此会话的帮助",
-      choose: "选择其项目文件夹，然后重启 Spex 重试",
-      repair: "提供这些详情，以获取修复此数据的帮助",
-      blocking: "修复后才能继续相关操作",
-      nonblocking: "其他工作可继续",
-      details: "详情",
+    const words = {
+      heading: `⚠${i18n._("Needs attention")}`,
+      older: i18n._("An older conversation can’t be opened"),
+      folder: i18n._("A saved conversation needs a project folder"),
+      generic: i18n._("Saved data needs attention"),
+      preserved: i18n._("Spex could not read this saved conversation. The original file is still saved."),
+      repair: i18n._("Spex could not use this saved file."),
+      blocking: i18n._("This must be resolved before using the affected data."),
+      details: i18n._("Technical details"),
     };
     const diagnostics: GroupsState["diagnostics"] = [
       { code: "session-import", file: "/old/sessions/one.json", reason: "unsupported legacy schema 1", blocking: false },
@@ -249,9 +236,9 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
       words.generic,
     ];
     const guidance = [
-      words.recover,
-      words.recover,
-      words.choose,
+      words.preserved,
+      words.preserved,
+      words.preserved,
       words.repair,
       words.repair,
     ];
@@ -259,9 +246,9 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
       const entry = diagnostics[index]!;
       expect(within(row).getByText(summaries[index]!).closest("details")).toBeNull();
       expect(within(row).getByText(guidance[index]!).closest("details")).toBeNull();
-      expect(within(row).getByTestId("space-diagnostic-impact").textContent).toBe(
-        entry.blocking ? words.blocking : words.nonblocking,
-      );
+      const impact = within(row).queryByTestId("space-diagnostic-impact");
+      if (entry.blocking) expect(impact?.textContent).toBe(words.blocking);
+      else expect(impact).toBeNull();
       const details = row.querySelector("details")!;
       expect(details.open).toBe(false);
       expect(within(row).getByText(entry.file).closest("details")).toBe(details);
@@ -286,21 +273,21 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
       { open: false },
     );
     // Displaying it settles nothing: it still counts (space-54).
-    expect(screen.getByTestId("space-issues").textContent).toBe("⚠1 to fix");
+    expect(screen.getByTestId("space-issues").textContent).toBe("Saved work");
     fireEvent.click(screen.getByTestId("space-issues"));
     const row = screen.getByTestId("space-repair");
     expect(row.dataset.kind).toBe("repository");
     // Named by the project and its group, the folder it last ran in
     // secondary, no sentence (space-46, DR-159, DR-069).
-    expect(within(row).getByTestId("space-repair-title").textContent).toBe("infra · jane — Project folder not connected on this computer");
+    expect(within(row).getByTestId("space-repair-title").textContent).toBe("Continue 5 saved conversations");
     expect(row.textContent).not.toContain("infra-spex");
-    expect(within(row).getByTestId("space-repair-folder").textContent).toBe("/code/infra · 5 sessions ran there");
-    expect(row.querySelectorAll("p")).toHaveLength(1);
+    expect(within(row).getByTestId("space-repair-folder").textContent).toBe("Previously used folder/code/infra");
+    expect(row.textContent).toContain("Choose an existing project folder to continue these conversations there.");
     // Its controls, in their order (space-47).
     expect(within(row).getAllByRole("button").map((button) => button.textContent)).toEqual([
       "Use /code/infra",
-      "Choose folder…",
-      "Not on this computer",
+      "Choose project…",
+      "Not now",
     ]);
 
     // One gesture pairs the records with the folder, their key naming the
@@ -312,9 +299,84 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
       ]),
     );
     const resolved = await screen.findByTestId("space-repair-resolved");
-    expect(resolved.textContent).toContain("infra · now a project at /code/infra, 5 sessions listed");
+    expect(resolved.textContent).toContain("Project folder saved: /code/infra");
     fireEvent.click(within(resolved).getByRole("button", { name: "Open project" }));
     expect(onOpenProject).toHaveBeenCalledWith("jane/infra-spex");
+  });
+
+  test("saved work is optional, recognizable, and one folder choice includes every conversation", async () => {
+    const repair = unpaired({
+      name: "slalph-spex", group: "slalph", projectName: undefined,
+      sessions: 5, proposal: undefined,
+      directories: ["/Users/jane/Projects", "/old/other"],
+      checked: [{ path: "/Users/jane/Projects", here: true, repo: false }],
+      conversations: [
+        { title: "Plan the onboarding flow", updatedAt: NOW },
+        { updatedAt: NOW - 86_400_000 },
+        {},
+      ],
+      details: [{ file: "/records/older.spex.json", reason: "legacy session needs a cwd" }],
+    });
+    await renderGroups(repoState({}, { diagnostics: [{ file: "workspace/slalph/slalph-spex", reason: "no working folder", blocking: false, repair }] }), { open: false });
+    const review = screen.getByRole("button", { name: "Saved work" });
+    expect(review.className).not.toContain("amber");
+    expect(screen.queryByTestId("space-issues-list")).toBeNull();
+    fireEvent.click(review);
+    const row = screen.getByTestId("space-repair");
+    expect(screen.getAllByTestId("space-repair")).toHaveLength(1);
+    expect(row.textContent).not.toContain("slalph");
+    expect(row.textContent).toContain("Continue 5 saved conversations");
+    expect(row.textContent).toContain("Plan the onboarding flow");
+    expect(row.textContent).toContain("Conversation saved");
+    expect(row.textContent).toContain("Untitled conversation");
+    expect(row.textContent).toContain("and 2 more");
+    const details = row.querySelector("details")!;
+    expect(details.open).toBe(false);
+    expect(within(row).getByText("This is not the main folder of a Git project.").closest("details")).toBe(details);
+    expect(within(row).getByText("legacy session needs a cwd").closest("details")).toBe(details);
+    fireEvent.click(within(row).getByRole("button", { name: "Choose project…" }));
+    const field = within(row).getByLabelText("Existing project folder") as HTMLInputElement;
+    expect(field.value).toBe("");
+    expect(row.textContent).toContain("Select an existing project; this does not create one.");
+    expect(row.textContent).toContain("This choice applies to all these conversations.");
+    fireEvent.keyDown(field, { key: "Escape" });
+    await waitFor(() => expect(document.activeElement).toBe(within(row).getByRole("button", { name: "Choose project…" })));
+    expect(calls("project.rebind")).toHaveLength(0);
+  });
+
+  test("a folder choice keeps validation beside that field, preserves the draft, and prevents duplicate submission", async () => {
+    let resolve!: (value: unknown) => void;
+    let reject!: (reason: Error) => void;
+    commandMock.mockImplementation(async (type: string, fields: Record<string, unknown> = {}) => {
+      if (type === "project.rebind") return new Promise((yes, no) => { resolve = yes; reject = no; });
+      if (type === "project.list") return [];
+      return answer(type, fields);
+    });
+    await renderGroups(repoState({}, { diagnostics: [{ file: "workspace/jane/infra-spex", reason: "no folder", blocking: false, repair: unpaired({ proposal: undefined }) }] }), { open: false });
+    fireEvent.click(screen.getByTestId("space-issues"));
+    const row = screen.getByTestId("space-repair");
+    fireEvent.click(within(row).getByRole("button", { name: "Choose project…" }));
+    const field = within(row).getByLabelText("Existing project folder") as HTMLInputElement;
+    fireEvent.change(field, { target: { value: "/code/parent" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+    fireEvent.keyDown(field, { key: "Enter" });
+    expect(calls("project.rebind")).toHaveLength(1);
+    expect(field.disabled).toBe(true);
+    expect((within(row).getByRole("button", { name: "Cancel" }) as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => reject(new Error("/code/parent is not the main folder of a Git project. Choose an existing project folder.")));
+    const error = within(row).getByRole("alert");
+    expect(field.value).toBe("/code/parent");
+    expect(field.getAttribute("aria-invalid")).toBe("true");
+    expect(field.getAttribute("aria-describedby")).toContain(error.id);
+    fireEvent.change(field, { target: { value: "/code/parent/infra" } });
+    expect(field.getAttribute("aria-invalid")).toBeNull();
+    fireEvent.click(within(row).getByRole("button", { name: "Use this folder" }));
+    await act(async () => resolve({ id: "jane/infra-spex", name: "infra", path: "/code/parent/infra", registeredAt: 1 }));
+    expect((await screen.findByTestId("space-repair-resolved")).textContent).toContain("Project folder saved: /code/parent/infra");
+    expect(calls("project.rebind")).toEqual([
+      { projectId: "jane/infra-spex", path: "/code/parent", aliases: ["/code/infra"] },
+      { projectId: "jane/infra-spex", path: "/code/parent/infra", aliases: ["/code/infra"] },
+    ]);
   });
 
   test("a repair stays answerable while its spex repository syncs: the sync refuses nothing (space-47, space-21)", async () => {
@@ -335,7 +397,7 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     const row = screen.getByTestId("space-repair");
     const add = within(row).getByTestId("space-repair-use") as HTMLButtonElement;
     expect(add.disabled).toBe(false);
-    expect((within(row).getByRole("button", { name: "Choose folder…" }) as HTMLButtonElement).disabled).toBe(false);
+    expect((within(row).getByRole("button", { name: "Choose project…" }) as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(add);
     await waitFor(() => expect(calls("project.rebind")).toEqual([{ projectId: KEY, path: "/code/infra", aliases: ["/code/infra"] }]));
   });
@@ -362,7 +424,7 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     const row = screen.getByTestId("space-repair");
     expect(row.dataset.kind).toBe("folder");
     expect(row.textContent).toContain("/code/old");
-    expect(row.textContent).toContain("Records not on this computer");
+    expect(row.textContent).toContain("The saved work for this folder is no longer on this computer.");
     expect(within(row).queryByTestId("space-repair-use")).toBeNull();
     // The Overview tab's word for the same act (projects-9, DR-172).
     expect(within(row).getByTestId("space-repair-remove").textContent).toBe("Remove project");
@@ -394,23 +456,23 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     await renderGroups(repoState({}, { diagnostics: [{ file: "workspace/jane/infra-spex", reason: "no working folder pairs it", blocking: false, repair }] }), { open: false });
     fireEvent.click(screen.getByTestId("space-issues"));
     const row = screen.getByTestId("space-repair");
-    expect(within(row).getByTestId("space-repair-title").textContent).toBe("infra · jane — Project folder not connected on this computer");
-    expect(within(row).queryByText("Not a Git project folder — choose the project folder, not its parent") !== null).toBe(here && !unknown);
-    expect(within(row).queryByText("Last-used folder not found on this computer") !== null).toBe(!here && !unknown);
+    expect(within(row).getByTestId("space-repair-title").textContent).toBe("Continue 2 saved conversations");
+    expect(within(row).queryByText("This is not the main folder of a Git project.") !== null).toBe(here && !unknown);
+    expect(within(row).queryByText("This folder was not found.") !== null).toBe(!here && !unknown);
     expect(within(row).queryByTestId("space-repair-use")).toBeNull();
-    expect(within(row).getAllByRole("button").map((button) => button.textContent)).toEqual(["Choose folder…", "Not on this computer"]);
-    expect(within(row).getByRole("button", { name: "Not on this computer" }).title).toBe("Set aside this reminder on this computer; saved sessions stay");
-    // "Choose folder…" opens the row as an editor over the recorded path:
+    expect(within(row).getAllByRole("button").map((button) => button.textContent)).toEqual(["Choose project…", "Not now"]);
+    expect(within(row).getByRole("button", { name: "Not now" }).title).toBe("Leave this for later; saved conversations are kept");
+    // "Choose project…" opens the row as an editor over the recorded path:
     // "Use this folder" and Cancel, Escape cancelling, its note a phrase
     // (space-47).
-    fireEvent.click(within(row).getByRole("button", { name: "Choose folder…" }));
-    const path = within(row).getByLabelText("Project folder for infra") as HTMLInputElement;
-    expect(path.value).toBe("/gone/worktree");
-    expect(row.textContent).toContain("Folder location saved only on this computer");
+    fireEvent.click(within(row).getByRole("button", { name: "Choose project…" }));
+    const path = within(row).getByLabelText("Existing project folder") as HTMLInputElement;
+    expect(path.value).toBe("");
+    expect(row.textContent).toContain("Select an existing project; this does not create one.");
     expect(within(row).getByTestId("space-repair-submit").textContent).toBe("Use this folder");
     fireEvent.change(path, { target: { value: "" } });
     fireEvent.click(within(row).getByTestId("space-repair-submit"));
-    expect(within(row).getByRole("alert").textContent).toBe("Name a folder");
+    expect(within(row).getByRole("alert").textContent).toBe("Choose an existing project folder");
     fireEvent.keyDown(path, { key: "Escape" });
     expect(within(row).queryByTestId("space-repair-submit")).toBeNull();
     expect(calls("project.rebind")).toHaveLength(0);
@@ -426,21 +488,21 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     // It counts as no issue, but the control stays reachable — and
     // with nothing unanswered it stops wearing attention's colour.
     const issues = screen.getByTestId("space-issues");
-    expect(issues.textContent).toBe("⚠");
-    expect(issues.title).toBe("Nothing to fix");
-    expect(issues.getAttribute("aria-label")).toBe("Nothing to fix");
+    expect(issues.textContent).toBe("Saved work");
+    expect(issues.title).toBe("");
+    expect(issues.getAttribute("aria-label")).toBe("Saved work");
     expect(issues.className).not.toContain("amber");
     fireEvent.click(issues);
     expect(screen.getByTestId("space-issues-list").className).not.toContain("amber");
     const row = screen.getByTestId("space-repair-declined");
-    expect(within(row).getByTestId("space-repair-title").textContent).toBe("infra · jane — Project folder not connected on this computer · set aside");
+    expect(within(row).getByTestId("space-repair-title").textContent).toBe("Continue 5 saved conversations");
     // Its condition is named for assistive technology, by mark and word
     // (space-55).
-    expect(row.textContent).toContain("Set aside");
+    expect(row.textContent).toContain("For later");
     // Declining strips nothing: the row still offers what it offered.
-    expect(within(row).getByRole("button", { name: "Choose folder…" })).toBeTruthy();
-    expect(within(row).queryByRole("button", { name: "Not on this computer" })).toBeNull();
-    expect(screen.getByTestId("space-issues-heading").textContent).toBe("To fix (0) · 1 set aside");
+    expect(within(row).getByRole("button", { name: "Choose project…" })).toBeTruthy();
+    expect(within(row).queryByRole("button", { name: "Not now" })).toBeNull();
+    expect(screen.getByTestId("space-issues-heading").textContent).toBe("Saved work");
   });
 
   test("space-56: an outcome and a declined row hold their places until the reader's Refresh, as focus and the count move on", async () => {
@@ -493,30 +555,30 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
       }
     });
     const { onOpenProject } = await renderGroups(report(), { open: false });
-    expect(screen.getByTestId("space-issues").textContent).toBe("⚠3 to fix");
+    expect(screen.getByTestId("space-issues").textContent).toBe("Saved work");
     fireEvent.click(screen.getByTestId("space-issues"));
     const items = () => within(screen.getByTestId("space-issues-list")).getAllByRole("listitem");
     const at = (index: number) => items()[index]!;
     const [infra, , docs] = screen.getAllByTestId("space-repair");
 
     // A declined row keeps its place, and counts no more.
-    fireEvent.click(within(infra!).getByRole("button", { name: "Not on this computer" }));
+    fireEvent.click(within(infra!).getByRole("button", { name: "Not now" }));
     await waitFor(() => expect(at(0).dataset.testid).toBe("space-repair-declined"));
     expect(at(0).textContent).toContain("infra");
-    expect(at(0).textContent).toContain("set aside");
-    expect(screen.getByTestId("space-issues").textContent).toBe("⚠2 to fix");
-    expect(screen.getByTestId("space-issues-heading").textContent).toBe("To fix (2) · 1 set aside");
-    expect(live()).toBe("infra set aside");
+    expect(at(0).textContent).toContain("For later");
+    expect(screen.getByTestId("space-issues").textContent).toBe("Saved work");
+    expect(screen.getByTestId("space-issues-heading").textContent).toBe("Saved work");
+    expect(live()).toBe("Saved for later. Your conversations are kept.");
 
     // The last row gives way to its outcome in its own place.
     fireEvent.click(within(docs!).getByTestId("space-repair-use"));
     await waitFor(() => expect(at(2).dataset.testid).toBe("space-repair-resolved"));
-    expect(at(2).textContent).toContain("docs · now a project at /code/docs, 1 session listed");
+    expect(at(2).textContent).toContain("Project folder saved: /code/docs");
     // The count falls, the live region counts what the header does —
     // the declined row not among them — and focus wraps to the next
     // unanswered repair's first control.
-    expect(screen.getByTestId("space-issues").textContent).toBe("⚠1 to fix");
-    expect(live()).toBe("1 left to fix.");
+    expect(screen.getByTestId("space-issues").textContent).toBe("Saved work");
+    expect(live()).toBe("Project folder saved: /code/docs");
     await waitFor(() => expect(document.activeElement).toBe(within(at(1)).getByTestId("space-repair-use")));
     expect(at(1).textContent).toContain("slc");
 
@@ -534,7 +596,7 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     // Open project, the one way off the surface.
     fireEvent.click(within(at(0)).getByTestId("space-repair-use"));
     await waitFor(() => expect(at(0).dataset.testid).toBe("space-repair-resolved"));
-    expect(live()).toBe("Nothing left to fix.");
+    expect(live()).toBe("Project folder saved: /code/slc");
     const openSlc = within(at(0)).getByRole("button", { name: "Open project" });
     await waitFor(() => expect(document.activeElement).toBe(openSlc));
     fireEvent.click(openSlc);
@@ -544,8 +606,8 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     // though the core reports nothing, until the reader's Refresh.
     fireEvent.click(within(at(1)).getByTestId("space-repair-use"));
     await waitFor(() => expect(at(1).dataset.testid).toBe("space-repair-resolved"));
-    expect(at(1).textContent).toContain("infra · now a project at /code/infra, 5 sessions listed");
-    expect(live()).toBe("Nothing left to fix.");
+    expect(at(1).textContent).toContain("Project folder saved: /code/infra");
+    expect(live()).toBe("Project folder saved: /code/infra");
     await waitFor(() => expect(document.activeElement).toBe(within(at(1)).getByRole("button", { name: "Open project" })));
     expect(home.current.diagnostics).toEqual([]);
     expect(items()).toHaveLength(2);

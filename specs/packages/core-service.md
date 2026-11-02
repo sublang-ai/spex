@@ -241,7 +241,10 @@ When a rescan replaces an indexed session's history, the core shall publish `ses
 
 #### core-service-85
 
-When a client sends `project.rebind` with `projectId`, local `path`, optional recorded `aliases` and optional Git `revision`, the core shall apply the existing-identity binding rules [[storage-6](storage.md#storage-6)] after verifying that the path is a repository root and the project has no live session — no turn in flight ([DR-051](../decisions/051-runtime-held-for-a-turn.md)).
+When a client sends `project.rebind` with `projectId`, local `path`, optional recorded `aliases` and optional Git `revision`, the core shall apply the existing-identity binding rules [[storage-6](storage.md#storage-6)] after verifying that the path is a repository root and the project has no live session — no turn in flight ([DR-051](../decisions/051-runtime-held-for-a-turn.md)):
+
+- an invalid folder refusal names the exact candidate and explains that an existing Git project folder is required and none is created;
+- after pairing, older-session imports are retried for that repository alone before the serialized session rescan publishes their results [[core-service-60](#core-service-60)], successful imports losing their old diagnostics and unresolved failures preserving their source files [[storage-12](storage.md#storage-12)] ([DR-182](../decisions/182-saved-work-is-a-choice-not-setup-debt.md)).
 
 #### core-service-86
 
@@ -251,6 +254,8 @@ When a client sends `storage.diagnostics`, the core shall report each unresolved
 - a diagnostic a local folder would repair carries that repair's own facts — the project it names with that project's registered name, the working directories recorded for it, how many sessions record them, what the core found about each folder it names, and the one folder it proposes where exactly one qualifies [[space-53](space.md#space-53)] — so a client offers the repair, and its proposal, from the data rather than from the reason's wording;
 - a diagnostic no local folder repairs carries none, and a project is named by its registered name rather than by its identifier wherever a repair names it.
 - failed former-store imports carry optional code `session-import`, and failed older desktop-session imports carry `session-folder-required` when no normalized project folder is available, otherwise `session-upgrade`, assigned at the reporting operation without classifying the reason's prose; these codes change neither preservation nor blocking ([DR-177](../decisions/177-repairs-explain-the-next-step.md)).
+- a folder repair carries a project name only from valid project metadata and previews of at most three most-recent saved conversations, titled by a single-line excerpt of at most 120 characters from the session listing’s title [[core-service-32](#core-service-32)] and carrying a known saved timestamp where one exists, without fabricating dates or project names;
+- a `session-folder-required` diagnostic carries its repository explicitly, so the folder diagnostic's fold can keep it in the same task [[space-46](space.md#space-46)] without matching reason text.
 
 ### Boss Turns
 
@@ -1030,7 +1035,7 @@ Where fixture sessions another host wrote [[core-service-60](#core-service-60)] 
 
 #### core-service-88
 
-When an integration suite changes stored history and folder pairs through a running core, it shall verify removal and restoration of a recorded-path alias [[core-service-85](#core-service-85)], diagnostics preserving unresolved files and distinguishing skipped former-store imports, older desktop-session failures and a missing project folder through their codes [[core-service-86](#core-service-86)], and history-replacement notification before the updated summary [[core-service-87](#core-service-87)].
+When an integration suite changes stored history and folder pairs through a running core, it shall verify removal and restoration of a recorded-path alias and immediate repository-scoped older-session import retries after a folder is saved, without restarting, with a remaining import failure preserved [[core-service-85](#core-service-85)], diagnostics preserving unresolved files, exposing bounded recognizable conversation previews and distinguishing skipped former-store imports, older desktop-session failures and a missing project folder through their codes [[core-service-86](#core-service-86)], and history-replacement notification before the updated summary [[core-service-87](#core-service-87)].
 
 #### core-service-77
 
