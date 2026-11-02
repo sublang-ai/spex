@@ -240,7 +240,7 @@ When an authoring session [[storage-23](storage.md#storage-23)] writes a spec pa
 
 #### environments-47
 
-When a publication or its preview is requested, the package manager shall establish the org's publishing status before offering a checked preview or uploading, using the selected registry's current authorized namespaces [[environments-27](#environments-27)] and its registry grant [[environments-38](#environments-38)] ([DR-199](../decisions/199-publishing-names-need-registry-authority.md)):
+When a publication or its preview is requested, the package manager shall establish the org's publishing status before offering a checked preview or uploading, using the selected registry's current authorized namespaces [[environments-27](#environments-27)] and its registry grant [[environments-38](#environments-38)] ([DR-200](../decisions/200-publishing-names-need-registry-authority.md)):
 
 | Registry grant and answer | Outcome |
 | --- | --- |

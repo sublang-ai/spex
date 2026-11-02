@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Repository-system audit: the tag-to-download graph must not publish a
-// partial release or let a native packager publish ahead of the other OS.
+// Repository-system audit: both release channels require full validation of
+// their tagged tree; native downloads must publish together after packaging.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -15,26 +15,60 @@ import { parse } from "yaml";
 const root = new URL("../", import.meta.url);
 const read = (path) => readFileSync(new URL(path, root), "utf8");
 const workflow = parse(read(".github/workflows/app-release.yml"));
+const cliWorkflow = parse(read(".github/workflows/release.yml"));
 const desktop = JSON.parse(read("apps/desktop/package.json"));
 
-test("release-40: only app tags enter CI-gated preparation, with version and notes checked before builds", () => {
-  assert.deepEqual(workflow.on, { push: { tags: ["app-v*"] } });
-  assert.deepEqual(workflow.permissions, {});
+test("release-45: each channel directly gates publication on full validation of its exact tagged tree", () => {
+  for (const [channel, current] of [["app", workflow], ["cli", cliWorkflow]]) {
+    assert.deepEqual(current.on, { push: { tags: [`${channel}-v*`] } });
+    assert.deepEqual(current.permissions, {});
+    assert.deepEqual(current.jobs.validate, {
+      uses: "./.github/workflows/ci.yml",
+      permissions: { contents: "read" },
+      with: { full: true, channel },
+    }, "a local reusable call validates the caller's exact commit with explicit full channel scope");
+    assert.equal(current.jobs["require-ci-green"], undefined, "a prior CI run cannot substitute for full validation");
+    const releaseNeeds = [current.jobs.release.needs].flat();
+    assert.ok(releaseNeeds.includes("validate"), `${channel} publication directly requires full validation`);
+    for (const [id, job] of Object.entries(current.jobs)) {
+      assert.equal(job.if, undefined, `${channel}/${id} must skip when a required job fails, skips or is cancelled`);
+      assert.equal(job["continue-on-error"], undefined, `${channel}/${id} cannot forgive failure`);
+      for (const step of job.steps ?? []) {
+        if (step.uses?.startsWith("actions/checkout@")) {
+          assert.equal(step.with?.ref, undefined, "check out the workflow's tagged tree, not a moving branch");
+        }
+      }
+    }
+  }
+});
+
+test("release-40: app preparation checks version, notes and runtime sources without repeating validated suites", () => {
   assert.equal(workflow.concurrency["cancel-in-progress"], false);
-  const gate = workflow.jobs["require-ci-green"];
-  assert.deepEqual(gate.permissions, { actions: "read" });
-  const wait = gate.steps[0].run;
-  assert.match(wait, /actions\/workflows\/ci\.yml\/runs\?head_sha=\$SHA/);
-  assert.match(wait, /conclusion" = "success"/);
-  assert.match(wait, /seq 1 60/);
-  assert.match(wait, /Timed out/);
   const prepare = workflow.jobs.prepare;
-  assert.equal(prepare.needs, "require-ci-green");
+  assert.equal(prepare.needs, "validate");
   const commands = prepare.steps.filter((s) => s.run).map((s) => s.run);
   assert.match(commands[0], /release-notes\.mjs check --tag="\$GITHUB_REF_NAME"/);
   assert.match(commands[1], /release-notes\.mjs notes/);
-  assert.deepEqual(commands.slice(2), ["node scripts/dependency-closure.mjs --registry-only", "npm ci", "npm run build", "npm test"]);
+  assert.deepEqual(commands.slice(2), ["node scripts/dependency-closure.mjs --registry-only"]);
   assert.equal(prepare.steps.find((s) => s.uses?.startsWith("actions/checkout@")).with["fetch-depth"], 0);
+});
+
+test("release-45: CLI publication builds and inspects the package without repeating its validated lifecycle tests", () => {
+  const release = cliWorkflow.jobs.release;
+  assert.equal(release.needs, "validate");
+  assert.deepEqual(release.permissions, { contents: "write", "id-token": "write" });
+  const commands = release.steps.filter((step) => step.run).map((step) => step.run);
+  const install = commands.indexOf("npm ci");
+  const build = commands.indexOf("npm run build -w packages/cli");
+  const publish = commands.indexOf("npm publish -w packages/cli --provenance --access public --ignore-scripts");
+  assert.ok(install >= 0 && install < build && build < publish);
+  assert.ok(publish >= 0, "publishing reuses full validation without rerunning prepublishOnly");
+  assert.equal(commands.some((command) => /\bnpm (test|run build)$/.test(command)), false);
+  assert.ok(commands.slice(build + 1, publish).some((command) => command.includes("npm pack --dry-run -w packages/cli")));
+  assert.ok(commands.slice(build + 1, publish).some((command) => command.includes('"$TAG_VERSION" != "$PKG_VERSION"')));
+  assert.ok(commands.slice(build + 1, publish).some((command) => command.includes('if [ ! -s /tmp/release-notes.md ]')));
+  const cli = JSON.parse(read("packages/cli/package.json"));
+  assert.equal(cli.scripts.prepublishOnly, "npm run build && npm test", "ordinary package publication retains its lifecycle gate");
 });
 
 test("release-40: both native jobs build locked dependencies and upload their exact versioned download", () => {
@@ -75,7 +109,7 @@ test("release-40: both native jobs build locked dependencies and upload their ex
 
 test("release-40: the sole publisher waits for both platforms, requires both downloads and adds checksums", () => {
   const release = workflow.jobs.release;
-  assert.deepEqual(release.needs, ["prepare", "package"]);
+  assert.deepEqual(release.needs, ["validate", "prepare", "package"]);
   assert.equal(release.if, undefined, "failed needs must skip publication");
   assert.deepEqual(release.permissions, { contents: "write" });
   assert.deepEqual(Object.entries(workflow.jobs).filter(([, j]) => j.permissions?.contents === "write").map(([id]) => id), ["release"]);

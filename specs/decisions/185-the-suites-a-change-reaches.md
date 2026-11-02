@@ -9,6 +9,8 @@ Accepted (2026-11-02) on the owner's direction to run no test a change cannot br
 Amends [DR-145](145-merge-on-green.md) and [DR-166](166-pull-requests-run-without-macos.md) in the pull request's matrix and in what the suites run: the Linux test job on Node 22 alone, the journeys in three shards, and the test job running the suites the change reaches, the classifier naming that reach beside documentation alone; and DR-166 in documentation alone, which a Markdown file inside a workspace no longer is.
 Amends [DR-169](169-documentation-alone-reports-the-suites-names.md) in the stand-in's names, which follow this matrix.
 
+Amended by [DR-199](199-release-gated-full-validation.md) in root tooling ownership, local untracked and documentation selection, validation timing and the merge gate: selected checks on pull requests, full channel checks at publication or on request, one required `checks` result, and no main or nightly run.
+
 ## Context
 
 A pull request's run was bounded by its journeys job: thirty-five minutes for forty journey files on one worker, each booting a shell and a core.

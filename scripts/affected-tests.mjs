@@ -2,12 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The suites a change reaches (release-34, release-43, DR-185): the
-// paths a change touched, each classed as documentation, a workspace or
-// the root, and the workspaces they reach through the internal
-// dependency graph -- the changed ones and every transitive dependent.
-// A root path reaches everything; documentation -- docs/, specs/ and
-// Markdown outside the workspaces -- reaches nothing.
+// The suites a change reaches (release-34, release-43, DR-199): changed
+// workspaces and known root tools select their owners and transitive
+// dependents. Unknown root paths reach everything; documentation --
+// docs/, specs/ and Markdown outside workspaces -- reaches nothing.
 //
 //   node scripts/affected-tests.mjs [--base <ref>] [--paths <file>] [--root <dir>]
 //       prints {"docsOnly":bool,"all":bool,"workspaces":[...]}
@@ -15,12 +13,53 @@
 //       prints docs-only=true|false and affected=all|<folders>
 //   ... --run [all|"<folders>"]
 //       runs the script tests, then the tests of everything or of each folder
+//       with no explicit selection, documentation alone runs CLI tests and lint
 
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, posix, resolve } from "node:path";
 
 const DEPENDENCY_FIELDS = ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"];
+// Exact ownership, never a blanket exemption for scripts/ or .github/.
+// Unlisted tooling, including dependency and localization configuration,
+// keeps the conservative fallback to every workspace (release-34).
+const ROOT_OWNERS = new Map([
+  ...[
+    ".github/workflows/ci.yml",
+    ".github/workflows/app-release.yml",
+    ".github/workflows/release.yml",
+    ".github/workflows/hub-lane.yml",
+    "scripts/affected-tests.mjs",
+    "scripts/affected-tests.test.mjs",
+    "scripts/ci-verdict.mjs",
+    "scripts/ci-workflow.test.mjs",
+    "scripts/app-release-workflow.test.mjs",
+    "scripts/prepush.sh",
+    "scripts/merge-on-green.sh",
+    "scripts/test-linux.sh",
+    "scripts/linux-ci/Dockerfile",
+    "scripts/release-notes.mjs",
+    "scripts/release-notes.test.mjs",
+    "scripts/smoke.mjs",
+    "scripts/smoke.test.mjs",
+    "scripts/install-smoke.mjs",
+    "scripts/cli-smoke.mjs",
+    "scripts/desktop-smoke.mjs",
+    "scripts/migration-smoke.mjs",
+    "scripts/desktop-runner.test.mjs",
+    "scripts/source-launch.integration.test.mjs",
+    "scripts/live-output.test.mjs",
+    "scripts/inspection-browser-cache.test.mjs",
+    "scripts/inspection-evidence.test.mjs",
+    "scripts/team-server-local.test.mjs",
+  ].map((path) => [path, []]),
+  ["scripts/start-desktop.mjs", ["apps/desktop"]],
+  ["scripts/desktop-runner.mjs", ["apps/desktop"]],
+  ["scripts/start-server.mjs", ["apps/server"]],
+  ["scripts/storage-git.mjs", ["packages/core"]],
+  ["scripts/native-approval-stage.mjs", ["packages/core"]],
+  ["scripts/browser-preparation.ts", ["apps/desktop", "e2e"]],
+]);
 
 function readJson(file) {
   return JSON.parse(readFileSync(file, "utf8"));
@@ -99,7 +138,11 @@ export function classify(root, paths) {
     docsOnly = false;
     const owner = workspaces.find((workspace) => path.startsWith(`${workspace.folder}/`));
     if (owner) changed.add(owner.folder);
-    else all = true;
+    else {
+      const owners = ROOT_OWNERS.get(path);
+      if (owners === undefined || owners.some((folder) => !workspaces.some((workspace) => workspace.folder === folder))) all = true;
+      else for (const folder of owners) changed.add(folder);
+    }
   }
   // Every transitive dependent of a changed workspace is reached too.
   const dependents = new Map(workspaces.map((workspace) => [workspace.folder, []]));
@@ -118,10 +161,11 @@ export function classify(root, paths) {
   return { docsOnly, all, workspaces: [...reached].sort() };
 }
 
-/** The paths the working tree changed against the merge base with `base`, both sides of a rename. */
+/** Tracked changes against the merge base, both sides of a rename, and untracked files outside Git's ignores. */
 export function changedPaths(root, base) {
   const output = execFileSync("git", ["diff", "--name-only", "--no-renames", "-z", "--merge-base", base], { cwd: root, encoding: "utf8" });
-  return output.split("\0").filter(Boolean);
+  const untracked = execFileSync("git", ["ls-files", "--others", "--exclude-standard", "-z"], { cwd: root, encoding: "utf8" });
+  return [...new Set(`${output}${untracked}`.split("\0").filter(Boolean))].sort();
 }
 
 function readPathsFile(file) {
@@ -144,15 +188,21 @@ export function commandsFor(affected) {
   return commands;
 }
 
+function runCommand(root, executable, args) {
+  const label = executable === process.execPath ? "node" : executable;
+  console.log(`affected-tests: ${label} ${args.join(" ")}`);
+  const result = spawnSync(executable, args, { cwd: root, stdio: "inherit", shell: executable === "npm" && process.platform === "win32" });
+  if (result.error) {
+    console.error(`affected-tests: ${label} could not start: ${result.error.message}`);
+    return 1;
+  }
+  return result.status ?? 1;
+}
+
 function run(root, commands) {
   for (const args of commands) {
-    console.log(`affected-tests: npm ${args.join(" ")}`);
-    const result = spawnSync("npm", args, { cwd: root, stdio: "inherit", shell: process.platform === "win32" });
-    if (result.error) {
-      console.error(`affected-tests: npm could not start: ${result.error.message}`);
-      return 1;
-    }
-    if (result.status !== 0) return result.status ?? 1;
+    const status = runCommand(root, "npm", args);
+    if (status !== 0) return status;
   }
   return 0;
 }
@@ -188,7 +238,13 @@ function main(argv) {
   if (options.run) {
     let affected = options.runValue;
     if (affected === undefined) {
-      affected = affectedValue(compute());
+      const result = compute();
+      if (result.docsOnly) {
+        console.log("affected-tests: documentation alone runs the CLI tests and spec lint");
+        return run(options.root, [["test", "-w", "packages/cli"]])
+          || runCommand(options.root, process.execPath, ["packages/cli/dist/cli.js", "lint"]);
+      }
+      affected = affectedValue(result);
       console.log(`affected-tests: the change reaches ${affected === "" ? "no workspace" : affected}`);
     }
     return run(options.root, commandsFor(affected));

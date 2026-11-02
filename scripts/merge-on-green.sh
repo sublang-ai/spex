@@ -6,7 +6,9 @@
 # stand-in for `gh pr merge --auto` elsewhere.
 # GitHub's rollup keeps the checks of every run on the head, so only each
 # workflow's newest run is judged; a status context has no run, stays,
-# and is judged by its state. The merge names the head checked, so a
+# and is judged by its state. The newest CI run must report its aggregate
+# `checks` gate as successful; skipped or absent gates cannot authorize a
+# merge (DR-199). The merge names the head checked, so a
 # push between the read and the merge is refused, not merged.
 # (A close and reopen adds a run; a re-run replaces its own run's checks.)
 # Start it once the head's newest run exists: a run that has not yet
@@ -18,7 +20,7 @@ newest='.statusCheckRollup | map(. + {run: (((.detailsUrl // "") | capture("/run
 head="$(gh pr view "$number" --json headRefOid --jq .headRefOid)"
 echo "Waiting for the checks of #$number at ${head:0:8}"
 while true; do
-  state="$(gh pr view "$number" --json headRefOid,mergeable,statusCheckRollup --jq "($newest)"' as $checks | {head: .headRefOid, mergeable, done: (($checks|length) > 0 and ([$checks[] | .status] | all(. == "COMPLETED"))), green: (($checks|length) > 0 and ([$checks[] | .conclusion] | all(. == "SUCCESS" or . == "SKIPPED" or . == "NEUTRAL")))}' 2>/dev/null || echo '{}')"
+  state="$(gh pr view "$number" --json headRefOid,mergeable,statusCheckRollup --jq "($newest)"' as $checks | {head: .headRefOid, mergeable, done: (($checks|length) > 0 and ([$checks[] | .status] | all(. == "COMPLETED"))), green: (any($checks[]; .workflowName == "CI" and .name == "checks" and .status == "COMPLETED" and .conclusion == "SUCCESS") and ([$checks[] | .conclusion] | all(. == "SUCCESS" or . == "SKIPPED" or . == "NEUTRAL")))}' 2>/dev/null || echo '{}')"
   # A failed or empty read is polled again; only another head is a move.
   now="$(printf '%s' "$state" | node -pe 'JSON.parse(require("fs").readFileSync(0,"utf8")).head || ""' 2>/dev/null || true)"
   if [ -n "$now" ] && [ "$now" != "$head" ]; then
@@ -28,8 +30,8 @@ while true; do
     gh pr merge "$number" --merge --match-head-commit "$head" || { echo "GitHub refused the merge; if the head moved, run again for the new head." >&2; exit 2; }
     echo "Merged #$number"; exit 0
   elif printf '%s' "$state" | node -pe 'const s=JSON.parse(require("fs").readFileSync(0,"utf8")); s.done ? "done" : "pending"' | grep -q done; then
-    echo "The checks finished and are not green:" >&2
-    gh pr view "$number" --json statusCheckRollup --jq "($newest)"' | .[] | select(.conclusion != "SUCCESS" and .conclusion != "SKIPPED" and .conclusion != "NEUTRAL") | [.name, .conclusion] | join(" ")' >&2
+    echo "The checks finished without a successful CI checks gate or with another failure:" >&2
+    gh pr view "$number" --json statusCheckRollup --jq "($newest)"' | .[] | select((.conclusion != "SUCCESS" and .conclusion != "SKIPPED" and .conclusion != "NEUTRAL") or (.workflowName == "CI" and .name == "checks" and .conclusion != "SUCCESS")) | [.name, .conclusion] | join(" ")' >&2
     exit 1
   fi
   sleep 60

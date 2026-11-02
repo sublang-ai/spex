@@ -18,7 +18,7 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 
 Amended by [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md) in what an install does for a playbook: a placed playbook runs, its roles bound by default; `enable` and `disable` retire as acts and as words.
 
-Amended by [DR-199](199-publishing-names-need-registry-authority.md) in the unchecked publishing-rights guidance of export.
+Amended by [DR-200](200-publishing-names-need-registry-authority.md) in the unchecked publishing-rights guidance of export.
 
 ## Context
 
