@@ -8,6 +8,8 @@
 Accepted (2026-10-30).
 Amends [DR-049](049-supported-app-hosts.md) for native Windows hosting and private-storage admission.
 
+Amended by [DR-182](182-published-desktop-runtime-adoption.md) to use the coordinated published runtime packages in place of temporary vendor archives.
+
 ## Context
 
 Node's Windows mode bits do not express the user boundary that private POSIX storage enforces.

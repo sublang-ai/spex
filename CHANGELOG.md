@@ -15,6 +15,10 @@ source; run source with `npm ci` and `npm start` (desktop) or
 
 ## [Unreleased]
 
+### Changed
+
+- Desktop and server builds adopt registry-published Cligent 0.36.2 and Playbook 18.1.1 with checksum-locked shared runtimes; app tags no longer consume local vendor archives.
+
 ### Added
 
 - Fork verification build rebased onto upstream `82961686`, preserving

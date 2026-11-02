@@ -9,6 +9,8 @@ Accepted (2026-10-29) on the owner's direction to publish a shared-engine depend
 Amends [DR-144](144-bounded-session-storage.md) and [DR-153](153-playbook-18-0-1-cligent-0-36-1-slc-0-19-1-adoption.md) by withdrawing the compiler-only nested Playbook exception and raising the slc floor; their storage, Cligent and xstate decisions stand.
 Extends [DR-081](081-the-app-supplies-the-compiler.md): each shell supplies Playbook beside the compiler, while the existing ABI/schema refusal remains.
 
+Amended by [DR-182](182-published-desktop-runtime-adoption.md) for the published Playbook 18.1.1 and Cligent 0.36.2 floors.
+
 ## Context
 
 The app locks Playbook 18.1.0 while slc 0.19.1 brings Playbook 17.11.1 through its ordinary dependency.

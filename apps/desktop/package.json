@@ -1,8 +1,8 @@
 {
   "name": "spex-desktop",
-  "version": "0.9.0-beta.22",
+  "version": "0.9.0-beta.23",
   "private": true,
-  "description": "Spex — the desktop app for running playbooks",
+  "description": "Spex \u2014 the desktop app for running playbooks",
   "author": {
     "name": "SubLang International"
   },
@@ -32,7 +32,7 @@
     "@lingui/core": "^6.7.0",
     "@openai/codex-sdk": "*",
     "@opencode-ai/sdk": "*",
-    "@sublang/playbook": "file:../../vendor/playbook/sublang-playbook-18.1.0-windows.20261030.tgz",
+    "@sublang/playbook": "^18.1.1",
     "@sublang/slc": "^0.20.0",
     "@sublang/spex": "*",
     "@sublang/spex-core": "*",

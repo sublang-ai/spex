@@ -38,8 +38,8 @@
   "dependencies": {
     "@lingui/core": "^6.7.0",
     "@openclaw/fs-safe": "0.26.13",
-    "@sublang/cligent": "file:../../vendor/cligent/sublang-cligent-0.36.1-windows.20261031.1.tgz",
-    "@sublang/playbook": "file:../../vendor/playbook/sublang-playbook-18.1.0-windows.20261030.tgz",
+    "@sublang/cligent": "^0.36.2",
+    "@sublang/playbook": "^18.1.1",
     "@sublang/spex": "*",
     "better-sqlite3": "^12.11.1",
     "esbuild": "^0.28.2",

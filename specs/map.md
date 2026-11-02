@@ -207,6 +207,7 @@ meta.md       The spec of specs
 | [DR-179](decisions/179-session-creation-waits-for-initialization.md) | 179-session-creation-waits-for-initialization.md | Session creation awaits its initialization for two minutes through the existing command-class reply bound |
 | [DR-180](decisions/180-windows-git-source-long-paths.md) | 180-windows-git-source-long-paths.md | Command-scoped Git for Windows long paths for package mirrors without changing user configuration |
 | [DR-181](decisions/181-owned-session-start-wait.md) | 181-owned-session-start-wait.md | Observe the single owned session creation through initialization without a false UI deadline or automatic resend |
+| [DR-182](decisions/182-published-desktop-runtime-adoption.md) | 182-published-desktop-runtime-adoption.md | Published Playbook 18.1.1 and Cligent 0.36.2 adoption for Fork desktop tag verification; retires vendor snapshots and preserves the single-engine and strict-peer contract of DR-167 |
 
 ## Packages
 
