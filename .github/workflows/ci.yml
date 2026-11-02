@@ -25,7 +25,8 @@ env:
 
 jobs:
   # The reach of a pull request's change (release-34, DR-166, DR-185):
-  # documentation alone -- docs/, specs/ and Markdown -- keeps the spec
+  # documentation alone -- docs/, specs/ and Markdown outside the
+  # workspaces -- keeps the spec
   # gates here, the CLI's own tests and the spec lint, and the suites
   # below are skipped, a stand-in reporting their required names
   # (DR-169); any other change names what it reaches -- all for a path

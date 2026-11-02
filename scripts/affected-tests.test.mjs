@@ -46,10 +46,16 @@ function reach(dir, paths, ...args) {
   return args.includes("--github-output") ? run.stdout.trim().split("\n") : JSON.parse(run.stdout);
 }
 
-test("documentation alone reaches nothing: docs/, specs/ and Markdown anywhere", () => {
+test("documentation alone reaches nothing: docs/, specs/ and Markdown outside the workspaces", () => {
   const dir = fixture();
-  assert.deepEqual(reach(dir, ["docs/guide.txt", "specs/decisions/001-x.md", "packages/base/README.md", "CHANGELOG.md"]), { docsOnly: true, all: false, workspaces: [] });
+  assert.deepEqual(reach(dir, ["docs/guide.txt", "specs/decisions/001-x.md", "CHANGELOG.md", "notes/README.md"]), { docsOnly: true, all: false, workspaces: [] });
   assert.deepEqual(reach(dir, []), { docsOnly: false, all: false, workspaces: [] }, "no path is no documentation");
+});
+
+test("a Markdown file inside a workspace is that workspace's: a fixture or a readme, never documentation alone", () => {
+  const dir = fixture();
+  assert.deepEqual(reach(dir, ["packages/mid/src/fixtures/README.md"]), { docsOnly: false, all: false, workspaces: ["apps/app", "packages/mid"] });
+  assert.deepEqual(reach(dir, ["apps/leaf/README.md", "docs/guide.txt"]), { docsOnly: false, all: false, workspaces: ["apps/leaf"] });
 });
 
 test("a workspace no other depends on reaches itself alone", () => {

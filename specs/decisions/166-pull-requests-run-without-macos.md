@@ -8,7 +8,7 @@
 Accepted (2026-10-29) on the owner's direction to make the merge gate faster without dropping a test.
 Amends [DR-145](145-merge-on-green.md) in the pull request's matrix: the macOS smoke job leaves it, and a pull request changing documentation alone runs the spec gates and not the suites.
 Amended by [DR-169](169-documentation-alone-reports-the-suites-names.md) in how documentation alone satisfies the required checks: a stand-in reports the suites' names.
-Amended by [DR-185](185-the-suites-a-change-reaches.md) in the pull request's matrix and in what the suites run: Node 24 leaves the pull request's Linux test job, the journeys run in three shards, and the test job runs only the suites the change reaches, the classifier naming that reach beside documentation alone.
+Amended by [DR-185](185-the-suites-a-change-reaches.md) in the pull request's matrix and in what the suites run: Node 24 leaves the pull request's Linux test job, the journeys run in three shards, and the test job runs only the suites the change reaches, the classifier naming that reach beside documentation alone; and in documentation alone, which a Markdown file inside a workspace no longer is.
 
 ## Context
 

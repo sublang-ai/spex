@@ -6,7 +6,7 @@
 ## Status
 
 Accepted (2026-11-02) on the owner's direction to run no test a change cannot break and to make the merge gate faster.
-Amends [DR-145](145-merge-on-green.md) and [DR-166](166-pull-requests-run-without-macos.md) in the pull request's matrix and in what the suites run: the Linux test job on Node 22 alone, the journeys in three shards, and the test job running the suites the change reaches, the classifier naming that reach beside documentation alone.
+Amends [DR-145](145-merge-on-green.md) and [DR-166](166-pull-requests-run-without-macos.md) in the pull request's matrix and in what the suites run: the Linux test job on Node 22 alone, the journeys in three shards, and the test job running the suites the change reaches, the classifier naming that reach beside documentation alone; and DR-166 in documentation alone, which a Markdown file inside a workspace no longer is.
 Amends [DR-169](169-documentation-alone-reports-the-suites-names.md) in the stand-in's names, which follow this matrix.
 
 ## Context
@@ -16,10 +16,11 @@ The test job ran every suite on Linux twice, on Node 22 and on Node 24, twenty-s
 A change to the interface alone, to a shell or to the hub paid the core's suite, which nothing in the change could break; the classifier of DR-166 knew only documentation alone.
 Locally the same: `npm test` or a whole workspace's suite was the only command, so a developer or an agent waited on the core's twenty-three minutes before pushing an interface change.
 The workspaces declare their internal dependencies in their `package.json`, so what a change can reach is readable: the core depends on the CLI's library; the interface, the shells and the journeys on the core; the hub on nothing.
+Some Markdown files are test inputs — the CLI's legacy scaffold fixtures, the interface's fixture readmes, the journeys' compiled fixtures — so DR-166's rule that any Markdown file is documentation would let a change to one of them skip the suite that reads it.
 
 ## Decision
 
-- One script, `scripts/affected-tests.mjs`, reads the changed paths and the workspaces' internal dependency graph and names the reach of a change: a path under `docs/` or `specs/` or ending in `.md` reaches nothing; a path in a workspace reaches that workspace and, transitively, every workspace depending on it; any other path reaches everything.
+- One script, `scripts/affected-tests.mjs`, reads the changed paths and the workspaces' internal dependency graph and names the reach of a change: a path under `docs/` or `specs/`, or a Markdown file outside every workspace, is documentation and reaches nothing; a path in a workspace, its Markdown included, reaches that workspace and, transitively, every workspace depending on it; any other path reaches everything; documentation alone is a change of documentation and nothing else.
 - The classifier job names the reach on every pull request beside documentation alone; the test job runs the scripts' tests and the suites of the reached workspaces, and everything for a push to `main` and the nightly; the journeys and desktop-browser jobs run for any change past documentation alone, as before, since the journeys cross every workspace.
 - A pull request's Linux test job runs on Node 22 alone; `main` and the nightly keep Node 24.
 - The journeys run in three shards, each a job, on a pull request and on `main`.

@@ -6,7 +6,8 @@
 // paths a change touched, each classed as documentation, a workspace or
 // the root, and the workspaces they reach through the internal
 // dependency graph -- the changed ones and every transitive dependent.
-// A root path reaches everything; documentation reaches nothing.
+// A root path reaches everything; documentation -- docs/, specs/ and
+// Markdown outside the workspaces -- reaches nothing.
 //
 //   node scripts/affected-tests.mjs [--base <ref>] [--paths <file>] [--root <dir>]
 //       prints {"docsOnly":bool,"all":bool,"workspaces":[...]}
@@ -81,9 +82,10 @@ export function readWorkspaces(root) {
   });
 }
 
-/** Documentation: under docs/ or specs/, or a Markdown file. */
-export function isDocumentation(path) {
-  return path.startsWith("docs/") || path.startsWith("specs/") || path.endsWith(".md");
+/** Documentation: under docs/ or specs/, or a Markdown file outside every workspace -- a workspace's own Markdown is a fixture or a package readme and reaches the workspace. */
+export function isDocumentation(path, workspaces = []) {
+  if (path.startsWith("docs/") || path.startsWith("specs/")) return true;
+  return path.endsWith(".md") && !workspaces.some((workspace) => path.startsWith(`${workspace.folder}/`));
 }
 
 /** The reach of a list of changed paths over the root's workspaces. */
@@ -93,7 +95,7 @@ export function classify(root, paths) {
   let all = false;
   let docsOnly = paths.length > 0;
   for (const path of paths) {
-    if (isDocumentation(path)) continue;
+    if (isDocumentation(path, workspaces)) continue;
     docsOnly = false;
     const owner = workspaces.find((workspace) => path.startsWith(`${workspace.folder}/`));
     if (owner) changed.add(owner.folder);
