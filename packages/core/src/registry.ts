@@ -57,6 +57,9 @@ export class RegistryManager {
    * DR-172): the display name its descriptor gave when last read, else
    * its host. */
   name(origin: string): string { return this.metadata.get(canonicalOrigin(origin))?.displayName ?? new URL(origin).host; }
+  /** Only running sign-ins permit the shell to open this registry's
+   * pages; a configured registry or saved account does not (app-shell-37). */
+  signInOrigins(): string[] { return [...this.flows.keys()]; }
   /** A registry that gave no answer, with what to do. */
   private unreachable(origin: string): string {
     return i18n._({ id: "{registry} could not be reached — check the connection, then Retry", comment: "The registry did not answer; {registry} is the registry's display name as last read, else its host", values: { registry: this.name(origin) } });

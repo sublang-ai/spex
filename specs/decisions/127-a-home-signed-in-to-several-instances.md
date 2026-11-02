@@ -21,6 +21,7 @@ Amended by [DR-132](132-team-servers.md) in your own group's creation or join at
 Amended by [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) in an environment's instance: the one its `spex.yaml` names as `space`, else the home's default instance.
 
 Amended by [DR-168](168-independent-package-registry.md) for independent registry selection, account authority and credentials; Space collaboration and server admission remain unchanged.
+Amended by [DR-188](188-registry-sign-in-opens-the-browser.md) in the desktop's permitted sign-in origins: each running registry sign-in also permits its origin.
 
 Extended by [DR-171](171-personal-names-are-space-logins.md) in personal attribution: the selected account's login supplies every new commit and intent author name; historical attribution is preserved.
 
