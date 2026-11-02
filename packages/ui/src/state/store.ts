@@ -2473,9 +2473,8 @@ function placeState(
     },
 
     async focusSession(sessionId: string): Promise<void> {
-      if (!get().views[sessionId]) {
-        await ensureSubscribed(sessionId);
-      }
+      // Select before loading so a failed first read has a visible
+      // transcript error and Retry, including without project files.
       set({ activeSessionId: sessionId });
       // Focusing a session always carries its project context along
       // (DR-011): sidebar rows, Dashboard rows and palette rows route
@@ -2485,6 +2484,9 @@ function placeState(
         get().setCurrentProject(session.projectId);
         get().openTab(session.projectId, sessionId);
         get().setWorkspaceTab(session.projectId, sessionId);
+      }
+      if (!get().views[sessionId]) {
+        await ensureSubscribed(sessionId);
       }
     },
 

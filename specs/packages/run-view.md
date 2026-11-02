@@ -465,9 +465,10 @@ While a session's tab is shown, the run view shall read each agent's settings on
 
 #### run-view-33
 
-When a session that is not live is opened [[run-view-68](#run-view-68)], the run view shall show a loading note while its stored transcript loads and, once it is shown, render it as a conversation a message continues, or — where the core lists it as history it cannot continue ([DR-042](../decisions/042-sessions-continue.md)) — a history notice carrying the core's reason and a "New session" control that starts a new session for the same project, in the composer's place — nothing the user produced becomes unreachable ([DR-009](../decisions/009-at-hand-interaction.md), [DR-051](../decisions/051-runtime-held-for-a-turn.md)):
+When a session that is not live is opened [[run-view-68](#run-view-68)], the run view shall show a loading note while its stored transcript loads and, once it is shown, render it as a conversation a message continues, or — where the core lists it as history it cannot continue ([DR-042](../decisions/042-sessions-continue.md)) — a history notice carrying the core's reason and, while its project has a working folder, a "New session" control that starts a new session for the same project, in the composer's place — nothing the user produced becomes unreachable ([DR-009](../decisions/009-at-hand-interaction.md), [DR-051](../decisions/051-runtime-held-for-a-turn.md)):
 
-- an uncertain session shows recovery controls [[run-view-110](#run-view-110)];
+- without a registered working folder, opening saved history [[space-46](space.md#space-46)] shows its transcript and title with Back to Space, no project setup, composer, recovery or new-session controls, and a first-load failure remains in that reader with Retry; locating project files remains a separate Space action [[space-47](space.md#space-47)] ([DR-183](../decisions/183-read-saved-conversations-before-locating-files.md));
+- an uncertain session with a working folder shows recovery controls [[run-view-110](#run-view-110)];
 - a continuable session shows no notice at all: its composer is an ordinary composer, and nothing names it ended;
 - the notice wraps its control under its words when its pane is too narrow for both ([DR-041](../decisions/041-chrome-that-fits.md));
 - when the transcript fails to load, the run view says so and offers a retry that reloads it — a failed load never presents as an empty run.
@@ -1290,7 +1291,7 @@ When the captain editor popover is opened from the Captain home's agent chip wit
 
 #### run-view-36
 
-Where a fixture holds one history-only session with a stored transcript and one session awaiting a Boss reply, the test suite shall assert that opening the history session shows a loading note and then its transcript with the history notice and a start-a-new-session affordance, that an idle continuable session shows its composer with no notice, that a failed load offers a retry instead of an empty run [[run-view-33](#run-view-33)], that a session assigned to another runtime shows its reason "Runs on <label>" as the history notice with no composer, Restore or Discard [[run-view-33](#run-view-33)], and that the Dashboard navigation badge shows the count 1 [[run-view-34](#run-view-34)].
+Where a fixture holds one history-only session with a stored transcript and one session awaiting a Boss reply, the test suite shall assert that opening the history session shows a loading note and then its transcript with the history notice and a start-a-new-session affordance, that an idle continuable session shows its composer with no notice, that a failed load offers a retry instead of an empty run and an unpaired saved conversation opens without project setup, permits retry after a failed first read and returns to Space without starting work [[run-view-33](#run-view-33)], that a session assigned to another runtime shows its reason "Runs on <label>" as the history notice with no composer, Restore or Discard [[run-view-33](#run-view-33)], and that the Dashboard navigation badge shows the count 1 [[run-view-34](#run-view-34)].
 
 #### run-view-52
 

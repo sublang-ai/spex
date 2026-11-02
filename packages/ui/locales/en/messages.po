@@ -256,6 +256,11 @@ msgstr "{count, plural, one {# review round} other {# review rounds}}"
 msgid "{count, plural, one {# running session} other {# running sessions}}"
 msgstr "{count, plural, one {# running session} other {# running sessions}}"
 
+#. number of conversations belonging to this project or unnamed saved-work group
+#: src/components/SpaceRepairs.tsx
+msgid "{count, plural, one {# saved conversation} other {# saved conversations}}"
+msgstr "{count, plural, one {# saved conversation} other {# saved conversations}}"
+
 #: src/components/ProjectPalette.tsx
 msgid "{count, plural, one {# session needs you} other {# sessions need you}}"
 msgstr "{count, plural, one {# session needs you} other {# sessions need you}}"
@@ -1582,6 +1587,11 @@ msgstr "back to {id}"
 msgid "back to {name}'s intent"
 msgstr "back to {name}'s intent"
 
+#. return from a saved conversation to locate files or read other saved work
+#: src/App.tsx
+msgid "Back to Space"
+msgstr "Back to Space"
+
 #: src/components/AuthoringWorkspace.tsx
 msgid "Back to the playbook list — the session stays as it is"
 msgstr "Back to the playbook list — the session stays as it is"
@@ -1977,25 +1987,10 @@ msgstr "Choose a project folder…"
 msgid "Choose a role"
 msgstr "Choose a role"
 
-#. choose a project folder for saved work
-#: src/components/SpaceRepairs.tsx
-msgid "Choose an existing project"
-msgstr "Choose an existing project"
-
 #. the folder-choice form needs a path before it can save
 #: src/components/SpaceRepairs.tsx
 msgid "Choose an existing project folder"
 msgstr "Choose an existing project folder"
-
-#. explains what the project-folder choice will accomplish
-#: src/components/SpaceRepairs.tsx
-msgid "Choose an existing project folder to continue these conversations there."
-msgstr "Choose an existing project folder to continue these conversations there."
-
-#. the purpose of choosing a folder when no conversation is indexed
-#: src/components/SpaceRepairs.tsx
-msgid "Choose an existing project folder to use this saved work."
-msgstr "Choose an existing project folder to use this saved work."
 
 #. empty choice of the reasoning-effort select
 #: src/components/TuningField.tsx
@@ -2018,20 +2013,10 @@ msgstr "Choose for {count, plural, one {# conflict} other {# conflicts}}"
 msgid "Choose group"
 msgstr "Choose group"
 
-#. choose an existing project folder for saved work; does not create a project
-#: src/components/SpaceRepairs.tsx
-msgid "Choose project…"
-msgstr "Choose project…"
-
 #. a step: the analyst chooses which workflows the request takes
 #: src/lib/step-words.ts
 msgid "Choose the approach"
 msgstr "Choose the approach"
-
-#. older saved work is optional and does not block new work
-#: src/components/SpaceRepairs.tsx
-msgid "Choose what you want to use again. You can leave the rest for later."
-msgstr "Choose what you want to use again. You can leave the rest for later."
 
 #: src/components/DraftConversation.tsx
 msgid "Choose which agent answers"
@@ -2492,11 +2477,6 @@ msgstr "Connection to the Spex core lost — reconnecting."
 msgid "Continue"
 msgstr "Continue"
 
-#. optional task naming how much saved work the folder choice applies to
-#: src/components/SpaceRepairs.tsx
-msgid "Continue {count, plural, one {# saved conversation} other {# saved conversations}}"
-msgstr "Continue {count, plural, one {# saved conversation} other {# saved conversations}}"
-
 #. a sign-in in flight: it continues on the Space's page in the browser
 #: src/components/SpaceSignIn.tsx
 msgid "Continue in your browser"
@@ -2505,6 +2485,16 @@ msgstr "Continue in your browser"
 #: src/components/SpaceMembers.tsx
 msgid "Contribute shared records and manage projects and their members."
 msgstr "Contribute shared records and manage projects and their members."
+
+#. the active server holds the saved history, not the reader's own computer
+#: src/components/SpaceRepairs.tsx
+msgid "Conversation history is saved in Spex on {place}, separately from your project files."
+msgstr "Conversation history is saved in Spex on {place}, separately from your project files."
+
+#. where saved conversation records are kept, without claiming they are local-only or synced
+#: src/components/SpaceRepairs.tsx
+msgid "Conversation history is saved in Spex on this computer, separately from your project files."
+msgstr "Conversation history is saved in Spex on this computer, separately from your project files."
 
 #. an untitled conversation identified by its actual saved date
 #: src/components/SpaceRepairs.tsx
@@ -3115,6 +3105,16 @@ msgstr "Each record states a design decision's context and reasons; spec items c
 msgid "Each role of a playbook is played by a player; add one to tune its agent"
 msgstr "Each role of a playbook is played by a player; add one to tune its agent"
 
+#. saved conversations whose actual project name is unknown
+#: src/components/SpaceRepairs.tsx
+msgid "Earlier conversations"
+msgstr "Earlier conversations"
+
+#. saved work with no known project name or indexed conversations
+#: src/components/SpaceRepairs.tsx
+msgid "Earlier saved work"
+msgstr "Earlier saved work"
+
 #. editor mode: the plain text field
 #. open the whole-file editor on the source
 #. open this file in the editor
@@ -3252,11 +3252,6 @@ msgstr "Existing and future project records"
 #: src/components/ProjectPalette.tsx
 msgid "Existing project"
 msgstr "Existing project"
-
-#. folder field for continuing saved conversations
-#: src/components/SpaceRepairs.tsx
-msgid "Existing project folder"
-msgstr "Existing project folder"
 
 #: src/components/CaptainHome.tsx
 msgid "Existing specs: {packages, plural, one {# package} other {# packages}} · {items, plural, one {# item} other {# items}}"
@@ -3808,6 +3803,11 @@ msgstr "Idle — no conversation yet."
 msgid "idle, held a failure"
 msgstr "idle, held a failure"
 
+#. saved-work recovery is optional even when no local project files are available
+#: src/components/SpaceRepairs.tsx
+msgid "If you don’t have the project files here, you can leave this for later."
+msgstr "If you don’t have the project files here, you can leave this for later."
+
 #. stands in for a blocked image that carried no alt text
 #: src/components/Markdown.tsx
 msgid "image"
@@ -4230,6 +4230,16 @@ msgstr "loading…"
 #: src/components/SpaceExplorer.tsx
 msgid "Loading…"
 msgstr "Loading…"
+
+#. locate the existing project files for this saved conversation group
+#: src/components/SpaceRepairs.tsx
+msgid "Locate folder…"
+msgstr "Locate folder…"
+
+#. saved history can be read before its project folder is located
+#: src/App.tsx
+msgid "Locate the project files in Saved work to work with them again."
+msgstr "Locate the project files in Saved work to work with them again."
 
 #: src/components/SpecGraph.tsx
 msgid "Lower the threshold"
@@ -5476,6 +5486,11 @@ msgstr "Previous tab in Projects"
 msgid "Previously used folder"
 msgstr "Previously used folder"
 
+#. all historical working folders for this saved conversation group
+#: src/components/SpaceRepairs.tsx
+msgid "Previously used folders"
+msgstr "Previously used folders"
+
 #. a term shown before the first connection to a team server: the registry sign-in is its own grant; {server} is its name
 #: src/components/SpaceServers.tsx
 msgid "Private packages need a separate registry sign-in on {server}"
@@ -5487,7 +5502,9 @@ msgid "Project folder"
 msgstr "Project folder"
 
 #. the field a project's records ask for: the folder its code is in, or is downloaded to
+#. the local folder containing the project files, separate from saved conversation history
 #: src/components/SpaceGroups.tsx
+#: src/components/SpaceRepairs.tsx
 msgid "Project folder on this computer"
 msgstr "Project folder on this computer"
 
@@ -5505,9 +5522,7 @@ msgstr "Project path"
 msgid "Project records"
 msgstr "Project records"
 
-#. actual project name from its saved metadata, never a storage name
 #: src/components/SpaceGroups.tsx
-#: src/components/SpaceRepairs.tsx
 msgid "Project: {name}"
 msgstr "Project: {name}"
 
@@ -6339,6 +6354,11 @@ msgstr "Save ({key})"
 msgid "Saved"
 msgstr "Saved"
 
+#. the conversation's actual saved date
+#: src/components/SpaceRepairs.tsx
+msgid "Saved {date}"
+msgstr "Saved {date}"
+
 #: src/components/SpecView.tsx
 msgid "Saved {path}"
 msgstr "Saved {path}"
@@ -6347,6 +6367,11 @@ msgstr "Saved {path}"
 #: src/components/SettingsSurface.tsx
 msgid "Saved ✓"
 msgstr "Saved ✓"
+
+#. preview list of conversations in this saved-work group
+#: src/components/SpaceRepairs.tsx
+msgid "Saved conversations"
+msgstr "Saved conversations"
 
 #. a stored file could not be used; the technical cause is in Details
 #: src/components/SpaceRepairs.tsx
@@ -6449,10 +6474,10 @@ msgstr "Seeding…"
 msgid "Select an entry to preview"
 msgstr "Select an entry to preview"
 
-#. choosing a folder is not project creation or Git initialization
+#. folder selection uses files already present on this computer
 #: src/components/SpaceRepairs.tsx
-msgid "Select an existing project; this does not create one."
-msgstr "Select an existing project; this does not create one."
+msgid "Select the existing folder used for this work. This does not create or download a project."
+msgstr "Select the existing folder used for this work. This does not create or download a project."
 
 #: src/state/attachments.ts
 msgid "Select up to 16 files and 256 MiB per message."
@@ -7437,6 +7462,11 @@ msgstr "The last turn failed. Send a message to pick it up."
 msgid "The ledger could not be loaded: {reason}"
 msgstr "The ledger could not be loaded: {reason}"
 
+#. a server allocates folders itself, so no local picker is offered
+#: src/components/SpaceRepairs.tsx
+msgid "The project files need to be available on {place} to work from these conversations."
+msgstr "The project files need to be available on {place} to work from these conversations."
+
 #. the title of Add…'s disabled Folder tab under Packages: the project's folder, which a folder package lies in, is not on this computer, as for a project on a server
 #: src/components/EnvironmentSection.tsx
 msgid "The project folder is not on this computer"
@@ -7535,11 +7565,6 @@ msgstr "The workflow markdown the playbook was compiled from"
 msgid "The workflow was aborted"
 msgstr "The workflow was aborted"
 
-#. a server allocates folders itself, so no local picker is offered
-#: src/components/SpaceRepairs.tsx
-msgid "These conversations cannot be continued on {place} yet."
-msgstr "These conversations cannot be continued on {place} yet."
-
 #. a project's members panel; {names} lists the other Spaces the records are kept at, by display name
 #: src/components/SpaceMembers.tsx
 msgid "These records are also placed at {names}"
@@ -7571,11 +7596,6 @@ msgstr "This agent cannot return screenshot files to this conversation."
 msgid "This agent does not support browser tools"
 msgstr "This agent does not support browser tools"
 
-#. the folder choice applies to this saved conversation group
-#: src/components/SpaceRepairs.tsx
-msgid "This choice applies to all these conversations."
-msgstr "This choice applies to all these conversations."
-
 #: src/components/SpecView.tsx
 msgid "This command refreshes the spec law and prints a migration prompt for an AI agent to apply:"
 msgstr "This command refreshes the spec law and prints a migration prompt for an AI agent to apply:"
@@ -7594,6 +7614,11 @@ msgstr "this computer's sign-in to each Space"
 #: src/components/AgentSettings.tsx
 msgid "This conversation is in use elsewhere — its settings read only."
 msgstr "This conversation is in use elsewhere — its settings read only."
+
+#. the saved-work preview is older than the current session list; this does not assert that any file was deleted
+#: src/components/SpaceRepairs.tsx
+msgid "This conversation is no longer listed. Refresh Saved work and try again."
+msgstr "This conversation is no longer listed. Refresh Saved work and try again."
 
 #: src/components/AgentSettings.tsx
 msgid "This conversation only"
@@ -7625,6 +7650,11 @@ msgstr "This folder is already used by another project."
 #: src/components/SpaceRepairs.tsx
 msgid "This folder was not found."
 msgstr "This folder was not found."
+
+#. the folder choice affects only this saved conversation group, including previews not shown
+#: src/components/SpaceRepairs.tsx
+msgid "This folder will be used for {count, plural, one {the conversation} other {all # conversations}} listed here."
+msgstr "This folder will be used for {count, plural, one {the conversation} other {all # conversations}} listed here."
 
 #: src/components/SpaceGroups.tsx
 msgid "This group is already scheduled for deletion."
@@ -7693,6 +7723,16 @@ msgstr "three in a row — tell the agent how to proceed"
 #: src/components/SpaceSync.tsx
 msgid "To send ({count})"
 msgstr "To send ({count})"
+
+#. locate original project files without promising resumable checkpoints
+#: src/components/SpaceRepairs.tsx
+msgid "To work on this project again, locate its files."
+msgstr "To work on this project again, locate its files."
+
+#. older cores without readable preview identifiers still offer the folder action
+#: src/components/SpaceRepairs.tsx
+msgid "To work with these files again, locate the folder used for this work."
+msgstr "To work with these files again, locate the folder used for this work."
 
 #: src/components/SpecView.tsx
 msgid "Toggle {name}"
@@ -7995,11 +8035,6 @@ msgstr "Use Enter or commas between usernames."
 msgid "Use org/name: lowercase words joined by hyphens"
 msgstr "Use org/name: lowercase words joined by hyphens"
 
-#. optional task to choose a project for saved work with no indexed conversations
-#: src/components/SpaceRepairs.tsx
-msgid "Use saved work"
-msgstr "Use saved work"
-
 #. confirm the existing folder for this saved work
 #. pair a project's records with the folder named
 #: src/components/SpaceGroups.tsx
@@ -8141,15 +8176,20 @@ msgstr "What the package promises its users — people or other packages"
 msgid "What would you change in {project}?"
 msgstr "What would you change in {project}?"
 
+#. locate the original files for saved conversations without a known project name
+#: src/components/SpaceRepairs.tsx
+msgid "Where are the files used in these conversations?"
+msgstr "Where are the files used in these conversations?"
+
+#. locate the files belonging to the named project above
+#: src/components/SpaceRepairs.tsx
+msgid "Where are this project’s files?"
+msgstr "Where are this project’s files?"
+
 #. a file family that stays on this computer
 #: src/lib/space.ts
 msgid "where projects live"
 msgstr "where projects live"
-
-#. the purpose of choosing an existing project folder
-#: src/components/SpaceRepairs.tsx
-msgid "Where should these conversations continue?"
-msgstr "Where should these conversations continue?"
 
 #. what a file is, in the records' tree: it names where a project's code is
 #: src/lib/space.ts
@@ -8255,6 +8295,16 @@ msgstr "Written by Spex from {name} {version} — an edit makes it yours"
 #: src/components/SpaceMembers.tsx
 msgid "You"
 msgstr "You"
+
+#. reading history needs no folder; work with project files does
+#: src/components/SpaceRepairs.tsx
+msgid "You can read these conversations now. To work on this project again, locate its files."
+msgstr "You can read these conversations now. To work on this project again, locate its files."
+
+#. reading history needs no folder; work with the original files does
+#: src/components/SpaceRepairs.tsx
+msgid "You can read these conversations now. To work with their files again, locate the folder used for this work."
+msgstr "You can read these conversations now. To work with their files again, locate the folder used for this work."
 
 #: src/components/SpaceGroups.tsx
 msgid "You can restore this group before deletion takes effect."

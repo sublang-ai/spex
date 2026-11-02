@@ -13,6 +13,7 @@ import { isLocalPlace } from "../state/store.js";
 import { currentLocale, i18n } from "../i18n.js";
 import { seatName, tildify } from "../lib/space.js";
 import { InlineConfirm } from "./InlineConfirm.js";
+import { Icon } from "./Icon.js";
 import { LINK, PRIMARY, SECONDARY, type Note } from "./SpaceSurface.js";
 
 /** The pending merge's file, which a row reads in plain words. */
@@ -39,14 +40,15 @@ function TechnicalDetails({ entries, children }: {
   );
 }
 
-/** One optional task: choose where saved conversations should continue.
+/** One saved-work group: read its conversations or locate its files.
  * Names from the storage layout never stand in for a user's project. */
-function RepairRow({ repair, disabled, focusSeq, onResolved, onNote }: {
+function RepairRow({ repair, disabled, focusSeq, onResolved, onNote, onOpenSession }: {
   repair: DiagnosticRepair;
   disabled: boolean;
   focusSeq?: number;
   onResolved(key: string, summary: string, projectId?: string): void;
   onNote: Note;
+  onOpenSession(sessionId: string): void;
 }) {
   const store = usePlaceStore();
   const rebindProject = store((state) => state.rebindProject);
@@ -58,6 +60,7 @@ function RepairRow({ repair, disabled, focusSeq, onResolved, onNote }: {
   const recorded = repair.directories[0] ?? "";
   const folderRepair = repair.kind === "folder";
   const hasConversations = repair.sessions > 0;
+  const canRead = repair.conversations?.some((conversation) => conversation.id) ?? false;
   const [editing, setEditing] = useState(false);
   const [removing, setRemoving] = useState(false);
   // A historical path is evidence, not a suggestion. Only a folder the
@@ -65,6 +68,7 @@ function RepairRow({ repair, disabled, focusSeq, onResolved, onNote }: {
   const [path, setPath] = useState(proposal?.path ?? "");
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string>();
+  const [readError, setReadError] = useState<string>();
   const fieldRef = useRef<HTMLInputElement>(null);
   const firstRef = useRef<HTMLButtonElement>(null);
   const wasEditing = useRef(false);
@@ -83,6 +87,20 @@ function RepairRow({ repair, disabled, focusSeq, onResolved, onNote }: {
     } else if (wasEditing.current) firstRef.current?.focus();
     wasEditing.current = editing;
   }, [editing]);
+
+  const readConversation = (sessionId: string): void => {
+    setReadError(undefined);
+    // A Space read may precede a session removal. A stale preview must
+    // not navigate to whichever conversation is still selected.
+    if (!store.getState().sessions.some((session) => session.id === sessionId)) {
+      setReadError(i18n._({
+        id: "This conversation is no longer listed. Refresh Saved work and try again.",
+        comment: "the saved-work preview is older than the current session list; this does not assert that any file was deleted",
+      }));
+      return;
+    }
+    onOpenSession(sessionId);
+  };
 
   const pair = async (chosen: string): Promise<void> => {
     if (!repair.repository || busy) return;
@@ -170,7 +188,7 @@ function RepairRow({ repair, disabled, focusSeq, onResolved, onNote }: {
       ) : null}
       {local ? (
         <button ref={first === "choose" ? firstRef : undefined} type="button" data-testid="space-repair-choose" className={showUse ? SECONDARY : PRIMARY} disabled={disabled || busy || !repair.repository} onClick={() => { setRefusal(undefined); setEditing(true); }}>
-          {i18n._({ id: "Choose project…", comment: "choose an existing project folder for saved work; does not create a project" })}
+          {i18n._({ id: "Locate folder…", comment: "locate the existing project files for this saved conversation group" })}
         </button>
       ) : null}
       {!declined ? (
@@ -184,12 +202,12 @@ function RepairRow({ repair, disabled, focusSeq, onResolved, onNote }: {
 
   const editor = (
     <div className="flex min-w-0 flex-col gap-3 rounded-lg border border-neutral-300 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900">
-      <h3 className="font-medium">{hasConversations
-        ? i18n._({ id: "Where should these conversations continue?", comment: "the purpose of choosing an existing project folder" })
-        : i18n._({ id: "Choose an existing project", comment: "choose a project folder for saved work" })}</h3>
-      <p id={helpId} className="text-xs text-neutral-500">{i18n._({ id: "Select an existing project; this does not create one.", comment: "choosing a folder is not project creation or Git initialization" })}</p>
+      <h3 className="font-medium">{repair.projectName
+        ? i18n._({ id: "Where are this project’s files?", comment: "locate the files belonging to the named project above" })
+        : i18n._({ id: "Where are the files used in these conversations?", comment: "locate the original files for saved conversations without a known project name" })}</h3>
+      <p id={helpId} className="text-xs text-neutral-500">{i18n._({ id: "Select the existing folder used for this work. This does not create or download a project.", comment: "folder selection uses files already present on this computer" })}</p>
       <div className="flex min-w-0 flex-col gap-1 text-xs">
-        <label htmlFor={fieldId}>{i18n._({ id: "Existing project folder", comment: "folder field for continuing saved conversations" })}</label>
+        <label htmlFor={fieldId}>{i18n._({ id: "Project folder on this computer", comment: "the local folder containing the project files, separate from saved conversation history" })}</label>
         <span className="flex min-w-0 flex-wrap items-center gap-2">
           <input id={fieldId} ref={fieldRef} data-testid="space-repair-path" value={path} aria-describedby={refusal ? `${helpId} ${errorId}` : helpId} aria-invalid={refusal ? true : undefined} onChange={(event) => { setPath(event.target.value); setRefusal(undefined); }}
             onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
@@ -213,7 +231,7 @@ function RepairRow({ repair, disabled, focusSeq, onResolved, onNote }: {
           </button> : null}
         </span>
       </div>
-      {hasConversations ? <p className="text-xs text-neutral-500">{i18n._({ id: "This choice applies to all these conversations.", comment: "the folder choice applies to this saved conversation group" })}</p> : null}
+      {hasConversations ? <p className="text-xs text-neutral-500">{i18n._({ id: "This folder will be used for {count, plural, one {the conversation} other {all # conversations}} listed here.", values: { count: repair.sessions }, comment: "the folder choice affects only this saved conversation group, including previews not shown" })}</p> : null}
       {refusalLine}
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" data-testid="space-repair-submit" className={PRIMARY} disabled={busy || disabled} onClick={submit}>
@@ -226,38 +244,65 @@ function RepairRow({ repair, disabled, focusSeq, onResolved, onNote }: {
 
   return (
     <li data-testid={declined ? "space-repair-declined" : "space-repair"} data-kind={repair.kind} className="flex min-w-0 flex-col gap-3 py-4 first:pt-0 last:pb-0">
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <h3 data-testid="space-repair-title" className="font-medium">{folderRepair
-          ? i18n._({ id: "Saved work is missing", comment: "the project's saved conversations are no longer present" })
-          : hasConversations
-            ? i18n._({ id: "Continue {count, plural, one {# saved conversation} other {# saved conversations}}", values: { count: repair.sessions }, comment: "optional task naming how much saved work the folder choice applies to" })
-            : i18n._({ id: "Use saved work", comment: "optional task to choose a project for saved work with no indexed conversations" })}</h3>
-        {declined ? <span className="text-xs text-neutral-500">{i18n._({ id: "For later", comment: "this optional task has been deferred" })}</span> : null}
+      <div className="flex min-w-0 flex-col gap-1">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          {!folderRepair && repair.projectName ? <Icon name="folder" className="h-4 w-4 shrink-0 text-neutral-500" /> : null}
+          <h3 data-testid="space-repair-title" className="min-w-0 break-words font-medium">{folderRepair
+            ? i18n._({ id: "Saved work is missing", comment: "the project's saved conversations are no longer present" })
+            : repair.projectName || (hasConversations
+              ? i18n._({ id: "Earlier conversations", comment: "saved conversations whose actual project name is unknown" })
+              : i18n._({ id: "Earlier saved work", comment: "saved work with no known project name or indexed conversations" }))}</h3>
+          {declined ? <span className="text-xs text-neutral-500">{i18n._({ id: "For later", comment: "this optional task has been deferred" })}</span> : null}
+        </div>
+        {!folderRepair && hasConversations ? <p className="text-xs text-neutral-500">{i18n._({
+          id: "{count, plural, one {# saved conversation} other {# saved conversations}}",
+          values: { count: repair.sessions },
+          comment: "number of conversations belonging to this project or unnamed saved-work group",
+        })}</p> : null}
       </div>
-      {!folderRepair && repair.projectName ? <p className="text-xs text-neutral-500">{i18n._({ id: "Project: {name}", values: { name: repair.projectName }, comment: "actual project name from its saved metadata, never a storage name" })}</p> : null}
-      {!folderRepair && repair.conversations?.length ? <div data-testid="space-repair-conversations" className="flex min-w-0 flex-col gap-1 text-sm">
-        {repair.conversations.slice(0, 3).map((conversation, index) => <p key={index} className="break-words">
-          {conversation.title || (conversation.updatedAt !== undefined
-            ? i18n._({ id: "Conversation saved {date}", values: { date: new Date(conversation.updatedAt).toLocaleDateString(currentLocale(), { dateStyle: "medium" }) }, comment: "an untitled conversation identified by its actual saved date" })
-            : i18n._({ id: "Untitled conversation", comment: "no saved title or date is available" }))}
-        </p>)}
-        {repair.sessions > repair.conversations.slice(0, 3).length ? <p className="text-xs text-neutral-500">{i18n._({
+      {!folderRepair && repair.conversations?.length ? <div data-testid="space-repair-conversations" className="flex min-w-0 flex-col gap-1">
+        <ul className="flex min-w-0 flex-col gap-2" aria-label={i18n._({ id: "Saved conversations", comment: "preview list of conversations in this saved-work group" })}>
+          {repair.conversations.slice(0, 3).map((conversation, index) => {
+            const date = conversation.updatedAt !== undefined
+              ? new Date(conversation.updatedAt).toLocaleDateString(currentLocale(), { dateStyle: "medium" }) : undefined;
+            const label = conversation.title || (date
+              ? i18n._({ id: "Conversation saved {date}", values: { date }, comment: "an untitled conversation identified by its actual saved date" })
+              : i18n._({ id: "Untitled conversation", comment: "no saved title or date is available" }));
+            return <li key={conversation.id ?? index} className="flex min-w-0 items-start gap-2">
+              <Icon name="conversation" className="mt-0.5 h-4 w-4 shrink-0 text-neutral-500" />
+              <div className="min-w-0">
+                {conversation.id ? <button type="button" className="max-w-full break-words text-left text-sm text-brand-600 underline-offset-2 hover:underline focus-visible:rounded focus-visible:outline-2 focus-visible:outline-brand-500 dark:text-brand-400" disabled={disabled} onClick={() => readConversation(conversation.id!)}>
+                  {label}
+                </button> : <p className="break-words text-sm">{label}</p>}
+                {conversation.title && date ? <p className="text-xs text-neutral-500">{i18n._({ id: "Saved {date}", values: { date }, comment: "the conversation's actual saved date" })}</p> : null}
+              </div>
+            </li>;
+          })}
+        </ul>
+        {repair.sessions > repair.conversations.slice(0, 3).length ? <p className="pl-6 text-xs text-neutral-500">{i18n._({
           id: "and {count} more",
           values: { count: repair.sessions - repair.conversations.slice(0, 3).length },
           comment: "additional saved conversations beyond the preview; every conversation is included in the folder choice",
         })}</p> : null}
       </div> : null}
+      {readError ? <p role="alert" data-testid="space-conversation-error" className="text-xs text-red-600 dark:text-red-400">{readError}</p> : null}
       {folderRepair ? <p className="text-xs text-neutral-500">{seat === undefined
         ? i18n._({ id: "The saved work for this folder is no longer on this computer.", comment: "a project whose saved records disappeared, without claiming its project files are gone" })
         : i18n._({ id: "The saved work for this folder is no longer on {place}.", values: { place: seat }, comment: "a server's saved project records are gone" })}</p>
-        : !editing ? <p className="text-sm text-neutral-600 dark:text-neutral-400">{local
-          ? hasConversations
-            ? i18n._({ id: "Choose an existing project folder to continue these conversations there.", comment: "explains what the project-folder choice will accomplish" })
-            : i18n._({ id: "Choose an existing project folder to use this saved work.", comment: "the purpose of choosing a folder when no conversation is indexed" })
-          : i18n._({ id: "These conversations cannot be continued on {place} yet.", values: { place: seat }, comment: "a server allocates folders itself, so no local picker is offered" })}</p> : null}
+        : <p className="text-sm text-neutral-600 dark:text-neutral-400">{local
+          ? repair.projectName
+            ? canRead
+              ? i18n._({ id: "You can read these conversations now. To work on this project again, locate its files.", comment: "reading history needs no folder; work with project files does" })
+              : i18n._({ id: "To work on this project again, locate its files.", comment: "locate original project files without promising resumable checkpoints" })
+            : canRead
+              ? i18n._({ id: "You can read these conversations now. To work with their files again, locate the folder used for this work.", comment: "reading history needs no folder; work with the original files does" })
+              : i18n._({ id: "To work with these files again, locate the folder used for this work.", comment: "older cores without readable preview identifiers still offer the folder action" })
+          : i18n._({ id: "The project files need to be available on {place} to work from these conversations.", values: { place: seat }, comment: "a server allocates folders itself, so no local picker is offered" })}</p>}
       {recorded ? <div data-testid="space-repair-folder" className="flex min-w-0 flex-col gap-1 text-xs text-neutral-500">
-        <span>{i18n._({ id: "Previously used folder", comment: "the historical folder below is evidence, not the new folder selection" })}</span>
-        <span className="break-all font-mono" title={recorded}>{tildify(recorded)}</span>
+        <span>{repair.directories.length === 1
+          ? i18n._({ id: "Previously used folder", comment: "the historical folder below is evidence, not the new folder selection" })
+          : i18n._({ id: "Previously used folders", comment: "all historical working folders for this saved conversation group" })}</span>
+        {repair.directories.map((directory) => <span key={directory} className="break-all font-mono" title={directory}>{tildify(directory)}</span>)}
       </div> : null}
       {editing ? editor : controls}
       {(repair.directories.length > 0 || repair.details?.length) && !folderRepair ? <TechnicalDetails entries={repair.details}>
@@ -358,6 +403,7 @@ export function IssuesList({
   open,
   refreshes,
   onOpenProject,
+  onOpenSession,
   onNote,
 }: {
   groups: GroupsState;
@@ -367,8 +413,11 @@ export function IssuesList({
   /** How many times the reader's own Refresh has re-read the state. */
   refreshes: number;
   onOpenProject(projectId: string): void;
+  onOpenSession(sessionId: string): void;
   onNote: Note;
 }) {
+  const store = usePlaceStore();
+  const seat = seatName(store.place);
   // A resolved repair's outcome stands in its row's place, and a
   // declined row keeps its place, until the reader's own Refresh or his
   // leaving the surface (space-48, space-55), so no list reflows under
@@ -453,7 +502,12 @@ export function IssuesList({
     >
       <div className="flex flex-col gap-1">
         <h2 data-testid="space-issues-heading" className={`font-medium ${blocking ? "text-amber-800 dark:text-amber-200" : ""}`}>{title}</h2>
-        {!blocking ? <p className="text-sm text-neutral-500">{i18n._({ id: "Choose what you want to use again. You can leave the rest for later.", comment: "older saved work is optional and does not block new work" })}</p> : null}
+        {!blocking ? <>
+          <p className="text-sm text-neutral-500">{seat === undefined
+            ? i18n._({ id: "Conversation history is saved in Spex on this computer, separately from your project files.", comment: "where saved conversation records are kept, without claiming they are local-only or synced" })
+            : i18n._({ id: "Conversation history is saved in Spex on {place}, separately from your project files.", values: { place: seat }, comment: "the active server holds the saved history, not the reader's own computer" })}</p>
+          <p className="text-sm text-neutral-500">{i18n._({ id: "If you don’t have the project files here, you can leave this for later.", comment: "saved-work recovery is optional even when no local project files are available" })}</p>
+        </> : null}
       </div>
       <ul className="flex min-w-0 flex-col divide-y divide-neutral-200 dark:divide-neutral-800">
         {placed.map((id) => {
@@ -484,6 +538,7 @@ export function IssuesList({
                 disabled={!connected}
                 focusSeq={focusSeq(id)}
                 onResolved={onResolved}
+                onOpenSession={onOpenSession}
                 onNote={onNote}
               />
             );

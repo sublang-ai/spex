@@ -531,6 +531,75 @@ describe("run-view-70: the sidebar navigates, the tabs hold what is open", () =>
   });
 });
 
+describe("saved conversations without project files (DR-183)", () => {
+  test.each(["ready", "retry", "removed"])("opens saved history without project setup and handles %s", async (scenario) => {
+    const failFirstRead = scenario === "retry";
+    const saved = session({
+      id: "saved-unpaired", projectId: "personal/notes-spex", projectPath: "/old/notes",
+      title: "Plan the launch", players: [], initialVisible: [], continuable: undefined,
+    });
+    const space = groupsState({ diagnostics: [{
+      file: "workspace/personal/notes-spex", reason: "No project folder is registered", blocking: false,
+      repair: {
+        kind: "repository", repository: saved.projectId, key: "notes|/old/notes",
+        projectName: "Notes", directories: [saved.projectPath], sessions: 1,
+        conversations: [{ id: saved.id, title: saved.title, updatedAt: NOW }],
+      },
+    }], issues: 1 });
+    const ledger = { intents: [], attention: [], badge: 0 };
+    let reads = 0;
+    commandMock.mockImplementation(async (type: string) => {
+      if (type === "history.get" && ++reads === 1 && failFirstRead) throw new Error("Temporary history read failure");
+      if (type === "space.get") return space;
+      if (type === "ledger.get") return ledger;
+      if (type === "history.get") return { records: [
+        { seq: 1, record: { type: "turn_started", turnId: 1, timestamp: NOW - 1000,
+          turn: { id: 1, prompt: "Plan the launch", timestamp: NOW - 1000 } } },
+        { seq: 2, record: { type: "captain_reply", turnId: 1, timestamp: NOW,
+          text: "The saved plan starts with testing sign-in." } },
+        { seq: 3, record: { type: "turn_finished", turnId: 1, timestamp: NOW } },
+      ] };
+      return defaultReply(type);
+    });
+    useAppStore.setState({
+      projects: [], sessions: [saved], views: {}, currentProjectId: undefined,
+      activeSessionId: undefined, workspaceTabs: {}, openTabs: {}, space, ledger: ledger as never,
+    });
+    render(<App />);
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Space" })));
+    fireEvent.click(screen.getByRole("button", { name: "Saved work" }));
+    if (scenario === "removed") act(() => useAppStore.setState({ sessions: [] }));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Plan the launch" })));
+    if (scenario === "removed") {
+      expect(screen.getByTestId("space-surface")).toBeTruthy();
+      expect(screen.queryByTestId("saved-conversation-reader")).toBeNull();
+      expect(screen.getByRole("alert").textContent).toContain("Refresh Saved work and try again.");
+      expect(commandMock).not.toHaveBeenCalledWith("history.get", expect.anything());
+      return;
+    }
+    if (failFirstRead) {
+      const failed = screen.getByTestId("saved-conversation-reader");
+      expect(failed.textContent).toContain("Temporary history read failure");
+      await act(async () => fireEvent.click(within(failed).getByRole("button", { name: "Retry" })));
+      expect(reads).toBe(2);
+    }
+    const reader = screen.getByTestId("saved-conversation-reader");
+    expect(within(reader).getByText("The saved plan starts with testing sign-in.")).toBeTruthy();
+    expect(useAppStore.getState().activeSessionId).toBe(saved.id);
+    expect(useAppStore.getState().projects).toEqual([]);
+    expect(commandMock).toHaveBeenCalledWith("history.get", { sessionId: saved.id, afterSeq: 0 });
+    expect(screen.queryByTestId("boss-composer")).toBeNull();
+    expect(screen.queryByRole("button", { name: "New session" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Restore" })).toBeNull();
+    for (const [type] of commandMock.mock.calls) {
+      expect(["project.rebind", "session.open", "turn.start", "session.restore"]).not.toContain(type);
+    }
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Back to Space" })));
+    expect(screen.getByTestId("space-surface")).toBeTruthy();
+    expect(useAppStore.getState().projects).toEqual([]);
+  });
+});
+
 describe("dashboard-10/54: a session another runtime runs", () => {
   test("reads the core's phrase as its reason, offers no continuation, Restore or Discard, and summons nothing here", async () => {
     // As the core lists it (core-service-32): `runsOn` with that

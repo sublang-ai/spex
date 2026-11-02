@@ -696,7 +696,7 @@ function WorkspaceSurface({
     } else if (isAppletTab(next)) {
       setWorkspaceTab(currentProjectId, next);
     } else {
-      void focusSession(next);
+      void focusSession(next).catch(() => {});
     }
   }
 
@@ -829,12 +829,52 @@ function WorkspaceSurface({
     tabRefs.current.get(next)?.focus();
   }
 
-  if (!project) {
-    return <div className="flex min-h-0 flex-1 flex-col">{startView}</div>;
-  }
-
   const view = pinnedTab(tab) || isAppletTab(tab) ? undefined : views[tab];
   const activeSession = open.find((session) => session.id === tab);
+
+  // Saved conversations are readable before the project files are
+  // located (DR-183). Do not route an opened transcript to project
+  // setup, or offer work controls for an unpaired project.
+  if (!project) {
+    if (!activeSession) return <div className="flex min-h-0 flex-1 flex-col">{startView}</div>;
+    const readingSession = {
+      ...activeSession,
+      continuable: undefined,
+      recovery: undefined,
+      continuationReason: activeSession.continuationReason ?? i18n._({
+        id: "Locate the project files in Saved work to work with them again.",
+        comment: "saved history can be read before its project folder is located",
+      }),
+    };
+    return (
+      <div data-testid="saved-conversation-reader" className="flex min-h-0 flex-1 flex-col">
+        <div className="flex min-w-0 flex-wrap items-center gap-3 border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
+          <button type="button" onClick={() => onNavigate("Space")} className="shrink-0 rounded px-2 py-1 text-sm text-brand-600 hover:bg-brand-50 dark:text-brand-400 dark:hover:bg-neutral-800">
+            {i18n._({ id: "Back to Space", comment: "return from a saved conversation to locate files or read other saved work" })}
+          </button>
+          <h2 className="min-w-0 break-words text-sm font-medium">{sessionTitle(view, activeSession)}</h2>
+        </div>
+        {!view || view.loading ? (
+          <div className="m-auto text-sm text-neutral-500">{i18n._("Loading transcript…")}</div>
+        ) : (
+          <RunView
+            key={activeSession.id}
+            session={readingSession}
+            view={view}
+            composer={{ queued: [] }}
+            connected={connection === "open"}
+            error={runErrors[activeSession.id]}
+            readOnly
+            onRetryLoad={() => { void loadPastSession(activeSession.id, true).catch(() => {}); }}
+            onSubmit={async () => {}}
+            onAbort={() => {}}
+            onRemoveQueued={() => {}}
+            onDismissError={() => clearRunError(activeSession.id)}
+          />
+        )}
+      </div>
+    );
+  }
   const composer = activeSession
     ? (composers[activeSession.id] ?? { queued: [] })
     : { queued: [] };
@@ -1408,7 +1448,8 @@ export function App() {
   // is named (dashboard-9, run-view-168).
   const openSessionAndShow = (sessionId: string, turnId?: number, place?: string, focusAt?: number) => {
     const store = storeAt(place);
-    void store.getState().focusSession(sessionId);
+    // The transcript keeps a failed read and its Retry in place.
+    void store.getState().focusSession(sessionId).catch(() => {});
     setPendingFocus(
       turnId !== undefined || focusAt !== undefined ? { sessionId, turnId, at: focusAt } : undefined,
     );

@@ -447,6 +447,7 @@ export function SpaceSurface({ onOpenSession, onOpenProject, onAddCredential }: 
               open={issuesOpen}
               refreshes={refreshes}
               onOpenProject={onOpenProject}
+              onOpenSession={onOpenSession}
               onNote={onNote}
             />
             {groups.git.ok ? (

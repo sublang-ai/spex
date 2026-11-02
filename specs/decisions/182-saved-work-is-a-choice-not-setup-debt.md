@@ -10,6 +10,8 @@ Amends [DR-177](177-repairs-explain-the-next-step.md) in its repair presentation
 Amends [DR-065](065-repairs-the-reader-answers.md) in acknowledgement meaning and presentation: Not now postpones optional recovery, without asserting where a project belongs.
 Amends [DR-172](172-surfaces-a-fresh-user-reads.md) in the repairs' heading, attention styling, naming and actions, and extends [DR-069](069-key-phrases-not-sentences.md) to make an action's purpose and scope visible before asking for it.
 
+Amended by [DR-183](183-read-saved-conversations-before-locating-files.md) in source explanation, project grouping and reading history before locating files.
+
 ## Context
 
 The previous repair screen made storage diagnostics into mandatory setup work after sign-in.

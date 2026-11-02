@@ -2130,8 +2130,9 @@ export interface DiagnosticRepair {
   group?: string;
   /** A real project's recorded name, never inferred from storage names. */
   projectName?: string;
-  /** At most three recent conversations, recognizable without internal ids. */
-  conversations?: { title?: string; updatedAt?: number }[];
+  /** At most three recent conversations, recognizable without displaying
+   * internal ids; an id permits reading existing history without a folder. */
+  conversations?: { id?: string; title?: string; updatedAt?: number }[];
   /** Related import failures resolved by this same folder-selection task. */
   details?: { file: string; reason: string }[];
   /** The working directories its sessions record, or the folder. */

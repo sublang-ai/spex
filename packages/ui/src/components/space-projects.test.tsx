@@ -86,11 +86,12 @@ const WORDS = {
     apart: "Started separately at Spex Example",
     combine: "Combine…",
     combineConfirm: "Combine",
-    repair: "Continue 3 saved conversations",
+    repair: "Delta",
     recoveryHelp: "Spex could not read this saved conversation. The original file is still saved.",
+    savedOnLab: "Conversation history is saved in Spex on lab-1, separately from your project files.",
     folderRetry: "Choose its project folder, then restart Spex to retry",
     repairFolder: "Previously used folder~/code/delta",
-    chooseFolder: "Choose project…",
+    chooseFolder: "Locate folder…",
     notHere: "Not now",
     notOnLab: "Not on lab-1",
     keepOnLab: "Keep lab-1's",
@@ -141,11 +142,12 @@ const WORDS = {
     apart: "在 Spex Example 上各自开始",
     combine: "合并…",
     combineConfirm: "合并",
-    repair: "继续之前的 3 段会话",
+    repair: "Delta",
     recoveryHelp: "Spex 无法读取这段会话，原始文件仍然保留。",
+    savedOnLab: "会话历史保存在 lab-1 上的 Spex 中，与项目文件分开存放。",
     folderRetry: "选择其项目文件夹，然后重启 Spex 重试",
     repairFolder: "之前使用的文件夹~/code/delta",
-    chooseFolder: "选择项目…",
+    chooseFolder: "查找文件夹…",
     notHere: "暂不处理",
     notOnLab: "不在 lab-1 上",
     keepOnLab: "保留 lab-1 的",
@@ -628,7 +630,7 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
     expect(callsOf(local, "space.sync")).toEqual([{ repository: ALPHA_KEY, placement: ORIGIN, join: true }]);
   });
 
-  test("a repair names the project and its group, the folder beneath; Not on this computer declines it", async () => {
+  test("saved work names its actual project, with its previous folder and optional postponement", async () => {
     state = home({
       diagnostics: [
         {
@@ -639,6 +641,7 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
             kind: "repository",
             repository: "@spex.example/acme/delta-spex",
             name: "delta-spex",
+            projectName: "Delta",
             group: "acme",
             directories: ["/Users/ada/code/delta"],
             sessions: 3,
@@ -652,13 +655,13 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
     await renderHere();
     fireEvent.click(screen.getByTestId("space-issues"));
     const repair = screen.getByTestId("space-repair");
-    // [space-46] "<project> · acme — Project folder not connected on this computer",
-    // the folder beneath it.
+    // [space-46] The actual project name heads the saved-work group,
+    // with its previously used folder beneath it.
     expect(within(repair).getByTestId("space-repair-title").textContent).toBe(words.repair);
     expect(within(repair).getByTestId("space-repair-folder").textContent).toBe(words.repairFolder);
     // [space-47] "Use <folder>" where the core proposes one.
     expect(within(repair).getByTestId("space-repair-use").textContent).toBe(words.use);
-    // [space-47] [space-49] "Choose folder…" and "Not on this computer",
+    // [space-47] [space-49] "Locate folder…" and "Not now",
     // declining sending `space.repair.decline`.
     expect(within(repair).getByTestId("space-repair-choose").textContent).toBe(words.chooseFolder);
     const decline = within(repair).getByTestId("space-repair-decline");
@@ -707,6 +710,7 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
     // guidance must not tell its reader to pick a folder or restart.
     fireEvent.click(screen.getByTestId("space-issues"));
     const diagnostic = screen.getByTestId("space-diagnostic");
+    expect(within(screen.getByTestId("space-issues-list")).getByText(words.savedOnLab)).toBeTruthy();
     expect(within(diagnostic).getByText(words.recoveryHelp)).toBeTruthy();
     expect(within(diagnostic).queryByText(words.folderRetry)).toBeNull();
     // [space-112] "Not on lab-1".

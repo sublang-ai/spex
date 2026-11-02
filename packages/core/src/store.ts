@@ -1827,7 +1827,7 @@ export class Store {
         const times = [meta.createdAt, meta.endedAt, lastRecorded, ...turns.flatMap((turn) => [turn.startedAt, turn.endedAt])].filter((time): time is number =>
           typeof time === "number" && Number.isFinite(time) && time > 0);
         const updatedAt = times.length ? times.reduce((last, time) => Math.max(last, time), 0) : undefined;
-        return { ...(title ? { title } : {}), ...(updatedAt !== undefined ? { updatedAt } : {}) };
+        return { id: meta.id, ...(title ? { title } : {}), ...(updatedAt !== undefined ? { updatedAt } : {}) };
       }).sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0)).slice(0, 3);
       reports.push({
         file: relative(this.dir, repository.dir),
@@ -1956,10 +1956,10 @@ export class Store {
     const meta = this.sessions.get(id);
     if (!meta) return undefined;
     const project = this.getProject(meta.projectId);
-    if (!project) return undefined;
+    if (!project && !this.repository(meta.projectId)) return undefined;
     // The project's read took `home.yaml` as it stands: its device is
     // this runtime's (DR-134).
-    return this.summarize(meta, project.path, this.homeFile.device);
+    return this.summarize(meta, project?.path ?? meta.cwd ?? "", this.homeFile.device, !project);
   }
 
   /** A settled checkpoint this runtime may continue: never one of a
@@ -1976,7 +1976,7 @@ export class Store {
   }
 
   /** `device` is this runtime's, read once per listing (DR-134). */
-  private summarize(meta: SessionMeta, path: string, device: string): SessionInfo {
+  private summarize(meta: SessionMeta, path: string, device: string, historyOnly = false): SessionInfo {
     const turns = [...(this.turns.get(meta.id)?.values() ?? [])].sort(
       (a, b) => a.turnId - b.turnId,
     );
@@ -2027,6 +2027,12 @@ export class Store {
       delete summary.continuable;
       summary.continuationReason = refusal;
     }
+    // Reading saved records needs no working folder. Their original
+    // execution and ownership checks still govern any later work.
+    if (historyOnly) {
+      delete summary.continuable;
+      delete summary.recovery;
+    }
     return summary;
   }
 
@@ -2039,10 +2045,10 @@ export class Store {
       (a, b) => a.createdAt - b.createdAt,
     )) {
       const project = projects.get(meta.projectId);
-      // A session whose project left the registry stays on disk but
-      // out of the listing (DR-036).
-      if (!project) continue;
-      out.push(this.summarize(meta, project.path, device));
+      // A missing folder makes history read-only; a removed record
+      // repository remains absent, even if indexed metadata survives.
+      if (!project && !this.repositories.has(meta.projectId)) continue;
+      out.push(this.summarize(meta, project?.path ?? meta.cwd ?? "", device, !project));
     }
     return out;
   }
