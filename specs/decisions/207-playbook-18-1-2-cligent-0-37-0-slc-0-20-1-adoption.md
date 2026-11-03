@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-204: Playbook 18.1.2, Cligent 0.37.0 and slc 0.20.1 Adoption
+# DR-207: Playbook 18.1.2, Cligent 0.37.0 and slc 0.20.1 Adoption
 
 ## Status
 

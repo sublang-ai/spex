@@ -61,9 +61,9 @@ When the run view asks for Settings at an agent's row [[run-view-179](run-view.m
 - a player the roster no longer holds opens Settings with no editor open;
 - the request is taken once, so returning to Settings later opens it as the reader left it.
 
-#### settings-68
+#### settings-70
 
-When the run view asks for Settings at an adapter's agent card [[run-view-45](run-view.md#run-view-45)], the Settings surface shall open with that adapter's card — or its entry beneath the cards [[settings-5](#settings-5)] — in view, leaving every other part as it was ([DR-200](../decisions/200-workshop-agents-in-one-pass.md)):
+When the run view asks for Settings at an adapter's agent card [[run-view-45](run-view.md#run-view-45)], the Settings surface shall open with that adapter's card — or its entry beneath the cards [[settings-5](#settings-5)] — in view, leaving every other part as it was ([DR-203](../decisions/203-workshop-agents-in-one-pass.md)):
 
 - the request is taken once, so returning to Settings later opens it as the reader left it.
 
@@ -75,9 +75,9 @@ Where the Settings surface is open, the Settings surface shall offer adding a se
 
 ### Workshop Adapters
 
-#### settings-56
+#### settings-58
 
-Where the Workshop switch — a constant in the interface's code, on by default — is on, the agent editor's adapter choices [[settings-1](#settings-1)] shall offer only `claude`, `codex` and the adapter the edited block already names, so a configuration naming `gemini`, `kimi` or `opencode` still loads, shows and may be changed to `claude` or `codex` while none of them is newly chosen ([DR-200](../decisions/200-workshop-agents-in-one-pass.md)):
+Where the Workshop switch — a constant in the interface's code, on by default — is on, the agent editor's adapter choices [[settings-1](#settings-1)] shall offer only `claude`, `codex` and the adapter the edited block already names, so a configuration naming `gemini`, `kimi` or `opencode` still loads, shows and may be changed to `claude` or `codex` while none of them is newly chosen ([DR-203](../decisions/203-workshop-agents-in-one-pass.md)):
 
 - the validation rules of [[settings-2](#settings-2)] are unchanged;
 - with the switch off, as in the release after the Workshop, every adapter the embedded runtime knows is offered, with nothing for a reader to do.
@@ -119,7 +119,7 @@ When an agent, role-binding, or session-tuning editor opens or the adapter it us
 - Beside it, offer the subagent-effort field: "Agent chooses" first — the configured omission, leaving each subagent's effort to the agent — then the adapter's subagent efforts [[settings-35](#settings-35)], a standing value outside them shown as requiring correction ([DR-095](../decisions/095-a-subagents-effort-and-the-agents-own-model.md)).
 - Use known model effort and fast-mode support; supplement efforts only with adapter choices Cligent identifies as unreported by its discovery interface, labeling only added choices adapter-wide. Missing model metadata leaves adapter-wide options unverified for that model.
 - Preserve draft values while loading or after failure, name unavailable discovery, and offer refresh.
-- Where an agent editor's or an agent card's [[settings-57](#settings-57)] `claude` model field serves a `third-party` base URL [[settings-14](#settings-14)] and the catalog reports a `defaultModel` [[settings-35](#settings-35)], mark Provider default as recommended [[settings-39](#settings-39)]; with no `defaultModel`, mark nothing ([DR-200](../decisions/200-workshop-agents-in-one-pass.md)).
+- Where an agent editor's or an agent card's [[settings-59](#settings-59)] `claude` model field serves a `third-party` base URL [[settings-14](#settings-14)] and the catalog reports a `defaultModel` [[settings-35](#settings-35)], mark Provider default as recommended [[settings-39](#settings-39)]; with no `defaultModel`, mark nothing ([DR-203](../decisions/203-workshop-agents-in-one-pass.md)).
 - Show unsupported effort or fast-mode selections as requiring correction, never silently removing values during discovery.
 - Explicitly switching an agent's adapter resets model, subagent model, subagent effort, effort, and fast mode to defaults because those settings belong to the previous adapter.
 
@@ -131,7 +131,7 @@ When the core receives `agent.options` for a known adapter, it shall return Clig
 - Adapter effort values, fast-mode support, subagent-model support and the adapter's subagent efforts — its effort values less its orchestration values, none where it serves no subagent model — accompany the discovery result ([DR-093](../decisions/093-a-players-subagent-model.md), [DR-095](../decisions/095-a-subagents-effort-and-the-agents-own-model.md)).
 - Available results carry Cligent's optional `unreportedEffortValues` separately from each model's effort list: adapter efforts the discovery interface cannot report.
 - Available results carry each model's optional `description` and the result's optional `defaultModel` — the model the runtime runs when none is configured — as Cligent reported them, absent where it reported none ([DR-091](../decisions/091-models-named-by-the-runtime.md)).
-- Where Cligent reports no `defaultModel` for `claude` while the environment a run inherits sets `ANTHROPIC_MODEL` — Claude Code's user settings included [[core-service-153](core-service.md#core-service-153)] — the result's `defaultModel` is that value, the model a run then selects ([DR-201](../decisions/201-agent-cards-read-alike.md)).
+- Where Cligent reports no `defaultModel` for `claude` while the environment a run inherits sets `ANTHROPIC_MODEL` — Claude Code's user settings included [[core-service-155](core-service.md#core-service-155)] — the result's `defaultModel` is that value, the model a run then selects ([DR-204](../decisions/204-agent-cards-read-alike.md)).
 - Unknown adapters are rejected by the protocol.
 - Discovery failure is returned as unavailable; config load and save do not depend on discovery.
 
@@ -180,24 +180,24 @@ While a model field's trigger has focus or its listbox is open [[settings-39](#s
 
 #### settings-5
 
-Where the Settings surface is open, in its full form and in its broken-config form [[settings-24](#settings-24)] alike, the Settings surface shall show an Agents section holding a standing card for `claude` and one for `codex` — shown whether or not any position uses them — and beneath them one entry per other adapter the shared config references, each reflecting the core's readiness report [[settings-14](#settings-14)] ([DR-200](../decisions/200-workshop-agents-in-one-pass.md), [DR-201](../decisions/201-agent-cards-read-alike.md)):
+Where the Settings surface is open, in its full form and in its broken-config form [[settings-24](#settings-24)] alike, the Settings surface shall show an Agents section holding a standing card for `claude` and one for `codex` — shown whether or not any position uses them — and beneath them one entry per other adapter the shared config references, each reflecting the core's readiness report [[settings-14](#settings-14)] ([DR-203](../decisions/203-workshop-agents-in-one-pass.md), [DR-204](../decisions/204-agent-cards-read-alike.md)):
 
 - every card has one frame: a heading with the agent's name, its tag — "Recommended" on the `claude` card until it is ready, none on the `codex` card — its badge and its positions in brief; one line saying what is missing or what runs; and what to do, a not-ready card closing with one line;
 - a card states ready in green, not ready in one amber attention tone whoever uses its adapter, sign-in unconfirmed — with "Sign-in could not be confirmed just now: <reason>. Re-check to try again." and no configuration steps — or unknown for an adapter with no preflight rule; a ready badge's tooltip reads "Found a sign-in or key; whether it works is checked on your first task.";
 - its heading names the positions using its adapter — `captain`, and each session player with the `<playbook>.<role>` bindings it answers [[settings-26](#settings-26)] — naming the first and counting the rest, as using it, or not ready as needing it, a press opening the whole list beneath and the tooltip holding it; or it says no role uses it yet;
-- not ready, a card shows its configuration [[settings-61](#settings-61)] alone, without its model service, its model, its one-model control [[settings-57](#settings-57)] or its official-name list [[settings-59](#settings-59)];
+- not ready, a card shows its configuration [[settings-63](#settings-63)] alone, without its model service, its model, its one-model control [[settings-59](#settings-59)] or its official-name list [[settings-61](#settings-61)];
 - ready, unconfirmed or unknown, its line names the `claude` card's model service by the base URL's state [[settings-14](#settings-14)] — "Anthropic official" for `unset`, "Third party <host>" for `third-party`, "Unrecognized" for `unknown`, nothing for `hidden` — beside the model its adapter's agents run in your own group's config: the one model by the display rule [[settings-38](#settings-38)], for Provider default the runtime's `defaultModel` [[settings-35](#settings-35)] or "Unavailable" where discovery failed or reported none, and "Several models" where they run different models — compared as they run, Provider default as the runtime's `defaultModel` and a catalog row's id or alias as its `resolvedModel`, so values naming one model read as that model; the model catalog is no readiness signal;
-- with a valid config that line carries "Change model", a link in the brand tone with an edit icon, opening beneath it the one-model control [[settings-57](#settings-57)];
-- a card not ready for a local credential of `claude` or `codex`, on this computer with the Workshop switch on [[settings-56](#settings-56)], offers the Workshop's setup guide [[settings-69](#settings-69)]; any other not-ready card offers a closed "How to configure" disclosure, holding the manual steps on this computer and, on a seat [[core-service-125](core-service.md#core-service-125)], a pointer to the Credentials section [[settings-48](#settings-48)] with no local step;
+- with a valid config that line carries "Change model", a link in the brand tone with an edit icon, opening beneath it the one-model control [[settings-59](#settings-59)];
+- a card not ready for a local credential of `claude` or `codex`, on this computer with the Workshop switch on [[settings-58](#settings-58)], offers the Workshop's setup guide [[settings-71](#settings-71)]; any other not-ready card offers a closed "How to configure" disclosure, holding the manual steps on this computer and, on a seat [[core-service-125](core-service.md#core-service-125)], a pointer to the Credentials section [[settings-48](#settings-48)] with no local step;
 - the manual steps follow the core's platform and the user's shell [[settings-14](#settings-14)]: on Windows, a user environment variable set with `setx` or the system settings; elsewhere, an `export` line in `~/.zshrc` for zsh, in `~/.bash_profile` for bash, and otherwise in the shell's login configuration file;
 - under "How to configure", the manual steps end "Quit Spex completely and open it again", the `codex` card's first saying it needs an official OpenAI key;
-- the section heading carries the Re-check control — a refresh icon and "Re-check", its tooltip saying it reads each agent's sign-in and Claude Code's settings again while a key set as an environment variable needs Spex reopened — whose icon turns while the check runs, its readiness request reseeding an untouched seed [[core-service-137](core-service.md#core-service-137)] ([DR-202](../decisions/202-the-workshop-points-to-its-guide.md)).
+- the section heading carries the Re-check control — a refresh icon and "Re-check", its tooltip saying it reads each agent's sign-in and Claude Code's settings again while a key set as an environment variable needs Spex reopened — whose icon turns while the check runs, its readiness request reseeding an untouched seed [[core-service-137](core-service.md#core-service-137)] ([DR-205](../decisions/205-the-workshop-points-to-its-guide.md)).
 
 ### Agent Cards
 
-#### settings-70
+#### settings-72
 
-While the core has reported readiness, the Agents section shall state beneath its heading, with a warning icon in the amber attention tone, what needs doing before a task can start or run whole, read from the adapter the Captain uses, since the Captain runs first ([DR-201](../decisions/201-agent-cards-read-alike.md)):
+While the core has reported readiness, the Agents section shall state beneath its heading, with a warning icon in the amber attention tone, what needs doing before a task can start or run whole, read from the adapter the Captain uses, since the Captain runs first ([DR-204](../decisions/204-agent-cards-read-alike.md)):
 
 | Readiness | Verdict |
 | --- | --- |
@@ -208,31 +208,31 @@ While the core has reported readiness, the Agents section shall state beneath it
 
 - The Captain's adapter with null readiness states no verdict.
 
-#### settings-57
+#### settings-59
 
-Where your own group's config is valid, the `claude` card and the `codex` card [[settings-5](#settings-5)] shall each offer one model for every agent on its adapter — "This changes the model of every Captain and player on <adapter> at once. To change only the Captain's or one player's, edit its settings above." as one line above "[model] [Apply]" — through the model field of [[settings-39](#settings-39)], Provider default and custom entry included, its targets the Captain where its adapter is the card's and each session player on that adapter [[settings-26](#settings-26)] ([DR-200](../decisions/200-workshop-agents-in-one-pass.md)):
+Where your own group's config is valid, the `claude` card and the `codex` card [[settings-5](#settings-5)] shall each offer one model for every agent on its adapter — "This changes the model of every Captain and player on <adapter> at once. To change only the Captain's or one player's, edit its settings above." as one line above "[model] [Apply]" — through the model field of [[settings-39](#settings-39)], Provider default and custom entry included, its targets the Captain where its adapter is the card's and each session player on that adapter [[settings-26](#settings-26)] ([DR-203](../decisions/203-workshop-agents-in-one-pass.md)):
 
 - a target takes the chosen model as its `model`, and Provider default as the removal of its `model` key;
 - a role binding's own model is no target.
 
-#### settings-58
+#### settings-60
 
-When the reader chooses Apply on a card's one-model control [[settings-57](#settings-57)], the Settings surface shall ask for confirmation listing the agents it changes and the roles whose binding names a model of its own, which it leaves, and on confirmation submit the changes as one `config.batch` [[core-service-44](core-service.md#core-service-44)] carrying the revision of the config state the surface shows [[core-service-45](core-service.md#core-service-45)], then say it is done, listing the roles it left again ([DR-200](../decisions/200-workshop-agents-in-one-pass.md)):
+When the reader chooses Apply on a card's one-model control [[settings-59](#settings-59)], the Settings surface shall ask for confirmation listing the agents it changes and the roles whose binding names a model of its own, which it leaves, and on confirmation submit the changes as one `config.batch` [[core-service-44](core-service.md#core-service-44)] carrying the revision of the config state the surface shows [[core-service-45](core-service.md#core-service-45)], then say it is done, listing the roles it left again ([DR-203](../decisions/203-workshop-agents-in-one-pass.md)):
 
 - a batch refused `conflict` changes nothing, reads your own group's config and each project's composition shown again, offering no batch from any agent card's control from the start of that reading until every read succeeds — the hold kept with the place, through leaving the Settings surface and entering it again, and the answers shown only once all settle, never where a later reading again or a newer config state already replaced them — and once every read settles asks the reader to retry over them, or, where a read failed, says so with a control reading again; a refused violation names the agent and the rule [[settings-12](#settings-12)], and changes nothing;
 - an effort the new model does not support stays, shown as requiring correction [[settings-34](#settings-34)];
 - where the `claude` base URL is `third-party` [[settings-14](#settings-14)] and discovery failed or reported no `defaultModel` [[settings-35](#settings-35)], Apply is disabled while Provider default is chosen, beside "The default model can't be read right now: retry, or choose a specific model" and a Retry rediscovering the models, while a specific model applies as ever.
 
-#### settings-59
+#### settings-61
 
-While the `claude` readiness entry's base URL is `third-party` [[settings-14](#settings-14)], the `claude` card shall list every role whose effective model is an official model name — the Captain by its own `model`; a role of your own group's config or of a project's composition [[core-service-2](core-service.md#core-service-2)] by its binding's own model, a specific model or Provider default alike, else by its player's `model`, a project's file binding players by name alone — saying "Some roles still name a Claude model, which <host> may bill as another model or refuse" with the control "Use <model> for all", naming Provider default by the runtime's `defaultModel` [[settings-35](#settings-35)], or "Set all to Provider default" where none is read, and the roles folded beneath "Show which roles", the list recomputed from the newest config state ([DR-200](../decisions/200-workshop-agents-in-one-pass.md), [DR-201](../decisions/201-agent-cards-read-alike.md)):
+While the `claude` readiness entry's base URL is `third-party` [[settings-14](#settings-14)], the `claude` card shall list every role whose effective model is an official model name — the Captain by its own `model`; a role of your own group's config or of a project's composition [[core-service-2](core-service.md#core-service-2)] by its binding's own model, a specific model or Provider default alike, else by its player's `model`, a project's file binding players by name alone — saying "Some roles still name a Claude model, which <host> may bill as another model or refuse" with the control "Use <model> for all", naming Provider default by the runtime's `defaultModel` [[settings-35](#settings-35)], or "Set all to Provider default" where none is read, and the roles folded beneath "Show which roles", the list recomputed from the newest config state ([DR-203](../decisions/203-workshop-agents-in-one-pass.md), [DR-204](../decisions/204-agent-cards-read-alike.md)):
 
 - an official model name begins with `claude-`, or is `opus`, `sonnet`, `haiku` or `fable`, each optionally followed by `[1m]`, ignoring case;
 - under any other base-URL state the card shows neither the list nor the control.
 
-#### settings-60
+#### settings-62
 
-When the reader chooses the official-name list's control [[settings-59](#settings-59)], the Settings surface shall ask for confirmation listing each role, its model now and its target — Provider default with the runtime's `defaultModel` [[settings-35](#settings-35)] — and on confirmation submit one `config.batch` [[core-service-44](core-service.md#core-service-44)] carrying the revision of the config state shown [[core-service-45](core-service.md#core-service-45)], writing by where each official name stands ([DR-200](../decisions/200-workshop-agents-in-one-pass.md)):
+When the reader chooses the official-name list's control [[settings-61](#settings-61)], the Settings surface shall ask for confirmation listing each role, its model now and its target — Provider default with the runtime's `defaultModel` [[settings-35](#settings-35)] — and on confirmation submit one `config.batch` [[core-service-44](core-service.md#core-service-44)] carrying the revision of the config state shown [[core-service-45](core-service.md#core-service-45)], writing by where each official name stands ([DR-203](../decisions/203-workshop-agents-in-one-pass.md)):
 
 | The official name stands on | The batch writes |
 | --- | --- |
@@ -244,14 +244,14 @@ When the reader chooses the official-name list's control [[settings-59](#setting
 - a batch refused `conflict` changes nothing, reads your own group's config and each project's composition shown again, offering no batch from any agent card's control from the start of that reading until every read succeeds — the hold kept with the place, through leaving the Settings surface and entering it again, and the answers shown only once all settle, never where a later reading again or a newer config state already replaced them — and once every read settles asks the reader to retry over them, or, where a read failed, says so with a control reading again;
 - where discovery failed or reported no `defaultModel`, the control is disabled beside "The default model can't be read right now" and a Retry rediscovering the models.
 
-#### settings-61
+#### settings-63
 
-While an agent card reports not ready [[settings-14](#settings-14)], the card shall phrase each fault by its kind and, for `claude`, by the base URL's state, keeping the core's own requirement, where its guidance is in other words, as that guidance's tooltip rather than a second line ([DR-200](../decisions/200-workshop-agents-in-one-pass.md)):
+While an agent card reports not ready [[settings-14](#settings-14)], the card shall phrase each fault by its kind and, for `claude`, by the base URL's state, keeping the core's own requirement, where its guidance is in other words, as that guidance's tooltip rather than a second line ([DR-203](../decisions/203-workshop-agents-in-one-pass.md)):
 
 | Fault | Guidance |
 | --- | --- |
 | `runtime` | the core's requirement, as it reads |
-| local `credential` of `claude` or `codex`, the Workshop switch on [[settings-56](#settings-56)] | what is missing, then the setup guide [[settings-69](#settings-69)] |
+| local `credential` of `claude` or `codex`, the Workshop switch on [[settings-58](#settings-58)] | what is missing, then the setup guide [[settings-71](#settings-71)] |
 | `credential` of `claude`, base URL `unset`, the switch off | "Sign in by running claude in a terminal, or set `ANTHROPIC_API_KEY`" |
 | `credential` of `claude`, base URL `third-party`, the switch off | "Set `ANTHROPIC_AUTH_TOKEN` and `ANTHROPIC_BASE_URL`" |
 | `credential` of `claude`, base URL `unknown`, the switch off | "`ANTHROPIC_BASE_URL` is not recognized: check the address, then set its credential" |
@@ -262,9 +262,9 @@ While an agent card reports not ready [[settings-14](#settings-14)], the card sh
 - both kinds unmet show both;
 - with the switch off, a local credential fault of `claude` with base URL `unset`, or of `codex`, ends "After signing in, re-check; after setting the key, quit Spex completely and open it again — see How to configure", any other local credential fault "Then quit Spex completely and open it again — see How to configure".
 
-#### settings-69
+#### settings-71
 
-Where the Workshop switch is on [[settings-56](#settings-56)], while an agent card on this computer reports a credential fault of `claude` or `codex` [[settings-14](#settings-14)], the card shall state what is missing, the core's requirement as its tooltip, then say whom the setup is for over its one action, the setup guide, and close with a line saying to re-check once connected ([DR-200](../decisions/200-workshop-agents-in-one-pass.md), [DR-202](../decisions/202-the-workshop-points-to-its-guide.md)):
+Where the Workshop switch is on [[settings-58](#settings-58)], while an agent card on this computer reports a credential fault of `claude` or `codex` [[settings-14](#settings-14)], the card shall state what is missing, the core's requirement as its tooltip, then say whom the setup is for over its one action, the setup guide, and close with a line saying to re-check once connected ([DR-203](../decisions/203-workshop-agents-in-one-pass.md), [DR-205](../decisions/205-the-workshop-points-to-its-guide.md)):
 
 | Fault | What is missing |
 | --- | --- |
@@ -273,7 +273,7 @@ Where the Workshop switch is on [[settings-56](#settings-56)], while an agent ca
 | `claude`, base URL `unknown` | "`ANTHROPIC_BASE_URL` is not an address Spex recognizes" |
 | `codex` | "Not signed in on this computer, and no key set" |
 
-- what is missing stands in neutral text with no icon, as the route does, the badge carrying the attention tone [[settings-5](#settings-5)] and the section's verdict the one warning [[settings-70](#settings-70)];
+- what is missing stands in neutral text with no icon, as the route does, the badge carrying the attention tone [[settings-5](#settings-5)] and the section's verdict the one warning [[settings-72](#settings-72)];
 - no online service is offered;
 - the route reads, on the `claude` card, "Connect Claude with a Claude subscription, or an Anthropic-compatible API key such as DeepSeek's: the setup guide walks you through it.", and on the `codex` card "Connect Codex with a ChatGPT subscription or an official OpenAI API key: the setup guide walks you through it.", over the primary action "Open the setup guide", sized as the card's other controls, which opens the Workshop's configuration document in the browser at its section for the core's platform — Windows or macOS — on the `codex` card at that platform's Codex section, and at its top on any other platform;
 - the closing line reads "Once connected, press Re-check; if nothing changes, quit Spex completely and open it again."
@@ -338,7 +338,7 @@ While the notifications editor lists notification events, each event shall be la
 
 #### settings-23
 
-While an agent card reports not ready, the core's own requirement — shown where the card phrases a fault in it [[settings-61](#settings-61)] — shall render in full, wrapping onto further lines as needed rather than truncating.
+While an agent card reports not ready, the core's own requirement — shown where the card phrases a fault in it [[settings-63](#settings-63)] — shall render in full, wrapping onto further lines as needed rather than truncating.
 
 #### settings-24
 
@@ -426,13 +426,13 @@ When the core service applies an accepted Settings save to the shared config fil
 
 #### settings-14
 
-Where the core service evaluates adapter readiness, the core service shall report readiness keyed by adapter — an entry for `claude` and one for `codex` always, and one deduplicated entry per other adapter the active config references, each carrying the positions using it — `captain`, and each session player with the bindings it answers — none where no position does, and while the config is missing or invalid the `claude` and `codex` entries alone with no positions — applying per-adapter rules that combine a runtime half with a credential half ([DR-024](../decisions/024-app-supplied-agent-runtimes.md), [DR-004](../decisions/004-config-and-persistence.md), [DR-200](../decisions/200-workshop-agents-in-one-pass.md)): an adapter whose runtime cligent's availability probe finds unusable [[core-service-9](core-service.md#core-service-9)] is not ready whatever its credential class, and one whose cligent-published runtime is missing or below cligent's supported floor carries cligent's verdict and the repair for its install tree — the pinned global install for a `PATH` runtime, reinstall guidance for a bundled SDK; over a usable runtime, `claude` is ready when `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN` or `CLAUDE_CODE_OAUTH_TOKEN` is set, in the core's environment or the `env` of Claude Code's user settings file, and `codex` when `OPENAI_API_KEY`, `CODEX_API_KEY` or `CODEX_ACCESS_TOKEN` is set — the variables of Playbook's launcher — and otherwise by the agent's own sign-in, its home folder alone never counting; both halves unmet report both requirements; an adapter with a usable runtime and no credential rule shall be reported with null readiness and verify-yourself guidance rather than not ready; on a seat the credential half is [[settings-49](#settings-49)]'s:
+Where the core service evaluates adapter readiness, the core service shall report readiness keyed by adapter — an entry for `claude` and one for `codex` always, and one deduplicated entry per other adapter the active config references, each carrying the positions using it — `captain`, and each session player with the bindings it answers — none where no position does, and while the config is missing or invalid the `claude` and `codex` entries alone with no positions — applying per-adapter rules that combine a runtime half with a credential half ([DR-024](../decisions/024-app-supplied-agent-runtimes.md), [DR-004](../decisions/004-config-and-persistence.md), [DR-203](../decisions/203-workshop-agents-in-one-pass.md)): an adapter whose runtime cligent's availability probe finds unusable [[core-service-9](core-service.md#core-service-9)] is not ready whatever its credential class, and one whose cligent-published runtime is missing or below cligent's supported floor carries cligent's verdict and the repair for its install tree — the pinned global install for a `PATH` runtime, reinstall guidance for a bundled SDK; over a usable runtime, `claude` is ready when `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN` or `CLAUDE_CODE_OAUTH_TOKEN` is set, in the core's environment or the `env` of Claude Code's user settings file, and `codex` when `OPENAI_API_KEY`, `CODEX_API_KEY` or `CODEX_ACCESS_TOKEN` is set — the variables of Playbook's launcher — and otherwise by the agent's own sign-in, its home folder alone never counting; both halves unmet report both requirements; an adapter with a usable runtime and no credential rule shall be reported with null readiness and verify-yourself guidance rather than not ready; on a seat the credential half is [[settings-49](#settings-49)]'s:
 
 - The agent's own sign-in is its status command — `claude auth status` read by the `loggedIn` its JSON states, `codex login status` by exit 0 or "Not logged in" on a failing exit — run on the executable the adapter spawns with the environment an agent run inherits, for at most 5 seconds, and only where the agent's configuration folder exists — `CLAUDE_CONFIG_DIR` or `~/.claude`, `CODEX_HOME` or `~/.codex` — a missing folder reading signed out, so no status command creates the folder Playbook's seed reads [[core-service-3](core-service.md#core-service-3)].
 - A status command that does not start, runs past its time, fails otherwise or answers in words not read leaves the sign-in unconfirmed: null readiness carrying the reason in the reader's words and no fault, never not ready; an unusable runtime still makes the entry not ready, its runtime fault alone.
 - Each entry lists its unmet requirements as faults, each of kind `runtime` or `credential` with its own requirement, beside the requirement string joining them.
 - The `claude` entry carries its base URL's state and every entry the core's platform and the user's shell, as the protocol reports them [[core-service-9](core-service.md#core-service-9)].
-- Environment lookups use the environment the core captured ([DR-004](../decisions/004-config-and-persistence.md)) — on macOS and Linux the login shell's — not the bare app process environment; on Windows, its source is the Windows host's ([DR-200](../decisions/200-workshop-agents-in-one-pass.md)).
+- Environment lookups use the environment the core captured ([DR-004](../decisions/004-config-and-persistence.md)) — on macOS and Linux the login shell's — not the bare app process environment; on Windows, its source is the Windows host's ([DR-203](../decisions/203-workshop-agents-in-one-pass.md)).
 
 ### External Changes
 
@@ -520,7 +520,7 @@ When rendered editors exchange capability and browser preparation messages with 
 
 #### settings-53
 
-Where Settings is asked for the Captain's row and, separately, for `dev.reviewer`'s and for a player the roster lacks, the test suite shall assert the asked row's editor opens in view while the others stay closed, the missing player opens none, and a later visit opens Settings as the reader left it [[settings-52](#settings-52)], and that Settings asked for the `codex` agent card brings that card into view once, a later visit leaving the scroll as the reader left it [[settings-68](#settings-68)].
+Where Settings is asked for the Captain's row and, separately, for `dev.reviewer`'s and for a player the roster lacks, the test suite shall assert the asked row's editor opens in view while the others stay closed, the missing player opens none, and a later visit opens Settings as the reader left it [[settings-52](#settings-52)], and that Settings asked for the `codex` agent card brings that card into view once, a later visit leaving the scroll as the reader left it [[settings-70](#settings-70)].
 
 #### settings-28
 
@@ -552,66 +552,66 @@ Where the UI holds a seat's store over a fake client, the test suite shall asser
 
 ### Agent Card Coverage
 
-#### settings-62
+#### settings-64
 
-Where the agent editor renders over a block naming `claude` and over one naming `gemini`, with the Workshop switch on and again off, the test suite shall assert that with it on the adapter choices are `claude` and `codex`, and `gemini` beside them for the block naming it, which reads `gemini` and may be changed to `claude`, while off every known adapter is offered [[settings-56](#settings-56)].
+Where the agent editor renders over a block naming `claude` and over one naming `gemini`, with the Workshop switch on and again off, the test suite shall assert that with it on the adapter choices are `claude` and `codex`, and `gemini` beside them for the block naming it, which reads `gemini` and may be changed to `claude`, while off every known adapter is offered [[settings-58](#settings-58)].
 
-#### settings-63
+#### settings-65
 
 Where the Settings surface renders a valid config whose roles bind official and third-party model names, against a `claude` catalog reporting a `defaultModel`, for each base-URL state of the case table, the test suite shall assert through the rendered cards:
 
 | Base URL | Model service | Official-name list | Credential guidance, not ready | Recommended mark |
 | --- | --- | --- | --- | --- |
-| `unset` | "Anthropic official" [[settings-5](#settings-5)] | none [[settings-59](#settings-59)] | with the Workshop switch on, no model service [[settings-69](#settings-69)]; off, sign in or set it [[settings-61](#settings-61)] | none [[settings-34](#settings-34)] |
-| `third-party` | "Third party" with its host [[settings-5](#settings-5)] | listed, with the control [[settings-59](#settings-59)] | on, the host's missing key [[settings-69](#settings-69)]; off, `ANTHROPIC_AUTH_TOKEN` and `ANTHROPIC_BASE_URL` [[settings-61](#settings-61)] | on Provider default [[settings-34](#settings-34)] [[settings-39](#settings-39)] |
-| `unknown` | "Unrecognized" [[settings-5](#settings-5)] | none [[settings-59](#settings-59)] | on, the unrecognized address [[settings-69](#settings-69)]; off, check the address [[settings-61](#settings-61)] | none [[settings-34](#settings-34)] |
-| `hidden`, on a seat | nothing [[settings-5](#settings-5)] | none [[settings-59](#settings-59)] | the class's phrase and the Credentials section, no local step [[settings-61](#settings-61)] | none [[settings-34](#settings-34)] |
+| `unset` | "Anthropic official" [[settings-5](#settings-5)] | none [[settings-61](#settings-61)] | with the Workshop switch on, no model service [[settings-71](#settings-71)]; off, sign in or set it [[settings-63](#settings-63)] | none [[settings-34](#settings-34)] |
+| `third-party` | "Third party" with its host [[settings-5](#settings-5)] | listed, with the control [[settings-61](#settings-61)] | on, the host's missing key [[settings-71](#settings-71)]; off, `ANTHROPIC_AUTH_TOKEN` and `ANTHROPIC_BASE_URL` [[settings-63](#settings-63)] | on Provider default [[settings-34](#settings-34)] [[settings-39](#settings-39)] |
+| `unknown` | "Unrecognized" [[settings-5](#settings-5)] | none [[settings-61](#settings-61)] | on, the unrecognized address [[settings-71](#settings-71)]; off, check the address [[settings-63](#settings-63)] | none [[settings-34](#settings-34)] |
+| `hidden`, on a seat | nothing [[settings-5](#settings-5)] | none [[settings-61](#settings-61)] | the class's phrase and the Credentials section, no local step [[settings-63](#settings-63)] | none [[settings-34](#settings-34)] |
 
-- each fault the card phrases in its own words keeps the core's requirement whole as its tooltip and shows it nowhere else, while a runtime fault shows it whole [[settings-23](#settings-23)] [[settings-61](#settings-61)];
-- with the switch off, the `unset` guidance and the `codex` guidance end with re-checking after signing in, the others with quitting and reopening Spex [[settings-61](#settings-61)]; with it on, none ends so, the route's closing line closing them [[settings-69](#settings-69)];
-- a runtime fault shows the core's requirement alone, and a card missing both halves shows both [[settings-61](#settings-61)];
+- each fault the card phrases in its own words keeps the core's requirement whole as its tooltip and shows it nowhere else, while a runtime fault shows it whole [[settings-23](#settings-23)] [[settings-63](#settings-63)];
+- with the switch off, the `unset` guidance and the `codex` guidance end with re-checking after signing in, the others with quitting and reopening Spex [[settings-63](#settings-63)]; with it on, none ends so, the route's closing line closing them [[settings-71](#settings-71)];
+- a runtime fault shows the core's requirement alone, and a card missing both halves shows both [[settings-63](#settings-63)];
 - a card whose sign-in is unconfirmed reads "sign-in unconfirmed" with its reason and Re-check, no configuration steps, while an adapter with no preflight rule still reads unknown with no such line [[settings-5](#settings-5)].
 
-#### settings-64
+#### settings-66
 
 Where the Settings surface renders a not-ready `claude` card and an unused `codex` card for each case — this computer with the Workshop switch on and off, a seat, and the core's platform and shell given as macOS with zsh, macOS with bash, macOS with fish and Windows — the test suite shall assert:
 
-- only on this computer with the switch on, each card states what is missing in neutral text, then the route naming the card's subscription and keys with the primary action "Open the setup guide", which opens the configuration document at the section for macOS, for Windows, Codex's own within each on the `codex` card, and at its top otherwise, and closes with its re-check line, showing no manual step and no online service [[settings-69](#settings-69)];
+- only on this computer with the switch on, each card states what is missing in neutral text, then the route naming the card's subscription and keys with the primary action "Open the setup guide", which opens the configuration document at the section for macOS, for Windows, Codex's own within each on the `codex` card, and at its top otherwise, and closes with its re-check line, showing no manual step and no online service [[settings-71](#settings-71)];
 - with the switch off, the manual steps stand closed under "How to configure", ending with quitting and reopening Spex, the `codex` card's naming an official OpenAI key, and a seat points to the Credentials section with no local step [[settings-5](#settings-5)];
 - with the switch off, the manual steps name `~/.zshrc`, `~/.bash_profile`, the shell's login file and `setx` respectively [[settings-5](#settings-5)];
 - a not-ready card names its first position and counts the rest, opening the whole list beneath and holding it as the tooltip, and shows no model service, default model or one-model control [[settings-5](#settings-5)];
 - the `codex` card's not-ready badge, unused, takes the same attention tone as the `claude` card's, used, the `claude` card alone tagged [[settings-5](#settings-5)];
-- a ready card has no closing line, its badge's tooltip saying the connection is checked on the first task; it names its positions in brief, opening the whole list, and states its model service with the model its agents run — one model, or "Several models" — opening the one-model control only from "Change model", its label and the Session players line one line above the field [[settings-5](#settings-5)] [[settings-57](#settings-57)];
+- a ready card has no closing line, its badge's tooltip saying the connection is checked on the first task; it names its positions in brief, opening the whole list, and states its model service with the model its agents run — one model, or "Several models" — opening the one-model control only from "Change model", its label and the Session players line one line above the field [[settings-5](#settings-5)] [[settings-59](#settings-59)];
 - the Re-check control reads "Re-check" with its tooltip naming the sign-ins and Claude Code's settings, and no restart line stands beside it [[settings-5](#settings-5)].
 
-#### settings-71
+#### settings-73
 
-Where the Settings surface renders the cards over each readiness row of [[settings-70](#settings-70)], and again before the core has answered, the test suite shall assert the verdict's text for each row, none where nothing needs doing and none before the answer [[settings-70](#settings-70)], with the `claude` card tagged "Recommended" in every row where it is not ready and untagged where it is, and the `codex` card untagged in every row [[settings-5](#settings-5)], and that behind a third-party service the official-name list states its one line naming the host, its control naming the runtime's default model and its roles folded [[settings-59](#settings-59)], and that over a catalog modeled on Claude Code's behind DeepSeek the one-model control lists one row per model, none for Provider default's [[settings-39](#settings-39)], a resolution its name already says reading once [[settings-38](#settings-38)].
-
-#### settings-65
-
-Where the Settings surface renders with the config missing and again invalid, the test suite shall assert that the `claude` and `codex` cards still show their readiness and configuration steps beside the broken-config notice, with no one-model control and no official-name control [[settings-5](#settings-5)] [[settings-57](#settings-57)] [[settings-59](#settings-59)], and that on a seat the Credentials section their steps point to stands too [[settings-48](#settings-48)].
-
-#### settings-66
-
-Where the Settings surface renders a config whose Captain and two players run on `claude`, one of their roles' bindings naming a model of its own, and a `codex` player, when the reader chooses a model on the `claude` card and Apply, the test suite shall assert:
-
-- the confirmation lists the Captain and the two players, and the role it leaves for its own model [[settings-58](#settings-58)];
-- confirming sends one `config.batch` with the shown state's revision, a `captain.set` and a `player.set` per player whose patch sets `model`, or with Provider default removes it, and nothing for the `codex` player or the binding [[settings-57](#settings-57)] [[settings-58](#settings-58)];
-- the done notice lists the left role again, and a refused `conflict` says to retry, reads the config again, and the next confirmation lists a player the file gained and sends its revision [[settings-58](#settings-58)];
-- with the base URL `third-party` and a catalog reporting no `defaultModel`, Apply is disabled while Provider default is chosen, with its line and a Retry that rediscovers, and enabled for a specific model [[settings-58](#settings-58)].
+Where the Settings surface renders the cards over each readiness row of [[settings-72](#settings-72)], and again before the core has answered, the test suite shall assert the verdict's text for each row, none where nothing needs doing and none before the answer [[settings-72](#settings-72)], with the `claude` card tagged "Recommended" in every row where it is not ready and untagged where it is, and the `codex` card untagged in every row [[settings-5](#settings-5)], and that behind a third-party service the official-name list states its one line naming the host, its control naming the runtime's default model and its roles folded [[settings-61](#settings-61)], and that over a catalog modeled on Claude Code's behind DeepSeek the one-model control lists one row per model, none for Provider default's [[settings-39](#settings-39)], a resolution its name already says reading once [[settings-38](#settings-38)].
 
 #### settings-67
 
+Where the Settings surface renders with the config missing and again invalid, the test suite shall assert that the `claude` and `codex` cards still show their readiness and configuration steps beside the broken-config notice, with no one-model control and no official-name control [[settings-5](#settings-5)] [[settings-59](#settings-59)] [[settings-61](#settings-61)], and that on a seat the Credentials section their steps point to stands too [[settings-48](#settings-48)].
+
+#### settings-68
+
+Where the Settings surface renders a config whose Captain and two players run on `claude`, one of their roles' bindings naming a model of its own, and a `codex` player, when the reader chooses a model on the `claude` card and Apply, the test suite shall assert:
+
+- the confirmation lists the Captain and the two players, and the role it leaves for its own model [[settings-60](#settings-60)];
+- confirming sends one `config.batch` with the shown state's revision, a `captain.set` and a `player.set` per player whose patch sets `model`, or with Provider default removes it, and nothing for the `codex` player or the binding [[settings-59](#settings-59)] [[settings-60](#settings-60)];
+- the done notice lists the left role again, and a refused `conflict` says to retry, reads the config again, and the next confirmation lists a player the file gained and sends its revision [[settings-60](#settings-60)];
+- with the base URL `third-party` and a catalog reporting no `defaultModel`, Apply is disabled while Provider default is chosen, with its line and a Retry that rediscovers, and enabled for a specific model [[settings-60](#settings-60)].
+
+#### settings-69
+
 Where the Settings surface renders a `third-party` base URL over a config whose Captain names an official model, whose roles cross official and third-party names on the player and on the binding, one binding in your own group's file naming an official model, and a project's composition binding a role to an official-named player your own roles leave unbound, the test suite shall assert:
 
-- a role on an official-named player whose binding names a third-party model is not listed, and one on a third-party player whose binding names an official model is [[settings-59](#settings-59)];
-- the confirmation lists each role with its model and the target, the project's role by its project among them [[settings-60](#settings-60)];
-- confirming sends one `config.batch` with the shown revision removing the Captain's and each official-named player's `model`, the project's included, and writing `model: false` on your own group's binding [[settings-60](#settings-60)];
-- once a project's composition binds a further official-named player after the confirmation, the done notice lists that role alone and never says all were set [[settings-60](#settings-60)];
-- a `conflict` refused to the one-model control whose project read fails holds Apply, the official-name control and its open confirmation from the start of the reading again, reports nothing until your own read settles too, then says the read failed, still holding them after the surface is left and entered again until reading again succeeds, the next batch carrying the revision read [[settings-58](#settings-58)] [[settings-60](#settings-60)];
-- two readings again answered in reverse order leave the later's states shown, and a config state broadcast during one is kept over its answers [[settings-60](#settings-60)];
-- with no `defaultModel`, the control is disabled with its line and a Retry that rediscovers [[settings-60](#settings-60)].
+- a role on an official-named player whose binding names a third-party model is not listed, and one on a third-party player whose binding names an official model is [[settings-61](#settings-61)];
+- the confirmation lists each role with its model and the target, the project's role by its project among them [[settings-62](#settings-62)];
+- confirming sends one `config.batch` with the shown revision removing the Captain's and each official-named player's `model`, the project's included, and writing `model: false` on your own group's binding [[settings-62](#settings-62)];
+- once a project's composition binds a further official-named player after the confirmation, the done notice lists that role alone and never says all were set [[settings-62](#settings-62)];
+- a `conflict` refused to the one-model control whose project read fails holds Apply, the official-name control and its open confirmation from the start of the reading again, reports nothing until your own read settles too, then says the read failed, still holding them after the surface is left and entered again until reading again succeeds, the next batch carrying the revision read [[settings-60](#settings-60)] [[settings-62](#settings-62)];
+- two readings again answered in reverse order leave the later's states shown, and a config state broadcast during one is kept over its answers [[settings-62](#settings-62)];
+- with no `defaultModel`, the control is disabled with its line and a Retry that rediscovers [[settings-62](#settings-62)].
 
 ### Browser Journeys
 

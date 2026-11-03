@@ -891,9 +891,9 @@ While the shared config is invalid or missing, the Captain home shall say so in 
 
 #### run-view-45
 
-While the selected Captain adapter reports not ready on a project's home, the run view shall explain beside the composer that a task cannot start, keep its draft editable, block dispatch, and offer Settings at that adapter's agent card [[settings-68](settings.md#settings-68)] and an in-place re-check ([DR-135](../decisions/135-a-welcome-page-before-the-first-project.md)):
+While the selected Captain adapter reports not ready on a project's home, the run view shall explain beside the composer that a task cannot start, keep its draft editable, block dispatch, and offer Settings at that adapter's agent card [[settings-70](settings.md#settings-70)] and an in-place re-check ([DR-135](../decisions/135-a-welcome-page-before-the-first-project.md)):
 
-- the notice names the Captain's adapter and its agent card's leading line — what is missing [[settings-69](settings.md#settings-69)], or the next step [[settings-61](settings.md#settings-61)] — at the composer's text size, with Settings as its primary action;
+- the notice names the Captain's adapter and its agent card's leading line — what is missing [[settings-71](settings.md#settings-71)], or the next step [[settings-63](settings.md#settings-63)] — at the composer's text size, with Settings as its primary action;
 - the start control stays enabled for a draft that could start: pressing it dispatches nothing but re-checks readiness — or, while a re-check already runs, waits on that one — starting the task only where the Captain's adapter then reports ready; where it reports not ready, keeping the draft, bringing the notice into view, marking it and focusing its Settings action; where the check cannot confirm it, keeping the draft and saying beside the composer that the task has not started, why, and that a second press starts it anyway, with a re-check;
 - where a different adapter is ready, the notice shall also open the Captain's in-place agent editor to switch to it [[run-view-32](#run-view-32)];
 - the app re-checks readiness when its window regains focus while anything is not ready;

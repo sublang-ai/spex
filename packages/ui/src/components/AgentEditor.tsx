@@ -150,7 +150,7 @@ export function AgentEditor(props: AgentEditorProps) {
   const discovery = useAgentOptions(adapter);
   // With the Workshop switch on, Claude and Codex, and the adapter the
   // block already names so it still reads and may be changed back
-  // (settings-56).
+  // (settings-58).
   const offeredAdapters = WORKSHOP
     ? ADAPTERS.filter((name) => (WORKSHOP_ADAPTERS as readonly string[]).includes(name) || name === knownAdapter(initial?.adapter))
     : ADAPTERS;

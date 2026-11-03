@@ -18,7 +18,7 @@ import {
 } from "@testing-library/react";
 
 // These suites cover every adapter the runtime knows: the Workshop
-// switch that limits the choices to two (settings-56) is off here.
+// switch that limits the choices to two (settings-58) is off here.
 vi.mock("../lib/workshop.js", () => ({ WORKSHOP: false, WORKSHOP_ADAPTERS: ["claude", "codex"] }));
 
 vi.mock("../lib/agent-options.js", async (original) => {

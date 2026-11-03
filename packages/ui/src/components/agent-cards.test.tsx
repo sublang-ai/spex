@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The agent cards and the Workshop adapter limit (settings-56 to
-// settings-61, DR-200), rendered over fixture readiness, catalogs and
+// The agent cards and the Workshop adapter limit (settings-58 to
+// settings-63, DR-203), rendered over fixture readiness, catalogs and
 // configs: what each card says for each base-URL state and computer,
 // the one-model batch, and the batch setting official names behind a
 // third-party service to Provider default.
@@ -199,16 +199,16 @@ beforeEach(() => {
 
 afterEach(() => setClientForTests(undefined));
 
-describe("settings-62: the Workshop switch limits adapter choices", () => {
+describe("settings-64: the Workshop switch limits adapter choices", () => {
   const adapters = () => screen.getAllByRole("radio").map((radio) => radio.textContent?.replace("●", "").trim());
 
   test("on: Claude and Codex, and an adapter the block already names, which may be changed", () => {
     render(<AgentEditor initial={{ adapter: "claude" }} readiness={[]} onSave={vi.fn(async () => {})} onCancel={() => {}} />);
-    // settings-56: only the two.
+    // settings-58: only the two.
     expect(adapters()).toEqual(["claude", "codex"]);
     cleanup();
     render(<AgentEditor initial={{ adapter: "gemini" }} readiness={[]} onSave={vi.fn(async () => {})} onCancel={() => {}} />);
-    // settings-56: the block's own adapter reads as itself and stands.
+    // settings-58: the block's own adapter reads as itself and stands.
     expect(adapters()).toEqual(["claude", "codex", "gemini"]);
     expect(screen.getByTestId("agent-adapter-gemini").getAttribute("aria-checked")).toBe("true");
     fireEvent.click(screen.getByTestId("agent-adapter-claude"));
@@ -219,12 +219,12 @@ describe("settings-62: the Workshop switch limits adapter choices", () => {
   test("off: every adapter the runtime knows", () => {
     flags.workshop = false;
     render(<AgentEditor initial={{ adapter: "claude" }} readiness={[]} onSave={vi.fn(async () => {})} onCancel={() => {}} />);
-    // settings-56: with the switch off, all five.
+    // settings-58: with the switch off, all five.
     expect(adapters()).toEqual(["claude", "codex", "gemini", "kimi", "opencode"]);
   });
 });
 
-describe("settings-63: each base-URL state", () => {
+describe("settings-65: each base-URL state", () => {
   const RECHECK = "After signing in, re-check; after setting the key, quit Spex completely and open it again — see How to configure.";
   const RESTART = "Then quit Spex completely and open it again — see How to configure.";
   const cases: { label: string; baseUrl: BaseUrlState; service: string | null; listed: boolean; missing: RegExp; off: RegExp; closing: string; mark: boolean }[] = [
@@ -238,7 +238,7 @@ describe("settings-63: each base-URL state", () => {
       const ready = screen.getByTestId("agent-card-claude");
       // settings-5: the model service by the base URL's state.
       expect(within(ready).getByTestId("agent-service").textContent).toBe(each.service);
-      // settings-59: listed only behind a third party.
+      // settings-61: listed only behind a third party.
       expect(within(ready).queryByTestId("agent-official") !== null).toBe(each.listed);
       // settings-34, settings-39: Provider default recommended only
       // behind a third party with a default model read.
@@ -253,7 +253,7 @@ describe("settings-63: each base-URL state", () => {
         const card = screen.getByTestId("agent-card-claude");
         const fault = within(card).getByTestId("agent-fault-credential");
         if (workshop) {
-          // settings-69: what is missing, then the setup guide by the
+          // settings-71: what is missing, then the setup guide by the
           // state; the route's own line closes it.
           expect(fault.textContent).toMatch(each.missing);
           expect(within(card).getByTestId("agent-route-local").textContent).toBe("Connect Claude with a Claude subscription, or an Anthropic-compatible API key such as DeepSeek's: the setup guide walks you through it.Open the setup guide");
@@ -261,14 +261,14 @@ describe("settings-63: each base-URL state", () => {
           expect(fault.textContent).not.toContain(RECHECK);
           expect(fault.textContent).not.toContain(RESTART);
         } else {
-          // settings-61: guidance by the state; re-check after a
+          // settings-63: guidance by the state; re-check after a
           // sign-in, restart after a variable.
           expect(fault.textContent).toMatch(each.off);
           expect(fault.textContent).toContain(each.closing);
           if (each.closing === RESTART) expect(fault.textContent).not.toContain(RECHECK);
           expect(within(card).queryByTestId("agent-routes-claude")).toBeNull();
         }
-        // settings-23, settings-61: the core's own words whole, in the
+        // settings-23, settings-63: the core's own words whole, in the
         // guidance's tooltip and nowhere else.
         expect(within(fault).getByTestId("agent-fault-guidance").getAttribute("title")).toBe(CLAUDE_CREDENTIAL.requirement);
         expect(within(fault).queryByTestId("agent-fault-core")).toBeNull();
@@ -295,9 +295,9 @@ describe("settings-63: each base-URL state", () => {
     const card = screen.getByTestId("agent-card-claude");
     // settings-5: nothing for hidden.
     expect(within(card).queryByTestId("agent-service")).toBeNull();
-    // settings-59: no list.
+    // settings-61: no list.
     expect(within(card).queryByTestId("agent-official")).toBeNull();
-    // settings-61: the class's phrase, no local step.
+    // settings-63: the class's phrase, no local step.
     const fault = within(card).getByTestId("agent-fault-credential");
     expect(fault.textContent).toContain("Credentials section");
     expect(fault.textContent).not.toContain("quit Spex");
@@ -311,10 +311,10 @@ describe("settings-63: each base-URL state", () => {
     const runtime = { kind: "runtime" as const, requirement: "the claude runtime failed to load — reinstall the app, or run npm install in a checkout" };
     show(CROSSED, [notReady("claude", [runtime]), notReady("codex", [{ kind: "runtime", requirement: "the codex runtime failed to load" }, CODEX_CREDENTIAL])]);
     const claude = screen.getByTestId("agent-card-claude");
-    // settings-61: the core's requirement alone, no key to set.
+    // settings-63: the core's requirement alone, no key to set.
     expect(within(claude).getByTestId("agent-fault-runtime").textContent).toBe(runtime.requirement);
     expect(within(claude).queryByTestId("agent-fault-credential")).toBeNull();
-    // settings-61: both halves unmet, both lines.
+    // settings-63: both halves unmet, both lines.
     const codex = screen.getByTestId("agent-card-codex");
     expect(within(codex).getByTestId("agent-fault-runtime").textContent).toContain("codex runtime failed to load");
     const codexCredential = within(codex).getByTestId("agent-fault-credential");
@@ -341,7 +341,7 @@ describe("settings-63: each base-URL state", () => {
   });
 });
 
-describe("settings-64: how to configure, per place and computer", () => {
+describe("settings-66: how to configure, per place and computer", () => {
   const computers: { platform: string; shell?: string; file: RegExp }[] = [
     { platform: "darwin", shell: "zsh", file: /~\/\.zshrc[\s\S]*export ANTHROPIC_API_KEY=/ },
     { platform: "darwin", shell: "bash", file: /~\/\.bash_profile[\s\S]*export ANTHROPIC_API_KEY=/ },
@@ -359,7 +359,7 @@ describe("settings-64: how to configure, per place and computer", () => {
         const claude = screen.getByTestId("agent-card-claude");
         const codex = screen.getByTestId("agent-card-codex");
         if (workshop) {
-          // settings-69: one route, the setup guide as the primary
+          // settings-71: one route, the setup guide as the primary
           // action, no online service; the guide opens at the platform.
           const routes = within(claude).getByTestId("agent-routes-claude");
           expect(routes.textContent).toMatch(/^Connect Claude with a Claude subscription/);
@@ -371,12 +371,12 @@ describe("settings-64: how to configure, per place and computer", () => {
           expect(guide.textContent).toBe("Open the setup guide");
           expect(guide.getAttribute("target")).toBe("_blank");
           expect(guide.getAttribute("href")).toBe(`https://merico.feishu.cn/docx/AjiHdkmV1oIAd6xY4CPcWJZpnah${computer.platform === "win32" ? "#doxcnAdFPoFFjXyeRrnquz98wQ4" : "#doxcnEXXdRnpDfvWb8k8vHYt16d"}`);
-          // settings-69: what is missing in plain text, the badge
+          // settings-71: what is missing in plain text, the badge
           // carrying the tone.
           expect(within(claude).getByTestId("agent-fault-guidance").dataset.tone).toBeUndefined();
-          // settings-69: Codex's route names OpenAI's alone.
+          // settings-71: Codex's route names OpenAI's alone.
           expect(within(codex).getByTestId("agent-route-local").textContent).toContain("Connect Codex with a ChatGPT subscription or an official OpenAI API key: the setup guide walks you through it.");
-          // settings-69: Codex's guide opens at its own section.
+          // settings-71: Codex's guide opens at its own section.
           expect(within(codex).getByTestId("agent-guide").getAttribute("href")).toBe(`https://merico.feishu.cn/docx/AjiHdkmV1oIAd6xY4CPcWJZpnah${computer.platform === "win32" ? "#doxcn7rsGnFZ0EKTepBD0qSnXrd" : "#doxcnfsvh6ogCgUgDtH1qeSIrhh"}`);
         } else {
           // settings-5: off, the manual steps closed under How to
@@ -445,7 +445,7 @@ describe("settings-64: how to configure, per place and computer", () => {
   });
 });
 
-describe("settings-65: with no config to read", () => {
+describe("settings-67: with no config to read", () => {
   for (const configState of [
     { status: "missing", path: "/tmp/playbook.config.yaml" },
     { status: "invalid", path: "/tmp/playbook.config.yaml", errors: ["captain must resolve an adapter"] },
@@ -463,7 +463,7 @@ describe("settings-65: with no config to read", () => {
       expect(screen.getByTestId("agent-card-claude").textContent).toContain("not ready");
       expect(screen.getByTestId("agent-card-codex").textContent).toContain("ready");
       expect(screen.getByTestId("agent-routes-claude")).toBeTruthy();
-      // settings-57, settings-59: nothing to batch without a config.
+      // settings-59, settings-61: nothing to batch without a config.
       expect(screen.queryByTestId("agent-unify-claude")).toBeNull();
       expect(screen.queryByTestId("agent-official")).toBeNull();
     });
@@ -486,7 +486,7 @@ describe("settings-65: with no config to read", () => {
   }
 });
 
-describe("settings-71: the section's verdict and Claude's tag", () => {
+describe("settings-73: the section's verdict and Claude's tag", () => {
   test("what needs doing before a task starts or runs whole, read from the Captain's agent", () => {
     const cases: { label: string; readiness: ReadinessEntry[]; text: string | null }[] = [
       { label: "none ready", readiness: [notReady("claude", [CLAUDE_CREDENTIAL], { usedBy: ["captain"] }), notReady("codex", [CODEX_CREDENTIAL])], text: "Set up at least one agent to start a task; Claude is recommended." },
@@ -509,18 +509,18 @@ describe("settings-71: the section's verdict and Claude's tag", () => {
   });
 });
 
-describe("settings-66: one model for every agent of an adapter", () => {
+describe("settings-68: one model for every agent of an adapter", () => {
   test("the confirmation, the batch, the done notice and a conflict", async () => {
     commandMock.mockResolvedValue({ ...UNIFY, revision: "rev-2" });
     show(UNIFY, [entry("claude", { baseUrl: { state: "unset" } }), entry("codex")]);
     choose("claude", /deepseek-v4-pro/);
     fireEvent.click(screen.getByTestId("agent-unify-apply-claude"));
     const confirm = screen.getByTestId("agent-unify-confirm-claude");
-    // settings-58: the agents it changes, and the role it leaves.
+    // settings-60: the agents it changes, and the role it leaves.
     expect(within(confirm).getByTestId("agent-unify-changes").textContent).toBe("Captaindev.coderdev.writer");
     expect(within(confirm).getByTestId("agent-unify-left").textContent).toBe("review.coder");
     await act(async () => { fireEvent.click(screen.getByTestId("agent-unify-confirm-claude-confirm")); });
-    // settings-57, settings-58: one batch, the shown revision, nothing
+    // settings-59, settings-60: one batch, the shown revision, nothing
     // for Codex or the binding.
     expect(commandMock).toHaveBeenCalledTimes(1);
     expect(commandMock).toHaveBeenCalledWith("config.batch", {
@@ -531,7 +531,7 @@ describe("settings-66: one model for every agent of an adapter", () => {
         { kind: "player.set", playerId: "dev.writer", patch: { model: "deepseek-v4-pro" } },
       ],
     });
-    // settings-58: done, the left role listed again.
+    // settings-60: done, the left role listed again.
     expect(screen.getByTestId("agent-unify-done-claude").textContent).toContain("review.coder");
 
     // Provider default removes each `model`.
@@ -553,7 +553,7 @@ describe("settings-66: one model for every agent of an adapter", () => {
       { kind: "captain.set", patch: { model: null } },
       { kind: "player.set", playerId: "dev.coder", patch: { model: null } },
     ] });
-    // settings-58: a conflict asks for a retry over the config now
+    // settings-60: a conflict asks for a retry over the config now
     // shown, read again: the next confirmation lists the new player and
     // carries its revision.
     expect(screen.getByTestId("agent-unify-error-claude").textContent).toMatch(/changed meanwhile and nothing was written: check the list and try again/);
@@ -569,7 +569,7 @@ describe("settings-66: one model for every agent of an adapter", () => {
   test("behind a third party with no default model, Provider default cannot apply until a model is chosen", () => {
     catalogs.defaultModel = undefined;
     show(UNIFY, [entry("claude", { baseUrl: { state: "third-party", host: "api.deepseek.com" } }), entry("codex")]);
-    // settings-58: disabled on Provider default, with its line and Retry.
+    // settings-60: disabled on Provider default, with its line and Retry.
     openChange("claude");
     const apply = screen.getByTestId("agent-unify-apply-claude") as HTMLButtonElement;
     expect(apply.disabled).toBe(true);
@@ -607,19 +607,19 @@ describe("settings-39: one row per model behind a third-party service", () => {
   });
 });
 
-describe("settings-67: official names behind a third-party service", () => {
+describe("settings-69: official names behind a third-party service", () => {
   const thirdParty = () => [entry("claude", { baseUrl: { state: "third-party", host: "api.deepseek.com" } }), entry("codex")];
 
   test("listed by the model each role runs, confirmed with their targets, written where each stands, recomputed after", async () => {
     show(CROSSED, thirdParty(), { [PROJECT]: projectComposition(CROSSED) });
-    // settings-59: one line naming the service, the fix by the model it
+    // settings-61: one line naming the service, the fix by the model it
     // sets, the roles folded beneath.
     const official = screen.getByTestId("agent-official");
     expect(official.textContent).toContain("Some roles still name a Claude model, which api.deepseek.com may bill as another model or refuse.");
     expect(screen.getByTestId("agent-official-fix").textContent).toBe("Use deepseek-flash for all");
     expect((screen.getByTestId("agent-official-roles") as HTMLDetailsElement).open).toBe(false);
     const list = screen.getByTestId("agent-official-list");
-    // settings-59: by the effective model.
+    // settings-61: by the effective model.
     expect(list.textContent).toContain("Captain · claude-opus-5-5");
     expect(list.textContent).toContain("code.reviewer · claude-sonnet-5");
     expect(list.textContent).toContain("review.coder · opus[1m]");
@@ -628,7 +628,7 @@ describe("settings-67: official names behind a third-party service", () => {
 
     fireEvent.click(screen.getByTestId("agent-official-fix"));
     const rows = screen.getAllByTestId("agent-official-confirm-row").map((row) => row.textContent);
-    // settings-60: each role, its model, its target; the project's elsewhere.
+    // settings-62: each role, its model, its target; the project's elsewhere.
     expect(rows).toContain("Captain: claude-opus-5-5 → Provider default · deepseek-flash");
     expect(rows).toContain("code.reviewer: claude-sonnet-5 → Provider default · deepseek-flash");
     // A project's role runs your own player's model: written there.
@@ -654,7 +654,7 @@ describe("settings-67: official names behind a third-party service", () => {
       return after;
     });
     await act(async () => { fireEvent.click(screen.getByTestId("agent-official-confirm-confirm")); });
-    // settings-60: one batch, the shown revision, written where each stands.
+    // settings-62: one batch, the shown revision, written where each stands.
     expect(commandMock).toHaveBeenCalledTimes(1);
     const [type, batch] = commandMock.mock.calls[0]!;
     expect(type).toBe("config.batch");
@@ -666,7 +666,7 @@ describe("settings-67: official names behind a third-party service", () => {
       { kind: "player.set", playerId: "dev.spare", patch: { model: null } },
       { kind: "playbook.role.bind", playbookId: "code", role: "reviewer", playerId: "dev.writer", model: false },
     ]));
-    // settings-60: recomputed from the newest state — the project's
+    // settings-62: recomputed from the newest state — the project's
     // new binding listed, and nothing says all were set.
     const done = screen.getByTestId("agent-official-done");
     expect(done.textContent).toBe("Written, but these roles still name an official model:");
@@ -694,7 +694,7 @@ describe("settings-67: official names behind a third-party service", () => {
     choose("claude", /deepseek-flash/);
     fireEvent.click(apply());
     await act(async () => { fireEvent.click(screen.getByTestId("agent-unify-confirm-claude-confirm")); });
-    // settings-58: the project's read failed, but your own is still
+    // settings-60: the project's read failed, but your own is still
     // being read — nothing is reported until both settle, and nothing
     // submits meanwhile, the other control's open confirmation included.
     expect(screen.queryByTestId("agents-stale")).toBeNull();
@@ -703,7 +703,7 @@ describe("settings-67: official names behind a third-party service", () => {
     await act(async () => { releaseOwn({ ...CROSSED, revision: "rev-9" }); });
     const stale = screen.getByTestId("agents-stale");
     expect(stale.textContent).toContain("could not be read again: the project's settings could not be read");
-    // settings-58, settings-60: the lists may be the refused batch's —
+    // settings-60, settings-62: the lists may be the refused batch's —
     // no batch from either control, the open confirmation included.
     expect(apply().disabled).toBe(true);
     expect(fix().disabled).toBe(true);
@@ -750,7 +750,7 @@ describe("settings-67: official names behind a third-party service", () => {
     // The second answers first and lifts the hold…
     await act(async () => { pending[1]!.own(newer); pending[1]!.project(newerProject); await second; });
     expect(useAppStore.getState().configReread).toBeUndefined();
-    // …then the first answers late: it writes nothing (settings-60).
+    // …then the first answers late: it writes nothing (settings-62).
     await act(async () => { pending[0]!.own(older); pending[0]!.project(olderProject); await first; });
     expect(useAppStore.getState().configState).toBe(newer);
     expect(useAppStore.getState().projectConfigs[PROJECT]).toBe(newerProject);
@@ -780,7 +780,7 @@ describe("settings-67: official names behind a third-party service", () => {
   test("with no default model the control is disabled, with its line and a Retry", () => {
     catalogs.defaultModel = undefined;
     show(CROSSED, thirdParty());
-    // settings-60
+    // settings-62
     expect((screen.getByTestId("agent-official-fix") as HTMLButtonElement).disabled).toBe(true);
     const blind = screen.getByTestId("agent-official-blind");
     expect(blind.textContent).toContain("The default model can't be read right now.");

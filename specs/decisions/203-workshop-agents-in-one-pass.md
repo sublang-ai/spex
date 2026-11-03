@@ -1,15 +1,15 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-200: Workshop agents in one pass
+# DR-203: Workshop agents in one pass
 
 ## Status
 
 Accepted (2026-11-01) on the owner's go-ahead after five review rounds.
 Amends [DR-004](004-config-and-persistence.md) in its readiness: the credential variables follow Playbook's, a home folder alone is no credential and the agent's own sign-in status decides without a variable, readiness reports its faults by kind, and `claude` and `codex` are always reported.
 Amends [DR-024](024-app-supplied-agent-runtimes.md) in how a runtime fault is reported: a kind of its own, never joined to the credential's reason.
-Amended by [DR-201](201-agent-cards-read-alike.md): one not-ready tone whoever uses the agent, one frame for every card, a Recommended tag until Claude is ready, the section's verdict, what is missing in plain text, and the online service's action enabled before its address; Claude Code's user settings reach every run through the core, since a run isolated from settings files reads none.
-Amended by [DR-202](202-the-workshop-points-to-its-guide.md): a not-ready card offers the setup guide alone, with no online service.
+Amended by [DR-204](204-agent-cards-read-alike.md): one not-ready tone whoever uses the agent, one frame for every card, a Recommended tag until Claude is ready, the section's verdict, what is missing in plain text, and the online service's action enabled before its address; Claude Code's user settings reach every run through the core, since a run isolated from settings files reads none.
+Amended by [DR-205](205-the-workshop-points-to-its-guide.md): a not-ready card offers the setup guide alone, with no online service.
 
 ## Context
 
@@ -73,7 +73,7 @@ Amended by [DR-202](202-the-workshop-points-to-its-guide.md): a not-ready card o
 - Guidance follows the fault's kind and, for Claude, the base URL's state; on a seat it points to the Credentials section and names no local command.
 - A sign-in is read by the status command at each re-check, while a variable reaches the core only from a new start; reopening Spex covers both, so the Workshop card closes on that one step, once per card, and the section's heading keeps the control alone.
 - The core's requirement repeats the card's guidance in other words, so it stays in the guidance's tooltip; it shows only where it is the guidance itself.
-- A card no position uses keeps its not-ready state and its tone, since a tone changing with use made one state look like two ([DR-201](201-agent-cards-read-alike.md)).
+- A card no position uses keeps its not-ready state and its tone, since a tone changing with use made one state look like two ([DR-204](204-agent-cards-read-alike.md)).
 - A blocked task start is explained where the attendee acts: the start control stays enabled and a press re-checks, starting the task once the Captain's agent is ready, otherwise bringing the notice forward with its way to the Captain's agent card.
 
 ### Windows
@@ -87,7 +87,7 @@ Amended by [DR-202](202-the-workshop-points-to-its-guide.md): a not-ready card o
 
 ## Consequences
 
-- settings-5 shows two standing agent cards with their configuration steps and an unconfirmed sign-in; settings-14 and core-service-9 take the new forms, the sign-in status, the fault kinds, the base URL's state and the platform; settings-23, settings-34 and settings-39 follow; settings-56 to settings-61, settings-68 and settings-69 are new; run-view-45 opens Settings at the agent card and keeps the start control enabled.
+- settings-5 shows two standing agent cards with their configuration steps and an unconfirmed sign-in; settings-14 and core-service-9 take the new forms, the sign-in status, the fault kinds, the base URL's state and the platform; settings-23, settings-34 and settings-39 follow; settings-58 to settings-63, settings-70 and settings-71 are new; run-view-45 opens Settings at the agent card and keeps the start control enabled.
 - core-service-44 adds `config.batch` and core-service-45 the config state's revision; core-service-26 and core-service-143 follow.
 - shared-config-roundtrip-1, -3 and -4 cover the batch.
 - The setup script and the Workshop materials live outside the app's release.

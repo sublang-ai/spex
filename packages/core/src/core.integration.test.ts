@@ -4758,7 +4758,7 @@ test("core-service-136: the first-run config takes the agents Playbook seeds for
     { row: "both", credentials: { ANTHROPIC_API_KEY: "a", OPENAI_API_KEY: "o" }, expected: both },
     { row: "neither", credentials: {}, expected: claudeOnly },
     // A folder the runtime made, signed in or not, is no credential
-    // (DR-201): Codex's beside a Claude key moves no one to Codex.
+    // (DR-204): Codex's beside a Claude key moves no one to Codex.
     { row: "a Codex folder, signed out", credentials: { ANTHROPIC_API_KEY: "a" }, folders: [".codex"], signedIn: false, cli: { ANTHROPIC_API_KEY: "a" }, expected: claudeOnly },
     // A sign-in its status command confirms counts.
     { row: "both signed in", credentials: {}, folders: [".claude", ".codex"], signedIn: true, cli: { ANTHROPIC_API_KEY: "a", OPENAI_API_KEY: "o" }, expected: both },
@@ -4844,7 +4844,7 @@ test("core-service-138: an untouched seed follows the credentials until it is ch
   chmodSync(ownConfig(dataDir), 0o640);
 
   // The folder Codex's runtime makes on its first start, signed out, is
-  // no credential: nothing moves (DR-201).
+  // no credential: nothing moves (DR-204).
   mkdirSync(join(home, ".codex"));
   const signedOut = await CoreService.start({ token: "test", dataDir, env: claude, home, own: OWN, watchConfig: false, agentSignIn: async () => ({ state: "signed-out" }) });
   const unmoved = signedOut.configStateSnapshot();

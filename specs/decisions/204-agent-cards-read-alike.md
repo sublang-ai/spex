@@ -1,16 +1,16 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-201: Agent Cards Read Alike, and a Third-Party Seed Names No Official Model
+# DR-204: Agent Cards Read Alike, and a Third-Party Seed Names No Official Model
 
 ## Status
 
 Accepted (2026-11-02) on the owner's direction during the Workshop's manual verification.
-Amends [DR-200](200-workshop-agents-in-one-pass.md) in its agent cards: a card no position uses keeps the not-ready tone of every other; a ready card shares the not-ready card's frame; the section states what needs doing before a task can start; what is missing is plain text; the online service's action is enabled before it has an address; a ready card has no closing line and no tag; and in its reading of Claude Code's user settings: the core writes their variables into every run's environment, since a run that reads no settings file would not apply them.
+Amends [DR-203](203-workshop-agents-in-one-pass.md) in its agent cards: a card no position uses keeps the not-ready tone of every other; a ready card shares the not-ready card's frame; the section states what needs doing before a task can start; what is missing is plain text; the online service's action is enabled before it has an address; a ready card has no closing line and no tag; and in its reading of Claude Code's user settings: the core writes their variables into every run's environment, since a run that reads no settings file would not apply them.
 Amends [DR-091](091-models-named-by-the-runtime.md) in its model list: rows running one model read as one row, and a resolution the name already says reads once.
 Amends [DR-154](154-the-seed-follows-playbooks-rule.md) in "the core chooses no adapter, model, effort or writable path itself": behind a third-party Claude service, the seed's Claude agents take the provider's default in place of an official model name; and in "That seed reads credentials alone": it reads confirmed credentials, never an agent's home folder alone.
 The reseed of [DR-156](156-an-untouched-seed-follows-the-credentials.md) applies that seed unchanged, so an untouched seed follows a base URL as it follows a credential.
-Amended by [DR-202](202-the-workshop-points-to-its-guide.md) in "The online service before its address": the action is removed.
+Amended by [DR-205](205-the-workshop-points-to-its-guide.md) in "The online service before its address": the action is removed.
 
 ## Context
 
@@ -21,7 +21,7 @@ Amended by [DR-202](202-the-workshop-points-to-its-guide.md) in "The online serv
 - A ready card stacked seven blocks — its badge with a note, its users, its model service, its default model, the one-model control, a note on a single role's model and the official-name list — so what runs, and what needs doing, was hard to find.
 - "Change model" read as muted text, not as something to press; and the closing line on the first task stood on every ready card though the attendee could do nothing with it.
 - Behind DeepSeek, Claude Code's catalog lists its default alias, its Opus and Sonnet slots and the model's own row, all running one model the provider's default already runs, each slot's name the model it resolves to, so one model filled four rows and read twice in each.
-- DR-200 counted the `env` of Claude Code's `settings.json` because a Claude run applies it, but a run with no tools — the Captain's control calls — loads no settings file, so a key or base URL written only there left the Captain failing while players ran and the card read ready; and Cligent names no default model where that `env` sets `ANTHROPIC_MODEL`, so the card read "Unavailable".
+- DR-203 counted the `env` of Claude Code's `settings.json` because a Claude run applies it, but a run with no tools — the Captain's control calls — loads no settings file, so a key or base URL written only there left the Captain failing while players ran and the card read ready; and Cligent names no default model where that `env` sets `ANTHROPIC_MODEL`, so the card read "Unavailable".
 - Playbook's seed names `claude-opus-5-5` for every Claude agent.
   A third-party service receives that name as written: an `ANTHROPIC_DEFAULT_*_MODEL` variable maps only an alias, and DeepSeek bills a `claude-opus` name as its Pro model while another service may refuse it.
   So every attendee with a third-party key met the official-name list on first start, though nobody had chosen those names.

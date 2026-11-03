@@ -1015,7 +1015,7 @@ export function SettingsSurface({
   agentRow?: string;
   onAgentRowShown?: () => void;
   /** The adapter the home's readiness notice asked for: its agent card
-   * comes into view (settings-68). */
+   * comes into view (settings-70). */
   agentCard?: string;
   onAgentCardShown?: () => void;
 } = {}) {
@@ -1064,7 +1064,7 @@ export function SettingsSurface({
       ?.scrollIntoView?.({ block: "center" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [summaryForAsk]);
-  // Asked for an adapter's card (settings-68): it comes into view once
+  // Asked for an adapter's card (settings-70): it comes into view once
   // it renders, its entry beneath the cards where it has no card, and
   // the ask is taken once.
   const cardAsked = useRef(agentCard);

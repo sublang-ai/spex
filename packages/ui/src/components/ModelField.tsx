@@ -131,7 +131,7 @@ export function ModelField({
    * it stands (settings-34); `selected` while the field holds it. */
   off?: { selected: boolean; onSelect(): void };
   /** Behind a third-party service whose default model is read, the
-   * provider's default is the one to choose (settings-34, DR-200). */
+   * provider's default is the one to choose (settings-34, DR-203). */
   recommended?: boolean;
 }) {
   const [custom, setCustom] = useState(false);

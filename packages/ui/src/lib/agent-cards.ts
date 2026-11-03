@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// What the agent cards decide (settings-57 to settings-61, DR-200),
+// What the agent cards decide (settings-59 to settings-63, DR-203),
 // apart from how they draw it: the batch that gives every agent of an
 // adapter one model, the roles still naming an official Claude model
 // behind a third-party service and the batch setting them to Provider
@@ -20,7 +20,7 @@ import type {
 
 import { i18n } from "../i18n.js";
 
-/** Anthropic's own naming (settings-59): a `claude-` model, or one of
+/** Anthropic's own naming (settings-61): a `claude-` model, or one of
  * its aliases, with or without the 1M-context suffix. No provider's
  * mapping table is kept: a third party maps these by its own rule. */
 export function isOfficialModel(value: string | false | undefined): boolean {
@@ -29,7 +29,7 @@ export function isOfficialModel(value: string | false | undefined): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// One model for every agent of an adapter (settings-57, settings-58)
+// One model for every agent of an adapter (settings-59, settings-60)
 // ---------------------------------------------------------------------------
 
 export interface UnifyPlan {
@@ -113,7 +113,7 @@ export function distinctRunModels(values: readonly string[], models: readonly Ag
 }
 
 // ---------------------------------------------------------------------------
-// Official names behind a third-party service (settings-59, settings-60)
+// Official names behind a third-party service (settings-61, settings-62)
 // ---------------------------------------------------------------------------
 
 /** Where an effective official name stands, which says what fixes it. */
@@ -182,7 +182,7 @@ export function officialRoles(state: ConfigState | undefined, projects: Record<s
 }
 
 /** The batch setting each official name to Provider default where it
- * stands (settings-60): the Captain's and a player's `model` removed,
+ * stands (settings-62): the Captain's and a player's `model` removed,
  * your own group's binding set to `false`. */
 export function fixPlan(rows: readonly OfficialRole[]): ConfigBatchOpInput[] {
   const ops: ConfigBatchOpInput[] = [];
@@ -199,7 +199,7 @@ export function fixPlan(rows: readonly OfficialRole[]): ConfigBatchOpInput[] {
 }
 
 // ---------------------------------------------------------------------------
-// Words (settings-5, settings-61)
+// Words (settings-5, settings-63)
 // ---------------------------------------------------------------------------
 
 /** An agent card's name: a product's own name stands untranslated,
@@ -227,16 +227,16 @@ export function faultsOf(entry: ReadinessEntry): ReadinessFault[] {
 
 export interface Guidance {
   /** Our words, where the fault has any; else the core's alone. In the
-   * Workshop, what is missing (settings-69). */
+   * Workshop, what is missing (settings-71). */
   text?: string;
   /** The core's own requirement: the guidance's tooltip where the
-   * guidance is in other words (settings-61). */
+   * guidance is in other words (settings-63). */
   core: string;
   /** The local closing line that follows: re-checking after a
    * sign-in or restarting after a variable, or restarting alone. */
   closing?: "re-check" | "restart";
   /** In the Workshop, the local route's line beside the online
-   * service's (settings-69); the routes' own line closes it. */
+   * service's (settings-71); the routes' own line closes it. */
   local?: string;
 }
 
@@ -245,7 +245,7 @@ function noService(): string {
   return i18n._({ id: "Not signed in on this computer, and no key set.", comment: "What an agent card in the Workshop says is missing, beneath its Not ready badge" });
 }
 
-/** The Workshop's guidance for a local credential (settings-69): what
+/** The Workshop's guidance for a local credential (settings-71): what
  * is missing, and the local route's line, by the agent. */
 function workshopGuidance(entry: ReadinessEntry, core: string): Guidance {
   const local = entry.adapter === "codex"
@@ -261,7 +261,7 @@ function workshopGuidance(entry: ReadinessEntry, core: string): Guidance {
   return { text: noService(), core, local };
 }
 
-/** One fault in the reader's next step (settings-61). */
+/** One fault in the reader's next step (settings-63). */
 export function faultGuidance(entry: ReadinessEntry, fault: ReadinessFault, options: { workshop: boolean; seat: boolean }): Guidance {
   const core = fault.requirement;
   if (fault.kind === "runtime") return { core };

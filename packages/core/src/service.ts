@@ -660,7 +660,7 @@ export class CoreService {
    * and the member's own credentials (storage-44). */
   private readonly seatEnvironment?: SeatEnvironment;
   /** Claude Code's user-settings variables, in the environment every run
-   * inherits (core-service-153). */
+   * inherits (core-service-155). */
   private readonly claudeSettings?: ClaudeSettingsEnvironment;
   private readonly codeCredentials?: CodeCredentialStore;
   /** The adapter imports every agent run loads: on a seat, each run
@@ -773,7 +773,7 @@ export class CoreService {
     if (options.seat) {
       // A seat's runs take the member's or the shared credentials alone,
       // as its readiness reads them: the server account's own settings
-      // are written into no run (core-service-153).
+      // are written into no run (core-service-155).
       const { credentials, environment } = seat ?? CoreService.seatCredentials(options, store.dir);
       this.codeCredentials = credentials;
       this.seatEnvironment = environment;
@@ -781,7 +781,7 @@ export class CoreService {
     } else {
       // Applied now, so discovery and readiness read what a run
       // inherits, and again before each run, as Claude Code applies its
-      // settings over the variables it inherits (core-service-153). Runs
+      // settings over the variables it inherits (core-service-155). Runs
       // inherit the process's environment.
       const claudeSettings = new ClaudeSettingsEnvironment(process.env, () => claudeSettingsEnv(this.env, this.home));
       this.claudeSettings = claudeSettings;
@@ -1112,7 +1112,7 @@ export class CoreService {
     }
     this.claudeSettings?.apply();
     // A run spawned with an environment of its own takes the settings'
-    // variables over it too (core-service-153); the process's own
+    // variables over it too (core-service-155); the process's own
     // already holds them.
     const settings = claudeSettingsEnv(this.env, this.home);
     return this.env === process.env || Object.keys(settings).length === 0 ? this.env : { ...this.env, ...settings };
@@ -1553,7 +1553,7 @@ export class CoreService {
     let credentials: SeedCredentials;
     try {
       // The seed counts the credentials confirmed now, never a home
-      // folder alone (core-service-3, DR-201).
+      // folder alone (core-service-3, DR-204).
       credentials = await seedCredentials(seat ? seat.environment.envFor(env) : env, seat ? null : options.home ?? env.HOME ?? homedir(), options.agentSignIn);
       store = await Store.open({
         seedCredentials: credentials,
@@ -2454,7 +2454,7 @@ export class CoreService {
 
   async readiness(signIn = this.options.agentSignIn): Promise<ReadinessEntry[]> {
     // A variable the settings no longer set leaves the environment
-    // before it is read (core-service-153).
+    // before it is read (core-service-155).
     this.claudeSettings?.apply();
     // Adapter-keyed and deduplicated (DR-019): readiness is a
     // property of the adapter's auth, not of any one agent block.
@@ -2462,7 +2462,7 @@ export class CoreService {
     // points somewhere concrete. Claude and Codex stand whether or not
     // a position uses them, so a reader sees the other agent's state
     // too — with no config to read, they are all there is, and no
-    // earlier config's positions carry over (core-service-9, DR-200).
+    // earlier config's positions carry over (core-service-9, DR-203).
     const positions = new Map<AdapterName, string[]>([["claude", []], ["codex", []]]);
     const note = (adapter: AdapterName, position: string): void => {
       const list = positions.get(adapter);
@@ -2489,7 +2489,7 @@ export class CoreService {
       ? (adapter: AdapterName) => seatCredentialHalf(adapter, sources, seat.runValues(adapter), this.runCommand)
       : undefined;
     // Manual steps are written for the computer that follows them; a
-    // seat's base URL is its own and none of the reader's (DR-200).
+    // seat's base URL is its own and none of the reader's (DR-203).
     const shell = this.env.SHELL ? basename(this.env.SHELL) : undefined;
     const host = { platform: process.platform, ...(shell ? { shell } : {}) };
     return Promise.all(
@@ -3341,7 +3341,7 @@ export class CoreService {
       }
       case "config.batch": {
         // Your own group's file alone, all or none, against the config
-        // the client saw (core-service-44, DR-200).
+        // the client saw (core-service-44, DR-203).
         const result = await editConfigBatch(
           this.configPath,
           command.ops as ConfigBatchOp[],

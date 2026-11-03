@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The Agents section (settings-5, DR-200): a standing card for Claude
+// The Agents section (settings-5, DR-203): a standing card for Claude
 // and one for Codex whether or not a role uses them, then an entry per
 // other adapter the config names. A card says its readiness and who
 // uses it, Claude's model service and each card's default model; one
-// not ready says what to do by its fault's kind (settings-61) — in the
-// Workshop what is missing and its setup guide (settings-69) — and how
+// not ready says what to do by its fault's kind (settings-63) — in the
+// Workshop what is missing and its setup guide (settings-71) — and how
 // to configure it on this computer, or on a seat where to set a
 // credential. With a valid config a card gives every agent of its
-// adapter one model (settings-57, settings-58), and Claude's behind a
+// adapter one model (settings-59, settings-60), and Claude's behind a
 // third-party service lists the roles still naming an official model
-// and sets them to Provider default (settings-59, settings-60) — each
+// and sets them to Provider default (settings-61, settings-62) — each
 // change one `config.batch` against the revision shown.
 
 import { useId, useState, type ReactNode } from "react";
@@ -128,10 +128,10 @@ function HowToConfigure({ entry, seat }: { entry: ReadinessEntry; seat: boolean 
   );
 }
 
-/** The Workshop's one route (settings-69): whom it is for over its
+/** The Workshop's one route (settings-71): whom it is for over its
  * primary action, the configuration document opened at the reader's
  * platform, then how to see the result. The online service is told in
- * the room, not offered here (DR-202). */
+ * the room, not offered here (DR-205). */
 function WorkshopRoute({ entry, local }: { entry: ReadinessEntry; local: string }) {
   return (
     <div data-testid={`agent-routes-${entry.adapter}`} className="flex flex-col gap-3">
@@ -156,7 +156,7 @@ function WorkshopRoute({ entry, local }: { entry: ReadinessEntry; local: string 
 }
 
 /** Each fault in the reader's next step, the core's words in its
- * tooltip where the step is in other words (settings-61). */
+ * tooltip where the step is in other words (settings-63). */
 function closingLine(closing: "re-check" | "restart"): string {
   return closing === "re-check"
     ? i18n._("After signing in, re-check; after setting the key, quit Spex completely and open it again — see How to configure.")
@@ -174,7 +174,7 @@ function FaultLines({ entry, seat }: { entry: ReadinessEntry; seat: boolean }) {
           <li key={`${fault.kind}:${fault.requirement}`} data-testid={`agent-fault-${fault.kind}`} className="flex flex-col">
             {guidance.local !== undefined ? (
               // Plain text: the badge carries the tone, and the section's
-              // verdict the one warning (settings-69).
+              // verdict the one warning (settings-71).
               <span data-testid="agent-fault-guidance" className="text-sm text-neutral-700 [overflow-wrap:anywhere] dark:text-neutral-300" title={guidance.core}>
                 <Rich text={guidance.text ?? guidance.core} components={[code]} />
               </span>
@@ -220,7 +220,7 @@ function RoleList({ roles, testId }: { roles: string[]; testId: string }) {
   );
 }
 
-/** One model for every agent on an adapter (settings-57, settings-58). */
+/** One model for every agent on an adapter (settings-59, settings-60). */
 function OneModel({ entry, state, catalog }: { entry: ReadinessEntry; state: Extract<ConfigState, { status: "valid" }>; catalog: ReturnType<typeof useAgentOptions> }) {
   const store = usePlaceStore();
   const labelId = useId();
@@ -228,14 +228,14 @@ function OneModel({ entry, state, catalog }: { entry: ReadinessEntry; state: Ext
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<{ done: true; left: string[] } | { error: string }>();
-  // Held while a conflict reads again, and after it failed (settings-58).
+  // Held while a conflict reads again, and after it failed (settings-60).
   const stale = store((s) => s.configReread) !== undefined;
   const discovery = catalog.options?.discovery;
   const models = discovery?.status === "available" ? discovery.models : [];
   const defaultModel = discovery?.status === "available" ? discovery.defaultModel : undefined;
   const thirdParty = entry.baseUrl?.state === "third-party";
   // Behind a third party, nobody can say what Provider default runs
-  // until the runtime reports it (settings-58).
+  // until the runtime reports it (settings-60).
   const blindDefault = thirdParty && value === "" && !defaultModel;
   const plan = unifyPlan(state.summary, entry.adapter, value);
   const name = agentName(entry.adapter);
@@ -256,7 +256,7 @@ function OneModel({ entry, state, catalog }: { entry: ReadinessEntry; state: Ext
     <div data-testid={`agent-unify-${entry.adapter}`} className="flex flex-col gap-1">
       {/* The field's label says it changes them all and where one is
           set alone, one line above it, in one message so each language
-          joins its sentences its own way (settings-57). */}
+          joins its sentences its own way (settings-59). */}
       <span id={labelId} data-testid={`agent-unify-label-${entry.adapter}`} className={mutedClass}>
         {i18n._("This changes the model of every Captain and player on {name} at once. To change only the Captain's or one player's, edit its settings above.", { name })}
       </span>
@@ -320,7 +320,7 @@ function OneModel({ entry, state, catalog }: { entry: ReadinessEntry; state: Ext
  * state shown at once (core-service-44). A conflict reads the config
  * and each project's composition shown again before it is reported, so
  * the reader confirms over what the files now hold, never the list the
- * refused batch was built from (settings-58, settings-60). */
+ * refused batch was built from (settings-60, settings-62). */
 async function send(store: ReturnType<typeof usePlaceStore>, ops: ConfigBatchOpInput[], revision: string | undefined): Promise<void> {
   try {
     const state = await store.getClient().command("config.batch", { ops, revision: revision ?? "" });
@@ -331,7 +331,7 @@ async function send(store: ReturnType<typeof usePlaceStore>, ops: ConfigBatchOpI
   }
 }
 
-/** Official names behind a third-party service (settings-59, -60). */
+/** Official names behind a third-party service (settings-61, -60). */
 function OfficialNames({ entry, state, catalog }: { entry: ReadinessEntry; state: Extract<ConfigState, { status: "valid" }>; catalog: ReturnType<typeof useAgentOptions> }) {
   const store = usePlaceStore();
   const projectConfigs = store((s) => s.projectConfigs);
@@ -339,9 +339,9 @@ function OfficialNames({ entry, state, catalog }: { entry: ReadinessEntry; state
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<{ done: true } | { error: string }>();
-  // Held while a conflict reads again, and after it failed (settings-58).
+  // Held while a conflict reads again, and after it failed (settings-60).
   const stale = store((s) => s.configReread) !== undefined;
-  // Recomputed from the newest state on every render (settings-59).
+  // Recomputed from the newest state on every render (settings-61).
   const rows = officialRoles(state, projectConfigs);
   const discovery = catalog.options?.discovery;
   const models = discovery?.status === "available" ? discovery.models : [];
@@ -462,7 +462,7 @@ function AgentCard({ entry, state, seat }: { entry: ReadinessEntry; state: Confi
   const listId = useId();
   const changeId = useId();
   // A local credential with the Workshop switch on: what is missing
-  // and the setup guide (settings-69), else the steps (settings-5).
+  // and the setup guide (settings-71), else the steps (settings-5).
   const routes = notReady && WORKSHOP && !seat
     ? faultsOf(entry).map((fault) => faultGuidance(entry, fault, { workshop: true, seat: false }).local).find((local) => local !== undefined)
     : undefined;
@@ -572,7 +572,7 @@ function usersBrief(usedBy: readonly string[], notReady: boolean): string {
   });
 }
 
-/** The section's verdict (settings-70): a line where something needs
+/** The section's verdict (settings-72): a line where something needs
  * doing before a task can start or run whole, read from the Captain's
  * agent, since a task needs at least one agent and the Captain runs
  * first; none where nothing does, or once the core has not answered. */

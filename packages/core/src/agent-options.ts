@@ -22,7 +22,7 @@ export async function readAgentOptions(
   // Cligent names no default where Claude Code's settings set
   // `ANTHROPIC_MODEL`, which a run then applies over the one it
   // inherits; the run environment carries those settings already, so
-  // its value is the model a run selects (settings-35, DR-201).
+  // its value is the model a run selects (settings-35, DR-204).
   const model = env.ANTHROPIC_MODEL?.trim();
   if (adapter === "claude" && discovery.status === "available" && discovery.defaultModel === undefined && model) {
     discovery = { ...discovery, defaultModel: model };

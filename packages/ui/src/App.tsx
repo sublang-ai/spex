@@ -463,7 +463,7 @@ function WorkspaceSurface({
   onNavigate: (surface: Surface) => void;
   /** Settings at an agent's row (run-view-179, settings-52). */
   onOpenAgentSettings: (agentId: string) => void;
-  /** Settings at an adapter's agent card (run-view-45, settings-68). */
+  /** Settings at an adapter's agent card (run-view-45, settings-70). */
   onOpenAgentCard: (adapter: string) => void;
   onOpenPalette: () => void;
   onOpenOwnProject: () => void;
@@ -1373,7 +1373,7 @@ export function App() {
   // settings-52), until that place's Settings has opened its row.
   const [agentAsk, setAgentAsk] = useState<{ place: string; agent: string }>();
   // The adapter the home's readiness notice asked Settings to show
-  // (run-view-45, settings-68), until that place's Settings has.
+  // (run-view-45, settings-70), until that place's Settings has.
   const [cardAsk, setCardAsk] = useState<{ place: string; adapter: string }>();
   /** Go to a surface on behalf of `store`'s place: Playbooks, Settings
    * and Space open at that place (run-view-168). */

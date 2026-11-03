@@ -216,8 +216,8 @@ export interface AppState extends AttachmentState {
   /** Read one project's composed configuration (`config.get` with its
    * id); a broadcast that overtook the read wins. */
   loadProjectConfig(projectId: string): Promise<void>;
-  /** A batch's conflict reading the config again (settings-58,
-   * settings-60): in flight, or failed with its reason; absent once
+  /** A batch's conflict reading the config again (settings-60,
+   * settings-62): in flight, or failed with its reason; absent once
    * every read succeeded. While it stands, no agent card's control
    * submits a batch, whichever card started it, the page left and
    * entered again or not. */

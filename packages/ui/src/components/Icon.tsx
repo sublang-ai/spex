@@ -86,9 +86,9 @@ const PATHS: Record<string, ReactNode> = {
     <path d="M9.5 2.5h4v4M13.5 2.5 7.5 8.5M11 9v3.5a1 1 0 0 1-1 1H3.5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1H7" />
   ),
   // An arrow up and out: a link leaving the app for the web
-  // (settings-69).
+  // (settings-71).
   external: <path d="M6 3.5H3.5v9h9V10M9 3h4v4M13 3 7.5 8.5" />,
-  // A warning: what an agent card says is missing (settings-69).
+  // A warning: what an agent card says is missing (settings-71).
   alert: (
     <>
       <circle cx="8" cy="8" r="6" />

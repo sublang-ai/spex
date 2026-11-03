@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Claude Code's user settings in every run (core-service-153,
-// core-service-154, DR-201), on a real core over the fixture adapter,
+// Claude Code's user settings in every run (core-service-155,
+// core-service-156, DR-204), on a real core over the fixture adapter,
 // which records the environment each run starts with: the `env` of
 // `settings.json` reaches the Captain's control calls, which read no
 // settings file, as it reaches a player's; a variable the file no
@@ -35,7 +35,7 @@ test.after(async () => {
   }
 });
 
-test("core-service-154, settings-36: Claude's user settings reach the Captain's control calls and every other run, follow the file, and leave at stop", async (t) => {
+test("core-service-156, settings-36: Claude's user settings reach the Captain's control calls and every other run, follow the file, and leave at stop", async (t) => {
   const home = mkdtempSync(join(scratch, "claude-settings-home-"));
   mkdirSync(join(home, ".claude"));
   const settings = join(home, ".claude", "settings.json");

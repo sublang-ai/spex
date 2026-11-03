@@ -225,7 +225,7 @@ describe("SET: adapter readiness panel", () => {
     expect(within(claude).getByTestId("agent-users-claude").getAttribute("title")).toMatch(/coder/i);
 
     const codex = screen.getByTestId("agent-card-codex");
-    // The core's requirement stands in the guidance's tooltip (settings-61).
+    // The core's requirement stands in the guidance's tooltip (settings-63).
     expect(within(codex).getByTestId("agent-fault-guidance").getAttribute("title")).toBe(
       "set OPENAI_API_KEY or sign in with the Codex CLI",
     );
@@ -716,7 +716,7 @@ describe("settings-53: Settings opened at an agent's row", () => {
     });
     const onAgentCardShown = vi.fn();
     const { unmount } = render(<SettingsSurface agentCard="codex" onAgentCardShown={onAgentCardShown} />);
-    // settings-68: that card, once.
+    // settings-70: that card, once.
     await vi.waitFor(() => expect(onAgentCardShown).toHaveBeenCalledTimes(1));
     expect(scrolled).toEqual(["agent-card-codex"]);
     expect(expanded("captain-edit")).toBe("false");

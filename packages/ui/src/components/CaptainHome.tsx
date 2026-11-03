@@ -67,7 +67,7 @@ export interface CaptainHomeProps {
   onDraftChange?: (draft: string) => void;
   /** Re-check agent readiness at hand (DR-009). */
   onRecheckReadiness?: () => Promise<unknown>;
-  /** Settings at an adapter's agent card (run-view-45, settings-68). */
+  /** Settings at an adapter's agent card (run-view-45, settings-70). */
   onOpenAgentCard?: (adapter: string) => void;
   /** The current project while this place opens it (run-view-168):
    * its name over the join's step, or the join's cause where it
@@ -693,7 +693,7 @@ export function CaptainHome(props: CaptainHomeProps) {
                 comment: "why a task cannot start; {agent} is a product name such as Claude",
                 values: { agent: agentName(captain.adapter) },
               })}
-              {/* The next step its agent card gives (settings-61). */}
+              {/* The next step its agent card gives (settings-63). */}
               {captainReadiness
                 ? faultsOf(captainReadiness).map((fault) => {
                     const guidance = faultGuidance(captainReadiness, fault, { workshop: WORKSHOP, seat: !isLocalPlace(store.place) });
