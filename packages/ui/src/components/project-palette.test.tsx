@@ -585,7 +585,7 @@ describe("run-view-168: this computer's From your groups", () => {
     expect(screen.queryByTestId("palette-groups")).toBeNull();
   });
 
-  test("one overflow explains a blocked code opening, and an allowed opening asks the contract on Space", async () => {
+  test("one overflow explains a blocked code opening, and an allowed opening connects immediately", async () => {
     const listing = { servers: [{ instance: SPEX, id: "9", name: "lab-9", group: "acme", open: false }], failures: [] };
     const command = vi.fn(async (type: string) => (type === "server.list" ? listing : {}));
     setClientForTests({ command, subscribe: vi.fn(async () => null), unsubscribe: vi.fn(async () => null), close: vi.fn() } as never);
@@ -616,10 +616,8 @@ describe("run-view-168: this computer's From your groups", () => {
       expect(document.activeElement).toBe(trigger);
       expect(blocked.onClose).not.toHaveBeenCalled();
       cleanup();
-      // [run-view-168] [run-view-170] with a remote, the entry opens the
-      // seat: this device's first open asks the contract beneath the
-      // server's line on this computer's Space, which the palette shows,
-      // closing.
+      // [run-view-168] [run-view-170] with a remote, the first explicit
+      // open starts the connection and shows its progress on Space.
       useAppStore.setState({ space: signedIn([{ ...ABSENT, code: "Code: github.com", codeKind: "elsewhere" }]) });
       const onShowSpace = vi.fn();
       const { onClose } = renderPalette({ onShowSpace });
@@ -633,11 +631,10 @@ describe("run-view-168: this computer's From your groups", () => {
       expect(document.activeElement).toBe(allowedTrigger);
       fireEvent.click(allowedTrigger);
       fireEvent.click(screen.getByTestId(`palette-open-at-${place}-${ABSENT.key}`));
-      expect(useServerOpens.getState().lines[place]?.asking).toBe(true);
-      expect(useServerOpens.getState().pending[`${place}|301`]?.stage).toBe("seat");
       expect(onShowSpace).toHaveBeenCalledOnce();
       expect(onClose).toHaveBeenCalledOnce();
-      expect(command).not.toHaveBeenCalledWith("server.open", expect.anything());
+      expect(command).toHaveBeenCalledWith("server.open", { instance: SPEX, serverId: "9", consented: true });
+      expect(command.mock.calls.filter(([type]) => type === "server.open")).toHaveLength(1);
     } finally {
       setClientForTests(undefined);
       useServerOpens.setState({ lines: {}, pending: {}, landed: 0 });

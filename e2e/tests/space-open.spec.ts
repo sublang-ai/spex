@@ -9,13 +9,13 @@
 // The team group holds two projects neither core has. The journey
 // activates "Open on lab-4", offered beside the first project's primary
 // "Open here" on its row of this computer's Space, and reads, through the
-// page: the terms shown once, as bullets naming neither seat nor ticket,
-// and "I understand" sending `server.open`; the server's line reading
+// page: its first activation sends `server.open` immediately, with no
+// acknowledgement panel; the server's line reading
 // "Connecting to lab-4…" and then "Connected"; the row reading "Opening
 // on lab-4…" and then "On lab-4"; that seat's core having received
 // `space.join` with no folder; the project standing under the server's
 // heading in the sidebar; and a second "Open on lab-4", of the other
-// project, sending its join at once with no terms. The stand-in seat
+// project, sending its join at once. The stand-in seat
 // is a plain core, not in seat mode, so it allocates no folder: once
 // its join has cloned the records, the journey pairs them over that
 // core's protocol with a folder of its own, as a seat's allocation
@@ -49,7 +49,7 @@ test.describe.configure({ timeout: 240_000 });
 test.use({
   appOptions: {
     project: true,
-    host: true,
+    host: { displayName: "Workshop Space" },
     signedIn: true,
     servers: [{ name: "lab-4", seat: { host: true, signedIn: true } }],
   },
@@ -81,7 +81,7 @@ async function otherPlaces(page: Page, key: string): Promise<Locator> {
 test("space-114: Open on <server> opens the seat, sends that seat's core the join with no folder, and the row reads On <server>", async ({
   page,
   app,
-}) => {
+}, testInfo) => {
   const host = app.host!;
   const [lab] = app.servers as [TeamServer];
   const origin = canonicalOrigin(host.url);
@@ -132,21 +132,8 @@ test("space-114: Open on <server> opens the seat, sends that seat's core the joi
   await expect(openNotes).toHaveText("Open here");
   const menu = await otherPlaces(page, notes.key);
   await expect(menu.getByRole("menuitem")).toHaveText(["Explore records", "Open on lab-4"]);
-  await menu.getByTestId(`space-row-open-at-${lab.place}-${notes.key}`).click();
-
-  // [space-111] [run-view-170] the first open of the seat on this
-  // computer shows the terms as bullets — the Space sign-in placed on the
-  // server, private packages needing a registry sign-in there — naming
-  // neither seat nor ticket (DR-172), and sends nothing; "I understand"
-  // sends `server.open` with consent.
-  const contract = page.getByTestId(`space-server-contract-${lab.place}`);
-  await expect(contract.getByRole("listitem").first()).toBeVisible();
-  await expect(contract).toContainText("Space sign-in on lab-4");
-  await expect(contract).toContainText("separate registry sign-in on lab-4");
-  await expect(contract).not.toContainText(/\b(seats?|tickets?)\b/i);
-  expect(toHere("server.open")).toEqual([]);
-  await expect(row.getByTestId(`space-repo-state-${notes.key}`)).toHaveText("Opening on lab-4…");
-  // The line says the open runs, then that the seat is connected.
+  // Observe before activating: even the first open starts immediately,
+  // without a contract or a second acknowledgement (run-view-170).
   const phrases: string[] = [];
   await page.exposeFunction("__spaceLine", (text: string) => phrases.push(text));
   await page.evaluate((testId) => {
@@ -156,8 +143,12 @@ test("space-114: Open on <server> opens the seat, sends that seat's core the joi
     };
     new MutationObserver(watch).observe(document.body, { subtree: true, childList: true, characterData: true });
   }, `space-server-${lab.place}`);
-  await page.getByTestId(`space-server-consent-${lab.place}`).click();
+  await menu.getByTestId(`space-row-open-at-${lab.place}-${notes.key}`).click();
   await expect.poll(() => toHere("server.open")).toEqual([{ type: "server.open", instance: origin, serverId: lab.server.id, consented: true }]);
+  const contract = page.getByTestId(`space-server-contract-${lab.place}`);
+  await expect(contract).toHaveCount(0);
+  await expect(page.getByTestId(`space-server-consent-${lab.place}`)).toHaveCount(0);
+  await expect(row.getByTestId(`space-repo-state-${notes.key}`)).toHaveText("Opening on lab-4…");
   await expect(line.getByTestId(`space-server-connected-${lab.place}`)).toHaveText("Connected", { timeout: 60_000 });
   expect(phrases.some((text) => text.includes("Connecting to lab-4…"))).toBe(true);
 
@@ -187,6 +178,8 @@ test("space-114: Open on <server> opens the seat, sends that seat's core the joi
   // sidebar.
   const sidebar = page.getByTestId("sidebar");
   await expect(sidebar.getByRole("group", { name: "lab-4", exact: true }).getByTestId(`sidebar-project-${notes.key}@${lab.place}`)).toBeVisible({ timeout: 30_000 });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.screenshot({ path: testInfo.outputPath("direct-server-open-connected.png"), fullPage: true });
 
   // [space-111] a second "Open on lab-4", of the other project, sends
   // its join at once, with no terms.

@@ -173,9 +173,10 @@ group. The project's code needs a remote repository the server can read.
 
 On **Space**, choose **Open on ⟨server⟩** on the project's row; use the
 arrow beside its opening button to choose another location.
-The first time, Spex lists the server's terms — among them that whoever runs
-the server can act with credentials you put there — and opens it once
-you choose **I understand**. Your seat starts with a Space sign-in.
+The connection starts immediately, including the first time, and Spex
+shows its progress. No separate acknowledgement is needed. Your seat
+starts with a Space sign-in. The server's administrator can access its
+files and act with credentials you put there.
 Private packages and publishing require a separate registry sign-in on
 that seat; your computer's registry account and shared agent credentials
 do not supply it.

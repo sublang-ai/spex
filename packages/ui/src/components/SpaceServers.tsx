@@ -7,11 +7,8 @@
 // group's rows — its name, then "Connected" with Disconnect in its
 // overflow while this computer is connected to it, and its name alone
 // otherwise (DR-175). "Open on <server>" on any row (space-111) runs
-// one flow per server (state/server-opens): the first connection from
-// this computer shows the Space's terms as bullets in the words its
-// record fixes (Spex Space DR-029), rendered in the page's language, "I
-// understand" sending `server.open` with consent and remembered here, so
-// a later connection sends it at once. While it connects the line says
+// one flow per server (state/server-opens), sending the first connection
+// at once just like later ones. While it connects the line says
 // so, and past ten seconds its title says the first connection can take
 // a minute;
 // once connected and until the server's sign-in at the Space completes
@@ -32,10 +29,10 @@ import { i18n } from "../i18n.js";
 import { instanceName } from "../lib/instances.js";
 import { openExternalBridge } from "../lib/space.js";
 import { usePlaceStore } from "../state/place-context.js";
-import { answerContract, sendServerAct, serverPlace, useServerOpens } from "../state/server-opens.js";
+import { sendServerAct, serverPlace, useServerOpens } from "../state/server-opens.js";
 import { causePhrase, signInAgainLabel } from "./SpaceSignIn.js";
 import { MoreMenu } from "./SpaceMenu.js";
-import { PRIMARY, SECONDARY, type Note } from "./SpaceSurface.js";
+import { SECONDARY, type Note } from "./SpaceSurface.js";
 
 /** How long a connection runs before the line's title says the first
  * one can take a minute (run-view-170). */
@@ -65,47 +62,6 @@ export function ApprovalLink({ href, testId, children }: { href: string; testId:
       {children}
     </a>
   );
-}
-
-/** The Space's terms for a server, as bullets in the words its record
- * fixes (run-view-170, Spex Space DR-029): what connecting places there,
- * who may act as you, the separate registry sign-in for private packages
- * (core-service-143), whose sign-ins agents run on, how long a credential
- * stays, and what stops its use. Read at render, in the page's language;
- * `space` is the Space's display name. */
-function contractTerms(server: string, space: string): string[] {
-  return [
-    i18n._({
-      id: "Connecting puts your Space sign-in on {server}",
-      values: { server },
-      comment: "a term shown before the first connection to a team server; {server} is its name",
-    }),
-    i18n._({
-      id: "Whoever runs {server} can act as you: in your groups, in your records, and with your {space} account, wherever it reaches",
-      values: { server, space },
-      comment: "a term shown before the first connection to a team server; {server} is its name, {space} the Space's display name",
-    }),
-    i18n._({
-      id: "Private packages need a separate registry sign-in on {server}",
-      values: { server },
-      comment: "a term shown before the first connection to a team server: the registry sign-in is its own grant; {server} is its name",
-    }),
-    i18n._({
-      id: "Agents on {server} run on the sign-ins its administrator set up, unless you set your own",
-      values: { server },
-      comment: "a term shown before the first connection to a team server; {server} is its name",
-    }),
-    i18n._({
-      id: "A credential you place on {server} stays there until you remove it",
-      values: { server },
-      comment: "a term shown before the first connection to a team server; {server} is its name",
-    }),
-    i18n._({
-      id: "Removing {server}, or revoking its access at {space}, stops new use; a credential already there lasts until it expires",
-      values: { server, space },
-      comment: "a term shown before the first connection to a team server; {server} is its name, {space} the Space's display name",
-    }),
-  ];
 }
 
 /** "Approve Spex on <server> in your browser" (run-view-170). */
@@ -240,8 +196,7 @@ export function InstanceServers({
 }
 
 /** One server's line (run-view-170): its name, "Connected" with
- * Disconnect in its overflow while a seat is open there, the contract
- * beneath it on this device's first "Open on <server>", the open while
+ * Disconnect in its overflow while a seat is open there, the open while
  * it runs, the seat's sign-in until it completes, and a refusal's
  * cause. */
 function ServerLine({
@@ -264,7 +219,6 @@ function ServerLine({
   // with its sign-in at the instance (core-service-142).
   const seat = store((state) => state.seats.find((entry) => entry.place === place));
   const line = useServerOpens((state) => state.lines[place]);
-  const asking = line?.asking === true;
   const acting = line?.acting;
   const busy = acting !== undefined;
   const refusal = line?.refusal;
@@ -289,9 +243,8 @@ function ServerLine({
     said.current = refusal;
   }, [refusal, onNote]);
 
-  /** Focus left with the contract's controls, or with an act's busy
-   * control, returns to the line's overflow where it has one, never to
-   * the page (DR-010 §6). */
+  /** Focus left with an act's busy control returns to the line's
+   * overflow where it has one, never to the page (DR-010 §6). */
   const refocus = () =>
     setTimeout(() => {
       const active = document.activeElement;
@@ -303,11 +256,6 @@ function ServerLine({
     if (wasBusy.current && !busy) refocus();
     wasBusy.current = busy;
   });
-
-  const answer = (understood: boolean) => {
-    answerContract(store, server, understood);
-    refocus();
-  };
 
   const name = server.name;
   const host = instanceName(instance);
@@ -415,44 +363,6 @@ function ServerLine({
           >
             {signInAgainLabel()}
           </button>
-        </div>
-      ) : null}
-      {asking ? (
-        <div
-          data-testid={`space-server-contract-${place}`}
-          className="ml-3.5 flex min-w-0 flex-col gap-2 rounded border border-neutral-200 p-2 dark:border-neutral-800"
-          onKeyDown={(event) => {
-            if (event.key === "Escape") {
-              event.stopPropagation();
-              answer(false);
-            }
-          }}
-        >
-          <ul data-testid={`space-server-terms-${place}`} className="ml-4 list-disc text-xs">
-            {contractTerms(name, host).map((term) => (
-              <li key={term}>{term}</li>
-            ))}
-          </ul>
-          <div className="flex flex-wrap items-center gap-1">
-            <button
-              type="button"
-              data-testid={`space-server-consent-${place}`}
-              className={PRIMARY}
-              onClick={() => answer(true)}
-            >
-              {i18n._({ id: "I understand", comment: "accepting a team server's terms, which connects this computer to it" })}
-            </button>
-            <button
-              type="button"
-              // Safe default: focus lands here, Enter backs out.
-              autoFocus
-              data-testid={`space-server-cancel-${place}`}
-              className={SECONDARY}
-              onClick={() => answer(false)}
-            >
-              {i18n._({ id: "Cancel", comment: "default cancel button: back out of the act" })}
-            </button>
-          </div>
         </div>
       ) : null}
       {refusal ? (

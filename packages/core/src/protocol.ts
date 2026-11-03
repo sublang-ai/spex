@@ -1651,9 +1651,9 @@ export const commandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("space.notice.dismiss"), id, notice: z.string().min(1), dismissed: z.boolean() }).strict(),
   // Team servers (core-service-128, DR-133): the servers each signed-in
   // instance lists, and a seat on one opened or closed, the server named
-  // by its instance's origin and its id there. `consented`: the client
-  // showed the contract of the instance's record; absent or false, the
-  // core refuses the open and asks nothing.
+  // by its instance's origin and its id there. `consented` records the
+  // person's explicit Open request; absent or false, the core refuses
+  // the open and asks nothing.
   z.object({ type: z.literal("server.list"), id }).strict(),
   z.object({ type: z.literal("server.open"), id, instance: instanceOriginSchema, serverId: z.string().min(1), consented: z.boolean().optional() }).strict(),
   z.object({ type: z.literal("server.close"), id, instance: instanceOriginSchema, serverId: z.string().min(1) }).strict(),

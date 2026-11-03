@@ -20,6 +20,8 @@ Amended by [DR-168](168-independent-package-registry.md) for independent registr
 
 Amended by [DR-201](201-shared-codex-subscription-access.md) for shared ChatGPT subscription access through an access-only external-token snapshot instead of `CODEX_ACCESS_TOKEN`.
 
+Amended by [DR-210](210-open-on-a-server-without-an-acknowledgement.md) in the separate first-open acknowledgement.
+
 ## Context
 
 - The server shell is one home, one core, one handshake token, one user ([DR-033](033-remote-gui-serving.md)); the core admits one lease holder per home ([DR-036](036-file-state-store.md)), and Playbook's machine identity is per OS user and state folder ([DR-108](108-the-root-lease-names-the-machine.md)).

@@ -911,11 +911,6 @@ msgstr "运行所需的命令未安装"
 msgid "A credential you place here stays on this server until you remove it."
 msgstr "你放在这里的凭据会一直留在此服务器上，直到你将其移除。"
 
-#. a term shown before the first connection to a team server; {server} is its name
-#: src/components/SpaceServers.tsx
-msgid "A credential you place on {server} stays there until you remove it"
-msgstr "你放在 {server} 上的凭据会一直留在那里，直到你将其移除"
-
 #: src/components/DeliveryCard.tsx
 msgid "A follow-up message continues this intent."
 msgstr "再发一条消息即可继续该意图。"
@@ -1334,11 +1329,6 @@ msgstr "智能体会话 {session}"
 #: src/components/SettingsSurface.tsx
 msgid "Agents"
 msgstr "智能体"
-
-#. a term shown before the first connection to a team server; {server} is its name
-#: src/components/SpaceServers.tsx
-msgid "Agents on {server} run on the sign-ins its administrator set up, unless you set your own"
-msgstr "{server} 上的智能体使用其管理员设置的登录凭据运行，除非你设置自己的"
 
 #: src/components/ProjectsSurface.tsx
 msgid "ahead of upstream"
@@ -1796,7 +1786,6 @@ msgstr "无法连接 {endpoint} 上的 Spex 核心 — 每秒重试中。网页�
 #. cancel choosing a project folder
 #. default cancel button: back out of the act
 #. default cancel button: back out of the act
-#. default cancel button: back out of the act
 #. leave an editor without saving
 #. leave an editor without saving
 #. leave an editor without saving
@@ -1831,7 +1820,6 @@ msgstr "无法连接 {endpoint} 上的 Spex 核心 — 每秒重试中。网页�
 #: src/components/SpaceMembers.tsx
 #: src/components/SpacePlacements.tsx
 #: src/components/SpaceRepairs.tsx
-#: src/components/SpaceServers.tsx
 #: src/components/SpaceSignIn.tsx
 #: src/components/SpecEditor.tsx
 msgid "Cancel"
@@ -2532,11 +2520,6 @@ msgstr "已连接，但{reason}"
 #: src/components/SpaceGroups.tsx
 msgid "Connecting {name} at {space}"
 msgstr "正在连接 {space} 上的 {name}"
-
-#. a term shown before the first connection to a team server; {server} is its name
-#: src/components/SpaceServers.tsx
-msgid "Connecting puts your Space sign-in on {server}"
-msgstr "连接会把你的 Space 登录放到 {server} 上"
 
 #. a team server's line while this computer connects to it; {server} is the server's name
 #: src/components/SpaceServers.tsx
@@ -3906,11 +3889,6 @@ msgstr "使用者看不到的实现行为"
 #: src/components/AgentCards.tsx
 msgid "How to configure"
 msgstr "如何配置"
-
-#. accepting a team server's terms, which connects this computer to it
-#: src/components/SpaceServers.tsx
-msgid "I understand"
-msgstr "我已了解"
 
 #. session row: no turn in flight
 #. session status: nothing is running
@@ -5664,11 +5642,6 @@ msgstr "之前使用的文件夹"
 msgid "Previously used folders"
 msgstr "之前使用的文件夹"
 
-#. a term shown before the first connection to a team server: the registry sign-in is its own grant; {server} is its name
-#: src/components/SpaceServers.tsx
-msgid "Private packages need a separate registry sign-in on {server}"
-msgstr "使用私有规约包需要在 {server} 上单独登录注册中心"
-
 #. the folder field of a project opened on this computer: where its code is downloaded
 #: src/components/ProjectPalette.tsx
 msgid "Project folder"
@@ -6213,11 +6186,6 @@ msgstr "已从列表中移除 {space}"
 #: src/components/EnvironmentSection.tsx
 msgid "Removes {name} from spex.yaml and uninstalls it"
 msgstr "从 spex.yaml 中移除 {name} 并卸载"
-
-#. a term shown before the first connection to a team server; {server} is its name, {space} the Space's display name
-#: src/components/SpaceServers.tsx
-msgid "Removing {server}, or revoking its access at {space}, stops new use; a credential already there lasts until it expires"
-msgstr "移除 {server}，或在 {space} 上撤销它的访问权限，即可停止新的使用；已在那里的凭据会持续到过期为止"
 
 #. sharing consequence: revoking access does not erase copies members already saved
 #. sharing consequence: revoking access does not erase copies members already saved
@@ -8591,11 +8559,6 @@ msgstr "你的项目文件夹在本机的位置，记在主目录文件中"
 #: src/lib/space.ts
 msgid "which process is writing right now"
 msgstr "当前正在写入的进程"
-
-#. a term shown before the first connection to a team server; {server} is its name, {space} the Space's display name
-#: src/components/SpaceServers.tsx
-msgid "Whoever runs {server} can act as you: in your groups, in your records, and with your {space} account, wherever it reaches"
-msgstr "运营 {server} 的人可以以你的身份行事：在你的群组中、在你的记录中，以及用你的 {space} 账户，凡其所及之处"
 
 #: src/components/DraftSourceTab.tsx
 msgid "Workflow source"

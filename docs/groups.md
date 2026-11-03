@@ -70,9 +70,9 @@ and your membership permissions.
 
 At Spex Space, Developer access or higher on the server's group or one of its
 subgroups lets you use it, without granting access to the parent group's
-records. Review the server's terms when you first open it. Each member
-gets a separate seat; the administrator can access its files and act with
-credentials used there. Private packages need a registry sign-in on that
+records. Opening the project connects immediately without a separate
+acknowledgement. Each member gets a separate seat; the administrator can
+access its files and act with credentials used there. Private packages need a registry sign-in on that
 seat too.
 
 To run one, a group Owner registers the server through **Servers** on

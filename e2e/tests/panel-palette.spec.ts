@@ -12,13 +12,11 @@
 // server from the palette and reads them again, through the page:
 // before the open, no heading in the sidebar and no page of the server;
 // the palette listing the project once under "From your groups" with
-// "Open here" and "Open on <server>"; "Open on <server>" showing the
-// terms once beneath the server's line and "I understand" sending
-// `server.open`, the line reading "Connecting to <server>…" then
-// "Connected"; the row reading "Opening on <server>…" and, once the seat
-// lists the project, the server's heading in the sidebar with the
+// "Open here" and "Open on <server>"; the first "Open on <server>"
+// sending `server.open` immediately and showing connection progress on
+// Space; once the seat lists the project, the server's heading in the sidebar with the
 // project beneath it, "This computer" heading its rows; after
-// Disconnect, no heading and the line reading the server's name with no
+// after Disconnect, no heading and the line reading the server's name with no
 // control. Booted again with the group holding no project, the palette
 // reads "No projects in your groups yet" under "From your groups". The
 // stand-in seat is a plain core, not in seat mode, so it allocates no
@@ -91,7 +89,6 @@ const COPY = [
     fromGroups: "From your groups",
     openHere: "Open here",
     openOn: "Open on lab-3",
-    understand: "I understand",
     connecting: "Connecting to lab-3…",
     connected: "Connected",
     opening: "Opening on lab-3…",
@@ -106,7 +103,6 @@ const COPY = [
     fromGroups: "来自你的群组",
     openHere: "在这里打开",
     openOn: "在 lab-3 上打开",
-    understand: "我已了解",
     connecting: "正在连接 lab-3…",
     connected: "已连接",
     opening: "正在 lab-3 上打开…",
@@ -187,14 +183,14 @@ for (const copy of COPY) {
       const openOn = await paletteEntry(page, key, `palette-open-at-${lab.place}-${key}`);
       await expect(openOn).toHaveText(copy.openOn);
 
-      // The server's line, recorded as it changes.
+      // Record the connection progress before activating the first open.
       const lineId = `space-server-${lab.place}`;
       const phrases: string[] = [];
       await page.exposeFunction("__serverLine", (text: string) => phrases.push(text));
       await page.evaluate((testId) => {
         let last: string | undefined;
         const watch = () => {
-          const text = document.querySelector(`[data-testid="${testId}"]`)?.textContent ?? undefined;
+          const text = document.querySelector(`[data-testid="${testId}"]`)?.textContent;
           if (text === undefined || text === last) return;
           last = text;
           (window as unknown as { __serverLine(text: string): void }).__serverLine(text);
@@ -203,30 +199,24 @@ for (const copy of COPY) {
       }, lineId);
 
       // [run-view-195] [run-view-170] "Open on lab-3", no seat open
-      // there, closes the palette and shows the Space surface with the
-      // terms asked beneath the server's line under its group, as
-      // bullets, sending nothing yet; the row reads "Opening on lab-3…"
-      // meanwhile.
+      // there, closes the palette, connects at once and shows its
+      // progress on Space without another acknowledgement.
       await openOn.click();
       await expect(palette).toBeHidden();
       await expect(surfaceEntry(page, "Space")).toHaveAttribute("aria-current", "page");
+      await expect(page.getByRole("main")).toBeFocused();
       const group = instanceSection(page, host).getByTestId(`space-group-${HOST_GROUP}`);
       const line = group.getByTestId(lineId);
       await expect(line).toBeVisible();
       const contract = page.getByTestId(`space-server-contract-${lab.place}`);
-      await expect(contract.getByRole("listitem").first()).toBeVisible();
-      expect(toHere("server.open")).toEqual([]);
+      await expect(contract).toHaveCount(0);
+      await expect(page.getByTestId(`space-server-consent-${lab.place}`)).toHaveCount(0);
       await expect(group.getByTestId(`space-repo-state-${key}`)).toHaveText(copy.opening);
 
-      // [run-view-195] [run-view-170] "I understand" sends `server.open`
-      // with consent, once, the terms then gone; the line reads
-      // "Connecting to lab-3…" and then "Connected".
-      const consent = page.getByTestId(`space-server-consent-${lab.place}`);
-      await expect(consent).toHaveText(copy.understand);
-      await consent.click();
+      // [run-view-195] [run-view-170] the first activation sends
+      // `server.open` once, without another confirmation.
       await expect.poll(() => toHere("server.open")).toEqual([{ type: "server.open", instance: origin, serverId: lab.server.id, consented: true }]);
-      await expect(contract).toHaveCount(0);
-      await expect(page.getByTestId(`space-server-connected-${lab.place}`)).toHaveText(copy.connected, { timeout: 60_000 });
+      await expect(line.getByTestId(`space-server-connected-${lab.place}`)).toHaveText(copy.connected, { timeout: 60_000 });
       expect(phrases.some((text) => text.includes(copy.connecting))).toBe(true);
 
       // [run-view-195] [run-view-168] once the seat is signed in, that
@@ -260,6 +250,7 @@ for (const copy of COPY) {
       // seat closed — and the line reads the server's name with no
       // control.
       await surfaceEntry(page, "Space").click();
+      await expect(line.getByTestId(`space-server-connected-${lab.place}`)).toHaveText(copy.connected);
       await line.getByTestId(`space-server-more-${lab.place}`).click();
       const disconnect = page.getByTestId(`space-server-disconnect-${lab.place}`);
       await expect(disconnect).toHaveText(copy.disconnect);

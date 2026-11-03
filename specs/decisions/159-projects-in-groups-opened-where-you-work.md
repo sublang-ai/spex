@@ -24,6 +24,8 @@ Amended by [DR-192](192-choose-a-group-before-adding.md) in the flow opened by "
 
 Amended by [DR-209](209-a-project-row-with-one-menu.md) in the project-row controls and palette: one overflow includes alternate places, the direct action reads Open project, and record counts and local-location wording are explicit.
 
+Amended by [DR-210](210-open-on-a-server-without-an-acknowledgement.md) in opening a server immediately from the explicit project-opening request.
+
 ## Context
 
 - The Space surface today lists spex repositories named `<name>-spex` under each group, each with Sync, an ahead-and-behind count, placement lines and "Place at…" and "Leave…"; every group heading carries Members, New subgroup, Rename and Delete; a namespace heading reads "ada-spex stands under your own group"; the servers stand in one flat list at the instance's foot with Open.
