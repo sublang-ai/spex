@@ -269,13 +269,14 @@ test("projects-40, projects-9: a project placed at two stand-in instances, while
   const home = await startHome("removal-placed", { host: first, project: false });
   t.after(() => home.stop());
   // Signed in to both: your own group created at the first, then placed
-  // at the second, waiting there for Continue (space-94).
+  // at the second, both syncing directly (space-94).
   let mark = home.client.mark();
   await signIn(home, first);
   await home.client.waitRepository(mark, "ada/ada-spex", (repository) => repository.sync.phase === "done", 30_000);
   mark = home.client.mark();
   await signIn(home, second);
-  await home.client.waitRepository(mark, "ada/ada-spex", (repository) => repository.sync.phase !== "running" && repository.placements[1]?.outcome?.kind === "waiting", 30_000);
+  await home.client.waitRepository(mark, "ada/ada-spex", (repository) => repository.sync.phase === "done" && repository.placements.length === 2
+    && repository.placements.every((line) => line.outcome?.kind === "synced"), 30_000);
 
   // A fixture repository whose spex repository is created in the
   // first's acme and then placed in the second's, both synced.
@@ -284,7 +285,7 @@ test("projects-40, projects-9: a project placed at two stand-in instances, while
   await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: first.url, groupId: "2002", name: "atlas" } });
   const key = hostKey(first, "acme/atlas-spex");
   await home.client.waitRepository(mark, key, (repository) => repository.sync.phase === "done", 30_000);
-  const placed = await home.client.settle("space.place", { repository: key, choice: { kind: "create", instance: second.url, groupId: "2002", name: "atlas" }, noticed: true }, 30_000);
+  const placed = await home.client.settle("space.place", { repository: key, choice: { kind: "create", instance: second.url, groupId: "2002", name: "atlas" } }, 30_000);
   assert.deepEqual(placed.placements.map((line) => [line.attached, line.outcome?.kind]), [[true, "synced"], [true, "synced"]]);
   const clone = clonePath(home.dataDir, key);
   const firstBare = bareOf(first, key);

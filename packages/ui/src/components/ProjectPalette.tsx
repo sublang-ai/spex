@@ -870,6 +870,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
               repo={pickingRepo}
               connected={connected}
               headerAction={closeButton}
+              onAdded={() => props.onShowSpace?.()}
               onClose={props.onClose}
               onPendingChange={onPickerPendingChange}
               onNote={(message) => props.onNote?.(message)}

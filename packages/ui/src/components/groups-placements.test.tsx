@@ -14,10 +14,8 @@
 // members panel naming the other Spaces the records are placed at, each
 // read at the Space governing it — the earliest signed-in one listing
 // its row while its own is signed out (space-62, space-69, space-72,
-// git-host-5). A placement owing its sharing confirm waits with
-// Continue, the confirm "Share with <group> at <display name>?"; the
-// row's "Sync records" asks it first only where no other placement can run
-// (space-57); records started separately combine from the line's
+// git-host-5). An explicit "Sync records" sends directly, including a
+// placement's first send; records started separately combine from the line's
 // "Combine…", or the row's (space-13), a Retry joining only the
 // placement this page combined; a stopped one retries from its line or
 // its row (space-15); focus after a line's act goes to the control that
@@ -317,7 +315,7 @@ describe("GROUPS: a line per placement (space-87, space-61, space-12, space-15, 
     expect(screen.queryByTestId(`space-lines-${KEY}@9`)).toBeNull();
   });
 
-  test("space-87, space-12: the step in flight stands on its placement's line; synced reads 'Synced just now · N sent · M received' or 'Everything is in sync', a read-only line 'M received; nothing sent', 'Behind — Sync again'; 'Changed here and at <display name>', 'Started separately at <display name>' and 'Waiting for you to continue' stand until the next operation, and Dismiss puts away the synced and stopped ones", async () => {
+  test("space-87, space-12: the step in flight stands on its placement's line; synced reads 'Synced just now · N sent · M received' or 'Everything is in sync', a read-only line 'M received; nothing sent', 'Behind — Sync again'; 'Changed here and at <display name>' and 'Started separately at <display name>' stand until the next operation, and Dismiss puts away the synced and stopped ones", async () => {
     const synced = (sent: number, received: number) => ({ kind: "synced" as const, sent, received });
     const now = { at: NOW, sent: 0, received: 0 };
 
@@ -375,13 +373,6 @@ describe("GROUPS: a line per placement (space-87, space-61, space-12, space-15, 
         "Synced just now · 1 sent · 0 received",
         "Started separately at Second Example",
       ],
-      [
-        { outcome: synced(1, 0), lastSync: { ...now, sent: 1 } },
-        { outcome: { kind: "waiting", sent: 0, received: 0 } },
-        { phase: "done", at: NOW, sent: 1, received: 0, pushed: true },
-        "Synced just now · 1 sent · 0 received",
-        "Waiting for you to continue",
-      ],
     ];
     for (const [first, second, sync, firstReads, secondReads] of cases) {
       await renderGroups(placedAtTwo({ first, second }, { sync }), { open: false });
@@ -389,7 +380,7 @@ describe("GROUPS: a line per placement (space-87, space-61, space-12, space-15, 
       expect(phraseOf(KEY, SECOND).textContent, secondReads).toBe(secondReads);
       // What asks for the reader reads in the attention tone.
       expect(phraseOf(KEY, SECOND).dataset.tone, secondReads).toBe(
-        ["Behind — Sync again", "Changed here and at Second Example", "Started separately at Second Example", "Waiting for you to continue"].includes(secondReads)
+        ["Behind — Sync again", "Changed here and at Second Example", "Started separately at Second Example"].includes(secondReads)
           ? "attention"
           : "idle",
       );
@@ -397,15 +388,15 @@ describe("GROUPS: a line per placement (space-87, space-61, space-12, space-15, 
     }
 
     // Dismiss on the Sync tab puts the synced outcome away on its line,
-    // which reads its last sync again; the one waiting for the reader
-    // stands. The dismissal outlives closing and reopening the row.
+    // which reads its last sync again; the unrelated history still
+    // asks the reader to combine it. The dismissal outlives closing and reopening the row.
     const done: RepositoryState["sync"] = { phase: "done", at: NOW, sent: 1, received: 0, pushed: true };
     await renderGroups(
-      placedAtTwo({ first: { outcome: synced(1, 0), lastSync: { ...now, sent: 1 } }, second: { outcome: { kind: "waiting", sent: 0, received: 0 } } }, { sync: done }),
+      placedAtTwo({ first: { outcome: synced(1, 0), lastSync: { ...now, sent: 1 } }, second: { outcome: { kind: "unrelated", sent: 0, received: 0 } } }, { sync: done }),
     );
     fireEvent.click(screen.getByTestId("space-dismiss"));
     expect(phraseOf(KEY, ORIGIN).textContent).toBe("Synced just now");
-    expect(phraseOf(KEY, SECOND).textContent).toBe("Waiting for you to continue");
+    expect(phraseOf(KEY, SECOND).textContent).toBe("Started separately at Second Example");
     fireEvent.click(screen.getByTestId(`space-repo-${KEY}`));
     fireEvent.click(screen.getByTestId(`space-repo-${KEY}`));
     expect(screen.queryByTestId("space-done")).toBeNull();
@@ -421,8 +412,8 @@ describe("GROUPS: a line per placement (space-87, space-61, space-12, space-15, 
     cleanup();
 
     // A stop put away by Dismiss reads the placement's state again; a
-    // placement left behind, or with choices, unrelated history or the
-    // notice owed, stands until the next operation.
+    // placement left behind, or with choices or unrelated history,
+    // stands until the next operation.
     const stopped: RepositoryState["sync"] = {
       phase: "stopped",
       op: "sync",
@@ -718,15 +709,14 @@ describe("GROUPS: a placement's members (space-62, space-69, space-72)", () => {
     await waitFor(() => expect(calls("space.members")).toHaveLength(2));
   });
 
-  test.each(["continue", "combine", "retry"] as const)("space-62: pending membership prevents local closure or replacement through %s", async (action) => {
+  test.each(["combine", "retry"] as const)("space-62: pending membership prevents local closure or replacement through %s", async (action) => {
     const mutation = action === "combine" ? "space.unshare" : "space.share";
     let resolve!: (reply: unknown) => void;
     commandMock.mockImplementation((type: string, fields: Record<string, unknown> = {}) => type === mutation
       ? new Promise((done) => { resolve = done; }) : answer(type, fields));
-    const outcome: PlacementState["outcome"] = action === "continue"
-      ? { kind: "waiting", sent: 0, received: 0 }
-      : action === "combine" ? { kind: "unrelated", sent: 0, received: 0 }
-        : { kind: "stopped", step: "push", cause: "unreachable", message: "Offline", guidance: "Retry", retry: true };
+    const outcome: PlacementState["outcome"] = action === "combine"
+      ? { kind: "unrelated", sent: 0, received: 0 }
+      : { kind: "stopped", step: "push", cause: "unreachable", message: "Offline", guidance: "Retry", retry: true };
     await renderGroups(placedAtTwo({ second: { can: { manageMembers: true, transfer: false }, outcome } }), { open: false });
     const line = lineOf(KEY, SECOND);
     const opener = within(line).getByTestId("space-line-members") as HTMLButtonElement;
@@ -937,213 +927,60 @@ describe("GROUPS: a placement's members (space-62, space-69, space-72)", () => {
   });
 });
 
-/** What the core says when a placement's first push owes the notice
- * this device's reader has not seen (space-57): the refusal's facts
- * name that placement. */
-const noticeRefusal = (placement: string): SpexCommandError =>
-  new SpexCommandError("invalid_request", "Read the sharing notice before the first sync of academy-spex", {
-    notice: true,
-    members: 2,
-    visibility: "private",
-    placement,
-  });
-
 /** A placement the device is offline from. */
 const OFFLINE = { state: "unreachable" as const, reason: "the device is offline" };
-/** A placement whose repository has other members, never pushed from
- * this device, its notice unseen (space-57). */
-const OWING = { members: 2, noticed: false, lastSync: null };
+/** A shared placement that this device has never pushed. */
+const FIRST_SEND = { members: 2, noticed: false, lastSync: null };
 const DONE: RepositoryState["sync"] = { phase: "done", at: NOW, sent: 1, received: 0, pushed: true };
 
-describe("GROUPS: a placement's sharing confirm, combining and retry (space-57, space-13, space-15, space-11, space-61)", () => {
-  test("space-57: a placement owing its confirm reads 'Waiting for you to continue' with Continue; Continue shows 'Share with <group> at <display name>?' over three phrases, Cancel focused, Escape keeping; Share sends space.sync {repository, placement, noticed: true}", async () => {
-    const waiting = { ...OWING, outcome: { kind: "waiting" as const, sent: 0, received: 0 } };
-    await renderGroups(placedAtTwo({ second: waiting }, { sync: DONE }), { open: false });
-    const line = lineOf(KEY, SECOND);
-    expect(reading(line).state).toBe("Waiting for you to continue");
-    const go = within(line).getByTestId("space-line-continue") as HTMLButtonElement;
-    expect(go.textContent).toBe("Continue");
-    // Described by its line's instance, so it reads apart from any other
-    // line's (space-87).
-    expect(describedAs(go)).toBe("Second Example");
-    // The placement that synced carries none.
-    expect(within(lineOf(KEY, ORIGIN)).queryByTestId("space-line-continue")).toBeNull();
-
-    // The confirm stands beneath the line, titled by the group and the
-    // Space the records go to, over its three phrases, Cancel focused;
-    // Escape keeps the line waiting, focus back on Continue (DR-010 §4,
-    // §6).
-    fireEvent.click(go);
-    let notice = within(line).getByTestId("space-line-notice");
-    const confirm = within(notice).getByTestId("space-sharing-confirm");
-    expect(confirm.firstElementChild?.textContent).toBe("Share with workshop at Second Example?");
-    expect(within(confirm).getAllByRole("listitem").map((item) => item.textContent)).toEqual([
-      "All sessions: conversations, agent activity, and attachments",
-      "Existing and future project records",
-      "Removing access won’t erase copies members already saved",
-    ]);
-    expect(document.activeElement).toBe(within(notice).getByRole("button", { name: "Cancel" }));
-    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
-    expect(within(line).queryByTestId("space-line-notice")).toBeNull();
-    expect(calls("space.sync")).toHaveLength(0);
-    await waitFor(() => expect(document.activeElement).toBe(go));
-    expect(reading(line).state).toBe("Waiting for you to continue");
-    // Cancel starts nothing either.
-    fireEvent.click(go);
-    fireEvent.click(within(within(line).getByTestId("space-line-notice")).getByRole("button", { name: "Cancel" }));
-    expect(calls("space.sync")).toHaveLength(0);
-
-    // Share syncs with that placement's confirm answered, and the line's
-    // Continue waits for the machine.
-    fireEvent.click(go);
-    notice = within(line).getByTestId("space-line-notice");
-    fireEvent.click(within(notice).getByRole("button", { name: "Share" }));
-    await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY, placement: SECOND, noticed: true }]));
-    expect(within(line).queryByTestId("space-line-notice")).toBeNull();
-    await waitFor(() => expect(go.disabled).toBe(true));
-    cleanup();
-
-    // Public records say anyone can read them.
-    await renderGroups(placedAtTwo({ second: { ...waiting, visibility: "public" } }, { sync: DONE }), { open: false });
-    fireEvent.click(within(lineOf(KEY, SECOND)).getByTestId("space-line-continue"));
-    expect(within(lineOf(KEY, SECOND)).getByTestId("space-line-notice").textContent).toContain("Public: anyone can read");
-    cleanup();
-
-    // In the reader's language, the line and its confirm (space-57).
-    activateLanguage("zh");
-    await renderGroups(placedAtTwo({ second: waiting }, { sync: DONE }), { open: false });
-    expect(reading(lineOf(KEY, SECOND)).state).toBe("等待你继续");
-    fireEvent.click(within(lineOf(KEY, SECOND)).getByTestId("space-line-continue"));
-    const zhNotice = within(lineOf(KEY, SECOND)).getByTestId("space-line-notice");
-    expect(within(zhNotice).getByTestId("space-sharing-confirm").firstElementChild?.textContent).toBe("与 Second Example 上的 workshop 共享？");
-    expect(within(zhNotice).getByRole("button", { name: "共享" })).toBeTruthy();
+describe("GROUPS: direct sync, combining and retry (space-57, space-13, space-15, space-11, space-61)", () => {
+  test.each([
+    { members: 2, visibility: "private" as const },
+    { members: null, visibility: "private" as const },
+    { members: 3, visibility: "public" as const },
+  ])("space-57: Sync records immediately sends a shared placement's first sync (%j)", async (shared) => {
+    await renderGroups(placedAtTwo({ first: OFFLINE, second: { ...FIRST_SEND, ...shared } }), { open: false });
+    syncNow();
+    await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY }]));
+    expect(screen.queryByRole("button", { name: "Share" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
+    expect(screen.queryByText("Waiting for you to continue")).toBeNull();
   });
 
-  test("space-57: Sync where the only runnable placement owes the confirm asks it first and sends that placement's noticed; where another can run, Sync asks nothing and the owing line waits; a read-only or path placement owes none", async () => {
-    // The first placement offline, the second owing: the row's "Sync
-    // now" asks the second's confirm first, beneath the row.
-    await renderGroups(placedAtTwo({ first: OFFLINE, second: OWING }), { open: false });
+  test("space-57: a sync sends both shared placements directly, including your sessions at a second Space", async () => {
+    await renderGroups(placedAtTwo({ second: FIRST_SEND }), { open: false });
     syncNow();
-    const notice = screen.getByTestId("space-notice-confirm");
-    expect(screen.getByTestId(`space-row-${KEY}`).contains(notice)).toBe(true);
-    expect(notice.textContent).toContain("Share with workshop at Second Example?");
-    expect(notice.textContent).toContain("All sessions: conversations, agent activity, and attachments");
-    expect(document.activeElement).toBe(within(notice).getByRole("button", { name: "Cancel" }));
-    fireEvent.click(within(notice).getByRole("button", { name: "Share" }));
-    await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY, placement: SECOND, noticed: true }]));
-    cleanup();
-
-    // The first can run: Sync says nothing and goes; the owing placement
-    // then waits on its line with Continue while the first synced.
-    commandMock.mockClear();
-    await renderGroups(placedAtTwo({ second: OWING }), { open: false });
-    syncNow();
-    expect(screen.queryByTestId("space-notice-confirm")).toBeNull();
     await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY }]));
-    deliver(
-      placedAtTwo(
-        {
-          first: { outcome: { kind: "synced", sent: 1, received: 0 }, lastSync: { at: NOW, sent: 1, received: 0 } },
-          second: { ...OWING, outcome: { kind: "waiting", sent: 0, received: 0 } },
-        },
-        { sync: DONE },
-      ),
-    );
+    deliver(placedAtTwo({
+      first: { outcome: { kind: "synced", sent: 1, received: 0 }, lastSync: { at: NOW, sent: 1, received: 0 } },
+      second: { ...FIRST_SEND, outcome: { kind: "synced", sent: 1, received: 0 }, lastSync: { at: NOW, sent: 1, received: 0 } },
+    }, { sync: DONE }));
     expect(reading(lineOf(KEY, ORIGIN)).state).toBe("Synced just now · 1 sent · 0 received");
-    expect(reading(lineOf(KEY, SECOND)).state).toBe("Waiting for you to continue");
-    expect(within(lineOf(KEY, SECOND)).getByTestId("space-line-continue")).toBeTruthy();
+    expect(reading(lineOf(KEY, SECOND)).state).toBe("Synced just now · 1 sent · 0 received");
     cleanup();
-
-    // A read-only placement never pushes, so it owes none: the sync goes.
     commandMock.mockClear();
-    await renderGroups(placedAtTwo({ first: OFFLINE, second: { ...OWING, state: "read-only", reason: "archived" } }), { open: false });
-    syncNow();
-    expect(screen.queryByTestId("space-notice-confirm")).toBeNull();
-    await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY }]));
-    cleanup();
-
-    // The path placement owes none and can run beside an owing one.
-    commandMock.mockClear();
-    const withPath = repo({
-      placements: [
-        placement({ ...OWING, members: 3 }),
-        placementState({ instance: null, path: "/srv/academy-spex.git", branch: { ...BRANCH, agreed: null } }),
-      ],
-    });
-    await renderGroups(twoInstances({}, [withPath]), { open: false });
-    syncNow();
-    expect(screen.queryByTestId("space-notice-confirm")).toBeNull();
-    await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY }]));
-    cleanup();
-
-    // Your own group's own repository owes it at an instance after its
-    // first placement's even where the account is its only member
-    // (space-4); its first placement says nothing.
-    commandMock.mockClear();
-    const ownAt = (placements: PlacementState[]): GroupsState => {
-      const home = twoInstances({}, []);
-      return { ...home, own: { ...home.own, repositories: [ownRepo({ placedAt: [ORIGIN, SECOND], placements })] } };
-    };
-    const ownFirst = placement({ path: OWN, id: "7", branch: null, members: 1, noticed: false, lastSync: { at: NOW - HOUR, sent: 1, received: 0 } });
-    const ownSecond = placementState({ instance: SECOND, path: "jada/jada-spex", id: "71", members: 1, visibility: "private", branch: BRANCH });
-    await renderGroups(ownAt([{ ...ownFirst, ...OFFLINE }, ownSecond]), { open: false });
+    const home = twoInstances({}, []);
+    const first = placement({ path: OWN, id: "7", branch: null, members: 1, noticed: false, lastSync: { at: NOW - HOUR, sent: 1, received: 0 } });
+    const second = placementState({ instance: SECOND, path: "jada/jada-spex", id: "71", members: 1, visibility: "private", branch: BRANCH });
+    await renderGroups({ ...home, own: { ...home.own, repositories: [ownRepo({ placedAt: [ORIGIN, SECOND], placements: [{ ...first, ...OFFLINE }, second] })] } }, { open: false });
     syncNow(OWN);
-    expect(screen.getByTestId("space-notice-confirm").textContent).toContain("Share with Personal at Second Example?");
-    fireEvent.click(within(screen.getByTestId("space-notice-confirm")).getByRole("button", { name: "Share" }));
-    await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: OWN, placement: SECOND, noticed: true }]));
-    cleanup();
-    commandMock.mockClear();
-    await renderGroups(ownAt([{ ...ownFirst, lastSync: null }]), { open: false });
-    syncNow(OWN);
-    expect(screen.queryByTestId("space-notice-confirm")).toBeNull();
     await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: OWN }]));
+    expect(screen.queryByRole("button", { name: "Share" })).toBeNull();
   });
 
-  test("space-57: a refusal carrying the notice opens the confirm for the placement it names", async () => {
-    // The page's read says the second's only member is the account; the
-    // core's fresh read finds others, and no other placement can run.
+  test("space-15: a first sync refusal keeps the cause visible and retries directly", async () => {
+    let refused = true;
     commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) => {
-      if (type === "space.sync" && fields?.noticed === undefined) throw noticeRefusal(SECOND);
+      if (type === "space.sync" && refused) throw new SpexCommandError("invalid_request", "Could not reach Second Example");
       return answer(type, fields);
     });
-    await renderGroups(placedAtTwo({ first: OFFLINE, second: { members: 1, noticed: false, lastSync: null } }), { open: false });
+    await renderGroups(placedAtTwo({ first: OFFLINE, second: FIRST_SEND }), { open: false });
     syncNow();
-    const notice = await screen.findByTestId("space-notice-confirm");
-    expect(notice.textContent).toContain("Share with workshop at Second Example?");
-    // The confirm stands in place of the refusal's words.
-    expect(screen.queryByTestId(`space-row-caption-${KEY}`)).toBeNull();
-    expect(document.activeElement).toBe(within(notice).getByRole("button", { name: "Cancel" }));
-    fireEvent.click(within(notice).getByRole("button", { name: "Share" }));
-    await waitFor(() =>
-      expect(calls("space.sync")).toEqual([{ repository: KEY }, { repository: KEY, placement: SECOND, noticed: true }]),
-    );
-    cleanup();
-
-    // A placement's Combine refused for its confirm says it on that
-    // line, its Share carrying the join.
-    commandMock.mockClear();
-    const unrelated = { outcome: { kind: "unrelated" as const, sent: 0, received: 0 }, branch: { ...BRANCH, unrelated: true } };
-    await renderGroups(placedAtTwo({ first: OFFLINE, second: { members: 1, noticed: false, lastSync: null, ...unrelated } }, { sync: { phase: "unrelated", placement: SECOND } }), { open: false });
-    const line = lineOf(KEY, SECOND);
-    const combine = within(line).getByTestId("space-line-combine");
-    fireEvent.click(combine);
-    fireEvent.click(within(within(line).getByTestId("space-line-combine-confirm")).getByRole("button", { name: "Combine" }));
-    const lineNotice = await within(line).findByTestId("space-line-notice");
-    expect(lineNotice.textContent).toContain("Share with workshop at Second Example?");
-    expect(within(line).queryByTestId("space-line-error")).toBeNull();
-    // Cancel hands focus back to the Combine… that asked.
-    fireEvent.click(within(lineNotice).getByRole("button", { name: "Cancel" }));
-    await waitFor(() => expect(document.activeElement).toBe(combine));
-    fireEvent.click(combine);
-    fireEvent.click(within(within(line).getByTestId("space-line-combine-confirm")).getByRole("button", { name: "Combine" }));
-    fireEvent.click(within(await within(line).findByTestId("space-line-notice")).getByRole("button", { name: "Share" }));
-    await waitFor(() =>
-      expect(calls("space.sync")).toEqual([
-        { repository: KEY, placement: SECOND, join: true },
-        { repository: KEY, placement: SECOND, join: true },
-        { repository: KEY, placement: SECOND, join: true, noticed: true },
-      ]),
-    );
+    await waitFor(() => expect(screen.getByTestId(`space-row-caption-${KEY}`).textContent).toContain("Could not reach Second Example"));
+    expect(calls("space.sync")).toEqual([{ repository: KEY }]);
+    refused = false;
+    syncNow();
+    await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY }, { repository: KEY }]));
   });
 
   test("space-13: a placement started separately offers \"Combine…\" on its line, confirmed inline with Cancel focused, sending {repository, placement, join: true}; the row reads \"Started separately at <display name>\" with its own \"Combine…\" and keeps Sync now", async () => {
@@ -1285,22 +1122,8 @@ describe("GROUPS: a placement's sharing confirm, combining and retry (space-57, 
     expect(calls("space.sync")).toHaveLength(6);
   });
 
-  test("space-57, space-13: after a line's Share or Combine, and a row confirm's Share, focus goes to the row's name while the control that asked is busy (DR-010 §6)", async () => {
+  test("space-13: after Combine, focus survives on the row name; direct first sync returns to More", async () => {
     const rowName = (key = KEY): HTMLElement => screen.getByTestId(`space-repo-${key}`);
-    // A line's confirm shared: its Continue busy until the machine
-    // moves.
-    const waiting = { ...OWING, outcome: { kind: "waiting" as const, sent: 0, received: 0 } };
-    await renderGroups(placedAtTwo({ second: waiting }), { open: false });
-    const go = within(lineOf(KEY, SECOND)).getByTestId("space-line-continue") as HTMLButtonElement;
-    fireEvent.click(go);
-    fireEvent.click(within(within(lineOf(KEY, SECOND)).getByTestId("space-line-notice")).getByRole("button", { name: "Share" }));
-    await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY, placement: SECOND, noticed: true }]));
-    await waitFor(() => expect(document.activeElement).toBe(rowName()));
-    expect(go.disabled).toBe(true);
-    cleanup();
-
-    // A Combine confirmed: Combining… until the machine moves.
-    installClient();
     const unrelated = {
       outcome: { kind: "unrelated" as const, sent: 0, received: 0 },
       branch: { ...BRANCH, unrelated: true, ahead: null, behind: null },
@@ -1313,13 +1136,10 @@ describe("GROUPS: a placement's sharing confirm, combining and retry (space-57, 
     await waitFor(() => expect(document.activeElement).toBe(rowName()));
     cleanup();
 
-    // The row's confirm shared: its "Sync records" busy until the machine
-    // moves, focus back on the row's "More" that held it (DR-159).
     installClient();
     await renderGroups(base({}, [repo({ members: 3, noticed: false })]), { open: false });
     syncNow();
-    fireEvent.click(within(screen.getByTestId("space-notice-confirm")).getByRole("button", { name: "Share" }));
-    await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY, placement: ORIGIN, noticed: true }]));
+    await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY }]));
     await waitFor(() => expect(document.activeElement).toBe(moreOf()));
     expect(syncEntry().disabled).toBe(true);
   });
@@ -1719,10 +1539,6 @@ function rowControls(key: string): string[] {
     .map((button) => button.dataset.testid ?? "");
 }
 
-/** The placement's first send waits for the reader's Continue
- * (space-57). */
-const WAITING = { kind: "waiting" as const, sent: 0, received: 0 };
-
 describe("GROUPS: a group holding a placement of a row standing elsewhere (space-1, DR-128, DR-172)", () => {
   test("space-1: the second's group holding a placement shows one quiet line per row standing elsewhere, naming the row and where it stands, with no control; its More holds Members alone; Personal at the second stands for its one line", async () => {
     await renderGroups(walkHome(), { open: false });
@@ -1811,7 +1627,7 @@ describe("GROUPS: a group holding a placement of a row standing elsewhere (space
 });
 
 describe("GROUPS: the placements surface at the floor (space-95, space-28, DR-172)", () => {
-  test("space-95: lines with Members, a line not on this computer offering nothing, rows of one primary and one overflow, the sharing confirm of your own group's second placement, the members' 'also placed at'", async () => {
+  test("space-95: lines with Members, a line not on this computer offering nothing, rows of one primary and one overflow, your own group's first sync at its second placement, the members' 'also placed at'", async () => {
     await renderGroups(walkHome(), { open: false });
 
     // The second's group holding a placement shows one line naming the
@@ -1871,37 +1687,19 @@ describe("GROUPS: the placements surface at the floor (space-95, space-28, DR-17
     }
     expect(menuIds(GAMMA)).toEqual([`space-row-explore-${GAMMA}`]);
 
-    // Your own group's placement at the second owes its confirm there
-    // (space-4): Sync now goes for the first, which owes none, and the
-    // second waits with Continue on its line, which asks "Share with
-    // Personal at Second Example?" and sends that placement's (space-57).
-    const owing = { noticed: false, lastSync: null };
-    deliver(walkHome({ [OWN]: atLine(SECOND, owing) }));
+    // Your own group's second placement syncs in the same explicit act.
+    deliver(walkHome({ [OWN]: atLine(SECOND, { noticed: false, lastSync: null }) }));
     syncNow(OWN);
-    expect(screen.queryByTestId("space-notice-confirm")).toBeNull();
     await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: OWN }]));
-    deliver(
-      walkHome({
-        [OWN]: (row) =>
-          atLine(SECOND, { ...owing, outcome: WAITING })(
-            atLine(ORIGIN, { outcome: { kind: "synced", sent: 1, received: 0 }, lastSync: { at: NOW, sent: 1, received: 0 } }, { sync: DONE })(row),
-          ),
-      }),
-    );
-    await waitFor(() => expect(reading(lineOf(OWN, SECOND)).state).toBe("Waiting for you to continue"));
+    deliver(walkHome({ [OWN]: (row) =>
+      atLine(SECOND, { outcome: { kind: "synced", sent: 1, received: 0 }, lastSync: { at: NOW, sent: 1, received: 0 } })(
+        atLine(ORIGIN, { outcome: { kind: "synced", sent: 1, received: 0 }, lastSync: { at: NOW, sent: 1, received: 0 } }, { sync: DONE })(row),
+      ),
+    }));
+    expect(reading(lineOf(OWN, SECOND)).state).toBe("Synced just now · 1 sent · 0 received");
     expect(reading(lineOf(OWN, ORIGIN)).state).toBe("Synced just now · 1 sent · 0 received");
-    const go = within(lineOf(OWN, SECOND)).getByTestId("space-line-continue") as HTMLButtonElement;
-    expect(go.textContent).toBe("Continue");
-    expect(describedAs(go)).toBe("Second Example");
-    expect(within(lineOf(OWN, ORIGIN)).queryByTestId("space-line-continue")).toBeNull();
-    // The row reads the same, Continue beside it (space-120).
-    expect(screen.getByTestId(`space-repo-state-${OWN}`).textContent).toBe("Waiting for you to continue");
-    expect(screen.getByTestId(`space-row-continue-${OWN}`).textContent).toBe("Continue");
-    fireEvent.click(go);
-    const notice = within(lineOf(OWN, SECOND)).getByTestId("space-line-notice");
-    expect(within(notice).getByTestId("space-sharing-confirm").firstElementChild?.textContent).toBe("Share with Personal at Second Example?");
-    fireEvent.click(within(notice).getByRole("button", { name: "Share" }));
-    await waitFor(() => expect(calls("space.sync")[1]).toEqual({ repository: OWN, placement: SECOND, noticed: true }));
+    expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Share" })).toBeNull();
 
     // Each placement's members panel says the records are also placed at
     // the other's display name (space-62).
@@ -1925,14 +1723,14 @@ describe("GROUPS: the placements surface at the floor (space-95, space-28, DR-17
     commandMock.mockImplementation(async (type: string, fields?: Record<string, unknown>) =>
       type === "space.sync" ? new Promise(() => {}) : answer(type, fields),
     );
-    // space-95's home, the outcomes its lines' last syncs left giving
-    // Continue, "Combine…" and Retry their turn beside Members: your own
-    // group's second placement waiting for its confirm, the opened
-    // project's second started separately, and the group's own stopped
-    // where retrying helps (space-87).
+    // space-95's home, with "Combine…" and Retry beside Members:
+    // two placements stopped where retrying helps, and the opened
+    // project's second placement started separately (space-87).
     await renderGroups(
       walkHome({
-        [OWN]: atLine(SECOND, { noticed: false, lastSync: null, outcome: WAITING }),
+        [OWN]: atLine(SECOND, {
+          outcome: { kind: "stopped", step: "push", cause: "unreachable", message: "Could not reach Second Example", guidance: "Check the network, then Retry", retry: true },
+        }),
         [KEY]: atLine(SECOND, { outcome: { kind: "unrelated", sent: 0, received: 0 } }),
         [ACME]: atLine(ORIGIN, {
           outcome: { kind: "stopped", step: "push", cause: "unreachable", message: "Could not reach Spex Example", guidance: "Check the network, then Retry", retry: true },
@@ -1979,18 +1777,17 @@ describe("GROUPS: the placements surface at the floor (space-95, space-28, DR-17
       measure();
     }
     expect(within(lineOf(OWN, ORIGIN)).getByTestId("space-line-members").getAttribute("aria-label")).toBe("Members");
-    expect([...seen]).toEqual(expect.arrayContaining(["Open project", "Add to a group…", "Combine…", "Continue", "Retry", "Members"]));
+    expect([...seen]).toEqual(expect.arrayContaining(["Open project", "Add to a group…", "Combine…", "Retry", "Members"]));
 
-    // Opened: the waiting line's confirm and a members panel; the
-    // records started separately's confirm; and Add to a group….
-    fireEvent.click(within(lineOf(OWN, SECOND)).getByTestId("space-line-continue"));
+    // Opened: a members panel, the records started separately's
+    // confirmation, and Add to a group….
     fireEvent.click(within(lineOf(OWN, ORIGIN)).getByTestId("space-line-members"));
     await within(await screen.findByTestId(`space-members-${OWN}@${ORIGIN}`)).findAllByTestId(/^space-member-/);
     measure();
     fireEvent.click(within(lineOf(KEY, SECOND)).getByTestId("space-line-combine"));
     fireEvent.click(screen.getByTestId(`space-row-pick-${GAMMA}`));
     measure();
-    expect([...seen]).toEqual(expect.arrayContaining(["Cancel", "Share", "Combine"]));
+    expect([...seen]).toEqual(expect.arrayContaining(["Cancel", "Combine"]));
 
     // Busy: each act sent and unanswered reads its busy form, within the
     // budget too (space-28).
@@ -2000,10 +1797,8 @@ describe("GROUPS: the placements surface at the floor (space-95, space-28, DR-17
     measure();
     linesWrap(KEY);
 
-    const own = lineOf(OWN, SECOND);
-    if (!within(own).queryByTestId("space-line-notice")) fireEvent.click(within(own).getByTestId("space-line-continue"));
-    fireEvent.click(within(within(own).getByTestId("space-line-notice")).getByRole("button", { name: "Share" }));
-    await waitFor(() => expect((within(lineOf(OWN, SECOND)).getByTestId("space-line-continue") as HTMLButtonElement).disabled).toBe(true));
+    fireEvent.click(within(lineOf(OWN, SECOND)).getByTestId("space-line-retry"));
+    await waitFor(() => expect((within(lineOf(OWN, SECOND)).getByTestId("space-line-retry") as HTMLButtonElement).disabled).toBe(true));
     measure();
     linesWrap(OWN);
 

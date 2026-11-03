@@ -4,7 +4,7 @@
 // RUN-42 (amended by DR-011): the project palette is fully keyboard
 // operable, carries per-project live state, and owns add/create.
 
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { useState } from "react";
 import {
   cleanup,
@@ -434,6 +434,13 @@ describe("DR-015: the palette offers the Academy example", () => {
 });
 
 describe("projects-1, space-58: a folder added while signed in asks for its group in place", () => {
+  beforeEach(() => {
+    setClientForTests({ command: vi.fn(async (type: string) => type === "space.get"
+      ? useAppStore.getState().space
+      : type === "server.list" ? { servers: [], failures: [] } : {}) } as never);
+  });
+  afterEach(() => setClientForTests(undefined));
+
   const ADDED: ProjectInfo = { id: "ada/gamma-spex", path: "/tmp/gamma", name: "gamma", registeredAt: 2, repository: { key: "ada/gamma-spex", name: "gamma-spex", group: "ada", own: true } };
   const HOST = "https://host.test";
   const SECOND = "https://second.test";
@@ -462,7 +469,8 @@ describe("projects-1, space-58: a folder added while signed in asks for its grou
     const spacePick = vi.fn(async () => {});
     useAppStore.setState({ connection: "open", space: groups(true, [row(ADDED.id)]), spacePick });
     const onNote = vi.fn();
-    const { onPick, onClose } = renderPalette({ onAddPath: vi.fn(async () => ADDED), onNote });
+    const onShowSpace = vi.fn();
+    const { onPick, onClose } = renderPalette({ onAddPath: vi.fn(async () => ADDED), onNote, onShowSpace });
     add();
     await screen.findByTestId(`space-picker-${ADDED.id}`);
     // The folder is the current project already; nothing is closed yet,
@@ -475,11 +483,13 @@ describe("projects-1, space-58: a folder added while signed in asks for its grou
     expect(screen.queryByTestId(`space-pick-name-${ADDED.id}`)).toBeNull();
     fireEvent.click(screen.getByTestId("space-pick-group-acme"));
     expect(spacePick).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(screen.getByTestId(`space-pick-submit-${ADDED.id}`)).toHaveProperty("disabled", false));
     fireEvent.click(screen.getByTestId(`space-pick-submit-${ADDED.id}`));
     await vi.waitFor(() =>
       expect(spacePick).toHaveBeenCalledWith(ADDED.id, { kind: "create", instance: HOST, groupId: "20", name: "gamma" }),
     );
     await vi.waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(onShowSpace).toHaveBeenCalledTimes(1);
     expect(onNote).toHaveBeenCalledWith("Adding gamma to acme at Host");
   });
 
@@ -496,6 +506,7 @@ describe("projects-1, space-58: a folder added while signed in asks for its grou
     expect(within(header).getByRole("button", { name: /^Close$/ }).textContent).toBe("");
     const submit = within(picker).getByTestId(`space-pick-submit-${ADDED.id}`) as HTMLButtonElement;
     fireEvent.click(selected);
+    await vi.waitFor(() => expect(submit.disabled).toBe(false));
     fireEvent.click(submit);
     expect(submit.disabled).toBe(true);
     const close = screen.getByRole("button", { name: /^Close$/ });
@@ -561,6 +572,7 @@ describe("projects-1, space-58: a folder added while signed in asks for its grou
     fireEvent.change(chooser, { target: { value: SECOND } });
     fireEvent.click(within(picker).getByTestId("space-pick-group-acme"));
     expect(spacePick).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(within(picker).getByTestId(`space-pick-submit-${ADDED.id}`)).toHaveProperty("disabled", false));
     fireEvent.click(within(picker).getByTestId(`space-pick-submit-${ADDED.id}`));
     await vi.waitFor(() =>
       expect(spacePick).toHaveBeenCalledWith(ADDED.id, { kind: "create", instance: SECOND, groupId: "30", name: "gamma" }),
@@ -636,7 +648,7 @@ describe("run-view-168: this computer's From your groups", () => {
     const listing = { servers: [{ instance: SPEX, id: "9", name: "lab-9", group: "acme", open: false }], failures: [] };
     const command = vi.fn(async (type: string) => (type === "server.list" ? listing : {}));
     setClientForTests({ command, subscribe: vi.fn(async () => null), unsubscribe: vi.fn(async () => null), close: vi.fn() } as never);
-    useServerOpens.setState({ lines: {}, pending: {}, landed: 0 });
+    useServerOpens.setState({ lines: {}, pending: {}, shared: {}, recovery: undefined, recoveryRead: undefined, recoveryServers: undefined, landed: 0 });
     const place = `${SPEX}#9`;
     try {
       // [run-view-168] [space-111] its records name no code remote: the
@@ -684,7 +696,7 @@ describe("run-view-168: this computer's From your groups", () => {
       expect(command.mock.calls.filter(([type]) => type === "server.open")).toHaveLength(1);
     } finally {
       setClientForTests(undefined);
-      useServerOpens.setState({ lines: {}, pending: {}, landed: 0 });
+      useServerOpens.setState({ lines: {}, pending: {}, shared: {}, recovery: undefined, recoveryRead: undefined, recoveryServers: undefined, landed: 0 });
     }
   });
 

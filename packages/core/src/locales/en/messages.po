@@ -1337,21 +1337,6 @@ msgstr "config is invalid: {errors}"
 msgid "config must be a YAML mapping"
 msgstr "config must be a YAML mapping"
 
-#. Refusal of attaching a project's records at a Space until the reader has answered the sharing confirm: every record reaches its members there; {name} is the project
-#: src/space.ts
-msgid "Confirm sharing before attaching {name}"
-msgstr "Confirm sharing before attaching {name}"
-
-#. Refusal of joining a project's records that other members share until the reader has answered the sharing confirm; {name} is the project
-#: src/space.ts
-msgid "Confirm sharing before joining {name}"
-msgstr "Confirm sharing before joining {name}"
-
-#. Refusal of the first send of a project's records to a Space where other members share them, until the reader has answered the sharing confirm; {name} is the project
-#: src/space.ts
-msgid "Confirm sharing before the first sync of {name}"
-msgstr "Confirm sharing before the first sync of {name}"
-
 #. Guidance under a stopped removal of a project's records from one Space: confirming again removes them there whatever they hold
 #: src/space.ts
 msgid "Confirm to remove it anyway."

@@ -78,7 +78,7 @@ test("parseCommand accepts the space commands and their optional fields", () => 
   assert.ok(!parseCommand({ type: "space.init", id: "s2" }).ok);
 });
 
-test("space-29, space-82, space-98, space-99: a space command names the instance it acts at by its origin, a group with its instance, a placement left or attached by its instance — an Attach with whether its notice was seen — and a sign-in the URL as the reader gave it", () => {
+test("space-29, space-82, space-98, space-99: a space command names the instance it acts at by its origin, a group with its instance, a placement left or attached by its instance and a sign-in the URL as the reader gave it", () => {
   const instance = "https://spex.pub";
   const repository = "@spex.pub/acme/a-spex";
   const named = [
@@ -103,14 +103,15 @@ test("space-29, space-82, space-98, space-99: a space command names the instance
     { type: "space.leave", id: "i16", repository, instance: "https://second.example" },
     { type: "space.leave", id: "i17", repository, instance, confirmed: true },
     { type: "space.attach", id: "i18", repository, instance: "https://second.example", noticed: true },
+    { type: "space.attach", id: "i19", repository, instance },
+    { type: "space.sync", id: "i20", repository, noticed: false },
   ];
   for (const command of named) {
     const parsed = parseCommand(command);
     assert.ok(parsed.ok, `${command.type}: ${parsed.ok ? "" : parsed.error}`);
   }
   // A command acting at an instance names it, and a sign-in its URL:
-  // none stands in for a default; an Attach says whether its notice was
-  // seen.
+  // none stands in for a default.
   for (const command of [
     { type: "space.signin.start", id: "d1" },
     { type: "space.signin.start", id: "d2", url: "" },
@@ -122,7 +123,6 @@ test("space-29, space-82, space-98, space-99: a space command names the instance
     { type: "space.leave", id: "d12", repository },
     { type: "space.leave", id: "d13", repository, instance: "", confirmed: true },
     { type: "space.attach", id: "d14", repository, noticed: true },
-    { type: "space.attach", id: "d15", repository, instance },
     { type: "space.join", id: "d6", hostId: "42" },
     { type: "space.group.create", id: "d7", name: "Acme", path: "acme", parent: null },
     { type: "space.group.rename", id: "d8", group: "7", name: "Acme Corp" },
@@ -201,17 +201,17 @@ test("space-29: a sync, a diff and a move name the placement they are for, an in
   }
 });
 
-test("space-29: `space.sync` naming choices, join or noticed without a placement is refused", () => {
+test("space-29: `space.sync` naming choices or join without a placement is refused", () => {
   const instance = "https://spex.pub";
   const repository = "@spex.pub/acme/a-spex";
   const choices = { "sessions/a": "remote" };
   // Each is for one placement, which the sync names.
-  for (const fields of [{ choices }, { join: true }, { join: false }, { noticed: true }, { noticed: false }, { choices, join: true }, { choices, noticed: true }]) {
+  for (const fields of [{ choices }, { join: true }, { join: false }, { choices, join: true }, { choices, noticed: true }]) {
     const parsed = parseCommand({ type: "space.sync", id: "n1", repository, ...fields });
     assert.ok(!parsed.ok, JSON.stringify(fields));
     if (!parsed.ok) {
       assert.equal(parsed.id, "n1", "the refusal names the command");
-      assert.equal(parsed.error, "placement: required with choices, join or noticed");
+      assert.equal(parsed.error, "placement: required with choices or join");
     }
     for (const placement of [instance, null]) {
       const named = parseCommand({ type: "space.sync", id: "n2", repository, placement, ...fields });

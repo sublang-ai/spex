@@ -29,7 +29,8 @@ import { i18n } from "../i18n.js";
 import { instanceName } from "../lib/instances.js";
 import { openExternalBridge } from "../lib/space.js";
 import { usePlaceStore } from "../state/place-context.js";
-import { sendServerAct, serverPlace, useServerOpens } from "../state/server-opens.js";
+import { resumeSharedOpens, sendServerAct, serverPlace, useServerOpens } from "../state/server-opens.js";
+import { isLocalPlace } from "../state/store.js";
 import { causePhrase, signInAgainLabel } from "./SpaceSignIn.js";
 import { MoreMenu } from "./SpaceMenu.js";
 import { SECONDARY, type Note } from "./SpaceSurface.js";
@@ -76,6 +77,9 @@ export const approveLabel = (server: string): string =>
 export interface ServersRead {
   /** The last listing read; undefined until one is. */
   listing?: ServerListing;
+  /** A failed read, available to a destination form that must know
+   * which servers it can offer before committing. */
+  error?: string;
   /** Read the listing again. */
   reload(): void;
 }
@@ -88,24 +92,31 @@ export function useServers(key: string | undefined): ServersRead {
   const store = usePlaceStore();
   const landed = useServerOpens((state) => state.landed);
   const [listing, setListing] = useState<ServerListing>();
+  const [error, setError] = useState<string>();
   const reads = useRef(0);
   const reload = useCallback(() => {
     reads.current += 1;
     const read = reads.current;
+    setError(undefined);
     void Promise.resolve()
       .then(() => store.getClient().command("server.list", {}))
       .then((reply) => {
-        if (read === reads.current) setListing(reply);
+        if (read === reads.current) {
+          setListing(reply);
+          setError(undefined);
+          if (isLocalPlace(store.place)) resumeSharedOpens(reply);
+        }
       })
       // A listing that cannot be read leaves the last one standing; each
       // instance's own failure arrives in the reply.
-      .catch(() => {});
+      .catch((cause: Error) => { if (read === reads.current) setError(cause.message); });
   }, [store]);
   const first = useRef(landed);
   useEffect(() => {
     if (key === undefined) {
       reads.current += 1;
       setListing(undefined);
+      setError(undefined);
       return;
     }
     reload();
@@ -116,7 +127,7 @@ export function useServers(key: string | undefined): ServersRead {
     reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [landed]);
-  return { listing, reload };
+  return { listing, error, reload };
 }
 
 /** The servers of one group of an instance, as one line each beneath its

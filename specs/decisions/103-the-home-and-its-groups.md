@@ -42,6 +42,8 @@ Amended by [DR-132](132-team-servers.md) in "Spex adds no access control", your 
 Amended by [DR-159](159-projects-in-groups-opened-where-you-work.md) in the Space surface's rows: a row is a project, named as its code is, never a spex repository named `<name>-spex`; a group's own repository reads as the group's own sessions; the Git of the records is reached from a row's overflow and shown on no row.
 Amended by [DR-176](176-global-playbooks-and-a-placed-playbook-runs.md) in a player a project names and your roster lacks: the role runs on the Captain's agent until you set the player up, a row in Settings and no longer a config error.
 
+Amended by [DR-215](215-add-to-a-group-and-start-working.md) in the separate first-sharing acknowledgement.
+
 ## Context
 
 - Until now the home, Spex's folder `~/.spex` or `SPEX_HOME`, was one Git repository with one remote, so every session and intent of every project had the same audience. A person could not keep private work beside a team's, and a team could not share one project without sharing all.

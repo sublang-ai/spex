@@ -1177,51 +1177,25 @@ describe("SPACE: syncing from the row (space-11, space-12, space-15, space-16, s
     await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY, placement: ORIGIN, join: true }]));
   });
 
-  test("space-57: the first sync of records others share asks 'Share with <group> at <Space>?' over its three phrases; Share records it", async () => {
-    await renderGroups(repoState({ members: 3, noticed: false }));
+  test.each([
+    { members: 3, noticed: false, visibility: "private" as const },
+    { members: 3, noticed: false, visibility: "public" as const },
+    { members: null, noticed: false },
+    { members: 1, noticed: false },
+    { members: 3, noticed: true },
+  ])("space-57: an explicit first Sync records starts immediately regardless of legacy sharing flags (%j)", async (state) => {
+    await renderGroups(repoState({ ...state, lastSync: null }));
     fireEvent.click(syncControl());
-    let notice = screen.getByTestId("space-notice-confirm");
-    // Titled by the group the records are in — "Personal" for your own —
-    // and the Space, over three phrases, no sentence (space-57).
-    expect(notice.textContent).toContain("Share with Personal at Spex Example?");
-    expect(notice.textContent).toContain("All sessions: conversations, agent activity, and attachments");
-    expect(notice.textContent).toContain("Existing and future project records");
-    expect(notice.textContent).toContain("Removing access won’t erase copies members already saved");
-    expect(notice.textContent).not.toContain("Public: anyone can read");
-    expect(document.activeElement).toBe(within(notice).getByRole("button", { name: "Cancel" }));
-    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
-    expect(screen.queryByTestId("space-notice-confirm")).toBeNull();
-    expect(calls("space.sync")).toHaveLength(0);
-    fireEvent.click(syncControl());
-    fireEvent.click(within(screen.getByTestId("space-notice-confirm")).getByRole("button", { name: "Cancel" }));
-    expect(calls("space.sync")).toHaveLength(0);
-    fireEvent.click(syncControl());
-    notice = screen.getByTestId("space-notice-confirm");
-    fireEvent.click(within(notice).getByRole("button", { name: "Share" }));
-    // The notice is seen for that placement (space-29).
-    await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY, placement: ORIGIN, noticed: true }]));
-    cleanup();
-    // A public repository says its records are public.
-    await renderGroups(repoState({ members: 3, noticed: false, visibility: "public" }));
-    fireEvent.click(syncControl());
-    expect(screen.getByTestId("space-notice-confirm").textContent).toContain("Public: anyone can read");
-    cleanup();
-    // Once seen it is not said again, and a repository whose only
-    // member is the account says nothing.
-    // One whose count the host's read lacks, never synced from here, may
-    // have others: it says so too.
-    await renderGroups(repoState({ members: null, noticed: false, lastSync: null }));
-    fireEvent.click(syncControl());
-    expect(screen.getByTestId("space-notice-confirm").textContent).toContain("All sessions: conversations, agent activity, and attachments");
-    cleanup();
-    for (const over of [{ members: 3, noticed: true }, { members: 1, noticed: false }, { members: null, noticed: false }]) {
-      commandMock.mockClear();
-      await renderGroups(repoState(over));
-      fireEvent.click(syncControl());
-      expect(screen.queryByTestId("space-notice-confirm")).toBeNull();
-      await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY }]));
-      cleanup();
-    }
+    await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY }]));
+    expect(screen.queryByRole("button", { name: "Share" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
+    deliver(repoState({ ...state, sync: { phase: "running", op: "sync", step: "push", since: NOW, cancelable: true } }));
+    expect(syncWords()).toBe("Syncing…");
+    expect(syncControl().disabled).toBe(true);
+    deliver(repoState({ ...state, sync: { phase: "done", at: NOW, sent: 1, received: 0, pushed: true } }));
+    expect(syncWords()).toBe("Sync records");
+    expect(syncControl().disabled).toBe(false);
+    expect(calls("space.sync")).toHaveLength(1);
   });
 
   test("controls are disabled while disconnected", async () => {

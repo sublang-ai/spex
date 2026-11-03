@@ -8,6 +8,8 @@
 Accepted (2026-11-02) on the owner's request to remove the server's separate acknowledgement because it leaves a project waiting for a confirmation elsewhere on the page.
 Amends [DR-132](132-team-servers.md) in the first-open contract, [DR-133](133-one-desktop-over-several-cores.md) in rendering that contract, and [DR-159](159-projects-in-groups-opened-where-you-work.md) in opening a server when a project needs it.
 
+Amended by [DR-215](215-add-to-a-group-and-start-working.md) in the group action authorizing sharing and continuing through server opening.
+
 ## Context
 
 The first Open on a server waits for I understand below the server's line, separate from the project the person opened.

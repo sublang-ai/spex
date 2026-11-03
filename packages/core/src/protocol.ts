@@ -1541,7 +1541,7 @@ export const commandSchema = z.discriminatedUnion("type", [
     repository: repositoryKeySchema,
     /** `instance`: the one the choice is at. */
     choice: groupChoiceSchema,
-    /** The privacy notice was shown for a join into a repository with other members (space-57). */
+    /** Obsolete sharing acknowledgement, accepted and ignored (space-57). */
     noticed: z.boolean().optional(),
   }).strict(),
   /** A placement added at an instance the clone holds none at
@@ -1552,7 +1552,7 @@ export const commandSchema = z.discriminatedUnion("type", [
     repository: repositoryKeySchema,
     /** `instance`: the one the choice is at. */
     choice: groupChoiceSchema,
-    /** The privacy notice was shown for that placement (space-57). */
+    /** Obsolete sharing acknowledgement, accepted and ignored (space-57). */
     noticed: z.boolean().optional(),
   }).strict(),
   /** A placement left (space-98, DR-128): `instance` the placement's;
@@ -1561,10 +1561,9 @@ export const commandSchema = z.discriminatedUnion("type", [
    * not read. */
   z.object({ type: z.literal("space.leave"), id, repository: repositoryKeySchema, instance: instanceOriginSchema, confirmed: z.boolean().optional() }).strict(),
   /** A placement a placement file of the clone names, attached
-   * (space-99, DR-128): `instance` the one the file names; `noticed` the
-   * reader's Continue past that placement's sharing notice, which Attach
-   * is (space-90). */
-  z.object({ type: z.literal("space.attach"), id, repository: repositoryKeySchema, instance: instanceOriginSchema, noticed: z.boolean() }).strict(),
+   * (space-99, DR-128): `instance` the one the file names; selecting it
+   * authorizes sharing. The optional `noticed` field is ignored. */
+  z.object({ type: z.literal("space.attach"), id, repository: repositoryKeySchema, instance: instanceOriginSchema, noticed: z.boolean().optional() }).strict(),
   /** `instance`: the one the row stands under (space-1). */
   z.object({ type: z.literal("space.join"), id, instance: instanceOriginSchema, hostId: z.string().min(1), folder: z.string().min(1).optional() }).strict(),
   // Members of a spex repository's placement by its key — `instance` the
@@ -1622,7 +1621,7 @@ export const commandSchema = z.discriminatedUnion("type", [
       type: z.literal("space.sync"),
       id,
       repository: repositoryKeySchema,
-      /** The placement `choices`, `join` and `noticed` are for — its
+      /** The placement `choices` and `join` are for — its
        * instance's origin, or null for the path placement — required
        * with any of them (space-29, DR-128; parseCommand). */
       placement: instanceOriginSchema.nullable().optional(),
@@ -2444,6 +2443,7 @@ export interface PlacementState {
    * (space-8). */
   conflicts: SpaceConflict[];
   lastSync: { at: number; sent: number; received: number } | null;
+  /** Compatibility field: sharing is authorized by the destination, always true. */
   noticed: boolean;
   /** What the last sync left on its line (space-87). */
   outcome:
@@ -2855,11 +2855,11 @@ export function parseCommand(raw: unknown): ParseCommandResult {
       command.group !== undefined && command.instance === undefined) {
       return { ok: false, error: "instance: a group is named with its instance", id: command.id };
     }
-    // Choices, a join and a notice are each for one placement, which the
+    // Choices and a join are each for one placement, which the
     // sync names (space-29, DR-128).
     if (command.type === "space.sync" && command.placement === undefined &&
-      (command.choices !== undefined || command.join !== undefined || command.noticed !== undefined)) {
-      return { ok: false, error: "placement: required with choices, join or noticed", id: command.id };
+      (command.choices !== undefined || command.join !== undefined)) {
+      return { ok: false, error: "placement: required with choices or join", id: command.id };
     }
     return { ok: true, command };
   }

@@ -26,6 +26,8 @@ Amended by [DR-209](209-a-project-row-with-one-menu.md) in the project-row contr
 
 Amended by [DR-210](210-open-on-a-server-without-an-acknowledgement.md) in opening a server immediately from the explicit project-opening request.
 
+Amended by [DR-215](215-add-to-a-group-and-start-working.md) in adding a project also opening it on its chosen server.
+
 ## Context
 
 - The Space surface today lists spex repositories named `<name>-spex` under each group, each with Sync, an ahead-and-behind count, placement lines and "Place at…" and "Leave…"; every group heading carries Members, New subgroup, Rename and Delete; a namespace heading reads "ada-spex stands under your own group"; the servers stand in one flat list at the instance's foot with Open.

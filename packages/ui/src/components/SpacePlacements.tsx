@@ -15,9 +15,7 @@
 //
 // A reachable placement at a Space carries Members, its panel beneath
 // the line (space-62). The outcome the last sync left carries its way
-// forward: a first send waiting on the sharing confirm Continue, the
-// confirm "Share with <group> at <display name>?" standing beneath the
-// line (space-57); records started separately "Combine…", confirmed
+// forward: records started separately "Combine…", confirmed
 // inline (space-13); a stop Retry (space-15); and an unreachable
 // placement whose Space is signed in, on a row still reachable, Retry
 // reading the Spaces again (space-61). A placement a file of the clone
@@ -35,7 +33,6 @@ import type { GroupsState, InstanceGroupState, PlacementState, RepositoryState }
 
 import { usePlaceStore } from "../state/place-context.js";
 import { i18n } from "../i18n.js";
-import type { SpexCommandError } from "../lib/client.js";
 import { instanceOf } from "../lib/instances.js";
 import { alsoPlacedAt, governingOfPlacement, placementName, standingEntry } from "../lib/placements.js";
 import { cloneHere, lineOutcome, personalLabel, phraseNames, placementPhrase, seatName, type LinePhrase } from "../lib/space.js";
@@ -53,25 +50,6 @@ export function entryName(entry: InstanceGroupState): string {
   return entry.mine ? personalLabel() : `@${entry.login}`;
 }
 
-/** The group a placement is in, as the sharing confirm names it
- * (space-57): the entry it stands in at its Space — your own group's own
- * repository's being "Personal" — else the entry its path lies in, else
- * that path's parent as the Space holds it. */
-export function placementGroupName(groups: GroupsState, repo: RepositoryState, line: PlacementState): string {
-  const standing = standingEntry(groups, repo, line);
-  if (standing) return entryName(standing);
-  if (repo.own) return personalLabel();
-  const parent = line.path.split("/").slice(0, -1).join("/");
-  const instance = instanceOf(groups, line.instance);
-  if (instance) {
-    const lower = parent.toLowerCase();
-    const entry = instance.groups.find((each) => (each.login ?? each.fullPath).toLowerCase() === lower);
-    if (entry) return entryName(entry);
-    if (lower === instance.account.login.toLowerCase()) return personalLabel();
-  }
-  return parent || line.path;
-}
-
 /** The path of the group a placement is in at its Space (space-87):
  * the part of its path before the last "/", never the records' own
  * `-spex` name; none in your namespace there, which reads as Personal,
@@ -85,67 +63,6 @@ export function placementGroupPath(groups: GroupsState, repo: RepositoryState, l
   const login = instanceOf(groups, line.instance)?.account.login;
   return login !== undefined && parent.toLowerCase() === login.toLowerCase() ? null : parent;
 }
-
-/** The sharing confirm (space-57, DR-172): "Share with <group> at
- * <display name>?" over what goes there — every session whole, past and
- * future records, what members keep — and, where the records are public,
- * that anyone can read them; Share and Cancel, Cancel focused and Escape
- * cancelling (DR-010 §4). */
-export function SharingConfirm({
-  group,
-  name,
-  visibility,
-  disabled,
-  onShare,
-  onCancel,
-}: {
-  /** The group the records go to, "Personal" for your namespace. */
-  group: string;
-  /** The display name of the Space they go to. */
-  name: string;
-  visibility: PlacementState["visibility"];
-  disabled?: boolean;
-  onShare(): void;
-  onCancel(): void;
-}) {
-  return (
-    <InlineConfirm
-      question={
-        <span data-testid="space-sharing-confirm" className="flex min-w-0 basis-full flex-col gap-0.5">
-          <span className="font-medium">
-            {i18n._({
-              id: "Share with {group} at {name}?",
-              values: { group, name },
-              comment:
-                "the sharing confirm's title, before a project's records first go to a group others read; {group} is the group's name, or Personal; {name} the Space's display name",
-            })}
-          </span>
-          <ul className="list-disc pl-4 text-neutral-600 dark:text-neutral-300">
-            <li>{i18n._({ id: "All sessions: conversations, agent activity, and attachments", comment: "sharing scope: all conversation messages, agent actions and results, and attachments" })}</li>
-            <li>{i18n._({ id: "Existing and future project records", comment: "the sharing confirm: the records made before and after the share both go" })}</li>
-            <li>{i18n._({ id: "Removing access won’t erase copies members already saved", comment: "sharing consequence: revoking access does not erase copies members already saved" })}</li>
-            {visibility === "public" ? (
-              <li>{i18n._({ id: "Public: anyone can read", comment: "the sharing confirm, on records at a public place of the Space" })}</li>
-            ) : null}
-          </ul>
-        </span>
-      }
-      confirmLabel={i18n._({ id: "Share", comment: "the sharing confirm's control: send the records to the group" })}
-      cancelLabel={i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}
-      disabled={disabled}
-      onConfirm={onShare}
-      onCancel={onCancel}
-    />
-  );
-}
-
-/** The control a first send waiting on the sharing confirm offers,
- * opening that confirm (space-57, space-87). */
-export const continueLabel = (): string =>
-  i18n._({
-    id: "Continue",
-    comment: "beside \"Waiting for you to continue\": opens the sharing confirm for that project's first send to a group",
-  });
 
 /** "Combine…" (space-13, DR-172): records started separately at a Space
  * brought into one; its confirm follows. */
@@ -246,9 +163,9 @@ export function PlacementLines({
   );
 }
 
-/** What a placement's line answers for the reader (space-87): the
- * sharing confirm it owes, combining its records, or a retry. */
-type LineAct = "continue" | "combine" | "retry";
+/** What a placement's line answers for the reader (space-87):
+ * combining its records, or a retry. */
+type LineAct = "combine" | "retry";
 
 /** One placement's line (space-87): its Space, its path there and its
  * phrase, each truncating with its title, then the acts on that
@@ -281,7 +198,7 @@ function PlacementLine({
   const spaceFetch = store((state) => state.spaceFetch);
   const spaceRefresh = store((state) => state.spaceRefresh);
   const spaceLastAct = store((state) => state.spaceLastAct);
-  const [opened, setOpened] = useState<"members" | "notice" | "combine">();
+  const [opened, setOpened] = useState<"members" | "combine">();
   const [membersPending, setMembersPending] = useState(false);
   useEffect(() => { onPendingChange(line.instance, membersPending); }, [line.instance, membersPending, onPendingChange]);
   useEffect(() => () => { onPendingChange(line.instance, false); }, [line.instance, onPendingChange]);
@@ -291,17 +208,11 @@ function PlacementLine({
   // until the machine's state moves (DR-010 §3, space-29).
   const [accepted, setAccepted] = useState<{ act: LineAct; key: string }>();
   const [error, setError] = useState<string>();
-  // What the confirm's Share sends beside `noticed`: the join a refusal
-  // for want of the confirm held back (space-57, space-13).
-  const [carried, setCarried] = useState<{ join?: true }>({});
   const nameId = useId();
   const membersId = useId();
   const membersRef = useRef<HTMLButtonElement>(null);
-  const continueRef = useRef<HTMLButtonElement>(null);
   const combineRef = useRef<HTMLButtonElement>(null);
   const retryRef = useRef<HTMLButtonElement>(null);
-  // The control the confirm answers, which Cancel hands focus back to.
-  const askedRef = useRef<HTMLButtonElement | null>(null);
   const name = placementName(groups, line);
   const groupPath = placementGroupPath(groups, repo, line);
   const phrase = placementPhrase(repo, line, now, dismissed, phraseNames(groups, repo, seatName(store.place)));
@@ -315,10 +226,9 @@ function PlacementLine({
   const pending = busy !== undefined || accepted !== undefined || running;
   const workingOn = (act: LineAct): boolean => busy === act || accepted?.act === act;
   // The outcome the last sync left on the line, its way forward beside
-  // it (space-87): the confirm owed (space-57), records started
-  // separately (space-13), a stop that retrying can help (space-15).
+  // it (space-87): records started separately (space-13), a stop that
+  // retrying can help (space-15).
   const outcome = lineOutcome(repo, line, dismissed);
-  const showContinue = line.attached && line.instance !== null && outcome?.kind === "waiting";
   const showCombine =
     line.attached &&
     (outcome?.kind === "unrelated" ||
@@ -369,24 +279,13 @@ function PlacementLine({
     }, 0);
   };
 
-  /** Say the sharing confirm beneath the line, answering `from`, its
-   * Share sending what `answer` holds beside `noticed` (space-57). */
-  const askConfirm = (from: HTMLButtonElement | null, answer: { join?: true } = {}) => {
-    askedRef.current = from;
-    setCarried(answer);
-    setError(undefined);
-    setOpened("notice");
-  };
-
   /** Send one of the line's acts: accepted at once, its control busy
-   * until the machine's state moves (space-29). A sync refused for the
-   * confirm this placement owes — one the page's read missed — says the
-   * confirm on the line instead, its Share carrying what was asked
-   * (space-57); any other refusal stands on the line. */
+   * until the machine's state moves (space-29). A refusal stands on
+   * the line. */
   const send = async (
     act: LineAct,
     run: () => Promise<unknown>,
-    options: { holds?: boolean; answer?: { join?: true }; from?: HTMLButtonElement | null } = {},
+    options: { holds?: boolean } = {},
   ): Promise<void> => {
     const key = machineKey;
     setBusy(act);
@@ -395,12 +294,6 @@ function PlacementLine({
       await run();
       if (options.holds !== false) setAccepted({ act, key });
     } catch (cause) {
-      const details = (cause as SpexCommandError).details;
-      const named = details?.placement === undefined ? line.instance : details.placement;
-      if (options.answer && details?.notice === true && named === line.instance) {
-        askConfirm(options.from ?? null, options.answer);
-        return;
-      }
       const message = (cause as Error).message;
       setError(message);
       onNote(message);
@@ -409,20 +302,10 @@ function PlacementLine({
     }
   };
 
-  /** Sync this placement with its confirm answered (space-57), and its
-   * join where the confirm held one back (space-13). */
-  const share = () => {
-    settle(askedRef);
-    void send("continue", () => spaceSync(repo.key, { placement: line.instance, ...carried, noticed: true }));
-  };
-
   /** Combine this placement's records with the clone's (space-13). */
   const combine = () => {
     settle(combineRef);
-    void send("combine", () => spaceSync(repo.key, { placement: line.instance, join: true }), {
-      answer: { join: true },
-      from: combineRef.current,
-    });
+    void send("combine", () => spaceSync(repo.key, { placement: line.instance, join: true }));
   };
 
   /** Run again what stopped (space-15): a stopped check checks again,
@@ -437,17 +320,12 @@ function PlacementLine({
       return;
     }
     if (sync.phase === "stopped" && sync.op === "check") {
-      void send("retry", () => spaceFetch(repo.key), { from: retryRef.current });
+      void send("retry", () => spaceFetch(repo.key));
       return;
     }
     const act = spaceLastAct(repo.key);
     const joined = act?.op === "join" ? act.instance : undefined;
-    void send("retry", () => spaceSync(repo.key, joined !== undefined ? { placement: joined, join: true } : {}), {
-      // The confirm this line owes carries the join where it is this
-      // line's (space-57).
-      answer: joined === line.instance ? { join: true } : {},
-      from: retryRef.current,
-    });
+    void send("retry", () => spaceSync(repo.key, joined !== undefined ? { placement: joined, join: true } : {}));
   };
 
   const origin = line.instance ?? "path";
@@ -484,7 +362,7 @@ function PlacementLine({
         >
           {phrase.text}
         </span>
-        {showMembers || showContinue || showCombine || showRetry ? (
+        {showMembers || showCombine || showRetry ? (
           <div className="ml-auto flex shrink-0 items-center gap-1">
             {showMembers ? (
               <button
@@ -508,20 +386,6 @@ function PlacementLine({
             ) : null}
             {/* The outcome's way forward stands last, the line's primary
                 act (DR-041). */}
-            {showContinue ? (
-              <button
-                ref={continueRef}
-                type="button"
-                data-testid="space-line-continue"
-                aria-describedby={nameId}
-                aria-expanded={opened === "notice"}
-                className={`${SECONDARY} shrink-0 whitespace-nowrap`}
-                disabled={!connected || pending || membersPending}
-                onClick={() => (opened === "notice" ? close(continueRef) : askConfirm(continueRef.current))}
-              >
-                {continueLabel()}
-              </button>
-            ) : null}
             {showCombine ? (
               <button
                 ref={combineRef}
@@ -561,18 +425,6 @@ function PlacementLine({
         <p data-testid="space-line-error" role="alert" className="px-2 text-xs text-red-600 dark:text-red-400">
           {error}
         </p>
-      ) : null}
-      {opened === "notice" && line.instance !== null ? (
-        <div data-testid="space-line-notice" className="px-2">
-          <SharingConfirm
-            group={placementGroupName(groups, repo, line)}
-            name={name}
-            visibility={line.visibility}
-            disabled={!connected}
-            onShare={share}
-            onCancel={() => close(askedRef)}
-          />
-        </div>
       ) : null}
       {opened === "combine" && showCombine ? (
         <div data-testid="space-line-combine-confirm" className="px-2">

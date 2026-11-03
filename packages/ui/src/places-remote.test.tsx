@@ -339,7 +339,7 @@ beforeEach(() => {
   activateLanguage("en");
   // The servers' flows are the page's own, one per server: each test
   // starts with none (state/server-opens).
-  useServerOpens.setState({ lines: {}, pending: {}, landed: 0 });
+  useServerOpens.setState({ lines: {}, pending: {}, shared: {}, recovery: undefined, recoveryRead: undefined, recoveryServers: undefined, landed: 0 });
   local = fakeClient();
   alpha = fakeClient();
   beta = fakeClient();

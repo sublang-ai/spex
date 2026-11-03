@@ -345,10 +345,10 @@ export interface AppState extends AttachmentState {
   spaceForget(instance: string): Promise<void>;
   /** Give a local-only spex repository a home at an instance (space-58):
    * a listed spex repository by its host id, or a new one in a group,
-   * the choice naming the instance it is at (space-29). `noticed` once
-   * the sharing notice was seen for a join (space-57). Accepted at
-   * once, outcome as state. */
-  spacePick(repository: string, choice: SpaceGroupChoice, noticed?: boolean): Promise<void>;
+   * the choice naming the instance it is at (space-29). The choice
+   * authorizes syncing there (space-57). Accepted at once, outcome as
+   * state. */
+  spacePick(repository: string, choice: SpaceGroupChoice): Promise<void>;
   /** Clone a spex repository an instance lists and this device lacks
    * (space-63), `instance` the one its row stands under, pairing it with
    * a folder. Accepted at once. */
@@ -392,13 +392,13 @@ export interface AppState extends AttachmentState {
    * once, outcome as state. */
   spaceFetch(repository: string): Promise<void>;
   /** Sync one spex repository (space-11, space-12), with choices
-   * (space-18), as a join (space-13), or with its first-push notice
-   * seen (space-57), each for the placement `placement` names — its
-   * instance's origin, null for the path placement (space-29): accepted
+   * (space-18), or as a join (space-13), each for the placement
+   * `placement` names — its instance's origin, null for the path
+   * placement (space-29): accepted
    * at once, outcome as state. */
   spaceSync(
     repository: string,
-    input: { placement?: string | null; choices?: Record<string, SpaceChoice>; join?: boolean; noticed?: boolean },
+    input: { placement?: string | null; choices?: Record<string, SpaceChoice>; join?: boolean },
   ): Promise<void>;
   /** Stop the running transport step (space-16). */
   spaceCancel(repository: string): Promise<boolean>;
@@ -2004,8 +2004,8 @@ function placeState(
       set({ space, spaceError: undefined, spaceReadAt: Date.now() });
     },
 
-    async spacePick(repository, choice, noticed): Promise<void> {
-      await getClient().command("space.pick", { repository, choice, ...(noticed ? { noticed: true } : {}) });
+    async spacePick(repository, choice): Promise<void> {
+      await getClient().command("space.pick", { repository, choice });
     },
 
     async spaceJoin(instance: string, hostId: string, folder?: string): Promise<void> {
@@ -2078,7 +2078,6 @@ function placeState(
         ...(input.placement !== undefined ? { placement: input.placement } : {}),
         ...(input.choices !== undefined ? { choices: input.choices } : {}),
         ...(input.join !== undefined ? { join: input.join } : {}),
-        ...(input.noticed !== undefined ? { noticed: input.noticed } : {}),
       });
     },
 

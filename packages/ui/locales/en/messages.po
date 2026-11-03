@@ -538,6 +538,10 @@ msgstr "{name} agent"
 msgid "{name} holds no records yet; Sync will send these"
 msgstr "{name} holds no records yet; Sync will send these"
 
+#: src/components/GroupTransferProgress.tsx
+msgid "{name} is ready on {server}"
+msgstr "{name} is ready on {server}"
+
 #: src/components/AgentSettings.tsx
 msgid "{name} settings for this conversation"
 msgstr "{name} settings for this conversation"
@@ -1028,11 +1032,6 @@ msgstr "Aborting…"
 msgid "Accepts {provider} accounts"
 msgstr "Accepts {provider} accounts"
 
-#. Personal does not imply that a project is private
-#: src/components/SpaceGroups.tsx
-msgid "Access follows this project's members and visibility"
-msgstr "Access follows this project's members and visibility"
-
 #: src/components/SpaceMembers.tsx
 msgid "Access starts immediately when you add them."
 msgstr "Access starts immediately when you add them."
@@ -1174,6 +1173,10 @@ msgstr "Add this project"
 #: src/components/Composer.tsx
 msgid "Add this to the project's Up next without sending it"
 msgstr "Add this to the project's Up next without sending it"
+
+#: src/components/GroupTransferProgress.tsx
+msgid "Add to {group}"
+msgstr "Add to {group}"
 
 #. on a project in no group: opens the groups at each Space its records may be shared into, Personal first
 #: src/components/SpaceGroups.tsx
@@ -1371,13 +1374,6 @@ msgstr "All here"
 #: src/components/DashboardSurface.tsx
 msgid "All projects"
 msgstr "All projects"
-
-#. sharing scope: all conversation messages, agent actions and results, and attachments
-#. sharing scope: all conversation messages, agent actions and results, and attachments
-#: src/components/SpaceGroups.tsx
-#: src/components/SpacePlacements.tsx
-msgid "All sessions: conversations, agent activity, and attachments"
-msgstr "All sessions: conversations, agent activity, and attachments"
 
 #. project palette: every project of the member's groups is open on this computer already
 #: src/components/ProjectPalette.tsx
@@ -1804,7 +1800,6 @@ msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a 
 #. leave the editor without changing anything
 #. leave the editor without changing anything
 #. leave the editor without changing anything
-#. leave the editor without changing anything
 #. stop the running compile
 #: src/components/AgentCards.tsx
 #: src/components/AgentEditor.tsx
@@ -1821,7 +1816,6 @@ msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a 
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceInstance.tsx
 #: src/components/SpaceMembers.tsx
-#: src/components/SpacePlacements.tsx
 #: src/components/SpaceRepairs.tsx
 #: src/components/SpaceSignIn.tsx
 #: src/components/SpecEditor.tsx
@@ -2065,6 +2059,10 @@ msgstr "Choose for {count, plural, one {# conflict} other {# conflicts}}"
 #: src/components/SpaceGroups.tsx
 msgid "Choose group"
 msgstr "Choose group"
+
+#: src/components/SpaceGroups.tsx
+msgid "Choose server"
+msgstr "Choose server"
 
 #. a step: the analyst chooses which workflows the request takes
 #: src/lib/step-words.ts
@@ -2445,6 +2443,10 @@ msgstr "Compiling since {age}"
 msgid "Compiling…"
 msgstr "Compiling…"
 
+#: src/components/GroupTransferProgress.tsx
+msgid "Completed"
+msgstr "Completed"
+
 #: src/components/AgentActiveTime.tsx
 msgid "Completed active time this session: {span} · parallel calls overlap"
 msgstr "Completed active time this session: {span} · parallel calls overlap"
@@ -2507,6 +2509,10 @@ msgstr "Connect Codex with a ChatGPT subscription or an official OpenAI API key:
 msgid "Connect project"
 msgstr "Connect project"
 
+#: src/components/GroupTransferProgress.tsx
+msgid "Connect to {server}"
+msgstr "Connect to {server}"
+
 #. matching projects already in the selected Space; connecting combines their records
 #: src/components/SpaceGroups.tsx
 msgid "Connect to an existing project"
@@ -2553,6 +2559,11 @@ msgstr "Connecting…"
 msgid "connection closed"
 msgstr "connection closed"
 
+#. a chosen server disconnected before the project opened
+#: src/state/server-opens.ts
+msgid "Connection closed"
+msgstr "Connection closed"
+
 #: src/components/SpaceMembers.tsx
 msgid "Connection lost. Reconnect to add the remaining members."
 msgstr "Connection lost. Reconnect to add the remaining members."
@@ -2564,11 +2575,6 @@ msgstr "Connection restored."
 #: src/App.tsx
 msgid "Connection to the Spex core lost — reconnecting."
 msgstr "Connection to the Spex core lost — reconnecting."
-
-#. beside "Waiting for you to continue": opens the sharing confirm for that project's first send to a group
-#: src/components/SpacePlacements.tsx
-msgid "Continue"
-msgstr "Continue"
 
 #. a sign-in in flight: it continues on the Space's page in the browser
 #: src/components/SpaceSignIn.tsx
@@ -2983,7 +2989,7 @@ msgstr "Describe your goal. AI helps write specs for how the system should work 
 msgid "desktop"
 msgstr "desktop"
 
-#. review of the project group's destination before confirmation
+#. the selected project group and Space
 #: src/components/SpaceGroups.tsx
 msgid "Destination"
 msgstr "Destination"
@@ -3362,13 +3368,6 @@ msgstr "Example"
 msgid "Example: {title}"
 msgstr "Example: {title}"
 
-#. the sharing confirm: the records made before and after the share both go
-#. the sharing confirm: the records made before and after the share both go
-#: src/components/SpaceGroups.tsx
-#: src/components/SpacePlacements.tsx
-msgid "Existing and future project records"
-msgstr "Existing and future project records"
-
 #: src/components/ProjectPalette.tsx
 msgid "Existing project"
 msgstr "Existing project"
@@ -3461,6 +3460,7 @@ msgid "failed"
 msgstr "failed"
 
 #. draft state chip, at most 14 characters: the last compile failed
+#: src/components/GroupTransferProgress.tsx
 #: src/lib/drafts.ts
 msgid "Failed"
 msgstr "Failed"
@@ -3841,11 +3841,6 @@ msgstr "Global"
 msgid "Go to Dashboard, Projects, Playbooks, Space, Settings"
 msgstr "Go to Dashboard, Projects, Playbooks, Space, Settings"
 
-#. effect of adding the project's records to a group
-#: src/components/SpaceGroups.tsx
-msgid "Group members can access these records"
-msgstr "Group members can access these records"
-
 #. the field naming a new group at the Space
 #: src/components/SpaceMembers.tsx
 msgid "Group name"
@@ -3955,6 +3950,10 @@ msgstr "implement a coding intent in reviewed, one-commit phases, using an inten
 #: src/lib/step-words.ts
 msgid "Implement an IR task"
 msgstr "Implement an IR task"
+
+#: src/components/GroupTransferProgress.tsx
+msgid "In progress"
+msgstr "In progress"
 
 #: src/App.tsx
 #: src/components/NavRail.tsx
@@ -4316,6 +4315,11 @@ msgstr "Loading model options…"
 #: src/components/PublishControl.tsx
 msgid "Loading registry…"
 msgstr "Loading registry…"
+
+#. reading available servers before the project's group destination is committed
+#: src/components/SpaceGroups.tsx
+msgid "Loading servers…"
+msgstr "Loading servers…"
 
 #: src/components/DraftConversation.tsx
 msgid "Loading the conversation…"
@@ -5241,6 +5245,7 @@ msgstr "Open on {server}"
 
 #. a resolved repair's control: shows the project it made
 #. open the workspace for a project already available at this place
+#: src/components/GroupTransferProgress.tsx
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceRepairs.tsx
 msgid "Open project"
@@ -5327,6 +5332,10 @@ msgstr "Opened the decision records"
 msgid "opened the pull request"
 msgstr "opened the pull request"
 
+#: src/components/GroupTransferProgress.tsx
+msgid "Opening {name} on {server}"
+msgstr "Opening {name} on {server}"
+
 #. a project's row while it is opened on a team server: the seat opens, signs in, and downloads it; {server} is the server's name
 #: src/components/SpaceGroups.tsx
 msgid "Opening on {server}…"
@@ -5368,6 +5377,11 @@ msgstr "Opens a playbook named {id} with the normalized text ready to paste — 
 #: src/components/SpaceGroups.tsx
 msgid "Opens Credentials in this server's Settings at {host}"
 msgstr "Opens Credentials in this server's Settings at {host}"
+
+#. the selected group has one server; Add also opens this project there after uploading records
+#: src/components/SpaceGroups.tsx
+msgid "Opens on {server}"
+msgstr "Opens on {server}"
 
 #. compile phase: slc optimizes the spec items
 #: src/lib/compile-log.ts
@@ -5689,11 +5703,6 @@ msgstr "Project folder saved: {path}"
 msgid "Project path"
 msgstr "Project path"
 
-#. what adding a project to a group syncs
-#: src/components/SpaceGroups.tsx
-msgid "Project records"
-msgstr "Project records"
-
 #: src/components/SpaceGroups.tsx
 msgid "Project: {name}"
 msgstr "Project: {name}"
@@ -5750,13 +5759,6 @@ msgstr "provider hints"
 #: src/components/SourcesTabs.tsx
 msgid "PRs"
 msgstr "PRs"
-
-#. the sharing confirm, on records at a public place of the Space
-#. the sharing confirm, on records at a public place of the Space
-#: src/components/SpaceGroups.tsx
-#: src/components/SpacePlacements.tsx
-msgid "Public: anyone can read"
-msgstr "Public: anyone can read"
 
 #. upload the spec package to the registry
 #. upload the spec package to the registry
@@ -6213,13 +6215,6 @@ msgstr "Removed {space} from this list"
 msgid "Removes {name} from spex.yaml and uninstalls it"
 msgstr "Removes {name} from spex.yaml and uninstalls it"
 
-#. sharing consequence: revoking access does not erase copies members already saved
-#. sharing consequence: revoking access does not erase copies members already saved
-#: src/components/SpaceGroups.tsx
-#: src/components/SpacePlacements.tsx
-msgid "Removing access won’t erase copies members already saved"
-msgstr "Removing access won’t erase copies members already saved"
-
 #. queue row control, busy: the removal is in flight
 #. the removal is in flight
 #. the removal is in flight
@@ -6363,6 +6358,7 @@ msgstr "resume tokens for this computer's agent conversations; they work nowhere
 #. read the record again
 #. read the registry account's orgs again
 #. read the specs tree again
+#. run the stopped step again
 #. run the stopped step again
 #. run the stopped step again
 #. run the stopped step again
@@ -6749,6 +6745,11 @@ msgstr "sends when this turn ends"
 msgid "sent to the agent"
 msgstr "sent to the agent"
 
+#. choose where Add opens the project after uploading records
+#: src/components/SpaceGroups.tsx
+msgid "Server"
+msgstr "Server"
+
 #: src/components/SpaceGroups.tsx
 msgid "Server: {name}"
 msgstr "Server: {name}"
@@ -6897,16 +6898,6 @@ msgstr "Settled — {title}"
 #: src/components/AgentCards.tsx
 msgid "Several models"
 msgstr "Several models"
-
-#. the sharing confirm's control: send the records to the group
-#: src/components/SpacePlacements.tsx
-msgid "Share"
-msgstr "Share"
-
-#. the sharing confirm's title, before a project's records first go to a group others read; {group} is the group's name, or Personal; {name} the Space's display name
-#: src/components/SpacePlacements.tsx
-msgid "Share with {group} at {name}?"
-msgstr "Share with {group} at {name}?"
 
 #. entry mark: this file syncs and is already sent
 #: src/lib/space.ts
@@ -8120,6 +8111,7 @@ msgstr "transcript could not be loaded: {reason}"
 #. error boundary: re-render the surface in place
 #. on a project of your groups whose open stopped: open it again
 #. on a team server's project whose code download failed: open it again, downloading its code into the folder the server allocated
+#: src/components/GroupTransferProgress.tsx
 #: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
 #: src/main.tsx
@@ -8308,6 +8300,10 @@ msgstr "Updating…"
 msgid "Upload failed"
 msgstr "Upload failed"
 
+#: src/components/GroupTransferProgress.tsx
+msgid "Upload records"
+msgstr "Upload records"
+
 #: src/components/ComposerAttachments.tsx
 msgid "Uploading {name}"
 msgstr "Uploading {name}"
@@ -8441,6 +8437,10 @@ msgstr "Wait for the running turn to finish, or abort it, before removing"
 msgid "waiting"
 msgstr "waiting"
 
+#: src/components/GroupTransferProgress.tsx
+msgid "Waiting"
+msgstr "Waiting"
+
 #: src/components/QueuedIntentPresentation.tsx
 msgid "waiting — current work failed"
 msgstr "waiting — current work failed"
@@ -8480,11 +8480,6 @@ msgstr "Waiting for a member who can prepare its branch in {group}"
 #: src/lib/status-words.ts
 msgid "waiting for you"
 msgstr "waiting for you"
-
-#. a project's row or placement line: its first send to a Space waits for the sharing confirm; Continue stands beside it
-#: src/lib/space.ts
-msgid "Waiting for you to continue"
-msgstr "Waiting for you to continue"
 
 #: src/components/CompileBand.tsx
 msgid "waiting for your queued message"

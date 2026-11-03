@@ -1337,21 +1337,6 @@ msgstr "配置无效：{errors}"
 msgid "config must be a YAML mapping"
 msgstr "配置必须是 YAML 映射"
 
-#. Refusal of attaching a project's records at a Space until the reader has answered the sharing confirm: every record reaches its members there; {name} is the project
-#: src/space.ts
-msgid "Confirm sharing before attaching {name}"
-msgstr "关联 {name} 前请先确认共享"
-
-#. Refusal of joining a project's records that other members share until the reader has answered the sharing confirm; {name} is the project
-#: src/space.ts
-msgid "Confirm sharing before joining {name}"
-msgstr "加入 {name} 前请先确认共享"
-
-#. Refusal of the first send of a project's records to a Space where other members share them, until the reader has answered the sharing confirm; {name} is the project
-#: src/space.ts
-msgid "Confirm sharing before the first sync of {name}"
-msgstr "首次同步 {name} 前请先确认共享"
-
 #. Guidance under a stopped removal of a project's records from one Space: confirming again removes them there whatever they hold
 #: src/space.ts
 msgid "Confirm to remove it anyway."

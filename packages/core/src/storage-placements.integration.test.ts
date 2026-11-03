@@ -215,7 +215,7 @@ test("storage-41, storage-12: a placement file that does not read as its encodin
   assert.deepEqual(await lines(), [held]);
 });
 
-test("storage-5, space-22, space-5, space-15: this device's last sync and notice are kept per placement under sync:<repository>:<placement>:, a former sync:<repository>:last and :noticed reading as the first placement's — a path placement's kept under its own name once a pick places the clone at an instance in front of it, an instance placement's until its next sync records its own, which removes them — and a placement dropped takes its own alone", async (t) => {
+test("storage-5, space-22, space-5, space-15: this device's last sync is kept per placement and legacy notice values remain inert under sync:<repository>:<placement>:, a former sync:<repository>:last and :noticed reading as the first placement's — a path placement's kept under its own name once a pick places the clone at an instance in front of it, an instance placement's until its next sync records its own, which removes them — and a placement dropped takes its own alone", async (t) => {
   const host = await startHost();
   const folder = hostFolder(host);
   const home = await startHome("per-placement", { host, project: false });
@@ -241,7 +241,7 @@ test("storage-5, space-22, space-5, space-15: this device's last sync and notice
     prefs[`sync:${local.key}:last`] = former;
   });
   const pathOnly = await home.client.repository(local.key);
-  assert.deepEqual(lines(pathOnly), [[null, former, false]]);
+  assert.deepEqual(lines(pathOnly), [[null, former, true]]);
 
   // A pick places it at the stand-in, in front of its path placement:
   // the path placement keeps that record under its own name, following
@@ -262,7 +262,7 @@ test("storage-5, space-22, space-5, space-15: this device's last sync and notice
   assert.ok(pickedLast && pickedLast.at > former.at, JSON.stringify(pickedLast));
   assert.deepEqual(syncRecordsOf(home.dataDir, key), { [`sync:${key}:${folder}:last`]: pickedLast, [`sync:${key}:origin:last`]: former });
   assert.deepEqual(syncRecordsOf(home.dataDir, local.key), {});
-  assert.deepEqual(lines(picked), [[host.url, pickedLast, false], [null, former, false]]);
+  assert.deepEqual(lines(picked), [[host.url, pickedLast, true], [null, former, true]]);
 
   // A former record of the repository reads as its first placement's —
   // now its instance placement — the path placement reading its own,
@@ -276,7 +276,7 @@ test("storage-5, space-22, space-5, space-15: this device's last sync and notice
     prefs[`sync:${key}:noticed`] = true;
   });
   const reread = await home.client.repository(key);
-  assert.deepEqual(lines(reread), [[host.url, earlier, true], [null, former, false]]);
+  assert.deepEqual(lines(reread), [[host.url, earlier, true], [null, former, true]]);
   const synced = await home.client.settle("space.sync", { repository: key }, 30_000);
   assert.equal(synced.sync.phase, "done", JSON.stringify(synced.sync));
   const syncedLast = placementOf(synced, host.url).lastSync;
@@ -288,7 +288,7 @@ test("storage-5, space-22, space-5, space-15: this device's last sync and notice
     [`sync:${key}:${folder}:noticed`]: true,
     [`sync:${key}:origin:last`]: pathSynced,
   });
-  assert.deepEqual(lines(synced), [[host.url, syncedLast, true], [null, pathSynced, false]]);
+  assert.deepEqual(lines(synced), [[host.url, syncedLast, true], [null, pathSynced, true]]);
 
   // The path placement dropped takes its own record alone (space-5).
   const dropped = repositoryOf(await home.client.expectOk("space.remote.set", { repository: key, url: null }), key);
@@ -296,7 +296,7 @@ test("storage-5, space-22, space-5, space-15: this device's last sync and notice
   assert.deepEqual(lines(dropped), [[host.url, syncedLast, true]]);
 });
 
-test("storage-42, storage-36, storage-34, storage-5, space-57, space-60: two instances over one Git backend, a project other members share placed at the first and synced after the notice; the first signed out, that project's sync follows the second, leaving placements/ holding the second's file, naming the same id, in place of the first's, its remote renamed to the second's folder with the id in its section, and its last sync and notice re-keyed to that remote in the same step", async (t) => {
+test("storage-42, storage-36, storage-34, storage-5, space-57, space-60: two instances over one Git backend, a project other members share placed at the first and synced without an acknowledgement; the first signed out, that project's sync follows the second, leaving placements/ holding the second's file, naming the same id, in place of the first's, its remote renamed to the second's folder with the id in its section, and its last sync and inert legacy notice re-keyed to that remote in the same step", async (t) => {
   const first = await startHost();
   const second = await startHost({ gitBackend: first, displayName: "Second stand-in" });
   const firstFolder = hostFolder(first);
@@ -315,17 +315,17 @@ test("storage-42, storage-36, storage-34, storage-5, space-57, space-60: two ins
   const key = hostKey(first, `${LOGIN}/team-spex`);
   const followed = hostKey(second, `${LOGIN}/team-spex`);
 
-  // Placed at the first by its Join, and synced once the notice is seen:
-  // its notice and its last sync recorded under the first's remote
+  // Placed at the first by its Join, and synced immediately:
+  // its last sync is recorded under the first's remote
   // (space-57, space-22, storage-5).
   from = home.client.mark();
   await home.client.expectOk("space.join", { instance: first.url, hostId: team.id });
   await home.client.waitRepository(from, key, (repository) => repository.state === "reachable" && repository.sync.phase === "idle", 30_000);
-  await home.client.expectError("space.sync", { repository: key }, "invalid_request", /^Confirm sharing before/);
-  const once = await home.client.settle("space.sync", { repository: key, placement: first.url, noticed: true }, 30_000);
+  const once = await home.client.settle("space.sync", { repository: key }, 30_000);
   const onceLine = placementOf(once, first.url);
   assert.deepEqual([once.sync.phase, onceLine.noticed], ["done", true], JSON.stringify(once.sync));
-  assert.deepEqual(syncRecordsOf(home.dataDir, key), { [`sync:${key}:${firstFolder}:last`]: onceLine.lastSync, [`sync:${key}:${firstFolder}:noticed`]: true });
+  assert.deepEqual(syncRecordsOf(home.dataDir, key), { [`sync:${key}:${firstFolder}:last`]: onceLine.lastSync });
+  rewritePrefs(home.dataDir, (prefs) => { prefs[`sync:${key}:${firstFolder}:noticed`] = false; });
   assert.deepEqual(readdirSync(join(clonePath(home.dataDir, key), "placements")), [`${firstFolder}.yaml`]);
 
   // The first signed out, its sync follows the second at Check: by its
@@ -360,7 +360,7 @@ test("storage-42, storage-36, storage-34, storage-5, space-57, space-60: two ins
     bytes: placementBytes(second.url, team.id),
     remotes: [secondFolder],
     id: team.id,
-    records: { [`sync:${followed}:${secondFolder}:last`]: onceLine.lastSync, [`sync:${followed}:${secondFolder}:noticed`]: true },
+    records: { [`sync:${followed}:${secondFolder}:last`]: onceLine.lastSync, [`sync:${followed}:${secondFolder}:noticed`]: false },
     read: [second.url, second.url, onceLine.lastSync, true],
   });
   // In one step with the remote's rename: no state the sync broadcast
@@ -370,7 +370,7 @@ test("storage-42, storage-36, storage-34, storage-5, space-57, space-60: two ins
   }
   // Its push to the second records its last sync there.
   assert.ok(movedLine.lastSync && onceLine.lastSync && movedLine.lastSync.at >= onceLine.lastSync.at, JSON.stringify(movedLine.lastSync));
-  assert.deepEqual({ ...syncRecordsOf(home.dataDir, key), ...syncRecordsOf(home.dataDir, followed) }, { [`sync:${followed}:${secondFolder}:last`]: movedLine.lastSync, [`sync:${followed}:${secondFolder}:noticed`]: true });
+  assert.deepEqual({ ...syncRecordsOf(home.dataDir, key), ...syncRecordsOf(home.dataDir, followed) }, { [`sync:${followed}:${secondFolder}:last`]: movedLine.lastSync, [`sync:${followed}:${secondFolder}:noticed`]: false });
   assert.deepEqual(readdirSync(join(clone, "placements")).sort(), [`${secondFolder}.yaml`].sort());
 });
 
@@ -478,7 +478,7 @@ test("storage-40, storage-37, storage-34, storage-38, space-91, space-97, space-
   await signIn(a, second);
   const acme = second.script.groups.find((group) => group.kind === "group" && group.fullPath === "acme");
   assert.ok(acme, "the second's acme");
-  const placed = await a.client.settle("space.place", { repository: key, choice: { kind: "create", instance: second.url, groupId: acme.id, name: "shared" }, noticed: true }, 30_000);
+  const placed = await a.client.settle("space.place", { repository: key, choice: { kind: "create", instance: second.url, groupId: acme.id, name: "shared" } }, 30_000);
   assert.equal(placed.sync.phase, "done", JSON.stringify(placed.sync));
   assert.deepEqual(placed.placements.map((line) => [line.instance, line.outcome?.kind]), [[host.url, "synced"], [second.url, "synced"]]);
   const there = second.script.repositories.find((repository) => repository.group.fullPath === "acme" && repository.path === "shared-spex");
@@ -491,7 +491,7 @@ test("storage-40, storage-37, storage-34, storage-38, space-91, space-97, space-
   assert.equal(brought.sync.phase, "done", JSON.stringify(brought.sync));
   assert.equal(readFileSync(join(cloneB, secondFile), "utf8"), placementBytes(second.url, there.id));
   assert.deepEqual(brought.placements.map((line) => [line.instance, line.attached]), [[host.url, true], [second.url, false]]);
-  const attached = await b.client.settle("space.attach", { repository: key, instance: second.url, noticed: true }, 30_000);
+  const attached = await b.client.settle("space.attach", { repository: key, instance: second.url }, 30_000);
   assert.equal(attached.sync.phase, "done", JSON.stringify(attached.sync));
   assert.deepEqual(attached.placements.map((line) => [line.instance, line.attached, line.outcome?.kind]), [[host.url, true, "synced"], [second.url, true, "synced"]]);
   assert.deepEqual(remotesOf(cloneB), [folder, secondFolder]);
@@ -690,10 +690,9 @@ test("storage-39, storage-36, storage-34, storage-1, storage-31, storage-6, stor
   assert.equal(ownFirstBytes, placementBytes(first.url, own.id));
   mark = home.client.mark();
   await signIn(home, second);
-  await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.sync.phase !== "running" && repository.placements[1]?.outcome?.kind === "waiting", 30_000);
+  const ownBoth = await home.client.waitRepository(mark, HOST_OWN, (repository) => repository.sync.phase === "done" && repository.placements[1]?.outcome?.kind === "synced", 30_000);
   const bobSpex = second.script.repositories.find((repository) => repository.group.fullPath === BOB.login && repository.path === `${BOB.login}-spex`);
   assert.ok(bobSpex, "the sign-in created bob-spex at the second");
-  const ownBoth = await home.client.settle("space.sync", { repository: HOST_OWN, placement: second.url, noticed: true }, 30_000);
   assert.equal(ownBoth.sync.phase, "done", JSON.stringify(ownBoth.sync));
   const ownSecondBytes = readFileSync(join(ownClone, secondFile), "utf8");
   assert.equal(ownSecondBytes, placementBytes(second.url, bobSpex.id));
@@ -736,11 +735,11 @@ test("storage-39, storage-36, storage-34, storage-1, storage-31, storage-6, stor
   // Placed in the second's acme: its remote added after `origin`, read
   // in the order added with `origin` last; its file written beside the
   // first's, none for `origin`; each placement's last sync recorded
-  // apart, and the notice its Place saw (space-97, storage-36,
+  // apart, with no new acknowledgement record (space-97, storage-36,
   // storage-34, storage-5).
   const acme = second.script.groups.find((group) => group.kind === "group" && group.fullPath === "acme");
   assert.ok(acme, "the second's acme");
-  const placed = await home.client.settle("space.place", { repository: key, choice: { kind: "create", instance: second.url, groupId: acme.id, name: "atlas" }, noticed: true }, 30_000);
+  const placed = await home.client.settle("space.place", { repository: key, choice: { kind: "create", instance: second.url, groupId: acme.id, name: "atlas" } }, 30_000);
   assert.equal(placed.sync.phase, "done", JSON.stringify(placed.sync));
   const there = second.script.repositories.find((repository) => repository.group.fullPath === "acme" && repository.path === "atlas-spex");
   assert.ok(there, "the second created atlas-spex in its acme");
@@ -753,11 +752,11 @@ test("storage-39, storage-36, storage-34, storage-1, storage-31, storage-6, stor
   assert.deepEqual(readdirSync(join(clone, "placements")).sort(), [`${firstFolder}.yaml`, `${secondFolder}.yaml`].sort());
   assert.deepEqual([committed(there.bare, firstFile), committed(there.bare, secondFile)], [firstBytes, secondBytes]);
   const records = syncRecordsOf(home.dataDir, key);
-  assert.deepEqual(Object.keys(records).sort(), [`sync:${key}:${firstFolder}:last`, `sync:${key}:${secondFolder}:last`, `sync:${key}:${secondFolder}:noticed`, `sync:${key}:origin:last`].sort());
+  assert.deepEqual(Object.keys(records).sort(), [`sync:${key}:${firstFolder}:last`, `sync:${key}:${secondFolder}:last`, `sync:${key}:origin:last`].sort());
   assert.deepEqual(placed.placements.map((line) => [line.lastSync, line.noticed]), [
-    [records[`sync:${key}:${firstFolder}:last`], false],
+    [records[`sync:${key}:${firstFolder}:last`], true],
     [records[`sync:${key}:${secondFolder}:last`], true],
-    [records[`sync:${key}:origin:last`], false],
+    [records[`sync:${key}:origin:last`], true],
   ]);
   // `origin` removed again, with its record (space-5, storage-5).
   const unpathed = repositoryOf(await home.client.expectOk("space.remote.set", { repository: key, url: null }), key);
@@ -902,7 +901,7 @@ test("storage-39, storage-36, storage-34, storage-1, storage-31, storage-6, stor
   assert.equal(existsSync(join(movedClone, firstFile)), false, "its file deleted");
   assert.equal(Home.load(home.dataDir).keyForFolder(code), movedKey, "its pair follows");
   assert.ok((await again.client.expectOk("session.list", {})).some((session) => session.id === sessionId && session.projectId === movedKey), "its session follows");
-  assert.deepEqual({ ...syncRecordsOf(home.dataDir, key), ...syncRecordsOf(home.dataDir, movedKey) }, { [`sync:${movedKey}:${secondFolder}:last`]: secondLast, [`sync:${movedKey}:${secondFolder}:noticed`]: true });
+  assert.deepEqual({ ...syncRecordsOf(home.dataDir, key), ...syncRecordsOf(home.dataDir, movedKey) }, { [`sync:${movedKey}:${secondFolder}:last`]: secondLast });
   await again.client.waitFor((message) => again.client.messages.indexOf(message) >= mark && message.type === "environment.state" && message.repository === movedKey && message.state.busy === null, 30_000);
   assert.ok(existsSync(exported), "its exports written again from where it moved");
   assert.equal((await again.client.expectOk("environment.get", { repository: movedKey })).repository, movedKey);
@@ -949,14 +948,14 @@ test("storage-39, storage-36, storage-34, storage-1, storage-31, storage-6, stor
   assert.equal(existsSync(join(otherLocalClone, secondFile)), false);
   mark = other.client.mark();
   await signIn(other, first);
-  await other.client.waitRepository(mark, otherOwn, (repository) => repository.sync.phase !== "running" && repository.placements.some((line) => line.instance === first.url && line.outcome?.kind === "waiting"), 30_000);
+  await other.client.waitRepository(mark, otherOwn, (repository) => repository.sync.phase !== "running" && repository.placements.some((line) => line.instance === first.url && line.outcome?.kind === "synced"), 30_000);
   assert.equal(readFileSync(join(clonePath(other.dataDir, otherOwn), firstFile), "utf8"), ownFirstBytes);
   const offered = await other.client.repository(otherLocal);
   assert.deepEqual(offered.placements.map((line) => [line.instance, line.attached, line.state]), [[first.url, false, "absent"]]);
   const attachedKey = hostKey(first, "acme/atlas-spex");
   const attachedClone = clonePath(other.dataDir, attachedKey);
   mark = other.client.mark();
-  assert.deepEqual(await other.client.expectOk("space.attach", { repository: otherLocal, instance: first.url, noticed: true }), { accepted: true });
+  assert.deepEqual(await other.client.expectOk("space.attach", { repository: otherLocal, instance: first.url }), { accepted: true });
   assert.ok(existsSync(join(attachedClone, ".git")) && !existsSync(otherLocalClone), "moved under the first's folder as the reply came");
   const attached = await other.client.waitRepository(mark, attachedKey, (repository) => repository.sync.phase !== "running" && repository.sync.phase !== "idle", 30_000);
   assert.equal(attached.sync.phase, "done", JSON.stringify(attached.sync));

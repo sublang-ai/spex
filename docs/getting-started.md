@@ -185,6 +185,13 @@ server, choose **Sign in** beside its registry, and approve with the code
 in your browser. That sign-in stays on the server, apart from your Space
 sign-in, until you sign out there or it expires.
 
+When you add a local project to a group, its available server is part of
+that same form. One server is chosen automatically; if there are several,
+choose one before **Add to group**. Spex uploads the records, connects and
+opens the project there, checking off each step and listing it under the
+server in the sidebar. No separate sharing acknowledgement or opening
+command is needed.
+
 ## Run a server for your group
 
 You need a Linux machine running systemd, sudo access, Node.js 22.19 or
@@ -363,9 +370,9 @@ as they are.
 Packages need no group. To sync a project's records, open **Space** and
 sign in to the Space where your team works. Choose a listed Space, or
 **Other Space…** to enter its address. Use **Add to a group…** on the
-project's row, select a group, review its access, then choose **Add to
-group**. A first sync can ask you to confirm sharing the complete records,
-including conversations, agent activity and attachments.
+project's row, select a group and choose **Add to group**. That action
+syncs its records and opens it on the server named in the same form,
+with a checklist showing progress and no separate sharing confirmation.
 
 On another computer, sign in to that Space and choose **Open here** on
 the project. Code and records are cloned separately; membership does not
