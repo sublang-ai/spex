@@ -97,7 +97,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository ?? "")) throw new Error("Invalid repository");
     const root = resolve(options.root ?? ".");
     const releases = options.releases ? JSON.parse(readFileSync(options.releases, "utf8"))
-      : JSON.parse(execFileSync("gh", ["api", `repos/${repository}/releases?per_page=100`, "--paginate", "--slurp"], { encoding: "utf8" })).flat();
+      : execFileSync("gh", ["api", `repos/${repository}/releases?per_page=100`, "--paginate", "--jq", ".[] | {tag_name, draft, published_at} | @json"], { encoding: "utf8" }).split("\n").filter(Boolean).map(line => JSON.parse(line));
     await requireUnpublished(release, { releases, ...(options.registry ? { registry: options.registry } : {}) });
     const generated = generatedChanges(root, release, repository, releases);
     let changelog = "";
