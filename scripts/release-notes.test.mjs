@@ -1,265 +1,114 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// release-28 and app-shell-36: the app release's tag check and notes,
-// run the way the app-release workflow runs them — the command over a
-// checkout holding a changelog and both shell manifests. release-28
-// holds the release rules: the regular and beta forms with their titles
-// and notes, links pinned to the tag, the refused forms, and a beta's
-// manifests and empty notes. app-shell-36 holds the app shell's release:
-// a regular release's run-from-source instructions, its manifest check,
-// and its empty notes.
-
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join, resolve } from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
+import { generatedChanges, parseTag, releaseNotes } from "./release-notes.mjs";
 
-import { parseTag, releaseNotes } from "./release-notes.mjs";
-
-const script = join(dirname(fileURLToPath(import.meta.url)), "release-notes.mjs");
-const REPO = "sublang-ai/spex";
-
-const CHANGELOG = `# Changelog
-
-Preamble text that is no release's notes.
-
+const script = resolve(import.meta.dirname, "release-notes.mjs");
+const repository = "sublang-ai/spex";
+const changelog = `# Changelog
 ## [Unreleased]
-
-### Added
-
-- A beta feature, recorded in [DR-087](specs/decisions/087-beta-app-releases.md).
-
-## [1.2.3] - 2026-09-28
-
+- Stale unreleased text must not leak.
+## [1.2.3] - 2026-11-03
 ### Fixed
-
-- A fix described in [the guide](docs/release-smoke.md) and the [README](README.md),
-  beside [an external page](https://example.com/specs/x) left alone.
-
-## [1.2.2] - 2026-09-01
-
-### Changed
-
-- An older change.
-
-[Unreleased]: https://github.com/sublang-ai/spex/compare/app-v1.2.3...HEAD
-[1.2.3]: https://github.com/sublang-ai/spex/compare/app-v1.2.2...app-v1.2.3
-[1.2.2]: https://github.com/sublang-ai/spex/releases/tag/app-v1.2.2
+- Curated fix in [guide](docs/release-smoke.md), [README](README.md) and [external](https://example.com/guide).
+## [1.2.2]
+- Older text must not leak.
+[1.2.3]: https://example.com/compare
 `;
-
-/** The changelog with `[Unreleased]` holding its heading alone. */
-const EMPTIED = CHANGELOG.replace(
-  "### Added\n\n- A beta feature, recorded in [DR-087](specs/decisions/087-beta-app-releases.md).\n",
-  "### Added\n\n",
-);
-
-/** A checkout the workflow would see: the changelog and both shells'
- * manifests, at one version unless a shell is given its own. */
-function checkout(t, { version, changelog = CHANGELOG, desktop = version, server = version }) {
-  const root = mkdtempSync(join(tmpdir(), "release-notes-"));
+function fixture(t) {
+  const root = mkdtempSync(join(tmpdir(), "spex-release-notes-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  writeFileSync(join(root, "CHANGELOG.md"), changelog);
-  for (const [shell, shellVersion] of [["desktop", desktop], ["server", server]]) {
-    mkdirSync(join(root, "apps", shell), { recursive: true });
-    writeFileSync(
-      join(root, "apps", shell, "package.json"),
-      JSON.stringify({ name: shell, version: shellVersion }),
-    );
-  }
-  return root;
+  const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  git("init", "-b", "main");
+  git("config", "user.name", "Release test");
+  git("config", "user.email", "release@example.invalid");
+  git("config", "commit.gpgsign", "false");
+  git("config", "tag.gpgsign", "false");
+  let n = 0;
+  const commit = subject => {
+    writeFileSync(join(root, "source"), String(++n));
+    git("add", "source"); git("commit", "-m", subject);
+    return git("rev-parse", "HEAD");
+  };
+  return { root, git, commit };
 }
+const published = (tag, day) => ({ tag_name: tag, published_at: `2026-11-${day}T00:00:00Z`, draft: false });
 
-/** The command as the workflow calls it; GitHub's outputs file read
- * back as a record. */
-function run(root, ...args) {
-  const outputFile = join(root, "github-output");
-  writeFileSync(outputFile, "");
-  const result = spawnSync(process.execPath, [script, ...args, `--root=${root}`], {
-    encoding: "utf8",
-    env: { ...process.env, GITHUB_OUTPUT: outputFile, GITHUB_ACTIONS: "true" },
-  });
-  const outputs = Object.fromEntries(
-    readFileSync(outputFile, "utf8")
-      .split("\n")
-      .filter(Boolean)
-      .map((line) => [line.slice(0, line.indexOf("=")), line.slice(line.indexOf("=") + 1)]),
-  );
-  return { ...result, outputs };
-}
+test("release-28: curated notes belong only to the exact version and links use the tagged tree", () => {
+  const release = parseTag("app-v1.2.3");
+  const notes = releaseNotes({ changelog, release, repository, generated: "fallback must not leak" });
+  assert.match(notes, /Curated fix/);
+  assert.doesNotMatch(notes, /Stale|Older|fallback|^\[1\.2\.3\]:/m);
+  assert.match(notes, /blob\/app-v1\.2\.3\/docs\/release-smoke\.md/);
+  assert.match(notes, /blob\/app-v1\.2\.3\/README\.md/);
+  assert.match(notes, /https:\/\/example\.com\/guide/);
+  assert.match(notes, /Spex-1\.2\.3-mac-arm64\.dmg/);
+  assert.match(notes, /Spex-1\.2\.3-win-x64\.exe/);
+  assert.match(notes, /SHA256SUMS/);
+  assert.match(notes, /Developer ID signed and Apple notarized/);
+  assert.match(notes, /Windows installer is unsigned/);
+});
 
-/** The notes the workflow would publish for a tag, read from the file
- * the command wrote. */
-function notesFor(t, tag, version) {
-  const root = checkout(t, { version });
+test("release-28: generated ranges use the newest published ancestor in the same channel", t => {
+  const { root, git, commit } = fixture(t);
+  commit("base"); git("tag", "app-v1.2.0");
+  commit("first change"); git("tag", "app-v1.2.1");
+  git("branch", "divergent");
+  commit("second change"); git("tag", "cli-v9.0.0"); git("tag", "app-v1.2.2");
+  const head = commit("final change"); git("tag", "app-v1.2.3-beta.1");
+  git("checkout", "divergent"); commit("unrelated branch"); git("tag", "app-v8.0.0"); git("checkout", "main");
+  const releases = [published("app-v1.2.0", "01"), published("app-v1.2.1", "02"),
+    published("cli-v9.0.0", "03"), { ...published("app-v1.2.2", "04"), draft: true }, published("app-v8.0.0", "05")];
+  const generated = generatedChanges(root, parseTag("app-v1.2.3-beta.1"), repository, releases);
+  assert.doesNotMatch(generated, /- base|first change|unrelated branch/);
+  assert.match(generated, /second change/);
+  assert.match(generated, /final change/);
+  assert.match(generated, /compare\/app-v1\.2\.1\.\.\.app-v1\.2\.3-beta\.1/);
+  assert.match(generated, new RegExp(`Source: \\[${head}\\]`));
+  const beta = releaseNotes({ changelog, release: parseTag("app-v1.2.3-beta.1"), repository, generated });
+  assert.match(beta, /^Beta 1 on the way to 1\.2\.3\./);
+  assert.doesNotMatch(beta, /Curated fix|Stale|waived|This beta ran/);
+  git("tag", "app-v1.2.3-beta.2");
+  const next = generatedChanges(root, parseTag("app-v1.2.3-beta.2"), repository, [...releases, published("app-v1.2.3-beta.1", "06")]);
+  assert.match(next, /No source commits since the previous published version/);
+  assert.doesNotMatch(next, /second change|final change/);
+});
+
+test("app-shell-36: no version bump or changelog section is needed by the actual notes command", t => {
+  const { root, git, commit } = fixture(t);
+  commit("source without version bump"); git("tag", "app-v2.0.0-beta.1");
+  const records = join(root, "releases.json"); writeFileSync(records, "[]");
   const out = join(root, "notes.md");
-  const notes = run(root, "notes", `--tag=${tag}`, `--repository=${REPO}`, `--out=${out}`);
-  assert.equal(notes.status, 0, notes.stderr);
+  const args = [script, "notes", "--tag=app-v2.0.0-beta.1", `--repository=${repository}`, `--out=${out}`, `--root=${root}`, `--releases=${records}`];
+  const run = spawnSync(process.execPath, args, { encoding: "utf8" });
+  assert.equal(run.status, 0, run.stderr);
   const body = readFileSync(out, "utf8");
-  assert.equal(notes.stdout, body);
-  return body;
-}
-
-/** The check over manifests off the tag's version: refused, naming the
- * manifest, with no outputs for the release step. */
-function assertRefusedManifest(t, tag, versions, manifest) {
-  const root = checkout(t, versions);
-  const check = run(root, "check", `--tag=${tag}`);
-  assert.equal(check.status, 1, tag);
-  assert.match(check.stderr, new RegExp(`does not match apps/${manifest}/package\\.json`), tag);
-  assert.deepEqual(check.outputs, {}, tag);
-}
-
-test("release-28: a regular tag checks both manifests and takes its version's section, links pinned to the tag", (t) => {
-  const root = checkout(t, { version: "1.2.3" });
-  const check = run(root, "check", "--tag=app-v1.2.3");
-  assert.equal(check.status, 0, check.stderr);
-  assert.deepEqual(check.outputs, {
-    version: "1.2.3",
-    beta: "false",
-    base: "1.2.3",
-    n: "",
-    title: "Spex App v1.2.3",
-  });
-
-  const body = notesFor(t, "app-v1.2.3", "1.2.3");
-  // The version's own section, nothing of its neighbours or the file's
-  // link definitions.
-  assert.ok(body.startsWith("\n### Fixed\n\n- A fix described in"), body);
-  assert.doesNotMatch(body, /A beta feature|An older change|Preamble/);
-  assert.doesNotMatch(body, /^\[[^\]]+\]: /m);
-  // Repository-relative links open the tagged tree; others stand.
-  assert.match(body, /\[the guide\]\(https:\/\/github\.com\/sublang-ai\/spex\/blob\/app-v1\.2\.3\/docs\/release-smoke\.md\)/);
-  assert.match(body, /\[README\]\(https:\/\/github\.com\/sublang-ai\/spex\/blob\/app-v1\.2\.3\/README\.md\)/);
-  assert.match(body, /\[an external page\]\(https:\/\/example\.com\/specs\/x\)/);
-  assert.doesNotMatch(body, /^Beta /m);
-  assert.match(body, /releases\/download\/app-v1\.2\.3\/Spex-1\.2\.3-mac-arm64\.dmg/);
-  assert.match(body, /releases\/download\/app-v1\.2\.3\/Spex-1\.2\.3-win-x64\.exe/);
-  assert.match(body, /releases\/download\/app-v1\.2\.3\/SHA256SUMS/);
-  assert.match(body, /macOS app and DMG are Developer ID signed and Apple notarized/);
-  assert.match(body, /Windows installer is unsigned/);
-  assert.match(body, /native Windows with Node\.js/);
-  assert.doesNotMatch(body, /ships no binaries|Storage requires private POSIX permissions\./);
+  assert.equal(run.stdout, body);
+  assert.match(body, /First release on this history for this channel/);
+  assert.match(body, /git checkout app-v2\.0\.0-beta\.1\nnode scripts\/release-version\.mjs prepare --tag=app-v2\.0\.0-beta\.1\nnpm ci/);
+  assert.match(body, /Node\.js 22\.19 or later/);
+  writeFileSync(records, JSON.stringify([published("app-v2.0.0-beta.1", "03")]));
+  const repeated = spawnSync(process.execPath, args, { encoding: "utf8" });
+  assert.notEqual(repeated.status, 0); assert.match(repeated.stderr, /Release already exists/);
+  commit("wrong checkout");
+  assert.throws(() => generatedChanges(root, parseTag("app-v2.0.0-beta.1"), repository, []), /does not name the checked-out commit/);
 });
 
-test("app-shell-36: a regular release's notes end with the run-from-source instructions at the root manifest's floor", (t) => {
-  const body = notesFor(t, "app-v1.2.3", "1.2.3");
-  const at = body.indexOf("## Run from source\n");
-  assert.ok(at > body.indexOf("- A fix described in"), body);
-  const instructions = body.slice(at);
-  // Node.js at the floor the root manifest declares, then the tag
-  // checked out before the install and both shells' commands.
-  const floor = JSON.parse(readFileSync(join(dirname(script), "..", "package.json"), "utf8"))
-    .engines.node.replace(/^>=/, "");
-  assert.equal(floor, "22.19");
-  assert.match(instructions, new RegExp(`with Node\\.js ${floor.replace(".", "\\.")} or later and`));
-  assert.match(
-    instructions,
-    /git checkout app-v1\.2\.3\nnpm ci\nnpm start +# the desktop app\nnpm run start:server +# the server shell/,
-  );
-  // The README line closes a regular release's notes: no beta line.
-  assert.match(
-    instructions,
-    /prerequisites are in the \[README\]\(https:\/\/github\.com\/sublang-ai\/spex\/blob\/app-v1\.2\.3\/README\.md\)\.\n$/,
-  );
-  assert.doesNotMatch(body, /This beta ran/);
-});
-
-test("release-28: a beta tag takes [Unreleased] under its line, and names the gates it skipped", (t) => {
-  const root = checkout(t, { version: "1.3.0-beta.2" });
-  const check = run(root, "check", "--tag=app-v1.3.0-beta.2");
-  assert.equal(check.status, 0, check.stderr);
-  assert.deepEqual(check.outputs, {
-    version: "1.3.0-beta.2",
-    beta: "true",
-    base: "1.3.0",
-    n: "2",
-    title: "Spex App v1.3.0-beta.2",
-  });
-
-  const body = notesFor(t, "app-v1.3.0-beta.2", "1.3.0-beta.2");
-  assert.ok(body.startsWith("Beta 2 on the way to 1.3.0 — everything unreleased at this tag.\n\n"), body);
-  assert.match(body, /A beta feature, recorded in \[DR-087\]\(https:\/\/github\.com\/sublang-ai\/spex\/blob\/app-v1\.3\.0-beta\.2\/specs\/decisions\/087-beta-app-releases\.md\)/);
-  assert.doesNotMatch(body, /A fix described in/);
-  assert.match(body, /git checkout app-v1\.3\.0-beta\.2\n/);
-  assert.match(body, /releases\/download\/app-v1\.3\.0-beta\.2\/Spex-1\.3\.0-beta\.2-mac-arm64\.dmg/);
-  assert.match(body, /releases\/download\/app-v1\.3\.0-beta\.2\/Spex-1\.3\.0-beta\.2-win-x64\.exe/);
-  assert.match(
-    body,
-    /\n\nBeta preparation requires CI, the smoke and the live smoke; the regression and the manual checklist run before the regular release \(\[DR-087\]\(https:\/\/github\.com\/sublang-ai\/spex\/blob\/app-v1\.3\.0-beta\.2\/specs\/decisions\/087-beta-app-releases\.md\)\)\.\n$/,
-  );
-});
-
-test("release-28: beta.26 discloses its limited gate and reused acceptance", (t) => {
-  const body = notesFor(t, "app-v0.9.0-beta.26", "0.9.0-beta.26");
-  assert.match(body, /Owner-authorized beta\.26 validation is limited to required PR checks, both native builds and packaged strict compiler checks/);
-  assert.match(body, /unrelated full UI checks did not pass and are waived for this tag only/);
-  assert.match(body, /Windows real UI acceptance is not claimed/);
-  assert.doesNotMatch(body, /Beta preparation requires CI, the smoke and the live smoke/);
-});
-
-test("release-28: a tag in any other form is refused before anything is read", (t) => {
-  for (const tag of [
-    "app-v1.2.3-beta.0",
-    "app-v1.2.3-beta.01",
-    "app-v1.2.3-rc.1",
-    "app-v1.2.3+build.5",
-    "app-v1.2.3-beta.1+build",
-    "app-v01.2.3",
-    "app-v1.2",
-    "cli-v1.2.3",
-  ]) {
-    assert.throws(() => parseTag(tag), /neither app-vMAJOR\.MINOR\.PATCH nor/, tag);
-    const root = checkout(t, { version: tag.replace(/^[a-z]+-v/, "") });
-    const check = run(root, "check", `--tag=${tag}`);
-    assert.equal(check.status, 1, tag);
-    assert.match(check.stderr, /^::error::Tag .* is neither/, tag);
-    assert.deepEqual(check.outputs, {}, tag);
-    const notes = run(root, "notes", `--tag=${tag}`, `--repository=${REPO}`, `--out=${join(root, "notes.md")}`);
-    assert.equal(notes.status, 1, tag);
-  }
-});
-
-test("release-28: a beta tag over manifests off its pre-release version refuses the release", (t) => {
-  // Both shells still at the base version, then one shell bumped
-  // without the other.
-  assertRefusedManifest(t, "app-v1.3.0-beta.1", { version: "1.3.0" }, "desktop");
-  assertRefusedManifest(t, "app-v1.3.0-beta.1", { version: "1.3.0-beta.1", server: "1.3.0" }, "server");
-});
-
-test("app-shell-36: either shell's manifest off a regular tag's version refuses the release", (t) => {
-  assertRefusedManifest(t, "app-v1.2.3", { version: "1.2.3", desktop: "1.2.2" }, "desktop");
-  assertRefusedManifest(t, "app-v1.2.3", { version: "1.2.3", server: "1.2.2" }, "server");
-});
-
-test("release-28: a beta's [Unreleased] holding only headings is refused as empty notes, LF or CRLF", (t) => {
-  const beta = parseTag("app-v1.3.0-beta.1");
-  assert.throws(
-    () => releaseNotes({ changelog: EMPTIED, release: beta, repository: REPO }),
-    /No release notes found under \[Unreleased\]/,
-  );
-  const root = checkout(t, { version: "1.3.0-beta.1", changelog: EMPTIED });
-  const refused = run(root, "notes", "--tag=app-v1.3.0-beta.1", `--repository=${REPO}`, `--out=${join(root, "notes.md")}`);
-  assert.equal(refused.status, 1);
-  assert.match(refused.stderr, /::error::No release notes found under \[Unreleased\] in CHANGELOG\.md for app-v1\.3\.0-beta\.1/);
-
-  // The same files with CRLF line endings: a heading ending in a
-  // carriage return is still a heading, as grep read it in the workflow,
-  // and a note is still a note.
-  const crlf = (text) => text.replaceAll("\n", "\r\n");
-  assert.throws(
-    () => releaseNotes({ changelog: crlf(EMPTIED), release: beta, repository: REPO }),
-    /No release notes found under \[Unreleased\]/,
-  );
-  assert.match(releaseNotes({ changelog: crlf(CHANGELOG), release: beta, repository: REPO }), /A beta feature/);
-});
-
-test("app-shell-36: a regular tag's version with no changelog section is refused as empty notes", (t) => {
-  const root = checkout(t, { version: "9.9.9" });
-  const missing = run(root, "notes", "--tag=app-v9.9.9", `--repository=${REPO}`, `--out=${join(root, "notes.md")}`);
-  assert.equal(missing.status, 1);
-  assert.match(missing.stderr, /::error::No release notes found under \[9\.9\.9\] in CHANGELOG\.md for app-v9\.9\.9/);
+test("release-28: CLI notes use their own title/version and invalid forms are refused", () => {
+  const release = parseTag("cli-v5.0.1");
+  assert.equal(release.title, "Spex CLI v5.0.1");
+  const body = releaseNotes({ changelog, release, repository, generated: "## Changes\n\n- CLI change.\n" });
+  assert.match(body, /CLI change/);
+  assert.match(body, /npm install -g @sublang\/spex@5\.0\.1/);
+  assert.doesNotMatch(body, /Desktop downloads|Stale|Curated/);
+  for (const tag of ["app-v01.2.3", "app-v1.2.3-beta.0", "app-v1.2.3-rc.1", "app-v1.2.3+build", "cli-v1.2.3-beta.1"]) assert.throws(() => parseTag(tag), /Invalid release tag/);
+  assert.throws(() => releaseNotes({ changelog: "## [Unreleased]\n- stale", release, repository }), /need a version section or generated/);
+  const crlf = changelog.replaceAll("\n", "\r\n");
+  assert.match(releaseNotes({ changelog: crlf, release: parseTag("app-v1.2.3"), repository }), /Curated fix/);
 });

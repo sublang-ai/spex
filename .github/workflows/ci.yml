@@ -15,6 +15,9 @@ on:
       channel:
         type: string
         default: app
+      release-tag:
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       full:
@@ -56,6 +59,12 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Prepare release version
+        if: inputs.release-tag != ''
+        env:
+          RELEASE_TAG: ${{ inputs.release-tag }}
+          RELEASE_CHANNEL: ${{ inputs.channel }}
+        run: node scripts/release-version.mjs prepare
       - id: classify
         shell: bash
         env:
@@ -104,6 +113,12 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
+      - name: Prepare release version
+        if: inputs.release-tag != ''
+        env:
+          RELEASE_TAG: ${{ inputs.release-tag }}
+          RELEASE_CHANNEL: ${{ inputs.channel }}
+        run: node scripts/release-version.mjs prepare
       - run: npm ci
       - name: Build, catalogs, types and specifications
         shell: bash
@@ -153,6 +168,12 @@ jobs:
           node-version: 24
           cache: npm
 
+      - name: Prepare release version
+        if: inputs.release-tag != ''
+        env:
+          RELEASE_TAG: ${{ inputs.release-tag }}
+          RELEASE_CHANNEL: ${{ inputs.channel }}
+        run: node scripts/release-version.mjs prepare
       - run: npm ci
       - run: npm run build
 
@@ -213,6 +234,12 @@ jobs:
         with:
           node-version: 24
           cache: npm
+      - name: Prepare release version
+        if: inputs.release-tag != ''
+        env:
+          RELEASE_TAG: ${{ inputs.release-tag }}
+          RELEASE_CHANNEL: ${{ inputs.channel }}
+        run: node scripts/release-version.mjs prepare
       - run: npm ci
       - run: npm run build
       - name: Install Electron and native browser libraries
@@ -228,7 +255,7 @@ jobs:
         shell: bash
         run: |
           if [ "$RUNNER_OS" = macOS ]; then target=mac; else target=linux; fi
-          node_modules/.bin/electron-builder --projectDir apps/desktop --dir "--$target" --config.executableName=spex-browser-acceptance --config.directories.output="$RUNNER_TEMP/spex browser packaged"
+          node_modules/.bin/electron-builder --projectDir apps/desktop --dir "--$target" --config.mac.identity=null --config.mac.forceCodeSigning=false --config.executableName=spex-browser-acceptance --config.directories.output="$RUNNER_TEMP/spex browser packaged"
       - name: Permit only the native CI executables to use sandbox namespaces
         if: runner.os == 'Linux'
         shell: bash
@@ -271,6 +298,8 @@ jobs:
     needs: changes
     if: needs.changes.result == 'success' && needs.changes.outputs.full == 'true' && needs.changes.outputs.channel == 'app'
     uses: ./.github/workflows/hub-lane.yml
+    with:
+      release-tag: ${{ inputs.release-tag || '' }}
     permissions:
       contents: read
 

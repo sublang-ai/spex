@@ -33,6 +33,7 @@ test("release-33: PRs cancel only their superseded run; CI has reusable/manual f
   assert.deepEqual(workflow.on.pull_request, { branches: ["main"] });
   assert.deepEqual(workflow.on.workflow_call.inputs, {
     full: { type: "boolean", default: false }, channel: { type: "string", default: "app" },
+    "release-tag": { type: "string", default: "" },
   });
   assert.equal(workflow.on.workflow_dispatch.inputs.full.default, true);
   assert.deepEqual(workflow.on.workflow_dispatch.inputs.channel.options, ["app", "cli"]);
@@ -73,6 +74,7 @@ test("release-33: the matrix runs affected Linux/Windows PR suites and retains e
   assert.deepEqual(workflow.jobs.journeys.strategy.matrix.shard, [1, 2, 3]);
   assert.deepEqual(workflow.jobs["hub-lane"], {
     needs: "changes", if: FULL_APP_CONDITION, uses: "./.github/workflows/hub-lane.yml", permissions: { contents: "read" },
+    with: { "release-tag": "${{ inputs.release-tag || '' }}" },
   });
 });
 
@@ -412,4 +414,25 @@ test("release-33: the merge-on-green script polls again after a failed or empty 
       assert.match(run.stderr, /The head moved; run again for the new head\./, c.name);
     }
   }
+});
+
+
+test("release-46: release CI injects the same version before installs, including the archived hub tree", () => {
+  for (const name of ["changes", "test", "journeys", "desktop-browser"]) {
+    const steps = workflow.jobs[name].steps;
+    const at = steps.findIndex(step => step.name === "Prepare release version");
+    assert(at > 0, name);
+    assert.equal(steps[at].if, "inputs.release-tag != ''");
+    assert.deepEqual(steps[at].env, { RELEASE_TAG: "${{ inputs.release-tag }}", RELEASE_CHANNEL: "${{ inputs.channel }}" });
+    assert.equal(steps[at].run, "node scripts/release-version.mjs prepare");
+    assert(steps.slice(0, at).every(step => !/npm ci/.test(step.run ?? "")), name);
+  }
+  const desktopBuild = workflow.jobs["desktop-browser"].steps.find(step => step.run?.includes("electron-builder"));
+  assert.match(desktopBuild.run, /--config\.mac\.identity=null --config\.mac\.forceCodeSigning=false/);
+  const hubSteps = Object.values(laneWorkflow.jobs).flatMap(job => job.steps ?? []);
+  const archive = hubSteps.findIndex(step => step.run?.includes("git archive"));
+  const stamp = hubSteps.findIndex(step => step.name === "Prepare the archived release version");
+  assert(archive >= 0 && stamp > archive);
+  assert.equal(hubSteps[stamp].if, "inputs.release-tag != ''");
+  assert.match(hubSteps[stamp].run, /release-version\.mjs.*--channel=app/);
 });

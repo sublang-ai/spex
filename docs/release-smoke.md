@@ -221,18 +221,15 @@ A beta ships for early trial without the regression
 
 - Tag `app-vX.Y.Z-beta.N`, `N` counting from 1 within one version; the
   workflow refuses any other pre-release identifier.
-- Bump `apps/desktop` and `apps/server` together to `X.Y.Z-beta.N`,
-  verbatim.
+- The tag workflow prepares both shell versions and their lockfile entries
+  from the tag. No version-only source change or PR is required.
 - Before tagging: `npm run smoke -- --live`, the smoke with the live
   smoke as its last stage. The tag workflow then requires full app
   validation before publication. No regression, no manual residue.
-- Notes: the changelog's `[Unreleased]` section as it stands at the tag,
-  which must not be empty. The changelog gains no section for a beta:
-  the regular release that follows moves `[Unreleased]` into its version
-  section, folding the betas' notes into it.
-- The GitHub release is a pre-release titled `Spex App vX.Y.Z-beta.N`,
-  stating that it ran the smoke and the live smoke but not the
-  regression.
+- Notes use an optional exact-version section or generated commits since the
+  previous published same-channel ancestor, never stale `[Unreleased]` text.
+- The GitHub release is a pre-release titled `Spex App vX.Y.Z-beta.N`.
+  Notes do not infer local smoke outcomes from the beta tag alone.
 
 ## 6. Record
 
@@ -246,7 +243,8 @@ clean-tree check exempts that directory, so a gate re-run needs no
 ## 7. Native downloads from an app tag
 
 Push `app-vX.Y.Z` or `app-vX.Y.Z-beta.N` only after the preparation gates
-above pass. The tag must match both shell manifests exactly.
+above pass. The tag supplies both shell versions; source manifests may still
+carry development defaults. See [TAG-driven publishing](releases/tag-driven-publishing.md).
 The app release workflow runs full app validation on that tagged commit,
 validates the version and notes, then builds on macOS and Windows native runners.
 Only after both succeed does one release publish:
@@ -257,7 +255,7 @@ Only after both succeed does one release publish:
 
 Packaging commands use `--publish never`; only the final workflow job
 publishes. Missing downloads or a failed build prevent that job.
-The builds are unsigned and the macOS app is not notarized; the release
-notes disclose this. Agent authentication remains the user's own setup.
+Mac downloads require Developer ID signing, Accepted Apple notarization and
+stapled tickets. Windows downloads remain unsigned; notes disclose this. Agent authentication remains the user's own setup.
 CLI tags require full CLI validation before building and inspecting the CLI
 tarball and publishing it; they do not run the app's browser or hub checks.

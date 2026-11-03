@@ -11,6 +11,8 @@ Rests on the tiers of [DR-086](086-tests-in-tiers.md).
 
 Amended by [DR-199](199-release-gated-full-validation.md) in the CI gate: the tagged tree runs full app validation before publication, without requiring a prior CI run before tagging.
 
+Amended by [DR-216](216-tags-own-release-versions.md) for TAG-owned versions, deterministic pre-validation metadata preparation and optional curated notes; release channel scopes and full validation gates remain.
+
 ## Context
 
 - The regression that a regular app release runs costs hours of real agents; a build meant for early trial should not wait on it, yet it must still install, start and reach a real agent.

@@ -12,6 +12,7 @@ const { promisify } = require("node:util");
 
 module.exports = async function afterPack(context) {
   const product = context.packager.appInfo.productFilename;
+  const expectedVersion = context.packager.appInfo.version ?? require("../package.json").version;
   const executableName = context.packager.executableName ?? product;
   const mac = context.electronPlatformName === "darwin";
   const app = mac ? join(context.appOutDir, `${product}.app`, "Contents") : context.appOutDir;
@@ -36,6 +37,8 @@ import { createRequire } from "node:module";
 import { dirname, join, relative, isAbsolute, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 const modules = fs.realpathSync(process.argv[2]);
+const appVersion = JSON.parse(fs.readFileSync(join(dirname(dirname(modules)), "app.asar", "package.json"), "utf8")).version;
+assert.equal(appVersion, process.argv[3], "packaged app version differs from build version");
 const within = file => {
   const rel = relative(modules, fs.realpathSync(file));
   assert(!rel.startsWith("..") && !isAbsolute(rel), "escaped packaged modules: " + file);
@@ -87,14 +90,14 @@ assert(Buffer.isBuffer(bundled) && bundled.length > 0, "packaged bundler produce
 const linked = join(artifact, "registry.mjs");
 fs.writeFileSync(linked, bundled);
 assert.equal((await import(pathToFileURL(linked))).default.config.id, "packaged-compiler");
-console.log(JSON.stringify({ status: "passed", node: process.versions.node, arch: process.arch,
+console.log(JSON.stringify({ status: "passed", appVersion, node: process.versions.node, arch: process.arch,
   slc, typescript: tsPath, nodeTypes, declarationDependencies: dependencies,
   strictValid: valid, strictInvalid: invalid, loadedDeclarations: [...declarations].sort(),
   archivedCoreBundler: { passed: true, bytes: bundled.length, module: archivedCore },
   defaultEngineLinks: { targets: engineTargets, registryImported: true } }));
 `);
     const { NODE_PATH: _path, NODE_OPTIONS: _options, ESBUILD_BINARY_PATH: _esbuild, ...env } = process.env;
-    const { stdout, stderr } = await promisify(execFile)(executable, [join(scratch, "probe.mjs"), modules], {
+    const { stdout, stderr } = await promisify(execFile)(executable, [join(scratch, "probe.mjs"), modules, expectedVersion], {
       cwd: scratch, env: { ...env, PATH: dirname(executable), ELECTRON_RUN_AS_NODE: "1" },
       timeout: 60_000, maxBuffer: 2 * 1024 * 1024, windowsHide: true,
     });

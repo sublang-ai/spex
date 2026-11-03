@@ -14,20 +14,19 @@ concurrency:
 
 jobs:
   validate:
+    needs: prepare
     uses: ./.github/workflows/ci.yml
     permissions:
       contents: read
     with:
-      # Owner-authorized, single-release scope; other tags retain full CI.
-      full: ${{ github.ref_name != 'app-v0.9.0-beta.26' }}
+      full: true
+      release-tag: ${{ github.ref_name }}
       channel: app
 
   prepare:
-    needs: validate
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      checks: read
     outputs:
       version: ${{ steps.version.outputs.version }}
       title: ${{ steps.version.outputs.title }}
@@ -39,10 +38,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Verify version matches tag
+      - name: Prepare version from tag
         id: version
-        run: node scripts/release-notes.mjs check --tag="$GITHUB_REF_NAME"
+        run: node scripts/release-version.mjs prepare --channel=app
       - name: Extract release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: >-
           node scripts/release-notes.mjs notes
           --tag="$GITHUB_REF_NAME"
@@ -50,17 +51,6 @@ jobs:
           --out=release-notes.md
       - name: Require published runtime dependencies
         run: node scripts/dependency-closure.mjs --registry-only
-      - name: Require the accepted PR tree for the beta.26 exception
-        if: github.ref_name == 'app-v0.9.0-beta.26'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          git merge-base --is-ancestor HEAD origin/main
-          accepted_head=$(git rev-parse HEAD^2)
-          git diff --exit-code "$accepted_head" HEAD
-          conclusion=$(gh api "repos/$GITHUB_REPOSITORY/commits/$accepted_head/check-runs" --jq '[.check_runs[] | select(.name == "checks" and .app.slug == "github-actions")] | sort_by(.started_at) | last | .conclusion')
-          test "$conclusion" = success
       - uses: actions/upload-artifact@v4
         with:
           name: app-release-notes
@@ -68,7 +58,7 @@ jobs:
           if-no-files-found: error
 
   package:
-    needs: prepare
+    needs: [prepare, validate]
     strategy:
       fail-fast: false
       matrix:
@@ -92,6 +82,8 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Prepare version from tag
+        run: node scripts/release-version.mjs prepare --channel=app
       - run: npm ci
       - run: npm run build
       - name: Prepare private macOS signing inputs
@@ -141,6 +133,8 @@ jobs:
           import os, shutil
           from pathlib import Path
           shutil.rmtree(Path(os.environ['RUNNER_TEMP']) / 'spex-macos-secrets', ignore_errors=True)
+      - name: Verify installer version matches tag
+        run: node scripts/release-artifacts.mjs app
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-${{ matrix.asset }}

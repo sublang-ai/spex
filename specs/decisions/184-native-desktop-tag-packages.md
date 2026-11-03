@@ -12,6 +12,8 @@ Amended by [DR-177](177-native-desktop-installers.md) for macOS download format:
 
 Amended by [DR-215](215-developer-id-macos-downloads.md) for signed and notarized macOS downloads; Windows status and release gates remain.
 
+Amended by [DR-216](216-tags-own-release-versions.md) for TAG-owned versions, deterministic pre-validation metadata preparation and optional curated notes; release channel scopes and full validation gates remain.
+
 ## Context
 
 Native macOS and Windows installation builds have been exercised locally, but the app tag workflow still publishes source instructions alone.

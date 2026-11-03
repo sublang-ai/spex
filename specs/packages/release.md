@@ -17,9 +17,7 @@ The project shall follow Semantic Versioning [[1]]: `MAJOR.MINOR.PATCH` where MA
 
 #### release-2
 
-The version in the released package's `package.json` (`packages/cli/package.json`) shall match the git tag (without the `cli-v` prefix):
-
-- The release workflow verifies this match before publishing [[release-8](#release-8)].
+The version in the released CLI package's `package.json` shall equal the `cli-v` tag's version, injected during release preparation rather than requiring a version-only source commit [[release-16](#release-16)] ([DR-216](../decisions/216-tags-own-release-versions.md)).
 
 ### Changelog
 
@@ -29,11 +27,15 @@ All notable changes to a release channel shall be documented in that channel's `
 
 #### release-4
 
-When preparing a release, the developer/agent shall review all commits since the last release and ensure all notable changes are documented in the `[Unreleased]` section of `CHANGELOG.md`.
+When developing a release's changes, the developer/agent shall document notable changes in the channel's `[Unreleased]` section without requiring a new version-specific commit solely to publish [[release-5](#release-5)].
 
 #### release-5
 
-When creating a regular release tag — a CLI tag, or an app tag carrying no pre-release version ([DR-087](../decisions/087-beta-app-releases.md)) — the developer/agent shall move items from `[Unreleased]` to a new version section in `CHANGELOG.md` with the release date, and update the comparison links at the bottom of the file.
+When assembling release notes, the release workflow shall use a non-empty exact-version changelog section if present, otherwise generate notes from commits since the most recently published same-channel ancestor release, linking the source commit and comparison range, without reusing `[Unreleased]` or treating draft releases and unpublished tags as release boundaries ([DR-216](../decisions/216-tags-own-release-versions.md)):
+
+- without a published ancestor it identifies the first release on that channel's history and its source commit;
+- with no new source commits it explicitly reports the empty range;
+- an exact-version section is optional, and existing historical sections remain unchanged.
 
 #### release-6
 
@@ -47,7 +49,10 @@ CLI releases shall be triggered by pushing a git tag matching the pattern `cli-v
 
 #### release-8
 
-When a release tag is pushed, the release workflow shall verify the tag version matches `package.json` version, build and validate the package, and extract release notes from `CHANGELOG.md`.
+When a release tag is pushed, the release workflow shall prepare the tag's version [[release-16](#release-16)], validate and build that prepared tree [[release-18](#release-18)], verify the actual distributable's version against the tag, and publish only that verified artifact with the prepared notes [[release-5](#release-5)]:
+
+- the CLI inspects the real packed archive and publishes that archive, rather than repacking the workspace;
+- native app metadata and the archived app manifest must match the tag, with the packaged compiler gate reporting the latter version.
 
 #### release-9
 
@@ -62,7 +67,7 @@ When the release workflow publishes a scoped package, it shall use `--access pub
 
 #### release-11
 
-When the release workflow completes publishing, it shall create a GitHub release with the extracted changelog notes and the channel's title ([DR-056](../decisions/056-release-naming.md)):
+When the release workflow completes publishing, it shall create a GitHub release with the prepared notes [[release-5](#release-5)] and the channel's title ([DR-056](../decisions/056-release-naming.md)):
 
 - CLI: `Spex CLI vMAJOR.MINOR.PATCH`.
 - App: `Spex App vMAJOR.MINOR.PATCH`; a beta ([DR-087](../decisions/087-beta-app-releases.md)): `Spex App vMAJOR.MINOR.PATCH-beta.N`, created as a pre-release.
@@ -70,12 +75,12 @@ When the release workflow completes publishing, it shall create a GitHub release
 
 #### release-18
 
-When a release tag is pushed, its release workflow shall require a successful reusable CI invocation with `full: true` and its `app` or `cli` channel on the exact tagged tree before publishing to npm or creating a release [[release-34](#release-34)] [[release-44](#release-44)] ([DR-199](../decisions/199-release-gated-full-validation.md)):
+When a release tag is pushed, its release workflow shall require a successful reusable CI invocation with `full: true` and its `app` or `cli` channel on the exact tagged tree with only deterministic release-version metadata preparation [[release-16](#release-16)] before publishing to npm or creating a release [[release-34](#release-34)] [[release-44](#release-44)] ([DR-199](../decisions/199-release-gated-full-validation.md)):
 
 - publication depends directly on that invocation; failed, cancelled or skipped validation permits no publication;
 - no prior CI run, local result or reduced pull-request result substitutes for that invocation;
 - downstream release jobs retain package builds and validation but do not repeat the test suites that invocation completed.
-- For owner-authorized `app-v0.9.0-beta.26` only, exact-tag selected validation replaces full validation; preparation additionally requires the tag on main, its tree equal to its merged PR head and that head's latest trusted `checks` successful, while both native builds and their packaged strict compiler gates remain mandatory; unrelated UI checks are explicitly waived for this tag and not represented as passing.
+- New release workflows contain no beta.26 exception or merge-parent/PR-status requirement; that historical tag retains its recorded waiver and workflow ([DR-216](../decisions/216-tags-own-release-versions.md)).
 
 #### release-19
 
@@ -88,9 +93,9 @@ Where the repo hosts multiple release channels ([DR-002](../decisions/002-deskto
 
 #### release-39
 
-When an app tag passes the existing CI, version, changelog and build/test gates [[release-18](#release-18)] [[release-8](#release-8)], the app release workflow shall publish a macOS Apple Silicon DMG and a Windows x64 per-user NSIS installer ([DR-177](../decisions/177-native-desktop-installers.md)) only after both native packaging jobs succeed ([DR-184](../decisions/184-native-desktop-tag-packages.md)):
+When an app tag passes the existing CI, prepared-version, notes and build/test gates [[release-18](#release-18)] [[release-8](#release-8)], the app release workflow shall publish a macOS Apple Silicon DMG and a Windows x64 per-user NSIS installer ([DR-177](../decisions/177-native-desktop-installers.md)) only after both native packaging jobs succeed ([DR-184](../decisions/184-native-desktop-tag-packages.md)):
 
-- each job installs the tagged tree's locked dependencies, builds it on the target OS and uploads its exact versioned download, failing on a missing file;
+- each job prepares the tag version, installs the tagged tree's locked dependencies, builds it on the target OS and uploads its verified versioned download, failing on a missing file;
 - packaging commands do not publish; only the final job has release-write permission;
 - the final job requires both downloads and writes their SHA-256 checksums before attaching all three files to the same release;
 - a failed or missing platform build prevents release publication;
@@ -121,14 +126,17 @@ The published package shall include a `README.md` that documents what the tool d
 
 #### release-15
 
-When preparing a release tag, the developer/agent shall verify that all changes are committed and pushed to `main`, with full channel validation required after the tag is pushed and before publication [[release-18](#release-18)], rather than requiring a prior CI run for the commit to be tagged ([DR-199](../decisions/199-release-gated-full-validation.md)).
+When preparing a release tag, the developer/agent shall select an intended committed and pushed source revision, with full channel validation required after the tag is pushed and before publication [[release-18](#release-18)], without requiring a version-only PR, merge commit or prior CI run for that revision ([DR-216](../decisions/216-tags-own-release-versions.md)).
 
 #### release-16
 
-When preparing a release tag, the developer/agent shall verify that the channel's `package.json` version is bumped — `packages/cli` for a CLI tag; `apps/desktop` and `apps/server` together for an app tag — and that the channel's `CHANGELOG.md` [[release-3](#release-3)] carries the release's notes:
+When preparing any release job that installs, validates or builds source, the release tooling shall take the version solely from a valid channel tag and set only the selected workspace manifests' and corresponding lockfile entries' versions before installation, consistently across reusable CI and packaging jobs ([DR-216](../decisions/216-tags-own-release-versions.md)):
 
-- for a regular tag, the notes stand in a new section with the new version and date [[release-5](#release-5)];
-- for a beta app tag ([DR-087](../decisions/087-beta-app-releases.md)), both shell manifests carry the tag's pre-release version `MAJOR.MINOR.PATCH-beta.N` verbatim, and `[Unreleased]` stays in place, non-empty, carrying the beta's notes [[release-27](#release-27)].
+- app tags prepare `apps/desktop` and `apps/server`; CLI tags prepare only `packages/cli`;
+- source versions remain development defaults; no dependency resolution, lifecycle hooks, source commits or write-back occurs;
+- malformed tags, channel mismatches and incomplete workspace metadata fail before preparation writes;
+- an existing GitHub release, including a draft, or existing CLI npm version blocks publication without overwriting it; registry lookup errors block publication;
+- the target tag must resolve to the checked-out source revision before notes are assembled.
 
 #### release-17
 
@@ -183,17 +191,13 @@ When preparing a regular app release tag, the developer/agent shall run the regr
 
 #### release-26
 
-When preparing a beta app release tag (`app-vMAJOR.MINOR.PATCH-beta.N`) ([DR-087](../decisions/087-beta-app-releases.md)), the developer/agent shall verify the committed release tree is on `main` [[release-15](#release-15)], run the smoke with its live stage [[release-20](#release-20)] [[release-22](#release-22)], and tag without the regression [[release-25](#release-25)] or the manual checklist [[release-21](#release-21)].
+When preparing a beta app release tag (`app-vMAJOR.MINOR.PATCH-beta.N`) ([DR-087](../decisions/087-beta-app-releases.md)), the developer/agent shall select the intended committed and pushed revision [[release-15](#release-15)], run the smoke with its live stage [[release-20](#release-20)] [[release-22](#release-22)], and tag without the regression [[release-25](#release-25)] or the manual checklist [[release-21](#release-21)].
 
-- The owner-authorized beta.26 exception [[release-18](#release-18)] reuses the recorded runtime smoke and real Mac/Codex workflow evidence, validating the changed packaging entry points and actual native packages without repeating those business journeys.
+- The historical beta.26 preparation record retains its authorized reused evidence; this does not change future tags' gates.
 
 #### release-27
 
-When a beta app release tag is pushed ([DR-087](../decisions/087-beta-app-releases.md)), the app release workflow shall require full app validation of the tagged tree as for any app tag [[release-18](#release-18)], verify that both shell manifests carry the tag's pre-release version [[release-16](#release-16)], take the release notes from the app changelog's `[Unreleased]` section — refusing empty notes — under a line naming the beta and the release it leads to, and create the GitHub release as a pre-release titled by [[release-11](#release-11)], its run-from-source instructions followed by a line stating that a beta ran the smoke and the live smoke but not the regression:
-
-- beta.26 notes disclose the limited gate, reused acceptance and failed/waived unrelated full UI checks; every other tag retains its normal gates and notes;
-- a tag whose pre-release identifier is not `beta.N` is refused without a release;
-- the changelog gains no section for a beta [[release-3](#release-3)]: the regular release that follows moves `[Unreleased]` into its version section [[release-5](#release-5)], folding the betas' notes into it.
+When a beta app release tag is pushed ([DR-087](../decisions/087-beta-app-releases.md)), the app release workflow shall prepare both shells with that pre-release version [[release-16](#release-16)], require full app validation [[release-18](#release-18)] and create a GitHub pre-release titled by [[release-11](#release-11)], with prepared notes [[release-5](#release-5)] under a line identifying the beta and its base version, without asserting unrecorded smoke results or requiring a beta changelog edit ([DR-216](../decisions/216-tags-own-release-versions.md)).
 
 ### Merging into Main
 
@@ -311,14 +315,7 @@ When the dependency audit runs over isolated lockfile and manifest fixtures, the
 
 #### release-28
 
-When the app release workflow's tag check and notes assembly run, as the workflow runs them, over a checkout holding a changelog and both shell manifests, the test suite shall assert:
-
-- an `app-vMAJOR.MINOR.PATCH` tag over manifests at its version is a regular release titled `Spex App vMAJOR.MINOR.PATCH` [[release-19](#release-19)] [[release-11](#release-11)], whose notes are its version's section alone — no neighbouring section, no link definition — with repository-relative links pointed at the tagged tree and other links left as they are [[release-11](#release-11)];
-- an `app-vMAJOR.MINOR.PATCH-beta.N` tag over manifests at its pre-release version is a beta titled with that version [[release-11](#release-11)], whose notes are the `[Unreleased]` section under the line naming the beta and the release it leads to, and end with the line naming the gates a beta skips [[release-27](#release-27)];
-- `beta.0`, `beta.01`, `rc.1`, build metadata, a leading zero, a two-part version or another channel's prefix is refused without outputs or notes [[release-19](#release-19)] [[release-27](#release-27)];
-- a beta tag over manifests off its pre-release version refuses the release [[release-27](#release-27)];
-- a beta's `[Unreleased]` holding only headings and blank lines, its lines ending in LF or CRLF, is refused as empty notes [[release-27](#release-27)].
-- beta.26 alone names its owner-authorized gate and reused acceptance rather than implying full UI validation passed.
+When the release-notes integration suite runs the actual notes command over isolated Git histories and published-release records, the suite shall verify exact-version curated notes with pinned repository links, same-channel published ancestor commit ranges, exclusion of drafts/unpublished tags/unrelated branches and stale `[Unreleased]` text, empty ranges, first releases and rejection of a tag naming another revision [[release-5](#release-5)] [[release-16](#release-16)], as well as channel titles, beta identity and download/source instructions [[release-11](#release-11)] [[release-27](#release-27)].
 
 ### Merge Gate
 
@@ -342,7 +339,11 @@ When the repository-system audit reads the CI and hub workflows, merge script an
 
 #### release-45
 
-When the repository-system audit reads both channel release workflows and their reusable validation dependencies, the suite shall verify that each invokes full validation with its own channel on the exact tagged tree, without a mutable-ref override or conditional bypass, and that publication depends on successful validation, with no prior-run polling or downstream repetition of the completed suites [[release-18](#release-18)], while the CLI explicitly builds before bypassing the standalone publication lifecycle [[release-12](#release-12)].
+When the repository-system audit reads both channel release workflows and their reusable validation dependencies, the suite shall verify that each invokes full validation with its own channel on the exact tagged tree with identical metadata preparation [[release-16](#release-16)], without a mutable-ref override or conditional bypass, and that publication depends on successful validation, with no prior-run polling or downstream repetition of the completed suites [[release-18](#release-18)], while the CLI explicitly builds before bypassing the standalone publication lifecycle [[release-12](#release-12)].
+
+#### release-46
+
+When release metadata and artifact checks run over isolated fixtures and actual archives, the suite shall verify channel-only idempotent manifest/lock preparation, unchanged dependencies, invalid-tag and incomplete-metadata refusal, duplicate-release/npm-version and registry-error refusal [[release-16](#release-16)], and packed archive/native metadata/compiler-receipt version mismatches [[release-8](#release-8)], while workflow audits verify preparation before installs across reusable jobs and the archived hub tree [[release-18](#release-18)].
 
 ## References
 

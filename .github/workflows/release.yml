@@ -11,17 +11,49 @@ env:
   # The cli-v* release channel ships only the CLI; skip Electron binaries.
   ELECTRON_SKIP_BINARY_DOWNLOAD: 1
 
+concurrency:
+  group: cli-release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Prepare version from tag
+        id: version
+        run: node scripts/release-version.mjs prepare --channel=cli
+      - name: Generate release notes and reject duplicate versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release-notes.mjs notes --tag="$GITHUB_REF_NAME" --repository="$GITHUB_REPOSITORY" --out=release-notes.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cli-release-notes
+          path: release-notes.md
+          if-no-files-found: error
+
   validate:
+    needs: prepare
     uses: ./.github/workflows/ci.yml
     permissions:
       contents: read
     with:
       full: true
       channel: cli
+      release-tag: ${{ github.ref_name }}
 
   release:
-    needs: validate
+    needs: [prepare, validate]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -44,47 +76,30 @@ jobs:
       - name: Upgrade npm for OIDC support
         run: npm install -g npm@11.8.0
 
+      - name: Prepare version from tag
+        run: node scripts/release-version.mjs prepare --channel=cli
       - run: npm ci
       - run: npm run build -w packages/cli
 
-      - name: Validate tarball
-        run: |
-          npm pack --dry-run -w packages/cli 2>&1 | tee /tmp/pack-output.txt
-          if grep -E '\.test\.(js|d\.ts)' /tmp/pack-output.txt; then
-            echo "::error::Tarball contains test files"
-            exit 1
-          fi
-
-      - name: Verify version matches tag
-        id: version
-        run: |
-          TAG_VERSION="${GITHUB_REF_NAME#cli-v}"
-          PKG_VERSION="$(node -p 'require("./packages/cli/package.json").version')"
-          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
-            echo "::error::Tag $TAG_VERSION does not match packages/cli/package.json $PKG_VERSION"
-            exit 1
-          fi
-          echo "version=$TAG_VERSION" >> "$GITHUB_OUTPUT"
-
-      - name: Extract release notes
-        id: notes
-        run: |
-          VERSION="${GITHUB_REF_NAME#cli-v}"
-          # Extract section between ## [VERSION] and next ## [
-          sed -n "/^## \[${VERSION}\]/,/^## \[/{/^## \[${VERSION}\]/d;/^## \[/d;p}" packages/cli/CHANGELOG.md > /tmp/release-notes.md
-          cat /tmp/release-notes.md
-          if [ ! -s /tmp/release-notes.md ]; then
-            echo "::error::No release notes found for version ${VERSION} in packages/cli/CHANGELOG.md"
-            exit 1
-          fi
+      - name: Pack the validated CLI
+        run: npm pack -w packages/cli --ignore-scripts --json > packed.json
+      - name: Verify the actual tarball version and contents
+        id: packed
+        run: node scripts/release-artifacts.mjs npm --pack=packed.json
+      - uses: actions/download-artifact@v4
+        with:
+          name: cli-release-notes
+          path: notes
 
       - name: Publish to npm
         # Full validation already passed for this tagged tree; its CLI build
         # above supplies the tarball without repeating prepublishOnly's tests.
-        run: npm publish -w packages/cli --provenance --access public --ignore-scripts
+        env:
+          TARBALL: ${{ steps.packed.outputs.tarball }}
+        run: npm publish "$TARBALL" --provenance --access public --ignore-scripts
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          name: Spex CLI v${{ steps.version.outputs.version }}
-          body_path: /tmp/release-notes.md
+          name: Spex CLI v${{ needs.prepare.outputs.version }}
+          body_path: notes/release-notes.md
