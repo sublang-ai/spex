@@ -14,10 +14,19 @@ The CLI and getting-started documentation now use `npm install -g @sublang/spex`
 | Gate | Publication result |
 | --- | --- |
 | Full working-tree build | Passed on base `5ebabf229008d1591ce04d724dee3cf80a292a9c`; release documentation was being updated |
-| Automated smoke | Pending on the committed candidate |
-| Live migration smoke | Running with the packed CLI and signed-in Claude in an isolated fixture |
+| Automated smoke | Passed on committed candidate `ddcf16d099b03dec6255703149ef881fef610977`: build 19s, lint 3s, fresh install 2m40s, packed CLI user journeys 8s; desktop/server startup and native-module restoration passed |
+| Live migration smoke | Passed with packed CLI 5.0.0 and signed-in Claude: lint clean, every fixture item and checkbox state retained, compositions removed and migration committed |
 | Tarball inspection | Passed: 130 runtime files, no tests or unnecessary implementation source; every declared export and scaffold law present |
+| CLI suite | Passed: 220 tests in 17 suites, no failures or skips, Node 25.5.0; supported Node/platform validation remains the tag workflow's gate |
+| Prepush | Passed; spec lint has zero errors and the existing `core-service-41` sentence warning |
 | Full tagged CLI validation | Required by the tag workflow before npm publication |
+
+The migration packed the unchanged product code from base `5ebabf22` while release documentation was being prepared; candidate `ddcf16d0` changes only the README, getting-started, changelog and this record.
+The smoke used a fresh clone and empty npm cache, launching both shells against an isolated home.
+No gate is waived.
+An initial restricted CLI test run encountered npm-cache and local-listener permission failures; a later run raced a build removing `dist`.
+The stable unrestricted rerun passed all 220 tests after the build finished.
+Local evidence: `/tmp/spex-cli-5.0.0-smoke.log`, `/tmp/spex-cli-5.0.0-migration.log`, `/tmp/spex-cli-5.0.0-independent-tests-stable.log`, `/tmp/spex-cli-5.0.0-independent-pack.json` and `/tmp/spex-cli-5.0.0-prepush.log`.
 
 ## Historical source preparation
 
