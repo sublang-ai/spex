@@ -164,9 +164,6 @@ test.describe("authoring media output", () => {
     test.setTimeout(90_000);
     await open(page, app);
     await projectTab(page, "Playbooks");
-    // Offline authors choose a package org explicitly; License follows the project.
-    await page.getByTestId("new-playbook-org").fill("acme");
-    await expect(page.getByTestId("new-playbook-license")).toHaveValue("Apache-2.0");
     await page.getByTestId("new-playbook-id").fill("visual");
     await page.getByTestId("new-playbook-id").press("Enter");
     const workspace = page.getByTestId("authoring-workspace");

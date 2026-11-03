@@ -85,18 +85,14 @@ test("playbook-library-77: a new playbook is authored, compiled, and added throu
   await projectTab(page, "Playbooks");
   await expect(page.getByTestId("playbooks-global")).toBeVisible();
 
-  // ── New playbook: the id inline beside Org and License filled with
-  //    a chosen registry namespace, and the
-  //    Apache license its LICENSE opens with — `Triage` refused naming
-  //    the rule, `triage` opened as the workspace
+  // ── New playbook: one command, no publication details or account
+  //    required. `Triage` is refused naming the rule; `triage` opens
+  //    the local authoring workspace
   //    (playbook-library-51/52/54).
   await expect(page.getByTestId("drafts-section")).toHaveCount(0);
-  await expect(page.getByTestId("new-playbook-org")).toHaveValue("");
-  // The org names the package and its folder, spex-packages/acme/triage
-  // (environments-10, playbook-library-51).
-  const org = "acme";
-  await page.getByTestId("new-playbook-org").fill(org);
-  await expect(page.getByTestId("new-playbook-license")).toHaveValue("Apache-2.0");
+  const org = "local";
+  await expect(page.getByTestId("new-playbook-org")).toHaveCount(0);
+  await expect(page.getByTestId("new-playbook-license")).toHaveCount(0);
   const idField = page.getByTestId("new-playbook-id");
   await idField.fill("Triage");
   await idField.press("Enter");
@@ -431,12 +427,12 @@ test("playbook-library-77: a new playbook is authored, compiled, and added throu
   await expect(page.getByTestId("playbook-card-triage")).toHaveCount(1);
   for (const words of ["Enable", "Disable", "in demo-project", "Personal"]) await expect(card).not.toContainText(words);
   await expect(card.getByTestId("added-note")).toContainText("Added · restart running sessions to use it");
-  await expect(card.getByTestId("added-commit")).toHaveText("Commit spex-packages/acme/triage with your code");
+  await expect(card.getByTestId("added-commit")).toHaveText("Commit spex-packages/local/triage with your code");
   await expect(workspace).toHaveCount(0);
   await expect(page.getByTestId("draft-row-triage").getByTestId("draft-chip")).toContainText("Added");
   await projectTab(page, "Packages");
   const requested = packageRow(packagesSection(page, "project"), `${org}/triage`);
-  await expect(packageSource(requested, `${org}/triage`)).toHaveAttribute("title", "From folder spex-packages/acme/triage");
+  await expect(packageSource(requested, `${org}/triage`)).toHaveAttribute("title", "From folder spex-packages/local/triage");
   await expect.poll(() => app.readProjectConfig()).toContain("triage:");
   expect(app.readConfig()).toContain("dev.triager:");
   expect((await app.core.command("draft.list", {})).map((draft) => draft.id)).toEqual(["triage"]);
@@ -444,7 +440,6 @@ test("playbook-library-77: a new playbook is authored, compiled, and added throu
   // ── Delete asks Delete or Keep and removes the row, the spec package
   //    folder staying (playbook-library-63).
   await projectTab(page, "Playbooks");
-  await page.getByTestId("new-playbook-org").fill(org);
   await idField.fill("secaudit");
   await idField.press("Enter");
   await expect(workspace).toBeVisible();
@@ -462,8 +457,8 @@ test("playbook-library-77: a new playbook is authored, compiled, and added throu
   await draftRow.getByTestId("draft-delete-secaudit").click();
   await draftRow.getByRole("button", { name: "Delete", exact: true }).click();
   await expect(draftRow).toHaveCount(0);
-  // Under the author's explicitly chosen package org.
-  const defaultOrg = org;
+  // A local draft is kept under the stable local namespace.
+  const defaultOrg = "local";
   await expect(page.getByTestId("deleted-note")).toContainText(`its spec package folder stays at spex-packages/${defaultOrg}/secaudit`);
   expect(existsSync(join(app.projectDir, "spex-packages", defaultOrg, "secaudit", "meta.yaml"))).toBe(true);
   expect((await app.core.command("draft.list", {})).map((draft) => draft.id)).toEqual(["triage"]);
@@ -533,9 +528,6 @@ test("playbook-library-84: a picked SKILL.md becomes the source of a draft with 
   await open(page, app);
   await projectTab(page, "Playbooks");
   const idField = page.getByTestId("new-playbook-id");
-  // Offline authors choose a package org explicitly; License follows the project.
-  await page.getByTestId("new-playbook-org").fill("acme");
-  await expect(page.getByTestId("new-playbook-license")).toHaveValue("Apache-2.0");
   await idField.fill("triage");
   await idField.press("Enter");
   await expect(page.getByTestId("authoring-workspace")).toBeVisible();
@@ -573,7 +565,6 @@ test.describe("the pasted example", () => {
   }) => {
     await open(page, app);
     await projectTab(page, "Playbooks");
-    await page.getByTestId("new-playbook-org").fill("acme");
     await page.getByTestId("example-prefill").click();
     await expect(page.getByTestId("authoring-workspace")).toBeVisible();
     const chip = page.getByTestId("draft-chip");
@@ -638,7 +629,6 @@ test.describe("the pasted example", () => {
     // (playbook-library-85, -41).
     await open(page, app);
     await projectTab(page, "Playbooks");
-    await page.getByTestId("new-playbook-org").fill("acme");
     await page.getByTestId("example-prefill").click();
     await page.getByTestId("paste-use").click();
     await page.getByTestId("compile-button").click();

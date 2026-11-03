@@ -24,6 +24,7 @@ import { compilePlaybook, defaultSpawner, ENGINE_LINKS_EXCLUDE, installEngine, m
 import { createModuleLoader, isValidRegistryEntry, type RegistryEntryLike } from "./config.js";
 import { fileVersion } from "@sublang/spex/files";
 import { instanceFolder } from "@sublang/spex/instance";
+import { GitHostClient, fileCredentialStore } from "@sublang/spex/git-host";
 import {
   artifactLanguages,
   builtinLock,
@@ -73,7 +74,7 @@ import { AGENT_FOLDERS } from "@sublang/spex/environment";
 import { startGitHttpHost, testCredentialArgs } from "./testing/git-http-host.js";
 import { APP_ENGINE_URL, APP_XSTATE_URL, importsOf, LINKED_ID, recordingResolutions, writeLinkedFixture } from "./testing/linked-artifact.js";
 import { scratchDir } from "./testing/scratch.js";
-import { browserSignIn, instanceClient } from "./testing/host-sign-in.js";
+import { browserSignIn } from "./testing/host-sign-in.js";
 import { startStandinHost, type StandinHost } from "./testing/standin-host.js";
 import { makeRelease, RELAY_HEADERS, startStandinRegistry, type ReleaseFixture, type StandinRegistry } from "@sublang/spex/testing";
 import { stubSlcScriptedSource } from "./testing/stub-slc.js";
@@ -1011,18 +1012,25 @@ test("environments-18: one stand-in registry answers at each instance relaying t
   const second = await startStandinHost({ dir: join(scratch, "second"), displayName: "Second", person: { id: "1002", login: "bob", displayName: "Bob" }, registry: shared.url });
   const third = await startStandinHost({ dir: join(scratch, "third"), displayName: "Third", person: { id: "1003", login: "grace", displayName: "Grace Hopper" }, registry: shared.url });
   try {
-    // A home signed in to the first and the second, another to the third
-    // alone, each app token minted by its instance's own sign-in.
+    // A home signed in to the first and the second registry accounts,
+    // another to the third alone, each grant minted for registry use.
+    const clientFor = (home: string, host: StandinHost, scope: "registry" | "space"): GitHostClient =>
+      new GitHostClient({ url: host.url, scope, label: "Spex on test", credentials: fileCredentialStore(join(scratch, home), host.url, scope) });
     const tokenAt = async (home: string, host: StandinHost): Promise<string> => {
-      const signedIn = instanceClient(join(scratch, home), host);
+      const signedIn = clientFor(home, host, "registry");
       await browserSignIn(signedIn);
       const secret = await signedIn.accessSecret();
-      assert.ok(secret, "the sign-in stored an app token");
+      assert.ok(secret, "the sign-in stored a registry app token");
       return secret;
     };
+    const space = clientFor("home", first, "space");
+    await browserSignIn(space);
+    const spaceToken = await space.accessSecret();
+    assert.ok(spaceToken);
     const one = await tokenAt("home", first);
     const two = await tokenAt("home", second);
     const three = await tokenAt("other", third);
+    assert.notEqual(one, spaceToken, "the same origin keeps distinct registry and Space grants");
     /** The registry as reached at `host`, presenting `token` or none. */
     const at = (host: Pick<StandinHost, "url">, token?: string): RegistryClient =>
       new RegistryClient({ url: host.url, ...(token === undefined ? {} : { token: async () => token }) });
@@ -1046,6 +1054,12 @@ test("environments-18: one stand-in registry answers at each instance relaying t
     let from = shared.script.received.length;
     const { checksum } = await publishRelease(at(first, one), vault);
     assert.deepEqual(shared.script.received.slice(from), [{ method: "PUT", path: "/api/v1/packages/vault/secrets/1.0.0", instance: first.url, account: "ada", bearer: true }]);
+    from = shared.script.received.length;
+    await assert.rejects(at(first, spaceToken).index("vault/secrets"), refusedAs("forbidden", "wrong_scope"));
+    assert.equal(shared.script.received.length, from, "a Space grant is refused before the package request reaches the shared registry");
+    await space.signOut();
+    assert.equal(await space.accessSecret(), null);
+    assert.equal((await fileCredentialStore(join(scratch, "home"), first.url, "registry").read())?.access, one, "Space sign-out leaves the registry grant intact");
     from = shared.script.received.length;
     assert.equal((await at(first, one).version("vault/secrets", "1.0.0")).checksum, checksum);
     assert.deepEqual(await versionsOf(at(second, two), "vault/secrets"), ["1.0.0"]);

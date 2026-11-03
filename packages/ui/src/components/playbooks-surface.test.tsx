@@ -299,6 +299,44 @@ describe("playbook-library-92/113: the built-in package is one row among the res
     expect(screen.queryByTestId("env-publish-acme/notes")).toBeNull();
   });
 
+  test("a local package opens publishing setup without needing its authoring session", async () => {
+    const { ["me/jot"]: _former, ...requests } = GLOBAL.requests;
+    environments[OWN_KEY] = {
+      ...GLOBAL,
+      requests: { ...requests, "local/jot": { kind: "path", path: "spex-packages/local/jot" } },
+      packages: GLOBAL.packages.map((pkg) => pkg.name === "me/jot" ? {
+        ...pkg, name: "local/jot", source: { kind: "path", detail: "spex-packages/local/jot" },
+      } : pkg),
+    };
+    lists = { project: null, own: [CODE, REVIEW, NOTE, { ...JOT, package: "local/jot" }] };
+    const original = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation(async (type, params, ...args) => type === "environment.publish" && params?.dryRun ? {
+      accepted: true, preview: {
+        instance: { origin: REGISTRY, name: "Spex Example" },
+        name: "mine/jot", version: "0.1.0", license: "MIT", orgVerified: true, files: ["meta.yaml"],
+      },
+    } : original(type, params, ...args));
+    await renderSurface();
+    expect(screen.queryByTestId("draft-row-jot")).toBeNull();
+    fireEvent.click(screen.getByTestId("env-more-local/jot"));
+    fireEvent.click(screen.getByTestId("env-publish-local/jot"));
+    await screen.findByRole("dialog", { name: "Publish package" });
+    await vi.waitFor(() => expect((screen.getByTestId("publish-license") as HTMLInputElement).value).toBe("Apache-2.0"));
+    fireEvent.change(screen.getByTestId("publish-org"), { target: { value: "mine" } });
+    fireEvent.change(screen.getByTestId("publish-license"), { target: { value: "MIT" } });
+    fireEvent.click(screen.getByTestId("publish-review"));
+    await screen.findByTestId("publish-summary");
+    expect(commandMock).toHaveBeenCalledWith("environment.publish", {
+      repository: OWN_KEY, name: "local/jot", publication: { org: "mine", license: "MIT" }, dryRun: true,
+    }, { timeoutMs: 35_000 });
+    fireEvent.click(screen.getByTestId("publish-cancel"));
+    expect((screen.getByTestId("publish-org") as HTMLInputElement).value).toBe("mine");
+    fireEvent.click(screen.getByTestId("publish-close"));
+    expect(screen.queryByRole("dialog", { name: "Publish package" })).toBeNull();
+    await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("env-more-local/jot")));
+    expect(commandMock.mock.calls.filter(([type, params]) => type === "environment.publish" && !params.dryRun)).toEqual([]);
+  });
+
   test("a package added through Add… is requested in the global spex.yaml", async () => {
     await renderSurface();
     fireEvent.click(screen.getByTestId("add-open"));
@@ -501,15 +539,15 @@ describe("playbook-library-50/51: authoring in the global environment", () => {
     expect(within(section).getByTestId("draft-row-mine")).toBeTruthy();
     expect(within(section).queryByTestId("draft-row-theirs")).toBeNull();
 
-    // Org and License from the global environment's defaults.
-    await vi.waitFor(() => expect((screen.getByTestId("new-playbook-org") as HTMLInputElement).value).toBe("me"));
-    expect(commandMock).toHaveBeenCalledWith("draft.defaults", { projectId: OWN_KEY });
+    // Creating a global playbook does not ask for publication details.
+    expect(commandMock).not.toHaveBeenCalledWith("draft.defaults", expect.anything());
+    expect(commandMock).not.toHaveBeenCalledWith("registry.orgs", expect.anything(), expect.anything());
     fireEvent.change(screen.getByTestId("new-playbook-id"), { target: { value: "sweep" } });
     await act(async () => {
       fireEvent.click(screen.getByTestId("new-playbook-button"));
     });
     await vi.waitFor(() =>
-      expect(commandMock).toHaveBeenCalledWith("draft.create", { projectId: OWN_KEY, draftId: "sweep", org: "me", license: "Apache-2.0" }),
+      expect(commandMock).toHaveBeenCalledWith("draft.create", { projectId: OWN_KEY, draftId: "sweep" }),
     );
     // Its workspace opens in the surface's place.
     expect(await screen.findByTestId("authoring-workspace")).toBeTruthy();

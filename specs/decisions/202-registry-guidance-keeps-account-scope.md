@@ -5,6 +5,8 @@
 
 ## Status
 
+Amended by [DR-218](218-write-a-playbook-before-publishing.md) in deferring publishing org, license and authority guidance until Publish, keeping creation local.
+
 Accepted (2026-11-02) under the owner's request to separate package and Space accounts and correct their visitor guidance.
 Amends [DR-200](200-publishing-names-need-registry-authority.md) in the namespace-management destination used by authoring, export and publication guidance.
 

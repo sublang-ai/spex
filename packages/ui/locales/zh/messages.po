@@ -1789,6 +1789,7 @@ msgstr "无法连接 {endpoint} 上的 Spex 核心 — 每秒重试中。网页�
 #. leave an editor without saving
 #. leave an editor without saving
 #. leave an editor without saving
+#. leave an editor without saving
 #. leave the editor without changing anything
 #. leave the editor without changing anything
 #. leave the editor without changing anything
@@ -1812,6 +1813,7 @@ msgstr "无法连接 {endpoint} 上的 Spex 核心 — 每秒重试中。网页�
 #: src/components/ProjectGroup.tsx
 #: src/components/ProjectPalette.tsx
 #: src/components/PublishControl.tsx
+#: src/components/PublishSetup.tsx
 #: src/components/RegistryAccount.tsx
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceInstance.tsx
@@ -2030,6 +2032,11 @@ msgstr "选择项目"
 msgid "Choose a project folder…"
 msgstr "选择项目文件夹…"
 
+#. publishing creates a release snapshot and does not rename local work
+#: src/components/PublishSetup.tsx
+msgid "Choose a publishing name and license. Your local files stay as they are."
+msgstr "选择发布名称和许可证，本地文件保持原样。"
+
 #: src/components/SpaceMembers.tsx
 msgid "Choose a role"
 msgstr "选择角色"
@@ -2161,8 +2168,8 @@ msgstr "引用 {out} · 被引用 {in}"
 msgid "cites it"
 msgstr "引用它"
 
-#. Open the selected registry's account page to claim a publishing name
-#: src/components/PlaybookAuthoring.tsx
+#. open the selected registry account's publishing-name management
+#: src/components/PublishSetup.tsx
 msgid "Claim an org"
 msgstr "认领组织名"
 
@@ -2316,6 +2323,11 @@ msgstr "合并此项目的本地记录与已有记录"
 #: src/components/SpacePlacements.tsx
 msgid "Combining…"
 msgstr "合并中…"
+
+#. the slash command of a new playbook
+#: src/components/PlaybookAuthoring.tsx
+msgid "Command"
+msgstr "命令"
 
 #. after adding an authored playbook to a project: {folder} is its package's folder in the project folder, e.g. spex-packages/acme/triage
 #: src/components/PlaybookAuthoring.tsx
@@ -3208,8 +3220,8 @@ msgstr "例如 .git、docs/generated"
 msgid "e.g. alex, sam"
 msgstr "例如 alex, sam"
 
-#. the hint inside the new-playbook license field; an SPDX license id
-#: src/components/PlaybookAuthoring.tsx
+#. an example SPDX license identifier
+#: src/components/PublishSetup.tsx
 msgid "e.g. Apache-2.0"
 msgstr "例如 Apache-2.0"
 
@@ -3266,6 +3278,11 @@ msgstr "编辑 {name}.md"
 msgid "Edit {path}"
 msgstr "编辑 {path}"
 
+#. return to publishing name and license without uploading
+#: src/components/PublishControl.tsx
+msgid "Edit details"
+msgstr "编辑发布信息"
+
 #: src/components/ProjectGroup.tsx
 msgid "Edit intent text"
 msgstr "编辑意图文本"
@@ -3317,6 +3334,11 @@ msgstr "结束此次运行。不会再恢复。"
 #: src/components/DraftConversation.tsx
 msgid "Ends the turn; the transcript keeps what it got"
 msgstr "结束本轮；对话记录保留已收到的内容"
+
+#. publishing needs an explicit license
+#: src/components/PublishSetup.tsx
+msgid "Enter a license on one line, such as Apache-2.0."
+msgstr "请用一行填写许可证，例如 Apache-2.0。"
 
 #: src/components/BindingEditor.tsx
 msgid "Enter a model ID, inherit, or use the provider default."
@@ -4275,10 +4297,15 @@ msgstr "最后输出：{age}"
 msgid "Last refreshed {age}"
 msgstr "上次刷新：{age}"
 
-#. field of New playbook: the SPDX license its spec package is published under
-#: src/components/PlaybookAuthoring.tsx
+#. the explicit license for the published release
+#: src/components/PublishSetup.tsx
 msgid "License"
 msgstr "许可证"
+
+#. the license chosen for this release
+#: src/components/PublishControl.tsx
+msgid "License: {license}"
+msgstr "许可证：{license}"
 
 #: src/components/SpaceMembers.tsx
 msgid "Limited access; cannot read or sync private shared records."
@@ -4352,8 +4379,8 @@ msgstr "加载中…"
 #. a read is still in flight
 #. a read is still in flight
 #: src/components/DashboardSurface.tsx
-#: src/components/PlaybookAuthoring.tsx
 #: src/components/ProjectGroup.tsx
+#: src/components/PublishSetup.tsx
 #: src/components/SpaceExplorer.tsx
 msgid "Loading…"
 msgstr "加载中…"
@@ -4614,7 +4641,6 @@ msgid "New group…"
 msgstr "新建群组…"
 
 #. start writing a playbook of one's own
-#. start writing a playbook of one's own
 #: src/components/PlaybookAuthoring.tsx
 msgid "New playbook"
 msgstr "新建规程"
@@ -4745,7 +4771,7 @@ msgid "No open pull requests."
 msgstr "没有未关闭的 PR。"
 
 #. the registry account may publish to no org
-#: src/components/PlaybookAuthoring.tsx
+#: src/components/PublishSetup.tsx
 msgid "No orgs to publish to"
 msgstr "没有可发布的组织"
 
@@ -4993,8 +5019,8 @@ msgstr "自 {moment} 起未同步"
 msgid "Not yet shared"
 msgstr "尚未共享"
 
-#. beneath New playbook's Org: the registry account may not publish to the org typed
-#: src/components/PlaybookAuthoring.tsx
+#. the registry account cannot publish under the typed name
+#: src/components/PublishSetup.tsx
 msgid "not yours to publish to"
 msgstr "你无权发布到此组织"
 
@@ -5392,16 +5418,6 @@ msgstr "优化"
 msgid "Or enter an existing Git repository path"
 msgstr "或手动输入已有 Git 仓库路径"
 
-#. field of New playbook: the registry org its spec package is published under
-#: src/components/PlaybookAuthoring.tsx
-msgid "Org"
-msgstr "组织"
-
-#. the example's prefill waits for New playbook's Org and License
-#: src/components/PlaybooksTab.tsx
-msgid "Org and License first"
-msgstr "请先填写组织和许可证"
-
 #. An unsigned publish preview checks local files but cannot verify the package's org
 #: src/components/PublishControl.tsx
 msgid "Org not checked — sign in to {registry} to check publishing rights"
@@ -5572,7 +5588,6 @@ msgid "plan the development path for a request: direct implementation, or a dura
 msgstr "为请求规划开发路径：直接实现，或先形成持久的决策；当请求指明 GitHub Issue 或要求 PR 时，经由 PR 交付"
 
 #: src/components/DraftRegisterTab.tsx
-#: src/components/PlaybookAuthoring.tsx
 msgid "Playbook id"
 msgstr "规程 id"
 
@@ -5655,10 +5670,17 @@ msgstr "前缀"
 msgid "Preparing browser…"
 msgstr "正在准备浏览器…"
 
+#. check the release and see its destination and files before confirming upload
 #. editor mode: the rendered draft
+#: src/components/PublishSetup.tsx
 #: src/components/SpecEditor.tsx
 msgid "Preview"
 msgstr "预览"
+
+#. check the release again after an earlier preview or publication attempt
+#: src/components/PublishControl.tsx
+msgid "Preview again"
+msgstr "重新预览"
 
 #: src/components/TrustedMedia.tsx
 msgid "Preview unavailable; the file can still be downloaded"
@@ -5778,6 +5800,21 @@ msgstr "将 {name} {version} 发布到 {registry}"
 msgid "publish a reviewed branch as a pull request, wait for its checks, fix red checks once through code, and merge it"
 msgstr "将经审阅的分支发布为 PR，等待其检查，经由 code 修复一次未通过的检查，然后合并"
 
+#. heading for publishing a local package
+#: src/components/PublishSetup.tsx
+msgid "Publish package"
+msgstr "发布规约包"
+
+#. heading for publishing a locally authored playbook
+#: src/components/PublishSetup.tsx
+msgid "Publish playbook"
+msgstr "发布剧本"
+
+#. registry publishing org, the first half of the published package name
+#: src/components/PublishSetup.tsx
+msgid "Publish under"
+msgstr "发布名称"
+
 #. a publish succeeded: the version the registry now holds, linking its page there
 #: src/components/PublishControl.tsx
 msgid "Published {version}"
@@ -5788,8 +5825,8 @@ msgstr "已发布 {version}"
 msgid "Publishes {path} to {registry}"
 msgstr "将 {path} 发布到 {registry}"
 
-#. New playbook's Org has no successful registry account check
-#: src/components/PlaybookAuthoring.tsx
+#. the publishing name has no successful registry account check
+#: src/components/PublishSetup.tsx
 msgid "Publishing rights not checked"
 msgstr "尚未验证发布权限"
 
@@ -6356,7 +6393,7 @@ msgstr "本机智能体对话的续接令牌；在别处无效"
 
 #. act: load the transcript again
 #. read the record again
-#. read the registry account's orgs again
+#. read the registry publishing names again
 #. read the specs tree again
 #. run the stopped step again
 #. run the stopped step again
@@ -6374,7 +6411,7 @@ msgstr "本机智能体对话的续接令牌；在别处无效"
 #: src/components/AgentCards.tsx
 #: src/components/ComposerAttachments.tsx
 #: src/components/DashboardSurface.tsx
-#: src/components/PlaybookAuthoring.tsx
+#: src/components/PublishSetup.tsx
 #: src/components/RunView.tsx
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceGroups.tsx
@@ -7352,6 +7389,11 @@ msgstr "开始任务"
 msgid "Start typing in the composer from anywhere in Projects"
 msgstr "在项目界面任意位置输入，文字直接进入输入框"
 
+#. create a local playbook and open its authoring workspace
+#: src/components/PlaybookAuthoring.tsx
+msgid "Start writing"
+msgstr "开始编写"
+
 #: src/components/ProjectGroup.tsx
 msgid "started {age}"
 msgstr "{age}开始"
@@ -8022,8 +8064,8 @@ msgstr "此规程未找到该阶段"
 msgid "three in a row — tell the agent how to proceed"
 msgstr "连续三次 — 请告诉智能体如何继续"
 
-#. Local package names do not establish publishing rights at the selected registry
-#: src/components/PlaybookAuthoring.tsx
+#. local names do not establish publishing rights
+#: src/components/PublishSetup.tsx
 msgid "To publish, use an org you can claim at this registry."
 msgstr "要发布规约包，请使用你能在此注册中心认领的组织名。"
 
@@ -8287,6 +8329,11 @@ msgstr "{age}由你更新"
 #: src/components/SettingsSurface.tsx
 msgid "Updated the starter config at <0>{path}</0> for the current sign-ins"
 msgstr "已按当前登录更新 <0>{path}</0> 的初始配置"
+
+#. an agent card reads its model catalog again after Re-check
+#: src/components/AgentCards.tsx
+msgid "Updating model…"
+msgstr "正在更新模型…"
 
 #. the packages spex.yaml names are being updated to the newest versions it allows and installed
 #. the packages spex.yaml names are being updated to the newest versions it allows and installed
@@ -8609,6 +8656,11 @@ msgstr "执行中…"
 msgid "Writable paths (comma-separated)"
 msgstr "可写路径（逗号分隔）"
 
+#. New playbooks need no publishing account or license to start
+#: src/components/PlaybookAuthoring.tsx
+msgid "Write and try it here. Publish when you’re ready."
+msgstr "在这里编写和试用，准备好后再发布。"
+
 #: src/components/CaptainHome.tsx
 msgid "Write clear specs. Build with playbooks."
 msgstr "写清规约，按规程开发。"
@@ -8664,7 +8716,7 @@ msgid "Your groups"
 msgstr "你的群组"
 
 #. the registry did not answer which orgs the account may publish to
-#: src/components/PlaybookAuthoring.tsx
+#: src/components/PublishSetup.tsx
 msgid "Your orgs could not be read"
 msgstr "无法读取你的组织"
 

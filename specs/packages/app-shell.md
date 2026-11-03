@@ -268,6 +268,16 @@ When a native desktop package is built, its packaging gate shall run the package
 - The gate provisions the archived core's default engine links and invokes its actual registry bundler, importing the produced module with the supplied native service and physical engine copies, with no global binary override.
 - The hooks load from both the desktop workspace and the repository-root `--projectDir` entry point, and the gate uses the platform packager's executable name, including the native acceptance build's override.
 
+#### app-shell-44
+
+When a native desktop package is built, its packaging command shall run a resume check after the build and before the platform packager, aborting packaging where it fails, over the Claude adapter of the Cligent the core resolves and the agent SDK the shell declares at the unconstrained range [[app-shell-33](#app-shell-33)], asserting that a resumed Claude call with no model requests the default current at that resume ([DR-217](../decisions/217-cligent-0-38-0-adoption-and-models-on-re-check.md)):
+
+- its child process starts under a temporary home — `HOME`, `USERPROFILE` and Claude's configuration directory — with every inherited `ANTHROPIC_*` and `CLAUDE_*` variable removed, a loopback model API fixture's address and a fake credential set, and a user settings file whose `env.ANTHROPIC_MODEL` is the only default;
+- it refuses a Cligent below 0.38.0 or outside the core's declared range, and prints the Cligent, SDK and Claude Code versions;
+- a call on an explicit model, then the settings default changed, then a resume of that session with no model each end in a successful terminal yielding a resume token;
+- the resume yields the first call's token, and its request names the changed default; another token fails as a new session in place of the resume, and naming the explicit model fails with a message that Claude Code restored the earlier model on resume;
+- a missing executable, a failed or timed-out call or a fixture receiving no or other requests fails it with its reason, and the home and fixture are removed either way.
+
 #### app-shell-34
 
 When the desktop's test suite reads the package manifest and resolves the compile toolchain with the desktop's Electron binary as the runtime over the module directories above the desktop's own module, the test suite shall assert that the three SDKs, the compiler and its host Playbook are declared, that the resolved compiler is the app's own copy run on that binary, that the scaffold command resolved over those directories is the checkout's own `packages/cli` entry on that binary run as Node, and that for a module inside an asar archive the directories handed are the archive's asar-unpacked ones [[app-shell-33](#app-shell-33)].

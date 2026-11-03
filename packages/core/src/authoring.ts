@@ -726,16 +726,18 @@ export class AuthorManager {
   /** Where the session's spec package stands (playbook-library-52,
    * -56, -70): its name as its manifest gives it, its folder and its
    * source, in the session's language, relative to the working folder. */
-  private packageFields(id: string, packagePath: string, language: string, dir: string | null): Pick<DraftInfo, "package" | "packagePath" | "sourcePath"> {
+  private packageFields(id: string, packagePath: string, language: string, dir: string | null): Pick<DraftInfo, "package" | "packageLicense" | "packagePath" | "sourcePath"> {
     let name: string | undefined;
+    let license: string | undefined;
     if (dir !== null) {
       try {
         const manifest = parseManifestText(readFileSync(join(dir, "meta.yaml"), "utf8")).manifest;
-        if (manifest) name = `${manifest.org}/${manifest.name}`;
+        if (manifest) { name = `${manifest.org}/${manifest.name}`; license = manifest.license; }
       } catch { /* a folder without a readable manifest names none */ }
     }
     return {
       ...(name ? { package: name } : {}),
+      ...(license !== undefined ? { packageLicense: license } : {}),
       packagePath,
       sourcePath: [packagePath, "playbooks", language, id, `${id}.md`].join("/"),
     };

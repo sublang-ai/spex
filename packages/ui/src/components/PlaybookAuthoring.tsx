@@ -5,12 +5,10 @@
 // playbook-library-51, DR-176): the authoring sessions of one
 // environment — a project's on its Playbooks tab, the global one on the
 // Playbooks surface — each with its state chip, age, Open and Delete,
-// and "New playbook" at the section's foot, asking the id beside "Org"
-// and "License" filled with that environment's defaults, creating the
-// session and its spec package under development in that environment's
-// folder. No destination is asked.
+// and a command-only creation form at the section's foot. Publishing
+// metadata is deferred until Publish (DR-218).
 
-import { type KeyboardEvent as ReactKeyboardEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { type KeyboardEvent as ReactKeyboardEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import type { DraftInfo, PlaybookAvailability } from "@sublang/spex-core/protocol";
 
 import { usePlaceStore } from "../state/place-context.js";
@@ -19,8 +17,6 @@ import {
   draftIdRuleText,
   draftPackagePath,
   isDraftId,
-  isPackageOrg,
-  packageOrgRuleText,
 } from "../lib/drafts.js";
 import { i18n } from "../i18n.js";
 import { phaseLabel } from "../lib/compile-log.js";
@@ -29,7 +25,6 @@ import { useClock } from "../lib/useClock.js";
 import { DraftStateChip } from "./AuthoringWorkspace.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { withCode } from "./PlaybookCard.js";
-import { useRegistrySignIn } from "./RegistryAccount.js";
 
 const PRIMARY =
   "min-h-6 rounded-md border border-brand-300 px-2.5 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50 disabled:opacity-40 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950";
@@ -201,128 +196,11 @@ function DraftRow({
   );
 }
 
-/** New playbook's Org and License for one environment
- * (playbook-library-51, playbook-library-103, playbook-library-121):
- * Org comes only from that registry account's authorized namespaces,
- * License from the core's defaults, then the person's own edits.
- * A change of environment clears both and forgets what the person typed;
- * defaults read again on a reconnect or registry/account change fill
- * only a field the person has not edited since. */
-export function useNewPackageFields(repository: string | undefined) {
-  const store = usePlaceStore();
-  const connection = store((state) => state.connection);
-  const loadDraftDefaults = store((state) => state.loadDraftDefaults);
-  const loadEnvironment = store((state) => state.loadEnvironment);
-  const environments = store((current) => current.environments);
-  const connected = connection === "open";
-  const [enteredOrg, setEnteredOrg] = useState<string>();
-  const [license, setLicense] = useState("");
-  const [orgsReply, setOrgsReply] = useState<{
-    scope: string;
-    orgs: { name: string; path: string; provider?: string }[];
-    status: "idle" | "loading" | "ready" | "error";
-    error?: string;
-  }>();
-  const [orgsAttempt, setOrgsAttempt] = useState(0);
-  const registryOrigin = repository ? environments[repository]?.registry?.origin : undefined;
-  // Authoring can open before Packages has read the selected registry's
-  // account. A Space's account establishes no publishing identity.
-  const registry = useRegistrySignIn(registryOrigin, { read: true });
-  const registryAccount = registry.state?.account
-    ? JSON.stringify([registry.state.account.id, registry.state.account.login])
-    : undefined;
-  const orgsScope = JSON.stringify([repository, connected, registryOrigin, registryAccount, orgsAttempt]);
-  // A former account's successful answer is unusable in the very render
-  // that changes scope, before the next request's effect starts.
-  const currentOrgs = orgsReply?.scope === orgsScope ? orgsReply : undefined;
-  const orgs = currentOrgs?.orgs ?? [];
-  const orgsStatus = currentOrgs?.status ?? "idle";
-  const orgsError = currentOrgs?.error;
-
-  // The environment names the registry its orgs are read at.
-  useEffect(() => {
-    if (connected && repository) void loadEnvironment(repository).catch(() => {});
-  }, [connected, repository, loadEnvironment]);
-
-  useEffect(() => {
-    let active = true;
-    setOrgsReply({ scope: orgsScope, orgs: [], status: "idle" });
-    if (connected && repository && registryOrigin && registryAccount) void (async () => {
-      setOrgsReply({ scope: orgsScope, orgs: [], status: "loading" });
-      try {
-        const reply = await store.getClient().command("registry.orgs", { repository }, { timeoutMs: 35_000 });
-        if (active) {
-          const sorted = [...reply.orgs].sort((left, right) => left.name < right.name ? -1 : left.name > right.name ? 1 : 0);
-          setOrgsReply({ scope: orgsScope, orgs: sorted, status: "ready" });
-        }
-      } catch (cause) {
-        if (active) setOrgsReply({ scope: orgsScope, orgs: [], status: "error", error: cause instanceof Error ? cause.message : i18n._({ id: "Your orgs could not be read", comment: "the registry did not answer which orgs the account may publish to" }) });
-      }
-    })();
-    return () => { active = false; };
-  }, [connected, repository, registryOrigin, registryAccount, orgsScope, store]);
-
-  const touched = useRef({ license: false });
-  useEffect(() => {
-    touched.current = { license: false };
-    setEnteredOrg(undefined);
-    setLicense("");
-  }, [repository]);
-  useEffect(() => {
-    if (!connected || !repository) return;
-    let current = true;
-    void loadDraftDefaults(repository)
-      .then((defaults) => {
-        if (!current || !defaults) return;
-        // Older cores may suggest a Space group here. Only the scoped
-        // registry.orgs answer above can supply an automatic Org.
-        if (!touched.current.license) setLicense(defaults.license ?? "");
-      })
-      .catch(() => {
-        // The fields stand empty for the person to fill.
-      });
-    return () => {
-      current = false;
-    };
-  }, [connected, repository, registryOrigin, registryAccount, loadDraftDefaults]);
-  const editOrg = useCallback((value: string) => {
-    setEnteredOrg(value);
-  }, []);
-  const editLicense = useCallback((value: string) => {
-    touched.current.license = true;
-    setLicense(value);
-  }, []);
-  const org = enteredOrg !== undefined ? enteredOrg : orgsStatus === "ready" ? orgs[0]?.name ?? "" : "";
-  const fields = { org: org.trim(), license: license.trim() };
-  return {
-    org,
-    license,
-    editOrg,
-    editLicense,
-    fields,
-    ready: isPackageOrg(fields.org) && fields.license.length > 0,
-    orgs,
-    orgsStatus,
-    orgsError,
-    registryOrigin,
-    retryOrgs: () => setOrgsAttempt((attempt) => attempt + 1),
-  };
-}
-
-export type NewPackageFields = ReturnType<typeof useNewPackageFields>;
-
-/** The New playbook field (playbook-library-51): the id, checked in
- * place against the Agent Skills name rule and the ids the
- * environments already hold, beside "Org" and "License" for the new
- * package's `meta.yaml`, filled with the environment's defaults; Enter
- * creates the authoring session and opens its workspace. The Org is
- * one field suggesting the orgs the registry account may publish to
- * (playbook-library-121): a typed org they omit wears "not yours to
- * publish to", and what is typed always stands. */
+/** A local playbook starts with its command alone. Publication metadata
+ * belongs to PublishSetup (playbook-library-51, DR-218). */
 function NewPlaybookField({
   taken,
   drafts,
-  fields,
   onCreate,
   onOpenExisting,
   autoFocus,
@@ -331,7 +209,6 @@ function NewPlaybookField({
   /** The playbooks the environments place, by id and by name. */
   taken: ReadonlyMap<string, PlaybookAvailability>;
   drafts: Record<string, DraftInfo>;
-  fields: NewPackageFields;
   onCreate: (id: string) => Promise<unknown>;
   onOpenExisting: (id: string) => void;
   /** The Captain home's slash menu asked for this field. */
@@ -339,13 +216,12 @@ function NewPlaybookField({
   /** The request was honored: focus lands here once, not on every return. */
   onAutoFocused: () => void;
 }) {
-  const { org, license, orgs, orgsStatus, orgsError, registryOrigin } = fields;
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const inputRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
-  const empty = value.trim().length === 0 || org.trim().length === 0 || license.trim().length === 0;
+  const empty = value.trim().length === 0;
 
   useEffect(() => {
     if (!autoFocus) return;
@@ -372,13 +248,6 @@ function NewPlaybookField({
       setError(i18n._("{id} is already a playbook of {package}", { id, package: holder.package }));
       return;
     }
-    // A new spec package names its org and license: both are asked,
-    // the org by the manifest's name rule.
-    if (empty) return;
-    if (!isPackageOrg(org.trim())) {
-      setError(packageOrgRuleText());
-      return;
-    }
     setBusy(true);
     setError(undefined);
     try {
@@ -397,48 +266,18 @@ function NewPlaybookField({
       void submit();
     }
   };
-  const field = "rounded border border-neutral-300 bg-white px-2 py-1 font-mono dark:border-neutral-700 dark:bg-neutral-950";
-  // One note beneath the Org at a time (playbook-library-121): the
-  // read in flight, its failure with Retry, an account with no org to
-  // publish to, or a typed org the account's list omits.
-  const typedOrg = org.trim();
-  const orgNote =
-    orgsStatus === "loading" ? (
-      <span id="new-playbook-org-note" role="status" data-testid="new-playbook-org-note" className="text-xs text-neutral-500">
-        {i18n._({ id: "Loading…", comment: "a read is still in flight" })}
-      </span>
-    ) : orgsStatus === "error" ? (
-      <span id="new-playbook-org-note" role="alert" data-testid="new-playbook-org-note" className="text-xs text-amber-700 dark:text-amber-300">
-        {orgsError}{" "}
-        <button type="button" data-testid="new-playbook-orgs-retry" onClick={fields.retryOrgs} className="underline">
-          {i18n._({ id: "Retry", comment: "read the registry account's orgs again" })}
-        </button>
-      </span>
-    ) : orgsStatus === "ready" && !orgs?.length ? (
-      <span id="new-playbook-org-note" role="status" data-testid="new-playbook-org-note" className="text-xs text-neutral-500">
-        {i18n._({ id: "No orgs to publish to", comment: "the registry account may publish to no org" })}
-      </span>
-    ) : orgsStatus === "ready" && typedOrg && !orgs?.some((entry) => entry.name === typedOrg) ? (
-      <span id="new-playbook-org-note" data-testid="new-playbook-org-note" className="text-xs text-amber-700 dark:text-amber-300">
-        {i18n._({ id: "not yours to publish to", comment: "beneath New playbook's Org: the registry account may not publish to the org typed" })}
-      </span>
-    ) : orgsStatus === "idle" ? (
-      <span id="new-playbook-org-note" data-testid="new-playbook-org-note" className="text-xs text-neutral-500">
-        {i18n._({ id: "Publishing rights not checked", comment: "New playbook's Org has no successful registry account check" })}
-      </span>
-    ) : null;
-  const orgVerified = orgsStatus === "ready" && !!typedOrg && orgs.some((entry) => entry.name === typedOrg);
-  const claimUrl = registryOrigin ? new URL("/account/orgs?scope=registry", registryOrigin).href : undefined;
+  const field = "min-w-0 w-full rounded border border-neutral-300 bg-white px-2 py-1 font-mono dark:border-neutral-700 dark:bg-neutral-950";
 
   return (
     <div
       ref={rootRef}
       data-testid="new-playbook"
-      className="flex flex-col gap-1 rounded-lg border border-dashed border-neutral-300 bg-white px-4 py-3 dark:border-neutral-700 dark:bg-neutral-900"
+      className="@container flex flex-col gap-2 rounded-lg border border-dashed border-neutral-300 bg-white px-4 py-3 dark:border-neutral-700 dark:bg-neutral-900"
     >
-      <div className="flex flex-wrap items-end gap-2">
+      <p className="text-xs text-neutral-500">{i18n._({ id: "Write and try it here. Publish when you’re ready.", comment: "New playbooks need no publishing account or license to start" })}</p>
+      <div className="grid grid-cols-1 items-end gap-2 @sm:grid-cols-[minmax(0,1fr)_auto]">
         <label className="flex min-w-0 flex-1 basis-48 flex-col gap-0.5 text-sm">
-          <span className="text-xs text-neutral-500">{i18n._("Playbook id")}</span>
+          <span className="text-xs text-neutral-500">{i18n._({ id: "Command", comment: "the slash command of a new playbook" })}</span>
           <input
             ref={inputRef}
             data-testid="new-playbook-id"
@@ -455,46 +294,6 @@ function NewPlaybookField({
             className={field}
           />
         </label>
-        <label className="flex min-w-0 flex-1 basis-28 flex-col gap-0.5 text-sm">
-          <span className="text-xs text-neutral-500">{i18n._({ id: "Org", comment: "field of New playbook: the registry org its spec package is published under" })}</span>
-          <input
-            data-testid="new-playbook-org"
-            value={org}
-            list="new-playbook-orgs"
-            onChange={(event) => {
-              fields.editOrg(event.target.value);
-              setError(undefined);
-            }}
-            onKeyDown={onKeyDown}
-            spellCheck={false}
-            autoComplete="off"
-            aria-describedby={[orgNote && "new-playbook-org-note", !orgVerified && "new-playbook-org-guidance"].filter(Boolean).join(" ") || undefined}
-            className={field}
-          />
-          {/* The suggestions: the orgs the account may publish to, as
-              the registry read them — never a filter on what is typed. */}
-          <datalist id="new-playbook-orgs" data-testid="new-playbook-orgs">
-            {(orgs ?? []).map((entry) => (
-              <option key={entry.name} value={entry.name} />
-            ))}
-          </datalist>
-          {orgNote}
-        </label>
-        <label className="flex min-w-0 flex-1 basis-28 flex-col gap-0.5 text-sm">
-          <span className="text-xs text-neutral-500">{i18n._({ id: "License", comment: "field of New playbook: the SPDX license its spec package is published under" })}</span>
-          <input
-            data-testid="new-playbook-license"
-            value={license}
-            onChange={(event) => {
-              fields.editLicense(event.target.value);
-              setError(undefined);
-            }}
-            onKeyDown={onKeyDown}
-            placeholder={i18n._({ id: "e.g. Apache-2.0", comment: "the hint inside the new-playbook license field; an SPDX license id" })}
-            spellCheck={false}
-            className={field}
-          />
-        </label>
         <button
           type="button"
           data-testid="new-playbook-button"
@@ -502,20 +301,9 @@ function NewPlaybookField({
           onClick={() => void submit()}
           className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-500 disabled:opacity-40"
         >
-          {busy ? i18n._({ id: "Opening…", comment: "an authoring session is being opened" }) : i18n._({ id: "New playbook", comment: "start writing a playbook of one's own" })}
+          {busy ? i18n._({ id: "Opening…", comment: "an authoring session is being opened" }) : i18n._({ id: "Start writing", comment: "create a local playbook and open its authoring workspace" })}
         </button>
       </div>
-      {!orgVerified ? (
-        <span id="new-playbook-org-guidance" data-testid="new-playbook-org-guidance" className="text-xs text-neutral-500">
-          {i18n._({ id: "To publish, use an org you can claim at this registry.", comment: "Local package names do not establish publishing rights at the selected registry" })}
-          {claimUrl ? <> <a
-            href={claimUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="underline"
-          >{i18n._({ id: "Claim an org", comment: "Open the selected registry's account page to claim a publishing name" })}</a></> : null}
-        </span>
-      ) : null}
       <span id="new-playbook-caption" data-testid="new-playbook-caption" className="text-xs text-neutral-500">
         {draftIdCaption(isDraftId(value.trim()) ? value.trim() : "triage")}
       </span>
@@ -537,7 +325,6 @@ function NewPlaybookField({
 export function AuthoringSection({
   repository,
   taken,
-  fields,
   autoFocus = false,
   onAutoFocused = () => {},
   onAnnounce,
@@ -546,7 +333,6 @@ export function AuthoringSection({
    * project's key, or your own group's for the global one. */
   repository: string;
   taken: ReadonlyMap<string, PlaybookAvailability>;
-  fields: NewPackageFields;
   autoFocus?: boolean;
   onAutoFocused?: () => void;
   /** Says a deletion in the page's live region. */
@@ -567,8 +353,7 @@ export function AuthoringSection({
     <NewPlaybookField
       taken={taken}
       drafts={drafts}
-      fields={fields}
-      onCreate={(id) => createDraft(id, fields.fields, repository)}
+      onCreate={(id) => createDraft(id, {}, repository)}
       onOpenExisting={(id) => void openDraft(id)}
       autoFocus={autoFocus}
       onAutoFocused={onAutoFocused}
