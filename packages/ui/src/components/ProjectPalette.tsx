@@ -25,7 +25,7 @@
 // space-103). A row reads "Opening…" while its open runs and offers "Try
 // again" once it stopped.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   GroupsState,
   InstanceGroupState,
@@ -56,6 +56,7 @@ import { Icon } from "./Icon.js";
 import { GroupPicker } from "./SpaceGroups.js";
 import { MoreMenu, type MenuEntry } from "./SpaceMenu.js";
 import { useServers } from "./SpaceServers.js";
+import { SECONDARY } from "./SpaceSurface.js";
 
 /** A refusal as the palette shows it: the core's words, and Git's own
  * output where the core relayed it beside them (projects-34). */
@@ -364,6 +365,11 @@ const FOCUSABLE = "button, input, select";
 
 export function ProjectPalette(props: ProjectPaletteProps) {
   const pickerPending = useRef(false);
+  const [pickerSubmitting, setPickerSubmitting] = useState(false);
+  const onPickerPendingChange = useCallback((pending: boolean) => {
+    pickerPending.current = pending;
+    setPickerSubmitting(pending);
+  }, []);
   const [query, setQuery] = useState("");
   const [index, setIndex] = useState(0);
   const [pathDraft, setPathDraft] = useState("");
@@ -762,6 +768,11 @@ export function ProjectPalette(props: ProjectPaletteProps) {
     }
   }
 
+  /** Every dismissal respects a submitted group choice (space-58). */
+  function close(): void {
+    if (!pickerPending.current) props.onClose();
+  }
+
   /** The dialog's own keys: Escape closes from anywhere inside it,
    * and Tab wraps so focus never leaves it (DR-010 §6). */
   function dialogKeydown(event: React.KeyboardEvent): void {
@@ -778,7 +789,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
-      if (!pickerPending.current) props.onClose();
+      close();
       return;
     }
     if (event.key !== "Tab") return;
@@ -836,7 +847,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
       // the window with nothing able to scroll to what it hides.
       className="fixed inset-0 z-30 flex items-start justify-center bg-black/20 p-4 pt-[min(18vh,4rem)]"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !pickerPending.current) props.onClose();
+        if (event.target === event.currentTarget) close();
       }}
     >
       <div
@@ -849,6 +860,17 @@ export function ProjectPalette(props: ProjectPaletteProps) {
         onKeyDown={dialogKeydown}
         className="flex max-h-full w-[28rem] max-w-[90vw] flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-2xl dark:border-neutral-700 dark:bg-neutral-900"
       >
+        <div className="flex shrink-0 justify-end px-2 pt-2">
+          <button
+            type="button"
+            data-testid="palette-close"
+            disabled={pickerSubmitting}
+            onClick={close}
+            className={SECONDARY}
+          >
+            {i18n._("Close")}
+          </button>
+        </div>
         {space && pickingRepo ? (
           // The picker stands in place of the list (space-58): a pick or
           // Cancel — which leaves it local only — closes the palette.
@@ -858,11 +880,12 @@ export function ProjectPalette(props: ProjectPaletteProps) {
               repo={pickingRepo}
               connected={connected}
               onClose={props.onClose}
-              onPendingChange={(pending) => { pickerPending.current = pending; }}
+              onPendingChange={onPickerPendingChange}
               onNote={(message) => props.onNote?.(message)}
             />
           </div>
         ) : addProjectOnly ? (
+          <>
           <div data-testid="palette-own-project" className="min-h-0 overflow-y-auto p-4">
             <h2 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">
               {i18n._("Add a local project")}
@@ -990,8 +1013,13 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                 </div>
               )}
             </div>
-            {refusal ? <div className="mt-4">{refusal}</div> : null}
           </div>
+          {refusal ? (
+            <div className="shrink-0 border-t border-neutral-200 p-4 dark:border-neutral-800">
+              {refusal}
+            </div>
+          ) : null}
+          </>
         ) : (
         <>
         {empty ? null : (

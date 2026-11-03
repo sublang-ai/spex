@@ -145,6 +145,7 @@ The local project palette shall distinguish adding an existing project from crea
 - Without a native picker, the switcher offers Add and Create on the typed path, both disabled until a path is entered; with a native picker, it offers the folder action for adding and leaves creation to the add form.
 - With no project registered across any connected place there is nothing to filter: the palette drops its filter and names itself an add flow; its ordinary entry focuses the folder action where available, or the path field otherwise, and leads the list with the Academy-example action [[projects-27](#projects-27)], while the welcome page's "Add a local project" entry omits that repeated choice and separates an existing repository from creating a new one [[run-view-172](run-view.md#run-view-172)] ([DR-136](../decisions/136-the-first-project-picker-leads-with-a-folder.md));
 - the palette is where projects are browsed, chosen and created; it is not the only place one is added, a Space repair adding the project it already names from the folder it has checked ([DR-065](../decisions/065-repairs-the-reader-answers.md)).
+- every palette mode, including its group chooser, carries a visible header Close with the same dismissal and opener-focus return as Escape or clicking the backdrop; a submitted group choice keeps all dismissal routes disabled until its outcome [[space-58](space.md#space-58)] ([DR-210](../decisions/210-a-panel-carries-its-own-way-out.md)).
 
 #### projects-42
 
@@ -334,6 +335,7 @@ Where the local project palette renders with a fixture client, the integration s
 - With or without registered projects, adding an existing project and creating a new one send their distinct actions; English and Chinese labels explain the two effects [[projects-42](#projects-42)] [[projects-25](#projects-25)].
 - With one project holding a live session and one without, only the live project's row shows its running count beside a pulsing dot [[projects-23](#projects-23)].
 - No text, label or title on the surface contains the word "forge" [[projects-25](#projects-25)].
+- the normal picker, empty picker and local-project add form offer header Close, close without submission and return focus to their actual opener; the palette group chooser's held submission disables Close, and refusal restores it with the destination retained [[projects-22](#projects-22)].
 
 ### Refusal Coverage
 

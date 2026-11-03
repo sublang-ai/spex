@@ -95,6 +95,8 @@ export function ApprovalInbox() {
   }));
   const region = useRef<HTMLDivElement>(null);
   const toggle = useRef<HTMLButtonElement>(null);
+  const dismissalOpener = useRef<HTMLElement | null>(null);
+  const wasOpen = useRef(false);
   const focusedRequest = useRef<string | undefined>(undefined);
   const several = places.length > 1;
   const pending = useMemo(() => places.flatMap(({store, value}) =>
@@ -107,8 +109,20 @@ export function ApprovalInbox() {
   const focus = opener?.value.focusId ? {place: opener.store.place.key, id: opener.value.focusId} : undefined;
   const show = () => useAppStore.getState().showApprovals();
   const hide = () => places.forEach(({store}) => store.getState().hideApprovals());
+  const close = () => {
+    hide();
+    // The contextual notice may have opened the inbox somewhere else
+    // in the app; hiding it preserves every pending approval.
+    const target = dismissalOpener.current?.isConnected ? dismissalOpener.current : toggle.current;
+    target?.focus();
+  };
   const keyOf = (place: string, id: string) => `${place}\n${id}`;
   useEffect(() => {
+    const active = document.activeElement;
+    if (open && (!wasOpen.current || (focus && active instanceof HTMLElement && !region.current?.contains(active)))) {
+      dismissalOpener.current = active instanceof HTMLElement && active !== document.body ? active : toggle.current;
+    }
+    wasOpen.current = open;
     if (open && focus) {
       const card = region.current?.querySelector<HTMLElement>(`[data-approval-place="${focus.place}"][data-approval-id="${focus.id}"]`);
       (card?.querySelector<HTMLElement>("button[data-deny]") ?? card)?.focus();
@@ -122,8 +136,11 @@ export function ApprovalInbox() {
     }
   }, [pending]);
   if (!pending.length) return null;
-  return <section aria-label={i18n._("Tool approvals")} className="shrink-0 border-b border-brand-300 bg-brand-50 px-3 py-2 dark:border-brand-800 dark:bg-neutral-950">
-    <button ref={toggle} aria-expanded={open} aria-controls="live-approval-inbox" className="min-h-8 text-left font-medium text-brand-700 dark:text-brand-300" onClick={() => open ? hide() : show()}>{i18n._("Tool approvals ({count})", {count: pending.length})}</button>
+  return <section aria-label={i18n._("Tool approvals")} className="shrink-0 border-b border-brand-300 bg-brand-50 px-3 py-2 dark:border-brand-800 dark:bg-neutral-950" onKeyDown={(event) => { if (open && event.key === "Escape" && !event.defaultPrevented) { event.preventDefault(); event.stopPropagation(); close(); } }}>
+    <div className="flex min-w-0 items-center justify-between gap-2">
+      <button ref={toggle} aria-expanded={open} aria-controls="live-approval-inbox" className="min-h-8 min-w-0 text-left font-medium text-brand-700 dark:text-brand-300" onClick={() => open ? hide() : show()}>{i18n._("Tool approvals ({count})", {count: pending.length})}</button>
+      {open ? <button type="button" aria-label={i18n._("Close tool approvals")} className="min-h-6 shrink-0 rounded border border-neutral-300 px-1.5 py-0.5 text-xs hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800" onClick={close}>{i18n._("Close")}</button> : null}
+    </div>
     {open ? <div id="live-approval-inbox" ref={region} className="grid max-h-[45vh] min-w-0 gap-2 overflow-y-auto" onBlurCapture={(event) => { if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget as Node)) focusedRequest.current = undefined; }} onFocusCapture={(event) => { const card = (event.target as HTMLElement).closest<HTMLElement>("[data-approval-id]"); focusedRequest.current = card ? keyOf(card.dataset.approvalPlace ?? "", card.dataset.approvalId ?? "") : undefined; }}>
       {pending.some((item) => !item.connected) ? <p role="status" className="text-sm">{i18n._("Reconnect to answer these requests.")}</p> : null}
       {pending.map(({store, approval, generation, connected}) => <ApprovalCard key={`${store.place.key}:${generation}:${approval.id}`} approval={approval} generation={generation} connected={connected} store={store} place={several ? placeLabel(store.place) : undefined} />)}

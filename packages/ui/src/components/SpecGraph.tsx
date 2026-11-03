@@ -293,7 +293,7 @@ function citesTimes(from: string, to: string, count: number): string {
  * group. Text cut to its line keeps its whole in the DOM and the hover
  * hint, and a count is never the part cut.
  */
-function PackageLines({ node }: { node: GraphNode }) {
+function PackageLines({ node, action }: { node: GraphNode; action?: ReactNode }) {
   const items = i18n._("{count, plural, one {# item} other {# items}}", {
     count: node.items,
   });
@@ -304,11 +304,15 @@ function PackageLines({ node }: { node: GraphNode }) {
   }`;
   return (
     <>
-      <div
-        title={node.basename}
-        className="truncate font-medium text-neutral-900 dark:text-neutral-100"
-      >
-        {node.basename}
+      <div className="flex min-w-0 items-start gap-2">
+        <span
+          data-testid="graph-card-name"
+          title={node.basename}
+          className="min-w-0 flex-1 truncate font-medium text-neutral-900 dark:text-neutral-100"
+        >
+          {node.basename}
+        </span>
+        {action}
       </div>
       <div
         data-testid="graph-card-totals"
@@ -899,6 +903,19 @@ export function SpecGraph({
     select(svg).call(behavior.translateBy, dx, dy);
   }, []);
 
+  /** Closing the pinned card clears its shared selection and gives
+   * focus back to that package without opening a floating inspection. */
+  const dismissSelection = (restoreFocus = false) => {
+    clearHover();
+    if (keyFocus) setDismissed(keyFocus);
+    onClearSelection?.();
+    if (!restoreFocus || !selectedName) return;
+    const node = Array.from(svgRef.current?.querySelectorAll<SVGGElement>("[data-graph-node]") ?? [])
+      .find((each) => each.dataset.testid === `graph-node-${selectedName}`);
+    node?.focus();
+    setDismissed(selectedName);
+  };
+
   const onSurfaceKeyDown = (event: ReactKeyboardEvent) => {
     // A modified arrow belongs to someone else — Alt+Left walks a
     // jump back (spec-view-6).
@@ -916,9 +933,7 @@ export function SpecGraph({
           setDismissed(keyFocus);
         } else if (selectedName) {
           event.preventDefault();
-          clearHover();
-          if (keyFocus) setDismissed(keyFocus);
-          onClearSelection?.();
+          dismissSelection(panelRef.current?.contains(event.target as Node) === true);
         }
         return;
       case "+":
@@ -1791,10 +1806,23 @@ export function SpecGraph({
             data-testid="graph-selection-card"
             role="group"
             aria-label={selectedNode.basename}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") onSurfaceKeyDown(event);
+            }}
             className="absolute right-2 top-2 z-[5] flex max-h-[45%] w-56 max-w-[calc(100%-1rem)] flex-col overflow-hidden rounded-lg border border-neutral-200 bg-white text-xs shadow-md dark:border-neutral-700 dark:bg-neutral-900"
           >
             <div className="shrink-0 px-2.5 py-2">
-              <PackageLines node={selectedNode} />
+              <PackageLines node={selectedNode} action={
+                <button
+                  type="button"
+                  data-testid="graph-selection-close"
+                  aria-label={i18n._("Close {name}'s details", { name: selectedNode.basename })}
+                  className="min-h-6 shrink-0 rounded border border-neutral-300 px-1.5 py-0.5 text-xs hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
+                  onClick={() => dismissSelection(true)}
+                >
+                  {i18n._("Close")}
+                </button>
+              } />
             </div>
             {relationships.length > 0 ? (
               <>

@@ -228,6 +228,7 @@ meta.md       The spec of specs
 | [DR-207](decisions/207-the-outline-gives-its-width-to-the-intent.md) | 207-the-outline-gives-its-width-to-the-intent.md | The outline gives its width to the intent: a package's counts as labeled counts in one cell under no heading row, a group with none left out; the cross-package rollup as labeled `Cites`/`Cited by` counts; a collapsed intent on one line; an expanded header pinned at the outline's top; the graph starting at a third of the split; amends DR-158 |
 | [DR-208](decisions/208-playbook-18-1-2-cligent-0-37-0-slc-0-20-1-adoption.md) | 208-playbook-18-1-2-cligent-0-37-0-slc-0-20-1-adoption.md | Adopt Playbook 18.1.2, Cligent 0.37.0 and slc 0.20.1: seeds at `medium`, a second-adapter `dev.reviewer` at `high`, Codex on `gpt-6.1-sol`; Playbook `^18.1.2`, Cligent `^0.37.0`, slc `^0.20.1`; amends DR-153, DR-154, DR-167 and DR-182 |
 | [DR-209](decisions/209-a-project-row-with-one-menu.md) | 209-a-project-row-with-one-menu.md | A project row with one menu: explicit Open project, shared overflow for alternate places, plain location text, clickable record-sync status, neutral missing-code-remote details, and server guidance scoped to opening code; amends DR-159, DR-172, DR-175 and DR-041 |
+| [DR-210](decisions/210-a-panel-carries-its-own-way-out.md) | 210-a-panel-carries-its-own-way-out.md | A panel carries its own way out: visible contextual Close or Cancel across temporary views, nearest Escape, opener focus, pending guards and preserved attention; amends DR-198, DR-194 and DR-158 |
 
 ## Packages
 

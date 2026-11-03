@@ -14,7 +14,7 @@
 // and sets them to Provider default (settings-61, settings-62) — each
 // change one `config.batch` against the revision shown.
 
-import { useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type {
   AdapterName,
   ConfigBatchOpInput,
@@ -221,13 +221,38 @@ function RoleList({ roles, testId }: { roles: string[]; testId: string }) {
 }
 
 /** One model for every agent on an adapter (settings-59, settings-60). */
-function OneModel({ entry, state, catalog }: { entry: ReadinessEntry; state: Extract<ConfigState, { status: "valid" }>; catalog: ReturnType<typeof useAgentOptions> }) {
+function OneModel({ entry, state, catalog, focusRequest, onClose, onPendingChange }: {
+  entry: ReadinessEntry;
+  state: Extract<ConfigState, { status: "valid" }>;
+  catalog: ReturnType<typeof useAgentOptions>;
+  focusRequest: number;
+  onClose(): void;
+  onPendingChange(pending: boolean): void;
+}) {
   const store = usePlaceStore();
   const labelId = useId();
   const [value, setValue] = useState("");
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<{ done: true; left: string[] } | { error: string }>();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const applyRef = useRef<HTMLButtonElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const inFlight = useRef(false);
+  const returnAfterApply = useRef(false);
+  const confirmId = `agent-unify-confirm-${entry.adapter}`;
+  useEffect(() => {
+    panelRef.current?.querySelector<HTMLElement>("button, input")?.focus();
+  }, [focusRequest]);
+  useEffect(() => {
+    if (asking) panelRef.current?.querySelector<HTMLElement>(`[data-testid="${confirmId}"] button:last-child`)?.focus();
+  }, [asking, confirmId]);
+  useEffect(() => {
+    if (!busy && returnAfterApply.current) {
+      returnAfterApply.current = false;
+      (applyRef.current?.disabled ? closeRef.current : applyRef.current)?.focus();
+    }
+  }, [busy]);
   // Held while a conflict reads again, and after it failed (settings-60).
   const stale = store((s) => s.configReread) !== undefined;
   const discovery = catalog.options?.discovery;
@@ -241,7 +266,10 @@ function OneModel({ entry, state, catalog }: { entry: ReadinessEntry; state: Ext
   const name = agentName(entry.adapter);
 
   function apply(): void {
+    if (inFlight.current || stale) return;
+    inFlight.current = true;
     setBusy(true);
+    onPendingChange(true);
     setOutcome(undefined);
     send(store, plan.ops, state.revision)
       .then(() => setOutcome({ done: true, left: plan.left }))
@@ -249,18 +277,34 @@ function OneModel({ entry, state, catalog }: { entry: ReadinessEntry; state: Ext
         // A failed reading again speaks once, for the whole section.
         if ((error as Partial<SpexCommandError>)?.code !== "conflict" || store.getState().configReread === undefined) setOutcome({ error: refusalText(error) });
       })
-      .finally(() => { setBusy(false); setAsking(false); });
+      .finally(() => {
+        inFlight.current = false;
+        returnAfterApply.current = true;
+        setBusy(false);
+        setAsking(false);
+        onPendingChange(false);
+      });
   }
 
   return (
-    <div data-testid={`agent-unify-${entry.adapter}`} className="flex flex-col gap-1">
+    <div ref={panelRef} data-testid={`agent-unify-${entry.adapter}`} className="flex flex-col gap-1"
+      onKeyDown={(event) => {
+        if (event.key !== "Escape" || event.defaultPrevented) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (inFlight.current) return;
+        if (asking && (event.target as HTMLElement).closest(`[data-testid="${confirmId}"]`)) {
+          setAsking(false);
+          applyRef.current?.focus();
+        } else onClose();
+      }}>
       {/* The field's label says it changes them all and where one is
           set alone, one line above it, in one message so each language
           joins its sentences its own way (settings-59). */}
       <span id={labelId} data-testid={`agent-unify-label-${entry.adapter}`} className={mutedClass}>
         {i18n._("This changes the model of every Captain and player on {name} at once. To change only the Captain's or one player's, edit its settings above.", { name })}
       </span>
-      <div className="flex flex-wrap items-start gap-2">
+      <fieldset disabled={busy} className="m-0 flex min-w-0 flex-wrap items-start gap-2 border-0 p-0">
         <div className="min-w-0 flex-1 basis-56">
           <ModelField
             value={value}
@@ -273,6 +317,7 @@ function OneModel({ entry, state, catalog }: { entry: ReadinessEntry; state: Ext
           />
         </div>
         <button
+          ref={applyRef}
           type="button"
           data-testid={`agent-unify-apply-${entry.adapter}`}
           className={buttonClass}
@@ -281,7 +326,10 @@ function OneModel({ entry, state, catalog }: { entry: ReadinessEntry; state: Ext
         >
           {i18n._({ id: "Apply", comment: "give every agent of the adapter the chosen model" })}
         </button>
-      </div>
+        <button ref={closeRef} type="button" className={buttonClass} disabled={busy} onClick={() => { if (!inFlight.current) onClose(); }}>
+          {outcome && "done" in outcome ? i18n._("Close") : i18n._({ id: "Cancel", comment: "leave an editor without saving" })}
+        </button>
+      </fieldset>
       {blindDefault ? (
         <span data-testid={`agent-unify-blind-${entry.adapter}`} className={mutedClass}>
           {i18n._("The default model can't be read right now: retry, or choose a specific model.")}{" "}
@@ -289,7 +337,7 @@ function OneModel({ entry, state, catalog }: { entry: ReadinessEntry; state: Ext
         </span>
       ) : null}
       {asking ? (
-        <Confirm testId={`agent-unify-confirm-${entry.adapter}`} busy={busy || stale} onConfirm={apply} onCancel={() => setAsking(false)}>
+        <Confirm testId={confirmId} busy={busy || stale} onConfirm={apply} onCancel={() => { setAsking(false); applyRef.current?.focus(); }}>
           <span>{i18n._("These agents change:")}</span>
           <RoleList roles={plan.changes} testId="agent-unify-changes" />
           {plan.left.length > 0 ? (
@@ -459,6 +507,9 @@ function AgentCard({ entry, state, seat }: { entry: ReadinessEntry; state: Confi
   const notReady = entry.ready === false;
   const [listed, setListed] = useState(false);
   const [changing, setChanging] = useState(false);
+  const [changePending, setChangePending] = useState(false);
+  const [changeFocus, setChangeFocus] = useState(0);
+  const changeRef = useRef<HTMLButtonElement>(null);
   const listId = useId();
   const changeId = useId();
   // A local credential with the Workshop switch on: what is missing
@@ -524,12 +575,14 @@ function AgentCard({ entry, state, seat }: { entry: ReadinessEntry; state: Confi
             </span>
             {validState ? (
               <button
+                ref={changeRef}
                 type="button"
                 data-testid={`agent-change-${entry.adapter}`}
                 aria-expanded={changing}
                 aria-controls={changeId}
-                onClick={() => setChanging((open) => !open)}
-                className="inline-flex items-center gap-1 rounded text-xs text-brand-600 hover:underline dark:text-brand-300"
+                disabled={changePending}
+                onClick={() => { setChanging(true); setChangeFocus((request) => request + 1); }}
+                className="inline-flex items-center gap-1 rounded text-xs text-brand-600 hover:underline disabled:opacity-50 dark:text-brand-300"
               >
                 <Icon name="edit" className="h-3 w-3" />
                 {i18n._({ id: "Change model", comment: "opens an agent card's adapter-wide model setting" })}
@@ -538,7 +591,9 @@ function AgentCard({ entry, state, seat }: { entry: ReadinessEntry; state: Confi
           </div>
           {validState && changing ? (
             <div id={changeId}>
-              <OneModel entry={entry} state={validState} catalog={catalog} />
+              <OneModel entry={entry} state={validState} catalog={catalog} focusRequest={changeFocus}
+                onPendingChange={setChangePending}
+                onClose={() => { setChanging(false); changeRef.current?.focus(); }} />
             </div>
           ) : null}
           {validState && entry.adapter === "claude" && entry.baseUrl?.state === "third-party" ? (

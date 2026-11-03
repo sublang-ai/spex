@@ -1797,6 +1797,8 @@ msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a 
 #. default cancel button: back out of the act
 #. default cancel button: back out of the act
 #. default cancel button: back out of the act
+#. dismiss the package-add form without sending a request
+#. leave an editor without saving
 #. leave an editor without saving
 #. leave an editor without saving
 #. leave an editor without saving
@@ -1821,6 +1823,7 @@ msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a 
 #: src/components/BindingEditor.tsx
 #: src/components/CompileBand.tsx
 #: src/components/DraftSourceTab.tsx
+#: src/components/EnvironmentSection.tsx
 #: src/components/InlineConfirm.tsx
 #: src/components/ProjectGroup.tsx
 #: src/components/ProjectPalette.tsx
@@ -2199,10 +2202,22 @@ msgstr "client not connected"
 
 #. close the attached project's code-remote explanation
 #. close the members panel and return to its opener
+#. close the project records panel and return to its opener
+#: src/components/AgentCards.tsx
+#: src/components/ApprovalInbox.tsx
+#: src/components/ConfiguredBrowserTools.tsx
+#: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceMembers.tsx
+#: src/components/SpaceRepairs.tsx
+#: src/components/SpaceSurface.tsx
+#: src/components/SpecGraph.tsx
 msgid "Close"
 msgstr "Close"
+
+#: src/components/SpecGraph.tsx
+msgid "Close {name}'s details"
+msgstr "Close {name}'s details"
 
 #: src/lib/shortcuts.ts
 msgid "Close the focused session tab"
@@ -2224,10 +2239,18 @@ msgstr "Close this intent as dropped — the turn keeps running"
 msgid "Close this tab — the session stays in the sidebar"
 msgstr "Close this tab — the session stays in the sidebar"
 
+#: src/components/ApprovalInbox.tsx
+msgid "Close tool approvals"
+msgstr "Close tool approvals"
+
 #. a call's outcome: no repository work follows
 #: src/lib/step-words.ts
 msgid "closed the discussion"
 msgstr "closed the discussion"
+
+#: src/components/ConfiguredBrowserTools.tsx
+msgid "Closing cancels browser setup"
+msgstr "Closing cancels browser setup"
 
 #. heading over the file naming where a project's code lives
 #: src/lib/space.ts

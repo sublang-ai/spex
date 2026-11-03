@@ -919,6 +919,84 @@ describe("playbook-library-94: a row's artifacts", () => {
 });
 
 describe("playbook-library-94: Add…", () => {
+  test.each(["registry", "folder", "git"] as const)("the %s form has visible Cancel, with the same dismissal and focus return as Escape or clicking outside", async (tab) => {
+    await renderTab();
+    const section = projectSection();
+    const opener = section.getByTestId("add-open");
+    const fieldId = tab === "registry" ? "registry-query" : tab === "folder" ? "folder-request-path" : "git-request-name";
+    opener.focus();
+    openAdd(section, tab);
+    const field = section.getByTestId(fieldId) as HTMLInputElement;
+    const initial = field.value;
+    field.focus();
+    fireEvent.change(field, { target: { value: "unsubmitted-draft" } });
+    const cancel = within(section.getByTestId("add-packages")).getByRole("button", { name: "Cancel" });
+    cancel.focus();
+    fireEvent.click(cancel);
+    expect(section.queryByTestId("add-packages")).toBeNull();
+    expect(document.activeElement).toBe(opener);
+    expect(opener.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(opener);
+    const reopened = section.getByTestId(fieldId) as HTMLInputElement;
+    expect(reopened.value).toBe(initial);
+    reopened.focus();
+    fireEvent.keyDown(reopened, { key: "Escape" });
+    expect(section.queryByTestId("add-packages")).toBeNull();
+    expect(document.activeElement).toBe(opener);
+
+    fireEvent.click(opener);
+    section.getByTestId(fieldId).focus();
+    fireEvent.mouseDown(document.body);
+    expect(section.queryByTestId("add-packages")).toBeNull();
+    expect(document.activeElement).toBe(opener);
+    expect(commandMock).not.toHaveBeenCalledWith("environment.request", expect.anything());
+  });
+
+  test.each(["resolve", "reject"] as const)("a submitted add stays visible until it %ss, then dismissal returns to Add…", async (outcome) => {
+    const base = commandMock.getMockImplementation()!;
+    let finish!: () => void;
+    commandMock.mockImplementation((type: string, params?: Record<string, unknown>) => {
+      if (type === "environment.request") return new Promise((resolve, reject) => {
+        finish = () => outcome === "resolve" ? resolve({ accepted: true }) : reject(new Error("Package unavailable"));
+      });
+      return base(type, params);
+    });
+    await renderTab();
+    const section = projectSection();
+    const opener = section.getByTestId("add-open");
+    opener.focus();
+    openAdd(section, "git");
+    for (const [id, value] of [["name", "acme/flows"], ["url", "https://example.test/acme/flows.git"], ["rev", "v1.0.0"]]) {
+      fireEvent.change(section.getByTestId(`git-request-${id}`), { target: { value } });
+    }
+    const submit = section.getByTestId("git-request-submit");
+    submit.focus();
+    fireEvent.click(submit);
+    await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
+    const cancel = section.getByTestId("add-cancel") as HTMLButtonElement;
+    expect(cancel.disabled).toBe(true);
+    expect(opener).toHaveProperty("disabled", true);
+    fireEvent.click(cancel);
+    fireEvent.click(opener);
+    fireEvent.keyDown(window, { key: "Escape" });
+    fireEvent.mouseDown(document.body);
+    expect(section.getByTestId("add-packages")).toBeTruthy();
+    expect(section.getByTestId("add-from-registry")).toHaveProperty("disabled", true);
+    expect(commandMock.mock.calls.filter(([type]) => type === "environment.request")).toHaveLength(1);
+
+    await act(async () => finish());
+    if (outcome === "reject") {
+      expect(section.getByTestId("git-request-error").textContent).toBe("Package unavailable");
+      expect((section.getByTestId("git-request-name") as HTMLInputElement).value).toBe("acme/flows");
+      expect(cancel.disabled).toBe(false);
+      cancel.focus();
+      fireEvent.click(cancel);
+    } else expect(section.getByTestId("add-note").textContent).toContain("Added acme/flows");
+    expect(section.queryByTestId("add-packages")).toBeNull();
+    expect(document.activeElement).toBe(opener);
+  });
+
   test("the Registry tab searches the heading's registry, reads each version's requirement, adds the chosen one, and the receipt reads what arrived with no further act", async () => {
     await renderBoth();
     openAdd(projectSection());

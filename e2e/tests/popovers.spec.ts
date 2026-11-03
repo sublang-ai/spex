@@ -297,7 +297,7 @@ test.describe("the project palette", () => {
   test("projects-28: a refused path shows its message inside a short window", async ({
     page,
     app,
-  }) => {
+  }, testInfo) => {
     await open(page, app);
     await page.setViewportSize({ width: 900, height: SHORT });
     await page.getByTestId("sidebar").getByRole("button", { name: "Add a local project" }).click();
@@ -313,10 +313,21 @@ test.describe("the project palette", () => {
     await palette.getByTestId("palette-add").click();
     const message = palette.getByTestId("palette-error");
     await expect(message).toBeVisible();
-    const window = await viewport(page);
-    expectInside(await boxOf(palette), window, "the palette");
-    expectInside(await boxOf(message), window, "the palette's message");
     await pageDoesNotScroll(page);
+    // The open sidebar is wider than the app's 320px floor allows;
+    // resizing here tests the fixed dialog's own bounds independently.
+    for (const width of [900, FLOOR]) {
+      await page.setViewportSize({ width, height: SHORT });
+      const window = await viewport(page);
+      expectInside(await boxOf(palette), window, "the palette");
+      expectInside(await boxOf(message), window, "the palette's message");
+      expectInside(await boxOf(palette.getByTestId("palette-close")), window, "the palette's Close");
+      await palette.screenshot({ path: testInfo.outputPath(`palette-refusal-${width}.png`) });
+    }
+    await page.setViewportSize({ width: 900, height: SHORT });
+    await palette.getByTestId("palette-close").click();
+    await expect(palette).toBeHidden();
+    await expect(page.getByTestId("sidebar").getByRole("button", { name: "Add a local project" })).toBeFocused();
   });
 });
 

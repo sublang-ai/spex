@@ -510,6 +510,79 @@ describe("settings-73: the section's verdict and Claude's tag", () => {
 });
 
 describe("settings-68: one model for every agent of an adapter", () => {
+  test("Cancel and Escape dismiss the model editor, returning focus without changing config", () => {
+    show(UNIFY, [entry("claude"), entry("codex")]);
+    const opener = screen.getByTestId("agent-change-claude");
+    fireEvent.click(opener);
+    const field = screen.getByTestId("agent-unify-model-claude-trigger");
+    expect(document.activeElement).toBe(field);
+    choose("claude", /deepseek-v4-pro/);
+
+    // Opening the same task again keeps the chosen value, rather than
+    // hiding a form whose close control the reader has not used.
+    fireEvent.click(opener);
+    expect(field.textContent).toContain("deepseek-v4-pro");
+    expect(document.activeElement).toBe(field);
+    fireEvent.click(within(screen.getByTestId("agent-unify-claude")).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByTestId("agent-unify-claude")).toBeNull();
+    expect(document.activeElement).toBe(opener);
+
+    fireEvent.click(opener);
+    fireEvent.keyDown(screen.getByTestId("agent-unify-model-claude-trigger"), { key: "Escape" });
+    expect(screen.queryByTestId("agent-unify-claude")).toBeNull();
+    expect(document.activeElement).toBe(opener);
+    expect(commandMock).not.toHaveBeenCalled();
+  });
+
+  test("Escape closes only the model list or confirmation before closing its editor", () => {
+    show(UNIFY, [entry("claude"), entry("codex")]);
+    openChange("claude");
+    const field = screen.getByTestId("agent-unify-model-claude-trigger");
+    fireEvent.click(field);
+    fireEvent.keyDown(screen.getByRole("listbox"), { key: "Escape" });
+    expect(screen.queryByRole("listbox")).toBeNull();
+    expect(screen.getByTestId("agent-unify-claude")).toBeTruthy();
+    expect(document.activeElement).toBe(field);
+
+    fireEvent.click(screen.getByTestId("agent-unify-apply-claude"));
+    const confirmation = screen.getByTestId("agent-unify-confirm-claude");
+    const cancel = within(confirmation).getByRole("button", { name: "Cancel" });
+    expect(document.activeElement).toBe(cancel);
+    fireEvent.keyDown(cancel, { key: "Escape" });
+    expect(screen.queryByTestId("agent-unify-confirm-claude")).toBeNull();
+    expect(screen.getByTestId("agent-unify-claude")).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByTestId("agent-unify-apply-claude"));
+    expect(commandMock).not.toHaveBeenCalled();
+  });
+
+  test("a pending model batch keeps its editor visible, then the result can be closed", async () => {
+    let finish!: (state: ConfigState) => void;
+    commandMock.mockReturnValue(new Promise<ConfigState>((resolve) => { finish = resolve; }));
+    show(UNIFY, [entry("claude"), entry("codex")]);
+    choose("claude", /deepseek-v4-pro/);
+    fireEvent.click(screen.getByTestId("agent-unify-apply-claude"));
+    fireEvent.click(screen.getByTestId("agent-unify-confirm-claude-confirm"));
+    const opener = screen.getByTestId("agent-change-claude") as HTMLButtonElement;
+    const panel = screen.getByTestId("agent-unify-claude");
+    expect(opener.disabled).toBe(true);
+    for (const cancel of within(panel).getAllByRole("button", { name: "Cancel" })) {
+      expect((cancel as HTMLButtonElement).disabled).toBe(true);
+      fireEvent.click(cancel);
+    }
+    fireEvent.keyDown(panel, { key: "Escape" });
+    fireEvent.click(opener);
+    fireEvent.click(screen.getByTestId("agent-unify-confirm-claude-confirm"));
+    expect(screen.getByTestId("agent-unify-claude")).toBe(panel);
+    expect(commandMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => { finish({ ...UNIFY, revision: "rev-2" }); });
+    expect(screen.getByTestId("agent-unify-done-claude")).toBeTruthy();
+    expect(opener.disabled).toBe(false);
+    fireEvent.click(within(panel).getByRole("button", { name: "Close" }));
+    expect(screen.queryByTestId("agent-unify-claude")).toBeNull();
+    expect(document.activeElement).toBe(opener);
+  });
+
   test("the confirmation, the batch, the done notice and a conflict", async () => {
     commandMock.mockResolvedValue({ ...UNIFY, revision: "rev-2" });
     show(UNIFY, [entry("claude", { baseUrl: { state: "unset" } }), entry("codex")]);

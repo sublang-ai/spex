@@ -842,23 +842,36 @@ function AddPopover({
   const folder = store((current) => current.environments[repository]?.pathRoot ?? null);
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<AddMode>("registry");
+  const [adding, setAdding] = useState(false);
+  const addingRef = useRef(false);
   const anchorRef = useRef<HTMLButtonElement>(null);
   const openRef = useRef(open);
   openRef.current = open;
-  const panelRef = usePopover<HTMLDivElement>(open, { anchorRef, onClose: () => setOpen(false) });
+  const close = () => {
+    // A submitted request has no cancellation protocol. Keep its
+    // progress and eventual refusal visible until it settles.
+    if (!addingRef.current) setOpen(false);
+  };
+  const panelRef = usePopover<HTMLDivElement>(open, { anchorRef, onClose: close });
   const baseId = useId();
   const label = i18n._({ id: "Add…", comment: "a Packages tab heading's control: opens the ways to add a package, from the registry, a folder or Git" });
 
   async function add(name: string, next: EnvironmentRequest): Promise<void> {
+    if (addingRef.current) return;
+    addingRef.current = true;
+    setAdding(true);
     try {
       await request(repository, name, next);
+      onAdded(name);
+      setOpen(false);
     } catch (cause) {
       // A refusal arriving after the popover closed shows by the heading.
       if (!openRef.current) onRefused((cause as Error).message);
       throw cause;
+    } finally {
+      addingRef.current = false;
+      setAdding(false);
     }
-    onAdded(name);
-    setOpen(false);
   }
 
   const modes: { key: AddMode; label: string; testId: string; disabledWhy?: string }[] = [
@@ -902,9 +915,11 @@ function AddPopover({
         data-testid="add-open"
         aria-haspopup="dialog"
         aria-expanded={open}
+        disabled={adding}
         onClick={() => {
           if (!open) onOpen();
-          setOpen((was) => !was);
+          if (open) close();
+          else setOpen(true);
         }}
         className={BUTTON}
       >
@@ -931,7 +946,7 @@ function AddPopover({
                 aria-selected={shown === entry.key}
                 aria-controls={`${baseId}-panel`}
                 tabIndex={shown === entry.key ? 0 : -1}
-                disabled={entry.disabledWhy !== undefined}
+                disabled={adding || entry.disabledWhy !== undefined}
                 title={entry.disabledWhy}
                 onKeyDown={onTabKey}
                 onClick={() => setMode(entry.key)}
@@ -946,9 +961,16 @@ function AddPopover({
             ))}
           </div>
           <div id={`${baseId}-panel`} role="tabpanel" aria-labelledby={`${baseId}-${shown}`}>
-            {shown === "registry" ? <RegistryTab repository={repository} onAdd={add} /> : null}
-            {shown === "folder" && folder ? <FolderTab repository={repository} folder={folder} onAdd={add} /> : null}
-            {shown === "git" ? <GitTab onAdd={add} /> : null}
+            <fieldset disabled={adding} className="min-w-0 border-0 p-0">
+              {shown === "registry" ? <RegistryTab repository={repository} onAdd={add} /> : null}
+              {shown === "folder" && folder ? <FolderTab repository={repository} folder={folder} onAdd={add} /> : null}
+              {shown === "git" ? <GitTab onAdd={add} /> : null}
+            </fieldset>
+          </div>
+          <div className="flex justify-end">
+            <button type="button" data-testid="add-cancel" className={BUTTON} disabled={adding} onClick={close}>
+              {i18n._({ id: "Cancel", comment: "dismiss the package-add form without sending a request" })}
+            </button>
           </div>
         </div>
       ) : null}

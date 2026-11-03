@@ -49,6 +49,7 @@ While actual pending requests exist [[approvals-4](#approvals-4)], the interface
 - a disconnected or answering client disables its controls, preserving a refused answer's cause even if another client has already removed the request;
 - answering, expiry, or cancellation removes only that request, and historical permission telemetry raises no entry;
 - keyboard operation, narrow-view wrapping, and focus transfer preserve access to the remaining entries, without automatically focusing approval or assigning a single-keystroke approval shortcut.
+- the expanded inbox carries visible Close; Close and Escape collapse the view and return focus to its actual opener, or its attention entry if the opener has gone, preserving every request and the attention count without sending any answer ([DR-210](../decisions/210-a-panel-carries-its-own-way-out.md)).
 
 ### approvals-6
 
@@ -70,3 +71,7 @@ When a fresh served UI drives approval fixtures through a real core, acceptance 
 ### approvals-9
 
 When a fresh installed Desktop drives a signed-in Claude working agent with explicit ask policy through task-owned read-only fixtures, live acceptance verification shall assert a genuine native request with no completed operation while pending [[approvals-1](#approvals-1)], UI deny and allow-once answers joined to the native response and actual tool result [[approvals-2](#approvals-2)], unchanged governed repositories and expired live authority after settlement [[approvals-3](#approvals-3)], and historical-only decisions after reopening [[approvals-4](#approvals-4)], without resetting or claiming operating-system or Codex app-access consent [[approvals-6](#approvals-6)].
+
+### approvals-10
+
+Where rendered conversation notices open the global inbox over fixture pending requests, the integration suite shall verify that visible Close and Escape return focus to the actual opener, fall back to the attention entry after that opener disappears, and preserve the requests and their count without approving or denying them [[approvals-5](#approvals-5)].

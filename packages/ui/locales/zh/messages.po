@@ -1797,6 +1797,8 @@ msgstr "无法连接 {endpoint} 上的 Spex 核心 — 每秒重试中。网页�
 #. default cancel button: back out of the act
 #. default cancel button: back out of the act
 #. default cancel button: back out of the act
+#. dismiss the package-add form without sending a request
+#. leave an editor without saving
 #. leave an editor without saving
 #. leave an editor without saving
 #. leave an editor without saving
@@ -1821,6 +1823,7 @@ msgstr "无法连接 {endpoint} 上的 Spex 核心 — 每秒重试中。网页�
 #: src/components/BindingEditor.tsx
 #: src/components/CompileBand.tsx
 #: src/components/DraftSourceTab.tsx
+#: src/components/EnvironmentSection.tsx
 #: src/components/InlineConfirm.tsx
 #: src/components/ProjectGroup.tsx
 #: src/components/ProjectPalette.tsx
@@ -2199,10 +2202,22 @@ msgstr "客户端未连接"
 
 #. close the attached project's code-remote explanation
 #. close the members panel and return to its opener
+#. close the project records panel and return to its opener
+#: src/components/AgentCards.tsx
+#: src/components/ApprovalInbox.tsx
+#: src/components/ConfiguredBrowserTools.tsx
+#: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceMembers.tsx
+#: src/components/SpaceRepairs.tsx
+#: src/components/SpaceSurface.tsx
+#: src/components/SpecGraph.tsx
 msgid "Close"
 msgstr "关闭"
+
+#: src/components/SpecGraph.tsx
+msgid "Close {name}'s details"
+msgstr "关闭 {name} 的详情"
 
 #: src/lib/shortcuts.ts
 msgid "Close the focused session tab"
@@ -2224,10 +2239,18 @@ msgstr "将该意图记为已放弃并关闭 — 本轮继续运行"
 msgid "Close this tab — the session stays in the sidebar"
 msgstr "关闭此标签页 — 会话仍留在侧栏"
 
+#: src/components/ApprovalInbox.tsx
+msgid "Close tool approvals"
+msgstr "关闭工具审批"
+
 #. a call's outcome: no repository work follows
 #: src/lib/step-words.ts
 msgid "closed the discussion"
 msgstr "结束讨论"
+
+#: src/components/ConfiguredBrowserTools.tsx
+msgid "Closing cancels browser setup"
+msgstr "关闭将取消浏览器设置"
 
 #. heading over the file naming where a project's code lives
 #: src/lib/space.ts

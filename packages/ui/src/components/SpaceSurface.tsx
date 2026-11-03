@@ -270,13 +270,54 @@ export function SpaceSurface({ onOpenSession, onOpenProject, onAddCredential, re
   );
 
   const [selected, setSelected] = useState<string>();
+  const surfaceRef = useRef<HTMLElement>(null);
+  const [repositoryPending, setRepositoryPending] = useState(false);
+  const [repositoryFocus, setRepositoryFocus] = useState(0);
+  const repositoryOpener = useRef<HTMLElement | null>(null);
+  const closeRepository = () => {
+    if (repositoryPending) return;
+    setSelected(undefined);
+    setTimeout(() => {
+      const opener = repositoryOpener.current;
+      if (opener?.isConnected && !(opener instanceof HTMLButtonElement && opener.disabled)) opener.focus();
+      else {
+        const row = Array.from(surfaceRef.current?.querySelectorAll<HTMLButtonElement>("button[data-testid]") ?? [])
+          .find((button) => button.dataset.testid === `space-repo-${selected}` && !button.disabled);
+        (row ?? surfaceRef.current)?.focus();
+      }
+    }, 0);
+  };
   // The opened row's tab: its name opens Sync, "Explore records" Explore
   // (space-1).
   const [tab, setTab] = useState<SpaceTab>("sync");
   const [issuesOpen, setIssuesOpen] = useState(false);
+  const [issuesPending, setIssuesPending] = useState(false);
+  const issuesOpener = useRef<HTMLElement | null>(null);
+  const previousBlockers = useRef<ReadonlySet<string>>(new Set());
+  const blockerKey = JSON.stringify(groups?.diagnostics.filter((entry) => entry.blocking)
+    .map((entry) => JSON.stringify([entry.file, entry.reason])).sort() ?? []);
+  useEffect(() => {
+    const current = new Set<string>(JSON.parse(blockerKey));
+    if ([...current].some((key) => !previousBlockers.current.has(key))) setIssuesOpen(true);
+    previousBlockers.current = current;
+  }, [blockerKey]);
+  const closeIssues = () => {
+    if (issuesPending) return;
+    setIssuesOpen(false);
+    setRevealDismissed(undefined);
+    setTimeout(() => {
+      const opener = issuesOpener.current;
+      if (opener?.isConnected && opener !== document.body && opener !== document.documentElement &&
+        !(opener instanceof HTMLButtonElement && opener.disabled)) opener.focus();
+      if (!opener || document.activeElement !== opener || opener === document.body) {
+        (surfaceRef.current?.querySelector<HTMLButtonElement>('[data-testid="space-issues"]') ?? surfaceRef.current)?.focus();
+      }
+    }, 0);
+  };
   const [revealDismissed, setRevealDismissed] = useState<number>();
   useEffect(() => {
     if (reviewRequest === undefined) return;
+    issuesOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setIssuesOpen(true);
     setRevealDismissed(reviewRequest);
     onReviewOpened?.();
@@ -419,6 +460,8 @@ export function SpaceSurface({ onOpenSession, onOpenProject, onAddCredential, re
   return (
     <ChoicesContext.Provider value={choices}>
       <section
+        ref={surfaceRef}
+        tabIndex={-1}
         data-testid="space-surface"
         aria-label={surfaceName}
         // The surface root is the box the surface scrolls in, positioned
@@ -441,7 +484,13 @@ export function SpaceSurface({ onOpenSession, onOpenProject, onAddCredential, re
               refreshError={refreshError}
               onRefresh={() => void refresh()}
               issuesOpen={issuesOpen}
-              onIssuesOpen={(open) => { setIssuesOpen(open); setRevealDismissed(undefined); }}
+              issuesPending={issuesPending}
+              onIssuesOpen={(open, opener) => {
+                if (issuesPending) return;
+                issuesOpener.current = opener;
+                setIssuesOpen(open);
+                setRevealDismissed(undefined);
+              }}
             />
           ) : null}
         </div>
@@ -461,23 +510,31 @@ export function SpaceSurface({ onOpenSession, onOpenProject, onAddCredential, re
               onOpenProject={onOpenProject}
               onOpenSession={onOpenSession}
               onNote={onNote}
+              onClose={closeIssues}
+              onPendingChange={setIssuesPending}
             />
             {groups.git.ok ? (
               <GroupsList
                 groups={groups}
                 now={now}
                 selected={selected}
+                selectionDisabled={repositoryPending}
                 connected={connected}
                 refreshes={refreshes}
                 dismissed={dismissed}
                 signIn={signIn}
                 servers={servers.listing}
                 onAddCredential={onAddCredential}
-                onSelect={(key, reveal) => {
+                onSelect={(key, reveal, opener) => {
+                  if (repositoryPending) return;
+                  repositoryOpener.current = opener ?? null;
                   setTab("sync");
                   setSelected((current) => (!reveal && current === key ? undefined : key));
+                  setRepositoryFocus((value) => value + 1);
                 }}
-                onExplore={(key) => {
+                onExplore={(key, opener) => {
+                  if (repositoryPending) return;
+                  repositoryOpener.current = opener ?? null;
                   setTab("explore");
                   setSelected(key);
                   setTimeout(() => document.getElementById("space-tab-explore")?.focus(), 0);
@@ -500,6 +557,10 @@ export function SpaceSurface({ onOpenSession, onOpenProject, onAddCredential, re
                 onDismiss={(phase) => setDismissed((was) => ({ ...was, [repo.key]: phase }))}
                 onOpenSession={onOpenSession}
                 onNote={onNote}
+                pending={repositoryPending}
+                onPendingChange={setRepositoryPending}
+                focusRequest={repositoryFocus}
+                onClose={closeRepository}
               />
             ) : null}
             {anySignedIn(groups) ? (
@@ -549,6 +610,7 @@ function HomeHeader({
   refreshError,
   onRefresh,
   issuesOpen,
+  issuesPending,
   onIssuesOpen,
 }: {
   groups: GroupsState;
@@ -559,12 +621,12 @@ function HomeHeader({
   refreshError?: string;
   onRefresh(): void;
   issuesOpen: boolean;
-  onIssuesOpen(open: boolean): void;
+  issuesPending: boolean;
+  onIssuesOpen(open: boolean, opener: HTMLButtonElement): void;
 }) {
   // Count notices the reader has not set aside, using the core's fold.
   // A zero-count review remains reachable while postponed tasks stand.
   const noticeCount = groups.issues;
-  const reviewIsOpen = issuesOpen || groups.diagnostics.some((entry) => entry.blocking);
   const reading = refreshing || groups.instances.some((instance) => instance.read.phase === "running");
   const listed = groups.instances.length > 0;
   const refresh = anySignedIn(groups);
@@ -581,9 +643,9 @@ function HomeHeader({
     ? i18n._({ id: "Review {count, plural, one {# notice} other {# notices}}", values: { count: noticeCount }, comment: "accessible name for the notice review control" })
     : issuesLabel;
   const issues = groups.diagnostics.length > 0 ? (
-    <button type="button" data-testid="space-issues" aria-expanded={reviewIsOpen} aria-label={issuesName}
+    <button type="button" data-testid="space-issues" aria-expanded={issuesOpen} aria-label={issuesName} disabled={issuesPending}
       className={`flex items-center gap-1 text-sm hover:underline ${noticeCount > 0 ? "text-amber-700 dark:text-amber-300" : "text-neutral-500"}`}
-      onClick={() => onIssuesOpen(!issuesOpen)}
+      onClick={(event) => onIssuesOpen(!issuesOpen, event.currentTarget)}
     >
       {noticeCount > 0 ? <span aria-hidden>⚠</span> : null}
       {issuesLabel}
@@ -672,6 +734,10 @@ function RepositoryPanel({
   onDismiss,
   onOpenSession,
   onNote,
+  pending,
+  onPendingChange,
+  focusRequest,
+  onClose,
 }: {
   groups: GroupsState;
   repo: RepositoryState;
@@ -685,8 +751,14 @@ function RepositoryPanel({
   onDismiss(phase: string): void;
   onOpenSession(sessionId: string): void;
   onNote: Note;
+  pending: boolean;
+  onPendingChange(pending: boolean): void;
+  focusRequest: number;
+  onClose(): void;
 }) {
   const store = usePlaceStore();
+  const panelRef = useRef<HTMLElement>(null);
+  useEffect(() => { panelRef.current?.focus(); }, [focusRequest]);
   const seat = seatName(store.place);
   // The row's name and whether it is a project's, as its group reads it
   // (space-1).
@@ -695,6 +767,7 @@ function RepositoryPanel({
   const name = rowName(group, repo);
 
   const onTabKey = (event: KeyboardEvent<HTMLElement>) => {
+    if (pending) return;
     if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
     event.preventDefault();
     const next: SpaceTab = tab === "sync" ? "explore" : "sync";
@@ -711,6 +784,7 @@ function RepositoryPanel({
       aria-selected={tab === which}
       aria-controls={`space-panel-${which}`}
       tabIndex={tab === which ? 0 : -1}
+      disabled={pending}
       onClick={() => setTab(which)}
       onKeyDown={onTabKey}
       className={`min-h-7 rounded px-3 py-1 text-sm ${
@@ -733,6 +807,8 @@ function RepositoryPanel({
   const standingPhrase = rowPhrase(repo, now, dismissed, phraseNames(groups, repo, seat), quiet).text;
   return (
     <section
+      ref={panelRef}
+      tabIndex={-1}
       id="space-repository"
       data-testid="space-repository"
       aria-label={name}
@@ -742,19 +818,29 @@ function RepositoryPanel({
       // folding the explorer under the foot; the Sync tab keeps its
       // whole height for the same reason (space-28).
       className={`flex min-w-0 flex-1 flex-col gap-3 ${tab === "explore" ? "min-h-96" : ""}`}
+      onKeyDown={(event) => {
+        if (event.key !== "Escape") return;
+        event.stopPropagation();
+        if (!pending) onClose();
+      }}
     >
       <div
         data-testid="space-repository-header"
         className="flex min-w-0 flex-col gap-1 rounded-lg border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900"
       >
-        <div className="flex min-w-0 flex-col gap-1 @xs:flex-row @xs:flex-wrap @xs:items-center @xs:gap-x-3">
-          <Field testId="space-repository-name" title={standingPhrase ? `${name} · ${standingPhrase}` : name} className="min-w-0 flex-1">
-            <span className="min-w-0 truncate font-medium">{name}</span>
-            {standingPhrase ? (
-              <span className="min-w-0 truncate text-xs text-neutral-500">{standingPhrase}</span>
-            ) : null}
-          </Field>
-          {absent ? null : <PathControls path={root} testId="space-clone-path" onNote={onNote} compact />}
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="flex min-w-0 flex-1 flex-col gap-1 @xs:flex-row @xs:flex-wrap @xs:items-center @xs:gap-x-3">
+            <Field testId="space-repository-name" title={standingPhrase ? `${name} · ${standingPhrase}` : name} className="min-w-0 flex-1">
+              <span className="min-w-0 truncate font-medium">{name}</span>
+              {standingPhrase ? (
+                <span className="min-w-0 truncate text-xs text-neutral-500">{standingPhrase}</span>
+              ) : null}
+            </Field>
+            {absent ? null : <PathControls path={root} testId="space-clone-path" onNote={onNote} compact />}
+          </div>
+          <button type="button" data-testid="space-repository-close" className={`${SECONDARY} shrink-0`} disabled={pending} onClick={onClose}>
+            {i18n._({ id: "Close", comment: "close the project records panel and return to its opener" })}
+          </button>
         </div>
         {repo.folder ? (
           <span
@@ -803,6 +889,7 @@ function RepositoryPanel({
             onDismiss={onDismiss}
             onOpenSession={onOpenSession}
             onNote={onNote}
+            onPendingChange={onPendingChange}
           />
         ) : absent ? (
           <p className="text-sm text-neutral-500">{notHerePhrase(seat)}</p>

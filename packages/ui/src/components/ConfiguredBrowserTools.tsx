@@ -8,6 +8,7 @@ import { useBrowserTools } from "../lib/useBrowserTools.js";
 import { usePopover } from "../lib/usePopover.js";
 import { useFitInBox } from "../lib/popover-fit.js";
 import { BrowserControl } from "./BrowserControl.js";
+import { SECONDARY } from "./SpaceSurface.js";
 
 type Props = { agent: AgentSummary; context: MediaUploadOwner; disabled?: boolean };
 
@@ -24,6 +25,12 @@ function PreparationPopover({ agent, context, anchorRef, onClose }: Props & {
       choiceDisabled inherited onChange={() => {}} onPrepare={tools.prepare} onCancel={tools.cancel} />
     <p className="text-xs text-neutral-500">{i18n._("Browser access follows the selected agent in Settings")}</p>
     {tools.capabilityError && <button type="button" onClick={tools.refresh} className="self-start text-xs underline">{i18n._("Retry browser support check")}</button>}
+    <div className="flex justify-end">
+      <button type="button" onClick={onClose} className={SECONDARY}
+        title={tools.preparation.status === "preparing" ? i18n._("Closing cancels browser setup") : undefined}>
+        {i18n._("Close")}
+      </button>
+    </div>
   </div>;
 }
 

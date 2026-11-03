@@ -316,16 +316,16 @@ export function MembersPanel({
         }
       }}
     >
-      <header className="flex min-w-0 flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 flex-1 basis-36">
-          <h4 className="break-words font-medium">{i18n._("Members of {name}", { name })}</h4>
-          {result ? (
-            <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">
-              {i18n._("{count, plural, one {# member} other {# members}}", { count: result.members.length })}
-            </p>
-          ) : null}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+      <header className="flex min-w-0 items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-1 flex-wrap items-start gap-2">
+          <div className="min-w-0 flex-1 basis-36">
+            <h4 className="break-words font-medium">{i18n._("Members of {name}", { name })}</h4>
+            {result ? (
+              <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">
+                {i18n._("{count, plural, one {# member} other {# members}}", { count: result.members.length })}
+              </p>
+            ) : null}
+          </div>
           {canManage ? (
             <button
               ref={shareRef}
@@ -347,10 +347,10 @@ export function MembersPanel({
               {i18n._({ id: "Invite members…", comment: "open the form to add people to this group or project's records" })}
             </button>
           ) : null}
-          <button type="button" data-testid={`space-members-close-${id}`} className={SECONDARY} disabled={adding || removing} onClick={onClose}>
-            {i18n._({ id: "Close", comment: "close the members panel and return to its opener" })}
-          </button>
         </div>
+        <button type="button" data-testid={`space-members-close-${id}`} className={`${SECONDARY} shrink-0`} disabled={adding || removing} onClick={onClose}>
+          {i18n._({ id: "Close", comment: "close the members panel and return to its opener" })}
+        </button>
       </header>
       {alsoPlacedAt.length > 0 ? (
         // Every Space's members see that the records are kept elsewhere

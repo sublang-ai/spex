@@ -2664,6 +2664,49 @@ describe("spec-view-20: citation graph beside the outline", () => {
     restore();
   });
 
+  test("the pinned selection card closes explicitly and returns focus without raising a floating card", () => {
+    const restore = sized();
+    try {
+      showGraph();
+      const auth = node("auth") as unknown as HTMLElement;
+      act(() => auth.focus());
+      const floating = screen.getByTestId("graph-card");
+      expect(within(floating).queryByRole("button", { name: /Close/ })).toBeNull();
+      fireEvent.keyDown(auth, { key: "Enter" });
+      const card = screen.getByTestId("graph-selection-card");
+      const close = within(card).getByRole("button", { name: "Close auth's details" });
+      expect(close.textContent).toBe("Close");
+      act(() => close.focus());
+      fireEvent.click(close);
+      expect(screen.queryByTestId("graph-selection-card")).toBeNull();
+      expect(screen.getByTestId("graph-halo-auth").getAttribute("class")).toContain("stroke-brand-");
+      expect(screen.getByTestId("file-toggle-auth").getAttribute("aria-current")).not.toBe("true");
+      expect(document.activeElement).toBe(auth);
+      expect(screen.queryByTestId("graph-card")).toBeNull();
+      act(() => (node("billing") as unknown as HTMLElement).focus());
+      expect(within(screen.getByTestId("graph-card")).getByText("billing")).toBeTruthy();
+    } finally {
+      restore();
+    }
+  });
+
+  test("Escape from the pinned card clears the selection and returns focus", () => {
+    const restore = sized();
+    try {
+      showGraph();
+      fireEvent.click(node("auth"));
+      const close = within(screen.getByTestId("graph-selection-card")).getByRole("button", { name: "Close auth's details" });
+      act(() => close.focus());
+      fireEvent.keyDown(close, { key: "Escape" });
+      expect(screen.queryByTestId("graph-selection-card")).toBeNull();
+      expect(screen.getByTestId("graph-halo-auth").getAttribute("class")).toContain("stroke-brand-");
+      expect(document.activeElement).toBe(node("auth"));
+      expect(screen.queryByTestId("graph-card")).toBeNull();
+    } finally {
+      restore();
+    }
+  });
+
   // spec-view-41: emphasis, keyboard, cards, camera, and scoping.
   test("selection holds through transit, and the keyboard drives the graph", () => {
     const restore = sized();
@@ -2704,7 +2747,7 @@ describe("spec-view-20: citation graph beside the outline", () => {
     // The pinned card reads the same lines in the same order
     // (spec-view-26).
     const lines = (box: Element) => [
-      box.children[0]?.textContent,
+      box.querySelector('[data-testid="graph-card-name"]')?.textContent,
       box.children[1]?.textContent,
       ...[...(box.children[2]?.querySelectorAll("li") ?? [])].map((line) => line.textContent),
     ];

@@ -5,7 +5,7 @@
 // A folder choice is one task, with supporting evidence behind Details.
 // Outcomes keep their rows and focus until Refresh.
 
-import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { DiagnosticRepair, GroupsState } from "@sublang/spex-core/protocol";
 
 import { usePlaceStore } from "../state/place-context.js";
@@ -42,7 +42,7 @@ function TechnicalDetails({ entries, children }: {
 
 /** One saved-work group: read its conversations or locate its files.
  * Names from the storage layout never stand in for a user's project. */
-function RepairRow({ repair, disabled, canDismiss, focusSeq, onResolved, onDismissalChanged, onOpenSession }: {
+function RepairRow({ repair, disabled, canDismiss, focusSeq, onResolved, onDismissalChanged, onOpenSession, onPendingChange }: {
   repair: DiagnosticRepair;
   disabled: boolean;
   canDismiss: boolean;
@@ -50,6 +50,7 @@ function RepairRow({ repair, disabled, canDismiss, focusSeq, onResolved, onDismi
   onResolved(key: string, summary: string, projectId?: string): void;
   onDismissalChanged(key: string, dismissed: boolean): void;
   onOpenSession(sessionId: string): void;
+  onPendingChange(key: string, pending: boolean): void;
 }) {
   const store = usePlaceStore();
   const rebindProject = store((state) => state.rebindProject);
@@ -76,6 +77,11 @@ function RepairRow({ repair, disabled, canDismiss, focusSeq, onResolved, onDismi
   const helpId = `${fieldId}-help`;
   const errorId = `${fieldId}-error`;
   const declined = canDismiss && repair.declined !== undefined;
+
+  useEffect(() => {
+    onPendingChange(`repair:${repair.key}`, busy);
+    return () => onPendingChange(`repair:${repair.key}`, false);
+  }, [busy, repair.key, onPendingChange]);
 
   useEffect(() => {
     if (focusSeq !== undefined) firstRef.current?.focus();
@@ -203,7 +209,12 @@ function RepairRow({ repair, disabled, canDismiss, focusSeq, onResolved, onDismi
   );
 
   const editor = (
-    <div className="flex min-w-0 flex-col gap-3 rounded-lg border border-neutral-300 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900">
+    <div className="flex min-w-0 flex-col gap-3 rounded-lg border border-neutral-300 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900"
+      onKeyDown={(event) => {
+        if (event.key !== "Escape") return;
+        event.stopPropagation();
+        if (!busy) closeEditor();
+      }}>
       <h3 className="font-medium">{repair.projectName
         ? i18n._({ id: "Where are this project’s files?", comment: "locate the files belonging to the named project above" })
         : i18n._({ id: "Where are the files used in these conversations?", comment: "locate the original files for saved conversations without a known project name" })}</h3>
@@ -212,9 +223,8 @@ function RepairRow({ repair, disabled, canDismiss, focusSeq, onResolved, onDismi
         <label htmlFor={fieldId}>{i18n._({ id: "Project folder on this computer", comment: "the local folder containing the project files, separate from saved conversation history" })}</label>
         <span className="flex min-w-0 flex-wrap items-center gap-2">
           <input id={fieldId} ref={fieldRef} data-testid="space-repair-path" value={path} aria-describedby={refusal ? `${helpId} ${errorId}` : helpId} aria-invalid={refusal ? true : undefined} onChange={(event) => { setPath(event.target.value); setRefusal(undefined); }}
-            onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
+            onKeyDown={(event) => {
               if (busy) return;
-              if (event.key === "Escape") { event.stopPropagation(); closeEditor(); }
               if (event.key === "Enter") void submit();
             }}
             spellCheck={false} disabled={busy} className="min-w-0 flex-1 rounded border border-neutral-300 bg-white px-2 py-1 font-mono text-xs dark:border-neutral-700 dark:bg-neutral-950"
@@ -367,11 +377,12 @@ const dismissedNotice = (entry: IssueEntry): boolean =>
   dismissibleNotice(entry) && entry.notice?.dismissed !== undefined;
 
 /** Known operations supply the cause; error prose never selects a remedy. */
-function DiagnosticRow({ entry, disabled, focusSeq, onNoticeChanged }: {
+function DiagnosticRow({ entry, disabled, focusSeq, onNoticeChanged, onPendingChange }: {
   entry: IssueEntry;
   disabled: boolean;
   focusSeq?: number;
   onNoticeChanged(key: string, dismissed: boolean): void;
+  onPendingChange(key: string, pending: boolean): void;
 }) {
   const store = usePlaceStore();
   const dismiss = store((state) => state.spaceNoticeDismiss);
@@ -379,6 +390,10 @@ function DiagnosticRow({ entry, disabled, focusSeq, onNoticeChanged }: {
   const [error, setError] = useState<string>();
   const actionRef = useRef<HTMLButtonElement>(null);
   const dismissed = dismissedNotice(entry);
+  useEffect(() => {
+    onPendingChange(`notice:${entry.file}`, busy);
+    return () => onPendingChange(`notice:${entry.file}`, false);
+  }, [busy, entry.file, onPendingChange]);
   useEffect(() => {
     if (focusSeq !== undefined) actionRef.current?.focus();
   }, [focusSeq]);
@@ -441,6 +456,8 @@ export function IssuesList({
   onOpenProject,
   onOpenSession,
   onNote,
+  onClose,
+  onPendingChange,
 }: {
   groups: GroupsState;
   connected: boolean;
@@ -453,6 +470,8 @@ export function IssuesList({
   onOpenProject(projectId: string): void;
   onOpenSession(sessionId: string): void;
   onNote: Note;
+  onClose(): void;
+  onPendingChange(pending: boolean): void;
 }) {
   const store = usePlaceStore();
   const seat = seatName(store.place);
@@ -461,6 +480,18 @@ export function IssuesList({
   const [outcomes, setOutcomes] = useState<Record<string, RepairOutcome>>({});
   const [dismissalNote, setDismissalNote] = useState<string>();
   const [dismissedOpen, setDismissedOpen] = useState(false);
+  const [pending, setPending] = useState<ReadonlySet<string>>(() => new Set());
+  const pendingChange = useCallback((key: string, busy: boolean) => {
+    setPending((current) => {
+      if (current.has(key) === busy) return current;
+      const next = new Set(current);
+      if (busy) next.add(key);
+      else next.delete(key);
+      return next;
+    });
+  }, []);
+  useEffect(() => { onPendingChange(pending.size > 0); }, [pending, onPendingChange]);
+  useEffect(() => () => onPendingChange(false), [onPendingChange]);
   const seenReveal = useRef<number | undefined>(undefined);
   const [noticeFocus, setNoticeFocus] = useState<{ key: string; dismissed: boolean; seq: number }>();
   const dismissedSummaryRef = useRef<HTMLElement>(null);
@@ -492,7 +523,6 @@ export function IssuesList({
 
   // Optional recovery stays neutral; only a blocking diagnostic needs
   // immediate attention. Deferred tasks remain available.
-  const blocking = groups.diagnostics.some((entry) => entry.blocking);
   const fresh = groups.diagnostics.filter((entry) => entry.repair);
   const notices = groups.diagnostics.filter((entry) => !entry.repair);
   const activeNotices = notices.filter((entry) => !dismissedNotice(entry));
@@ -525,7 +555,7 @@ export function IssuesList({
     layout.current = nextLayout;
     latest.current = { groups, outcomes };
   });
-  const listOpen = (rows.size > 0 || notices.length > 0) && (open || blocking);
+  const listOpen = (rows.size > 0 || notices.length > 0) && open;
 
   /** The reader's act resolved a repair (space-48): its outcome takes
    * the row's place, and focus and the live region move on. */
@@ -605,7 +635,7 @@ export function IssuesList({
       focusSeq={focusSeq(id)} onOpenProject={onOpenProject} />;
     return row.entry.repair ? <RepairRow key={id} repair={row.entry.repair} disabled={!connected} canDismiss={!row.entry.blocking}
       focusSeq={focusSeq(id)} onResolved={onResolved} onDismissalChanged={onRepairDismissalChanged}
-      onOpenSession={onOpenSession} /> : null;
+      onOpenSession={onOpenSession} onPendingChange={pendingChange} /> : null;
   };
   const renderNotice = (entry: IssueEntry) => entry.file.endsWith(MERGE_HEAD_FILE)
     ? <li key={issueRowId(entry)} title={entry.file}>
@@ -613,22 +643,37 @@ export function IssuesList({
     </li>
     : <DiagnosticRow key={entry.notice?.key ?? issueRowId(entry)} entry={entry} disabled={!connected}
       focusSeq={!noticeFocus?.dismissed && noticeFocus?.key === entry.notice?.key ? noticeFocus?.seq : undefined}
-      onNoticeChanged={onNoticeChanged} />;
+      onNoticeChanged={onNoticeChanged} onPendingChange={pendingChange} />;
   const listClass = "flex min-w-0 flex-col divide-y divide-neutral-200 dark:divide-neutral-800";
+  const closeControl = <button type="button" data-testid="space-issues-close" className={`${SECONDARY} shrink-0`} disabled={pending.size > 0} onClick={onClose}>
+    {i18n._("Close")}
+  </button>;
   return (
-    <section data-testid="space-issues-list" aria-label={title} className="flex min-w-0 flex-col gap-4 text-sm">
+    <section data-testid="space-issues-list" aria-label={title} className="flex min-w-0 flex-col gap-4 text-sm"
+      onKeyDown={(event) => {
+        if (event.key !== "Escape") return;
+        event.stopPropagation();
+        if (pending.size === 0) onClose();
+      }}>
       {activeRepairs.length > 0 ? <div data-testid="space-folder-review" className={panelClass(repairsBlocking)}>
         <div className="flex flex-col gap-1">
-          <h2 data-testid="space-issues-heading" className={`font-medium ${repairsBlocking ? "text-amber-800 dark:text-amber-200" : ""}`}>{repairTitle}</h2>
+          <div className="flex items-start justify-between gap-3">
+            <h2 data-testid="space-issues-heading" className={`min-w-0 break-words font-medium ${repairsBlocking ? "text-amber-800 dark:text-amber-200" : ""}`}>{repairTitle}</h2>
+            {closeControl}
+          </div>
           {activeFolderTasks.length > 0 ? introduction : null}
         </div>
         <ul className={listClass}>{activeRepairs.map(renderRepair)}</ul>
       </div> : null}
       {activeNotices.length > 0 ? <div data-testid="space-notice-review" className={panelClass(noticesBlocking)}>
-        <h2 data-testid={activeRepairs.length > 0 ? undefined : "space-issues-heading"} className={`font-medium ${noticesBlocking ? "text-amber-800 dark:text-amber-200" : ""}`}>{noticeTitle}</h2>
+        <div className="flex items-start justify-between gap-3">
+          <h2 data-testid={activeRepairs.length > 0 ? undefined : "space-issues-heading"} className={`min-w-0 break-words font-medium ${noticesBlocking ? "text-amber-800 dark:text-amber-200" : ""}`}>{noticeTitle}</h2>
+          {activeRepairs.length === 0 ? closeControl : null}
+        </div>
         <ul data-testid="space-active-notices" className={listClass}>{activeNotices.map(renderNotice)}</ul>
       </div> : null}
       {dismissalNote ? <p data-testid="space-deferred-notice" className="text-sm text-neutral-500">{dismissalNote}</p> : null}
+      {activeRepairs.length === 0 && activeNotices.length === 0 && dismissedCount > 0 ? <div className="flex justify-end">{closeControl}</div> : null}
       {dismissedCount > 0 ? <details data-testid="space-dismissed" className="min-w-0 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800"
         open={dismissedOpen} onToggle={(event) => setDismissedOpen(event.currentTarget.open)}>
         <summary ref={dismissedSummaryRef} className="cursor-pointer font-medium text-neutral-500">{i18n._({
