@@ -3,6 +3,26 @@
 
 # CLI 5.0.0 release preparation
 
+## Publication receipt — 2026-11-03
+
+CLI 5.0.0 is published on npm as `@sublang/spex`, with `latest` selecting 5.0.0.
+The immutable `cli-v5.0.0` tag names release candidate `a78876405978b4b0ac5116de66adfe6b3125aaeb`, merged through PR349 before publication.
+The publication date is November 3; the November 2 changelog date records preparation.
+
+| Evidence | Outcome |
+| --- | --- |
+| Exact-tag full CLI validation | [Release run 41600218767](https://github.com/sublang-ai/spex/actions/runs/41600218767) succeeded on the tagged commit: Linux and macOS on Node 22 and 24, Windows on Node 22, and the final `checks` gate all passed; app-only journeys, native browser acceptance and the hub lane were skipped as the CLI validation plan requires |
+| npm publication | The same run built and inspected the tagged package, matched its version, then published publicly using OIDC trusted publishing and provenance; no static npm token or validation waiver was used |
+| Release page | [Spex CLI v5.0.0](https://github.com/sublang-ai/spex/releases/tag/cli-v5.0.0) was published at `2026-11-03T08:08:09Z` |
+| Registry identity | npm reports version and `latest` as 5.0.0, with tarball integrity `sha512-+kw9Lhg9c2R7k4F+6wB/xJSXrtnS0xcJKUg/4E5OiHHxW16Wyyyz3QzJBM5Ut3xG1pu7eD3GbxEC3d0joJUg6g==` |
+| Published consumer | An unversioned `npm install -g @sublang/spex` using an empty cache and an isolated prefix installed 5.0.0; its executable passed version, export help, scaffold, lint, export, add-by-path and list, and placed the test skill under `.agents/skills/` |
+
+The first immediate consumer install received 4.2.0 while npm was still processing the publication; it is retained as an initial observation, not the successful consumer result.
+The subsequent empty-cache install and executable journeys passed against 5.0.0.
+Consumer evidence: `/tmp/spex-npm-5.0.0-consumer-verified.log`; the initial observation is `/tmp/spex-npm-5.0.0-consumer.log`.
+The isolated successful installation is `/tmp/spex-npm-consumer.N2GCwR`.
+This receipt changes no release product, changelog, package, tag or published artifact; preparation and source evidence remain below.
+
 ## Publication preparation — 2026-11-02
 
 The owner requested the first npm publication of CLI 5.0.0.
