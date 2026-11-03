@@ -6,25 +6,32 @@ import type { AdapterName, AgentModelOption, AgentOptions } from "@sublang/spex-
 import { i18n } from "../i18n.js";
 import { usePlaceStore } from "../state/place-context.js";
 
-/** Discovery belongs to an open editor, never application startup. */
-export function useAgentOptions(adapter: AdapterName) {
+/** Discovery belongs to an open editor, never application startup.
+ * A caller passing `epoch` reads the catalog again each time it changes,
+ * keeping the earlier reading as `refreshing` until the new one lands;
+ * a failed reading replaces it (settings-5, DR-217). */
+export function useAgentOptions(adapter: AdapterName, epoch?: number) {
   const store = usePlaceStore();
   const load = store((state) => state.loadAgentOptions);
   const [attempt, setAttempt] = useState(0);
-  const [result, setResult] = useState<{ adapter: AdapterName; attempt: number; options?: AgentOptions; error?: string }>();
+  const [result, setResult] = useState<{ adapter: AdapterName; attempt: number; epoch?: number; options?: AgentOptions; error?: string }>();
   useEffect(() => {
     let active = true;
     void Promise.resolve().then(() => load(adapter)).then(
-      (options) => { if (active) setResult({ adapter, attempt, options }); },
-      (cause: unknown) => { if (active) setResult({ adapter, attempt, error: cause instanceof Error ? cause.message : String(cause) }); },
+      (options) => { if (active) setResult({ adapter, attempt, epoch, options }); },
+      (cause: unknown) => { if (active) setResult({ adapter, attempt, epoch, error: cause instanceof Error ? cause.message : String(cause) }); },
     );
     return () => { active = false; };
-  }, [adapter, attempt, load]);
-  const current = result?.adapter === adapter && result.attempt === attempt ? result : undefined;
+  }, [adapter, attempt, epoch, load]);
+  const same = result?.adapter === adapter && result.attempt === attempt;
+  const current = same && result.epoch === epoch ? result : undefined;
+  const earlier = !current && same && epoch !== undefined ? result : undefined;
+  const shown = current ?? earlier;
   return {
-    options: current?.options,
-    loading: !current,
-    error: current?.error,
+    options: shown?.options,
+    loading: !shown,
+    refreshing: earlier !== undefined,
+    error: shown?.error,
     refresh: () => setAttempt((value) => value + 1),
   };
 }
