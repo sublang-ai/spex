@@ -250,6 +250,7 @@ test.describe("a legacy project with distinct registry and Space identities", ()
     await expect(packages.getByTestId("registry-signin")).toBeVisible();
     await projectTab(page, "Playbooks");
     await expect(page.getByTestId("authoring-workspace")).toBeVisible();
+    await page.getByTestId("tab-add").click();
     await expect(page.getByTestId("publish").getByRole("button", { name: "Sign in to publish", exact: true })).toBeVisible();
     await expect(page.getByTestId("publish-setup")).toHaveCount(0);
     await expect(page.getByTestId("publish-org")).toHaveCount(0);
