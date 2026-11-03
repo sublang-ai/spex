@@ -3111,3 +3111,259 @@ test("space-110: pending sign-in cancels before its start reply and later auth s
   assert.equal(instanceOf(state, origin)?.signedIn, true);
   assert.equal(home.client.messages.slice(from).filter((message) => message.type === "space.signin.completed" && message.id === reply.id).length, 1);
 });
+
+// ---------------------------------------------------------------------------
+// space-59, space-60, storage-2, storage-56: your own group's folder in
+// lowercase, and every move of clones checked against home.yaml first
+// ---------------------------------------------------------------------------
+
+/** Make `home.yaml` stop reading, once, as the core's `mover` returns
+ * from its call of `step` — the last read before its moves on disk. */
+function damageHomeAt(home: Awaited<ReturnType<typeof startHome>>, mover: "renameOwn" | "moveInSync" | "moveAtPick", step: "machineIdentity" | "syncsWith"): { damaged: () => Buffer | undefined } {
+  const space = (home.service as unknown as { space: Record<string, (...args: unknown[]) => unknown> }).space;
+  const original = space[step] as (...args: unknown[]) => unknown;
+  let bytes: Buffer | undefined;
+  const damage = (): void => {
+    bytes = Buffer.from("format: [\n");
+    writeFileSync(Home.file(home.dataDir), bytes);
+  };
+  space[step] = function (this: unknown, ...args: unknown[]): unknown {
+    const result = original.apply(this, args);
+    if (bytes !== undefined || !(new Error().stack ?? "").includes(`.${mover} `)) return result;
+    if (result instanceof Promise) return result.then((value) => { damage(); return value; });
+    damage();
+    return result;
+  };
+  return { damaged: () => bytes };
+}
+
+/** Make the store's next write of `home.yaml` for moved clones fail,
+ * once: the home's folder may not be written while it runs, so the
+ * real write is refused after the clones moved on disk. */
+function failHomeWrite(home: Awaited<ReturnType<typeof startHome>>): { failed: () => boolean } {
+  const store = (home.service as unknown as { space: { host: { store: { moveRepositories: (...args: unknown[]) => void } } } }).space.host.store;
+  const original = store.moveRepositories;
+  let failed = false;
+  store.moveRepositories = function (this: unknown, ...args: unknown[]): void {
+    if (failed) return original.apply(this, args);
+    failed = true;
+    chmodSync(home.dataDir, 0o555);
+    try { original.apply(this, args); }
+    finally { chmodSync(home.dataDir, 0o755); }
+  };
+  return { failed: () => failed };
+}
+
+/** What the core says on the console while `run` runs. */
+async function consoleErrors<T>(run: () => Promise<T>): Promise<{ result: T; said: string[] }> {
+  const said: string[] = [];
+  const original = console.error;
+  console.error = (...args: unknown[]) => { said.push(args.map(String).join(" ")); };
+  try { return { result: await run(), said }; }
+  finally { console.error = original; }
+}
+
+const asRoot = process.getuid?.() === 0 ? "root writes a folder it may not write" : false;
+
+for (const [why, login, folder] of [
+  ["capitals", "Startrekzky", "startrekzky"],
+  ["a dot", "ada.lovelace", "ada-lovelace"],
+  ["an underscore", "ada_lovelace", "ada-lovelace"],
+  ["a -spex ending", "ada-spex", "ada"],
+  ["nothing left in lowercase", "__", "me"],
+] as const) {
+  test(`space-4, space-59, storage-2, storage-56: a first sign-in as a login holding ${why} names your own group's folder and its repository at the stand-in ${folder}, home.yaml and workspace/ agreeing, the project and its session listed after a restart`, async (t) => {
+    const host = await startHost({ person: { id: "1001", login, displayName: null } });
+    const home = await startHome(`lower-${folder}`, { host, extra: { signIn: "browser" } });
+    t.after(() => home.stop());
+    const { key } = await addFolder(home, home.projectDir);
+    const sessionId = await runTurn(home, key, "Before the sign-in");
+    const from = home.client.mark();
+    await signIn(home, host);
+    const moved = `${folder}/${basename(home.projectDir)}-spex`;
+    // Your own group's repository is created at the stand-in under the
+    // same lowercase name, and synced (space-4, space-65, git-host-6).
+    const own = await home.client.waitRepository(from, `${folder}/${folder}-spex`, (repository) => repository.sync.phase === "done", 30_000);
+    assert.equal(own.state, "reachable");
+    assert.deepEqual(creationsAsked(host), [[`${folder}-spex`, null]]);
+    const file = Home.load(home.dataDir).file;
+    // Your own group's folder is the login in lowercase (storage-2,
+    // space-59), holding its clone and the project's.
+    assert.equal(file.own, folder);
+    assert.deepEqual(file.folders.map((entry) => [entry.path, entry.repository]), [[home.projectDir, moved]]);
+    assert.ok(existsSync(join(home.dataDir, "workspace", folder, `${folder}-spex`, ".git")), "your own group's clone lies under the folder home.yaml names");
+    assert.ok(existsSync(clonePath(home.dataDir, moved)), "the project's clone lies under it too");
+    assert.ok(!existsSync(join(home.dataDir, "workspace", OWN)), "the former folder left with its clones");
+    if ((login as string) !== folder) assert.ok(!readdirSync(join(home.dataDir, "workspace")).includes(login), "no folder spelled as the login");
+    await home.stop();
+    const again = await startHome(`lower-${folder}-again`, { host, dataDir: home.dataDir, project: false, extra: { signIn: "browser" } });
+    t.after(() => again.stop());
+    assert.ok((await again.client.expectOk("project.list", {})).some((project) => project.id === moved), "the project is listed after a restart");
+    assert.ok((await again.client.expectOk("session.list", {})).some((session) => session.id === sessionId && session.projectId === moved), "its session is listed after a restart");
+  });
+}
+
+test("space-59: a sign-in while home.yaml stops reading as the rename begins moves no clone and leaves home.yaml as it stands", async (t) => {
+  const host = await startHost();
+  const home = await startHome("lower-unread", { host, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  const { key, clone } = await addFolder(home, home.projectDir);
+  const sessionId = await runTurn(home, key, "Before the sign-in");
+  const { damaged } = damageHomeAt(home, "renameOwn", "machineIdentity");
+  // Signed in, the set-up reaches the rename; home.yaml then reads no
+  // instance, so the sign-in is awaited by the damage itself.
+  const started = await home.client.expectOk("space.signin.start", { url: host.url });
+  assert.equal(started.flow, "browser");
+  const redirect = await fetch(started.flow === "browser" ? started.url : "", { redirect: "manual" });
+  await (await fetch(redirect.headers.get("location") ?? "")).text();
+  for (let waited = 0; damaged() === undefined && waited < 30_000; waited += 50) await sleep(50);
+  await sleep(300);
+  const bytes = damaged();
+  assert.ok(bytes, "home.yaml stopped reading as the rename began");
+  assert.deepEqual(readFileSync(Home.file(home.dataDir)), bytes, "home.yaml is left as it stands");
+  assert.ok(existsSync(join(clone, "sessions", `${sessionId}.json`)), "the project's clone stays, its session with it");
+  assert.ok(existsSync(join(ownClone(home.dataDir), ".git")), "your own group's clone stays");
+  assert.deepEqual(readdirSync(join(home.dataDir, "workspace")).filter((name) => !name.startsWith(".") && !name.startsWith("@")), [OWN], "no folder named after the login");
+});
+
+test("space-59: a sign-in whose move of your own group's clone fails after the project's moved puts the project's clone back, home.yaml unchanged", { skip: asRoot }, async (t) => {
+  const host = await startHost();
+  const home = await startHome("lower-partial", { host, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  const { key, clone } = await addFolder(home, home.projectDir);
+  const sessionId = await runTurn(home, key, "Before the sign-in");
+  // Your own group's clone moves last; a folder that may not be written
+  // refuses its move to another parent (its `..` would change), after
+  // the project's moved.
+  const own = ownClone(home.dataDir);
+  chmodSync(own, 0o555);
+  let said: string[];
+  try {
+    ({ said } = await consoleErrors(() => signIn(home, host)));
+  } finally { chmodSync(own, 0o755); }
+  const refused = said.find((line) => line.includes("your own group's folder did not move"));
+  assert.ok(refused?.includes(`${OWN}-spex' -> `), `your own group's clone's rename failed: ${said.join("\n")}`);
+  assert.ok(!said.some((line) => line.includes("did not move back")), "the project's clone moved back");
+  assert.ok(existsSync(join(clone, "sessions", `${sessionId}.json`)), "the project's clone is back where it was, its session with it");
+  assert.ok(existsSync(join(own, ".git")), "your own group's clone stays");
+  assert.ok(!existsSync(join(home.dataDir, "workspace", LOGIN)), "nothing is left under the login's folder");
+  const file = Home.load(home.dataDir).file;
+  assert.equal(file.own, OWN);
+  assert.deepEqual(file.folders.map((entry) => [entry.path, entry.repository]), [[home.projectDir, key]]);
+  assert.ok((await home.client.expectOk("session.list", {})).some((session) => session.id === sessionId && session.projectId === key));
+});
+
+test("space-59: a sign-in whose write of home.yaml fails after every clone moved puts the clones back, home.yaml unchanged", { skip: asRoot }, async (t) => {
+  const host = await startHost();
+  const home = await startHome("lower-unwritten", { host, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  const { key, clone } = await addFolder(home, home.projectDir);
+  const sessionId = await runTurn(home, key, "Before the sign-in");
+  const { failed } = failHomeWrite(home);
+  const { said } = await consoleErrors(() => signIn(home, host));
+  assert.ok(failed(), "the write of home.yaml was reached");
+  assert.ok(said.some((line) => line.includes("your own group's folder did not move")), said.join("\n"));
+  assert.ok(!said.some((line) => line.includes("did not move back")), "every clone moved back");
+  // The sign-in wrote its account; the move wrote nothing.
+  const file = Home.load(home.dataDir).file;
+  assert.equal(file.own, OWN);
+  assert.deepEqual(file.folders.map((entry) => [entry.path, entry.repository]), [[home.projectDir, key]]);
+  assert.ok(existsSync(join(clone, "sessions", `${sessionId}.json`)), "the project's clone is back where it was, its session with it");
+  assert.ok(existsSync(join(ownClone(home.dataDir), ".git")), "your own group's clone is back");
+  assert.ok(!existsSync(join(home.dataDir, "workspace", LOGIN)), "nothing is left under the login's folder");
+  assert.ok((await home.client.expectOk("session.list", {})).some((session) => session.id === sessionId && session.projectId === key));
+  await home.stop();
+  const again = await startHome("lower-unwritten-again", { host, dataDir: home.dataDir, project: false, extra: { signIn: "browser" } });
+  t.after(() => again.stop());
+  assert.ok((await again.client.expectOk("session.list", {})).some((session) => session.id === sessionId), "its session is listed after a restart");
+});
+
+test("space-60: a sync of a repository the stand-in renamed, while home.yaml stops reading before the move, leaves the clone and home.yaml where they were", async (t) => {
+  const host = await startHost();
+  const home = await startHome("lower-sync-unread", { host, project: false, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  await signIn(home, host);
+  const { key, id, clone, sessionId } = await acmeProject(home, "unread");
+  host.script.rename(id, { name: "renamed-spex" });
+  const target = clonePath(home.dataDir, hostKey(host, "acme/renamed-spex"));
+  const homeBytes = readFileSync(Home.file(home.dataDir));
+  const { damaged } = damageHomeAt(home, "moveInSync", "syncsWith");
+  const stopped = await home.client.settle("space.sync", { repository: key });
+  const bytes = damaged();
+  assert.ok(bytes, "home.yaml stopped reading before the move");
+  assert.notEqual(stopped.sync.phase, "done", JSON.stringify(stopped.sync));
+  assert.deepEqual(readFileSync(Home.file(home.dataDir)), bytes, "home.yaml is left as it stands");
+  assert.ok(existsSync(join(clone, "sessions", `${sessionId}.json`)), "the clone stays, its session with it");
+  assert.ok(!existsSync(target), "nothing lands at the new path");
+  // home.yaml read again, the clone is still paired where it lay.
+  writeFileSync(Home.file(home.dataDir), homeBytes);
+  assert.ok((await home.client.expectOk("session.list", {})).some((session) => session.id === sessionId && session.projectId === key));
+});
+
+test("space-60: a pick of a local-only clone, while home.yaml stops reading before its move, leaves the clone and home.yaml where they were", async (t) => {
+  const host = await startHost();
+  const home = await startHome("lower-pick-unread", { host, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  await signIn(home, host);
+  const { key, clone } = await addFolder(home, home.projectDir);
+  const sessionId = await runTurn(home, key, "Before the pick");
+  const name = basename(home.projectDir);
+  const target = clonePath(home.dataDir, hostKey(host, `acme/${name}-spex`));
+  const { damaged } = damageHomeAt(home, "moveAtPick", "machineIdentity");
+  await home.client.expectOk("space.pick", { repository: key, choice: { kind: "create", instance: host.url, groupId: "2002", name } });
+  // The pick lands at the stand-in, then reaches its move.
+  for (let waited = 0; damaged() === undefined && waited < 30_000; waited += 50) await sleep(50);
+  await sleep(300);
+  const bytes = damaged();
+  assert.ok(bytes, "home.yaml stopped reading before the move");
+  assert.deepEqual(readFileSync(Home.file(home.dataDir)), bytes, "home.yaml is left as it stands");
+  assert.ok(existsSync(join(clone, "sessions", `${sessionId}.json`)), "the clone stays under your own group's folder, its session with it");
+  assert.ok(!existsSync(target), "nothing lands under the instance's folder");
+});
+
+test("space-60: a pick of a local-only clone whose write of home.yaml fails after the move puts the clone back, home.yaml unchanged", { skip: asRoot }, async (t) => {
+  const host = await startHost();
+  const home = await startHome("lower-pick-unwritten", { host, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  await signIn(home, host);
+  const { key, clone } = await addFolder(home, home.projectDir);
+  const sessionId = await runTurn(home, key, "Before the pick");
+  const name = basename(home.projectDir);
+  const target = clonePath(home.dataDir, hostKey(host, `acme/${name}-spex`));
+  const homeBytes = readFileSync(Home.file(home.dataDir));
+  const { failed } = failHomeWrite(home);
+  const { said } = await consoleErrors(async () => {
+    await home.client.expectOk("space.pick", { repository: key, choice: { kind: "create", instance: host.url, groupId: "2002", name } });
+    // The pick lands at the stand-in, then reaches its move.
+    for (let waited = 0; !failed() && waited < 30_000; waited += 50) await sleep(50);
+    await sleep(300);
+  });
+  assert.ok(failed(), "the write of home.yaml was reached");
+  assert.ok(said.some((line) => line.includes(`${key} stays where it lies`)), said.join("\n"));
+  assert.ok(!said.some((line) => line.includes("did not move back")), "the clone moved back");
+  assert.deepEqual(readFileSync(Home.file(home.dataDir)), homeBytes, "home.yaml is left as it was");
+  assert.ok(existsSync(join(clone, "sessions", `${sessionId}.json`)), "the clone is back under your own group's folder, its session with it");
+  assert.ok(!existsSync(target), "nothing is left under the instance's folder");
+  assert.ok((await home.client.expectOk("session.list", {})).some((session) => session.id === sessionId && session.projectId === key));
+});
+
+test("space-60: where the filesystem folds case, a sync of a repository renamed by case alone whose write of home.yaml fails after the rename puts the clone back under its former spelling", { skip: asRoot || (foldsCase ? false : "the scratch filesystem tells case apart") }, async (t) => {
+  const host = await startHost();
+  const home = await startHome("cased-unwritten", { host, project: false, extra: { signIn: "browser" } });
+  t.after(() => home.stop());
+  await signIn(home, host);
+  const { key, id, folder, sessionId } = await acmeProject(home, "cased");
+  host.script.rename(id, { name: "Cased-spex" });
+  const homeBytes = readFileSync(Home.file(home.dataDir));
+  const { failed } = failHomeWrite(home);
+  const { result: stopped, said } = await consoleErrors(() => home.client.settle("space.sync", { repository: key }));
+  assert.ok(failed(), "the write of home.yaml was reached");
+  assert.notEqual(stopped.sync.phase, "done", JSON.stringify(stopped.sync));
+  assert.ok(!said.some((line) => line.includes("did not move back")), `the clone moved back: ${said.join("\n")}`);
+  const listed = readdirSync(join(home.dataDir, "workspace", hostFolder(host), "acme"));
+  assert.ok(listed.includes("cased-spex") && !listed.includes("Cased-spex"), `the clone stands under its former spelling: ${JSON.stringify(listed)}`);
+  assert.deepEqual(readFileSync(Home.file(home.dataDir)), homeBytes, "home.yaml is left as it was");
+  assert.equal(Home.load(home.dataDir).keyForFolder(folder), key, "its pair stays");
+  assert.ok((await home.client.expectOk("project.list", {})).some((project) => project.id === key), "the project stays listed");
+  assert.ok((await home.client.expectOk("session.list", {})).some((session) => session.id === sessionId && session.projectId === key), "its session stays listed");
+});

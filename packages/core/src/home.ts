@@ -251,6 +251,36 @@ export class Home {
    * naming a moved key names its new one, and your own group's folder
    * takes `own` where it was renamed. Validated before it is taken. */
   move(moves: { from: string; to: string }[], own?: string): void {
+    this.data = this.moved(moves, own);
+  }
+
+  /** `move`, written to `home.yaml` in the same step: a write that
+   * fails leaves this home as it was, unless the file already holds the
+   * new text, which is then taken (space-59, space-60). */
+  moveAndSave(moves: { from: string; to: string }[], own?: string): void {
+    const next = this.moved(moves, own);
+    const text = stringifyYaml(next);
+    try { writeApplicationBytes(Home.file(this.root), text); }
+    catch (error) {
+      if (!this.holds(text)) throw error;
+      console.error(`spex: home.yaml was written, but not synced: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    this.data = next;
+    this.text = text;
+  }
+
+  /** Whether `home.yaml` holds exactly `text`. */
+  private holds(text: string): boolean {
+    try { return readFileSync(Home.file(this.root), "utf8") === text; } catch { return false; }
+  }
+
+  /** Refuse, taking nothing, what `move` would refuse: a caller checks
+   * before it moves any clone on disk (space-59, space-60). */
+  checkMove(moves: { from: string; to: string }[], own?: string): void {
+    this.moved(moves, own);
+  }
+
+  private moved(moves: { from: string; to: string }[], own?: string): HomeFile {
     const to = new Map(moves.map((entry) => [entry.from, entry.to]));
     const next: HomeFile = {
       ...this.data,
@@ -258,7 +288,7 @@ export class Home {
       folders: this.data.folders.map((folder) => to.has(folder.repository) ? { ...folder, repository: to.get(folder.repository) as string } : folder),
     };
     parseHomeFile(next, Home.file(this.root));
-    this.data = next;
+    return next;
   }
 
   // -- instances (DR-127): the library's entries -----------------------------

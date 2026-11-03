@@ -28,6 +28,18 @@ export function pruneEmptyFolders(dir: string, stopAt: string): void {
   }
 }
 
+/** Whether a path stands empty: nothing there, or a folder holding
+ * nothing (space-59). */
+export function standsEmpty(path: string): boolean {
+  let info;
+  try { info = lstatSync(path); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return true;
+    throw error;
+  }
+  return info.isDirectory() && readdirSync(path).length === 0;
+}
+
 /** Whether two paths name one file — a case-only rename's source and
  * destination on a filesystem that folds case (space-60). */
 export function sameFile(a: string, b: string): boolean {

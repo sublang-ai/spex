@@ -17,7 +17,7 @@ import { closeSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, rea
 import { homedir, hostname, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { parseProjectFile, type StorageDiagnostic } from "./app-storage.js";
-import { heldSessionLease, occupied, pruneEmptyFolders } from "./clone-moves.js";
+import { heldSessionLease, occupied, pruneEmptyFolders, sameFile, standsEmpty } from "./clone-moves.js";
 import { canonicalHost } from "./code-credentials.js";
 import { canonicalCodeRemote } from "./code-remote.js";
 import { portable, readJsonFile, sha256, StorageFormatError, UUID, writeApplicationFile } from "@sublang/spex/files";
@@ -5809,13 +5809,17 @@ export class SpaceManager {
   // -- your own group (space-4, space-59, space-65) ---------------------------
 
   /** Rename your own group's folder and its spex repository after the
-   * account's login (space-59), only while the folder still bears this
-   * device's user name, as it does until the home's first sign-in, so no
-   * later sign-in renames it: one synchronous step at its instant —
-   * the clones beneath read now, each moved by one rename, every pair
-   * naming one rewritten. A destination already taken is a conflict:
-   * nothing moves, and the next set-up asks again. Writers beneath the
-   * clones resolve their paths at their own instants. */
+   * account's login in lowercase (space-59, storage-2), only while the
+   * folder still bears this device's user name, as it does until the
+   * home's first sign-in, so no later sign-in renames it: one
+   * synchronous step at its instant — the clones beneath read now,
+   * `home.yaml` checked with every move written, each clone moved by one
+   * rename, every pair naming one rewritten. A destination already
+   * taken, or a `home.yaml` that would refuse the moves, is a conflict:
+   * nothing moves, and the next set-up asks again. A rename failing
+   * partway, or a write of `home.yaml` failing after the last, moves the
+   * clones already moved back. Writers beneath the clones resolve their paths at their own
+   * instants. */
   private async renameOwn(account: Pick<HostAccount, "login">, instance: HostInstance, generation: number): Promise<"none" | "done" | "conflict"> {
     const store = this.host.store;
     const target = ownNameFor(account.login);
@@ -5845,6 +5849,14 @@ export class SpaceManager {
       console.error(`spex: your own group's folder did not move: ${error instanceof Error ? error.message : String(error)}`);
       return "conflict";
     }
+    // `home.yaml` must take every move and the new name before any
+    // clone moves, so the disk never runs ahead of a refused write.
+    try { store.checkMoves(moves, target); }
+    catch (error) {
+      console.error(`spex: your own group's folder did not move: ${error instanceof Error ? error.message : String(error)}`);
+      return "conflict";
+    }
+    const workspace = store.home.workspace;
     const done: { from: string; to: string }[] = [];
     try {
       for (const move of moves) {
@@ -5855,19 +5867,50 @@ export class SpaceManager {
       }
     } catch (error) {
       console.error(`spex: your own group's folder did not move: ${error instanceof Error ? error.message : String(error)}`);
+      this.moveBack(done);
+      for (const move of moves) pruneEmptyFolders(dirname(store.home.clonePath(move.to)), workspace);
+      return "conflict";
     }
-    pruneEmptyFolders(join(store.home.workspace, current), store.home.workspace);
-    const complete = done.length === moves.length;
-    this.relocate(done, complete ? target : undefined);
+    pruneEmptyFolders(join(workspace, current), workspace);
+    try { this.relocate(done, target); }
+    catch (error) {
+      console.error(`spex: your own group's folder did not move: ${error instanceof Error ? error.message : String(error)}`);
+      return "conflict";
+    }
     await this.afterMove(done);
-    return complete ? "done" : "conflict";
+    return "done";
+  }
+
+  /** The clones a failed move already moved go back, last first, each
+   * only onto a path that stands empty, or that is the clone itself under
+   * its former case (space-59, space-60); `home.yaml`,
+   * never written for them, still names where they were. One that cannot go
+   * back stays, said on the console. */
+  private moveBack(done: readonly { from: string; to: string }[]): void {
+    const home = this.host.store.home;
+    for (const move of [...done].reverse()) {
+      const back = home.clonePath(move.from);
+      const moved = home.clonePath(move.to);
+      try {
+        // A case-only rename's former spelling, on a filesystem that
+        // folds case, names the moved clone itself (occupied).
+        const recased = dirname(back) === dirname(moved) && sameFile(back, moved);
+        if (!recased && !standsEmpty(back)) throw new Error(`workspace/${move.from} is taken`);
+        mkdirSync(dirname(back), { recursive: true, mode: 0o700 });
+        renameSync(moved, back);
+      } catch (error) {
+        console.error(`spex: workspace/${move.to} did not move back to workspace/${move.from}: ${error instanceof Error ? error.message : String(error)}`);
+        continue;
+      }
+      pruneEmptyFolders(dirname(moved), home.workspace);
+    }
   }
 
   /** The listing that is your own group's own repository while its
    * clone records no host id (space-4, git-host-5): `<name>-spex` in
    * your namespace at the instance, `<name>` your own group's folder's
-   * name or the one your login there gives it, which a sign-in's rename
-   * of the folder may not have reached yet (space-59) — only your
+   * name or the one your login gives it (ownNameFor), which a sign-in's
+   * rename of the folder may not have reached yet (space-59) — only your
    * namespace holds it, a group of the instance named like your login
    * never does. Its clone matches it by its id once it records one. */
   private ownNamespaceListing(view: HostView): HostListing | undefined {
@@ -6087,6 +6130,8 @@ export class SpaceManager {
     if (store.repository(from)?.dir !== source || machine.key !== from || !machine.recordsNow(repository.remoteUrl, repository.id)) return;
     try {
       if (heldSessionLease(source, identity) !== undefined || this.destinationTaken(from, to) !== undefined) return;
+      // `home.yaml` must take the move before the clone moves (space-60).
+      store.checkMoves([{ from, to }]);
       const target = store.home.clonePath(to);
       mkdirSync(dirname(target), { recursive: true, mode: 0o700 });
       renameSync(source, target);
@@ -6095,7 +6140,11 @@ export class SpaceManager {
       return;
     }
     pruneEmptyFolders(dirname(source), store.home.workspace);
-    this.relocate([{ from, to }]);
+    try { this.relocate([{ from, to }]); }
+    catch (error) {
+      console.error(`spex: ${from} stays where it lies until its next sync: ${error instanceof Error ? error.message : String(error)}`);
+      return;
+    }
     await this.afterMove([{ from, to }]);
   }
 
@@ -7992,8 +8041,8 @@ export class SpaceManager {
 
   /** What refuses a clone's move to `to` (renameClone), thrown as its
    * Check's stop before anything is written: a session's lease beneath
-   * it, or a destination taken by anything but the clone itself
-   * (space-60, storage-38). */
+   * it, a destination taken by anything but the clone itself (space-60,
+   * storage-38), or a `home.yaml` that would refuse the move (space-60). */
   private refuseMove(machine: RepositorySync, to: string, identity: string | undefined): void {
     const store = this.host.store;
     const from = machine.key;
@@ -8017,6 +8066,8 @@ export class SpaceManager {
         retry: true,
       }, false);
     }
+    // `home.yaml` must take the move before the clone moves (space-60).
+    store.checkMoves([{ from, to }]);
   }
 
   /** What takes a clone's destination `to`, if anything: something on
@@ -8029,9 +8080,16 @@ export class SpaceManager {
     return waiting ? { waiting: waiting.from } : undefined;
   }
 
-  /** The store, the machines and the waiting steps follow moved clones. */
+  /** The store, the machines and the waiting steps follow moved clones.
+   * A `home.yaml` that refuses them, or a write of it that fails, moves
+   * the clones back (moveBack) and throws: the disk then stands as the
+   * home still names it (space-59, space-60). */
   private relocate(moves: { from: string; to: string }[], own?: string): void {
-    this.host.store.moveRepositories(moves, own);
+    try { this.host.store.moveRepositories(moves, own); }
+    catch (error) {
+      this.moveBack(moves);
+      throw error;
+    }
     for (const { from, to } of moves) {
       const machine = this.machines.get(from);
       this.machines.delete(from);
