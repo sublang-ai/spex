@@ -17,8 +17,11 @@ to run it; published app 0.9.0-beta.24 has earlier membership controls.
 1. Open **Space** in the IDE and **Sign in** to the Space where your team
    works. Choose it from the list, or use **Other Space…** to enter its
    website address. Use **Add a Space…** if another Space is already listed.
-2. Use a group you belong to, or choose **New group…** to create one where
-   your Space permits it.
+2. Use a group you belong to, or choose **New group…** on the Space heading
+   to create one where your Space permits it. To create a group inside
+   another, open that parent’s **More → New group…**. The editor names
+   the parent, its full path and Space, and explains that the parent’s
+   members also gain access to the new group.
 3. Open the group's **More → Members**, then **Invite members…** if you
    can manage its membership.
 4. Enter **Usernames**, using Enter or commas between them, or paste a
@@ -75,7 +78,18 @@ added. When the check finds no contents, review the group and Space, then
 choose **Delete group** or **Cancel**. The Space checks again before
 requesting deletion and refuses if that check finds contents.
 
-The Space decides when deletion takes effect. A group marked **Scheduled for deletion** offers **Restore** while the Space permits it; no recovery deadline is assumed.
+The Space decides when deletion takes effect; its recovery period can mean
+that deletion is not immediate. Scheduled groups move into **Scheduled for
+deletion (N)** below the active groups. Open that section to revisit them
+and choose **Restore group** where permitted. **Hide**, Escape or the
+disclosure collapses it without cancelling deletion. A deletion you just
+requested opens the section; revisiting the surface starts with it collapsed.
+
+Use **Refresh** to check whether deletion has completed. Once the Space no
+longer reports a group, it disappears; the section disappears when empty.
+Keeping the app open does not itself refresh the Space. The app does not
+assume a deletion deadline. For an unexpectedly long wait, ask the Space
+administrator to check its retention policy and deletion processing.
 
 ## Publish packages separately
 
