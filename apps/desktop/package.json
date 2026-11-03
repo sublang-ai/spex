@@ -1,6 +1,6 @@
 {
   "name": "spex-desktop",
-  "version": "0.9.0-beta.25",
+  "version": "0.9.0-beta.26",
   "private": true,
   "description": "Spex \u2014 the desktop app for running playbooks",
   "author": {
@@ -51,8 +51,8 @@
     "appId": "ai.sublang.spex",
     "productName": "Spex",
     "npmRebuild": false,
-    "onNodeModuleFile": "./scripts/include-compiler-declarations.cjs",
-    "afterPack": "./scripts/verify-packaged-compiler.cjs",
+    "onNodeModuleFile": "spex-desktop/scripts/include-compiler-declarations.cjs",
+    "afterPack": "spex-desktop/scripts/verify-packaged-compiler.cjs",
     "directories": {
       "output": "release"
     },

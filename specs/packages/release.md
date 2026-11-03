@@ -75,6 +75,7 @@ When a release tag is pushed, its release workflow shall require a successful re
 - publication depends directly on that invocation; failed, cancelled or skipped validation permits no publication;
 - no prior CI run, local result or reduced pull-request result substitutes for that invocation;
 - downstream release jobs retain package builds and validation but do not repeat the test suites that invocation completed.
+- For owner-authorized `app-v0.9.0-beta.26` only, exact-tag selected validation replaces full validation; preparation additionally requires the tag on main, its tree equal to its merged PR head and that head's latest trusted `checks` successful, while both native builds and their packaged strict compiler gates remain mandatory; unrelated UI checks are explicitly waived for this tag and not represented as passing.
 
 #### release-19
 
@@ -183,10 +184,13 @@ When preparing a regular app release tag, the developer/agent shall run the regr
 
 When preparing a beta app release tag (`app-vMAJOR.MINOR.PATCH-beta.N`) ([DR-087](../decisions/087-beta-app-releases.md)), the developer/agent shall verify the committed release tree is on `main` [[release-15](#release-15)], run the smoke with its live stage [[release-20](#release-20)] [[release-22](#release-22)], and tag without the regression [[release-25](#release-25)] or the manual checklist [[release-21](#release-21)].
 
+- The owner-authorized beta.26 exception [[release-18](#release-18)] reuses the recorded runtime smoke and real Mac/Codex workflow evidence, validating the changed packaging entry points and actual native packages without repeating those business journeys.
+
 #### release-27
 
 When a beta app release tag is pushed ([DR-087](../decisions/087-beta-app-releases.md)), the app release workflow shall require full app validation of the tagged tree as for any app tag [[release-18](#release-18)], verify that both shell manifests carry the tag's pre-release version [[release-16](#release-16)], take the release notes from the app changelog's `[Unreleased]` section — refusing empty notes — under a line naming the beta and the release it leads to, and create the GitHub release as a pre-release titled by [[release-11](#release-11)], its run-from-source instructions followed by a line stating that a beta ran the smoke and the live smoke but not the regression:
 
+- beta.26 notes disclose the limited gate, reused acceptance and failed/waived unrelated full UI checks; every other tag retains its normal gates and notes;
 - a tag whose pre-release identifier is not `beta.N` is refused without a release;
 - the changelog gains no section for a beta [[release-3](#release-3)]: the regular release that follows moves `[Unreleased]` into its version section [[release-5](#release-5)], folding the betas' notes into it.
 
@@ -313,6 +317,7 @@ When the app release workflow's tag check and notes assembly run, as the workflo
 - `beta.0`, `beta.01`, `rc.1`, build metadata, a leading zero, a two-part version or another channel's prefix is refused without outputs or notes [[release-19](#release-19)] [[release-27](#release-27)];
 - a beta tag over manifests off its pre-release version refuses the release [[release-27](#release-27)];
 - a beta's `[Unreleased]` holding only headings and blank lines, its lines ending in LF or CRLF, is refused as empty notes [[release-27](#release-27)].
+- beta.26 alone names its owner-authorized gate and reused acceptance rather than implying full UI validation passed.
 
 ### Merge Gate
 
