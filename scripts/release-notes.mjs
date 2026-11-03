@@ -133,7 +133,7 @@ export function releaseNotes({ changelog, release, repository }) {
     `- Windows (Intel/AMD x86-64): [Spex-${version}-win-x64.exe](https://github.com/${repository}/releases/download/${tag}/Spex-${version}-win-x64.exe) — run the per-user installer; WSL is not required.\n`,
     `- [SHA256SUMS](https://github.com/${repository}/releases/download/${tag}/SHA256SUMS) verifies both downloads.\n`,
     "\n",
-    "These builds are unsigned and the macOS app is not notarized; the operating system may require approval before opening. Agent sign-in and model access are configured separately.\n",
+    "The macOS app and DMG are Developer ID signed and Apple notarized, with stapled tickets. The Windows installer is unsigned; Windows may require approval before opening. Agent sign-in and model access are configured separately.\n",
     "\n",
     "## Run from source\n",
     "\n",

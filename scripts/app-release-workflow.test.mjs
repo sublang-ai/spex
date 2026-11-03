@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -133,9 +133,13 @@ test("release-40: both native jobs build locked dependencies and upload their ex
   assert.deepEqual(job.permissions, { contents: "read" });
   assert.equal(workflow.env?.ELECTRON_SKIP_BINARY_DOWNLOAD, undefined);
   assert.equal(job.env?.ELECTRON_SKIP_BINARY_DOWNLOAD, undefined);
-  assert.deepEqual(job.steps.filter((s) => s.run).map((s) => s.run), [
-    "npm ci", "npm run build", "npm run ${{ matrix.script }} -w apps/desktop",
-  ]);
+  assert.deepEqual(job.steps.filter((s) => s.run && !s.if).map((s) => s.run), ["npm ci", "npm run build"]);
+  const windowsBuild = job.steps.find(s => s.name === "Build native desktop package");
+  assert.equal(windowsBuild.if, "runner.os != 'macOS'");
+  assert.equal(windowsBuild.run, "npm run ${{ matrix.script }} -w apps/desktop");
+  const macBuild = job.steps.find(s => s.name === "Build signed and notarized Mac package");
+  assert.equal(macBuild.if, "runner.os == 'macOS'");
+  assert.equal(macBuild.run, "npm run package:mac -w apps/desktop");
   const checkout = job.steps.find((s) => s.uses?.startsWith("actions/checkout@"));
   assert.equal(checkout.with.ref, undefined, "build this workflow's tagged tree, not moving main");
   const upload = job.steps.find((s) => s.uses?.startsWith("actions/upload-artifact@"));
@@ -147,7 +151,7 @@ test("release-40: both native jobs build locked dependencies and upload their ex
     assert.match(desktop.scripts[name], /--publish never$/);
     assert.match(desktop.scripts[name], /rebuild:electron/);
   }
-  assert.match(desktop.scripts["package:mac"], /--mac dmg --arm64/);
+  assert.match(desktop.scripts["package:mac"], /node scripts\/package-macos\.mjs --publish never$/);
   assert.match(desktop.scripts["package:windows"], /stage:windows-runtime.*--win nsis --x64/);
   assert.deepEqual(desktop.build.mac.target, [{ target: "dmg", arch: ["arm64"] }]);
   assert.deepEqual(desktop.build.win.target, [{ target: "nsis", arch: ["x64"] }]);
@@ -155,6 +159,70 @@ test("release-40: both native jobs build locked dependencies and upload their ex
   assert.equal(desktop.build.win.artifactName, "Spex-${version}-win-${arch}.${ext}");
   assert.equal(desktop.build.nsis.perMachine, false);
   assert.deepEqual(desktop.build.asarUnpack, ["node_modules/**/*"]);
+});
+
+test("app-shell-45: only the Mac path receives private credentials and requires signed verification", () => {
+  const steps = workflow.jobs.package.steps;
+  const prepare = steps.find(step => step.name === "Prepare private macOS signing inputs");
+  const build = steps.find(step => step.name === "Build signed and notarized Mac package");
+  const cleanup = steps.find(step => step.name === "Remove private macOS signing inputs");
+  assert.equal(prepare.if, "runner.os == 'macOS'");
+  assert.equal(prepare.shell, "python");
+  assert.equal(Object.keys(prepare.env).length, 6);
+  assert.match(prepare.run, /mode=0o700/);
+  assert.match(prepare.run, /os\.chmod\(path, 0o600\)/);
+  assert.match(prepare.run, /validate=True/);
+  assert.equal(cleanup.if, "always() && runner.os == 'macOS'");
+  assert(steps.indexOf(prepare) < steps.indexOf(build));
+  assert(steps.indexOf(cleanup) > steps.indexOf(build));
+  for (const step of steps) {
+    if (Object.values(step.env ?? {}).some(value => String(value).includes("secrets."))) assert.equal(step.if, "runner.os == 'macOS'");
+  }
+  assert.equal(desktop.build.appId, "ai.sublang.spex");
+  assert.equal(desktop.build.productName, "Spex");
+  assert.equal(desktop.build.mac.identity, undefined);
+  assert.equal(desktop.build.mac.forceCodeSigning, true);
+  assert.equal(desktop.build.mac.hardenedRuntime, true);
+  assert.equal(desktop.build.mac.notarize, false, "the recorded distribution pipeline owns notarization");
+  assert.equal(desktop.build.dmg.sign, false, "fresh-keychain timestamped signing runs after DMG packaging");
+  assert.equal(desktop.build.mac.entitlements, desktop.build.mac.entitlementsInherit);
+  const receipt = steps.find(s => s.with?.name === "macos-signing-verification");
+  assert.equal(receipt.if, "runner.os == 'macOS'");
+  assert.equal(receipt.with["if-no-files-found"], "error");
+  assert.match(receipt.with.path, /macos-signing\.json/);
+  assert.doesNotMatch(receipt.with.path, /private|\.p12|\.p8|keychain/);
+});
+
+test("app-shell-46: the workflow's real Python preparation and cleanup keep decoded inputs private", { skip: process.platform === "win32" }, t => {
+  const steps = workflow.jobs.package.steps;
+  const prepare = steps.find(step => step.name === "Prepare private macOS signing inputs").run;
+  const cleanup = steps.find(step => step.name === "Remove private macOS signing inputs").run;
+  for (const mode of ["valid", "missing", "malformed"]) {
+    const root = mkdtempSync(join(tmpdir(), "spex-mac-ci-inputs-"));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const env = { ...process.env, RUNNER_TEMP: root, GITHUB_ENV: join(root, "github-env"),
+      MACOS_CERTIFICATE_P12_BASE64: Buffer.from("private p12 fixture").toString("base64"),
+      MACOS_CERTIFICATE_PASSWORD: "private password fixture", APPLE_API_KEY_P8_BASE64: Buffer.from("private p8 fixture").toString("base64"),
+      APPLE_API_KEY_ID: "KEYID", APPLE_API_ISSUER: "issuer", APPLE_TEAM_ID: "ABCDEFGHIJ" };
+    if (mode === "missing") delete env.APPLE_TEAM_ID;
+    if (mode === "malformed") env.APPLE_API_KEY_P8_BASE64 = "!invalid base64!";
+    const result = spawnSync("python3", ["-c", prepare], { env, encoding: "utf8" });
+    assert.equal(result.status === 0, mode === "valid", result.stderr);
+    if (mode === "valid") {
+      const directory = join(root, "spex-macos-secrets");
+      assert.equal(statSync(directory).mode & 0o777, 0o700);
+      for (const [file, bytes] of [["signing.p12", "private p12 fixture"], ["notary.p8", "private p8 fixture"]]) {
+        assert.equal(readFileSync(join(directory, file), "utf8"), bytes);
+        assert.equal(statSync(join(directory, file)).mode & 0o777, 0o600);
+      }
+      const variables = readFileSync(env.GITHUB_ENV, "utf8");
+      assert.match(variables, /^CSC_LINK=.*signing\.p12$/m);
+      assert.match(variables, /^APPLE_API_KEY=.*notary\.p8$/m);
+      assert.doesNotMatch(variables, /private|fixture|password/);
+    }
+    assert.equal(spawnSync("python3", ["-c", cleanup], { env, encoding: "utf8" }).status, 0);
+    assert.equal(existsSync(join(root, "spex-macos-secrets")), false);
+  }
 });
 
 test("release-40: the sole publisher waits for both platforms, requires both downloads and adds checksums", () => {

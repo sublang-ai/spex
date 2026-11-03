@@ -233,6 +233,7 @@ meta.md       The spec of specs
 | [DR-212](decisions/212-panel-dismissal-as-quiet-chrome.md) | 212-panel-dismissal-as-quiet-chrome.md | Borderless cross in contextual panel headers, full-width attached Members header with bounded body, integrated palette and fixed browser setup headers, and visual review in wide and narrow application context; amends DR-211 |
 | [DR-213](decisions/213-public-github-code-opens-over-https.md) | 213-public-github-code-opens-over-https.md | Public GitHub code opens over HTTPS: canonical shared code identity, equivalent project matching, unchanged existing working-folder remotes, legacy SSH clone compatibility, and credential guidance only on authentication failures; amends DR-103 and DR-132 |
 | [DR-214](decisions/214-project-navigation-and-contextual-recovery.md) | 214-project-navigation-and-contextual-recovery.md | Project navigation keeps its five destinations and real projects; optional folder recovery returns through Space → Files & history → Dismissed, with saved history opening its own place's review; amends DR-175, DR-195, DR-196 and DR-197 |
+| [DR-215](decisions/215-developer-id-macos-downloads.md) | 215-developer-id-macos-downloads.md | Developer ID signed, notarized and stapled Mac App and DMG; temporary CI credentials, fresh DMG signing keychain and final verification; amends DR-184 and DR-177 |
 
 ## Packages
 

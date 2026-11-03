@@ -93,7 +93,8 @@ When an app tag passes the existing CI, version, changelog and build/test gates 
 - each job installs the tagged tree's locked dependencies, builds it on the target OS and uploads its exact versioned download, failing on a missing file;
 - packaging commands do not publish; only the final job has release-write permission;
 - the final job requires both downloads and writes their SHA-256 checksums before attaching all three files to the same release;
-- a failed or missing platform build prevents release publication.
+- a failed or missing platform build prevents release publication;
+- the Mac job supplies private signing inputs from CI secrets only to the Mac path, removes them even on failure, requires the signed/notarized distribution command and its verification report [[app-shell-45](app-shell.md#app-shell-45)], and uploads public verification receipts beside the compiler check ([DR-215](../decisions/215-developer-id-macos-downloads.md)).
 
 ### Package Hygiene
 

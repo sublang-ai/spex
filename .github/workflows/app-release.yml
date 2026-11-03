@@ -94,8 +94,53 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      - name: Prepare private macOS signing inputs
+        if: runner.os == 'macOS'
+        shell: python
+        env:
+          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          import base64, os
+          from pathlib import Path
+          names = ['MACOS_CERTIFICATE_P12_BASE64', 'MACOS_CERTIFICATE_PASSWORD', 'APPLE_API_KEY_P8_BASE64', 'APPLE_API_KEY_ID', 'APPLE_API_ISSUER', 'APPLE_TEAM_ID']
+          for name in names:
+              if not os.environ.get(name):
+                  raise SystemExit('Missing macOS signing secret: ' + name)
+          root = Path(os.environ['RUNNER_TEMP']) / 'spex-macos-secrets'
+          root.mkdir(mode=0o700)
+          outputs = {}
+          for source, target, variable in [('MACOS_CERTIFICATE_P12_BASE64', 'signing.p12', 'CSC_LINK'), ('APPLE_API_KEY_P8_BASE64', 'notary.p8', 'APPLE_API_KEY')]:
+              path = root / target
+              with path.open('xb') as stream:
+                  os.chmod(path, 0o600)
+                  stream.write(base64.b64decode(os.environ[source], validate=True))
+              outputs[variable] = str(path)
+          with open(os.environ['GITHUB_ENV'], 'a') as stream:
+              for name, value in outputs.items():
+                  stream.write(name + '=' + value + '\n')
       - name: Build native desktop package
+        if: runner.os != 'macOS'
         run: npm run ${{ matrix.script }} -w apps/desktop
+      - name: Build signed and notarized Mac package
+        if: runner.os == 'macOS'
+        run: npm run package:mac -w apps/desktop
+        env:
+          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      - name: Remove private macOS signing inputs
+        if: always() && runner.os == 'macOS'
+        shell: python
+        run: |
+          import os, shutil
+          from pathlib import Path
+          shutil.rmtree(Path(os.environ['RUNNER_TEMP']) / 'spex-macos-secrets', ignore_errors=True)
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-${{ matrix.asset }}
@@ -105,6 +150,14 @@ jobs:
         with:
           name: compiler-check-${{ matrix.asset }}
           path: apps/desktop/release/compiler-check-*.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'macOS'
+        with:
+          name: macos-signing-verification
+          path: |
+            apps/desktop/release/macos-signing.json
+            apps/desktop/release/macos-*-notarization.json
           if-no-files-found: error
 
   release:

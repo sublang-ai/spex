@@ -17,6 +17,8 @@ source; run source with `npm ci` and `npm start` (desktop) or
 
 ### Changed
 
+- Mac desktop downloads require Developer ID signatures, Accepted Apple notarization and stapled tickets on both the App and DMG, verified before publication; Windows signing status and the two-platform release gate are unchanged ([DR-215](specs/decisions/215-developer-id-macos-downloads.md)).
+
 - App beta.26 alone uses the owner-authorized limited release gate: green PR checks on the identical tree and both native packaged compiler checks. Unrelated full UI checks were not passed; prior runtime acceptance is reused. All other app tags retain full validation.
 
 - Scheduled groups collect in one collapsible section per Space, with a way to revisit restoration and clear guidance to Refresh after the Space’s deletion period. A group’s **More → New group…** creates a group inside it, with its parent and inherited access shown before creation.

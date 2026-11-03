@@ -139,7 +139,8 @@ test("release-28: a regular tag checks both manifests and takes its version's se
   assert.match(body, /releases\/download\/app-v1\.2\.3\/Spex-1\.2\.3-mac-arm64\.dmg/);
   assert.match(body, /releases\/download\/app-v1\.2\.3\/Spex-1\.2\.3-win-x64\.exe/);
   assert.match(body, /releases\/download\/app-v1\.2\.3\/SHA256SUMS/);
-  assert.match(body, /unsigned.*not notarized/);
+  assert.match(body, /macOS app and DMG are Developer ID signed and Apple notarized/);
+  assert.match(body, /Windows installer is unsigned/);
   assert.match(body, /native Windows with Node\.js/);
   assert.doesNotMatch(body, /ships no binaries|Storage requires private POSIX permissions\./);
 });
