@@ -916,6 +916,12 @@ source; run source with `npm ci` and `npm start` (desktop) or
 
 ### Fixed
 
+- Opening Space during a long run no longer stalls the run or freezes the
+  window. Reading Space now fetches each saved conversation's files in one
+  Git read and reuses summaries of unchanged conversations, and reads that
+  overlap share one recomputation instead of restarting one another
+  ([#331](https://github.com/sublang-ai/spex/issues/331)).
+
 - Desktop packaging hooks load from either the workspace command or the
   repository-root `--projectDir` command, including native browser acceptance
   builds whose Linux executable name differs from the product name.
