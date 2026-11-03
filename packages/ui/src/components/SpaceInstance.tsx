@@ -31,6 +31,7 @@ import { seatName } from "../lib/space.js";
 import { spaceNameOf, SpaceChooser } from "./SpaceDirectory.js";
 import { MoreMenu } from "./SpaceMenu.js";
 import { GroupNameEditor } from "./SpaceMembers.js";
+import { ATTACHED_OWNER } from "./SpacePanel.js";
 import {
   causePhrase,
   focusCardField,
@@ -285,7 +286,7 @@ function InstanceHeading({
   return (
     <div
       data-testid="space-instance-heading"
-      className="flex min-w-0 flex-col gap-1"
+      className={`flex min-w-0 flex-col gap-2 ${creating && instance.signedIn ? ATTACHED_OWNER : ""}`}
       onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
         // Escape cancels the flow in flight here (space-3).
         if (event.key !== "Escape" || !runningHere) return;
@@ -293,7 +294,7 @@ function InstanceHeading({
         signIn.cancel();
       }}
     >
-      <div className={ROW}>
+      <div className={`${ROW} ${creating && instance.signedIn ? "px-2 pt-1" : ""}`}>
         {/* The name owns the slack and truncates with its title; what
             stands beside it follows the separator in the secondary tone
             (space-1). */}
@@ -417,7 +418,9 @@ function InstanceHeading({
             testId="space-new-group-editor"
             instance={origin}
             parent={null}
+            scope={{ space: name }}
             connected={connected}
+            canCreate={instance.account.canCreateGroup}
             focusRequest={createFocus}
             onPendingChange={setCreatingPending}
             onClose={() => {

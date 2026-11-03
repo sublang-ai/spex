@@ -221,6 +221,7 @@ meta.md       The spec of specs
 | [DR-200](decisions/200-publishing-names-need-registry-authority.md) | 200-publishing-names-need-registry-authority.md | Unchecked local names explained before release, refreshed account suggestions, and fresh registry authorization in publish previews and uploads; registry account scope in guidance by DR-202 |
 | [DR-201](decisions/201-shared-codex-subscription-access.md) | 201-shared-codex-subscription-access.md | Shared ChatGPT subscription access through private per-seat access-only Codex snapshots; administrator-only refresh |
 | [DR-202](decisions/202-registry-guidance-keeps-account-scope.md) | 202-registry-guidance-keeps-account-scope.md | Registry namespace guidance explicitly selects the registry account, with matching CLI and IDE visitor instructions; amends DR-200 |
+| [DR-203](decisions/203-groups-within-groups-and-deletion-review.md) | 203-groups-within-groups-and-deletion-review.md | Collapsible scheduled-deletion review with honest timing and Refresh; create groups inside permitted groups through the existing editor |
 
 ## Packages
 

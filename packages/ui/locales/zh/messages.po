@@ -3754,6 +3754,10 @@ msgstr "这里"
 msgid "Hidden: {groups}"
 msgstr "已隐藏：{groups}"
 
+#: src/components/SpaceGroups.tsx
+msgid "Hide"
+msgstr "收起"
+
 #: src/components/SpaceSync.tsx
 msgid "Hide diff"
 msgstr "隐藏差异"
@@ -4319,6 +4323,10 @@ msgid "Members"
 msgstr "成员"
 
 #: src/components/SpaceMembers.tsx
+msgid "Members of {group} will also have access to this group."
+msgstr "{group} 的成员也将拥有此群组的访问权限。"
+
+#: src/components/SpaceMembers.tsx
 msgid "Members of {name}"
 msgstr "{name} 的成员"
 
@@ -4480,7 +4488,17 @@ msgstr "新增"
 msgid "New folder path"
 msgstr "新文件夹路径"
 
+#: src/components/SpaceMembers.tsx
+msgid "New group at {space}"
+msgstr "在 {space} 新建群组"
+
+#: src/components/SpaceMembers.tsx
+msgid "New group in {group}"
+msgstr "在 {group} 中新建群组"
+
 #. open the name and path editor for a group at this Space
+#. open the name and path editor for a group inside this group
+#: src/components/SpaceGroups.tsx
 #: src/components/SpaceInstance.tsx
 msgid "New group…"
 msgstr "新建群组…"
@@ -6471,6 +6489,10 @@ msgstr "在项目目录中生成一个："
 msgid "Scheduled for deletion"
 msgstr "已计划删除"
 
+#: src/components/SpaceGroups.tsx
+msgid "Scheduled for deletion ({count})"
+msgstr "已计划删除（{count}）"
+
 #. the hint inside Add…'s registry search field: search the registry, or type a package's full name
 #: src/components/EnvironmentSection.tsx
 msgid "Search, or type org/name"
@@ -7561,6 +7583,10 @@ msgstr "本机上已没有为此文件夹保存的工作。"
 msgid "The sign-in did not start"
 msgstr "登录未能开始"
 
+#: src/components/SpaceGroups.tsx
+msgid "The Space controls when deletion takes effect. Refresh to check whether it has finished."
+msgstr "删除生效的时间由 Space 决定。刷新可查看删除是否已完成。"
+
 #: src/App.tsx
 msgid "The Spex window and its core speak different protocol versions — restart the app (or update Spex) to fix this."
 msgstr "Spex 窗口与其核心的协议版本不一致 — 请重启应用（或更新 Spex）来修复。"
@@ -8345,6 +8371,10 @@ msgstr "由 Spex 根据 {name} {version} 写入 — 编辑后即归你所有"
 #: src/components/SpaceMembers.tsx
 msgid "You"
 msgstr "你"
+
+#: src/components/SpaceMembers.tsx
+msgid "You can no longer create a group here."
+msgstr "您已无法在此处创建群组。"
 
 #: src/components/SpaceGroups.tsx
 msgid "You can restore this group before deletion takes effect."

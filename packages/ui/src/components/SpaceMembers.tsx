@@ -25,7 +25,6 @@ import { InlineConfirm } from "./InlineConfirm.js";
 import { ATTACHED_PANEL } from "./SpacePanel.js";
 import { PRIMARY, SECONDARY, type Note } from "./SpaceSurface.js";
 
-const EDITOR = "flex min-w-0 flex-col gap-1 rounded border border-neutral-300 p-2 dark:border-neutral-700";
 const FIELD =
   "min-w-0 flex-1 rounded border border-neutral-300 bg-white px-1.5 py-0.5 text-sm dark:border-neutral-700 dark:bg-neutral-900";
 const REFUSAL = "min-w-0 text-xs text-red-600 dark:text-red-400";
@@ -59,6 +58,8 @@ export function GroupNameEditor({
   instance,
   parent,
   connected,
+  canCreate = true,
+  scope,
   onClose,
   onNote,
   focusRequest,
@@ -70,6 +71,9 @@ export function GroupNameEditor({
   /** The parent group's id at the Space; null creates at its root. */
   parent: string | null;
   connected: boolean;
+  canCreate?: boolean;
+  /** The named destination, whether at a Space's root or inside a group. */
+  scope: { space: string; parent?: { name: string; fullPath: string } };
   /** Close the editor; the caller returns focus to its control. */
   onClose(): void;
   onNote: Note;
@@ -85,6 +89,7 @@ export function GroupNameEditor({
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string>();
   const fieldRef = useRef<HTMLInputElement>(null);
+  const titleId = useId();
   const inFlight = useRef(false);
   useEffect(() => {
     fieldRef.current?.focus();
@@ -92,8 +97,9 @@ export function GroupNameEditor({
 
   const chosen = name.trim();
   const chosenPath = path.trim();
+  const Heading = scope.parent ? "h4" : "h3";
   const submit = async () => {
-    if (!chosen || !chosenPath || inFlight.current) return;
+    if (!connected || !canCreate || !chosen || !chosenPath || inFlight.current) return;
     inFlight.current = true;
     setBusy(true);
     onPendingChange?.(true);
@@ -116,14 +122,24 @@ export function GroupNameEditor({
   return (
     <div
       data-testid={testId}
-      className={EDITOR}
+      role="group"
+      aria-labelledby={titleId}
+      aria-busy={busy}
+      className={`flex max-w-xl min-w-0 flex-col gap-3 ${ATTACHED_PANEL}`}
       onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
         if (event.key !== "Escape") return;
         event.stopPropagation();
         if (!busy) onClose();
       }}
     >
-      <label className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
+      <Heading id={titleId} className="break-words text-sm font-medium">{scope.parent
+        ? i18n._("New group in {group}", { group: scope.parent.name })
+        : i18n._("New group at {space}", { space: scope.space })}</Heading>
+      {scope.parent ? <div className="flex min-w-0 flex-col gap-1 text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">
+        <p className="break-words">{scope.parent.fullPath} <span aria-hidden>·</span> {scope.space}</p>
+        <p>{i18n._("Members of {group} will also have access to this group.", { group: scope.parent.name })}</p>
+      </div> : null}
+      <label className="grid min-w-0 gap-1 text-xs @xs:grid-cols-[6rem_minmax(0,1fr)] @xs:items-center @xs:gap-2">
         <span className="shrink-0 text-neutral-500">
           {i18n._({ id: "Group name", comment: "the field naming a new group at the Space" })}
         </span>
@@ -143,10 +159,10 @@ export function GroupNameEditor({
           readOnly={busy}
           spellCheck={false}
           autoComplete="off"
-          className={FIELD}
+          className={`${FIELD} min-h-7`}
         />
       </label>
-      <label className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
+      <label className="grid min-w-0 gap-1 text-xs @xs:grid-cols-[6rem_minmax(0,1fr)] @xs:items-center @xs:gap-2">
         <span className="shrink-0 text-neutral-500">
           {i18n._({ id: "Path", comment: "the field holding a new group's path at the Space, the last segment of its address" })}
         </span>
@@ -164,10 +180,11 @@ export function GroupNameEditor({
           spellCheck={false}
           autoComplete="off"
           autoCapitalize="off"
-          className={FIELD}
+          className={`${FIELD} min-h-7`}
         />
       </label>
       {refusal ? <p role="alert" className={REFUSAL}>{refusal}</p> : null}
+      {!canCreate ? <p className="text-xs text-neutral-600 dark:text-neutral-400">{i18n._("You can no longer create a group here.")}</p> : null}
       <div className="flex flex-wrap items-center justify-end gap-2">
         <button type="button" data-testid={`${testId}-cancel`} className={SECONDARY} disabled={busy} onClick={onClose}>
           {i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}
@@ -176,7 +193,7 @@ export function GroupNameEditor({
           type="button"
           data-testid={`${testId}-create`}
           className={PRIMARY}
-          disabled={!connected || busy || !chosen || !chosenPath}
+          disabled={!connected || !canCreate || busy || !chosen || !chosenPath}
           onClick={() => void submit()}
         >
           {busy

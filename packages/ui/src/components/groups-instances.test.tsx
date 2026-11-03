@@ -267,6 +267,9 @@ describe("SPACE: each Space under its heading (space-1, git-host-5, space-3, spa
     const opener = first.getByTestId("space-new-group");
     fireEvent.click(opener);
     const editor = first.getByTestId("space-new-group-editor");
+    expect(first.getByRole("group", { name: "New group at Spex Example" })).toBe(editor);
+    expect(first.getByRole("heading", { name: "New group at Spex Example" }).textContent).toBe("New group at Spex Example");
+    expect(first.getByTestId("space-instance-heading").contains(editor)).toBe(true);
     const name = within(editor).getByLabelText("Group name") as HTMLInputElement;
     const path = within(editor).getByLabelText("Path") as HTMLInputElement;
     fireEvent.change(name, { target: { value: "Research team" } });
