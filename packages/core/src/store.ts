@@ -1702,22 +1702,35 @@ export class Store {
     return removed;
   }
 
+  /** Refuse, before the caller moves any clone on disk, what
+   * moveRepositories would refuse for the same moves: a `home.yaml`
+   * that does not read, or would not stand with them written (space-59,
+   * space-60). */
+  checkMoves(moves: { from: string; to: string }[], own?: string): void {
+    this.assertProjectsWritable();
+    this.homeFile.checkMove(moves, own);
+  }
+
   /**
    * Clones the caller already moved on disk (space-59, space-60): every
    * pair naming a moved key names its new one in `home.yaml`, your own
    * group's name follows where it was renamed, and the indexes — clones,
    * sessions, the preferences keyed by repository — follow in the same
    * step, so no reader sees a key that names nothing; intents are read
-   * where their clones now lie.
+   * where their clones now lie. Only the write of `home.yaml` throws: one
+   * that fails leaves the file and every index as they were, so the
+   * caller can move its clones back; what follows the write is said on
+   * the console where it fails.
    */
   moveRepositories(moves: { from: string; to: string }[], own?: string): void {
     this.assertProjectsWritable();
     if (moves.length === 0 && own === undefined) return;
-    this.homeFile.move(moves, own);
-    this.saveHome();
+    if (this.homeProblem) throw new StorageFormatError(this.homeProblem.file, this.homeProblem.reason);
+    this.homeFile.moveAndSave(moves, own);
     const to = new Map(moves.map((entry) => [entry.from, entry.to]));
     for (const { from } of moves) this.repositories.delete(from);
-    this.prepareSessionDirs();
+    try { this.prepareSessionDirs(); }
+    catch (error) { console.error(`spex: the sessions folders of the moved clones were not made: ${error instanceof Error ? error.message : String(error)}`); }
     for (const [id, location] of [...this.sessionLocations]) {
       const next = to.get(location);
       if (!next) continue;
@@ -1733,17 +1746,19 @@ export class Store {
       const repository = this.repositories.get(next);
       this.sessions.set(id, { ...meta, projectId: next, ...(repository && meta.originDir ? { originDir: repository.sessionsDir } : {}) });
     }
-    this.changePrefs((prefs) => {
-      let changed = false;
-      for (const { from, to: next } of moves) {
-        for (const key of [...prefs.keys()].filter((name) => name.startsWith(`sync:${from}:`))) {
-          prefs.set(`sync:${next}:${key.slice(`sync:${from}:`.length)}`, prefs.get(key));
-          prefs.delete(key);
-          changed = true;
+    try {
+      this.changePrefs((prefs) => {
+        let changed = false;
+        for (const { from, to: next } of moves) {
+          for (const key of [...prefs.keys()].filter((name) => name.startsWith(`sync:${from}:`))) {
+            prefs.set(`sync:${next}:${key.slice(`sync:${from}:`.length)}`, prefs.get(key));
+            prefs.delete(key);
+            changed = true;
+          }
         }
-      }
-      return changed;
-    });
+        return changed;
+      });
+    } catch (error) { console.error(`spex: the sync preferences of the moved clones still name their former keys: ${error instanceof Error ? error.message : String(error)}`); }
     for (const { from, to: next } of moves) {
       const cached = this.forgeCache.get(from);
       if (cached) { this.forgeCache.delete(from); this.forgeCache.set(next, cached); }

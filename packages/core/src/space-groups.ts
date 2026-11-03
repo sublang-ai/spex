@@ -24,6 +24,7 @@ import {
   type HostRole,
   type SignInCause,
 } from "@sublang/spex/git-host";
+import { kebab } from "./home.js";
 import { i18n } from "./i18n.js";
 import { INSTANCE_FOLDER_PATTERN, REPOSITORY_KEY_PATTERN } from "./protocol.js";
 import { hostRefused, noLongerShared, signInAgain } from "./space-git.js";
@@ -247,12 +248,13 @@ export function userGroup(view: HostView | undefined): HostGroup | undefined {
   return view?.groups.find((group) => group.kind === "user");
 }
 
-/** Your own group's folder name for an account: its login as the host
- * spells it where that is a key segment (storage-2, space-59), else the
- * login kebab-cased. */
+/** Your own group's name for an account (storage-2, space-59): its
+ * login in lowercase kebab-case without any trailing `-spex` — a folder
+ * so named would read as a clone, not a group — `me` where nothing of
+ * it remains. It names the local folder and, before `-spex`, the
+ * repository at the instance (space-4, git-host-6). */
 export function ownNameFor(login: string): string {
-  if (/^[A-Za-z0-9_][A-Za-z0-9._-]*$/.test(login) && !login.endsWith("-spex")) return login;
-  return login.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "me";
+  return kebab(login).replace(/(?:-spex)+$/, "") || "me";
 }
 
 // ---------------------------------------------------------------------------

@@ -64,7 +64,7 @@ The home file shall encode `home.yaml` as exactly `{format: 2, device, origin, i
 | `device` | a canonical lowercase UUID minted once for this device, keying what is acknowledged per device [[storage-5](#storage-5)] |
 | `origin` | the origin of the instance the home was created with [[git-host-1](git-host.md#git-host-1)], kept as it is thereafter |
 | `instances` | an array of `{origin, clientId, account, displayName?, signedOut?}`, one per instance the home has signed in to and not forgotten [[space-82](space.md#space-82)], in the order they were added: its origin, the public client id `spex`, `{id, login, displayName}` of the account as that instance reported them, the instance's display name as its last read named it, and `signedOut` true once its credential was removed while its entry is kept [[git-host-4](git-host.md#git-host-4)] [[git-host-10](git-host.md#git-host-10)] |
-| `own` | the folder name of your own group under `workspace/`: this device's user name before the home's first sign-in and that sign-in's login after, no later sign-in renaming it [[space-59](space.md#space-59)] |
+| `own` | the folder name of your own group under `workspace/`: this device's user name before the home's first sign-in and that sign-in's login in lowercase kebab-case without any trailing `-spex` after, `me` where nothing of the login remains, no later sign-in renaming it [[space-59](space.md#space-59)] |
 | `folders` | an array of `{path, repository, aliases?}`: a normalized absolute working folder, the key of its spex repository, and optional former working directories recorded in its sessions |
 
 - an instance is recorded by its URL's origin — the scheme, the host in lowercase, and the port where it is not the scheme's default — and a URL with a path beyond `/`, a query or a user, a scheme other than `https` or `http`, `http` on a host that is not loopback, or a host holding `_` or a character outside a key segment's is refused, as is a new origin whose folder [[storage-1](#storage-1)] equals a listed instance's, no two entries sharing an origin;
@@ -586,6 +586,13 @@ Where real cores pair working Git folders with project records, the integration 
 - recognized GitHub SCP-style, SSH and HTTPS forms, including default ports, path-case differences, optional `.git` suffixes and trailing slashes, write the same lowercase HTTPS identity while each working folder's original `origin` stays unchanged [[storage-3](#storage-3)];
 - repeated saves from equivalent SSH and HTTPS folders keep the same project remote, with no transport needed to derive it [[storage-3](#storage-3)];
 - a custom host, SSH alias, nondefault port, other SSH user, extra path component, query, fragment and HTTP URL keep their given identities [[storage-3](#storage-3)].
+
+### storage-56
+
+When an integration suite signs a real core on a scratch home with a project in to the stand-in Git host as a login holding capitals, as one holding `.`, as one holding `_`, as one ending `-spex` and as one with no letter or digit, it shall verify for each:
+
+- `home.yaml`'s `own` the login in lowercase kebab-case, its trailing `-spex` dropped, or `me` for the last, naming the folder under `workspace/` that holds your own group's clone and the project's [[storage-2](#storage-2)];
+- the project and its session still listed after the core restarts [[storage-2](#storage-2)].
 
 ## References
 
