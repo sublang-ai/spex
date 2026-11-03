@@ -238,7 +238,12 @@ async function twoInstances(name: string): Promise<{ first: StandinHost; second:
   const from = home.client.mark();
   await signIn(home, first);
   await home.client.waitRepository(from, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
+  const placing = home.client.mark();
   await signIn(home, second);
+  // Sign-in ends before its own records finish syncing. Settle both
+  // placements before a test attributes credential requests to its join.
+  await home.client.waitRepository(placing, HOST_OWN, (repository) => repository.sync.phase === "done"
+    && repository.placements.length === 2 && repository.placements.every((line) => line.outcome?.kind === "synced"), 30_000);
   return { first, second, home };
 }
 
