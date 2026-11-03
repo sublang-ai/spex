@@ -1899,12 +1899,12 @@ export function App() {
           }
           onPick={(projectId) => pickProject(projectId)}
           onPickAt={(place, projectId) => pickProject(projectId, place)}
-          // A server's contract is asked beneath its line on this
-          // computer's Space (run-view-170): "Open on <server>" from the
-          // palette shows it there.
+          // A new server connection starts immediately; Space shows
+          // its progress, sign-in and any refusal after the palette closes.
           onShowSpace={() => {
             setConfiguredPlace(LOCAL_PLACE_KEY);
             setSurface("Space");
+            setLanding({ on: "surface" });
           }}
           // A group's project opened at a place is current there at
           // once, the Projects surface showing that place (run-view-168).

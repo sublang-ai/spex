@@ -5,7 +5,7 @@
 // opens, holds and closes the seats the person holds on team servers.
 // `server.list` reads each signed-in instance's servers listing, each
 // instance standing or failing on its own (git-host-29, git-host-11);
-// `server.open`, with the person's consent to the contract, reads the
+// `server.open`, on the person's explicit Open request, reads the
 // instance's listing for the server's name, group and address — a
 // server it does not name no longer shared, no ticket asked — then asks
 // the instance for a ticket, presents it at that address over TLS for
@@ -132,9 +132,9 @@ class AdmissionFailed extends Error {
 
 // -- phrases (core-service-111) ----------------------------------------------
 
-const consentFirst = (): string => i18n._({
-  id: "Accept the server's terms before connecting",
-  comment: "Refusal of Connect sent without the person's acceptance of the terms the Space fixes for team servers, which the server's line shows before the first connection",
+const explicitRequestRequired = (): string => i18n._({
+  id: "Opening a server requires an explicit request",
+  comment: "Refusal of a server open command without the flag recording the person's explicit Open request",
 });
 
 const noSeatOpen = (): string => i18n._({
@@ -571,18 +571,18 @@ export class Places {
   }
 
   /**
-   * `server.open` (core-service-128): with the person's consent, the
-   * server's name, group and address read from the instance's listing —
+   * `server.open` (core-service-128): on the person's explicit Open
+   * request, the server's name, group and address read from the listing —
    * a server it does not name no longer shared, no ticket asked — a
    * ticket asked for, presented at that address, the admission awaited
    * ninety seconds, and the seat kept, its relay started and announced,
    * the relay's first hello starting the seat's sign-in with the ticket
    * (core-service-142); the reply carries the place and the expiry
-   * alone. Without consent nothing is asked. A seat opens none: the
-   * service refuses it before this (core-service-125).
+   * alone. Without its authorization flag nothing is asked. A seat opens
+   * none: the service refuses it before this (core-service-125).
    */
   async open(input: { instance: string; serverId: string; consented?: boolean }): Promise<{ place: string; leaseExpiresAt: number }> {
-    if (input.consented !== true) throw new CoreError("invalid_request", consentFirst());
+    if (input.consented !== true) throw new CoreError("invalid_request", explicitRequestRequired());
     if (this.stopping) throw new CoreError("busy", seatStopping());
     const origin = this.host.signedInInstance(input.instance);
     const place = placeOf(origin, input.serverId);

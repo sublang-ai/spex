@@ -911,11 +911,6 @@ msgstr "A command the run needs is not installed"
 msgid "A credential you place here stays on this server until you remove it."
 msgstr "A credential you place here stays on this server until you remove it."
 
-#. a term shown before the first connection to a team server; {server} is its name
-#: src/components/SpaceServers.tsx
-msgid "A credential you place on {server} stays there until you remove it"
-msgstr "A credential you place on {server} stays there until you remove it"
-
 #: src/components/DeliveryCard.tsx
 msgid "A follow-up message continues this intent."
 msgstr "A follow-up message continues this intent."
@@ -1334,11 +1329,6 @@ msgstr "Agent session {session}"
 #: src/components/SettingsSurface.tsx
 msgid "Agents"
 msgstr "Agents"
-
-#. a term shown before the first connection to a team server; {server} is its name
-#: src/components/SpaceServers.tsx
-msgid "Agents on {server} run on the sign-ins its administrator set up, unless you set your own"
-msgstr "Agents on {server} run on the sign-ins its administrator set up, unless you set your own"
 
 #: src/components/ProjectsSurface.tsx
 msgid "ahead of upstream"
@@ -1796,7 +1786,6 @@ msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a 
 #. cancel choosing a project folder
 #. default cancel button: back out of the act
 #. default cancel button: back out of the act
-#. default cancel button: back out of the act
 #. dismiss the package-add form without sending a request
 #. leave an editor without saving
 #. leave an editor without saving
@@ -1834,7 +1823,6 @@ msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a 
 #: src/components/SpaceMembers.tsx
 #: src/components/SpacePlacements.tsx
 #: src/components/SpaceRepairs.tsx
-#: src/components/SpaceServers.tsx
 #: src/components/SpaceSignIn.tsx
 #: src/components/SpecEditor.tsx
 msgid "Cancel"
@@ -2546,11 +2534,6 @@ msgstr "Connected, but {reason}"
 #: src/components/SpaceGroups.tsx
 msgid "Connecting {name} at {space}"
 msgstr "Connecting {name} at {space}"
-
-#. a term shown before the first connection to a team server; {server} is its name
-#: src/components/SpaceServers.tsx
-msgid "Connecting puts your Space sign-in on {server}"
-msgstr "Connecting puts your Space sign-in on {server}"
 
 #. a team server's line while this computer connects to it; {server} is the server's name
 #: src/components/SpaceServers.tsx
@@ -3920,11 +3903,6 @@ msgstr "How the package behaves inside, hidden from its users"
 #: src/components/AgentCards.tsx
 msgid "How to configure"
 msgstr "How to configure"
-
-#. accepting a team server's terms, which connects this computer to it
-#: src/components/SpaceServers.tsx
-msgid "I understand"
-msgstr "I understand"
 
 #. session row: no turn in flight
 #. session status: nothing is running
@@ -5678,11 +5656,6 @@ msgstr "Previously used folder"
 msgid "Previously used folders"
 msgstr "Previously used folders"
 
-#. a term shown before the first connection to a team server: the registry sign-in is its own grant; {server} is its name
-#: src/components/SpaceServers.tsx
-msgid "Private packages need a separate registry sign-in on {server}"
-msgstr "Private packages need a separate registry sign-in on {server}"
-
 #. the folder field of a project opened on this computer: where its code is downloaded
 #: src/components/ProjectPalette.tsx
 msgid "Project folder"
@@ -6227,11 +6200,6 @@ msgstr "Removed {space} from this list"
 #: src/components/EnvironmentSection.tsx
 msgid "Removes {name} from spex.yaml and uninstalls it"
 msgstr "Removes {name} from spex.yaml and uninstalls it"
-
-#. a term shown before the first connection to a team server; {server} is its name, {space} the Space's display name
-#: src/components/SpaceServers.tsx
-msgid "Removing {server}, or revoking its access at {space}, stops new use; a credential already there lasts until it expires"
-msgstr "Removing {server}, or revoking its access at {space}, stops new use; a credential already there lasts until it expires"
 
 #. sharing consequence: revoking access does not erase copies members already saved
 #. sharing consequence: revoking access does not erase copies members already saved
@@ -8605,11 +8573,6 @@ msgstr "where your project folders are on this computer, in the home file"
 #: src/lib/space.ts
 msgid "which process is writing right now"
 msgstr "which process is writing right now"
-
-#. a term shown before the first connection to a team server; {server} is its name, {space} the Space's display name
-#: src/components/SpaceServers.tsx
-msgid "Whoever runs {server} can act as you: in your groups, in your records, and with your {space} account, wherever it reaches"
-msgstr "Whoever runs {server} can act as you: in your groups, in your records, and with your {space} account, wherever it reaches"
 
 #: src/components/DraftSourceTab.tsx
 msgid "Workflow source"

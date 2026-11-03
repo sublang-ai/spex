@@ -16,11 +16,10 @@ line. Public packages need no account to browse or install. Publishing
 and private packages need a registry sign-in, separate from any Space
 sign-in. Syncing a project's records is optional.
 
-This guide follows the current source build. Its CLI commands and IDE
-controls are newer than the published CLI 4.2.0 and desktop app
-0.9.0-beta.24. Use the source setup below for the IDE, or
-[install the current source CLI](../packages/cli/README.md#install-current-source-cli)
-for command-line package workflows.
+The command-line workflows use Spex CLI 5.0, installed with
+`npm install -g @sublang/spex` and Node.js 22 or later. The IDE controls
+follow current source and are newer than desktop app 0.9.0-beta.24;
+use the source setup below for those controls.
 
 ## Open the IDE and a project
 
@@ -128,13 +127,12 @@ same.
 
 ## Use the CLI
 
-The current source CLI manages the same package files as the IDE without
-a running app. First
-[install the source CLI](../packages/cli/README.md#install-current-source-cli);
-the published npm 4.2.0 release uses older package commands. Then run
-`spex` in your project's folder:
+Spex CLI 5.0 manages the same package files as the IDE without a running
+app. Install it with Node.js 22 or later, then run `spex` in your
+project's folder:
 
 ```sh
+npm install -g @sublang/spex
 cd /absolute/path/to/project
 spex search toolkit
 spex add my-org/toolkit
@@ -173,9 +171,10 @@ group. The project's code needs a remote repository the server can read.
 
 On **Space**, choose **Open on ⟨server⟩** on the project's row; use the
 arrow beside its opening button to choose another location.
-The first time, Spex lists the server's terms — among them that whoever runs
-the server can act with credentials you put there — and opens it once
-you choose **I understand**. Your seat starts with a Space sign-in.
+The connection starts immediately, including the first time, and Spex
+shows its progress. No separate acknowledgement is needed. Your seat
+starts with a Space sign-in. The server's administrator can access its
+files and act with credentials you put there.
 Private packages and publishing require a separate registry sign-in on
 that seat; your computer's registry account and shared agent credentials
 do not supply it.

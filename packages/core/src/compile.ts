@@ -18,7 +18,18 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { build } from "esbuild";
+
+/** The existing desktop physical-path rule (app-shell-13), for both
+ * module files and directories passed to external tools. */
+export function unpackedPath(path: string): string {
+  const unpacked = path.replace(/\.asar(?=[\\/]|$)/, ".asar.unpacked");
+  return unpacked !== path && existsSync(unpacked) ? unpacked : path;
+}
+
+// esbuild derives its native service executable from its own module's
+// path. Load its physical module so spawn never receives an asar path.
+const installed = createRequire(import.meta.url);
+const { build } = installed(unpackedPath(installed.resolve("esbuild"))) as typeof import("esbuild");
 
 /** The node_modules directories up-tree from a module, nearest first:
  * where a shell finds the compiler it declares (playbook-library-11). */
@@ -38,7 +49,7 @@ export function moduleDirectoriesAbove(fromUrl: string): string[] {
 /** node_modules dirs up-tree from this package, so bundling artifacts
  * in the external library dir still resolves xstate and friends. */
 function bundleNodePaths(): string[] {
-  return moduleDirectoriesAbove(import.meta.url);
+  return moduleDirectoriesAbove(import.meta.url).map(unpackedPath);
 }
 
 import { RUNTIME_ABI } from "@sublang/playbook/xstate-runtime";

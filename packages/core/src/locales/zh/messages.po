@@ -1073,11 +1073,6 @@ msgstr "此会话已有一轮正在运行。"
 msgid "a turn is being submitted in this session"
 msgstr "此会话中已有一轮正在提交"
 
-#. Refusal of Connect sent without the person's acceptance of the terms the Space fixes for team servers, which the server's line shows before the first connection
-#: src/places.ts
-msgid "Accept the server's terms before connecting"
-msgstr "连接前请先接受服务器的条款"
-
 #. Storage diagnostic: an act names an intent no queue act created
 #: src/app-storage.ts
 msgid "act targets unknown intent {intentId}"
@@ -2166,6 +2161,11 @@ msgstr "只有已结束的意图才能从历史中移除"
 #: src/service.ts
 msgid "only a finished intent confirms done"
 msgstr "只有已完成的意图才能确认完成"
+
+#. Refusal of a server open command without the flag recording the person's explicit Open request
+#: src/places.ts
+msgid "Opening a server requires an explicit request"
+msgstr "打开服务器需要明确请求"
 
 #. compile phase: slc optimizes the spec items
 #: src/authoring.ts

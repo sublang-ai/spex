@@ -1,0 +1,100 @@
+format: 1
+requests: f68d00efe6539e289f5d9310814787c63f45485b6e12fceeed2fbba65afb2222
+packages:
+  sublang/playbooks:
+    source:
+      registry: https://spex.pub
+      version: 17.9.0
+      checksum: aa2744f9c318f8ffb19e7bff0695400294fb6c8775f9f2bc80cf431104e334a0
+    required-by: []
+    artifacts:
+      branch: { language: en, fallback: false }
+      code: { language: en, fallback: false }
+      decide: { language: en, fallback: false }
+      dev: { language: en, fallback: false }
+      inspect: { language: en, fallback: false }
+      pr: { language: en, fallback: false }
+      review: { language: en, fallback: false }
+    files:
+      - { path: LICENSE, sha256: c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4, executable: false }
+      - { path: README.md, sha256: 84952cde1a4447aebd9758964c6c4382ff52b9abd72b1f404f078dc9dfea6607, executable: false }
+      - { path: meta.yaml, sha256: 5d59dd1748cf8e2608da0f93902cf8ab2d508f7b0b19634f326dbfeb87a0fae3, executable: false }
+      - { path: playbooks/en/branch/branch.md, sha256: 9d7b5346f882c4e1083a186f49bdb5f56afc8134537e410588996f8538f0de74, executable: false }
+      - { path: playbooks/en/branch/branch.playbook/branch.fsm.js, sha256: 89e708612d83b8ac0702dd868ea05f8632f5a3b38294f23a758bd3b2eda6652f, executable: false }
+      - { path: playbooks/en/branch/branch.playbook/branch.fsm.ts, sha256: 06477fc460e039f7fcde78191497385bc85234ab2aaf48615f6edb70640ebf9d, executable: false }
+      - { path: playbooks/en/branch/branch.playbook/branch.gears.md, sha256: 8cdd31615e4f07e36926136add0dd0bf417d8e85be610d65d3f83dae9ef18e1b, executable: false }
+      - { path: playbooks/en/branch/branch.playbook/branch.playbook.js, sha256: cfb5d472491ed3e443bd66a1937d2c4f400f00e46c3bdd0ed30899f2f621ee28, executable: false }
+      - { path: playbooks/en/branch/branch.playbook/branch.registry.js, sha256: a56061226cd720eb0b9db7cb490bb57e37a587f951af658e970cc9b47be7476b, executable: false }
+      - { path: playbooks/en/branch/package.json, sha256: f69ed17eea98f49ee075f676bae79df9cb779e54d5887b94d94313d34511170c, executable: false }
+      - { path: playbooks/en/code/code.md, sha256: 5da9672f9232d5e2e7496c03238b9290f0748cba82eee1f384b5fa9816269a7f, executable: false }
+      - { path: playbooks/en/code/code.playbook/bin/adapter-sdk.js, sha256: abf36796517fc8c6e44bdcf8e42a43f12731d1666999eb3ac297e939b0ac8c74, executable: false }
+      - { path: playbooks/en/code/code.playbook/bin/interactive-session.js, sha256: fc4ff0855766326c23789856fc2180d7a76e40c29cacf0ab2ecea3bfda39d4f6, executable: false }
+      - { path: playbooks/en/code/code.playbook/bin/launch-config.js, sha256: 41a1986c250477cd3ab5c63b8a527dc4fa62dd8ca238ac816bb4bfb1bfc959d4, executable: false }
+      - { path: playbooks/en/code/code.playbook/bin/machine-identity.js, sha256: 51167127fac736ca3ab44f567c402da0ebe353e43aa3b7b5a488cb4a35b1acc3, executable: false }
+      - { path: playbooks/en/code/code.playbook/bin/playbook.js, sha256: 76491bd63006ef8077c1c61cd5deb4496fa4d59e100bd7aa68d00130f0bf6104, executable: true }
+      - { path: playbooks/en/code/code.playbook/bin/portable-codec.js, sha256: e6e74c16a89891d4a7ce80989bb15eb6778a521af6bd4e3c00d958061abb79e1, executable: false }
+      - { path: playbooks/en/code/code.playbook/bin/private-paths.js, sha256: 17a96008f7b49f6636916d6a7c18ce78b2661aebfd838cad5d85eff165c92c39, executable: false }
+      - { path: playbooks/en/code/code.playbook/bin/provision.js, sha256: 7f8c3b25175b3fbf6f74c8a5dd2774387b1e26274045d5bcff5fa4a8bb396c24, executable: false }
+      - { path: playbooks/en/code/code.playbook/bin/replay-observer.js, sha256: 1da10d7de25caec1b878a24b6eb8e1a25f0f6c1e588e5b9102deaf4f3bb01f4c, executable: false }
+      - { path: playbooks/en/code/code.playbook/bin/repository-effects.js, sha256: 50f028247f1768b522eda99c06f0a4d8e7a5dfddf1cf908a0374a55475bfaced, executable: false }
+      - { path: playbooks/en/code/code.playbook/bin/run.js, sha256: e6ab8695be0cf6ef18d35e460a0da7deeeaa21fccecbe84c76f69fbed2d7fc08, executable: false }
+      - { path: playbooks/en/code/code.playbook/bin/session-host.js, sha256: a4d7d97c7ccb03d3315949debbd1d12efd0c2014d637d21851855443aa7103be, executable: false }
+      - { path: playbooks/en/code/code.playbook/bin/session-media.js, sha256: 333c08a45814e818dde9a9dc6f8cea80bea1a766d83074d87bff23591b2e5046, executable: false }
+      - { path: playbooks/en/code/code.playbook/bin/session-store.js, sha256: 8f891251af40ad47752a96f35a250d8d0c10e111cde06714c1aaf89d03dd0c98, executable: false }
+      - { path: playbooks/en/code/code.playbook/code.fsm.introspect.js, sha256: 1d96a2e25d1b254154a4fa58609181913d634dd4eb26c46af72997e6a68ad686, executable: false }
+      - { path: playbooks/en/code/code.playbook/code.fsm.js, sha256: 1eed7b89be26c772db27ed5f7217139f40383a6bc06a36b451e6439533177edb, executable: false }
+      - { path: playbooks/en/code/code.playbook/code.fsm.ts, sha256: a3cfb906c7278cf950accc206699f7bb4e9af8cb3285dfbf04d20d6449761e4d, executable: false }
+      - { path: playbooks/en/code/code.playbook/code.gears.md, sha256: 58e73a531000518a60def440a38dc8c714300bda900d162e4dc7ff55e38eb756, executable: false }
+      - { path: playbooks/en/code/code.playbook/code.playbook.js, sha256: 662ddf7758661135fc43d6e5c4188aae3e5f8661d9897bc525ecfbe1ceb22b10, executable: false }
+      - { path: playbooks/en/code/code.playbook/code.registry.js, sha256: 200eec4360c8d6810014c0ce5cc0a136d1d9aebafa03d12375660ba53cb7c675, executable: false }
+      - { path: playbooks/en/code/code.playbook/host-capabilities.js, sha256: 857a380713c653f0e6a7c8e2656e711402bb474e30deb0ae8fa3181ece7d2b81, executable: false }
+      - { path: playbooks/en/code/code.playbook/machine-identity.js, sha256: 34ac3906efe2180af5f774e73d701738149a261558cc10197981b391db623b06, executable: false }
+      - { path: playbooks/en/code/code.playbook/playbook-captain.js, sha256: c452e41626040659f8bc1f24a5412575605cb758b538611dcf0bed62217b20fc, executable: false }
+      - { path: playbooks/en/code/code.playbook/session-assets.js, sha256: 5168a319e2efee3637b4f242a7bceb8598e1906a1a53d284c808d87f0d85ccca, executable: false }
+      - { path: playbooks/en/code/code.playbook/session-host.js, sha256: c3c99c50a29d245b4e0c5cfaa0c92ed972e7b08676f9eeceea369c05eb17ec56, executable: false }
+      - { path: playbooks/en/code/code.playbook/session-store.js, sha256: c7610bed53ed1cbbdcd1f0f6c393b1710f4dccee6a07bb95d6564b6f927136d7, executable: false }
+      - { path: playbooks/en/code/code.playbook/worker-evidence.js, sha256: e357da613197bf8c2197d456d843335951cd04f4936c99625864be98b84db15e, executable: false }
+      - { path: playbooks/en/code/package.json, sha256: f69ed17eea98f49ee075f676bae79df9cb779e54d5887b94d94313d34511170c, executable: false }
+      - { path: playbooks/en/decide/decide.md, sha256: eeaf14bd9d674f298913e95129e7b82006e26a6533a5f8cec8ef32a5e3adf9e0, executable: false }
+      - { path: playbooks/en/decide/decide.playbook/decide.fsm.js, sha256: 42178f21913f845fdb68db0e0a80c61b9be5a027f8ed5b0cbea057655b024d8a, executable: false }
+      - { path: playbooks/en/decide/decide.playbook/decide.fsm.ts, sha256: 26796284f010b06ef69114da0bdee8ff1fca8e0b1e81fa511e2960f8d50f1c07, executable: false }
+      - { path: playbooks/en/decide/decide.playbook/decide.gears.md, sha256: c4564292e072ad9b12be446e1b1596e2fc10b57d120c46051dd1da259f583572, executable: false }
+      - { path: playbooks/en/decide/decide.playbook/decide.playbook.js, sha256: a8fdadeb464bc4e220fbcad308e05375b5615c45d37acf6e41ef07a9b66ce30c, executable: false }
+      - { path: playbooks/en/decide/decide.playbook/decide.registry.js, sha256: 9ebcbbae4b7d0387f9a58b926f1c417c80de92728b562e23aebf3d95092614eb, executable: false }
+      - { path: playbooks/en/decide/package.json, sha256: f69ed17eea98f49ee075f676bae79df9cb779e54d5887b94d94313d34511170c, executable: false }
+      - { path: playbooks/en/dev/dev.md, sha256: 47bbb288bc221a23953df9c771a7cc3d30956b11a5c65ff5cbadce9301b0734b, executable: false }
+      - { path: playbooks/en/dev/dev.playbook/dev.fsm.js, sha256: aef28df092ce466154f350a5145558383493b485b5382cfd1f39a1d273b6f41a, executable: false }
+      - { path: playbooks/en/dev/dev.playbook/dev.fsm.ts, sha256: c1b13d4455cb5b9e5df0b0b5c6eec88fefde26a2069c8697cb966f0da7b1ee2c, executable: false }
+      - { path: playbooks/en/dev/dev.playbook/dev.gears.md, sha256: 4905ecd492d80f7b692676e4b4cdcea679f3ea9db5010b05a25e459f7ea2b140, executable: false }
+      - { path: playbooks/en/dev/dev.playbook/dev.playbook.js, sha256: 49cb52f76fac84d348faf9e767026c6ae7bc94c8b3eb175b31ae0f45e34c63da, executable: false }
+      - { path: playbooks/en/dev/dev.playbook/dev.registry.js, sha256: 852ec3e648378b196de6e8cec2f7dc96e32b9e9e51123823ff920bcf8af974e1, executable: false }
+      - { path: playbooks/en/dev/package.json, sha256: f69ed17eea98f49ee075f676bae79df9cb779e54d5887b94d94313d34511170c, executable: false }
+      - { path: playbooks/en/inspect/inspect.md, sha256: 9c14c800df323eb86438b44c5be6422d7fc558b49530bc6376bb0e89f90036e5, executable: false }
+      - { path: playbooks/en/inspect/inspect.playbook/inspect.fsm.js, sha256: ee2dc2f1c5cbdc13aee92811071ba3ab79822159bf59254debb5b39310b0c838, executable: false }
+      - { path: playbooks/en/inspect/inspect.playbook/inspect.fsm.ts, sha256: c3b8d371484d71058f4719e8555fb69585f6c26dfefb1dc874eccfcfba5e59cc, executable: false }
+      - { path: playbooks/en/inspect/inspect.playbook/inspect.gears.md, sha256: 829ff4080d8051362763ce9402983c8f7208a6fcbd49c75c180f34f832e8802a, executable: false }
+      - { path: playbooks/en/inspect/inspect.playbook/inspect.playbook.js, sha256: f08b24427c8e6585364c53d8c9c593c3034b6ec0b41035f7db1b875f7ce4ac2f, executable: false }
+      - { path: playbooks/en/inspect/inspect.playbook/inspect.registry.js, sha256: 5daf9a93dfa9961a3375e1b2e9e55f7486ef75e4ea7c2d190ee5135fe48e3faf, executable: false }
+      - { path: playbooks/en/inspect/package.json, sha256: f69ed17eea98f49ee075f676bae79df9cb779e54d5887b94d94313d34511170c, executable: false }
+      - { path: playbooks/en/pr/package.json, sha256: f69ed17eea98f49ee075f676bae79df9cb779e54d5887b94d94313d34511170c, executable: false }
+      - { path: playbooks/en/pr/pr.md, sha256: 80f951530fcf1dbec6e2586b12cdcaf59f05706606dd383d1b55ad6c5fd1ff3c, executable: false }
+      - { path: playbooks/en/pr/pr.playbook/pr.fsm.js, sha256: ae66679c00c04e0d5cc0a0bb2fd747e8eeb22a9a013f8e8966f22da6ef3915fb, executable: false }
+      - { path: playbooks/en/pr/pr.playbook/pr.fsm.ts, sha256: 5c8bd1f6c3a3dc1fbdd1aac114645183a741a912b497927edb7f2d8b5810eb02, executable: false }
+      - { path: playbooks/en/pr/pr.playbook/pr.gears.md, sha256: 2eef0c3ac601018ef8d1512f653642ef77caeac4acb5e30e3a2258fa9be1d7dd, executable: false }
+      - { path: playbooks/en/pr/pr.playbook/pr.playbook.js, sha256: 0e0a0934b9e374ae652d48bc047748819542c32a988e2d5d97e4c969504eaf73, executable: false }
+      - { path: playbooks/en/pr/pr.playbook/pr.registry.js, sha256: 2350d6a8bfb65c782556ceabdf8b79547cab2f8a6a353abdcadf1f6c7e050671, executable: false }
+      - { path: playbooks/en/review/package.json, sha256: f69ed17eea98f49ee075f676bae79df9cb779e54d5887b94d94313d34511170c, executable: false }
+      - { path: playbooks/en/review/review.md, sha256: b85db78057d1f1a2cf292977570fbfa8ca9862dcb952dce2733de43d115080a4, executable: false }
+      - { path: playbooks/en/review/review.playbook/review.fsm.js, sha256: b7dc5507470293ac762f3121899de480d3900d3ac94dada1f6b174e242239b87, executable: false }
+      - { path: playbooks/en/review/review.playbook/review.fsm.ts, sha256: 9dd34d03f4f23403c0d86f85a4ea49ec04dabccae4f1234eb7901b81dc3a4ff6, executable: false }
+      - { path: playbooks/en/review/review.playbook/review.gears.md, sha256: a9d29ccfb4b7dfd61c7216e01f62894598f3f80dad7486464f8e8bd5f40ce841, executable: false }
+      - { path: playbooks/en/review/review.playbook/review.playbook.js, sha256: dcc9de67f47862771f7f435827536515f59e3057b46b7da221ebca426d7b0ef4, executable: false }
+      - { path: playbooks/en/review/review.playbook/review.registry.js, sha256: 7744a69a038b677f181d6172534bcb7c9ff546c564ecbe9d59467e88731c0080, executable: false }
+    exports:
+      branch: branch
+      code: code
+      decide: decide
+      dev: dev
+      inspect: inspect
+      pr: pr
+      review: review

@@ -200,8 +200,7 @@ export interface ProjectPaletteProps {
   /** Opened at "From your groups": the welcome page's "Open a project
    * from your groups" (run-view-172). */
   groupsAt?: string;
-  /** Show this computer's Space surface, where a server's contract is
-   * asked beneath its line (run-view-170). */
+  /** Show a new server connection's progress, sign-in or failure on Space. */
   onShowSpace?: () => void;
   /** Forward group-operation feedback to a region that survives this dialog. */
   onNote?: (message: string) => void;
@@ -507,8 +506,8 @@ export function ProjectPalette(props: ProjectPaletteProps) {
    * "Open on <server>" shows its workspace where that seat holds the
    * project, otherwise downloads it — disabled with a visible reason while
    * its records name no code remote, reading "Signing in to <Space>…"
-   * while that seat still signs in — opening the seat where none is,
-   * whose contract the Space surface asks beneath the server's line. */
+   * while that seat still signs in — opening the seat immediately where
+   * none is, then joining the project once that seat is signed in. */
   function placeEntries(repo: RepositoryState): MenuEntry[] {
     if (repo.own || repo.id === null || repo.state === "local-only" || repo.state === "unreachable") return [];
     const entries: MenuEntry[] = [];
@@ -556,7 +555,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
         disabled: noCode || waiting || signingIn !== undefined || busy,
         onSelect: () => {
           openOnServer(useAppStore, server, { key: repo.key, hostId });
-          if (useServerOpens.getState().lines[at]?.asking) props.onShowSpace?.();
+          if (!server.open) props.onShowSpace?.();
           props.onClose();
         },
       });

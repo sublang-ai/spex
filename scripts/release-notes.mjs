@@ -149,7 +149,11 @@ export function releaseNotes({ changelog, release, repository }) {
     "```\n",
     "\n",
     `Agent sign-in, GitHub, and playbook-compile prerequisites are in the [README](${blob}/README.md).\n`,
-    beta
+    tag === "app-v0.9.0-beta.26"
+      ? "\nOwner-authorized beta.26 validation is limited to required PR checks, both native builds and packaged strict compiler checks. " +
+        "Prior Mac/Codex workflow and live-smoke evidence is reused; unrelated full UI checks did not pass and are waived for this tag only. " +
+        `See the [preparation record](${blob}/docs/releases/0.9.0-beta.26-preparation.md). Windows real UI acceptance is not claimed.\n`
+      : beta
       ? "\n" +
         "Beta preparation requires CI, the smoke and the live smoke; the regression and the manual checklist run before the regular release " +
         `([DR-087](${blob}/specs/decisions/087-beta-app-releases.md)).\n`

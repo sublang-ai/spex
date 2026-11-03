@@ -192,6 +192,14 @@ test("release-28: a beta tag takes [Unreleased] under its line, and names the ga
   );
 });
 
+test("release-28: beta.26 discloses its limited gate and reused acceptance", (t) => {
+  const body = notesFor(t, "app-v0.9.0-beta.26", "0.9.0-beta.26");
+  assert.match(body, /Owner-authorized beta\.26 validation is limited to required PR checks, both native builds and packaged strict compiler checks/);
+  assert.match(body, /unrelated full UI checks did not pass and are waived for this tag only/);
+  assert.match(body, /Windows real UI acceptance is not claimed/);
+  assert.doesNotMatch(body, /Beta preparation requires CI, the smoke and the live smoke/);
+});
+
 test("release-28: a tag in any other form is refused before anything is read", (t) => {
   for (const tag of [
     "app-v1.2.3-beta.0",

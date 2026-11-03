@@ -15,6 +15,8 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 - [DR-035](035-intent-ledger.md) in the Dashboard's attention: one queue joins every connected core's attention.
 - [DR-033](033-remote-gui-serving.md) in "the browser is a pure protocol client": a served page may hold the same relayed connections through its own core.
 
+Amended by [DR-210](210-open-on-a-server-without-an-acknowledgement.md) in rendering the first-open contract.
+
 ## Context
 
 - The UI holds one WebSocket, one store and one connection banner; its project ids are repository keys, which name the instance and not the machine, so one repository cloned on two machines has one id on both; draft ids are unique within a repository alone; session, intent and approval ids are UUIDs.

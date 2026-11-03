@@ -18,7 +18,8 @@ jobs:
     permissions:
       contents: read
     with:
-      full: true
+      # Owner-authorized, single-release scope; other tags retain full CI.
+      full: ${{ github.ref_name != 'app-v0.9.0-beta.26' }}
       channel: app
 
   prepare:
@@ -26,6 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      checks: read
     outputs:
       version: ${{ steps.version.outputs.version }}
       title: ${{ steps.version.outputs.title }}
@@ -48,6 +50,17 @@ jobs:
           --out=release-notes.md
       - name: Require published runtime dependencies
         run: node scripts/dependency-closure.mjs --registry-only
+      - name: Require the accepted PR tree for the beta.26 exception
+        if: github.ref_name == 'app-v0.9.0-beta.26'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor HEAD origin/main
+          accepted_head=$(git rev-parse HEAD^2)
+          git diff --exit-code "$accepted_head" HEAD
+          conclusion=$(gh api "repos/$GITHUB_REPOSITORY/commits/$accepted_head/check-runs" --jq '[.check_runs[] | select(.name == "checks" and .app.slug == "github-actions")] | sort_by(.started_at) | last | .conclusion')
+          test "$conclusion" = success
       - uses: actions/upload-artifact@v4
         with:
           name: app-release-notes
@@ -87,6 +100,11 @@ jobs:
         with:
           name: desktop-${{ matrix.asset }}
           path: apps/desktop/release/Spex-${{ needs.prepare.outputs.version }}-${{ matrix.asset }}
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: compiler-check-${{ matrix.asset }}
+          path: apps/desktop/release/compiler-check-*.json
           if-no-files-found: error
 
   release:
