@@ -531,8 +531,8 @@ describe("run-view-70: the sidebar navigates, the tabs hold what is open", () =>
   });
 });
 
-describe("postponed folder choices remain reachable (DR-196)", () => {
-  test.each([false, true])("the sidebar reopens zero-count choices after leaving Space (collapsed: %s)", async (collapsed) => {
+describe("dismissed folder choices remain reachable through Space (DR-214)", () => {
+  test.each([false, true])("Space review preserves zero-count choices across visits and reload (collapsed: %s)", async (collapsed) => {
     let space = groupsState({ diagnostics: ["Atlas", "Website", "Notes"].map((name, index) => ({
       file: `workspace/personal/${name}`, reason: "No project folder registered", blocking: false,
       repair: { kind: "repository" as const, repository: `personal/${name}`, projectName: name,
@@ -551,52 +551,68 @@ describe("postponed folder choices remain reachable (DR-196)", () => {
       }
       return defaultReply(type);
     });
-    // Bootstrap must discover the entry even before Space was visited.
     useAppStore.setState({ projects: [], sessions: [], views: {}, space: undefined, spaceError: undefined,
       currentProjectId: undefined, activeSessionId: undefined, openTabs: {}, workspaceTabs: {},
       railCollapsed: collapsed, ledger: ledger as never });
     const mounted = render(<App />);
     await act(async () => {});
-    const entry = screen.getByTestId("sidebar-locate-files");
-    expect(entry.getAttribute("aria-label")).toBe("Locate project files on This computer");
-    await act(async () => {
-      if (collapsed) fireEvent.click(entry);
-      else { entry.focus(); fireEvent.keyDown(entry, { key: "Enter" }); }
-    });
+    // Recovery uses the existing named destination in either rail state.
+    expect(screen.queryByTestId("sidebar-locate-files")).toBeNull();
+    expect(screen.queryByTestId("sidebar-place-heading")).toBeNull();
+    const openSpace = async () => {
+      const entry = screen.getByRole("button", { name: "Space" });
+      entry.focus();
+      await act(async () => {
+        if (collapsed) fireEvent.click(entry);
+        else fireEvent.keyDown(window, { key: "4", metaKey: true });
+      });
+    };
+    await openSpace();
+    expect(screen.queryByTestId("space-issues-list")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Files & history — 3 notices" }));
     expect(screen.getByTestId("space-issues-list")).toBeTruthy();
-    expect(screen.getByTestId("space-issues").textContent).toContain("Review (3)");
     for (const remaining of [2, 1, 0]) {
       await act(async () => fireEvent.click(screen.getAllByRole("button", { name: "Dismiss" })[0]!));
       expect(useAppStore.getState().space?.issues).toBe(remaining);
     }
-    expect(screen.getByTestId("space-issues").textContent).toBe("Review");
-    expect(screen.getByTestId("space-issues").textContent).not.toContain("⚠");
+    expect(screen.getByTestId("space-issues").textContent).toBe("Files & history");
     expect(screen.getByTestId("space-issues").className).not.toContain("amber");
-    expect(screen.getByTestId("sidebar-locate-files")).toBeTruthy();
+    expect(screen.getByTestId("space-deferred-notice").textContent).toContain("Space");
+    expect(screen.getByTestId("space-deferred-notice").textContent).toContain("Files & history");
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Dashboard" })));
-    await act(async () => fireEvent.click(screen.getByTestId("sidebar-locate-files")));
+    await openSpace();
+    fireEvent.click(screen.getByRole("button", { name: "Files & history" }));
+    const dismissed = screen.getByTestId("space-dismissed") as HTMLDetailsElement;
+    expect(dismissed.open).toBe(false);
+    fireEvent.click(dismissed.querySelector("summary")!);
+    expect(dismissed.open).toBe(true);
     expect(screen.getAllByTestId("space-repair-declined")).toHaveLength(3);
     expect(screen.getAllByRole("button", { name: "Locate folder…" })).toHaveLength(3);
     expect(useAppStore.getState().space?.issues).toBe(0);
-    // A reload has no cached Space model; the durable core answer restores it.
+    // Reload reads the persisted dismissal when Space opens again.
     mounted.unmount();
     useAppStore.setState({ space: undefined, spaceError: undefined });
     render(<App />);
-    await act(async () => {});
-    await act(async () => fireEvent.click(screen.getByTestId("sidebar-locate-files")));
+    await openSpace();
+    fireEvent.click(screen.getByRole("button", { name: "Files & history" }));
+    const reloaded = screen.getByTestId("space-dismissed") as HTMLDetailsElement;
+    expect(reloaded.open).toBe(false);
+    fireEvent.click(reloaded.querySelector("summary")!);
     expect(screen.getAllByTestId("space-repair-declined")).toHaveLength(3);
     expect(useAppStore.getState().projects).toEqual([]);
     expect(commandMock.mock.calls.filter(([type]) => type === "space.repair.decline")).toHaveLength(3);
     expect(commandMock).not.toHaveBeenCalledWith("project.rebind", expect.anything());
-    // Resolving the last task removes its navigation entry too.
+    // Resolved tasks remove Review, without leaving a navigation row.
     act(() => useAppStore.setState({ space: { ...space, diagnostics: [], issues: 0 } }));
+    expect(screen.queryByTestId("space-issues")).toBeNull();
     expect(screen.queryByTestId("sidebar-locate-files")).toBeNull();
   });
 });
 
 describe("saved conversations without project files (DR-195)", () => {
-  test.each(["ready", "retry", "removed"])("opens saved history without project setup and handles %s", async (scenario) => {
+  test.each(["ready", "retry", "removed", "dismissed"])("opens saved history without project setup and handles %s", async (scenario) => {
     const failFirstRead = scenario === "retry";
+    const dismissed = scenario === "dismissed";
     const saved = session({
       id: "saved-unpaired", projectId: "personal/notes-spex", projectPath: "/old/notes",
       title: "Plan the launch", players: [], initialVisible: [], continuable: undefined,
@@ -607,8 +623,9 @@ describe("saved conversations without project files (DR-195)", () => {
         kind: "repository", repository: saved.projectId, key: "notes|/old/notes",
         projectName: "Notes", directories: [saved.projectPath], sessions: 1,
         conversations: [{ id: saved.id, title: saved.title, updatedAt: NOW }],
+        ...(dismissed ? { declined: NOW } : {}),
       },
-    }], issues: 1 });
+    }], issues: dismissed ? 0 : 1 });
     const ledger = { intents: [], attention: [], badge: 0 };
     let reads = 0;
     commandMock.mockImplementation(async (type: string) => {
@@ -630,7 +647,8 @@ describe("saved conversations without project files (DR-195)", () => {
     });
     render(<App />);
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Space" })));
-    fireEvent.click(screen.getByRole("button", { name: "Review 1 notice" }));
+    fireEvent.click(screen.getByRole("button", { name: dismissed ? "Files & history" : "Files & history — 1 notice" }));
+    if (dismissed) fireEvent.click(screen.getByTestId("space-dismissed").querySelector("summary")!);
     if (scenario === "removed") act(() => useAppStore.setState({ sessions: [] }));
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Plan the launch" })));
     if (scenario === "removed") {
@@ -659,6 +677,9 @@ describe("saved conversations without project files (DR-195)", () => {
     }
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Back to Space" })));
     expect(screen.getByTestId("space-surface")).toBeTruthy();
+    expect(screen.getByTestId("space-issues-list")).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByTestId("space-issues"));
+    if (dismissed) expect((screen.getByTestId("space-dismissed") as HTMLDetailsElement).open).toBe(true);
     expect(useAppStore.getState().projects).toEqual([]);
   });
 });

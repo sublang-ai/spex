@@ -10,6 +10,8 @@ Amends [DR-194](194-saved-work-is-a-choice-not-setup-debt.md) in recovery identi
 
 Amended by [DR-196](196-a-review-count-and-a-way-back.md) in shared explanation and postponed-task navigation.
 
+Amended by [DR-214](214-project-navigation-and-contextual-recovery.md) in the saved reader's return: Back to Space opens its own place's review and reveals dismissed folder tasks.
+
 ## Context
 
 Conversation records are held by the selected Spex core, separately from project files.

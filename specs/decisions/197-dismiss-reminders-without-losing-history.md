@@ -8,6 +8,8 @@
 Accepted (2026-11-02) on the owner's request to dismiss the remaining format-incompatibility notice and distinguish active reminders from dismissed ones with consistent actions.
 Amends [DR-194](194-saved-work-is-a-choice-not-setup-debt.md) in optional-reminder acknowledgement and [DR-196](196-a-review-count-and-a-way-back.md) in dismissal wording, list grouping and the sidebar return path.
 
+Amended by [DR-214](214-project-navigation-and-contextual-recovery.md) in the named return path: dismissal names Space → Files & history → Dismissed, and the saved reader reveals dismissed folder tasks directly instead of a sidebar shortcut.
+
 ## Context
 
 A folder reminder can be set aside, but an unrelated old-format import failure remains counted with no useful action.

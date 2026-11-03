@@ -443,6 +443,7 @@ function sessionTooltip(
 
 function WorkspaceSurface({
   onNavigate,
+  onOpenFolderReview,
   onOpenAgentSettings,
   onOpenAgentCard,
   onOpenPalette,
@@ -461,6 +462,8 @@ function WorkspaceSurface({
   onSpecViewState,
 }: {
   onNavigate: (surface: Surface) => void;
+  /** Return saved history to its own place's folder choices. */
+  onOpenFolderReview: () => void;
   /** Settings at an agent's row (run-view-179, settings-52). */
   onOpenAgentSettings: (agentId: string) => void;
   /** Settings at an adapter's agent card (run-view-45, settings-70). */
@@ -846,14 +849,14 @@ function WorkspaceSurface({
       continuable: undefined,
       recovery: undefined,
       continuationReason: activeSession.continuationReason ?? i18n._({
-        id: "Use Locate project files in the sidebar to work with these files again.",
+        id: "Open Space → Files & history to locate these project files and continue work.",
         comment: "saved history can be read before its project folder is located",
       }),
     };
     return (
       <div data-testid="saved-conversation-reader" className="flex min-h-0 flex-1 flex-col">
         <div className="flex min-w-0 flex-wrap items-center gap-3 border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
-          <button type="button" onClick={() => onNavigate("Space")} className="shrink-0 rounded px-2 py-1 text-sm text-brand-600 hover:bg-brand-50 dark:text-brand-400 dark:hover:bg-neutral-800">
+          <button type="button" onClick={onOpenFolderReview} className="shrink-0 rounded px-2 py-1 text-sm text-brand-600 hover:bg-brand-50 dark:text-brand-400 dark:hover:bg-neutral-800">
             {i18n._({ id: "Back to Space", comment: "return from a saved conversation to locate files or read other saved work" })}
           </button>
           <h2 className="min-w-0 break-words text-sm font-medium">{sessionTitle(view, activeSession)}</h2>
@@ -1395,6 +1398,7 @@ export function App() {
     // language is an input, so the phrase is read again.
     language: state.language.resolved,
     currentProjectId: state.currentProjectId,
+    activeSessionId: state.activeSessionId,
     expandedProjects: state.expandedProjects,
     workspaceTabs: state.workspaceTabs,
     // A seat's groups name the projects the palette opens there
@@ -1402,23 +1406,6 @@ export function App() {
     space: state.space,
     connection: state.connection,
   }));
-  // The return path must exist after a fresh launch on any surface,
-  // before the reader has opened Space. Read once per connection;
-  // subsequent space.state reports keep the same sidebar data current.
-  const folderReviewReads = useRef(new Set<AppStore>());
-  const folderReviewSeen = useRef(new WeakSet<AppStore>());
-  useEffect(() => {
-    for (const { store, value } of placeStates) {
-      if (value.connection !== "open") { folderReviewReads.current.delete(store); continue; }
-      if (folderReviewReads.current.has(store)) continue;
-      folderReviewReads.current.add(store);
-      if (!value.space || folderReviewSeen.current.has(store)) void store.getState().loadSpace().catch(() => {});
-      folderReviewSeen.current.add(store);
-    }
-    for (const store of folderReviewReads.current) {
-      if (!placeStates.some((entry) => entry.store === store)) folderReviewReads.current.delete(store);
-    }
-  }, [placeStates]);
   const local = placeStates[0]!.value;
   // The seats the local core holds, each with its sign-in at its
   // instance (core-service-142): the palette says where one still runs.
@@ -1786,8 +1773,6 @@ export function App() {
     // The projects its core is opening, read from its Groups state
     // (run-view-168).
     opening: openingProjects(value.space, value.projects),
-    onLocateFiles: value.space?.diagnostics.some((entry) => entry.repair?.kind === "repository")
-      ? () => openFolderReview(store) : undefined,
     sessions: value.sessions,
     attention: attentionAt(store.place.key),
     currentProjectId: value.currentProjectId,
@@ -1820,12 +1805,14 @@ export function App() {
     onDeleteSession: (sessionId) => store.getState().deleteSession(sessionId),
   }));
 
-  // A seat holding no project has no page of its own (run-view-168): the
-  // Projects surface shows this computer's instead.
+  // A seat holding no project has no welcome page of its own. A saved
+  // conversation remains readable there before its files are located.
   useEffect(() => {
     if (shownPlace === LOCAL_PLACE_KEY) return;
     const place = navPlaces.find((entry) => entry.key === shownPlace);
-    if (place && place.projects.length === 0 && (place.opening?.length ?? 0) === 0) setShownPlace(LOCAL_PLACE_KEY);
+    const state = shown.getState();
+    const readingSaved = state.sessions.some((session) => session.id === state.activeSessionId);
+    if (place && place.projects.length === 0 && (place.opening?.length ?? 0) === 0 && !readingSaved) setShownPlace(LOCAL_PLACE_KEY);
   });
 
   // The rail foot's other tenant. A broken config keeps its red voice
@@ -2001,6 +1988,7 @@ export function App() {
               <WorkspaceSurface
                 key={shown.place.key}
                 onNavigate={navigateFrom(shown)}
+                onOpenFolderReview={() => openFolderReview(shown)}
                 onOpenAgentSettings={(agent) => {
                   setAgentAsk({ place: shown.place.key, agent });
                   navigateFrom(shown)("Settings");

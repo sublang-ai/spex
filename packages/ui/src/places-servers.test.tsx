@@ -321,10 +321,10 @@ const shownPlace = (): string => {
 describe("run-view-171: the selector switches Playbooks, Settings and Space", () => {
   test("each surface reads and acts at the place the selector names", async () => {
     render(<App />);
-    // The sidebar reads every place once for its saved-record folder
-    // tasks (run-view-67). Subsequent actions stay at the named place.
+    // Project navigation does not read an unrelated server for optional
+    // recovery. Surface actions stay at the place the reader selected.
     await settle();
-    expect(commandsOf(beta)).toEqual(["space.get"]);
+    expect(commandsOf(beta)).toEqual([]);
     const betaCommands = commandsOf(beta).length;
 
     // Settings: this computer's roster, then the seat's own.
@@ -392,10 +392,10 @@ describe("run-view-171: the selector switches Playbooks, Settings and Space", ()
 
   test("[run-view-168] a project's Playbooks and Packages tabs stand at the project's place, with no selector", async () => {
     render(<App />);
-    // Finish the sidebar's initial read before checking which core
-    // each project-tab action asks (run-view-67, run-view-168).
+    // Project tabs ask their own place, with no optional-recovery read
+    // of an unrelated server (run-view-67, run-view-168).
     await settle();
-    expect(commandsOf(beta)).toEqual(["space.get"]);
+    expect(commandsOf(beta)).toEqual([]);
     const betaCommands = commandsOf(beta).length;
     // This computer's project: its tabs read this computer's core.
     const seatLists = callsOf(alpha, "environment.playbooks").length;

@@ -464,7 +464,7 @@ export function IssuesList({
   connected: boolean;
   /** The header's control opened it. */
   open: boolean;
-  /** A sidebar request reveals the folder tasks it led here to find. */
+  /** A saved conversation's return reveals its dismissed folder tasks. */
   revealDismissed?: number;
   /** How many times the reader's own Refresh has re-read the state. */
   refreshes: number;
@@ -588,7 +588,7 @@ export function IssuesList({
     if (dismissed) setNoticeFocus((was) => ({ key, dismissed: true, seq: (was?.seq ?? 0) + 1 }));
     else setFocusTo((was) => ({ id: outcomeRowId(key), seq: (was?.seq ?? 0) + 1 }));
     confirmDismissal(dismissed
-      ? i18n._({ id: "Moved to Dismissed. Your conversations are kept.", comment: "confirms a folder task was dismissed without deleting saved conversations" })
+      ? i18n._({ id: "Moved to Dismissed in Space → Files & history. Your conversations are kept.", comment: "confirms preservation and names the return path for a dismissed folder task" })
       : i18n._({ id: "Shown again.", comment: "a dismissed folder task or notice is active and counted again" }));
   };
   const onNoticeChanged = (key: string, dismissed: boolean): void => {
