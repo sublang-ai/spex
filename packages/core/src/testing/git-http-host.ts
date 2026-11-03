@@ -27,15 +27,15 @@ export interface GitHttpHost {
 }
 
 /** Serve the bare repositories under `root` over smart HTTP, to
- * `username` with `password` only. */
-export async function startGitHttpHost(options: { root: string; username: string; password: string }): Promise<GitHttpHost> {
+ * `username` with `password`, or anonymously for public-code journeys. */
+export async function startGitHttpHost(options: { root: string; username: string; password: string; anonymous?: boolean }): Promise<GitHttpHost> {
   const expected = `Basic ${Buffer.from(`${options.username}:${options.password}`).toString("base64")}`;
   let refused = 0;
   let credentialed = 0;
 
   async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
     if (req.headers.authorization !== undefined) credentialed += 1;
-    if (req.headers.authorization !== expected) {
+    if (!options.anonymous && req.headers.authorization !== expected) {
       refused += 1;
       res.writeHead(401, { "www-authenticate": 'Basic realm="stand-in git host"', "content-type": "text/plain" });
       res.end("credential required\n");
@@ -50,7 +50,7 @@ export async function startGitHttpHost(options: { root: string; username: string
       QUERY_STRING: url.search.replace(/^\?/, ""),
       REQUEST_METHOD: req.method ?? "GET",
       CONTENT_TYPE: req.headers["content-type"] ?? "",
-      REMOTE_USER: options.username,
+      ...(options.anonymous ? {} : { REMOTE_USER: options.username }),
       REMOTE_ADDR: "127.0.0.1",
       GATEWAY_INTERFACE: "CGI/1.1",
       SERVER_PROTOCOL: "HTTP/1.1",
@@ -99,11 +99,12 @@ export async function startGitHttpHost(options: { root: string; username: string
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address() as AddressInfo;
+  let closing: Promise<void> | undefined;
   return {
     url: `http://127.0.0.1:${port}`,
     get refused() { return refused; },
     get credentialed() { return credentialed; },
-    close: () => new Promise<void>((resolve) => {
+    close: () => closing ??= new Promise<void>((resolve) => {
       server.closeAllConnections();
       server.close(() => resolve());
     }),

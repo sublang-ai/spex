@@ -5,6 +5,8 @@
 
 ## Status
 
+Amended by [DR-213](213-public-github-code-opens-over-https.md) for public GitHub code: recognized SSH and HTTPS URLs clone by their HTTPS identity, and a failed code clone asks for a missing credential only where Git reports authentication is required.
+
 Accepted (2026-10-21) on the owner's direction: a group shares a Linux server that runs Spex for its members, each in an OS account of their own, admitted by the group's live membership through the instance (spex.pub DR-029 [[1]]), with the administrator's agent sign-ins shared across the server; one desktop controls projects there and here at once ([DR-133](133-one-desktop-over-several-cores.md)); execution is owned per runtime ([DR-134](134-execution-ownership.md)); a seat whose lease lapsed while no hub ran is stopped by the service manager's sweep by [DR-148](148-a-lapsed-seat-is-stopped-by-a-sweep.md).
 Amended by [DR-156](156-an-untouched-seed-follows-the-credentials.md): a seat reads the shared file and the member's own credentials before it seeds its config, and an untouched seed follows them.
 Amended by [DR-159](159-projects-in-groups-opened-where-you-work.md) in "A client presents a ticket": every admission mints a bearer of its own, those of the person's earlier admissions standing while the lease lasts; and in "The helper creates the account on first admission": the account is made without the host's login skeleton, and one bound covers the whole admission — the account, the unit and the seat's socket — which the client's wait exceeds.

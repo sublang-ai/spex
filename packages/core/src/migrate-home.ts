@@ -21,6 +21,7 @@ import { isObject, need, readJsonFile, sha256, StorageFormatError, UUID, writeAp
 import { Home, repositoryNameFor } from "./home.js";
 import { i18n } from "./i18n.js";
 import { commitClone, gitEnvironment, initializeClone, validateStorageTree } from "./storage-git.js";
+import { canonicalCodeRemote } from "./code-remote.js";
 
 export interface GroupsReceipt {
   format: 1;
@@ -84,13 +85,13 @@ function move(source: string, target: string): void {
   renameSync(source, target);
 }
 
-/** The code's remote as the folder's `origin` reports it, a credential
+/** The code's portable remote from the folder's `origin`, a credential
  * before the host never written (storage-3, space-5). */
 export function folderRemote(folder: string, env?: NodeJS.ProcessEnv): string | null {
   try {
     const url = execFileSync("git", ["-C", folder, "remote", "get-url", "origin"], { env: gitEnvironment(env), stdio: ["ignore", "pipe", "ignore"], timeout: 10_000 }).toString().trim();
     if (!url || /\s/.test(url)) return null;
-    return url.replace(/^(https?:\/\/)[^/@]*@/i, "$1");
+    return canonicalCodeRemote(url.replace(/^(https?:\/\/)[^/@]*@/i, "$1"));
   } catch { return null; }
 }
 

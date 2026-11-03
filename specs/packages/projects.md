@@ -68,9 +68,13 @@ When the user invokes an Academy-example action ([DR-015](../decisions/015-refer
 
 ### The Code's Clone
 
+#### projects-44
+
+When the core clones a project's code, it shall use the canonical HTTPS equivalent of a recognized GitHub SSH or HTTPS URL [[storage-3](storage.md#storage-3)], including a URL held by older project records, as the clone's URL and its new `origin`, and use any other code remote as given, leaving existing working folders' remotes unchanged ([DR-213](../decisions/213-public-github-code-opens-over-https.md)).
+
 #### projects-37
 
-When the core clones a project's code from the remote its `project.json` names [[storage-3](storage.md#storage-3)], it shall hand Git the credential that a signed-in instance of one of its spex repository's placements — one its clone holds [[storage-34](storage.md#storage-34)] or its placement files name [[storage-36](storage.md#storage-36)] — brokers [[git-host-9](git-host.md#git-host-9)] only where that remote lies under that instance's reported Git origin [[git-host-5](git-host.md#git-host-5)], the project's own instance [[storage-31](storage.md#storage-31)] first where several do, and name no helper of the app's for any other remote, one under the Git origin of an instance no placement is at included, so this device's own credentials serve it — except, on a seat, a remote at a host the member placed a token for, which the app's helper serves with that token [[git-host-9](git-host.md#git-host-9)] ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md), [DR-132](../decisions/132-team-servers.md)).
+When the core clones a project's code using its canonical remote URL [[projects-44](#projects-44)], it shall hand Git the credential that a signed-in instance of one of its spex repository's placements — one its clone holds [[storage-34](storage.md#storage-34)] or its placement files name [[storage-36](storage.md#storage-36)] — brokers [[git-host-9](git-host.md#git-host-9)] only where that remote lies under that instance's reported Git origin [[git-host-5](git-host.md#git-host-5)], the project's own instance [[storage-31](storage.md#storage-31)] first where several do, and name no helper of the app's for any other remote, one under the Git origin of an instance no placement is at included, so this device's own credentials serve it — except, on a seat, a remote at a host the member placed a token for, which the app's helper serves with that token [[git-host-9](git-host.md#git-host-9)] ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md), [DR-128](../decisions/128-a-spex-repository-placed-at-several-instances.md), [DR-132](../decisions/132-team-servers.md)).
 
 ### The Overview Tab
 
@@ -301,6 +305,10 @@ Where a real core on a scratch home is signed in to two stand-in instances over 
 Where the Overview tab renders a project whose GitHub binding names an unmet condition, when the reader folds its Sources band and opens it again, the test suite shall assert that the header names the guidance beside the repository state only while the band is folded, and that the open band carries the guidance while the header repeats nothing [[projects-7](#projects-7)].
 
 ### Code Clone Coverage
+
+#### projects-45
+
+Where a real core joins project records whose recognized GitHub SSH and HTTPS code URLs address public repositories served by the suite's real Git transport, the integration suite shall verify that new code clones use the equivalent HTTPS URL as `origin`, including a legacy SSH URL still held in the records, and an already-present working folder keeps its remote [[projects-44](#projects-44)].
 
 #### projects-39
 

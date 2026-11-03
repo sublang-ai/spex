@@ -77,8 +77,11 @@ The home file shall encode `home.yaml` as exactly `{format: 2, device, origin, i
 
 ### storage-3
 
-The project file shall encode `<clone>/project.json` as exactly `{format: 1, name, remote}`: the project's name, and the code's remote URL as the working folder's `origin` reported it, or `null` where the folder has none, a credential embedded in the URL never written [[space-5](space.md#space-5)]:
+The project file shall encode `<clone>/project.json` as exactly `{format: 1, name, remote}`: the project's name, and the code's canonical remote identity derived from the working folder's `origin`, or `null` where the folder has none, a credential embedded in the URL never written [[space-5](space.md#space-5)] ([DR-213](../decisions/213-public-github-code-opens-over-https.md)):
 
+- `git@github.com:<owner>/<repository>`, `ssh://git@github.com[:22]/<owner>/<repository>` and `https://github.com[:443]/<owner>/<repository>` identify `https://github.com/<owner>/<repository>.git`, with schemes, host and both path components compared without case, path components written lowercase, an optional case-insensitive `.git` suffix and one trailing `/` removed before normalization;
+- each recognized path component, after suffix removal, is nonempty ASCII letters, digits, `_`, `-` or `.`, other than `.` and `..`; another SSH user, host, port or path shape, an HTTP URL, and a URL with a credential, query or fragment retain their given identity, subject to the credential refusal;
+- deriving or recording the identity changes no working folder's Git remote and runs no transport;
 - a sync refreshes the remote from its safely paired working folder before saving [[space-12](space.md#space-12)];
 - the store reads the file as it stands when a command needs it, with no reload ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)).
 
@@ -575,6 +578,14 @@ Where a home opens, closes and reopens seats against a stand-in instance and a s
 ### storage-54
 
 Where two seat homes materialize subscription access, the integration suite shall assert that their native Codex directories and credential files are distinct and owner-only, hold no refresh token, and are replaced atomically, and that a symlink at the directory or credential path is refused without touching its target [[storage-53](#storage-53)].
+
+### storage-55
+
+Where real cores pair working Git folders with project records, the integration suite shall verify their recorded code identities through registration and Save:
+
+- recognized GitHub SCP-style, SSH and HTTPS forms, including default ports, path-case differences, optional `.git` suffixes and trailing slashes, write the same lowercase HTTPS identity while each working folder's original `origin` stays unchanged [[storage-3](#storage-3)];
+- repeated saves from equivalent SSH and HTTPS folders keep the same project remote, with no transport needed to derive it [[storage-3](#storage-3)];
+- a custom host, SSH alias, nondefault port, other SSH user, extra path component, query, fragment and HTTP URL keep their given identities [[storage-3](#storage-3)].
 
 ## References
 

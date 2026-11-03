@@ -5,6 +5,8 @@
 
 ## Status
 
+Amended by [DR-213](213-public-github-code-opens-over-https.md) in shared code identity and project matching: recognized GitHub SSH and HTTPS code URLs share one HTTPS identity, while existing working folders keep their remotes.
+
 Amended by [DR-150](150-spex-space-product-and-destination.md) in the IDE destination's name: Space replaces Groups; group objects and their actions keep their names.
 
 Amended by [DR-144](144-bounded-session-storage.md) for bounded session roots, replay descriptors and session-owned chunks selected and published as one unit.

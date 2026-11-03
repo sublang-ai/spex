@@ -231,6 +231,7 @@ meta.md       The spec of specs
 | [DR-210](decisions/210-open-on-a-server-without-an-acknowledgement.md) | 210-open-on-a-server-without-an-acknowledgement.md | Open on a server connects immediately on first and later use, without a separate acknowledgement or per-device acceptance; keeps existing admission and visible progress |
 | [DR-211](decisions/211-a-panel-carries-its-own-way-out.md) | 211-a-panel-carries-its-own-way-out.md | A panel carries its own way out: visible contextual Close or Cancel across temporary views, nearest Escape, opener focus, pending guards and preserved attention; amends DR-198, DR-194 and DR-158 |
 | [DR-212](decisions/212-panel-dismissal-as-quiet-chrome.md) | 212-panel-dismissal-as-quiet-chrome.md | Borderless cross in contextual panel headers, full-width attached Members header with bounded body, integrated palette and fixed browser setup headers, and visual review in wide and narrow application context; amends DR-211 |
+| [DR-213](decisions/213-public-github-code-opens-over-https.md) | 213-public-github-code-opens-over-https.md | Public GitHub code opens over HTTPS: canonical shared code identity, equivalent project matching, unchanged existing working-folder remotes, legacy SSH clone compatibility, and credential guidance only on authentication failures; amends DR-103 and DR-132 |
 
 ## Packages
 

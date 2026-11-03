@@ -19,6 +19,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "nod
 import { parseProjectFile, type StorageDiagnostic } from "./app-storage.js";
 import { heldSessionLease, occupied, pruneEmptyFolders } from "./clone-moves.js";
 import { canonicalHost } from "./code-credentials.js";
+import { canonicalCodeRemote } from "./code-remote.js";
 import { portable, readJsonFile, sha256, StorageFormatError, UUID, writeApplicationFile } from "@sublang/spex/files";
 import { withGitCredential, type GitCredentialHandle } from "./git-credential.js";
 import {
@@ -3673,12 +3674,13 @@ class RepositorySync {
     const root = await git.ok(["rev-parse", "--show-toplevel"]);
     if (realpathSync(root) !== realpathSync(paired.path)) return;
     const remotes = await git.ok(["remote"]);
-    const remote = remotes.split(/\r?\n/).includes("origin")
+    const origin = remotes.split(/\r?\n/).includes("origin")
       ? await git.ok(["remote", "get-url", "origin"]) : null;
-    if (remote !== null) {
-      const checked = validateRemoteUrl(remote);
+    if (origin !== null) {
+      const checked = validateRemoteUrl(origin);
       if (!checked.ok) throw new SpaceStopped("save", { cause: "validation", message: checked.reason, guidance: retryGuidance(), retry: false });
     }
+    const remote = origin === null ? null : canonicalCodeRemote(origin);
     // A pair or clone may move while Git runs. Never write an old pair,
     // and read the latest file here so another writer's name survives.
     if (this.host.store.home.folderOf(this.key)?.path !== paired.path) return;
@@ -5019,11 +5021,11 @@ export class SpaceManager {
    * default instance where it is null, first — else "Code: <host>", the
    * remote's host as the reader set it, or the remote itself where it
    * names no host (DR-120, DR-127, DR-172). The Git system behind an
-   * instance is never named, and its transport URL and the project file
-   * stay as given. */
+   * instance is never named; recognized GitHub code uses its portable
+   * identity, and reading the glyph changes no file or Git remote. */
   codeAsShown(project: { remote?: unknown } | null | undefined, origin: string | null): { code: string | null; codeKind: CodeKind } {
     if (!project) return { code: null, codeKind: "unknown" };
-    const remote = typeof project.remote === "string" ? project.remote.trim() : "";
+    const remote = typeof project.remote === "string" ? canonicalCodeRemote(project.remote.trim()) : "";
     if (remote.length === 0) return { code: codeRemoteMissing(), codeKind: "none" };
     if (!this.originsReported()) return { code: null, codeKind: "unknown" };
     const at = this.reportingUnder(remote, origin);
@@ -6998,7 +7000,9 @@ export class SpaceManager {
   private async pairJoined(machine: RepositorySync, folder: string, step: (phase: SpaceSyncPhase) => void): Promise<SpaceSyncPhase | undefined> {
     const project = this.projectFile(machine.repository);
     const root = existsSync(folder) && await this.workTreeRoot(folder);
-    const remote = !root && project?.remote ? project.remote : undefined;
+    // Older shared records can still name the computer's SSH remote.
+    // Clone the portable address without changing that computer's Git.
+    const remote = !root && project?.remote ? canonicalCodeRemote(project.remote) : undefined;
     const at: SyncStep = remote ? "code" : "check";
     step({ phase: "running", op: "join", step: at, since: Date.now(), cancelable: false });
     await this.publish();
@@ -7032,12 +7036,12 @@ export class SpaceManager {
           await credential?.dispose();
         }
         if (run.code !== 0) {
-          // On a seat, an https remote at no signed-in instance's Git
-          // origin whose host holds no token of the member's — or one
-          // that will not read — names that host, carried in
-          // `credential` for a client to open Settings by (space-103,
+          // On a seat, an authentication failure at an https remote at
+          // no signed-in instance's Git origin whose host holds no token
+          // of the member's — or one that will not read — names that host,
+          // carried in `credential` for a client to open Settings by (space-103,
           // settings-48); any other failure shows as it is.
-          const needed = !brokered && !own ? this.credentialNeeded(remote) : null;
+          const needed = !brokered && !own ? this.credentialNeeded(remote, run) : null;
           if (needed !== null) {
             const message = token === UNREADABLE ? codeCredentialUnreadable(needed) : codeNeedsCredential(needed);
             return stopped({ cause: run.killed ?? "git", message, guidance: chooseFolder(), retry: false }, needed);
@@ -7092,9 +7096,12 @@ export class SpaceManager {
    * under no signed-in instance's Git origin; null off a seat, for an
    * ssh, scp-like, local or any other remote, whose failure shows as it
    * is, and at a signed-in instance's Git origin. Asked only where no
-   * token of the member's for that host served the clone. */
-  private credentialNeeded(remote: string): string | null {
+   * token of the member's for that host served the clone, and Git says
+   * authentication is required; a public download can fail for other
+   * reasons, which keep their actual explanation. */
+  private credentialNeeded(remote: string, run: GitRun): string | null {
     if (!this.host.seat || !httpRemote(remote)) return null;
+    if (run.killed || !/authentication failed|could not read (?:username|password)|terminal prompts disabled|(?:returned error:|http(?:\/\S+)?\s+)\s*401\b/i.test(run.stderr)) return null;
     const host = codeHostOf(remote);
     if (host === null) return null;
     return this.listedInstances().some((instance) => this.signedInAt(instance) && underOrigin(remote, instance.knownOrigin())) ? null : host;
