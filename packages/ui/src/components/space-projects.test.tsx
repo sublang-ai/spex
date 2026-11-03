@@ -60,7 +60,7 @@ const WORDS = {
     members: "4 members",
     research: "Research · acme/research",
     more: (name: string) => `More for ${name}`,
-    groupActs: ["Members", "Delete group"],
+    groupActs: ["Members", "New group…", "Delete group"],
     connected: "Connected",
     disconnect: "Disconnect",
     groupSessions: "Group sessions",
@@ -116,7 +116,7 @@ const WORDS = {
     members: "4 名成员",
     research: "Research · acme/research",
     more: (name: string) => `${name} 的更多操作`,
-    groupActs: ["成员", "删除群组"],
+    groupActs: ["成员", "新建群组…", "删除群组"],
     connected: "已连接",
     disconnect: "断开连接",
     groupSessions: "群组会话",
@@ -461,8 +461,8 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
     const computer = screen.getByTestId("space-own");
     expect(instance.contains(computer)).toBe(false);
     expect(within(computer).getByRole("heading", { level: 2 }).textContent).toBe(words.thisComputer);
-    // [space-1] [space-77] acme's More offers Members and deletion,
-    // with its contents reviewed in a separate confirmation.
+    // [space-1] [space-68] [space-77] acme's More offers Members,
+    // nested creation and deletion with a separate contents check.
     expect(screen.getByTestId("space-group-more-acme").getAttribute("aria-label")).toBe(words.more("acme"));
     expect(entries("space-group-more-acme")).toEqual(words.groupActs);
     fireEvent.click(screen.getByTestId("space-group-more-acme"));
