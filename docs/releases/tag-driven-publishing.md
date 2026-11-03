@@ -84,6 +84,7 @@ tarball remain Actions artifacts. npm publish and GitHub Release creation requir
 an actual channel-tag push, so manual dispatch cannot publish them.
 
 For targeted native-package repair, an app branch dispatch may explicitly set
-`build-only: true`. This skips reusable CI for that diagnostic run and leaves
+`build-only: true`. This runs the native generated-module-scope regression before packaging,
+skips reusable CI for that diagnostic run and leaves
 the final publication/checksum job ineligible. It is package evidence only;
 normal branch dispatch and every actual tag push still require full validation.

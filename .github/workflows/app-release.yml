@@ -107,6 +107,9 @@ jobs:
         run: node scripts/release-version.mjs prepare --channel=app
       - run: npm ci
       - run: npm run build
+      - name: Check module scope for package diagnostics
+        if: github.event_name == 'workflow_dispatch' && inputs.build-only
+        run: node --test packages/core/dist/compile-module-scope.integration.test.js
       - name: Prepare private macOS signing inputs
         if: runner.os == 'macOS'
         shell: python

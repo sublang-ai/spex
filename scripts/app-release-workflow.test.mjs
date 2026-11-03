@@ -285,3 +285,13 @@ test("release-47: targeted package diagnostics cannot satisfy the publication de
   assert(workflow.jobs.release.needs.includes("validate"));
   assert.equal(workflow.jobs.release.if, undefined, "default dependency success is required; a skipped validation cannot reach publication");
 });
+
+
+test("release-47: package-only diagnostics check real generated-module loading before signing on each platform", () => {
+  const steps = workflow.jobs.package.steps;
+  const at = steps.findIndex(s => s.name === "Check module scope for package diagnostics");
+  assert.equal(steps[at].if, "github.event_name == 'workflow_dispatch' && inputs.build-only");
+  assert.equal(steps[at].run, "node --test packages/core/dist/compile-module-scope.integration.test.js");
+  assert(at > steps.findIndex(s => s.run === "npm run build"));
+  assert(at < steps.findIndex(s => s.name === "Prepare private macOS signing inputs"));
+});

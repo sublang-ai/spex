@@ -106,7 +106,7 @@ When an app tag passes the existing CI, prepared-version, notes and build/test g
 When a maintainer explicitly dispatches a release workflow on a branch with a valid unused candidate tag, the workflow shall run the same version preparation, full channel validation and artifact checks as a tag release, making a runner-local tag only for notes and retaining verified artifacts, while npm publishing and GitHub Release creation require an actual channel-tag push ([DR-220](../decisions/220-tags-own-release-versions.md)):
 
 - native packaging may run in parallel with full validation, but final acceptance/publication still requires both;
-- explicit app `build-only` dispatch diagnoses the native jobs with reusable validation skipped, making final acceptance/publication ineligible even if those package jobs succeed; tag pushes always retain full validation;
+- explicit app `build-only` dispatch diagnoses the native jobs with reusable validation skipped, checking real SLC module-scope loading on each native platform before packaging and making final acceptance/publication ineligible even if package jobs succeed; tag pushes always retain full validation;
 - Windows full app validation includes the generated-module-scope regression alongside native storage checks.
 
 ### Package Hygiene
