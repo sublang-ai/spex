@@ -880,7 +880,7 @@ The core shall expose the Space surface through these commands and messages, eac
 - the device flow's `verificationUri` is the verification URL the host completed with the user code where it gave one [[git-host-3](git-host.md#git-host-3)], and `userCode` is carried for clients and tests, never shown by the surface [[space-3](#space-3)];
 - `space.state { state: GroupsState }` is broadcast to every client on each transition of any repository's machine [[space-31](#space-31)], on a sign-in's start and end, and when a full read of any instance starts or settles; long commands reply `accepted` at once and their outcome is state, never a hung reply ([DR-010](../decisions/010-interface-craft.md) §5);
 - each repository in a reply or broadcast carries its phase, placement lists and local units from one coherent reading: a read crossing an operation's progress or completion cannot pair an ending phase with earlier lists, and an older read cannot replace a newer completed plan [[space-8](#space-8)] [[space-33](#space-33)];
-- the interface re-pulls `space.get` when the surface mounts, on window focus, and — debounced — while the surface is shown, on `config.state` and `session.removed`, on a `session.state` for a session it held no entry for or whose `live`, `turnActive`, `title` or `turns` differ from its entry's, on an `intents.changed` naming no project with a held session whose `live` or `turnActive` is true, and on this client's accepted `intent.queue`, `intent.edit`, `intent.close` or `intent.remove`.
+- the interface re-pulls `space.get` when the surface mounts, on window focus, and — debounced — while the surface is shown, on `config.state` and `session.removed`, on a `session.state` for a session it held no entry for or whose `live`, `turnActive`, `title` or `turns` differ from its entry's, on an `intents.changed` naming a project with no held session whose `live` or `turnActive` is true, and on this client's accepted `intent.queue`, `intent.edit`, `intent.close` or `intent.remove`.
 
 #### space-30
 
@@ -1333,7 +1333,7 @@ Where the Space surface renders over the production store holding an idle sessio
 - `session.state`, `session.removed`, `intents.changed` and `config.state` delivered together re-read once, and a minute of silence re-reads nothing [[space-2](#space-2)] [[space-29](#space-29)];
 - a `session.state` starting that session's turn re-reads once, and further `session.state` for it with the same `live`, `turnActive`, `title` and `turns`, and `intents.changed` naming its project, re-read nothing while that turn runs [[space-2](#space-2)] [[space-29](#space-29)];
 - an intent this page queues while that turn runs re-reads once after the core accepts it [[space-2](#space-2)] [[space-29](#space-29)];
-- an `intents.changed` naming only a project with no running turn re-reads once while that turn runs [[space-29](#space-29)];
+- an `intents.changed` naming a project with no running turn re-reads once while that turn runs, alone or beside that turn's project [[space-2](#space-2)] [[space-29](#space-29)];
 - a `session.state` settling that turn re-reads once, and a new session's first `session.state` re-reads once [[space-2](#space-2)] [[space-29](#space-29)].
 
 #### space-56

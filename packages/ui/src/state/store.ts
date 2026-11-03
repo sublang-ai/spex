@@ -1761,9 +1761,10 @@ function placeState(
         break;
       case "intents.changed": {
         // A running turn's ledger moves with its records: its settle
-        // re-reads Space for them (space-29).
-        const projects = new Set(message.projectIds);
-        if (!get().sessions.some((s) => projects.has(s.projectId) && turnRuns(s))) noteSpaceChange();
+        // re-reads Space for them (space-29). An idle project batched
+        // beside it still re-reads now.
+        const running = new Set(get().sessions.filter(turnRuns).map((s) => s.projectId));
+        if (message.projectIds.some((projectId) => !running.has(projectId))) noteSpaceChange();
         // The one fold moved (DR-035): re-pull it, and refresh any
         // loaded History first page for the named projects.
         void get()

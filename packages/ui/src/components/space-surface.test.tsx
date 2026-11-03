@@ -202,8 +202,11 @@ describe("GROUPS: re-reads on events, never on a timer (space-2)", () => {
     expect(calls("intent.queue")).toHaveLength(1);
     reread(1);
 
-    // A ledger change of a project with no running turn still re-reads.
+    // A ledger change of a project with no running turn still re-reads,
+    // alone or batched with the running one's.
     announce({ type: "intents.changed", projectIds: ["other"] });
+    reread(1);
+    announce({ type: "intents.changed", projectIds: [KEY, "other"] });
     reread(1);
 
     // The turn settles: one re-read shows what it stored.
