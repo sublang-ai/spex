@@ -243,7 +243,6 @@ export class StopBound {
     if (this.terminating || this.finished) return;
     this.terminating = true;
     clearTimeout(this.settleTimer);
-    this.killTimer = setTimeout(() => { void this.kill(); }, this.bounds.killMs);
     const pids = await this.agents();
     if (this.finished) return;
     for (const pid of pids) {
@@ -251,7 +250,8 @@ export class StopBound {
       this.signalled.add(pid);
       signalProcess(pid, "SIGTERM");
     }
-
+    // Process discovery must not consume the agents' SIGTERM grace.
+    this.killTimer = setTimeout(() => { void this.kill(); }, this.bounds.killMs);
   }
 
   private async kill(): Promise<void> {
