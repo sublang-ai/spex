@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The Workshop switch (settings-58, DR-203): a constant of the
+// The Workshop switch (settings-58, DR-204): a constant of the
 // interface's code, never read from the environment, so every attendee
 // sees the same cards. On, the adapter choices are Claude and Codex and
 // a not-ready card offers the Workshop's setup guide (settings-71); the

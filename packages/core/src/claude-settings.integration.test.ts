@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // Claude Code's user settings in every run (core-service-155,
-// core-service-156, DR-204), on a real core over the fixture adapter,
+// core-service-156, DR-205), on a real core over the fixture adapter,
 // which records the environment each run starts with: the `env` of
 // `settings.json` reaches the Captain's control calls, which read no
 // settings file, as it reaches a player's; a variable the file no

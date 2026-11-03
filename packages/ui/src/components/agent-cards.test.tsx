@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The agent cards and the Workshop adapter limit (settings-58 to
-// settings-63, DR-203), rendered over fixture readiness, catalogs and
+// settings-63, DR-204), rendered over fixture readiness, catalogs and
 // configs: what each card says for each base-URL state and computer,
 // the one-model batch, and the batch setting official names behind a
 // third-party service to Provider default.
