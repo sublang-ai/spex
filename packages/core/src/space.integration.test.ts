@@ -678,6 +678,42 @@ test("space-39: local changes of every unit kind list in order, incoming units a
   await home.client.expectError("space.read", { repository: key, path: "absent.txt" }, "not_found");
 });
 
+test("space-130: overlapping reads share one recomputation, and a session's files are read in one batch, once", async (t) => {
+  const log = join(mkdtempSync(join(scratch, "git-calls-")), "calls");
+  const shim = holdingGit("cat-file --batch", { log });
+  const home = await startHome("relist", { env: { PATH: shim.path } });
+  t.after(() => home.stop());
+  const { key, clone } = await addFolder(home, home.projectDir);
+  await runTurn(home, key, "Fix the login redirect");
+  // Each logged line is `-C <dir> <command…>`; the working tree's
+  // recomputation stages it under a temporary index with `add -A`.
+  const calls = (command: string): string[] => readFileSync(log, "utf8").split("\n")
+    .filter((line) => line.split(" ")[1] === clone && line.split(" ").slice(2).join(" ").startsWith(command));
+  const recomputed = (): number => calls("add -A -- .").length;
+  const titled = (state: GroupsState): string | undefined => repositoryOf(state, key).local.find((unit) => unit.kind === "session")?.label;
+  const before = { recomputed: recomputed(), batches: calls("cat-file --batch").length };
+  shim.hold();
+  const first = home.client.expectOk("space.get", {});
+  await shim.held();
+  const later = [home.client.expectOk("space.get", {}), home.client.expectOk("space.get", {})];
+  // Both later reads reach the held clone and wait on its recomputation.
+  await sleep(500);
+  assert.equal(recomputed(), before.recomputed + 1, "nothing recomputes beside the held one");
+  shim.release();
+  for (const state of await Promise.all([first, ...later])) assert.equal(titled(state), "Fix the login redirect");
+  assert.equal(recomputed(), before.recomputed + 2, "the held recomputation and one the two later reads share (space-31)");
+  // The session's files: one batch, never a child per file (space-32), and
+  // the shared recomputation read none of them again (space-33).
+  const sessionFiles = git(clone, "ls-files", "--others", "--exclude-standard", "--", "sessions").split("\n").filter((file) => file && !file.includes(".assets/"));
+  assert.ok(sessionFiles.some((file) => file.includes(".chunks/")), sessionFiles.join("\n"));
+  const oids = new Set(git(clone, "hash-object", "--", ...sessionFiles).split("\n"));
+  assert.deepEqual(calls("cat-file blob").filter((line) => oids.has(line.split(" ").at(-1)!)), [], "no session file read alone");
+  assert.equal(calls("cat-file --batch").length, before.batches + 1, "one batch across the three reads");
+  assert.equal(titled(await home.client.expectOk("space.get", {})), "Fix the login redirect");
+  assert.equal(recomputed(), before.recomputed + 3);
+  assert.equal(calls("cat-file --batch").length, before.batches + 1, "an unchanged session is not read again (space-33)");
+});
+
 // ---------------------------------------------------------------------------
 // space-51: a clone no folder pairs, and the repair the reader answers
 // ---------------------------------------------------------------------------

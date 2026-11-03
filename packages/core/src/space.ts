@@ -1055,19 +1055,32 @@ function capText(text: string, maxBytes: number, maxLines: number): { text: stri
 
 type SessionChangeSummary = { title?: string; turns: number; at?: number };
 
+/** Session side summaries a clone keeps in memory (space-33). */
+const SUMMARIES_KEPT = 256;
+
+/** A session unit's files in a tree with their blob ids, its assets
+ * aside: what its summary reads, and the key it is kept by (space-33). */
+function sessionFiles(unit: StorageMergeUnit, tree: StorageTree): [string, string][] {
+  const files: [string, string][] = [];
+  for (const [file, oid] of tree) {
+    if (storageUnitName(file) !== unit.name || file.startsWith(`${unit.name}.assets/`)) continue;
+    if (file.split("/").some((part) => !part || part === "." || part === "..")) throw new StorageFormatError(file, "unsafe session summary path");
+    files.push([file, oid]);
+  }
+  return files;
+}
+
 /** Read the selected revision through the shared reader in a private
- * directory; the live session may already be on a different generation. */
-async function sessionSummary(unit: StorageMergeUnit, tree: StorageTree, blob: (oid: string | undefined) => Promise<Buffer | undefined>): Promise<SessionChangeSummary> {
+ * directory; the live session may already be on a different generation.
+ * Its files' bytes come in one read (space-32). */
+async function sessionSummary(unit: StorageMergeUnit, files: readonly [string, string][], blobs: (oids: string[]) => Promise<Map<string, Buffer>>): Promise<SessionChangeSummary> {
+  const bytes = await blobs(files.map(([, oid]) => oid));
   const stage = mkdtempSync(join(tmpdir(), "spex-session-summary-"));
   try {
-    for (const [file, oid] of tree) {
-      if (storageUnitName(file) !== unit.name || file.startsWith(`${unit.name}.assets/`)) continue;
-      if (file.split("/").some((part) => !part || part === "." || part === "..")) throw new StorageFormatError(file, "unsafe session summary path");
-      const bytes = await blob(oid);
-      if (!bytes) continue;
+    for (const [file, oid] of files) {
       const target = join(stage, file);
       mkdirSync(dirname(target), { recursive: true, mode: 0o700 });
-      writeFileSync(target, bytes, { mode: 0o600 });
+      writeFileSync(target, bytes.get(oid)!, { mode: 0o600 });
     }
     const { createSessionStore } = await import("@sublang/playbook/session-store");
     const history = await createSessionStore({ sessionsDir: join(stage, "sessions"), createSessionsDir: false }).readHistory(unit.name.slice("sessions/".length));
@@ -1247,6 +1260,15 @@ class RepositorySync {
    * ordinary reads never invalidate one another merely by starting. */
   private boundary = 0;
   private listsRevision = 0;
+  /** The working tree's lists recomputation running, and the one the
+   * reads asking meanwhile share, starting once it ends (space-31). */
+  private listing?: Promise<boolean>;
+  private nextListing?: Promise<boolean>;
+  /** The commits the current lists were computed from (space-33). */
+  private listed?: { repo: Extract<RepositoryInfo, { root: true }>; revision: number };
+  /** Session sides' summaries by the blob ids of their files, the most
+   * recently used last (space-33). */
+  private readonly summaries = new Map<string, Promise<SessionChangeSummary>>();
   get phase(): SpaceSyncPhase { return this.progress; }
   set phase(next: SpaceSyncPhase) { this.progress = next; this.boundary += 1; }
 
@@ -2152,20 +2174,21 @@ class RepositorySync {
   private async readState(recompute: boolean): Promise<MachineRead> {
     for (;;) {
       const read = this.reading();
-      const revision = this.listsRevision;
-      const repo = await this.readRepository();
+      let revision = this.listsRevision;
+      let repo = await this.readRepository();
       if (!this.stillReading(read) || revision !== this.listsRevision) continue;
-      // Eligibility is checked here too: diff's lazy plan read cannot
-      // replace a running operation's plan or a retained choice.
-      let accepted = revision;
-      if (recompute && !read.operation && this.phase.phase !== "choices" && repo.root && repo.head !== null) {
-        const refreshed = await this.refreshLists(repo, read, revision);
-        if (refreshed === null) continue;
-        accepted = refreshed;
+      if (recompute && this.listable(read, repo)) {
+        if (!(await this.recomputeLists(repo, read, revision))) continue;
+        // The row reads the commits its lists were computed from, whichever
+        // read computed them (space-33).
+        const listed = this.listed;
+        if (!listed || !this.stillReading(read) || listed.revision !== this.listsRevision) continue;
+        repo = listed.repo;
+        revision = listed.revision;
       }
       // A transition or another list commit can precede this
       // continuation. Validate before freezing the row, not after it.
-      if (!this.stillReading(read) || this.listsRevision !== accepted) continue;
+      if (!this.stillReading(read) || this.listsRevision !== revision) continue;
       const phase = this.phase;
       const local = this.local;
       const held = repo.root ? repo.placements : [];
@@ -2319,7 +2342,7 @@ class RepositorySync {
     }]));
     try {
       const kept = (placement: Placement): boolean => keepChoices && runs.get(placement.name)?.outcome?.kind === "choices";
-      if (keepChoices && placements.every(kept)) return revision;
+      if (keepChoices && placements.every(kept)) return this.listedAt(repo, revision);
       const mine = await this.workingTree();
       let againstHead: { plan: LastPlan; lists: Lists; unrelated?: boolean } | undefined;
       const headPlan = async () => (againstHead ??= await this.computeWorkingLists(repo.head!, mine, null));
@@ -2346,10 +2369,60 @@ class RepositorySync {
       if (fallback) this.unchecked = fallback.plan;
       this.settleLocal(fallback?.lists.local, placements);
       this.listsRevision += 1;
-      return this.listsRevision;
+      return this.listedAt(repo, this.listsRevision);
     } catch (error) {
       console.error(`spex: space listing failed: ${error instanceof Error ? error.message : String(error)}`);
-      return this.stillReading(read) && revision === this.listsRevision ? revision : null;
+      return this.stillReading(read) && revision === this.listsRevision ? this.listedAt(repo, revision) : null;
+    }
+  }
+
+  /** The lists at `revision` stand computed from `repo`'s commits. */
+  private listedAt(repo: Extract<RepositoryInfo, { root: true }>, revision: number): number {
+    this.listed = { repo, revision };
+    return revision;
+  }
+
+  /** Whether a read may recompute the lists: diff's lazy plan read cannot
+   * replace a running operation's plan or a retained choice. */
+  private listable(read: ReturnType<RepositorySync["reading"]>, repo: RepositoryInfo): repo is Extract<RepositoryInfo, { root: true }> {
+    return !read.operation && this.phase.phase !== "choices" && repo.root && repo.head !== null;
+  }
+
+  /** Recompute the working tree's lists for a read, one recomputation at
+   * a time (space-31): with none running, from the read's own commits;
+   * a read asking while one runs shares the next, which reads the clone
+   * again once that one ends, so overlapping reads cost two at most and
+   * each reads the working tree as of its asking or later. False where
+   * the read must read again. */
+  private recomputeLists(repo: Extract<RepositoryInfo, { root: true }>, read: ReturnType<RepositorySync["reading"]>, revision: number): Promise<boolean> {
+    if (this.listing) {
+      const next = (): Promise<boolean> => {
+        this.nextListing = undefined;
+        return this.startListing(() => this.relist());
+      };
+      return this.nextListing ??= this.listing.then(next, next);
+    }
+    return this.startListing(async () => (await this.refreshLists(repo, read, revision)) !== null);
+  }
+
+  private startListing(run: () => Promise<boolean>): Promise<boolean> {
+    const running = run().finally(() => {
+      if (this.listing === running) this.listing = undefined;
+    });
+    this.listing = running;
+    return running;
+  }
+
+  /** The shared recomputation: the clone read again, and again where a
+   * transition or another list commit overtook it. */
+  private async relist(): Promise<boolean> {
+    for (;;) {
+      const read = this.reading();
+      const revision = this.listsRevision;
+      const repo = await this.readRepository();
+      if (!this.stillReading(read) || revision !== this.listsRevision) continue;
+      if (!this.listable(read, repo)) return false;
+      if ((await this.refreshLists(repo, read, revision)) !== null) return true;
     }
   }
 
@@ -2526,6 +2599,50 @@ class RepositorySync {
     return run.stdout;
   }
 
+  /** Many blobs through one `cat-file --batch`, never a child per blob
+   * (space-32). */
+  private async blobs(oids: readonly string[]): Promise<Map<string, Buffer>> {
+    const wanted = [...new Set(oids)];
+    const read = new Map<string, Buffer>();
+    if (wanted.length === 0) return read;
+    const run = await this.git.run(["cat-file", "--batch"], { input: `${wanted.join("\n")}\n` });
+    if (run.code !== 0) throw new Error(`git cat-file --batch failed: ${failureSummary(run.stderr)}`);
+    // Each object answers `<oid> <type> <size>\n<bytes>\n`, in the order asked.
+    const out = run.stdout;
+    let at = 0;
+    for (const oid of wanted) {
+      const end = out.indexOf(0x0a, at);
+      const header = (end < 0 ? out.subarray(at) : out.subarray(at, end)).toString("utf8").split(" ");
+      const size = Number(header[2]);
+      if (end < 0 || header[0] !== oid || header[1] !== "blob" || !Number.isSafeInteger(size) || end + 1 + size > out.length) {
+        throw new Error(`git cat-file ${oid} failed: ${header.join(" ") || "no answer"}`);
+      }
+      read.set(oid, out.subarray(end + 1, end + 1 + size));
+      at = end + 1 + size + 1;
+    }
+    return read;
+  }
+
+  /** A session side's summary, kept by the blob ids of its files so an
+   * unchanged side is not read again (space-33). A failed one is not
+   * kept, and the least recently used leave beyond the bound. */
+  private summaryOf(unit: StorageMergeUnit, tree: StorageTree): Promise<SessionChangeSummary> {
+    let files: [string, string][];
+    try { files = sessionFiles(unit, tree); }
+    catch (error) { return Promise.reject(error); }
+    const key = sha256(files.map(([file, oid]) => `${file}\0${oid}`).join("\n"));
+    let pending = this.summaries.get(key);
+    if (pending) this.summaries.delete(key);
+    else {
+      pending = sessionSummary(unit, files, (oids) => this.blobs(oids));
+      const kept = pending;
+      kept.catch(() => { if (this.summaries.get(key) === kept) this.summaries.delete(key); });
+    }
+    this.summaries.set(key, pending);
+    while (this.summaries.size > SUMMARIES_KEPT) this.summaries.delete(this.summaries.keys().next().value!);
+    return pending;
+  }
+
   private async describe(units: StorageMergeUnit[], trees: StorageTrees, revs: PlanRevisions): Promise<Lists> {
     const blobs = new Map<string, Promise<Buffer>>();
     const blob = (oid: string | undefined): Promise<Buffer | undefined> => {
@@ -2539,7 +2656,7 @@ class RepositorySync {
       let byUnit = summaries.get(tree);
       if (!byUnit) { byUnit = new Map(); summaries.set(tree, byUnit); }
       let pending = byUnit.get(unit.name);
-      if (!pending) { pending = sessionSummary(unit, tree, blob); byUnit.set(unit.name, pending); }
+      if (!pending) { pending = this.summaryOf(unit, tree); byUnit.set(unit.name, pending); }
       return pending;
     };
     const context = { trees, revs, blob, summary };

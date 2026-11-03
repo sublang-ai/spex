@@ -582,7 +582,7 @@ playbooks:
    * core awaits a command that already read the clone. Later matching
    * commands run at once. With `skipFirst`, the first match after
    * `hold()` runs normally and the second is held. */
-  function holdingGit(args: string, options: { after?: boolean; skipFirst?: boolean } = {}): { path: string; hold(): void; held(): Promise<string>; release(): void } {
+  function holdingGit(args: string, options: { after?: boolean; skipFirst?: boolean; log?: string } = {}): { path: string; hold(): void; held(): Promise<string>; release(): void } {
     const dir = mkdtempSync(join(scratch, "holding-git-"));
     const real = execFileSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).trim();
     const hold = join(dir, "hold");
@@ -595,6 +595,8 @@ playbooks:
     const wait = `umask > "${held}.tmp"; mv "${held}.tmp" "${held}"; while [ -e "${claimed}" ]; do sleep 0.05; done`;
     writeFileSync(join(dir, "git"), [
       "#!/bin/sh",
+      // With `log`, every Git command's arguments, one line each.
+      ...(options.log ? [`printf '%s\\n' "$*" >> "${options.log}"`] : []),
       'case " $* " in',
       `  *" ${args} "*)`,
       ...(options.skipFirst ? [`    if [ -e "${hold}" ] && mkdir "${skipped}" 2>/dev/null; then exec "${real}" "$@"; fi`] : []),
