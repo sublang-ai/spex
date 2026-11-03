@@ -3511,6 +3511,21 @@ msgstr "Fast mode <0/> (unsupported)"
 msgid "file"
 msgstr "file"
 
+#. project-folder choices and saved-file notices, including dismissed reminders
+#: src/components/SpaceSurface.tsx
+msgid "Files & history"
+msgstr "Files & history"
+
+#. accessible name for project-folder choices and saved-file notices
+#: src/components/SpaceSurface.tsx
+msgid "Files & history — {count, plural, one {# notice} other {# notices}}"
+msgstr "Files & history — {count, plural, one {# notice} other {# notices}}"
+
+#. project-folder choices and saved-file notices; dismissed items do not count
+#: src/components/SpaceSurface.tsx
+msgid "Files & history ({count})"
+msgstr "Files & history ({count})"
+
 #: src/components/SpaceExplorer.tsx
 msgid "Files in {name}"
 msgstr "Files in {name}"
@@ -4345,17 +4360,9 @@ msgid "Locate folder…"
 msgstr "Locate folder…"
 
 #. review the project folders needed for saved conversations
-#. sidebar return to unfinished project folder choices, including those left for later
-#. sidebar return to unfinished project folder choices, including those left for later
-#: src/components/NavRail.tsx
 #: src/components/SpaceRepairs.tsx
 msgid "Locate project files"
 msgstr "Locate project files"
-
-#. accessible name and tooltip of a place-specific folder review shortcut
-#: src/components/NavRail.tsx
-msgid "Locate project files on {place}"
-msgstr "Locate project files on {place}"
 
 #: src/components/SpecGraph.tsx
 msgid "Lower the threshold"
@@ -4518,10 +4525,10 @@ msgstr "More for {name}"
 msgid "Move the focused Up next row"
 msgstr "Move the focused Up next row"
 
-#. confirms a folder task was dismissed without deleting saved conversations
+#. confirms preservation and names the return path for a dismissed folder task
 #: src/components/SpaceRepairs.tsx
-msgid "Moved to Dismissed. Your conversations are kept."
-msgstr "Moved to Dismissed. Your conversations are kept."
+msgid "Moved to Dismissed in Space → Files & history. Your conversations are kept."
+msgstr "Moved to Dismissed in Space → Files & history. Your conversations are kept."
 
 #. the folder field's refusal of an empty path
 #. the folder field's refusal of an empty path
@@ -5264,6 +5271,11 @@ msgstr "Open Settings to see what's wrong"
 #: src/components/CaptainHome.tsx
 msgid "Open Space"
 msgstr "Open Space"
+
+#. saved history can be read before its project folder is located
+#: src/App.tsx
+msgid "Open Space → Files & history to locate these project files and continue work."
+msgstr "Open Space → Files & history to locate these project files and continue work."
 
 #: src/components/CaptainHome.tsx
 msgid "Open the Academy example"
@@ -6411,21 +6423,9 @@ msgid "Return (Alt+Left)"
 msgstr "Return (Alt+Left)"
 
 #. a step: the reviewer reviews the change
-#. reopen notices and postponed project-folder choices
-#: src/components/SpaceSurface.tsx
 #: src/lib/step-words.ts
 msgid "Review"
 msgstr "Review"
-
-#. review the pending notices; postponed folder choices do not count
-#: src/components/SpaceSurface.tsx
-msgid "Review ({count})"
-msgstr "Review ({count})"
-
-#. accessible name for the notice review control
-#: src/components/SpaceSurface.tsx
-msgid "Review {count, plural, one {# notice} other {# notices}}"
-msgstr "Review {count, plural, one {# notice} other {# notices}}"
 
 #. the built-in /review playbook's intent, as its registry entry states it
 #: src/lib/playbook-intent.ts
@@ -8361,11 +8361,6 @@ msgstr "Use default"
 #: src/components/SpaceMembers.tsx
 msgid "Use Enter or commas between usernames."
 msgstr "Use Enter or commas between usernames."
-
-#. saved history can be read before its project folder is located
-#: src/App.tsx
-msgid "Use Locate project files in the sidebar to work with these files again."
-msgstr "Use Locate project files in the sidebar to work with these files again."
 
 #. a package name typed in Add… breaks the rule; keep org/name as it is
 #: src/components/EnvironmentSection.tsx

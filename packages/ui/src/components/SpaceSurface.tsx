@@ -70,7 +70,7 @@ export interface SpaceSurfaceProps {
   /** Open this place's Credentials section at a code host whose clone
    * failed for want of the member's credential (space-103, settings-48). */
   onAddCredential?(host: string): void;
-  /** A sidebar request opens review even when every folder was postponed. */
+  /** A saved conversation returns to its folder choices, even if dismissed. */
   reviewRequest?: number;
   /** Consume the request so a later ordinary visit keeps its own open state. */
   onReviewOpened?(): void;
@@ -323,6 +323,18 @@ export function SpaceSurface({ onOpenSession, onOpenProject, onAddCredential, re
     setRevealDismissed(reviewRequest);
     onReviewOpened?.();
   }, [reviewRequest, onReviewOpened]);
+  const focusedReview = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (!issuesOpen || revealDismissed === undefined || focusedReview.current === revealDismissed) return;
+    // Back to Space removes the reader's button. Land on the named
+    // toggle once its place's state has rendered, and keep it as the
+    // review's return target. Ordinary background reads never move focus.
+    const control = surfaceRef.current?.querySelector<HTMLButtonElement>('[data-testid="space-issues"]');
+    if (!control || control.disabled) return;
+    focusedReview.current = revealDismissed;
+    issuesOpener.current = control;
+    control.focus();
+  }, [issuesOpen, revealDismissed, groups]);
   // The reader's own Refresh (space-2), counted: it lets the issues
   // list lay itself out afresh (space-48, space-55) and an open members
   // list read the host again (space-62).
@@ -600,8 +612,8 @@ export function SpaceSurface({ onOpenSession, onOpenProject, onAddCredential, re
  * in to a Space" (space-3); while any Space is signed in, Refresh, which
  * reads every signed-in Space and reads "Reading…" until each read's
  * outcome (git-host-5), titled with when it last read — each read's
- * failure standing on its Space's heading; "⚠ <n> to fix", the count the
- * core carries, and Git's presence. Below 20rem the fields stack
+ * failure standing on its Space's heading; Files & history, carrying
+ * the core's pending-notice count, and Git's presence. Below 20rem the fields stack
  * (space-28). A header with nothing to say takes no room. */
 function HomeHeader({
   groups,
@@ -639,18 +651,18 @@ function HomeHeader({
     .reduce<number | null>((latest, instance) => Math.max(latest ?? 0, instance.readAt!), null);
   const row = "flex min-w-0 flex-col gap-1 @xs:flex-row @xs:flex-wrap @xs:items-center @xs:gap-x-3";
   const issuesLabel = noticeCount > 0
-    ? i18n._({ id: "Review ({count})", values: { count: noticeCount }, comment: "review the pending notices; postponed folder choices do not count" })
-    : i18n._({ id: "Review", comment: "reopen notices and postponed project-folder choices" });
+    ? i18n._({ id: "Files & history ({count})", values: { count: noticeCount }, comment: "project-folder choices and saved-file notices; dismissed items do not count" })
+    : i18n._({ id: "Files & history", comment: "project-folder choices and saved-file notices, including dismissed reminders" });
   const issuesName = noticeCount > 0
-    ? i18n._({ id: "Review {count, plural, one {# notice} other {# notices}}", values: { count: noticeCount }, comment: "accessible name for the notice review control" })
+    ? i18n._({ id: "Files & history — {count, plural, one {# notice} other {# notices}}", values: { count: noticeCount }, comment: "accessible name for project-folder choices and saved-file notices" })
     : issuesLabel;
   const issues = groups.diagnostics.length > 0 ? (
     <button type="button" data-testid="space-issues" aria-expanded={issuesOpen} aria-label={issuesName} disabled={issuesPending}
-      className={`flex items-center gap-1 text-sm hover:underline ${noticeCount > 0 ? "text-amber-700 dark:text-amber-300" : "text-neutral-500"}`}
+      className={`flex min-w-0 max-w-full items-center gap-1 text-sm hover:underline ${noticeCount > 0 ? "text-amber-700 dark:text-amber-300" : "text-neutral-500"}`}
       onClick={(event) => onIssuesOpen(!issuesOpen, event.currentTarget)}
     >
       {noticeCount > 0 ? <span aria-hidden>⚠</span> : null}
-      {issuesLabel}
+      <span className="min-w-0 text-left">{issuesLabel}</span>
     </button>
   ) : null;
   const empty = groups.git.ok && listed && !refresh && !issues;

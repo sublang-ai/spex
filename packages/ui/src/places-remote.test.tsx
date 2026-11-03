@@ -47,6 +47,7 @@ import type {
   RepositoryState,
   SeatState,
   ServerListing,
+  SessionInfo,
 } from "@sublang/spex-core/protocol";
 
 import { App } from "./App.js";
@@ -510,9 +511,9 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
     expect(within(palette).getByTestId(`palette-project-p2@${ALPHA.place}`).textContent).toContain("build-box");
     expect(within(palette).queryByTestId(`palette-project-places-p2@${ALPHA.place}`)).toBeNull();
     expect(within(palette).queryByTestId("palette-project-places-p1")).toBeNull();
-    // The shell reads once for the persistent folder-review shortcut;
-    // the palette adds no separate seat-group read (DR-196).
-    expect(callsOf(beta, "space.get")).toHaveLength(1);
+    // The palette reads the groups of this computer; it needs no
+    // background read of an empty server for a recovery shortcut.
+    expect(callsOf(beta, "space.get")).toHaveLength(0);
 
     // [run-view-171] [run-view-168] with every project of the groups
     // open here, the list says so; with the groups listing none, that
@@ -546,36 +547,87 @@ describe("run-view-171: a remote place offers no picker, reveal or path entry", 
     expect(within(overview).queryByText("Open folder…")).toBeNull();
   });
 
-  test("a deferred-only server keeps its sidebar return with no project or warning count", async () => {
+  test.each([false, true])("an empty server keeps dismissed recovery in Space review (collapsed: %s)", async (collapsed) => {
     const deferred = { ...REPAIR_ISSUE, repair: { ...REPAIR_ISSUE.repair!, declined: 123 } };
     const pending = { ...placeGroups(undefined, [deferred]), issues: 0 };
     beta.answers["space.get"] = pending;
     betaStore.setState({ space: undefined, projects: [] });
+    useAppStore.setState({ railCollapsed: collapsed });
     render(<App />);
     await settle();
-    const testId = `sidebar-locate-files@${BETA.place}`;
-    const link = screen.getByTestId(testId);
-    expect(link.getAttribute("aria-label")).toBe("Locate project files on gpu-box");
-    fireEvent.click(link);
+    expect(screen.queryByTestId(`sidebar-locate-files@${BETA.place}`)).toBeNull();
+    // An empty server creates no project heading just for recovery.
+    expect(screen.queryAllByTestId("sidebar-place-heading").map((row) => row.textContent)).not.toContain("gpu-box");
+    goTo("Space");
+    pick("gpu-box");
     await settle();
-    expect(screen.getByTestId("space-issues-list")).toBeTruthy();
-    expect(screen.getByTestId("space-issues").textContent).toBe("Review");
+    expect(shownPlace()).toBe("gpu-box");
+    expect(screen.queryByTestId("space-issues-list")).toBeNull();
+    expect(screen.getByTestId("space-issues").textContent).toBe("Files & history");
+    fireEvent.click(screen.getByRole("button", { name: "Files & history" }));
+    const dismissed = screen.getByTestId("space-dismissed") as HTMLDetailsElement;
+    expect(dismissed.open).toBe(false);
+    fireEvent.click(dismissed.querySelector("summary")!);
+    expect(dismissed.open).toBe(true);
     expect(screen.getByTestId("space-repair-declined")).toBeTruthy();
     expect(screen.getByText("Conversation history is saved on gpu-box. Project files must be available there for further work.")).toBeTruthy();
     expect(screen.queryByTestId("space-repair-choose")).toBeNull();
     expect(betaStore.getState().projects).toEqual([]);
     expect(useAppStore.getState().space?.issues ?? 0).toBe(0);
     fireEvent.click(screen.getByRole("button", { name: "Dashboard" }));
-    act(() => useAppStore.setState({ railCollapsed: true }));
-    const collapsed = screen.getByTestId(testId);
-    expect(collapsed.tagName).toBe("BUTTON");
-    expect(collapsed.getAttribute("aria-label")).toBe("Locate project files on gpu-box");
-    fireEvent.click(collapsed);
+    goTo("Space");
     await settle();
+    expect(shownPlace()).toBe("gpu-box");
+    fireEvent.click(screen.getByRole("button", { name: "Files & history" }));
+    const returned = screen.getByTestId("space-dismissed") as HTMLDetailsElement;
+    expect(returned.open).toBe(false);
+    fireEvent.click(returned.querySelector("summary")!);
     expect(screen.getByTestId("space-repair-declined")).toBeTruthy();
     expect(callsOf(beta, "project.rebind")).toEqual([]);
     expect(callsOf(beta, "space.repair.decline")).toEqual([]);
     expect(callsOf(local, "project.rebind")).toEqual([]);
+  });
+
+  test("a saved conversation returns to its server's dismissed files and history", async () => {
+    const now = Date.now();
+    const saved: SessionInfo = {
+      id: "saved-server-conversation", projectId: REPAIR.repository!, projectPath: "/code/infra",
+      title: "Plan server deployment", createdAt: now - 1000, endedAt: now,
+      live: false, failed: false, turns: 1, players: [], initialVisible: [],
+    };
+    const deferred = { ...REPAIR_ISSUE, repair: { ...REPAIR, declined: now,
+      conversations: [{ id: saved.id, title: saved.title }] } };
+    const pending = { ...placeGroups(undefined, [deferred]), issues: 0 };
+    beta.answers["space.get"] = pending;
+    betaStore.setState({ space: pending, projects: [], sessions: [saved] });
+    render(<App />);
+    goTo("Space");
+    pick("gpu-box");
+    await settle();
+    fireEvent.click(screen.getByRole("button", { name: "Files & history" }));
+    fireEvent.click(screen.getByTestId("space-dismissed").querySelector("summary")!);
+    fireEvent.click(screen.getByRole("button", { name: saved.title }));
+    await settle();
+    expect(screen.getByTestId("saved-conversation-reader")).toBeTruthy();
+    expect(callsOf(beta, "history.get")).toEqual([{ sessionId: saved.id, afterSeq: 0 }]);
+    expect(callsOf(local, "history.get")).toEqual([]);
+    // Changing a global surface's place leaves the conversation at its
+    // original server; its contextual return must select that server again.
+    goTo("Settings");
+    pick("This computer");
+    await settle();
+    fireEvent.keyDown(window, { key: "2", metaKey: true });
+    await settle();
+    expect(screen.getByTestId("saved-conversation-reader")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Back to Space" }));
+    await settle();
+    expect(shownPlace()).toBe("gpu-box");
+    expect(screen.getByTestId("space-issues-list")).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByTestId("space-issues"));
+    expect((screen.getByTestId("space-dismissed") as HTMLDetailsElement).open).toBe(true);
+    expect(screen.getByTestId("space-repair-declined")).toBeTruthy();
+    expect(betaStore.getState().projects).toEqual([]);
+    expect(callsOf(beta, "project.rebind")).toEqual([]);
   });
 
   test("a repair row: this computer's offers the proposed folder and a path, a seat's neither", async () => {

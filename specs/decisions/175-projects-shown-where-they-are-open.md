@@ -16,6 +16,8 @@ Amended by [DR-196](196-a-review-count-and-a-way-back.md) in sidebar availabilit
 
 Amended by [DR-209](209-a-project-row-with-one-menu.md) in the code phrase and project-row controls: absent code remote is neutral configuration information, server guidance concerns opening code alone, and alternate opening destinations share one overflow.
 
+Amended by [DR-214](214-project-navigation-and-contextual-recovery.md) in sidebar availability: saved-record folder tasks no longer add an entry or a place heading; headings stand only for places holding or opening projects.
+
 ## Context
 
 - A member signed in to a space, opened a seat on its server and saw, in the left panel, the server's name as a heading over nothing, beside "This computer" and its projects; it read as the group they had joined, broken.

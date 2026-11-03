@@ -3511,6 +3511,21 @@ msgstr "快速模式 <0/>（不支持）"
 msgid "file"
 msgstr "文件"
 
+#. project-folder choices and saved-file notices, including dismissed reminders
+#: src/components/SpaceSurface.tsx
+msgid "Files & history"
+msgstr "文件与历史记录"
+
+#. accessible name for project-folder choices and saved-file notices
+#: src/components/SpaceSurface.tsx
+msgid "Files & history — {count, plural, one {# notice} other {# notices}}"
+msgstr "文件与历史记录 — {count, plural, other {# 条提醒}}"
+
+#. project-folder choices and saved-file notices; dismissed items do not count
+#: src/components/SpaceSurface.tsx
+msgid "Files & history ({count})"
+msgstr "文件与历史记录（{count}）"
+
 #: src/components/SpaceExplorer.tsx
 msgid "Files in {name}"
 msgstr "{name} 中的文件"
@@ -4345,17 +4360,9 @@ msgid "Locate folder…"
 msgstr "查找文件夹…"
 
 #. review the project folders needed for saved conversations
-#. sidebar return to unfinished project folder choices, including those left for later
-#. sidebar return to unfinished project folder choices, including those left for later
-#: src/components/NavRail.tsx
 #: src/components/SpaceRepairs.tsx
 msgid "Locate project files"
 msgstr "查找项目文件"
-
-#. accessible name and tooltip of a place-specific folder review shortcut
-#: src/components/NavRail.tsx
-msgid "Locate project files on {place}"
-msgstr "查找 {place} 上的项目文件"
 
 #: src/components/SpecGraph.tsx
 msgid "Lower the threshold"
@@ -4518,10 +4525,10 @@ msgstr "{name} 的更多操作"
 msgid "Move the focused Up next row"
 msgstr "移动“接下来”中选中的行"
 
-#. confirms a folder task was dismissed without deleting saved conversations
+#. confirms preservation and names the return path for a dismissed folder task
 #: src/components/SpaceRepairs.tsx
-msgid "Moved to Dismissed. Your conversations are kept."
-msgstr "已移至“已忽略”。会话仍会保留。"
+msgid "Moved to Dismissed in Space → Files & history. Your conversations are kept."
+msgstr "已移至 Space → 文件与历史记录 → 已忽略。对话仍会保留。"
 
 #. the folder field's refusal of an empty path
 #. the folder field's refusal of an empty path
@@ -5264,6 +5271,11 @@ msgstr "打开设置查看问题所在"
 #: src/components/CaptainHome.tsx
 msgid "Open Space"
 msgstr "打开 Space"
+
+#. saved history can be read before its project folder is located
+#: src/App.tsx
+msgid "Open Space → Files & history to locate these project files and continue work."
+msgstr "打开 Space → 文件与历史记录，找到这些项目文件后即可继续工作。"
 
 #: src/components/CaptainHome.tsx
 msgid "Open the Academy example"
@@ -6411,21 +6423,9 @@ msgid "Return (Alt+Left)"
 msgstr "返回（Alt+←）"
 
 #. a step: the reviewer reviews the change
-#. reopen notices and postponed project-folder choices
-#: src/components/SpaceSurface.tsx
 #: src/lib/step-words.ts
 msgid "Review"
 msgstr "审查"
-
-#. review the pending notices; postponed folder choices do not count
-#: src/components/SpaceSurface.tsx
-msgid "Review ({count})"
-msgstr "查看（{count}）"
-
-#. accessible name for the notice review control
-#: src/components/SpaceSurface.tsx
-msgid "Review {count, plural, one {# notice} other {# notices}}"
-msgstr "查看 {count, plural, other {# 条提示}}"
 
 #. the built-in /review playbook's intent, as its registry entry states it
 #: src/lib/playbook-intent.ts
@@ -8361,11 +8361,6 @@ msgstr "使用默认"
 #: src/components/SpaceMembers.tsx
 msgid "Use Enter or commas between usernames."
 msgstr "用回车或逗号分隔用户名。"
-
-#. saved history can be read before its project folder is located
-#: src/App.tsx
-msgid "Use Locate project files in the sidebar to work with these files again."
-msgstr "如需继续处理这些文件，请使用侧栏中的“查找项目文件”。"
 
 #. a package name typed in Add… breaks the rule; keep org/name as it is
 #: src/components/EnvironmentSection.tsx
