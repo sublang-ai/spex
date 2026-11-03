@@ -57,8 +57,10 @@ console.log("real SLC strict checks, native FSM and linked runtime imports passe
         if (args[0] === "--version") { onLine("v24.1.0"); return 0; }
         compilerCalls++;
         assert.equal(JSON.parse(readFileSync(manifest, "utf8")).type, "module", "boundary exists before compiler starts");
-        const code = await defaultSpawner(command, args, cwd, onLine, signal, env);
+        const output: string[] = [];
+        const code = await defaultSpawner(command, args, cwd, line => { output.push(line); onLine(line); }, signal, env);
         assert.equal(code, 0);
+        assert(existsSync(join(generated, `${LINKED_ID}.fsm.ts`)), JSON.stringify({ command, args, cwd, generated, output }, null, 2));
         // Only generation is stubbed; use SLC's real checker and native
         // loader in a fresh Node so cached package scopes cannot hide bugs.
         const checked = spawnSync(process.execPath, [probe], { cwd: project, encoding: "utf8", timeout: 60_000 });
@@ -69,6 +71,7 @@ console.log("real SLC strict checks, native FSM and linked runtime imports passe
         playbookId: LINKED_ID, source: { text: readFileSync(join(fixture, `${LINKED_ID}.md`), "utf8") },
         roles: ["coder", "reviewer"], command: LINKED_ID, intent: "Review", libraryDir: join(project, "library"),
         env: {
+          ...process.env,
           SPEX_SLC: `${process.execPath} ${stub}`,
           // The configured compiler is a Node script, also when this
           // integration test is driven by the signed Electron runtime.

@@ -117,3 +117,17 @@ for (const failure of ["dmg-sign", "dmg-invalid", "dmg-timeout", "inner-validati
     if (failure === "inner-validation") assert(f.calls.some(c => c.command === "hdiutil" && c.args[0] === "detach"));
   });
 }
+
+test("app-shell-46: failed service stdout is diagnostic and credentials remain redacted", async t => {
+  const f = await fixture(t);
+  const recorded = f.run;
+  const run = async (command, args, options) => {
+    if (basename(command) === "xcrun" && args[0] === "notarytool") throw Object.assign(new Error("private-password"), { code: 68, stdout: "service upload failed private-key-id private-issuer", stderr: "" });
+    return recorded(command, args, options);
+  };
+  await assert.rejects(packageMac({ ...f, run, outputDir: f.root }), error => {
+    assert.match(error.message, /service upload failed/);
+    assert.doesNotMatch(error.message, /private-key-id|private-issuer|private-password/);
+    return true;
+  });
+});

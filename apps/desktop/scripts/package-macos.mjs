@@ -52,7 +52,7 @@ export async function packageMac({ env = process.env, outputDir = join(appDir, "
     } catch (error) {
       // execFile errors contain the entire command line, including P12 or
       // keychain passwords for security(1). Never relay that error object.
-      throw new Error(`${basename(command)} failed (${error.code ?? error.signal ?? "unknown"}): ${redact(String(error.stderr ?? ""))}`);
+      throw new Error(`${basename(command)} failed (${error.code ?? error.signal ?? "unknown"}): ${redact(String(error.stderr ?? "") + String(error.stdout ?? ""))}`);
     }
   }
   const builder = installed.resolve("electron-builder/out/cli/cli.js");

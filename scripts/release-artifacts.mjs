@@ -32,7 +32,7 @@ export function verifyApp(root, release, { output = join(root, "apps/desktop/rel
   assert(statSync(file).size > 0, "installer is empty");
   const actual = inspect ? inspect(file) : mac
     ? execFileSync("/usr/bin/plutil", ["-extract", "CFBundleShortVersionString", "raw", "-o", "-", join(output, "mac-arm64/Spex.app/Contents/Info.plist")], { encoding: "utf8" }).trim()
-    : execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", "(Get-Item -LiteralPath $env.SPEX_RELEASE_INSTALLER).VersionInfo.ProductVersion"], { encoding: "utf8", env: { ...process.env, SPEX_RELEASE_INSTALLER: file } }).trim();
+    : execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", "(Get-Item -LiteralPath $env:SPEX_RELEASE_INSTALLER).VersionInfo.ProductVersion"], { encoding: "utf8", env: { ...process.env, SPEX_RELEASE_INSTALLER: file } }).trim();
   assert.equal(actual, release.version, "native product version differs from tag");
   const compiler = JSON.parse(readFileSync(join(output, `compiler-check-${platform}-${mac ? "arm64" : "x64"}.json`), "utf8"));
   assert.equal(compiler.status, "passed");
