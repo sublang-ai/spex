@@ -52,6 +52,7 @@ import { i18n } from "../i18n.js";
 import { Icon } from "./Icon.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { RunningMark } from "./RunningMark.js";
+import { PublishSetup } from "./PublishSetup.js";
 import { PublishControl } from "./PublishControl.js";
 import { RegistryAccount, registrySignInTitle, useRegistrySignIn } from "./RegistryAccount.js";
 import { MoreMenu, type MenuEntry } from "./SpaceMenu.js";
@@ -464,7 +465,16 @@ function PackageRow({
         />
       ) : null}
       {publishing > 0 && direct && publishable && request?.kind === "path" ? (
-        <PublishControl
+        name.startsWith("local/") ? <PublishSetup
+          key={publishing}
+          repository={repository}
+          name={name}
+          path={request.path}
+          target={target}
+          opened autoAsk={autoAsk}
+          onAutoAsked={() => setAutoAsk(false)}
+          onClose={() => { setPublishing(0); moreRef.current?.focus(); }}
+        /> : <PublishControl
           key={publishing}
           repository={repository}
           name={name}

@@ -45,7 +45,7 @@ import { i18n } from "../i18n.js";
 import { AgentChip } from "./AgentChip.js";
 import { AgentEditorPopover } from "./AgentEditor.js";
 import { Icon } from "./Icon.js";
-import { PublishControl } from "./PublishControl.js";
+import { PublishSetup } from "./PublishSetup.js";
 
 const NEW_PREFIX = "new:";
 
@@ -461,7 +461,7 @@ export function DraftRegisterTab({
         </button>
       </div>
       <div className="flex flex-col gap-1">
-        <PublishControl repository={draft.projectId} name={packageName} path={draftPackagePath(draft)} target={publishTargetOf(environment, registryAccounts)} onNavigate={onNavigate} />
+        <PublishSetup draft={draft} repository={draft.projectId} name={packageName} path={draftPackagePath(draft)} target={publishTargetOf(environment, registryAccounts)} />
         {hasRow ? (
           <button
             type="button"

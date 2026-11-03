@@ -1383,9 +1383,9 @@ test("playbook-library-104: New playbook uses the first authorized registry name
   const meta = parseYaml(readFileSync(join(folder, "spex-packages", "workshop", "intake", "meta.yaml"), "utf8")) as Record<string, unknown>;
   assert.deepEqual([meta.org, meta.name, meta.license, meta.description], ["workshop", "intake", "BSD-3-Clause", "The intake playbook"]);
 
-  // The one-shot compile asks no one: the project's defaults stand —
-  // the org the registry of its instance lists, no license where none
-  // is derived (playbook-library-69).
+  // The one-shot compile asks for no publishing choice: registry-only
+  // suggestions stand where available, with a local name otherwise and
+  // no license where none is derived (playbook-library-69).
   const oneShot = (id: string, playbookId: string) => client.command("compile.run", {
     projectId: id, playbookId, sourceText: "# Solo\n\nRoles:\n\n- Helper\n", roles: ["Helper"], command: playbookId, intent: "a solo workflow", bindings: { Helper: "dev.coder" },
   });
@@ -1413,14 +1413,19 @@ test("playbook-library-104: New playbook uses the first authorized registry name
   assert.deepEqual(await orgsOf(), ["", "", "alpha-two"], "signed out of the first");
   assert.equal(Home.load(state).account(first.url)?.login, "tester", "the Space account stays signed in");
   writeFileSync(license, cases[0]![0]!);
-  const packageFiles = () => readdirSync(join(folder, "spex-packages"), { recursive: true }).map(String).sort();
-  const beforeFiles = packageFiles();
   const beforeCompiles = harness.slcCalls.length;
-  const missingOrg = await oneShot(projectId, "licensed");
-  assert.ok(!missingOrg.ok && missingOrg.error.code === "invalid_request", JSON.stringify(missingOrg));
-  assert.match(missingOrg.error.message, /Org.*New playbook|New playbook.*Org/);
-  assert.deepEqual(packageFiles(), beforeFiles, "an implicit compile without an Org writes no package files");
-  assert.equal(harness.slcCalls.length, beforeCompiles, "no compiler runs before the namespace is chosen");
+  before = [orgsAsked(first), orgsAsked(second)];
+  const localReply = await oneShot(projectId, "offline-default");
+  assert.ok(localReply.ok, JSON.stringify(localReply));
+  const local = manifestOf(folder, "local", "offline-default");
+  assert.deepEqual([local.org, local.license], ["local", "Apache-2.0"], "a known project license is retained without choosing a publishing namespace");
+  assert.equal(harness.slcCalls.length, beforeCompiles + 1, "local compilation runs without a registry grant");
+  assert.deepEqual([orgsAsked(first) - before[0]!, orgsAsked(second) - before[1]!], [0, 0], "no Space or registry authority is consulted while signed out");
+  rmSync(license);
+  const unlicensedReply = await oneShot(projectId, "offline-unlicensed");
+  assert.ok(unlicensedReply.ok, JSON.stringify(unlicensedReply));
+  const unlicensed = manifestOf(folder, "local", "offline-unlicensed");
+  assert.deepEqual([unlicensed.org, "license" in unlicensed], ["local", false], "local fallback invents no license");
 
   // An explicit local name creates the package without a registry
   // grant, and its existing manifest remains the authority on compile.

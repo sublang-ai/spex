@@ -265,17 +265,18 @@ implementing with `/code`. See [Approvals](approvals.md) for permissions.
 ## Publish specs, skills, and playbooks
 
 Publishing needs a namespace your registry account can use. It is the
-first part of `namespace/package`, called **Org** in the CLI and IDE.
+first part of `namespace/package`, called **Org** in the CLI and
+**Publish under** in the playbook publishing setup.
 At Spex Space, sign in to your
 [registry account](https://spex.sublang.ai/account?scope=registry), then
 check [Your orgs](https://spex.sublang.ai/account/orgs?scope=registry).
 Your sign-in name becomes a personal namespace when it is valid and
 available; you can also claim an organization you own. Use a name listed
 there, rather than assuming a local username or a Space group grants it.
-The Org field suggests only names authorized by that registry account.
-Without a registry sign-in or available names it starts empty; you can
-still enter a name to author locally. Existing draft and package names
-remain unchanged.
+The publishing setup suggests only names authorized by that registry
+account. Without available names its **Publish under** field starts
+empty. Creating, compiling and adding a playbook need no registry sign-in
+or publishing namespace. Existing draft and package names remain unchanged.
 
 Packages are public by default. **Private packages** restricts a
 namespace's packages to its personal owner or organization members.
@@ -341,7 +342,8 @@ API token is needed.
 
 1. Choose **New playbook** on the project's **Playbooks** tab for a
    playbook of the project, or on **Playbooks** for a global one. Enter
-   a lowercase id, **Org**, and **License**.
+   a lowercase **Command** and choose **Start writing**. Its package starts
+   under `spex-packages/local/<id>/` without a license.
 2. Describe what the workflow does, who does what, and when it is done.
    Inspect **Source**, or supply text with **Source → Paste → Use as source**.
 3. Select the answering agent in the conversation header, then **Compile**.
@@ -352,8 +354,11 @@ API token is needed.
    choose **Add**: the playbook runs where you created it. Try its
    command in a new task and review its work.
 5. Still on **Add**, choose **Publish**, which reads **Sign in to
-   publish** while you are signed out. Review the registry, the package's
-   name and version, the files and the account, then confirm **Publish**.
+   publish** while you are signed out. Choose **Publish under** and
+   **License**, then **Preview**. Review the registry, the package's
+   name, version and license, the files and the account, then confirm
+   **Publish**. These publishing details leave your local package,
+   command and environment requests unchanged.
    Success shows the published version and a link to its page; **Its
    package** opens its row on the **Packages** tab.
 

@@ -1151,12 +1151,11 @@ describe("playbook-library-35: the example card", () => {
     expect(card.textContent).not.toContain("from 'xstate'");
   });
 
-  test("the prefill waits for New playbook's Org and License", async () => {
-    // No defaults read: the fields stand empty for the person to fill.
+  test("the prefill is available without publishing setup", async () => {
     await renderTab();
     const prefill = screen.getByTestId("example-prefill") as HTMLButtonElement;
-    expect(prefill.disabled).toBe(true);
-    expect(prefill.title).toBe("Org and License first");
+    expect(prefill.disabled).toBe(false);
+    expect(prefill.title).not.toBe("Org and License first");
   });
 });
 

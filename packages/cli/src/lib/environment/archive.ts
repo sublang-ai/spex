@@ -9,8 +9,9 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { parseDocument } from "yaml";
 
-import { checkRelease, parseManifestText, portablePathIssues, readPublishableRelease, sha256Hex, type Issue, type Manifest, type ReleaseFile } from "./format.js";
+import { checkRelease, FormatError, parseManifestText, portablePathIssues, publishIssues, readRelease, sha256Hex, type Issue, type Manifest, type ReleaseFile } from "./format.js";
 import type { RegistrySource } from "./registry.js";
 import { gunzip, gzip, readTar, writeTar } from "./tar.js";
 
@@ -80,13 +81,46 @@ export function unpackRelease(tgz: Uint8Array, pkg: string): UnpackedRelease {
   return { manifest: parsed.manifest, files, data, issues };
 }
 
-/** Publish a release folder as it is (environments-10): read and check
- * it as the core reads any release, with the fields the registry
- * requires, pack its declared files, upload. */
+/** Explicit metadata for a publication snapshot; the local package keeps
+ * its own identity and license (environments-10). */
+export interface PublicationFields { org: string; license: string }
+
+/** Capture and validate the exact bytes a publication will upload. No file
+ * is written, including when publication metadata changes the snapshot. */
+export async function preparePublication(dir: string, publication?: PublicationFields): Promise<{ source: Manifest; manifest: Manifest; files: ReleaseFile[]; archive: Uint8Array }> {
+  const release = await readRelease(dir);
+  const captured = release.files.map((file) => {
+    const data = readFileSync(join(dir, ...file.path.split("/")));
+    if (sha256Hex(data) !== file.sha256) {
+      throw new FormatError([{ path: file.path, rule: "changed", message: "changed while preparing publication; retry" }]);
+    }
+    return { path: file.path, executable: file.executable, data };
+  });
+  const meta = captured.find((file) => file.path === "meta.yaml")!;
+  const parsed = parseManifestText(meta.data.toString("utf8"));
+  if (!parsed.manifest || parsed.issues.length) throw new FormatError(parsed.issues);
+  const source = parsed.manifest;
+  if (publication) {
+    if (!publication.license || publication.license.trim() !== publication.license || /[\r\n]/.test(publication.license)) {
+      throw new FormatError([{ path: "meta.yaml", rule: "field", message: "license must be a nonempty trimmed line" }], "publishing");
+    }
+    const doc = parseDocument(meta.data.toString("utf8"));
+    doc.set("org", publication.org);
+    doc.set("license", publication.license);
+    meta.data = Buffer.from(doc.toString({ lineWidth: 0 }));
+  }
+  const archive = packFiles(source.name, captured);
+  const checked = unpackRelease(archive, source.name);
+  const issues = [...checked.issues, ...(checked.manifest ? publishIssues(checked.manifest) : [])];
+  if (!checked.manifest || issues.length) throw new FormatError(issues, "publishing");
+  return { source, manifest: checked.manifest, files: checked.files, archive };
+}
+
+/** Publish a release folder as it is (environments-10), uploading the
+ * same captured bytes that passed validation. */
 export async function publishRelease(registry: RegistrySource, dir: string): Promise<{ name: string; version: string; checksum: string }> {
-  const { manifest, files } = await readPublishableRelease(dir);
-  const tgz = packRelease(dir, manifest, files);
+  const { manifest, archive } = await preparePublication(dir);
   const name = `${manifest.org}/${manifest.name}`;
-  await registry.publish(name, manifest.version, tgz);
-  return { name, version: manifest.version, checksum: sha256Hex(tgz) };
+  await registry.publish(name, manifest.version, archive);
+  return { name, version: manifest.version, checksum: sha256Hex(archive) };
 }

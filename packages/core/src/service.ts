@@ -3435,26 +3435,22 @@ export class CoreService {
           // `spex-packages/<org>/<id>/` (playbook-library-69,
           // playbook-library-70, environments-10) — never another org's
           // package of that name; no one is asked here: the project's
-          // defaults stand, with no license where none is derived.
-          const defaults = newPackageDefaults(project.id, project.path, await this.environments.publishableOrgs(project.id));
+          // defaults stand, with no license where none is derived. An
+          // unavailable publishing suggestion never blocks local use.
+          const defaults = newPackageDefaults(project.id, project.path, await this.environments.publishableOrgs(project.id).catch(() => null));
+          const org = defaults.org || "local";
           const sessionFolder = this.drafts.workingFolder(command.playbookId);
           const existingPackage = sessionFolder !== null && canonicalFolder(sessionFolder) === canonicalFolder(project.path);
-          if (!existingPackage && defaults.org.length === 0) {
-            throw new CoreError("invalid_request", i18n._({
-              id: "Choose an Org in New playbook before compiling a new package.",
-              comment: "A one-shot compile cannot infer a publishing namespace from a Space group; choose an explicit Org in the New playbook form first",
-            }));
-          }
           const packagePath = existingPackage
             ? this.drafts.packagePath(command.playbookId)
-            : packageFolderFor(project.path, defaults.org, command.playbookId);
+            : packageFolderFor(project.path, org, command.playbookId);
           const packageDir = join(project.path, ...packagePath.split("/"));
           // The language its manifest already names, else the project's
           // authoring language, else the home's (playbook-library-70).
           const language = authoringLanguage(project.path, packageDir, command.playbookId, this.homeLanguage());
           mkdirSync(join(packageDir, "playbooks", language), { recursive: true });
           if (!existsSync(join(packageDir, "meta.yaml"))) {
-            const fields = { org: defaults.org, ...(defaults.license !== null ? { license: defaults.license } : {}) };
+            const fields = { org, ...(defaults.license !== null ? { license: defaults.license } : {}) };
             // A manifest made while the registry was asked stands.
             try {
               writeFileSync(join(packageDir, "meta.yaml"), authoringManifest(command.playbookId, fields, language), { flag: "wx" });
@@ -3973,7 +3969,7 @@ export class CoreService {
       case "draft.list":
         return this.authors.list();
       case "draft.defaults": {
-        // What New playbook fills in, read from the project — or the
+        // What publishing suggests, read from the project — or the
         // global environment — and its selected registry account now,
         // asked once (playbook-library-103).
         const { repository, workingFolder } = this.draftHome(command.projectId);
@@ -3994,17 +3990,17 @@ export class CoreService {
             comment: "Refusal: the id offered for a new playbook is another project's authoring session",
           }));
         }
-        // The org and license the New playbook field holds go into the
-        // new package's manifest (playbook-library-51, -70): the org by
-        // the manifest's name rule (environments-1), the license given.
-        if (!isKebabName(command.org)) {
+        // Legacy callers may still name local package metadata. New
+        // authoring needs only its id; publishing chooses its org and
+        // license later without changing these local files (DR-218).
+        if (command.org !== undefined && !isKebabName(command.org)) {
           throw new CoreError("invalid_request", i18n._({
             id: "org {org} is not lowercase letters and digits in words joined by single hyphens, at most 64 characters",
             values: { org: JSON.stringify(command.org) },
             comment: "Refusal: the org a new playbook's spec package names breaks the manifest's name rule",
           }));
         }
-        if (!PACKAGE_LICENSE_PATTERN.test(command.license)) {
+        if (command.license !== undefined && !PACKAGE_LICENSE_PATTERN.test(command.license)) {
           throw new CoreError("invalid_request", i18n._({
             id: "a new playbook needs a license on one line, such as Apache-2.0",
             comment: "Refusal: the license a new playbook's spec package names is empty, spans lines or is edged with spaces",
@@ -4013,7 +4009,7 @@ export class CoreService {
         return this.authors.create(
           command.draftId,
           { key: repository.key, authoringDir: repository.authoringDir, workingFolder },
-          { org: command.org, license: command.license },
+          { org: command.org ?? "local", ...(command.license !== undefined ? { license: command.license } : {}) },
         );
       }
       case "draft.open":
@@ -4145,7 +4141,13 @@ export class CoreService {
       case "environment.publish": {
         // A dry run replies the inline summary and uploads nothing
         // (playbook-library-93); the upload reports through state.
-        const { done, preview } = await this.environments.publish(command.repository, command.name, command.dryRun === true, command.wait === true);
+        let authoringPath: string | undefined;
+        if (command.draft) {
+          this.requireDraft(command.repository, command.draft.id);
+          this.authors.assertInstance(command.draft.id, command.draft.instance);
+          authoringPath = this.drafts.packagePath(command.draft.id);
+        }
+        const { done, preview } = await this.environments.publish(command.repository, command.name, command.dryRun === true, command.wait === true, { publication: command.publication, authoringPath, expectedChecksum: command.expectedChecksum });
         if (command.wait && !command.dryRun) {
           const published = await done;
           if (!published) throw new CoreError("internal", "Publication completed without a receipt");

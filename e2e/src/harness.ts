@@ -2098,17 +2098,17 @@ export async function rowSignInToPublish(row: Locator): Promise<Locator> {
   return button;
 }
 
-/** The orgs New playbook's one "Org" field suggests (playbook-library-121),
+/** The names publishing setup suggests (playbook-library-121),
  * as they read: its datalist's entries, or the listbox it opens. */
 export async function orgSuggestions(page: Page): Promise<string[]> {
-  const field = page.getByTestId("new-playbook-org");
+  const field = page.getByTestId("publish-org");
   const list = await field.getAttribute("list");
   if (list) {
     return page
       .locator(`datalist[id="${list}"] option`)
       .evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value));
   }
-  const listbox = page.getByTestId("new-playbook").getByRole("option");
+  const listbox = page.getByTestId("publish-setup").getByRole("option");
   if ((await listbox.count()) === 0) await field.focus();
   return (await listbox.allTextContents()).map((text) => text.trim());
 }

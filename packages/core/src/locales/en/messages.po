@@ -1221,11 +1221,6 @@ msgstr "Check the URL, create the repository, or sign this computer in at {host}
 msgid "Check your GitHub account with gh auth status, switch with gh auth login, then Retry"
 msgstr "Check your GitHub account with gh auth status, switch with gh auth login, then Retry"
 
-#. A one-shot compile cannot infer a publishing namespace from a Space group; choose an explicit Org in the New playbook form first
-#: src/service.ts
-msgid "Choose an Org in New playbook before compiling a new package."
-msgstr "Choose an Org in New playbook before compiling a new package."
-
 #. Guidance where the side chosen for a change failed validation
 #: src/space.ts
 msgid "Choose the other side or fix the file, then Retry."
