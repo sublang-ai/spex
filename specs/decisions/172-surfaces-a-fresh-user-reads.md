@@ -5,6 +5,8 @@
 
 ## Status
 
+Amended by [DR-218](218-write-a-playbook-before-publishing.md) in deferring publishing org, license and authority guidance until Publish, keeping creation local.
+
 Amended by [DR-194](194-saved-work-is-a-choice-not-setup-debt.md) in repairs: a neutral Saved work review, recognizable conversations, existing-folder selection and Not now replace the issue-first presentation.
 
 Amended by [DR-189](189-repairs-explain-the-next-step.md) in repair wording and storage-failure presentation: unconnected folders are not called missing, and technical evidence stays behind Details with a plain next step above it.

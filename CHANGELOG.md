@@ -17,9 +17,9 @@ source; run source with `npm ci` and `npm start` (desktop) or
 
 ### Changed
 
-- App and CLI release versions now come from their tags; CI prepares matching workspace/lock metadata, generates notes when no exact-version section exists, and verifies the final artifacts without a version-only PR ([DR-218](specs/decisions/218-tags-own-release-versions.md)).
+- App and CLI release versions now come from their tags; CI prepares matching workspace/lock metadata, generates notes when no exact-version section exists, and verifies the final artifacts without a version-only PR ([DR-220](specs/decisions/220-tags-own-release-versions.md)).
 
-- Mac desktop downloads require Developer ID signatures, Accepted Apple notarization and stapled tickets on both the App and DMG, verified before publication; Windows signing status and the two-platform release gate are unchanged ([DR-217](specs/decisions/217-developer-id-macos-downloads.md)).
+- Mac desktop downloads require Developer ID signatures, Accepted Apple notarization and stapled tickets on both the App and DMG, verified before publication; Windows signing status and the two-platform release gate are unchanged ([DR-219](specs/decisions/219-developer-id-macos-downloads.md)).
 
 - App beta.26 alone uses the owner-authorized limited release gate: green PR checks on the identical tree and both native packaged compiler checks. Unrelated full UI checks were not passed; prior runtime acceptance is reused. All other app tags retain full validation.
 

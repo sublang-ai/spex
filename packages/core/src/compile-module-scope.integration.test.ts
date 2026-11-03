@@ -17,7 +17,7 @@ const slc = dirname(createRequire(import.meta.url).resolve("@sublang/slc"));
 const strictCheck = pathToFileURL(join(slc, "verify-typescript.js")).href;
 const nativeLoad = pathToFileURL(join(slc, "verify.js")).href;
 
-test("generated ESM scope isolates real SLC loading and registry packaging from project module settings (playbook-library-125)", async (t) => {
+test("generated ESM scope isolates real SLC loading and registry packaging from project module settings (playbook-library-126)", async (t) => {
   for (const scope of ["absent", "inherited-commonjs", "commonjs", "module"]) {
     await t.test(scope, async () => {
       const parent = scratchDir("spex-module-scope-");
@@ -100,7 +100,7 @@ console.log("real SLC strict checks, native FSM and linked runtime imports passe
   }
 });
 
-test("conflicting or abnormal generated boundaries refuse compilation without overwriting files (playbook-library-125)", async (t) => {
+test("conflicting or abnormal generated boundaries refuse compilation without overwriting files (playbook-library-126)", async (t) => {
   for (const kind of ["commonjs", "missing-type", "invalid-json", "null", "directory", "symlink", "dangling-symlink", "linked-directory"]) {
     await t.test(kind, async (caseTest) => {
       const project = scratchDir("spex-module-conflict-");

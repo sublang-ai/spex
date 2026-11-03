@@ -12,6 +12,7 @@
 import { useEffect, useState } from "react";
 import type { EnvironmentState, PublishPreview } from "@sublang/spex-core/protocol";
 import { publishTargetAt, type PublishTarget } from "../lib/environments.js";
+import type { PublicationOptions } from "../state/store.js";
 import { usePlaceStore } from "../state/place-context.js";
 import { i18n } from "../i18n.js";
 import { RegistryFlowLine, registrySignInTitle, useRegistrySignIn } from "./RegistryAccount.js";
@@ -37,6 +38,9 @@ function sameReceipt(before: Receipt, after: NonNullable<Receipt>): boolean {
 
 interface PublishProps {
   repository: string;
+  options?: PublicationOptions;
+  onPrepare?: () => void;
+  onPendingChange?: (pending: boolean) => void;
   /** The spec package published, `<org>/<pkg>`, by which the core finds
    * its folder (environments-10). */
   name: string;
@@ -85,7 +89,7 @@ function PublishRead({ choseSignIn, ...props }: PublishProps & { choseSignIn: bo
       : props.target;
   // Remount synchronously when the upload destination changes, so an old
   // preview can never confirm against the new folder or account target.
-  const key = JSON.stringify([props.repository, props.name, props.path, target?.origin,
+  const key = JSON.stringify([props.repository, props.name, props.path, props.options, target?.origin,
     target?.signedIn, target?.name, target?.login, target?.accountId]);
   return (
     <PublishAttempt
@@ -157,6 +161,9 @@ function PublishSignIn({ target, autoStart, readError }: { target: PublishTarget
  * authority. */
 function PublishAttempt({
   repository,
+  options,
+  onPrepare,
+  onPendingChange,
   name,
   path,
   target,
@@ -178,6 +185,10 @@ function PublishAttempt({
   // read from what changed rather than from what stood.
   const [sent, setSent] = useState<{ name: string; version: string; previous: EnvironmentState["published"] }>();
 
+  const submittedUpload = sent !== undefined && environment?.busy === "publishing";
+  useEffect(() => { onPendingChange?.(pending !== undefined || submittedUpload); }, [pending, submittedUpload, onPendingChange]);
+  useEffect(() => () => { onPendingChange?.(false); }, [onPendingChange]);
+
   const signedIn = target?.signedIn === true;
   const judged = target?.signedIn !== undefined;
   // Opened from a row's overflow, the choice is spent once the account
@@ -185,7 +196,7 @@ function PublishAttempt({
   useEffect(() => {
     if (!opened || !autoAsk || !judged) return;
     onAutoAsked?.();
-    if (signedIn) void ask();
+    if (signedIn) { if (onPrepare && !options?.publication) onPrepare(); else void ask(); }
     // Judged once per mount; a change of target, its read included,
     // remounts.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -220,7 +231,7 @@ function PublishAttempt({
     setError(undefined);
     setSent(undefined);
     try {
-      setPreview(await previewPublish(repository, name));
+      setPreview(await previewPublish(repository, name, options));
     } catch (cause) {
       setError((cause as Error).message);
     } finally {
@@ -234,10 +245,11 @@ function PublishAttempt({
     setError(undefined);
     try {
       setSent({ name: preview.name, version: preview.version, previous: environment?.published });
-      await publish(repository, name);
+      await publish(repository, name, { ...options, ...(preview.checksum ? { expectedChecksum: preview.checksum } : {}) });
       setPreview(undefined);
     } catch (cause) {
       setSent(undefined);
+      setPreview(undefined);
       setError((cause as Error).message);
     } finally {
       setPending(undefined);
@@ -259,6 +271,7 @@ function PublishAttempt({
               values: { name: preview.name, version: preview.version, registry: destination.name || target.name },
             })}
           </span>
+          {preview.license ? <span data-testid="publish-license-summary" className="text-neutral-500">{i18n._({ id: "License: {license}", comment: "the license chosen for this release", values: { license: preview.license } })}</span> : null}
           <span data-testid="publish-count" className="text-neutral-500">
             {i18n._({
               id: "{count, plural, one {# file} other {# files}}",
@@ -295,6 +308,8 @@ function PublishAttempt({
             <button
               type="button"
               data-testid="publish-cancel"
+              autoFocus
+              disabled={pending !== undefined}
               onClick={() => {
                 setPreview(undefined);
                 onClose?.();
@@ -327,15 +342,18 @@ function PublishAttempt({
               comment: "the title of Publish: what it publishes and where; {path} is the package's folder, {registry} the registry's display name",
               values: { path, registry: target.name },
             })}
-            onClick={() => void ask()}
+            onClick={() => onPrepare && !options?.publication ? onPrepare() : void ask()}
             className={OUTLINE}
           >
             {checking
               ? i18n._({ id: "Checking…", comment: "the checks a publish makes are running, nothing uploads yet" })
               : publishing
                 ? publishingWord
-                : i18n._({ id: "Publish", comment: "upload the spec package to the registry" })}
+                : options?.publication
+                  ? i18n._({ id: "Preview again", comment: "check the release again after an earlier preview or publication attempt" })
+                  : i18n._({ id: "Publish", comment: "upload the spec package to the registry" })}
           </button>
+          {onPrepare && options?.publication ? <button type="button" data-testid="publish-edit-details" disabled={checking || pending !== undefined || publishing} onClick={onPrepare} className={OUTLINE}>{i18n._({ id: "Edit details", comment: "return to publishing name and license without uploading" })}</button> : null}
           {published ? (
             <span data-testid="publish-done" className="text-xs text-emerald-700 dark:text-emerald-300">
               <a

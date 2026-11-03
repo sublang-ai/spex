@@ -77,7 +77,7 @@ import {
   prepareProjectEnvironment,
   providedArtifacts,
   publishIssues,
-  publishRelease,
+  preparePublication,
   PUBLIC_REGISTRY_ORIGIN,
   readRelease,
   readSpecPlacements,
@@ -105,6 +105,7 @@ import {
   type Manifest,
   type ModuleLocation,
   type OwnPathIssue,
+  type PublicationFields,
   type RegistryOrg,
   type RegistrySource,
   type RegistrySourceLock,
@@ -1741,7 +1742,7 @@ export class EnvironmentManager {
    * upload runs after it. The target is the registry of the
    * environment's instance, uploaded to as that instance's account
    * (environments-10, environments-17, DR-127, DR-165). */
-  async publish(key: string, name: string, dryRun = false, strict = false): Promise<{ done: Promise<PublishedPackage | undefined>; preview: PublishPreview }> {
+  async publish(key: string, name: string, dryRun = false, strict = false, options: { publication?: PublicationFields; authoringPath?: string; expectedChecksum?: string } = {}): Promise<{ done: Promise<PublishedPackage | undefined>; preview: PublishPreview }> {
     if (strict && this.stopped) throw stoppingError();
     this.cloneDir(key);
     const root = this.pathRoot(key);
@@ -1757,7 +1758,7 @@ export class EnvironmentManager {
     // once; a `spex.yaml` that does not read refuses the publish
     // (environments-2, environments-10).
     const requests = this.requestsOf(key);
-    const path = this.publishFolder(requests, name);
+    const path = options.authoringPath ?? this.publishFolder(requests, name);
     const folder = resolvePath(root, path);
     const inside = relative(resolvePath(root), folder);
     if (inside === "" || inside.startsWith("..") || isAbsolute(inside) || inside.split(sep).includes("..")) throw this.outside(path, this.isOwn(key));
@@ -1782,11 +1783,9 @@ export class EnvironmentManager {
       }));
     }
     let manifest: Manifest;
-    let files: string[];
     try {
       const release = await readRelease(folder);
       manifest = release.manifest;
-      files = release.files.map((file) => file.path);
     } catch (error) {
       if (error instanceof FormatError) {
         throw new CoreError("invalid_request", i18n._({
@@ -1810,7 +1809,7 @@ export class EnvironmentManager {
     // The registry refuses a release lacking a field it requires; the
     // core says so first, naming it, the preview included
     // (environments-10).
-    const missing = publishIssues(manifest);
+    const missing = publishIssues({ ...manifest, ...options.publication });
     if (missing.length > 0) {
       throw new CoreError("invalid_request", i18n._({
         id: "{path} cannot be published: {issues} — add them to meta.yaml, then Retry",
@@ -1818,24 +1817,41 @@ export class EnvironmentManager {
         values: { path, issues: listed(missing.map((issue) => `${issue.path}: ${issue.message}`)) },
       }));
     }
+    // A private immutable capture keeps source edits after this point out
+    // of the release being authorized and uploaded (environments-10).
+    let prepared: Awaited<ReturnType<typeof preparePublication>>;
+    try {
+      prepared = await preparePublication(folder, options.publication);
+    } catch (error) {
+      throw new CoreError("invalid_request", error instanceof FormatError ? listed(error.issues.map((issue) => `${issue.path ?? "release"}: ${issue.message}`)) : error instanceof Error ? error.message : String(error));
+    }
+    if (`${prepared.source.org}/${prepared.source.name}` !== name) {
+      throw conflictError(new VersionConflictError(join(folder, "meta.yaml")));
+    }
+    const checksum = sha256(Buffer.from(prepared.archive));
+    if (options.expectedChecksum !== undefined && options.expectedChecksum !== checksum) {
+      throw conflictError(new VersionConflictError(folder));
+    }
+    manifest = prepared.manifest;
+    const publicationName = `${manifest.org}/${manifest.name}`;
     if (signedIn) {
       try {
-        await target.remote.checkPublishOrg(held);
+        await target.remote.checkPublishOrg(publicationName);
       } catch (error) {
-        throw new CoreError("invalid_request", this.publishFailure(error, target.origin, held, manifest.version));
+        throw new CoreError("invalid_request", this.publishFailure(error, target.origin, publicationName, manifest.version));
       }
     }
     // What the upload would hold: the declared release files, in the
     // archive's order (playbook-library-93).
-    const preview: PublishPreview = { instance: { origin: target.origin, name: this.registryName(target.origin) }, name: `${manifest.org}/${manifest.name}`, version: manifest.version, orgVerified: signedIn, files: [...files].sort() };
+    const preview: PublishPreview = { instance: { origin: target.origin, name: this.registryName(target.origin) }, name: `${manifest.org}/${manifest.name}`, version: manifest.version, checksum, ...(options.publication ? { license: manifest.license } : {}), orgVerified: signedIn, files: prepared.files.map((file) => file.path).sort() };
     if (dryRun) return { done: Promise.resolve(undefined), preview };
     if (this.stopped) throw stoppingError();
     const done = this.run(key, async (step) => {
       const state = this.cloneState(key);
       step("publishing");
       try {
-        const published = await publishRelease(target.source, folder);
-        const receipt: PublishedPackage = { instance: preview.instance, name: published.name, version: published.version, url: `${target.origin}/${published.name}` };
+        await target.source.publish(publicationName, manifest.version, prepared.archive);
+        const receipt: PublishedPackage = { instance: preview.instance, name: publicationName, version: manifest.version, url: `${target.origin}/${publicationName}` };
         state.published = { name: receipt.name, version: receipt.version, url: receipt.url };
         state.error = null;
         state.refused = null;

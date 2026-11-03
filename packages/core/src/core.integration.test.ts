@@ -1476,9 +1476,9 @@ test("CORE-27: a second compile.run for the same playbook and project is refused
   const second = await client.command("compile.run", { ...COMPILE_INPUT, projectId });
   assert.ok(!second.ok && second.error.code === "busy", JSON.stringify(second));
   assert.match(second.error.message, /^a compile is writing /);
-  // At spex-packages/<org>/<id>/, the project's default org its key's
-  // first segment (environments-10, playbook-library-69).
-  assert.ok(second.error.message.includes(join("spex-packages", projectId.split("/")[0]!, "demo", "playbooks", "en", "demo")), second.error.message);
+  // A new local compile uses no publishing identity (DR-218,
+  // environments-10, playbook-library-69).
+  assert.ok(second.error.message.includes(join("spex-packages", "local", "demo", "playbooks", "en", "demo")), second.error.message);
   await sleep(50);
   assert.equal(working(), 1, "the refused compile spawned nothing");
 
@@ -5094,14 +5094,14 @@ test("playbook-library-32: compile.run binds derived roles however the form case
   assert.equal(slcEnvs[0]?.SLC_AGENT, "claude-code");
   assert.equal(slcEnvs[0]?.SLC_MODEL, "claude-test");
   assert.equal(slcEnvs[0]?.SLC_EFFORT, undefined);
-  // At spex-packages/<org>/<id>/, the project's default org
-  // (environments-10).
-  const org = project.id.split("/")[0]!;
+  // Local compilation starts without a publishing identity (DR-218,
+  // environments-10).
+  const org = "local";
   const artifactDir = join(harness.projectDir, "spex-packages", org, "pair", "playbooks", "en", "pair");
   assert.ok(existsSync(join(artifactDir, "pair.registry.mjs")), "the module stands in the playbook artifact's folder");
   assert.deepEqual(readdirSync(otherOrg), ["meta.yaml"], "the other org's package of that id is untouched");
-  // The project's environment requests it by path, named under the
-  // project's default org (playbook-library-69); its config entry
+  // The project's environment requests the local package by path
+  // (playbook-library-69); its config entry
   // binds each derived role by its own id, and names no module.
   const clone = clonePath(harness.dataDir, project.id);
   assert.match(readFileSync(join(harness.projectDir, "spex.yaml"), "utf8"), new RegExp(`${org}/pair:\\n\\s+path: spex-packages/${org}/pair\\n`));

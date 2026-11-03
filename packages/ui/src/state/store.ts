@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
+export interface PublicationOptions {
+  expectedChecksum?: string;
+  draft?: { id: string; instance: string };
+  publication?: { org: string; license: string };
+}
+
 // App store: wires the protocol client into view state, one store per
 // core, each at its place (run-view-168). Composer
 // submissions queue client-side while a turn is active and dispatch
@@ -488,11 +494,11 @@ export interface AppState extends AttachmentState {
   /** The inline summary Publish shows before it uploads anything. */
   /** Publish by name (environments-10): the core reads the package's
    * folder, its request's path or `spex-packages/<org>/<pkg>/`. */
-  previewPublish(repository: string, name: string): Promise<PublishPreview>;
-  publishSpecPackage(repository: string, name: string): Promise<void>;
+  previewPublish(repository: string, name: string, options?: PublicationOptions): Promise<PublishPreview>;
+  publishSpecPackage(repository: string, name: string, options?: PublicationOptions): Promise<void>;
 
   listDrafts(): Promise<void>;
-  /** What New playbook fills its Org and License with for a project
+  /** Publishing org/license suggestions for a project
    * (playbook-library-51, playbook-library-103). */
   loadDraftDefaults(projectId: string): Promise<CommandResults["draft.defaults"]>;
   /** Create a draft in the environment `repository` names — a
@@ -500,7 +506,7 @@ export interface AppState extends AttachmentState {
    * package naming the org and license given, and open its workspace;
    * the core refuses an id a playbook of either environment holds
    * (playbook-library-51, core-service-96). */
-  createDraft(draftId: string, fields: { org: string; license: string }, repository: string): Promise<DraftInfo>;
+  createDraft(draftId: string, fields: { org?: string; license?: string }, repository: string): Promise<DraftInfo>;
   /** Open a draft's workspace: subscribe, replay its records and
    * source, then stream (playbook-library-62). */
   openDraft(draftId: string): Promise<void>;
@@ -2981,8 +2987,8 @@ function placeState(
       return getClient().command("draft.defaults", { projectId });
     },
 
-    async createDraft(draftId: string, fields: { org: string; license: string }, repository: string): Promise<DraftInfo> {
-      const draft = await getClient().command("draft.create", { projectId: repository, draftId, org: fields.org, license: fields.license });
+    async createDraft(draftId: string, fields: { org?: string; license?: string }, repository: string): Promise<DraftInfo> {
+      const draft = await getClient().command("draft.create", { projectId: repository, draftId, ...fields });
       adoptDraft(draft);
       await get().openDraft(draft.id);
       return draft;
@@ -3293,10 +3299,11 @@ function placeState(
       return packages;
     },
 
-    async previewPublish(repository: string, name: string): Promise<PublishPreview> {
+    async previewPublish(repository: string, name: string, options?: PublicationOptions): Promise<PublishPreview> {
       const reply = await getClient().command("environment.publish", {
         repository,
         name,
+        ...options,
         dryRun: true,
       }, { timeoutMs: 35_000 });
       if (!reply.preview) {
@@ -3305,8 +3312,8 @@ function placeState(
       return reply.preview;
     },
 
-    async publishSpecPackage(repository: string, name: string): Promise<void> {
-      await getClient().command("environment.publish", { repository, name }, { timeoutMs: 35_000 });
+    async publishSpecPackage(repository: string, name: string, options?: PublicationOptions): Promise<void> {
+      await getClient().command("environment.publish", { repository, name, ...options }, { timeoutMs: 35_000 });
     },
 
     async runCompile(input): Promise<void> {

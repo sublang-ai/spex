@@ -1221,11 +1221,6 @@ msgstr "检查 URL、创建该仓库，或让本机登录 {host}，然后重试"
 msgid "Check your GitHub account with gh auth status, switch with gh auth login, then Retry"
 msgstr "用 gh auth status 检查你的 GitHub 账户，用 gh auth login 切换，然后重试"
 
-#. A one-shot compile cannot infer a publishing namespace from a Space group; choose an explicit Org in the New playbook form first
-#: src/service.ts
-msgid "Choose an Org in New playbook before compiling a new package."
-msgstr "编译新包前，请在“新建剧本”中选择 Org。"
-
 #. Guidance where the side chosen for a change failed validation
 #: src/space.ts
 msgid "Choose the other side or fix the file, then Retry."

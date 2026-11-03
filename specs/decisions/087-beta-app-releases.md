@@ -11,7 +11,7 @@ Rests on the tiers of [DR-086](086-tests-in-tiers.md).
 
 Amended by [DR-199](199-release-gated-full-validation.md) in the CI gate: the tagged tree runs full app validation before publication, without requiring a prior CI run before tagging.
 
-Amended by [DR-218](218-tags-own-release-versions.md) for TAG-owned versions, deterministic pre-validation metadata preparation and optional curated notes; release channel scopes and full validation gates remain.
+Amended by [DR-220](220-tags-own-release-versions.md) for TAG-owned versions, deterministic pre-validation metadata preparation and optional curated notes; release channel scopes and full validation gates remain.
 
 ## Context
 

@@ -1789,6 +1789,7 @@ msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a 
 #. leave an editor without saving
 #. leave an editor without saving
 #. leave an editor without saving
+#. leave an editor without saving
 #. leave the editor without changing anything
 #. leave the editor without changing anything
 #. leave the editor without changing anything
@@ -1812,6 +1813,7 @@ msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a 
 #: src/components/ProjectGroup.tsx
 #: src/components/ProjectPalette.tsx
 #: src/components/PublishControl.tsx
+#: src/components/PublishSetup.tsx
 #: src/components/RegistryAccount.tsx
 #: src/components/SpaceGroups.tsx
 #: src/components/SpaceInstance.tsx
@@ -2030,6 +2032,11 @@ msgstr "Choose a project"
 msgid "Choose a project folder…"
 msgstr "Choose a project folder…"
 
+#. publishing creates a release snapshot and does not rename local work
+#: src/components/PublishSetup.tsx
+msgid "Choose a publishing name and license. Your local files stay as they are."
+msgstr "Choose a publishing name and license. Your local files stay as they are."
+
 #: src/components/SpaceMembers.tsx
 msgid "Choose a role"
 msgstr "Choose a role"
@@ -2161,8 +2168,8 @@ msgstr "cites {out} · cited by {in}"
 msgid "cites it"
 msgstr "cites it"
 
-#. Open the selected registry's account page to claim a publishing name
-#: src/components/PlaybookAuthoring.tsx
+#. open the selected registry account's publishing-name management
+#: src/components/PublishSetup.tsx
 msgid "Claim an org"
 msgstr "Claim an org"
 
@@ -2316,6 +2323,11 @@ msgstr "Combines this project's local and existing records"
 #: src/components/SpacePlacements.tsx
 msgid "Combining…"
 msgstr "Combining…"
+
+#. the slash command of a new playbook
+#: src/components/PlaybookAuthoring.tsx
+msgid "Command"
+msgstr "Command"
 
 #. after adding an authored playbook to a project: {folder} is its package's folder in the project folder, e.g. spex-packages/acme/triage
 #: src/components/PlaybookAuthoring.tsx
@@ -3208,8 +3220,8 @@ msgstr "e.g. .git, docs/generated"
 msgid "e.g. alex, sam"
 msgstr "e.g. alex, sam"
 
-#. the hint inside the new-playbook license field; an SPDX license id
-#: src/components/PlaybookAuthoring.tsx
+#. an example SPDX license identifier
+#: src/components/PublishSetup.tsx
 msgid "e.g. Apache-2.0"
 msgstr "e.g. Apache-2.0"
 
@@ -3266,6 +3278,11 @@ msgstr "Edit {name}.md"
 msgid "Edit {path}"
 msgstr "Edit {path}"
 
+#. return to publishing name and license without uploading
+#: src/components/PublishControl.tsx
+msgid "Edit details"
+msgstr "Edit details"
+
 #: src/components/ProjectGroup.tsx
 msgid "Edit intent text"
 msgstr "Edit intent text"
@@ -3317,6 +3334,11 @@ msgstr "End this run. It will not be resumed."
 #: src/components/DraftConversation.tsx
 msgid "Ends the turn; the transcript keeps what it got"
 msgstr "Ends the turn; the transcript keeps what it got"
+
+#. publishing needs an explicit license
+#: src/components/PublishSetup.tsx
+msgid "Enter a license on one line, such as Apache-2.0."
+msgstr "Enter a license on one line, such as Apache-2.0."
 
 #: src/components/BindingEditor.tsx
 msgid "Enter a model ID, inherit, or use the provider default."
@@ -4275,10 +4297,15 @@ msgstr "last output {age}"
 msgid "Last refreshed {age}"
 msgstr "Last refreshed {age}"
 
-#. field of New playbook: the SPDX license its spec package is published under
-#: src/components/PlaybookAuthoring.tsx
+#. the explicit license for the published release
+#: src/components/PublishSetup.tsx
 msgid "License"
 msgstr "License"
+
+#. the license chosen for this release
+#: src/components/PublishControl.tsx
+msgid "License: {license}"
+msgstr "License: {license}"
 
 #: src/components/SpaceMembers.tsx
 msgid "Limited access; cannot read or sync private shared records."
@@ -4352,8 +4379,8 @@ msgstr "loading…"
 #. a read is still in flight
 #. a read is still in flight
 #: src/components/DashboardSurface.tsx
-#: src/components/PlaybookAuthoring.tsx
 #: src/components/ProjectGroup.tsx
+#: src/components/PublishSetup.tsx
 #: src/components/SpaceExplorer.tsx
 msgid "Loading…"
 msgstr "Loading…"
@@ -4614,7 +4641,6 @@ msgid "New group…"
 msgstr "New group…"
 
 #. start writing a playbook of one's own
-#. start writing a playbook of one's own
 #: src/components/PlaybookAuthoring.tsx
 msgid "New playbook"
 msgstr "New playbook"
@@ -4745,7 +4771,7 @@ msgid "No open pull requests."
 msgstr "No open pull requests."
 
 #. the registry account may publish to no org
-#: src/components/PlaybookAuthoring.tsx
+#: src/components/PublishSetup.tsx
 msgid "No orgs to publish to"
 msgstr "No orgs to publish to"
 
@@ -4993,8 +5019,8 @@ msgstr "Not synced since {moment}"
 msgid "Not yet shared"
 msgstr "Not yet shared"
 
-#. beneath New playbook's Org: the registry account may not publish to the org typed
-#: src/components/PlaybookAuthoring.tsx
+#. the registry account cannot publish under the typed name
+#: src/components/PublishSetup.tsx
 msgid "not yours to publish to"
 msgstr "not yours to publish to"
 
@@ -5392,16 +5418,6 @@ msgstr "Optimize"
 msgid "Or enter an existing Git repository path"
 msgstr "Or enter an existing Git repository path"
 
-#. field of New playbook: the registry org its spec package is published under
-#: src/components/PlaybookAuthoring.tsx
-msgid "Org"
-msgstr "Org"
-
-#. the example's prefill waits for New playbook's Org and License
-#: src/components/PlaybooksTab.tsx
-msgid "Org and License first"
-msgstr "Org and License first"
-
 #. An unsigned publish preview checks local files but cannot verify the package's org
 #: src/components/PublishControl.tsx
 msgid "Org not checked — sign in to {registry} to check publishing rights"
@@ -5572,7 +5588,6 @@ msgid "plan the development path for a request: direct implementation, or a dura
 msgstr "plan the development path for a request: direct implementation, or a durable decision first, delivered through a pull request when the request names a GitHub issue or asks for one"
 
 #: src/components/DraftRegisterTab.tsx
-#: src/components/PlaybookAuthoring.tsx
 msgid "Playbook id"
 msgstr "Playbook id"
 
@@ -5655,10 +5670,17 @@ msgstr "Prefix"
 msgid "Preparing browser…"
 msgstr "Preparing browser…"
 
+#. check the release and see its destination and files before confirming upload
 #. editor mode: the rendered draft
+#: src/components/PublishSetup.tsx
 #: src/components/SpecEditor.tsx
 msgid "Preview"
 msgstr "Preview"
+
+#. check the release again after an earlier preview or publication attempt
+#: src/components/PublishControl.tsx
+msgid "Preview again"
+msgstr "Preview again"
 
 #: src/components/TrustedMedia.tsx
 msgid "Preview unavailable; the file can still be downloaded"
@@ -5778,6 +5800,21 @@ msgstr "Publish {name} {version} to {registry}"
 msgid "publish a reviewed branch as a pull request, wait for its checks, fix red checks once through code, and merge it"
 msgstr "publish a reviewed branch as a pull request, wait for its checks, fix red checks once through code, and merge it"
 
+#. heading for publishing a local package
+#: src/components/PublishSetup.tsx
+msgid "Publish package"
+msgstr "Publish package"
+
+#. heading for publishing a locally authored playbook
+#: src/components/PublishSetup.tsx
+msgid "Publish playbook"
+msgstr "Publish playbook"
+
+#. registry publishing org, the first half of the published package name
+#: src/components/PublishSetup.tsx
+msgid "Publish under"
+msgstr "Publish under"
+
 #. a publish succeeded: the version the registry now holds, linking its page there
 #: src/components/PublishControl.tsx
 msgid "Published {version}"
@@ -5788,8 +5825,8 @@ msgstr "Published {version}"
 msgid "Publishes {path} to {registry}"
 msgstr "Publishes {path} to {registry}"
 
-#. New playbook's Org has no successful registry account check
-#: src/components/PlaybookAuthoring.tsx
+#. the publishing name has no successful registry account check
+#: src/components/PublishSetup.tsx
 msgid "Publishing rights not checked"
 msgstr "Publishing rights not checked"
 
@@ -6356,7 +6393,7 @@ msgstr "resume tokens for this computer's agent conversations; they work nowhere
 
 #. act: load the transcript again
 #. read the record again
-#. read the registry account's orgs again
+#. read the registry publishing names again
 #. read the specs tree again
 #. run the stopped step again
 #. run the stopped step again
@@ -6374,7 +6411,7 @@ msgstr "resume tokens for this computer's agent conversations; they work nowhere
 #: src/components/AgentCards.tsx
 #: src/components/ComposerAttachments.tsx
 #: src/components/DashboardSurface.tsx
-#: src/components/PlaybookAuthoring.tsx
+#: src/components/PublishSetup.tsx
 #: src/components/RunView.tsx
 #: src/components/SettingsSurface.tsx
 #: src/components/SpaceGroups.tsx
@@ -7352,6 +7389,11 @@ msgstr "Start task"
 msgid "Start typing in the composer from anywhere in Projects"
 msgstr "Start typing in the composer from anywhere in Projects"
 
+#. create a local playbook and open its authoring workspace
+#: src/components/PlaybookAuthoring.tsx
+msgid "Start writing"
+msgstr "Start writing"
+
 #: src/components/ProjectGroup.tsx
 msgid "started {age}"
 msgstr "started {age}"
@@ -8022,8 +8064,8 @@ msgstr "this stage was not found for this playbook"
 msgid "three in a row — tell the agent how to proceed"
 msgstr "three in a row — tell the agent how to proceed"
 
-#. Local package names do not establish publishing rights at the selected registry
-#: src/components/PlaybookAuthoring.tsx
+#. local names do not establish publishing rights
+#: src/components/PublishSetup.tsx
 msgid "To publish, use an org you can claim at this registry."
 msgstr "To publish, use an org you can claim at this registry."
 
@@ -8287,6 +8329,11 @@ msgstr "Updated {age} by you"
 #: src/components/SettingsSurface.tsx
 msgid "Updated the starter config at <0>{path}</0> for the current sign-ins"
 msgstr "Updated the starter config at <0>{path}</0> for the current sign-ins"
+
+#. an agent card reads its model catalog again after Re-check
+#: src/components/AgentCards.tsx
+msgid "Updating model…"
+msgstr "Updating model…"
 
 #. the packages spex.yaml names are being updated to the newest versions it allows and installed
 #. the packages spex.yaml names are being updated to the newest versions it allows and installed
@@ -8609,6 +8656,11 @@ msgstr "Working…"
 msgid "Writable paths (comma-separated)"
 msgstr "Writable paths (comma-separated)"
 
+#. New playbooks need no publishing account or license to start
+#: src/components/PlaybookAuthoring.tsx
+msgid "Write and try it here. Publish when you’re ready."
+msgstr "Write and try it here. Publish when you’re ready."
+
 #: src/components/CaptainHome.tsx
 msgid "Write clear specs. Build with playbooks."
 msgstr "Write clear specs. Build with playbooks."
@@ -8664,7 +8716,7 @@ msgid "Your groups"
 msgstr "Your groups"
 
 #. the registry did not answer which orgs the account may publish to
-#: src/components/PlaybookAuthoring.tsx
+#: src/components/PublishSetup.tsx
 msgid "Your orgs could not be read"
 msgstr "Your orgs could not be read"
 

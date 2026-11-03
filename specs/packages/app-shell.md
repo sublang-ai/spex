@@ -143,7 +143,7 @@ The shell shall run the core service in the Electron main process or an Electron
 
 #### app-shell-45
 
-When the Mac distribution command packages the app, the command shall produce a Developer ID signed and Apple-notarized App inside a signed and notarized DMG, both carrying validated stapled tickets, under these constraints ([DR-217](../decisions/217-developer-id-macos-downloads.md)):
+When the Mac distribution command packages the app, the command shall produce a Developer ID signed and Apple-notarized App inside a signed and notarized DMG, both carrying validated stapled tickets, under these constraints ([DR-219](../decisions/219-developer-id-macos-downloads.md)):
 
 - missing credentials, a wrong team, signature or timestamp failure, a non-Accepted or timed-out notarization, and a failed ticket or Gatekeeper check fail the command;
 - a stapler ticket-service connection loss/timeout may retry the exact operation at most twice, without skipping validation or retrying other failures;
@@ -199,7 +199,7 @@ When a valid tag matching `app-v*` is pushed, the app release workflow shall cre
 - the workflow requires successful full app validation of the exact tagged tree [[release-18](release.md#release-18)], prepares both shells and their lockfile entries from the tag before installation [[release-16](release.md#release-16)], and verifies native metadata and archived app versions before creating the release;
 - the release names Node.js 22.19 or later and, from a checkout of its tag, `node scripts/release-version.mjs prepare --tag=<tag>` followed by `npm ci`, `npm start` for the desktop, and `npm run start:server` for the server shell as the way to run it;
 - the desktop package names its Electron version exactly, never as a range: the local packager (`npm run package -w apps/desktop`, electron-builder [[3]]) downloads the platform binaries of one release and refuses a range outright;
-- the downloads are a macOS Apple Silicon DMG and a Windows x64 per-user NSIS installer ([DR-177](../decisions/177-native-desktop-installers.md)), named with version, platform and architecture, with SHA-256 checksums and notes identifying signed and notarized macOS downloads and unsigned Windows downloads ([DR-217](../decisions/217-developer-id-macos-downloads.md));
+- the downloads are a macOS Apple Silicon DMG and a Windows x64 per-user NSIS installer ([DR-177](../decisions/177-native-desktop-installers.md)), named with version, platform and architecture, with SHA-256 checksums and notes identifying signed and notarized macOS downloads and unsigned Windows downloads ([DR-219](../decisions/219-developer-id-macos-downloads.md));
 - native runners build both downloads with the shipped physical dependency tree [[app-shell-13](#app-shell-13)], and the workflow publishes only after both packaging jobs succeed [[release-37](release.md#release-37)];
 - the workflow does not publish to npm and does not run for CLI tags, keeping the release channels disjoint [[release-19](release.md#release-19)].
 
@@ -281,6 +281,16 @@ When a native desktop package is built, its packaging gate shall run the package
 - The gate verifies the archived app manifest version against the builder's prepared version and records it alongside compiler evidence.
 - The gate provisions the archived core's default engine links and invokes its actual registry bundler, importing the produced module with the supplied native service and physical engine copies, with no global binary override.
 - The hooks load from both the desktop workspace and the repository-root `--projectDir` entry point, and the gate uses the platform packager's executable name, including the native acceptance build's override.
+
+#### app-shell-44
+
+When a native desktop package is built, its packaging command shall run a resume check after the build and before the platform packager, aborting packaging where it fails, over the Claude adapter of the Cligent the core resolves and the agent SDK the shell declares at the unconstrained range [[app-shell-33](#app-shell-33)], asserting that a resumed Claude call with no model requests the default current at that resume ([DR-217](../decisions/217-cligent-0-38-0-adoption-and-models-on-re-check.md)):
+
+- its child process starts under a temporary home — `HOME`, `USERPROFILE` and Claude's configuration directory — with every inherited `ANTHROPIC_*` and `CLAUDE_*` variable removed, a loopback model API fixture's address and a fake credential set, and a user settings file whose `env.ANTHROPIC_MODEL` is the only default;
+- it refuses a Cligent below 0.38.0 or outside the core's declared range, and prints the Cligent, SDK and Claude Code versions;
+- a call on an explicit model, then the settings default changed, then a resume of that session with no model each end in a successful terminal yielding a resume token;
+- the resume yields the first call's token, and its request names the changed default; another token fails as a new session in place of the resume, and naming the explicit model fails with a message that Claude Code restored the earlier model on resume;
+- a missing executable, a failed or timed-out call or a fixture receiving no or other requests fails it with its reason, and the home and fixture are removed either way.
 
 #### app-shell-34
 

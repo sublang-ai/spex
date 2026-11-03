@@ -690,6 +690,7 @@ test("environments-24: a playbook authored in a project compiles, is requested b
   registry.script.setOrgs("tester-token", [{ name: ORG, path: ORG, role: "Owner" }]);
   const created = await core.client.expectOk("draft.create", { projectId: project.id, draftId: "triage", org: ORG, license: "Apache-2.0" });
   assert.equal(created.package, `${ORG}/triage`);
+  assert.equal(created.packageLicense, "Apache-2.0", "an explicit existing license remains available for publication");
   // At spex-packages/<org>/<id>/ (environments-10).
   assert.equal(created.packagePath, `spex-packages/${ORG}/triage`);
   const folder = join(working, "spex-packages", ORG, "triage");
@@ -770,7 +771,7 @@ test("environments-24: a playbook authored in a project compiles, is requested b
   const declared = (await readRelease(folder)).files;
   assert.equal(preview.preview?.instance.origin, registry.url);
   assert.ok(preview.preview?.instance.name);
-  assert.deepEqual(preview.preview, { instance: preview.preview?.instance, name: `${ORG}/triage`, version: "0.1.0", orgVerified: true, files: declared.map((file) => file.path).sort() });
+  assert.deepEqual(preview.preview, { instance: preview.preview?.instance, name: `${ORG}/triage`, version: "0.1.0", checksum: preview.preview?.checksum, orgVerified: true, files: declared.map((file) => file.path).sort() });
   assert.ok(!preview.preview?.files.some((path) => path.includes("node_modules")), "engine links never upload");
   assert.deepEqual(preview.preview?.files.filter(ownedByCompiler), [], "the compiler's own files never upload");
   for (const path of retained) assert.ok(preview.preview?.files.includes(`playbooks/en/triage/${path}`), `${path} uploads`);
@@ -1179,7 +1180,7 @@ test("environments-33 through real cores: a skill your own group requests by a p
   // Publishing by its name reads the same folder, its request's path
   // (environments-10).
   const preview = await a.client.expectOk("environment.publish", { repository: ownKey, name: `${OWN}/notes`, dryRun: true });
-  assert.deepEqual(preview.preview, { instance: { origin: "https://spex.sublang.ai", name: "spex.sublang.ai" }, name: `${OWN}/notes`, version: "0.1.0", orgVerified: false, files: ["meta.yaml", "skills/en/notes/SKILL.md"] });
+  assert.deepEqual(preview.preview, { instance: { origin: "https://spex.sublang.ai", name: "spex.sublang.ai" }, name: `${OWN}/notes`, version: "0.1.0", checksum: preview.preview?.checksum, orgVerified: false, files: ["meta.yaml", "skills/en/notes/SKILL.md"] });
 
   // A file added later that the sync would drop fails the next install
   // before anything is installed: the state names it, and the exports
@@ -3073,4 +3074,96 @@ test("publishing checks current org rights before previews and uploads", async (
   registry.script.setOrgs("fixture-publisher", [{ name: "acme", path: "acme", role: "Owner" }]);
   assert.ok((await core.client.expectOk("environment.publish", { repository: key, name: "acme/checked", wait: true })).published);
   assert.equal(uploads().length, 1);
+});
+
+test("id-only authoring publishes explicit metadata snapshots without renaming local packages", { timeout: 240_000 }, async (t) => {
+  const registry = await startStandinRegistry({ dir: scratchDir("spex-publish-snapshot-registry-") });
+  t.after(() => registry.close());
+  const dir = scratchDir("spex-publish-snapshot-core-");
+  signedInHome(join(dir, "state"), registry.url, "snapshot-publisher");
+  registry.script.setOrgs("snapshot-publisher", [
+    { name: "workshop", path: "workshop", role: "Owner" },
+    { name: "personal", path: "personal", role: "Owner" },
+  ]);
+  let afterCapture: (() => void) | undefined;
+  const registryFetch: typeof fetch = (input, init) => {
+    const path = new URL(input instanceof Request ? input.url : String(input)).pathname;
+    if (path === "/api/v1/account/orgs") { const run = afterCapture; afterCapture = undefined; run?.(); }
+    return fetch(input, init);
+  };
+  const core = await startCore(dir, { hostUrl: registry.url, script: authoringScript(), slc: stubSlcSource("['triager', 'verifier']"), extra: { registryFetch } });
+  t.after(() => core.stop());
+  const working = gitFolder(join(dir, "project"));
+  const { id: key } = await core.client.expectOk("project.register", { path: working });
+  registry.script.clearRequests();
+  const created = await core.client.expectOk("draft.create", { projectId: key, draftId: "triage" });
+  assert.equal(created.package, "local/triage", "[core-service-96] local authoring needs only its id");
+  assert.equal(created.packagePath, "spex-packages/local/triage");
+  const folder = join(working, created.packagePath!);
+  const metaFile = join(folder, "meta.yaml");
+  assert.equal((parseYaml(readFileSync(metaFile, "utf8")) as { license?: string }).license, undefined, "[environments-10] creation invents no publishing license");
+  assert.deepEqual(registry.script.requests, [], "creation asks no registry for authority");
+  const draft = { id: "triage", instance: created.instance! };
+  await core.client.expectOk("draft.send", { projectId: key, draftId: draft.id, instance: draft.instance, text: "I want a playbook that triages new issues." });
+  await until(() => core.client.messages.some((m) => m.type === "draft.state" && m.draft.id === "triage" && m.draft.state === "compiled" && m.draft.activity === "idle"), 120_000, "id-only author's successful compile");
+  const source = join(folder, "playbooks", "en", "triage", "triage.md");
+  const files = (await readRelease(folder)).files.map((file) => join(folder, file.path));
+  const unchanged = [...files, join(working, "spex.yaml"), join(working, "spex.lock")];
+  const before = unchanged.map((file) => readFileSync(file));
+  const uploads = () => registry.script.requests.filter((request) => request.startsWith("PUT "));
+  const request = { repository: key, name: "local/triage", draft, publication: { org: "workshop", license: "MIT" } };
+  await core.client.expectError("environment.publish", { repository: key, name: "local/triage", draft, dryRun: true }, "invalid_request", /license/);
+  const preview = await core.client.expectOk("environment.publish", { ...request, dryRun: true });
+  assert.equal(preview.preview?.name, "workshop/triage");
+  assert.equal(preview.preview?.license, "MIT");
+  assert.equal(preview.preview?.orgVerified, true);
+  assert.match(preview.preview?.checksum ?? "", /^[0-9a-f]{64}$/);
+  assert.deepEqual(uploads(), [], "[environments-10] preview uploads nothing");
+  assert.deepEqual(unchanged.map((file) => readFileSync(file)), before, "[environments-10] preview changes no source or environment file");
+  const beforeConfirmation = readFileSync(source);
+  writeFileSync(source, "# Changed after the preview\n");
+  await core.client.expectError("environment.publish", { ...request, expectedChecksum: preview.preview!.checksum, wait: true }, "conflict");
+  writeFileSync(source, beforeConfirmation);
+  await core.client.expectError("environment.publish", { ...request, publication: { org: "someone-else", license: "MIT" }, dryRun: true }, "invalid_request", /not yours to publish to/);
+  await core.client.expectError("environment.publish", { ...request, draft: { ...draft, instance: randomUUID() }, dryRun: true }, "conflict");
+  const other = await core.client.expectOk("project.register", { path: gitFolder(join(dir, "other")) });
+  await core.client.expectError("environment.publish", { ...request, repository: other.id, dryRun: true }, "not_found");
+  await core.client.expectError("environment.publish", { ...request, name: "other/triage", dryRun: true }, "invalid_request", /holds local\/triage/);
+  await core.client.expectError("environment.publish", { ...request, publication: { org: "Invalid", license: "MIT" }, dryRun: true }, "invalid_request");
+  for (const license of ["", " MIT", "MIT\nApache-2.0"]) {
+    await core.client.expectError("environment.publish", { ...request, publication: { org: "workshop", license }, dryRun: true }, "invalid_request");
+  }
+  await core.client.expectError("environment.publish", { ...request, draft: { ...draft, path: "../../outside" } } as never, "invalid_message");
+  const meta = readFileSync(metaFile);
+  const withoutDescription = parseDocument(meta.toString());
+  withoutDescription.delete("description");
+  writeFileSync(metaFile, withoutDescription.toString());
+  await core.client.expectError("environment.publish", { ...request, dryRun: true }, "invalid_request", /description/);
+  writeFileSync(metaFile, meta);
+  assert.deepEqual(uploads(), [], "[environments-47] every refusal uploads nothing");
+
+  // An independent source edit after capture cannot alter the bytes whose
+  // metadata and publishing authority the core checked.
+  const sourceBefore = readFileSync(source);
+  afterCapture = () => writeFileSync(source, "# Changed after publication capture\n");
+  const published = await core.client.expectOk("environment.publish", { ...request, expectedChecksum: preview.preview!.checksum, wait: true });
+  assert.equal(published.published?.name, "workshop/triage");
+  const client = new RegistryClient({ url: registry.url });
+  const release = await client.version("workshop/triage", "0.1.0");
+  assert.equal(release.org, "workshop");
+  assert.equal(release.license, "MIT");
+  assert.equal(release.files?.find((file) => file.path === "playbooks/en/triage/triage.md")?.sha256, sha256Hex(sourceBefore), "[environments-10] upload uses the validated capture");
+  writeFileSync(source, sourceBefore);
+  assert.deepEqual(unchanged.map((file) => readFileSync(file)), before, "publication preserves local package identity and source");
+  await core.client.expectError("environment.publish", { ...request, publication: { org: "workshop", license: "Apache-2.0" }, wait: true }, "invalid_request", /already/);
+  assert.equal((await client.version("workshop/triage", "0.1.0")).license, "MIT", "published versions remain immutable");
+
+  await core.client.expectOk("draft.register", { projectId: key, draftId: draft.id, instance: draft.instance, command: "triage", intent: "Label new issues", bindings: { Triager: "dev.coder", Verifier: "dev.coder" } });
+  await until(() => core.client.messages.some((m) => m.type === "draft.state" && m.draft.id === "triage" && m.draft.state === "added"), 30_000, "the local package added");
+  const addedBefore = unchanged.map((file) => readFileSync(file));
+  const second = await core.client.expectOk("environment.publish", { ...request, publication: { org: "personal", license: "Apache-2.0" }, wait: true });
+  assert.equal(second.published?.name, "personal/triage");
+  assert.deepEqual(unchanged.map((file) => readFileSync(file)), addedBefore, "[environments-10] publishing an added draft leaves its request and lock unchanged");
+  assert.ok(parseRequests(readFileSync(join(working, "spex.yaml"), "utf8")).packages["local/triage"]);
+  assert.equal((parseYaml(readFileSync(metaFile, "utf8")) as { org: string }).org, "local");
 });

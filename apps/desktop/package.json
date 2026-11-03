@@ -23,17 +23,18 @@
     "package": "npm run package:mac",
     "rebuild:electron": "node scripts/rebuild-native.mjs electron",
     "rebuild:node": "node scripts/rebuild-native.mjs node",
-    "package:windows": "npm run build && npm run stage:windows-runtime && npm run rebuild:electron && electron-builder --win nsis --x64 --publish never",
+    "package:windows": "npm run build && npm run check:claude-resume && npm run stage:windows-runtime && npm run rebuild:electron && electron-builder --win nsis --x64 --publish never",
     "stage:windows-runtime": "node scripts/stage-windows-runtime.mjs",
-    "package:mac": "npm run build && npm run rebuild:electron && node scripts/package-macos.mjs --publish never"
+    "package:mac": "npm run build && npm run check:claude-resume && npm run rebuild:electron && node scripts/package-macos.mjs --publish never",
+    "check:claude-resume": "node ../../packages/core/scripts/check-claude-resume.mjs"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "*",
     "@lingui/core": "^6.7.0",
     "@openai/codex-sdk": "*",
     "@opencode-ai/sdk": "*",
-    "@sublang/playbook": "^18.1.2",
-    "@sublang/slc": "^0.20.1",
+    "@sublang/playbook": "^18.1.3",
+    "@sublang/slc": "^0.20.2",
     "@sublang/spex": "*",
     "@sublang/spex-core": "*",
     "dugite": "3.3.2"

@@ -6,10 +6,12 @@
 // "Packages" heading's "Registry: <registry>" chooser offers the public
 // registry and the one spex.yaml names, and takes a Space's origin
 // through "Other…", the account there signs in and out with the Space untouched,
-// and New playbook's one Org field suggests that account's orgs; the
+// and publishing setup suggests that account's publishing names; the
 // Space surface's sign-in card lists the directory's Spaces.
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { AUTHORING_SOURCE } from "@sublang/spex-core/testing";
+
 import {
   HOST_LOGIN,
   test,
@@ -32,21 +34,28 @@ import {
   chooseSpace,
 } from "../src/harness";
 
-test.use({ appOptions: { project: true, host: { registry: true }, independentRegistry: true } });
+test.use({ appOptions: {
+  project: true,
+  host: { registry: true },
+  independentRegistry: true,
+  authoring: { slc: "ok", phaseDelayMs: 30, script: { fallback: { deltas: ["Compiled."], result: "Compiled." } } },
+} });
 
 test("playbook-library-120/space-116: independent same-origin registry account, org suggestions and Space directory", async ({ page, app }) => {
+  test.setTimeout(120_000);
   const host = app.host!;
   host.script.deviceInterval = 0;
   app.registry!.script.setOrgs(host.url, [{ name: "acme", path: "acme", role: "Owner" }, { name: "other", path: "unrelated", role: "Owner" }]);
   await signInCore(app);
   const key = (await refreshProjectKey(app))!;
   await open(page, app);
-  // A local name is not proof that the registry account owns it.
+  // Local authoring asks for the command alone; publishing names and
+  // account guidance belong to publishing, when a playbook exists.
   await projectTab(page, "Playbooks");
-  await expect(page.getByTestId("new-playbook-org-note")).toHaveText("Publishing rights not checked");
-  await expect(page.getByTestId("new-playbook-org-guidance")).toContainText("To publish, use an org you can claim at this registry.");
-  const unsignedRegistry = (await app.core.command("environment.get", { repository: key })).registry!.origin;
-  await expect(page.getByRole("link", { name: "Claim an org" })).toHaveAttribute("href", `${unsignedRegistry}/account/orgs?scope=registry`);
+  await expect(page.getByTestId("new-playbook-id")).toBeVisible();
+  await expect(page.getByTestId("new-playbook-org")).toHaveCount(0);
+  await expect(page.getByTestId("new-playbook-license")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Claim an org" })).toHaveCount(0);
   // The "Packages" heading carries its registry as "Registry:
   // <registry>", a chooser offering the public registry by its display
   // name, the registry the project's spex.yaml names where that is
@@ -100,18 +109,27 @@ test("playbook-library-120/space-116: independent same-origin registry account, 
   const signOut = packages.getByTestId("registry-signout");
   await expect(signOut).toHaveText("Sign out");
   await expect(packages.getByTestId("registry-login")).toHaveText(`@${HOST_LOGIN}`);
-  // New playbook's one Org field on the Playbooks tab reads "Loading…"
-  // while that account's orgs are read, a failed read says so with
-  // Retry, and then suggests the orgs that account may publish to; a
-  // typed org outside them wears "not yours to publish to", the typed
-  // name standing as typed (playbook-library-121).
+  // A real local playbook is created without publishing metadata,
+  // then compiled from pasted source. Only Publish opens the account's
+  // publishing-name suggestions and rights guidance.
+  await projectTab(page, "Playbooks");
+  await page.getByTestId("new-playbook-id").fill("registry-flow");
+  await page.getByTestId("new-playbook-id").press("Enter");
+  await expect(page.getByTestId("authoring-workspace")).toBeVisible();
+  await page.getByRole("button", { name: "Paste", exact: true }).click();
+  await page.getByTestId("paste-text").fill(AUTHORING_SOURCE.replaceAll("<id>", "registry-flow"));
+  await page.getByTestId("paste-use").click();
+  await page.getByTestId("compile-button").click();
+  await expect(page.getByTestId("draft-chip")).toContainText("Compiled", { timeout: 30_000 });
+  await page.getByRole("tablist", { name: "Draft artifacts" }).getByRole("tab", { name: "Add", exact: true }).click();
   app.registry!.script.delayOrgs(1_500);
   app.registry!.script.unavailable(1);
-  await projectTab(page, "Playbooks");
-  const form = page.getByTestId("new-playbook");
-  const org = page.getByTestId("new-playbook-org");
-  const note = page.getByTestId("new-playbook-org-note");
-  const retry = page.getByTestId("new-playbook-orgs-retry");
+  await page.getByTestId("publish-button").click();
+  const form = page.getByTestId("publish-setup");
+  const org = page.getByTestId("publish-org");
+  const note = page.getByTestId("publish-org-note");
+  const retry = page.getByTestId("publish-orgs-retry");
+  await expect(form).toBeVisible();
   await expect(retry).toBeVisible();
   await expect(page.getByRole("link", { name: "Claim an org" })).toHaveAttribute("href", `${host.url}/account/orgs?scope=registry`);
   await retry.click();
@@ -120,7 +138,7 @@ test("playbook-library-120/space-116: independent same-origin registry account, 
   app.registry!.script.delayOrgs(0);
   await org.fill("other");
   await expect(form).not.toContainText("not yours to publish to");
-  await expect(page.getByTestId("new-playbook-org-guidance")).toBeHidden();
+  await expect(page.getByTestId("publish-org-guidance")).toBeHidden();
   await org.fill("elsewhere");
   await expect(form).toContainText("not yours to publish to");
   await expect(page.getByRole("link", { name: "Claim an org" })).toHaveAttribute("href", `${host.url}/account/orgs?scope=registry`);
@@ -129,11 +147,12 @@ test("playbook-library-120/space-116: independent same-origin registry account, 
   await expect(form).not.toContainText("not yours to publish to");
   await expect(org).toHaveValue("other");
   // A successful empty read still explains where to claim a name.
+  await page.getByTestId("publish-setup-cancel").click();
   app.registry!.script.setOrgs(host.url, []);
-  await projectTab(page, "Packages");
-  await projectTab(page, "Playbooks");
+  await page.getByTestId("publish-button").click();
   await expect(note).toHaveText("No orgs to publish to");
   await expect(page.getByRole("link", { name: "Claim an org" })).toHaveAttribute("href", `${host.url}/account/orgs?scope=registry`);
+  await page.getByTestId("publish-setup-cancel").click();
   // Signing out of the registry leaves the Space signed in.
   await projectTab(page, "Packages");
   await signOut.click();
@@ -154,15 +173,16 @@ test("playbook-library-120/space-116: independent same-origin registry account, 
   await expect(spaceAddress(card)).toHaveValue("https://custom.example");
 });
 
-
 test.describe("a legacy project with distinct registry and Space identities", () => {
   test.use({ appOptions: {
     project: true,
     independentRegistry: true,
     host: { registry: true, displayName: "Public package registry", second: { displayName: "spex.sublang.xyz" } },
+    authoring: { slc: "ok", phaseDelayMs: 30, script: { fallback: { deltas: ["Compiled."], result: "Compiled." } } },
   } });
 
   test("package views never inherit the Space account, address or group", async ({ page, app }) => {
+    test.setTimeout(120_000);
     const registryOrigin = "https://spex.sublang.ai";
     const registryHost = app.host!;
     const spaceHost = app.hosts[1]!;
@@ -177,8 +197,9 @@ test.describe("a legacy project with distinct registry and Space identities", ()
     writeFileSync(join(app.projectDir, "spex.yaml"), legacy);
     await open(page, app);
     await projectTab(page, "Playbooks");
-    await expect(page.getByTestId("new-playbook-org")).toHaveValue("");
-    await expect(page.getByRole("link", { name: "Claim an org" })).toHaveAttribute("href", `${registryOrigin}/account/orgs?scope=registry`);
+    await expect(page.getByTestId("new-playbook-org")).toHaveCount(0);
+    await expect(page.getByTestId("new-playbook-license")).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Claim an org" })).toHaveCount(0);
     await expect(page.getByTestId("new-playbook")).not.toContainText("spex.sublang.xyz");
     expect((await app.core.command("environment.get", { repository: key })).registry?.origin).toBe(registryOrigin);
     expect(readFileSync(join(app.projectDir, "spex.yaml"), "utf8")).toBe(legacy);
@@ -199,18 +220,39 @@ test.describe("a legacy project with distinct registry and Space identities", ()
     registryHost.script.approveDevice(pending.signIn.userCode);
     await expect(packages.getByTestId("registry-login")).toHaveText(`@${HOST_LOGIN}`);
     await projectTab(page, "Playbooks");
+    // Local authoring needs no publishing name. The registry-only
+    // default and suggestions appear only after compilation and Publish.
+    await page.getByTestId("new-playbook-id").fill("registry-context");
+    await page.getByTestId("new-playbook-id").press("Enter");
+    await expect(page.getByTestId("authoring-workspace")).toBeVisible();
+    await page.getByRole("button", { name: "Paste", exact: true }).click();
+    await page.getByTestId("paste-text").fill(AUTHORING_SOURCE.replaceAll("<id>", "registry-context"));
+    await page.getByTestId("paste-use").click();
+    await page.getByTestId("compile-button").click();
+    await expect(page.getByTestId("draft-chip")).toContainText("Compiled", { timeout: 30_000 });
+    await page.getByTestId("tab-add").click();
+    await page.getByTestId("publish-button").click();
+    const setup = page.getByTestId("publish-setup");
     await expect.poll(() => orgSuggestions(page)).toEqual(["publisher"]);
-    await expect(page.getByTestId("new-playbook-org")).toHaveValue("publisher");
-    await expect(page.getByTestId("new-playbook")).not.toContainText("spex.sublang.xyz");
+    await expect(page.getByTestId("publish-org")).toHaveValue("publisher");
+    await expect(setup).not.toContainText("spex.sublang.xyz");
+    expect((await app.core.command("draft.list", {}))[0]?.package).toBe("local/registry-context");
 
     // Space sign-out leaves the package account and its namespace usable.
     await app.core.command("space.signout", { instance: spaceHost.url });
     expect((await app.core.command("registry.get", { origin: registryOrigin })).account?.login).toBe(HOST_LOGIN);
+    await expect(page.getByTestId("publish-org")).toHaveValue("publisher");
+    await expect.poll(() => orgSuggestions(page)).toEqual(["publisher"]);
+    await page.getByTestId("publish-setup-cancel").click();
     await projectTab(page, "Packages");
     await expect(packages.getByTestId("registry-login")).toHaveText(`@${HOST_LOGIN}`);
     await packages.getByTestId("registry-signout").click();
     await expect(packages.getByTestId("registry-signin")).toBeVisible();
     await projectTab(page, "Playbooks");
-    await expect(page.getByTestId("new-playbook-org")).toHaveValue("");
+    await expect(page.getByTestId("authoring-workspace")).toBeVisible();
+    await page.getByTestId("tab-add").click();
+    await expect(page.getByTestId("publish").getByRole("button", { name: "Sign in to publish", exact: true })).toBeVisible();
+    await expect(page.getByTestId("publish-setup")).toHaveCount(0);
+    await expect(page.getByTestId("publish-org")).toHaveCount(0);
   });
 });

@@ -394,11 +394,18 @@ test("parseCommand rejects a draft id outside the Agent Skills name rule", () =>
   }
 });
 
-test("a new playbook's license holds one line, never empty or edged with spaces, and draft.create names both fields", () => {
+test("draft.create accepts optional metadata and a supplied license holds one trimmed line", () => {
   for (const license of ["MIT", "Apache-2.0", "MIT OR Apache-2.0", "LicenseRef-Acme"]) assert.ok(PACKAGE_LICENSE_PATTERN.test(license), license);
-  for (const license of ["", " MIT", "MIT ", "MIT\nOR Apache-2.0"]) assert.ok(!PACKAGE_LICENSE_PATTERN.test(license), JSON.stringify(license));
-  assert.ok(!parseCommand({ type: "draft.create", id: "d20", projectId: "alice/a-spex", draftId: "triage" }).ok, "both are required");
-  assert.ok(!parseCommand({ type: "draft.create", id: "d21", projectId: "alice/a-spex", draftId: "triage", org: "acme" }).ok, "the license is required");
+  for (const license of ["", " MIT", "MIT ", "MIT\nOR Apache-2.0", "MIT\rOR Apache-2.0"]) assert.ok(!PACKAGE_LICENSE_PATTERN.test(license), JSON.stringify(license));
+  const command = { type: "draft.create", id: "d20", projectId: "alice/a-spex", draftId: "triage" };
+  for (const fields of [{}, { org: "acme" }, { license: "MIT" }, { org: "acme", license: "Apache-2.0" }]) {
+    const parsed = parseCommand({ ...command, ...fields });
+    assert.ok(parsed.ok, JSON.stringify(fields));
+    if (parsed.ok) assert.deepEqual(parsed.command, { ...command, ...fields });
+  }
+  for (const fields of [{ org: null }, { org: 1 }, { license: null }, { license: 1 }]) {
+    assert.ok(!parseCommand({ ...command, ...fields }).ok, JSON.stringify(fields));
+  }
 });
 
 test("parseCommand rejects an empty draft message", () => {

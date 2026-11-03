@@ -8,7 +8,7 @@
 Accepted (2026-10-31) on the owner's request for installer downloads for Mac M-series and Windows x86 computers.
 Amends [DR-184](184-native-desktop-tag-packages.md) for the macOS download format; platform architectures and publication gates remain.
 
-Amended by [DR-217](217-developer-id-macos-downloads.md) for signed and notarized macOS downloads; Windows status and release gates remain.
+Amended by [DR-219](219-developer-id-macos-downloads.md) for signed and notarized macOS downloads; Windows status and release gates remain.
 
 ## Context
 

@@ -191,6 +191,31 @@ test("app-shell-46: the workflow's real Python preparation and cleanup keep deco
   }
 });
 
+test("app-shell-44: both native packaging commands run the resume check after the build and before the packager", () => {
+  assert.equal(desktop.scripts["check:claude-resume"], "node ../../packages/core/scripts/check-claude-resume.mjs");
+  for (const name of ["package:mac", "package:windows"]) {
+    const steps = desktop.scripts[name].split(" && ");
+    assert.equal(steps[0], "npm run build", name);
+    assert.equal(steps[1], "npm run check:claude-resume", name);
+    assert.match(steps.at(-1), name === "package:mac" ? /^node scripts\/package-macos\.mjs / : /^electron-builder /, name);
+  }
+});
+
+test("app-shell-44: the resume check passes only a resume of the same session on the changed default", async () => {
+  const { freshVerdict, resumeVerdict } = await import(new URL("packages/core/scripts/check-claude-resume-verdict.mjs", root).href);
+  const base = { explicit: "probe-explicit", changedDefault: "probe-default-b", freshToken: "session-1" };
+  assert.equal(freshVerdict({ explicit: "probe-explicit", requests: ["probe-explicit"] }), undefined);
+  assert.match(freshVerdict({ explicit: "probe-explicit", requests: [] }), /expected one request naming it/);
+  assert.equal(resumeVerdict({ ...base, resumeToken: "session-1", requests: ["probe-default-b"] }), undefined);
+  // A new session in place of the resume requests the default too, so the
+  // request alone cannot tell it from a resume.
+  assert.match(resumeVerdict({ ...base, resumeToken: "session-2", requests: ["probe-default-b"] }), /started a new session in place of the resume/);
+  assert.match(resumeVerdict({ ...base, resumeToken: undefined, requests: ["probe-default-b"] }), /started a new session/);
+  assert.match(resumeVerdict({ ...base, resumeToken: "session-1", requests: ["probe-explicit"] }), /restored the session's earlier model probe-explicit/);
+  assert.match(resumeVerdict({ ...base, resumeToken: "session-1", requests: [] }), /expected one request naming the current default/);
+  assert.match(resumeVerdict({ ...base, resumeToken: "session-1", requests: ["probe-default-b", "probe-default-b"] }), /expected one request/);
+});
+
 test("release-40: the sole publisher waits for both platforms, requires both downloads and adds checksums", () => {
   const release = workflow.jobs.release;
   assert.deepEqual(release.needs, ["validate", "prepare", "package"]);

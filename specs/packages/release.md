@@ -17,7 +17,7 @@ The project shall follow Semantic Versioning [[1]]: `MAJOR.MINOR.PATCH` where MA
 
 #### release-2
 
-The version in the released CLI package's `package.json` shall equal the `cli-v` tag's version, injected during release preparation rather than requiring a version-only source commit [[release-16](#release-16)] ([DR-218](../decisions/218-tags-own-release-versions.md)).
+The version in the released CLI package's `package.json` shall equal the `cli-v` tag's version, injected during release preparation rather than requiring a version-only source commit [[release-16](#release-16)] ([DR-220](../decisions/220-tags-own-release-versions.md)).
 
 ### Changelog
 
@@ -31,7 +31,7 @@ When developing a release's changes, the developer/agent shall document notable 
 
 #### release-5
 
-When assembling release notes, the release workflow shall use a non-empty exact-version changelog section if present, otherwise generate notes from commits since the most recently published same-channel ancestor release, linking the source commit and comparison range, without reusing `[Unreleased]` or treating draft releases and unpublished tags as release boundaries ([DR-218](../decisions/218-tags-own-release-versions.md)):
+When assembling release notes, the release workflow shall use a non-empty exact-version changelog section if present, otherwise generate notes from commits since the most recently published same-channel ancestor release, linking the source commit and comparison range, without reusing `[Unreleased]` or treating draft releases and unpublished tags as release boundaries ([DR-220](../decisions/220-tags-own-release-versions.md)):
 
 - without a published ancestor it identifies the first release on that channel's history and its source commit;
 - with no new source commits it explicitly reports the empty range;
@@ -80,7 +80,7 @@ When a release tag is pushed, its release workflow shall require a successful re
 - publication depends directly on that invocation; failed, cancelled or skipped validation permits no publication;
 - no prior CI run, local result or reduced pull-request result substitutes for that invocation;
 - downstream release jobs retain package builds and validation but do not repeat the test suites that invocation completed.
-- New release workflows contain no beta.26 exception or merge-parent/PR-status requirement; that historical tag retains its recorded waiver and workflow ([DR-218](../decisions/218-tags-own-release-versions.md)).
+- New release workflows contain no beta.26 exception or merge-parent/PR-status requirement; that historical tag retains its recorded waiver and workflow ([DR-220](../decisions/220-tags-own-release-versions.md)).
 
 #### release-19
 
@@ -99,11 +99,11 @@ When an app tag passes the existing CI, prepared-version, notes and build/test g
 - packaging commands do not publish; only the final job has release-write permission;
 - the final job requires both downloads and writes their SHA-256 checksums before attaching all three files to the same release;
 - a failed or missing platform build prevents release publication;
-- the Mac job supplies private signing inputs from CI secrets only to the Mac path, removes them even on failure, requires the signed/notarized distribution command and its verification report [[app-shell-45](app-shell.md#app-shell-45)], and uploads public verification receipts beside the compiler check ([DR-217](../decisions/217-developer-id-macos-downloads.md)).
+- the Mac job supplies private signing inputs from CI secrets only to the Mac path, removes them even on failure, requires the signed/notarized distribution command and its verification report [[app-shell-45](app-shell.md#app-shell-45)], and uploads public verification receipts beside the compiler check ([DR-219](../decisions/219-developer-id-macos-downloads.md)).
 
 #### release-48
 
-When a maintainer explicitly dispatches a release workflow on a branch with a valid unused candidate tag, the workflow shall run the same version preparation, full channel validation and artifact checks as a tag release, making a runner-local tag only for notes and retaining verified artifacts, while npm publishing and GitHub Release creation require an actual channel-tag push ([DR-218](../decisions/218-tags-own-release-versions.md)):
+When a maintainer explicitly dispatches a release workflow on a branch with a valid unused candidate tag, the workflow shall run the same version preparation, full channel validation and artifact checks as a tag release, making a runner-local tag only for notes and retaining verified artifacts, while npm publishing and GitHub Release creation require an actual channel-tag push ([DR-220](../decisions/220-tags-own-release-versions.md)):
 
 - native packaging may run in parallel with full validation, but final acceptance/publication still requires both;
 - explicit app `build-only` dispatch diagnoses the native jobs with reusable validation skipped, making final acceptance/publication ineligible even if those package jobs succeed; tag pushes always retain full validation;
@@ -134,11 +134,11 @@ The published package shall include a `README.md` that documents what the tool d
 
 #### release-15
 
-When preparing a release tag, the developer/agent shall select an intended committed and pushed source revision, with full channel validation required after the tag is pushed and before publication [[release-18](#release-18)], without requiring a version-only PR, merge commit or prior CI run for that revision ([DR-218](../decisions/218-tags-own-release-versions.md)).
+When preparing a release tag, the developer/agent shall select an intended committed and pushed source revision, with full channel validation required after the tag is pushed and before publication [[release-18](#release-18)], without requiring a version-only PR, merge commit or prior CI run for that revision ([DR-220](../decisions/220-tags-own-release-versions.md)).
 
 #### release-16
 
-When preparing any release job that installs, validates or builds source, the release tooling shall take the version solely from a valid channel tag and set only the selected workspace manifests' and corresponding lockfile entries' versions before installation, consistently across reusable CI and packaging jobs ([DR-218](../decisions/218-tags-own-release-versions.md)):
+When preparing any release job that installs, validates or builds source, the release tooling shall take the version solely from a valid channel tag and set only the selected workspace manifests' and corresponding lockfile entries' versions before installation, consistently across reusable CI and packaging jobs ([DR-220](../decisions/220-tags-own-release-versions.md)):
 
 - app tags prepare `apps/desktop` and `apps/server`; CLI tags prepare only `packages/cli`;
 - source versions remain development defaults; no dependency resolution, lifecycle hooks, source commits or write-back occurs;
@@ -205,7 +205,7 @@ When preparing a beta app release tag (`app-vMAJOR.MINOR.PATCH-beta.N`) ([DR-087
 
 #### release-27
 
-When a beta app release tag is pushed ([DR-087](../decisions/087-beta-app-releases.md)), the app release workflow shall prepare both shells with that pre-release version [[release-16](#release-16)], require full app validation [[release-18](#release-18)] and create a GitHub pre-release titled by [[release-11](#release-11)], with prepared notes [[release-5](#release-5)] under a line identifying the beta and its base version, without asserting unrecorded smoke results or requiring a beta changelog edit ([DR-218](../decisions/218-tags-own-release-versions.md)).
+When a beta app release tag is pushed ([DR-087](../decisions/087-beta-app-releases.md)), the app release workflow shall prepare both shells with that pre-release version [[release-16](#release-16)], require full app validation [[release-18](#release-18)] and create a GitHub pre-release titled by [[release-11](#release-11)], with prepared notes [[release-5](#release-5)] under a line identifying the beta and its base version, without asserting unrecorded smoke results or requiring a beta changelog edit ([DR-220](../decisions/220-tags-own-release-versions.md)).
 
 ### Merging into Main
 

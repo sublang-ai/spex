@@ -1772,12 +1772,22 @@ test("git-host-25, space-84, git-host-5, git-host-8, git-host-16, git-host-9, sp
 
   // Its push presents a credential the first issued, the Git system's
   // own state the first's (git-host-9).
+  // Initial records can already have been sent by an earlier read.
+  // Give each explicit Sync a new local record to send, so this tests
+  // an actual push rather than whether initial setup happened to wait.
+  const beforePush = new Map([aKey, bKey].map((key) => {
+    const head = git(bareOf(first, key), "rev-parse", "spex");
+    writeFileSync(join(clonePath(home.dataDir, key), "notes.txt"), `A new record for ${key}\n`);
+    return [key, head] as const;
+  }));
   const pushedFrom = first.script.transportCredentials.length;
   for (const key of [aKey, bKey]) {
     const synced = await home.client.settle("space.sync", { repository: key, placement: first.url, noticed: true }, 30_000);
     assert.deepEqual([synced.sync.phase, synced.state], ["done", "reachable"], `${key}: ${JSON.stringify(synced.sync)}`);
     assert.ok(synced.sync.phase === "done" && synced.sync.pushed, `${key} pushed`);
-    assert.equal(git(bareOf(first, key), "rev-parse", "spex"), git(clonePath(home.dataDir, key), "rev-parse", "spex"));
+    const remoteHead = git(bareOf(first, key), "rev-parse", "spex");
+    assert.notEqual(remoteHead, beforePush.get(key), `${key} advanced at the host`);
+    assert.equal(remoteHead, git(clonePath(home.dataDir, key), "rev-parse", "spex"));
   }
   const pushes = first.script.transportCredentials.slice(pushedFrom).filter((entry) => entry.push);
   assert.ok(pushes.some((entry) => entry.path.includes(`/${LOGIN}/a-spex.git/`)) && pushes.some((entry) => entry.path.includes(`/${LOGIN}/b-spex.git/`)));
