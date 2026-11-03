@@ -54,7 +54,7 @@ While a project's Packages tab is shown, the tab shall present the project's env
 - after an Add, the receipt reads "Added ⟨name⟩ ⟨version⟩ · ⟨what it provides⟩", a playbook it provides running at once [[core-service-2](core-service.md#core-service-2)];
 - the heading names no spex repository ([DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md));
 - a change the core refuses shows its cause in place; a sync of that spex repository, or an update or install the core runs, disables no control, the core's own work reading in place as progress ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)).
-- Add…'s popover carries Cancel in all three tabs, with Cancel, Escape and an outside click closing it and returning focus to Add…; a submitted add disables dismissal, its opener, tab switching and fields until its outcome, success closing the popover and refusal retaining its selected tab and values beside the cause, without blocking unrelated environment work ([DR-210](../decisions/210-a-panel-carries-its-own-way-out.md)).
+- Add…'s popover carries Cancel in all three tabs, with Cancel, Escape and an outside click closing it and returning focus to Add…; a submitted add disables dismissal, its opener, tab switching and fields until its outcome, success closing the popover and refusal retaining its selected tab and values beside the cause, without blocking unrelated environment work ([DR-211](../decisions/211-a-panel-carries-its-own-way-out.md)).
 
 #### playbook-library-119
 

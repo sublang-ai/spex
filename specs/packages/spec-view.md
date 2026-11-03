@@ -199,7 +199,7 @@ While the graph renders, the spec view shall emphasize by the selection [[spec-v
 - keyboard focus reaches every node, with Enter selecting [[spec-view-42](#spec-view-42)];
 - the query's match marks hold full strength through an isolation [[spec-view-29](#spec-view-29)];
 - Escape follows the ladder of [[spec-view-42](#spec-view-42)] for the pointer and the keyboard alike: a floating card first — keyboard focus staying on its node, whose card returns only once focus moves to another node — then the selection, focus still staying.
-- the pinned card carries a borderless cross with a contextual Close name and tooltip at its header's trailing edge ([DR-211](../decisions/211-panel-dismissal-as-quiet-chrome.md)); Close, or Escape clearing its selection from inside the card, returns focus to the selected package's graph node without reopening its floating inspection card ([DR-210](../decisions/210-a-panel-carries-its-own-way-out.md)).
+- the pinned card carries a borderless cross with a contextual Close name and tooltip at its header's trailing edge ([DR-212](../decisions/212-panel-dismissal-as-quiet-chrome.md)); Close, or Escape clearing its selection from inside the card, returns focus to the selected package's graph node without reopening its floating inspection card ([DR-211](../decisions/211-a-panel-carries-its-own-way-out.md)).
 
 #### spec-view-26
 

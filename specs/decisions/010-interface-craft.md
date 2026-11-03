@@ -8,7 +8,7 @@
 Question presentation and active-turn input are amended by [DR-085](085-boss-talks-through-captain.md).
 
 Accepted.
-Extended by [DR-210](210-a-panel-carries-its-own-way-out.md) in visible contextual dismissal, nested Escape and focus restoration for temporary panels.
+Extended by [DR-211](211-a-panel-carries-its-own-way-out.md) in visible contextual dismissal, nested Escape and focus restoration for temporary panels.
 §5 is amended by [DR-181](181-owned-session-start-wait.md) for a session start that owns runtime initialization; ordinary reply deadlines remain unchanged.
 The conversation-first principle begins after project registration under [DR-135](135-a-welcome-page-before-the-first-project.md).
 §8's interaction hue is amended by [DR-013](013-sublang-brand.md): brand purple replaces indigo.

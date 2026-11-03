@@ -49,7 +49,7 @@ While actual pending requests exist [[approvals-4](#approvals-4)], the interface
 - a disconnected or answering client disables its controls, preserving a refused answer's cause even if another client has already removed the request;
 - answering, expiry, or cancellation removes only that request, and historical permission telemetry raises no entry;
 - keyboard operation, narrow-view wrapping, and focus transfer preserve access to the remaining entries, without automatically focusing approval or assigning a single-keystroke approval shortcut.
-- the expanded inbox carries a borderless cross with a contextual Close name and tooltip at its header's trailing edge ([DR-211](../decisions/211-panel-dismissal-as-quiet-chrome.md)); Close and Escape collapse the view and return focus to its actual opener, or its attention entry if the opener has gone, preserving every request and the attention count without sending any answer ([DR-210](../decisions/210-a-panel-carries-its-own-way-out.md)).
+- the expanded inbox carries a borderless cross with a contextual Close name and tooltip at its header's trailing edge ([DR-212](../decisions/212-panel-dismissal-as-quiet-chrome.md)); Close and Escape collapse the view and return focus to its actual opener, or its attention entry if the opener has gone, preserving every request and the attention count without sending any answer ([DR-211](../decisions/211-a-panel-carries-its-own-way-out.md)).
 
 ### approvals-6
 

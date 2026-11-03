@@ -1,14 +1,13 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-211: Panel Dismissal as Quiet Chrome
+# DR-212: Panel Dismissal as Quiet Chrome
 
 ## Status
 
-Proposed (2026-11-03) following the owner's request for a cross instead of a textual header Close and a visual review in the surrounding application.
-Visual acceptance is pending.
-Proposes amending [DR-210](210-a-panel-carries-its-own-way-out.md) in header dismissal presentation.
-The dismissal, focus, pending-operation and attention-preservation behavior of [DR-210](210-a-panel-carries-its-own-way-out.md) remains.
+Accepted (2026-11-03) following the owner's review of the wide and narrow application screenshots and approval to merge and push.
+Amends [DR-211](211-a-panel-carries-its-own-way-out.md) in header dismissal presentation.
+The dismissal, focus, pending-operation and attention-preservation behavior of [DR-211](211-a-panel-carries-its-own-way-out.md) remains.
 
 ## Context
 
@@ -34,4 +33,4 @@ The refinement needs evaluation with the owning group and neighboring content vi
 ## Consequences
 
 The dismissal affordance reads as panel chrome while task actions retain their visible verbs.
-The proposed package requirements describe the refinement under review; passing functional tests does not stand in for the pending visual acceptance.
+The package requirements describe the accepted refinement, verified through functional tests and visual review in the containing application.

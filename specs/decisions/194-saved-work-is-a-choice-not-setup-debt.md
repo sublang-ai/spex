@@ -6,7 +6,7 @@
 ## Status
 
 Accepted (2026-11-02) on the owner's rejection of the repair screen's unexplained names, connection language and ambiguous folder action.
-Amended by [DR-210](210-a-panel-carries-its-own-way-out.md) in allowing review to close while its warning remains, with new blockers reopening it.
+Amended by [DR-211](211-a-panel-carries-its-own-way-out.md) in allowing review to close while its warning remains, with new blockers reopening it.
 Amends [DR-189](189-repairs-explain-the-next-step.md) in its repair presentation, next steps and issue count; structured causes and preservation remain.
 Amends [DR-065](065-repairs-the-reader-answers.md) in acknowledgement meaning and presentation: Not now postpones optional recovery, without asserting where a project belongs.
 Amends [DR-172](172-surfaces-a-fresh-user-reads.md) in the repairs' heading, attention styling, naming and actions, and extends [DR-069](069-key-phrases-not-sentences.md) to make an action's purpose and scope visible before asking for it.
