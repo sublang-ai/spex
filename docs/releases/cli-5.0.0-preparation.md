@@ -1,7 +1,34 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# CLI 5.0.0 source preparation
+# CLI 5.0.0 release preparation
+
+## Publication preparation — 2026-11-02
+
+The owner requested the first npm publication of CLI 5.0.0.
+The registry check found `latest` at 4.2.0 and no 5.0.0 publication or tag.
+The following source-preparation evidence is historical; the release gates below are run again for this publication.
+The first 5.0.0 changelog includes the standalone package manager and every later CLI change on main, including `spex export`, provided spec placement and portable Git line endings.
+The CLI and getting-started documentation now use `npm install -g @sublang/spex`.
+
+| Gate | Publication result |
+| --- | --- |
+| Full working-tree build | Passed on base `5ebabf229008d1591ce04d724dee3cf80a292a9c`; release documentation was being updated |
+| Automated smoke | Passed on committed candidate `ddcf16d099b03dec6255703149ef881fef610977`: build 19s, lint 3s, fresh install 2m40s, packed CLI user journeys 8s; desktop/server startup and native-module restoration passed |
+| Live migration smoke | Passed with packed CLI 5.0.0 and signed-in Claude: lint clean, every fixture item and checkbox state retained, compositions removed and migration committed |
+| Tarball inspection | Passed: 130 runtime files, no tests or unnecessary implementation source; every declared export and scaffold law present |
+| CLI suite | Passed: 220 tests in 17 suites, no failures or skips, Node 25.5.0; supported Node/platform validation remains the tag workflow's gate |
+| Prepush | Passed; spec lint has zero errors and the existing `core-service-41` sentence warning |
+| Full tagged CLI validation | Required by the tag workflow before npm publication |
+
+The migration packed the unchanged product code from base `5ebabf22` while release documentation was being prepared; candidate `ddcf16d0` changes only the README, getting-started, changelog and this record.
+The smoke used a fresh clone and empty npm cache, launching both shells against an isolated home.
+No gate is waived.
+An initial restricted CLI test run encountered npm-cache and local-listener permission failures; a later run raced a build removing `dist`.
+The stable unrestricted rerun passed all 220 tests after the build finished.
+Local evidence: `/tmp/spex-cli-5.0.0-smoke.log`, `/tmp/spex-cli-5.0.0-migration.log`, `/tmp/spex-cli-5.0.0-independent-tests-stable.log`, `/tmp/spex-cli-5.0.0-independent-pack.json` and `/tmp/spex-cli-5.0.0-prepush.log`.
+
+## Historical source preparation
 
 The standalone CLI and independent registry architecture are delivered as merged, verified source. No version was released in this architecture task: no CLI tag, npm publication or post-publication consumer run was performed. The package version remains release preparation; publication belongs to a separate release task.
 
