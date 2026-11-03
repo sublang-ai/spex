@@ -44,7 +44,7 @@ test("approvals-8: fresh served UI reviews actual pending scope, denies safely, 
     await page.setViewportSize({width, height: 900});
     record(`Tool approval ${width}px`, await measure(page), defects);
     if (width === 900) await test.info().attach("Tool approval 900px", {
-      body: await page.screenshot(), contentType: "image/png",
+      body: await page.screenshot({ path: test.info().outputPath("approvals-context-900.png") }), contentType: "image/png",
     });
   }
   expect(defects).toEqual([]);

@@ -194,8 +194,12 @@ describe("contextual browser controls through the core client", () => {
     opener.focus();
     fireEvent.click(opener);
     const dialog = screen.getByRole("dialog", { name: "Browser setup" });
+    expect(within(dialog).getByRole("heading", { name: "Browser setup" })).toBeTruthy();
     await within(dialog).findByText("Browser tools are unavailable here");
     const close = within(dialog).getByRole("button", { name: "Close" });
+    expect(close).toBe(screen.getByTestId("draft-browser-close"));
+    expect(close.textContent).toBe("");
+    expect(close.querySelector("svg")).toBeTruthy();
     expect(document.activeElement).toBe(close);
     if (way === "Close") fireEvent.click(close);
     else if (way === "Escape") fireEvent.keyDown(close, { key: "Escape" });

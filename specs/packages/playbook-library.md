@@ -54,7 +54,7 @@ While a project's Packages tab is shown, the tab shall present the project's env
 - after an Add, the receipt reads "Added ⟨name⟩ ⟨version⟩ · ⟨what it provides⟩", a playbook it provides running at once [[core-service-2](core-service.md#core-service-2)];
 - the heading names no spex repository ([DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md));
 - a change the core refuses shows its cause in place; a sync of that spex repository, or an update or install the core runs, disables no control, the core's own work reading in place as progress ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)).
-- Add…'s popover carries Cancel in all three tabs, with Cancel, Escape and an outside click closing it and returning focus to Add…; a submitted add disables dismissal, its opener, tab switching and fields until its outcome, success closing the popover and refusal retaining its selected tab and values beside the cause, without blocking unrelated environment work ([DR-210](../decisions/210-a-panel-carries-its-own-way-out.md)).
+- Add…'s popover carries Cancel in all three tabs, with Cancel, Escape and an outside click closing it and returning focus to Add…; a submitted add disables dismissal, its opener, tab switching and fields until its outcome, success closing the popover and refusal retaining its selected tab and values beside the cause, without blocking unrelated environment work ([DR-211](../decisions/211-a-panel-carries-its-own-way-out.md)).
 
 #### playbook-library-119
 
@@ -538,6 +538,8 @@ When the conversation runner composes a turn's prompt, it shall compose it by th
 | Relay | the failed phase, its elapsed time, the last 200 lines of its output — or the clarification questions with reason, evidence, and choices — then "Fix `<id>.md` and explain the cause; you may ask for another compile" as a system-origin message |
 | Success | "The compile succeeded; the roles are ⟨roles⟩. Propose its entry in a register block" as a system-origin message |
 | Unreadable-block relay | "Write the ⟨kind⟩ block again so Spex can read it" as a system-origin message, ⟨kind⟩ as the thread's line names it [[playbook-library-53](#playbook-library-53)] |
+
+- Shipped document paths name their physical asar-unpacked copy when present, so the agent's external file tools can read them; source-install paths remain unchanged.
 
 - the preamble names the absolute source path inside the spec package, tells the agent to write and edit only that file and the package's `meta.yaml` description, never to run the compiler, git, or npm, and to ask at most one question per reply when the answer changes the roles or the ending, and says that a source the Boss placed may be a SKILL.md — YAML frontmatter `name` and `description`, then instructions — or other workflow markdown, to rewrite in place into a source with the description as the title and the intent, the instructions as the prompts, and the actors as the roles ([DR-082](../decisions/082-the-first-move-in-a-draft-is-an-act.md));
 - the preamble names the session's language [[playbook-library-70](#playbook-library-70)] as the one the source's title, prose and prompts are written in, and, for a language other than English, the words `slc` recognizes literally that stay in English: the `Roles:` and `Results:` headings, the `Captain shall prompt`, `Captain shall relay` and `Output shall include` clauses, role and result names, and the lead-in "in quotes (`>`)" before a blockquote relaying a runtime value, which a sentence in the session's language may surround;

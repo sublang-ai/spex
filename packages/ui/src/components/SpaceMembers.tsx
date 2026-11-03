@@ -22,6 +22,7 @@ import { i18n } from "../i18n.js";
 import { instanceName } from "../lib/instances.js";
 import { nameList } from "../lib/placements.js";
 import { InlineConfirm } from "./InlineConfirm.js";
+import { PanelCloseButton } from "./PanelCloseButton.js";
 import { ATTACHED_PANEL } from "./SpacePanel.js";
 import { PRIMARY, SECONDARY, type Note } from "./SpaceSurface.js";
 
@@ -308,7 +309,7 @@ export function MembersPanel({
       tabIndex={-1}
       data-testid={`space-members-${id}`}
       aria-label={i18n._("Members of {name}", { name })}
-      className={`@container flex min-w-0 max-w-xl flex-col gap-3 text-sm ${embedded ? ATTACHED_PANEL : "p-3"}`}
+      className={`@container flex min-w-0 flex-col gap-3 text-sm ${embedded ? ATTACHED_PANEL : "max-w-xl p-3"}`}
       onKeyDown={(event) => {
         if (event.key === "Escape") {
           event.stopPropagation();
@@ -348,85 +349,85 @@ export function MembersPanel({
             </button>
           ) : null}
         </div>
-        <button type="button" data-testid={`space-members-close-${id}`} className={`${SECONDARY} shrink-0`} disabled={adding || removing} onClick={onClose}>
-          {i18n._({ id: "Close", comment: "close the members panel and return to its opener" })}
-        </button>
+        <PanelCloseButton data-testid={`space-members-close-${id}`} disabled={adding || removing} onClick={onClose} />
       </header>
-      {alsoPlacedAt.length > 0 ? (
-        // Every Space's members see that the records are kept elsewhere
-        // too (DR-128); the Spaces are named, never linked.
-        <p data-testid="space-members-also" className="min-w-0 text-xs text-neutral-500">
-          {i18n._({
-            id: "These records are also placed at {names}",
-            comment: "a project's members panel; {names} lists the other Spaces the records are kept at, by display name",
-            values: { names: nameList(alsoPlacedAt) },
-          })}
-        </p>
-      ) : null}
-      {sharing && canManage ? (
-        <InviteEditor
-          instance={instance}
-          target={target}
-          id={id}
-          name={name}
-          editorId={editorId}
-          focusRequest={inviteFocus}
-          connected={connected && !removing}
-          onBusy={setAdding}
-          onMembers={(reply) => {
-            reads.current += 1;
-            setResult(reply);
-            setError(undefined);
-          }}
-          onFinished={(line, complete) => {
-            setOutcome(line);
-            onNote(line);
-            if (complete) {
+      <div className="flex min-w-0 max-w-xl flex-col gap-3">
+        {alsoPlacedAt.length > 0 ? (
+          // Every Space's members see that the records are kept elsewhere
+          // too (DR-128); the Spaces are named, never linked.
+          <p data-testid="space-members-also" className="min-w-0 text-xs text-neutral-500">
+            {i18n._({
+              id: "These records are also placed at {names}",
+              comment: "a project's members panel; {names} lists the other Spaces the records are kept at, by display name",
+              values: { names: nameList(alsoPlacedAt) },
+            })}
+          </p>
+        ) : null}
+        {sharing && canManage ? (
+          <InviteEditor
+            instance={instance}
+            target={target}
+            id={id}
+            name={name}
+            editorId={editorId}
+            focusRequest={inviteFocus}
+            connected={connected && !removing}
+            onBusy={setAdding}
+            onMembers={(reply) => {
+              reads.current += 1;
+              setResult(reply);
+              setError(undefined);
+            }}
+            onFinished={(line, complete) => {
+              setOutcome(line);
+              onNote(line);
+              if (complete) {
+                setSharing(false);
+                focusLater(shareRef);
+              }
+            }}
+            onClose={() => {
               setSharing(false);
               focusLater(shareRef);
-            }
-          }}
-          onClose={() => {
-            setSharing(false);
-            focusLater(shareRef);
-          }}
-        />
-      ) : null}
-      {error ? (
-        <p role="alert" className={REFUSAL}>
-          {error}
-        </p>
-      ) : !result ? (
-        <p className="text-xs text-neutral-500">{i18n._("Reading members…")}</p>
-      ) : (
-        <>
-          {outcome ? (
-            <p data-testid={`space-members-outcome-${id}`} className="text-xs text-neutral-600 dark:text-neutral-400">
-              {outcome}
-            </p>
-          ) : null}
-          <ul className="flex min-w-0 flex-col divide-y divide-neutral-200 dark:divide-neutral-800">
-            {result.members.map((member) => (
-              <MemberRow
-                key={member.id}
-                member={member}
-                isYou={member.login === instance.account.login}
-                target={target}
-                place={name}
-                removable={canManage && member.direct}
-                connected={connected && !adding && !removing}
-                onBusy={setRemoving}
-                onRemoved={(reply) => {
-                  answered(reply, i18n._("@{login} removed", { login: member.login }));
-                  // The row is gone; focus stays in the panel.
-                  setTimeout(() => (shareRef.current ?? panelRef.current)?.focus(), 0);
-                }}
-                onNote={onNote}
-              />
-            ))}
-          </ul>
-        </>
-      )}
+            }}
+          />
+        ) : null}
+        {error ? (
+          <p role="alert" className={REFUSAL}>
+            {error}
+          </p>
+        ) : !result ? (
+          <p className="text-xs text-neutral-500">{i18n._("Reading members…")}</p>
+        ) : (
+          <>
+            {outcome ? (
+              <p data-testid={`space-members-outcome-${id}`} className="text-xs text-neutral-600 dark:text-neutral-400">
+                {outcome}
+              </p>
+            ) : null}
+            <ul className="flex min-w-0 flex-col divide-y divide-neutral-200 dark:divide-neutral-800">
+              {result.members.map((member) => (
+                <MemberRow
+                  key={member.id}
+                  member={member}
+                  isYou={member.login === instance.account.login}
+                  target={target}
+                  place={name}
+                  removable={canManage && member.direct}
+                  connected={connected && !adding && !removing}
+                  onBusy={setRemoving}
+                  onRemoved={(reply) => {
+                    answered(reply, i18n._("@{login} removed", { login: member.login }));
+                    // The row is gone; focus stays in the panel.
+                    setTimeout(() => (shareRef.current ?? panelRef.current)?.focus(), 0);
+                  }}
+                  onNote={onNote}
+                />
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
     </section>
   );
 }

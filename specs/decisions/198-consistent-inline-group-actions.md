@@ -6,7 +6,7 @@
 ## Status
 
 Accepted (2026-11-02) on the owner's request for consistent presentation, punctuation and repeated-button behavior across group selection, Members and Delete group.
-Amended by [DR-210](210-a-panel-carries-its-own-way-out.md) in reserving Members' trailing header position for its visible Close action.
+Amended by [DR-211](211-a-panel-carries-its-own-way-out.md) in reserving Members' trailing header position for its visible Close action.
 Amends [DR-190](190-membership-with-a-clear-scope.md) in membership-panel presentation and dismissal, [DR-192](192-choose-a-group-before-adding.md) in repeated chooser activation, and [DR-193](193-group-deletion-follows-the-space-policy.md) in repeated confirmation activation and its presentation.
 Extended by [DR-203](203-groups-within-groups-and-deletion-review.md) in applying the attached presentation and bounded editor layout to top-level and nested New group.
 Extends [DR-187](187-the-group-chooser-belongs-to-its-project.md)'s attached expansion to Members and Delete group.

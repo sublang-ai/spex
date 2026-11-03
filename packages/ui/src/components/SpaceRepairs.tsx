@@ -14,6 +14,7 @@ import { currentLocale, i18n } from "../i18n.js";
 import { seatName, tildify } from "../lib/space.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { Icon } from "./Icon.js";
+import { PanelCloseButton } from "./PanelCloseButton.js";
 import { LINK, PRIMARY, SECONDARY, type Note } from "./SpaceSurface.js";
 
 /** The pending merge's file, which a row reads in plain words. */
@@ -645,9 +646,8 @@ export function IssuesList({
       focusSeq={!noticeFocus?.dismissed && noticeFocus?.key === entry.notice?.key ? noticeFocus?.seq : undefined}
       onNoticeChanged={onNoticeChanged} onPendingChange={pendingChange} />;
   const listClass = "flex min-w-0 flex-col divide-y divide-neutral-200 dark:divide-neutral-800";
-  const closeControl = <button type="button" data-testid="space-issues-close" className={`${SECONDARY} shrink-0`} disabled={pending.size > 0} onClick={onClose}>
-    {i18n._("Close")}
-  </button>;
+  const closeControl = <PanelCloseButton data-testid="space-issues-close" disabled={pending.size > 0} onClick={onClose} />;
+  const onlyDismissed = activeRepairs.length === 0 && activeNotices.length === 0 && dismissedCount > 0;
   return (
     <section data-testid="space-issues-list" aria-label={title} className="flex min-w-0 flex-col gap-4 text-sm"
       onKeyDown={(event) => {
@@ -673,10 +673,11 @@ export function IssuesList({
         <ul data-testid="space-active-notices" className={listClass}>{activeNotices.map(renderNotice)}</ul>
       </div> : null}
       {dismissalNote ? <p data-testid="space-deferred-notice" className="text-sm text-neutral-500">{dismissalNote}</p> : null}
-      {activeRepairs.length === 0 && activeNotices.length === 0 && dismissedCount > 0 ? <div className="flex justify-end">{closeControl}</div> : null}
-      {dismissedCount > 0 ? <details data-testid="space-dismissed" className="min-w-0 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800"
+      {dismissedCount > 0 ? <div className="relative min-w-0">
+        {onlyDismissed ? <div className="absolute right-4 top-4">{closeControl}</div> : null}
+        <details data-testid="space-dismissed" className="min-w-0 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800"
         open={dismissedOpen} onToggle={(event) => setDismissedOpen(event.currentTarget.open)}>
-        <summary ref={dismissedSummaryRef} className="cursor-pointer font-medium text-neutral-500">{i18n._({
+        <summary ref={dismissedSummaryRef} className={`cursor-pointer font-medium text-neutral-500 ${onlyDismissed ? "pr-8" : ""}`}>{i18n._({
           id: "Dismissed ({count})", values: { count: dismissedCount },
           comment: "collapsed folder choices and saved-file notices that no longer contribute to the warning count",
         })}</summary>
@@ -690,7 +691,8 @@ export function IssuesList({
             <ul className={listClass}>{dismissedNotices.map(renderNotice)}</ul>
           </div> : null}
         </div>
-      </details> : null}
+        </details>
+      </div> : null}
     </section>
   );
 }

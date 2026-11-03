@@ -174,6 +174,9 @@ The desktop shell shall declare the `claude`, `codex` and `opencode` agent SDKs 
 
 Where the app is packaged, the packaged app shall ship its complete `node_modules` dependency tree outside the asar archive as asar-unpacked files [[2]], keeping spawned native binaries and Cligent-owned Node child modules in one physically resolvable dependency tree, while app code and UI remain archived ([DR-097](../decisions/097-media-and-browser-tools-across-hosts.md)).
 
+- Production dependencies retain their TypeScript declarations in that same tree, including standard libraries, XState, Node types and declaration dependencies, at their hoisted or nested module-resolution locations.
+- The compiler's esbuild module and the core's default engine links resolve to the physical tree, so native services and newly added playbooks load outside the archive without a global executable override.
+
 ### Release
 
 #### app-shell-14
@@ -257,6 +260,13 @@ Where a packaged build launches with its user-data directory and state root redi
 Where an environment variable consulted by an adapter readiness check (for example, `ANTHROPIC_API_KEY`) is exported only in the user's login-shell profile and absent from the app's launch environment, when the test suite starts the app and queries adapter readiness, the test suite shall assert that the check reports the adapter ready, proving the captured login-shell environment reached the core before readiness checks ran [[app-shell-12](#app-shell-12)].
 
 ### Supplied Runtime Coverage
+
+#### app-shell-43
+
+When a native desktop package is built, its packaging gate shall run the packaged compiler's own strict FSM type check on the packaged Electron, accept a valid minimal XState machine using Node types, reject an invalid context type, and verify every declaration it reads lies within the package's physical dependency tree [[app-shell-13](#app-shell-13)], without source-checkout or global declarations.
+
+- The gate provisions the archived core's default engine links and invokes its actual registry bundler, importing the produced module with the supplied native service and physical engine copies, with no global binary override.
+- The hooks load from both the desktop workspace and the repository-root `--projectDir` entry point, and the gate uses the platform packager's executable name, including the native acceptance build's override.
 
 #### app-shell-34
 

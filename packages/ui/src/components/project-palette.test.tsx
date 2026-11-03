@@ -126,7 +126,7 @@ describe("project palette keyboard contract (DR-011)", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  test.each([false, true])("visible Close dismisses the palette and restores its opener (local add: %s)", (addProjectOnly) => {
+  test.each([false, true])("header dismissal closes the palette and restores its opener (local add: %s)", (addProjectOnly) => {
     const onPick = vi.fn();
     const onAddPath = vi.fn(async () => PROJECTS[0]);
     const onCreatePath = vi.fn(async () => PROJECTS[1]);
@@ -152,7 +152,12 @@ describe("project palette keyboard contract (DR-011)", () => {
     fireEvent.click(opener);
     expect(screen.getByRole("dialog")).toBeTruthy();
     fireEvent.change(screen.getByTestId("palette-path"), { target: { value: "/tmp/unsaved-project" } });
-    fireEvent.click(screen.getByRole("button", { name: /^Close$/ }));
+    const close = screen.getByRole("button", { name: /^Close$/ });
+    expect(close.textContent).toBe("");
+    expect(close.closest("header")).toBeTruthy();
+    if (addProjectOnly) expect(within(close.closest("header")!).getByRole("heading", { name: "Add a local project" })).toBeTruthy();
+    else expect(within(close.closest("header")!).getByRole("textbox", { name: "Filter projects" })).toBeTruthy();
+    fireEvent.click(close);
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(document.activeElement).toBe(opener);
     expect(onPick).not.toHaveBeenCalled();
@@ -181,15 +186,15 @@ describe("project palette keyboard contract (DR-011)", () => {
     renderPalette();
     const dialog = screen.getByRole("dialog", { name: "Choose a project" });
     expect(dialog.getAttribute("aria-modal")).toBe("true");
-    const close = screen.getByTestId("palette-close");
+    const search = screen.getByTestId("palette-search");
     const last = screen.getByTestId("palette-academy");
     // Shift+Tab from the first control lands on the last, Tab from
     // the last lands on the first: focus never leaves the palette.
-    close.focus();
-    fireEvent.keyDown(close, { key: "Tab", shiftKey: true });
+    search.focus();
+    fireEvent.keyDown(search, { key: "Tab", shiftKey: true });
     expect(document.activeElement).toBe(last);
     fireEvent.keyDown(last, { key: "Tab" });
-    expect(document.activeElement).toBe(close);
+    expect(document.activeElement).toBe(search);
   });
 });
 
@@ -486,6 +491,9 @@ describe("projects-1, space-58: a folder added while signed in asks for its grou
     add();
     const picker = await screen.findByTestId(`space-picker-${ADDED.id}`);
     const selected = within(picker).getByTestId("space-pick-group-acme") as HTMLInputElement;
+    expect(document.activeElement).toBe(within(picker).getByTestId("space-pick-group-@ada"));
+    const header = within(picker).getByRole("heading", { name: "Add gamma to a group" }).closest("header")!;
+    expect(within(header).getByRole("button", { name: /^Close$/ }).textContent).toBe("");
     const submit = within(picker).getByTestId(`space-pick-submit-${ADDED.id}`) as HTMLButtonElement;
     fireEvent.click(selected);
     fireEvent.click(submit);
@@ -624,7 +632,7 @@ describe("run-view-168: this computer's From your groups", () => {
     expect(screen.queryByTestId("palette-groups")).toBeNull();
   });
 
-  test("one overflow explains a blocked code opening, and an allowed opening asks the contract on Space", async () => {
+  test("one overflow explains a blocked code opening, and an allowed opening connects immediately", async () => {
     const listing = { servers: [{ instance: SPEX, id: "9", name: "lab-9", group: "acme", open: false }], failures: [] };
     const command = vi.fn(async (type: string) => (type === "server.list" ? listing : {}));
     setClientForTests({ command, subscribe: vi.fn(async () => null), unsubscribe: vi.fn(async () => null), close: vi.fn() } as never);
@@ -655,10 +663,8 @@ describe("run-view-168: this computer's From your groups", () => {
       expect(document.activeElement).toBe(trigger);
       expect(blocked.onClose).not.toHaveBeenCalled();
       cleanup();
-      // [run-view-168] [run-view-170] with a remote, the entry opens the
-      // seat: this device's first open asks the contract beneath the
-      // server's line on this computer's Space, which the palette shows,
-      // closing.
+      // [run-view-168] [run-view-170] with a remote, the first explicit
+      // open starts the connection and shows its progress on Space.
       useAppStore.setState({ space: signedIn([{ ...ABSENT, code: "Code: github.com", codeKind: "elsewhere" }]) });
       const onShowSpace = vi.fn();
       const { onClose } = renderPalette({ onShowSpace });
@@ -672,11 +678,10 @@ describe("run-view-168: this computer's From your groups", () => {
       expect(document.activeElement).toBe(allowedTrigger);
       fireEvent.click(allowedTrigger);
       fireEvent.click(screen.getByTestId(`palette-open-at-${place}-${ABSENT.key}`));
-      expect(useServerOpens.getState().lines[place]?.asking).toBe(true);
-      expect(useServerOpens.getState().pending[`${place}|301`]?.stage).toBe("seat");
       expect(onShowSpace).toHaveBeenCalledOnce();
       expect(onClose).toHaveBeenCalledOnce();
-      expect(command).not.toHaveBeenCalledWith("server.open", expect.anything());
+      expect(command).toHaveBeenCalledWith("server.open", { instance: SPEX, serverId: "9", consented: true });
+      expect(command.mock.calls.filter(([type]) => type === "server.open")).toHaveLength(1);
     } finally {
       setClientForTests(undefined);
       useServerOpens.setState({ lines: {}, pending: {}, landed: 0 });

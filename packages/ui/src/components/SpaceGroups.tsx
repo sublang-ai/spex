@@ -121,6 +121,7 @@ import {
 import { AddInstance, InstanceSection } from "./SpaceInstance.js";
 import { GroupServers, InstanceServers } from "./SpaceServers.js";
 import { GroupNameEditor, MembersPanel } from "./SpaceMembers.js";
+import { PanelCloseButton } from "./PanelCloseButton.js";
 import { ATTACHED_OWNER, ATTACHED_PANEL } from "./SpacePanel.js";
 import { MoreMenu, type MenuEntry } from "./SpaceMenu.js";
 import { CombineConfirm, SharingConfirm, combineLabel, combiningLabel, continueLabel, entryName, placementGroupName } from "./SpacePlacements.js";
@@ -1764,12 +1765,15 @@ function RepositoryRow({
             }
           }}
         >
+          <header className="flex min-w-0 items-start justify-between gap-3">
+            <h4 className="min-w-0 break-words text-sm font-medium text-neutral-900 dark:text-neutral-100">
+              {i18n._({ id: "Code for {name}", values: { name }, comment: "accessible name of an attached project's code-remote explanation" })}
+            </h4>
+            <PanelCloseButton onClick={() => close("code")} />
+          </header>
           <p>{i18n._({ id: "Spex has no remote repository address for this project's code.", comment: "explains missing saved code-remote metadata without claiming that the folder is not a Git repository" })}</p>
           <p>{i18n._({ id: "Set the project folder's Git origin remote, then sync records to update the project.", comment: "how to refresh the project's recorded code remote from the folder; origin is Git's standard remote name" })}</p>
           <p>{needsCodeRemoteLabel()}</p>
-          <button type="button" className={SECONDARY} onClick={() => close("code")}>
-            {i18n._({ id: "Close", comment: "close the attached project's code-remote explanation" })}
-          </button>
         </div>
       ) : null}
       {caption ? (
@@ -1976,7 +1980,7 @@ interface PickSection {
  * Reading and selecting never mutate the project. The current Space's
  * destinations are resolved again on every render, so a removed group
  * or signed-out Space cannot leave an actionable stale selection. */
-export function GroupPicker({ id, embedded = false, focusRequest, groups, repo, connected, onClose, onNote, onPendingChange }: {
+export function GroupPicker({ id, embedded = false, focusRequest, groups, repo, connected, headerAction, onClose, onNote, onPendingChange }: {
   /** The row opener's controlled form; the palette owns its own dialog. */
   id?: string;
   embedded?: boolean;
@@ -1984,6 +1988,8 @@ export function GroupPicker({ id, embedded = false, focusRequest, groups, repo, 
   groups: GroupsState;
   repo: RepositoryState;
   connected: boolean;
+  /** The enclosing palette's dismissal action, beside this form's title. */
+  headerAction?: ReactNode;
   onClose(): void;
   onNote: Note;
   onPendingChange?(pending: boolean): void;
@@ -2011,6 +2017,7 @@ export function GroupPicker({ id, embedded = false, focusRequest, groups, repo, 
   const refocus = useRef(false);
   const pickerRef = useRef<HTMLDivElement>(null);
   const submitRef = useRef<HTMLButtonElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
   const ids = useId();
   const section = sections.find((entry) => entry.instance.origin === origin);
   const selected = selection?.origin === section?.instance.origin ? selection : undefined;
@@ -2022,7 +2029,7 @@ export function GroupPicker({ id, embedded = false, focusRequest, groups, repo, 
 
   useEffect(() => {
     const panel = pickerRef.current;
-    (panel?.querySelector<HTMLElement>("input:checked") ?? panel?.querySelector<HTMLElement>("select, input, button"))?.focus();
+    (panel?.querySelector<HTMLElement>("input:checked") ?? panel?.querySelector<HTMLElement>("select, input") ?? cancelRef.current)?.focus();
   }, [focusRequest]);
   useLayoutEffect(() => {
     if (busy) pickerRef.current?.focus();
@@ -2098,7 +2105,10 @@ export function GroupPicker({ id, embedded = false, focusRequest, groups, repo, 
           if (!submitting.current) onClose();
         }
       }}>
-      <h3 id={ids + "-title"} className="min-w-0 break-words text-sm font-medium">{title}</h3>
+      <header className="flex min-w-0 items-start justify-between gap-3">
+        <h3 id={ids + "-title"} className="min-w-0 flex-1 break-words text-sm font-medium">{title}</h3>
+        {headerAction}
+      </header>
       <div data-testid={"space-pick-context-" + repo.key} className="flex min-w-0 items-baseline gap-2">
         <label id={ids + "-space-label"} htmlFor={sections.length > 1 ? ids + "-space" : undefined} className="shrink-0 text-xs font-medium text-neutral-600 dark:text-neutral-400">
           {i18n._({ id: "Space", comment: "label identifying the Space that holds the destination groups" })}<span aria-hidden>:</span>
@@ -2183,7 +2193,7 @@ export function GroupPicker({ id, embedded = false, focusRequest, groups, repo, 
       ) : null}
       {refusal ? <p role="alert" className="break-words text-sm text-red-600 dark:text-red-400">{refusal}</p> : null}
       <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 border-t border-neutral-200 pt-2 dark:border-neutral-700">
-        <button type="button" data-testid={"space-pick-cancel-" + repo.key} className={SECONDARY} disabled={busy} onClick={onClose}>
+        <button ref={cancelRef} type="button" data-testid={"space-pick-cancel-" + repo.key} className={SECONDARY} disabled={busy} onClick={onClose}>
           {i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}
         </button>
         <button ref={submitRef} type="button" data-testid={"space-pick-submit-" + repo.key} className={PRIMARY} disabled={disabled || !target}

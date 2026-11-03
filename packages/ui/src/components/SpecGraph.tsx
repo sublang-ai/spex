@@ -51,6 +51,7 @@ import {
 } from "../lib/spec-graph-layout.js";
 import { GROUP_NAME, GROUP_WORD, type SpecGroup } from "../lib/spec-view-model.js";
 import { i18n } from "../i18n.js";
+import { PanelCloseButton } from "./PanelCloseButton.js";
 
 export {
   buildGraphModel,
@@ -304,7 +305,7 @@ function PackageLines({ node, action }: { node: GraphNode; action?: ReactNode })
   }`;
   return (
     <>
-      <div className="flex min-w-0 items-start gap-2">
+      <div className="flex min-w-0 items-center gap-2">
         <span
           data-testid="graph-card-name"
           title={node.basename}
@@ -1813,15 +1814,11 @@ export function SpecGraph({
           >
             <div className="shrink-0 px-2.5 py-2">
               <PackageLines node={selectedNode} action={
-                <button
-                  type="button"
+                <PanelCloseButton
                   data-testid="graph-selection-close"
-                  aria-label={i18n._("Close {name}'s details", { name: selectedNode.basename })}
-                  className="min-h-6 shrink-0 rounded border border-neutral-300 px-1.5 py-0.5 text-xs hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
+                  label={i18n._("Close {name}'s details", { name: selectedNode.basename })}
                   onClick={() => dismissSelection(true)}
-                >
-                  {i18n._("Close")}
-                </button>
+                />
               } />
             </div>
             {relationships.length > 0 ? (

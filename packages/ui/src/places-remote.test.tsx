@@ -15,8 +15,8 @@
 // computer lacks, once, every row — an open project's or a group's —
 // carrying its Space row's Open control: "Open on <server>" sends that
 // seat's core a join with no folder, reads "Signing in to <Space>…",
-// disabled, while that seat's sign-in runs, and asks the server's
-// contract on this computer's Space where no seat is open there; "Open
+// disabled, while that seat's sign-in runs, and opens the server
+// immediately where no seat is open there; "Open
 // on <server>" shows a seat's existing project; "Open here" opens into the folder
 // the shell's picker took or a path named in place; and this computer's
 // welcome page opens the palette there while signed in and leads to the
@@ -954,6 +954,7 @@ describe("run-view-171: opening a group's project on a seat", () => {
     expect(pickDirectory).not.toHaveBeenCalled();
     // Accepted, the palette closes; the open reports on the Space row.
     expect(screen.queryByTestId("project-palette")).toBeNull();
+    expect(screen.queryByTestId("space-surface")).toBeNull();
 
     // [run-view-168] while that open runs, its entry is not offered
     // twice.
@@ -980,10 +981,11 @@ describe("run-view-171: opening a group's project on a seat", () => {
     expect(callsOf(alpha, "space.join")).toHaveLength(1);
   });
 
-  test("with no seat open at the server, Open on <server> asks its contract on this computer's Space, the palette closing", async () => {
+  test("with no seat open, the palette connects immediately and shows progress on this computer's Space", async () => {
     const LAB = `${SPEX}#43`;
     local.answers["server.list"] = listing({ instance: SPEX, id: "43", name: "lab-box", group: "acme/lab", open: false });
-    local.answers["server.open"] = { place: LAB, leaseExpiresAt: Date.now() + 3_600_000 };
+    let admit!: (value: unknown) => void;
+    local.answers["server.open"] = () => new Promise((resolve) => { admit = resolve; });
     render(<App />);
     // From a seat's Space surface.
     goTo("Space");
@@ -995,23 +997,18 @@ describe("run-view-171: opening a group's project on a seat", () => {
     expect(entriesOf(menu)).toEqual(["Open on build-box", "Open on gpu-box", "Open on lab-box"]);
     fireEvent.click(within(menu).getByTestId(`palette-open-at-${LAB}-${ABSENT_KEY}`));
     await settle();
-    // [run-view-171] [run-view-170] this device's first open of a seat
-    // there: the palette closes on this computer's Space, the server's
-    // contract beneath its line, nothing sent yet.
+    // The first explicit open starts at once and closes the palette on
+    // this computer's Space, where its progress and any refusal are shown.
     expect(screen.queryByTestId("project-palette")).toBeNull();
     expect(document.querySelector('[data-surface="Space"]')!.getAttribute("aria-current")).toBe("page");
     expect(shownPlace()).toBe("This computer");
-    const contract = screen.getByTestId(`space-server-contract-${LAB}`);
-    expect(screen.getByTestId(`space-server-${LAB}`).contains(contract)).toBe(true);
-    expect(callsOf(local, "server.open")).toEqual([]);
-    // [run-view-171] "I understand" sends `server.open` with consent to
-    // the local core alone.
-    fireEvent.click(within(contract).getByTestId(`space-server-consent-${LAB}`));
-    await settle();
+    expect(screen.getByTestId(`space-server-connecting-${LAB}`).textContent).toBe("Connecting to lab-box…");
     expect(callsOf(local, "server.open")).toEqual([{ instance: SPEX, serverId: "43", consented: true }]);
     expect(callsOf(alpha, "server.open")).toEqual([]);
     expect(callsOf(beta, "server.open")).toEqual([]);
     expect(callsOf(alpha, "space.join")).toEqual([]);
+    admit({ place: LAB, leaseExpiresAt: Date.now() + 3_600_000 });
+    await settle();
   });
 });
 

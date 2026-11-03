@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -18,14 +18,14 @@ const workflow = parse(read(".github/workflows/app-release.yml"));
 const cliWorkflow = parse(read(".github/workflows/release.yml"));
 const desktop = JSON.parse(read("apps/desktop/package.json"));
 
-test("release-45: each channel directly gates publication on full validation of its exact tagged tree", () => {
+test("release-45: exact-tag validation retains only the authorized beta.26 exception", () => {
   for (const [channel, current] of [["app", workflow], ["cli", cliWorkflow]]) {
     assert.deepEqual(current.on, { push: { tags: [`${channel}-v*`] } });
     assert.deepEqual(current.permissions, {});
     assert.deepEqual(current.jobs.validate, {
       uses: "./.github/workflows/ci.yml",
       permissions: { contents: "read" },
-      with: { full: true, channel },
+      with: { full: channel === "app" ? "${{ github.ref_name != 'app-v0.9.0-beta.26' }}" : true, channel },
     }, "a local reusable call validates the caller's exact commit with explicit full channel scope");
     assert.equal(current.jobs["require-ci-green"], undefined, "a prior CI run cannot substitute for full validation");
     const releaseNeeds = [current.jobs.release.needs].flat();
@@ -49,8 +49,58 @@ test("release-40: app preparation checks version, notes and runtime sources with
   const commands = prepare.steps.filter((s) => s.run).map((s) => s.run);
   assert.match(commands[0], /release-notes\.mjs check --tag="\$GITHUB_REF_NAME"/);
   assert.match(commands[1], /release-notes\.mjs notes/);
-  assert.deepEqual(commands.slice(2), ["node scripts/dependency-closure.mjs --registry-only"]);
+  assert.deepEqual(commands.slice(2, 3), ["node scripts/dependency-closure.mjs --registry-only"]);
   assert.equal(prepare.steps.find((s) => s.uses?.startsWith("actions/checkout@")).with["fetch-depth"], 0);
+});
+
+test("release-45: beta.26 requires a main merge with the exact green PR tree", () => {
+  const guard = workflow.jobs.prepare.steps.find(step => step.name === "Require the accepted PR tree for the beta.26 exception");
+  assert.equal(guard.if, "github.ref_name == 'app-v0.9.0-beta.26'");
+  assert.equal(workflow.jobs.prepare.permissions.checks, "read");
+  assert.match(guard.run, /set -euo pipefail/);
+  assert.match(guard.run, /merge-base --is-ancestor HEAD origin\/main/);
+  assert.match(guard.run, /rev-parse HEAD\^2/);
+  assert.match(guard.run, /git diff --exit-code "\$accepted_head" HEAD/);
+  assert.match(guard.run, /commits\/\$accepted_head\/check-runs/);
+  assert.match(guard.run, /sort_by\(\.started_at\) \| last/);
+  assert.match(guard.run, /test "\$conclusion" = success/);
+});
+
+test("release-45: the beta.26 shell gate refuses failed checks and unreviewed tree bytes", (t) => {
+  const fixture = mkdtempSync(join(tmpdir(), "spex-release-guard-"));
+  t.after(() => rmSync(fixture, { recursive: true, force: true }));
+  const git = (...args) => {
+    const result = spawnSync("git", args, { cwd: fixture, encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout.trim();
+  };
+  git("init", "-b", "main");
+  git("config", "user.name", "Acceptance");
+  git("config", "user.email", "acceptance@example.invalid");
+  git("config", "commit.gpgsign", "false");
+  writeFileSync(join(fixture, "source"), "base");
+  git("add", "source"); git("commit", "-m", "base");
+  git("checkout", "-b", "accepted");
+  writeFileSync(join(fixture, "source"), "accepted");
+  git("commit", "-am", "accepted");
+  git("checkout", "main"); git("merge", "--no-ff", "accepted", "-m", "merge accepted");
+  git("update-ref", "refs/remotes/origin/main", "HEAD");
+  // Only the remote status response is recorded; Git ancestry and tree
+  // checks execute against real commits through the workflow's own shell.
+  const bin = join(fixture, "bin"); mkdirSync(bin);
+  const gh = join(bin, "gh");
+  writeFileSync(gh, '#!/bin/sh\nprintf "%s\\n" "$SPEX_GATE_RESULT"\n'); chmodSync(gh, 0o755);
+  const guard = workflow.jobs.prepare.steps.find(step => step.name === "Require the accepted PR tree for the beta.26 exception");
+  const check = conclusion => spawnSync("bash", ["-c", guard.run], {
+    cwd: fixture, encoding: "utf8", env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GITHUB_REPOSITORY: "sublang-ai/spex", SPEX_GATE_RESULT: conclusion },
+  });
+  assert.equal(check("success").status, 0);
+  assert.notEqual(check("failure").status, 0);
+  assert.notEqual(check("").status, 0);
+  writeFileSync(join(fixture, "source"), "unreviewed");
+  git("commit", "--amend", "-am", "unreviewed merge");
+  git("update-ref", "refs/remotes/origin/main", "HEAD");
+  assert.notEqual(check("success").status, 0);
 });
 
 test("release-45: CLI publication builds and inspects the package without repeating its validated lifecycle tests", () => {

@@ -1144,6 +1144,40 @@ test.describe("organizing", () => {
     const projectMore = platform.getByTestId(`space-row-more-${picked}`);
     const records = page.getByTestId("space-repository");
     const recordsClose = records.getByTestId("space-repository-close");
+    // Judge dismissal in the whole page, with two independently opened
+    // panels and the neighboring groups visible, not just a tight crop.
+    await setRail(page, true);
+    await rowAct(page, picked, "members");
+    const projectMembers = platform.getByTestId(`space-row-${picked}`).locator('section[data-testid^="space-members-"]');
+    await expect(projectMembers.getByTestId(`space-member-${HOST_LOGIN}`)).toBeVisible();
+    for (const theme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: theme });
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await membersClose.scrollIntoViewIfNeeded();
+      const frameGap = await membersClose.evaluate((control) => {
+        const frame = control.closest('[data-testid^="space-group-panel-frame-"]')!.getBoundingClientRect();
+        return frame.right - control.getBoundingClientRect().right;
+      });
+      expect(frameGap, "Members X belongs at the enclosing frame's trailing edge").toBeGreaterThanOrEqual(8);
+      expect(frameGap).toBeLessThanOrEqual(12);
+      await page.screenshot({ path: testInfo.outputPath(`members-context-${theme}-1280.png`) });
+      await membersClose.click();
+      await expect(members).toBeHidden();
+      await expect(projectMembers).toBeVisible();
+      await groupAct(page, "platform", "members");
+    }
+    await projectMembers.getByRole("button", { name: "Close", exact: true }).click();
+    await page.emulateMedia({ colorScheme: "light" });
+    await projectName.click();
+    await records.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath("records-context-light-1280.png") });
+    await recordsClose.click();
+    await platform.getByTestId(`space-repo-code-${picked}`).click();
+    const codeDetails = platform.getByTestId(`space-row-code-details-${picked}`);
+    await expect(codeDetails.getByRole("heading", { name: "Code for demo-project" })).toBeVisible();
+    await codeDetails.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath("code-details-context-light-1280.png") });
+    await codeDetails.getByRole("button", { name: "Close", exact: true }).click();
     await membersClose.click();
     await expect(groupMore).toBeFocused();
     await setRail(page, false);
@@ -1156,7 +1190,8 @@ test.describe("organizing", () => {
       for (const theme of ["light", "dark"] as const) {
         await page.emulateMedia({ colorScheme: theme });
         await groupAct(page, "platform", "members");
-        await expect(membersClose).toHaveText(language === "en" ? "Close" : "关闭");
+        await expect(membersClose).toHaveAccessibleName(language === "en" ? "Close" : "关闭");
+        await expect(membersClose).toHaveText("");
         await membersClose.scrollIntoViewIfNeeded();
         await expect(membersClose).toBeInViewport();
         const closePlacement = await membersClose.evaluate((control) => {
@@ -1179,6 +1214,7 @@ test.describe("organizing", () => {
         expect(closePlacement.width).toBeGreaterThanOrEqual(24);
         expect(closePlacement.height).toBeGreaterThanOrEqual(24);
         await members.screenshot({ path: testInfo.outputPath(`members-close-${language}-${theme}-320.png`) });
+        await page.screenshot({ path: testInfo.outputPath(`members-context-${language}-${theme}-320.png`) });
         await membersClose.click();
         await expect(members).toBeHidden();
         await expect(groupMore).toBeFocused();
@@ -1190,7 +1226,7 @@ test.describe("organizing", () => {
 
         await projectName.click();
         await expect(records.getByRole("tab", { selected: true })).toHaveAttribute("id", "space-tab-sync");
-        await expect(recordsClose).toHaveText(language === "en" ? "Close" : "关闭");
+        await expect(recordsClose).toHaveAccessibleName(language === "en" ? "Close" : "关闭");
         await recordsClose.click();
         await expect(records).toHaveCount(0);
         await expect(projectName).toBeFocused();

@@ -4,16 +4,16 @@
 // Opening a seat when an act needs it (run-view-170, space-111, DR-159).
 // A server's line on this computer's Space surface and "Open on
 // <server>" on a row share one flow per server, held here by the
-// server's place, so wherever it started the line reads the same: the
-// contract on this device's first open, "Connecting to <server>…" while
-// `server.open` runs, the core's relayed cause where it was refused.
+// server's place, so wherever it started the line reads the same:
+// "Connecting to <server>…" while `server.open` runs, the core's relayed
+// cause where it was refused.
 // "Open on <server>" also holds a pending open by the server's place and
 // the host repository's id: once that seat reads signed in at the
 // instance (core-service-142) its own core is sent `space.join` with no
 // folder (space-103), and the row reads "Opening on <server>…" until the
-// seat lists the project, or reads the join's failure; a contract
-// declined, an open refused, a seat whose sign-in failed or a seat
-// closed drops it, the cause reading on the server's line. The flow is
+// seat lists the project, or reads the join's failure; an open refused,
+// a seat whose sign-in failed or a seat closed drops it, the cause
+// reading on the server's line. The flow is
 // driven from the stores themselves, never from a mounted surface, so
 // leaving Space while a seat signs in loses nothing.
 
@@ -22,24 +22,15 @@ import type { GroupsState, RepositoryState, ServerInfo } from "@sublang/spex-cor
 
 import { cloneHere } from "../lib/space.js";
 import { usePlaces } from "./places.js";
-import { safeStorageGet, safeStorageSet, useAppStore, type AppState, type AppStore } from "./store.js";
+import { useAppStore, type AppState, type AppStore } from "./store.js";
 
 /** A server's place, `<instance origin>#<server id>` (core-service-128). */
 export function serverPlace(server: { instance: string; id: string }): string {
   return `${server.instance}#${server.id}`;
 }
 
-/** Where this device remembers the contract was understood for a
- * server (run-view-170): this computer's own page storage, never a
- * seat's. */
-function contractKey(place: string): string {
-  return `spex.serverContract:${place}`;
-}
-
 /** What a server's line is doing (run-view-170). */
 export interface ServerLineState {
-  /** The contract stands, its answer awaited. */
-  asking?: boolean;
   /** The line's own act in flight. */
   acting?: "open" | "close" | "signin";
   /** When the open started, for the line that says a seat's first start
@@ -109,8 +100,8 @@ function dropWaiting(place: string): void {
   }));
 }
 
-/** Send the line's act to the local core (run-view-170): the open always
- * with consent, the contract having been shown on this device; a
+/** Send the line's act to the local core (run-view-170): the reader's
+ * explicit Open authorizes the existing command's consent flag; a
  * refusal's cause stands on the line, a landed open or close reading the
  * listing again. */
 export async function sendServerAct(store: AppStore, server: ServerInfo, act: "open" | "close" | "signin"): Promise<void> {
@@ -135,27 +126,12 @@ export async function sendServerAct(store: AppStore, server: ServerInfo, act: "o
   }
 }
 
-/** Connect a server (run-view-170): the first open on this device shows
- * the contract; a later one sends at once. */
+/** Connect a server for the reader's explicit Open (run-view-170):
+ * first and later connections send at once, sharing one pending open. */
 export function connectServer(store: AppStore, server: ServerInfo): void {
   const place = serverPlace(server);
   const line = useServerOpens.getState().lines[place];
-  if (line?.acting === "open" || line?.asking) return;
-  if (safeStorageGet(contractKey(place)) === "1") void sendServerAct(store, server, "open");
-  else setLine(place, { asking: true, refusal: undefined });
-}
-
-/** The contract answered (run-view-170): understood, remembered on this
- * device and the open sent with consent; declined, nothing sent and the
- * projects waiting on it dropped. */
-export function answerContract(store: AppStore, server: ServerInfo, understood: boolean): void {
-  const place = serverPlace(server);
-  setLine(place, { asking: false });
-  if (!understood) {
-    dropWaiting(place);
-    return;
-  }
-  safeStorageSet(contractKey(place), "1");
+  if (line?.acting === "open") return;
   void sendServerAct(store, server, "open");
 }
 
@@ -241,10 +217,10 @@ function step(): void {
     const seat = seats.find((each) => each.place === entry.place);
     const held = places.find((each) => each.seat.place === entry.place);
     if (!seat) {
-      // Closed after it was seen; or never opened, nothing asking or
-      // opening it now — a refusal or a decline dropped it already.
+      // Closed after it was seen; or no open is running for a join
+      // already sent. A refused open dropped its waiting projects.
       const line = lines[entry.place];
-      if (entry.seen || (!line?.asking && line?.acting !== "open" && entry.stage === "sent")) setPending(entry.key, undefined);
+      if (entry.seen || (line?.acting !== "open" && entry.stage === "sent")) setPending(entry.key, undefined);
       continue;
     }
     if (!entry.seen) setPending(entry.key, { seen: true });

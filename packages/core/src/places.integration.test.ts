@@ -225,7 +225,7 @@ test("core-service-130: server.list names each signed-in instance's servers, one
   assert.ok([...first.script.serverCalls, ...second.script.serverCalls].every((call) => call.method === "GET"));
 });
 
-test("core-service-130, storage-45: server.open asks nothing without consent; with it the seat's entry is written owner-only, the reply carries the place and the expiry alone, and server.close removes the entry and announces server.state", async (t) => {
+test("core-service-130, storage-45: server.open asks nothing without an explicit authorization flag; with it the seat's entry is written owner-only, the reply carries the place and the expiry alone, and server.close removes the entry and announces server.state", async (t) => {
   const host = await startHost();
   const hub = await startHub(host);
   const home = await startHome("places-open", { host, project: false, extra: { serverCertificateAuthorities: [hub.ca] } });
@@ -236,16 +236,17 @@ test("core-service-130, storage-45: server.open asks nothing without consent; wi
   // At the connection the core sent the seats it holds: none.
   await seatsAfter(() => home.client.messages, 0, (seats) => seats.length === 0);
 
-  // Without consent: refused, and nothing asked of the instance or the hub.
-  await home.client.expectError("server.open", { instance: host.url, serverId: SERVER }, "invalid_request", /^Accept the server's terms before connecting$/);
-  await home.client.expectError("server.open", { instance: host.url, serverId: SERVER, consented: false }, "invalid_request", /^Accept the server.s terms before connecting$/);
+  // Without explicit authorization: refused, and nothing asked of the
+  // instance or the hub.
+  await home.client.expectError("server.open", { instance: host.url, serverId: SERVER }, "invalid_request", /^Opening a server requires an explicit request$/);
+  await home.client.expectError("server.open", { instance: host.url, serverId: SERVER, consented: false }, "invalid_request", /^Opening a server requires an explicit request$/);
   assert.equal(host.script.serverCalls.length, 0, "no listing and no ticket was asked");
   assert.equal(host.script.tickets.length, 0);
   assert.equal(hub.admissions.length, 0);
   assert.equal(existsSync(file), false);
 
-  // With consent: a ticket asked with the instance's token, presented at
-  // the hub, the seat kept and announced.
+  // With explicit authorization: a ticket asked with the instance's
+  // token, presented at the hub, the seat kept and announced.
   const from = home.client.mark();
   const opened = await home.client.expectOk("server.open", { instance: host.url, serverId: SERVER, consented: true });
   const place = `${host.url}#${SERVER}`;

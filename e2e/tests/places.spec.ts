@@ -207,20 +207,13 @@ test("run-view-173: one desktop opens two seats and reads its places, its joined
   await expect(moreTwo).toHaveCount(0);
 
   // [run-view-173] [run-view-170] the first "Open on lab-1", on a group
-  // project's row, shows the terms as bullets — the Space sign-in placed
-  // on the server, private packages needing a separate registry sign-in
-  // there — naming neither seat nor ticket (DR-172), and asks nothing
-  // yet; "I understand" sends `server.open` with consent.
+  // project's row, sends `server.open` immediately without an
+  // acknowledgement panel.
   await expect(group.getByTestId(`space-row-${notes}`)).toBeVisible();
   await (await otherPlaces(page, notes)).getByTestId(`space-row-open-at-${one.place}-${notes}`).click();
   const contract = page.getByTestId(`space-server-contract-${one.place}`);
-  await expect(contract.getByRole("listitem").first()).toBeVisible();
-  await expect(contract).toContainText("Space sign-in on lab-1");
-  await expect(contract).toContainText("separate registry sign-in on lab-1");
-  await expect(contract).not.toContainText(/\b(seats?|tickets?)\b/i);
-  expect(opensSent(tap.sent)).toEqual([]);
-  expect(one.hub.admissions).toEqual([]);
-  await page.getByTestId(`space-server-consent-${one.place}`).getByText("I understand").click();
+  await expect(contract).toHaveCount(0);
+  await expect(page.getByTestId(`space-server-consent-${one.place}`)).toHaveCount(0);
   // Open, the line holds its overflow, which holds Disconnect, and still
   // no control of its own (run-view-170).
   await expect(moreOne).toBeVisible({ timeout: 30_000 });
@@ -234,12 +227,11 @@ test("run-view-173: one desktop opens two seats and reads its places, its joined
   await joinLanded(one.seat, notes);
 
   // The second server's first "Open on lab-2" on this computer, of the
-  // other project, shows its own terms (run-view-170): understood, it
-  // opens too, reading Connected with its overflow.
+  // other project, also connects immediately (run-view-170), reading
+  // Connected with its overflow.
   await (await otherPlaces(page, tools)).getByTestId(`space-row-open-at-${two.place}-${tools}`).click();
-  await expect(page.getByTestId(`space-server-contract-${two.place}`)).toContainText("Space sign-in on lab-2");
-  await expect(page.getByTestId(`space-server-contract-${two.place}`)).toContainText("separate registry sign-in on lab-2");
-  await page.getByTestId(`space-server-consent-${two.place}`).click();
+  await expect(page.getByTestId(`space-server-contract-${two.place}`)).toHaveCount(0);
+  await expect(page.getByTestId(`space-server-consent-${two.place}`)).toHaveCount(0);
   await expect(moreTwo).toBeVisible({ timeout: 30_000 });
   await expect(controlTwo).toHaveCount(0);
   await expect.poll(() => opensSent(tap.sent).at(-1)).toEqual({ instance: host.url, serverId: two.server.id, consented: true });

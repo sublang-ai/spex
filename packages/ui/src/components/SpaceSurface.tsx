@@ -51,6 +51,7 @@ import {
   tildify,
 } from "../lib/space.js";
 import { Icon } from "./Icon.js";
+import { PanelCloseButton } from "./PanelCloseButton.js";
 import { ChoicesContext, SyncTab, createChoices, forgetCompleted } from "./SpaceSync.js";
 import { ExploreTab } from "./SpaceExplorer.js";
 import { GroupsList } from "./SpaceGroups.js";
@@ -838,9 +839,7 @@ function RepositoryPanel({
             </Field>
             {absent ? null : <PathControls path={root} testId="space-clone-path" onNote={onNote} compact />}
           </div>
-          <button type="button" data-testid="space-repository-close" className={`${SECONDARY} shrink-0`} disabled={pending} onClick={onClose}>
-            {i18n._({ id: "Close", comment: "close the project records panel and return to its opener" })}
-          </button>
+          <PanelCloseButton data-testid="space-repository-close" disabled={pending} onClick={onClose} />
         </div>
         {repo.folder ? (
           <span

@@ -1073,11 +1073,6 @@ msgstr "A turn is already running in this session."
 msgid "a turn is being submitted in this session"
 msgstr "a turn is being submitted in this session"
 
-#. Refusal of Connect sent without the person's acceptance of the terms the Space fixes for team servers, which the server's line shows before the first connection
-#: src/places.ts
-msgid "Accept the server's terms before connecting"
-msgstr "Accept the server's terms before connecting"
-
 #. Storage diagnostic: an act names an intent no queue act created
 #: src/app-storage.ts
 msgid "act targets unknown intent {intentId}"
@@ -2166,6 +2161,11 @@ msgstr "only a closed intent leaves history"
 #: src/service.ts
 msgid "only a finished intent confirms done"
 msgstr "only a finished intent confirms done"
+
+#. Refusal of a server open command without the flag recording the person's explicit Open request
+#: src/places.ts
+msgid "Opening a server requires an explicit request"
+msgstr "Opening a server requires an explicit request"
 
 #. compile phase: slc optimizes the spec items
 #: src/authoring.ts

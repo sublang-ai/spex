@@ -56,7 +56,7 @@ import { Icon } from "./Icon.js";
 import { GroupPicker } from "./SpaceGroups.js";
 import { MoreMenu, type MenuEntry } from "./SpaceMenu.js";
 import { useServers } from "./SpaceServers.js";
-import { SECONDARY } from "./SpaceSurface.js";
+import { PanelCloseButton } from "./PanelCloseButton.js";
 
 /** A refusal as the palette shows it: the core's words, and Git's own
  * output where the core relayed it beside them (projects-34). */
@@ -200,8 +200,7 @@ export interface ProjectPaletteProps {
   /** Opened at "From your groups": the welcome page's "Open a project
    * from your groups" (run-view-172). */
   groupsAt?: string;
-  /** Show this computer's Space surface, where a server's contract is
-   * asked beneath its line (run-view-170). */
+  /** Show a new server connection's progress, sign-in or failure on Space. */
   onShowSpace?: () => void;
   /** Forward group-operation feedback to a region that survives this dialog. */
   onNote?: (message: string) => void;
@@ -507,8 +506,8 @@ export function ProjectPalette(props: ProjectPaletteProps) {
    * "Open on <server>" shows its workspace where that seat holds the
    * project, otherwise downloads it — disabled with a visible reason while
    * its records name no code remote, reading "Signing in to <Space>…"
-   * while that seat still signs in — opening the seat where none is,
-   * whose contract the Space surface asks beneath the server's line. */
+   * while that seat still signs in — opening the seat immediately where
+   * none is, then joining the project once that seat is signed in. */
   function placeEntries(repo: RepositoryState): MenuEntry[] {
     if (repo.own || repo.id === null || repo.state === "local-only" || repo.state === "unreachable") return [];
     const entries: MenuEntry[] = [];
@@ -556,7 +555,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
         disabled: noCode || waiting || signingIn !== undefined || busy,
         onSelect: () => {
           openOnServer(useAppStore, server, { key: repo.key, hostId });
-          if (useServerOpens.getState().lines[at]?.asking) props.onShowSpace?.();
+          if (!server.open) props.onShowSpace?.();
           props.onClose();
         },
       });
@@ -773,6 +772,8 @@ export function ProjectPalette(props: ProjectPaletteProps) {
     if (!pickerPending.current) props.onClose();
   }
 
+  const closeButton = <PanelCloseButton data-testid="palette-close" disabled={pickerSubmitting} onClick={close} />;
+
   /** The dialog's own keys: Escape closes from anywhere inside it,
    * and Tab wraps so focus never leaves it (DR-010 §6). */
   function dialogKeydown(event: React.KeyboardEvent): void {
@@ -860,17 +861,6 @@ export function ProjectPalette(props: ProjectPaletteProps) {
         onKeyDown={dialogKeydown}
         className="flex max-h-full w-[28rem] max-w-[90vw] flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-2xl dark:border-neutral-700 dark:bg-neutral-900"
       >
-        <div className="flex shrink-0 justify-end px-2 pt-2">
-          <button
-            type="button"
-            data-testid="palette-close"
-            disabled={pickerSubmitting}
-            onClick={close}
-            className={SECONDARY}
-          >
-            {i18n._("Close")}
-          </button>
-        </div>
         {space && pickingRepo ? (
           // The picker stands in place of the list (space-58): a pick or
           // Cancel — which leaves it local only — closes the palette.
@@ -879,6 +869,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
               groups={space}
               repo={pickingRepo}
               connected={connected}
+              headerAction={closeButton}
               onClose={props.onClose}
               onPendingChange={onPickerPendingChange}
               onNote={(message) => props.onNote?.(message)}
@@ -886,10 +877,13 @@ export function ProjectPalette(props: ProjectPaletteProps) {
           </div>
         ) : addProjectOnly ? (
           <>
-          <div data-testid="palette-own-project" className="min-h-0 overflow-y-auto p-4">
-            <h2 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">
+          <header className="flex shrink-0 items-start justify-between gap-3 px-4 pt-4">
+            <h2 className="min-w-0 flex-1 text-base font-semibold text-neutral-900 dark:text-neutral-100">
               {i18n._("Add a local project")}
             </h2>
+            {closeButton}
+          </header>
+          <div data-testid="palette-own-project" className="min-h-0 overflow-y-auto p-4 pt-0">
             <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
               {i18n._("Add an existing Git repository or create a new project.")}
             </p>
@@ -1022,7 +1016,13 @@ export function ProjectPalette(props: ProjectPaletteProps) {
           </>
         ) : (
         <>
-        {empty ? null : (
+        {empty ? (
+          <header className="flex shrink-0 items-center justify-between gap-3 px-4 py-2">
+            <h2 className="min-w-0 flex-1 text-sm font-medium">{i18n._("Add a project")}</h2>
+            {closeButton}
+          </header>
+        ) : (
+          <header className="flex shrink-0 items-center gap-2 border-b border-neutral-200 pr-2 dark:border-neutral-800">
           <input
             ref={searchRef}
             data-testid="palette-search"
@@ -1035,8 +1035,10 @@ export function ProjectPalette(props: ProjectPaletteProps) {
             }}
             onKeyDown={searchKeydown}
             placeholder={i18n._("Switch to a project…")}
-            className="border-b border-neutral-200 bg-transparent px-4 py-3 text-sm outline-none dark:border-neutral-800"
+            className="min-w-0 flex-1 bg-transparent px-4 py-3 text-sm outline-none"
           />
+          {closeButton}
+          </header>
         )}
         {/* The list is what yields inside the dialog's bound: the
             path row, its options, and a failure message keep their

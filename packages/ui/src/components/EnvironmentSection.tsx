@@ -855,6 +855,11 @@ function AddPopover({
   const panelRef = usePopover<HTMLDivElement>(open, { anchorRef, onClose: close });
   const baseId = useId();
   const label = i18n._({ id: "Add…", comment: "a Packages tab heading's control: opens the ways to add a package, from the registry, a folder or Git" });
+  const cancel = (
+    <button type="button" data-testid="add-cancel" className={BUTTON} disabled={adding} onClick={close}>
+      {i18n._({ id: "Cancel", comment: "dismiss the package-add form without sending a request" })}
+    </button>
+  );
 
   async function add(name: string, next: EnvironmentRequest): Promise<void> {
     if (addingRef.current) return;
@@ -963,15 +968,11 @@ function AddPopover({
           <div id={`${baseId}-panel`} role="tabpanel" aria-labelledby={`${baseId}-${shown}`}>
             <fieldset disabled={adding} className="min-w-0 border-0 p-0">
               {shown === "registry" ? <RegistryTab repository={repository} onAdd={add} /> : null}
-              {shown === "folder" && folder ? <FolderTab repository={repository} folder={folder} onAdd={add} /> : null}
-              {shown === "git" ? <GitTab onAdd={add} /> : null}
+              {shown === "folder" && folder ? <FolderTab repository={repository} folder={folder} onAdd={add} cancel={cancel} /> : null}
+              {shown === "git" ? <GitTab onAdd={add} cancel={cancel} /> : null}
             </fieldset>
           </div>
-          <div className="flex justify-end">
-            <button type="button" data-testid="add-cancel" className={BUTTON} disabled={adding} onClick={close}>
-              {i18n._({ id: "Cancel", comment: "dismiss the package-add form without sending a request" })}
-            </button>
-          </div>
+          {shown === "registry" ? <div className="flex justify-end">{cancel}</div> : null}
         </div>
       ) : null}
     </span>
@@ -1165,11 +1166,13 @@ function RequestForm({
   fields,
   ready,
   onSubmit,
+  cancel,
 }: {
   testId: string;
   fields: ReactNode;
   ready: boolean;
   onSubmit: () => Promise<void>;
+  cancel: ReactNode;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -1193,7 +1196,8 @@ function RequestForm({
           {error}
         </p>
       ) : null}
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        {cancel}
         <button type="submit" data-testid={`${testId}-submit`} disabled={busy || !ready} className={PRIMARY}>
           {addLabel(busy)}
         </button>
@@ -1232,10 +1236,12 @@ function FolderTab({
   repository,
   folder,
   onAdd,
+  cancel,
 }: {
   repository: string;
   folder: string;
   onAdd: (name: string, request: EnvironmentRequest) => Promise<void>;
+  cancel: ReactNode;
 }) {
   const store = usePlaceStore();
   const preview = store((current) => current.previewFolderPackage);
@@ -1284,6 +1290,7 @@ function FolderTab({
 
   return (
     <RequestForm
+      cancel={cancel}
       testId="folder-request"
       ready={current?.phase === "read" && (found !== null || name.trim().length > 0)}
       onSubmit={async () => {
@@ -1382,14 +1389,17 @@ function FolderTab({
  * tag, with the package's name. */
 function GitTab({
   onAdd,
+  cancel,
 }: {
   onAdd: (name: string, request: EnvironmentRequest) => Promise<void>;
+  cancel: ReactNode;
 }) {
   const [name, setName] = useState("");
   const [git, setGit] = useState("");
   const [rev, setRev] = useState("");
   return (
     <RequestForm
+      cancel={cancel}
       testId="git-request"
       ready={name.trim().length > 0 && git.trim().length > 0 && rev.trim().length > 0}
       onSubmit={async () => {
