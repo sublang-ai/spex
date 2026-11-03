@@ -86,7 +86,7 @@ function PublishRead({ choseSignIn, ...props }: PublishProps & { choseSignIn: bo
   // Remount synchronously when the upload destination changes, so an old
   // preview can never confirm against the new folder or account target.
   const key = JSON.stringify([props.repository, props.name, props.path, target?.origin,
-    target?.signedIn, target?.name, target?.login]);
+    target?.signedIn, target?.name, target?.login, target?.accountId]);
   return (
     <PublishAttempt
       key={key}

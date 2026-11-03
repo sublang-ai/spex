@@ -1,23 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// Legacy environments without registry settings at several instances
-// (environments-34/39, DR-168), through
-// real cores: a home signed in to two stand-in instances over one Git
-// backend, each relaying to a stand-in registry of its own, the first
-// the home's default instance; and a second home signed in only to a
-// third stand-in instance that the first's registry also answers. An
-// environment resolves at its instance's registry, or the default
-// instance's where it has none, with that instance's token, keeping the
-// registry its lock records for the same release; new pairings instead
-// lock the built-in at the public registry; and a compatibility install
-// takes each locked release from the environment's instance, else the
-// registry its lock records, else any instance the home is signed in
-// to. A search asks the registry of the environment it names, the orgs
-// a project's new playbook defaults from are asked of its environment's
-// registry, and a publish uses a separately obtained registry grant. A
-// registry refusing an instance's token signs that instance alone out,
-// where that token is still the stored pair's.
+// Independent registry accounts at several Spaces (DR-216), through real
+// cores. Explicit registry choices route package operations, exact installs
+// retain locked origins, and neither registry refusals nor Space placement
+// changes another service's grant or package source. Git sources continue
+// using their independently selected Space broker.
 
 import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
@@ -94,6 +82,16 @@ async function registrySignIn(home: Home, host: StandinHost): Promise<void> {
   if (start.flow === "browser") await (await fetch(start.url)).text();
   else host.script.approveDevice(start.userCode);
   await home.client.waitFor((message) => home.client.messages.indexOf(message) >= from && message.type === "registry.state" && message.state.origin === host.url && message.state.account !== null && message.state.signIn.phase === "idle");
+}
+
+/** Selecting a registry keeps the prior lock intact; resolving is the
+ * separate action that makes the changed manifest current. */
+async function selectRegistry(home: Home, key: string, origin: string): Promise<void> {
+  await home.client.expectOk("environment.registry.set", { repository: key, origin });
+  await home.client.expectOk("environment.resolve", { repository: key });
+  const state = await environmentOf(home, key, (candidate) => candidate.error !== null ||
+    (candidate.stale === null && candidate.packages.every((pkg) => pkg.installed)));
+  assert.equal(state.error, null);
 }
 
 /** The stand-ins' default person, and your own group's repository once
@@ -233,15 +231,9 @@ async function joinAt(home: Home, host: StandinHost, path: string, folder?: stri
   return key;
 }
 
-/** Two stand-in instances over one Git backend, each relaying to a
- * stand-in registry of its own, and a home signed in to the first, its
- * default instance, then to the second, the same person at both,
- * holding the second's project and a local-only one (environments-34).
- * A project added is local only, its pairing locking the built-in at
- * the default instance's registry; picked into your namespace at the
- * second, it is the second's project, its built-in locked at the
- * second's origin (environments-11). `registryFetch` stands between the
- * core and every registry where given. */
+/** Two Spaces over one Git backend and two explicitly selected registry
+ * accounts. Legacy project locks retain their original source when a
+ * Space placement or registry selection changes (DR-216). */
 async function twoInstances(t: TestContext, name: string, registryFetch?: typeof fetch) {
   const R1 = await startStandinRegistry({ dir: join(scratch, `${name}-registry-first`) });
   const R2 = await startStandinRegistry({ dir: join(scratch, `${name}-registry-second`) });
@@ -254,17 +246,27 @@ async function twoInstances(t: TestContext, name: string, registryFetch?: typeof
   await signIn(home, first);
   await home.client.waitRepository(signing, HOST_OWN, (repository) => repository.sync.phase === "done", 30_000);
   await signIn(home, second);
+  assert.deepEqual((await home.client.expectOk("environment.get", { repository: HOST_OWN })).registry,
+    { origin: PUBLIC_REGISTRY_ORIGIN, legacy: false }, "a legacy manifest does not inherit a Space registry");
+  await registrySignIn(home, first);
+  await registrySignIn(home, second);
+  await selectRegistry(home, HOST_OWN, first.url);
 
   const { key: added } = await addFolder(home, gitFolder("south"));
   assert.equal(registryOf(lockOf(home, added), BUILTIN_PACKAGE_NAME), first.url);
+  await selectRegistry(home, added, first.url);
   const south = await pickAt(home, added, second, "south");
-  await environmentOf(home, south, (state) => installedFrom(state, BUILTIN_PACKAGE_NAME, second.url));
-  assert.equal(registryOf(lockOf(home, south), BUILTIN_PACKAGE_NAME), second.url);
-  // The pick names the second, not the default, as its environment's
+  await environmentOf(home, south, (state) => installedFrom(state, BUILTIN_PACKAGE_NAME, first.url));
+  assert.equal(registryOf(lockOf(home, south), BUILTIN_PACKAGE_NAME), first.url, "Space placement preserves locked provenance");
+  assert.equal(requestsOf(home, south).registry, first.url, "Space placement preserves the explicit registry");
+  await selectRegistry(home, south, second.url);
+  // The pick changes only collaboration; explicit registry selection
+  // separately chooses package operations. The state names its
   // instance (environments-11, environments-2).
   assert.equal(spaceOf(home, south), second.url);
   assert.equal((await home.client.expectOk("environment.get", { repository: south })).instance, second.url, "the state names the environment's instance");
   const { key: local } = await addFolder(home, gitFolder("local"));
+  await selectRegistry(home, local, first.url);
   assert.equal(spaceOf(home, local), undefined, "a local-only project names no space");
   assert.equal((await home.client.expectOk("environment.get", { repository: local })).instance, first.url, "one naming none is the default instance's");
   assert.equal(rowOf(await home.client.expectOk("space.get", {}), local).instance, null, "a project with no instance");
@@ -272,7 +274,7 @@ async function twoInstances(t: TestContext, name: string, registryFetch?: typeof
   return { R1, R2, first, second, home, south, local };
 }
 
-test("environments-34, environments-5, environments-12, environments-3, environments-7, environments-11: the second's project resolves at the second's registry with its token, its lock recording the second's origin, and installs from it, the local-only project resolving at the first's; a lock recording the first's origin for a release the second's registry holds alike keeps it; a legacy project picked at the second keeps legacy source behavior while a fresh join or rebind uses the public registry; a release the second's registry lacks installs from the first's; and a second home installs a private release locked at the first's through the third with its token, failing naming it while signed out there", { timeout: 300_000 }, async (t) => {
+test("environments-38, environments-5, environments-12, environments-3, environments-7, environments-11: explicit registries resolve independently of Space placement, exact locked sources are preserved and installs neither scan Spaces nor borrow their grants", { timeout: 300_000 }, async (t) => {
   const { R1, R2, first, second, home, south, local } = await twoInstances(t, "instances");
   const third = await startHost({ registry: R1, displayName: "Third stand-in", person: GRACE });
 
@@ -347,8 +349,7 @@ test("environments-34, environments-5, environments-12, environments-3, environm
 
   // A public release the second's project locks at the first's origin,
   // which the second's registry lacks, installs from the first's: the
-  // second's registry asked first, then the first's with the first's
-  // token (environments-7, environments-12).
+  // pinned first registry alone asked with its registry grant (environments-7, environments-12).
   lockByHand(home, south, "acme/open", "1.0.0", await resolvedAt(new RegistryClient({ url: first.url }), "acme/open", "1.0.0"));
   assert.equal(registryOf(lockOf(home, south), "acme/open"), first.url);
   one = R1.script.received.length;
@@ -356,7 +357,7 @@ test("environments-34, environments-5, environments-12, environments-3, environm
   await home.client.expectOk("environment.install", { repository: south });
   state = await environmentOf(home, south, (candidate) => installedFrom(candidate, "acme/open", first.url) || candidate.error !== null);
   assert.equal(state.error, null);
-  assert.deepEqual(receivedFor(R2, two, "acme/open"), [["/api/v1/packages/acme/open/1.0.0", second.url, LOGIN, true]]);
+  assert.deepEqual(receivedFor(R2, two, "acme/open"), [], "an exact install does not scan the selected registry");
   assert.deepEqual(receivedFor(R1, one, "acme/open"), [
     ["/api/v1/packages/acme/open/1.0.0", first.url, LOGIN, true],
     ["/api/v1/packages/acme/open/1.0.0/download", first.url, LOGIN, true],
@@ -430,40 +431,45 @@ test("environments-34, environments-5, environments-12, environments-3, environm
   await assert.rejects(new RegistryClient({ url: first.url }).version("vault/secrets", "1.0.0"), (error: unknown) => error instanceof RegistryError && error.kind === "not_found",
     "the first's registry refuses the private release without a token");
 
-  // Signed out of the third, nothing serves it: the registry of the
-  // environment's instance — the home's default, the third, whose
-  // `spex.yaml` names no space (environments-2) — is asked with no
-  // token, then the first's, the lock's, with none, and the install
-  // fails naming the spec package, the last files staying
-  // (environments-7, environments-12).
-  await signOut(other, third);
+  // A Space grant at a different relay supplies neither trust nor a
+  // registry credential for the exact first-origin source (DR-216).
   one = R1.script.received.length;
   await other.client.expectOk("environment.install", { repository: copy });
   state = await environmentOf(other, copy, (candidate) => candidate.error !== null);
   assert.match(state.error ?? "", /vault\/secrets/);
   assert.equal(state.packages.find((pkg) => pkg.name === "vault/secrets")?.installed, false);
   assert.deepEqual(receivedFor(R1, one, "vault/secrets"), [
-    ["/api/v1/packages/vault/secrets/1.0.0", third.url, null, false],
+    ["/api/v1/packages/vault/secrets/1.0.0", first.url, null, false],
+  ], "only the pinned registry is asked, anonymously");
+  assert.equal(instanceOf(await other.client.expectOk("space.get", {}), third.url)?.signedIn, true);
+
+  // Even a registry grant at the unrelated third origin cannot replace
+  // the pinned source's own account.
+  await registrySignIn(other, third);
+  one = R1.script.received.length;
+  await other.client.expectOk("environment.install", { repository: copy });
+  state = await environmentOf(other, copy, (candidate) => candidate.error !== null);
+  assert.deepEqual(receivedFor(R1, one, "vault/secrets"), [
     ["/api/v1/packages/vault/secrets/1.0.0", first.url, null, false],
   ]);
 
-  // Signed in to the third again, it installs through the third, the
-  // environment's instance, with the third's token, the first's
-  // registry asked nothing directly; the lock still records the first's
-  // origin (environments-7, environments-12).
-  await signIn(other, third);
+  // Its own registry grant permits installation without changing the
+  // lock's source or the third Space's distinct account.
+  await registrySignIn(other, first);
   one = R1.script.received.length;
   await other.client.expectOk("environment.install", { repository: copy });
   state = await environmentOf(other, copy, (candidate) => installedFrom(candidate, "vault/secrets", first.url) || candidate.error !== null);
   assert.equal(state.error, null);
   assert.deepEqual(receivedFor(R1, one, "vault/secrets"), [
-    ["/api/v1/packages/vault/secrets/1.0.0", third.url, GRACE.login, true],
-    ["/api/v1/packages/vault/secrets/1.0.0/download", third.url, GRACE.login, true],
+    ["/api/v1/packages/vault/secrets/1.0.0", first.url, LOGIN, true],
+    ["/api/v1/packages/vault/secrets/1.0.0/download", first.url, LOGIN, true],
   ]);
   assert.equal(registryOf(lockOf(other, copy), "vault/secrets"), first.url);
+  assert.equal(instanceOf(await other.client.expectOk("space.get", {}), third.url)?.account.login, GRACE.login);
+
 });
 
-test("environments-34, environments-12, git-host-4: with the first's registry answering token_revoked to the first's tokens, a resolution in the local-only project signs the first instance alone out and fails, the second staying signed in and its project resolving and installing; a refusal of a pair a refresh replaced meanwhile signs nothing out and fails as changed meanwhile", { timeout: 300_000 }, async (t) => {
+test("environments-38, environments-12, git-host-31: registry revocation and a stale refusal isolate the current registry pair while both Spaces and the other registry remain signed in", { timeout: 300_000 }, async (t) => {
   const holds = holdingFetch();
   const { R1, R2, first, second, home, south, local } = await twoInstances(t, "refused", holds.fetch);
   await publishTo(R1, await release("acme/open"));
@@ -486,40 +492,36 @@ test("environments-34, environments-12, git-host-4: with the first's registry an
   // pair alone: nothing is removed or signed out, the refreshed pair
   // stays, and the resolution fails as changed meanwhile (git-host-4).
   R1.script.refuseTokens(first.url);
-  const presented = pairs()[first.url]!;
+  const presented = pairs()[`registry:${first.url}`]!;
   let one = R1.script.received.length;
   const gate = holds.hold((path, status) => path === "/api/v1/packages/acme/open" && status === 401);
   await home.client.expectOk("environment.resolve", { repository: local });
   try {
     await gate.reached;
     first.script.expireAccess();
-    const outside = new GitHostClient({ url: first.url, label: "Spex on test", credentials: fileCredentialStore(home.dataDir, first.url) });
+    const outside = new GitHostClient({ url: first.url, scope: "registry", label: "Spex on test", credentials: fileCredentialStore(home.dataDir, first.url, "registry") });
     assert.equal((await outside.me()).login, LOGIN);
   } finally {
     gate.release();
   }
-  const refreshed = pairs()[first.url];
+  const refreshed = pairs()[`registry:${first.url}`];
   assert.ok(refreshed && refreshed.access !== presented.access, "a refresh replaced the pair meanwhile");
   state = await environmentOf(home, local, (candidate) => candidate.error !== null);
   assert.match(state.error ?? "", /changed meanwhile/);
   assert.deepEqual(receivedFor(R1, one, "acme/open"), [["/api/v1/packages/acme/open", first.url, LOGIN, true]]);
   assert.deepEqual(await signedIn(), [[true, false], [true, false]]);
-  assert.equal(pairs()[first.url]?.access, refreshed.access, "the refreshed pair stays");
+  assert.equal(pairs()[`registry:${first.url}`]?.access, refreshed.access, "the refreshed registry pair stays");
 
-  // Refused the stored pair, a resolution in the local-only project
-  // signs the first alone out — its credential gone, its entry kept,
-  // the sign-out said as the host's with its login — and fails; the
-  // second's token, entry and rows stay (environments-12, git-host-4).
+  // Refusing the current registry pair signs out only that registry.
+  // Both Spaces and the second registry retain their independent grants.
   one = R1.script.received.length;
-  const mark = home.client.mark();
   await home.client.expectOk("environment.resolve", { repository: local });
-  const out = await home.client.waitSpace(mark, (space) => instanceOf(space, first.url)?.signedIn === false, 30_000);
-  assert.equal(instanceOf(out, first.url)?.account.login, LOGIN);
   state = await environmentOf(home, local, (candidate) => candidate.error !== null && !/changed meanwhile/.test(candidate.error));
-  assert.match(state.error ?? "", /acme\/open/);
+  assert.match(state.error ?? "", /Sign-in to .+ expired/);
   assert.deepEqual(receivedFor(R1, one, "acme/open"), [["/api/v1/packages/acme/open", first.url, LOGIN, true]]);
-  assert.deepEqual(await signedIn(), [[false, true], [true, false]]);
-  assert.deepEqual(Object.keys(pairs()), [second.url]);
+  assert.deepEqual(await signedIn(), [[true, false], [true, false]]);
+  assert.equal(pairs()[`registry:${first.url}`], undefined);
+  assert.ok(pairs()[first.url] && pairs()[second.url] && pairs()[`registry:${second.url}`]);
   assert.equal(rowOf(await home.client.expectOk("space.get", {}), south).state, "reachable");
 
   // The second's project resolves and installs at the second's registry
@@ -545,7 +547,7 @@ test("environments-34, environments-12, git-host-4: with the first's registry an
   state = await environmentOf(home, local, (candidate) => candidate.error === null);
   const asked = receivedFor(R1, one, "acme/open");
   assert.ok(asked.length > 0 && asked.every(([, instance, account, bearer]) => instance === first.url && account === null && !bearer), JSON.stringify(asked));
-  assert.deepEqual(await signedIn(), [[false, true], [true, false]]);
+  assert.deepEqual(await signedIn(), [[true, false], [true, false]]);
 });
 
 test("environments-34, environments-13, environments-29: a Git source at the shared Git backend's origin, requested in the second's project, is fetched at resolution and at install with the credential the second brokers, its request, its locked source and its failures reading as the second's display name; in the local-only project the first brokers it and names it; and with the second signed out, the first brokers it for the second's project", { timeout: 300_000 }, async (t) => {
@@ -655,7 +657,7 @@ test("environments-34, environments-13, environments-29: a Git source at the sha
   assert.deepEqual(brokers(from), [first.url], "the first brokered the fetch once the second signed out");
 });
 
-test("environments-34, environments-17, environments-12: environment.search for the second's project lists the second's registry's spec packages and not the first's, asked through the second with its token, the local-only project and your own group listing the first's and a key naming no clone refused; with the second's registry refusing the second's token, the search is refused and signs the second alone out, a later search asking the second's registry with no token", { timeout: 300_000 }, async (t) => {
+test("environments-38, environments-17, environments-12: searches use explicit registry grants and a refused registry credential leaves both Space accounts signed in", { timeout: 300_000 }, async (t) => {
   const { R1, R2, first, second, home, south, local } = await twoInstances(t, "search");
   await publishTo(R1, await release("acme/search-first"));
   await publishTo(R2, await release("team/search-second"));
@@ -705,14 +707,14 @@ test("environments-34, environments-17, environments-12: environment.search for 
   assert.deepEqual([searched(R1, one), searched(R2, two)], [[], []]);
 
   // The second's registry refusing the second's token refuses the
-  // search and signs the second alone out, the first staying signed in
+  // search and signs that registry alone out, both Spaces staying signed in
   // (environments-17, environments-12).
   R2.script.refuseTokens(second.url);
   two = R2.script.received.length;
-  const mark = home.client.mark();
   await home.client.expectError("environment.search", { repository: south, query: "search" }, "invalid_request");
-  const out = await home.client.waitSpace(mark, (space) => instanceOf(space, second.url)?.signedIn === false, 30_000);
-  assert.deepEqual([instanceOf(out, first.url)?.signedIn, instanceOf(out, second.url)?.hostSignedOut], [true, true]);
+  const out = await home.client.expectOk("space.get", {});
+  assert.deepEqual([instanceOf(out, first.url)?.signedIn, instanceOf(out, second.url)?.signedIn], [true, true]);
+  assert.equal(await fileCredentialStore(home.dataDir, second.url, "registry").read(), null);
   assert.deepEqual(searched(R2, two), [["/api/v1/search", second.url, LOGIN, true]]);
 
   // Signed out there, the second's project still searches the second's
@@ -729,12 +731,10 @@ test("environments-34, environments-17, environments-12: environment.search for 
   assert.deepEqual(searched(R1, one), []);
 });
 
-test("environments-34, environments-10, environments-17, environments-5: a publish from the second's project lands at the second's registry as the second's account and one from the local-only project at the first's; once the second registry is signed out, a publish from its project is refused as not signed in there, naming it, and nothing is uploaded; the first then forgotten, your own group's environment, whose own repository was created at the first and now syncs with the second, resolves at the second's registry, its lock recording the second's origin, and a publish from it lands there", { timeout: 300_000 }, async (t) => {
+test("environments-38, environments-10, environments-17, environments-5: publishing uses explicit registry accounts; Space sign-out and Forget preserve the registry choice until an explicit change", { timeout: 300_000 }, async (t) => {
   const { R1, R2, first, second, home, south, local } = await twoInstances(t, "publish");
   R1.script.setOrgs(first.url, [{ name: "acme", path: "acme", role: "Owner" }]);
   R2.script.setOrgs(second.url, [{ name: "acme", path: "acme", role: "Owner" }]);
-  await registrySignIn(home, first);
-  await registrySignIn(home, second);
   // Each upload a registry received after a mark: its path, the instance
   // that relayed it, that instance's account and whether a bearer came
   // (environments-18).
@@ -813,8 +813,12 @@ test("environments-34, environments-10, environments-17, environments-5: a publi
   const synced = await home.client.settle("space.sync", { repository: HOST_OWN }, 30_000);
   assert.deepEqual([synced.sync.phase, synced.instance, synced.key], ["done", second.url, HOST_OWN], JSON.stringify(synced.sync));
 
-  // Your own group's environment resolves a spec package newly requested
-  // there at the second's registry, with the second's token — the
+  assert.equal(requestsOf(home, HOST_OWN).registry, first.url, "forgetting a Space preserves the selected registry");
+  assert.ok(await fileCredentialStore(home.dataDir, first.url, "registry").read(), "Space sign-out preserves its registry grant");
+  await home.client.expectOk("environment.registry.set", { repository: HOST_OWN, origin: second.url });
+
+  // After the explicit registry choice, your own group's environment
+  // resolves a spec package newly requested at the second's registry, with the second's token — the
   // release private there to it — its lock recording the second's
   // origin; the built-in keeps the origin its lock records, as it
   // resolves to the same version and checksum (environments-5). The
@@ -828,7 +832,7 @@ test("environments-34, environments-10, environments-17, environments-5: a publi
   assert.equal(state.error, null);
   const ownLock = lockOf(home, HOST_OWN);
   assert.equal(registryOf(ownLock, "team/own-kit"), second.url);
-  assert.equal(registryOf(ownLock, BUILTIN_PACKAGE_NAME), first.url);
+  assert.equal(registryOf(ownLock, BUILTIN_PACKAGE_NAME), PUBLIC_REGISTRY_ORIGIN, "the existing built-in source is not rehomed");
   const asked = receivedFor(R2, two, "team/own-kit");
   assert.deepEqual(asked[0], ["/api/v1/packages/team/own-kit", second.url, LOGIN, true]);
   assert.ok(asked.every(([, instance, account, bearer]) => instance === second.url && account === LOGIN && bearer), JSON.stringify(asked));
@@ -849,8 +853,6 @@ test("environments-34, environments-10, environments-17, environments-5: a publi
 
 test("environments-34, environments-27: the orgs asked for the second's project are asked of the second's registry once, relayed by the second with its token as its account, the first's registry asked nothing; the local-only project's are asked of the first's with the first's token", { timeout: 300_000 }, async (t) => {
   const { R1, R2, first, second, home, south, local } = await twoInstances(t, "orgs");
-  await registrySignIn(home, first);
-  await registrySignIn(home, second);
   // Each registry lists an org for the bearers its own instance accepts
   // (environments-18), at the namespace both projects' keys name, so an
   // org replied is the one its registry read (playbook-library-103).

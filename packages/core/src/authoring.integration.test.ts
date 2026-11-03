@@ -1275,7 +1275,7 @@ test("playbook-library-102: a session takes its folder's, its project's, else th
 // playbook-library-104: a new playbook's org and license
 // ---------------------------------------------------------------------------
 
-test("playbook-library-104: New playbook's defaults come from its independently selected registry's namespaces, else the project's key, and from its LICENSE, each reply asking that registry alone, and the manifests name the org and license", { timeout: 120_000 }, async (t) => {
+test("playbook-library-104: New playbook uses the first authorized registry namespace or a blank Org, independently of Space groups, and explicit authoring remains available offline", { timeout: 120_000 }, async (t) => {
   // A home signed in to two stand-in registries, each standing as its
   // instance, the first the home's default instance, with a project
   // paired at each instance two groups deeper than the home's own, its
@@ -1318,10 +1318,9 @@ test("playbook-library-104: New playbook's defaults come from its independently 
   await client.expectOk("environment.registry.set", { repository: atSecond, origin: second.url });
   const folder = join(dir, "project");
   const license = join(folder, "LICENSE");
-  const org = projectId.split("/")[0];
   assert.equal(projectId, "tester/project-spex", "the harness's project lives in the home's own group, local only");
-  // The second's registry lists two orgs throughout, one at the
-  // projects' group.
+  // A namespace whose path matches the Space group confers no priority
+  // over the registry's first authorized namespace.
   second.script.setOrgs("second-token", [
     { name: "alpha-two", path: "alpha", role: "owner" },
     { name: "team-two", path: "acme/workshop/team", role: "maintainer" },
@@ -1345,9 +1344,8 @@ test("playbook-library-104: New playbook's defaults come from its independently 
     (await defaults(atSecond, signedIn.second ? second : null)).org,
   ];
 
-  // The license each LICENSE opens with, read at each reply; the first's
-  // registry refuses the first's app token (401, no org scripted for
-  // it), so the key's first segment stands.
+  // LICENSE is read at each reply. A registry refusal leaves Org blank,
+  // with no Space group or local-username fallback.
   const cases: [string | null, string | null][] = [
     ["﻿\n                                 Apache License\n                           Version 2.0, January 2004\n", "Apache-2.0"],
     ["MIT License\n\nCopyright (c) 2026 Acme\n", "MIT"],
@@ -1357,26 +1355,26 @@ test("playbook-library-104: New playbook's defaults come from its independently 
   for (const [text, expected] of cases) {
     if (text === null) rmSync(license, { force: true });
     else writeFileSync(license, text);
-    assert.deepEqual(await defaults(projectId, first), { org, license: expected }, `LICENSE ${JSON.stringify(text?.trim().split("\n")[0] ?? null)}`);
+    assert.deepEqual(await defaults(projectId, first), { org: "", license: expected }, `LICENSE ${JSON.stringify(text?.trim().split("\n")[0] ?? null)}`);
   }
-  assert.deepEqual(await orgsOf(), ["tester", "acme", "team-two"], "refused");
+  assert.deepEqual(await orgsOf(), ["", "", "alpha-two"], "refused");
 
-  // An outage is no answer, and none listed falls back the same way.
+  // An outage and a successful empty list both leave Org blank.
   first.script.unavailable(2);
-  assert.deepEqual(await orgsOf(), ["tester", "acme", "team-two"], "out of service");
+  assert.deepEqual(await orgsOf(), ["", "", "alpha-two"], "out of service");
   first.script.setOrgs("first-token", []);
-  assert.deepEqual(await orgsOf(), ["tester", "acme", "team-two"], "none listed");
+  assert.deepEqual(await orgsOf(), ["", "", "alpha-two"], "none listed");
   // One listed is it, wherever its path.
   first.script.setOrgs("first-token", [{ name: "workshop-261011", path: "workshop-261011", role: "maintainer" }]);
-  assert.deepEqual(await orgsOf(), ["workshop-261011", "workshop-261011", "team-two"], "one listed");
-  // Of several, the one at an ancestor of the project's group — never
-  // `acme/work`, a prefix of `acme/workshop` — else the first listed.
+  assert.deepEqual(await orgsOf(), ["workshop-261011", "workshop-261011", "alpha-two"], "one listed");
+  // Of several, the first listed name wins for every project, even
+  // when another namespace's path matches its Space group.
   first.script.setOrgs("first-token", [
     { name: "workshop", path: "acme/workshop", role: "developer" },
     { name: "alpha", path: "alpha", role: "owner" },
     { name: "acme-work", path: "acme/work", role: "maintainer" },
   ]);
-  assert.deepEqual(await orgsOf(), ["acme-work", "workshop", "team-two"], "several listed");
+  assert.deepEqual(await orgsOf(), ["acme-work", "acme-work", "alpha-two"], "several listed");
 
   // The session's manifest names the org and license given, its
   // package named under that org (playbook-library-70).
@@ -1396,31 +1394,46 @@ test("playbook-library-104: New playbook's defaults come from its independently 
   const manifestOf = (working: string, org: string, playbookId: string): Record<string, unknown> =>
     parseYaml(readFileSync(join(working, "spex-packages", org, playbookId, "meta.yaml"), "utf8")) as Record<string, unknown>;
   let before = [orgsAsked(first), orgsAsked(second)];
-  await oneShot(projectId, "bare");
+  const bareReply = await oneShot(projectId, "bare");
+  assert.ok(bareReply.ok, JSON.stringify(bareReply));
   const bare = manifestOf(folder, "acme-work", "bare");
   assert.deepEqual([bare.org, "license" in bare], ["acme-work", false]);
   assert.deepEqual([orgsAsked(first) - before[0]!, orgsAsked(second) - before[1]!], [1, 0], "the local-only project's compile asks the first's registry alone");
   before = [orgsAsked(first), orgsAsked(second)];
-  await oneShot(atSecond, "paired");
-  const paired = manifestOf(join(dir, "graph-second"), "team-two", "paired");
-  assert.deepEqual([paired.org, "license" in paired], ["team-two", false]);
+  const pairedReply = await oneShot(atSecond, "paired");
+  assert.ok(pairedReply.ok, JSON.stringify(pairedReply));
+  const paired = manifestOf(join(dir, "graph-second"), "alpha-two", "paired");
+  assert.deepEqual([paired.org, "license" in paired], ["alpha-two", false]);
   assert.deepEqual([orgsAsked(first) - before[0]!, orgsAsked(second) - before[1]!], [0, 1], "the second's project's compile asks the second's registry alone");
 
-  // Signed out of the first, its registry is not asked and the key's
-  // first segment stands, the second's still asked; the local-only
-  // project's compile then names that segment and the Apache license.
+  // A registry sign-out leaves its Space signed in, but supplies no Org
+  // for any project using that registry.
   await client.expectOk("registry.signout", { origin: first.url });
   signedIn.first = false;
-  assert.deepEqual(await orgsOf(), ["tester", "acme", "team-two"], "signed out of the first");
+  assert.deepEqual(await orgsOf(), ["", "", "alpha-two"], "signed out of the first");
+  assert.equal(Home.load(state).account(first.url)?.login, "tester", "the Space account stays signed in");
   writeFileSync(license, cases[0]![0]!);
-  await oneShot(projectId, "licensed");
-  const licensed = manifestOf(folder, org, "licensed");
-  assert.deepEqual([licensed.org, licensed.license], [org, "Apache-2.0"]);
+  const packageFiles = () => readdirSync(join(folder, "spex-packages"), { recursive: true }).map(String).sort();
+  const beforeFiles = packageFiles();
+  const beforeCompiles = harness.slcCalls.length;
+  const missingOrg = await oneShot(projectId, "licensed");
+  assert.ok(!missingOrg.ok && missingOrg.error.code === "invalid_request", JSON.stringify(missingOrg));
+  assert.match(missingOrg.error.message, /Org.*New playbook|New playbook.*Org/);
+  assert.deepEqual(packageFiles(), beforeFiles, "an implicit compile without an Org writes no package files");
+  assert.equal(harness.slcCalls.length, beforeCompiles, "no compiler runs before the namespace is chosen");
+
+  // An explicit local name creates the package without a registry
+  // grant, and its existing manifest remains the authority on compile.
+  await client.expectOk("draft.create", { projectId, draftId: "licensed", org: "local-choice", license: "Apache-2.0" });
+  const offline = await oneShot(projectId, "licensed");
+  assert.ok(offline.ok, JSON.stringify(offline));
+  const licensed = manifestOf(folder, "local-choice", "licensed");
+  assert.deepEqual([licensed.org, licensed.license], ["local-choice", "Apache-2.0"]);
 
   // Signed out of both, no registry is asked.
   await client.expectOk("registry.signout", { origin: second.url });
   signedIn.second = false;
-  assert.deepEqual(await orgsOf(), ["tester", "acme", "acme"], "signed out of both");
+  assert.deepEqual(await orgsOf(), ["", "", ""], "signed out of both");
 });
 
 // ---------------------------------------------------------------------------
@@ -1710,10 +1723,9 @@ test("playbook-library-100: one compile or packaging job writes a playbook artif
   const client = new Client(harness.service.port());
   await client.open();
   const other = (await client.expectOk("project.register", { path: workingFolder(join(dir, "other")) })).id;
-  // The session's package under its org, acme; the other project's
-  // one-shot compile under that project's default org, its key's first
-  // segment (environments-10, playbook-library-69).
-  const artifactDir = (id: string, folder = "project") => join(dir, folder, "spex-packages", folder === "project" ? "acme" : other.split("/")[0]!, id, "playbooks", "en", id);
+  // The session's explicit org is acme. The other project's implicit
+  // compile will use its independent registry's authorized namespace.
+  const artifactDir = (id: string, folder = "project") => join(dir, folder, "spex-packages", folder === "project" ? "acme" : "registry-org", id, "playbooks", "en", id);
   const release = (id: string, folder = "project") => writeFileSync(join(artifactDir(id, folder), STUB_SLC_RELEASE_FILE), "");
   let writer: number | undefined;
   // However the test ends, every hold is released before the stop.
@@ -1723,6 +1735,16 @@ test("playbook-library-100: one compile or packaging job writes a playbook artif
     client.close();
     await harness.service.stop();
   });
+  const registry = await startStandinRegistry({ dir: scratchDir("spex-compile-jobs-registry-") });
+  t.after(() => registry.close());
+  registry.script.setOrgs("compile-token", [{ name: "registry-org", path: "registry-org", role: "owner" }]);
+  registry.script.setAccount("compile-token", { id: "compile-account", login: "compiler" });
+  mkdirSync(join(harness.dataDir, "local"), { recursive: true, mode: 0o700 });
+  writeFileSync(join(harness.dataDir, "local", "credentials.yaml"), stringifyYaml({
+    format: 1,
+    hosts: { [`registry:${registry.url}`]: { access: "compile-token", accessExpiresAt: Date.now() + 3_600_000, refresh: "compile-refresh" } },
+  }), { mode: 0o600 });
+  await client.expectOk("environment.registry.set", { repository: other, origin: registry.url });
   // The session's working folder again, through a link to it: a project
   // of its own whose artifact folders are the session's.
   const linked = join(dir, "project-link");

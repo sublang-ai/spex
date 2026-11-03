@@ -23,7 +23,10 @@
 // `server.close`, the line reading the server's name alone again; and
 // the page waits for an open or a close as long as the admission may
 // take. A new playbook asked for from a seat's Captain home opens that
-// seat's project's Playbooks tab.
+// seat's project's Playbooks tab. Add to group also continues directly
+// to its chosen server: upload completion, sign-in and the actual
+// project registration advance the checklist without another action;
+// upload and sign-in failures retry only their failed operation.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -38,7 +41,7 @@ import type {
 } from "@sublang/spex-core/protocol";
 
 import { App } from "./App.js";
-import { NO_CAN, groupsState, instanceState, namespace, repositoryRow } from "./fixtures/groups-state.js";
+import { NO_CAN, groupsState, instanceState, namespace, placementState, repositoryRow } from "./fixtures/groups-state.js";
 import { CONFIG_STATE, available, environment, specPackage } from "./fixtures/playbooks.js";
 import { activateLanguage } from "./i18n.js";
 import { SpexClient, SpexCommandError } from "./lib/client.js";
@@ -247,7 +250,7 @@ beforeEach(() => {
   activateLanguage("en");
   // The servers' flows are the page's own, one per server: each test
   // starts with none (state/server-opens).
-  useServerOpens.setState({ lines: {}, pending: {}, landed: 0 });
+  useServerOpens.setState({ lines: {}, pending: {}, shared: {}, recovery: undefined, recoveryRead: undefined, recoveryServers: undefined, landed: 0 });
   local = fakeClient();
   alpha = fakeClient();
   beta = fakeClient();
@@ -720,6 +723,350 @@ const running = (uri = APPROVE): SeatState["signIn"] => ({ state: "running", ver
 function serverState(...seats: SeatState[]): void {
   act(() => useAppStore.setState({ seats }));
 }
+
+/** A project starts on this computer, then takes its group's key once
+ * the first upload lands. Its folder identifies that same project
+ * across the change. */
+const DRAFT_KEY = "me/draft-spex";
+const DRAFT_FOLDER = "/work/draft";
+const SHARED_DRAFT_KEY = "@spex.pub/acme/lab/draft-spex";
+const DRAFT = repositoryRow(DRAFT_KEY, { name: "draft-spex", folder: DRAFT_FOLDER });
+
+function draftGroups(row: RepositoryState = DRAFT): GroupsState {
+  return {
+    ...LOCAL_GROUPS,
+    own: { ...LOCAL_GROUPS.own, repositories: row.instance === null ? [row] : [] },
+    instances: LOCAL_GROUPS.instances.map((instance) => ({
+      ...instance,
+      groups: instance.groups.map((entry) => entry.fullPath === "acme/lab" && row.instance === instance.origin
+        ? { ...entry, repositories: [...entry.repositories, row] }
+        : entry),
+    })),
+  };
+}
+
+function uploadedDraft(over: Partial<RepositoryState> = {}): RepositoryState {
+  return repositoryRow(SHARED_DRAFT_KEY, {
+    name: "draft-spex", folder: DRAFT_FOLDER, instance: SPEX, governing: SPEX,
+    id: "302", state: "reachable",
+    placements: [placementState({
+      instance: SPEX, path: "acme/lab/draft-spex", id: "302",
+      outcome: { kind: "synced", sent: 1, received: 0 },
+      lastSync: { at: Date.now(), sent: 1, received: 0 },
+      branch: { ahead: 0, behind: 0, checkedAt: Date.now(), hostEmpty: false, unrelated: false, agreed: null },
+    })],
+    sync: { phase: "done", at: Date.now(), sent: 1, received: 0, pushed: true },
+    ...over,
+  });
+}
+
+function unfinishedDraft(): RepositoryState {
+  return uploadedDraft({
+    sync: { phase: "idle" },
+    placements: [placementState({
+      instance: SPEX, path: "acme/lab/draft-spex", id: "302",
+      branch: { ahead: 1, behind: 0, checkedAt: Date.now(), hostEmpty: true, unrelated: false, agreed: null },
+    })],
+  });
+}
+
+/** A state broadcast updates both the current read and later reads. */
+function draftState(row: RepositoryState): void {
+  const space = draftGroups(row);
+  local.answers["space.get"] = space;
+  act(() => useAppStore.setState({ space }));
+}
+
+async function chooseDraftGroup(): Promise<HTMLElement> {
+  local.answers["space.get"] = draftGroups();
+  await openGroups();
+  fireEvent.click(screen.getByTestId(`space-row-pick-${DRAFT_KEY}`));
+  fireEvent.click(screen.getByTestId("space-pick-group-acme/lab"));
+  return screen.getByRole("group", { name: "Add draft to a group" });
+}
+
+describe("space-58: adding a project continues onto the chosen server", () => {
+  test("an unfinished first upload from a previous app session continues when its server listing arrives after upload completion", async () => {
+    local.answers["space.get"] = draftGroups(unfinishedDraft());
+    let readServers!: (value: ServerListing) => void;
+    const listingPending = new Promise<ServerListing>((resolve) => { readServers = resolve; });
+    local.answers["server.list"] = () => listingPending;
+    // The shell's empty loading state precedes the core's fresh catalog.
+    useAppStore.setState({ space: groupsState() });
+    render(<App />);
+    goTo("Space");
+    await screen.findByTestId(`space-row-${SHARED_DRAFT_KEY}`);
+    await settle();
+    expect(callsOf(local, "server.list")).toHaveLength(1);
+    expect(callsOf(local, "server.open")).toEqual([]);
+    expect(screen.queryByTestId("group-transfer-progress")).toBeNull();
+
+    // The core resumes the old Add itself. The UI must remember that
+    // unfinished Add while it is still waiting to learn its server.
+    draftState(uploadedDraft());
+    await settle();
+    expect(callsOf(local, "server.open")).toEqual([]);
+    local.answers["server.list"] = listing({ "43": true });
+    readServers(listing());
+    await settle();
+    expect(callsOf(local, "server.open")).toEqual([{ instance: SPEX, serverId: "43", consented: true }]);
+    expect(screen.getByRole("region", { name: "Opening draft on lab-box" })).toBeTruthy();
+    const labSeat: SeatState = { ...ALPHA, serverId: "43", name: "lab-box", group: "acme/lab", place: LAB_BOX };
+    const lab = fakeClient();
+    const labStore = seatStore(labSeat, lab, { projects: [] });
+    serverState(ALPHA, BETA, labSeat);
+    act(() => usePlaces.setState({ seats: [
+      { seat: ALPHA, store: alphaStore }, { seat: BETA, store: betaStore }, { seat: labSeat, store: labStore },
+    ] }));
+    await settle();
+    expect(joinsOf(lab)).toEqual([{ instance: SPEX, hostId: "302" }]);
+    act(() => labStore.setState({ projects: [project(SHARED_DRAFT_KEY, "draft")] }));
+    await settle();
+    expect(screen.getByTestId(`sidebar-project-${SHARED_DRAFT_KEY}@${LAB_BOX}`)).toBeTruthy();
+    expect(within(screen.getByRole("region", { name: "draft is ready on lab-box" })).getAllByText("Completed")).toHaveLength(4);
+    expect(callsOf(local, "space.pick")).toEqual([]);
+    expect(callsOf(local, "space.sync")).toEqual([]);
+    expect(callsOf(local, "server.open")).toHaveLength(1);
+    expect(joinsOf(lab)).toHaveLength(1);
+  });
+
+  test("opening Space with an already uploaded project does not start a server connection", async () => {
+    local.answers["space.get"] = draftGroups(uploadedDraft());
+    await openGroups();
+    draftState(uploadedDraft());
+    await settle();
+    expect(screen.getByTestId(`space-row-${SHARED_DRAFT_KEY}`)).toBeTruthy();
+    expect(screen.queryByTestId("group-transfer-progress")).toBeNull();
+    expect(callsOf(local, "server.open")).toEqual([]);
+    expect(joinsOf(local)).toEqual([]);
+    expect(joinsOf(alpha)).toEqual([]);
+    expect(joinsOf(beta)).toEqual([]);
+  });
+
+  test("an unfinished Add from a previous session never chooses between multiple eligible servers", async () => {
+    local.answers["space.get"] = draftGroups(unfinishedDraft());
+    local.answers["server.list"] = {
+      servers: [...listing().servers, { instance: SPEX, id: "44", name: "other-lab", group: "acme/lab", open: false }],
+      failures: [],
+    };
+    await openGroups();
+    draftState(uploadedDraft());
+    await settle();
+    expect(screen.queryByTestId("group-transfer-progress")).toBeNull();
+    expect(callsOf(local, "server.open")).toEqual([]);
+    expect(joinsOf(local)).toEqual([]);
+    expect(joinsOf(alpha)).toEqual([]);
+    expect(joinsOf(beta)).toEqual([]);
+  });
+
+  test("one Add uploads, connects, signs in and opens the server project without another action, even after leaving Space", async () => {
+    const labSeat: SeatState = { ...ALPHA, serverId: "43", name: "lab-box", group: "acme/lab", place: LAB_BOX };
+    const lab = fakeClient();
+    let admit!: (value: unknown) => void;
+    local.answers["server.open"] = () => new Promise((resolve) => { admit = resolve; });
+    const picker = await chooseDraftGroup();
+    await waitFor(() => expect(picker.textContent).toContain("Opens on lab-box"));
+    expect(within(picker).queryByRole("combobox", { name: "Server" })).toBeNull();
+    expect(callsOf(local, "space.pick")).toEqual([]);
+    expect(callsOf(local, "server.open")).toEqual([]);
+    fireEvent.click(within(picker).getByRole("button", { name: "Add to group" }));
+    await settle();
+    expect(callsOf(local, "space.pick")).toEqual([
+      { repository: DRAFT_KEY, choice: { kind: "create", instance: SPEX, groupId: "62", name: "draft" } },
+    ]);
+    expect(screen.queryByRole("button", { name: "Share" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
+    expect(callsOf(local, "server.open")).toEqual([]);
+    const starting = screen.getByRole("region", { name: "Opening draft on lab-box" });
+    expect(within(starting).getAllByRole("listitem").map((step) => step.textContent)).toEqual([
+      "Add to labIn progress", "Upload recordsWaiting", "Connect to lab-boxWaiting", "Open projectWaiting",
+    ]);
+    // A repository id alone is insufficient: upload completion is what
+    // permits a seat to read the project's records.
+    const uploading = uploadedDraft({
+      sync: { phase: "running", op: "sync", step: "push", since: Date.now(), cancelable: true },
+      placements: [placementState({ instance: SPEX, path: "acme/lab/draft-spex", id: "302" })],
+    });
+    draftState(uploading);
+    await settle();
+    expect(callsOf(local, "server.open")).toEqual([]);
+    const uploadingProgress = screen.getByRole("region", { name: "Opening draft on lab-box" });
+    expect(within(uploadingProgress).getAllByRole("listitem").map((step) => step.textContent)).toEqual([
+      "Add to labCompleted", "Upload recordsIn progress", "Connect to lab-boxWaiting", "Open projectWaiting",
+    ]);
+    goTo("Settings");
+    draftState(uploadedDraft());
+    await settle();
+    expect(callsOf(local, "server.open")).toEqual([{ instance: SPEX, serverId: "43", consented: true }]);
+    draftState(uploadedDraft());
+    await settle();
+    expect(callsOf(local, "server.open")).toHaveLength(1);
+    local.answers["server.list"] = listing({ "43": true });
+    admit({ place: LAB_BOX, leaseExpiresAt: Date.now() + 3_600_000 });
+    await settle();
+
+    const labStore = seatStore(labSeat, lab, { projects: [] });
+    serverState(ALPHA, BETA, { ...labSeat, signIn: running() });
+    act(() => usePlaces.setState({ seats: [
+      { seat: ALPHA, store: alphaStore }, { seat: BETA, store: betaStore }, { seat: labSeat, store: labStore },
+    ] }));
+    await settle();
+    expect(joinsOf(lab)).toEqual([]);
+    serverState(ALPHA, BETA, labSeat);
+    await settle();
+    expect(joinsOf(lab)).toEqual([{ instance: SPEX, hostId: "302" }]);
+    serverState(ALPHA, BETA, labSeat);
+    await settle();
+    expect(joinsOf(lab)).toHaveLength(1);
+    expect(joinsOf(local)).toEqual([]);
+    expect(joinsOf(alpha)).toEqual([]);
+    expect(joinsOf(beta)).toEqual([]);
+    act(() => labStore.setState({ projects: [project(SHARED_DRAFT_KEY, "draft")] }));
+    await settle();
+    expect(screen.getByTestId(`sidebar-project-${SHARED_DRAFT_KEY}@${LAB_BOX}`)).toBeTruthy();
+    goTo("Space");
+    await settle();
+    expect(screen.getByTestId(`space-row-on-${LAB_BOX}-${SHARED_DRAFT_KEY}`).textContent).toBe("On lab-box");
+    const finished = screen.getByRole("region", { name: "draft is ready on lab-box" });
+    expect(within(finished).getAllByText("Completed")).toHaveLength(4);
+    const close = within(finished).getByRole("button", { name: "Close" });
+    close.focus();
+    fireEvent.click(close);
+    expect(screen.queryByTestId("group-transfer-progress")).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId(`space-row-open-${SHARED_DRAFT_KEY}`)));
+    expect(screen.getByTestId(`sidebar-project-${SHARED_DRAFT_KEY}@${LAB_BOX}`)).toBeTruthy();
+  });
+
+  test("multiple matching servers require one inline choice, including an ancestor; an open seat is reused without another admission", async () => {
+    local.answers["server.list"] = {
+      servers: [
+        { instance: SPEX, id: "41", name: "build-box", group: "acme", open: true },
+        { instance: SPEX, id: "43", name: "lab-box", group: "acme/lab", open: false },
+        { instance: SPEX, id: "42", name: "gpu-box", group: "acme/infra", open: true },
+        { instance: SPEX, id: "44", name: "lookalike", group: "acme/la", open: false },
+        { instance: LAB, id: "41", name: "other-space", group: "acme/lab", open: false },
+      ],
+      failures: [],
+    };
+    const picker = await chooseDraftGroup();
+    const server = await within(picker).findByRole("combobox", { name: "Server" }) as HTMLSelectElement;
+    const choices = [...server.options];
+    expect(choices.filter((entry) => entry.value).map((entry) => entry.textContent)).toEqual(["build-box", "lab-box"]);
+    const add = within(picker).getByRole("button", { name: "Add to group" });
+    expect(add).toHaveProperty("disabled", true);
+    fireEvent.click(add);
+    expect(callsOf(local, "space.pick")).toEqual([]);
+    fireEvent.change(server, { target: { value: choices.find((entry) => entry.textContent === "build-box")!.value } });
+    expect(add).toHaveProperty("disabled", false);
+    expect(callsOf(local, "space.pick")).toEqual([]);
+    expect(joinsOf(alpha)).toEqual([]);
+    fireEvent.click(add);
+    await settle();
+    expect(callsOf(local, "space.pick")).toHaveLength(1);
+    expect(joinsOf(alpha)).toEqual([]);
+    draftState(uploadedDraft());
+    await settle();
+    expect(callsOf(local, "server.open")).toEqual([]);
+    expect(joinsOf(alpha)).toEqual([{ instance: SPEX, hostId: "302" }]);
+    expect(joinsOf(beta)).toEqual([]);
+    act(() => alphaStore.setState({ projects: [GPU, project(SHARED_DRAFT_KEY, "draft")] }));
+    await settle();
+    expect(screen.getByTestId(`sidebar-project-${SHARED_DRAFT_KEY}@${ALPHA.place}`)).toBeTruthy();
+    expect(callsOf(local, "space.pick")).toHaveLength(1);
+    expect(joinsOf(alpha)).toHaveLength(1);
+  });
+
+  test("a failed upload names the failed step and retries the upload once before continuing to its server", async () => {
+    const picker = await chooseDraftGroup();
+    await waitFor(() => expect(picker.textContent).toContain("Opens on lab-box"));
+    fireEvent.click(within(picker).getByRole("button", { name: "Add to group" }));
+    await settle();
+    const stopped = uploadedDraft({
+      sync: { phase: "stopped", op: "sync", step: "push", cause: "unreachable", message: "Could not reach spex.pub", guidance: "Check the network, then Retry.", retry: true },
+      placements: [placementState({ instance: SPEX, path: "acme/lab/draft-spex", id: "302" })],
+    });
+    draftState(stopped);
+    await settle();
+    const progress = screen.getByRole("region", { name: "Opening draft on lab-box" });
+    expect(within(progress).getByRole("alert").textContent).toBe("Could not reach spex.pub");
+    expect(within(progress).getAllByRole("listitem").map((step) => step.textContent)).toEqual([
+      "Add to labCompleted", "Upload recordsFailed", "Connect to lab-boxWaiting", "Open projectWaiting",
+    ]);
+    expect(callsOf(local, "server.open")).toEqual([]);
+    let retried!: (value: unknown) => void;
+    local.answers["space.sync"] = () => new Promise((resolve) => { retried = resolve; });
+    fireEvent.click(within(progress).getByRole("button", { name: "Try again" }));
+    await settle();
+    expect(callsOf(local, "space.sync")).toEqual([{ repository: SHARED_DRAFT_KEY }]);
+    expect(within(progress).queryByRole("button", { name: "Try again" })).toBeNull();
+    expect(within(progress).queryByRole("alert")).toBeNull();
+    expect(within(progress).getByText("Upload records").closest("li")!.textContent).toBe("Upload recordsIn progress");
+    // Repeated reads of the old failure cannot fail the new attempt.
+    draftState(stopped);
+    await settle();
+    expect(within(progress).queryByRole("button", { name: "Try again" })).toBeNull();
+    retried({ accepted: true });
+    await settle();
+    draftState({ ...stopped, sync: { phase: "running", op: "sync", step: "push", since: Date.now(), cancelable: true } });
+    await settle();
+    expect(callsOf(local, "server.open")).toEqual([]);
+    draftState(uploadedDraft());
+    await settle();
+    expect(callsOf(local, "server.open")).toEqual([{ instance: SPEX, serverId: "43", consented: true }]);
+    expect(callsOf(local, "space.sync")).toHaveLength(1);
+    expect(callsOf(local, "space.pick")).toHaveLength(1);
+  });
+
+  test("a failed server sign-in retries that step and ignores the previous failure until the new sign-in arrives", async () => {
+    const labSeat: SeatState = { ...ALPHA, serverId: "43", name: "lab-box", group: "acme/lab", place: LAB_BOX };
+    const lab = fakeClient();
+    const labStore = seatStore(labSeat, lab, { projects: [] });
+    const picker = await chooseDraftGroup();
+    await waitFor(() => expect(picker.textContent).toContain("Opens on lab-box"));
+    fireEvent.click(within(picker).getByRole("button", { name: "Add to group" }));
+    await settle();
+    draftState(uploadedDraft());
+    await settle();
+    const failed: SeatState = { ...labSeat, signIn: { state: "failed", cause: "The sign-in was denied at spex.pub" } };
+    serverState(ALPHA, BETA, failed);
+    act(() => usePlaces.setState({ seats: [
+      { seat: ALPHA, store: alphaStore }, { seat: BETA, store: betaStore }, { seat: labSeat, store: labStore },
+    ] }));
+    await settle();
+    const progress = screen.getByRole("region", { name: "Opening draft on lab-box" });
+    expect(within(progress).getByRole("alert").textContent).toBe("The sign-in was denied at spex.pub");
+    expect(within(progress).getByText("Connect to lab-box").closest("li")!.textContent).toBe("Connect to lab-boxFailed");
+    expect(joinsOf(lab)).toEqual([]);
+    let signedIn!: (value: unknown) => void;
+    local.answers["server.signin"] = () => new Promise((resolve) => { signedIn = resolve; });
+    fireEvent.click(within(progress).getByRole("button", { name: "Try again" }));
+    await settle();
+    expect(callsOf(local, "server.signin")).toEqual([{ instance: SPEX, serverId: "43" }]);
+    expect(within(progress).queryByRole("button", { name: "Try again" })).toBeNull();
+    expect(within(progress).queryByRole("alert")).toBeNull();
+    serverState(ALPHA, BETA, { ...failed, signIn: { state: "failed", cause: "The sign-in was denied at spex.pub" } });
+    await settle();
+    expect(within(progress).getByText("Connect to lab-box").closest("li")!.textContent).toBe("Connect to lab-boxIn progress");
+    expect(joinsOf(lab)).toEqual([]);
+    serverState(ALPHA, BETA, { ...labSeat, signIn: { state: "pending" } });
+    signedIn({ started: true });
+    await settle();
+    expect(joinsOf(lab)).toEqual([]);
+    serverState(ALPHA, BETA, labSeat);
+    await settle();
+    expect(joinsOf(lab)).toEqual([{ instance: SPEX, hostId: "302" }]);
+    serverState(ALPHA, BETA, labSeat);
+    await settle();
+    expect(joinsOf(lab)).toHaveLength(1);
+    expect(callsOf(local, "server.open")).toHaveLength(1);
+    expect(callsOf(local, "space.pick")).toHaveLength(1);
+    expect(callsOf(local, "space.sync")).toEqual([]);
+    act(() => labStore.setState({ projects: [project(SHARED_DRAFT_KEY, "draft")] }));
+    await settle();
+    expect(screen.getByRole("region", { name: "draft is ready on lab-box" })).toBeTruthy();
+    expect(screen.getByTestId(`sidebar-project-${SHARED_DRAFT_KEY}@${LAB_BOX}`)).toBeTruthy();
+  });
+});
 
 describe("run-view-170: a server's line while its seat opens and signs in", () => {
   test("while server.open runs the line reads Connecting to <server>…, titled past ten seconds that the first connection can take a minute", async () => {

@@ -27,6 +27,7 @@ import { defaultSpawner, ENGINE_LINKS_EXCLUDE, type LineSpawner } from "./compil
 import { createModuleLoader, starterText, templatePath } from "./config.js";
 import { ContentStore, gitSource, install, installedPackages, INSTALL_RECORD, parseLock, parseRequests, publishRelease, readRelease, RegistryClient, requestsDigest, resolve as resolveRequests, serializeLock, sha256Hex, writeLock, type BuiltinPackage, type Lock, type RegistrySourceLock } from "@sublang/spex/environment";
 import { fileVersion } from "@sublang/spex/files";
+import { fileCredentialStore } from "@sublang/spex/git-host";
 import { builtinPackage } from "./builtins.js";
 import type { Command, CommandResults, EnvironmentState, ServerMessage } from "./protocol.js";
 import { authoringScript } from "./testing/authoring.js";
@@ -1971,7 +1972,7 @@ test("environments-21, environments-26, environments-7, environments-14: a worki
   assert.deepEqual(fileStamps(join(committed.folder, ".spex", "packages")), appPlaced, "and rewrites nothing");
 });
 
-test("environments-21 through a real core: the registry presents the access secret the host client refreshed, a Git source at the host's origin installs with the brokered credential and one elsewhere with this device's Git, and a signed-out home presents none", { timeout: 240_000 }, async (t) => {
+test("environments-21 through a real core: the registry presents its own refreshed grant, a Git source at the host's origin installs with the brokered credential and one elsewhere with this device's Git, and a signed-out home presents none", { timeout: 240_000 }, async (t) => {
   const harness = createSpaceHarness();
   t.after(() => harness.dispose());
   const host = await harness.startHost();
@@ -1985,14 +1986,18 @@ test("environments-21 through a real core: the registry presents the access secr
   const home = await harness.startHome("front", { project: false, env: { SPEX_HOST_URL: front.url } });
   t.after(() => home.stop());
   const own = `${host.script.person.login}/${host.script.person.login}-spex`;
-  const localOwn = join(home.dataDir, "workspace", OWN, `${OWN}-spex`, "spex.yaml");
-  const legacy = parseYaml(readFileSync(localOwn, "utf8")) as Record<string, unknown>; delete legacy.registry; writeFileSync(localOwn, stringifyYaml(legacy));
   const signing = home.client.mark();
   // The home's instance is the front, which serves the stand-in's sign-in.
   await harness.signIn(home, host, front.url);
   // Your own group's spex repository is created on the host and pushed
   // before its environment takes a write (environments-17).
   await home.client.waitRepository(signing, own, (repository) => repository.sync.phase === "done", 60_000);
+  await home.client.expectOk("environment.registry.set", { repository: own, origin: front.url });
+  const login = await home.client.expectOk("registry.signin.start", { origin: front.url });
+  if (login.flow !== "device") throw new Error("Expected registry device sign-in");
+  host.script.approveDevice(login.userCode);
+  await home.client.waitFor((message) => message.type === "registry.state" && message.state.origin === front.url && message.state.account !== null);
+
   const states = (from: number): EnvironmentState[] =>
     home.client.messages.slice(from).flatMap((m) => (m.type === "environment.state" && m.repository === own ? [m.state] : []));
   /** One operation run through after a mark: its first busy state, then
@@ -2013,11 +2018,11 @@ test("environments-21 through a real core: the registry presents the access secr
   // The access secret nears its expiry: the registry's next call
   // presents the one the host client refreshed first (environments-12,
   // git-host-4), never the file's stale one.
-  const credentials = join(home.dataDir, "local", "credentials.yaml");
-  type Stored = { access: string; accessExpiresAt: number; refresh: string };
-  const stored = (): Stored => (parseYaml(readFileSync(credentials, "utf8")) as { hosts: Record<string, Stored> }).hosts[front.url]!;
-  const stale = stored();
-  writeFileSync(credentials, stringifyYaml({ format: 1, hosts: { [front.url]: { ...stale, accessExpiresAt: Date.now() + 5_000 } } }), { mode: 0o600 });
+  const registryCredentials = fileCredentialStore(home.dataDir, front.url, "registry");
+  const spaceCredentials = fileCredentialStore(home.dataDir, front.url, "space");
+  const spaceGrant = await spaceCredentials.read();
+  const stale = (await registryCredentials.read())!;
+  assert.ok(await registryCredentials.replace(stale, { ...stale, accessExpiresAt: Date.now() + 5_000 }));
   const grants = host.script.tokenGrants.length;
   front.log.length = 0;
   let from = home.client.mark();
@@ -2025,7 +2030,8 @@ test("environments-21 through a real core: the registry presents the access secr
   let state = await ran(from);
   assert.equal(state.error, null);
   assert.ok(installed(state, "acme/tools"));
-  const fresh = stored();
+  const fresh = (await registryCredentials.read())!;
+  assert.deepEqual(await spaceCredentials.read(), spaceGrant, "registry refresh preserves the Space grant");
   assert.notEqual(fresh.access, stale.access, "the access secret was refreshed before the registry call");
   assert.ok(host.script.tokenGrants.slice(grants).some((grant) => grant.grantType === "refresh_token" && grant.ok), JSON.stringify(host.script.tokenGrants));
   const registryCalls = front.log.filter((entry) => entry.to === "registry");
@@ -2080,7 +2086,8 @@ test("environments-21 through a real core: the registry presents the access secr
   from = home.client.mark();
   await home.client.expectOk("environment.remove", { repository: own, name: "acme/toolbox" });
   assert.equal((await ran(from)).error, null);
-  await home.client.expectOk("space.signout", { instance: front.url });
+  await home.client.expectOk("registry.signout", { origin: front.url });
+  assert.ok(instanceOf(await home.client.expectOk("space.get", {}), front.url)?.signedIn, "registry sign-out leaves Space signed in");
   front.log.length = 0;
   from = home.client.mark();
   await home.client.expectOk("environment.resolve", { repository: own });
@@ -2512,6 +2519,7 @@ test("environments-21 through a real core: an install whose lock or requests cha
     assert.equal(existsSync(join(clone, "spex.yaml")), false, "nothing was written, in the clone least of all");
     assert.equal(existsSync(root), false, "and no folder made");
     gitFolder(root);
+    await client.expectOk("environment.registry.set", { repository: key, origin: registry.url });
 
     // A clone removed while the download is held is never made again,
     // by the install or its exports. The request's own operation is

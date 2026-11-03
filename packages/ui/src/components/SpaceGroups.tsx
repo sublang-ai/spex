@@ -33,18 +33,17 @@
 // Space first" while no Space it would offer is signed in (space-58),
 // Retry for one unreachable. The phrase carries its way forward: Resolve
 // with the picker beneath the row (space-14), "Combine…" confirmed
-// inline (space-13), Continue saying the sharing confirm (space-57),
-// Retry (space-15). The overflow holds "Sync records", Members, "Explore
-// records", other opening destinations and, on a clone holding no
+// inline (space-13), Retry (space-15). The overflow holds "Sync records",
+// Members, "Explore records", other opening destinations and, on a clone holding no
 // placement at a Space, "Add to a group…". Missing code-remote information
 // opens a quiet attached explanation; the records' standing opens Sync.
 // Moving a project to another group, placing its records at a
 // second Space, leaving one and attaching a copy another computer added
 // are not offered here (DR-172). What an act opens stands beneath its
 // row: the group picker (space-58), the folder an Open asks for on the
-// served page (space-63), the sharing confirm (space-57) and the members
-// panel. Activating a row's name opens its Sync and Explore tabs beneath
-// the list, the Sync tab carrying its placements' lines (space-87). No
+// served page (space-63) and the members panel. Activating a row's name
+// opens its Sync and Explore tabs beneath the list, the Sync tab
+// carrying its placements' lines (space-87). No
 // part of the list links a page of the Space, or names what stands
 // behind it (space-1). At a remote place an Open names no folder, its
 // core allocating one, and a clone whose code clone failed offers "Try
@@ -70,8 +69,10 @@ import {
   hostIdAt,
   openOnServer,
   pendingKey,
+  queueSharedOpen,
   seatHolding,
   serverPlace,
+  sharedOpenFor,
   useServerOpens,
 } from "../state/server-opens.js";
 import { i18n } from "../i18n.js";
@@ -87,7 +88,6 @@ import {
   standingOf,
   thisComputerRows,
 } from "../lib/instances.js";
-import type { SpexCommandError } from "../lib/client.js";
 import {
   alsoPlacedAt,
   canRun,
@@ -96,11 +96,8 @@ import {
   instanceNameAt,
   instancePlacements,
   keyPlacement,
-  owesNotice,
   placementAt,
-  placementName,
   rowPlacement,
-  runnable,
 } from "../lib/placements.js";
 import {
   awaitsFolder,
@@ -119,12 +116,13 @@ import {
   thisComputerLabel,
 } from "../lib/space.js";
 import { AddInstance, InstanceSection } from "./SpaceInstance.js";
-import { GroupServers, InstanceServers } from "./SpaceServers.js";
+import { GroupServers, InstanceServers, useServers } from "./SpaceServers.js";
+import { GroupTransferProgress } from "./GroupTransferProgress.js";
 import { GroupNameEditor, MembersPanel } from "./SpaceMembers.js";
 import { PanelCloseButton } from "./PanelCloseButton.js";
 import { ATTACHED_OWNER, ATTACHED_PANEL } from "./SpacePanel.js";
 import { MoreMenu, type MenuEntry } from "./SpaceMenu.js";
-import { CombineConfirm, SharingConfirm, combineLabel, combiningLabel, continueLabel, entryName, placementGroupName } from "./SpacePlacements.js";
+import { CombineConfirm, combineLabel, combiningLabel, entryName } from "./SpacePlacements.js";
 import type { SignInFlow } from "./SpaceSignIn.js";
 import { ChoicesContext, ConflictsPicker, stoppedRetryInput } from "./SpaceSync.js";
 import { PRIMARY, SECONDARY, syncRefusal, type Note } from "./SpaceSurface.js";
@@ -971,7 +969,7 @@ function GroupSection({
   );
 }
 
-type Opened = "pick" | "join" | "folder" | "notice" | "members" | "resolve" | "combine" | "code";
+type Opened = "pick" | "join" | "folder" | "members" | "resolve" | "combine" | "code";
 
 /** The words of "Open here" (space-111). */
 const openHereLabel = (): string =>
@@ -1045,6 +1043,7 @@ function RepositoryRow({
   const spaceLastAct = store((state) => state.spaceLastAct);
   const rebindProject = store((state) => state.rebindProject);
   const pending = useServerOpens((state) => state.pending);
+  const transfer = useServerOpens((state) => sharedOpenFor(state.shared, repo));
   const useChoices = useContext(ChoicesContext);
   const dismissed = dismissedByKey[repo.key];
   const isSelected = selected === repo.key;
@@ -1063,11 +1062,6 @@ function RepositoryRow({
   // reply and the state (DR-010 §3, space-29).
   const [accepted, setAccepted] = useState<{ op: "sync" | "combine" | "retry" | "join"; key: string }>();
   const [error, setError] = useState<string>();
-  // The placement the row's sharing confirm names, by its Space's
-  // origin, and what its Share sends beside `noticed` (space-57,
-  // space-13).
-  const [noticeAt, setNoticeAt] = useState<string | null>();
-  const [carried, setCarried] = useState<{ join?: true }>({});
   const primaryRef = useRef<HTMLButtonElement>(null);
   const moreRef = useRef<HTMLButtonElement>(null);
   const nameRef = useRef<HTMLButtonElement>(null);
@@ -1109,19 +1103,9 @@ function RepositoryRow({
     }, 0);
   };
 
-  /** Say the sharing confirm of the placement at `origin` beneath the
-   * row before its sync (space-57), its Share carrying `answer`. */
-  const askNotice = (origin: string | null, answer: { join?: true } = {}) => {
-    setNoticeAt(origin);
-    setCarried(answer);
-    setOpened("notice");
-  };
-
-  /** Sync every placement (space-12), with the confirm of the one
-   * `placement` names answered (space-57) and the combining of records
-   * started separately (space-13). A refusal for want of a confirm the
-   * page's read missed says it for the placement the core names, else
-   * the first that owes it; any other stands beneath the row. */
+  /** Sync every placement (space-12), or combine the records started
+   * separately at the placement named (space-13). A refusal stands
+   * beneath the row. */
   const start = async (input: Parameters<typeof spaceSync>[1], op: "sync" | "combine" | "retry" = "sync") => {
     const key = machineKey;
     setBusy(op);
@@ -1130,18 +1114,6 @@ function RepositoryRow({
       await spaceSync(repo.key, input);
       setAccepted({ op, key });
     } catch (cause) {
-      const details = (cause as SpexCommandError).details;
-      if (!input?.noticed && details?.notice === true) {
-        const named = details.placement;
-        const owing =
-          (typeof named === "string" || named === null ? placementAt(repo, named) : undefined) ??
-          heldPlacements(repo).find((line) => owesNotice(repo, line)) ??
-          keyPlacement(repo);
-        if (owing) {
-          askNotice(owing.instance, input?.join ? { join: true } : {});
-          return;
-        }
-      }
       const message = (cause as Error).message;
       setError(message);
       onNote(message);
@@ -1263,14 +1235,6 @@ function RepositoryRow({
   const here = cloneHere(repo);
   const syncs = here && (repo.state === "reachable" || readOnly);
   const refusal = syncs ? rowSyncRefusal(groups, repo, governing) : undefined;
-  // The first send to a placement others share asks once (space-57):
-  // where every placement this sync would run owes it, the first owing
-  // one's confirm comes first; where any other can run, the sync goes
-  // and each owing one waits on its line for its Continue.
-  const runs = heldPlacements(repo).filter((line) => runnable(groups, repo, line));
-  const owing = runs.filter((line) => owesNotice(repo, line));
-  const noticeFirst = runs.length > 0 && owing.length === runs.length ? owing[0] : undefined;
-  const noticeLine = opened === "notice" && noticeAt !== undefined ? placementAt(repo, noticeAt) : undefined;
   const joining = busy === "join" || accepted?.op === "join" || (running && sync.op === "join");
   const syncing = busy === "sync" || accepted?.op === "sync" || (running && sync.op !== "join" && sync.op !== "check");
   const workingOn = (op: "combine" | "retry"): boolean => busy === op || accepted?.op === op;
@@ -1529,10 +1493,7 @@ function RepositoryRow({
       hint: refusal,
       testId: `space-row-sync-${repo.key}`,
       disabled: refusal !== undefined || working,
-      onSelect: () => {
-        if (noticeFirst) askNotice(noticeFirst.instance);
-        else void start({});
-      },
+      onSelect: () => { void start({}); },
     });
   }
   if (showMembers) {
@@ -1595,8 +1556,6 @@ function RepositoryRow({
         return i18n._({ id: "Resolve", comment: "beside \"Changed here and at <display name>\": opens the choices beneath the row" });
       case "combine":
         return workingOn("combine") ? combiningLabel() : combineLabel();
-      case "continue":
-        return continueLabel();
       case "retry":
         return workingOn("retry")
           ? i18n._({ id: "Retrying…", comment: "the Retry control, while the retry is in flight" })
@@ -1612,15 +1571,11 @@ function RepositoryRow({
       case "combine":
         setOpened((was) => (was === "combine" ? undefined : "combine"));
         return;
-      case "continue":
-        if (opened === "notice") close("act");
-        else askNotice(act.placement);
-        return;
       case "retry":
         void retryStopped();
     }
   };
-  const actExpanded = act?.kind === "resolve" ? opened === "resolve" : act?.kind === "combine" ? opened === "combine" : act?.kind === "continue" ? opened === "notice" : undefined;
+  const actExpanded = act?.kind === "resolve" ? opened === "resolve" : act?.kind === "combine" ? opened === "combine" : undefined;
 
   return (
     <li data-testid={`space-row-${repo.key}`} data-state={repo.state}
@@ -1686,7 +1641,7 @@ function RepositoryRow({
                 data-testid={`space-row-${act.kind}-${repo.key}`}
                 className={`${SECONDARY} shrink-0 whitespace-nowrap`}
                 aria-expanded={actExpanded}
-                disabled={disabled || ((act.kind === "combine" || act.kind === "retry" || act.kind === "continue") && working)}
+                disabled={disabled || ((act.kind === "combine" || act.kind === "retry") && working)}
                 onClick={onAct}
               >
                 {actLabel(act.kind)}
@@ -1837,6 +1792,12 @@ function RepositoryRow({
           onCancel={() => close("primary")}
         />
       ) : null}
+      {transfer ? <GroupTransferProgress transfer={transfer} onDismiss={() => {
+        setTimeout(() => {
+          const primary = primaryRef.current;
+          (primary && !primary.disabled ? primary : moreRef.current ?? nameRef.current)?.focus();
+        }, 0);
+      }} /> : null}
       {opened === "folder" ? (
         <FolderEditor
           testId={`space-folder-${repo.key}`}
@@ -1847,21 +1808,6 @@ function RepositoryRow({
           onSubmit={pair}
           onCancel={() => close("primary")}
         />
-      ) : null}
-      {noticeLine && noticeLine.instance !== null ? (
-        <div data-testid="space-notice-confirm" className="pl-6">
-          <SharingConfirm
-            group={placementGroupName(groups, repo, noticeLine)}
-            name={placementName(groups, noticeLine)}
-            visibility={noticeLine.visibility}
-            disabled={disabled}
-            onShare={() => {
-              close(act?.kind === "continue" ? "act" : "more");
-              void start({ placement: noticeLine.instance, noticed: true, ...carried });
-            }}
-            onCancel={() => close(act?.kind === "continue" ? "act" : "more")}
-          />
-        </div>
       ) : null}
     </li>
   );
@@ -1980,7 +1926,7 @@ interface PickSection {
  * Reading and selecting never mutate the project. The current Space's
  * destinations are resolved again on every render, so a removed group
  * or signed-out Space cannot leave an actionable stale selection. */
-export function GroupPicker({ id, embedded = false, focusRequest, groups, repo, connected, headerAction, onClose, onNote, onPendingChange }: {
+export function GroupPicker({ id, embedded = false, focusRequest, groups, repo, connected, headerAction, onClose, onAdded, onNote, onPendingChange }: {
   /** The row opener's controlled form; the palette owns its own dialog. */
   id?: string;
   embedded?: boolean;
@@ -1991,6 +1937,8 @@ export function GroupPicker({ id, embedded = false, focusRequest, groups, repo, 
   /** The enclosing palette's dismissal action, beside this form's title. */
   headerAction?: ReactNode;
   onClose(): void;
+  /** Successful Add reveals the continuing progress from a palette. */
+  onAdded?(): void;
   onNote: Note;
   onPendingChange?(pending: boolean): void;
 }) {
@@ -2011,6 +1959,7 @@ export function GroupPicker({ id, embedded = false, focusRequest, groups, repo, 
   }));
   const [origin, setOrigin] = useState(() => sections[0]?.instance.origin);
   const [selection, setSelection] = useState<{ origin: string; kind: "create" | "join"; key: string; identity: string }>();
+  const [serverChoice, setServerChoice] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string>();
   const submitting = useRef(false);
@@ -2023,6 +1972,19 @@ export function GroupPicker({ id, embedded = false, focusRequest, groups, repo, 
   const selected = selection?.origin === section?.instance.origin ? selection : undefined;
   const existing = selected?.kind === "join" ? section?.listed.find((entry) => entry.repo.key === selected.key && entry.repo.id === selected.identity) : undefined;
   const target = selected?.kind === "create" ? section?.creatable.find((entry) => groupTestKey(entry) === selected.key && entryKey(entry) === selected.identity) : existing?.group;
+  const local = isLocalPlace(store.place);
+  const serverRead = useServers(connected && local ? groups.instances.filter((instance) => instance.signedIn).map((instance) => instance.origin).join("|") : undefined);
+  const available = local && section && target?.login === null
+    ? (serverRead.listing?.servers ?? []).filter((server) => {
+      const group = target.fullPath.toLowerCase();
+      const ancestor = server.group.toLowerCase();
+      return server.instance === section.instance.origin && (group === ancestor || group.startsWith(ancestor + "/"));
+    })
+    : [];
+  const chosenServer = available.length === 1 ? available[0] : available.find((server) => serverPlace(server) === serverChoice);
+  const serverFailure = local ? serverRead.error ?? serverRead.listing?.failures.find((failure) => failure.instance === origin)?.message : undefined;
+  const serversPending = local && serverRead.listing === undefined && !serverFailure;
+  const serverRequired = available.length > 1 && !chosenServer;
   const disabled = !connected || busy;
   const project = projectName(repo.name);
   const title = i18n._({ id: "Add {name} to a group", values: { name: project }, comment: "visible heading of the local project's destination form" });
@@ -2043,6 +2005,7 @@ export function GroupPicker({ id, embedded = false, focusRequest, groups, repo, 
     if (sections.some((entry) => entry.instance.origin === origin)) return;
     setOrigin(sections[0]?.instance.origin);
     setSelection(undefined);
+    setServerChoice(undefined);
     setRefusal(undefined);
   }, [groups, origin]);
   // A destination that disappears or becomes pending deletion needs a
@@ -2054,28 +2017,28 @@ export function GroupPicker({ id, embedded = false, focusRequest, groups, repo, 
   const select = (kind: "create" | "join", key: string, identity: string) => {
     if (!section || submitting.current) return;
     setSelection({ origin: section.instance.origin, kind, key, identity });
+    setServerChoice(undefined);
     setRefusal(undefined);
   };
   const submit = async () => {
-    if (disabled || submitting.current || !section || !selected || !target) return;
+    if (disabled || submitting.current || !section || !selected || !target || serversPending || serverFailure || serverRequired) return;
     submitting.current = true;
     onPendingChange?.(true);
     setBusy(true);
     setRefusal(undefined);
     const space = instanceName(section.instance);
+    const syncBefore = JSON.stringify(repo.sync);
     const choice: SpaceGroupChoice = existing
       ? { kind: "join", instance: section.instance.origin, hostId: existing.repo.id! }
       : { kind: "create", instance: section.instance.origin, groupId: target.mine ? null : target.id,
           name: repo.folder ? lastSegment(repo.folder) : project };
-    // The visible review answers the existing project's sharing notice.
-    // A newly created destination still gets its fresh first-sync check:
-    // its visibility and recipients are not known before creation.
-    const noticed = existing && !existing.placement?.noticed && (existing.placement?.members == null || existing.placement.members > 1);
     try {
-      await (noticed ? spacePick(repo.key, choice, true) : spacePick(repo.key, choice));
+      await spacePick(repo.key, choice);
+      if (chosenServer) queueSharedOpen(store, chosenServer, { key: repo.key, folder: repo.folder, group: target.fullPath, groupName: entryName(target), syncBefore });
       onNote(existing
         ? i18n._({ id: "Connecting {name} at {space}", values: { name: project, space }, comment: "acknowledges an accepted connection; the project row reports completion" })
         : i18n._({ id: "Adding {name} to {group} at {space}", values: { name: project, group: entryName(target), space }, comment: "acknowledges an accepted request; the project row reports completion or a wait" }));
+      onAdded?.();
       onClose();
     } catch (cause) {
       const message = (cause as Error).message;
@@ -2116,7 +2079,7 @@ export function GroupPicker({ id, embedded = false, focusRequest, groups, repo, 
         {sections.length > 1 ? (
           <select id={ids + "-space"} value={origin ?? ""} disabled={disabled}
             className="min-h-8 min-w-0 flex-1 rounded border border-neutral-300 bg-white px-2 py-1 text-sm focus:border-brand-500 dark:border-neutral-600 dark:bg-neutral-900"
-            onChange={(event) => { setOrigin(event.target.value); setSelection(undefined); setRefusal(undefined); }}>
+            onChange={(event) => { setOrigin(event.target.value); setSelection(undefined); setServerChoice(undefined); setRefusal(undefined); }}>
             {sections.map(({ instance }) => <option key={instance.origin} value={instance.origin}>{instanceName(instance)}</option>)}
           </select>
         ) : <p aria-labelledby={ids + "-space-label"} className="min-w-0 break-words text-sm">{section ? instanceName(section.instance) : i18n._("Sign in to a Space first")}</p>}
@@ -2172,31 +2135,36 @@ export function GroupPicker({ id, embedded = false, focusRequest, groups, repo, 
       {section && target ? (
         <div data-testid={"space-pick-review-" + repo.key} className="flex min-w-0 flex-col gap-2 border-l-2 border-neutral-200 pl-3 text-xs dark:border-neutral-700">
           <div className="min-w-0">
-            <h4 className="mb-1 font-medium text-neutral-600 dark:text-neutral-400">{i18n._({ id: "Destination", comment: "review of the project group's destination before confirmation" })}</h4>
+            <h4 className="mb-1 font-medium text-neutral-600 dark:text-neutral-400">{i18n._({ id: "Destination", comment: "the selected project group and Space" })}</h4>
             {existing ? <p className="mb-1 break-words text-sm">{rowName(target, existing.repo)}</p> : null}
             <p className="flex min-w-0 flex-wrap items-baseline gap-x-1 text-sm"><GroupOptionLabel entry={target} /><span aria-hidden>·</span><span className="min-w-0 break-words">{instanceName(section.instance)}</span></p>
           </div>
           {existing ? <p className="font-medium">{i18n._({ id: "Combines this project's local and existing records", comment: "consequence of connecting a matching project" })}</p> : null}
-          <div>
-            <p className="mb-1 font-medium">{i18n._({ id: "Project records", comment: "what adding a project to a group syncs" })}</p>
-            <ul className="list-disc space-y-1 pl-4 text-neutral-600 dark:text-neutral-300">
-              <li>{i18n._({ id: "All sessions: conversations, agent activity, and attachments", comment: "sharing scope: all conversation messages, agent actions and results, and attachments" })}</li>
-              <li>{i18n._({ id: "Existing and future project records", comment: "the sharing confirm: the records made before and after the share both go" })}</li>
-              <li>{i18n._({ id: "Removing access won’t erase copies members already saved", comment: "sharing consequence: revoking access does not erase copies members already saved" })}</li>
-            </ul>
-          </div>
-          <p className="text-neutral-600 dark:text-neutral-300">{target.login !== null
-            ? i18n._({ id: "Access follows this project's members and visibility", comment: "Personal does not imply that a project is private" })
-            : i18n._({ id: "Group members can access these records", comment: "effect of adding the project's records to a group" })}</p>
-          {existing?.placement?.visibility === "public" ? <p className="font-medium text-amber-800 dark:text-amber-300">{i18n._({ id: "Public: anyone can read", comment: "the sharing confirm, on records at a public place of the Space" })}</p> : null}
+          {chosenServer && available.length === 1 ? <p data-testid={"space-pick-server-summary-" + repo.key} className="text-neutral-600 dark:text-neutral-300">
+            {i18n._({ id: "Opens on {server}", values: { server: chosenServer.name }, comment: "the selected group has one server; Add also opens this project there after uploading records" })}
+          </p> : null}
+          {available.length > 1 ? <label className="flex min-w-0 flex-col gap-1 text-sm">
+            <span className="text-xs font-medium text-neutral-600 dark:text-neutral-400">{i18n._({ id: "Server", comment: "choose where Add opens the project after uploading records" })}</span>
+            <select data-testid={"space-pick-server-" + repo.key} value={chosenServer ? serverPlace(chosenServer) : ""} disabled={disabled}
+              className="min-h-8 min-w-0 rounded border border-neutral-300 bg-white px-2 py-1 text-sm focus:border-brand-500 dark:border-neutral-600 dark:bg-neutral-900"
+              onChange={(event) => setServerChoice(event.target.value)}>
+              <option value="">{i18n._({ id: "Choose server", comment: "placeholder requiring a server choice when a group offers several" })}</option>
+              {available.map((server) => <option key={serverPlace(server)} value={serverPlace(server)}>{server.name}</option>)}
+            </select>
+          </label> : null}
         </div>
       ) : null}
+      {serversPending ? <p role="status" className="text-xs text-neutral-500">{i18n._({ id: "Loading servers…", comment: "reading available servers before the project's group destination is committed" })}</p> : null}
+      {serverFailure ? <div role="alert" className="flex min-w-0 items-center gap-2 text-sm text-red-600 dark:text-red-400">
+        <span className="min-w-0 break-words">{serverFailure}</span>
+        <button type="button" className={SECONDARY} disabled={disabled} onClick={serverRead.reload}>{i18n._({ id: "Retry", comment: "run the stopped step again" })}</button>
+      </div> : null}
       {refusal ? <p role="alert" className="break-words text-sm text-red-600 dark:text-red-400">{refusal}</p> : null}
       <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 border-t border-neutral-200 pt-2 dark:border-neutral-700">
         <button ref={cancelRef} type="button" data-testid={"space-pick-cancel-" + repo.key} className={SECONDARY} disabled={busy} onClick={onClose}>
           {i18n._({ id: "Cancel", comment: "leave the editor without changing anything" })}
         </button>
-        <button ref={submitRef} type="button" data-testid={"space-pick-submit-" + repo.key} className={PRIMARY} disabled={disabled || !target}
+        <button ref={submitRef} type="button" data-testid={"space-pick-submit-" + repo.key} className={PRIMARY} disabled={disabled || !target || serversPending || !!serverFailure || serverRequired}
           onClick={() => void submit()}>
           {busy ? existing
             ? i18n._({ id: "Connecting…", comment: "connecting this local project's records to an existing group project" })

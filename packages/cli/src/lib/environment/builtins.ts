@@ -362,7 +362,7 @@ export function prepareBuiltinEnvironment(root: string, pkg: BuiltinPackage, reg
   if (requested.length !== 1 || requested[0] !== BUILTIN_PACKAGE_NAME) return wrote;
   try {
     // Written only where no lock stands yet (DR-111).
-    writeVersionedBytes(lockFile, serializeLock(builtinLock(pkg, parseRequests(text).registry ?? registryUrl, text)), null);
+    writeVersionedBytes(lockFile, serializeLock(builtinLock(pkg, parseRequests(text).registry ?? PUBLIC_REGISTRY_ORIGIN, text)), null);
   } catch (error) {
     // The first resolve writes it instead.
     console.error(`spex: ${root} holds no lock yet: ${error instanceof Error ? error.message : String(error)}`);

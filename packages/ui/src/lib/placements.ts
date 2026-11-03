@@ -121,26 +121,6 @@ export function canRun(state: GroupsState, repo: RepositoryState, line: Placemen
   return line.instance === null || governingOfPlacement(state, repo, line)?.signedIn === true;
 }
 
-/** Whether a sync admitted now takes a held placement's turn (space-11,
- * space-57): one it can run that reads reachable or read-only, or the
- * path placement. */
-export function runnable(state: GroupsState, repo: RepositoryState, line: PlacementState): boolean {
-  return canRun(state, repo, line) && (line.instance === null || line.state === "reachable" || line.state === "read-only");
-}
-
-/** Whether a placement's first push owes the sharing notice (space-57):
- * a held placement at an instance that takes pushes — a read-only one
- * never pushes, and the path placement owes none — whose notice this
- * device's reader has not seen, and whose repository has other members,
- * or a count the host's last read lacks with nothing synced with it from
- * here; or your own group's own repository's at an instance other than
- * its first placement's, never synced from here (space-4). */
-export function owesNotice(repo: RepositoryState, line: PlacementState): boolean {
-  if (!line.attached || line.instance === null || line.state !== "reachable" || line.noticed) return false;
-  if (line.members === null ? line.lastSync === null : line.members > 1) return true;
-  return repo.own && line.lastSync === null && instancePlacements(repo)[0]?.instance !== line.instance;
-}
-
 /** The instances "Place at…" offers a row (space-88): where its clone
  * holds a placement with an instance and the view says the person may
  * manage the members of every one it holds with an instance

@@ -244,15 +244,13 @@ export const PUBLIC_REGISTRY_ORIGIN = "https://spex.sublang.ai";
 
 export interface EnvironmentRegistry { origin: string; scope: AuthScope; legacy: boolean }
 
-/** Existing manifests without registry preserve their former source and
- * credential. An absent manifest starts in independent registry mode. */
+/** Package routing never inherits collaboration settings or grants.
+ * Existing locked sources keep their provenance when installed. The
+ * home argument remains for compatibility with published callers. */
 export function environmentRegistry(
   requests: Pick<Requests, "space" | "registry"> | null,
-  home: Pick<HomeFile, "origin" | "instances">,
+  _home: Pick<HomeFile, "origin" | "instances">,
 ): EnvironmentRegistry {
-  if (requests !== null && requests.registry === undefined) {
-    return { origin: environmentInstance(requests, home), scope: "space", legacy: true };
-  }
   return { origin: canonicalOrigin(requests?.registry ?? PUBLIC_REGISTRY_ORIGIN), scope: "registry", legacy: false };
 }
 

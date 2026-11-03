@@ -1713,6 +1713,24 @@ describe("playbook-library-113: Publish a folder package from its row", () => {
     await vi.waitFor(() => expect(commandMock).toHaveBeenCalledWith("registry.signin.start", { origin: "https://second.test" }));
   });
 
+  test("switching registry account identity discards a publish preview even when both accounts have the same login", async () => {
+    environments[PROJECT_ID] = local();
+    publishingReplies();
+    await renderTab();
+    choose(projectSection(), NAME, "publish");
+    await row().findByTestId("publish-summary");
+    const space = useAppStore.getState().space;
+    act(() => deliverServerMessageForTests({
+      type: "registry.state",
+      state: account(true, { account: { id: "another-registry-account", login: "me" } }),
+    }));
+    expect(row().queryByTestId("publish-summary")).toBeNull();
+    expect(row().queryByTestId("publish-confirm")).toBeNull();
+    expect(row().getByTestId("publish-button").textContent).toBe("Publish");
+    expect(useAppStore.getState().space).toBe(space);
+    expect(commandMock.mock.calls.some(([type, params]) => type === "environment.publish" && !params.dryRun)).toBe(false);
+  });
+
   test.each([
     { lands: "signed in", reply: () => account(true) },
     { lands: "signed out", reply: () => account(false) },

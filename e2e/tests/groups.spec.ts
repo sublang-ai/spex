@@ -6,8 +6,8 @@
 // sign-in by the device flow the served shell runs, from the card
 // titled "Sign in to a Space" (space-40); a folder added while signed
 // in, shared into a group from the palette (space-58, projects-1), and
-// at two Spaces (projects-17); a folder joining a team's project, which
-// asks the sharing confirm first (space-81); the organizer making a
+// at two Spaces (projects-17); a folder joining a team's project
+// directly (space-81); the organizer making a
 // group, sharing a project into it and adding a member (space-71); the
 // surface naming nothing behind the Space, in English and in Chinese
 // (space-75); a second Space signed in from "Add a Space…", a project
@@ -45,6 +45,7 @@ import {
   SESSION_TITLE,
   arrangeHostPeer,
   bareOf,
+  canonicalOrigin,
   chooseSpace,
   chosenSpace,
   clonePath,
@@ -70,8 +71,10 @@ import {
   spaceAddress,
   spaceChooser,
   surfaceEntry,
+  tapSockets,
   test,
   type App,
+  type TeamServer,
 } from "../src/harness";
 import {
   HEIGHTS,
@@ -155,13 +158,6 @@ async function expectNoSentence(where: Locator, what: string): Promise<void> {
   const text = await where.innerText();
   expect(text, `${what}: ${text}`).not.toMatch(SENTENCE);
 }
-
-/** The three phrases the sharing confirm stands over (space-57). */
-const SHARING_PHRASES = [
-  "All sessions: conversations, agent activity, and attachments",
-  "Existing and future project records",
-  "Removing access won’t erase copies members already saved",
-];
 
 /**
  * Record every text an element reads while the journey acts — a busy
@@ -483,8 +479,8 @@ test.describe("first start", () => {
     await expect.poll(() => host.script.repositories.map((repo) => `${repo.group.fullPath}/${repo.path}`)).toContain(OWN_KEY);
     await expect.poll(() => headOf(bareOf(host, OWN_KEY), "spex"), { timeout: 30_000 }).toMatch(/^[0-9a-f]{40}$/);
 
-    // "Add to a group…" offers, under the stand-in's display name, "Share
-    // into" with "Personal" first and then its groups, each by its name
+    // "Add to a group…" offers, under the stand-in's display name,
+    // "Choose group" with "Personal" first and then its groups, each by its name
     // and its path, and no field naming the new records; picking the
     // team's turns the row reachable with a sync time, the stand-in
     // holding `<name>-spex` on its `spex` branch (space-58, space-12).
@@ -618,17 +614,40 @@ test.describe("first start", () => {
 // ---------------------------------------------------------------------------
 
 test.describe("a folder added while signed in", () => {
-  test.use({ appOptions: { host: true, signedIn: true } });
+  test.use({ appOptions: {
+    host: { displayName: "Workshop Space" },
+    signedIn: true,
+    servers: [{ name: "lab-4", seat: { host: true }, seatMode: true }],
+  } });
 
-  test("space-58, projects-1: the palette's Add asks for the group in place, and a pick shares the project there", async ({
+  test("space-58, space-114, projects-1: Add uploads a local project and opens it on its group's server in the sidebar without another action", async ({
     page,
     app,
-  }) => {
-    test.setTimeout(120_000);
+  }, testInfo) => {
+    test.setTimeout(240_000);
     const host = app.host!;
+    const [lab] = app.servers as [TeamServer];
     const TEAM_KEY = hostKey(host, TEAM_PATH);
+    host.script.groups.find((group) => group.fullPath === HOST_GROUP)!.members!.push(PEER_MEMBER);
     seedDemoProject(app.projectDir);
+    const code = join(dirname(app.projectDir), "demo-project.git");
+    git(dirname(code), "clone", "-q", "--bare", app.projectDir, code);
+    git(app.projectDir, "remote", "add", "origin", code);
+    expect((await lab.seat.core.command("project.list", {}))).toEqual([]);
+    expect(instanceOf(await lab.seat.core.command("space.get", {}), host.url)?.signedIn).not.toBe(true);
+    const tap = tapSockets(page);
+    const relay = `/seats/${encodeURIComponent(lab.place)}`;
+    const commands = (type: string, seat = false) => tap.sockets
+      .filter((socket) => (new URL(socket.url).pathname === relay) === seat)
+      .flatMap((socket) => socket.sent.flatMap((frame) => {
+        try {
+          const { id: _id, ...command } = JSON.parse(frame) as Record<string, unknown>;
+          return command.type === type ? [command] : [];
+        } catch { return []; }
+      }));
+    await page.setViewportSize({ width: 1440, height: 1000 });
     await open(page, app);
+    const readSurface = await watch(page, '[data-testid="space-surface"]');
 
     // The folder pairs with records through the picker, standing in the
     // palette in place of its list: under the stand-in's display name,
@@ -642,7 +661,7 @@ test.describe("a folder added while signed in", () => {
     const picker = palette.getByTestId(`space-picker-${localKey}`);
     await expect(picker).toBeVisible();
     await expect(palette.getByTestId("palette-path")).toHaveCount(0);
-    const section = await pickSection(picker, host);
+    const section = await pickSection(picker, host, "Workshop Space");
     await expect(section).toContainText("Choose group");
     await expectPickOptions(section, [
       PICKED_AS[HOST_LOGIN]!,
@@ -654,18 +673,92 @@ test.describe("a folder added while signed in", () => {
     // the palette closes, and the row is reachable in that group with
     // the project followed to its key (space-58, space-60).
     await section.getByTestId(`space-pick-group-${HOST_GROUP}`).check();
+    await expect(picker).toContainText("Opens on lab-4");
+    await expect(picker.getByRole("button", { name: /^(Share|Continue|I understand)$/ })).toHaveCount(0);
+    await page.screenshot({ path: testInfo.outputPath("01-local-project-choose-group.png"), fullPage: true });
+    const deviceRequests = host.script.deviceRequests.length;
+    // Slow only the real admission response so the actual Connecting
+    // state can be inspected and captured, without altering the page.
+    lab.hub.delay(1, 5000);
     await picker.getByRole("button", { name: "Add to group", exact: true }).click();
     await expect(palette).toBeHidden();
-    await showGroups(page);
-    await expect(page.getByTestId(`space-repo-state-${TEAM_KEY}`)).toHaveText("Synced just now", { timeout: 30_000 });
-    await expect(page.getByTestId(`space-row-${TEAM_KEY}`)).toHaveAttribute("data-state", "reachable");
+    await expect(page.getByTestId("space-surface")).toBeVisible();
+    const row = page.getByTestId(`space-row-${TEAM_KEY}`);
+    const server = page.getByTestId(`space-server-${lab.place}`);
+    const progress = row.getByTestId("group-transfer-progress");
+    await expect(server).toContainText("Connecting to lab-4…", { timeout: 30_000 });
+    await expect(row).toHaveAttribute("data-state", "reachable");
+    await expect(progress.locator('li[data-state="complete"]')).toHaveCount(2);
+    await expect(progress.locator('li[data-state="complete"]').first()).toContainText("Add to Acme");
+    await expect(progress.locator('li[data-state="current"]')).toContainText("Connect to lab-4");
     expect(headOf(bareOf(host, TEAM_KEY), "spex")).toMatch(/^[0-9a-f]{40}$/);
-    await nav(page, "Projects").click();
-    await expect(page.getByTestId("captain-home")).toContainText("demo-project");
-    await expect(
-      page.getByRole("tree", { name: "Projects and sessions" }).getByRole("treeitem", { name: "demo-project", exact: true }),
-    ).toBeVisible();
+    const remoteProject = JSON.parse(git(bareOf(host, TEAM_KEY), "show", "spex:project.json"));
+    expect(remoteProject).toMatchObject({ name: "demo-project", remote: code });
+    expect(commands("space.pick")).toHaveLength(1);
+    expect(commands("space.pick")[0]).not.toHaveProperty("noticed");
+    await page.screenshot({ path: testInfo.outputPath("02-uploaded-connecting.png"), fullPage: true });
     expect((await app.core.command("project.list", {})).map((project) => project.id)).toEqual([TEAM_KEY]);
+
+    // The same Add admits a new seat, whose ticket signs it in.
+    // The real core in seat mode clones both records and code and pairs
+    // its allocated folder; the journey performs no rebind or seat setup.
+    await expect.poll(() => commands("server.open")).toEqual([
+      { type: "server.open", instance: canonicalOrigin(host.url), serverId: lab.server.id, consented: true },
+    ]);
+    await expect(server.getByTestId(`space-server-connected-${lab.place}`)).toHaveText("Connected", { timeout: 60_000 });
+    const remoteRepo = host.script.repositories.find((repo) => `${repo.group.fullPath}/${repo.path}` === TEAM_PATH)!;
+    expect(remoteRepo).toBeDefined();
+    await expect.poll(() => commands("space.join", true), { timeout: 60_000 }).toEqual([
+      { type: "space.join", instance: canonicalOrigin(host.url), hostId: remoteRepo.id },
+    ]);
+    expect(commands("space.join")).toEqual([]);
+    await expect(row.getByTestId(`space-row-on-${lab.place}-${TEAM_KEY}`)).toHaveText("On lab-4", { timeout: 60_000 });
+    const serverProjects = page.getByTestId("sidebar").getByRole("group", { name: "lab-4", exact: true });
+    const serverProject = serverProjects.getByTestId(`sidebar-project-${TEAM_KEY}@${lab.place}`);
+    await expect(serverProject).toBeVisible();
+    await expect(progress).toContainText("demo-project is ready on lab-4");
+    await expect(progress.locator('li[data-state="complete"]')).toHaveCount(4);
+    const seatProject = (await lab.seat.core.command("project.list", {})).find((project) => project.id === TEAM_KEY)!;
+    expect(seatProject).toBeDefined();
+    const seatRow = repositoryOf(await lab.seat.core.command("space.get", {}), TEAM_KEY);
+    expect(seatRow.folder).toBe(join(lab.seat.dataDir, "projects", TEAM_KEY));
+    expect(existsSync(join(seatRow.folder!, "README.md"))).toBe(true);
+    expect(git(seatRow.folder!, "remote", "get-url", "origin")).toBe(code);
+    expect(git(clonePath(lab.seat.dataDir, TEAM_KEY), "rev-parse", "spex")).toBe(headOf(bareOf(host, TEAM_KEY), "spex"));
+    expect(host.script.deviceRequests.slice(deviceRequests)).toEqual([
+      expect.objectContaining({ label: "Spex on lab-4", serverId: lab.server.id, personId: host.script.person.id, ticket: expect.any(String) }),
+    ]);
+    expect(host.script.tickets.at(-1)?.spent).toBe(true);
+    await expect(page.getByTestId("space-notice-confirm")).toHaveCount(0);
+    await expect(page.getByTestId(`space-server-contract-${lab.place}`)).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^(Share|Continue|I understand)$/ })).toHaveCount(0);
+    expect((await readSurface()).some((text) => text.includes("Waiting for you to continue"))).toBe(false);
+    await page.mouse.move(1400, 950);
+    await page.screenshot({ path: testInfo.outputPath("03-open-on-server-sidebar.png"), fullPage: true });
+    await page.emulateMedia({ colorScheme: "dark" });
+    await page.screenshot({ path: testInfo.outputPath("06-open-on-server-sidebar-dark.png"), fullPage: true });
+    await page.emulateMedia({ colorScheme: "light" });
+
+    // Refresh reads authoritative state, then a fresh page reconstructs
+    // the connected seat and its sidebar entry without another admission.
+    const readAt = instanceOf(await app.core.command("space.get", {}), host.url)?.readAt ?? 0;
+    await page.getByTestId("space-refresh").click();
+    await expect.poll(async () => instanceOf(await app.core.command("space.get", {}), host.url)?.readAt ?? 0).toBeGreaterThan(readAt);
+    await expect(row).toHaveAttribute("data-state", "reachable");
+    await expect(serverProject).toBeVisible();
+    await page.reload();
+    await expect(serverProject).toBeVisible({ timeout: 30_000 });
+    await showGroups(page);
+    await expect(row.getByTestId(`space-row-on-${lab.place}-${TEAM_KEY}`)).toHaveText("On lab-4");
+    await expect(page.getByTestId(`space-repo-state-${TEAM_KEY}`)).toHaveText(/^Synced (just now|\d+m ago)$/);
+    await expect(page.getByTestId("space-refresh")).toHaveText("Refresh");
+    expect(commands("server.open")).toHaveLength(1);
+    expect(headOf(bareOf(host, TEAM_KEY), "spex")).toBe(git(clonePath(app.dataDir, TEAM_KEY), "rev-parse", "spex"));
+    await page.screenshot({ path: testInfo.outputPath("04-refreshed-server-sidebar.png"), fullPage: true });
+    await setRail(page, true);
+    await page.setViewportSize({ width: 640, height: 1000 });
+    await expect(serverProject).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath("05-narrow-server-sidebar.png"), fullPage: true });
   });
 });
 
@@ -728,7 +821,7 @@ test.describe("reviewing a local project's destination", () => {
     await opener.click();
     await expect(picker.getByRole("radio", { checked: true })).toHaveCount(0);
     await group.check();
-    for (const phrase of SHARING_PHRASES) await expect(picker).toContainText(phrase);
+    await expect(picker.getByRole("button", { name: /^(Share|Continue|I understand)$/ })).toHaveCount(0);
     await picker.screenshot({ path: testInfo.outputPath("02-review-group-light.png") });
     await page.screenshot({ path: testInfo.outputPath("03-space-context-light.png") });
 
@@ -831,14 +924,14 @@ test.describe("a folder added while signed in at two Spaces", () => {
 });
 
 // ---------------------------------------------------------------------------
-// space-81: a pick joining a team's project asks the sharing confirm first
+// space-81: a pick joins a team's project with one Connect project act
 // ---------------------------------------------------------------------------
 
 test.describe("a folder joining a team's project", () => {
   test.use({ appOptions: { host: true, signedIn: true } });
 
   for (const unknown of [false, true]) {
-    test(`space-81: a pick joining a team's project ${unknown ? "whose members' count is unknown" : "with another member"} reviews sharing without mutating, and Connect project joins it`, async ({
+    test(`space-81: selecting a team's project ${unknown ? "whose members' count is unknown" : "with another member"} changes nothing, and Connect project joins it directly`, async ({
       page,
       app,
     }) => {
@@ -885,7 +978,7 @@ test.describe("a folder joining a team's project", () => {
       // Connect project. Escape cancels the whole form without sharing.
       await listed.check();
       await expect(listed).toBeChecked();
-      for (const phrase of SHARING_PHRASES) await expect(picker).toContainText(phrase);
+      await expect(picker.getByRole("button", { name: /^(Share|Continue|I understand)$/ })).toHaveCount(0);
       await expect(picker.getByRole("button", { name: "Connect project", exact: true })).toBeEnabled();
       expect(repositoryOf(await app.core.command("space.get", {}), localKey).state).toBe("local-only");
       await page.keyboard.press("Escape");
@@ -893,8 +986,8 @@ test.describe("a folder joining a team's project", () => {
       await expect(page.getByTestId(`space-row-pick-${localKey}`)).toBeFocused();
       expect(repositoryOf(await app.core.command("space.get", {}), localKey).state).toBe("local-only");
 
-      // Explicit confirmation connects the project's records with the
-      // existing history and records the reviewed sharing scope.
+      // Connect project joins the existing history directly, without a
+      // sharing acknowledgement, including an unknown member count.
       await page.getByTestId(`space-row-pick-${localKey}`).click();
       await listed.check();
       await picker.getByRole("button", { name: "Connect project", exact: true }).click();
@@ -903,7 +996,6 @@ test.describe("a folder joining a team's project", () => {
       await expect(row).toHaveAttribute("data-state", "reachable", { timeout: 30_000 });
       await expect(page.getByTestId(`space-repo-state-${key}`)).toHaveText(/^Synced (just now|\d+m ago)$/, { timeout: 30_000 });
       const joined = repositoryOf(await app.core.command("space.get", {}), key);
-      expect(placementOf(joined, host.url).noticed).toBe(true);
       expect(joined.folder).toBe(app.projectDir);
       const clone = clonePath(app.dataDir, key);
       expect(git(clone, "rev-parse", "spex")).toBe(git(bareOf(host, key), "rev-parse", "spex"));
@@ -2444,10 +2536,8 @@ test.describe("second computer", () => {
     await expect(page.getByText("Queued on the other laptop")).toBeVisible();
 
     // A session run here and synced lands on the stand-in's `spex`
-    // beside the peer's (space-12); the records' other member makes its
-    // first send ask the sharing confirm beneath the row, titled "Share
-    // with Acme at <display name>?" over its three phrases, and Share
-    // sends (space-57).
+    // beside the peer's (space-12), with no extra sharing confirmation
+    // before its first send even though the project has another member.
     await page.getByRole("tab", { name: "New task" }).click();
     await send(page, "Fix the token refresh in auth.ts");
     await expect(page.getByTestId("captain-pane")).toContainText("/code finished");
@@ -2459,11 +2549,9 @@ test.describe("second computer", () => {
     await expect(sessionRow).toContainText("Fix the token refresh in auth.ts");
     const ownSession = (await sessionRow.getAttribute("data-testid"))!.replace("space-unit-mine-sessions/", "");
     await rowAct(page, key, "sync");
-    const confirm = page.getByTestId("space-notice-confirm");
-    await expect(confirm).toContainText("Share with Acme at Stand-in Git host?");
-    for (const phrase of SHARING_PHRASES) await expect(confirm).toContainText(phrase);
-    await confirm.getByRole("button", { name: "Share", exact: true }).click();
     await expect(page.getByTestId("space-done-line")).toHaveText(/^Synced just now · [1-9]\d* sent · 0 received$/);
+    await expect(page.getByTestId("space-notice-confirm")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^(Share|Continue)$/ })).toHaveCount(0);
     const tracked = git(bareOf(host, key), "ls-tree", "-r", "--name-only", "spex").split("\n");
     expect(tracked).toContain(`sessions/${ownSession}.json`);
     expect(tracked).toContain(`sessions/${peerSession}.json`);

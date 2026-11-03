@@ -30,6 +30,7 @@ const { commandMock } = vi.hoisted(() => ({ commandMock: vi.fn() }));
  * here. Add a command to this table rather than teaching a caller to
  * survive a reply the protocol forbids. */
 function defaultReply(type: string): object {
+  if (type === "server.list") return { servers: [], failures: [] };
   return type === "specs.get"
     ? { present: false, legacy: false, files: [], decisions: [], intents: [], notices: [], readAt: 0 }
     : type === "environment.get"
@@ -960,6 +961,7 @@ describe("run-view-172: first-project welcome route", () => {
     fireEvent.click(within(picker).getByTestId("space-pick-group-@me"));
     const submit = within(picker).getByTestId(`space-pick-submit-${added.id}`);
     const live = screen.getByTestId("app-live");
+    await vi.waitFor(() => expect(submit).toHaveProperty("disabled", false));
     fireEvent.click(submit);
     await vi.waitFor(() => expect(live.textContent).toBe("Destination unavailable"));
     const previousAnnouncement = live.firstElementChild;
@@ -986,6 +988,7 @@ describe("run-view-172: first-project welcome route", () => {
       expect(live.textContent).toBe("Adding gamma to Personal at Example");
     });
     expect(live.isConnected).toBe(true);
+    await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByRole("main", { name: "Space" })));
   });
 
   test("landing and sidebar add the same way; the switch shortcut still offers Academy", () => {

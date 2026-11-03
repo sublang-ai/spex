@@ -157,7 +157,7 @@ import { AGENT_CREDENTIAL_FORMS, codexAuthContent, unreadablePhrase, SeatEnviron
 import { RegistryManager } from "./registry.js";
 import { SpaceManager, type SpaceHost, type SpaceStepEvent } from "./space.js";
 import { Places } from "./places.js";
-import { GitHostClient, SEAT_ID_MAX, fileCredentialStore } from "@sublang/spex/git-host";
+import { CredentialChanged, GitHostClient, SEAT_ID_MAX, fileCredentialStore } from "@sublang/spex/git-host";
 import { relayHostError } from "./space-groups.js";
 import { currentRuntime, withGitCredential } from "./git-credential.js";
 import { configureSeatGit } from "./seat-git.js";
@@ -878,31 +878,17 @@ export class CoreService {
       // (environments-12, git-host-4, DR-127), an instance that cannot
       // be reached, or asks to wait, read as it answered (git-host-11).
       placedAt: (key) => this.space.instanceOriginOf(key),
-      tokenFor: async (origin, scope = "space") => {
-        if (scope === "registry") {
-          try { return await this.registry.client(origin).accessSecret(); }
-          catch (error) { throw new Error(relayHostError(error, this.registry.name(origin))); }
-        }
-        try {
-          return await this.space.accessSecretFor(origin);
-        } catch (error) {
-          throw new Error(relayHostError(error, this.space.instanceName(origin)));
-        }
+      tokenFor: async (origin) => {
+        try { return await this.registry.client(origin).accessSecret(); }
+        catch (error) { throw new Error(relayHostError(error, this.registry.name(origin))); }
       },
       // The instance a publish goes to, named by its display name as last
       // read, else its host name (environments-10, playbook-library-93).
       instanceName: (origin) => this.registry.name(origin),
-      // A registry refusing an instance's token signs that instance alone
-      // out, where that token is still its stored pair's; a pair replaced
-      // meanwhile fails the call as changed meanwhile (environments-12,
-      // git-host-4, DR-127).
-      refused: async (origin, token, scope = "space") => {
-        if (scope === "registry") { await this.registry.client(origin).signOutRefused(token); return; }
-        try {
-          await this.space.registryRefused(origin, token);
-        } catch (error) {
-          throw new Error(relayHostError(error, this.space.instanceName(origin)));
-        }
+      // Package refusals affect only the registry grant, even when the
+      // same origin also serves a Space (environments-12, DR-168).
+      refused: async (origin, token) => {
+        if (!(await this.registry.client(origin).signOutRefused(token))) throw new CredentialChanged();
       },
       // A Git source at a signed-in instance's Git origin takes the
       // credential that instance brokers, through the app's helper, and
@@ -3452,7 +3438,14 @@ export class CoreService {
           // defaults stand, with no license where none is derived.
           const defaults = newPackageDefaults(project.id, project.path, await this.environments.publishableOrgs(project.id));
           const sessionFolder = this.drafts.workingFolder(command.playbookId);
-          const packagePath = sessionFolder !== null && canonicalFolder(sessionFolder) === canonicalFolder(project.path)
+          const existingPackage = sessionFolder !== null && canonicalFolder(sessionFolder) === canonicalFolder(project.path);
+          if (!existingPackage && defaults.org.length === 0) {
+            throw new CoreError("invalid_request", i18n._({
+              id: "Choose an Org in New playbook before compiling a new package.",
+              comment: "A one-shot compile cannot infer a publishing namespace from a Space group; choose an explicit Org in the New playbook form first",
+            }));
+          }
+          const packagePath = existingPackage
             ? this.drafts.packagePath(command.playbookId)
             : packageFolderFor(project.path, defaults.org, command.playbookId);
           const packageDir = join(project.path, ...packagePath.split("/"));
@@ -3981,7 +3974,7 @@ export class CoreService {
         return this.authors.list();
       case "draft.defaults": {
         // What New playbook fills in, read from the project — or the
-        // global environment — and the registry of its instance now,
+        // global environment — and its selected registry account now,
         // asked once (playbook-library-103).
         const { repository, workingFolder } = this.draftHome(command.projectId);
         return newPackageDefaults(repository.key, workingFolder, await this.environments.publishableOrgs(repository.key));

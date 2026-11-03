@@ -226,17 +226,12 @@ export function lineOutcome(
 ): PlacementState["outcome"] {
   const outcome = line.outcome;
   if (!outcome) return null;
+  // Old cores may leave a first-share acknowledgement outcome in a
+  // snapshot. The chosen destination already authorizes syncing
+  // (space-57, DR-215); it no longer asks the reader for an action.
+  if (outcome.kind === "waiting") return null;
   const putAway = dismissed !== undefined && dismissed === JSON.stringify(repo.sync);
   return putAway && (outcome.kind === "synced" || outcome.kind === "behind" || outcome.kind === "stopped") ? null : outcome;
-}
-
-/** "Waiting for you to continue" (space-57, space-87): a placement's
- * first send waiting on the sharing confirm. */
-export function waitingForYouPhrase(): string {
-  return i18n._({
-    id: "Waiting for you to continue",
-    comment: "a project's row or placement line: its first send to a Space waits for the sharing confirm; Continue stands beside it",
-  });
 }
 
 /** A placement's line (space-87), the first that applies: the step in
@@ -301,10 +296,6 @@ export function placementPhrase(
       }
       case "unrelated": {
         const text = startedSeparately(name);
-        return { text, title: text, tone: "attention" };
-      }
-      case "waiting": {
-        const text = waitingForYouPhrase();
         return { text, title: text, tone: "attention" };
       }
       case "stopped": {
@@ -408,10 +399,9 @@ export function toSendPhrase(units: readonly SpaceUnit[]): { text: string; title
 /** The phrase a row reads (space-120, DR-159): its words, the fuller
  * reading for its title, its tone, and the way forward beside it —
  * Resolve for choices owed, "Combine…" for records started separately,
- * Continue for a first send waiting on the sharing confirm, Retry for a
- * stop retrying can help — with the placement it is for. */
+ * Retry for a stop retrying can help — with the placement it is for. */
 export interface RowPhrase extends LinePhrase {
-  act?: { kind: "resolve" | "combine" | "continue" | "retry"; placement: string | null };
+  act?: { kind: "resolve" | "combine" | "retry"; placement: string | null };
 }
 
 const NO_PHRASE: RowPhrase = { text: "", title: "", tone: "idle" };
@@ -424,8 +414,7 @@ const NO_PHRASE: RowPhrase = { text: "", title: "", tone: "idle" };
  * 2. "<n> record(s) to sync", its local units;
  * 3. "Changed here and at <display name>" with Resolve (space-14);
  * 4. "Started separately at <display name>" with "Combine…" (space-13);
- * 5. "Waiting for you to continue" with the sharing confirm (space-57),
- *    or a stopped step's cause with Retry (space-15);
+ * 5. a stopped step's cause with Retry (space-15);
  * 6. "Read-only: <the host's reason>", the records read-only;
  * 7. "Unreachable: <cause>", the records unreachable;
  * 8. "Signed out of <display name>", unreachable because this computer
@@ -476,10 +465,6 @@ export function rowPhrase(
     return { text, title: text, tone: "attention", act: { kind: "combine", placement: apartAt } };
   }
   for (const { line, outcome } of outcomes) {
-    if (outcome?.kind === "waiting") {
-      const text = waitingForYouPhrase();
-      return { text, title: text, tone: "attention", act: { kind: "continue", placement: line.instance } };
-    }
     if (outcome?.kind === "stopped") {
       const text = stoppedPhrase(outcome.step, outcome.message);
       return {
@@ -599,8 +584,7 @@ export function openingAt(state: GroupsState | undefined, id: string | undefined
 }
 
 /** "Personal" (space-1, DR-172): your own records and your namespace
- * at a Space, as a heading, a picker's first choice and a group the
- * sharing confirm names. */
+ * at a Space, as a heading and a picker's first choice. */
 export const personalLabel = (): string =>
   i18n._({ id: "Personal", comment: "your own records at a Space, apart from any group: a heading, a picker's choice and where records are shared into" });
 

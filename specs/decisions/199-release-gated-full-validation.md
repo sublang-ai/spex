@@ -9,7 +9,7 @@ Accepted (2026-11-02) on the owner's direction to accelerate CI and local checks
 Amends [DR-040](040-source-only-app-releases.md) in the publication gate, [DR-086](086-tests-in-tiers.md) and [DR-087](087-beta-app-releases.md) in the timing of hermetic checks and release evidence, [DR-145](145-merge-on-green.md), [DR-166](166-pull-requests-run-without-macos.md) and [DR-185](185-the-suites-a-change-reaches.md) in validation selection and the merge gate, and [DR-149](149-the-privileged-lane-runs-on-ci.md) in the privileged lane's triggers.
 Supersedes [DR-169](169-documentation-alone-reports-the-suites-names.md): one result gate replaces stand-ins for skipped suite names.
 
-Amended by [DR-216](216-tags-own-release-versions.md) for TAG-owned versions, deterministic pre-validation metadata preparation and optional curated notes; release channel scopes and full validation gates remain.
+Amended by [DR-218](218-tags-own-release-versions.md) for TAG-owned versions, deterministic pre-validation metadata preparation and optional curated notes; release channel scopes and full validation gates remain.
 
 ## Context
 

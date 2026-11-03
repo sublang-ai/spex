@@ -8,6 +8,8 @@
 // through "Other…", the account there signs in and out with the Space untouched,
 // and New playbook's one Org field suggests that account's orgs; the
 // Space surface's sign-in card lists the directory's Spaces.
+import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   HOST_LOGIN,
   test,
@@ -44,7 +46,7 @@ test("playbook-library-120/space-116: independent same-origin registry account, 
   await expect(page.getByTestId("new-playbook-org-note")).toHaveText("Publishing rights not checked");
   await expect(page.getByTestId("new-playbook-org-guidance")).toContainText("To publish, use an org you can claim at this registry.");
   const unsignedRegistry = (await app.core.command("environment.get", { repository: key })).registry!.origin;
-  await expect(page.getByRole("link", { name: "Claim an org" })).toHaveAttribute("href", `${unsignedRegistry}/account/orgs`);
+  await expect(page.getByRole("link", { name: "Claim an org" })).toHaveAttribute("href", `${unsignedRegistry}/account/orgs?scope=registry`);
   // The "Packages" heading carries its registry as "Registry:
   // <registry>", a chooser offering the public registry by its display
   // name, the registry the project's spex.yaml names where that is
@@ -111,7 +113,7 @@ test("playbook-library-120/space-116: independent same-origin registry account, 
   const note = page.getByTestId("new-playbook-org-note");
   const retry = page.getByTestId("new-playbook-orgs-retry");
   await expect(retry).toBeVisible();
-  await expect(page.getByRole("link", { name: "Claim an org" })).toHaveAttribute("href", `${host.url}/account/orgs`);
+  await expect(page.getByRole("link", { name: "Claim an org" })).toHaveAttribute("href", `${host.url}/account/orgs?scope=registry`);
   await retry.click();
   await expect(note).toHaveText("Loading…");
   await expect.poll(() => orgSuggestions(page)).toEqual(["acme", "other"]);
@@ -121,7 +123,7 @@ test("playbook-library-120/space-116: independent same-origin registry account, 
   await expect(page.getByTestId("new-playbook-org-guidance")).toBeHidden();
   await org.fill("elsewhere");
   await expect(form).toContainText("not yours to publish to");
-  await expect(page.getByRole("link", { name: "Claim an org" })).toHaveAttribute("href", `${host.url}/account/orgs`);
+  await expect(page.getByRole("link", { name: "Claim an org" })).toHaveAttribute("href", `${host.url}/account/orgs?scope=registry`);
   await expect(org).toHaveValue("elsewhere");
   await org.fill("other");
   await expect(form).not.toContainText("not yours to publish to");
@@ -131,7 +133,7 @@ test("playbook-library-120/space-116: independent same-origin registry account, 
   await projectTab(page, "Packages");
   await projectTab(page, "Playbooks");
   await expect(note).toHaveText("No orgs to publish to");
-  await expect(page.getByRole("link", { name: "Claim an org" })).toHaveAttribute("href", `${host.url}/account/orgs`);
+  await expect(page.getByRole("link", { name: "Claim an org" })).toHaveAttribute("href", `${host.url}/account/orgs?scope=registry`);
   // Signing out of the registry leaves the Space signed in.
   await projectTab(page, "Packages");
   await signOut.click();
@@ -150,4 +152,65 @@ test("playbook-library-120/space-116: independent same-origin registry account, 
   await expect(spaceAddress(card)).toBeVisible();
   await spaceAddress(card).fill("https://custom.example");
   await expect(spaceAddress(card)).toHaveValue("https://custom.example");
+});
+
+
+test.describe("a legacy project with distinct registry and Space identities", () => {
+  test.use({ appOptions: {
+    project: true,
+    independentRegistry: true,
+    host: { registry: true, displayName: "Public package registry", second: { displayName: "spex.sublang.xyz" } },
+  } });
+
+  test("package views never inherit the Space account, address or group", async ({ page, app }) => {
+    const registryOrigin = "https://spex.sublang.ai";
+    const registryHost = app.host!;
+    const spaceHost = app.hosts[1]!;
+    registryHost.script.deviceInterval = 0;
+    spaceHost.script.deviceInterval = 0;
+    app.registry!.script.setOrgs(registryHost.url, [{ name: "publisher", path: "publisher", role: "Owner" }]);
+    await signInCore(app, spaceHost);
+    const key = (await refreshProjectKey(app))!;
+    // This is the old project shape that incorrectly selected the Space
+    // as its package registry. Reading it must not rewrite the manifest.
+    const legacy = `format: 1\nspace: ${spaceHost.url}\npackages: {}\n`;
+    writeFileSync(join(app.projectDir, "spex.yaml"), legacy);
+    await open(page, app);
+    await projectTab(page, "Playbooks");
+    await expect(page.getByTestId("new-playbook-org")).toHaveValue("");
+    await expect(page.getByRole("link", { name: "Claim an org" })).toHaveAttribute("href", `${registryOrigin}/account/orgs?scope=registry`);
+    await expect(page.getByTestId("new-playbook")).not.toContainText("spex.sublang.xyz");
+    expect((await app.core.command("environment.get", { repository: key })).registry?.origin).toBe(registryOrigin);
+    expect(readFileSync(join(app.projectDir, "spex.yaml"), "utf8")).toBe(legacy);
+    expect((await app.core.command("registry.get", { repository: key })).account).toBeNull();
+    expect((await app.core.command("space.get", {})).instances.find((entry) => entry.origin === spaceHost.url)?.signedIn).toBe(true);
+
+    await projectTab(page, "Packages");
+    const packages = packagesSection(page, "project");
+    await expect(packages).not.toContainText("spex.sublang.xyz");
+    await expect(packages.getByTestId("registry-signin")).toBeVisible();
+    // Cancelling the registry flow cannot cancel or clear Space access.
+    await packages.getByTestId("registry-signin").click();
+    await packages.getByTestId("registry-cancel").click();
+    expect((await app.core.command("space.get", {})).instances.find((entry) => entry.origin === spaceHost.url)?.signedIn).toBe(true);
+    await packages.getByTestId("registry-signin").click();
+    const pending = await app.core.command("registry.get", { origin: registryOrigin });
+    if (pending.signIn.phase !== "running" || pending.signIn.flow !== "device") throw new Error("Expected registry sign-in");
+    registryHost.script.approveDevice(pending.signIn.userCode);
+    await expect(packages.getByTestId("registry-login")).toHaveText(`@${HOST_LOGIN}`);
+    await projectTab(page, "Playbooks");
+    await expect.poll(() => orgSuggestions(page)).toEqual(["publisher"]);
+    await expect(page.getByTestId("new-playbook-org")).toHaveValue("publisher");
+    await expect(page.getByTestId("new-playbook")).not.toContainText("spex.sublang.xyz");
+
+    // Space sign-out leaves the package account and its namespace usable.
+    await app.core.command("space.signout", { instance: spaceHost.url });
+    expect((await app.core.command("registry.get", { origin: registryOrigin })).account?.login).toBe(HOST_LOGIN);
+    await projectTab(page, "Packages");
+    await expect(packages.getByTestId("registry-login")).toHaveText(`@${HOST_LOGIN}`);
+    await packages.getByTestId("registry-signout").click();
+    await expect(packages.getByTestId("registry-signin")).toBeVisible();
+    await projectTab(page, "Playbooks");
+    await expect(page.getByTestId("new-playbook-org")).toHaveValue("");
+  });
 });

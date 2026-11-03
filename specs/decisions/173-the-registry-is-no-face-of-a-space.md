@@ -2,6 +2,8 @@
 
 ## Status
 
+Amended by [DR-216](216-registry-and-space-accounts-stay-apart.md): package and authoring account context comes only from the selected registry, including environments without an explicit `registry`.
+
 Accepted (2026-10-31) on the owner's clarification that one Spex Space site, `spex.sublang.ai`, is the registry itself and lists, on its Groups page, the Spaces where groups live, such as `git.sublang.xyz`.
 Amends [DR-172](172-surfaces-a-fresh-user-reads.md) in the Space surface's map and in a Space's heading, and [DR-168](168-independent-package-registry.md) in how the registry is shown; everything else in both stands.
 

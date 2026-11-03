@@ -396,16 +396,6 @@ msgstr "{name} is on this computer already, syncing with {project}"
 msgid "{name} is private — Sign in to {registry}"
 msgstr "{name} is private — Sign in to {registry}"
 
-#. A package the registry keeps private, asked while this computer is signed out of the Space whose sign-in a spex.yaml naming no registry reads with; {registry} is the registry's display name. Space is the rail's surface holding the sign-in
-#: src/environments.ts
-msgid "{name} is private at {registry} — Sign in on Space, then Retry"
-msgstr "{name} is private at {registry} — Sign in on Space, then Retry"
-
-#. A package the registry does not show while this computer is signed out of the Space whose sign-in a spex.yaml naming no registry reads with, either private or never published; {registry} is the registry's display name. Space is the rail's surface holding the sign-in
-#: src/environments.ts
-msgid "{name} is private or not at {registry} — Sign in on Space, then Retry"
-msgstr "{name} is private or not at {registry} — Sign in on Space, then Retry"
-
 #. A package the registry does not show while signed out there, either private or never published; {registry} is the registry's display name. 'Sign in to' names the Packages tab's sign-in control
 #: src/environments.ts
 msgid "{name} is private or not at {registry} — Sign in to {registry}"
@@ -471,11 +461,6 @@ msgstr "{name}: {registry} is down ({status}) — Retry later"
 #: src/environments.ts
 msgid "{name}: no folder at {path} — put the folder back, or Remove {name}"
 msgstr "{name}: no folder at {path} — put the folder back, or Remove {name}"
-
-#. Asked for the package {name}, the Space whose sign-in a spex.yaml naming no registry reads with no longer accepts this computer's sign-in; {registry} is the registry's display name. Space is the rail's surface holding the sign-in
-#: src/environments.ts
-msgid "{name}: sign-in at {registry} expired — Sign in again on Space"
-msgstr "{name}: sign-in at {registry} expired — Sign in again on Space"
 
 #. spex.lock records the package's registry by a value that is not an address, so Spex asks it nothing; Update is the Packages tab's control that writes spex.lock again
 #: src/environments.ts
@@ -1236,6 +1221,11 @@ msgstr "Check the URL, create the repository, or sign this computer in at {host}
 msgid "Check your GitHub account with gh auth status, switch with gh auth login, then Retry"
 msgstr "Check your GitHub account with gh auth status, switch with gh auth login, then Retry"
 
+#. A one-shot compile cannot infer a publishing namespace from a Space group; choose an explicit Org in the New playbook form first
+#: src/service.ts
+msgid "Choose an Org in New playbook before compiling a new package."
+msgstr "Choose an Org in New playbook before compiling a new package."
+
 #. Guidance where the side chosen for a change failed validation
 #: src/space.ts
 msgid "Choose the other side or fix the file, then Retry."
@@ -1336,21 +1326,6 @@ msgstr "config is invalid: {errors}"
 #: src/config.ts
 msgid "config must be a YAML mapping"
 msgstr "config must be a YAML mapping"
-
-#. Refusal of attaching a project's records at a Space until the reader has answered the sharing confirm: every record reaches its members there; {name} is the project
-#: src/space.ts
-msgid "Confirm sharing before attaching {name}"
-msgstr "Confirm sharing before attaching {name}"
-
-#. Refusal of joining a project's records that other members share until the reader has answered the sharing confirm; {name} is the project
-#: src/space.ts
-msgid "Confirm sharing before joining {name}"
-msgstr "Confirm sharing before joining {name}"
-
-#. Refusal of the first send of a project's records to a Space where other members share them, until the reader has answered the sharing confirm; {name} is the project
-#: src/space.ts
-msgid "Confirm sharing before the first sync of {name}"
-msgstr "Confirm sharing before the first sync of {name}"
 
 #. Guidance under a stopped removal of a project's records from one Space: confirming again removes them there whatever they hold
 #: src/space.ts
@@ -2612,11 +2587,6 @@ msgstr "Sign out of {host} first"
 #: src/space-git.ts
 msgid "Sign this computer in at {host} with an account that can see it, then Retry"
 msgstr "Sign this computer in at {host} with an account that can see it, then Retry"
-
-#. The Space whose sign-in a spex.yaml naming no registry reads with no longer accepts this computer's sign-in; {registry} is the registry's display name. Space is the rail's surface holding the sign-in
-#: src/environments.ts
-msgid "Sign-in at {registry} expired — Sign in again on Space"
-msgstr "Sign-in at {registry} expired — Sign in again on Space"
 
 #. A sign-in at the registry was cancelled, denied, expired or interrupted; {registry} is the registry's display name
 #: src/registry.ts

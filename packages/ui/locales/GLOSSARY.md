@@ -110,7 +110,6 @@ Product names and the role names Playbook defines stay as authored; everything e
 | Sign in / Signing in… / Sign in again / Sign out | 登录 / 登录中… / 重新登录 / 退出登录 | signing in to a Space or a registry |
 | login | 登录名 | a person's account name at a Space, shown as @login; never 用户名, which is Git's user name |
 | Members | 成员 | a project's or a group's overflow entry |
-| Waiting for you to continue | 等待你继续 | the first send of a project's records waiting on the sharing confirm |
 | authoring (session) | 编写（会话） | a playbook being written in a draft |
 | Queue (the capture control) | 加入队列 | |
 | Connect / Connected / Disconnect | 连接 / 已连接 / 断开连接 | a server's line |

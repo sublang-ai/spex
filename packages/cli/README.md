@@ -125,7 +125,8 @@ packages:
 
 - `registry` is where packages come from, and where `spex publish`
   sends yours. A new `spex.yaml` names the public registry, Spex Space
-  at `https://spex.sublang.ai`.
+  at `https://spex.sublang.ai`; that is also the default when `registry`
+  is absent.
 - `space`, optional, is the Space this project's records sync with. It
   changes nothing about where packages come from.
 - `language`, optional, picks each package's files in that language
@@ -334,8 +335,8 @@ spex whoami
 spex logout --registry https://spex.sublang.ai
 ```
 
-- With no flag, `login` and `logout` act on the registry `spex.yaml`
-  names, or on the public registry where there is no `spex.yaml`.
+- With no flag, `login`, `logout` and `whoami` act on the registry
+  `spex.yaml` names, or the public registry when it names none.
   `--registry <url>` or `--space <url>` picks another; the two cannot be
   combined.
 - These flags choose where to sign in or out, not the registry used by
@@ -345,14 +346,12 @@ spex logout --registry https://spex.sublang.ai
   code expires. Ctrl-C stops it and saves nothing.
 - A sign-in you already have is reported and kept; `--force` replaces
   it. Signing in to a registry adds no Space.
-- `spex whoami` prints one line for the registry and one for each Space
-  you have signed in to on this computer, each with `@<login>` or
-  `signed out`, marking `(default)` the Space a `spex.yaml` without
-  `space` uses; with a flag, it prints that line alone:
+- `spex whoami` prints only the selected registry account, with
+  `@<login>` or `signed out`. Use `spex whoami --space <url>` to inspect
+  a Space account separately; `(default)` marks the home's default Space.
 
   ```text
   Registry  Spex Space  @me
-  Space     Spex Space  @me (default)
   ```
 
 - `spex logout` signs out of the one it acts on. Signing out of a
@@ -560,12 +559,10 @@ at the top of the project folder, with the installed files under
 `.spex/`; the two files an earlier app kept in a project's records move
 into its project folder at the app's next start.
 
-- A `spex.yaml` without `registry` keeps the package source it had, a
-  Space or the default, until you add `registry` yourself. Before you
-  add it, check where its packages came from, above all before you
-  publish a private package: nothing moves a private package or a
-  publish to another registry for you. Publishing from such a
-  `spex.yaml` needs a registry sign-in at that same address.
+- A `spex.yaml` without `registry` uses the public registry for search,
+  resolution and publishing. To keep using another package service,
+  name it explicitly in `registry`; `space` never selects it.
+  Existing package names and manifests are not renamed automatically.
 - `spex.lock` keeps each package's registry, version and checksum as
   recorded. An install downloads only from the registry it records,
   never from another Space you signed in to.

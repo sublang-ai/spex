@@ -26,6 +26,7 @@ import type {
 
 import { SpaceSurface } from "../components/SpaceSurface.js";
 import { deliverServerMessageForTests, setClientForTests, useAppStore } from "../state/store.js";
+import { useServerOpens } from "../state/server-opens.js";
 import { NO_CAN, namespace, placementState, rowOf, type RowOver } from "./groups-state.js";
 
 export { NO_CAN, namespace, placementState, type RowOver } from "./groups-state.js";
@@ -598,6 +599,8 @@ export async function answer(type: string, fields: Record<string, unknown> = {})
       return { flow: "browser", url: "https://spex.example/login/app?client_id=spex&state=s" };
     case "space.members":
       return { members: MEMBERS };
+    case "server.list":
+      return { servers: [], failures: [] };
     case "space.group.create":
       return { group: { id: "90", fullPath: fields.path as string, name: fields.name as string } };
     case "space.share": {
@@ -642,6 +645,7 @@ export function installClient(): void {
     views: {},
     projects: [],
   } as never);
+  useServerOpens.setState({ lines: {}, pending: {}, shared: {}, recovery: undefined, recoveryRead: undefined, recoveryServers: undefined, landed: 0 });
   Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
   delete (window as { spexNative?: unknown }).spexNative;
 }

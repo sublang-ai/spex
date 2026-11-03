@@ -1,15 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// The registry source (environments-12): Spex Space's `/api/v1` for
-// format 2 (Spex Space DR-016, DR-017). The version index carries every
+// The package registry source (environments-12), using its independent
+// registry account. The version index carries every
 // version with its dependencies and artifacts, so a dependency graph
 // resolves from indexes alone; a version resource is read only for a
 // version picked; files come by raw URL or the release archive, each
-// verified by its digest elsewhere. The app token of the instance the
-// registry answers for is presented as a bearer where the home is signed
-// in there; an answer refusing it as the instance's sign-out is reported
-// with the token it refused (environments-12, DR-127).
+// verified by its digest elsewhere. Registry-grant refusals are reported
+// with the token refused and never affect Space grants.
 
 import { canonicalOrigin } from "../instance.js";
 import { isPackageName } from "./format.js";
@@ -228,8 +226,8 @@ export function readVersionResource(name: string, version: string, raw: unknown)
   } as VersionResource;
 }
 
-/** The codes a registry refuses an instance's token with that sign that
- * instance out (environments-12, git-host-4); `token_expired` is not one
+/** The codes that invalidate only the presented registry grant
+ * (environments-12); `token_expired` is not one
  * of them, an expired access secret being a failure of its call. */
 export const SIGN_OUT_CODES: readonly string[] = ["invalid_token", "token_revoked", "reauth_required"];
 
@@ -238,20 +236,19 @@ export interface SpaceDirectoryEntry { origin: string; displayName: string; sign
 
 export interface RegistryClientOptions {
   url: string;
-  /** The app token of the instance the registry answers for, where the
-   * home is signed in there; a getter that throws fails the call as
+  /** The independent registry grant; a getter that throws fails the call as
    * `unavailable`. */
   token?: () => Promise<string | null>;
   /** Told the token a call presented when the registry refused it with
    * one of `SIGN_OUT_CODES`, before that call fails (environments-12):
-   * awaited; where it throws — the token no longer the instance's stored
+   * awaited; where it throws — the token no longer the registry's stored
    * one (git-host-4) — the call fails with what it threw in place of the
    * registry's words, still `unauthenticated`. */
   refused?: (token: string, code: string) => void | Promise<void>;
   fetch?: typeof fetch;
 }
 
-/** Spex Space over HTTP (environments-12). */
+/** The package service over HTTP (environments-12). */
 export class RegistryClient implements RegistrySource {
   readonly url: string;
   private readonly token?: () => Promise<string | null>;
@@ -339,7 +336,9 @@ export class RegistryClient implements RegistrySource {
         try {
           await this.refused(token, code);
         } catch (error) {
-          throw new RegistryError("unauthenticated", name, `${about}${error instanceof Error ? error.message : String(error)}`, code, undefined, answered);
+          const refusal = new RegistryError("unauthenticated", name, `${about}${error instanceof Error ? error.message : String(error)}`, code, undefined, answered);
+          refusal.cause = error;
+          throw refusal;
         }
       }
       throw new RegistryError("unauthenticated", name, `${about}sign-in expired at ${host}`, code, undefined, answered);
@@ -426,7 +425,7 @@ export class RegistryClient implements RegistrySource {
         if (!isPlainObject(org) || typeof org.name !== "string" || typeof org.path !== "string" || typeof org.role !== "string") return null;
         orgs.push({ name: org.name, path: org.path, role: org.role, ...(typeof org.provider === "string" ? { provider: org.provider } : {}) });
       }
-      return orgs;
+      return orgs.sort((a, b) => a.name.localeCompare(b.name));
     })();
     return Promise.race([asked, late]);
   }

@@ -143,7 +143,7 @@ The shell shall run the core service in the Electron main process or an Electron
 
 #### app-shell-45
 
-When the Mac distribution command packages the app, the command shall produce a Developer ID signed and Apple-notarized App inside a signed and notarized DMG, both carrying validated stapled tickets, under these constraints ([DR-215](../decisions/215-developer-id-macos-downloads.md)):
+When the Mac distribution command packages the app, the command shall produce a Developer ID signed and Apple-notarized App inside a signed and notarized DMG, both carrying validated stapled tickets, under these constraints ([DR-217](../decisions/217-developer-id-macos-downloads.md)):
 
 - missing credentials, a wrong team, signature or timestamp failure, a non-Accepted or timed-out notarization, and a failed ticket or Gatekeeper check fail the command;
 - hardened runtime and Electron entitlements preserve the app runtime, native modules and Electron-as-Node compiler, whose strict packaged check runs again after signing;
@@ -198,7 +198,7 @@ When a valid tag matching `app-v*` is pushed, the app release workflow shall cre
 - the workflow requires successful full app validation of the exact tagged tree [[release-18](release.md#release-18)], prepares both shells and their lockfile entries from the tag before installation [[release-16](release.md#release-16)], and verifies native metadata and archived app versions before creating the release;
 - the release names Node.js 22.19 or later and, from a checkout of its tag, `node scripts/release-version.mjs prepare --tag=<tag>` followed by `npm ci`, `npm start` for the desktop, and `npm run start:server` for the server shell as the way to run it;
 - the desktop package names its Electron version exactly, never as a range: the local packager (`npm run package -w apps/desktop`, electron-builder [[3]]) downloads the platform binaries of one release and refuses a range outright;
-- the downloads are a macOS Apple Silicon DMG and a Windows x64 per-user NSIS installer ([DR-177](../decisions/177-native-desktop-installers.md)), named with version, platform and architecture, with SHA-256 checksums and notes identifying signed and notarized macOS downloads and unsigned Windows downloads ([DR-215](../decisions/215-developer-id-macos-downloads.md));
+- the downloads are a macOS Apple Silicon DMG and a Windows x64 per-user NSIS installer ([DR-177](../decisions/177-native-desktop-installers.md)), named with version, platform and architecture, with SHA-256 checksums and notes identifying signed and notarized macOS downloads and unsigned Windows downloads ([DR-217](../decisions/217-developer-id-macos-downloads.md));
 - native runners build both downloads with the shipped physical dependency tree [[app-shell-13](#app-shell-13)], and the workflow publishes only after both packaging jobs succeed [[release-37](release.md#release-37)];
 - the workflow does not publish to npm and does not run for CLI tags, keeping the release channels disjoint [[release-19](release.md#release-19)].
 

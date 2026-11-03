@@ -2,6 +2,8 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // Opening a seat when an act needs it (run-view-170, space-111, DR-159).
+// Add to group also continues to the server chosen in its destination
+// form, after that destination holds the uploaded records (DR-215).
 // A server's line on this computer's Space surface and "Open on
 // <server>" on a row share one flow per server, held here by the
 // server's place, so wherever it started the line reads the same:
@@ -18,9 +20,10 @@
 // leaving Space while a seat signs in loses nothing.
 
 import { create } from "zustand";
-import type { GroupsState, RepositoryState, ServerInfo } from "@sublang/spex-core/protocol";
+import type { GroupsState, RepositoryState, ServerInfo, ServerListing } from "@sublang/spex-core/protocol";
 
-import { cloneHere } from "../lib/space.js";
+import { cloneHere, isGroupRepository } from "../lib/space.js";
+import { i18n } from "../i18n.js";
 import { usePlaces } from "./places.js";
 import { useAppStore, type AppState, type AppStore } from "./store.js";
 
@@ -58,14 +61,150 @@ export interface PendingOpen {
   error?: string;
 }
 
+/** One Add to group continuing through the server chosen in that form
+ * (space-57, space-111, DR-215). Kept for its progress checklist until
+ * dismissed. The initial read may also resume a previously added
+ * project's unfinished first upload, never an ordinary synced project. */
+export interface SharedOpen {
+  key: string;
+  repository: string;
+  folder: string | null;
+  group: string;
+  groupName?: string;
+  server: ServerInfo;
+  hostId?: string;
+  stage: "adding" | "syncing" | "connecting" | "opening" | "done" | "failed";
+  failedAt?: "adding" | "syncing" | "connecting" | "opening";
+  error?: string;
+  /** An Add or retry was accepted; keep the old snapshot from ending
+   * it before the core publishes the new operation. */
+  retrying?: string;
+}
+
 interface ServerOpens {
   lines: Record<string, ServerLineState>;
   pending: Record<string, PendingOpen>;
+  shared: Record<string, SharedOpen>;
+  /** Initial paired group projects with an unfinished first upload;
+   * undefined until the first local Groups snapshot is available. */
+  recovery?: Record<string, { key: string; folder: string; instance: string; group: string; groupName: string }>;
+  /** Each Space is captured once its first complete catalog arrives. */
+  recoveryRead?: string[];
+  recoveryServers?: ServerListing;
   /** Counts each open or close that landed: the listing is read again. */
   landed: number;
 }
 
-export const useServerOpens = create<ServerOpens>(() => ({ lines: {}, pending: {}, landed: 0 }));
+export const useServerOpens = create<ServerOpens>(() => ({ lines: {}, pending: {}, shared: {}, landed: 0 }));
+
+/** A successful local server listing can finish a previously accepted
+ * Add. Retain its initial first-upload evidence if the upload finishes
+ * before this read arrives (DR-215). */
+export function resumeSharedOpens(listing: ServerListing): void {
+  useServerOpens.setState({ recoveryServers: listing });
+  drive();
+}
+
+function recoverInitialShares(): void {
+  const groups = useAppStore.getState().space;
+  if (!groups) return;
+  const initial = useServerOpens.getState();
+  const unread = groups.instances.filter((instance) => instance.signedIn && instance.readAt !== null && !initial.recoveryRead?.includes(instance.origin));
+  if (unread.length > 0) {
+    const recovery = { ...initial.recovery };
+    for (const instance of unread) {
+      for (const group of instance.groups) {
+        if (group.login !== null || group.id === null || group.pendingDeletion) continue;
+        for (const repo of group.repositories) {
+          if (!repo.folder || isGroupRepository(group, repo)) continue;
+          const first = repo.placements.find((line) => line.instance === instance.origin && line.attached && line.id !== null &&
+            line.state === "reachable" && line.lastSync === null &&
+            line.path.split("/").slice(0, -1).join("/").toLowerCase() === group.fullPath.toLowerCase());
+          if (first) recovery[repo.folder] = { key: repo.key, folder: repo.folder, instance: instance.origin, group: group.fullPath, groupName: group.name };
+        }
+      }
+    }
+    useServerOpens.setState({ recovery, recoveryRead: [...(initial.recoveryRead ?? []), ...unread.map((instance) => instance.origin)] });
+  }
+  const { recovery, recoveryServers, shared } = useServerOpens.getState();
+  if (!recovery || !recoveryServers) return;
+  for (const [folder, candidate] of Object.entries(recovery)) {
+    if (recoveryServers.failures.some((failure) => failure.instance === candidate.instance)) continue;
+    const servers = recoveryServers.servers.filter((server) => server.instance === candidate.instance &&
+      (candidate.group.toLowerCase() === server.group.toLowerCase() || candidate.group.toLowerCase().startsWith(server.group.toLowerCase() + "/")));
+    // A successful read settles this one recovery decision. With no
+    // server or several, an explicit destination choice remains needed.
+    useServerOpens.setState((state) => {
+      const remaining = { ...state.recovery };
+      delete remaining[folder];
+      return { recovery: remaining };
+    });
+    if (servers.length === 1 && !Object.values(shared).some((entry) => entry.folder === folder)) {
+      queueSharedOpen(useAppStore, servers[0]!, candidate);
+    }
+  }
+}
+
+/** Find a transfer even after adding moves the project's records to
+ * their group. The working folder is stable across that key change. */
+export function sharedOpenFor(shared: Record<string, SharedOpen>, repo: RepositoryState): SharedOpen | undefined {
+  return Object.values(shared).find((entry) => entry.folder !== null ? entry.folder === repo.folder : entry.repository === repo.key);
+}
+
+function setShared(key: string, change: Partial<SharedOpen>): void {
+  useServerOpens.setState((state) => {
+    const old = state.shared[key];
+    if (!old || Object.entries(change).every(([field, value]) => old[field as keyof SharedOpen] === value)) return state;
+    return { shared: { ...state.shared, [key]: { ...old, ...change } } };
+  });
+}
+
+/** Add was accepted: continue only this project to its chosen server,
+ * after the destination holds its records. */
+export function queueSharedOpen(store: AppStore, server: ServerInfo, repo: { key: string; folder: string | null; group: string; groupName?: string; syncBefore?: string }): void {
+  const key = `${store.place.key}|${repo.folder ?? repo.key}`;
+  useServerOpens.setState((state) => ({ shared: {
+    ...state.shared,
+    [key]: { key, repository: repo.key, folder: repo.folder, group: repo.group, groupName: repo.groupName, server, stage: "adding", retrying: repo.syncBefore },
+  } }));
+  drive();
+}
+
+export function dismissSharedOpen(key: string): void {
+  useServerOpens.setState((state) => {
+    const shared = { ...state.shared };
+    delete shared[key];
+    return { shared };
+  });
+}
+
+/** Retry the actual failed operation. Conflict resolution stays on the
+ * ordinary project row; there is no sharing acknowledgement. */
+export async function retrySharedOpen(store: AppStore, key: string): Promise<void> {
+  const entry = useServerOpens.getState().shared[key];
+  if (!entry || entry.stage !== "failed" || !entry.failedAt) return;
+  const stage = entry.failedAt;
+  const row = rowsOf(store.getState().space).find((row) => entry.folder !== null ? row.folder === entry.folder : row.key === entry.repository);
+  const seat = store.getState().seats.find((seat) => seat.place === serverPlace(entry.server));
+  const signInRetry = (stage === "connecting" || stage === "opening") && seat?.signIn.state === "failed";
+  setShared(key, { stage, failedAt: undefined, error: undefined,
+    retrying: stage === "adding" || stage === "syncing" ? JSON.stringify(row?.sync) : signInRetry ? JSON.stringify(seat.signIn) : undefined });
+  try {
+    if (stage === "adding" || stage === "syncing") {
+      if (row?.sync.phase === "stopped" && row.sync.op === "check") {
+        await store.getState().spaceFetch(entry.repository);
+      } else {
+        const last = store.getState().spaceLastAct(entry.repository);
+        await store.getState().spaceSync(entry.repository, last?.op === "join" ? { placement: last.instance, join: true } : {});
+      }
+    } else if (entry.hostId) {
+      if (signInRetry) await sendServerAct(store, entry.server, "signin");
+      else openOnServer(store, entry.server, { key: entry.repository, hostId: entry.hostId });
+    }
+  } catch (cause) {
+    setShared(key, { stage: "failed", failedAt: stage, error: (cause as Error).message, retrying: undefined });
+  }
+}
 
 /** The pending open's key (space-111). */
 export function pendingKey(place: string, hostId: string): string {
@@ -100,8 +239,8 @@ function dropWaiting(place: string): void {
   }));
 }
 
-/** Send the line's act to the local core (run-view-170): the reader's
- * explicit Open authorizes the existing command's consent flag; a
+/** Send the line's act to the local core (run-view-170): an explicit
+ * Open or Add with its named server authorizes the command's consent flag; a
  * refusal's cause stands on the line, a landed open or close reading the
  * listing again. */
 export async function sendServerAct(store: AppStore, server: ServerInfo, act: "open" | "close" | "signin"): Promise<void> {
@@ -141,6 +280,7 @@ export function connectServer(store: AppStore, server: ServerInfo): void {
 export function openOnServer(store: AppStore, server: ServerInfo, repo: { key: string; hostId: string }): void {
   const place = serverPlace(server);
   const key = pendingKey(place, repo.hostId);
+  setLine(place, { refusal: undefined });
   useServerOpens.setState((state) => ({
     pending: {
       ...state.pending,
@@ -207,6 +347,8 @@ export function drive(): void {
 }
 
 function step(): void {
+  recoverInitialShares();
+  stepShared();
   const { pending, lines } = useServerOpens.getState();
   const entries = Object.values(pending);
   if (entries.length === 0) return;
@@ -233,6 +375,12 @@ function step(): void {
       if (seat.signIn.state !== "signedIn") continue;
       if (!held || held.store.getState().connection !== "open") continue;
       const store = held.store;
+      const state = store.getState();
+      const holding = seatHolding(state, entry.repository, entry.instance, entry.hostId);
+      if (state.projects.some((project) => project.id === holding?.projectId)) {
+        setPending(entry.key, undefined);
+        continue;
+      }
       setPending(entry.key, { stage: "joining" });
       void store
         .getState()
@@ -261,6 +409,102 @@ function step(): void {
   }
 }
 
+/** Follow accepted Add operations, including a resumed first upload.
+ * Ordinary synced or merely discovered projects never enter this queue. */
+function stepShared(): void {
+  const local = useAppStore.getState();
+  const rows = rowsOf(local.space);
+  for (const entry of Object.values(useServerOpens.getState().shared)) {
+    if (entry.stage === "done") continue;
+    const row = rows.find((repo) => entry.folder !== null ? repo.folder === entry.folder : repo.key === entry.repository);
+    if (row && row.key !== entry.repository) setShared(entry.key, { repository: row.key });
+    if (entry.stage === "failed") {
+      // The ordinary row Retry or server Sign in again can repair the
+      // failure too. Follow that observed work rather than leaving a
+      // stale failed checklist beside a successful operation.
+      if (entry.failedAt === "adding" || entry.failedAt === "syncing") {
+        if (row?.sync.phase === "running" || (row?.sync.phase === "done" && row.placements.some((line) =>
+          line.instance === entry.server.instance && line.outcome?.kind === "synced"))) {
+          setShared(entry.key, { stage: entry.failedAt, failedAt: undefined, error: undefined });
+        }
+      } else {
+        const place = serverPlace(entry.server);
+        const flow = useServerOpens.getState();
+        const pending = entry.hostId ? flow.pending[pendingKey(place, entry.hostId)] : undefined;
+        const acting = flow.lines[place]?.acting;
+        const held = usePlaces.getState().seats.find((held) => held.seat.place === place);
+        const state = held?.store.getState();
+        const holding = state && seatHolding(state, row?.key ?? entry.repository, entry.server.instance, entry.hostId ?? null);
+        const seat = local.seats.find((seat) => seat.place === place);
+        if (state?.projects.some((project) => project.id === holding?.projectId)) {
+          setShared(entry.key, { stage: "done", failedAt: undefined, error: undefined });
+        } else if (acting === "open" || acting === "signin" || (pending && pending.stage !== "failed" && !flow.lines[place]?.refusal && seat?.signIn.state !== "failed")) {
+          setShared(entry.key, { stage: "connecting", failedAt: undefined, error: undefined,
+            retrying: acting === "signin" && seat?.signIn.state === "failed" ? JSON.stringify(seat.signIn) : undefined });
+        }
+      }
+      continue;
+    }
+    if (entry.stage === "adding" || entry.stage === "syncing") {
+      if (!row) continue;
+      if (entry.retrying !== undefined) {
+        if (entry.retrying === JSON.stringify(row.sync)) continue;
+        setShared(entry.key, { retrying: undefined });
+      }
+      const line = row.placements.find((line) => line.instance === entry.server.instance &&
+        line.path.split("/").slice(0, -1).join("/").toLowerCase() === entry.group.toLowerCase());
+      if (row.sync.phase === "stopped") {
+        setShared(entry.key, { stage: "failed", failedAt: line?.attached ? "syncing" : "adding", error: row.sync.message });
+        continue;
+      }
+      if (line?.outcome?.kind === "stopped") {
+        setShared(entry.key, { stage: "failed", failedAt: "syncing", error: line.outcome.message });
+        continue;
+      }
+      if (!line?.attached || !line.id) continue;
+      if (entry.stage === "adding") setShared(entry.key, { stage: "syncing", hostId: line.id });
+      if (line.outcome?.kind !== "synced" || line.lastSync === null) continue;
+      if (row.sync.phase !== "done" || (!row.sync.pushed && !line.branch?.agreed?.current)) continue;
+      setShared(entry.key, { stage: "connecting", hostId: line.id });
+      openOnServer(useAppStore, entry.server, { key: row.key, hostId: line.id });
+      continue;
+    }
+    const place = serverPlace(entry.server);
+    const seat = local.seats.find((seat) => seat.place === place);
+    const held = usePlaces.getState().seats.find((held) => held.seat.place === place);
+    const flow = useServerOpens.getState();
+    const pending = entry.hostId ? flow.pending[pendingKey(place, entry.hostId)] : undefined;
+    const refusal = flow.lines[place]?.refusal;
+    const state = held?.store.getState();
+    const holding = state && seatHolding(state, row?.key ?? entry.repository, entry.server.instance, entry.hostId ?? null);
+    if (state?.projects.some((project) => project.id === holding?.projectId)) {
+      setShared(entry.key, { stage: "done" });
+      continue;
+    }
+    if (refusal || pending?.stage === "failed") {
+      setShared(entry.key, { stage: "failed", failedAt: pending?.stage === "failed" ? "opening" : "connecting", error: pending?.error ?? refusal });
+      continue;
+    }
+    if (entry.retrying !== undefined) {
+      if (entry.retrying === JSON.stringify(seat?.signIn)) continue;
+      setShared(entry.key, { retrying: undefined });
+      if (seat?.signIn.state !== "failed" && entry.hostId) {
+        openOnServer(useAppStore, entry.server, { key: row?.key ?? entry.repository, hostId: entry.hostId });
+      }
+    }
+    if (seat?.signIn.state === "failed") {
+      setShared(entry.key, { stage: "failed", failedAt: "connecting", error: seat.signIn.cause });
+      continue;
+    }
+    if (!seat && !pending && flow.lines[place]?.acting !== "open") {
+      setShared(entry.key, { stage: "failed", failedAt: "connecting", error: i18n._({ id: "Connection closed", comment: "a chosen server disconnected before the project opened" }) });
+      continue;
+    }
+    if (!held || held.store.getState().connection !== "open" || seat?.signIn.state !== "signedIn") continue;
+    setShared(entry.key, { stage: "opening" });
+  }
+}
+
 // The stores drive the pending opens: the local core's seats, each
 // seat's store as the places hold them, and the pending opens
 // themselves.
@@ -284,7 +528,10 @@ function watchPlaces(): void {
   drive();
 }
 useAppStore.subscribe((state, previous) => {
-  if (state.seats !== previous.seats) drive();
+  if (state.seats !== previous.seats || state.space !== previous.space || state.projects !== previous.projects) drive();
+});
+useServerOpens.subscribe((state, previous) => {
+  if (state.shared !== previous.shared || state.pending !== previous.pending || state.lines !== previous.lines) drive();
 });
 usePlaces.subscribe(watchPlaces);
 watchPlaces();

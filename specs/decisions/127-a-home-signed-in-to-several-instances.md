@@ -5,6 +5,8 @@
 
 ## Status
 
+Amended by [DR-216](216-registry-and-space-accounts-stay-apart.md) in authoring and package placement: a Space group supplies no Org suggestion, and placing records never rehomes a package's registry source.
+
 Amended by [DR-150](150-spex-space-product-and-destination.md) in the default origin for new homes: `https://spex.sublang.ai`; saved origins are unchanged.
 
 Accepted (2026-10-20) on the owner's direction: a person may belong to groups at more than one spex.pub instance — the internal and the production instance today, an instance at JiHu GitLab [[1]] tomorrow — and must not need a home per instance.

@@ -35,6 +35,7 @@ import type {
   GroupsState,
   PlacementState,
   RepositoryState,
+  SeatOptions,
   ServerMessage,
 } from "@sublang/spex-core";
 import { ARTIFACT_SCHEMAS, suppliedCompiler, templatePath } from "@sublang/spex-core";
@@ -224,14 +225,15 @@ export interface AppOptions {
    * of its team group under `name` (servers-5), its tickets redeemed
    * there, and its relays piped to a further core standing as the
    * person's seat — a plain served core on a scratch root of its own,
-   * booted with `seat`'s options as a journey's app is, not in seat
-   * mode — while this app's core trusts the hubs' fixture CA beside the
-   * system's (core-service-128). A seat booted with `host: true` shares
+   * booted with `seat`'s options as a journey's app is, in seat mode
+   * where `seatMode` is true — while this app's core trusts the hubs'
+   * fixture CA beside the system's (core-service-128). A seat booted
+   * with `host: true` shares
    * this app's own stand-in instance, and the registry it fronts, in
    * place of starting one of its own (`host.share`), so its `signedIn`
    * signs the seat in there as the same person. Needs `host`.
    */
-  servers?: { name: string; seat?: AppOptions }[];
+  servers?: { name: string; seat?: AppOptions; seatMode?: boolean }[];
   /**
    * Playbook authoring (DR-058): a stub `slc` on the toolchain path
    * — passing, failing once at gears2fsm and then passing, asking for
@@ -810,13 +812,13 @@ async function boot(
   return { server, core };
 }
 
-export async function startApp(options: AppOptions = {}): Promise<App> {
+export async function startApp(options: AppOptions = {}, seat?: SeatOptions): Promise<App> {
   const scratch = mkdtempSync(join(tmpdir(), "spex-e2e-"));
   // A start that fails leaves no root behind: removed outright before
   // the shell boots, closed with the shell after.
   const started: Started = {};
   try {
-    return await arrangeApp(scratch, options, started);
+    return await arrangeApp(scratch, options, started, seat);
   } catch (error) {
     // The failure that stopped the start is the one reported.
     if (started.app) await started.app.close().catch(() => undefined);
@@ -839,6 +841,7 @@ async function arrangeApp(
   scratch: string,
   options: AppOptions,
   started: Started,
+  seat?: SeatOptions,
 ): Promise<App> {
   const home = join(scratch, "home");
   mkdirSync(home, { recursive: true });
@@ -952,7 +955,9 @@ async function arrangeApp(
         entry.seat?.host === true
           ? { ...entry.seat, host: { share: { host: instance, ...(registry ? { registry } : {}) } } }
           : (entry.seat ?? {});
-      const seat = await startApp(seatOptions);
+      const seat = await startApp(seatOptions, entry.seatMode
+        ? { serverId: `srv_${index + 1}`, serverName: entry.name, personId: instance.script.person.id }
+        : undefined);
       owned.push(seat);
       hub.relayTo(seat.url.replace(/^http/, "ws"));
       const server: StandinServer = { id: `srv_${index + 1}`, name: entry.name, group: HOST_GROUP, address: hub.url };
@@ -1069,6 +1074,7 @@ async function arrangeApp(
           }) as typeof fetch } : {}),
           home,
           own: E2E_OWN,
+          ...(seat ? { seat } : {}),
           // New projects must have a real baseline, independent of the
           // test host's identity and signing policy.
           runCommand: async (command, args, cwd, commandEnv) => {

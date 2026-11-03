@@ -20,6 +20,8 @@ Amended by [DR-132](132-team-servers.md) in placing your own group at every inst
 Amended by [DR-159](159-projects-in-groups-opened-where-you-work.md) in its presentation alone: a placement's line, "Place at…", "Leave…" and Attach move behind one overflow control per row, their meanings standing.
 Amended by [DR-172](172-surfaces-a-fresh-user-reads.md) in the acts offered.
 
+Amended by [DR-215](215-add-to-a-group-and-start-working.md) in per-placement acknowledgement and legacy first-send waits.
+
 ## Context
 
 - The sync of [DR-057](057-space-surface.md), as [DR-103](103-the-home-and-its-groups.md) and [DR-111](111-the-core-coordinates-as-git-does.md) keep it, is a merge: the host's `spex` fetched, each unit compared with the merge base, a merge commit with `spex` and the host's `spex` as parents or a fast-forward, and a join from the empty ancestor where the histories are unrelated. Every device is a peer of the host's branch.

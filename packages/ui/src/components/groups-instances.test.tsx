@@ -705,11 +705,11 @@ describe("SPACE: the card 'Sign in to a Space' (space-3, space-115, space-66)", 
 describe("SPACE: Add to a group… at each Space (space-58, space-29)", () => {
   test("space-58: labelled Space selection scopes the group choices and resets a destination without sending anything", async () => {
     await renderGroups(pickHome(), { open: false });
-    const openPicker = (key: string): HTMLElement => {
-      fireEvent.click(screen.getByTestId(`space-row-pick-${key}`));
+    const openPicker = async (key: string): Promise<HTMLElement> => {
+      await act(async () => { fireEvent.click(screen.getByTestId(`space-row-pick-${key}`)); });
       return screen.getByTestId(`space-picker-${key}`);
     };
-    const picker = openPicker(GAMMA);
+    const picker = await openPicker(GAMMA);
     const opener = screen.getByTestId(`space-row-pick-${GAMMA}`);
     const formId = picker.id;
     expect(formId).not.toBe("");
@@ -743,25 +743,25 @@ describe("SPACE: Add to a group… at each Space (space-58, space-29)", () => {
     ]));
     await waitFor(() => expect(screen.queryByTestId(`space-picker-${GAMMA}`)).toBeNull());
 
-    const confirm = (key: string, origin: string, option: string) => {
-      const form = openPicker(key);
+    const confirm = async (key: string, origin: string, option: string) => {
+      const form = await openPicker(key);
       const select = within(form).queryByRole("combobox", { name: "Space" });
       if (select) fireEvent.change(select, { target: { value: origin } });
       fireEvent.click(within(form).getByTestId(option));
       fireEvent.click(within(form).getByTestId(`space-pick-submit-${key}`));
     };
-    confirm(GAMMA, ORIGIN, "space-pick-group-acme");
+    await confirm(GAMMA, ORIGIN, "space-pick-group-acme");
     await waitFor(() => expect(calls("space.pick")[1]).toEqual({ repository: GAMMA, choice: { kind: "create", instance: ORIGIN, groupId: "3", name: "gamma" } }));
     await waitFor(() => expect(screen.queryByTestId(`space-picker-${GAMMA}`)).toBeNull());
-    confirm(GAMMA, SECOND, "space-pick-group-@jada");
+    await confirm(GAMMA, SECOND, "space-pick-group-@jada");
     await waitFor(() => expect(calls("space.pick")[2]).toEqual({ repository: GAMMA, choice: { kind: "create", instance: SECOND, groupId: null, name: "gamma" } }));
     await waitFor(() => expect(screen.queryByTestId(`space-picker-${GAMMA}`)).toBeNull());
-    confirm(GAMMA, SECOND, `space-pick-repo-${LISTED}`);
+    await confirm(GAMMA, SECOND, `space-pick-repo-${LISTED}`);
     await waitFor(() => expect(calls("space.pick")[3]).toEqual({ repository: GAMMA, choice: { kind: "join", instance: SECOND, hostId: "71" } }));
     await waitFor(() => expect(screen.queryByTestId(`space-picker-${GAMMA}`)).toBeNull());
 
     // A project already keyed under one Space offers that Space alone.
-    const keyed = openPicker(KEY);
+    const keyed = await openPicker(KEY);
     expect(within(keyed).queryByRole("combobox")).toBeNull();
     expect(within(keyed).getAllByTestId(/^space-pick-instance-/).map((each) => each.dataset.testid)).toEqual([`space-pick-instance-${ORIGIN}`]);
     fireEvent.click(within(keyed).getByTestId("space-pick-group-acme"));
@@ -771,7 +771,7 @@ describe("SPACE: Add to a group… at each Space (space-58, space-29)", () => {
 
     commandMock.mockClear();
     await renderGroups(signedOutAt(SECOND, {}, pickHome()), { open: false });
-    const alone = openPicker(GAMMA);
+    const alone = await openPicker(GAMMA);
     expect(within(alone).queryByRole("combobox")).toBeNull();
     expect(within(alone).queryByTestId(`space-pick-repo-${LISTED}`)).toBeNull();
     cleanup();
@@ -781,7 +781,7 @@ describe("SPACE: Add to a group… at each Space (space-58, space-29)", () => {
     const blocked = screen.getByTestId(`space-row-pick-${KEY}`) as HTMLButtonElement;
     expect(blocked.disabled).toBe(true);
     expect(blocked.title).toBe("Sign in to a Space first");
-    const second = openPicker(GAMMA);
+    const second = await openPicker(GAMMA);
     expect(within(second).queryByRole("combobox")).toBeNull();
     expect(within(second).getAllByTestId(/^space-pick-instance-/).map((each) => each.dataset.testid)).toEqual([`space-pick-instance-${SECOND}`]);
     expect(within(second).getByTestId(`space-pick-repo-${LISTED}`)).toBeTruthy();

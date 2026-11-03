@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // The Groups surface against the stand-in Git host (git-host-12):
-// sign-in in both flows, picks, joins, members, the notice, sign-out
+// sign-in in both flows, picks, joins, members, direct sharing, sign-out
 // by the reader and by the host, the read a signed-in start owes, and
 // the host's renames, archives, removals and refusals over its own
 // HTTP transport, and groups and sharing — the host's roles and what
@@ -808,13 +808,13 @@ test("space-65: a working folder paired with a group's own spex repository bring
   assert.equal(await home.service.ensureGroupRepository(key), "unchanged");
 });
 
-test("space-37, space-92, storage-5: a repository listed with no clone here reads as a row carrying its one listed placement; a join pick and the first sync into a repository with other members wait for the notice, recorded with the last sync under the placement's remote; space.join clones it with its code; members read live", async (t) => {
+test("space-37, space-92, storage-5: a repository listed with no clone here reads as a row carrying its one listed placement; a join pick and the first sync into a repository with other members send directly and record the last sync; space.join clones it with its code; members read live", async (t) => {
   const host = await startHost();
   const code = codeRepository("team");
   const bob = { id: "1002", login: "bob", displayName: "Bob", role: "Developer" };
   const team = host.script.addRepository({ group: "acme", name: "team-spex", project: { format: 1, name: "team", remote: code }, members: [bob], visibility: "internal" });
   const pal = host.script.addRepository({ group: "acme", name: "pal-spex", members: [bob] });
-  const home = await startHome("notice", { host, project: false, extra: { signIn: "browser" } });
+  const home = await startHome("direct-sharing", { host, project: false, extra: { signIn: "browser" } });
   t.after(() => home.stop());
   const signed = await signIn(home, host);
   const absent = repositoryOf(signed, hostKey(host, "acme/team-spex"));
@@ -850,31 +850,28 @@ test("space-37, space-92, storage-5: a repository listed with no clone here read
   assert.equal(git(folder, "remote", "get-url", "origin"), code);
   assert.equal(git(clonePath(home.dataDir, hostKey(host, "acme/team-spex")), "symbolic-ref", "--short", "HEAD"), "spex");
   await home.client.expectError("space.join", { instance: host.url, hostId: team.id }, "invalid_request", /^team is on this computer already — Show it instead$/);
-  // Its first sync waits for the notice, then pushes and records both
-  // (space-57, space-12, space-22).
+  // Its first explicit sync pushes and records the sync, with no
+  // device acknowledgement (space-57, space-12, space-22).
   await runTurn(home, hostKey(host, "acme/team-spex"), "For the team");
-  await home.client.expectError("space.sync", { repository: hostKey(host, "acme/team-spex") }, "invalid_request", /^Confirm sharing before/);
-  const done = await home.client.settle("space.sync", { repository: hostKey(host, "acme/team-spex"), placement: host.url, noticed: true });
+  const done = await home.client.settle("space.sync", { repository: hostKey(host, "acme/team-spex") });
   assert.ok(done.sync.phase === "done" && done.sync.pushed, JSON.stringify(done.sync));
   const doneLine = placementOf(done, host.url);
-  assert.equal(doneLine.noticed, true);
   const prefs = prefsOf(home.dataDir);
-  assert.equal(prefs[`sync:${hostKey(host, "acme/team-spex")}:${hostFolder(host)}:noticed`], true);
+  assert.equal(prefs[`sync:${hostKey(host, "acme/team-spex")}:${hostFolder(host)}:noticed`], undefined);
   assert.deepEqual(prefs[`sync:${hostKey(host, "acme/team-spex")}:${hostFolder(host)}:last`], doneLine.lastSync);
   assert.equal(git(bareOf(host, hostKey(host, "acme/team-spex")), "rev-parse", "spex"), git(clonePath(home.dataDir, hostKey(host, "acme/team-spex")), "rev-parse", "spex"));
-  // A pick joining a repository with other members waits for it too.
+  // Choosing an existing shared project starts its join and sync directly.
   const mine = await addFolder(home, gitFolder("pal"));
-  await home.client.expectError("space.pick", { repository: mine.key, choice: { kind: "join", instance: host.url, hostId: pal.id } }, "invalid_request", /^Confirm sharing before/);
   const fromPal = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: mine.key, choice: { kind: "join", instance: host.url, hostId: pal.id }, noticed: true });
+  await home.client.expectOk("space.pick", { repository: mine.key, choice: { kind: "join", instance: host.url, hostId: pal.id } });
   const palJoined = await home.client.waitRepository(fromPal, hostKey(host, "acme/pal-spex"), (repository) => repository.sync.phase === "done");
   assert.equal(palJoined.state, "reachable");
   // Joined from the listing, it goes straight to its sync (git-host-5).
   assertNeverUnreachable(home.client.readings(fromPal, [mine.key, hostKey(host, "acme/pal-spex")]));
-  assert.equal(prefsOf(home.dataDir)[`sync:${hostKey(host, "acme/pal-spex")}:${hostFolder(host)}:noticed`], true);
+  assert.equal(prefsOf(home.dataDir)[`sync:${hostKey(host, "acme/pal-spex")}:${hostFolder(host)}:noticed`], undefined);
 });
 
-test("git-host-14, space-37: with every members route failing at the stand-in, a Refresh and a sync's Check stand with no count, and a pick joining or a first push waits for the notice", async (t) => {
+test("git-host-14, space-37: with every members route failing at the stand-in, a Refresh and a sync's Check stand with no count, while a join pick and first sync still complete", async (t) => {
   const host = await startHost();
   t.after(() => host.script.failMembers(false));
   const code = codeRepository("solo");
@@ -918,20 +915,23 @@ test("git-host-14, space-37: with every members route failing at the stand-in, a
   assert.equal(synced.sync.phase, "done", JSON.stringify(synced.sync));
   assert.equal(synced.state, "reachable");
 
-  // An unknown count is taken to have other members (space-57): the first
-  // sync of a repository joined here waits for the notice, then goes on.
+  // An unknown count does not block the first explicit sync (space-57).
   const folder = join(mkdtempSync(join(scratch, "solo-")), "solo");
   const fromJoin = home.client.mark();
   await home.client.expectOk("space.join", { instance: host.url, hostId: solo.id, folder });
   const joined = await home.client.waitRepository(fromJoin, hostKey(host, "acme/solo-spex"), (repository) => repository.state !== "absent" && repository.folder !== null && repository.sync.phase === "idle", 30_000);
   assert.equal(joined.state, "reachable");
   assert.equal(placementOf(joined, host.url).members, null);
-  await home.client.expectError("space.sync", { repository: hostKey(host, "acme/solo-spex") }, "invalid_request", /^Confirm sharing before/);
-  const noticed = await home.client.settle("space.sync", { repository: hostKey(host, "acme/solo-spex"), placement: host.url, noticed: true });
-  assert.equal(noticed.sync.phase, "done", JSON.stringify(noticed.sync));
-  // And a pick joining one waits for it too.
+  const firstSync = await home.client.settle("space.sync", { repository: hostKey(host, "acme/solo-spex") });
+  assert.equal(firstSync.sync.phase, "done", JSON.stringify(firstSync.sync));
+  assert.equal(placementOf(firstSync, host.url).members, null);
+  // Choosing an existing project also completes despite its unknown count.
   const mine = await addFolder(home, gitFolder("pal"));
-  await home.client.expectError("space.pick", { repository: mine.key, choice: { kind: "join", instance: host.url, hostId: pal.id } }, "invalid_request", /^Confirm sharing before/);
+  const fromPick = home.client.mark();
+  await home.client.expectOk("space.pick", { repository: mine.key, choice: { kind: "join", instance: host.url, hostId: pal.id } });
+  const picked = await home.client.waitRepository(fromPick, hostKey(host, "acme/pal-spex"), (repository) => repository.sync.phase === "done", 30_000);
+  assert.equal(placementOf(picked, host.url).members, null);
+  assert.equal(git(bareOf(host, picked.key), "rev-parse", "spex"), git(clonePath(home.dataDir, picked.key), "rev-parse", "spex"));
 });
 
 test("space-37: a join reads not on this device, running at its Code step, until its code is cloned into the folder", async (t) => {
@@ -1636,7 +1636,7 @@ test("space-58, storage-35: a clone under your own group's folder holding only t
   await home.client.expectError("space.pick", { repository: key, choice: { kind: "create", instance: host.url, groupId: "2002", name: "again" } }, "invalid_request", /^path-only is in a group already$/);
 });
 
-test("space-73, storage-5, space-5, space-98, space-61, space-11, space-12: a path remote named through space.remote.set stands as origin beside the placement's remote, which keeps its id, its spex and this device's record under its name, and goes alone; a repository the host moved keeps them through its next Sync, which moves the clone; leaving that placement stops for the record unit no remaining placement holds and, confirmed, takes its remote, id, spex, last sync and notice with it, the clone local only under your own group's folder; a bare repository then named syncs with no catalog read and goes; and a group then picked reads no last sync until its first", async (t) => {
+test("space-73, storage-5, space-5, space-98, space-61, space-11, space-12: a path remote named through space.remote.set stands as origin beside the placement's remote, which keeps its id, its spex and this device's record under its name, and goes alone; a repository the host moved keeps them through its next Sync, which moves the clone; leaving that placement stops for the record unit no remaining placement holds and, confirmed, takes its remote, id, spex and last sync with it, the clone local only under your own group's folder; a bare repository then named syncs with no catalog read and goes; and a group then picked reads no last sync until its first", async (t) => {
   const host = await startHost();
   const home = await startHome("moved-pick", { host, project: false, extra: { signIn: "browser" } });
   t.after(() => home.stop());
@@ -1723,12 +1723,9 @@ test("space-73, storage-5, space-5, space-98, space-61, space-11, space-12: a pa
   assert.ok(followed.lastSync && followed.lastSync.at >= (syncedLine.lastSync?.at ?? 0), JSON.stringify(followed.lastSync));
   assert.deepEqual(followed.branch?.agreed, { at, current: true });
 
-  // The notice seen for that placement on this device, beside its last
-  // sync (space-57, storage-5).
+  // Only the last sync is recorded for this placement (storage-5).
   const movedClone = clonePath(home.dataDir, moved);
-  const noticed = await home.client.settle("space.sync", { repository: moved, placement: host.url, noticed: true }, 30_000);
-  assert.equal(noticed.sync.phase, "done", JSON.stringify(noticed.sync));
-  assert.equal(prefsOf(home.dataDir)[`sync:${moved}:${folder}:noticed`], true);
+  assert.equal(prefsOf(home.dataDir)[`sync:${moved}:${folder}:noticed`], undefined);
   assert.ok(prefsOf(home.dataDir)[`sync:${moved}:${folder}:last`], "its last sync recorded");
 
   // Leaving that placement, the clone's last, stops first for every
@@ -1742,8 +1739,8 @@ test("space-73, storage-5, space-5, space-98, space-61, space-11, space-12: a pa
   assert.deepEqual(remotesOf(movedClone), [folder]);
   assert.ok(existsSync(join(movedClone, "placements", `${folder}.yaml`)), "its file kept");
   // Confirmed, it takes its remote with its id, the `spex` the clone
-  // fetched of it, its upstream, this device's last sync and notice
-  // record and its placement file; the clone moves under your own group's
+  // fetched of it, its upstream, this device's last sync record and
+  // its placement file; the clone moves under your own group's
   // folder with its pair, reading local only with no last sync and no
   // agreed commit; nothing at the host changes (space-98, space-5,
   // storage-38).

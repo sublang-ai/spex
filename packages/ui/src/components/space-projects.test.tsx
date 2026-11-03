@@ -341,14 +341,14 @@ beforeEach(() => {
   seatStore = createAppStore({ key: PLACE, name: "lab-1" }, seat.client);
   seatStore.setState({ connection: "open", everConnected: true, projects: [project(BETA_KEY, "beta")] });
   usePlaces.setState({ seats: [{ seat: SEAT, store: seatStore }] });
-  useServerOpens.setState({ lines: {}, pending: {}, landed: 0 });
+  useServerOpens.setState({ lines: {}, pending: {}, shared: {}, recovery: undefined, recoveryRead: undefined, recoveryServers: undefined, landed: 0 });
   delete (window as { spexNative?: unknown }).spexNative;
 });
 
 afterEach(() => {
   cleanup();
   usePlaces.setState({ seats: [] });
-  useServerOpens.setState({ lines: {}, pending: {}, landed: 0 });
+  useServerOpens.setState({ lines: {}, pending: {}, shared: {}, recovery: undefined, recoveryRead: undefined, recoveryServers: undefined, landed: 0 });
   useAppStore.setState(pristine, true);
   setClientForTests(undefined);
   delete (window as { spexNative?: unknown }).spexNative;

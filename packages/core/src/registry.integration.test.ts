@@ -94,6 +94,18 @@ test("core-service-144/storage-52: same-origin registry and Space grants stay in
   assert.ok(samePair(await spaceStore.read(), independentSpace), "refused registry refresh preserves Space credentials");
   host.script.refuseRefresh = false;
   const again = await cli.startBrowserSignIn(); await (await fetch(again.url)).text(); await again.done;
+  const retainedRegistry = await registryStore.read();
+  const expiringSpace = await spaceStore.read();
+  assert.ok(expiringSpace);
+  assert.ok(await spaceStore.replace(expiringSpace, { ...expiringSpace, accessExpiresAt: 0 }));
+  host.script.refuseRefresh = true;
+  const spaceRefresh = home.client.mark();
+  await home.client.expectOk("space.refresh", {});
+  await home.client.waitSpace(spaceRefresh, (state) => instanceOf(state, host.url)?.signedIn === false);
+  assert.equal(await spaceStore.read(), null);
+  assert.ok(samePair(await registryStore.read(), retainedRegistry), "a refused Space refresh preserves the same-origin registry grant");
+  host.script.refuseRefresh = false;
+  await harness.signIn(home, host);
   const directory = await home.client.expectOk("registry.directory", { origin: host.url });
   assert.deepEqual(directory.spaces, [{ origin: host.url, displayName: "Shared Space", signIn: ["github", "gitlab"] }]);
   await home.stop();

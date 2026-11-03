@@ -5,7 +5,8 @@
 // `@sublang/spex`,
 // packed with `npm pack` and installed into a scratch prefix, runs as a
 // child process on a scratch home whose `home.yaml` names the library's
-// stand-in registry as the default instance, in scratch Git working
+// stand-in as a Space, while each package fixture explicitly selects its
+// registry, in scratch Git working
 // folders, with no core running. The stand-in runs in this process, so
 // every run is asynchronous. What each command prints is a project's
 // Packages tab's words (DR-172), the registry named by its descriptor's
@@ -195,7 +196,7 @@ before(async () => {
   // The scratch working folder holds a scaffolded specs/ (cli-15),
   // committed, so Git shows what the commands write beside it.
   workingFolder(WORK);
-  writeFileSync(join(WORK, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages: {}\n`);
+  writeFileSync(join(WORK, "spex.yaml"), `format: 1\nspace: ${registry.url}\nregistry: ${registry.url}\npackages: {}\n`);
   await ok(WORK, "scaffold");
   git(WORK, "add", "--all", "--", ".", ":(exclude)spex.yaml");
   git(WORK, "commit", "--quiet", "-m", "Scaffold specs/");
@@ -245,7 +246,7 @@ test("cli-15: add writes the package into spex.yaml, installs under .spex/ and p
   const added = await ok(WORK, "add", "demo/tool@^1.0.0");
   // The file is made naming the default instance (cli-2).
   const requests = readYaml(join(WORK, "spex.yaml"));
-  assert.deepEqual(requests, { format: 1, space: registry.url, packages: { "demo/tool": { version: "^1.0.0" } } }, "[cli-2] the requirement written into the existing spex.yaml, its space kept");
+  assert.deepEqual(requests, { format: 1, space: registry.url, registry: registry.url, packages: { "demo/tool": { version: "^1.0.0" } } }, "[cli-2] the requirement written into the existing spex.yaml, its space kept");
   assert.match(added, /^Added demo\/tool 1\.0\.0\n {2}tool {2}\.agents\/skills, \.claude\/skills$/m, "[cli-2] the package added, with its version and where its skill went");
   assert.equal(readFileSync(join(WORK, ".spex", ".gitignore"), "utf8"), "*\n", "[cli-2] .spex/ ignores everything in it");
   assert.equal(readFileSync(join(WORK, ".gitattributes"), "utf8"), LF_RULES, "[cli-2] .gitattributes keeps spex.yaml, spex.lock and the placed specs at LF");
@@ -276,8 +277,8 @@ test("cli-15: add writes the package into spex.yaml, installs under .spex/ and p
     ["a path to no folder", ["add", "demo/tool", "--path", "kits/none"], /^spex add: --path kits\/none: no folder there — give the folder holding the package's meta\.yaml$/m],
     ["a folder holding no meta.yaml", ["add", "demo/tool", "--path", "kits/empty"], /^spex add: --path kits\/empty has no meta\.yaml, so it is no package — spex export demo\/tool --spec <file> \| --skill <folder> builds one$/m],
     ["a folder holding another package", ["add", "demo/tool", "--path", "kits/wrong"], /^spex add: --path kits\/wrong holds demo\/other, not demo\/tool — spex add demo\/other --path kits\/wrong$/m],
-    // A spex.yaml naming no registry reads with its Space's sign-in.
-    ["a package the registry does not list", ["add", "demo/missing"], new RegExp(`^spex add: demo/missing: not at ${REGISTRY}, or private — spex login --space ${exactly(registry.url)}, then retry$`, "m")],
+    // A valid Space-only credential grants no package access, even at the same origin.
+    ["a package the registry does not list", ["add", "demo/missing"], new RegExp(`^spex add: demo/missing: not at ${REGISTRY}, or private — spex login, then retry$`, "m")],
   ];
   // Each refusal, where spex.yaml stands and where none does yet; the
   // folders given by --path stand in this one alone.
@@ -425,7 +426,7 @@ test("cli-15: the root is found from a subfolder, and at the Git top level of a 
   const fifth = workingFolder(join(SCRATCH, "fifth"));
   const sub = join(fifth, "app", "lib");
   mkdirSync(sub, { recursive: true });
-  writeFileSync(join(fifth, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages: {}\n`);
+  writeFileSync(join(fifth, "spex.yaml"), `format: 1\nspace: ${registry.url}\nregistry: ${registry.url}\npackages: {}\n`);
   await ok(sub, "add", "demo/tool");
   assert.ok(existsSync(join(fifth, "spex.yaml")), "[cli-1] made at the Git top level");
   assert.equal(existsSync(join(sub, "spex.yaml")), false);
@@ -439,7 +440,7 @@ test("cli-15: the root is found from a subfolder, and at the Git top level of a 
   const mono = workingFolder(join(SCRATCH, "mono"));
   const app = join(mono, "packages", "app");
   mkdirSync(join(app, "src"), { recursive: true });
-  writeFileSync(join(app, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages: {}\n`);
+  writeFileSync(join(app, "spex.yaml"), `format: 1\nspace: ${registry.url}\nregistry: ${registry.url}\npackages: {}\n`);
   await ok(join(app, "src"), "add", "demo/tool@^1.0.0");
   assert.ok((await ok(join(app, "src"), "list")).startsWith(`Folder    ${app}\n`), "[cli-1] the nearest spex.yaml, below the Git top level");
   assert.equal(existsSync(join(mono, "spex.yaml")), false);
@@ -450,7 +451,7 @@ test("cli-15: the root is found from a subfolder, and at the Git top level of a 
   // Outside any Git work tree and below no spex.yaml, the current folder.
   const loose = join(SCRATCH, "loose", "here");
   mkdirSync(loose, { recursive: true });
-  writeFileSync(join(loose, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages: {}\n`);
+  writeFileSync(join(loose, "spex.yaml"), `format: 1\nspace: ${registry.url}\nregistry: ${registry.url}\npackages: {}\n`);
   await ok(loose, "add", "demo/tool@^1.0.0");
   assert.ok(existsSync(join(loose, "spex.yaml")), "[cli-1] else the current folder");
   assert.equal(existsSync(join(SCRATCH, "loose", "spex.yaml")), false);
@@ -461,7 +462,7 @@ test("cli-15: the root is found from a subfolder, and at the Git top level of a 
   mkdirSync(home, { recursive: true });
   copyFileSync(join(HOME, "home.yaml"), join(home, "home.yaml"));
   const clone = workingFolder(join(home, "workspace", "tester", "tester-spex"));
-  writeFileSync(join(clone, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages: {}\n`);
+  writeFileSync(join(clone, "spex.yaml"), `format: 1\nspace: ${registry.url}\nregistry: ${registry.url}\npackages: {}\n`);
   const user = join(SCRATCH, "user");
   mkdirSync(join(user, ".claude", "skills", "mine"), { recursive: true });
   writeFileSync(join(user, ".claude", "skills", "mine", "SKILL.md"), "---\nname: mine\ndescription: Mine\n---\n");
@@ -480,7 +481,7 @@ test("cli-15: the root is found from a subfolder, and at the Git top level of a 
   }
   // A seat's project below the home's projects/ is a working folder.
   const seat = workingFolder(join(home, "projects", `@${host.replace(":", "_")}`, "tester", "app"));
-  writeFileSync(join(seat, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages: {}\n`);
+  writeFileSync(join(seat, "spex.yaml"), `format: 1\nspace: ${registry.url}\nregistry: ${registry.url}\npackages: {}\n`);
   await ok(seat, "add", "demo/tool@^1.0.0");
   assert.ok(existsSync(join(seat, "spex.lock")), "[cli-1] a seat's project is a root");
 });
@@ -490,7 +491,7 @@ test("cli-15: a Git source is shown with no network remote named, and a source c
   // failure: it may lie under an instance's Git origin (DR-120).
   const dir = workingFolder(join(SCRATCH, "git-source"));
   const remote = "http://127.0.0.1:1/acme/kit-spex.git";
-  writeFileSync(join(dir, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages:\n  acme/kit:\n    git: ${remote}\n    rev: main\n`);
+  writeFileSync(join(dir, "spex.yaml"), `format: 1\nspace: ${registry.url}\nregistry: ${registry.url}\npackages:\n  acme/kit:\n    git: ${remote}\n    rev: main\n`);
   const listed = await ok(dir, "list");
   assert.match(listed, /^ {2}acme\/kit {2}a Git remote at main$/m, "[cli-6] the Git package, its remote unnamed");
   const failed = await spex(dir, "install");
@@ -501,7 +502,7 @@ test("cli-15: a Git source is shown with no network remote named, and a source c
   // A registry package moved to a path source at the same version is a
   // move of its source, not a package gained.
   const moved = workingFolder(join(SCRATCH, "source-move"));
-  writeFileSync(join(moved, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages: {}\n`);
+  writeFileSync(join(moved, "spex.yaml"), `format: 1\nspace: ${registry.url}\nregistry: ${registry.url}\npackages: {}\n`);
   await ok(moved, "add", "demo/tool@~1.0.0");
   await makeRelease(join(moved, "vendor", "tool"), manifestOf("demo/tool", "1.0.0", { tool: skill }), skillFiles("tool", "1.0.0"));
   const changed = await ok(moved, "add", "demo/tool", "--path", "vendor/tool");
@@ -517,14 +518,14 @@ test("cli-15: a Git source is shown with no network remote named, and a source c
 
 test("cli-15: list says the lock is missing or stale, and a skill a folder of yours keeps out", async () => {
   const dir = workingFolder(join(SCRATCH, "list-states"));
-  writeFileSync(join(dir, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages:\n  demo/tool:\n    version: ^1.0.0\n`);
+  writeFileSync(join(dir, "spex.yaml"), `format: 1\nspace: ${registry.url}\nregistry: ${registry.url}\npackages:\n  demo/tool:\n    version: ^1.0.0\n`);
   assert.match(await ok(dir, "list"), /^Added\n {2}demo\/tool {2}\^1\.0\.0\nNot installed yet — spex install\n$/m, "[cli-6] the lock missing, last with the command that installs it");
   mkdirSync(join(dir, ".claude", "skills", "tool"), { recursive: true });
   writeFileSync(join(dir, ".claude", "skills", "tool", "SKILL.md"), "---\nname: tool\ndescription: Mine\n---\n");
   await ok(dir, "install");
   const listed = await ok(dir, "list");
   assert.match(listed, /^Skills for agents\n {2}tool {2}\.agents\/skills, not \.claude\/skills \(yours is there\)$/m, "[cli-6] the skill's folders, and the one yours keeps it out of");
-  writeFileSync(join(dir, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages:\n  demo/tool:\n    version: ^1.0.0\n  demo/base:\n    version: ^1.0.0\n`);
+  writeFileSync(join(dir, "spex.yaml"), `format: 1\nspace: ${registry.url}\nregistry: ${registry.url}\npackages:\n  demo/tool:\n    version: ^1.0.0\n  demo/base:\n    version: ^1.0.0\n`);
   const stale = await ok(dir, "list");
   assert.match(stale, /^Added\n {2}demo\/base {2}\^1\.0\.0\n {2}demo\/tool {2}\^1\.0\.0$/m);
   assert.ok(stale.endsWith("\nspex.yaml changed — spex update\n"), `[cli-6] the lock stale, last with the command that updates it: ${stale}`);
@@ -537,7 +538,7 @@ test("cli-15: list says the lock is missing or stale, and a skill a folder of yo
   assert.ok(unplaced.endsWith("\nNot installed yet — spex install\n"), `[cli-6] the files not installed, last with the command that installs them: ${unplaced}`);
   // A folder package whose meta.yaml no longer reads: fix it first.
   const kit = workingFolder(join(SCRATCH, "list-kit"));
-  writeFileSync(join(kit, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages: {}\n`);
+  writeFileSync(join(kit, "spex.yaml"), `format: 1\nspace: ${registry.url}\nregistry: ${registry.url}\npackages: {}\n`);
   await makeRelease(join(kit, "kit"), manifestOf("acme/kit", "0.1.0", { kit: skill }), skillFiles("kit", "0.1.0"));
   await ok(kit, "add", "acme/kit", "--path", "kit");
   writeFileSync(join(kit, "kit", "meta.yaml"), stringifyYaml(manifestOf("acme/kit", "0.2.0", { kit: skill })));
@@ -550,7 +551,7 @@ test("cli-15: list says the lock is missing or stale, and a skill a folder of yo
 
 test("cli-15: a package's spec is placed in specs/ under its marker line, its links relative or waiting for their package, a file of its name blocking it, a hand edit left as yours across an update and at the removal", async () => {
   const dir = workingFolder(join(SCRATCH, "placing"));
-  writeFileSync(join(dir, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages: {}\n`);
+  writeFileSync(join(dir, "spex.yaml"), `format: 1\nspace: ${registry.url}\nregistry: ${registry.url}\npackages: {}\n`);
   await ok(dir, "scaffold");
   assert.ok(statSync(join(dir, "specs", "packages")).isDirectory(), "a scaffolded specs/");
   const placed = join(dir, "specs", "packages", "spec.md");
@@ -644,7 +645,7 @@ test("cli-15: the built-in spec package a lock holds installs from this device's
   await makeRelease(staged, manifestOf("sublang/playbooks", "18.1.0", { review: skill }), skillFiles("review", "18.1.0"));
   await seedBuiltinPackage(new ContentStore(home), join(home, "cache"), { name: "sublang/playbooks", version: "18.1.0", dir: staged });
   const dir = workingFolder(join(SCRATCH, "paired"));
-  writeFileSync(join(dir, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages:\n  sublang/playbooks:\n    version: ^18.1.0\n`);
+  writeFileSync(join(dir, "spex.yaml"), `format: 1\nspace: ${registry.url}\nregistry: ${registry.url}\npackages:\n  sublang/playbooks:\n    version: ^18.1.0\n`);
   const added = await okAt(home, dir, "add", "demo/tool@^1.0.0");
   assert.match(added, /^Added sublang\/playbooks 18\.1\.0$/m, "[cli-2] resolved from the seed");
   assert.match(added, /^Added demo\/tool 1\.\d\.\d$/m);
@@ -666,7 +667,7 @@ test("cli-15: the built-in spec package a lock holds installs from this device's
 test("cli-15: a lock recording the app's built-in at a checksum no registry serves installs the rest and marks the built-in built in", async () => {
   // A real resolution of demo/tool, made in a folder of its own.
   const made = workingFolder(join(SCRATCH, "app-made"));
-  writeFileSync(join(made, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages: {}\n`);
+  writeFileSync(join(made, "spex.yaml"), `format: 1\nspace: ${registry.url}\nregistry: ${registry.url}\npackages: {}\n`);
   await ok(made, "add", "demo/tool@^1.0.0");
   const tool = parseLock(readFileSync(join(made, "spex.lock"), "utf8")).packages["demo/tool"]!;
   const toolVersion = (tool.source as RegistrySourceLock).version.replace(/\./g, "\\.");
@@ -687,7 +688,7 @@ test("cli-15: a lock recording the app's built-in at a checksum no registry serv
   // lock of it.
   const write = (dir: string, packages: Record<string, Resolution>): string => {
     const requests = Object.keys(packages).sort().map((name) => `  ${name}:\n    version: ^${(packages[name]!.source as RegistrySourceLock).version}\n`);
-    const text = `format: 1\nspace: ${registry.url}\npackages:\n${requests.join("")}`;
+    const text = `format: 1\nspace: ${registry.url}\nregistry: ${registry.url}\npackages:\n${requests.join("")}`;
     writeFileSync(join(dir, "spex.yaml"), text);
     writeFileSync(join(dir, "spex.lock"), serializeLock({ format: 1, requests: requestsDigest(text), packages }));
     return readFileSync(join(dir, "spex.lock"), "utf8");
@@ -722,7 +723,7 @@ test("cli-15: a lock recording the app's built-in at a checksum no registry serv
   write(failing, { "demo/gone": gone, "demo/tool": tool, "sublang/playbooks": builtin });
   const refused = await spex(failing, "install");
   assert.equal(refused.code, 1, `${refused.stdout}${refused.stderr}`);
-  assert.equal(refused.stderr, `spex install: demo/gone: not at ${REGISTRY}, or private — spex login --space ${registry.url}, then retry\n`, "[cli-4] the ordinary package nothing serves named");
+  assert.equal(refused.stderr, `spex install: demo/gone: not at ${REGISTRY}, or private — spex login, then retry\n`, "[cli-4] the ordinary package nothing serves named");
   assert.equal(existsSync(join(failing, ".spex", "packages")), false, "[cli-4] nothing installed");
 });
 
@@ -788,7 +789,7 @@ test("cli-15: export builds spex-packages/<org>/<pkg>/ by copying the project's 
   // A project installing demo/base, whose spec its own spec cites, and
   // developing acme/tools, exported first.
   const dir = project();
-  writeFileSync(join(dir, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages: {}\n`);
+  writeFileSync(join(dir, "spex.yaml"), `format: 1\nspace: ${registry.url}\nregistry: ${registry.url}\npackages: {}\n`);
   await ok(dir, "add", "demo/base");
   writeFileSync(join(dir, "specs/packages/tools.md"), TOOLS_MD);
   writeFileSync(join(dir, "specs/packages/local.md"), LOCAL_MD);
@@ -918,7 +919,7 @@ test("cli-15: export leaves out a citation of the project's own file, though an 
   // demo/base's placement is blocked by the project's own base.md, so
   // that file is no package's spec (environments-42).
   const dir = project();
-  writeFileSync(join(dir, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages: {}\n`);
+  writeFileSync(join(dir, "spex.yaml"), `format: 1\nspace: ${registry.url}\nregistry: ${registry.url}\npackages: {}\n`);
   const own = "# base: Ours\n\n## Intent\n\nThe project's own base.\n\n## External Behavior\n\n### base-1\n\nOurs shall stand.\n";
   writeFileSync(join(dir, "specs/packages/base.md"), own);
   assert.match(await ok(dir, "add", "demo/base"), /^ {2}spec not placed — specs\/ holds base\.md already$/m);
@@ -1044,7 +1045,7 @@ test("cli-16: publish by name to the registry spex.yaml names, named by its own 
   const uploads = (): string[] => registry.script.requests.filter((request) => request.startsWith("PUT "));
 
   const dir = publishedFrom = project();
-  writeFileSync(join(dir, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages: {}\n`);
+  writeFileSync(join(dir, "spex.yaml"), `format: 1\nspace: ${registry.url}\nregistry: ${registry.url}\npackages: {}\n`);
   await okAt(PUBLISHER, dir, "export", "acme/hello", "--skill", ".claude/skills/greet", "--spec", "specs/packages/hello.md");
 
   const dry = await okAt(PUBLISHER, dir, "publish", "acme/hello", "--dry-run");
@@ -1128,7 +1129,7 @@ test("cli-18: exit 0, 1 and 130 with the cause on standard error, no token print
 
   // An environment installed at demo/tool 1.1.0.
   const dir = workingFolder(join(SCRATCH, "interrupted"));
-  writeFileSync(join(dir, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages:\n  demo/tool:\n    version: ^1.0.0\n`);
+  writeFileSync(join(dir, "spex.yaml"), `format: 1\nspace: ${registry.url}\nregistry: ${registry.url}\npackages:\n  demo/tool:\n    version: ^1.0.0\n`);
   assert.match(await ok(dir, "install"), /^Installed demo\/tool 1\.1\.0$/m, "[cli-13] success exits 0");
   // A newer lock arrives with the code, resolved on another device whose
   // store holds its files, so this home fetches them.
@@ -1232,10 +1233,16 @@ test("cli-18: each cause of the table names the registry by its name and ends in
     await refusedWith(signedIn, asking, [command], `secret/tool: not shared with @sam at ${REGISTRY} — ask its owner`, `a refused read (403), at ${command}`);
   }
 
-  // A spex.yaml naming no registry reads with its Space's sign-in.
+  // A valid Space-only credential grants no package access, even at the same origin.
   const legacy = workingFolder(join(SCRATCH, "causes-legacy"));
-  writeFileSync(join(legacy, "spex.yaml"), `format: 1\nspace: ${registry.url}\npackages: {}\n`);
-  await refusedWith(HOME, legacy, ["add", "secret/tool"], `secret/tool: not at ${REGISTRY}, or private — spex login --space ${registry.url}, then retry`, "a private package to a device signed out of the Space a spex.yaml naming no registry reads with");
+  writeFileSync(join(legacy, "spex.yaml"), `format: 1\nspace: ${registry.url}\nregistry: ${registry.url}\npackages: {}\n`);
+  const spaceOnly = join(SCRATCH, "space-only-home");
+  mkdirSync(spaceOnly, { recursive: true });
+  copyFileSync(join(HOME, "home.yaml"), join(spaceOnly, "home.yaml"));
+  const spaceGrant = { access: other, accessExpiresAt: Date.now() + 86_400_000, refresh: `refresh-${other}` };
+  assert.ok(fileCredentialStore(spaceOnly, registry.url, "space").replace(null, spaceGrant));
+  await refusedWith(spaceOnly, legacy, ["add", "secret/tool"], `secret/tool: not at ${REGISTRY}, or private — spex login, then retry`, "Space-only sign-in leaves the registry signed out");
+  assert.deepEqual(await fileCredentialStore(spaceOnly, registry.url, "space").read(), spaceGrant);
 
   // The sign-in expired.
   registry.script.refuseTokens(other, "token_expired");

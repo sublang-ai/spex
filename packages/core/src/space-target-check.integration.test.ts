@@ -5,7 +5,7 @@
 // transports. Only individual HTTP answers are held/refused.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Store } from "./store.js";
 import { STANDIN_STORAGE } from "./testing/standin-host.js";
@@ -131,19 +131,21 @@ test("git-host-23: catalog, target and auth failures refuse Check without a push
   assert.deepEqual(readFileSync(join(clone, "config/playbook.config.yaml")), original);
 });
 
-test("git-host-23: fresh unknown target members require notice despite a cached solo count", async (t) => {
-  const { home, host, core } = await prepared("target-notice");
+test("git-host-23, space-57: fresh unknown target members do not block a first sync or write an acknowledgement", async (t) => {
+  const { home, host, core } = await prepared("target-unknown-members");
   t.after(() => home.stop());
   assert.equal(placementOf(await home.client.repository(OWN), host.url).members, 1);
-  // Same joined clone, first push on this device: forget only this
-  // scratch device's acknowledgments through the real preferences API.
+  // Same joined clone, first push on this device: forget this scratch
+  // device's last sync through the real preferences API.
   core.store.deletePref(`sync:${OWN}:${hostFolder(host)}:last`);
   core.store.deletePref(`sync:${OWN}:${hostFolder(host)}:noticed`);
   host.script.failMembers(true);
-  await home.client.expectError("space.sync", { repository: OWN }, "invalid_request", /^Confirm sharing before/);
-  assert.equal(placementOf(await home.client.repository(OWN), host.url).members, null);
-  const row = await home.client.settle("space.sync", { repository: OWN, placement: host.url, noticed: true });
-  assert.deepEqual([row.sync.phase, row.state, placementOf(row, host.url).noticed], ["done", "reachable", true]);
+  const row = await home.client.settle("space.sync", { repository: OWN });
+  const line = placementOf(row, host.url);
+  assert.deepEqual([row.sync.phase, row.state, line.members], ["done", "reachable", null]);
+  assert.ok(line.lastSync);
+  assert.equal(core.store.getPref(`sync:${OWN}:${hostFolder(host)}:noticed`), undefined);
+  assert.equal(git(host.bareOf(OWN), "rev-parse", "spex"), git(clonePath(home.dataDir, OWN), "rev-parse", "spex"));
 });
 
 for (const outcome of ["success", "failure"] as const) {
@@ -349,17 +351,16 @@ for (const next of ["signed-out", "another-account"] as const) {
   });
 }
 
-test("git-host-23: one failed fresh notice read refuses before Save and cannot fall through to a healthy unnoticed Check", async (t) => {
-  const { host, home, core, id } = await prepared("notice-admission-failure");
+test("git-host-23: a failed first-sync Check stops before transport and a fresh explicit retry can send", async (t) => {
+  const { host, home, core, id } = await prepared("first-check-failure");
   t.after(() => home.stop());
   core.store.deletePref(`sync:${OWN}:${hostFolder(host)}:last`);
   core.store.deletePref(`sync:${OWN}:${hostFolder(host)}:noticed`);
   const target = host.script.repositories.find((repository) => repository.id === id)!;
   target.members.push({ id: "1002", login: "bob", displayName: "Bob", role: "Developer" });
   const clone = clonePath(home.dataDir, OWN);
-  const head = git(clone, "rev-parse", "HEAD");
-  const steps: string[] = [];
-  home.hooks.beforeStep = (event) => { steps.push(event.step); };
+  const remoteHead = git(host.bareOf(OWN), "rev-parse", "spex");
+  writeFileSync(join(clone, "notes.md"), "Keep the local record through a failed Check.\n");
   const inner = core.hostClient.fetchImpl;
   let fail = true;
   let catalogReads = 0;
@@ -369,25 +370,29 @@ test("git-host-23: one failed fresh notice read refuses before Save and cannot f
     return inner(input, init);
   };
   const from = host.script.requests.length;
-  await home.client.expectError("space.sync", { repository: OWN }, "invalid_request", /Could not reach/);
-  await settled();
-  assert.deepEqual(steps, [], "not even Save started");
-  assert.equal(catalogReads, 1, "no automatic healthy Check after admission failure");
-  assert.equal(git(clone, "rev-parse", "HEAD"), head);
-  assert.ok(!host.script.requests.slice(from).some((request) => request.path.endsWith("git-receive-pack")));
-  // A new user gesture now gets the healthy sharing notice, never an
-  // implicit acknowledgment inherited from the failed read.
-  await home.client.expectError("space.sync", { repository: OWN }, "invalid_request", /^Confirm sharing before/);
-  assert.equal(placementOf(await home.client.repository(OWN), host.url).noticed, false);
+  const stopped = await home.client.settle("space.sync", { repository: OWN });
+  assert.equal(stopped.sync.phase, "stopped", JSON.stringify(stopped.sync));
+  if (stopped.sync.phase === "stopped") assert.deepEqual([stopped.sync.step, stopped.sync.cause], ["check", "unreachable"]);
+  assert.equal(catalogReads, 1, "a failed Check does not silently start another sync");
+  assert.equal(readFileSync(join(clone, "notes.md"), "utf8"), "Keep the local record through a failed Check.\n");
+  assert.equal(git(host.bareOf(OWN), "rev-parse", "spex"), remoteHead);
+  assert.ok(!host.script.requests.slice(from).some((request) => request.path.includes(".git/") || request.path.endsWith("/credential") || request.path.endsWith("/spex-branch")), "the failed Check starts no branch preparation or Git transport");
   assert.equal(core.store.getPref(`sync:${OWN}:${hostFolder(host)}:last`), undefined);
+  // A new explicit Sync reads the now healthy target and sends directly.
+  const retried = await home.client.settle("space.sync", { repository: OWN });
+  assert.ok(retried.sync.phase === "done" && retried.sync.pushed && retried.sync.sent > 0, JSON.stringify(retried.sync));
+  assert.equal(git(host.bareOf(OWN), "show", "spex:notes.md"), "Keep the local record through a failed Check.");
+  assert.equal(core.store.getPref(`sync:${OWN}:${hostFolder(host)}:noticed`), undefined);
 });
 
-test("git-host-23: solo membership becoming shared at Check stops before transport and leaves the notice owed", async (t) => {
-  const { host, home, core, id } = await prepared("notice-membership-change");
+test("git-host-23, space-57: membership changing at Check sends directly while a fresh read-only role still prevents a push", async (t) => {
+  const { host, home, core, id } = await prepared("first-sync-membership-change");
   t.after(() => home.stop());
   core.store.deletePref(`sync:${OWN}:${hostFolder(host)}:last`);
   core.store.deletePref(`sync:${OWN}:${hostFolder(host)}:noticed`);
   const target = host.script.repositories.find((repository) => repository.id === id)!;
+  const clone = clonePath(home.dataDir, OWN);
+  writeFileSync(join(clone, "notes.md"), "Send this record to the chosen group.\n");
   let shared = false;
   home.hooks.beforeStep = (event) => {
     if (event.step === "check" && !shared) {
@@ -395,27 +400,32 @@ test("git-host-23: solo membership becoming shared at Check stops before transpo
       target.members.push({ id: "1002", login: "bob", displayName: "Bob", role: "Developer" });
     }
   };
-  const from = host.script.requests.length;
   const row = await home.client.settle("space.sync", { repository: OWN });
-  assert.equal(row.sync.phase, "stopped");
-  if (row.sync.phase === "stopped") {
-    assert.equal(row.sync.step, "check");
-    assert.match(row.sync.message, /^Confirm sharing before/);
-  }
+  assert.ok(row.sync.phase === "done" && row.sync.pushed && row.sync.sent > 0, JSON.stringify(row.sync));
   const line = placementOf(row, host.url);
-  assert.deepEqual([line.members, line.noticed, line.lastSync], [2, false, null]);
-  assert.ok(!host.script.requests.slice(from).some((request) => request.path.includes(".git/") || request.path.endsWith("/credential") || request.path.endsWith("/spex-branch")), "no branch preparation or Git transport");
-  await home.client.expectError("space.sync", { repository: OWN }, "invalid_request", /^Confirm sharing before/);
+  assert.equal(line.members, 2);
+  assert.ok(line.lastSync);
+  assert.equal(git(host.bareOf(OWN), "show", "spex:notes.md"), "Send this record to the chosen group.");
   assert.equal(core.store.getPref(`sync:${OWN}:${hostFolder(host)}:noticed`), undefined);
-  const seen = await home.client.settle("space.sync", { repository: OWN, placement: host.url, noticed: true });
-  assert.deepEqual([seen.sync.phase, placementOf(seen, host.url).noticed], ["done", true]);
+
+  writeFileSync(join(clone, "notes.md"), "Keep this edit here after the role changes.\n");
+  home.hooks.beforeStep = (event) => {
+    if (event.step === "check") host.script.accessLevel(id, "Reporter");
+  };
+  const from = host.script.requests.length;
+  const readOnly = await home.client.settle("space.sync", { repository: OWN });
+  assert.ok(readOnly.sync.phase === "done" && !readOnly.sync.pushed && readOnly.sync.sent === 0, JSON.stringify(readOnly.sync));
+  assert.equal(readOnly.state, "read-only");
+  assert.ok(!host.script.requests.slice(from).some((request) => request.path.endsWith("git-receive-pack")), "the fresh role still prevents a push");
+  assert.equal(git(host.bareOf(OWN), "show", "spex:notes.md"), "Send this record to the chosen group.");
+  assert.equal(readFileSync(join(clone, "notes.md"), "utf8"), "Keep this edit here after the role changes.\n");
 });
 
-test("git-host-23, space-57, space-58: a sync the core starts after a pick owes the notice as any sync: a repository created in a group another member joins before its Check waits for Continue on its line, its branch unprepared and nothing sent, and a sync noticed for it then prepares the branch and pushes", async (t) => {
-  const { host, home } = await prepared("pick-notice");
+test("git-host-23, space-57, space-58: a pick prepares its branch and pushes directly when another member joins the selected group before Check", async (t) => {
+  const { host, home, core } = await prepared("pick-first-sync");
   t.after(() => home.stop());
-  const { key: local } = await addFolder(home, gitFolder("pick-notice"));
-  const key = hostKey(host, "acme/pick-notice-spex");
+  const { key: local } = await addFolder(home, gitFolder("pick-first-sync"));
+  const key = hostKey(host, "acme/pick-first-sync-spex");
   const acme = host.script.groups.find((group) => group.fullPath === "acme")!;
   let shared = false;
   home.hooks.beforeStep = (event) => {
@@ -423,19 +433,14 @@ test("git-host-23, space-57, space-58: a sync the core starts after a pick owes 
     shared = true;
     acme.members = [...(acme.members ?? []), { id: "1002", login: "bob", displayName: "Bob", role: "Developer" }];
   };
-  const from = host.script.requests.length;
   const mark = home.client.mark();
-  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: host.url, groupId: "2002", name: "pick-notice" } });
-  const waiting = await home.client.waitRepository(mark, key, (row) => row.sync.phase === "stopped", 30_000);
+  await home.client.expectOk("space.pick", { repository: local, choice: { kind: "create", instance: host.url, groupId: "2002", name: "pick-first-sync" } });
+  const synced = await home.client.waitRepository(mark, key, (row) => row.sync.phase === "done", 30_000);
   home.hooks.beforeStep = undefined;
-  assert.ok(waiting.sync.phase === "stopped", JSON.stringify(waiting.sync));
-  assert.deepEqual([waiting.sync.op, waiting.sync.step, waiting.sync.cause], ["sync", "check", "refused"]);
-  assert.match(waiting.sync.message, /^Confirm sharing before the first sync of pick-notice$/);
-  const [line] = waiting.placements;
-  assert.deepEqual([line.outcome, line.members, line.noticed, line.lastSync], [{ kind: "waiting", sent: 0, received: 0 }, 2, false, null]);
-  assert.ok(!host.script.requests.slice(from).some((request) => request.path.includes(".git/") || request.path.endsWith("/credential") || request.path.endsWith("/spex-branch")), "no branch preparation or Git transport");
-  const seen = await home.client.settle("space.sync", { repository: key, placement: host.url, noticed: true }, 30_000);
-  const seenLine = placementOf(seen, host.url);
-  assert.deepEqual([seen.sync.phase, seenLine.noticed, seenLine.outcome?.kind], ["done", true, "synced"], JSON.stringify(seen.sync));
-  assert.equal(git(host.bareOf("acme/pick-notice-spex"), "rev-parse", "spex"), git(clonePath(home.dataDir, key), "rev-parse", "spex"));
+  assert.ok(synced.sync.phase === "done" && synced.sync.pushed && synced.sync.sent > 0, JSON.stringify(synced.sync));
+  const line = placementOf(synced, host.url);
+  assert.deepEqual([line.members, line.outcome?.kind], [2, "synced"]);
+  assert.ok(line.lastSync);
+  assert.equal(core.store.getPref(`sync:${key}:${hostFolder(host)}:noticed`), undefined);
+  assert.equal(git(host.bareOf("acme/pick-first-sync-spex"), "rev-parse", "spex"), git(clonePath(home.dataDir, key), "rev-parse", "spex"));
 });

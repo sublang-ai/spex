@@ -33,19 +33,18 @@ to run it; published app 0.9.0-beta.24 has earlier membership controls.
    through the group to its projects and groups within it.
 5. Create or add a project, then open **Add to a group…** on its Space
    row. Check the labelled **Space**, select the team under **Choose
-   group**, and review the records and access before **Add to group**.
+   group**, then choose **Add to group**.
    Selecting a row alone changes nothing. **Personal** means your
    personal group. If the same project already appears in that Space,
    **Connect to an existing project** lets you review and combine its
-   records before **Connect project**. A first sync may still ask you
-   to confirm sharing after checking access.
+   records with **Connect project**. The action uploads the records and
+   continues to the server named in that form, without another confirmation.
 
 If some additions fail, successful members appear in the list and only failed or unsent usernames remain in the form. Correct those entries and submit again; successful additions are not repeated. If the connection drops, reconnect before submitting the remaining usernames.
 
 Sharing includes existing and future conversations, agent activity and
 attachments. Removing someone's access cannot erase copies they already
-saved. The confirmation names public visibility when anyone can read the
-records.
+saved. Public records can be read by anyone.
 
 On another computer, sign in to the same Space and choose **Open here**
 on the project. This downloads its records and code separately; access
@@ -56,6 +55,15 @@ On a project's Space row, **Open project** returns to its workspace.
 The record status, such as **1 record to sync**, opens its Sync details.
 The row's **More** menu holds **Sync records**, Members, Explore records
 and other places to open the project.
+
+Adding a local project to a group also opens it on the group's server.
+With one available server, Spex chooses it; with several, choose one in the
+same form. **Add to group** uploads the records and continues through the
+connection and project opening. Its checklist checks off each completed
+step, and the project appears under that server in the left sidebar.
+There is no separate **Share**, **Continue** or **Open on** step.
+A failed step shows its cause and **Try again**; a records conflict still
+needs its actual differences resolved.
 
 ## Work on a team server
 
@@ -110,5 +118,8 @@ A Space group shares records and grants team-server access. Publishing
 uses a namespace authorized by your registry account, whether personal
 or an organization. At Spex Space, check
 [Your orgs](https://spex.sublang.ai/account/orgs?scope=registry) for those
-names. Creating a group here grants no publishing namespace there. See
+names. Creating or signing in to a Space group supplies no package
+account, Org suggestion or publishing namespace. Package operations use
+`registry` from `spex.yaml`, or the public registry when that field is
+absent; `space` selects collaboration separately. See
 [Publish specs, skills, and playbooks](getting-started.md#publish-specs-skills-and-playbooks).

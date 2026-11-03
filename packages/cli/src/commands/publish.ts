@@ -75,7 +75,7 @@ export const publish: Command = async (args) => {
   const target = env.registryOf(read?.requests ?? null);
   const instance = target.origin;
   const registryName = await env.registryName(instance);
-  const signedIn = (await env.tokenAt(instance, "registry").catch(() => "")) !== null;
+  const signedIn = (await env.tokenAt(instance).catch(() => "")) !== null;
   if (!dryRun && !signedIn) {
     // `spex login` from this folder signs in at its registry for
     // publishing (cli-10).
@@ -110,7 +110,7 @@ export const publish: Command = async (args) => {
     console.log(["Files (dry run, nothing published):", ...files.map((file) => `  ${file}`)].join("\n"));
     return;
   }
-  const registry = env.registryAt(instance, "registry");
+  const registry = env.registryAt(instance);
   try {
     await publishRelease(registry, folder);
   } catch (error) {

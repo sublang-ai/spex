@@ -48,6 +48,7 @@ export interface PublishTarget {
   signedIn: boolean | undefined;
   name: string;
   login?: string;
+  accountId?: string;
 }
 
 /** The publish target at `origin` as its registry state reads, unread
@@ -57,7 +58,7 @@ export function publishTargetAt(origin: string, account: RegistryState | undefin
     origin,
     signedIn: account ? !!account.account : undefined,
     name: account?.displayName || hostNameOf(origin),
-    ...(account?.account ? { login: account.account.login } : {}),
+    ...(account?.account ? { login: account.account.login, accountId: account.account.id } : {}),
   };
 }
 

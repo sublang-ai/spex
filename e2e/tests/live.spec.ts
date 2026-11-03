@@ -270,6 +270,7 @@ test.describe("the changelog playbook", () => {
     await projectTab(page, "Playbooks");
     // The seeded template configures every built-in, so no built-ins
     // section stands here; the New playbook field proves the surface.
+    await page.getByTestId("new-playbook-org").fill("acme");
     const idField = page.getByTestId("new-playbook-id");
     await expect(idField).toBeVisible();
     // The project's defaults fill Org and License (playbook-library-51).

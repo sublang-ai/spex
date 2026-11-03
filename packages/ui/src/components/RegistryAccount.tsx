@@ -82,9 +82,18 @@ export function useRegistrySignIn(origin: string | undefined, { read = false }: 
   const store = usePlaceStore();
   const broadcast = store((state) => (origin ? state.registryAccounts?.[origin] : undefined));
   const [answered, setAnswered] = useState<RegistryState>();
-  const [started, setStarted] = useState<RegistryFlow>();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string>();
+  const [started, setStarted] = useState<{ origin: string; flow: RegistryFlow }>();
+  const [pending, setPending] = useState<{ origin: string; id: number }>();
+  const [error, setError] = useState<{ origin: string; message: string }>();
+  const nextOperation = useRef(0);
+  const currentOrigin = useRef(origin);
+  const mounted = useRef(true);
+  currentOrigin.current = origin;
+  const busy = pending !== undefined && pending.origin === origin;
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
 
   // The account there, read without credentials (core-service-143); the
   // core's broadcast keeps it current.
@@ -97,7 +106,7 @@ export function useRegistrySignIn(origin: string | undefined, { read = false }: 
         if (active) setAnswered(reply as RegistryState);
       })
       .catch((cause: Error) => {
-        if (active) setError(causePhrase(cause.message));
+        if (active) setError({ origin, message: causePhrase(cause.message) });
       });
     return () => {
       active = false;
@@ -125,26 +134,30 @@ export function useRegistrySignIn(origin: string | undefined, { read = false }: 
       : { flow: "device", verificationUri: fromState.verificationUri }
     : login
       ? undefined
-      : started;
+      : started && started.origin === origin ? started.flow : undefined;
 
   async function start(): Promise<void> {
     if (!origin || busy) return;
-    setBusy(true);
+    const operation = { origin, id: ++nextOperation.current };
+    setPending(operation);
     setError(undefined);
     try {
       const reply = (await store.getClient().command("registry.signin.start", { origin })) as
         | { flow: "browser"; url: string }
         | { flow: "device"; verificationUri: string };
+      if (!mounted.current || currentOrigin.current !== origin || nextOperation.current !== operation.id) return;
       if (reply?.flow === "browser") {
-        setStarted({ flow: "browser", url: reply.url });
+        setStarted({ origin, flow: { flow: "browser", url: reply.url } });
         await openExternalBridge()?.(reply.url).catch(() => false);
       } else if (reply?.flow === "device") {
-        setStarted({ flow: "device", verificationUri: reply.verificationUri });
+        setStarted({ origin, flow: { flow: "device", verificationUri: reply.verificationUri } });
       }
     } catch (cause) {
-      setError(causePhrase((cause as Error).message));
+      if (mounted.current && currentOrigin.current === origin && nextOperation.current === operation.id) {
+        setError({ origin, message: causePhrase((cause as Error).message) });
+      }
     } finally {
-      setBusy(false);
+      if (mounted.current) setPending((current) => current?.id === operation.id ? undefined : current);
     }
   }
 
@@ -154,24 +167,27 @@ export function useRegistrySignIn(origin: string | undefined, { read = false }: 
     try {
       await store.getClient().command("registry.signin.cancel", { origin });
     } catch (cause) {
-      setError(causePhrase((cause as Error).message));
+      if (mounted.current && currentOrigin.current === origin) setError({ origin, message: causePhrase((cause as Error).message) });
     }
   }
 
   async function signOut(): Promise<void> {
     if (!origin || busy) return;
-    setBusy(true);
+    const operation = { origin, id: ++nextOperation.current };
+    setPending(operation);
     setError(undefined);
     try {
       await store.getClient().command("registry.signout", { origin });
     } catch (cause) {
-      setError(causePhrase((cause as Error).message));
+      if (mounted.current && currentOrigin.current === origin && nextOperation.current === operation.id) {
+        setError({ origin, message: causePhrase((cause as Error).message) });
+      }
     } finally {
-      setBusy(false);
+      if (mounted.current) setPending((current) => current?.id === operation.id ? undefined : current);
     }
   }
 
-  const failure = error ?? (state?.error && !login && !running ? causePhrase(state.error) : undefined);
+  const failure = (error && error.origin === origin ? error.message : undefined) ?? (state?.error && !login && !running ? causePhrase(state.error) : undefined);
   return { state, login, running, busy, error: failure, start, cancel, signOut };
 }
 
