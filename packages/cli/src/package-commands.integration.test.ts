@@ -838,7 +838,7 @@ test("cli-15: export builds spex-packages/<org>/<pkg>/ by copying the project's 
   ].join("\n"), "[cli-23] a warning per citation removed or reduced, naming the item and the target");
   assert.doesNotMatch(ran.stderr, /release/, "[cli-13] no word of the library's own");
   assert.equal(ran.stdout, [
-    `Publishing rights for acme are not checked — use a name you can claim at ${registry.url}/account/orgs`,
+    `Publishing rights for acme are not checked — use a name you can claim at ${registry.url}/account/orgs?scope=registry`,
     "Exported acme/hello 0.1.0 to spex-packages/acme/hello/",
     "  skill greet  from .claude/skills/greet/",
     "  spec hello   from specs/packages/hello.md",
@@ -1064,7 +1064,7 @@ test("cli-16: publish by name to the registry spex.yaml names, named by its own 
     for (const args of [["--dry-run"], []]) {
       const refused = await spexAt(PUBLISHER, dir, "publish", "acme/hello", ...args);
       assert.equal(refused.code, 1);
-      assert.equal(refused.stderr, `spex publish: acme is not yours at ${REGISTRY} — claim it at ${registry.url}/account/orgs\n`);
+      assert.equal(refused.stderr, `spex publish: acme is not yours at ${REGISTRY} — claim it at ${registry.url}/account/orgs?scope=registry\n`);
       assert.deepEqual(uploads(), [], "an empty or nonmatching org list prevents any upload");
     }
   }
@@ -1220,7 +1220,7 @@ test("cli-18: each cause of the table names the registry by its name and ends in
   registry.script.setOrgs(other, []);
   await refusedWith(signedIn, dir, ["add", "secret/tool"], `secret/tool: not shared with @sam at ${REGISTRY} — ask its owner`, "a refused read (403)");
   await refusedWith(signedIn, dir, ["add", "demo/none"], `demo/none: not at ${REGISTRY}, or not shared with @sam — check the name, or ask its owner`, "a package the registry lists to no account signed in");
-  await refusedWith(signedIn, publishedFrom, ["publish", "acme/hello"], `acme is not yours at ${REGISTRY} — claim it at ${registry.url}/account/orgs`, "a refused publish (403)");
+  await refusedWith(signedIn, publishedFrom, ["publish", "acme/hello"], `acme is not yours at ${REGISTRY} — claim it at ${registry.url}/account/orgs?scope=registry`, "a refused publish (403)");
 
   // The same package asked by spex.yaml, its spex.lock written by an
   // install or an update: the registry's answer, never a conflict of

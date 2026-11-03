@@ -494,9 +494,9 @@ The seats are then administered as $HUB_USER:
 
 Admission signs a seat in to its Space only. Public packages need no registry
 sign-in. For private packages or publishing, each member signs in to the package
-registry on their own seat: select that seat in the IDE, then Playbooks > Package
-registry > Sign in to registry. The shared agent credential file supplies no
-registry sign-in.
+registry on their own seat: open the project on that server in the IDE, then
+choose Sign in beside the registry name on its Packages tab. The shared agent
+credential file supplies no registry sign-in.
 
 A seat loads Spex's modules from $prefix/app as it needs them, so a seat that
 runs while install.sh replaces $prefix/app may load modules of the new version

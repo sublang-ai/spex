@@ -3041,8 +3041,8 @@ test("publishing checks current org rights before previews and uploads", async (
   for (const orgs of [[], [{ name: "other", path: "acme", role: "Owner" }]]) {
     registry.script.setOrgs("fixture-publisher", orgs);
     for (const dryRun of [true, false]) {
-      const refusal = await core.client.expectError("environment.publish", { repository: key, name: "acme/checked", dryRun, wait: true }, "invalid_request", /^acme is not yours to publish to at .+ — claim it at .+\/account\/orgs, or publish under one of your orgs$/);
-      assert.ok(refusal.includes(`${registry.url}/account/orgs`));
+      const refusal = await core.client.expectError("environment.publish", { repository: key, name: "acme/checked", dryRun, wait: true }, "invalid_request", /^acme is not yours to publish to at .+ — claim it at .+\/account\/orgs\?scope=registry, or publish under one of your orgs$/);
+      assert.ok(refusal.includes(`${registry.url}/account/orgs?scope=registry`));
       assert.deepEqual(uploads(), []);
     }
   }

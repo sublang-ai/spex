@@ -52,7 +52,14 @@ Follow [Start using Spex](docs/getting-started.md) to open a project,
 install a spec package, use its skills and playbooks, and author and
 publish a workflow of your own.
 
-To set up a team or a workshop — where groups are made, who shares what, where a package publishes — read [docs/groups.md](docs/groups.md).
+The guide follows current source. Its package commands require the
+[source CLI](packages/cli/README.md#install-current-source-cli); npm
+currently publishes CLI 4.2.0 with the older app-attached interface.
+The IDE controls described there are also newer than app 0.9.0-beta.24.
+
+To share project records, manage members or work on a team server, read
+[Groups and collaboration](docs/groups.md). Package publishing uses your
+registry account, separately from a Space's groups.
 
 Requires Node.js 22.19 or later. The desktop compiles playbooks on the Node
 inside its Electron; the server shell compiles them only when its Node, or a

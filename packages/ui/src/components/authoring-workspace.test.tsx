@@ -2072,7 +2072,7 @@ describe("playbook-library-120/121: Org suggests the orgs the registry account m
     fireEvent.change(screen.getByTestId("new-playbook-org"), { target: { value: "manual-org" } });
     await act(async () => held[0]!.reject(new Error("Registry unavailable")));
     expect((await screen.findByRole("alert")).textContent).toContain("Registry unavailable");
-    expect(screen.getByRole("link", { name: "Claim an org" }).getAttribute("href")).toBe("https://spex.example/account/orgs");
+    expect(screen.getByRole("link", { name: "Claim an org" }).getAttribute("href")).toBe("https://spex.example/account/orgs?scope=registry");
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     await vi.waitFor(() => expect(note()?.textContent).toBe("Loading…"));
     await act(async () => held[1]!.resolve({ orgs: [{ name: "alpha", path: "alpha", role: "Owner" }, { name: "zeta", path: "zeta", role: "Owner", provider: "github" }] }));
@@ -2100,7 +2100,7 @@ describe("playbook-library-120/121: Org suggests the orgs the registry account m
     await vi.waitFor(() => expect(useAppStore.getState().environments[PROJECT_ID]?.registry?.origin).toBe(origin));
     expect(commandMock.mock.calls.filter(([type]) => type === "registry.orgs")).toEqual([]);
     expect(note()?.textContent).toBe("Publishing rights not checked");
-    expect(screen.getByRole("link", { name: "Claim an org" }).getAttribute("href")).toBe(`${origin}/account/orgs`);
+    expect(screen.getByRole("link", { name: "Claim an org" }).getAttribute("href")).toBe(`${origin}/account/orgs?scope=registry`);
     act(() => useAppStore.setState({ registryAccounts: { [origin]: { ...registry, account: { id: "old", login: "old" } } } }));
     await vi.waitFor(() => expect(note()?.textContent).toBe("Loading…"));
     fireEvent.change(screen.getByTestId("new-playbook-org"), { target: { value: "my-choice" } });
@@ -2137,7 +2137,7 @@ describe("playbook-library-120/121: Org suggests the orgs the registry account m
         render(<PlaybooksTab project={PROJECT} />);
         await defaultsShown();
         const link = screen.getByRole("link", { name: "Claim an org" }) as HTMLAnchorElement;
-        expect(link.href).toBe(`${origin}/account/orgs`);
+        expect(link.href).toBe(`${origin}/account/orgs?scope=registry`);
         expect(link.target).toBe("_blank");
         expect(link.rel).toBe("noreferrer");
         expect(fireEvent.click(link)).toBe(true);
@@ -2186,7 +2186,7 @@ describe("playbook-library-120/121: Org suggests the orgs the registry account m
       await defaultsShown();
       expect(note()?.textContent).toBe("尚未验证发布权限");
       expect(screen.getByTestId("new-playbook-org-guidance").textContent).toContain("要发布规约包，请使用你能在此注册中心认领的组织名。");
-      expect(screen.getByRole("link", { name: "认领组织名" }).getAttribute("href")).toBe(`${origin}/account/orgs`);
+      expect(screen.getByRole("link", { name: "认领组织名" }).getAttribute("href")).toBe(`${origin}/account/orgs?scope=registry`);
       fireEvent.change(screen.getByTestId("new-playbook-org"), { target: { value: "local-choice" } });
       fireEvent.change(screen.getByTestId("new-playbook-id"), { target: { value: "triage" } });
       fireEvent.click(screen.getByTestId("new-playbook-button"));

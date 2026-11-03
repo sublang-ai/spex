@@ -245,7 +245,7 @@ When a publication or its preview is requested, the package manager shall establ
 | Registry grant and answer | Outcome |
 | --- | --- |
 | signed in, the manifest's org is a listed `name` | checked preview reports `orgVerified: true`; an upload proceeds to the registry's final authorization |
-| signed in, the org is absent, including a valid empty list | refuse with `<origin>/account/orgs` as the claim destination, uploading nothing |
+| signed in, the org is absent, including a valid empty list | refuse with `<origin>/account/orgs?scope=registry` as the claim destination, uploading nothing ([DR-202](../decisions/202-registry-guidance-keeps-account-scope.md)) |
 | signed in, the registry rejects an expired or revoked grant | refuse with the existing sign-in failure and grant-refusal handling [[environments-12](#environments-12)], uploading nothing |
 | signed in, authorization cannot be read or is malformed | refuse as unable to check, never as an empty authorization list, uploading nothing |
 | signed out, preview requested | validate the local release [[environments-10](#environments-10)] and report `orgVerified: false`, uploading nothing |
