@@ -712,6 +712,7 @@ export function SyncTab({
   onDismiss,
   onOpenSession,
   onNote,
+  onPendingChange,
 }: {
   groups: GroupsState;
   repo: RepositoryState;
@@ -728,6 +729,7 @@ export function SyncTab({
   onDismiss(phase: string): void;
   onOpenSession(sessionId: string): void;
   onNote: Note;
+  onPendingChange?(pending: boolean): void;
 }) {
   const store = usePlaceStore();
   const spaceFetch = store((state) => state.spaceFetch);
@@ -917,6 +919,7 @@ export function SyncTab({
         connected={connected}
         refreshes={refreshes}
         onNote={onNote}
+        onPendingChange={onPendingChange}
       />
       {repo.mergePending ? (
         <Card testId="space-merge-note" tone="amber">

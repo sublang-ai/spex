@@ -30,7 +30,7 @@
 // @md, the phrase truncates with its title, Members shows its mark below
 // @md and below @xs the controls wrap beneath (space-28).
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { GroupsState, InstanceGroupState, PlacementState, RepositoryState } from "@sublang/spex-core/protocol";
 
 import { usePlaceStore } from "../state/place-context.js";
@@ -198,6 +198,7 @@ export function PlacementLines({
   connected,
   refreshes,
   onNote,
+  onPendingChange,
 }: {
   groups: GroupsState;
   repo: RepositoryState;
@@ -210,7 +211,19 @@ export function PlacementLines({
   /** How many times the reader's own Refresh has re-read the state. */
   refreshes: number;
   onNote: Note;
+  onPendingChange?(pending: boolean): void;
 }) {
+  const [pendingMembers, setPendingMembers] = useState<ReadonlySet<string | null>>(() => new Set());
+  const onLinePendingChange = useCallback((instance: string | null, pending: boolean) => {
+    setPendingMembers((current) => {
+      if (current.has(instance) === pending) return current;
+      const next = new Set(current);
+      if (pending) next.add(instance); else next.delete(instance);
+      return next;
+    });
+  }, []);
+  useEffect(() => { onPendingChange?.(pendingMembers.size > 0); }, [pendingMembers, onPendingChange]);
+  useEffect(() => () => { onPendingChange?.(false); }, [onPendingChange]);
   if (!cloneHere(repo) || repo.placements.length === 0) return null;
   return (
     <ul data-testid={`space-lines-${repo.key}`} className="flex min-w-0 flex-col gap-0.5 pl-6">
@@ -226,6 +239,7 @@ export function PlacementLines({
           connected={connected}
           refreshes={refreshes}
           onNote={onNote}
+          onPendingChange={onLinePendingChange}
         />
       ))}
     </ul>
@@ -249,6 +263,7 @@ function PlacementLine({
   connected,
   refreshes,
   onNote,
+  onPendingChange,
 }: {
   groups: GroupsState;
   repo: RepositoryState;
@@ -259,6 +274,7 @@ function PlacementLine({
   connected: boolean;
   refreshes: number;
   onNote: Note;
+  onPendingChange(instance: string | null, pending: boolean): void;
 }) {
   const store = usePlaceStore();
   const spaceSync = store((state) => state.spaceSync);
@@ -267,6 +283,8 @@ function PlacementLine({
   const spaceLastAct = store((state) => state.spaceLastAct);
   const [opened, setOpened] = useState<"members" | "notice" | "combine">();
   const [membersPending, setMembersPending] = useState(false);
+  useEffect(() => { onPendingChange(line.instance, membersPending); }, [line.instance, membersPending, onPendingChange]);
+  useEffect(() => () => { onPendingChange(line.instance, false); }, [line.instance, onPendingChange]);
   const [membersFocus, setMembersFocus] = useState(0);
   const [busy, setBusy] = useState<LineAct>();
   // A long command's reply is only "accepted": its control stays busy

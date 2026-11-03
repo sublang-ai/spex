@@ -71,3 +71,47 @@ test("parallel owners remain distinct and deny-only native choices never offer a
   deliver(state(2, [draft]));
   expect(screen.getByText(/Draft: draft/)).toBeTruthy();
 });
+
+test("closing an externally opened approval inbox preserves requests and returns focus to its opener", () => {
+  const command = vi.fn();
+  setClientForTests({command} as unknown as SpexClient);
+  render(<><ApprovalInbox /><ApprovalNotice owner={request.owner} /></>);
+  deliver(state());
+  const opener = screen.getByRole("button", {name: "Tool approval needed (1)"});
+  const header = screen.getByRole("button", {name: "Tool approvals (1)"});
+  act(() => opener.focus());
+  fireEvent.click(opener);
+  expect(document.activeElement).toBe(screen.getByRole("button", {name: "Deny"}));
+  const close = screen.getByRole("button", {name: "Close tool approvals"});
+  expect(close.textContent).toBe("Close");
+  fireEvent.click(close);
+  expect(screen.queryByRole("button", {name: "Deny"})).toBeNull();
+  expect(header.getAttribute("aria-expanded")).toBe("false");
+  expect(document.activeElement).toBe(opener);
+  expect(useAppStore.getState().approvals?.pending).toEqual([request]);
+  expect(command).not.toHaveBeenCalled();
+
+  fireEvent.click(opener);
+  fireEvent.keyDown(screen.getByRole("button", {name: "Deny"}), {key: "Escape"});
+  expect(header.getAttribute("aria-expanded")).toBe("false");
+  expect(document.activeElement).toBe(opener);
+  expect(useAppStore.getState().approvals?.pending).toEqual([request]);
+  expect(command).not.toHaveBeenCalled();
+});
+
+test("closing approvals falls back to the inbox header when its contextual opener is gone", () => {
+  render(<ApprovalInbox />);
+  const notice = render(<ApprovalNotice owner={request.owner} />);
+  deliver(state());
+  const opener = screen.getByRole("button", {name: "Tool approval needed (1)"});
+  act(() => opener.focus());
+  fireEvent.click(opener);
+  notice.unmount();
+  const close = screen.getByRole("button", {name: "Close tool approvals"});
+  act(() => close.focus());
+  fireEvent.keyDown(close, {key: "Escape"});
+  const header = screen.getByRole("button", {name: "Tool approvals (1)"});
+  expect(header.getAttribute("aria-expanded")).toBe("false");
+  expect(document.activeElement).toBe(header);
+  expect(useAppStore.getState().approvals?.pending).toEqual([request]);
+});

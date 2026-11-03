@@ -619,6 +619,50 @@ describe("GROUPS: the sign-in card's Space address, no directory read (space-66,
 });
 
 describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", () => {
+  test.each(["name", "phrase", "explore"] as const)("the records panel closes itself and restores focus to its %s opener", async (source) => {
+    await renderGroups(base(), { open: false });
+    const opener = screen.getByTestId(source === "name" ? `space-repo-${KEY}`
+      : source === "phrase" ? `space-repo-state-${KEY}` : `space-row-more-${KEY}`);
+    const open = () => fireEvent.click(source === "explore"
+      ? within(moreOf(KEY)).getByTestId(`space-row-explore-${KEY}`) : opener);
+    open();
+    const panel = await screen.findByTestId("space-repository");
+    expect(screen.getByRole("tab", { name: source === "explore" ? "Explore" : "Sync", selected: true })).toBeTruthy();
+    const close = within(screen.getByTestId("space-repository-header")).getByRole("button", { name: "Close" });
+    fireEvent.click(close);
+    expect(screen.queryByTestId("space-repository")).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(opener));
+    open();
+    const reopened = await screen.findByTestId("space-repository");
+    expect(reopened).not.toBe(panel);
+    fireEvent.keyDown(screen.getByRole("tab", { selected: true }), { key: "Escape" });
+    expect(screen.queryByTestId("space-repository")).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(opener));
+    expect(calls("space.sync")).toEqual([]);
+  });
+
+  test("closing records during a background sync does not stop it", async () => {
+    await renderGroups(base({}, [repo({ sync: { phase: "running", op: "sync", step: "push", since: NOW, cancelable: true } })]));
+    const close = screen.getByTestId("space-repository-close") as HTMLButtonElement;
+    expect(close.disabled).toBe(false);
+    fireEvent.click(close);
+    expect(screen.queryByTestId("space-repository")).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId(`space-repo-${KEY}`)));
+    expect(calls("space.cancel")).toEqual([]);
+  });
+
+  test("closing records follows a moved project's row when the original opener is gone", async () => {
+    await renderGroups(base());
+    const oldOpener = screen.getByTestId(`space-repo-${KEY}`);
+    const movedKey = "@spex.example/jane/renamed-spex";
+    deliver(base({}, [repo({ key: movedKey, name: "renamed-spex" })]));
+    await waitFor(() => expect(screen.getByTestId("space-repository-name").textContent).toContain("renamed"));
+    expect(oldOpener.isConnected).toBe(false);
+    fireEvent.click(screen.getByTestId("space-repository-close"));
+    expect(screen.queryByTestId("space-repository")).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId(`space-repo-${movedKey}`)));
+  });
+
   test("space-1, space-66: the instance's heading over Personal, then every group it lists in the order of their paths, each by its name, its path where the two differ and its member count, each repository a row; This computer only while it holds one", async () => {
     const mine = base({}, [repo({ local: [SESSION_UNIT], lastSync: { at: NOW - 2 * 60 * MIN, sent: 1, received: 0 } })]);
     // A personal group the host names after the login, its path apart

@@ -204,6 +204,44 @@ async function openPlacementMembers(key: string): Promise<HTMLElement> {
 }
 
 describe("GROUPS: each act where the host's read says (space-1, space-62, space-29)", () => {
+  test.each(["group", "project", "placement"] as const)("%s Members remains closable while loading or failed without membership permissions", async (scope) => {
+    const first = deferred<unknown>();
+    const second = deferred<unknown>();
+    let read = 0;
+    commandMock.mockImplementation((type: string, fields?: Record<string, unknown>) => type === "space.members"
+      ? (read++ === 0 ? first.promise : second.promise) : core(type, fields));
+    await renderGroups(sharingHome(), { open: false });
+    const id = scope === "group" ? "group:other" : at(B_SPEX);
+    const opener = scope === "placement"
+      ? within(lineOf(B_SPEX)).getByTestId("space-line-members")
+      : screen.getByTestId(scope === "group" ? "space-group-more-other" : `space-row-more-${B_SPEX}`);
+    const open = () => fireEvent.click(scope === "group" ? groupAct("other", "members")!
+      : scope === "project" ? rowAct(B_SPEX, "members")! : opener);
+    open();
+    const loading = await screen.findByTestId(`space-members-${id}`);
+    expect(within(loading).getByText("Reading members…")).toBeTruthy();
+    expect(within(loading).queryByRole("button", { name: "Invite members…" })).toBeNull();
+    const close = within(loading).getByRole("button", { name: "Close" }) as HTMLButtonElement;
+    expect(close.disabled).toBe(false);
+    fireEvent.click(close);
+    expect(screen.queryByTestId(`space-members-${id}`)).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(opener));
+    await act(async () => first.resolve({ members: [] }));
+    expect(screen.queryByTestId(`space-members-${id}`)).toBeNull();
+    open();
+    const failed = await screen.findByTestId(`space-members-${id}`);
+    await act(async () => second.reject(new Error("Members could not be read")));
+    expect(within(failed).getByRole("alert").textContent).toBe("Members could not be read");
+    const retryClose = within(failed).getByRole("button", { name: "Close" }) as HTMLButtonElement;
+    expect(retryClose.disabled).toBe(false);
+    fireEvent.keyDown(retryClose, { key: "Escape" });
+    expect(screen.queryByTestId(`space-members-${id}`)).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(opener));
+    expect(calls("space.members")).toHaveLength(2);
+    expect(calls("space.share")).toEqual([]);
+    expect(calls("space.unshare")).toEqual([]);
+  });
+
   test.each(["group", "project"] as const)("%s Members and invitation openers preserve the current draft and explicit Close returns focus", async (scope) => {
     commandMock.mockImplementation(core);
     await renderGroups(sharingHome(), { open: false });

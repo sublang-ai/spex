@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { createRef } from "react";
 import type { AgentSummary, Command, CommandResults } from "@sublang/spex-core/protocol";
 import { AgentEditor } from "./AgentEditor.js";
@@ -181,6 +181,58 @@ describe("contextual browser controls through the core client", () => {
     expect(checkbox().disabled).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Set up browser" }));
     await screen.findByText("Browser ready");
+    expect(checkbox().checked).toBe(false);
+    expect(command.mock.calls.some(([type]) => type === "config.edit")).toBe(false);
+  });
+
+  test.each(["Close", "Escape", "outside"] as const)("authoring browser setup dismisses through %s and returns to its opener", async (way) => {
+    const command = fixture((type) => type === "agent.capabilities"
+      ? { browser: { status: "unsupported", code: "unsupported-host", message: "Browser tools are unavailable here" } }
+      : undefined);
+    render(<ConfiguredBrowserTools agent={agent} context={context} />);
+    const opener = screen.getByTestId("draft-browser");
+    opener.focus();
+    fireEvent.click(opener);
+    const dialog = screen.getByRole("dialog", { name: "Browser setup" });
+    await within(dialog).findByText("Browser tools are unavailable here");
+    const close = within(dialog).getByRole("button", { name: "Close" });
+    expect(document.activeElement).toBe(close);
+    if (way === "Close") fireEvent.click(close);
+    else if (way === "Escape") fireEvent.keyDown(close, { key: "Escape" });
+    else fireEvent.mouseDown(document.body);
+    expect(screen.queryByRole("dialog", { name: "Browser setup" })).toBeNull();
+    expect(opener.getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).toBe(opener);
+    expect(command.mock.calls.some(([type]) => type === "browser.prepare" || type === "browser.cancel" || type === "config.edit")).toBe(false);
+    fireEvent.click(opener);
+    expect(screen.getByRole("dialog", { name: "Browser setup" })).toBeTruthy();
+    await waitFor(() => expect(command.mock.calls.filter(([type]) => type === "agent.capabilities")).toHaveLength(2));
+  });
+
+  test.each(["Close", "Escape", "outside"] as const)("authoring browser setup %s cancels its pending work and ignores the old result after reopening", async (way) => {
+    const pending = deferred<CommandResults["browser.prepare"]>();
+    const command = fixture((type) => type === "browser.prepare" ? pending.promise : undefined);
+    render(<ConfiguredBrowserTools agent={agent} context={context} />);
+    const opener = screen.getByTestId("draft-browser");
+    opener.focus();
+    fireEvent.click(opener);
+    await supported();
+    fireEvent.click(screen.getByRole("button", { name: "Set up browser" }));
+    const operationId = command.mock.calls.find(([type]) => type === "browser.prepare")![1].operationId;
+    const close = within(screen.getByRole("dialog", { name: "Browser setup" })).getByRole("button", { name: "Close" });
+    expect(close.getAttribute("title")).toBe("Closing cancels browser setup");
+    close.focus();
+    if (way === "Close") fireEvent.click(close);
+    else if (way === "Escape") fireEvent.keyDown(close, { key: "Escape" });
+    else fireEvent.mouseDown(document.body);
+    expect(screen.queryByRole("dialog", { name: "Browser setup" })).toBeNull();
+    expect(document.activeElement).toBe(opener);
+    expect(command.mock.calls.filter(([type]) => type === "browser.cancel")).toEqual([["browser.cancel", { operationId }]]);
+    fireEvent.click(opener);
+    await supported();
+    await act(async () => pending.resolve({ status: "ready", checkedAt: 42 }));
+    expect(screen.queryByText("Browser ready")).toBeNull();
+    expect(screen.getByText("Browser not prepared")).toBeTruthy();
     expect(checkbox().checked).toBe(false);
     expect(command.mock.calls.some(([type]) => type === "config.edit")).toBe(false);
   });

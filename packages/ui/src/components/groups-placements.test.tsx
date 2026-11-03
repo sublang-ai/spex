@@ -665,6 +665,29 @@ function withLines(row: RepositoryState, over: Partial<PlacementState>): Reposit
 }
 
 describe("GROUPS: a placement's members (space-62, space-69, space-72)", () => {
+  test("Escape closes only the nearest invitation, members, or records panel and restores its opener", async () => {
+    await renderGroups(placedAtTwo({ second: { can: { manageMembers: true, transfer: false } } }), { open: false });
+    const line = lineOf(KEY, SECOND);
+    const records = screen.getByTestId("space-repository");
+    const membersOpener = within(line).getByTestId("space-line-members");
+    fireEvent.click(membersOpener);
+    const panel = await screen.findByTestId(`space-members-${KEY}@${SECOND}`);
+    const invite = within(panel).getByRole("button", { name: "Invite members…" });
+    fireEvent.click(invite);
+    fireEvent.keyDown(within(panel).getByLabelText("Usernames"), { key: "Escape" });
+    expect(within(panel).queryByLabelText("Usernames")).toBeNull();
+    expect(screen.getByTestId("space-repository")).toBe(records);
+    await waitFor(() => expect(document.activeElement).toBe(invite));
+    fireEvent.keyDown(invite, { key: "Escape" });
+    expect(screen.queryByTestId(`space-members-${KEY}@${SECOND}`)).toBeNull();
+    expect(screen.getByTestId("space-repository")).toBe(records);
+    await waitFor(() => expect(document.activeElement).toBe(membersOpener));
+    fireEvent.keyDown(membersOpener, { key: "Escape" });
+    expect(screen.queryByTestId("space-repository")).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId(`space-repo-${KEY}`)));
+    expect(calls("space.share")).toEqual([]);
+  });
+
   test("space-62: repeating a placement's Members opener preserves its invitation and focuses the open panel", async () => {
     await renderGroups(placedAtTwo({ second: { can: { manageMembers: true, transfer: false } } }), { open: false });
     const line = lineOf(KEY, SECOND);
@@ -724,6 +747,19 @@ describe("GROUPS: a placement's members (space-62, space-69, space-72)", () => {
     expect(replacing.disabled).toBe(true);
     const close = within(panel).getByRole("button", { name: "Close" }) as HTMLButtonElement;
     expect(close.disabled).toBe(true);
+    const records = screen.getByTestId("space-repository");
+    const recordsClose = screen.getByTestId("space-repository-close") as HTMLButtonElement;
+    const exploreTab = screen.getByRole("tab", { name: "Explore" }) as HTMLButtonElement;
+    const rowName = screen.getByTestId(`space-repo-${KEY}`) as HTMLButtonElement;
+    expect(recordsClose.disabled).toBe(true);
+    expect(exploreTab.disabled).toBe(true);
+    expect(rowName.disabled).toBe(true);
+    expect(entryOf(KEY, `space-row-explore-${KEY}`)?.disabled).toBe(true);
+    fireEvent.click(recordsClose);
+    fireEvent.click(exploreTab);
+    fireEvent.click(rowName);
+    fireEvent.keyDown(records, { key: "Escape" });
+    expect(screen.getByTestId("space-repository")).toBe(records);
     fireEvent.click(opener);
     fireEvent.click(replacing);
     fireEvent.click(close);
@@ -736,6 +772,9 @@ describe("GROUPS: a placement's members (space-62, space-69, space-72)", () => {
     await waitFor(() => expect(opener.disabled).toBe(false));
     expect(replacing.disabled).toBe(false);
     expect(close.disabled).toBe(false);
+    expect(recordsClose.disabled).toBe(false);
+    expect(exploreTab.disabled).toBe(false);
+    expect(rowName.disabled).toBe(false);
   });
 
   test.each(["en", "zh"] as const)(

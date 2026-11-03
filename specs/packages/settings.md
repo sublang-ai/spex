@@ -105,7 +105,7 @@ When an agent editor or conversation settings opens, the UI shall bind its brows
 - show a known empty media-output source set as a screenshot-return limitation alongside the control without disabling supported browser tools, while absent output facts remain unknown;
 - persist Browser only through the editor's ordinary explicit save, preserving false and conversation reset-to-configuration semantics [[media-9](media.md#media-9)];
 - keep preparation separate from enabling, relay progress and diagnostic detail, allow retry and cancellation, and cancel owned work on close or context change;
-- offer preparation for the authoring draft's selected configured agent without changing that agent's shared browser choice;
+- offer preparation for the authoring draft's selected configured agent without changing that agent's shared browser choice, in a popover with a visible Close; Close, Escape and outside click return focus to Browser and cancel owned preparation, its running Close explaining "Closing cancels browser setup" ([DR-210](../decisions/210-a-panel-carries-its-own-way-out.md));
 - leave unknown or unsupported capabilities disabled for new admission — a Browser the edit turns on or carries to another adapter — while a standing enabled choice can be cleared or kept as other values save, and preserve other editor values after failure.
 
 ### Model and Tuning Options
@@ -187,7 +187,7 @@ Where the Settings surface is open, in its full form and in its broken-config fo
 - its heading names the positions using its adapter — `captain`, and each session player with the `<playbook>.<role>` bindings it answers [[settings-26](#settings-26)] — naming the first and counting the rest, as using it, or not ready as needing it, a press opening the whole list beneath and the tooltip holding it; or it says no role uses it yet;
 - not ready, a card shows its configuration [[settings-63](#settings-63)] alone, without its model service, its model, its one-model control [[settings-59](#settings-59)] or its official-name list [[settings-61](#settings-61)];
 - ready, unconfirmed or unknown, its line names the `claude` card's model service by the base URL's state [[settings-14](#settings-14)] — "Anthropic official" for `unset`, "Third party <host>" for `third-party`, "Unrecognized" for `unknown`, nothing for `hidden` — beside the model its adapter's agents run in your own group's config: the one model by the display rule [[settings-38](#settings-38)], for Provider default the runtime's `defaultModel` [[settings-35](#settings-35)] or "Unavailable" where discovery failed or reported none, and "Several models" where they run different models — compared as they run, Provider default as the runtime's `defaultModel` and a catalog row's id or alias as its `resolvedModel`, so values naming one model read as that model; the model catalog is no readiness signal;
-- with a valid config that line carries "Change model", a link in the brand tone with an edit icon, opening beneath it the one-model control [[settings-59](#settings-59)];
+- with a valid config that line carries "Change model", a link in the brand tone with an edit icon, opening and focusing beneath it the one-model control [[settings-59](#settings-59)], repeated activation focusing its existing draft without closing or clearing it ([DR-210](../decisions/210-a-panel-carries-its-own-way-out.md));
 - a card not ready for a local credential of `claude` or `codex`, on this computer with the Workshop switch on [[settings-58](#settings-58)], offers the Workshop's setup guide [[settings-71](#settings-71)]; any other not-ready card offers a closed "How to configure" disclosure, holding the manual steps on this computer and, on a seat [[core-service-125](core-service.md#core-service-125)], a pointer to the Credentials section [[settings-48](#settings-48)] with no local step;
 - the manual steps follow the core's platform and the user's shell [[settings-14](#settings-14)]: on Windows, a user environment variable set with `setx` or the system settings; elsewhere, an `export` line in `~/.zshrc` for zsh, in `~/.bash_profile` for bash, and otherwise in the shell's login configuration file;
 - under "How to configure", the manual steps end "Quit Spex completely and open it again", the `codex` card's first saying it needs an official OpenAI key;
@@ -210,10 +210,11 @@ While the core has reported readiness, the Agents section shall state beneath it
 
 #### settings-59
 
-Where your own group's config is valid, the `claude` card and the `codex` card [[settings-5](#settings-5)] shall each offer one model for every agent on its adapter — "This changes the model of every Captain and player on <adapter> at once. To change only the Captain's or one player's, edit its settings above." as one line above "[model] [Apply]" — through the model field of [[settings-39](#settings-39)], Provider default and custom entry included, its targets the Captain where its adapter is the card's and each session player on that adapter [[settings-26](#settings-26)] ([DR-204](../decisions/204-workshop-agents-in-one-pass.md)):
+Where your own group's config is valid, the `claude` card and the `codex` card [[settings-5](#settings-5)] shall each offer one model for every agent on its adapter — "This changes the model of every Captain and player on <adapter> at once. To change only the Captain's or one player's, edit its settings above." as one line above "[model] [Apply] [Cancel]" — through the model field of [[settings-39](#settings-39)], Provider default and custom entry included, its targets the Captain where its adapter is the card's and each session player on that adapter [[settings-26](#settings-26)] ([DR-204](../decisions/204-workshop-agents-in-one-pass.md)):
 
 - a target takes the chosen model as its `model`, and Provider default as the removal of its `model` key;
 - a role binding's own model is no target.
+- Cancel, reading Close after a completed change, and the nearest Escape close the editor and return focus to Change model; Escape in its model list or confirmation dismisses only that child, a cancelled confirmation returning focus to Apply; a submitted batch [[settings-60](#settings-60)] disables changes, dismissal and the opener until its outcome ([DR-210](../decisions/210-a-panel-carries-its-own-way-out.md)).
 
 #### settings-60
 
@@ -522,6 +523,7 @@ When rendered editors exchange capability and browser preparation messages with 
 - a served-browser journey shall verify unknown support and stale-choice clearing through the real core, including the editor at 320-pixel and 1280-pixel widths;
 - served-browser and Electron host acceptance shall perform native credential-free browser preparation from the UI and save an explicit choice, keeping successful setup separate from that choice; source and packaged Electron hosts shall each start with an independently empty managed browser cache and no external Node on PATH.
 - acceptance waits observe the current control's terminal outcome: ready continues, failure or explicit cancellation stops promptly with the complete displayed diagnostic, and an absent terminal outcome remains bounded; initial idle state never passes or fails preparation.
+- the authoring browser popover's visible Close, Escape and outside click return opener focus; closing pending setup sends its cancellation, reopening ignores the former result, and none of these acts enables Browser or writes configuration [[settings-44](#settings-44)].
 
 ### Roster Coverage
 
@@ -611,6 +613,7 @@ Where the Settings surface renders a config whose Captain and two players run on
 - confirming sends one `config.batch` with the shown state's revision, a `captain.set` and a `player.set` per player whose patch sets `model`, or with Provider default removes it, and nothing for the `codex` player or the binding [[settings-59](#settings-59)] [[settings-60](#settings-60)];
 - the done notice lists the left role again, and a refused `conflict` says to retry, reads the config again, and the next confirmation lists a player the file gained and sends its revision [[settings-60](#settings-60)];
 - with the base URL `third-party` and a catalog reporting no `defaultModel`, Apply is disabled while Provider default is chosen, with its line and a Retry that rediscovers, and enabled for a specific model [[settings-60](#settings-60)].
+- repeat opening preserves the chosen model, Cancel and Escape close without a write and return opener focus, and Escape first dismisses an open model list or confirmation; a held batch keeps the editor visible with its opener and dismissal disabled, cannot duplicate, and its completed result offers Close [[settings-5](#settings-5)] [[settings-59](#settings-59)].
 
 #### settings-69
 

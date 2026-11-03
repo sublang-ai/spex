@@ -5,6 +5,7 @@
 // operable, carries per-project live state, and owns add/create.
 
 import { afterEach, describe, expect, test, vi } from "vitest";
+import { useState } from "react";
 import {
   cleanup,
   fireEvent,
@@ -125,6 +126,40 @@ describe("project palette keyboard contract (DR-011)", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  test.each([false, true])("visible Close dismisses the palette and restores its opener (local add: %s)", (addProjectOnly) => {
+    const onPick = vi.fn();
+    const onAddPath = vi.fn(async () => PROJECTS[0]);
+    const onCreatePath = vi.fn(async () => PROJECTS[1]);
+    function PaletteHarness() {
+      const [open, setOpen] = useState(false);
+      return <>
+        <button type="button" onClick={() => setOpen(true)}>Open project picker</button>
+        {open ? <ProjectPalette
+          projects={PROJECTS}
+          sessions={[]}
+          attention={new Map()}
+          addProjectOnly={addProjectOnly}
+          onPick={onPick}
+          onAddPath={onAddPath}
+          onCreatePath={onCreatePath}
+          onClose={() => setOpen(false)}
+        /> : null}
+      </>;
+    }
+    render(<PaletteHarness />);
+    const opener = screen.getByRole("button", { name: "Open project picker" });
+    opener.focus();
+    fireEvent.click(opener);
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    fireEvent.change(screen.getByTestId("palette-path"), { target: { value: "/tmp/unsaved-project" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Close$/ }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(opener);
+    expect(onPick).not.toHaveBeenCalled();
+    expect(onAddPath).not.toHaveBeenCalled();
+    expect(onCreatePath).not.toHaveBeenCalled();
+  });
+
   test("typing filters the rows", () => {
     renderPalette();
     fireEvent.change(screen.getByTestId("palette-search"), {
@@ -146,15 +181,15 @@ describe("project palette keyboard contract (DR-011)", () => {
     renderPalette();
     const dialog = screen.getByRole("dialog", { name: "Choose a project" });
     expect(dialog.getAttribute("aria-modal")).toBe("true");
-    const search = screen.getByTestId("palette-search");
+    const close = screen.getByTestId("palette-close");
     const last = screen.getByTestId("palette-academy");
     // Shift+Tab from the first control lands on the last, Tab from
     // the last lands on the first: focus never leaves the palette.
-    search.focus();
-    fireEvent.keyDown(search, { key: "Tab", shiftKey: true });
+    close.focus();
+    fireEvent.keyDown(close, { key: "Tab", shiftKey: true });
     expect(document.activeElement).toBe(last);
     fireEvent.keyDown(last, { key: "Tab" });
-    expect(document.activeElement).toBe(search);
+    expect(document.activeElement).toBe(close);
   });
 });
 
@@ -455,6 +490,9 @@ describe("projects-1, space-58: a folder added while signed in asks for its grou
     fireEvent.click(selected);
     fireEvent.click(submit);
     expect(submit.disabled).toBe(true);
+    const close = screen.getByRole("button", { name: /^Close$/ });
+    expect(close.hasAttribute("disabled")).toBe(true);
+    fireEvent.click(close);
     fireEvent.mouseDown(screen.getByTestId("project-palette"));
     fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
     fireEvent.keyDown(picker, { key: "Escape" });
@@ -465,6 +503,7 @@ describe("projects-1, space-58: a folder added while signed in asks for its grou
     await vi.waitFor(() => expect(within(picker).getByRole("alert").textContent).toBe("Could not reach Host"));
     expect(selected.checked).toBe(true);
     expect(submit.disabled).toBe(false);
+    expect(close.hasAttribute("disabled")).toBe(false);
     expect(onClose).not.toHaveBeenCalled();
     await vi.waitFor(() => expect(document.activeElement).toBe(submit));
     fireEvent.mouseDown(screen.getByTestId("project-palette"));

@@ -205,6 +205,34 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     expect(within(list).getAllByRole("listitem")).toHaveLength(2);
     expect(list.textContent).toContain("sessions/x.json");
     expect(screen.getByTestId("space-merge-note").textContent).toContain("Finish or abort the merge in your terminal");
+    fireEvent.click(screen.getByTestId("space-issues-close"));
+    expect(screen.queryByTestId("space-issues-list")).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(issues));
+    expect(issues.textContent).toBe("⚠Review (2)");
+    fireEvent.click(issues);
+    fireEvent.keyDown(screen.getByTestId("space-issues-close"), { key: "Escape" });
+    expect(screen.queryByTestId("space-issues-list")).toBeNull();
+    expect(calls("space.notice.dismiss")).toHaveLength(0);
+  });
+
+  test("closing blocking review preserves its warning and a new blocker reopens it", async () => {
+    const diagnostic = { file: "/records/home.yaml", reason: "could not read saved data", blocking: true };
+    const initial = repoState({}, { diagnostics: [diagnostic] });
+    await renderGroups(initial, { open: false });
+    expect(screen.getByTestId("space-issues-heading").textContent).toBe("Needs attention");
+    fireEvent.click(screen.getByTestId("space-issues-close"));
+    expect(screen.queryByTestId("space-issues-list")).toBeNull();
+    const review = screen.getByTestId("space-issues");
+    await waitFor(() => expect(document.activeElement).toBe(review));
+    expect(review.textContent).toBe("⚠Review (1)");
+    expect(review.getAttribute("aria-expanded")).toBe("false");
+    deliver({ ...initial, diagnostics: [{ ...diagnostic }] });
+    expect(screen.queryByTestId("space-issues-list")).toBeNull();
+    deliver(repoState({}, { diagnostics: [diagnostic, { ...diagnostic, file: "/records/new.yaml" }] }));
+    expect(screen.getByTestId("space-issues-heading").textContent).toBe("Needs attention");
+    expect(review.textContent).toBe("⚠Review (2)");
+    expect(calls("space.notice.dismiss")).toHaveLength(0);
+    expect(calls("space.repair.decline")).toHaveLength(0);
   });
 
   test.each(["en", "zh"] as const)("storage diagnostics in %s explain the next step by code and disclose technical details only on request", async (language) => {
@@ -428,11 +456,17 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     expect(calls("project.rebind")).toHaveLength(1);
     expect(field.disabled).toBe(true);
     expect((within(row).getByRole("button", { name: "Cancel" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTestId("space-issues-close") as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTestId("space-issues") as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByTestId("space-issues-close"));
+    fireEvent.keyDown(screen.getByTestId("space-issues-list"), { key: "Escape" });
+    expect(screen.getByTestId("space-repair-path")).toBe(field);
     await act(async () => reject(new Error("/code/parent is not the main folder of a Git project. Choose an existing project folder.")));
     const error = within(row).getByRole("alert");
     expect(field.value).toBe("/code/parent");
     expect(field.getAttribute("aria-invalid")).toBe("true");
     expect(field.getAttribute("aria-describedby")).toContain(error.id);
+    expect((screen.getByTestId("space-issues-close") as HTMLButtonElement).disabled).toBe(false);
     fireEvent.change(field, { target: { value: "/code/parent/infra" } });
     expect(field.getAttribute("aria-invalid")).toBeNull();
     fireEvent.click(within(row).getByRole("button", { name: "Use this folder" }));
@@ -539,6 +573,12 @@ describe("SPACE: what needs fixing (space-1, space-46..space-56)", () => {
     expect(within(row).getByRole("alert").textContent).toBe("Choose an existing project folder");
     fireEvent.keyDown(path, { key: "Escape" });
     expect(within(row).queryByTestId("space-repair-submit")).toBeNull();
+    expect(screen.getByTestId("space-issues-list")).toBeTruthy();
+    fireEvent.click(within(row).getByRole("button", { name: "Locate folder…" }));
+    fireEvent.keyDown(within(row).getByRole("button", { name: "Cancel" }), { key: "Escape" });
+    expect(within(row).queryByTestId("space-repair-submit")).toBeNull();
+    expect(screen.getByTestId("space-issues-list")).toBeTruthy();
+    expect(document.activeElement).toBe(within(row).getByRole("button", { name: "Locate folder…" }));
     expect(calls("project.rebind")).toHaveLength(0);
   });
 

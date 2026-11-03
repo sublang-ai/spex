@@ -1134,6 +1134,81 @@ test.describe("organizing", () => {
     await expect(members.getByTestId(`space-member-${HOST_LOGIN}`)).toContainText("Owner");
     await expect(members.getByTestId(`space-member-${MEMBER.login}`)).toHaveCount(0);
 
+    // A read view carries its own way out (space-126): the trailing
+    // Members Close stays reachable while the title and invitation
+    // wrap at the floor, in both languages and themes. The records
+    // header also closes back to whichever row control opened it.
+    const membersClose = members.getByTestId(`space-members-close-${PANEL}`);
+    const groupMore = platform.getByTestId("space-group-more-platform");
+    const projectName = platform.getByTestId(`space-repo-${picked}`);
+    const projectMore = platform.getByTestId(`space-row-more-${picked}`);
+    const records = page.getByTestId("space-repository");
+    const recordsClose = records.getByTestId("space-repository-close");
+    await membersClose.click();
+    await expect(groupMore).toBeFocused();
+    await setRail(page, false);
+    await page.setViewportSize({ width: 320, height: TALL });
+    for (const language of ["en", "zh"] as const) {
+      await surfaceEntry(page, "Settings").click();
+      await page.getByTestId("language-select").selectOption(language);
+      await expect(page.locator("html")).toHaveAttribute("lang", language);
+      await surfaceEntry(page, "Space").click();
+      for (const theme of ["light", "dark"] as const) {
+        await page.emulateMedia({ colorScheme: theme });
+        await groupAct(page, "platform", "members");
+        await expect(membersClose).toHaveText(language === "en" ? "Close" : "关闭");
+        await membersClose.scrollIntoViewIfNeeded();
+        await expect(membersClose).toBeInViewport();
+        const closePlacement = await membersClose.evaluate((control) => {
+          const header = control.closest("header")!.getBoundingClientRect();
+          const button = control.getBoundingClientRect();
+          return {
+            topGap: button.top - header.top,
+            trailingGap: header.right - button.right,
+            left: button.left,
+            right: button.right,
+            width: button.width,
+            height: button.height,
+            viewportWidth: document.documentElement.clientWidth,
+          };
+        });
+        expect(Math.abs(closePlacement.topGap), `${language}/${theme}: Close starts at the header's top`).toBeLessThanOrEqual(1);
+        expect(Math.abs(closePlacement.trailingGap), `${language}/${theme}: Close keeps the trailing header position`).toBeLessThanOrEqual(1);
+        expect(closePlacement.left).toBeGreaterThanOrEqual(0);
+        expect(closePlacement.right).toBeLessThanOrEqual(closePlacement.viewportWidth);
+        expect(closePlacement.width).toBeGreaterThanOrEqual(24);
+        expect(closePlacement.height).toBeGreaterThanOrEqual(24);
+        await members.screenshot({ path: testInfo.outputPath(`members-close-${language}-${theme}-320.png`) });
+        await membersClose.click();
+        await expect(members).toBeHidden();
+        await expect(groupMore).toBeFocused();
+        await groupAct(page, "platform", "members");
+        await membersClose.focus();
+        await membersClose.press("Escape");
+        await expect(members).toBeHidden();
+        await expect(groupMore).toBeFocused();
+
+        await projectName.click();
+        await expect(records.getByRole("tab", { selected: true })).toHaveAttribute("id", "space-tab-sync");
+        await expect(recordsClose).toHaveText(language === "en" ? "Close" : "关闭");
+        await recordsClose.click();
+        await expect(records).toHaveCount(0);
+        await expect(projectName).toBeFocused();
+        await rowAct(page, picked, "explore");
+        await expect(records.getByRole("tab", { selected: true })).toHaveAttribute("id", "space-tab-explore");
+        await recordsClose.click();
+        await expect(records).toHaveCount(0);
+        await expect(projectMore).toBeFocused();
+      }
+    }
+    await surfaceEntry(page, "Settings").click();
+    await page.getByTestId("language-select").selectOption("en");
+    await expect(page.locator("html")).toHaveAttribute("lang", "en");
+    await surfaceEntry(page, "Space").click();
+    await page.emulateMedia({ colorScheme: "light" });
+    await setRail(page, true);
+    await groupAct(page, "platform", "members");
+
     // The invitation explains the target, Space usernames and one role
     // for everyone. Enter stages a chip, without changing membership.
     // (space-69, space-62).

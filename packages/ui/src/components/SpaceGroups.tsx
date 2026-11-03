@@ -298,6 +298,7 @@ export function GroupsList({
   groups,
   now,
   selected,
+  selectionDisabled = false,
   connected,
   refreshes,
   dismissed,
@@ -312,6 +313,7 @@ export function GroupsList({
   groups: GroupsState;
   now: number;
   selected?: string;
+  selectionDisabled?: boolean;
   connected: boolean;
   /** How many times the reader's own Refresh has re-read the state. */
   refreshes: number;
@@ -324,9 +326,9 @@ export function GroupsList({
   /** Open this place's Credentials section at a code host (space-103,
    * settings-48). */
   onAddCredential?: (host: string) => void;
-  onSelect(key: string, reveal?: boolean): void;
+  onSelect(key: string, reveal?: boolean, opener?: HTMLElement): void;
   /** Open a row's Explore tab (space-1). */
-  onExplore(key: string): void;
+  onExplore(key: string, opener?: HTMLElement): void;
   /** Show a project on the Projects surface at a place, this one where
    * none is named (space-111). */
   onOpenProject(projectId: string, place?: string): void;
@@ -340,6 +342,7 @@ export function GroupsList({
     groups,
     now,
     selected,
+    selectionDisabled,
     connected,
     refreshes,
     dismissed,
@@ -565,14 +568,15 @@ interface Shared {
   groups: GroupsState;
   now: number;
   selected?: string;
+  selectionDisabled?: boolean;
   connected: boolean;
   refreshes: number;
   dismissed: Readonly<Record<string, string>>;
   servers?: ServerListing;
   holdings: Holdings;
   onAddCredential?: (host: string) => void;
-  onSelect(key: string, reveal?: boolean): void;
-  onExplore(key: string): void;
+  onSelect(key: string, reveal?: boolean, opener?: HTMLElement): void;
+  onExplore(key: string, opener?: HTMLElement): void;
   onOpenProject(projectId: string, place?: string): void;
   onNote: Note;
   lifecycle?: GroupLifecycle;
@@ -1009,6 +1013,7 @@ function RepositoryRow({
   repo,
   now,
   selected,
+  selectionDisabled,
   connected,
   refreshes,
   dismissed: dismissedByKey,
@@ -1541,7 +1546,8 @@ function RepositoryRow({
     more.push({
       label: i18n._({ id: "Explore records", comment: "open a project's records as an annotated tree, beneath the list" }),
       testId: `space-row-explore-${repo.key}`,
-      onSelect: () => onExplore(repo.key),
+      disabled: selectionDisabled,
+      onSelect: () => onExplore(repo.key, moreRef.current ?? undefined),
     });
   }
   if (pickInMore) {
@@ -1637,9 +1643,10 @@ function RepositoryRow({
             aria-describedby={describedBy || undefined}
             aria-expanded={isSelected}
             aria-controls={isSelected ? "space-repository" : undefined}
-            onClick={() => onSelect(repo.key)}
+            disabled={selectionDisabled}
+            onClick={(event) => onSelect(repo.key, undefined, event.currentTarget)}
             title={name}
-            className={`block w-full min-w-12 truncate rounded text-left font-medium hover:underline ${
+            className={`block w-full min-w-12 truncate rounded text-left font-medium hover:underline disabled:cursor-not-allowed disabled:opacity-50 ${
               isSelected ? "text-brand-800 dark:text-brand-200" : ""
             }`}
           >
@@ -1662,11 +1669,12 @@ function RepositoryRow({
               data-tone={phrase.tone}
               // Records stay in the metadata line below the project name;
               // the full phrase remains in its title when space is tight.
-              className={`min-h-6 min-w-0 max-w-full shrink truncate rounded text-left text-xs hover:underline @md:max-w-[45%] ${TONES[phrase.tone]}`}
+              className={`min-h-6 min-w-0 max-w-full shrink truncate rounded text-left text-xs hover:underline disabled:cursor-not-allowed disabled:opacity-50 @md:max-w-[45%] ${TONES[phrase.tone]}`}
               title={phrase.title || undefined}
               aria-expanded={isSelected}
               aria-controls={isSelected ? "space-repository" : undefined}
-              onClick={() => onSelect(repo.key, true)}
+              disabled={selectionDisabled}
+              onClick={(event) => onSelect(repo.key, true, event.currentTarget)}
             >
               {phrase.text}
             </button> : <span id={describe("state")} data-testid={`space-repo-state-${repo.key}`} data-tone={phrase.tone} />}
