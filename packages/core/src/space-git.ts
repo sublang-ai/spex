@@ -650,6 +650,10 @@ export class SpaceGit {
         if (killed) finish();
       });
       child.on("close", finish);
+      // A child exiting before it read all its input breaks the pipe;
+      // its exit status and stderr carry the failure, so the write's
+      // own error must not escape as an unhandled event.
+      child.stdin?.on("error", () => {});
       if (options.input !== undefined) child.stdin?.end(options.input);
     });
   }
