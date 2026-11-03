@@ -98,16 +98,12 @@ export function BrowserControl({
         {supported ? (
           <>
             <p className={preparation.status === "failed" ? "text-red-600 dark:text-red-400" : "text-neutral-500 dark:text-neutral-400"}>{status}</p>
-            {summary ? <p data-testid={!expandedDetail ? "browser-diagnostic" : undefined} className="mt-0.5 text-neutral-600 dark:text-neutral-300">{summary}</p> : null}
+            {summary ? <p data-testid={!expandedDetail ? "browser-diagnostic" : undefined} className={`mt-0.5 text-neutral-600 dark:text-neutral-300 ${expandedDetail ? "line-clamp-2" : ""}`}>{summary}</p> : null}
           </>
         ) : (
           <p className="text-neutral-500 dark:text-neutral-400">{unsupportedReason ?? i18n._("This agent does not support browser tools")}</p>
         )}
       </div>
-      {supported && expandedDetail ? <details className="min-w-0 text-xs">
-        <summary className="cursor-pointer py-1">{i18n._("More details")}</summary>
-        <pre data-testid="browser-diagnostic" className="max-h-40 overflow-auto whitespace-pre-wrap rounded bg-neutral-100 p-2 [overflow-wrap:anywhere] dark:bg-neutral-900">{detail}</pre>
-      </details> : null}
       <div className="flex flex-wrap gap-1.5">
         {supported && preparation.status !== "preparing" ? (
           <button type="button" disabled={disabled} onClick={onPrepare} className={ACTION_CLASS}>
@@ -120,6 +116,10 @@ export function BrowserControl({
           <button type="button" disabled={disabled} onClick={onReset} className={ACTION_CLASS}>{i18n._("Use browser setting from Settings")}</button>
         ) : null}
       </div>
+      {supported && expandedDetail ? <details className="min-w-0 text-xs">
+        <summary className="cursor-pointer py-1">{i18n._("More details")}</summary>
+        <pre data-testid="browser-diagnostic" className="max-h-40 overflow-auto whitespace-pre-wrap rounded bg-neutral-100 p-2 [overflow-wrap:anywhere] dark:bg-neutral-900">{detail}</pre>
+      </details> : null}
     </div>
   );
 }

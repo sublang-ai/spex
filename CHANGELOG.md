@@ -15,6 +15,10 @@ source; run source with `npm ci` and `npm start` (desktop) or
 
 ## [Unreleased]
 
+### Fixed
+
+- Browser setup keeps Retry visible when long diagnostics expand, and narrow spec outlines leave room for their package identifiers beside item counts.
+
 ### Changed
 
 - App and CLI release versions now come from their tags; CI prepares matching workspace/lock metadata, generates notes when no exact-version section exists, and verifies the final artifacts without a version-only PR ([DR-220](specs/decisions/220-tags-own-release-versions.md)).
