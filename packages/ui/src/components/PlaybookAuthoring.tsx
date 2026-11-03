@@ -29,6 +29,7 @@ import { useClock } from "../lib/useClock.js";
 import { DraftStateChip } from "./AuthoringWorkspace.js";
 import { InlineConfirm } from "./InlineConfirm.js";
 import { withCode } from "./PlaybookCard.js";
+import { useRegistrySignIn } from "./RegistryAccount.js";
 
 const PRIMARY =
   "min-h-6 rounded-md border border-brand-300 px-2.5 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50 disabled:opacity-40 dark:border-brand-800 dark:text-brand-300 dark:hover:bg-brand-950";
@@ -202,8 +203,8 @@ function DraftRow({
 
 /** New playbook's Org and License for one environment
  * (playbook-library-51, playbook-library-103, playbook-library-121):
- * filled with that environment's defaults as the core reads them, then
- * the person's; and the orgs the registry account there may publish to.
+ * Org comes only from that registry account's authorized namespaces,
+ * License from the core's defaults, then the person's own edits.
  * A change of environment clears both and forgets what the person typed;
  * defaults read again on a reconnect or registry/account change fill
  * only a field the person has not edited since. */
@@ -212,17 +213,31 @@ export function useNewPackageFields(repository: string | undefined) {
   const connection = store((state) => state.connection);
   const loadDraftDefaults = store((state) => state.loadDraftDefaults);
   const loadEnvironment = store((state) => state.loadEnvironment);
-  const registryAccounts = store((current) => current.registryAccounts);
   const environments = store((current) => current.environments);
   const connected = connection === "open";
-  const [org, setOrg] = useState("");
+  const [enteredOrg, setEnteredOrg] = useState<string>();
   const [license, setLicense] = useState("");
-  const [orgs, setOrgs] = useState<{ name: string; path: string; provider?: string }[]>([]);
-  const [orgsStatus, setOrgsStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
-  const [orgsError, setOrgsError] = useState<string>();
+  const [orgsReply, setOrgsReply] = useState<{
+    scope: string;
+    orgs: { name: string; path: string; provider?: string }[];
+    status: "idle" | "loading" | "ready" | "error";
+    error?: string;
+  }>();
   const [orgsAttempt, setOrgsAttempt] = useState(0);
   const registryOrigin = repository ? environments[repository]?.registry?.origin : undefined;
-  const registryAccount = registryOrigin ? registryAccounts?.[registryOrigin]?.account?.id : undefined;
+  // Authoring can open before Packages has read the selected registry's
+  // account. A Space's account establishes no publishing identity.
+  const registry = useRegistrySignIn(registryOrigin, { read: true });
+  const registryAccount = registry.state?.account
+    ? JSON.stringify([registry.state.account.id, registry.state.account.login])
+    : undefined;
+  const orgsScope = JSON.stringify([repository, connected, registryOrigin, registryAccount, orgsAttempt]);
+  // A former account's successful answer is unusable in the very render
+  // that changes scope, before the next request's effect starts.
+  const currentOrgs = orgsReply?.scope === orgsScope ? orgsReply : undefined;
+  const orgs = currentOrgs?.orgs ?? [];
+  const orgsStatus = currentOrgs?.status ?? "idle";
+  const orgsError = currentOrgs?.error;
 
   // The environment names the registry its orgs are read at.
   useEffect(() => {
@@ -231,25 +246,26 @@ export function useNewPackageFields(repository: string | undefined) {
 
   useEffect(() => {
     let active = true;
-    setOrgs([]);
-    setOrgsError(undefined);
-    setOrgsStatus("idle");
+    setOrgsReply({ scope: orgsScope, orgs: [], status: "idle" });
     if (connected && repository && registryOrigin && registryAccount) void (async () => {
-      setOrgsStatus("loading");
+      setOrgsReply({ scope: orgsScope, orgs: [], status: "loading" });
       try {
         const reply = await store.getClient().command("registry.orgs", { repository }, { timeoutMs: 35_000 });
-        if (active) { setOrgs(reply.orgs); setOrgsStatus("ready"); }
+        if (active) {
+          const sorted = [...reply.orgs].sort((left, right) => left.name < right.name ? -1 : left.name > right.name ? 1 : 0);
+          setOrgsReply({ scope: orgsScope, orgs: sorted, status: "ready" });
+        }
       } catch (cause) {
-        if (active) { setOrgsError(cause instanceof Error ? cause.message : i18n._({ id: "Your orgs could not be read", comment: "the registry did not answer which orgs the account may publish to" })); setOrgsStatus("error"); }
+        if (active) setOrgsReply({ scope: orgsScope, orgs: [], status: "error", error: cause instanceof Error ? cause.message : i18n._({ id: "Your orgs could not be read", comment: "the registry did not answer which orgs the account may publish to" }) });
       }
     })();
     return () => { active = false; };
-  }, [connected, repository, registryOrigin, registryAccount, orgsAttempt, store]);
+  }, [connected, repository, registryOrigin, registryAccount, orgsScope, store]);
 
-  const touched = useRef({ org: false, license: false });
+  const touched = useRef({ license: false });
   useEffect(() => {
-    touched.current = { org: false, license: false };
-    setOrg("");
+    touched.current = { license: false };
+    setEnteredOrg(undefined);
     setLicense("");
   }, [repository]);
   useEffect(() => {
@@ -258,7 +274,8 @@ export function useNewPackageFields(repository: string | undefined) {
     void loadDraftDefaults(repository)
       .then((defaults) => {
         if (!current || !defaults) return;
-        if (!touched.current.org) setOrg(defaults.org);
+        // Older cores may suggest a Space group here. Only the scoped
+        // registry.orgs answer above can supply an automatic Org.
         if (!touched.current.license) setLicense(defaults.license ?? "");
       })
       .catch(() => {
@@ -269,13 +286,13 @@ export function useNewPackageFields(repository: string | undefined) {
     };
   }, [connected, repository, registryOrigin, registryAccount, loadDraftDefaults]);
   const editOrg = useCallback((value: string) => {
-    touched.current.org = true;
-    setOrg(value);
+    setEnteredOrg(value);
   }, []);
   const editLicense = useCallback((value: string) => {
     touched.current.license = true;
     setLicense(value);
   }, []);
+  const org = enteredOrg !== undefined ? enteredOrg : orgsStatus === "ready" ? orgs[0]?.name ?? "" : "";
   const fields = { org: org.trim(), license: license.trim() };
   return {
     org,

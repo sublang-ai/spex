@@ -607,6 +607,7 @@ async function assertSurfaceMatrix(
       name: "Playbook draft",
       show: async () => {
         await projectTab(page, "Playbooks");
+        await page.getByTestId("new-playbook-org").fill("acme");
         const idField = page.getByTestId("new-playbook-id");
         // The project's defaults fill Org and License (playbook-library-51).
         await expect(page.getByTestId("new-playbook-license")).toHaveValue("Apache-2.0");

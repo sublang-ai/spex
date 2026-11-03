@@ -124,7 +124,7 @@ export const add: Command = async (args) => {
     const target = env.registryOf(read?.requests ?? null);
     let versions;
     try {
-      versions = (await env.registryAt(target.origin, target.scope).index(name)).versions;
+      versions = (await env.registryAt(target.origin).index(name)).versions;
     } catch (error) {
       throw await env.registryRefusal(error, { origin: target.origin, scope: target.scope });
     }

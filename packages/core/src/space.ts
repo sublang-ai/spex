@@ -159,9 +159,8 @@ export interface SpaceHost {
    * before this returns. */
   environmentPaired?: (key: string) => void;
   /** A pick placed a local-only project's clone at an instance
-   * (storage-35), moved or not: the built-in spec package its pairing
-   * locked at the default instance's registry is locked at that
-   * instance's (environments-11, DR-127), written before this returns. */
+   * (storage-35), moved or not: update its collaboration binding while
+   * preserving package registry selection and locked sources. */
   environmentPlaced?: (key: string) => void;
   /** Throws where an Apply or a repair may not replace authoring session
    * `id` of clone `key` now — its turn runs in this core (space-19):
@@ -4795,25 +4794,10 @@ export class SpaceManager {
     return instance && !this.signedInAt(instance) ? signInTo(this.nameOf(instance)) : pickAGroupFirst();
   }
 
-  /** The access secret a client of an instance outside the core presents
-   * there — the registry (environments-12) — kept current by that
-   * instance's own client (git-host-4); null where this device holds no
-   * app token for it, or it refused the refresh. */
+  /** The Space grant's access secret, kept current by that Space's own
+   * client (git-host-4); never used for package registry operations. */
   accessSecretFor(origin: string): Promise<string | null> {
     return this.instanceAt(origin).client.accessSecret();
-  }
-
-  /** The registry of a listed instance refused the access secret a call
-   * presented there with a code that signs the device out
-   * (environments-12): that instance alone is signed out where the pair
-   * that presented it is still the stored one, its client saying so as
-   * a refusal of a host call does (git-host-4); where another pair
-   * replaced it meanwhile, nothing is signed out and `CredentialChanged`
-   * is thrown, the call refused as changed meanwhile. An origin the home
-   * does not list holds no pair, and nothing is done. */
-  async registryRefused(origin: string, access: string): Promise<void> {
-    if (this.host.store.home.instance(origin) === undefined) return;
-    if (!(await this.instanceAt(origin).client.signOutRefused(access))) throw new CredentialChanged();
   }
 
   /** The origins of every instance the home lists, in its order, then of
@@ -6598,8 +6582,8 @@ export class SpaceManager {
    * placement with an instance, as a pick's join does (adopt): its first
    * placement, ending every creation it waited for, and a clone under
    * your own group's folder moving under that instance's folder at the
-   * repository's path there, its built-in spec package's lock taking
-   * that instance's registry (storage-35, environments-11). Written only
+   * repository's path there, its package sources unchanged
+   * (storage-35, environments-11). Written only
    * while the clone's remotes still read `expected`, else refused
    * `conflict` (space-21).
    */

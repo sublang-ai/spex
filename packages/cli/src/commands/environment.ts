@@ -43,8 +43,8 @@ import {
   type Requests,
 } from "../lib/environment/index.js";
 import { readVersioned, type FileVersion } from "../lib/files.js";
-import type { AuthScope, GitHostClient } from "../lib/git-host.js";
-import { accountAt, instanceAt, updateHomeFile, withSignOut, type HomeFile, type HomeInstance } from "../lib/home-file.js";
+import { CredentialChanged, type AuthScope, type GitHostClient } from "../lib/git-host.js";
+import { accountAt, instanceAt, type HomeFile, type HomeInstance } from "../lib/home-file.js";
 import { canonicalOrigin } from "../lib/instance.js";
 import { clientOf, credentialsOf, defaultInstance, homeDir, hostCause, nameOf, readHome, registryName } from "./home.js";
 import { Refusal } from "./run.js";
@@ -233,12 +233,11 @@ export class Environment {
    * purpose there; undefined where it holds one whose login cannot be
    * read now. A Space's login is its home entry's; a registry's is read
    * from its account API. */
-  async loginAt(origin: string, scope: AuthScope): Promise<string | null | undefined> {
-    if (scope === "space") return this.home ? accountAt(this.home, origin)?.login ?? null : null;
-    const credentials = credentialsOf(this.homeDir, origin, scope);
+  async loginAt(origin: string): Promise<string | null | undefined> {
+    const credentials = credentialsOf(this.homeDir, origin, "registry");
     try { if (!(await credentials.read())) return null; } catch { return undefined; }
     try {
-      return (await clientOf(origin, credentials, undefined, scope).me()).login;
+      return (await clientOf(origin, credentials, undefined, "registry").me()).login;
     } catch {
       try { return (await credentials.read()) ? undefined : null; } catch { return undefined; }
     }
@@ -258,16 +257,15 @@ export class Environment {
     try { if (error.registry !== undefined) origin = canonicalOrigin(error.registry); } catch { /* the registry asked */ }
     const name = await this.registryName(origin);
     const pkg = error.packageName;
-    // `spex login` here signs in at this folder's registry for packages
-    // (cli-10); another registry, or a Space's sign-in — what a
-    // `spex.yaml` naming no `registry` reads with (environments-38) — is
-    // named.
-    const login = context.scope === "space" ? `spex login --space ${origin}` : origin === context.origin ? "spex login" : `spex login --registry ${origin}`;
+    // `spex login` selects this folder's package registry (cli-10).
+    // An exact locked source at another registry names that target.
+    const login = origin === context.origin ? "spex login" : `spex login --registry ${origin}`;
     const about = pkg ? `${pkg}: ` : "";
+    if (error.cause instanceof CredentialChanged) return new Refusal(`your sign-in at ${name} changed meanwhile — retry`);
     switch (error.kind) {
       case "not_found": {
         if (error.code === "suppressed") return new Refusal(`${about}withdrawn at ${name} — spex update picks another version`);
-        const who = await this.loginAt(origin, context.scope);
+        const who = await this.loginAt(origin);
         if (who === null) return new Refusal(`${about}not at ${name}, or private — ${login}, then retry`);
         return new Refusal(`${about}not at ${name}, or not shared with ${who === undefined ? "this account" : `@${who}`} — check the name, or ask its owner`);
       }
@@ -276,7 +274,7 @@ export class Environment {
           const org = pkg?.split("/")[0] ?? "this org";
           return new Refusal(`${org} is not yours at ${name} — claim it at ${origin}/account/orgs?scope=registry`);
         }
-        const who = await this.loginAt(origin, context.scope);
+        const who = await this.loginAt(origin);
         return new Refusal(`${about}not shared with ${typeof who === "string" ? `@${who}` : "this account"} at ${name} — ask its owner`);
       }
       case "unauthenticated":
@@ -322,34 +320,28 @@ export class Environment {
     return (this.home?.instances ?? []).filter((entry) => this.signedInAt(entry.origin)).map((entry) => entry.origin);
   }
 
-  /** The app token a registry call presents at an instance
-   * (environments-12): its access secret, kept current by its client,
-   * where the device is signed in there; none otherwise. */
-  async tokenAt(origin: string, scope: AuthScope = "space"): Promise<string | null> {
-    if (scope === "space" ? !this.signedInAt(origin) : !(await credentialsOf(this.homeDir, origin, scope).read())) return null;
+  /** The package registry's access secret, kept current by its scoped
+   * client (environments-12), independent of any Space sign-in. */
+  async tokenAt(origin: string): Promise<string | null> {
+    if (!(await credentialsOf(this.homeDir, origin, "registry").read())) return null;
     try {
-      return await this.clientAt(origin, scope).accessSecret();
+      return await this.clientAt(origin).accessSecret();
     } catch (error) {
       throw new Error(hostCause(error, await this.registryName(origin)));
     }
   }
 
-  /** An instance's client, one per command: a refresh the instance
-   * refuses removes its token and marks it signed out in `home.yaml` in
-   * one step, as the app's sign-out does (git-host-4). */
-  private clientAt(origin: string, scope: AuthScope = "space"): GitHostClient {
+  /** One registry-purpose client per origin. A refused refresh affects
+   * only its registry slot and never the Space's home entry. */
+  private clientAt(origin: string): GitHostClient {
     const at = canonicalOrigin(origin);
-    const key = `${scope}:${at}`;
+    const key = at;
     let client = this.clients.get(key);
     if (!client) {
-      client = clientOf(at, credentialsOf(this.homeDir, at, scope), scope === "space" ? () => this.markSignedOut(at) : undefined, scope);
+      client = clientOf(at, credentialsOf(this.homeDir, at, "registry"), undefined, "registry");
       this.clients.set(key, client);
     }
     return client;
-  }
-
-  private markSignedOut(origin: string): void {
-    try { updateHomeFile(this.homeDir, (current) => withSignOut(current, origin)); } catch { /* the token is gone; whoami may still list it */ }
   }
 
   /** The built-in spec package as this device's seed holds it
@@ -361,22 +353,18 @@ export class Environment {
     return this.builtin;
   }
 
-  /** The registry answering under an instance's origin, presenting its
-   * app token where the device is signed in there; a refusal that signs
-   * the device out there marks it signed out in `home.yaml`
-   * (environments-12, git-host-4). The built-in spec package is answered
-   * from this device's seed first, as the app answers it. */
-  private registry(origin: string, scope: AuthScope): { remote: RegistryClient; source: RegistrySource } {
+  /** One package registry and its independent grant, composed with the
+   * device's built-in seed (environments-12). */
+  private registry(origin: string): { remote: RegistryClient; source: RegistrySource } {
     const at = canonicalOrigin(origin);
-    const key = `${scope}:${at}`;
+    const key = at;
     let registry = this.registries.get(key);
     if (!registry) {
       const remote = new RegistryClient({
         url: at,
-        token: () => this.tokenAt(at, scope),
+        token: () => this.tokenAt(at),
         refused: async (token) => {
-          if (!(await this.clientAt(at, scope).signOutRefused(token))) throw new Error(`your sign-in at ${await this.registryName(at)} changed meanwhile — retry`);
-          if (scope === "space") this.markSignedOut(at);
+          if (!(await this.clientAt(at).signOutRefused(token))) throw new CredentialChanged();
         },
       });
       registry = { remote, source: compositeRegistry(this.seed(), remote) };
@@ -385,19 +373,19 @@ export class Environment {
     return registry;
   }
 
-  registryAt(origin: string, scope: AuthScope = "space"): RegistrySource {
-    return this.registry(origin, scope).source;
+  registryAt(origin: string): RegistrySource {
+    return this.registry(origin).source;
   }
 
-  registryClientAt(origin: string, scope: AuthScope = "registry"): RegistryClient {
-    return this.registry(origin, scope).remote;
+  registryClientAt(origin: string): RegistryClient {
+    return this.registry(origin).remote;
   }
 
   /** The registries an install asks for a registry package's files, in
    * the library's order (environments-7). */
-  installRegistries(instance: string, source: RegistrySourceLock, scope: AuthScope = "space"): RegistrySource[] {
-    return installRegistryOrder(instance, source.registry, this.signedIn(), { independent: scope === "registry" })
-      .map((entry) => ("origin" in entry ? this.registryAt(entry.origin, scope) : compositeRegistry(this.seed(), unaskedRegistry(entry.unasked))));
+  installRegistries(instance: string, source: RegistrySourceLock): RegistrySource[] {
+    return installRegistryOrder(instance, source.registry, [])
+      .map((entry) => ("origin" in entry ? this.registryAt(entry.origin) : compositeRegistry(this.seed(), unaskedRegistry(entry.unasked))));
   }
 }
 

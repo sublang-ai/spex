@@ -118,5 +118,8 @@ A Space group shares records and grants team-server access. Publishing
 uses a namespace authorized by your registry account, whether personal
 or an organization. At Spex Space, check
 [Your orgs](https://spex.sublang.ai/account/orgs?scope=registry) for those
-names. Creating a group here grants no publishing namespace there. See
+names. Creating or signing in to a Space group supplies no package
+account, Org suggestion or publishing namespace. Package operations use
+`registry` from `spex.yaml`, or the public registry when that field is
+absent; `space` selects collaboration separately. See
 [Publish specs, skills, and playbooks](getting-started.md#publish-specs-skills-and-playbooks).

@@ -396,16 +396,6 @@ msgstr "{name} 已在本机，与 {project} 同步"
 msgid "{name} is private — Sign in to {registry}"
 msgstr "{name} 是私有的 — 请登录 {registry}"
 
-#. A package the registry keeps private, asked while this computer is signed out of the Space whose sign-in a spex.yaml naming no registry reads with; {registry} is the registry's display name. Space is the rail's surface holding the sign-in
-#: src/environments.ts
-msgid "{name} is private at {registry} — Sign in on Space, then Retry"
-msgstr "{name} 在 {registry} 上是私有的 — 请在 Space 中登录，然后重试"
-
-#. A package the registry does not show while this computer is signed out of the Space whose sign-in a spex.yaml naming no registry reads with, either private or never published; {registry} is the registry's display name. Space is the rail's surface holding the sign-in
-#: src/environments.ts
-msgid "{name} is private or not at {registry} — Sign in on Space, then Retry"
-msgstr "{name} 是私有的，或不在 {registry} 上 — 请在 Space 中登录，然后重试"
-
 #. A package the registry does not show while signed out there, either private or never published; {registry} is the registry's display name. 'Sign in to' names the Packages tab's sign-in control
 #: src/environments.ts
 msgid "{name} is private or not at {registry} — Sign in to {registry}"
@@ -471,11 +461,6 @@ msgstr "{name}：{registry} 暂时无法服务（{status}）— 请稍后重试"
 #: src/environments.ts
 msgid "{name}: no folder at {path} — put the folder back, or Remove {name}"
 msgstr "{name}：{path} 处没有文件夹 — 请放回该文件夹，或移除 {name}"
-
-#. Asked for the package {name}, the Space whose sign-in a spex.yaml naming no registry reads with no longer accepts this computer's sign-in; {registry} is the registry's display name. Space is the rail's surface holding the sign-in
-#: src/environments.ts
-msgid "{name}: sign-in at {registry} expired — Sign in again on Space"
-msgstr "{name}：{registry} 的登录已过期 — 请在 Space 中重新登录"
 
 #. spex.lock records the package's registry by a value that is not an address, so Spex asks it nothing; Update is the Packages tab's control that writes spex.lock again
 #: src/environments.ts
@@ -1235,6 +1220,11 @@ msgstr "检查 URL、创建该仓库，或让本机登录 {host}，然后重试"
 #: src/space-git.ts
 msgid "Check your GitHub account with gh auth status, switch with gh auth login, then Retry"
 msgstr "用 gh auth status 检查你的 GitHub 账户，用 gh auth login 切换，然后重试"
+
+#. A one-shot compile cannot infer a publishing namespace from a Space group; choose an explicit Org in the New playbook form first
+#: src/service.ts
+msgid "Choose an Org in New playbook before compiling a new package."
+msgstr "编译新包前，请在“新建剧本”中选择 Org。"
 
 #. Guidance where the side chosen for a change failed validation
 #: src/space.ts
@@ -2597,11 +2587,6 @@ msgstr "请先退出登录 {host}"
 #: src/space-git.ts
 msgid "Sign this computer in at {host} with an account that can see it, then Retry"
 msgstr "让本机以能看到它的账户登录 {host}，然后重试"
-
-#. The Space whose sign-in a spex.yaml naming no registry reads with no longer accepts this computer's sign-in; {registry} is the registry's display name. Space is the rail's surface holding the sign-in
-#: src/environments.ts
-msgid "Sign-in at {registry} expired — Sign in again on Space"
-msgstr "{registry} 的登录已过期 — 请在 Space 中重新登录"
 
 #. A sign-in at the registry was cancelled, denied, expired or interrupted; {registry} is the registry's display name
 #: src/registry.ts

@@ -17,7 +17,7 @@ export const search: Command = async (args) => {
   const target = env.registryOf(env.readRequests()?.requests ?? null);
   let found;
   try {
-    found = await env.registryAt(target.origin, target.scope).search(query);
+    found = await env.registryAt(target.origin).search(query);
   } catch (error) {
     throw await env.registryRefusal(error, { origin: target.origin, scope: target.scope });
   }

@@ -22,6 +22,7 @@ import { Home, repositoryNameFor } from "./home.js";
 import { i18n } from "./i18n.js";
 import { commitClone, gitEnvironment, initializeClone, validateStorageTree } from "./storage-git.js";
 import { canonicalCodeRemote } from "./code-remote.js";
+import { PUBLIC_REGISTRY_ORIGIN } from "@sublang/spex/environment";
 
 export interface GroupsReceipt {
   format: 1;
@@ -404,17 +405,17 @@ export async function migrateFormerHome(root: string, options: { env?: NodeJS.Pr
   const keys = [...new Set([...Object.values(plan!), home.own()])];
   // Your own group's environment — the global — requests the built-in
   // spec package before its first history is written, as the home it
-  // becomes is made, locked at the default instance's registry, as no
-  // clone lies at an instance yet; each project's working folder holding
+  // becomes is made, locked at the public registry independently of its
+  // Space; each project's working folder holding
   // neither environment file gets its own at its root, requesting
   // nothing, never in the clone (storage-9, environments-11,
   // environments-26).
   for (const key of keys) {
-    if (key === home.own()) { options.prepareRepository?.(home.clonePath(key), key, home.defaultInstance().origin, null, true); continue; }
+    if (key === home.own()) { options.prepareRepository?.(home.clonePath(key), key, PUBLIC_REGISTRY_ORIGIN, null, true); continue; }
     const folder = home.folderOf(key)?.path;
     if (!folder || !existsSync(folder) || !statSync(folder).isDirectory()) continue;
     if (existsSync(join(folder, "spex.yaml")) || existsSync(join(folder, "spex.lock"))) continue;
-    options.prepareRepository?.(folder, key, home.defaultInstance().origin, null, false);
+    options.prepareRepository?.(folder, key, PUBLIC_REGISTRY_ORIGIN, null, false);
   }
   for (const key of keys) {
     await validateStorageTree(home.clonePath(key), { own: key === home.own(), ...(options.libraryDir ? { libraryDir: options.libraryDir } : {}) });

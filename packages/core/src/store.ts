@@ -28,6 +28,7 @@ import { spawnSync } from "node:child_process";
 import { homedir, tmpdir } from "node:os";
 import { createSessionStore, isUncertainTurnDiscardable, validateSessionContext, type SharedSessionStore, type SessionManifest, type SessionRecovery } from "@sublang/playbook/session-store";
 import { acquireRootLease, assertFormerLeaseReleased, type RootLease } from "./root-lease.js";
+import { PUBLIC_REGISTRY_ORIGIN } from "@sublang/spex/environment";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import {
@@ -696,11 +697,8 @@ export class Store {
     this.initializeRepository(dir, generatedBootstrap);
   }
 
-  /** The caller's writing of an environment at `root` — the clone, or a
-   * project's working folder — at the registry of the clone's instance —
-   * read from its key, a deferred move or the remote its Git names now,
-   * so your own group's is the one its remote names (storage-31) — else
-   * the default instance's (environments-5, environments-11); its
+  /** Prepare an environment with the public registry default and its
+   * independent collaboration placement (environments-11); its
    * failure leaves the folder as it is, reported, never failing the open. */
   private prepareRepository(dir: string, key: string, root: string, global: boolean): boolean {
     try {
@@ -708,13 +706,11 @@ export class Store {
       // complete. Store opens before EnvironmentManager resumes that plan.
       if (environmentReceipt(this.dir)?.pending?.some((plan) => plan.key === key || plan.root === root)) return false;
       const placed = instanceOfClone(this.homeFile, this.deferred, key, () => this.remoteNameOf(dir, key));
-      const defaultOrigin = canonicalOrigin(this.homeFile.defaultInstance().origin);
-      const registryOrigin = placed ?? defaultOrigin;
       // A clone placed at an instance names it as its environment's
       // instance, the default one included; one local only names none
       // (environments-11).
       const space = placed !== null ? canonicalOrigin(placed) : null;
-      this.options.prepareRepository?.(root, key, registryOrigin, space, global);
+      this.options.prepareRepository?.(root, key, PUBLIC_REGISTRY_ORIGIN, space, global);
       return true;
     }
     catch (error) { console.error(`spex: ${key} was not prepared: ${error instanceof Error ? error.message : String(error)}`); return false; }

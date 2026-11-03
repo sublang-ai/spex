@@ -78,11 +78,11 @@ import {
   providedArtifacts,
   publishIssues,
   publishRelease,
+  PUBLIC_REGISTRY_ORIGIN,
   readRelease,
   readSpecPlacements,
   RegistryClient,
   RegistryError,
-  rehomeBuiltinLock,
   removeExports,
   requestIssues,
   requestsDigest,
@@ -113,10 +113,11 @@ import {
   type SpecPlacement,
 } from "@sublang/spex/environment";
 import { parseDocument } from "yaml";
-import type { AuthScope } from "@sublang/spex/git-host";
 import { shippedBuiltinPackage } from "./builtins.js";
 import { installEngine } from "./compile.js";
 import { i18n } from "./i18n.js";
+import { CredentialChanged } from "@sublang/spex/git-host";
+import { relayHostError } from "./space-groups.js";
 import { migrateEnvironments, type MigratedRepository } from "./migrate-environment.js";
 import { gitEnvironment } from "./storage-git.js";
 import { splitKey } from "./home.js";
@@ -161,21 +162,18 @@ export interface EnvironmentManagerOptions {
    * instance itself is the `space` its `spex.yaml` names, else the home's
    * default instance (environments-2, DR-165). */
   placedAt: (key: string) => string | null;
-  /** The device's current access secret at a listed instance, kept
-   * current by that instance's client (git-host-4); null where it holds
-   * none. Asked only of an instance the home is signed in to
-   * (environments-12). */
-  tokenFor: (origin: string, scope?: AuthScope) => Promise<string | null>;
+  /** The registry grant's current access secret, independent of Space
+   * entries and grants (environments-12). */
+  tokenFor: (origin: string) => Promise<string | null>;
   /** A registry's name in what the core says of it: the display name
    * its descriptor gave when last read, else its host name, never a
    * Space's — the registry every package phrase and a publish's
    * preview name (environments-10, playbook-library-93, core-service-145,
    * DR-172). */
   instanceName: (origin: string) => string;
-  /** Told the token an instance's registry refused with a code that
-   * signs that instance out (environments-12, git-host-4); where it
+  /** Told the registry token refused by the package service; where it
    * throws, the refused call fails with what it threw. */
-  refused?: (origin: string, token: string, scope?: AuthScope) => void | Promise<void>;
+  refused?: (origin: string, token: string) => void | Promise<void>;
   /** The brokered credential for a Git source (environments-13): the
    * one an instance the home is signed in to brokers at whose Git origin
    * the source lies, the environment's own instance — `preferred` —
@@ -561,7 +559,7 @@ export class EnvironmentManager {
    * access secret kept current by its client; null where that cannot be
    * told now. */
   private async signedInAtRegistry(origin: string): Promise<boolean | null> {
-    try { return (await this.tokenAt(origin, "registry")) !== null; } catch { return null; }
+    try { return (await this.tokenAt(origin)) !== null; } catch { return null; }
   }
 
   /** The reader's words for why an Update or an install stopped
@@ -593,21 +591,12 @@ export class EnvironmentManager {
     const at = this.refusedAt(refusal, origin);
     const registry = this.registryName(at);
     const name = refusal.packageName ?? (error instanceof InstallError ? error.packageName : undefined);
-    // A manifest naming no registry keeps its former Space-held reads,
-    // so a registry sign-in would not reach it, the Space's would
-    // (environments-38).
-    const legacy = requests !== undefined && requests.registry === undefined;
     if (name !== undefined && refusal.kind === "not_found" && refusal.code === "suppressed") {
       return i18n._({ id: "{name} is withdrawn at {registry} — Update picks another version", comment: "The registry's operator withdrew the version spex.lock records; {registry} is the registry's display name. Update is the Packages tab's control that picks the versions again", values: { name, registry } });
     }
     if (name !== undefined && (refusal.kind === "forbidden" || refusal.kind === "not_found")) {
-      const signedIn = legacy ? this.store.home.account(at) !== null : await this.signedInAtRegistry(at);
+      const signedIn = await this.signedInAtRegistry(at);
       if (signedIn === false) {
-        if (legacy) {
-          return refusal.kind === "forbidden"
-            ? i18n._({ id: "{name} is private at {registry} — Sign in on Space, then Retry", comment: "A package the registry keeps private, asked while this computer is signed out of the Space whose sign-in a spex.yaml naming no registry reads with; {registry} is the registry's display name. Space is the rail's surface holding the sign-in", values: { name, registry } })
-            : i18n._({ id: "{name} is private or not at {registry} — Sign in on Space, then Retry", comment: "A package the registry does not show while this computer is signed out of the Space whose sign-in a spex.yaml naming no registry reads with, either private or never published; {registry} is the registry's display name. Space is the rail's surface holding the sign-in", values: { name, registry } });
-        }
         return refusal.kind === "forbidden"
           ? i18n._({ id: "{name} is private — Sign in to {registry}", comment: "A package the registry keeps private, asked while signed out there; {registry} is the registry's display name. 'Sign in to' names the Packages tab's sign-in control", values: { name, registry } })
           : i18n._({ id: "{name} is private or not at {registry} — Sign in to {registry}", comment: "A package the registry does not show while signed out there, either private or never published; {registry} is the registry's display name. 'Sign in to' names the Packages tab's sign-in control", values: { name, registry } });
@@ -619,14 +608,7 @@ export class EnvironmentManager {
       }
       return i18n._({ id: "{name} is not at {registry}, or private — check the name and your sign-in, then Retry", comment: "A package the registry does not show, when whether this computer is signed in there cannot be read now; {registry} is the registry's display name", values: { name, registry } });
     }
-    // Signed out by the refusal, as a refusal of the pair a refresh
-    // replaced meanwhile does not (environments-12).
-    if (legacy && refusal.kind === "unauthenticated" && this.store.home.account(at) === null) {
-      return name === undefined
-        ? i18n._({ id: "Sign-in at {registry} expired — Sign in again on Space", comment: "The Space whose sign-in a spex.yaml naming no registry reads with no longer accepts this computer's sign-in; {registry} is the registry's display name. Space is the rail's surface holding the sign-in", values: { registry } })
-        : i18n._({ id: "{name}: sign-in at {registry} expired — Sign in again on Space", comment: "Asked for the package {name}, the Space whose sign-in a spex.yaml naming no registry reads with no longer accepts this computer's sign-in; {registry} is the registry's display name. Space is the rail's surface holding the sign-in", values: { name, registry } });
-    }
-    return this.registryPhrase(refusal, registry, !legacy, name) ?? failurePhrase(stage, error);
+    return this.registryPhrase(refusal, registry, name) ?? failurePhrase(stage, error);
   }
 
   /** The registry a refusal came from: the one it names, else the one
@@ -641,9 +623,10 @@ export class EnvironmentManager {
    * a sign-in it no longer accepts, where the grant is the registry's
    * own; a registry not reached; one down, each after the package it was
    * asked for where it was asked for one; null for any other. */
-  private registryPhrase(refusal: RegistryError, registry: string, ownGrant: boolean, name = refusal.packageName): string | null {
+  private registryPhrase(refusal: RegistryError, registry: string, name = refusal.packageName): string | null {
+    if (refusal.cause instanceof CredentialChanged) return relayHostError(refusal.cause, registry);
     const status = (refusal as { status?: unknown }).status;
-    if (ownGrant && refusal.kind === "unauthenticated") {
+    if (refusal.kind === "unauthenticated") {
       return i18n._({ id: "Sign-in to {registry} expired — Sign in again", comment: "The registry no longer accepts this computer's sign-in, so Spex signed out there; {registry} is the registry's display name", values: { registry } });
     }
     if (refusal.kind !== "unavailable") return null;
@@ -689,7 +672,7 @@ export class EnvironmentManager {
     if (error.kind === "rejected" && status === 413) {
       return i18n._({ id: "{name} {version} is too large for {registry} — leave out what it does not need, then Retry", comment: "Refusal of Publish: the package is larger than the registry takes; {registry} is the registry's display name", values: { name, version, registry } });
     }
-    return this.registryPhrase(error, registry, true) ?? failurePhrase("publish", error);
+    return this.registryPhrase(error, registry) ?? failurePhrase("publish", error);
   }
 
   private shownConflicts(conflicts: readonly Conflict[], requests: Requests | null, git: EnvironmentGit): Conflict[] {
@@ -721,12 +704,11 @@ export class EnvironmentManager {
    * independent of Space membership (DR-168); null without its registry
    * grant or where the registry gives no answer. */
   async publishableOrgs(key: string): Promise<RegistryOrg[] | null> {
-    // A `spex.yaml` that does not read names no instance: no registry is
-    // asked, the default instance's least of all (environments-2).
+    // A damaged manifest names no trusted registry; no service is asked.
     let target: ReturnType<typeof environmentRegistry>;
     try { target = this.registryOf(key); } catch { return null; }
-    const { origin, remote } = this.registryAt(target.origin, "registry");
-    if ((await this.tokenAt(origin, "registry")) === null) return null;
+    const { origin, remote } = this.registryAt(target.origin);
+    if ((await this.tokenAt(origin)) === null) return null;
     return remote.orgs();
   }
 
@@ -734,8 +716,8 @@ export class EnvironmentManager {
    * short best-effort authoring suggestion (environments-27). */
   async registryOrgs(key: string): Promise<RegistryOrg[]> {
     const target = this.registryOf(key);
-    const { origin, remote } = this.registryAt(target.origin, "registry");
-    if ((await this.tokenAt(origin, "registry")) === null) {
+    const { origin, remote } = this.registryAt(target.origin);
+    if ((await this.tokenAt(origin)) === null) {
       throw new CoreError("invalid_request", i18n._({ id: "Sign in to {registry} to see your orgs", comment: "Refusal: listing the orgs this account may publish to needs a sign-in at the registry; {registry} is its display name. An org is a package name's first half", values: { registry: this.registryName(origin) } }));
     }
     const orgs = await remote.orgs(30_000);
@@ -743,12 +725,6 @@ export class EnvironmentManager {
       throw new CoreError("invalid_request", i18n._({ id: "Your orgs at {registry} could not be read — check the connection, then Retry", comment: "Refusal: the registry gave no answer listing the orgs this account may publish to; {registry} is its display name", values: { registry: this.registryName(origin) } }));
     }
     return orgs;
-  }
-
-  /** The home's default instance's origin (storage-2): the registry of
-   * an environment with no instance (DR-127). */
-  private defaultOrigin(): string {
-    return canonicalOrigin(this.store.home.defaultInstance().origin);
   }
 
   /** The instance of an environment of these requests (environments-2,
@@ -817,22 +793,22 @@ export class EnvironmentManager {
     return canonicalOrigin(placed);
   }
 
-  /** The registry answering under an instance's origin: one client per
-   * origin for the run, each composed with the built-in spec package
+  /** The package registry: one client per origin for the run, each
+   * using registry authority and composed with the built-in spec package
    * this device serves offline (environments-11, environments-12). */
-  private registryAt(origin: string, scope: AuthScope = "space"): { origin: string; remote: RegistryClient; source: RegistrySource } {
+  private registryAt(origin: string): { origin: string; remote: RegistryClient; source: RegistrySource } {
     const at = canonicalOrigin(origin);
-    let registry = this.registries.get(`${scope}:${at}`);
+    let registry = this.registries.get(at);
     if (!registry) {
       const refused = this.options.refused;
       const remote = new RegistryClient({
         url: at,
-        token: () => this.tokenAt(at, scope),
-        ...(refused ? { refused: (token: string) => refused(at, token, scope) } : {}),
+        token: () => this.tokenAt(at),
+        ...(refused ? { refused: (token: string) => refused(at, token) } : {}),
         ...(this.options.fetch ? { fetch: this.options.fetch } : {}),
       });
       registry = { origin: at, remote, source: compositeRegistry(this.builtinSource(), remote) };
-      this.registries.set(`${scope}:${at}`, registry);
+      this.registries.set(at, registry);
     }
     return registry;
   }
@@ -848,22 +824,17 @@ export class EnvironmentManager {
 
   private builtinRegistry?: RegistrySource;
 
-  /** The token a registry call presents at an instance (environments-12):
-   * that instance's access secret where the home is signed in to it, as
-   * its client keeps it current (git-host-4); none to any other origin. */
-  private tokenAt(origin: string, scope: AuthScope = "space"): Promise<string | null> {
-    return scope === "registry" || this.store.home.account(origin) !== null ? this.options.tokenFor(origin, scope) : Promise.resolve(null);
+  /** The registry account's access secret, kept current by its scoped
+   * client (environments-12), independent of Space membership. */
+  private tokenAt(origin: string): Promise<string | null> {
+    return this.options.tokenFor(origin);
   }
 
-  /** The registries an install asks for a registry package's files, in
-   * order (environments-7): the environment's instance's, then the one
-   * its lock records, then every other instance's the home is signed in
-   * to, in the home's order, each asked once. A recorded registry that
-   * names no instance's origin is never asked; it stands in the list to
-   * be named where no other serves. */
+  /** Install from the lock's exact registry provenance, never from
+   * collaboration membership (environments-7). */
   private installRegistries(target: ReturnType<typeof environmentRegistry>, source: RegistrySourceLock): RegistrySource[] {
-    const order = installRegistryOrder(target.origin, source.registry, this.store.home.instances().filter((entry) => this.store.home.account(entry.origin) !== null).map((entry) => entry.origin), { independent: !target.legacy });
-    return order.map((entry) => "origin" in entry ? this.registryAt(entry.origin, target.scope).source : compositeRegistry(this.builtinSource(), unaskedRegistry(entry.unasked)));
+    const order = installRegistryOrder(target.origin, source.registry, []);
+    return order.map((entry) => "origin" in entry ? this.registryAt(entry.origin).source : compositeRegistry(this.builtinSource(), unaskedRegistry(entry.unasked)));
   }
 
   private cloneState(key: string): CloneState {
@@ -988,18 +959,15 @@ export class EnvironmentManager {
     return { shipped, locked: source.version };
   }
 
-  /** The global environment where its home was made with none (a home
-   * an earlier version, or a store with no environments, made): its
-   * `spex.yaml` requesting the built-in spec package, locked at the
-   * registry of the instance your own group's own repository is placed
-   * at, else the default instance's, naming that instance as `space`
+  /** A missing global environment requests the built-in package at the
+   * public registry, naming its collaboration placement as `space`
    * wherever it has one (environments-11, environments-2). An
    * environment that stands never has it requested again, so a removal
    * stands. */
   private prepareGlobal(root: string, key: string): boolean {
     if (!this.options.builtin || existsSync(join(root, "spex.yaml")) || existsSync(join(root, "spex.lock"))) return false;
     const placed = this.options.placedAt(key);
-    return prepareBuiltinEnvironment(root, this.options.builtin, placed ?? this.defaultOrigin(), this.spaceOf(placed));
+    return prepareBuiltinEnvironment(root, this.options.builtin, PUBLIC_REGISTRY_ORIGIN, this.spaceOf(placed));
   }
 
   /** At start: seed the built-in spec package into the store, so it
@@ -1213,12 +1181,11 @@ export class EnvironmentManager {
     }
     let lock = locked?.lock ?? null;
     let lockVersion: FileVersion = locked?.version ?? null;
-    // The environment's registry, at the instance its `spex.yaml` names,
-    // else the default instance's (environments-2, environments-5,
-    // DR-165), read from the requests this operation read.
+    // Package service follows registry alone, with the public default;
+    // collaboration is retained only for Git-source brokerage.
     envGit = this.gitOf(key, read?.requests ?? null);
     const target = environmentRegistry(read?.requests ?? null, { origin: this.store.home.defaultInstance().origin, instances: this.store.home.instances() });
-    const registry = this.registryAt(target.origin, target.scope).source;
+    const registry = this.registryAt(target.origin).source;
     const needsResolve = mode === "resolve" || (mode === "auto" && lock === null && read !== null);
     if (needsResolve && read !== null) {
       step("resolving");
@@ -1248,7 +1215,7 @@ export class EnvironmentManager {
         const changed = this.changedSince(requestsPath, read.version, lockPath, lockVersion);
         if (changed) return this.overtaken(changed, strict);
         state.conflicts = { requests: read.version, conflicts: result.conflicts };
-        state.error = !target.legacy && (await this.signedInAtRegistry(target.origin)) === false
+        state.error = (await this.signedInAtRegistry(target.origin)) === false
           ? i18n._({ id: "Sign in to {registry} to see private versions", comment: "No version fits every package while signed out at the registry, whose private versions Spex cannot see; {registry} is its display name", values: { registry: this.registryName(target.origin) } })
           : null;
         const refused = result.conflicts.map((conflict) => conflict.name).filter((name) => unread.has(name));
@@ -1688,12 +1655,9 @@ export class EnvironmentManager {
     return this.settle(key, wrote && !existsSync(join(root, "spex.lock")) ? "resolve" : "auto", false);
   }
 
-  /** A pick placed a local-only project's clone at an instance
-   * (storage-35): where its environment is still the one its pairing
-   * prepared at the default instance's registry, the built-in spec
-   * package is locked at that instance's instead, then installed as the
-   * lock now records it (environments-11, DR-127); a lock resolved to
-   * anything else stays as it is (environments-5). */
+  /** A placement changes collaboration alone: the manifest's Space
+   * binding and a current lock's request digest, never its package
+   * source or registry selection (environments-38). */
   placed(key: string): Promise<void> {
     if (this.migrationBlocked.has(key)) return Promise.resolve();
     const dir = this.rootOf(key);
@@ -1702,7 +1666,7 @@ export class EnvironmentManager {
     try {
       const path = join(dir, "spex.yaml");
       const read = readRequestsAt(path);
-      if (read?.requests.registry !== undefined) {
+      if (read !== null) {
         // Collaboration changes its own binding, not any package pin.
         // Advance a previously current lock's digest only; never bless
         // a lock already stale before this Space-only edit.
@@ -1738,11 +1702,7 @@ export class EnvironmentManager {
       if (!(error instanceof VersionConflictError)) console.error(`spex: ${key} keeps its environment's Space binding: ${error instanceof Error ? error.message : String(error)}`);
       return Promise.resolve();
     }
-    if (!this.options.builtin) return Promise.resolve();
-    let wrote = false;
-    try { wrote = rehomeBuiltinLock(dir, this.options.builtin, placed ?? this.defaultOrigin(), this.spaceOf(placed)); }
-    catch (error) { console.error(`spex: ${key} keeps its built-in spec package's lock: ${error instanceof Error ? error.message : String(error)}`); }
-    return wrote ? this.settle(key, "auto", false) : Promise.resolve();
+    return Promise.resolve();
   }
 
   /** A clone moved: its report follows, and it is exported again. An
@@ -1812,8 +1772,8 @@ export class EnvironmentManager {
       }));
     }
     const selected = this.registryOf(key);
-    const target = this.registryAt(selected.origin, "registry");
-    const signedIn = (await this.tokenAt(target.origin, "registry").catch(() => "")) !== null;
+    const target = this.registryAt(selected.origin);
+    const signedIn = (await this.tokenAt(target.origin).catch(() => "")) !== null;
     if (!dryRun && !signedIn) {
       throw new CoreError("invalid_request", i18n._({
         id: "Sign in to {registry} to publish",
@@ -1898,12 +1858,12 @@ export class EnvironmentManager {
   async search(key: string, query: string): Promise<{ name: string; description: string | null; versions: string[] }[]> {
     const target = this.registryOf(key);
     try {
-      const results = await this.registryAt(target.origin, target.scope).source.search(query);
+      const results = await this.registryAt(target.origin).source.search(query);
       return results.map((result) => ({ name: result.name, description: result.description || null, versions: result.versions }));
     } catch (error) {
       const registry = this.registryName(target.origin);
       const cause = error instanceof Error ? error.message : String(error);
-      throw new CoreError("invalid_request", (error instanceof RegistryError ? this.registryPhrase(error, registry, !target.legacy) : null)
+      throw new CoreError("invalid_request", (error instanceof RegistryError ? this.registryPhrase(error, registry) : null)
         ?? i18n._({ id: "Searching {registry} stopped: {cause} — Retry", comment: "A search of the registry's packages failed; {registry} is its display name, {cause} the library's or the registry's own words. Retry is the control that runs it again", values: { registry, cause } }));
     }
   }

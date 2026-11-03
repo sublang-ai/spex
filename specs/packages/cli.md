@@ -147,11 +147,14 @@ When `spex logout [--registry <url> | --space <url>]` runs, the CLI shall revoke
 
 #### cli-12
 
-When `spex whoami [--registry <url> | --space <url>]` runs, the CLI shall print, without secrets, one line for the environment's registry [[environments-38](environments.md#environments-38)] and one for each Space the home lists [[storage-2](storage.md#storage-2)] — or, with a flag, the selected service's line alone — each its kind, its name as [[cli-22](#cli-22)] names it and `@<login>` or `signed out`, the home's default Space marked `(default)`, reading registry identity from its account API and Space identity from its home entry, and refusing both flags together ([DR-168](../decisions/168-independent-package-registry.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)):
+When `spex whoami [--registry <url> | --space <url>]` runs, the CLI shall print, without secrets, one line for the selected registry account [[environments-38](environments.md#environments-38)] — the environment's registry without a flag, or the explicitly named registry — or, with `--space`, that Space account alone [[storage-2](storage.md#storage-2)], each its kind, its name as [[cli-22](#cli-22)] names it and `@<login>` or `signed out`, reading registry identity from its account API and Space identity from its home entry, and refusing both flags together ([DR-216](../decisions/216-registry-and-space-accounts-stay-apart.md)):
 
 ```text
+$ spex whoami
 Registry  Spex Space  @me
-Space     Spex Space  @me (default)
+
+$ spex whoami --space https://team.example
+Space     Team Space  @me
 ```
 
 ### Output
@@ -170,7 +173,6 @@ When a package command ends, the CLI shall exit `0` only on its success, `1` on 
 | Case | Cause |
 | --- | --- |
 | the registry lists no `<org>/<pkg>` to a device signed out there | `<org>/<pkg>: not at <registry>, or private — spex login, then retry` |
-| the registry lists no `<org>/<pkg>` to a device signed out of the Space whose sign-in a `spex.yaml` naming no `registry` reads with [[environments-38](environments.md#environments-38)] | `<org>/<pkg>: not at <registry>, or private — spex login --space <origin>, then retry` |
 | the registry lists no `<org>/<pkg>` to the account signed in there | `<org>/<pkg>: not at <registry>, or not shared with @<login> — check the name, or ask its owner` |
 | the registry refuses the account a read of `<org>/<pkg>` (403) | `<org>/<pkg>: not shared with @<login> at <registry> — ask its owner` |
 | the registry refuses the account a publish to `<org>` (403) | `<org> is not yours at <registry> — claim it at <origin>/account/orgs?scope=registry` |
@@ -231,4 +233,4 @@ When the package-build integration inspects the packed `@sublang/spex`, it shall
 
 #### cli-20
 
-When the real CLI runs against a scoped HTTP fixture, the integration suite shall verify the public registry named in a new `spex.yaml`, preserved legacy destinations [[cli-2](#cli-2)], independent registry and Space login with mutually exclusive flags [[cli-10](#cli-10)], purpose-specific whoami [[cli-12](#cli-12)] and logout preserving the other purpose [[cli-11](#cli-11)].
+When the real CLI runs against a scoped HTTP fixture, the integration suite shall verify the public registry named in a new `spex.yaml`, public registry selection for a manifest without `registry` [[cli-2](#cli-2)], exact locked-source preservation without Space fallback [[cli-4](#cli-4)], independent registry and Space login with mutually exclusive flags [[cli-10](#cli-10)], registry-only default whoami and an explicit Space account report [[cli-12](#cli-12)] and logout preserving the other purpose [[cli-11](#cli-11)].

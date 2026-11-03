@@ -2,9 +2,8 @@
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
 // `spex whoami [--registry <url> | --space <url>]` (cli-12, DR-168,
-// DR-172): this computer's sign-ins in one grammar, a line each — this
-// folder's registry, then every Space the home lists — or, with a flag,
-// the line of the registry or Space named alone: its kind, its name as
+// DR-172): this folder's registry account, or the explicitly selected
+// registry or Space account alone: its kind, its name as
 // cli-22 names it, and `@<login>` or `signed out`, the home's default
 // Space marked `(default)`. A registry's login is read from its account
 // API; a Space's from its home entry, asking no Space. No secret is
@@ -57,7 +56,6 @@ export const whoami: Command = async (args) => {
     const line = await registryLine(dir, target.origin);
     rows.push(line.row);
     cause = line.cause;
-    if (values.registry === undefined) for (const entry of home?.instances ?? []) rows.push(spaceLine(home, entry, defaultOrigin));
   }
   // Columns aligned, two spaces apart.
   const widths = rows.reduce<number[]>((out, row) => row.map((cell, at) => Math.max(out[at] ?? 0, cell.length)), []);

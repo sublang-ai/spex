@@ -375,7 +375,11 @@ beforeEach(() => {
         return { repository: String(params?.repository), language: null, requests: {}, packages: [], stale: null, conflicts: null, busy: null, error: null,
           ...(missingRegistry ? {} : { registry: { origin: environmentInstance ?? "https://spex.example", legacy: false } }), ...(environmentInstance !== undefined ? { instance: environmentInstance } : {}) };
       case "registry.orgs":
-        return { orgs: [] };
+        return { orgs: [{ name: "me", path: "me", role: "Owner" }] };
+      case "registry.get": {
+        const origin = String(params?.origin ?? "https://spex.example");
+        return state.registryAccounts?.[origin] ?? { origin, displayName: new URL(origin).host, account: null, signIn: { phase: "idle" }, error: null };
+      }
       case "playbook.artifacts":
         return { source: null, gears: null, fsm: null, stateIds: null, machine: null, missing: [] };
       case "config.edit":
@@ -387,9 +391,9 @@ beforeEach(() => {
         return { draft: state.drafts[id] ?? draftInfo({ id }), source: state.draftSources[id] ?? null, records: [] };
       }
       case "draft.defaults":
-        // The core's defaults (playbook-library-103): the key's first
-        // segment, and the license this test's LICENSE names.
-        return { org: String(params?.projectId).split("/")[0], license: defaultLicense };
+        // A namespace supplied by the fixture's registry, independent
+        // of the project's Space key, and its LICENSE-derived default.
+        return { org: "me", license: defaultLicense };
       case "draft.create":
         return draftInfo({ id: String(params?.draftId), state: "no-source", firstLine: null, touchedAt: now, createdAt: now });
       case "draft.artifacts":
@@ -599,13 +603,13 @@ describe("playbook-library-51: New playbook asks for the id", () => {
     const other = { ...PROJECT, id: "acme/tools-spex", name: "tools", repository: { key: "acme/tools-spex", name: "tools-spex", group: "acme", own: false } };
     seed({ projects: [PROJECT, other], currentProjectId: "acme/tools-spex" });
     render(<PlaybooksTab project={other} />);
-    await defaultsShown("acme");
+    await defaultsShown("me");
     expect(commandMock).toHaveBeenCalledWith("draft.defaults", { projectId: "acme/tools-spex" });
     const input = screen.getByTestId("new-playbook-id");
     fireEvent.change(input, { target: { value: "triage" } });
     fireEvent.keyDown(input, { key: "Enter" });
     await vi.waitFor(() =>
-      expect(commandMock).toHaveBeenCalledWith("draft.create", { projectId: "acme/tools-spex", draftId: "triage", org: "acme", license: "Apache-2.0" }),
+      expect(commandMock).toHaveBeenCalledWith("draft.create", { projectId: "acme/tools-spex", draftId: "triage", org: "me", license: "Apache-2.0" }),
     );
   });
 });
@@ -2057,6 +2061,67 @@ describe("playbook-library-120/121: Org suggests the orgs the registry account m
   const suggestions = () =>
     [...screen.getByTestId("new-playbook-orgs").querySelectorAll("option")].map((option) => option.value);
 
+  test("an older core's Space-derived default cannot replace the selected registry account's first authorized namespace", async () => {
+    const registry = "https://spex.sublang.ai";
+    const space = "https://spex.sublang.xyz";
+    const original = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation((type, ...args) => {
+      if (type === "environment.get") return Promise.resolve({ repository: PROJECT_ID, language: null, requests: {}, packages: [], stale: null, conflicts: null, busy: null, error: null, registry: { origin: registry, legacy: false }, instance: space });
+      if (type === "registry.get") return Promise.resolve({ origin: registry, displayName: "Package Registry", account: { id: "registry-person", login: "registry-person" }, signIn: { phase: "idle" }, error: null });
+      if (type === "registry.orgs") return Promise.resolve({ orgs: [{ name: "zeta", path: "zeta", role: "Owner" }, { name: "registry-owned", path: "registry-owned", role: "Owner" }] });
+      if (type === "draft.defaults") return Promise.resolve({ org: "space-group", license: "MIT" });
+      return original(type, ...args);
+    });
+    seed({ space: groupsState({ defaultInstance: space, instances: [instanceState(space, { account: { id: "space-person", login: "space-person", displayName: null, canCreateGroup: false } })] }), registryAccounts: {} });
+    render(<PlaybooksTab project={PROJECT} />);
+    await defaultsShown("registry-owned", "MIT");
+    await vi.waitFor(() => expect(suggestions()).toEqual(["registry-owned", "zeta"]));
+    expect(commandMock).toHaveBeenCalledWith("registry.get", { origin: registry });
+    expect(commandMock).not.toHaveBeenCalledWith("registry.get", { origin: space });
+    expect(document.body.textContent).not.toContain(space);
+    expect(document.body.textContent).not.toContain("space-person");
+    expect(screen.getByTestId("new-playbook-org")).not.toHaveProperty("value", "space-group");
+  });
+
+  test("an older core's Space-derived default leaves Org blank without a registry grant until the person supplies a local name", async () => {
+    const registry = "https://spex.sublang.ai";
+    const space = "https://spex.sublang.xyz";
+    const original = commandMock.getMockImplementation()!;
+    commandMock.mockImplementation((type, ...args) => {
+      if (type === "environment.get") return Promise.resolve({ repository: PROJECT_ID, language: null, requests: {}, packages: [], stale: null, conflicts: null, busy: null, error: null, registry: { origin: registry, legacy: false }, instance: space });
+      if (type === "draft.defaults") return Promise.resolve({ org: "space-group", license: "MIT" });
+      return original(type, ...args);
+    });
+    seed({ space: groupsState({ defaultInstance: space, instances: [instanceState(space)] }), registryAccounts: { [registry]: { origin: registry, displayName: "Package Registry", account: null, signIn: { phase: "idle" }, error: null } } });
+    render(<PlaybooksTab project={PROJECT} />);
+    await defaultsShown("", "MIT");
+    expect(suggestions()).toEqual([]);
+    expect(commandMock).not.toHaveBeenCalledWith("registry.orgs", expect.anything(), expect.anything());
+    expect(screen.getByRole("link", { name: "Claim an org" }).getAttribute("href")).toBe(`${registry}/account/orgs?scope=registry`);
+    fireEvent.change(screen.getByTestId("new-playbook-id"), { target: { value: "local-tool" } });
+    expect(screen.getByTestId("new-playbook-button")).toHaveProperty("disabled", true);
+    expect(screen.getByTestId("example-prefill")).toHaveProperty("disabled", true);
+    expect(document.body.textContent).not.toContain(space);
+    fireEvent.change(screen.getByTestId("new-playbook-org"), { target: { value: "local-choice" } });
+    fireEvent.click(screen.getByTestId("example-prefill"));
+    await vi.waitFor(() => expect(commandMock).toHaveBeenCalledWith("draft.create", { projectId: PROJECT_ID, draftId: SLC_DEMO.playbookId, org: "local-choice", license: "MIT" }));
+    expect(commandMock).not.toHaveBeenCalledWith("space.signin.start", expect.anything());
+  });
+
+  test("clearing an automatic registry Org remains an explicit empty field through account refresh", async () => {
+    seed();
+    render(<PlaybooksTab project={PROJECT} />);
+    await defaultsShown();
+    fireEvent.change(screen.getByTestId("new-playbook-org"), { target: { value: "" } });
+    expect(screen.getByTestId("new-playbook-org")).toHaveProperty("value", "");
+    const registry = useAppStore.getState().registryAccounts!["https://spex.example"]!;
+    act(() => useAppStore.setState({ registryAccounts: { "https://spex.example": { ...registry, account: { id: "refreshed", login: "refreshed" } } } }));
+    await vi.waitFor(() => expect(suggestions()).toEqual(["me"]));
+    await defaultsShown("");
+    fireEvent.change(screen.getByTestId("new-playbook-id"), { target: { value: "triage" } });
+    expect(screen.getByTestId("new-playbook-button")).toHaveProperty("disabled", true);
+  });
+
   test("loading, failure and retry remain visible without replacing a manually entered org", async () => {
     const original = commandMock.getMockImplementation()!;
     const held: { resolve: (value: unknown) => void; reject: (cause: Error) => void }[] = [];
@@ -2064,7 +2129,7 @@ describe("playbook-library-120/121: Org suggests the orgs the registry account m
       ? new Promise((resolve, reject) => held.push({ resolve, reject })) : original(type, ...args));
     seed();
     render(<PlaybooksTab project={PROJECT} />);
-    await defaultsShown();
+    await defaultsShown("");
     await vi.waitFor(() => expect(note()?.textContent).toBe("Loading…"));
     // One field, suggestions and no chooser beside it.
     expect(screen.queryByRole("combobox", { name: "Registry namespaces" })).toBeNull();
@@ -2096,7 +2161,7 @@ describe("playbook-library-120/121: Org suggests the orgs the registry account m
     const registry = { origin, displayName: "Registry", account: null, signIn: { phase: "idle" as const }, error: null };
     seed({ registryAccounts: { [origin]: registry } });
     render(<PlaybooksTab project={PROJECT} />);
-    await defaultsShown();
+    await defaultsShown("");
     await vi.waitFor(() => expect(useAppStore.getState().environments[PROJECT_ID]?.registry?.origin).toBe(origin));
     expect(commandMock.mock.calls.filter(([type]) => type === "registry.orgs")).toEqual([]);
     expect(note()?.textContent).toBe("Publishing rights not checked");
@@ -2135,7 +2200,7 @@ describe("playbook-library-120/121: Org suggests the orgs the registry account m
           registryAccounts: { [origin]: { origin, displayName: "Registry", account: null, signIn: { phase: "idle" }, error: null } },
         });
         render(<PlaybooksTab project={PROJECT} />);
-        await defaultsShown();
+        await defaultsShown("");
         const link = screen.getByRole("link", { name: "Claim an org" }) as HTMLAnchorElement;
         expect(link.href).toBe(`${origin}/account/orgs?scope=registry`);
         expect(link.target).toBe("_blank");
@@ -2154,26 +2219,29 @@ describe("playbook-library-120/121: Org suggests the orgs the registry account m
     const registry = { origin, displayName: "Registry", account: null, signIn: { phase: "idle" as const }, error: null };
     const original = commandMock.getMockImplementation()!;
     const held: { account: string | undefined; resolve: (value: unknown) => void }[] = [];
-    commandMock.mockImplementation((type, ...args) => type === "draft.defaults"
+    commandMock.mockImplementation((type, ...args) => type === "registry.orgs"
         ? new Promise((resolve) => held.push({ account: useAppStore.getState().registryAccounts?.[origin]?.account?.id, resolve }))
-      : original(type, ...args));
+      : type === "draft.defaults" ? Promise.resolve({ org: "space-group", license: "MIT" }) : original(type, ...args));
     seed({ registryAccounts: { [origin]: registry } });
     render(<PlaybooksTab project={PROJECT} />);
     await vi.waitFor(() => expect(useAppStore.getState().environments[PROJECT_ID]?.registry?.origin).toBe(origin));
-    await act(async () => held.forEach(({ resolve }) => resolve({ org: "os-user", license: "MIT" })));
-    await defaultsShown("os-user", "MIT");
+    await defaultsShown("", "MIT");
     act(() => useAppStore.setState({ registryAccounts: { [origin]: { ...registry, account: { id: "old", login: "old" } } } }));
     await vi.waitFor(() => expect(held.some((entry) => entry.account === "old")).toBe(true));
     act(() => useAppStore.setState({ registryAccounts: { [origin]: { ...registry, account: { id: "new", login: "new" } } } }));
     await vi.waitFor(() => expect(held.some((entry) => entry.account === "new")).toBe(true));
-    await act(async () => held.find((entry) => entry.account === "new")!.resolve({ org: "personal-name", license: "MIT" }));
+    expect((screen.getByTestId("new-playbook-org") as HTMLInputElement).value).toBe("");
+    await act(async () => held.find((entry) => entry.account === "new")!.resolve({ orgs: [{ name: "personal-name", path: "personal-name", role: "Owner" }] }));
     await defaultsShown("personal-name", "MIT");
-    await act(async () => held.find((entry) => entry.account === "old")!.resolve({ org: "former-account", license: "MIT" }));
+    await act(async () => held.find((entry) => entry.account === "old")!.resolve({ orgs: [{ name: "former-account", path: "former-account", role: "Owner" }] }));
     await defaultsShown("personal-name", "MIT");
+    act(() => useAppStore.setState({ registryAccounts: { [origin]: { ...registry, account: { id: "new", login: "renamed" } } } }));
+    expect(screen.getByTestId("new-playbook-org")).toHaveProperty("value", "");
+    await vi.waitFor(() => expect(held).toHaveLength(3));
+    await act(async () => held.at(-1)!.resolve({ orgs: [{ name: "renamed-account", path: "renamed-account", role: "Owner" }] }));
+    await defaultsShown("renamed-account", "MIT");
     fireEvent.change(screen.getByTestId("new-playbook-org"), { target: { value: "manual-name" } });
     act(() => useAppStore.setState({ registryAccounts: { [origin]: registry } }));
-    await vi.waitFor(() => expect(held.at(-1)?.account).toBeUndefined());
-    await act(async () => held.at(-1)!.resolve({ org: "os-user", license: "MIT" }));
     await defaultsShown("manual-name", "MIT");
   });
 
@@ -2183,7 +2251,7 @@ describe("playbook-library-120/121: Org suggests the orgs the registry account m
     activateLanguage("zh");
     try {
       render(<PlaybooksTab project={PROJECT} />);
-      await defaultsShown();
+      await defaultsShown("");
       expect(note()?.textContent).toBe("尚未验证发布权限");
       expect(screen.getByTestId("new-playbook-org-guidance").textContent).toContain("要发布规约包，请使用你能在此注册中心认领的组织名。");
       expect(screen.getByRole("link", { name: "认领组织名" }).getAttribute("href")).toBe(`${origin}/account/orgs?scope=registry`);

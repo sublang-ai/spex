@@ -34,6 +34,7 @@ test("real CLI and shared clients isolate registry purpose at the same origin", 
   let origin = "";
   let next = 0;
   let rejectRegistry = false;
+  let replaceRegistryOnRead = false;
   const grants = new Map<string, { scope: string; refresh: string }>();
   const codes = new Map<string, string>();
   const server = createServer(async (req, res) => {
@@ -48,6 +49,16 @@ test("real CLI and shared clients isolate registry purpose at the same origin", 
     if (path === "/api/v1/registry") return answer({ origin, display_name: "Registry", providers: ["github", "gitlab"] });
     if (path === "/api/v1/spaces") return answer({ spaces: [{ origin, display_name: "Space", sign_in: ["gitlab"] }] });
     if (path === "/api/v1/host") return answer({ display_name: "Space", git_origin: origin, roles: [] });
+    if (path === "/api/v1/packages/acme/stale" && replaceRegistryOnRead) {
+      replaceRegistryOnRead = false;
+      const store = fileCredentialStore(home, origin, "registry");
+      const held = await store.read();
+      assert.equal(held?.access, bearer);
+      const next = { access: "registry-replacement", refresh: "refresh-replacement", accessExpiresAt: Date.now() + 3_600_000 };
+      grants.set(next.access, { scope: "registry", refresh: next.refresh });
+      assert.ok(store.replace(held, next));
+      return answer({ error: { code: "token_revoked" } }, 401);
+    }
     if (path === "/api/v1/auth/device") { const code = `code-${++next}`; codes.set(code, body.scope); return answer({ device_code: code, user_code: code, verification_uri: `${origin}/device`, expires_in: 60, interval: 0.001 }); }
     if (path === "/api/v1/auth/token") {
       const scope = body.scope;
@@ -108,10 +119,19 @@ test("real CLI and shared clients isolate registry purpose at the same origin", 
     // a flag's line alone (cli-12).
     const registryWho = await cli(home, work, "whoami");
     assert.equal(registryWho.code, 0, registryWho.out);
-    assert.equal(registryWho.out, "Registry  Registry  @reader\nSpace     Space     @reader (default)\n", "[cli-12] the registry and every Space, by name, login and default");
+    assert.equal(registryWho.out, "Registry  Registry  @reader\n", "[cli-12] the default account command shows only the selected registry");
     assert.equal((await cli(home, work, "whoami", "--registry", origin)).out, "Registry  Registry  @reader\n", "[cli-12] the registry's line alone");
     assert.equal((await cli(home, work, "whoami", "--space", origin)).out, "Space  Space  @reader (default)\n", "[cli-12] the Space's line alone");
     for (const secret of [(await registry.read())!.access, (await registry.read())!.refresh, spacePair.access, spacePair.refresh]) assert.ok(!registryWho.out.includes(secret), "[cli-12] no secret");
+    const beforeStaleRead = await registry.read();
+    replaceRegistryOnRead = true;
+    const staleRead = await cli(home, work, "add", "acme/stale");
+    assert.equal(staleRead.code, 1, staleRead.out);
+    assert.match(staleRead.out, /changed meanwhile/);
+    assert.doesNotMatch(staleRead.out, /sign-in expired|spex login/);
+    assert.notEqual((await registry.read())?.access, beforeStaleRead?.access, "a refusal of the old pair preserves the replacement registry sign-in");
+    assert.deepEqual(await space.read(), spacePair, "a stale package refusal leaves the Space grant alone");
+    assert.equal(readFileSync(join(home, "home.yaml"), "utf8"), storedHome);
     const descriptorClient = new RegistryClient({ url: origin, token: async () => "must-not-leak" });
     assert.deepEqual((await descriptorClient.describe()).providers, ["github", "gitlab"]);
     assert.deepEqual((await descriptorClient.spaces())[0].signIn, ["gitlab"]);
@@ -133,7 +153,7 @@ test("real CLI and shared clients isolate registry purpose at the same origin", 
     const unlisted = await cli(home, work, "logout", "--space", "http://127.0.0.1:9");
     assert.equal(unlisted.code, 1);
     assert.equal(unlisted.out, "spex logout: 127.0.0.1:9: not signed in on this computer — spex whoami\n", "[cli-11] a Space not signed in here refused, naming whoami");
-    assert.equal((await cli(home, work, "whoami")).out, "Registry  Registry  signed out\nSpace     Space     @reader (default)\n", "[cli-12] the registry signed out, the Space's sign-in kept");
+    assert.equal((await cli(home, work, "whoami")).out, "Registry  Registry  signed out\n", "[cli-12] the registry signed out, with Space available only through its explicit target");
     assert.equal(await registry.read(), null);
     assert.deepEqual(await space.read(), spacePair);
     assert.equal(readFileSync(join(home, "home.yaml"), "utf8"), storedHome);
@@ -147,11 +167,13 @@ test("real CLI and shared clients isolate registry purpose at the same origin", 
   }
 });
 
-test("registry manifests preserve legacy sources and new CLI manifests explicitly choose public registry", async () => {
+test("missing registry settings select public packages independently of Space and preserve locked provenance", async () => {
   const home = { origin: "https://private.example", instances: [] };
-  assert.deepEqual(environmentRegistry(parseRequests("format: 1\npackages: {}\n"), home), { origin: home.origin, scope: "space", legacy: true });
+  assert.deepEqual(environmentRegistry(parseRequests("format: 1\npackages: {}\n"), home), { origin: PUBLIC_REGISTRY_ORIGIN, scope: "registry", legacy: false });
+  assert.deepEqual(environmentRegistry(parseRequests("format: 1\nspace: https://team.example\npackages: {}\n"), home), { origin: PUBLIC_REGISTRY_ORIGIN, scope: "registry", legacy: false });
   assert.deepEqual(environmentRegistry(null, home), { origin: PUBLIC_REGISTRY_ORIGIN, scope: "registry", legacy: false });
   assert.deepEqual(installRegistryOrder("https://packages.example", "https://locked.example", ["https://private.example"], { independent: true }), [{ origin: "https://locked.example" }]);
+  assert.deepEqual(installRegistryOrder("https://packages.example", "https://locked.example", ["https://private.example"]), [{ origin: "https://locked.example" }], "older callers cannot inherit signed-in Space sources");
   const scratch = mkdtempSync(join(tmpdir(), "spex-registry-new-"));
   try {
     const work = join(scratch, "work"); mkdirSync(work);

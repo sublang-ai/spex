@@ -1007,6 +1007,7 @@ export async function startStandinHost(opts: StandinHostOptions): Promise<Standi
     if (bearer !== null) {
       const found = bearerDevice(bearer);
       if ("code" in found) headers[RELAY_HEADERS.refused] = found.code;
+      else if (found.device.scope !== "registry") return envelope(res, 403, "wrong_scope", "Sign in to registry.");
       else headers[RELAY_HEADERS.account] = script.person.login;
     }
     const answer = await fetch(new URL(`${target.pathname}${target.search}`, registry), {

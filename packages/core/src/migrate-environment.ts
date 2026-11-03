@@ -163,8 +163,8 @@ function lacksSpace(root: string): boolean {
 
 /** `spex.yaml`'s text naming `space` as `instance`, and the lock following
  * its bytes where the lock matched the text before (environments-2): an
- * environment placed before `space` existed keeps resolving there, its
- * lock as current as it was. Null where nothing changes. */
+ * collaboration follows its placement without changing package sources
+ * or registry selection. Null where nothing changes. */
 function withSpace(requests: string, lock: string | null, instance: string): { requests: string; lock: string | null } | null {
   let space: string | undefined;
   try { space = parseRequests(requests).space; } catch { return null; }

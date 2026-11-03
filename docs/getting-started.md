@@ -58,7 +58,9 @@ project's is Spex Space. The project's **Packages** tab shows it at the
 top as **Registry: Spex Space**, with your sign-in there beside it.
 To use another registry, open that chooser and select **Other…**, then
 enter its website address. The choice updates `registry` in this
-project's `spex.yaml`; it does not change your Space sign-in.
+project's `spex.yaml`; it does not change your Space sign-in. If the file
+names no `registry`, packages still use the public registry; its `space`
+field never selects a package registry or account.
 
 1. **Find a package.** On the project's **Packages** tab, choose
    **Add…** and search on **Registry**. On the command line, run
@@ -157,7 +159,9 @@ registry, edit `registry` in `spex.yaml`, preserving the rest of the file,
 then sign in there. `spex login --registry <url>` signs in at that
 address without changing the project's registry; `search`, `add` and
 `publish` use the file's choice and take no `--registry` flag.
-`spex login --space <url>` signs in to a Space instead. The two sign-ins
+`spex whoami` reports only that registry account.
+`spex login --space <url>` signs in to a Space instead, and
+`spex whoami --space <url>` reports that Space account. The two sign-ins
 are separate, and signing out of one keeps the other. See the
 [CLI guide](../packages/cli/README.md) for every command, sign-in and exit
 codes.
@@ -268,12 +272,22 @@ check [Your orgs](https://spex.sublang.ai/account/orgs?scope=registry).
 Your sign-in name becomes a personal namespace when it is valid and
 available; you can also claim an organization you own. Use a name listed
 there, rather than assuming a local username or a Space group grants it.
+The Org field suggests only names authorized by that registry account.
+Without a registry sign-in or available names it starts empty; you can
+still enter a name to author locally. Existing draft and package names
+remain unchanged.
 
 Packages are public by default. **Private packages** restricts a
 namespace's packages to its personal owner or organization members.
 Space groups control project records and servers, separately from
 registry namespaces. For another registry, check its account page and
 publishing rules.
+
+Older locks keep their exact source, version and checksums. Installing
+one may require a separate registry sign-in at its recorded source; a
+Space sign-in cannot supply it. To keep using a different registry for
+new resolution or publication, select it explicitly in `registry`.
+Changing that selection preserves existing locked source provenance.
 
 ### Publish a spec or skill package
 

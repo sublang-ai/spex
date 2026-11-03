@@ -5,6 +5,8 @@
 
 ## Status
 
+Amended by [DR-216](216-registry-and-space-accounts-stay-apart.md): missing `registry` selects the public registry without Space credential fallback, publishing suggestions use no group context, and the CLI's default account report names only the registry; exact locked source provenance remains preserved.
+
 Accepted (2026-10-30) on the owner's direction to separate package management, Space management and server execution, preserving existing accounts and records.
 Amended by [DR-172](172-surfaces-a-fresh-user-reads.md) in where the registry's sign-in shows, and by [DR-173](173-the-registry-is-no-face-of-a-space.md): the registry stands nowhere on the Space surface.
 Completed by [DR-188](188-registry-sign-in-opens-the-browser.md) in the desktop's browser opening for an independent registry sign-in and its manual continuation link.

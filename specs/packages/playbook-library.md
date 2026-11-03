@@ -58,7 +58,7 @@ While a project's Packages tab is shown, the tab shall present the project's env
 
 #### playbook-library-119
 
-While a project's Packages tab or the Playbooks surface [[playbook-library-122](#playbook-library-122)] is shown, its heading shall carry the registry of its environment as "Registry: ⟨registry⟩", a chooser offering the public registry by its display name [[environments-39](environments.md#environments-39)], the registry that environment's `spex.yaml` names where that is another, and a last entry "Other…" revealing a field for a registry's address, the choice written as the `registry` of that environment's `spex.yaml`, and beside it the independent registry account there — "@⟨login⟩", or "Sign in" where none — with Sign out and cancellable browser or device sign-in progress, errors shown in place and Space account state unchanged [[core-service-143](core-service.md#core-service-143)], browser sign-in attempting automatic opening through the native bridge [[app-shell-37](app-shell.md#app-shell-37)] where available and showing an ordinary external link [[app-shell-21](app-shell.md#app-shell-21)] to the complete sign-in URL regardless of that attempt's result ([DR-168](../decisions/168-independent-package-registry.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md), [DR-173](../decisions/173-the-registry-is-no-face-of-a-space.md)).
+While a project's Packages tab or the Playbooks surface [[playbook-library-122](#playbook-library-122)] is shown, its heading shall carry only the independently selected registry of its environment [[environments-38](environments.md#environments-38)] as "Registry: ⟨registry⟩", a chooser offering the public registry by its display name [[environments-39](environments.md#environments-39)], the registry that environment's `spex.yaml` names where that is another, and a last entry "Other…" revealing a field for a registry's address, the choice written as the `registry` of that environment's `spex.yaml`, and beside it the independent registry account there — "@⟨login⟩", or "Sign in" where none — with Sign out and cancellable browser or device sign-in progress, errors shown in place and Space account state unchanged [[core-service-143](core-service.md#core-service-143)], browser sign-in attempting automatic opening through the native bridge [[app-shell-37](app-shell.md#app-shell-37)] where available and showing an ordinary external link [[app-shell-21](app-shell.md#app-shell-21)] to the complete sign-in URL regardless of that attempt's result ([DR-168](../decisions/168-independent-package-registry.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md), [DR-173](../decisions/173-the-registry-is-no-face-of-a-space.md)).
 
 #### playbook-library-113
 
@@ -177,7 +177,7 @@ When the user activates "New playbook" — at the Authoring section's foot of th
 
 When the new-playbook form shows its "Org" field [[playbook-library-51](#playbook-library-51)], the form shall present its selected registry's publishing-name suggestions and authorization state, permitting local authoring without a verified name ([DR-168](../decisions/168-independent-package-registry.md), [DR-172](../decisions/172-surfaces-a-fresh-user-reads.md), [DR-200](../decisions/200-publishing-names-need-registry-authority.md)):
 
-- Suggestions are the orgs its registry account may publish to [[environments-27](environments.md#environments-27)], read only while that account is signed in; a project-group match is only an initial suggestion, never a filter or required Space association.
+- Suggestions are only the orgs its selected registry account may publish to [[environments-27](environments.md#environments-27)], read only while that account is signed in, with no Space group, login, key or address supplying, selecting or filtering a suggestion ([DR-216](../decisions/216-registry-and-space-accounts-stay-apart.md)).
 - Loading, successful emptiness and an error with Retry stand in place; a typed org a nonempty successful answer omits wears "not yours to publish to", and the signed-out field reads "Publishing rights not checked".
 - A name without a successful authorization result carries guidance to use a claimable org and an ordinary link to the selected registry's `/account/orgs?scope=registry`, whose activation follows external-link navigation [[app-shell-21](app-shell.md#app-shell-21)] without cancelling navigation or invoking the automatic opener ([DR-202](../decisions/202-registry-guidance-keeps-account-scope.md)).
 - Suggestions and untouched defaults refresh on registry or account changes, preserving manually entered names and ignoring former-project, former-registry and former-account replies.
@@ -620,11 +620,11 @@ When an authoring session is created, opened, written, recorded, listed, or dele
 
 #### playbook-library-103
 
-When a client sends `draft.defaults` for a project, the authoring store shall reply with the `org` and `license` a new playbook of that project starts from, read at the reply, the registry asked at most once ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
+When a client sends `draft.defaults` for a project, the authoring store shall reply with the `org` and `license` a new playbook of that project starts from, read at the reply, the selected registry asked at most once ([DR-216](../decisions/216-registry-and-space-accounts-stay-apart.md)):
 
 | Field | Default |
 | --- | --- |
-| `org` | where the project's selected registry [[environments-38](environments.md#environments-38)] lists orgs its registry account may publish to [[environments-27](environments.md#environments-27)], the one whose path is the project's group — its spex repository key without any instance folder leading it [[storage-1](storage.md#storage-1)] and without the last segment — or an ancestor of it, else the first listed; where it lists none, the home holds no registry grant there, or the registry gives no answer, the first `/`-separated segment of that key past any instance folder — `slbeta1` for `@spex.sublang.ai/slbeta1/workshop/graph-crate-spex` |
+| `org` | the first namespace name, in registry name order, the selected registry account may publish to [[environments-27](environments.md#environments-27)]; empty where that account has no grant, lists none or gives no answer, with no fallback to a Space account, group, project key or local username |
 | `license` | `Apache-2.0` where the working folder's `LICENSE`, past a byte order mark and leading whitespace, begins with "Apache License"; `MIT` where it begins with "MIT License"; else none |
 
 #### playbook-library-71
@@ -643,7 +643,7 @@ When an integration suite drives a project's Packages tab and its new-playbook f
 | Registry selected from the chooser or through "Other…" | The environment's registry remains separate from the project's Space [[playbook-library-119](#playbook-library-119)]. |
 | Browser sign-in on a home with no Spaces, with the native opener absent, successful, refusing or rejecting | The available opener receives the complete sign-in URL once on starting; in every case, manual activation follows the ordinary link's complete URL without cancelling navigation or invoking the bridge again [[playbook-library-119](#playbook-library-119)]. |
 | Claiming an org on a home with no Spaces, with the native opener absent, successful, refusing or rejecting | Activating the claim link follows the selected registry's complete `/account/orgs?scope=registry` URL without cancelling navigation or invoking the opener [[playbook-library-121](#playbook-library-121)]. |
-| Org suggestions | Suggestions wait for the registry account; loading and failure stay visible through retry; successful empty and complete authorized lists display; a typed org outside a nonempty list reads "not yours to publish to"; manual names survive, untouched defaults refresh on account or registry changes, and former-account responses are ignored; unsigned, failed, empty and unowned states explain the publishing constraint with the selected registry's claim link [[playbook-library-121](#playbook-library-121)]. |
+| Org suggestions | No Space identity appears in package account context, including with only a Space grant and a manifest without `registry` [[playbook-library-119](#playbook-library-119)]; Org suggestions wait for the registry account; loading and failure stay visible through retry; successful empty and complete authorized lists display; a typed org outside a nonempty list reads "not yours to publish to"; manual names survive, untouched defaults refresh on account or registry changes, and former-account responses are ignored; unsigned, failed, empty and unowned states explain the publishing constraint with the selected registry's claim link [[playbook-library-121](#playbook-library-121)]. |
 
 ### Compile Coverage
 
@@ -837,7 +837,7 @@ Where the core runs with the scripted fake adapter, when authoring sessions are 
 
 #### playbook-library-104
 
-Where the core runs with the scripted fake adapter on a home signed in to two stand-in instances whose folders are `@<first>` and `@<second>`, each with its stand-in registry, the first the home's default instance, when `draft.defaults` is sent for a local-only project whose working folder's `LICENSE` stands as each case of the first table, and for it and a project of `acme/workshop/team` at each instance while the first instance's registry stands as each case of the second and the second's lists `alpha-two` at `alpha` and `team-two` at `acme/workshop/team`, and an authoring session and a one-shot compile then make their spec packages, the test suite shall assert the `license` and `org` replied per case, each reply asking once its explicitly selected registry — the first's for the local-only project — where the home holds that registry's grant, and no other registry [[playbook-library-103](#playbook-library-103)]:
+Where the core runs with the scripted fake adapter on a home signed in to two stand-in instances whose folders are `@<first>` and `@<second>`, each with its stand-in registry, the first the home's default instance, when `draft.defaults` is sent for a local-only project whose working folder's `LICENSE` stands as each case of the first table, and for it and a project of `acme/workshop/team` at each instance while the first instance's registry stands as each case of the second and the second's lists `alpha-two` at `alpha` and `team-two` at `acme/workshop/team`, and an authoring session and a one-shot compile then make their spec packages, the test suite shall assert the `license` and `org` replied per case, each reply asking once its selected registry — the first for the local-only project — where the home holds that registry's grant, and no Space account or other registry [[playbook-library-103](#playbook-library-103)]:
 
 | `LICENSE` | `license` replied |
 | --- | --- |
@@ -848,13 +848,13 @@ Where the core runs with the scripted fake adapter on a home signed in to two st
 
 | The first instance's registry | `org` for `tester/project-spex` | `org` for `@<first>/acme/workshop/team/graph-spex` | `org` for `@<second>/acme/workshop/team/graph-spex` |
 | --- | --- | --- | --- |
-| refusing the first registry's app token (`401`) | `tester` | `acme` | `team-two` |
-| out of service (`500`) | `tester` | `acme` | `team-two` |
-| listing no org | `tester` | `acme` | `team-two` |
-| listing `workshop-261011` alone | `workshop-261011` | `workshop-261011` | `team-two` |
-| listing `acme-work` at `acme/work`, `alpha` at `alpha`, and `workshop` at `acme/workshop` | `acme-work` | `workshop` | `team-two` |
-| not asked, the home signed out of the first registry | `tester` | `acme` | `team-two` |
-| not asked, the home signed out of both registries | `tester` | `acme` | `acme` |
+| refusing the first registry's app token (`401`) | empty | empty | `alpha-two` |
+| out of service (`500`) | empty | empty | `alpha-two` |
+| listing no org | empty | empty | `alpha-two` |
+| listing `workshop-261011` alone | `workshop-261011` | `workshop-261011` | `alpha-two` |
+| listing `acme-work` at `acme/work`, `alpha` at `alpha`, and `workshop` at `acme/workshop` | `acme-work` | `acme-work` | `alpha-two` |
+| not asked, the home signed out of the first registry | empty | empty | `alpha-two` |
+| not asked, the home signed out of both registries | empty | empty | empty |
 
 - the session's `meta.yaml` names the org and the license `draft.create` gave, its package named under that org [[playbook-library-70](#playbook-library-70)];
 - the one-shot compile's `meta.yaml` names the project's defaults [[playbook-library-69](#playbook-library-69)].
@@ -1021,7 +1021,7 @@ Where the browser journey harness boots real cores with a stand-in instance and 
 
 Where the browser journey harness boots real cores against an authenticated stand-in registry with a private release omitted from search, when the journey types that known release's name in the Registry tab of the Packages tab's Add… and exercises the not-listed row's refusal cases, the test suite shall assert:
 
-- the typed name reads as the one row "⟨name⟩ · not listed publicly", whose name and version suffice to request and install the permitted private release with the selected instance's ordinary credential, while the package remains absent from public search [[playbook-library-92](#playbook-library-92)];
+- the typed name reads as the one row "⟨name⟩ · not listed publicly", whose name and version suffice to request and install the permitted private release with the selected registry's registry-purpose credential, while the package remains absent from public search [[playbook-library-92](#playbook-library-92)];
 - exact, caret and tilde versions retain their respective request semantics, an empty or invalid version is refused, and Add makes no further search call [[playbook-library-92](#playbook-library-92)];
 - a registry access refusal is visible and never presented as successful installation, while a public search result can still be added from its own row [[playbook-library-92](#playbook-library-92)].
 
