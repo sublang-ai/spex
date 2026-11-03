@@ -555,7 +555,7 @@ function sigterms(log: string): Map<string, number> {
  * and its real walk of the processes it started recorded; beside it, a
  * bystander this process started, as a host's own child, ignoring
  * SIGTERM the same way. */
-async function stubbornTurn(t: TestContext, wedged: boolean, stop: { settleMs: number; killMs: number }) {
+async function stubbornTurn(t: TestContext, wedged: boolean, stop: { settleMs: number; killMs: number }, discoveryDelayMs = 0) {
   const fixture = scratchDir("spex-stubborn-agent-");
   const script = join(fixture, "agent.cjs");
   writeFileSync(script, STUBBORN_AGENT);
@@ -567,6 +567,7 @@ async function stubbornTurn(t: TestContext, wedged: boolean, stop: { settleMs: n
   const started = harness.service["startedProcesses"];
   const walk = started.pids.bind(started);
   started.pids = async () => {
+    if (walks.length === 0 && discoveryDelayMs) await new Promise((resolve) => setTimeout(resolve, discoveryDelayMs));
     const pids = await walk();
     walks.push(pids);
     return pids;
@@ -586,6 +587,14 @@ async function stubbornTurn(t: TestContext, wedged: boolean, stop: { settleMs: n
   const session = await client.expectOk("session.create", { projectId: project.id });
   await client.expectOk("turn.submit", { sessionId: session.id, text: "start the stubborn agent" });
   const { agent, child } = await stubborn.started;
+  // Use the dispatcher's clock for the grace period. The child's signal
+  // handler can run later under load; its log still proves delivery.
+  const dispatched: { signal: string | number; at: number }[] = [];
+  const kill = process.kill.bind(process);
+  t.mock.method(process, "kill", (pid: number, signal?: string | number) => {
+    if (pid === agent.pid && signal) dispatched.push({ signal, at: Date.now() });
+    return kill(pid, signal);
+  });
   const killed = new Promise<{ signal: NodeJS.Signals | null; at: number }>((resolve) => {
     agent.once("exit", (_code, signal) => resolve({ signal, at: Date.now() }));
   });
@@ -594,7 +603,7 @@ async function stubbornTurn(t: TestContext, wedged: boolean, stop: { settleMs: n
     for (const pid of [agent.pid as number, child]) if (processAlive(pid)) process.kill(pid, "SIGKILL");
   });
   client.close();
-  return { harness, log, walks, workingFolder, session, agent, child, killed, bystander };
+  return { harness, log, walks, dispatched, workingFolder, session, agent, child, killed, bystander };
 }
 
 /** Every path under `dir` with its size and modification time. */
@@ -624,8 +633,8 @@ async function gone(pid: number, withinMs: number): Promise<boolean> {
 test("CORE-41: a stop bounded by its seams kills an agent ignoring SIGTERM and leaves its turn uncertain", { timeout: 60_000 }, async (t) => {
   const SETTLE_MS = 1_000;
   const KILL_MS = 1_000;
-  const { harness, log, walks, workingFolder, session, agent, child, killed, bystander } =
-    await stubbornTurn(t, true, { settleMs: SETTLE_MS, killMs: KILL_MS });
+  const { harness, log, walks, dispatched, workingFolder, session, agent, child, killed, bystander } =
+    await stubbornTurn(t, true, { settleMs: SETTLE_MS, killMs: KILL_MS }, 250);
   const before = snapshot(workingFolder);
 
   const began = Date.now();
@@ -649,7 +658,10 @@ test("CORE-41: a stop bounded by its seams kills an agent ignoring SIGTERM and l
   assert.ok(agentTerm >= began + SETTLE_MS, `SIGTERM ${agentTerm - began} ms after the stop began`);
   const exit = await killed;
   assert.equal(exit.signal, "SIGKILL");
-  assert.ok(exit.at >= agentTerm + KILL_MS - 50, `SIGKILL ${exit.at - agentTerm} ms after SIGTERM`);
+  const termDispatch = dispatched.find((entry) => entry.signal === "SIGTERM");
+  const killDispatch = dispatched.find((entry) => entry.signal === "SIGKILL");
+  assert.ok(termDispatch && killDispatch, "both signals were dispatched to the real agent");
+  assert.ok(killDispatch.at >= termDispatch.at + KILL_MS - 50, `SIGKILL ${killDispatch.at - termDispatch.at} ms after SIGTERM dispatch`);
   assert.ok(returned - began < SETTLE_MS + KILL_MS + 5_000, `the stop returned ${returned - began} ms after it began`);
   assert.ok(walks.some((pids) => pids.includes(agent.pid as number) && pids.includes(child)), "the walk found the agent and its child");
   assert.ok(await gone(child, 5_000), "the agent's child is gone");
@@ -684,7 +696,7 @@ test("CORE-41: once the turns settle, an agent left alive receives SIGTERM at on
   // have begun the signals.
   const SETTLE_MS = 30_000;
   const KILL_MS = 1_000;
-  const { harness, log, walks, workingFolder, agent, child, killed, bystander } =
+  const { harness, log, walks, dispatched, workingFolder, agent, child, killed, bystander } =
     await stubbornTurn(t, false, { settleMs: SETTLE_MS, killMs: KILL_MS });
   const before = snapshot(workingFolder);
 
@@ -701,8 +713,11 @@ test("CORE-41: once the turns settle, an agent left alive receives SIGTERM at on
   assert.ok(agentTerm < began + SETTLE_MS / 3, `SIGTERM ${agentTerm - began} ms after the stop began`);
   const exit = await killed;
   assert.equal(exit.signal, "SIGKILL");
-  assert.ok(exit.at >= agentTerm + KILL_MS - 50, `SIGKILL ${exit.at - agentTerm} ms after SIGTERM`);
-  assert.ok(returned >= agentTerm + KILL_MS - 50, "the stop waited for the agent SIGTERM reached");
+  const termDispatch = dispatched.find((entry) => entry.signal === "SIGTERM");
+  const killDispatch = dispatched.find((entry) => entry.signal === "SIGKILL");
+  assert.ok(termDispatch && killDispatch, "both signals were dispatched to the real agent");
+  assert.ok(killDispatch.at >= termDispatch.at + KILL_MS - 50, `SIGKILL ${killDispatch.at - termDispatch.at} ms after SIGTERM dispatch`);
+  assert.ok(returned >= termDispatch.at + KILL_MS - 50, "the stop waited for the agent SIGTERM reached");
   assert.ok(walks.some((pids) => pids.includes(agent.pid as number) && pids.includes(child)), "the walk found the agent and its child");
   assert.ok(await gone(child, 5_000), "the agent's child is gone");
   // Only the processes the core started are signalled: a host's own

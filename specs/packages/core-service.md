@@ -992,6 +992,8 @@ Where admitted initialization fails, the integration suite shall distinguish an 
 
 Where a fixture agent ignores SIGTERM and holds a child of its own, and the stop's bounds are shortened through the seams, the integration suite shall stop the core mid-turn and assert that the agent receives SIGTERM once turns settle or the first bound passes and SIGKILL at the second, that the stop returns reporting the disposal unconfirmed, that nothing was written into the working folder, and that the session reads `uncertain` on this runtime afterwards [[core-service-39](#core-service-39)].
 
+With the first process discovery delayed, that coverage shall assert the full grace between the parent's actual SIGTERM and SIGKILL dispatches, while retaining the real agent's and child's signal-delivery and exit checks [[core-service-39](#core-service-39)].
+
 ### Record Visibility Coverage
 
 #### core-service-20

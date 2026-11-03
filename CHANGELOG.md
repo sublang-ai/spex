@@ -17,6 +17,8 @@ source; run source with `npm ci` and `npm start` (desktop) or
 
 ### Fixed
 
+- Agent process discovery no longer consumes the shutdown grace between SIGTERM and SIGKILL.
+
 - Browser setup keeps Retry visible when long diagnostics expand, and narrow spec outlines leave room for their package identifiers beside item counts.
 
 ### Changed
