@@ -922,6 +922,12 @@ source; run source with `npm ci` and `npm start` (desktop) or
   overlap share one recomputation instead of restarting one another
   ([#331](https://github.com/sublang-ai/spex/issues/331)).
 
+- Space left open during a run no longer re-reads after every saved record.
+  It re-reads when a conversation starts, a turn starts or settles, or this
+  window changes an intent; an intent changed elsewhere during a turn shows
+  when that turn settles, on window focus or on Refresh
+  ([#331](https://github.com/sublang-ai/spex/issues/331)).
+
 - Desktop packaging hooks load from either the workspace command or the
   repository-root `--projectDir` command, including native browser acceptance
   builds whose Linux executable name differs from the product name.

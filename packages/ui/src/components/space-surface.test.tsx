@@ -135,32 +135,84 @@ describe("GROUPS: re-reads on events, never on a timer (space-2)", () => {
     expect(useAppStore.getState().space?.instances[0]?.groups[0]?.repositories[0]?.state).toBe("reachable");
   });
 
-  test("session, ledger and configuration announcements re-read once, debounced by 300 ms, never on a timer", async () => {
+  /** A session of the shown project as `session.state` carries it. */
+  const sessionInfo = (over: Partial<SessionInfo> = {}): SessionInfo =>
+    ({ id: "s1", projectId: KEY, projectPath: "/tmp/p1", createdAt: NOW, live: false, endedAt: NOW, players: [], initialVisible: [], turns: 1, failed: false, ...over }) as SessionInfo;
+  const announce = (...messages: Parameters<typeof deliverServerMessageForTests>[0][]) =>
+    act(() => {
+      for (const message of messages) deliverServerMessageForTests(message);
+    });
+  const wait = (ms: number) =>
+    act(() => {
+      vi.advanceTimersByTime(ms);
+    });
+
+  test("space-131: session, ledger and configuration announcements re-read once, debounced by 300 ms, never on a timer", async () => {
+    useAppStore.setState({ sessions: [sessionInfo()] });
     await renderGroups(repoState());
     const before = calls("space.get").length;
     vi.useFakeTimers();
-    act(() => {
-      deliverServerMessageForTests({
-        type: "session.state",
-        session: { id: "s1", projectId: KEY, projectPath: "/tmp/p1", createdAt: NOW, live: false, endedAt: NOW, players: [], initialVisible: [], turns: 1, failed: false } as SessionInfo,
-      });
-      deliverServerMessageForTests({ type: "session.removed", sessionId: "s9", projectId: KEY });
-      deliverServerMessageForTests({ type: "intents.changed", projectIds: [KEY] });
-      deliverServerMessageForTests({ type: "config.state", state: { status: "missing", seeded: false, path: "/x" } as never });
-    });
-    act(() => {
-      vi.advanceTimersByTime(299);
-    });
+    announce(
+      { type: "session.state", session: sessionInfo({ turns: 2 }) },
+      { type: "session.removed", sessionId: "s9", projectId: KEY },
+      { type: "intents.changed", projectIds: [KEY] },
+      { type: "config.state", state: { status: "missing", seeded: false, path: "/x" } as never },
+    );
+    wait(299);
     expect(calls("space.get")).toHaveLength(before);
-    act(() => {
-      vi.advanceTimersByTime(1);
-    });
+    wait(1);
     expect(calls("space.get")).toHaveLength(before + 1);
     // Silence keeps it silent: a minute later, nothing has re-read.
-    act(() => {
-      vi.advanceTimersByTime(60_000);
-    });
+    wait(60_000);
     expect(calls("space.get")).toHaveLength(before + 1);
+  });
+
+  test("space-131: a running turn's records re-read nothing; its start and settle, this page's intent and a new session re-read once", async () => {
+    useAppStore.setState({ sessions: [sessionInfo()] });
+    await renderGroups(repoState());
+    let count = calls("space.get").length;
+    const reread = (times: number) => {
+      wait(300);
+      count += times;
+      expect(calls("space.get")).toHaveLength(count);
+    };
+    vi.useFakeTimers();
+
+    // The turn starts: its first announcement re-reads (space-2).
+    const running = sessionInfo({ live: true, turnActive: true, endedAt: null, turns: 2, title: "Fix it" });
+    announce({ type: "session.state", session: running });
+    reread(1);
+
+    // Its records announce the same turn, and the ledger moves with
+    // them: nothing re-reads while it runs (space-29).
+    announce(
+      { type: "session.state", session: { ...running, agentActiveMs: { captain: 10 } } },
+      { type: "intents.changed", projectIds: [KEY] },
+      { type: "session.state", session: { ...running, agentActiveMs: { captain: 20 } } },
+      { type: "intents.changed", projectIds: [KEY] },
+    );
+    reread(0);
+    wait(60_000);
+    expect(calls("space.get")).toHaveLength(count);
+
+    // An intent this page queues re-reads once the core accepts it.
+    await act(async () => {
+      await useAppStore.getState().queueIntent({ projectId: KEY, text: "Queued during the turn" });
+    });
+    expect(calls("intent.queue")).toHaveLength(1);
+    reread(1);
+
+    // A ledger change of a project with no running turn still re-reads.
+    announce({ type: "intents.changed", projectIds: ["other"] });
+    reread(1);
+
+    // The turn settles: one re-read shows what it stored.
+    announce({ type: "session.state", session: { ...running, live: false, turnActive: false, endedAt: NOW + 1 } });
+    reread(1);
+
+    // A session the store never held re-reads on its first announcement.
+    announce({ type: "session.state", session: sessionInfo({ id: "s2", turns: 0 }) });
+    reread(1);
   });
 });
 

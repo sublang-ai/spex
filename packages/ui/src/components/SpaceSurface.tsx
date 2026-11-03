@@ -349,7 +349,8 @@ export function SpaceSurface({ onOpenSession, onOpenProject, onAddCredential, re
   // The state is read on events only (space-2): the surface opening,
   // the window regaining focus, and Refresh; the core's broadcasts —
   // a sync's end, a sign-in's end, a host read — land through the
-  // store, and the announcements below re-read debounced.
+  // store, and the announcements below re-read debounced — the store
+  // counting only those that can move what Space shows (space-29).
   // The surface can open before the core is reachable — a launch
   // restores the surface the reader left (run-view-67) — so the read
   // waits for the connection rather than reporting it as a failure.
