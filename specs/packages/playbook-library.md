@@ -178,7 +178,7 @@ When the new-playbook form shows its "Org" field [[playbook-library-51](#playboo
 
 - Suggestions are the orgs its registry account may publish to [[environments-27](environments.md#environments-27)], read only while that account is signed in; a project-group match is only an initial suggestion, never a filter or required Space association.
 - Loading, successful emptiness and an error with Retry stand in place; a typed org a nonempty successful answer omits wears "not yours to publish to", and the signed-out field reads "Publishing rights not checked".
-- A name without a successful authorization result carries guidance to use a claimable org and an ordinary link to the selected registry's `/account/orgs`, whose activation follows external-link navigation [[app-shell-21](app-shell.md#app-shell-21)] without cancelling navigation or invoking the automatic opener.
+- A name without a successful authorization result carries guidance to use a claimable org and an ordinary link to the selected registry's `/account/orgs?scope=registry`, whose activation follows external-link navigation [[app-shell-21](app-shell.md#app-shell-21)] without cancelling navigation or invoking the automatic opener ([DR-202](../decisions/202-registry-guidance-keeps-account-scope.md)).
 - Suggestions and untouched defaults refresh on registry or account changes, preserving manually entered names and ignoring former-project, former-registry and former-account replies.
 
 #### playbook-library-52
@@ -639,7 +639,7 @@ When an integration suite drives a project's Packages tab and its new-playbook f
 | Registry sign-in and sign-out at a Space's origin | The registry account changes independently of Space account state [[playbook-library-119](#playbook-library-119)]. |
 | Registry selected from the chooser or through "Other…" | The environment's registry remains separate from the project's Space [[playbook-library-119](#playbook-library-119)]. |
 | Browser sign-in on a home with no Spaces, with the native opener absent, successful, refusing or rejecting | The available opener receives the complete sign-in URL once on starting; in every case, manual activation follows the ordinary link's complete URL without cancelling navigation or invoking the bridge again [[playbook-library-119](#playbook-library-119)]. |
-| Claiming an org on a home with no Spaces, with the native opener absent, successful, refusing or rejecting | Activating the claim link follows the selected registry's complete `/account/orgs` URL without cancelling navigation or invoking the opener [[playbook-library-121](#playbook-library-121)]. |
+| Claiming an org on a home with no Spaces, with the native opener absent, successful, refusing or rejecting | Activating the claim link follows the selected registry's complete `/account/orgs?scope=registry` URL without cancelling navigation or invoking the opener [[playbook-library-121](#playbook-library-121)]. |
 | Org suggestions | Suggestions wait for the registry account; loading and failure stay visible through retry; successful empty and complete authorized lists display; a typed org outside a nonempty list reads "not yours to publish to"; manual names survive, untouched defaults refresh on account or registry changes, and former-account responses are ignored; unsigned, failed, empty and unowned states explain the publishing constraint with the selected registry's claim link [[playbook-library-121](#playbook-library-121)]. |
 
 ### Compile Coverage

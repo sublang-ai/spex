@@ -257,7 +257,7 @@ When the reader activates Members on the heading of a group an instance lists or
 
 #### space-68
 
-When the reader activates "New group…" on a Space heading or in a permitted active group's overflow, the surface shall open the existing inline creation editor under that heading and create at that destination through `space.group.create` [[git-host-15](git-host.md#git-host-15)] ([DR-202](../decisions/202-groups-within-groups-and-deletion-review.md)):
+When the reader activates "New group…" on a Space heading or in a permitted active group's overflow, the surface shall open the existing inline creation editor under that heading and create at that destination through `space.group.create` [[git-host-15](git-host.md#git-host-15)] ([DR-203](../decisions/203-groups-within-groups-and-deletion-review.md)):
 
 - a Space heading creates at its root with no parent; a group's editor reads "New group in <group>", shows the parent's full path and Space, explains its members' inherited access, and sends that parent's stable id with the instance, name and path;
 - "Group name" and "Path" label the fields; the path follows the name as the Space derives it — lower-cased, each run outside letters, digits, `.`, `_` and `-` one `-`, leading and trailing `-` and `.` dropped — until edited, and a name deriving no path leaves it empty;
@@ -312,7 +312,7 @@ When the reader activates "Delete group" in a group's overflow [[space-1](#space
 
 #### space-123
 
-While the Space reports groups scheduled for deletion [[git-host-5](git-host.md#git-host-5)], the surface shall place them in one collapsible "Scheduled for deletion (N)" section per Space, outside its active groups, with their headings, paths and permitted restoration ([DR-202](../decisions/202-groups-within-groups-and-deletion-review.md)):
+While the Space reports groups scheduled for deletion [[git-host-5](git-host.md#git-host-5)], the surface shall place them in one collapsible "Scheduled for deletion (N)" section per Space, outside its active groups, with their headings, paths and permitted restoration ([DR-203](../decisions/203-groups-within-groups-and-deletion-review.md)):
 
 - the section starts collapsed, counts every pending group including inherited schedules, and preserves its open or closed state through Refresh while mounted; its disclosure opens it, Hide or Escape collapses it, and these acts change no remote state;
 - expanded guidance explains that the Space controls when deletion takes effect and Refresh checks completion, promising no deadline or recovery period; a successful fresh read removes a group no longer reported, with no section when none remain, and active replacements at the same path stay active;

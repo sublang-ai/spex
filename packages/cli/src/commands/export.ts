@@ -633,7 +633,7 @@ export const exportPackage: Command = async (args) => {
     rmSync(staging, { recursive: true, force: true });
   }
 
-  console.log(`Publishing rights for ${org} are not checked — use a name you can claim at ${registry.origin}/account/orgs`);
+  console.log(`Publishing rights for ${org} are not checked — use a name you can claim at ${registry.origin}/account/orgs?scope=registry`);
 
   for (const warning of warnings) process.stderr.write(`${warningLine(warning)}\n`);
   if (kept !== null && (options.description !== undefined || options.license !== undefined)) {

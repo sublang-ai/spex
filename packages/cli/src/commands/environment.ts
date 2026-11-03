@@ -274,7 +274,7 @@ export class Environment {
       case "forbidden": {
         if (context.operation === "publish") {
           const org = pkg?.split("/")[0] ?? "this org";
-          return new Refusal(`${org} is not yours at ${name} — claim it at ${origin}/account/orgs`);
+          return new Refusal(`${org} is not yours at ${name} — claim it at ${origin}/account/orgs?scope=registry`);
         }
         const who = await this.loginAt(origin, context.scope);
         return new Refusal(`${about}not shared with ${typeof who === "string" ? `@${who}` : "this account"} at ${name} — ask its owner`);
