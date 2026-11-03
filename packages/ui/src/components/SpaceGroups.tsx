@@ -905,11 +905,10 @@ function GroupSection({
         ) : null}
         {opened === "create" && hostGroup !== null && instance ? (
           <GroupNameEditor
-            embedded
             testId={`space-group-create-editor-${group.fullPath}`}
             instance={instance.origin}
             parent={hostGroup}
-            scope={{ name, fullPath: group.fullPath, space: instanceName(instance) }}
+            scope={{ space: instanceName(instance), parent: { name, fullPath: group.fullPath } }}
             connected={connected}
             canCreate={group.can.createSubgroup && !group.pendingDeletion}
             focusRequest={createFocus}

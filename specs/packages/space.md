@@ -148,10 +148,10 @@ When the reader activates "Remove from this list" in a signed-out instance's hea
 
 #### space-125
 
-The Space surface's Add to a group chooser, Members panel and Delete group confirmation shall use one attached inline presentation ([DR-198](../decisions/198-consistent-inline-group-actions.md)):
+The Space surface's Add to a group chooser, Members panel, New group editor at either level and Delete group confirmation shall use one attached inline presentation ([DR-198](../decisions/198-consistent-inline-group-actions.md), [DR-203](../decisions/203-groups-within-groups-and-deletion-review.md)):
 
-- the owning project, group or placement heading and its panel form one continuous quiet expansion with a shared muted background and a thin interaction-colour left rule; a group's child projects remain outside that expansion;
-- each panel names its affected project or group, retaining the Space context required by its action [[space-58](#space-58)] [[space-62](#space-62)] [[space-77](#space-77)];
+- the owning Space, project, group or placement heading and its panel form one continuous quiet expansion with a shared muted background and a thin interaction-colour left rule; a group's child projects remain outside that expansion;
+- each panel names its affected destination, project or group, retaining the Space context required by its action [[space-58](#space-58)] [[space-62](#space-62)] [[space-68](#space-68)] [[space-77](#space-77)];
 - normal text and medium-weight titles use the surrounding 14-pixel scale, secondary text uses 12 pixels, and controls use the standard button styles, with compact spacing and no independent raised card or warning-coloured slab;
 - content is bounded and wraps within its container [[space-28](#space-28)], with the final destructive control distinguished in red.
 
@@ -259,7 +259,8 @@ When the reader activates Members on the heading of a group an instance lists or
 
 When the reader activates "New group…" on a Space heading or in a permitted active group's overflow, the surface shall open the existing inline creation editor under that heading and create at that destination through `space.group.create` [[git-host-15](git-host.md#git-host-15)] ([DR-203](../decisions/203-groups-within-groups-and-deletion-review.md)):
 
-- a Space heading creates at its root with no parent; a group's editor reads "New group in <group>", shows the parent's full path and Space, explains its members' inherited access, and sends that parent's stable id with the instance, name and path;
+- both destinations use the same bounded editor, aligned fields, title hierarchy and standard Create/Cancel controls in the attached presentation [[space-125](#space-125)];
+- a Space heading creates at its root with no parent, its editor reading "New group at <Space>"; a group's editor reads "New group in <group>", shows the parent's full path and Space, explains its members' inherited access, and sends that parent's stable id with the instance, name and path;
 - "Group name" and "Path" label the fields; the path follows the name as the Space derives it — lower-cased, each run outside letters, digits, `.`, `_` and `-` one `-`, leading and trailing `-` and `.` dropped — until edited, and a name deriving no path leaves it empty;
 - Create is disabled for an empty name or path, a lost connection, or permission no longer allowing creation at that destination; keyboard submission follows the same guards and retains the draft;
 - Create reads "Creating…" while pending, with duplicate submission, cancellation and replacement blocked, and Cancel, Escape and repeat activation follow the shared editor contract [[space-126](#space-126)];
@@ -1342,6 +1343,7 @@ Where the Space surface renders over a signed-in home whose read allows group cr
 - "New group…" stands on the instance's heading, each real group's overflow holds Members, "Personal" holds none, and only active groups with permission offer "Delete group", including groups containing projects, placements, other groups or a server [[space-1](#space-1)] [[space-77](#space-77)];
 - `acme`'s and `a-spex`'s panels have a target heading and "Invite members…" above the roster, their directly held members offering Remove, an inherited member reading "via acme" without Remove, and the current account labelled You; `other` and `b-spex` have neither invitation nor removal, and personal display names and host links appear nowhere [[space-62](#space-62)] [[space-72](#space-72)];
 - a read denying creation disables "New group…" with its reason, in English and Chinese, and an unread instance offers none [[space-1](#space-1)];
+- root and nested "New group…" editors use the same attached frame, bounded content, aligned fields and controls, the root named by its Space and the nested editor by its parent [[space-125](#space-125)] [[space-68](#space-68)];
 - "New group…" opens Group name and Path, the path following "Lumen Labs" as "lumen-labs" and staying empty for "华芯智造", Create disabled until both hold text, Escape cancelling; Create sends the name and path with no parent, reads "Creating…", retains the name on refusal, and closes on success with the returned group listed [[space-68](#space-68)];
 - a permitted active group offers "New group…", whose editor names the parent, full path, Space and inherited access; submission names the correct instance and stable parent id, denied or pending groups offer none, lost connection or permission prevents Enter submission, repeat opening keeps the draft, and success lists the nested group with focus restored [[space-68](#space-68)];
 - "Invite members…" opens the target-named form with visible Usernames and Role labels, associated separator and account guidance, a username example, immediate-access wording, and group or project scope; the single-choice dropdown keeps the five reported role names and order, Developer selected, the role description following selection, and an unfamiliar or capability-mismatched role using only its reported send capability [[space-69](#space-69)];

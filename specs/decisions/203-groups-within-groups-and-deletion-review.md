@@ -7,7 +7,7 @@
 
 Accepted (2026-11-02) on the owner's request for complete, simple group creation and a way to collapse and revisit scheduled deletions.
 Amends [DR-172](172-surfaces-a-fresh-user-reads.md) in creating a group inside another group, and [DR-193](193-group-deletion-follows-the-space-policy.md) in scheduled groups' presentation.
-Applies [DR-198](198-consistent-inline-group-actions.md)'s editor, focus and pending-mutation guarantees.
+Extends [DR-198](198-consistent-inline-group-actions.md)'s attached presentation to New group at both levels, retaining its focus and pending-mutation guarantees.
 
 ## Context
 
@@ -27,7 +27,9 @@ The protocol already supports creating a group inside a permitted parent, while 
 - A newly accepted scheduled deletion opens its section and leaves focus on a surviving control there.
   A successful restoration returns the group to the active list and focus to its heading control.
   Mutations retain their task and disable collapse or duplicate submission until the reply; failures remain visible and focus never follows a removed control.
-- A permitted active group's More menu offers **New group…**, reusing the existing creation editor under that heading.
+- Top-level and nested creation share one bounded attached editor, matching Members and Delete group in the owner frame, title and guidance scale, aligned fields and standard Create/Cancel controls.
+  The top-level title names the Space; the nested title names the parent.
+- A permitted active group's More menu offers **New group…**, opening that editor under its heading.
   The editor names the parent, its full path and Space and explains that the parent's members gain access to the new group.
   Creation sends that parent's stable id; the same action on the Space heading still creates at the root.
   Lost permission or connection disables submission through both pointer and keyboard, preserving the draft and Cancel.

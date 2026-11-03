@@ -907,10 +907,30 @@ test.describe("a folder joining a team's project", () => {
 test.describe("organizing", () => {
   test.use({ appOptions: { host: { displayName: "spex.sublang.xyz" }, signedIn: true } });
 
-  test("space-68: create a group inside a group, preserving its parent through Refresh", async ({ page, app }, testInfo) => {
+  test("space-68: create groups at either level and revisit their scheduled deletion", async ({ page, app }, testInfo) => {
+    test.setTimeout(90_000);
     const host = app.host!;
     await open(page, app);
     await showGroups(page);
+    await setRail(page, true);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.emulateMedia({ colorScheme: "light" });
+
+    // A single real flow leaves the whole Space visible in the review
+    // captures: its heading, Personal, the active parent and child, and
+    // the group that will move into scheduled deletion.
+    const newGroup = instanceSection(page, host).getByTestId("space-instance-heading").getByTestId("space-new-group");
+    await newGroup.click();
+    const top = page.getByTestId("space-new-group-editor");
+    await expect(top.getByRole("heading")).toHaveText("New group at spex.sublang.xyz");
+    await top.getByRole("textbox", { name: "Group name", exact: true }).fill("Prototype");
+    await expect(top.getByRole("textbox", { name: "Path", exact: true })).toHaveValue("prototype");
+    await page.screenshot({ path: testInfo.outputPath("01-new-group-at-space-light.png") });
+    await top.getByRole("button", { name: "Create", exact: true }).click();
+    await expect(top).toBeHidden();
+    const prototype = page.getByTestId("space-group-prototype");
+    await expect(prototype).toBeVisible();
+
     const parent = page.getByTestId(`space-group-${HOST_GROUP}`);
     await menuAct(page, `space-group-more-${HOST_GROUP}`, `space-group-create-${HOST_GROUP}`);
     const editor = parent.getByTestId(`space-group-create-editor-${HOST_GROUP}`);
@@ -925,10 +945,11 @@ test.describe("organizing", () => {
     await menuAct(page, `space-group-more-${HOST_GROUP}`, `space-group-create-${HOST_GROUP}`);
     await expect(name).toHaveValue("Systems team");
     await expect(name).toBeFocused();
-    await editor.screenshot({ path: testInfo.outputPath("nested-group-desktop.png") });
+    await page.screenshot({ path: testInfo.outputPath("02-new-group-inside-group-light.png") });
     await setRail(page, false);
     await page.setViewportSize({ width: 320, height: TALL });
-    await editor.screenshot({ path: testInfo.outputPath("nested-group-320.png") });
+    await page.emulateMedia({ colorScheme: "dark" });
+    await page.screenshot({ path: testInfo.outputPath("06-new-group-inside-group-dark-320.png") });
     const accessibility = await new AxeBuilder({ page }).include(`[data-testid="space-group-create-editor-${HOST_GROUP}"]`).analyze();
     expect(accessibility.violations).toEqual([]);
     await editor.getByRole("button", { name: "Create", exact: true }).click();
@@ -939,6 +960,44 @@ test.describe("organizing", () => {
     await expect(page.getByTestId(`space-group-more-${HOST_GROUP}`)).toBeFocused();
     await page.getByTestId("space-refresh").click();
     await expect(page.getByTestId("space-refresh")).toHaveText("Refresh");
+    await expect(parent.getByTestId(`space-group-${createdPath}`)).toBeVisible();
+
+    await setRail(page, true);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.emulateMedia({ colorScheme: "light" });
+    host.script.scheduleGroupDeletion(true);
+    await groupAct(page, "prototype", "delete");
+    const deletion = prototype.getByTestId("space-group-delete-confirm-prototype");
+    await expect(deletion).toContainText("This group is empty.");
+    await expect(deletion.getByRole("heading")).toHaveText("Delete Prototype at spex.sublang.xyz?");
+    await expect(deletion.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+    await page.screenshot({ path: testInfo.outputPath("03-delete-group-confirmation-light.png") });
+    await deletion.getByRole("button", { name: "Delete group", exact: true }).click();
+    const scheduled = page.getByTestId("space-scheduled-groups");
+    const revisit = scheduled.getByRole("button", { name: "Scheduled for deletion (1)", exact: true });
+    const restore = scheduled.getByRole("button", { name: "Restore group", exact: true });
+    await expect(restore).toBeFocused();
+    await scheduled.getByRole("button", { name: "Hide", exact: true }).click();
+    await expect(revisit).toBeFocused();
+    await expect(revisit).toHaveAttribute("aria-expanded", "false");
+    await page.screenshot({ path: testInfo.outputPath("04-scheduled-deletion-collapsed-light.png") });
+    await page.getByTestId("space-refresh").click();
+    await expect(page.getByTestId("space-refresh")).toHaveText("Refresh");
+    await expect(revisit).toHaveAttribute("aria-expanded", "false");
+    await revisit.click();
+    await expect(restore).toBeVisible();
+    await expect(scheduled).toContainText("The Space controls when deletion takes effect.");
+    await page.screenshot({ path: testInfo.outputPath("05-scheduled-deletion-expanded-light.png") });
+    await page.emulateMedia({ colorScheme: "dark" });
+    await page.screenshot({ path: testInfo.outputPath("07-scheduled-deletion-expanded-dark.png") });
+    await setRail(page, false);
+    await page.setViewportSize({ width: 320, height: TALL });
+    await page.screenshot({ path: testInfo.outputPath("08-scheduled-deletion-expanded-dark-320.png") });
+    const fit = await measure(page, ['[data-testid="space-scheduled-groups"] button']);
+    expect({ overflow: fit.overflow, vertical: fit.vertical, overlap: fit.overlap }).toEqual({ overflow: [], vertical: [], overlap: [] });
+    await restore.click();
+    await expect(scheduled).toHaveCount(0);
+    await expect(prototype.getByTestId("space-group-more-prototype")).toBeFocused();
     await expect(parent.getByTestId(`space-group-${createdPath}`)).toBeVisible();
   });
 

@@ -4489,6 +4489,10 @@ msgid "New folder path"
 msgstr "New folder path"
 
 #: src/components/SpaceMembers.tsx
+msgid "New group at {space}"
+msgstr "New group at {space}"
+
+#: src/components/SpaceMembers.tsx
 msgid "New group in {group}"
 msgstr "New group in {group}"
 
