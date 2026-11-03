@@ -237,6 +237,8 @@ meta.md       The spec of specs
 | [DR-216](decisions/216-registry-and-space-accounts-stay-apart.md) | 216-registry-and-space-accounts-stay-apart.md | Registry-only package accounts and authoring defaults, public registry without an explicit choice, no Space credential or source fallback, and preserved exact locked provenance; amends DR-168, DR-127, DR-173 and DR-200 |
 | [DR-217](decisions/217-cligent-0-38-0-adoption-and-models-on-re-check.md) | 217-cligent-0-38-0-adoption-and-models-on-re-check.md | Cligent `^0.38.0`, Playbook `^18.1.3` and slc `^0.20.2`: a resumed Claude call on the provider's default admitted and Claude's catalog read inside the packaged app; a packaging check that a resume with no model runs the settings' current default; Re-check reading the agent cards' model catalogs again, the earlier model muted while it reads; amends DR-208 and DR-206 |
 | [DR-218](decisions/218-write-a-playbook-before-publishing.md) | 218-write-a-playbook-before-publishing.md | Command-only creation; publishing details and rights deferred to a release snapshot preserving local work |
+| [DR-219](decisions/219-developer-id-macos-downloads.md) | 219-developer-id-macos-downloads.md | Developer ID signed/notarized Mac downloads and bounded ticket-service retries |
+| [DR-220](decisions/220-tags-own-release-versions.md) | 220-tags-own-release-versions.md | TAG-owned app and CLI versions, prepared metadata, checked artifacts and branch diagnostics without publication |
 
 ## Packages
 

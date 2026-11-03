@@ -11,6 +11,10 @@ name: Hub Lane
 
 on:
   workflow_call:
+    inputs:
+      release-tag:
+        type: string
+        default: ""
   workflow_dispatch:
 
 # One lane at a time per ref; a run cancels nothing.
@@ -75,6 +79,12 @@ jobs:
           set -euo pipefail
           sudo install -d -m 0755 -o root -g root "$CHECKOUT"
           git archive --format=tar HEAD | sudo tar -x --no-same-owner -C "$CHECKOUT"
+
+      - name: Prepare the archived release version
+        if: inputs.release-tag != ''
+        env:
+          RELEASE_TAG: ${{ inputs.release-tag }}
+        run: sudo -n node "$CHECKOUT/scripts/release-version.mjs" prepare --root="$CHECKOUT" --tag="$RELEASE_TAG" --channel=app
 
       - name: The privileged lane (hub-10)
         run: sudo -n env LANE_COMMIT="$GITHUB_SHA" LANE_LOGS="$LANE_LOGS" "$CHECKOUT/apps/hub/scripts/privileged-lane.sh"

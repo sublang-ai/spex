@@ -452,6 +452,7 @@ When a compile is started for playbook id `<id>`, the compile runner shall run `
 - The compiler runs on the Node.js the resolver chose [[playbook-library-11](#playbook-library-11)], with the variable that runtime needs beside the caller's environment — `ELECTRON_RUN_AS_NODE=1` for Electron's, dropped again by the compiler's preload before it starts — so the compiler runs as Node while the agents it spawns inherit no such variable.
 - The materialized source replaces `<id>.md` in one atomic step, the picked file read once, only where `<id>.md` still holds the bytes it held when the job began, else the compile is refused as a conflict, changed meanwhile, before the compiler runs; the check is Spex's own write's, an independent writer keeping ordinary filesystem behavior ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)).
 - `slc` writes its outputs in the folder in place: a failed or canceled compile may leave them partial, and only a successful compile is recorded compiled or added ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)).
+- Before compilation or repackaging loads generated artifacts, the runner establishes an independent ESM scope in `<id>.playbook/` with a versioned creation of `package.json` declaring `"type": "module"`; an existing regular manifest declaring ESM is preserved byte for byte, while conflicting, malformed or non-regular manifests and non-plain generated directories refuse the job without overwriting them, leaving project and ancestor module configurations unchanged.
 
 #### playbook-library-42
 
@@ -649,6 +650,10 @@ When an integration suite drives a project's Packages tab, creation form and pub
 | Org suggestions | No Space identity appears in package account context, including with only a Space grant and a manifest without `registry` [[playbook-library-119](#playbook-library-119)]; Org suggestions wait for the registry account; loading and failure stay visible through retry; successful empty and complete authorized lists display; a typed org outside a nonempty list reads "not yours to publish to"; manual names survive, untouched defaults refresh on account or registry changes, and former-account responses are ignored; unsigned, failed, empty and unowned states explain the publishing constraint with the selected registry's claim link [[playbook-library-121](#playbook-library-121)]. |
 
 ### Compile Coverage
+
+#### playbook-library-126
+
+When the integration suite compiles and repackages generated artifacts under absent, inherited CommonJS, explicit CommonJS and explicit ESM project configurations, the suite shall verify the generated ESM boundary before compiler loading, real SLC strict checking and native FSM and linked-artifact imports, bundled registry loading through the existing engine links, preservation of compatible manifests and project files, refusal of conflicting or abnormal boundary entries, and rejection of a type-invalid machine [[playbook-library-12](#playbook-library-12)] [[playbook-library-14](#playbook-library-14)].
 
 #### playbook-library-118
 

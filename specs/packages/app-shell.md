@@ -139,6 +139,19 @@ The shell shall run the core service in the Electron main process or an Electron
 
 - The shell carries no application features — commands, state, records, config — over Electron IPC; Electron-specific channels are limited to the shell's own OS integrations (native dialogs, notifications, badge, quit handling), so the UI bundle runs unmodified in a browser against the same core.
 
+### Signed Mac Distribution
+
+#### app-shell-45
+
+When the Mac distribution command packages the app, the command shall produce a Developer ID signed and Apple-notarized App inside a signed and notarized DMG, both carrying validated stapled tickets, under these constraints ([DR-219](../decisions/219-developer-id-macos-downloads.md)):
+
+- missing credentials, a wrong team, signature or timestamp failure, a non-Accepted or timed-out notarization, and a failed ticket or Gatekeeper check fail the command;
+- a stapler ticket-service connection loss/timeout may retry the exact operation at most twice, without skipping validation or retrying other failures;
+- hardened runtime and Electron entitlements preserve the app runtime, native modules and Electron-as-Node compiler, whose strict packaged check runs again after signing;
+- the App is stapled before DMG creation, and the DMG is signed with a secure timestamp in a fresh temporary keychain after creation;
+- temporary keychains are removed and the original search list is restored after success or failure without changing the default keychain or trust settings;
+- the final DMG and its contained App pass signature, ticket and Gatekeeper checks before a verification report is written.
+
 ## Internal Behavior
 
 ### Renderer Isolation
@@ -181,12 +194,12 @@ Where the app is packaged, the packaged app shall ship its complete `node_module
 
 #### app-shell-14
 
-When a valid tag matching `app-v*` is pushed, the app release workflow shall create a GitHub release for that tag carrying the version's notes from the app changelog, the run-from-source instructions and both native desktop downloads ([DR-184](../decisions/184-native-desktop-tag-packages.md)):
+When a valid tag matching `app-v*` is pushed, the app release workflow shall create a GitHub release for that tag carrying prepared release notes [[release-5](release.md#release-5)], the run-from-source instructions and both native desktop downloads ([DR-184](../decisions/184-native-desktop-tag-packages.md)):
 
-- the workflow requires successful full app validation of the exact tagged tree [[release-18](release.md#release-18)], verifies the tag's version against both shells' `package.json`, and builds the native packages before creating the release — empty notes or a mismatch fail it without a release;
-- the release names Node.js 22.19 or later and, from a checkout of its tag, `npm ci`, `npm start` for the desktop, and `npm run start:server` for the server shell as the way to run it;
+- the workflow requires successful full app validation of the exact tagged tree [[release-18](release.md#release-18)], prepares both shells and their lockfile entries from the tag before installation [[release-16](release.md#release-16)], and verifies native metadata and archived app versions before creating the release;
+- the release names Node.js 22.19 or later and, from a checkout of its tag, `node scripts/release-version.mjs prepare --tag=<tag>` followed by `npm ci`, `npm start` for the desktop, and `npm run start:server` for the server shell as the way to run it;
 - the desktop package names its Electron version exactly, never as a range: the local packager (`npm run package -w apps/desktop`, electron-builder [[3]]) downloads the platform binaries of one release and refuses a range outright;
-- the downloads are a macOS Apple Silicon DMG and a Windows x64 per-user NSIS installer ([DR-177](../decisions/177-native-desktop-installers.md)), named with version, platform and architecture, with SHA-256 checksums and notes identifying unsigned and non-notarized status;
+- the downloads are a macOS Apple Silicon DMG and a Windows x64 per-user NSIS installer ([DR-177](../decisions/177-native-desktop-installers.md)), named with version, platform and architecture, with SHA-256 checksums and notes identifying signed and notarized macOS downloads and unsigned Windows downloads ([DR-219](../decisions/219-developer-id-macos-downloads.md));
 - native runners build both downloads with the shipped physical dependency tree [[app-shell-13](#app-shell-13)], and the workflow publishes only after both packaging jobs succeed [[release-37](release.md#release-37)];
 - the workflow does not publish to npm and does not run for CLI tags, keeping the release channels disjoint [[release-19](release.md#release-19)].
 
@@ -265,6 +278,7 @@ Where an environment variable consulted by an adapter readiness check (for examp
 
 When a native desktop package is built, its packaging gate shall run the packaged compiler's own strict FSM type check on the packaged Electron, accept a valid minimal XState machine using Node types, reject an invalid context type, and verify every declaration it reads lies within the package's physical dependency tree [[app-shell-13](#app-shell-13)], without source-checkout or global declarations.
 
+- The gate verifies the archived app manifest version against the builder's prepared version and records it alongside compiler evidence.
 - The gate provisions the archived core's default engine links and invokes its actual registry bundler, importing the produced module with the supplied native service and physical engine copies, with no global binary override.
 - The hooks load from both the desktop workspace and the repository-root `--projectDir` entry point, and the gate uses the platform packager's executable name, including the native acceptance build's override.
 
@@ -318,14 +332,13 @@ When the desktop's test suite starts a real core through the shell's own option 
 
 ### Release Coverage
 
+#### app-shell-46
+
+When the signing integration suite drives the distribution command with recorded system-tool responses, the suite shall verify the App-acceptance/staple/DMG/fresh-keychain ordering, timestamp and team checks, post-sign strict compiler check, final contained-App validation, secret redaction, bounded ticket-service retry with exhaustion blocking success, keychain restoration, and refusal on missing credentials, identity mismatch, import or builder failure, non-Accepted or timed-out notarization and failed Gatekeeper assessment [[app-shell-45](#app-shell-45)].
+
 #### app-shell-36
 
-When the app release workflow's tag check and notes assembly run, as the workflow runs them, over a checkout holding a changelog and both shell manifests for an `app-vMAJOR.MINOR.PATCH` tag, the test suite shall assert the regular release's checks and instructions:
-
-- the notes end with the run-from-source instructions, which name Node.js 22.19 — the root manifest's engine floor — or later and check out that tag before `npm ci`, `npm start` and `npm run start:server` [[app-shell-14](#app-shell-14)];
-- the notes link both versioned native downloads and their checksums, identify unsigned and non-notarized status, and include native Windows in the source instructions [[app-shell-14](#app-shell-14)];
-- either shell's manifest off the tag's version refuses the release [[app-shell-14](#app-shell-14)];
-- a version with no changelog section is refused as empty notes [[app-shell-14](#app-shell-14)].
+When the app release workflow's notes assembly runs over an isolated tagged checkout with no version bump or changelog section, the test suite shall assert successful automatic notes, the root manifest's Node.js floor, version preparation before source installation, both versioned native downloads and checksums, and accurate Mac/Windows signing status [[app-shell-14](#app-shell-14)].
 
 ## References
 

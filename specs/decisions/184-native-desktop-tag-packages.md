@@ -10,6 +10,10 @@ Amends [DR-040](040-source-only-app-releases.md) for binary distribution; source
 
 Amended by [DR-177](177-native-desktop-installers.md) for macOS download format: a DMG replaces the ZIP; platform architectures and publication gates remain.
 
+Amended by [DR-219](219-developer-id-macos-downloads.md) for signed and notarized macOS downloads; Windows status and release gates remain.
+
+Amended by [DR-220](220-tags-own-release-versions.md) for TAG-owned versions, deterministic pre-validation metadata preparation and optional curated notes; release channel scopes and full validation gates remain.
+
 ## Context
 
 Native macOS and Windows installation builds have been exercised locally, but the app tag workflow still publishes source instructions alone.
