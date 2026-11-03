@@ -914,6 +914,13 @@ source; run source with `npm ci` and `npm start` (desktop) or
 
 ### Fixed
 
+- Native desktop packages retain the compiler's standard-library, XState and
+  Node declarations in the physical dependency tree. Newly authored playbooks
+  use readable reference documents, the bundled native builder and physical
+  engine links when compiled and added. Each native package now checks valid
+  and invalid FSM types and imports an actually bundled registry module before
+  it can become an installer. See [the beta.25 preparation record](docs/releases/0.9.0-beta.25-preparation.md).
+
 - Registry sign-in opens the browser on a home with no Space account.
   The manual sign-in link stays usable when automatic opening is refused
   or fails, preserving the complete sign-in URL.
