@@ -12,10 +12,11 @@ const { promisify } = require("node:util");
 
 module.exports = async function afterPack(context) {
   const product = context.packager.appInfo.productFilename;
+  const executableName = context.packager.executableName ?? product;
   const mac = context.electronPlatformName === "darwin";
   const app = mac ? join(context.appOutDir, `${product}.app`, "Contents") : context.appOutDir;
   const executable = mac ? join(app, "MacOS", product)
-    : join(app, product + (context.electronPlatformName === "win32" ? ".exe" : ""));
+    : join(app, executableName + (context.electronPlatformName === "win32" ? ".exe" : ""));
   const modules = join(app, mac ? "Resources" : "resources", "app.asar.unpacked", "node_modules");
   const scratch = await mkdtemp(join(tmpdir(), "spex-packaged-compiler-"));
   try {

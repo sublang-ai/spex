@@ -266,6 +266,7 @@ Where an environment variable consulted by an adapter readiness check (for examp
 When a native desktop package is built, its packaging gate shall run the packaged compiler's own strict FSM type check on the packaged Electron, accept a valid minimal XState machine using Node types, reject an invalid context type, and verify every declaration it reads lies within the package's physical dependency tree [[app-shell-13](#app-shell-13)], without source-checkout or global declarations.
 
 - The gate provisions the archived core's default engine links and invokes its actual registry bundler, importing the produced module with the supplied native service and physical engine copies, with no global binary override.
+- The hooks load from both the desktop workspace and the repository-root `--projectDir` entry point, and the gate uses the platform packager's executable name, including the native acceptance build's override.
 
 #### app-shell-34
 
