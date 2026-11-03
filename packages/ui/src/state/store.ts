@@ -1390,6 +1390,22 @@ function placeState(
     set({ spaceChangeSeq: get().spaceChangeSeq + 1 });
   }
 
+  /** Whether a turn holds the session's runtime (DR-051). */
+  const turnRuns = (session: SessionInfo): boolean => session.live || session.turnActive === true;
+
+  /** Whether a `session.state` can move what Space shows (space-29): a
+   * session new to the store, or a turn starting or settling — never a
+   * record the running turn stored, which its settle shows. */
+  function sessionMovesSpace(next: SessionInfo, previous: SessionInfo | undefined): boolean {
+    return (
+      !previous ||
+      previous.live !== next.live ||
+      previous.turnActive !== next.turnActive ||
+      previous.title !== next.title ||
+      previous.turns !== next.turns
+    );
+  }
+
   /** Fold one draft record into its view (playbook-library-53): the
    * same reducer the run view uses, plus the seq index that lets the
    * thread interleave lines and segments in record order. A record at
@@ -1718,7 +1734,8 @@ function placeState(
       }
       case "session.state": {
         if (sessionReadPending) sessionHeard.add(message.session.id);
-        noteSpaceChange();
+        const previous = get().sessions.find((s) => s.id === message.session.id);
+        if (sessionMovesSpace(message.session, previous)) noteSpaceChange();
         const sessions = get().sessions.filter(
           (session) => session.id !== message.session.id,
         );
@@ -1727,7 +1744,7 @@ function placeState(
         const view = get().views[message.session.id];
         // The runtime's release at settlement reports the session no
         // longer live: that report still belongs to the turn that ended.
-        const wasLive = get().sessions.find((s) => s.id === message.session.id)?.live === true;
+        const wasLive = previous?.live === true;
         set({ sessions, ...(view ? {
           views: { ...get().views, [message.session.id]: sessionActivity(view, message.session) },
         } : {}) });
@@ -1743,7 +1760,11 @@ function placeState(
         get().forgetSession(message.sessionId, message.projectId);
         break;
       case "intents.changed": {
-        noteSpaceChange();
+        // A running turn's ledger moves with its records: its settle
+        // re-reads Space for them (space-29). An idle project batched
+        // beside it still re-reads now.
+        const running = new Set(get().sessions.filter(turnRuns).map((s) => s.projectId));
+        if (message.projectIds.some((projectId) => !running.has(projectId))) noteSpaceChange();
         // The one fold moved (DR-035): re-pull it, and refresh any
         // loaded History first page for the named projects.
         void get()
@@ -2761,17 +2782,20 @@ function placeState(
     async queueIntent(input): Promise<IntentInfo> {
       const { attachments, ...rest } = input;
       const intent = await getClient().command("intent.queue", { ...rest, ...(attachments?.length ? { attachments: [...attachments] } : {}) });
+      noteSpaceChange();
       await get().loadLedger();
       return intent;
     },
 
     async editIntent(intentId, text, attachments): Promise<void> {
       await getClient().command("intent.edit", { intentId, text, ...(attachments ? { attachments: [...attachments] } : {}) });
+      noteSpaceChange();
       await get().loadLedger();
     },
 
     async closeIntent(intentId, as): Promise<void> {
       await getClient().command("intent.close", { intentId, as });
+      noteSpaceChange();
       await get().loadLedger();
     },
 
@@ -2783,6 +2807,7 @@ function placeState(
 
     async removeIntent(intentId): Promise<void> {
       await getClient().command("intent.remove", { intentId });
+      noteSpaceChange();
       // The row leaves at once, from every page already loaded — the
       // broadcast that follows re-reads the first page anyway.
       const history = Object.fromEntries(
