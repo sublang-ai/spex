@@ -473,9 +473,9 @@ export function SpaceSurface({ onOpenSession, onOpenProject, onAddCredential, re
                 signIn={signIn}
                 servers={servers.listing}
                 onAddCredential={onAddCredential}
-                onSelect={(key) => {
+                onSelect={(key, reveal) => {
                   setTab("sync");
-                  setSelected((current) => (current === key ? undefined : key));
+                  setSelected((current) => (!reveal && current === key ? undefined : key));
                 }}
                 onExplore={(key) => {
                   setTab("explore");

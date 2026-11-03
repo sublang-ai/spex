@@ -20,6 +20,8 @@ Amended by [DR-190](190-membership-with-a-clear-scope.md) in the group overflow:
 Amended by [DR-192](192-choose-a-group-before-adding.md) in the group picker: a visible task title, labelled Space, radio choices and explicit Add to group replace the immediate "Share into" actions.
 Amended by [DR-203](203-groups-within-groups-and-deletion-review.md) in restoring creation inside a permitted group through its New group action.
 
+Amended by [DR-209](209-a-project-row-with-one-menu.md) in the project-row vocabulary and actions: explicit record counts, neutral missing-code-remote status, and one overflow for all secondary acts.
+
 ## Context
 
 A fresh-user audit of every phrase and flow of the package and Space operations, in the code, the catalogs, the journeys and the English catalog read with no other context, found the same roots behind the owner's examples.

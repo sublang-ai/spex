@@ -997,6 +997,11 @@ msgstr "a dispatched intent's text is history"
 msgid "a Git merge is pending; finish or abort it in a terminal before syncing"
 msgstr "a Git merge is pending; finish or abort it in a terminal before syncing"
 
+#. Refusal of opening a project's code on a team server because its records name no code remote; this prerequisite does not describe access to saved sessions or other records
+#: src/space.ts
+msgid "A Git remote is required to open this project's code on a server."
+msgstr "A Git remote is required to open this project's code on a server."
+
 #. Why a project's records are unreachable: their group's path is your login's, so they can have no folder of their own on this computer; read after 'Unreachable: '
 #: src/space-groups.ts
 msgid "a group named like your login"
@@ -1251,20 +1256,15 @@ msgstr "Code not downloaded: {host} needs your credential — add it in Settings
 msgid "Code not downloaded: your credential for {host} cannot be read — set it again in Settings"
 msgstr "Code not downloaded: your credential for {host} cannot be read — set it again in Settings"
 
-#. The title of a warning glyph on a project's row while the project is not open on this computer: its records name no Git host for its code
-#: src/space.ts
-msgid "Code not on a Git host"
-msgstr "Code not on a Git host"
-
-#. The title of a warning glyph on a project's row while the project is open on this computer: its code is on no Git host, only in its folder here
-#: src/space.ts
-msgid "Code only on this computer"
-msgstr "Code only on this computer"
-
 #. The project file's unit label: the remote of the code changed
 #: src/space.ts
 msgid "Code remote changed"
 msgstr "Code remote changed"
+
+#. A project's code status: Spex has no recorded Git remote address for the code; this says nothing about whether its folder is a Git repository, its backups, or access to its records
+#: src/space.ts
+msgid "Code remote not configured"
+msgstr "Code remote not configured"
 
 #. The title of a project's code glyph on its row: where its code is — {where} is a Space's display name, or the host of the code's remote as the reader set it (such as github.com), or a local remote as written
 #: src/space.ts
@@ -1952,11 +1952,6 @@ msgstr "Name the group"
 #: src/environments.ts
 msgid "Name the package to add"
 msgstr "Name the package to add"
-
-#. Refusal of opening a project on a team server: its records name no Git host for its code, so the server has no code to take; the member pushes the code to a Git host first
-#: src/space.ts
-msgid "Needs the code on a Git host"
-msgstr "Needs the code on a Git host"
 
 #. A stopped transfer's message; {host} is the remote's host
 #. A stopped transfer's message; {host} is the remote's host
@@ -3462,6 +3457,7 @@ msgstr "Your global packages' folder is not on this computer"
 msgid "Your merge is saved on this computer — Retry to send it"
 msgstr "Your merge is saved on this computer — Retry to send it"
 
+#. Refusal: the registry gave no answer listing the orgs this account may publish to; {registry} is its display name
 #. Refusal: the registry gave no answer listing the orgs this account may publish to; {registry} is its display name
 #: src/environments.ts
 msgid "Your orgs at {registry} could not be read — check the connection, then Retry"

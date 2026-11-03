@@ -683,7 +683,7 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
     expect(screen.queryByTestId(`space-repo-dot-${KEY}`)).toBeNull();
     expect(screen.queryByTestId(`space-repo-counts-${KEY}`)).toBeNull();
     const state = screen.getByTestId(`space-repo-state-${KEY}`);
-    expect(state.textContent).toBe("1 to send");
+    expect(state.textContent).toBe("1 record to sync");
     expect(state.getAttribute("title")).toBe("Sessions (1)");
     // The row is named by its project alone, its code and phrase
     // describing it, so the name holds while the phrase changes.
@@ -711,6 +711,16 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
     fireEvent.click(row);
     expect(screen.queryByTestId("space-repository")).toBeNull();
 
+    // The explicit records status opens Sync and keeps it open when
+    // selected repeatedly, including from Explore.
+    fireEvent.click(state);
+    expect(screen.getByRole("tab", { name: "Sync", selected: true })).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: "Explore" }));
+    fireEvent.click(state);
+    expect(screen.getByRole("tab", { name: "Sync", selected: true })).toBeTruthy();
+    fireEvent.click(state);
+    expect(screen.getByTestId("space-repository")).toBeTruthy();
+
     // A project in no group stands under "This computer" after every
     // instance, before "Add a Space…" (space-1).
     cleanup();
@@ -730,13 +740,13 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
 
   test("space-120, space-61: each state reads its one phrase and offers its control and its overflow; Members stands in a reachable row's overflow; nothing moves, places, leaves or attaches", async () => {
     // The phrase, the primary control, and the overflow's entries by
-    // their names: "Sync now" where it can sync, Members on a reachable
+    // their names: "Sync records" where it can sync, Members on a reachable
     // placement, "Explore records" always (space-1, space-61, space-111,
     // space-120).
     const cases: [RowOver, string, string | null, string[]][] = [
-      [{ state: "reachable", lastSync: null }, "Never synced", "Show", ["Sync now", "Members", "Explore records"]],
-      [{ state: "reachable", lastSync: { at: NOW - 5 * MIN, sent: 1, received: 1 } }, "Synced 5m ago", "Show", ["Sync now", "Members", "Explore records"]],
-      [{ state: "read-only", reason: "archived" }, "Read-only: archived", "Show", ["Sync now", "Explore records"]],
+      [{ state: "reachable", lastSync: null }, "Never synced", "Open project", ["Sync records", "Members", "Explore records"]],
+      [{ state: "reachable", lastSync: { at: NOW - 5 * MIN, sent: 1, received: 1 } }, "Synced 5m ago", "Open project", ["Sync records", "Members", "Explore records"]],
+      [{ state: "read-only", reason: "archived" }, "Read-only: archived", "Open project", ["Sync records", "Explore records"]],
       [{ state: "unreachable", reason: "the host stopped listing it" }, "Unreachable: the host stopped listing it", "Retry", ["Explore records"]],
       // Not on this computer, the row reads nothing and offers Open here
       // (space-61, space-111).
@@ -797,21 +807,40 @@ describe("GROUPS: the groups list and its rows (space-1, space-61, space-64)", (
     expect(shortMoment(since)).toMatch(/月/);
   });
 
-  test("space-1: a project in a group naming no code remote reads ⚠ Code only on this computer in the attention tone; one at a Space a glyph titled by its display name; none before the core knows, nor under This computer", async () => {
-    await renderGroups(base({}, [repo({ code: "Code only on this computer", codeKind: "none" })]), { open: false });
+  test("space-1: missing code remote is neutral information with an attached explanation, independent of records sync", async () => {
+    await renderGroups(base({}, [repo({ code: "Code remote not configured", codeKind: "none" })]), { open: false });
     const none = screen.getByTestId(`space-repo-code-${KEY}`);
-    expect(none.textContent).toBe("⚠ Code only on this computer");
+    expect(none.textContent).toBe("Code remote not configured");
     expect(none.dataset.kind).toBe("none");
-    expect(none.getAttribute("title")).toBe("Code only on this computer");
-    // The warning wears the attention tone, the row's phrase's own, not
-    // a stop's red.
-    expect(none.dataset.tone).toBe("attention");
-    expect(none.className).toContain("text-amber-700");
-    expect(none.className).not.toMatch(/text-red-/);
+    expect(none.dataset.tone).toBe("idle");
+    expect(none.className).not.toMatch(/text-(amber|red)-/);
+    none.focus();
+    fireEvent.click(none);
+    const detail = screen.getByRole("region", { name: "Code for academy" });
+    expect(document.activeElement).toBe(detail);
+    expect(none.getAttribute("aria-expanded")).toBe("true");
+    expect(detail.textContent).toContain("Spex has no remote repository address for this project's code.");
+    expect(detail.textContent).toContain("Set the project folder's Git origin remote, then sync records to update the project.");
+    expect(detail.textContent).toContain("A Git remote is required to open this project's code on a server.");
+    // Information never starts a sync or navigation, and it doesn't
+    // change the availability of the separate records action.
+    expect(calls("space.sync")).toEqual([]);
+    expect(moreEntries(KEY)).toContain("Sync records");
+    detail.focus();
+    fireEvent.keyDown(detail, { key: "Escape" });
+    await waitFor(() => expect(document.activeElement).toBe(none));
+    expect(screen.queryByTestId(`space-row-code-details-${KEY}`)).toBeNull();
+    fireEvent.click(none);
+    fireEvent.click(within(screen.getByTestId(`space-row-code-details-${KEY}`)).getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(document.activeElement).toBe(none));
+    fireEvent.click(none);
+    deliver(base({}, [repo({ code: CODE, codeKind: "elsewhere" })]));
+    expect(screen.queryByTestId(`space-row-code-details-${KEY}`)).toBeNull();
+    expect(document.activeElement).toBe(screen.getByTestId(`space-repo-${KEY}`));
     cleanup();
     // Under "This computer" nobody shares the project yet: no glyph,
     // whatever the core says of its code, signed in or not.
-    for (const [kind, code] of [["none", "Code not on a Git host"], ["elsewhere", CODE]] as const) {
+    for (const [kind, code] of [["none", "Code remote not configured"], ["elsewhere", CODE]] as const) {
       const localRow = repo({ state: "local-only", remote: null, id: null, code, codeKind: kind, branch: null, members: null });
       await renderGroups(base({ own: { name: "jane", named: false, repositories: [OWN_REPO, localRow] } }, []), { open: false });
       expect(within(screen.getByTestId("space-own")).getByTestId(`space-row-${KEY}`)).toBeTruthy();
@@ -1359,7 +1388,7 @@ describe("GROUPS: the instance's entries (space-1, space-58, space-61, DR-120)",
     expect(within(screen.getByTestId("space-group-@jane")).getByRole("heading", { level: 3 }).textContent).toBe("Personal");
     const row = within(apart).getByTestId("space-row-@spex.example/jane/jane-spex@81");
     expect(within(row).getByTestId("space-repo-state-@spex.example/jane/jane-spex@81").textContent).toBe("Unreachable: a group named like your login");
-    // No Open, no "Sync now" in its overflow; Retry its one control
+    // No Open, no "Sync records" in its overflow; Retry its one control
     // (space-61, space-111).
     expect(within(row).queryByTestId("space-row-open-@spex.example/jane/jane-spex@81")).toBeNull();
     expect(within(moreOf("@spex.example/jane/jane-spex@81")).queryByTestId("space-row-sync-@spex.example/jane/jane-spex@81")).toBeNull();
@@ -1523,16 +1552,17 @@ describe("GROUPS: copy and fit (space-27, space-28)", () => {
     expect(item.className.split(/\s+/)).toContain("@container");
     const name = screen.getByTestId(`space-repo-${KEY}`);
     expect(name.textContent).toBe("academy");
-    for (const token of ["flex-1", "truncate"]) expect(name.className.split(/\s+/)).toContain(token);
+    for (const token of ["w-full", "truncate"]) expect(name.className.split(/\s+/)).toContain(token);
+    expect(name.parentElement!.className.split(/\s+/)).toContain("flex-1");
     expect(name.getAttribute("title")).toBe("academy");
     const phrase = screen.getByTestId(`space-repo-state-${KEY}`);
     for (const token of ["min-w-0", "truncate"]) expect(phrase.className.split(/\s+/)).toContain(token);
-    expect(name.parentElement!.className.split(/\s+/)).toContain("flex-wrap");
+    expect(name.parentElement!.parentElement!.className.split(/\s+/)).toContain("flex-wrap");
     expect(screen.getByTestId(`space-repo-code-${KEY}`).className).toContain("hidden");
     expect(screen.getByTestId(`space-repo-code-${KEY}`).className).toContain("@md:inline-flex");
     // The local changes read as the one phrase, no count beside it
     // (space-120).
-    expect(phrase.textContent).toBe("1 to send");
+    expect(phrase.textContent).toBe("1 record to sync");
     expect(screen.queryByTestId(`space-repo-changes-${KEY}`)).toBeNull();
     // The overflow keeps its name in its mark's form (space-1).
     expect(screen.getByTestId(`space-row-more-${KEY}`).getAttribute("aria-label")).toBe("More for academy");

@@ -14,6 +14,8 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 
 Amended by [DR-196](196-a-review-count-and-a-way-back.md) in sidebar availability for a place holding a saved-record folder task.
 
+Amended by [DR-209](209-a-project-row-with-one-menu.md) in the code phrase and project-row controls: absent code remote is neutral configuration information, server guidance concerns opening code alone, and alternate opening destinations share one overflow.
+
 ## Context
 
 - A member signed in to a space, opened a seat on its server and saw, in the left panel, the server's name as a heading over nothing, beside "This computer" and its projects; it read as the group they had joined, broken.

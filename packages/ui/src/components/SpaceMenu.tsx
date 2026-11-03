@@ -3,8 +3,8 @@
 
 // The Space surface's menus (space-1, space-111, run-view-170, DR-159,
 // DR-172): a row's and a group heading's one overflow control, "More",
-// and beside a row's primary control the other places it may be opened
-// at. One trigger opens a menu of acts anchored beneath it through the
+// with a project's other opening destinations grouped in that menu.
+// One trigger opens a menu of acts anchored beneath it through the
 // house popover idiom (usePopover): focus moves into the menu, ↑/↓ walk it, Escape, Tab and
 // a click outside close it, focus going back to the trigger. An entry
 // the state does not offer now stands disabled with its reason beside
@@ -29,13 +29,15 @@ export interface MenuEntry {
   /** Words beside the label in the secondary tone: why a disabled
    * entry is not offered now. */
   hint?: string;
+  /** A quiet heading starting a group within the same menu. */
+  section?: string;
   testId: string;
   disabled?: boolean;
   onSelect(): void;
 }
 
 const MENU_ITEM =
-  "flex min-h-6 w-full min-w-0 flex-col items-start rounded px-2 py-1 text-left text-xs hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent dark:hover:bg-neutral-800";
+  "flex min-h-6 w-full min-w-0 flex-col items-start rounded px-2 py-1 text-left text-xs hover:bg-neutral-100 disabled:cursor-not-allowed disabled:hover:bg-transparent dark:hover:bg-neutral-800";
 
 /** The words "More" the overflow control is named by (space-1). */
 export const moreLabel = (): string =>
@@ -101,26 +103,32 @@ export function MenuButton({
           data-testid={`${testId}-menu`}
           className="absolute right-0 top-full z-20 mt-0.5 flex w-max min-w-40 max-w-[16rem] flex-col rounded-md border border-neutral-200 bg-white p-1 shadow-lg dark:border-neutral-700 dark:bg-neutral-900"
         >
-          {entries.map((entry) => (
-            <button
-              key={entry.testId}
-              type="button"
-              role="menuitem"
-              data-testid={entry.testId}
-              aria-label={entry.name}
-              title={entry.title ?? entry.name ?? entry.hint}
-              className={MENU_ITEM}
-              disabled={entry.disabled}
-              onClick={() => {
-                setOpen(false);
-                entry.onSelect();
-              }}
-            >
-              <span className="min-w-0 max-w-full truncate">{entry.label}</span>
-              {entry.hint ? (
-                <span className="min-w-0 max-w-full whitespace-normal break-words text-neutral-500">{entry.hint}</span>
+          {entries.map((entry, index) => (
+            <div key={entry.testId} role="none">
+              {entry.section ? (
+                <div role="presentation" className={`mb-1 px-2 pt-2 text-xs font-medium text-neutral-500 ${index > 0 ? "mt-1 border-t border-neutral-200 dark:border-neutral-800" : ""}`}>
+                  {entry.section}
+                </div>
               ) : null}
-            </button>
+              <button
+                type="button"
+                role="menuitem"
+                data-testid={entry.testId}
+                aria-label={entry.name}
+                title={entry.title ?? entry.name ?? entry.hint}
+                className={MENU_ITEM}
+                disabled={entry.disabled}
+                onClick={() => {
+                  setOpen(false);
+                  entry.onSelect();
+                }}
+              >
+                <span className={`min-w-0 max-w-full truncate ${entry.disabled ? "opacity-50" : ""}`}>{entry.label}</span>
+                {entry.hint ? (
+                  <span className="min-w-0 max-w-full whitespace-normal break-words text-neutral-500">{entry.hint}</span>
+                ) : null}
+              </button>
+            </div>
           ))}
         </div>
       ) : null}

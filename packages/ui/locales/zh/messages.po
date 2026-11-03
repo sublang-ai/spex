@@ -242,6 +242,11 @@ msgstr "{count, plural, other {# 个规程}}"
 msgid "{count, plural, one {# record never reached a Space. Remove anyway?} other {# records never reached a Space. Remove anyway?}}"
 msgstr "{count, plural, other {# 条记录从未到达任何 Space。仍要移除？}}"
 
+#. a project's row: how many Spex records this computer changed that are not sent yet, not code files or Git commits; the sync action in its overflow sends and receives records
+#: src/lib/space.ts
+msgid "{count, plural, one {# record to sync} other {# records to sync}}"
+msgstr "{count, plural, other {# 条记录待同步}}"
+
 #: src/components/SpaceExplorer.tsx
 #: src/components/SpecView.tsx
 msgid "{count, plural, one {# record} other {# records}}"
@@ -345,11 +350,6 @@ msgstr "另有 {count} 个标签：{rest}"
 #: src/components/ProjectPalette.tsx
 msgid "{count} running"
 msgstr "{count} 个运行中"
-
-#. a project's row: how many of its records this computer changed that are not sent yet; Sync now in its overflow sends them
-#: src/lib/space.ts
-msgid "{count} to send"
-msgstr "{count} 项待发送"
 
 #: src/lib/spec-view-model.ts
 #: src/lib/time.ts
@@ -919,6 +919,13 @@ msgstr "你放在 {server} 上的凭据会一直留在那里，直到你将其�
 #: src/components/DeliveryCard.tsx
 msgid "A follow-up message continues this intent."
 msgstr "再发一条消息即可继续该意图。"
+
+#. visible reason beside a disabled server opening: only the project's code needs a remote; records sharing and reading are independent
+#. visible reason for a disabled server opening: this project's code has no configured Git remote; records sharing and reading remain separate
+#: src/components/ProjectPalette.tsx
+#: src/components/SpaceGroups.tsx
+msgid "A Git remote is required to open this project's code on a server."
+msgstr "要在服务器上打开此项目的代码，需要先配置 Git 远程仓库。"
 
 #: src/components/SpaceGroups.tsx
 msgid "A group owner can restore it before deletion takes effect."
@@ -2190,7 +2197,9 @@ msgstr "清除搜索（Esc）"
 msgid "client not connected"
 msgstr "客户端未连接"
 
+#. close the attached project's code-remote explanation
 #. close the members panel and return to its opener
+#: src/components/SpaceGroups.tsx
 #: src/components/SpaceMembers.tsx
 msgid "Close"
 msgstr "关闭"
@@ -2224,6 +2233,11 @@ msgstr "结束讨论"
 #: src/lib/space.ts
 msgid "Code"
 msgstr "代码"
+
+#. accessible name of an attached project's code-remote explanation
+#: src/components/SpaceGroups.tsx
+msgid "Code for {name}"
+msgstr "{name} 的代码"
 
 #. Credentials section: the code hosts the member placed a token for
 #: src/components/SettingsSurface.tsx
@@ -3840,11 +3854,6 @@ msgstr "群组：{name}"
 msgid "Handed to {player}"
 msgstr "交给 {player}"
 
-#. a project's mark: it is open at the place shown
-#: src/components/SpaceGroups.tsx
-msgid "Here"
-msgstr "这里"
-
 #: src/components/SpecView.tsx
 msgid "Hidden: {groups}"
 msgstr "已隐藏：{groups}"
@@ -4513,14 +4522,6 @@ msgstr "更多详情"
 msgid "More for {name}"
 msgstr "{name} 的更多操作"
 
-#. the accessible name of the menu beside a project's primary control, listing the other servers, or this computer, it may be opened on; {name} is the project's name
-#. the accessible name of the menu beside a project's primary control, listing the other servers, or this computer, it may be opened on; {name} is the project's name
-#. the accessible name of the menu beside a project's primary control, listing the other servers, or this computer, it may be opened on; {name} is the project's name
-#: src/components/ProjectPalette.tsx
-#: src/components/SpaceGroups.tsx
-msgid "More ways to open {name}"
-msgstr "以其他方式打开 {name}"
-
 #: src/lib/shortcuts.ts
 msgid "Move the focused Up next row"
 msgstr "移动“接下来”中选中的行"
@@ -4561,13 +4562,6 @@ msgstr "需要关注"
 #: src/App.tsx
 msgid "needs recovery"
 msgstr "需要恢复"
-
-#. the title of a disabled Open on <server> entry: the project's records name no code remote, so the server cannot fetch its code; the member pushes the code to a Git host first
-#. the title of a disabled Open on <server> entry: the project's records name no code remote, so the server cannot fetch its code; the member pushes the code to a Git host first
-#: src/components/ProjectPalette.tsx
-#: src/components/SpaceGroups.tsx
-msgid "Needs the code on a Git host"
-msgstr "需要先将代码托管在 Git 主机上"
 
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
@@ -5215,6 +5209,11 @@ msgstr "打开添加"
 msgid "Open and send a message to pick it up."
 msgstr "打开并发送一条消息即可接续。"
 
+#. heading in a project's single overflow above its other opening destinations
+#: src/components/SpaceGroups.tsx
+msgid "Open elsewhere"
+msgstr "在其他位置打开"
+
 #: src/components/ProjectPalette.tsx
 msgid "Open folder…"
 msgstr "打开文件夹…"
@@ -5234,12 +5233,16 @@ msgstr "打开其规约包"
 
 #. a project's Open entry for a team server: opens the member's seat there where none is, then the project on it; {server} is the server's name
 #. a project's Open entry for a team server: opens the member's seat there where none is, then the project on it; {server} is the server's name
+#. a project's Open entry where it is open on that team server already: shows it there on Projects; {server} is the server's name
+#. a project's Open entry where it is open on that team server already: shows it there on Projects; {server} is the server's name
 #: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
 msgid "Open on {server}"
 msgstr "在 {server} 上打开"
 
 #. a resolved repair's control: shows the project it made
+#. open the workspace for a project already available at this place
+#: src/components/SpaceGroups.tsx
 #: src/components/SpaceRepairs.tsx
 msgid "Open project"
 msgstr "打开项目"
@@ -6857,6 +6860,11 @@ msgstr "全部改为服务商默认"
 msgid "Set each as a user environment variable — in a terminal with setx, or in the system settings:"
 msgstr "把每一项设为用户环境变量（在终端里用 setx，或在系统设置里）："
 
+#. how to refresh the project's recorded code remote from the folder; origin is Git's standard remote name
+#: src/components/SpaceGroups.tsx
+msgid "Set the project folder's Git origin remote, then sync records to update the project."
+msgstr "为项目文件夹配置 Git origin 远程仓库，然后同步记录以更新项目信息。"
+
 #. an agent chip's title: the model and effort the agent is set to run, then the specific model its runtime reported running
 #: src/components/AgentSettings.tsx
 msgid "set to {set}, runtime reports {model}"
@@ -6936,11 +6944,6 @@ msgstr "@{login} 共享的"
 msgid "Shared with the playbook CLI — edits made outside appear here"
 msgstr "与 playbook CLI 共用 — 在外部所做的编辑会显示在这里"
 
-#. a project's primary control where it is open at that place already: shows it on Projects
-#: src/components/SpaceGroups.tsx
-msgid "Show"
-msgstr "显示"
-
 #: src/components/PlayerPane.tsx
 msgid "Show {count} of {rest} earlier entries"
 msgstr "显示更早的 {rest} 条中的 {count} 条"
@@ -6978,13 +6981,6 @@ msgstr "在文件夹中显示"
 #: src/components/CompileBand.tsx
 msgid "Show log"
 msgstr "显示日志"
-
-#. a project's Open entry where it is open on that team server already: shows it there on Projects; {server} is the server's name
-#. a project's Open entry where it is open on that team server already: shows it there on Projects; {server} is the server's name
-#: src/components/ProjectPalette.tsx
-#: src/components/SpaceGroups.tsx
-msgid "Show on {server}"
-msgstr "在 {server} 上显示"
 
 #: src/components/NavRail.tsx
 msgid "Show sessions in {project}"
@@ -7293,6 +7289,11 @@ msgstr "Spex 无法使用这个已保存的文件。"
 msgid "Spex has no config file yet — playbooks are unavailable."
 msgstr "Spex 还没有配置文件 — 规程不可用。"
 
+#. explains missing saved code-remote metadata without claiming that the folder is not a Git repository
+#: src/components/SpaceGroups.tsx
+msgid "Spex has no remote repository address for this project's code."
+msgstr "Spex 尚未记录此项目代码的远程仓库地址。"
+
 #: src/components/SettingsSurface.tsx
 msgid "Spex itself follows your OS theme."
 msgstr "Spex 本身跟随系统主题。"
@@ -7516,10 +7517,10 @@ msgstr "切换到已就绪智能体"
 msgid "Sync"
 msgstr "同步"
 
-#. send what is here and bring back anything new, now
+#. sync this project's records with its Space; the code is managed separately
 #: src/components/SpaceGroups.tsx
-msgid "Sync now"
-msgstr "立即同步"
+msgid "Sync records"
+msgstr "同步记录"
 
 #. one unit's kind: a sync rule file
 #: src/lib/space.ts

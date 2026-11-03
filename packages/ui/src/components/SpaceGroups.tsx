@@ -19,23 +19,26 @@
 // A row is a project, never a spex repository by its name: the
 // repository's with its `-spex` dropped, a group's own reading "Group
 // sessions" and your own group's own "Your sessions" — a glyph titled by
-// where its code is, the places it is open at ("Here", "On <server>"),
+// where its code is, the places it is open at ("This computer", "On <server>"),
 // one standing phrase (space-120), one primary control and one overflow
 // control (space-1). The primary control is the first place it may be
 // opened at (space-111): this place's entry — "Open here", titled as
-// downloading the records and the code, "Show", or, for a clone whose
+// downloading the records and the code, "Open project", or, for a clone whose
 // code found no folder, "Choose folder…" (at a seat "Try again") — then
-// each server of the Space the member may open, "Open on <server>" or
-// "Show on <server>", the other places offered in a menu beside it. A
+// each server of the Space the member may open, "Open on <server>",
+// focusing an existing workspace or opening one as needed. Other places
+// join the row's one overflow. A
 // row whose state offers another control reads it instead: "Add to a
 // group…" for a project in no group, disabled and titled "Sign in to a
 // Space first" while no Space it would offer is signed in (space-58),
 // Retry for one unreachable. The phrase carries its way forward: Resolve
 // with the picker beneath the row (space-14), "Combine…" confirmed
 // inline (space-13), Continue saying the sharing confirm (space-57),
-// Retry (space-15). The overflow holds "Sync now", Members, "Explore
-// records" and, on a clone holding no placement at a Space, "Add to a
-// group…". Moving a project to another group, placing its records at a
+// Retry (space-15). The overflow holds "Sync records", Members, "Explore
+// records", other opening destinations and, on a clone holding no
+// placement at a Space, "Add to a group…". Missing code-remote information
+// opens a quiet attached explanation; the records' standing opens Sync.
+// Moving a project to another group, placing its records at a
 // second Space, leaving one and attaching a copy another computer added
 // are not offered here (DR-172). What an act opens stands beneath its
 // row: the group picker (space-58), the folder an Open asks for on the
@@ -119,7 +122,7 @@ import { AddInstance, InstanceSection } from "./SpaceInstance.js";
 import { GroupServers, InstanceServers } from "./SpaceServers.js";
 import { GroupNameEditor, MembersPanel } from "./SpaceMembers.js";
 import { ATTACHED_OWNER, ATTACHED_PANEL } from "./SpacePanel.js";
-import { MenuButton, MoreMenu, type MenuEntry } from "./SpaceMenu.js";
+import { MoreMenu, type MenuEntry } from "./SpaceMenu.js";
 import { CombineConfirm, SharingConfirm, combineLabel, combiningLabel, continueLabel, entryName, placementGroupName } from "./SpacePlacements.js";
 import type { SignInFlow } from "./SpaceSignIn.js";
 import { ChoicesContext, ConflictsPicker, stoppedRetryInput } from "./SpaceSync.js";
@@ -321,7 +324,7 @@ export function GroupsList({
   /** Open this place's Credentials section at a code host (space-103,
    * settings-48). */
   onAddCredential?: (host: string) => void;
-  onSelect(key: string): void;
+  onSelect(key: string, reveal?: boolean): void;
   /** Open a row's Explore tab (space-1). */
   onExplore(key: string): void;
   /** Show a project on the Projects surface at a place, this one where
@@ -568,7 +571,7 @@ interface Shared {
   servers?: ServerListing;
   holdings: Holdings;
   onAddCredential?: (host: string) => void;
-  onSelect(key: string): void;
+  onSelect(key: string, reveal?: boolean): void;
   onExplore(key: string): void;
   onOpenProject(projectId: string, place?: string): void;
   onNote: Note;
@@ -963,7 +966,7 @@ function GroupSection({
   );
 }
 
-type Opened = "pick" | "join" | "folder" | "notice" | "members" | "resolve" | "combine";
+type Opened = "pick" | "join" | "folder" | "notice" | "members" | "resolve" | "combine" | "code";
 
 /** The words of "Open here" (space-111). */
 const openHereLabel = (): string =>
@@ -978,6 +981,21 @@ function CodeGlyph() {
     </svg>
   );
 }
+
+/** The neutral information mark shares the surface's inline SVG grammar. */
+function InfoGlyph() {
+  return (
+    <svg aria-hidden viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round">
+      <circle cx="8" cy="8" r="6" />
+      <path d="M8 7v4M8 4.5v.5" />
+    </svg>
+  );
+}
+
+const needsCodeRemoteLabel = (): string => i18n._({
+  id: "A Git remote is required to open this project's code on a server.",
+  comment: "visible reason beside a disabled server opening: only the project's code needs a remote; records sharing and reading are independent",
+});
 
 /** One spex repository's row (space-1, space-61, space-111,
  * space-120): the name owning the slack, its code glyph — hidden below
@@ -1030,6 +1048,7 @@ function RepositoryRow({
   const [pickerFocus, setPickerFocus] = useState(0);
   const [membersFocus, setMembersFocus] = useState(0);
   const pickerId = useId();
+  const codeDetailsId = useId();
   // What runs from this row: a sync — asked plainly, as a combining, or
   // as a retry — an open, or a read of the Spaces.
   const [busy, setBusy] = useState<"sync" | "combine" | "retry" | "join" | "refresh">();
@@ -1047,6 +1066,11 @@ function RepositoryRow({
   const moreRef = useRef<HTMLButtonElement>(null);
   const nameRef = useRef<HTMLButtonElement>(null);
   const actRef = useRef<HTMLButtonElement>(null);
+  const codeRef = useRef<HTMLButtonElement>(null);
+  const codeDetailsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (opened === "code") codeDetailsRef.current?.focus();
+  }, [opened]);
 
   const sync = repo.sync;
   const running = sync.phase === "running";
@@ -1067,14 +1091,14 @@ function RepositoryRow({
       else setMembersFocus((value) => value + 1);
     } else setOpened(task);
   };
-  const close = (focus: "primary" | "more" | "act" = "more") => {
+  const close = (focus: "primary" | "more" | "act" | "code" = "more") => {
     setOpened(undefined);
     // Closing never strands focus (DR-010 §6): a control gone or busy
     // hands it to the row's name.
     setTimeout(() => {
       const active = document.activeElement;
       if (active && active !== document.body && active.isConnected) return;
-      const target = { primary: primaryRef, more: moreRef, act: actRef }[focus].current ?? moreRef.current;
+      const target = { primary: primaryRef, more: moreRef, act: actRef, code: codeRef }[focus].current ?? moreRef.current;
       (!target || target.disabled || !target.isConnected ? nameRef.current : target)?.focus();
     }, 0);
   };
@@ -1268,7 +1292,7 @@ function RepositoryRow({
 
   // This place's entry of Open (space-111): "Open here" for a repository
   // not here; "Choose folder…" — at a seat "Try again" — for a clone
-  // whose code found no folder; "Show" for one open here. Your own
+  // whose code found no folder; "Open project" for one open here. Your own
   // records, always here, open nowhere else.
   const openHere = here && repo.folder !== null && repo.state !== "local-only";
   const openingLabel = (): string =>
@@ -1322,15 +1346,15 @@ function RepositoryRow({
     );
   } else if (openHere) {
     hereEntries.push({
-      label: i18n._({ id: "Show", comment: "a project's primary control where it is open at that place already: shows it on Projects" }),
+      label: i18n._({ id: "Open project", comment: "open the workspace for a project already available at this place" }),
       testId: `space-row-show-${repo.key}`,
       onSelect: () => onOpenProject(repo.key),
     });
   }
 
   // Each server of the row's Space the member may open (space-111):
-  // "Show on <server>" where the project is open on its seat, else "Open
-  // on <server>", the seat opened where none is and its join sent once
+  // "Open on <server>" focuses an existing server workspace or opens
+  // a seat where none is, its join sent once
   // it is signed in. Your own records go to no server (space-102).
   const serverEntries: { server: ServerInfo; place: string; entry: MenuEntry; holds: boolean; waiting?: string; failed?: string; key: string }[] = [];
   const offersServers = !remote && !repo.own && instance !== undefined && repo.state !== "local-only" && repo.state !== "unreachable";
@@ -1356,7 +1380,7 @@ function RepositoryRow({
         holding?.projectId !== undefined
           ? {
               label: i18n._({
-                id: "Show on {server}",
+                id: "Open on {server}",
                 values: { server: server.name },
                 comment: "a project's Open entry where it is open on that team server already: shows it there on Projects; {server} is the server's name",
               }),
@@ -1373,10 +1397,8 @@ function RepositoryRow({
               // (space-111): the entry says what it needs.
               ...(repo.codeKind === "none"
                 ? {
-                    title: i18n._({
-                      id: "Needs the code on a Git host",
-                      comment: "the title of a disabled Open on <server> entry: the project's records name no code remote, so the server cannot fetch its code; the member pushes the code to a Git host first",
-                    }),
+                    title: needsCodeRemoteLabel(),
+                    hint: needsCodeRemoteLabel(),
                   }
                 : {}),
               testId: `space-row-open-at-${at}-${repo.key}`,
@@ -1435,40 +1457,25 @@ function RepositoryRow({
       );
     }
   } else if (openEntries.length > 0) {
-    // The first place as the primary control, the others beside it in
-    // one menu (space-1, space-111).
-    const [first, ...others] = openEntries as [MenuEntry, ...MenuEntry[]];
+    // Keep the ordinary destination direct; other destinations join
+    // the row's one overflow below.
+    const [first] = openEntries as [MenuEntry, ...MenuEntry[]];
     primary = (
-      <span className="inline-flex shrink-0 items-center gap-0.5">
-        <button
-          ref={primaryRef}
-          type="button"
-          data-testid={`space-row-open-${repo.key}`}
-          // The one entry it stands for, as the menu would name it.
-          data-entry={first.testId}
-          className={`${SECONDARY} shrink-0 whitespace-nowrap`}
-          title={first.title ?? first.name}
-          aria-label={first.name}
-          aria-expanded={opened === "join" || opened === "folder" ? true : undefined}
-          disabled={disabled || first.disabled}
-          onClick={first.onSelect}
-        >
-          {first.label}
-        </button>
-        {others.length > 0 ? (
-          <MenuButton
-            trigger={<span aria-hidden>▾</span>}
-            name={i18n._({
-              id: "More ways to open {name}",
-              values: { name },
-              comment: "the accessible name of the menu beside a project's primary control, listing the other servers, or this computer, it may be opened on; {name} is the project's name",
-            })}
-            testId={`space-row-places-${repo.key}`}
-            entries={others}
-            disabled={disabled}
-          />
-        ) : null}
-      </span>
+      <button
+        ref={primaryRef}
+        type="button"
+        data-testid={`space-row-open-${repo.key}`}
+        // The one entry it stands for, as the menu would name it.
+        data-entry={first.testId}
+        className={`${SECONDARY} shrink-0 whitespace-nowrap`}
+        title={first.title ?? first.name}
+        aria-label={first.name}
+        aria-expanded={opened === "join" || opened === "folder" ? true : undefined}
+        disabled={disabled || first.disabled}
+        onClick={first.onSelect}
+      >
+        {first.label}
+      </button>
     );
   }
 
@@ -1492,18 +1499,23 @@ function RepositoryRow({
   // a stop's too: one Retry on a row.
   const act = phrase.act?.kind === "retry" && repo.state === "unreachable" ? undefined : phrase.act;
 
-  // Where its code is (space-1): a glyph titled by the core's phrase, a
-  // warning in the attention tone where the project names no remote;
+  // Where its code is (space-1): a glyph titled by the core's phrase,
+  // or neutral, expandable information where no remote is configured;
   // nothing for a group's own records, before the core knows, or on a
   // row under "This computer", which nobody shares yet.
   const code = groupRepository ? null : codeOf(repo, instance === undefined);
+  useEffect(() => {
+    if (opened !== "code" || code?.kind === "none") return;
+    setOpened(undefined);
+    if (document.activeElement === document.body) nameRef.current?.focus();
+  }, [opened, code?.kind]);
 
   const more: MenuEntry[] = [];
   if (syncs) {
     more.push({
       label: syncing
         ? i18n._({ id: "Syncing…", comment: "the Sync control, while the sync runs" })
-        : i18n._({ id: "Sync now", comment: "send what is here and bring back anything new, now" }),
+        : i18n._({ id: "Sync records", comment: "sync this project's records with its Space; the code is managed separately" }),
       // What it does is its own to say (DR-069).
       title: readOnly
         ? i18n._({ id: "Brings back anything new; sends nothing", comment: "the title of Sync now on records the Space lets this account only read" })
@@ -1539,12 +1551,17 @@ function RepositoryRow({
       onSelect: () => openTask("pick"),
     });
   }
+  const alternateEntries = openEntries.slice(1);
+  more.push(...alternateEntries.map((entry, index) => ({
+    ...entry,
+    ...(index === 0 ? { section: i18n._({ id: "Open elsewhere", comment: "heading in a project's single overflow above its other opening destinations" }) } : {}),
+  })));
 
   const captionId = `space-row-caption-${repo.key}`;
   const caption = error ?? failedOpen?.failed;
   const describe = (part: string) => `space-repo-${part}-${repo.key}`;
   const badges = [
-    ...(openHere && !repo.own ? [{ testId: `space-row-here-${repo.key}`, text: i18n._({ id: "Here", comment: "a project's mark: it is open at the place shown" }) }] : []),
+    ...(openHere && !repo.own ? [{ testId: `space-row-here-${repo.key}`, text: placeLabel(store.place) }] : []),
     ...serverEntries
       .filter((each) => each.holds)
       .map((each) => ({
@@ -1600,91 +1617,106 @@ function RepositoryRow({
 
   return (
     <li data-testid={`space-row-${repo.key}`} data-state={repo.state}
-      className={`@container flex min-w-0 flex-col gap-1 ${opened === "pick" || opened === "members"
+      className={`@container flex min-w-0 flex-col gap-1 ${opened === "pick" || opened === "members" || opened === "code"
         ? ATTACHED_OWNER
         : ""}`}>
-      {/* The name owns the slack; below @xs the row's controls wrap
-          beneath it, its primary control and overflow last (space-28,
-          DR-041). */}
+      {/* Project identity leads; compact metadata sits beneath it and
+          actions keep one aligned group, wrapping within the pane. */}
       <div
         className={`flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 rounded px-2 py-1 text-sm ${
           isSelected ? "bg-brand-50 dark:bg-brand-950" : ""
         }`}
       >
-        <button
-          ref={nameRef}
-          type="button"
-          data-testid={`space-repo-${repo.key}`}
-          data-state={repo.state}
-          aria-label={name}
-          aria-describedby={describedBy || undefined}
-          aria-expanded={isSelected}
-          aria-controls={isSelected ? "space-repository" : undefined}
-          onClick={() => onSelect(repo.key)}
-          title={name}
-          className={`min-w-12 flex-1 basis-24 truncate rounded text-left font-medium hover:underline ${
-            isSelected ? "text-brand-800 dark:text-brand-200" : ""
-          }`}
-        >
-          {name}
-        </button>
-        {code !== null ? (
-          <span
-            id={describe("code")}
-            data-testid={`space-repo-code-${repo.key}`}
-            data-kind={code.kind}
-            data-tone={code.tone}
-            title={code.phrase}
-            className={`hidden min-w-0 max-w-[40%] shrink-0 items-center gap-1 text-xs @md:inline-flex ${TONES[code.tone]}`}
+        <div className="min-w-0 flex-1 basis-40">
+          <button
+            ref={nameRef}
+            type="button"
+            data-testid={`space-repo-${repo.key}`}
+            data-state={repo.state}
+            aria-label={name}
+            aria-describedby={describedBy || undefined}
+            aria-expanded={isSelected}
+            aria-controls={isSelected ? "space-repository" : undefined}
+            onClick={() => onSelect(repo.key)}
+            title={name}
+            className={`block w-full min-w-12 truncate rounded text-left font-medium hover:underline ${
+              isSelected ? "text-brand-800 dark:text-brand-200" : ""
+            }`}
           >
-            {code.kind === "none" ? (
-              <span className="min-w-0 truncate">
-                <span aria-hidden>⚠ </span>
-                {code.phrase}
+            {name}
+          </button>
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
+            {badges.map((badge) => (
+              <span
+                key={badge.testId}
+                data-testid={badge.testId}
+                className="shrink-0 text-xs text-neutral-500"
+              >
+                {badge.text}
               </span>
-            ) : (
-              <>
+            ))}
+            {phrase.text ? <button
+              type="button"
+              id={describe("state")}
+              data-testid={`space-repo-state-${repo.key}`}
+              data-tone={phrase.tone}
+              // Records stay in the metadata line below the project name;
+              // the full phrase remains in its title when space is tight.
+              className={`min-h-6 min-w-0 max-w-full shrink truncate rounded text-left text-xs hover:underline @md:max-w-[45%] ${TONES[phrase.tone]}`}
+              title={phrase.title || undefined}
+              aria-expanded={isSelected}
+              aria-controls={isSelected ? "space-repository" : undefined}
+              onClick={() => onSelect(repo.key, true)}
+            >
+              {phrase.text}
+            </button> : <span id={describe("state")} data-testid={`space-repo-state-${repo.key}`} data-tone={phrase.tone} />}
+            {act ? (
+              <button
+                ref={actRef}
+                type="button"
+                data-testid={`space-row-${act.kind}-${repo.key}`}
+                className={`${SECONDARY} shrink-0 whitespace-nowrap`}
+                aria-expanded={actExpanded}
+                disabled={disabled || ((act.kind === "combine" || act.kind === "retry" || act.kind === "continue") && working)}
+                onClick={onAct}
+              >
+                {actLabel(act.kind)}
+              </button>
+            ) : null}
+            {code?.kind === "none" ? (
+              <button
+                ref={codeRef}
+                type="button"
+                id={describe("code")}
+                data-testid={`space-repo-code-${repo.key}`}
+                data-kind={code.kind}
+                data-tone={code.tone}
+                title={code.phrase}
+                aria-expanded={opened === "code"}
+                aria-controls={opened === "code" ? codeDetailsId : undefined}
+                disabled={pickerPending || membersPending}
+                onClick={() => opened === "code" ? close("code") : setOpened("code")}
+                className="inline-flex min-h-6 min-w-0 max-w-full shrink-0 items-center gap-1 rounded text-xs text-neutral-500 hover:text-neutral-700 hover:underline disabled:opacity-50 dark:hover:text-neutral-300"
+              >
+                <InfoGlyph />
+                <span className="min-w-0 whitespace-normal break-words text-left">{code.phrase}</span>
+              </button>
+            ) : code !== null ? (
+              <span
+                id={describe("code")}
+                data-testid={`space-repo-code-${repo.key}`}
+                data-kind={code.kind}
+                data-tone={code.tone}
+                title={code.phrase}
+                className={`hidden min-w-0 max-w-[40%] shrink-0 items-center gap-1 text-xs @md:inline-flex ${TONES[code.tone]}`}
+              >
                 <CodeGlyph />
                 <span className="sr-only">{code.phrase}</span>
-              </>
-            )}
-          </span>
-        ) : null}
-        {badges.map((badge) => (
-          <span
-            key={badge.testId}
-            data-testid={badge.testId}
-            className="shrink-0 rounded border border-neutral-300 px-1 text-[11px] leading-4 text-neutral-600 dark:border-neutral-700 dark:text-neutral-300"
-          >
-            {badge.text}
-          </span>
-        ))}
-        <span
-          id={describe("state")}
-          data-testid={`space-repo-state-${repo.key}`}
-          data-tone={phrase.tone}
-          // Beside the name from @md; beneath it below, the whole line
-          // its own where the controls leave it room (space-28); empty
-          // where the row reads no phrase (space-120).
-          className={`min-w-0 max-w-full shrink truncate text-xs @md:max-w-[45%] ${TONES[phrase.tone]}`}
-          title={phrase.title || undefined}
-        >
-          {phrase.text}
-        </span>
-        {act ? (
-          <button
-            ref={actRef}
-            type="button"
-            data-testid={`space-row-${act.kind}-${repo.key}`}
-            className={`${SECONDARY} shrink-0 whitespace-nowrap`}
-            aria-expanded={actExpanded}
-            disabled={disabled || ((act.kind === "combine" || act.kind === "retry" || act.kind === "continue") && working)}
-            onClick={onAct}
-          >
-            {actLabel(act.kind)}
-          </button>
-        ) : null}
-        <span className="ml-auto flex shrink-0 items-center gap-1">
+              </span>
+            ) : null}
+          </div>
+        </div>
+        <span className="ml-auto flex shrink-0 items-center gap-1 self-center">
           {credentialHost !== undefined && onAddCredential ? (
             <button
               type="button"
@@ -1707,6 +1739,31 @@ function RepositoryRow({
           <MoreMenu of={name} testId={`space-row-more-${repo.key}`} buttonRef={moreRef} entries={more} disabled={disabled} />
         </span>
       </div>
+      {opened === "code" && code?.kind === "none" ? (
+        <div
+          ref={codeDetailsRef}
+          id={codeDetailsId}
+          tabIndex={-1}
+          role="region"
+          aria-label={i18n._({ id: "Code for {name}", values: { name }, comment: "accessible name of an attached project's code-remote explanation" })}
+          data-testid={`space-row-code-details-${repo.key}`}
+          className={`${ATTACHED_PANEL} space-y-2 text-xs text-neutral-600 dark:text-neutral-400`}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              event.stopPropagation();
+              close("code");
+            }
+          }}
+        >
+          <p>{i18n._({ id: "Spex has no remote repository address for this project's code.", comment: "explains missing saved code-remote metadata without claiming that the folder is not a Git repository" })}</p>
+          <p>{i18n._({ id: "Set the project folder's Git origin remote, then sync records to update the project.", comment: "how to refresh the project's recorded code remote from the folder; origin is Git's standard remote name" })}</p>
+          <p>{needsCodeRemoteLabel()}</p>
+          <button type="button" className={SECONDARY} onClick={() => close("code")}>
+            {i18n._({ id: "Close", comment: "close the attached project's code-remote explanation" })}
+          </button>
+        </div>
+      ) : null}
       {caption ? (
         <p id={captionId} data-testid={captionId} role="alert" className="flex flex-wrap items-center gap-2 pl-6 text-xs text-red-600 dark:text-red-400">
           <span className="min-w-0">{caption}</span>

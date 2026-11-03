@@ -486,8 +486,8 @@ const notesPhrase = (): string => screen.getByTestId(`space-repo-state-${NOTES_K
 /** Open the menu of the notes row's other places, beside its primary
  * control, and read its entries (space-1, space-111). */
 function openMenu(): HTMLElement {
-  fireEvent.click(screen.getByTestId(`space-row-places-${NOTES_KEY}`));
-  return screen.getByTestId(`space-row-places-${NOTES_KEY}-menu`);
+  fireEvent.click(screen.getByTestId(`space-row-more-${NOTES_KEY}`));
+  return screen.getByTestId(`space-row-more-${NOTES_KEY}-menu`);
 }
 
 /** "Open on lab-box" on the notes row (space-111): the one act that opens
@@ -911,9 +911,10 @@ describe("run-view-171: Open on <server> on a row of this computer's Space", () 
     // server of the instance the member may open beside it.
     const open = screen.getByTestId(`space-row-open-${NOTES_KEY}`);
     expect(open.textContent).toBe("Open here");
-    expect(screen.getByTestId(`space-row-places-${NOTES_KEY}`).getAttribute("aria-label")).toBe("More ways to open notes");
+    expect(screen.getByTestId(`space-row-more-${NOTES_KEY}`).getAttribute("aria-label")).toBe("More for notes");
     const menu = openMenu();
-    expect(within(menu).getAllByRole("menuitem").map((item) => item.textContent)).toEqual([
+    expect(within(menu).getAllByRole("menuitem").map((item) => item.firstElementChild?.textContent)).toEqual([
+      "Explore records",
       "Open on build-box",
       "Open on gpu-box",
       "Open on lab-box",
@@ -941,7 +942,7 @@ describe("run-view-171: Open on <server> on a row of this computer's Space", () 
     expect(screen.getByTestId(`space-row-on-${ALPHA.place}-${NOTES_KEY}`).textContent).toBe("On build-box");
     expect(screen.queryByTestId(`space-row-here-${NOTES_KEY}`)).toBeNull();
     const shown = within(openMenu()).getByTestId(`space-row-show-at-${ALPHA.place}-${NOTES_KEY}`);
-    expect(shown.textContent).toBe("Show on build-box");
+    expect(shown.textContent).toBe("Open on build-box");
     // [space-111] "Show on <server>" shows the project at that place.
     fireEvent.click(shown);
     await settle();

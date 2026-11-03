@@ -16,8 +16,8 @@
 // carrying its Space row's Open control: "Open on <server>" sends that
 // seat's core a join with no folder, reads "Signing in to <Space>…",
 // disabled, while that seat's sign-in runs, and asks the server's
-// contract on this computer's Space where no seat is open there; "Show
-// on <server>" shows a seat's project; "Open here" opens into the folder
+// contract on this computer's Space where no seat is open there; "Open
+// on <server>" shows a seat's existing project; "Open here" opens into the folder
 // the shell's picker took or a path named in place; and this computer's
 // welcome page opens the palette there while signed in and leads to the
 // Space surface's sign-in while not (run-view-168, run-view-172). A seat
@@ -861,14 +861,14 @@ describe("run-view-171: a seat whose sign-in at its instance runs", () => {
     // where it is not yet read, its entry says it signs in at the Space,
     // disabled; the other seat, signed in and holding the project, shows
     // it there.
-    expect(entries()).toEqual(["Show on build-box", "Signing in to spex.pub…"]);
+    expect(entries()).toEqual(["Open on build-box", "Signing in to spex.pub…"]);
     expect(there().disabled).toBe(true);
     act(() => useAppStore.setState({ seats: [ALPHA, { ...BETA, signIn: { state: "pending" } }] }));
     expect(there().textContent).toBe("Signing in to spex.pub…");
     expect(there().disabled).toBe(true);
     // [run-view-168] signed in, the entry opens the project there.
     act(() => useAppStore.setState({ seats: [ALPHA, BETA] }));
-    expect(entries()).toEqual(["Show on build-box", "Open on gpu-box"]);
+    expect(entries()).toEqual(["Open on build-box", "Open on gpu-box"]);
     expect(there().disabled).toBe(false);
     expect(callsOf(beta, "space.join")).toEqual([]);
   });
@@ -932,7 +932,7 @@ const entriesOf = (menu: HTMLElement): string[] =>
     .map((item) => item.textContent ?? "");
 
 describe("run-view-171: opening a group's project on a seat", () => {
-  test("Open on <server> sends space.join with no folder to that place's client alone; once the seat lists it, Show on <server> shows it there", async () => {
+  test("Open on <server> downloads a missing project through that place's client, or shows its existing workspace", async () => {
     render(<App />);
     fireEvent.keyDown(window, { key: "p", metaKey: true });
     await settle();
@@ -969,10 +969,10 @@ describe("run-view-171: opening a group's project on a seat", () => {
     await settle();
     expect(screen.getByTestId(`palette-project-places-${ABSENT_KEY}@${ALPHA.place}`)).toBeTruthy();
     const shown = rowPlaces(ABSENT_KEY);
-    expect(entriesOf(shown)).toEqual(["Show on build-box", "Open on gpu-box"]);
+    expect(entriesOf(shown)).toEqual(["Open on build-box", "Open on gpu-box"]);
     fireEvent.click(within(shown).getByTestId(`palette-show-at-${ALPHA.place}-${ABSENT_KEY}`));
     await settle();
-    // [run-view-168] "Show on <server>" shows it at that place, sending
+    // [run-view-168] "Open on <server>" shows it at that place, sending
     // nothing.
     expect(screen.queryByTestId("project-palette")).toBeNull();
     expect(alphaStore.getState().currentProjectId).toBe(ABSENT_KEY);

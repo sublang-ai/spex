@@ -17,7 +17,8 @@ afterEach(cleanup);
 
 import { ProjectPalette } from "./ProjectPalette.js";
 import { SpexCommandError } from "../lib/client.js";
-import { setClientForTests, useAppStore } from "../state/store.js";
+import { createAppStore, setClientForTests, useAppStore } from "../state/store.js";
+import { usePlaces } from "../state/places.js";
 import { useServerOpens } from "../state/server-opens.js";
 import {
   applyRecords,
@@ -27,6 +28,7 @@ import {
 import type {
   ProjectInfo,
   RepositoryState,
+  SeatState,
   SessionInfo,
   TmuxPlayRecord,
 } from "@sublang/spex-core/protocol";
@@ -583,7 +585,7 @@ describe("run-view-168: this computer's From your groups", () => {
     expect(screen.queryByTestId("palette-groups")).toBeNull();
   });
 
-  test("a row's places: Open on <server> from the Space's servers, disabled and titled Needs the code on a Git host while its records name no code remote; a first open asks the contract on Space and closes the palette", async () => {
+  test("one overflow explains a blocked code opening, and an allowed opening asks the contract on Space", async () => {
     const listing = { servers: [{ instance: SPEX, id: "9", name: "lab-9", group: "acme", open: false }], failures: [] };
     const command = vi.fn(async (type: string) => (type === "server.list" ? listing : {}));
     setClientForTests({ command, subscribe: vi.fn(async () => null), unsubscribe: vi.fn(async () => null), close: vi.fn() } as never);
@@ -592,14 +594,27 @@ describe("run-view-168: this computer's From your groups", () => {
     try {
       // [run-view-168] [space-111] its records name no code remote: the
       // entry stands disabled with what it needs.
-      useAppStore.setState({ connection: "open", space: signedIn([{ ...ABSENT, code: "Code not on a Git host", codeKind: "none" }]) });
-      renderPalette();
-      fireEvent.click(await screen.findByTestId(`palette-join-places-${ABSENT.key}`));
+      useAppStore.setState({ connection: "open", space: signedIn([{ ...ABSENT, code: "Code remote not configured", codeKind: "none" }]) });
+      const blocked = renderPalette();
+      const trigger = await screen.findByTestId(`palette-join-places-${ABSENT.key}`);
+      expect(trigger.getAttribute("aria-label")).toBe("More for gamma");
+      expect(trigger.textContent).toContain("⋯");
+      trigger.focus();
+      fireEvent.click(trigger);
       const entry = screen.getByTestId(`palette-open-at-${place}-${ABSENT.key}`) as HTMLButtonElement;
-      expect(entry.textContent).toBe("Open on lab-9");
+      const reason = "A Git remote is required to open this project's code on a server.";
+      expect(entry.textContent).toBe(`Open on lab-9${reason}`);
       expect(entry.disabled).toBe(true);
-      expect(entry.getAttribute("title")).toBe("Needs the code on a Git host");
-      fireEvent.keyDown(window, { key: "Escape" });
+      expect(entry.getAttribute("title")).toBe(reason);
+      expect(within(entry).getByText(reason)).toBeTruthy();
+      fireEvent.click(entry);
+      expect(command).not.toHaveBeenCalledWith("server.open", expect.anything());
+      expect(command).not.toHaveBeenCalledWith("space.join", expect.anything());
+      // Even an all-disabled menu closes independently of its palette.
+      fireEvent.keyDown(trigger, { key: "Escape" });
+      expect(screen.queryByTestId(`palette-join-places-${ABSENT.key}-menu`)).toBeNull();
+      expect(document.activeElement).toBe(trigger);
+      expect(blocked.onClose).not.toHaveBeenCalled();
       cleanup();
       // [run-view-168] [run-view-170] with a remote, the entry opens the
       // seat: this device's first open asks the contract beneath the
@@ -611,7 +626,13 @@ describe("run-view-168: this computer's From your groups", () => {
       fireEvent.click(await screen.findByTestId(`palette-join-places-${ABSENT.key}`));
       const open = screen.getByTestId(`palette-open-at-${place}-${ABSENT.key}`) as HTMLButtonElement;
       expect(open.disabled).toBe(false);
-      fireEvent.click(open);
+      expect(document.activeElement).toBe(open);
+      fireEvent.keyDown(open, { key: "Escape" });
+      expect(onClose).not.toHaveBeenCalled();
+      const allowedTrigger = screen.getByTestId(`palette-join-places-${ABSENT.key}`);
+      expect(document.activeElement).toBe(allowedTrigger);
+      fireEvent.click(allowedTrigger);
+      fireEvent.click(screen.getByTestId(`palette-open-at-${place}-${ABSENT.key}`));
       expect(useServerOpens.getState().lines[place]?.asking).toBe(true);
       expect(useServerOpens.getState().pending[`${place}|301`]?.stage).toBe("seat");
       expect(onShowSpace).toHaveBeenCalledOnce();
@@ -620,6 +641,42 @@ describe("run-view-168: this computer's From your groups", () => {
     } finally {
       setClientForTests(undefined);
       useServerOpens.setState({ lines: {}, pending: {}, landed: 0 });
+    }
+  });
+
+  test("an open project's overflow opens an existing server workspace without starting another download", async () => {
+    const place = `${SPEX}#9`;
+    const listing = { servers: [{ instance: SPEX, id: "9", name: "lab-9", group: "acme", open: true }], failures: [] };
+    const command = vi.fn(async (type: string) => (type === "server.list" ? listing : {}));
+    const client = { command, subscribe: vi.fn(async () => null), unsubscribe: vi.fn(async () => null), close: vi.fn() };
+    setClientForTests(client as never);
+    const remoteProject = PROJECTS[0];
+    const seat: SeatState = { instance: SPEX, serverId: "9", name: "lab-9", group: "acme", place, leaseExpiresAt: Date.now() + 60_000, relay: "open", signIn: { state: "signedIn" } };
+    const store = createAppStore({ key: place, name: "lab-9" }, client as never);
+    store.setState({ projects: [remoteProject] });
+    usePlaces.setState({ seats: [{ seat, store }] });
+    useAppStore.setState({ connection: "open", space: signedIn([{ ...ABSENT, key: PROJECTS[0].repository.key, state: "reachable", folder: PROJECTS[0].path }]) });
+    const onPickAt = vi.fn();
+    try {
+      const { onPick, onClose } = renderPalette({ onPickAt });
+      const trigger = await screen.findByTestId(`palette-project-places-${PROJECTS[0].id}`);
+      expect(trigger.getAttribute("aria-label")).toBe("More for alpha");
+      fireEvent.click(trigger);
+      const open = screen.getByTestId(`palette-show-at-${place}-${PROJECTS[0].repository.key}`);
+      expect(open.textContent).toBe("Open on lab-9");
+      fireEvent.keyDown(open, { key: "Tab" });
+      expect(document.activeElement).toBe(trigger);
+      expect(onClose).not.toHaveBeenCalled();
+      fireEvent.click(trigger);
+      fireEvent.click(screen.getByTestId(`palette-show-at-${place}-${PROJECTS[0].repository.key}`));
+      expect(onPickAt).toHaveBeenCalledWith(place, PROJECTS[0].id);
+      expect(onPick).not.toHaveBeenCalled();
+      expect(onClose).toHaveBeenCalledOnce();
+      expect(command).not.toHaveBeenCalledWith("space.join", expect.anything());
+      expect(command).not.toHaveBeenCalledWith("server.open", expect.anything());
+    } finally {
+      usePlaces.setState({ seats: [] });
+      setClientForTests(undefined);
     }
   });
 

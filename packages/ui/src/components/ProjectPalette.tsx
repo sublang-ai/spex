@@ -54,7 +54,7 @@ import { waitingOf } from "../lib/placements.js";
 import { isGroupRepository, projectName } from "../lib/space.js";
 import { Icon } from "./Icon.js";
 import { GroupPicker } from "./SpaceGroups.js";
-import { MenuButton, type MenuEntry } from "./SpaceMenu.js";
+import { MoreMenu, type MenuEntry } from "./SpaceMenu.js";
 import { useServers } from "./SpaceServers.js";
 
 /** A refusal as the palette shows it: the core's words, and Git's own
@@ -160,12 +160,11 @@ const openHereLabel = (): string =>
     comment: "project palette: open a project of the member's groups on this computer, downloading its records and code into the folder named beside",
   });
 
-/** The title of a disabled "Open on <server>" (space-111): no server can
- * fetch code its records name no remote for. */
+/** The reason a server cannot open this project's code (space-111). */
 const needsCodeHostLabel = (): string =>
   i18n._({
-    id: "Needs the code on a Git host",
-    comment: "the title of a disabled Open on <server> entry: the project's records name no code remote, so the server cannot fetch its code; the member pushes the code to a Git host first",
+    id: "A Git remote is required to open this project's code on a server.",
+    comment: "visible reason for a disabled server opening: this project's code has no configured Git remote; records sharing and reading remain separate",
   });
 
 /** A project of the member's groups as the palette names it: as its
@@ -485,7 +484,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
   const anyProject = space !== undefined && groupsListProjects(space);
   // The servers of each signed-in Space the member may open (space-111):
   // the listing read while any is signed in, again as a seat opens or
-  // closes; and what each open seat holds, for "Show on <server>".
+  // closes; and what each open seat holds, for opening its workspace.
   const seats = props.seats ?? [];
   const servers = useServers(
     signedIn && space
@@ -499,8 +498,8 @@ export function ProjectPalette(props: ProjectPaletteProps) {
 
   /** A row's other places, as its Space row offers them (space-111,
    * run-view-168): for each server of its Space the member may open,
-   * "Show on <server>" where that seat holds the project, else "Open on
-   * <server>" — disabled, titled "Needs the code on a Git host", while
+   * "Open on <server>" shows its workspace where that seat holds the
+   * project, otherwise downloads it — disabled with a visible reason while
    * its records name no code remote, reading "Signing in to <Space>…"
    * while that seat still signs in — opening the seat where none is,
    * whose contract the Space surface asks beneath the server's line. */
@@ -517,7 +516,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
         const projectId = holding.projectId;
         entries.push({
           label: i18n._({
-            id: "Show on {server}",
+            id: "Open on {server}",
             values: { server: server.name },
             comment: "a project's Open entry where it is open on that team server already: shows it there on Projects; {server} is the server's name",
           }),
@@ -546,7 +545,7 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                 values: { server: server.name },
                 comment: "a project's Open entry for a team server: opens the member's seat there where none is, then the project on it; {server} is the server's name",
               }),
-        ...(noCode ? { title: needsCodeHostLabel() } : {}),
+        ...(noCode ? { title: needsCodeHostLabel(), hint: needsCodeHostLabel() } : {}),
         testId: `palette-open-at-${at}-${repo.key}`,
         disabled: noCode || waiting || signingIn !== undefined || busy,
         onSelect: () => {
@@ -773,6 +772,9 @@ export function ProjectPalette(props: ProjectPaletteProps) {
       event.stopPropagation();
       return;
     }
+    // The shared menu owns these keys before the enclosing palette:
+    // Escape dismisses the menu alone, and Tab returns to its trigger.
+    if ((event.key === "Escape" || event.key === "Tab") && dialogRef.current?.querySelector('[role="menu"]')) return;
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
@@ -1120,13 +1122,8 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                 </span>
               </button>
               {places.length > 0 ? (
-                <MenuButton
-                  trigger={<span aria-hidden>▾</span>}
-                  name={i18n._({
-                    id: "More ways to open {name}",
-                    values: { name: project.name },
-                    comment: "the accessible name of the menu beside a project's primary control, listing the other servers, or this computer, it may be opened on; {name} is the project's name",
-                  })}
+                <MoreMenu
+                  of={project.name}
                   testId={`palette-project-places-${key}`}
                   entries={places}
                   disabled={busy}
@@ -1206,13 +1203,8 @@ export function ProjectPalette(props: ProjectPaletteProps) {
                       )}
                     </button>
                     {places.length > 0 ? (
-                      <MenuButton
-                        trigger={<span aria-hidden>▾</span>}
-                        name={i18n._({
-                          id: "More ways to open {name}",
-                          values: { name: projectNameOf(entry.repo) },
-                          comment: "the accessible name of the menu beside a project's primary control, listing the other servers, or this computer, it may be opened on; {name} is the project's name",
-                        })}
+                      <MoreMenu
+                        of={projectNameOf(entry.repo)}
                         testId={`palette-join-places-${key}`}
                         entries={places}
                         disabled={busy}

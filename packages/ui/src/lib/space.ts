@@ -384,14 +384,14 @@ export function stoppedPhrase(step: SyncStep, message: string): string {
   });
 }
 
-/** "<n> to send" (space-120): the records this computer changed that no
+/** "<n> record(s) to sync" (space-120): the records this computer changed that no
  * Space holds yet, its title naming them by kind. */
 export function toSendPhrase(units: readonly SpaceUnit[]): { text: string; title: string } {
   return {
     text: i18n._({
-      id: "{count} to send",
+      id: "{count, plural, one {# record to sync} other {# records to sync}}",
       values: { count: units.length },
-      comment: "a project's row: how many of its records this computer changed that are not sent yet; Sync now in its overflow sends them",
+      comment: "a project's row: how many Spex records this computer changed that are not sent yet, not code files or Git commits; the sync action in its overflow sends and receives records",
     }),
     title: groupUnits(units)
       .map(({ kind, units: those }) =>
@@ -421,7 +421,7 @@ const NO_PHRASE: RowPhrase = { text: "", title: "", tone: "idle" };
  * of the first line, in the lines' order, holding the phrase —
  *
  * 1. the step in flight, or "Opening…" while its join runs (space-63);
- * 2. "<n> to send", its local units;
+ * 2. "<n> record(s) to sync", its local units;
  * 3. "Changed here and at <display name>" with Resolve (space-14);
  * 4. "Started separately at <display name>" with "Combine…" (space-13);
  * 5. "Waiting for you to continue" with the sharing confirm (space-57),
@@ -532,9 +532,10 @@ export function rowPhrase(
   return { text, title: last ? absoluteTitle(last.at) : text, tone: "idle" };
 }
 
-/** A project's code glyph (space-1, DR-172): the core's phrase, "Code:
- * <where>" or "Code only on this computer" or "Code not on a Git host", with what it says of the remote — at a
- * Space, elsewhere, or none, a warning in the attention tone; nothing
+/** A project's code status (space-1): the core's phrase, "Code:
+ * <where>" or "Code remote not configured", with what it says of the
+ * configured remote — at a Space, elsewhere, or none, in the neutral
+ * tone; nothing
  * while the core does not know yet, the records hold no `project.json`,
  * or the row stands under "This computer" (`local`), which nobody shares
  * yet. */
@@ -543,7 +544,7 @@ export function codeOf(
   local: boolean,
 ): { kind: Exclude<CodeKind, "unknown">; phrase: string; tone: "idle" | "attention" } | null {
   if (local || repo.codeKind === "unknown" || repo.code === null) return null;
-  return { kind: repo.codeKind, phrase: repo.code, tone: repo.codeKind === "none" ? "attention" : "idle" };
+  return { kind: repo.codeKind, phrase: repo.code, tone: "idle" };
 }
 
 /** A project's name from its spex repository's (space-1, space-46):

@@ -242,6 +242,11 @@ msgstr "{count, plural, one {# playbook} other {# playbooks}}"
 msgid "{count, plural, one {# record never reached a Space. Remove anyway?} other {# records never reached a Space. Remove anyway?}}"
 msgstr "{count, plural, one {# record never reached a Space. Remove anyway?} other {# records never reached a Space. Remove anyway?}}"
 
+#. a project's row: how many Spex records this computer changed that are not sent yet, not code files or Git commits; the sync action in its overflow sends and receives records
+#: src/lib/space.ts
+msgid "{count, plural, one {# record to sync} other {# records to sync}}"
+msgstr "{count, plural, one {# record to sync} other {# records to sync}}"
+
 #: src/components/SpaceExplorer.tsx
 #: src/components/SpecView.tsx
 msgid "{count, plural, one {# record} other {# records}}"
@@ -345,11 +350,6 @@ msgstr "{count} more labels: {rest}"
 #: src/components/ProjectPalette.tsx
 msgid "{count} running"
 msgstr "{count} running"
-
-#. a project's row: how many of its records this computer changed that are not sent yet; Sync now in its overflow sends them
-#: src/lib/space.ts
-msgid "{count} to send"
-msgstr "{count} to send"
 
 #: src/lib/spec-view-model.ts
 #: src/lib/time.ts
@@ -919,6 +919,13 @@ msgstr "A credential you place on {server} stays there until you remove it"
 #: src/components/DeliveryCard.tsx
 msgid "A follow-up message continues this intent."
 msgstr "A follow-up message continues this intent."
+
+#. visible reason beside a disabled server opening: only the project's code needs a remote; records sharing and reading are independent
+#. visible reason for a disabled server opening: this project's code has no configured Git remote; records sharing and reading remain separate
+#: src/components/ProjectPalette.tsx
+#: src/components/SpaceGroups.tsx
+msgid "A Git remote is required to open this project's code on a server."
+msgstr "A Git remote is required to open this project's code on a server."
 
 #: src/components/SpaceGroups.tsx
 msgid "A group owner can restore it before deletion takes effect."
@@ -2190,7 +2197,9 @@ msgstr "Clear the search (Escape)"
 msgid "client not connected"
 msgstr "client not connected"
 
+#. close the attached project's code-remote explanation
 #. close the members panel and return to its opener
+#: src/components/SpaceGroups.tsx
 #: src/components/SpaceMembers.tsx
 msgid "Close"
 msgstr "Close"
@@ -2224,6 +2233,11 @@ msgstr "closed the discussion"
 #: src/lib/space.ts
 msgid "Code"
 msgstr "Code"
+
+#. accessible name of an attached project's code-remote explanation
+#: src/components/SpaceGroups.tsx
+msgid "Code for {name}"
+msgstr "Code for {name}"
 
 #. Credentials section: the code hosts the member placed a token for
 #: src/components/SettingsSurface.tsx
@@ -3840,11 +3854,6 @@ msgstr "Group: {name}"
 msgid "Handed to {player}"
 msgstr "Handed to {player}"
 
-#. a project's mark: it is open at the place shown
-#: src/components/SpaceGroups.tsx
-msgid "Here"
-msgstr "Here"
-
 #: src/components/SpecView.tsx
 msgid "Hidden: {groups}"
 msgstr "Hidden: {groups}"
@@ -4513,14 +4522,6 @@ msgstr "More details"
 msgid "More for {name}"
 msgstr "More for {name}"
 
-#. the accessible name of the menu beside a project's primary control, listing the other servers, or this computer, it may be opened on; {name} is the project's name
-#. the accessible name of the menu beside a project's primary control, listing the other servers, or this computer, it may be opened on; {name} is the project's name
-#. the accessible name of the menu beside a project's primary control, listing the other servers, or this computer, it may be opened on; {name} is the project's name
-#: src/components/ProjectPalette.tsx
-#: src/components/SpaceGroups.tsx
-msgid "More ways to open {name}"
-msgstr "More ways to open {name}"
-
 #: src/lib/shortcuts.ts
 msgid "Move the focused Up next row"
 msgstr "Move the focused Up next row"
@@ -4561,13 +4562,6 @@ msgstr "Needs attention"
 #: src/App.tsx
 msgid "needs recovery"
 msgstr "needs recovery"
-
-#. the title of a disabled Open on <server> entry: the project's records name no code remote, so the server cannot fetch its code; the member pushes the code to a Git host first
-#. the title of a disabled Open on <server> entry: the project's records name no code remote, so the server cannot fetch its code; the member pushes the code to a Git host first
-#: src/components/ProjectPalette.tsx
-#: src/components/SpaceGroups.tsx
-msgid "Needs the code on a Git host"
-msgstr "Needs the code on a Git host"
 
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
@@ -5215,6 +5209,11 @@ msgstr "Open Add"
 msgid "Open and send a message to pick it up."
 msgstr "Open and send a message to pick it up."
 
+#. heading in a project's single overflow above its other opening destinations
+#: src/components/SpaceGroups.tsx
+msgid "Open elsewhere"
+msgstr "Open elsewhere"
+
 #: src/components/ProjectPalette.tsx
 msgid "Open folder…"
 msgstr "Open folder…"
@@ -5234,12 +5233,16 @@ msgstr "Open its package"
 
 #. a project's Open entry for a team server: opens the member's seat there where none is, then the project on it; {server} is the server's name
 #. a project's Open entry for a team server: opens the member's seat there where none is, then the project on it; {server} is the server's name
+#. a project's Open entry where it is open on that team server already: shows it there on Projects; {server} is the server's name
+#. a project's Open entry where it is open on that team server already: shows it there on Projects; {server} is the server's name
 #: src/components/ProjectPalette.tsx
 #: src/components/SpaceGroups.tsx
 msgid "Open on {server}"
 msgstr "Open on {server}"
 
 #. a resolved repair's control: shows the project it made
+#. open the workspace for a project already available at this place
+#: src/components/SpaceGroups.tsx
 #: src/components/SpaceRepairs.tsx
 msgid "Open project"
 msgstr "Open project"
@@ -6857,6 +6860,11 @@ msgstr "Set all to Provider default"
 msgid "Set each as a user environment variable — in a terminal with setx, or in the system settings:"
 msgstr "Set each as a user environment variable — in a terminal with setx, or in the system settings:"
 
+#. how to refresh the project's recorded code remote from the folder; origin is Git's standard remote name
+#: src/components/SpaceGroups.tsx
+msgid "Set the project folder's Git origin remote, then sync records to update the project."
+msgstr "Set the project folder's Git origin remote, then sync records to update the project."
+
 #. an agent chip's title: the model and effort the agent is set to run, then the specific model its runtime reported running
 #: src/components/AgentSettings.tsx
 msgid "set to {set}, runtime reports {model}"
@@ -6936,11 +6944,6 @@ msgstr "Shared by @{login}"
 msgid "Shared with the playbook CLI — edits made outside appear here"
 msgstr "Shared with the playbook CLI — edits made outside appear here"
 
-#. a project's primary control where it is open at that place already: shows it on Projects
-#: src/components/SpaceGroups.tsx
-msgid "Show"
-msgstr "Show"
-
 #: src/components/PlayerPane.tsx
 msgid "Show {count} of {rest} earlier entries"
 msgstr "Show {count} of {rest} earlier entries"
@@ -6978,13 +6981,6 @@ msgstr "Show in folder"
 #: src/components/CompileBand.tsx
 msgid "Show log"
 msgstr "Show log"
-
-#. a project's Open entry where it is open on that team server already: shows it there on Projects; {server} is the server's name
-#. a project's Open entry where it is open on that team server already: shows it there on Projects; {server} is the server's name
-#: src/components/ProjectPalette.tsx
-#: src/components/SpaceGroups.tsx
-msgid "Show on {server}"
-msgstr "Show on {server}"
 
 #: src/components/NavRail.tsx
 msgid "Show sessions in {project}"
@@ -7293,6 +7289,11 @@ msgstr "Spex could not use this saved file."
 msgid "Spex has no config file yet — playbooks are unavailable."
 msgstr "Spex has no config file yet — playbooks are unavailable."
 
+#. explains missing saved code-remote metadata without claiming that the folder is not a Git repository
+#: src/components/SpaceGroups.tsx
+msgid "Spex has no remote repository address for this project's code."
+msgstr "Spex has no remote repository address for this project's code."
+
 #: src/components/SettingsSurface.tsx
 msgid "Spex itself follows your OS theme."
 msgstr "Spex itself follows your OS theme."
@@ -7516,10 +7517,10 @@ msgstr "Switch to a ready agent"
 msgid "Sync"
 msgstr "Sync"
 
-#. send what is here and bring back anything new, now
+#. sync this project's records with its Space; the code is managed separately
 #: src/components/SpaceGroups.tsx
-msgid "Sync now"
-msgstr "Sync now"
+msgid "Sync records"
+msgstr "Sync records"
 
 #. one unit's kind: a sync rule file
 #: src/lib/space.ts

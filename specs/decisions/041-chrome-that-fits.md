@@ -13,6 +13,8 @@ Amended by [DR-078](078-the-interface-speaks-the-readers-language.md) in scope: 
 Amended by [DR-141](141-project-start-explains-the-task-and-slash-discovery.md) on the project home: the resting slash hint stands below the composer; staged and acknowledgment captions remain inside it.
 Amended by [DR-159](159-projects-in-groups-opened-where-you-work.md) in the label budget: a menu's entry, and a row's act that record fixes as a whole phrase, may exceed fourteen characters and wraps within its row.
 
+Amended by [DR-209](209-a-project-row-with-one-menu.md) in the label budget for a project row's clickable standing phrase and code-status control: their informative status wording remains whole rather than becoming a shorter action label.
+
 ## Context
 
 - The same pane renders at many widths: the Captain column is set by a divider and the rail's state, the served page has no window floor, and the desktop window has none either.

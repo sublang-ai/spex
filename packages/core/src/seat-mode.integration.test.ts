@@ -35,7 +35,7 @@ const HOST_OWN = `${LOGIN}/${LOGIN}-spex`;
 const PATH_REFUSAL = /^Projects on a server are opened from their group$/;
 const OPEN_REFUSAL = /^Already on a server — open it from your computer$/;
 const OWN_REFUSAL = /^Personal records stay on this server$/;
-const CODE_REFUSAL = /^Needs the code on a Git host$/;
+const CODE_REFUSAL = /^A Git remote is required to open this project's code on a server\.$/;
 
 /** Your own group's own row in a state. */
 function ownRow(state: GroupsState) {
@@ -256,7 +256,7 @@ test("core-service-127: on a seat every command naming a working folder is refus
   assert.equal(existsSync(clonePath(home.dataDir, hostKey(host, "acme/alpha-spex"))), false, "nothing is cloned");
 });
 
-test("space-103: a seat refuses the open of a project whose records name no code remote with the phrase, allocating, cloning and pairing nothing, its row reading Code not on a Git host; a group's own records, holding no project.json, open", async (t) => {
+test("space-103: a seat's refusal names opening the project's code, not general server or record access, when no code remote is configured; a group's own records still open", async (t) => {
   const host = await startHost();
   const listed = host.script.addRepository({ group: "acme", name: "beta-spex", project: { format: 1, name: "beta", remote: null } });
   const group = host.script.addRepository({ group: "acme", name: "acme-spex" });
@@ -266,9 +266,9 @@ test("space-103: a seat refuses the open of a project whose records name no code
   await signIn(home, host);
   const read = await home.client.waitSpace(from, (state) => (instanceOf(state, host.url)?.readAt ?? null) !== null && state.signIn.phase === "idle");
   const key = hostKey(host, "acme/beta-spex");
-  // Not open here, its code on no Git host (space-1).
+  // Not open here; Spex records no configured code remote (space-1).
   const row = repositoryOf(read, key);
-  assert.deepEqual([row.state, row.folder, row.code, row.codeKind], ["absent", null, "Code not on a Git host", "none"]);
+  assert.deepEqual([row.state, row.folder, row.code, row.codeKind], ["absent", null, "Code remote not configured", "none"]);
 
   // Refused before anything is cloned or allocated (space-103).
   await home.client.expectError("space.join", { instance: host.url, hostId: listed.id }, "invalid_request", CODE_REFUSAL);

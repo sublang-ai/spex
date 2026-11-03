@@ -22,6 +22,8 @@ Amends, under [DR-046](046-decision-record-evolution.md):
 
 Amended by [DR-192](192-choose-a-group-before-adding.md) in the flow opened by "Add to a group…": selection is reviewed before an explicit Add to group or Connect project action.
 
+Amended by [DR-209](209-a-project-row-with-one-menu.md) in the project-row controls and palette: one overflow includes alternate places, the direct action reads Open project, and record counts and local-location wording are explicit.
+
 ## Context
 
 - The Space surface today lists spex repositories named `<name>-spex` under each group, each with Sync, an ahead-and-behind count, placement lines and "Place at…" and "Leave…"; every group heading carries Members, New subgroup, Rename and Delete; a namespace heading reads "ada-spex stands under your own group"; the servers stand in one flat list at the instance's foot with Open.

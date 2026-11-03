@@ -76,7 +76,8 @@ test("space-37: a working folder added pairs with a local-only spex repository w
   assert.equal(row.state, "local-only");
   assert.equal(row.own, false);
   assert.equal(row.folder, home.projectDir);
-  assert.deepEqual([row.code, row.codeKind], ["Code only on this computer", "none"], "the folder has no remote of its own, its code only here");
+  assert.equal(git(home.projectDir, "rev-parse", "--is-inside-work-tree"), "true", "the project is already a Git repository");
+  assert.deepEqual([row.code, row.codeKind], ["Code remote not configured", "none"], "the missing remote does not mean the folder is not a Git repository or has no other copies");
   assert.equal(row.sync.phase, "idle");
   // Its clone begins on `spex` with one commit of the managed rules and
   // project.json, under the fallback identity, its environment
@@ -99,6 +100,9 @@ test("space-37: a working folder added pairs with a local-only spex repository w
   await home.client.expectOk("space.remote.set", { repository: key, url: bareRepo() });
   const done = await home.client.settle("space.sync", { repository: key });
   assert.equal(done.sync.phase, "done", JSON.stringify(done.sync));
+  assert.deepEqual([done.code, done.codeKind], ["Code remote not configured", "none"], "records sync succeeds while the project's code remote remains unconfigured");
+  assert.ok((await home.client.expectOk("session.list", {})).some((session) => session.id === sessionId), "saved sessions remain listed with no code remote");
+  assert.ok((await home.client.expectOk("history.get", { sessionId })).records.length > 0, "saved session history remains readable with no code remote");
   const tracked = git(clone, "ls-files").split("\n");
   assert.ok(tracked.includes(`sessions/${sessionId}.json`) && tracked.includes(`sessions/${sessionId}.replay.json`));
   // The environment's lock is the one tracked `.lock` (storage-1).

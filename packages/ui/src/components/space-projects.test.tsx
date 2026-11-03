@@ -65,15 +65,15 @@ const WORDS = {
     disconnect: "Disconnect",
     groupSessions: "Group sessions",
     yourSessions: "Your sessions",
-    here: "Here",
+    here: "This computer",
     onLab: "On lab-1",
     synced: "Synced 5m ago",
-    rowActs: ["Sync now", "Members", "Explore records"],
-    show: "Show",
+    rowActs: ["Sync records", "Members", "Explore records", "Open on lab-1"],
+    show: "Open project",
     openOnLab: "Open on lab-1",
-    needsCodeHost: "Needs the code on a Git host",
+    needsCodeHost: "A Git remote is required to open this project's code on a server.",
     openHere: "Open here",
-    showOnLab: "Show on lab-1",
+    showOnLab: "Open on lab-1",
     openingOnLab: "Opening on lab-1…",
     folderForSessions: "Folder its sessions run in on this computer",
     addToGroup: "Add to a group…",
@@ -105,7 +105,7 @@ const WORDS = {
     newGroup: "New group…",
     signOut: "Sign out",
     removeFromList: "Remove from this list",
-    toSend: "1 to send",
+    toSend: "1 record to sync",
     use: "Use ~/code/delta",
     exempt: ["Add to a group…"],
   },
@@ -121,15 +121,15 @@ const WORDS = {
     disconnect: "断开连接",
     groupSessions: "群组会话",
     yourSessions: "你的会话",
-    here: "这里",
+    here: "本机",
     onLab: "在 lab-1 上",
     synced: "5 分钟前同步",
-    rowActs: ["立即同步", "成员", "浏览记录"],
-    show: "显示",
+    rowActs: ["同步记录", "成员", "浏览记录", "在 lab-1 上打开"],
+    show: "打开项目",
     openOnLab: "在 lab-1 上打开",
-    needsCodeHost: "需要先将代码托管在 Git 主机上",
+    needsCodeHost: "要在服务器上打开此项目的代码，需要先配置 Git 远程仓库。",
     openHere: "在这里打开",
-    showOnLab: "在 lab-1 上显示",
+    showOnLab: "在 lab-1 上打开",
     openingOnLab: "正在 lab-1 上打开…",
     folderForSessions: "本机上运行其会话的文件夹",
     addToGroup: "加入群组…",
@@ -161,7 +161,7 @@ const WORDS = {
     newGroup: "新建群组…",
     signOut: "退出登录",
     removeFromList: "从列表中移除",
-    toSend: "1 项待发送",
+    toSend: "1 条记录待同步",
     use: "使用 ~/code/delta",
     exempt: ["加入群组…"],
   },
@@ -507,9 +507,11 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
     // [space-1] alpha's "More": Sync now, Members and Explore records
     // alone.
     expect(entries(`space-row-more-${ALPHA_KEY}`)).toEqual(words.rowActs);
+    expect(screen.queryByTestId(`space-row-places-${ALPHA_KEY}`)).toBeNull();
+    const row = screen.getByTestId(`space-row-${ALPHA_KEY}`);
+    expect(within(row).getAllByRole("button").filter((button) => button.getAttribute("aria-haspopup") === "menu")).toHaveLength(1);
     // [space-87] no placement's line on the row; its lines in the Sync
     // tab the row's name opens.
-    const row = screen.getByTestId(`space-row-${ALPHA_KEY}`);
     expect(within(row).queryByTestId(`space-line-${ORIGIN}`)).toBeNull();
     fireEvent.click(screen.getByTestId(`space-repo-${ALPHA_KEY}`));
     const panel = await screen.findByTestId("space-repository");
@@ -521,10 +523,10 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
     const { onOpenProject } = await renderHere();
     // [space-111] alpha: "Show", "Open on lab-1" beside it.
     expect(screen.getByTestId(`space-row-open-${ALPHA_KEY}`).textContent).toBe(words.show);
-    expect(entries(`space-row-places-${ALPHA_KEY}`)).toEqual([words.openOnLab]);
+    expect(entries(`space-row-more-${ALPHA_KEY}`)).toEqual(words.rowActs);
     // beta: "Open here", "Show on lab-1" beside it.
     expect(screen.getByTestId(`space-row-open-${BETA_KEY}`).textContent).toBe(words.openHere);
-    expect(entries(`space-row-places-${BETA_KEY}`)).toEqual([words.showOnLab]);
+    expect(entries(`space-row-more-${BETA_KEY}`)).toEqual([words.rowActs[2], words.showOnLab]);
     // acme-spex: "Open here" asking for the folder its sessions run in.
     const acmeOpen = screen.getByTestId(`space-row-open-${ACME_KEY}`);
     expect(acmeOpen.textContent).toBe(words.openHere);
@@ -535,7 +537,7 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
     // the seat's place.
     fireEvent.click(screen.getByTestId(`space-row-open-${ALPHA_KEY}`));
     expect(onOpenProject).toHaveBeenLastCalledWith(ALPHA_KEY);
-    pick(`space-row-places-${BETA_KEY}`, `space-row-show-at-${PLACE}-${BETA_KEY}`);
+    pick(`space-row-more-${BETA_KEY}`, `space-row-show-at-${PLACE}-${BETA_KEY}`);
     expect(onOpenProject).toHaveBeenLastCalledWith(BETA_KEY, PLACE);
     // [space-63] "Open here" on beta sends `space.join` with the folder
     // the picker the act opens returns.
@@ -549,28 +551,35 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
   });
 
   test("space-111: a project whose records name no code remote offers its server entry disabled, titled Needs the code on a Git host", async () => {
-    state = home({ alpha: alpha({ code: "Code only on this computer", codeKind: "none" }) });
+    state = home({ alpha: alpha({ code: "Code remote not configured", codeKind: "none" }) });
     await renderHere();
-    fireEvent.click(screen.getByTestId(`space-row-places-${ALPHA_KEY}`));
-    const entry = within(screen.getByTestId(`space-row-places-${ALPHA_KEY}-menu`)).getByTestId(
+    fireEvent.click(screen.getByTestId(`space-row-more-${ALPHA_KEY}`));
+    const entry = within(screen.getByTestId(`space-row-more-${ALPHA_KEY}-menu`)).getByTestId(
       `space-row-open-at-${PLACE}-${ALPHA_KEY}`,
     ) as HTMLButtonElement;
     // [space-111] the entry keeps its words, disabled, saying what it
     // needs; no seat is opened and nothing is sent.
-    expect(entry.textContent).toBe(words.openOnLab);
+    expect(entry.firstElementChild?.textContent).toBe(words.openOnLab);
+    expect(entry.textContent).toContain(words.needsCodeHost);
     expect(entry.disabled).toBe(true);
     expect(entry.getAttribute("title")).toBe(words.needsCodeHost);
+    const menu = screen.getByTestId(`space-row-more-${ALPHA_KEY}-menu`);
+    const syncEntry = within(menu).getByTestId(`space-row-sync-${ALPHA_KEY}`);
+    expect(document.activeElement).toBe(syncEntry);
+    fireEvent.keyDown(syncEntry, { key: "End" });
+    expect(document.activeElement).toBe(within(menu).getByTestId(`space-row-explore-${ALPHA_KEY}`));
     fireEvent.click(entry);
     await settle();
     expect(callsOf(local, "server.open")).toEqual([]);
     expect(callsOf(seat, "space.join")).toEqual([]);
     fireEvent.keyDown(window, { key: "Escape" });
+    expect(document.activeElement).toBe(screen.getByTestId(`space-row-more-${ALPHA_KEY}`));
   });
 
   test("Open on lab-1 sends the seat's join with no folder once it is signed in, nothing while it signs in", async () => {
     act(() => useAppStore.setState({ seats: [{ ...SEAT, signIn: { state: "running", verificationUri: `${ORIGIN}/login/device?user_code=X`, expiresAt: NOW + 600_000 } }] }));
     await renderHere();
-    pick(`space-row-places-${ALPHA_KEY}`, `space-row-open-at-${PLACE}-${ALPHA_KEY}`);
+    pick(`space-row-more-${ALPHA_KEY}`, `space-row-open-at-${PLACE}-${ALPHA_KEY}`);
     await settle();
     // [space-111] the seat signs in: nothing sent yet, the row reading
     // "Opening on lab-1…"; no seat opened, one is open there.
@@ -611,7 +620,7 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
   });
 
   test("choices owed read Changed here with Resolve beneath the row, or N to send while a unit waits; records started separately Combine…", async () => {
-    // [space-120] a local unit comes first: "1 to send".
+    // [space-120] a local unit comes first: "1 record to sync".
     state = home({
       alpha: alpha(
         { sync: { phase: "choices", placement: ORIGIN, savedCommit: null }, conflicts: CONFLICTS, local: [SESSION] },
@@ -801,6 +810,8 @@ describe.each(["en", "zh"] as const)("space-113: the Space surface reads as proj
     // a whole phrase a decision fixes.
     const controls = [...screen.getByTestId("space-groups").querySelectorAll("button")]
       .filter((button) => button.getAttribute("role") !== "menuitem")
+      // Informational metadata keeps its full phrase outside the verb budget.
+      .filter((button) => !/^space-repo-(state|code)-/.test(button.dataset.testid ?? ""))
       .map((button) => (button.getAttribute("aria-haspopup") ? (button.textContent ?? "").replace(/^⋯/, "") : button.textContent ?? ""))
       .filter((text) => !(words.exempt as readonly string[]).includes(text));
     for (const text of controls) expect([...text].length, text).toBeLessThanOrEqual(14);

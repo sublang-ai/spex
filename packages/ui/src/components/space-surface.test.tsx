@@ -5,7 +5,7 @@
 // (DR-103, DR-172): what needs fixing — "⚠ <n> to fix" and "To fix (<n>)
 // · <m> set aside" with its repairs (space-1, space-46..space-56); "To
 // send" and each Space's incoming list with Open session and View diff
-// (space-7, space-8, space-10); "Sync now" from the row's overflow with
+// (space-7, space-8, space-10); "Sync records" from the row's overflow with
 // its rail, Stop, stopped, done and "Started separately" cards
 // (space-11..space-16); the Space's line in the Sync tab (space-87); the
 // picker — in the Sync tab and beneath the row by Resolve — its keyboard
@@ -60,7 +60,7 @@ function openMore(key: string = KEY): HTMLElement {
   if (!screen.queryByTestId(`${id}-menu`)) fireEvent.click(screen.getByTestId(id));
   return screen.getByTestId(`${id}-menu`);
 }
-/** "Sync now" in the row's "More" (space-1, space-11). */
+/** "Sync records" in the row's "More" (space-1, space-11). */
 const syncControl = (): HTMLButtonElement => within(openMore()).getByTestId(`space-row-sync-${KEY}`) as HTMLButtonElement;
 /** Its words, apart from a refusal standing beside them (space-11). */
 const syncWords = (): string => syncControl().firstElementChild?.textContent ?? "";
@@ -100,7 +100,7 @@ describe("GROUPS: re-reads on events, never on a timer (space-2)", () => {
       await pending;
     });
     expect(useAppStore.getState().space).toBe(done);
-    expect(syncWords()).toBe("Sync now");
+    expect(syncWords()).toBe("Sync records");
     expect(syncControl().disabled).toBe(false);
 
     // No announcement overtakes this request: its reply still applies.
@@ -112,7 +112,7 @@ describe("GROUPS: re-reads on events, never on a timer (space-2)", () => {
       await pending;
     });
     expect(useAppStore.getState().space).toBe(current);
-    expect(syncWords()).toBe("Sync now");
+    expect(syncWords()).toBe("Sync records");
   });
 
   test("window focus re-reads; a space.state broadcast replaces the state wholesale, the opened repository staying open", async () => {
@@ -129,9 +129,9 @@ describe("GROUPS: re-reads on events, never on a timer (space-2)", () => {
     expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("Synced 2h ago");
     // Something to send outranks it (space-120).
     deliver(repoState());
-    expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("9 to send");
+    expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("9 records to sync");
     expect(screen.getByTestId("space-repository")).toBeTruthy();
-    expect(syncWords()).toBe("Sync now");
+    expect(syncWords()).toBe("Sync records");
     expect(useAppStore.getState().space?.instances[0]?.groups[0]?.repositories[0]?.state).toBe("reachable");
   });
 
@@ -896,10 +896,10 @@ describe("SPACE: changes (space-7, space-8, space-10)", () => {
     await renderGroups(repoState({ local: [], branch: { ...BRANCH, unrelated: true }, incoming: [], sync: { phase: "unrelated", placement: ORIGIN } }));
     expect(screen.getByTestId("space-unrelated").textContent).toContain("Started separately at Spex Example");
     expect(screen.queryByTestId(`space-repo-counts-${KEY}`)).toBeNull();
-    // The row keeps its "Sync now"; "Combine…" stands on the Space's
+    // The row keeps its "Sync records"; "Combine…" stands on the Space's
     // line and beside the row's phrase, never Join or Merge (space-13,
     // space-87, space-120, DR-172).
-    expect(syncWords()).toBe("Sync now");
+    expect(syncWords()).toBe("Sync records");
     expect(within(lineAt()).getByTestId("space-line-combine").textContent).toBe("Combine…");
     expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("Started separately at Spex Example");
     expect(screen.getByTestId(`space-row-combine-${KEY}`).textContent).toBe("Combine…");
@@ -914,9 +914,9 @@ describe("SPACE: changes (space-7, space-8, space-10)", () => {
 describe("SPACE: syncing from the row (space-11, space-12, space-15, space-16, space-57)", () => {
   test("Sync sends the command naming the repository and reads 'Syncing…' with the rail naming each step while it runs", async () => {
     await renderGroups(repoState());
-    // "Sync now" stands in the row's overflow, titled as what it does
+    // "Sync records" stands in the row's overflow, titled as what it does
     // (space-1).
-    expect(syncWords()).toBe("Sync now");
+    expect(syncWords()).toBe("Sync records");
     expect(syncControl().title).toBe("Sends what is here and brings back anything new");
     expect(screen.queryByTestId(`space-row-sync-${KEY}`)?.closest("[role=menu]")).toBeTruthy();
     fireEvent.click(syncControl());
@@ -940,9 +940,9 @@ describe("SPACE: syncing from the row (space-11, space-12, space-15, space-16, s
 
   test("Sync is refused before the first step with the reason beside the disabled control", async () => {
     await renderGroups(repoState({ mergePending: true }));
-    // The reason stands beside "Sync now" in the row's overflow.
+    // The reason stands beside "Sync records" in the row's overflow.
     expect(syncControl().disabled).toBe(true);
-    expect(syncWords()).toBe("Sync now");
+    expect(syncWords()).toBe("Sync records");
     expect(syncControl().lastElementChild?.textContent).toBe("Finish or abort the merge in your terminal");
     cleanup();
     // A displayed blocking diagnostic beneath this clone, perhaps stale
@@ -951,7 +951,7 @@ describe("SPACE: syncing from the row (space-11, space-12, space-15, space-16, s
     await renderGroups(repoState({}, { diagnostics: [{ file: `workspace/${KEY}/intents/x.json`, reason: "malformed intent", blocking: true }] }));
     expect(screen.getByTestId("space-issues-list")).toBeTruthy();
     expect(syncControl().disabled).toBe(false);
-    expect(syncControl().textContent).toBe("Sync now");
+    expect(syncControl().textContent).toBe("Sync records");
     fireEvent.click(syncControl());
     await waitFor(() => expect(calls("space.sync")).toEqual([{ repository: KEY }]));
   });
@@ -1046,9 +1046,9 @@ describe("SPACE: syncing from the row (space-11, space-12, space-15, space-16, s
 
   test("records started separately offer Combine… on the Space's line, confirmed inline with Cancel focused; the row keeps Sync (space-13)", async () => {
     await renderGroups(repoState({ branch: { ...BRANCH, unrelated: true }, sync: { phase: "unrelated", placement: ORIGIN } }));
-    // The row's one "Sync now" stands as ever (DR-128); "Combine…" on the
+    // The row's one "Sync records" stands as ever (DR-128); "Combine…" on the
     // Space's line, never named Join or Merge (DR-172).
-    expect(syncWords()).toBe("Sync now");
+    expect(syncWords()).toBe("Sync records");
     expect(syncControl().title).toBe("Sends what is here and brings back anything new");
     fireEvent.keyDown(window, { key: "Escape" });
     const line = lineAt();
@@ -1132,7 +1132,7 @@ describe("SPACE: syncing from the row (space-11, space-12, space-15, space-16, s
   test("controls are disabled while disconnected", async () => {
     await renderGroups(repoState());
     act(() => useAppStore.setState({ connection: "closed" }));
-    // The row's overflow, which holds "Sync now", and its Open.
+    // The row's overflow, which holds "Sync records", and its Open.
     expect((screen.getByTestId(`space-row-more-${KEY}`) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByTestId(`space-row-open-${KEY}`) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByTestId("space-check") as HTMLButtonElement).disabled).toBe(true);
@@ -1268,7 +1268,7 @@ describe("SPACE: choices (space-9, space-17, space-18)", () => {
     expect(screen.getByTestId(`space-repo-state-${KEY}`).textContent).toBe("Changed here and at Spex Example");
     expect(screen.getByTestId(`space-row-resolve-${KEY}`)).toBeTruthy();
     expect(screen.queryByText("Started separately at Spex Example")).toBeNull();
-    expect(syncWords()).toBe("Sync now");
+    expect(syncWords()).toBe("Sync records");
     expect(within(lineAt()).getByTestId("space-line-combine").textContent).toBe("Combine…");
     expect(screen.queryByTestId(`space-repo-counts-${KEY}`)).toBeNull();
     fireEvent.click(within(screen.getByRole("radiogroup", { name: "Settings changed" })).getByLabelText(/Keep this computer's/));

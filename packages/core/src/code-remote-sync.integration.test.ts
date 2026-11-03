@@ -27,6 +27,8 @@ test("space-129: Sync publishes a code remote added after registration and enabl
   const file = () => join(clonePath(home.dataDir, key), "project.json");
   const project = () => JSON.parse(readFileSync(file(), "utf8"));
   assert.equal(project().remote, null);
+  assert.equal(git(folder, "rev-parse", "--is-inside-work-tree"), "true");
+  assert.deepEqual([row.code, row.codeKind], ["Code remote not configured", "none"], "a Git folder without origin reads as missing a code remote");
 
   const remote = join(scratch, "published-code.git");
   mkdirSync(remote);
@@ -83,6 +85,8 @@ test("space-129: Sync publishes a code remote added after registration and enabl
   assert.equal((await sync()).sync.phase, "done");
   assert.equal(project().remote, null);
   assert.equal(JSON.parse(git(bareOf(host, key), "show", "spex:project.json")).remote, null);
+  const afterRemoval = repositoryOf(await home.client.expectOk("space.get", {}), key);
+  assert.deepEqual([afterRemoval.code, afterRemoval.codeKind], ["Code remote not configured", "none"], "removing origin restores the informational status without claiming the folder stopped being a Git repository");
   git(folder, "remote", "add", "origin", second);
   const moved = `${folder}-away`;
   renameSync(folder, moved);

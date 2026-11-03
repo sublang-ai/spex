@@ -69,11 +69,11 @@ function commandsSent(sent: readonly string[], type: string): Record<string, unk
   });
 }
 
-/** The menu beside a project's primary control holding its other places
+/** The project's single actions menu holding its other places
  * (space-1, space-111), opened where it is not standing. */
 async function otherPlaces(page: Page, key: string): Promise<Locator> {
-  const menu = page.getByTestId(`space-row-places-${key}-menu`);
-  if ((await menu.count()) === 0) await page.getByTestId(`space-row-places-${key}`).click();
+  const menu = page.getByTestId(`space-row-more-${key}-menu`);
+  if ((await menu.count()) === 0) await page.getByTestId(`space-row-more-${key}`).click();
   await expect(menu).toBeVisible();
   return menu;
 }
@@ -131,7 +131,7 @@ test("space-114: Open on <server> opens the seat, sends that seat's core the joi
   const openNotes = row.getByTestId(`space-row-open-${notes.key}`);
   await expect(openNotes).toHaveText("Open here");
   const menu = await otherPlaces(page, notes.key);
-  await expect(menu.getByRole("menuitem")).toHaveText(["Open on lab-4"]);
+  await expect(menu.getByRole("menuitem")).toHaveText(["Explore records", "Open on lab-4"]);
   await menu.getByTestId(`space-row-open-at-${lab.place}-${notes.key}`).click();
 
   // [space-111] [run-view-170] the first open of the seat on this
@@ -180,7 +180,7 @@ test("space-114: Open on <server> opens the seat, sends that seat's core the joi
   await expect(row.getByTestId(`space-row-on-${lab.place}-${notes.key}`)).toHaveText("On lab-4", { timeout: 30_000 });
   await expect(row.getByTestId(`space-repo-state-${notes.key}`)).not.toHaveText("Opening on lab-4…");
   await expect(openNotes).toHaveText("Open here");
-  await expect((await otherPlaces(page, notes.key)).getByRole("menuitem")).toHaveText(["Show on lab-4"]);
+  await expect((await otherPlaces(page, notes.key)).getByRole("menuitem", { name: "Open on lab-4", exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
 
   // [space-111] the project stands under the server's heading in the

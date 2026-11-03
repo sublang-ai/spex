@@ -52,10 +52,23 @@ on the project. This downloads its records and code separately; access
 to private code still needs that repository's permission and credentials.
 Reading a session elsewhere does not move its running agents there.
 
+On a project's Space row, **Open project** returns to its workspace.
+The record status, such as **1 record to sync**, opens its Sync details.
+The row's **More** menu holds **Sync records**, Members, Explore records
+and other places to open the project.
+
 ## Work on a team server
 
-A project with a code remote can offer **Open on ⟨server⟩**. At Spex
-Space, Developer access or higher on the server's group or one of its
+A project with a code remote can offer **More → Open on ⟨server⟩**.
+**Code remote not configured** means Spex has no recorded remote address
+for the project's code; its folder may already be a Git repository.
+Publish the code to a Git repository and configure its address as the
+project folder's `origin` remote, then choose **Sync records** to update
+the recorded address. This prerequisite applies to opening the project's
+code on a server; access to saved sessions follows their availability
+and your membership permissions.
+
+At Spex Space, Developer access or higher on the server's group or one of its
 subgroups lets you use it, without granting access to the parent group's
 records. Review the server's terms when you first open it. Each member
 gets a separate seat; the administrator can access its files and act with

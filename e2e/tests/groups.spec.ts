@@ -234,13 +234,13 @@ function rowEntry(page: Page, key: string, act: string): Promise<Locator> {
   return menuEntry(page, `space-row-more-${key}`, `space-row-${act}-${key}`);
 }
 
-/** What a project row's "More" holds (space-1): "Sync now", Members and
+/** What a project row's "More" holds (space-1): "Sync records", Members and
  * "Explore records", and none of the acts DR-172 cuts — "Move…",
  * "Place at…", "Leave…" or Attach. The menu is left standing. */
 async function expectRowMenu(page: Page, key: string): Promise<void> {
   await rowEntry(page, key, "sync");
   await expect(page.getByTestId(`space-row-more-${key}-menu`).getByRole("menuitem")).toHaveText([
-    "Sync now",
+    "Sync records",
     "Members",
     "Explore records",
   ]);
@@ -396,7 +396,7 @@ test.describe("first start", () => {
     // overflow (space-1, space-61, space-120).
     const groups = page.getByTestId("space-groups");
     await expect(groups.locator('[data-testid^="space-instance-"]')).toHaveCount(0);
-    await expect(groups.locator('[data-testid^="space-group-"]')).toHaveCount(0);
+    await expect(groups.locator('[data-testid^="space-group-"][role="group"]')).toHaveCount(0);
     const here = groups.getByTestId("space-own");
     await expect(here).toHaveAttribute("role", "group");
     await expect(here).toHaveAttribute("aria-label", "This computer");
@@ -507,13 +507,20 @@ test.describe("first start", () => {
     await expect(page.getByTestId(`space-repo-state-${TEAM_KEY}`)).toHaveText("Synced just now", { timeout: 30_000 });
     await expect(page.getByTestId(`space-row-${TEAM_KEY}`)).toHaveAttribute("data-state", "reachable");
     await expect(page.getByTestId(`space-repo-${TEAM_KEY}`)).toHaveText("demo-project");
-    // In a group, its code glyph stands: the project names no code
-    // remote and is paired with its folder here, so "Code only on this
-    // computer" in the attention tone (space-1, DR-175).
+    // Missing code configuration is neutral information, with an
+    // attached explanation. It does not block reading or syncing
+    // records (space-1, DR-209).
     const codeGlyph = page.getByTestId(`space-repo-code-${TEAM_KEY}`);
     await expect(codeGlyph).toHaveAttribute("data-kind", "none");
-    await expect(codeGlyph).toHaveAttribute("data-tone", "attention");
-    await expect(codeGlyph).toHaveAttribute("title", "Code only on this computer");
+    await expect(codeGlyph).toHaveAttribute("data-tone", "idle");
+    await expect(codeGlyph).toHaveText("Code remote not configured");
+    await codeGlyph.click();
+    const codeDetails = page.getByTestId(`space-row-code-details-${TEAM_KEY}`);
+    await expect(codeDetails).toBeVisible();
+    await expect(codeDetails).toContainText("A Git remote is required to open this project's code on a server.");
+    await expect(page.getByTestId(`space-row-places-${TEAM_KEY}`)).toHaveCount(0);
+    await codeGlyph.click();
+    await expect(codeDetails).toHaveCount(0);
     // No placement's line on the row: in its Sync tab, the row's name
     // opening it, its one placement's line names the stand-in by its
     // display name and the path there of the group it is in, never the
@@ -527,7 +534,7 @@ test.describe("first start", () => {
     await expect(line.getByTestId("space-line-at")).toHaveText(HOST_GROUP);
     await expect(line).not.toContainText("-spex");
     await expect(line.getByTestId("space-line-state")).toHaveText(/^Synced just now/);
-    // "Sync now" stands in the row's overflow beside Members and
+    // "Sync records" stands in the row's overflow beside Members and
     // "Explore records", and nothing else (space-1).
     await expectRowMenu(page, TEAM_KEY);
     await closeMenu(page);
@@ -535,7 +542,7 @@ test.describe("first start", () => {
     expect(git(bareOf(host, TEAM_KEY), "rev-parse", "spex")).toBe(git(clone, "rev-parse", "spex"));
 
     // A session run from the Captain home lists under the records' "To
-    // send (1)" by its title, the row reading "1 to send"; Open session
+    // send (1)" by its title, the row reading "1 record to sync"; Open session
     // opens its tab; Sync sends it, the host's `spex` holding both bundle
     // files (space-7, space-120, space-12). The project's key moved with
     // the sign-in and the pick (space-59, space-58, space-60); the page
@@ -557,7 +564,12 @@ test.describe("first start", () => {
     const panel = page.getByTestId("space-repository");
     const local = panel.getByTestId("space-local-list");
     await expect(panel.getByRole("heading", { name: "To send (1)", exact: true })).toBeVisible();
-    await expect(phraseOf(page, TEAM_KEY)).toHaveText("1 to send");
+    await expect(phraseOf(page, TEAM_KEY)).toHaveText("1 record to sync");
+    // The record status is a direct route back to Sync even while
+    // this project's records explorer is already selected.
+    await panel.getByRole("tab", { name: "Explore", exact: true }).click();
+    await phraseOf(page, TEAM_KEY).click();
+    await expect(panel.getByRole("tab", { name: "Sync", exact: true })).toHaveAttribute("aria-selected", "true");
     const sessionRow = local.locator('[data-testid^="space-unit-mine-sessions/"]');
     await expect(sessionRow).toHaveCount(1);
     await expect(sessionRow).toContainText("Fix the token refresh in auth.ts");
@@ -568,7 +580,7 @@ test.describe("first start", () => {
     await expect(page.getByTestId("captain-pane")).toContainText("Fix the token refresh in auth.ts");
     await showGroups(page);
     await openRepository(page, TEAM_KEY);
-    // "Sync now" sends it, the row's phrase naming each step in flight
+    // "Sync records" sends it, the row's phrase naming each step in flight
     // and then its last sync (space-12, space-120).
     const phrases = await watch(page, `[data-testid="space-repo-state-${TEAM_KEY}"]`);
     await rowAct(page, TEAM_KEY, "sync");
@@ -576,10 +588,10 @@ test.describe("first start", () => {
     await expect(done).toHaveText(/^Synced just now · [1-9]\d* sent · 0 received$/);
     await expect(phraseOf(page, TEAM_KEY)).toHaveText("Synced just now");
     const seen = await phrases();
-    expect(seen[0]).toBe("1 to send");
+    expect(seen[0]).toBe("1 record to sync");
     expect(seen.at(-1)).toBe("Synced just now");
     expect(inStepOrder(seen.slice(1, -1)), seen.join(" → ")).toBe(true);
-    await expect(await rowEntry(page, TEAM_KEY, "sync")).toHaveText("Sync now");
+    await expect(await rowEntry(page, TEAM_KEY, "sync")).toHaveText("Sync records");
     await closeMenu(page);
     await expect(panel.getByTestId("space-sync-tab")).toContainText("Nothing to send from this computer");
     const tracked = git(bareOf(host, TEAM_KEY), "ls-tree", "-r", "--name-only", "spex").split("\n");
@@ -589,7 +601,7 @@ test.describe("first start", () => {
 
     // An intent queued while Space is shown lists under "To send (1)"
     // with Refresh never activated — the ledger's announcement re-reads
-    // the state — the row reading "1 to send" (space-2, space-7,
+    // the state — the row reading "1 record to sync" (space-2, space-7,
     // space-120).
     await app.core.command("intent.queue", { projectId: TEAM_KEY, text: "Queued while Space is shown" });
     const intentRow = local.locator('[data-testid^="space-unit-mine-intents/"]');
@@ -597,7 +609,7 @@ test.describe("first start", () => {
     await expect(intentRow).toContainText("Queued while Space is shown");
     await expect(intentRow).toHaveAttribute("data-change", "new");
     await expect(panel.getByRole("heading", { name: "To send (1)", exact: true })).toBeVisible();
-    await expect(phraseOf(page, TEAM_KEY)).toHaveText("1 to send");
+    await expect(phraseOf(page, TEAM_KEY)).toHaveText("1 record to sync");
   });
 });
 
@@ -1566,8 +1578,8 @@ test.describe("a second Space", () => {
     expect(headOf(bareOf(second, SECOND_KEY), "spex")).toBe(git(clone, "rev-parse", "spex"));
     expect(first.script.repositories.some((repo) => repo.path === "atlas-spex")).toBe(false);
 
-    // The row's "Sync now" then sends what changed here to the second,
-    // with the second's credential, its phrase reading "1 to send", then
+    // The row's "Sync records" then sends what changed here to the second,
+    // with the second's credential, its phrase reading "1 record to sync", then
     // each step and then its last sync (space-12, space-120); its "More"
     // holds no act DR-172 cuts (space-1).
     await expect
@@ -1577,7 +1589,7 @@ test.describe("a second Space", () => {
     await openRepository(page, SECOND_KEY);
     const panel = page.getByTestId("space-repository");
     await expect(panel.getByTestId("space-local-list").getByTestId(`space-unit-mine-intents/${queued.id}`)).toContainText("Queued at the second Space");
-    await expect(phraseOf(page, SECOND_KEY)).toHaveText("1 to send");
+    await expect(phraseOf(page, SECOND_KEY)).toHaveText("1 record to sync");
     const pushes = second.script.transportCredentials.length;
     const phrases = await watch(page, `[data-testid="space-repo-state-${SECOND_KEY}"]`);
     await expectRowMenu(page, SECOND_KEY);
@@ -1848,7 +1860,7 @@ test.describe("daily sync", () => {
     await expect(stopped.getByTestId("space-stopped-title")).toHaveText("Sending stopped — Stand-in Git host changed again", { timeout: 30_000 });
     await expect(counts).toHaveAttribute("title", /[1-9]\d* commits? ahead/);
     await expect(stopped.getByTestId("space-retry")).toBeVisible();
-    await expect(phraseOf(page, TEAM_KEY)).toHaveText(/^[1-9]\d* to send$/);
+    await expect(phraseOf(page, TEAM_KEY)).toHaveText(/^[1-9]\d* records? to sync$/);
     await scanVocabulary(page, "changed again", words);
     await sync.click();
     await expect(done).toHaveText(/^Synced just now · 1 sent · 1 received$/);
@@ -2307,8 +2319,8 @@ test.describe("second computer", () => {
     // The opened clone holds the host's `spex`: it reads synced at the
     // peer's last push, never "Never synced" (space-61).
     await expect(page.getByTestId(`space-repo-state-${key}`)).toHaveText(/^Synced (just now|\d+m ago)$/);
-    await expect(page.getByTestId(`space-row-here-${key}`)).toHaveText("Here");
-    await expect(page.getByTestId(`space-row-open-${key}`)).toHaveText("Show");
+    await expect(page.getByTestId(`space-row-here-${key}`)).toHaveText("This computer");
+    await expect(page.getByTestId(`space-row-open-${key}`)).toHaveText("Open project");
     expect(existsSync(join(clonePath(app.dataDir, key), "project.json"))).toBe(true);
     expect(existsSync(join(folder, "README.md"))).toBe(true);
     expect(git(folder, "remote", "get-url", "origin")).toBe(code);

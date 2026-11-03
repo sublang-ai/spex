@@ -1053,7 +1053,7 @@ describe("GROUPS: the new controls fit (space-28)", () => {
     for (const label of ["New group…", "Invite members…", "Create", "Creating…", "Add member", "Adding…", "Cancel", "Remove", "Removing…", "Keep", "⋯More"]) {
       expect(seen, label).toContain(label);
     }
-    for (const label of ["Members", "Sync now", "Explore records"]) {
+    for (const label of ["Members", "Sync records", "Explore records"]) {
       expect(entries, label).toContain(label);
     }
 

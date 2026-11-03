@@ -102,12 +102,12 @@ function opensSent(sent: readonly string[]): { instance: string; serverId: strin
   });
 }
 
-/** The menu beside a project's primary control on its Space row,
+/** The single actions menu on a project's Space row,
  * holding its other places (space-1, space-111), opened where it is not
  * standing. */
 async function otherPlaces(page: Page, key: string): Promise<Locator> {
-  const menu = page.getByTestId(`space-row-places-${key}-menu`);
-  if ((await menu.count()) === 0) await page.getByTestId(`space-row-places-${key}`).click();
+  const menu = page.getByTestId(`space-row-more-${key}-menu`);
+  if ((await menu.count()) === 0) await page.getByTestId(`space-row-more-${key}`).click();
   await expect(menu).toBeVisible();
   return menu;
 }

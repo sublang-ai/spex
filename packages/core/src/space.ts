@@ -275,27 +275,19 @@ const codeAt = (where: string): string => i18n._({
   comment: "The title of a project's code glyph on its row: where its code is — {where} is a Space's display name, or the host of the code's remote as the reader set it (such as github.com), or a local remote as written",
 });
 
-/** The title of a project's warning glyph where its `project.json`
- * names no remote for its code, while it is open here (space-1,
- * DR-175): where its code is. */
-const codeOnlyHere = (): string => i18n._({
-  id: "Code only on this computer",
-  comment: "The title of a warning glyph on a project's row while the project is open on this computer: its code is on no Git host, only in its folder here",
-});
-
-/** The title of a project's warning glyph where its `project.json`
- * names no remote for its code, while it is not open here (space-1,
- * DR-175). */
-const codeNotHosted = (): string => i18n._({
-  id: "Code not on a Git host",
-  comment: "The title of a warning glyph on a project's row while the project is not open on this computer: its records name no Git host for its code",
+/** The informational status where a project's records name no remote
+ * repository address for its code (space-1). A Git working folder may
+ * exist without that configured remote. */
+const codeRemoteMissing = (): string => i18n._({
+  id: "Code remote not configured",
+  comment: "A project's code status: Spex has no recorded Git remote address for the code; this says nothing about whether its folder is a Git repository, its backups, or access to its records",
 });
 
 /** The refusal of a team server's open of a project whose records name
  * no code remote (space-103, DR-175). */
 const needsCodeHost = (): string => i18n._({
-  id: "Needs the code on a Git host",
-  comment: "Refusal of opening a project on a team server: its records name no Git host for its code, so the server has no code to take; the member pushes the code to a Git host first",
+  id: "A Git remote is required to open this project's code on a server.",
+  comment: "Refusal of opening a project's code on a team server because its records name no code remote; this prerequisite does not describe access to saved sessions or other records",
 });
 
 /** Why a file of a withheld family is shown without its text (space-35). */
@@ -2216,7 +2208,7 @@ class RepositorySync {
       let code: { code: string | null; codeKind: CodeKind } = { code: null, codeKind: "unknown" };
       try {
         const project = existsSync(read.repository.projectFile) ? readJsonFile(read.repository.projectFile) as { remote?: unknown } : undefined;
-        code = this.owner.codeAsShown(project, instance, store.home.folderOf(read.repository.key) !== undefined);
+        code = this.owner.codeAsShown(project, instance);
       } catch { code = { code: null, codeKind: "unknown" }; }
       const remote = repo.root ? repo.remote : null;
       const state: RepositoryState = {
@@ -4901,8 +4893,8 @@ export class SpaceManager {
    * (space-1, core-service-145), from its `project.json` — the one its
    * clone holds, or the one its listing carries: nothing for none, a
    * group's own or your own group's own; where it names no remote,
-   * "Code only on this computer" while `pairedHere` — a folder on this
-   * device pairs it — and "Code not on a Git host" otherwise (DR-175);
+   * "Code remote not configured", without inferring whether a working
+   * folder is a Git repository or whether other copies exist;
    * and otherwise nothing until the default instance and every
    * instance the home lists have reported their Git origin, then
    * "Code: <display name>" of the listed instance under whose
@@ -4912,10 +4904,10 @@ export class SpaceManager {
    * names no host (DR-120, DR-127, DR-172). The Git system behind an
    * instance is never named, and its transport URL and the project file
    * stay as given. */
-  codeAsShown(project: { remote?: unknown } | null | undefined, origin: string | null, pairedHere: boolean): { code: string | null; codeKind: CodeKind } {
+  codeAsShown(project: { remote?: unknown } | null | undefined, origin: string | null): { code: string | null; codeKind: CodeKind } {
     if (!project) return { code: null, codeKind: "unknown" };
     const remote = typeof project.remote === "string" ? project.remote.trim() : "";
-    if (remote.length === 0) return { code: pairedHere ? codeOnlyHere() : codeNotHosted(), codeKind: "none" };
+    if (remote.length === 0) return { code: codeRemoteMissing(), codeKind: "none" };
     if (!this.originsReported()) return { code: null, codeKind: "unknown" };
     const at = this.reportingUnder(remote, origin);
     if (at) return { code: codeAt(this.nameOf(at)), codeKind: "space" };
@@ -8824,7 +8816,7 @@ export class SpaceManager {
     const path = `${repository.group.fullPath}/${repository.path}`;
     const key = colliding ? `${folder}/${path}@${repository.id}` : hostKey(repository, folder);
     if (!key || (!colliding && (store.repository(key) || deferred.has(key)))) return undefined;
-    const code = this.codeAsShown(repository.project, instance.origin, false);
+    const code = this.codeAsShown(repository.project, instance.origin);
     return {
       row: {
         key,

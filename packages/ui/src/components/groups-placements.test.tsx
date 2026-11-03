@@ -16,7 +16,7 @@
 // its row while its own is signed out (space-62, space-69, space-72,
 // git-host-5). A placement owing its sharing confirm waits with
 // Continue, the confirm "Share with <group> at <display name>?"; the
-// row's "Sync now" asks it first only where no other placement can run
+// row's "Sync records" asks it first only where no other placement can run
 // (space-57); records started separately combine from the line's
 // "Combine…", or the row's (space-13), a Retry joining only the
 // placement this page combined; a stopped one retries from its line or
@@ -172,7 +172,7 @@ function choose(key: string, id: string): void {
   fireEvent.click(screen.getByTestId(id));
 }
 
-/** The row's "Sync now" (space-1). */
+/** The row's "Sync records" (space-1). */
 const syncEntry = (key = KEY): Entry => entryOf(key, `space-row-sync-${key}`)!;
 const syncNow = (key = KEY): void => choose(key, `space-row-sync-${key}`);
 
@@ -644,7 +644,7 @@ describe("GROUPS: a line per placement (space-87, space-61, space-12, space-15, 
     expect(screen.getByTestId(`space-repo-state-${GAMMA}`).className.split(/\s+/)).not.toContain("hidden");
     // Below @xs the row's controls wrap beneath its name, its overflow
     // last (space-28, DR-041).
-    const head = screen.getByTestId(`space-repo-${KEY}`).parentElement!;
+    const head = screen.getByTestId(`space-repo-${KEY}`).parentElement!.parentElement!;
     expect(head.className.split(/\s+/)).toContain("flex-wrap");
     expect(screen.getByTestId(`space-repo-${KEY}`).className.split(/\s+/)).toContain("truncate");
     const controls = moreOf().parentElement!.parentElement!;
@@ -1121,7 +1121,7 @@ describe("GROUPS: a placement's sharing confirm, combining and retry (space-57, 
     };
     await renderGroups(placedAtTwo({ second: unrelated }, { sync: { phase: "unrelated", placement: SECOND } }), { open: false });
     // The row's one Sync now stands for every placement (DR-128).
-    expect(syncEntry().label).toBe("Sync now");
+    expect(syncEntry().label).toBe("Sync records");
     expect(syncEntry().disabled).toBe(false);
     expect(syncEntry().title).toBe("Sends what is here and brings back anything new");
     // The row reads the outcome with its way forward beside it
@@ -1274,7 +1274,7 @@ describe("GROUPS: a placement's sharing confirm, combining and retry (space-57, 
     await waitFor(() => expect(document.activeElement).toBe(rowName()));
     cleanup();
 
-    // The row's confirm shared: its "Sync now" busy until the machine
+    // The row's confirm shared: its "Sync records" busy until the machine
     // moves, focus back on the row's "More" that held it (DR-159).
     installClient();
     await renderGroups(base({}, [repo({ members: 3, noticed: false })]), { open: false });
@@ -1334,7 +1334,7 @@ describe("GROUPS: a placement's sharing confirm, combining and retry (space-57, 
   test("space-11, space-61: a row whose every placement's instance is signed out reads 'Sign in to <first placement's display name> first'; an unreachable line offers Retry only while its instance is signed in and the row offers none", async () => {
     // Both instances signed out: no placement can run, and the refusal
     // names the first placement's instance.
-    // The reason stands beside the disabled "Sync now" in the row's
+    // The reason stands beside the disabled "Sync records" in the row's
     // overflow (space-11, DR-159).
     await renderGroups(signedOutAt(SECOND, {}, signedOutAt(ORIGIN, {}, placedAtTwo())), { open: false });
     expect(syncEntry().disabled).toBe(true);
@@ -1676,7 +1676,7 @@ function rowControls(key: string): string[] {
   const lines = screen.queryByTestId(`space-lines-${key}`);
   return within(screen.getByTestId(`space-row-${key}`))
     .queryAllByRole("button")
-    .filter((button) => !lines?.contains(button) && button.dataset.testid !== `space-repo-${key}`)
+    .filter((button) => !lines?.contains(button) && !button.dataset.testid?.startsWith("space-repo-"))
     .map((button) => button.dataset.testid ?? "");
 }
 
@@ -1922,7 +1922,7 @@ describe("GROUPS: the placements surface at the floor (space-95, space-28, DR-17
      * line's controls wrap beneath its name below @xs instead (space-28,
      * DR-041). */
     const linesWrap = (key: string) => {
-      const top = screen.getByTestId(`space-repo-${key}`).parentElement!;
+      const top = screen.getByTestId(`space-repo-${key}`).parentElement!.parentElement!;
       expect(top.className.split(/\s+/)).toContain("flex-wrap");
       for (const line of linesOf(key)) {
         const row = within(line).getByTestId("space-line-instance").parentElement!;
@@ -1940,7 +1940,7 @@ describe("GROUPS: the placements surface at the floor (space-95, space-28, DR-17
       measure();
     }
     expect(within(lineOf(OWN, ORIGIN)).getByTestId("space-line-members").getAttribute("aria-label")).toBe("Members");
-    expect([...seen]).toEqual(expect.arrayContaining(["Show", "Add to a group…", "Combine…", "Continue", "Retry", "Members"]));
+    expect([...seen]).toEqual(expect.arrayContaining(["Open project", "Add to a group…", "Combine…", "Continue", "Retry", "Members"]));
 
     // Opened: the waiting line's confirm and a members panel; the
     // records started separately's confirm; and Add to a group….
