@@ -5,7 +5,7 @@
 
 ## Status
 
-Amended by [DR-219](219-your-own-groups-folder-is-a-lowercase-name-checked-before-it-moves.md) in your own group's folder name at sign-in: the login in lowercase kebab-case without a trailing `-spex`, or `me`, its repository at the host `<that name>-spex`; every move of clones on disk checked against `home.yaml` before it is made, and moved back where it or the write of `home.yaml` fails.
+Amended by [DR-221](221-your-own-groups-folder-is-a-lowercase-name-checked-before-it-moves.md) in your own group's folder name at sign-in: the login in lowercase kebab-case without a trailing `-spex`, or `me`, its repository at the host `<that name>-spex`; every move of clones on disk checked against `home.yaml` before it is made, and moved back where it or the write of `home.yaml` fails.
 
 Amended by [DR-213](213-public-github-code-opens-over-https.md) in shared code identity and project matching: recognized GitHub SSH and HTTPS code URLs share one HTTPS identity, while existing working folders keep their remotes.
 

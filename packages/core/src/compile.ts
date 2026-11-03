@@ -56,7 +56,7 @@ import { RUNTIME_ABI } from "@sublang/playbook/xstate-runtime";
 
 import { ARTIFACT_SCHEMAS, freshFileUrl, isValidRegistryEntry, REGISTRY_CONTRACT } from "./config.js";
 import { ENGINE_LINKS_EXCLUDE, type InstallEngine } from "@sublang/spex/environment";
-import { readVersioned, VersionConflictError, writeVersionedBytes } from "@sublang/spex/files";
+import { assertPlainDirectory, readVersioned, VersionConflictError, writeVersionedBytes } from "@sublang/spex/files";
 import { i18n } from "./i18n.js";
 
 /** The packages a compile resolves from the playbook's own directory:
@@ -1043,6 +1043,32 @@ export function compilePlaybook(options: CompileOptions): Promise<CompileResult>
   return admitArtifactJob(artifactFolder(options.libraryDir, options.playbookId), options.skipSlc ? "packaging" : "compile", () => compileAdmitted(options));
 }
 
+/** slc loads the generated TypeScript with native import. Keep its ESM
+ * scope local to the generated directory, independent of the project.
+ * Existing manifests are validated, never rewritten. Called only while
+ * the compile/packaging job owns this artifact folder. */
+function prepareArtifactModule(artifactDir: string): void {
+  assertPlainDirectory(artifactDir);
+  mkdirSync(artifactDir, { recursive: true });
+  const manifest = join(artifactDir, "package.json");
+  const stat = lstatSync(manifest, { throwIfNoEntry: false });
+  if (stat && (!stat.isFile() || stat.isSymbolicLink())) {
+    throw new Error(`${manifest}: expected a regular ESM package.json`);
+  }
+  const before = readVersioned(manifest);
+  if (before.bytes !== null) {
+    let value: unknown;
+    try { value = JSON.parse(before.bytes.toString("utf8")); }
+    catch { throw new Error(`${manifest}: expected valid JSON with "type": "module"`); }
+    if (value === null || typeof value !== "object" || Array.isArray(value) ||
+      (value as { type?: unknown }).type !== "module") {
+      throw new Error(`${manifest}: expected "type": "module"; existing configuration was not changed`);
+    }
+    return;
+  }
+  writeVersionedBytes(manifest, '{\n  "type": "module"\n}\n', before.version, 0o644);
+}
+
 async function compileAdmitted(
   options: CompileOptions,
 ): Promise<CompileResult> {
@@ -1067,6 +1093,8 @@ async function compileAdmitted(
   const agent = options.start ? await options.start() : options.agent;
   const dir = artifactFolder(options.libraryDir, id);
   mkdirSync(dir, { recursive: true });
+  const artifactDir = join(dir, `${id}.playbook`);
+  prepareArtifactModule(artifactDir);
   const sourcePath = join(dir, `${id}.md`);
   if (options.source.text !== undefined || options.source.path) {
     // Spex's own write of the source replaces `<id>.md` atomically under
@@ -1080,7 +1108,6 @@ async function compileAdmitted(
     throw new Error("compile needs a source text or file");
   }
 
-  const artifactDir = join(dir, `${id}.playbook`);
   const fsmPath = join(artifactDir, `${id}.fsm.ts`);
   const playbookPath = join(artifactDir, `${id}.playbook.ts`);
   // slc emits the registry-entry module beside the artifact dir when

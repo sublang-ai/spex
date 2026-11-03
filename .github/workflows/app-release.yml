@@ -5,8 +5,21 @@ on:
   push:
     tags:
       - "app-v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Candidate release tag to validate without publishing
+        type: string
+        required: true
+      build-only:
+        description: Diagnose native packages without full CI; cannot publish
+        type: boolean
+        default: false
 
 permissions: {}
+
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
 concurrency:
   group: app-release-${{ github.ref }}
@@ -14,20 +27,20 @@ concurrency:
 
 jobs:
   validate:
+    if: github.event_name != 'workflow_dispatch' || !inputs.build-only
+    needs: prepare
     uses: ./.github/workflows/ci.yml
     permissions:
       contents: read
     with:
-      # Owner-authorized, single-release scope; other tags retain full CI.
-      full: ${{ github.ref_name != 'app-v0.9.0-beta.26' }}
+      full: true
+      release-tag: ${{ inputs.tag || github.ref_name }}
       channel: app
 
   prepare:
-    needs: validate
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      checks: read
     outputs:
       version: ${{ steps.version.outputs.version }}
       title: ${{ steps.version.outputs.title }}
@@ -39,28 +52,26 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Verify version matches tag
+      - name: Create local candidate tag for branch validation
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/release-version.mjs check --tag="$RELEASE_TAG" --channel=app
+          git -c tag.gpgsign=false tag "$RELEASE_TAG" "$GITHUB_SHA"
+      - name: Prepare version from tag
         id: version
-        run: node scripts/release-notes.mjs check --tag="$GITHUB_REF_NAME"
+        run: node scripts/release-version.mjs prepare --channel=app
       - name: Extract release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: >-
           node scripts/release-notes.mjs notes
-          --tag="$GITHUB_REF_NAME"
+          --tag="$RELEASE_TAG"
           --repository="$GITHUB_REPOSITORY"
           --out=release-notes.md
       - name: Require published runtime dependencies
         run: node scripts/dependency-closure.mjs --registry-only
-      - name: Require the accepted PR tree for the beta.26 exception
-        if: github.ref_name == 'app-v0.9.0-beta.26'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          git merge-base --is-ancestor HEAD origin/main
-          accepted_head=$(git rev-parse HEAD^2)
-          git diff --exit-code "$accepted_head" HEAD
-          conclusion=$(gh api "repos/$GITHUB_REPOSITORY/commits/$accepted_head/check-runs" --jq '[.check_runs[] | select(.name == "checks" and .app.slug == "github-actions")] | sort_by(.started_at) | last | .conclusion')
-          test "$conclusion" = success
       - uses: actions/upload-artifact@v4
         with:
           name: app-release-notes
@@ -92,10 +103,62 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Prepare version from tag
+        run: node scripts/release-version.mjs prepare --channel=app
       - run: npm ci
       - run: npm run build
+      - name: Check module scope for package diagnostics
+        if: github.event_name == 'workflow_dispatch' && inputs.build-only
+        run: node --test packages/core/dist/compile-module-scope.integration.test.js
+      - name: Prepare private macOS signing inputs
+        if: runner.os == 'macOS'
+        shell: python
+        env:
+          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          import base64, os
+          from pathlib import Path
+          names = ['MACOS_CERTIFICATE_P12_BASE64', 'MACOS_CERTIFICATE_PASSWORD', 'APPLE_API_KEY_P8_BASE64', 'APPLE_API_KEY_ID', 'APPLE_API_ISSUER', 'APPLE_TEAM_ID']
+          for name in names:
+              if not os.environ.get(name):
+                  raise SystemExit('Missing macOS signing secret: ' + name)
+          root = Path(os.environ['RUNNER_TEMP']) / 'spex-macos-secrets'
+          root.mkdir(mode=0o700)
+          outputs = {}
+          for source, target, variable in [('MACOS_CERTIFICATE_P12_BASE64', 'signing.p12', 'CSC_LINK'), ('APPLE_API_KEY_P8_BASE64', 'notary.p8', 'APPLE_API_KEY')]:
+              path = root / target
+              with path.open('xb') as stream:
+                  os.chmod(path, 0o600)
+                  stream.write(base64.b64decode(os.environ[source], validate=True))
+              outputs[variable] = str(path)
+          with open(os.environ['GITHUB_ENV'], 'a') as stream:
+              for name, value in outputs.items():
+                  stream.write(name + '=' + value + '\n')
       - name: Build native desktop package
+        if: runner.os != 'macOS'
         run: npm run ${{ matrix.script }} -w apps/desktop
+      - name: Build signed and notarized Mac package
+        if: runner.os == 'macOS'
+        run: npm run package:mac -w apps/desktop
+        env:
+          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      - name: Remove private macOS signing inputs
+        if: always() && runner.os == 'macOS'
+        shell: python
+        run: |
+          import os, shutil
+          from pathlib import Path
+          shutil.rmtree(Path(os.environ['RUNNER_TEMP']) / 'spex-macos-secrets', ignore_errors=True)
+      - name: Verify installer version matches tag
+        run: node scripts/release-artifacts.mjs app
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-${{ matrix.asset }}
@@ -105,6 +168,14 @@ jobs:
         with:
           name: compiler-check-${{ matrix.asset }}
           path: apps/desktop/release/compiler-check-*.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'macOS'
+        with:
+          name: macos-signing-verification
+          path: |
+            apps/desktop/release/macos-signing.json
+            apps/desktop/release/macos-*-notarization.json
           if-no-files-found: error
 
   release:
@@ -131,7 +202,13 @@ jobs:
           test -s "Spex-$VERSION-mac-arm64.dmg"
           test -s "Spex-$VERSION-win-x64.exe"
           sha256sum "Spex-$VERSION-mac-arm64.dmg" "Spex-$VERSION-win-x64.exe" > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-desktop-checksums
+          path: artifacts/SHA256SUMS
+          if-no-files-found: error
       - name: Create GitHub release with both native downloads
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/app-v')
         uses: softprops/action-gh-release@v2
         with:
           name: ${{ needs.prepare.outputs.title }}

@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# DR-219: Your Own Group's Folder Is a Lowercase Name, Checked Before It Moves
+# DR-221: Your Own Group's Folder Is a Lowercase Name, Checked Before It Moves
 
 ## Status
 

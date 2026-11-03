@@ -21,12 +21,12 @@
     "i18n:extract": "lingui extract --clean",
     "i18n:check": "node ../../scripts/i18n-check.mjs",
     "package": "npm run package:mac",
-    "check:claude-resume": "node ../../packages/core/scripts/check-claude-resume.mjs",
     "rebuild:electron": "node scripts/rebuild-native.mjs electron",
     "rebuild:node": "node scripts/rebuild-native.mjs node",
     "package:windows": "npm run build && npm run check:claude-resume && npm run stage:windows-runtime && npm run rebuild:electron && electron-builder --win nsis --x64 --publish never",
     "stage:windows-runtime": "node scripts/stage-windows-runtime.mjs",
-    "package:mac": "npm run build && npm run check:claude-resume && npm run rebuild:electron && electron-builder --mac dmg --arm64 --publish never"
+    "package:mac": "npm run build && npm run check:claude-resume && npm run rebuild:electron && node scripts/package-macos.mjs --publish never",
+    "check:claude-resume": "node ../../packages/core/scripts/check-claude-resume.mjs"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "*",
@@ -73,9 +73,13 @@
         }
       ],
       "icon": "build/icon.icns",
-      "identity": null,
       "category": "public.app-category.developer-tools",
-      "artifactName": "Spex-${version}-mac-${arch}.${ext}"
+      "artifactName": "Spex-${version}-mac-${arch}.${ext}",
+      "forceCodeSigning": true,
+      "hardenedRuntime": true,
+      "notarize": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
     },
     "asarUnpack": [
       "node_modules/**/*"
@@ -104,6 +108,9 @@
     "nsis": {
       "oneClick": true,
       "perMachine": false
+    },
+    "dmg": {
+      "sign": false
     }
   }
 }

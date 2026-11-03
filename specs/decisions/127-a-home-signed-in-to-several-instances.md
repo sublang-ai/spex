@@ -5,7 +5,7 @@
 
 ## Status
 
-Amended by [DR-219](219-your-own-groups-folder-is-a-lowercase-name-checked-before-it-moves.md) in the name the first sign-in gives your own group's folder and its repository at each instance, and in checking a clone's move against `home.yaml` before it is made, the clones moved back where a move or the write of `home.yaml` fails.
+Amended by [DR-221](221-your-own-groups-folder-is-a-lowercase-name-checked-before-it-moves.md) in the name the first sign-in gives your own group's folder and its repository at each instance, and in checking a clone's move against `home.yaml` before it is made, the clones moved back where a move or the write of `home.yaml` fails.
 
 Amended by [DR-216](216-registry-and-space-accounts-stay-apart.md) in authoring and package placement: a Space group supplies no Org suggestion, and placing records never rehomes a package's registry source.
 

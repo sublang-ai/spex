@@ -49,7 +49,9 @@ test("playbook-library-123: the surface adds, binds and removes the global packa
   // A playbook authored in the global environment and added there: its
   // spec package under development in your own group's clone, requested
   // by path from the global environment (playbook-library-51, -61).
-  const { org } = await app.core.command("draft.defaults", { projectId: ownKey });
+  // Anonymous registry defaults intentionally suggest no org; this scenario
+  // supplies the author's explicit choice, as the authoring UI permits.
+  const org = "acme";
   const id = "sweep";
   const name = `${org}/${id}`;
   const { instance } = await app.core.command("draft.create", { projectId: ownKey, draftId: id, org, license: "Apache-2.0" });
