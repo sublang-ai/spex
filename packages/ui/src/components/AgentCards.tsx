@@ -486,8 +486,10 @@ function RecommendedTag({ adapter, ready }: { adapter: AdapterName; ready: boole
   return <span data-testid={`agent-tag-${adapter}`} className="rounded border border-neutral-300 px-1.5 text-xs text-neutral-500 dark:border-neutral-700 dark:text-neutral-400">{i18n._({ id: "Recommended", comment: "tag beside the Claude agent card's name" })}</span>;
 }
 
-function AgentCard({ entry, state, seat }: { entry: ReadinessEntry; state: ConfigState | undefined; seat: boolean }) {
-  const catalog = useAgentOptions(entry.adapter);
+function AgentCard({ entry, state, seat, optionsEpoch }: { entry: ReadinessEntry; state: ConfigState | undefined; seat: boolean; optionsEpoch: number }) {
+  // Read again after each Re-check, never on the window's own readiness
+  // refresh (settings-5, DR-217).
+  const catalog = useAgentOptions(entry.adapter, optionsEpoch);
   const name = agentName(entry.adapter);
   const discovery = catalog.options?.discovery;
   const models = discovery?.status === "available" ? discovery.models : [];
@@ -568,10 +570,16 @@ function AgentCard({ entry, state, seat }: { entry: ReadinessEntry; state: Confi
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span data-testid={`agent-runs-${entry.adapter}`} className="min-w-0 text-sm text-neutral-700 [overflow-wrap:anywhere] dark:text-neutral-300">
+            <span data-testid={`agent-runs-${entry.adapter}`} aria-busy={catalog.refreshing || undefined} className="min-w-0 text-sm text-neutral-700 [overflow-wrap:anywhere] dark:text-neutral-300">
               {service ? <span data-testid="agent-service">{service}</span> : null}
               {service ? " · " : ""}
-              <span data-testid={`agent-default-${entry.adapter}`}>{runsText}</span>
+              {/* The model read before, muted, until the new reading lands. */}
+              <span data-testid={`agent-default-${entry.adapter}`} className={catalog.refreshing ? "text-neutral-400 dark:text-neutral-500" : undefined}>{runsText}</span>
+              {catalog.refreshing ? (
+                <span data-testid={`agent-updating-${entry.adapter}`} className={`${mutedClass} ml-2`}>
+                  {i18n._({ id: "Updating model…", comment: "an agent card reads its model catalog again after Re-check" })}
+                </span>
+              ) : null}
             </span>
             {validState ? (
               <button
@@ -688,9 +696,15 @@ export function AgentCards() {
   const others = readiness.filter((entry) => !STANDING.includes(entry.adapter));
   const reread = store((state) => state.configReread);
   const [checking, setChecking] = useState(false);
+  // Each settled Re-check has the cards read their catalogs again; the
+  // window's own readiness refresh leaves them be (settings-5, DR-217).
+  const [optionsEpoch, setOptionsEpoch] = useState(0);
   function recheck(): void {
     setChecking(true);
-    void refreshReadiness().finally(() => setChecking(false));
+    void refreshReadiness().finally(() => {
+      setChecking(false);
+      setOptionsEpoch((epoch) => epoch + 1);
+    });
   }
   return (
     <section data-testid="agents-section" className="flex flex-col gap-2">
@@ -718,7 +732,7 @@ export function AgentCards() {
         </div>
       ) : null}
       <Verdict readiness={readiness} />
-      {standing.map((entry) => <AgentCard key={entry.adapter} entry={entry} state={configState} seat={seat} />)}
+      {standing.map((entry) => <AgentCard key={entry.adapter} entry={entry} state={configState} seat={seat} optionsEpoch={optionsEpoch} />)}
       {others.map((entry) => <OtherEntry key={entry.adapter} entry={entry} />)}
     </section>
   );

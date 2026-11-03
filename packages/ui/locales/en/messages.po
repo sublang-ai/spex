@@ -8288,6 +8288,11 @@ msgstr "Updated {age} by you"
 msgid "Updated the starter config at <0>{path}</0> for the current sign-ins"
 msgstr "Updated the starter config at <0>{path}</0> for the current sign-ins"
 
+#. an agent card reads its model catalog again after Re-check
+#: src/components/AgentCards.tsx
+msgid "Updating model…"
+msgstr "Updating model…"
+
 #. the packages spex.yaml names are being updated to the newest versions it allows and installed
 #. the packages spex.yaml names are being updated to the newest versions it allows and installed
 #. the packages spex.yaml names are being updated to the newest versions it allows and installed

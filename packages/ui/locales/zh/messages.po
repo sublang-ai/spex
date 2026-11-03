@@ -8288,6 +8288,11 @@ msgstr "{age}由你更新"
 msgid "Updated the starter config at <0>{path}</0> for the current sign-ins"
 msgstr "已按当前登录更新 <0>{path}</0> 的初始配置"
 
+#. an agent card reads its model catalog again after Re-check
+#: src/components/AgentCards.tsx
+msgid "Updating model…"
+msgstr "正在更新模型…"
+
 #. the packages spex.yaml names are being updated to the newest versions it allows and installed
 #. the packages spex.yaml names are being updated to the newest versions it allows and installed
 #. the packages spex.yaml names are being updated to the newest versions it allows and installed
