@@ -2311,14 +2311,17 @@ async function arrangeChoices(app: App): Promise<void> {
     if (existsSync(join(app.projectDir, file))) copyFileSync(join(app.projectDir, file), join(clone, file));
   }
   appendFileSync(join(clone, "spex.yaml"), "# requested for the team\n");
-  const code = JSON.parse(readFileSync(join(clone, "project.json"), "utf8")) as Record<string, unknown>;
-  writeFileSync(join(clone, "project.json"), `${JSON.stringify({ ...code, remote: "git@example.com:acme/demo-project.git" }, null, 2)}\n`);
+  // Save captures the paired code folder's actual remote. A direct edit
+  // of project.json would be replaced by that capture before Sync.
+  const hasOrigin = git(app.projectDir, "remote").split(/\r?\n/).includes("origin");
+  git(app.projectDir, "remote", ...(hasOrigin ? ["set-url", "origin"] : ["add", "origin"]), "git@example.com:acme/demo-project.git");
   appendFileSync(join(clone, ".gitignore"), "# authored\n/scratch/\n");
   writeFileSync(join(clone, "notes.txt"), "a stray note\n");
   const state = await app.settleSpace("space.sync", { repository: projectId });
   if (state.sync.phase !== "choices") {
     throw new Error(`the arranged sync ended ${JSON.stringify(state.sync)}`);
   }
+  expect(state.local.some((unit) => unit.kind === "code")).toBe(true);
 }
 
 test.describe("fit", () => {

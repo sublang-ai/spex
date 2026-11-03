@@ -100,7 +100,7 @@ const DIVIDER_PX = 17;
 
 /** The package's counts in one cell, each a labeled tally that names
  * its own group, so no heading stands over them (spec-view-2). */
-const COUNTS_CELL = "flex shrink-0 justify-end gap-2 whitespace-nowrap text-xs tabular-nums";
+const COUNTS_CELL = "flex shrink-0 justify-end gap-1 whitespace-nowrap text-xs tabular-nums @md:gap-2";
 /** The cross-package rollup, labeled as the counts are (spec-view-19). */
 const ROLLUP_CELL =
   "hidden shrink-0 justify-end gap-2 whitespace-nowrap text-xs tabular-nums text-neutral-500 @md:flex dark:text-neutral-400";
@@ -1570,7 +1570,7 @@ export function SpecView(props: SpecViewProps) {
             // The row wears this button's focus ring; the app-wide
             // outline would frame the name alone.
             style={{ outline: "none" }}
-            className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded text-left"
+            className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 overflow-hidden rounded text-left"
           >
             {/* The package identifier is the basename (META-10). */}
             <span

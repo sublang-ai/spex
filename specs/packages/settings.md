@@ -469,7 +469,7 @@ When an in-place editor saves an agent-block tweak — the captain's or a player
 
 Where a rendered browser control receives capability and preparation updates from its host-facing owner, the integration suite shall verify independent choice and preparation actions, retained off state after successful preparation, reported progress and failure detail, cancellation, unsupported stale-choice clearing, conversation reset, disabled behavior and localized labels [[settings-42](#settings-42)]:
 
-- multiline terminal diagnostics remain completely readable through the disclosure, without terminal formatting, while a long first line cannot displace the summary or Retry;
+- multiline terminal diagnostics remain completely readable through the disclosure, without terminal formatting, with a two-line summary and Retry preceding the expandable detail so opening it cannot displace the action;
 - the rendered failure control and expanded diagnostics fit at 320 pixels, with Retry still reachable.
 
 ### Model Options Coverage

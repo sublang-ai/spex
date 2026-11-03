@@ -186,10 +186,15 @@ test("run-view-42, projects-42: the browser add form keeps paths distinct and ow
   await expect(palette.getByTestId("palette-academy")).toHaveCount(0);
   const create = palette.getByTestId("palette-create-start");
 
-  // Tab wraps between the last and first enabled controls.
+  // The title's Close cross participates in the modal's Tab cycle.
+  const close = palette.getByTestId("palette-close");
   await path.press("Shift+Tab");
+  await expect(close).toBeFocused();
+  await close.press("Shift+Tab");
   await expect(create).toBeFocused();
   await create.press("Tab");
+  await expect(close).toBeFocused();
+  await close.press("Tab");
   await expect(path).toBeFocused();
 
   await create.click();
