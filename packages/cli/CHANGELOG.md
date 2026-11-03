@@ -10,12 +10,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.0.0] - 2026-11-02
+
 ### Added
 
-- `spex --help` groups the commands as a project's Packages tab does,
-  each with one line saying what it is for. `spex <command> --help`,
-  `-h` or `spex help <command>` prints a command's lines and every
-  option it takes; `spex --version` (`-V`) prints the installed version.
+- The standalone command line is the package manager, with no running app
+  or IDE project registration. Commands use the nearest `spex.yaml`, else
+  the Git work tree's root, else the current folder. Commit `spex.yaml`
+  and `spex.lock` with code; installed files, generated skills and the
+  install record live under the ignored `.spex/`. The IDE reads the same
+  files. Skills export to `.claude/skills/` and `.agents/skills/`.
+  - `spex add <org>/<pkg>[@<requirement>]` or `--path <folder>` records
+    a request and installs; without a requirement it uses a caret at the
+    newest eligible release;
+  - `spex remove` (`rm`) drops a request and installs what remains;
+  - `spex install` (`i`) installs the lock, resolving if missing or stale;
+  - `spex update` resolves again and installs;
+  - `spex list` (`ls`) shows registry, requests, lock and placements;
+    `spex search <query>` searches the selected registry.
 - `spex export <org>/<pkg>` builds `spex-packages/<org>/<pkg>/` by
   copying `--spec` and `--skill` files, which stay where they are, and
   adds nothing to `spex.yaml`. A first export writes `meta.yaml` with
@@ -34,97 +46,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dropped, their words kept, until that package is added. An unedited
   copy follows its package and leaves with it; an edited one is left as
   yours, the newer version waiting; a file of yours by that name keeps
-  it out.
-- `spex lint` reads the marker line, so a placed spec `specs/map.md` does
-  not list draws no warning.
+  it out. `spex lint` accepts a placed spec without a `specs/map.md` row.
 - `spex list` says beneath each package where its spec stands in
   `specs/` — placed, edited and left as yours, kept out by a file of
   yours, or waiting for `spex scaffold` — and each package its links
   wait for, with `spex add <org>/<pkg>`; `spex add`, `spex install` and
   `spex update` say the same of what they placed.
-
-### Changed
-
-- Every printed line speaks the Packages tab's words. `spex list` heads
-  with `Folder` and `Registry`, then lists what is Added, Installed and
-  placed under Skills for agents, last with what to do where `spex.lock`
-  is stale or a package is not installed; `add`, `remove`, `install` and
-  `update` say Added, Updated, Removed and Installed, `install` says
-  Already installed for a package in place, and `update` says Up to date
-  where nothing moved. `publish` says `Publishing <org>/<pkg>@<version>
-  to <registry>`. The built-in playbooks read `built in`, and
-  `spex remove sublang/playbooks` is refused: "sublang/playbooks comes
-  with Spex".
-- A registry is named by the display name its descriptor gives, kept in
-  the home's `cache/registries/`, else by its host, and never by a Space
-  at the same address. `whoami` lists the registry and every Space in
-  one grammar; `login` and `logout` print one line each.
-- Every refusal is one phrase ending in what to do: an unknown command
-  or option with the command's usage, a package not at the registry or
-  private — at `install` and `update` too, never a conflict of versions —
-  an expired sign-in, a registry that cannot be reached or is down, an
-  org not yours, a folder package's folder missing or holding no
-  package, and a `spex.lock` from a newer Spex or one that cannot be
-  read, which `spex update` writes again. `spex add --path` checks the
-  folder holds the package before writing `spex.yaml`.
-- The stand-in registry of `@sublang/spex/testing` describes itself at
-  `/api/v1/registry` and names a scripted account at `/api/v1/whoami`.
-- Only what a package provides is placed. A support artifact — one a
-  sibling names in `from`, or one a sibling of another kind names in
-  `requires` — is installed but placed nowhere, so a playbook's support
-  skill no longer reaches the agent folders.
-- In a project, a package's spec is no longer placed as a generated
-  `<org>-<pkg>` skill; a Personal package's spec still is.
-
-### Removed
-
-- **Breaking:** `spex new` and its `--move`, replaced by `spex export`.
-
-### Fixed
-
-- Folder releases leave out slc's generated verification tests and the
-  compile-time FSM bundle, alongside its build history and verifier
-  support. Publishing and new Git resolutions keep the source, runtime
-  module, rebuild inputs and editable intermediates; existing locks and
-  registry archives retain their files.
-
-- Spex writes LF, and an install pins `spex.yaml`, `spex.lock` and
-  `specs/packages/*.md` to LF in the project's `.gitattributes`, so a
-  checkout whose Git converts line endings — Git for Windows by default —
-  installs from the committed files to no diff.
-
-### Fixed
-
-- A Git source's files are read as the repository holds them, whatever
-  this computer's Git line-ending settings, so a `spex.lock` resolved
-  on Windows installs on macOS and Linux, and the reverse.
-
-## [5.0.0] - 2026-10-31
-
-### Added
-
-- The standalone command line is the package manager, with no running app
-  or IDE project registration. Commands use the nearest `spex.yaml`, else
-  the Git work tree's root, else the current folder. Commit `spex.yaml`
-  and `spex.lock` with code; installed files, generated skills and the
-  install record live under the ignored `.spex/`. The IDE reads the same
-  files. Skills export to `.claude/skills/` and `.agents/skills/`.
-  - `spex add <org>/<pkg>[@<requirement>]` or `--path <folder>` records
-    a request and installs; without a requirement it uses a caret at the
-    newest eligible release;
-  - `spex remove` (`rm`) drops a request and installs what remains;
-  - `spex install` (`i`) installs the lock, resolving if missing or stale;
-  - `spex update` resolves again and installs;
-  - `spex list` (`ls`) shows registry, Space, requests, lock and exports;
-    `spex search <query>` searches the selected registry.
+- `spex --help` groups the commands as a project's Packages tab does,
+  each with one line saying what it is for. `spex <command> --help`,
+  `-h` or `spex help <command>` prints a command's lines and every
+  option it takes; `spex --version` (`-V`) prints the installed version.
 - New manifests explicitly select the public package registry with
   `registry: https://spex.sublang.ai`. Optional `space` selects records
   and Git-source brokerage independently. Existing manifests without
   `registry` retain their prior package source until explicitly migrated.
-- `spex new <org>/<pkg>` makes `spex-packages/<org>/<pkg>/` from skill
-  folders and a spec, requests it by path and installs it. Publishing
-  names the requested folder, else that package folder, or the one package
-  there when the name is omitted. `--dry-run` previews without upload.
 - `login`, `logout` and `whoami` accept mutually exclusive `--registry`
   and `--space` origins, defaulting to the environment's package registry.
   Registry sign-in creates no Space entry or repository consent. Credentials
@@ -144,11 +79,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   authoritative; installs do not search every signed-in Space.
 - `spex publish [<org>/<pkg>] [--dry-run]` publishes the named package's
   folder to the environment's registry with that registry's grant.
+  A signed-in dry run and every publication check that account's current
+  publishing rights before uploading. An unsigned dry run validates local
+  files and says the rights are unchecked. Export and refusals link the
+  selected registry's `Your orgs` page with `scope=registry`; a Space group
+  grants no publishing namespace.
 - `spex install` uses the app's built-in package, `sublang/playbooks`, from
   the same home's copy or a registry; where neither serves it, that package
-  is left to the app while the rest install.
+  is left to the app while the rest install. It can be removed like any
+  other package.
 - A developed package lives at `spex-packages/<org>/<pkg>/`, where the old
   `spex package init` wrote `spex-packages/<name>/`.
+- Only what a package provides is placed. A support artifact — one a
+  sibling names in `from`, or one a sibling of another kind names in
+  `requires` — is installed but placed nowhere, so a playbook's support
+  skill no longer reaches the agent folders. A project's provided spec
+  is placed in `specs/`; a spec in the global environment is placed as a
+  skill when its folder holds no `specs/`.
+- Every printed line speaks the Packages tab's words. `spex list` heads
+  with `Folder` and `Registry`, then lists what is Added, Installed and
+  placed under Skills for agents, last with what to do where `spex.lock`
+  is stale or a package is not installed; `add`, `remove`, `install` and
+  `update` say Added, Updated, Removed and Installed, `install` says
+  Already installed for a package in place, and `update` says Up to date
+  where nothing moved. `publish` says `Publishing <org>/<pkg>@<version>
+  to <registry>`. The built-in playbooks read `built in`.
+- A registry is named by the display name its descriptor gives, kept in
+  the home's `cache/registries/`, else by its host, and never by a Space
+  at the same address. `whoami` lists the registry and every Space in
+  one grammar; `login` and `logout` print one line each.
+- Every refusal is one phrase ending in what to do: an unknown command
+  or option with the command's usage, a package not at the registry or
+  private — at `install` and `update` too, never a conflict of versions —
+  an expired sign-in, a registry that cannot be reached or is down, an
+  org not yours, a folder package's folder missing or holding no
+  package, and a `spex.lock` from a newer Spex or one that cannot be
+  read, which `spex update` writes again. `spex add --path` checks the
+  folder holds the package before writing `spex.yaml`.
+- The stand-in registry of `@sublang/spex/testing` describes itself at
+  `/api/v1/registry` and names a scripted account at `/api/v1/whoami`.
 - **Breaking:** the package declares an `exports` map for the library,
   scaffold paths and `package.json`; arbitrary deep imports such as
   `@sublang/spex/dist/cli.js` no longer resolve.
@@ -158,7 +127,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** attached `auth`, `project` and `package` command groups,
   `--server`, `SPEX_SERVER_URL`, `--project` and `--timeout`; the CLI no
   longer connects to a running app, and exit code `2` is gone.
-- **Breaking:** `spex package init`, replaced by `spex new`.
+- **Breaking:** `spex package init` and its `--move`, replaced by
+  `spex export`, which copies files without adding a package request.
+
+### Fixed
+
+- Folder releases leave out slc's generated verification tests and the
+  compile-time FSM bundle, alongside its build history and verifier
+  support. Publishing and new Git resolutions keep the source, runtime
+  module, rebuild inputs and editable intermediates; existing locks and
+  registry archives retain their files.
+- Spex writes LF, and an install pins `spex.yaml`, `spex.lock` and
+  `specs/packages/*.md` to LF in the project's `.gitattributes`, so a
+  checkout whose Git converts line endings — Git for Windows by default —
+  installs from the committed files to no diff.
+- A Git source's files are read as the repository holds them, whatever
+  this computer's Git line-ending settings, so a `spex.lock` resolved
+  on Windows installs on macOS and Linux, and the reverse.
 
 ## [4.2.0] - 2026-10-29
 

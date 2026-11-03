@@ -1,7 +1,25 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai> -->
 
-# CLI 5.0.0 source preparation
+# CLI 5.0.0 release preparation
+
+## Publication preparation — 2026-11-02
+
+The owner requested the first npm publication of CLI 5.0.0.
+The registry check found `latest` at 4.2.0 and no 5.0.0 publication or tag.
+The following source-preparation evidence is historical; the release gates below are run again for this publication.
+The first 5.0.0 changelog includes the standalone package manager and every later CLI change on main, including `spex export`, provided spec placement and portable Git line endings.
+The CLI and getting-started documentation now use `npm install -g @sublang/spex`.
+
+| Gate | Publication result |
+| --- | --- |
+| Full working-tree build | Passed on base `5ebabf229008d1591ce04d724dee3cf80a292a9c`; release documentation was being updated |
+| Automated smoke | Pending on the committed candidate |
+| Live migration smoke | Running with the packed CLI and signed-in Claude in an isolated fixture |
+| Tarball inspection | Passed: 130 runtime files, no tests or unnecessary implementation source; every declared export and scaffold law present |
+| Full tagged CLI validation | Required by the tag workflow before npm publication |
+
+## Historical source preparation
 
 The standalone CLI and independent registry architecture are delivered as merged, verified source. No version was released in this architecture task: no CLI tag, npm publication or post-publication consumer run was performed. The package version remains release preparation; publication belongs to a separate release task.
 

@@ -16,18 +16,26 @@ folder, with no running app. Requires Node.js 22 or later.
 
 ## Install
 
-This page describes the current source CLI, version 5.0. The published
-npm release is 4.2.0: it supports `scaffold` and `lint`, but its package
-commands use the older `spex package …` interface and a running app.
-Use the source build for the independent package workflows below, or
-read the [4.2 reference](https://github.com/sublang-ai/spex/blob/cli-v4.2.0/packages/cli/README.md)
-for the released CLI.
+Install Spex CLI 5.0 with Node.js 22 or later:
+
+```sh
+npm install -g @sublang/spex
+spex --version
+```
+
+This installs the CLI without building or starting the IDE. The package
+commands below need no running app. To scaffold specs without installing
+the CLI globally:
+
+```sh
+npx @sublang/spex scaffold
+```
 
 ### Install current source CLI
 
-Use Git and Node.js 22.19 or later. From a new checkout, install only
-the CLI workspace's dependencies, build it, and install its packaged
-artifact:
+For development, use Git and Node.js 22.19 or later. From a new checkout,
+install only the CLI workspace's dependencies, build it, and install its
+packaged artifact:
 
 ```sh
 git clone --depth=1 https://github.com/sublang-ai/spex.git
@@ -38,16 +46,8 @@ npm install --global "$(npm pack --workspace @sublang/spex --silent)"
 spex --version
 ```
 
-This installs the CLI without building or starting the IDE. Check that
-`spex --version` reports 5.0.0 and `spex export --help` lists the export
-options before continuing. The package commands below use this installed
-`spex`, rather than asking `npx` for the older published release.
-
-To scaffold specs with the published CLI without installing it:
-
-```sh
-npx @sublang/spex scaffold
-```
+Check `spex --version` and `spex export --help` before continuing with a
+development build.
 
 ## Quick start
 
@@ -518,13 +518,14 @@ The command prints a per-file indicator for every framework and seed path, plus 
 
 ## Upgrading from an earlier release
 
-### From 5.0
+### From a pre-release source build
 
-`spex new` is gone. `spex export <org>/<pkg>` builds the folder in its
-place by copying your files, and can be run again to refresh it; it
-adds nothing to `spex.yaml` and has no `--move`. A folder `spex new`
-made keeps working; a skill `--move` took into it is edited there, since
-`spex export` refreshes a skill only from a folder of yours.
+If your source build used `spex new`, use `spex export <org>/<pkg>` in its
+place. It builds the folder by copying your files and can be run again
+to refresh it; it adds nothing to `spex.yaml` and has no `--move`.
+A folder `spex new` made keeps working; a skill `--move` took into it is
+edited there, since `spex export` refreshes a skill only from a folder
+of yours.
 
 Your next install places each package's spec in
 `specs/packages/<pkg>.md`, where the folder holds `specs/`, in place of
