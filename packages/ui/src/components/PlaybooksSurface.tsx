@@ -21,7 +21,7 @@ import { ownRepositoryKey } from "../lib/environments.js";
 import { i18n } from "../i18n.js";
 import { AuthoringWorkspace } from "./AuthoringWorkspace.js";
 import { EnvironmentSection } from "./EnvironmentSection.js";
-import { AddedNote, AuthoringSection, useNewPackageFields } from "./PlaybookAuthoring.js";
+import { AddedNote, AuthoringSection } from "./PlaybookAuthoring.js";
 import { InvalidEntryRow, PlaybookCard, playbookHints } from "./PlaybookCard.js";
 import { ConfigGate, rowsById, takenIds, useLiveNote, useRevealedCard } from "./PlaybooksTab.js";
 
@@ -56,7 +56,6 @@ export function PlaybooksSurface({
   // The global environment is your own group's spex repository's, as
   // Space or the list names it.
   const ownKey = ownRepositoryKey(space, readLists?.own);
-  const fields = useNewPackageFields(ownKey);
 
   const reloadLists = useCallback(() => {
     setListError(undefined);
@@ -149,7 +148,6 @@ export function PlaybooksSurface({
         <AuthoringSection
           repository={ownKey}
           taken={takenIds([lists?.own ?? []])}
-          fields={fields}
           onAnnounce={live.announce}
         />
       </>

@@ -5,6 +5,8 @@
 
 ## Status
 
+Amended by [DR-217](217-write-a-playbook-before-publishing.md) in deferring registry-only namespace selection until publication and using a local placeholder for authoring and a one-shot compile without a namespace grant.
+
 Accepted (2026-11-03) on the owner's direction that package management, playbook authoring and publishing use only the registry account, while groups and servers use only the Space account.
 Amends [DR-168](168-independent-package-registry.md) in legacy registry selection, namespace suggestions and the CLI's default account report; [DR-127](127-a-home-signed-in-to-several-instances.md) in group-derived authoring defaults and registry rehoming at placement; [DR-173](173-the-registry-is-no-face-of-a-space.md) in package-surface account context; and [DR-200](200-publishing-names-need-registry-authority.md) in group-derived Org suggestions.
 The scoped account links of [DR-202](202-registry-guidance-keeps-account-scope.md) remain.

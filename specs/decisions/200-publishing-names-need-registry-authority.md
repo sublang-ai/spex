@@ -6,6 +6,7 @@
 ## Status
 
 Amended by [DR-216](216-registry-and-space-accounts-stay-apart.md): group-derived Org suggestions are removed; only the selected registry account's authorized namespaces supply suggestions and an untouched default.
+Amended by [DR-217](217-write-a-playbook-before-publishing.md) in deferring publishing org, license and authority guidance until Publish, keeping creation local.
 
 Accepted (2026-11-02) for the publishing-name gap reported in issue #328.
 Amends [DR-168](168-independent-package-registry.md) in authoring guidance and publish preflight, [DR-174](174-what-a-package-provides-is-placed.md) in export guidance, and [DR-151](151-publish-local-spec-packages.md) in publication previews.

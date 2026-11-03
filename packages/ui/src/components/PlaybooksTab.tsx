@@ -26,7 +26,7 @@ import { i18n } from "../i18n.js";
 import { AuthoringWorkspace } from "./AuthoringWorkspace.js";
 import { Markdown } from "./Markdown.js";
 import { Rich } from "./Rich.js";
-import { AddedNote, AuthoringSection, announcementFor, useNewPackageFields } from "./PlaybookAuthoring.js";
+import { AddedNote, AuthoringSection, announcementFor } from "./PlaybookAuthoring.js";
 import { InvalidEntryRow, PlaybookCard, playbookHints, type CardScope } from "./PlaybookCard.js";
 import { StageBox, StageRow } from "./PlaybookStages.js";
 
@@ -167,7 +167,6 @@ export function PlaybooksTab({
   const [listError, setListError] = useState<string>();
   const [exampleError, setExampleError] = useState<string>();
   const [focusNew, setFocusNew] = useState(false);
-  const fields = useNewPackageFields(projectId);
   const live = useLiveNote();
 
   // What the environments place, as read for this project: a read for
@@ -216,13 +215,12 @@ export function PlaybooksTab({
     });
     try {
       if (store.getState().drafts[id]) await openDraft(id);
-      // A new session takes New playbook's org and license
-      // (playbook-library-35).
-      else await createDraft(id, fields.fields, projectId);
+      // Example creation is local and needs no publishing details (DR-217).
+      else await createDraft(id, {}, projectId);
     } catch (cause) {
       setExampleError((cause as Error).message);
     }
-  }, [createDraft, openDraft, setDraftSourceMode, fields.fields.org, fields.fields.license, projectId, store]);
+  }, [createDraft, openDraft, setDraftSourceMode, projectId, store]);
 
   if (!configState || configState.status !== "valid") return <ConfigGate onNavigate={onNavigate} />;
   // The players as a session in the project composes them: your roster,
@@ -337,7 +335,6 @@ export function PlaybooksTab({
       <AuthoringSection
         repository={projectId}
         taken={taken}
-        fields={fields}
         autoFocus={focusNew}
         onAutoFocused={() => setFocusNew(false)}
         onAnnounce={live.announce}
@@ -347,11 +344,6 @@ export function PlaybooksTab({
         <h2 className="text-sm font-semibold text-neutral-500">{i18n._({ id: "Example", comment: "section heading: the demo playbook" })}</h2>
         <ExampleCard
           onPrefill={prefillFromExample}
-          blockedReason={
-            drafts[SLC_DEMO.playbookId] || fields.ready
-              ? undefined
-              : i18n._({ id: "Org and License first", comment: "the example's prefill waits for New playbook's Org and License" })
-          }
           error={exampleError}
         />
       </section>

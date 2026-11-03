@@ -235,6 +235,7 @@ meta.md       The spec of specs
 | [DR-214](decisions/214-project-navigation-and-contextual-recovery.md) | 214-project-navigation-and-contextual-recovery.md | Project navigation keeps its five destinations and real projects; optional folder recovery returns through Space → Files & history → Dismissed, with saved history opening its own place's review; amends DR-175, DR-195, DR-196 and DR-197 |
 | [DR-215](decisions/215-add-to-a-group-and-start-working.md) | 215-add-to-a-group-and-start-working.md | One Add action uploads records and opens the project on its selected group server, with a four-step checklist and no separate sharing acknowledgement |
 | [DR-216](decisions/216-registry-and-space-accounts-stay-apart.md) | 216-registry-and-space-accounts-stay-apart.md | Registry-only package accounts and authoring defaults, public registry without an explicit choice, no Space credential or source fallback, and preserved exact locked provenance; amends DR-168, DR-127, DR-173 and DR-200 |
+| [DR-217](decisions/217-write-a-playbook-before-publishing.md) | 217-write-a-playbook-before-publishing.md | Command-only creation; publishing details and rights deferred to a release snapshot preserving local work |
 
 ## Packages
 

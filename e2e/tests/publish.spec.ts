@@ -151,6 +151,9 @@ test("playbook-library-95: Publish from a project at the second instance reads t
   // first's holds none (playbook-library-93).
   const publish = page.getByTestId("publish");
   await publish.getByTestId("publish-button").click();
+  await page.getByTestId("publish-org").fill(HOST_LOGIN);
+  await page.getByTestId("publish-license").fill("Apache-2.0");
+  await page.getByTestId("publish-review").click();
   const summary = publish.getByTestId("publish-summary");
   await expectPreview(summary, PACKAGE, SECOND_HOST_NAME, second.url);
   await expect(summary.getByTestId("publish-files")).toContainText("meta.yaml");

@@ -13,7 +13,7 @@ import type { AgentCapabilities, ApprovalDecision, ApprovalRequest, BrowserSetup
 import type { SessionRecord as RuntimeRecord } from "@sublang/playbook/session-assets";
 import { LANGUAGES, type Language } from "./language.js";
 
-export const PROTOCOL_VERSION = 33;
+export const PROTOCOL_VERSION = 34;
 
 /** The compile pipeline's phases and their human names, shared so the
  * core's thread lines and the UI's band name a phase alike. */
@@ -588,6 +588,10 @@ export interface PublishPreview {
   instance: PublishDestination;
   name: string;
   version: string;
+  /** Digest of the exact captured archive, checked on confirmation. */
+  checksum?: string;
+  /** The license in the captured publication manifest. */
+  license?: string;
   /** Release paths, in upload order. */
   files: string[];
 }
@@ -1507,7 +1511,7 @@ export const commandSchema = z.discriminatedUnion("type", [
    * DR-165); `dryRun` runs the checks and replies the inline summary —
    * name, version and the files it would upload — uploading nothing
    * (playbook-library-93). */
-  z.object({ type: z.literal("environment.publish"), id, repository: repositoryKeySchema, name: z.string().min(1), dryRun: z.boolean().optional(), wait: z.boolean().optional() }).strict(),
+  z.object({ type: z.literal("environment.publish"), id, repository: repositoryKeySchema, name: z.string().min(1), publication: z.object({ org: z.string(), license: z.string() }).strict().optional(), draft: z.object({ id: draftIdSchema, instance: draftInstanceSchema }).strict().optional(), expectedChecksum: z.string().regex(/^[0-9a-f]{64}$/).optional(), dryRun: z.boolean().optional(), wait: z.boolean().optional() }).strict(),
   z.object({ type: z.literal("environment.playbooks"), id, projectId: repositoryKeySchema.optional() }).strict(),
   // Applets (applets-3, DR-161): the path the core serves an installed
   // applet under for one project — `repository` the spex repository
@@ -1669,10 +1673,10 @@ export const commandSchema = z.discriminatedUnion("type", [
     id,
     projectId: repositoryKeySchema,
     draftId: draftIdSchema,
-    /** The new spec package's `org` and `license` (playbook-library-51),
-     * each refused `invalid_request` naming its rule (core-service-96). */
-    org: z.string(),
-    license: z.string(),
+    /** Optional local metadata for earlier clients; omission creates
+     * local authoring without a publishing license (core-service-96). */
+    org: z.string().optional(),
+    license: z.string().optional(),
   }),
   z.object({
     type: z.literal("draft.open"),
@@ -1994,6 +1998,8 @@ export interface DraftInfo {
   /** The spec package under development's name, `<org>/<id>`
    * (playbook-library-52). */
   package?: string;
+  /** Explicit local manifest license, if any; no publishing default. */
+  packageLicense?: string;
   /** Its folder in the working folder, e.g. `spex-packages/<org>/<id>`
    * (playbook-library-70). */
   packagePath?: string;
