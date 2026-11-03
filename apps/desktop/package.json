@@ -51,6 +51,8 @@
     "appId": "ai.sublang.spex",
     "productName": "Spex",
     "npmRebuild": false,
+    "onNodeModuleFile": "./scripts/include-compiler-declarations.cjs",
+    "afterPack": "./scripts/verify-packaged-compiler.cjs",
     "directories": {
       "output": "release"
     },

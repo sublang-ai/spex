@@ -30,7 +30,7 @@ import type { PlayerAdapterImports, TmuxPlayApprovalHandler } from "@sublang/cli
 
 import { loadAgentAdapter } from "./agent-runtime.js";
 import { stripLeadingComments } from "./artifacts.js";
-import { ArtifactFolderBusy, compilePlaybook, compilerAgentOf, type CompileResult, type CompilerAgent, type LineSpawner, type ToolchainRuntime } from "./compile.js";
+import { ArtifactFolderBusy, compilePlaybook, compilerAgentOf, unpackedPath, type CompileResult, type CompilerAgent, type LineSpawner, type ToolchainRuntime } from "./compile.js";
 import { subagentTuningOf, type ComposedConfig, type ResolvedAgent } from "./config.js";
 import { parseDirectives, type MalformedBlock } from "./directives.js";
 import { DEFAULT_AUTHORING_LANGUAGE, DraftChangedError, DraftStore, legacyInstance, type NewPackageFields, type StoredDraft, type StoredDraftCompile } from "./drafts.js";
@@ -226,6 +226,10 @@ export function playbookPackageDir(): string {
 
 /** The four shipped documents the prompt points at (playbook-library-65). */
 export function authoringDocuments(packageDir = playbookPackageDir()): { path: string; note: string }[] {
+  // The agent reads with external file tools, which cannot open Electron's
+  // virtual archive. Use the same physical-path rule as the desktop's
+  // compile runtime and the staged Academy corpus (app-shell-13).
+  packageDir = unpackedPath(packageDir);
   return [
     { path: join(packageDir, "slc", "text2gears.md"), note: "the compiler's reading of a source: the law" },
     { path: join(packageDir, "reference", "sdlc", "review.md"), note: "a two-role source with rounds" },

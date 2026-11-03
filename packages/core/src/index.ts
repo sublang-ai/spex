@@ -24,6 +24,7 @@ export {
   checkToolchain,
   compilerAgentEnv,
   moduleDirectoriesAbove,
+  unpackedPath,
   suppliedCompiler,
   type CompilerAgent,
   type ToolchainRuntime,
