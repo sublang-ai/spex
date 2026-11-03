@@ -9,6 +9,7 @@ Accepted (2026-11-02) on the owner's direction during the Workshop's manual veri
 Amends [DR-204](204-workshop-agents-in-one-pass.md) in its routes: a not-ready card offers the configuration document alone, as its primary action, and no online service.
 Amends [DR-205](205-agent-cards-read-alike.md) in "The online service before its address": the action is removed, not enabled.
 Amends [DR-156](156-an-untouched-seed-follows-the-credentials.md) in when an untouched seed is reseeded: on each readiness request too, a re-check among them, not only at start and on a seat's agent-credential change.
+Amended by [DR-217](217-cligent-0-38-0-adoption-and-models-on-re-check.md) in what a Re-check reads afresh: the agent cards' model catalogs too.
 
 ## Context
 

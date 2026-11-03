@@ -191,7 +191,8 @@ Where the Settings surface is open, in its full form and in its broken-config fo
 - a card not ready for a local credential of `claude` or `codex`, on this computer with the Workshop switch on [[settings-58](#settings-58)], offers the Workshop's setup guide [[settings-71](#settings-71)]; any other not-ready card offers a closed "How to configure" disclosure, holding the manual steps on this computer and, on a seat [[core-service-125](core-service.md#core-service-125)], a pointer to the Credentials section [[settings-48](#settings-48)] with no local step;
 - the manual steps follow the core's platform and the user's shell [[settings-14](#settings-14)]: on Windows, a user environment variable set with `setx` or the system settings; elsewhere, an `export` line in `~/.zshrc` for zsh, in `~/.bash_profile` for bash, and otherwise in the shell's login configuration file;
 - under "How to configure", the manual steps end "Quit Spex completely and open it again", the `codex` card's first saying it needs an official OpenAI key;
-- the section heading carries the Re-check control — a refresh icon and "Re-check", its tooltip saying it reads each agent's sign-in and Claude Code's settings again while a key set as an environment variable needs Spex reopened — whose icon turns while the check runs, its readiness request reseeding an untouched seed [[core-service-137](core-service.md#core-service-137)] ([DR-206](../decisions/206-the-workshop-points-to-its-guide.md)).
+- the section heading carries the Re-check control — a refresh icon and "Re-check", its tooltip saying it reads each agent's sign-in and Claude Code's settings again while a key set as an environment variable needs Spex reopened — whose icon turns while the check runs, its readiness request reseeding an untouched seed [[core-service-137](core-service.md#core-service-137)] ([DR-206](../decisions/206-the-workshop-points-to-its-guide.md));
+- once a Re-check's readiness request settles, each card reads its adapter's model catalog again, keeping until it arrives the model it read in a muted tone beside "Updating model…" and marked busy, a failed reading showing "Unavailable" and no earlier model, while a readiness request the control did not start reads no catalog ([DR-217](../decisions/217-cligent-0-38-0-adoption-and-models-on-re-check.md)).
 
 ### Agent Cards
 
@@ -595,7 +596,8 @@ Where the Settings surface renders a not-ready `claude` card and an unused `code
 - a not-ready card names its first position and counts the rest, opening the whole list beneath and holding it as the tooltip, and shows no model service, default model or one-model control [[settings-5](#settings-5)];
 - the `codex` card's not-ready badge, unused, takes the same attention tone as the `claude` card's, used, the `claude` card alone tagged [[settings-5](#settings-5)];
 - a ready card has no closing line, its badge's tooltip saying the connection is checked on the first task; it names its positions in brief, opening the whole list, and states its model service with the model its agents run — one model, or "Several models" — opening the one-model control only from "Change model", its label and the Session players line one line above the field [[settings-5](#settings-5)] [[settings-59](#settings-59)];
-- the Re-check control reads "Re-check" with its tooltip naming the sign-ins and Claude Code's settings, and no restart line stands beside it [[settings-5](#settings-5)].
+- the Re-check control reads "Re-check" with its tooltip naming the sign-ins and Claude Code's settings, and no restart line stands beside it [[settings-5](#settings-5)];
+- after Re-check settles, a ready card reads its catalog again, showing its earlier model muted beside "Updating model…" and marked busy, then the newly reported default, or "Unavailable" with no earlier model where the reading fails, while a readiness refresh Re-check did not start reads no catalog [[settings-5](#settings-5)].
 
 #### settings-73
 
