@@ -146,6 +146,7 @@ The shell shall run the core service in the Electron main process or an Electron
 When the Mac distribution command packages the app, the command shall produce a Developer ID signed and Apple-notarized App inside a signed and notarized DMG, both carrying validated stapled tickets, under these constraints ([DR-217](../decisions/217-developer-id-macos-downloads.md)):
 
 - missing credentials, a wrong team, signature or timestamp failure, a non-Accepted or timed-out notarization, and a failed ticket or Gatekeeper check fail the command;
+- a stapler ticket-service connection loss/timeout may retry the exact operation at most twice, without skipping validation or retrying other failures;
 - hardened runtime and Electron entitlements preserve the app runtime, native modules and Electron-as-Node compiler, whose strict packaged check runs again after signing;
 - the App is stapled before DMG creation, and the DMG is signed with a secure timestamp in a fresh temporary keychain after creation;
 - temporary keychains are removed and the original search list is restored after success or failure without changing the default keychain or trust settings;
@@ -323,7 +324,7 @@ When the desktop's test suite starts a real core through the shell's own option 
 
 #### app-shell-46
 
-When the signing integration suite drives the distribution command with recorded system-tool responses, the suite shall verify the App-acceptance/staple/DMG/fresh-keychain ordering, timestamp and team checks, post-sign strict compiler check, final contained-App validation, secret redaction, keychain restoration, and refusal on missing credentials, identity mismatch, import or builder failure, non-Accepted or timed-out notarization and failed Gatekeeper assessment [[app-shell-45](#app-shell-45)].
+When the signing integration suite drives the distribution command with recorded system-tool responses, the suite shall verify the App-acceptance/staple/DMG/fresh-keychain ordering, timestamp and team checks, post-sign strict compiler check, final contained-App validation, secret redaction, bounded ticket-service retry with exhaustion blocking success, keychain restoration, and refusal on missing credentials, identity mismatch, import or builder failure, non-Accepted or timed-out notarization and failed Gatekeeper assessment [[app-shell-45](#app-shell-45)].
 
 #### app-shell-36
 

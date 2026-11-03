@@ -82,3 +82,8 @@ use the production jobs; native packaging runs alongside full validation.
 Both must pass for final acceptance. Checked installers/checksums and the CLI
 tarball remain Actions artifacts. npm publish and GitHub Release creation require
 an actual channel-tag push, so manual dispatch cannot publish them.
+
+For targeted native-package repair, an app branch dispatch may explicitly set
+`build-only: true`. This skips reusable CI for that diagnostic run and leaves
+the final publication/checksum job ineligible. It is package evidence only;
+normal branch dispatch and every actual tag push still require full validation.

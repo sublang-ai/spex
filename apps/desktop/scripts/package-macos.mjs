@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
+import { setTimeout as delay } from "node:timers/promises";
 
 const appDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const installed = createRequire(import.meta.url);
@@ -46,15 +47,27 @@ export async function packageMac({ env = process.env, outputDir = join(appDir, "
   // notarize implicitly; notarization has its own recorded, fail-closed stage.
   for (const key of [...required, "CSC_KEYCHAIN", "CSC_NAME", "DEBUG"]) delete baseEnv[key];
   async function tool(command, args, { childEnv = baseEnv, timeout = 180_000, cleanup = false } = {}) {
-    try {
-      return await run(command, args, { cwd: appDir, env: childEnv, timeout, maxBuffer: 16 * 1024 * 1024,
-        ...(cleanup ? {} : { signal }) });
-    } catch (error) {
-      // execFile errors contain the entire command line, including P12 or
-      // keychain passwords for security(1). Never relay that error object.
-      throw new Error(`${basename(command)} failed (${error.code ?? error.signal ?? "unknown"}): ${redact(String(error.stderr ?? "") + String(error.stdout ?? ""))}`);
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await run(command, args, { cwd: appDir, env: childEnv, timeout, maxBuffer: 16 * 1024 * 1024,
+          ...(cleanup ? {} : { signal }) });
+      } catch (error) {
+        const diagnostic = String(error.stderr ?? "") + String(error.stdout ?? "");
+        // Apple's ticket lookup can lose its connection even for an
+        // Accepted, stapled artifact. Retry that exact check; never skip it.
+        if (command === "/usr/bin/xcrun" && args[0] === "stapler" && error.code === 68 &&
+            /NSURLErrorDomain Code=-(?:1001|1005)|The network connection was lost/.test(diagnostic) && attempt < 3) {
+          console.warn(`Apple ticket service connection failed; retrying stapler (${attempt}/2)`);
+          await delay(2_000, undefined, signal ? { signal } : {});
+          continue;
+        }
+        // execFile errors contain command-line passwords. Relay redacted
+        // service diagnostics only, never the original error or arguments.
+        throw new Error(`${basename(command)} failed (${error.code ?? error.signal ?? "unknown"}): ${redact(diagnostic)}`);
+      }
     }
   }
+
   const builder = installed.resolve("electron-builder/out/cli/cli.js");
   const builderArgs = ["--arm64", "--publish", "never", `--config.directories.output=${outputDir}`];
   if (electronDist) builderArgs.push(`--config.electronDist=${resolve(electronDist)}`);

@@ -24,6 +24,7 @@ test("release-45: tag-driven validation requires full checks for both channels",
     assert.equal(current.on.workflow_dispatch.inputs.tag.required, true);
     assert.deepEqual(current.permissions, {});
     assert.deepEqual(current.jobs.validate, {
+      ...(channel === "app" ? { if: "github.event_name != 'workflow_dispatch' || !inputs.build-only" } : {}),
       needs: "prepare",
       uses: "./.github/workflows/ci.yml",
       permissions: { contents: "read" },
@@ -33,7 +34,8 @@ test("release-45: tag-driven validation requires full checks for both channels",
     const releaseNeeds = [current.jobs.release.needs].flat();
     assert.ok(releaseNeeds.includes("validate"), `${channel} publication directly requires full validation`);
     for (const [id, job] of Object.entries(current.jobs)) {
-      assert.equal(job.if, undefined, `${channel}/${id} must skip when a required job fails, skips or is cancelled`);
+      if (channel === "app" && id === "validate") assert.equal(job.if, "github.event_name != 'workflow_dispatch' || !inputs.build-only");
+      else assert.equal(job.if, undefined, `${channel}/${id} must skip when a required job fails, skips or is cancelled`);
       assert.equal(job["continue-on-error"], undefined, `${channel}/${id} cannot forgive failure`);
       for (const step of job.steps ?? []) {
         if (step.uses?.startsWith("actions/checkout@")) {
@@ -249,4 +251,12 @@ test("release-47: branch dispatch shares packaging but cannot publish or push a 
     for (const step of effects) assert.equal(step.if, `github.event_name == 'push' && startsWith(github.ref, 'refs/tags/${channel}-v')`);
     assert(current.jobs.release.steps.some(s => s.uses?.startsWith("actions/upload-artifact@")));
   }
+});
+
+
+test("release-47: targeted package diagnostics cannot satisfy the publication dependency", () => {
+  assert.deepEqual(workflow.on.workflow_dispatch.inputs["build-only"], { description: "Diagnose native packages without full CI; cannot publish", type: "boolean", default: false });
+  assert.equal(workflow.jobs.validate.if, "github.event_name != 'workflow_dispatch' || !inputs.build-only");
+  assert(workflow.jobs.release.needs.includes("validate"));
+  assert.equal(workflow.jobs.release.if, undefined, "default dependency success is required; a skipped validation cannot reach publication");
 });

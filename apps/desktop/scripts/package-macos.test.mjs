@@ -131,3 +131,25 @@ test("app-shell-46: failed service stdout is diagnostic and credentials remain r
     return true;
   });
 });
+
+test("app-shell-46: transient Apple ticket errors retry the same check, bounded and fail-closed", async t => {
+  for (const recovers of [true, false]) {
+    const f = await fixture(t);
+    const recorded = f.run;
+    let attempts = 0;
+    const run = async (command, args, options) => {
+      if (basename(command) === "xcrun" && args[0] === "stapler" && args[1] === "validate" && (!recovers || attempts < 1)) {
+        attempts++;
+        throw Object.assign(new Error("network"), { code: 68, stdout: "NSURLErrorDomain Code=-1005 The network connection was lost.", stderr: "" });
+      }
+      return recorded(command, args, options);
+    };
+    if (recovers) {
+      assert.equal((await packageMac({ ...f, run, outputDir: f.root })).status, "passed");
+      assert.equal(attempts, 1);
+    } else {
+      await assert.rejects(packageMac({ ...f, run, outputDir: f.root }), /network connection was lost/);
+      assert.equal(attempts, 3);
+    }
+  }
+});

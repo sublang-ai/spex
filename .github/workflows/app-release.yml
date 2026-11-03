@@ -11,6 +11,10 @@ on:
         description: Candidate release tag to validate without publishing
         type: string
         required: true
+      build-only:
+        description: Diagnose native packages without full CI; cannot publish
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -23,6 +27,7 @@ concurrency:
 
 jobs:
   validate:
+    if: github.event_name != 'workflow_dispatch' || !inputs.build-only
     needs: prepare
     uses: ./.github/workflows/ci.yml
     permissions:

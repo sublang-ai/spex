@@ -20,6 +20,7 @@ That acceptance required a fresh temporary keychain to sign the DMG after packag
 - Require signing credentials for the distribution command and the native Mac tag job; never fall back silently to unsigned or pending-notarization downloads.
 - Sign the App with hardened runtime and Electron's required entitlements, preserving its Electron-as-Node compiler and native dependencies.
 - Obtain Accepted notarization and staple the App before packaging the DMG, then sign that DMG with a secure timestamp in a fresh temporary keychain, obtain Accepted notarization and staple it.
+- Retry the same stapler operation at most twice for observed Apple ticket-service connection loss/timeout; all other failures and exhausted retries still block distribution.
 - Verify both signatures, tickets and Gatekeeper assessments, including the App inside the final DMG, before making the Mac download eligible for publication.
 - Inject private P12 and P8 inputs from repository secrets into temporary files, restore the keychain search list and delete temporary keychains and private inputs after use, leaving the default keychain and trust settings alone.
 - Keep the verified public Apple G2 intermediate and root certificates separate from private signing credentials.

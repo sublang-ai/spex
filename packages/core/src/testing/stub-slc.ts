@@ -69,7 +69,14 @@ function checkFixture() {
 }
 function emitArtifacts() {
   if (FIXTURE_DIR) {
-    fs.cpSync(path.join(FIXTURE_DIR, base + ".playbook"), path.join(srcDir, base + ".playbook"), { recursive: true });
+    const sourceArtifact = path.join(FIXTURE_DIR, base + ".playbook");
+    const targetArtifact = path.join(srcDir, base + ".playbook");
+    fs.mkdirSync(targetArtifact, { recursive: true });
+    // Captured compiler fixtures are flat source artifacts; preserve the
+    // boundary already prepared by the app and copy each file explicitly.
+    for (const file of fs.readdirSync(sourceArtifact)) {
+      fs.copyFileSync(path.join(sourceArtifact, file), path.join(targetArtifact, file));
+    }
     fs.copyFileSync(path.join(FIXTURE_DIR, base + ".ts"), path.join(srcDir, base + ".ts"));
     return;
   }
