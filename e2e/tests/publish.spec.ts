@@ -136,6 +136,7 @@ test("playbook-library-95: Publish from a project at the second instance reads t
   const project = await pickGroup(app, { host: second, namespace: true });
   await selectRegistryCore(app, second.url, project.key);
   await signInRegistryCore(app, second);
+  secondRegistry.script.setOrgs(second.url, [{ name: HOST_LOGIN, path: HOST_LOGIN, role: "Owner" }]);
   expect(project.instance).toBe(second.url);
   await arrangeAdded(app);
   await open(page, app);
@@ -251,6 +252,7 @@ test("playbook-library-114: a local spec-and-skill package publishes without a p
   const project = await pickGroup(app, { host: second, namespace: true });
   await selectRegistryCore(app, second.url, project.key);
   await signInRegistryCore(app, second);
+  registry.script.setOrgs(second.url, [{ name: HOST_LOGIN, path: HOST_LOGIN, role: "Owner" }]);
   const id = "notes-tools";
   const name = `${HOST_LOGIN}/${id}`;
   const path = `spex-packages/${HOST_LOGIN}/${id}`;

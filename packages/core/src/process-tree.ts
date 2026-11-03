@@ -60,6 +60,11 @@ function descendantsOf(roots: number[]): number[] {
   return found;
 }
 
+/** Only the native API shape the core uses. The Windows-only optional
+ * package may be absent on other hosts, including while compiling. */
+interface ProcessTree { pid: number; children?: ProcessTree[] }
+type GetProcessTree = (rootPid: number, callback: (tree: ProcessTree | undefined) => void) => void;
+
 /** The core whose work is running, as the async context carries it. */
 const runningCore = new AsyncLocalStorage<StartedProcesses>();
 
@@ -98,18 +103,22 @@ export class StartedProcesses {
       .map((child) => child.pid as number);
     if (!roots.length) return [];
     if (process.platform === "win32") {
-      let getProcessTree: typeof import("@vscode/windows-process-tree").getProcessTree;
-      try { ({ getProcessTree } = await import("@vscode/windows-process-tree")); }
-      catch { return roots; } // taskkill /T still reaches each owned root's descendants.
+      let getProcessTree: GetProcessTree;
+      try {
+        const packageName = "@vscode/windows-process-tree";
+        const native = await import(packageName);
+        if (typeof native.getProcessTree !== "function") return roots;
+        getProcessTree = native.getProcessTree;
+      } catch { return roots; } // taskkill /T still reaches each owned root's descendants.
 
       const trees = await Promise.all(roots.map(root => new Promise<number[]>((resolve) => {
         const timer = setTimeout(() => resolve([root]), 5_000);
         getProcessTree(root, tree => {
           clearTimeout(timer);
           const found = new Set<number>([root]);
-          const visit = (entry: { pid: number; children?: unknown[] }): void => {
+          const visit = (entry: ProcessTree): void => {
             found.add(entry.pid);
-            for (const child of entry.children ?? []) visit(child as typeof entry);
+            for (const child of entry.children ?? []) visit(child);
           };
           if (tree) visit(tree);
           resolve([...found]);

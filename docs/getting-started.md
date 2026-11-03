@@ -7,8 +7,8 @@ Spex brings specs and AI workflows into one IDE. Specs describe how a
 system should work and how to check it. A playbook coordinates AI work
 and review through a workflow written in plain language.
 
-A **spec package** shares a spec and related skills or playbooks as a
-versioned package. Packages come from a registry, and
+A **spec package** shares specs, skills, playbooks or applets as a
+versioned bundle. Packages come from a registry, and
 [Spex Space](https://spex.sublang.ai) is the public one: find and publish
 packages there, and add them from a project's **Packages** tab, from
 **Playbooks** for every project of yours, or with the `spex` command
@@ -16,11 +16,18 @@ line. Public packages need no account to browse or install. Publishing
 and private packages need a registry sign-in, separate from any Space
 sign-in. Syncing a project's records is optional.
 
+This guide follows the current source build. Its CLI commands and IDE
+controls are newer than the published CLI 4.2.0 and desktop app
+0.9.0-beta.24. Use the source setup below for the IDE, or
+[install the current source CLI](../packages/cli/README.md#install-current-source-cli)
+for command-line package workflows.
+
 ## Open the IDE and a project
 
-Use macOS or Linux with Git, Node.js 22.19 or later, and a native build
-toolchain: Xcode Command Line Tools on macOS; Python 3, `make`, and `g++`
-on Linux. The first installation and launch need the network.
+Use Git and Node.js 22.19 or later. Source builds also need Xcode Command
+Line Tools on macOS, or Python 3, `make`, and `g++` on Linux. Native
+Windows uses the bundled Node SQLite and skips that native-module rebuild.
+The first installation and launch need the network:
 
 ```sh
 git clone --depth=1 https://github.com/sublang-ai/spex.git
@@ -29,8 +36,11 @@ npm ci
 npm start
 ```
 
-These commands follow current `main`. For tagged app releases and server
-access, see the [README](../README.md#getting-started).
+Desktop downloads are also available on
+[GitHub Releases](https://github.com/sublang-ai/spex/releases): the macOS
+M-series DMG or the Windows x86-64 installer. Those releases currently
+have earlier controls; use the documentation at their release tag.
+See the [README](../README.md#getting-started) for platform details.
 
 Choose **Add a local project** for an existing Git repository, or expand
 **Create a new project…** and keep the specs scaffold enabled. **Open the
@@ -47,6 +57,9 @@ coordinates; players inspect files, implement, and review through playbooks.
 A project's packages come from the registry its `spex.yaml` names; a new
 project's is Spex Space. The project's **Packages** tab shows it at the
 top as **Registry: Spex Space**, with your sign-in there beside it.
+To use another registry, open that chooser and select **Other…**, then
+enter its website address. The choice updates `registry` in this
+project's `spex.yaml`; it does not change your Space sign-in.
 
 1. **Find a package.** On the project's **Packages** tab, choose
    **Add…** and search on **Registry**. On the command line, run
@@ -115,13 +128,13 @@ same.
 
 ## Use the CLI
 
-The `spex` command line is the **Packages** tab without the app: the
-same verbs on the same files. It needs Node.js 22 or later and no
-running app. Run it in your project's folder, or put `npx @sublang/spex`
-in place of `spex`:
+The current source CLI manages the same package files as the IDE without
+a running app. First
+[install the source CLI](../packages/cli/README.md#install-current-source-cli);
+the published npm 4.2.0 release uses older package commands. Then run
+`spex` in your project's folder:
 
 ```sh
-npm install -g @sublang/spex
 cd /absolute/path/to/project
 spex search toolkit
 spex add my-org/toolkit
@@ -141,25 +154,90 @@ spex whoami
 ```
 
 `spex login` signs in to the project's registry with a code in your
-browser: open the address it prints and enter the code. `--space <url>`
-signs in to a Space instead. The two sign-ins are separate, and signing
-out of one keeps the other. See the [CLI guide](../packages/cli/README.md)
-for every command, sign-in and exit codes.
+browser: open the address it prints and enter the code. To use another
+registry, edit `registry` in `spex.yaml`, preserving the rest of the file,
+then sign in there. `spex login --registry <url>` signs in at that
+address without changing the project's registry; `search`, `add` and
+`publish` use the file's choice and take no `--registry` flag.
+`spex login --space <url>` signs in to a Space instead. The two sign-ins
+are separate, and signing out of one keeps the other. See the
+[CLI guide](../packages/cli/README.md) for every command, sign-in and exit
+codes.
 
 ## Open a project on a team server
 
-On **Space**, a project of your group offers **Open on ⟨server⟩**. The
-first time, Spex lists the server's terms — among them that whoever runs
+Sign in to the Space where the server is registered. At Spex Space,
+Developer access or higher in the server's group or one of its subgroups
+lets you use it; this does not give you access to records in the parent
+group. The project's code needs a remote repository the server can read.
+
+On **Space**, choose **Open on ⟨server⟩** on the project's row; use the
+arrow beside its opening button to choose another location.
+The first time, Spex lists the server's terms — among them that whoever runs
 the server can act with credentials you put there — and opens it once
-you choose **I understand**. The server is signed in to the Space and
-nothing more: your registry sign-in on this computer, and the agent
-sign-ins its administrator shares, give it no registry access.
+you choose **I understand**. Your seat starts with a Space sign-in.
+Private packages and publishing require a separate registry sign-in on
+that seat; your computer's registry account and shared agent credentials
+do not supply it.
 
 Public packages install there without a registry sign-in. For private
 packages or publishing, open the project's **Packages** tab on that
 server, choose **Sign in** beside its registry, and approve with the code
 in your browser. That sign-in stays on the server, apart from your Space
 sign-in, until you sign out there or it expires.
+
+## Run a server for your group
+
+You need a Linux machine running systemd, sudo access, Node.js 22.19 or
+later installed system-wide under root-owned directories and runnable by
+every account, and a public HTTPS address with a TLS certificate and key.
+Use Node.js 23.6 or later if members will compile
+playbooks on the server. The installer builds Spex from source, so the
+machine also needs Git, npm and the Linux build tools described above.
+
+1. On your Space's website, open **Servers** and register a name and the
+   HTTPS address for a group you own. Save the server ID and the token
+   shown once. Registration does not install or start the server.
+2. Check out a [Spex release](https://github.com/sublang-ai/spex/releases)
+   on the server outside the installation directory, for example under
+   `/usr/local/src/spex`. From that checkout, run:
+
+   ```sh
+   sudo apps/hub/deploy/install.sh
+   ```
+
+   The default installation is `/opt/spex`. The installer checks its
+   requirements, builds the hub and seats, and prints the exact file
+   ownership, permissions and commands for the next steps.
+3. Follow those instructions to write `/etc/spex/server.env` with the
+   Space address, server ID and name. Put the token in
+   `/etc/spex/server.token` using an editor, and make the certificate and
+   key readable by the `spex-hub` account. Keep
+   `/etc/spex/agents.env` empty unless you want to supply shared agent
+   sign-ins. Preserve the ownership and permissions the installer names.
+4. Attach the registered server, replacing the example values with yours:
+
+   ```sh
+   sudo -u spex-hub /opt/spex/bin/spex-hub attach \
+     --instance https://your-space.example \
+     --server-id YOUR_SERVER_ID \
+     --address https://your-server.example \
+     --tls-cert /absolute/path/to/certificate.pem \
+     --tls-key /absolute/path/to/private-key.pem \
+     --token-file /etc/spex/server.token
+   sudo systemctl enable --now spex-hub
+   sudo -u spex-hub /opt/spex/bin/spex-hub status
+   ```
+
+5. Make the registered HTTPS address reachable by your members. They can
+   now use **Open on ⟨server⟩** in the IDE. Each gets a separate seat and
+   signs in to private code and the package registry there as needed.
+
+The [installer](../apps/hub/deploy/install.sh) documents its requirements
+and update procedure. Install updates while no seat is running; restarting
+the hub alone does not stop existing seats. Registering and retiring a
+server requires ownership of its group, even when subgroup membership
+allows someone to use it.
 
 ## Try a spec-first task
 
@@ -176,11 +254,20 @@ implementing with `/code`. See [Approvals](approvals.md) for permissions.
 
 ## Publish specs, skills, and playbooks
 
-Publishing needs an org that is yours at the registry. Sign in to the
-registry, then claim one on [Your orgs](https://spex.sublang.ai/account/orgs)
-at Spex Space: any name your registry account may claim, with no Space
-group needed. Choose **Private** on a new claim when its packages should
-be private.
+Publishing needs a namespace your registry account can use. It is the
+first part of `namespace/package`, called **Org** in the CLI and IDE.
+At Spex Space, sign in to your
+[registry account](https://spex.sublang.ai/account?scope=registry), then
+check [Your orgs](https://spex.sublang.ai/account/orgs?scope=registry).
+Your sign-in name becomes a personal namespace when it is valid and
+available; you can also claim an organization you own. Use a name listed
+there, rather than assuming a local username or a Space group grants it.
+
+Packages are public by default. **Private packages** restricts a
+namespace's packages to its personal owner or organization members.
+Space groups control project records and servers, separately from
+registry namespaces. For another registry, check its account page and
+publishing rules.
 
 ### Publish a spec or skill package
 
@@ -189,8 +276,8 @@ To publish a skill you already have, such as one Claude Code keeps under
 skill in your project's folder, under an org of yours:
 
 ```sh
-npx @sublang/spex login
-npx @sublang/spex export my-org/my-skill --skill .claude/skills/my-skill
+spex login
+spex export my-org/my-skill --skill .claude/skills/my-skill
 ```
 
 `spex login` signs in with a code in your browser: open the address it
@@ -209,12 +296,17 @@ folder by hand, follow the
 Check what will be published, then publish it:
 
 ```sh
-npx @sublang/spex publish my-org/my-skill --dry-run
-npx @sublang/spex publish my-org/my-skill
+spex publish my-org/my-skill --dry-run
+spex publish my-org/my-skill
 ```
 
 The dry run shows the registry, the name, the version and the files, and
-publishes nothing. The publish prints the package's page at the registry.
+publishes nothing. When signed in, it also checks that your account can
+publish under the namespace; an unsigned dry run explicitly leaves those
+rights unchecked. Exporting works offline and checks no publishing rights.
+The publish prints the package's page at the registry. A published version
+cannot be replaced: refresh the exported files and raise `version` in
+`meta.yaml` before publishing another release.
 
 Or publish from the IDE. On the **Packages** tab, choose **Add… →
 Folder** and pick `spex-packages/<org>/<name>`, the folder `spex export`
@@ -269,9 +361,14 @@ as they are.
 
 ## Optionally sync project records
 
-Packages need no group: a project's records sync only once you choose
-**Add to a group…** on its row on **Space**. Before you share, check the
-Space's name there and read the sharing notice: the group's members see
-the records, session attachments included. Sign-in offers Spex Space,
-`https://spex.sublang.ai`, by default; a Space an earlier release saved
-stays as saved. See [groups](groups.md) and [storage and sync](storage.md).
+Packages need no group. To sync a project's records, open **Space** and
+sign in to the Space where your team works. Choose a listed Space, or
+**Other Space…** to enter its address. Use **Add to a group…** on the
+project's row, select a group, review its access, then choose **Add to
+group**. A first sync can ask you to confirm sharing the complete records,
+including conversations, agent activity and attachments.
+
+On another computer, sign in to that Space and choose **Open here** on
+the project. Code and records are cloned separately; membership does not
+grant access to a separate private code repository. See
+[Groups and collaboration](groups.md) and [storage and sync](storage.md).

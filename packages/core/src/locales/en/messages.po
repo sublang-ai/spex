@@ -484,8 +484,8 @@ msgstr "{name}: spex.lock names no registry address for it — Update writes spe
 
 #. Refusal of Publish: the registry refuses this account the package's org, a package name's first half; {registry} is the registry's display name
 #: src/environments.ts
-msgid "{org} is not yours to publish to at {registry} — claim it there, or publish under one of your orgs"
-msgstr "{org} is not yours to publish to at {registry} — claim it there, or publish under one of your orgs"
+msgid "{org} is not yours to publish to at {registry} — claim it at {url}, or publish under one of your orgs"
+msgstr "{org} is not yours to publish to at {registry} — claim it at {url}, or publish under one of your orgs"
 
 #. Why a placed playbook stands aside, composing nothing: its spec package is not installed here; {package} is its name, org/pkg
 #: src/config.ts
@@ -1270,6 +1270,11 @@ msgstr "Code remote changed"
 #: src/space.ts
 msgid "Code: {where}"
 msgstr "Code: {where}"
+
+#. Refusal of malformed access-only Codex subscription credentials; never repeats their contents
+#: src/service.ts
+msgid "Codex subscription credentials are invalid."
+msgstr "Codex subscription credentials are invalid."
 
 #. Refusal: the compile the Boss awaited was canceled
 #. The outcome of a compile the reader stopped

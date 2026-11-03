@@ -149,7 +149,7 @@ export class Environment {
   readonly store: ContentStore;
   readonly cache: string;
   readonly git: GitSource;
-  private readonly registries = new Map<string, RegistrySource>();
+  private readonly registries = new Map<string, { remote: RegistryClient; source: RegistrySource }>();
   private readonly clients = new Map<string, GitHostClient>();
   private builtin?: RegistrySource;
 
@@ -274,7 +274,7 @@ export class Environment {
       case "forbidden": {
         if (context.operation === "publish") {
           const org = pkg?.split("/")[0] ?? "this org";
-          return new Refusal(`${org} is not yours at ${name} — claim it at ${origin}/account/orgs`);
+          return new Refusal(`${org} is not yours at ${name} — claim it at ${origin}/account/orgs?scope=registry`);
         }
         const who = await this.loginAt(origin, context.scope);
         return new Refusal(`${about}not shared with ${typeof who === "string" ? `@${who}` : "this account"} at ${name} — ask its owner`);
@@ -282,6 +282,7 @@ export class Environment {
       case "unauthenticated":
         return new Refusal(`sign-in expired at ${name} — ${login}`);
       case "unavailable":
+        if (error.code === "orgs_unavailable") return new Refusal(`Your orgs at ${name} could not be read — check the connection, then retry`);
         if (error.code === "unreachable") return new Refusal(`${name} could not be reached — check the connection, then retry`);
         // A registry the lock names by no address is never asked.
         if (error.code === "unasked") return new Refusal(`${about}spex.lock names no registry address for it — spex update writes spex.lock again`);
@@ -365,7 +366,7 @@ export class Environment {
    * the device out there marks it signed out in `home.yaml`
    * (environments-12, git-host-4). The built-in spec package is answered
    * from this device's seed first, as the app answers it. */
-  registryAt(origin: string, scope: AuthScope = "space"): RegistrySource {
+  private registry(origin: string, scope: AuthScope): { remote: RegistryClient; source: RegistrySource } {
     const at = canonicalOrigin(origin);
     const key = `${scope}:${at}`;
     let registry = this.registries.get(key);
@@ -378,10 +379,18 @@ export class Environment {
           if (scope === "space") this.markSignedOut(at);
         },
       });
-      registry = compositeRegistry(this.seed(), remote);
+      registry = { remote, source: compositeRegistry(this.seed(), remote) };
       this.registries.set(key, registry);
     }
     return registry;
+  }
+
+  registryAt(origin: string, scope: AuthScope = "space"): RegistrySource {
+    return this.registry(origin, scope).source;
+  }
+
+  registryClientAt(origin: string, scope: AuthScope = "registry"): RegistryClient {
+    return this.registry(origin, scope).remote;
   }
 
   /** The registries an install asks for a registry package's files, in

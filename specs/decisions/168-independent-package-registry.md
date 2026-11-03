@@ -11,6 +11,8 @@ Completed by [DR-188](188-registry-sign-in-opens-the-browser.md) in the desktop'
 Amends [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) and [DR-127](127-a-home-signed-in-to-several-instances.md) in registry selection and credentials, [DR-151](151-publish-local-spec-packages.md) in publishing selection, and [DR-132](132-team-servers.md) in the credentials a seat needs to install private packages.
 The instance-only presentation of [DR-120](120-the-instance-is-the-space.md), project placements and execution ownership stand.
 
+Amended by [DR-200](200-publishing-names-need-registry-authority.md) in authoring guidance and fresh publishing-rights checks.
+
 ## Context
 
 The package manager is already one library used by the standalone CLI and IDE, and each Space already authorizes independently hosted servers.

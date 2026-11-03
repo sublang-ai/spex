@@ -2165,6 +2165,11 @@ msgstr "cites {out} · cited by {in}"
 msgid "cites it"
 msgstr "cites it"
 
+#. Open the selected registry's account page to claim a publishing name
+#: src/components/PlaybookAuthoring.tsx
+msgid "Claim an org"
+msgstr "Claim an org"
+
 #: src/components/AgentSettings.tsx
 msgid "Clear the fast-mode choice; this adapter does not accept it."
 msgstr "Clear the fast-mode choice; this adapter does not accept it."
@@ -5358,6 +5363,11 @@ msgstr "Org"
 msgid "Org and License first"
 msgstr "Org and License first"
 
+#. An unsigned publish preview checks local files but cannot verify the package's org
+#: src/components/PublishControl.tsx
+msgid "Org not checked — sign in to {registry} to check publishing rights"
+msgstr "Org not checked — sign in to {registry} to check publishing rights"
+
 #: src/lib/drafts.ts
 msgid "Org: lowercase letters and digits in words joined by single hyphens, at most 64 characters"
 msgstr "Org: lowercase letters and digits in words joined by single hyphens, at most 64 characters"
@@ -5755,6 +5765,11 @@ msgstr "Published {version}"
 #: src/components/PublishControl.tsx
 msgid "Publishes {path} to {registry}"
 msgstr "Publishes {path} to {registry}"
+
+#. New playbook's Org has no successful registry account check
+#: src/components/PlaybookAuthoring.tsx
+msgid "Publishing rights not checked"
+msgstr "Publishing rights not checked"
 
 #. a spec package is being uploaded to the registry
 #. a spec package is being uploaded to the registry
@@ -8006,6 +8021,11 @@ msgstr "this stage was not found for this playbook"
 #: src/components/CompileBand.tsx
 msgid "three in a row — tell the agent how to proceed"
 msgstr "three in a row — tell the agent how to proceed"
+
+#. Local package names do not establish publishing rights at the selected registry
+#: src/components/PlaybookAuthoring.tsx
+msgid "To publish, use an org you can claim at this registry."
+msgstr "To publish, use an org you can claim at this registry."
 
 #. a Sync tab's heading over the records this computer changed that no Space holds yet; {count} how many
 #: src/components/SpaceSync.tsx

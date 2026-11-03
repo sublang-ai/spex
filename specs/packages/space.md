@@ -552,7 +552,7 @@ When a sync is admitted, the core shall save, then run the other steps for each 
 
 | Step | The core | The line reads |
 | --- | --- | --- |
-| 1 Save | refresh the managed rules [[storage-17](storage.md#storage-17)], stage the catalog files, refuse a staged ignored-family path, validate the staged tree in a private copy [[storage-12](storage.md#storage-12)], commit that tree, where it differs from `HEAD`'s, on the `HEAD` it was staged against by a conditional ref update | "Saving…" |
+| 1 Save | refresh the managed rules [[storage-17](storage.md#storage-17)] and the project file’s code remote [[storage-3](storage.md#storage-3)] from the paired working folder’s `origin`, stage the catalog files, refuse a staged ignored-family path, validate the staged tree in a private copy [[storage-12](storage.md#storage-12)], commit that tree, where it differs from `HEAD`'s, on the `HEAD` it was staged against by a conditional ref update | "Saving…" |
 | 2 Check | read the fresh catalog of the placement's instance and its repository alone [[git-host-22](git-host.md#git-host-22)], prepare its branch where the first push is ahead [[git-host-7](git-host.md#git-host-7)], and fetch its `spex` branch with that instance's brokered credential [[git-host-9](git-host.md#git-host-9)], the path placement fetched with no read | "Checking <display name>…" |
 | 3 Compare | plan every unit against the common ancestor of `spex` and that placement's [[storage-11](storage.md#storage-11)] [[space-33](#space-33)]; nothing incoming skips to Push | "Comparing…" |
 | 4 Apply | write the selection and one merge commit, or fast-forward [[space-19](#space-19)], then reconcile the clone's placements with their files [[space-91](#space-91)] | "Merging…" |
@@ -569,7 +569,10 @@ When a sync is admitted, the core shall save, then run the other steps for each 
 
 - where the repair marker an interrupted Apply left stands, the sync first runs its repair, before Save [[space-67](#space-67)];
 - a placement's instance is the one its remote is named by, or the one a follow makes it follow [[space-60](#space-60)] ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md));
-- <display name> in a line is that of the placement's instance, or the path placement's remote as a report reads it [[space-15](#space-15)] ([DR-172](../decisions/172-surfaces-a-fresh-user-reads.md)).
+- <display name> in a line is that of the placement's instance, or the path placement's remote as a report reads it [[space-15](#space-15)] ([DR-172](../decisions/172-surfaces-a-fresh-user-reads.md));
+- the code remote refresh changes only `remote`, atomically and only when different, preserving the project’s name and format; it writes no credential [[space-5](#space-5)];
+- only a paired existing working folder that is its Git work-tree root supplies the remote; absent or non-root folders and records without a project file leave it unchanged;
+- an absent `origin` writes `null`, while a failed Git read or invalid remote stops Save without replacing the project file; reads and checks alone never refresh it.
 
 #### space-91
 
@@ -1517,3 +1520,12 @@ Where the Space surface renders over a controlled command connection reporting f
 - a dependent older-session diagnostic remains in its folder task's details without becoming another task [[space-46](#space-46)];
 - import, upgrade, missing-folder and unknown-code diagnostics show only their supported meanings, with technical evidence collapsed and expandable [[space-121](#space-121)];
 - eligible older-history notices offer dismissal separately from folder instructions; successful Dismiss and Show again move only their item between active review and collapsed Dismissed and update the count, failures retain the item with an error, blocking and unknown diagnostics offer no dismissal, and sidebar return reveals dismissed folder choices [[space-124](#space-124)].
+
+#### space-129
+
+Where a real core pairs a working Git repository with records at a stand-in instance, the integration suite shall exercise remote publication after registration and assert the Save refresh:
+
+- adding and pushing `origin` then syncing updates the local and published project file and exposes code-backed server opening metadata [[space-12](#space-12)];
+- changing and removing `origin` update that metadata on later syncs [[space-12](#space-12)];
+- a credential-bearing remote refuses Save and leaves the previous project file unchanged [[space-12](#space-12)];
+- reads alone and an unavailable or non-root paired folder leave the metadata unchanged [[space-12](#space-12)].

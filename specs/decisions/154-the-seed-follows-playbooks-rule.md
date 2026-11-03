@@ -13,6 +13,8 @@ Amended by [DR-156](156-an-untouched-seed-follows-the-credentials.md): a seeded 
 Amended by [DR-207](207-playbook-18-1-2-cligent-0-37-0-slc-0-20-1-adoption.md) in the Playbook floor and built-in release alone: Playbook `^18.1.2`, staging `sublang/playbooks` 18.1.2.
 Amended by [DR-204](204-agent-cards-read-alike.md): behind a third-party Claude service the seed's Claude agents take the provider's default in place of an official model name; the seed reads confirmed credentials, never an agent's home folder alone.
 
+Amended by [DR-201](201-shared-codex-subscription-access.md) only for a seed-only presence projection of a materialized access-only Codex snapshot; the launcher still chooses every agent setting.
+
 ## Context
 
 - Spex seeds your own group's config from Playbook's bundled starter template, as written but for `playbooks.*.from`.

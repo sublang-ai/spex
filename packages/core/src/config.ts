@@ -53,6 +53,7 @@ import { readVersioned, sha256, VersionConflictError, writeVersionedBytes, type 
 import { defaultOwnName, recordedOwnName } from "./home.js";
 import { i18n } from "./i18n.js";
 import { probeSignIn, type SignInProbe } from "./local-credentials.js";
+import { codexAuthContent } from "./seat-credentials.js";
 import { canonicalWritablePath } from "./permission-paths.js";
 
 import {
@@ -823,6 +824,7 @@ export async function seedCredentials(
 ): Promise<SeedCredentials> {
   const one = async (adapter: "claude" | "codex"): Promise<boolean> => {
     if (variableCredential(adapter, env, home)) return true;
+    if (adapter === "codex" && materializedCodexSnapshot(env)) return true;
     if (home === null) return false;
     // The status command runs only where the folder stands, since it
     // would create it.
@@ -837,6 +839,22 @@ export async function seedCredentials(
 function variableCredential(adapter: "claude" | "codex", env: NodeJS.ProcessEnv, home: SeedHome): boolean {
   const runEnv = adapter === "claude" && home !== null ? { ...env, ...claudeSettingsEnv(env, home) } : env;
   return (LOCAL_CREDENTIAL_FORMS[adapter] ?? []).some((name) => Boolean(runEnv[name]));
+}
+
+/** Whether `env` selects a seat's access-only Codex snapshot that is
+ * materialized as its own `auth.json` (core-service-150): a seed-only
+ * presence, never written into a run. An invalid or unmaterialized
+ * snapshot counts no credential. */
+function materializedCodexSnapshot(env: NodeJS.ProcessEnv): boolean {
+  if (!env.CODEX_AUTH_CONTENT || !env.CODEX_HOME) return false;
+  try {
+    const auth = join(env.CODEX_HOME, "auth.json");
+    const stat = lstatSync(auth);
+    return stat.isFile() && !stat.isSymbolicLink() &&
+      readFileSync(auth, "utf8") === codexAuthContent(env.CODEX_AUTH_CONTENT);
+  } catch {
+    return false;
+  }
 }
 
 /** An agent's configuration folder, where its sign-in is kept. */

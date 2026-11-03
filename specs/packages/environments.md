@@ -238,12 +238,28 @@ When an authoring session [[storage-23](storage.md#storage-23)] writes a spec pa
 - to share before publishing, the folder is requested by `git` at a commit, or published as a prerelease to a private namespace at the registry; to use it yourself on every device, it is kept in your own group's clone and requested by path there [[environments-2](#environments-2)];
 - a root may hold any number of spec packages under development, two orgs' packages of one name apart.
 
+#### environments-47
+
+When a publication or its preview is requested, the package manager shall establish the org's publishing status before offering a checked preview or uploading, using the selected registry's current authorized namespaces [[environments-27](#environments-27)] and its registry grant [[environments-38](#environments-38)] ([DR-200](../decisions/200-publishing-names-need-registry-authority.md)):
+
+| Registry grant and answer | Outcome |
+| --- | --- |
+| signed in, the manifest's org is a listed `name` | checked preview reports `orgVerified: true`; an upload proceeds to the registry's final authorization |
+| signed in, the org is absent, including a valid empty list | refuse with `<origin>/account/orgs?scope=registry` as the claim destination, uploading nothing ([DR-202](../decisions/202-registry-guidance-keeps-account-scope.md)) |
+| signed in, the registry rejects an expired or revoked grant | refuse with the existing sign-in failure and grant-refusal handling [[environments-12](#environments-12)], uploading nothing |
+| signed in, authorization cannot be read or is malformed | refuse as unable to check, never as an empty authorization list, uploading nothing |
+| signed out, preview requested | validate the local release [[environments-10](#environments-10)] and report `orgVerified: false`, uploading nothing |
+| signed out, upload requested | refuse as needing registry sign-in, uploading nothing |
+
+- Every signed-in preview and upload reads authorization afresh, so a prior successful preview grants no right to a later upload.
+- A namespace's `path` or provider name grants no permission to an org absent from the listed `name` values.
+
 #### environments-27
 
 While the home holds the selected registry credential, when the core asks the registry for the orgs its account may publish to, it shall send one `GET /api/v1/account/orgs` to that registry presenting its selected purpose's app token as resolving and installing do [[environments-12](#environments-12)], and take a `200` whose `orgs` lists each org's `name`, its provider namespace `path`, the account's `role` and optional identity `provider`, independent of Space affiliation, sorted by name, as the answer ([DR-120](../decisions/120-the-instance-is-the-space.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
 
 - the background authoring-default suggestion treats any status but `200`, a body not in that shape, a network failure, or no answer within two seconds as no answer;
-- the explicit `registry.orgs` selection waits up to thirty seconds and refuses with a readable error when the registry grant is missing or the registry gives no valid answer, preserving a valid empty `orgs` list as a successful empty answer.
+- explicit `registry.orgs` selection and publishing-rights checks [[environments-47](#environments-47)] wait up to thirty seconds and refuse with a readable error when the registry grant is missing or the registry gives no valid answer, preserving a valid empty `orgs` list as a successful empty answer.
 
 ### The Built-In Spec Package
 
@@ -364,7 +380,7 @@ The core shall expose environments through these commands and one message, each 
 | `environment.resolve` | `{ repository, wait? }` | `{ accepted: true }`, or terminal reply with `wait: true` [[environments-35](#environments-35)] | `not_found`; terminal wait also `invalid_request`, `conflict`, `aborted` |
 | `environment.install` | `{ repository, wait? }` | `{ accepted: true }`, or terminal reply with `wait: true` [[environments-35](#environments-35)] | `not_found`; terminal wait also `invalid_request`, `conflict`, `aborted` |
 | `environment.search` | `{ repository, query }`, searching the registry of `repository`'s environment ([DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)) | `{ packages: [{ name, description, versions }] }` | `invalid_request` (signed out of that registry's instance and the registry refusing), `not_found` |
-| `environment.publish` | `{ repository, name, dryRun?, wait? }`, `name` naming a spec package under development, whose folder [[environments-10](#environments-10)] lies inside the environment's path root [[environments-2](#environments-2)] | `{ accepted: true }`, a dry run uploading nothing and adding `preview: { instance: { origin, name }, name, version, files }`, where `instance` is the server-resolved publication destination; `wait: true` returns its terminal receipt [[environments-35](#environments-35)] | `invalid_request` (no path root on this device; no folder for the name; its manifest naming another spec package; not a release; no `description` or `license`; not signed in at the instance it publishes to [[environments-10](#environments-10)]), `not_found`, `aborted` |
+| `environment.publish` | `{ repository, name, dryRun?, wait? }`, `name` naming a spec package under development, whose folder [[environments-10](#environments-10)] lies inside the environment's path root [[environments-2](#environments-2)] | `{ accepted: true }`, a dry run uploading nothing and adding `preview: { instance: { origin, name }, name, version, files, orgVerified }`, where `instance` is the server-resolved publication destination; `wait: true` returns its terminal receipt [[environments-35](#environments-35)] | `invalid_request` (no path root on this device; no folder for the name; its manifest naming another spec package; not a release; no `description` or `license`; not signed in for an upload; unauthorized org or unreadable authorization [[environments-47](#environments-47)]), `not_found`, `aborted` |
 
 - `environment.state { repository, state: EnvironmentState }` is broadcast after every resolve, install, publish, sync-applied lock and pairing's placement [[environments-31](#environments-31)]; a long command without `wait: true` replies `accepted` at once and reports through state ([DR-010](../decisions/010-interface-craft.md) §5).
 
@@ -495,6 +511,15 @@ When an integration suite installs, into a scratch project holding a scaffolded 
 #### environments-46
 
 When the Windows integration suite fetches and reuses a real Git source below a cache root whose mirror pack paths exceed the legacy Windows path bound, it shall assert the expected commit and exported file bytes, with the source repository's configuration unchanged [[environments-13](#environments-13)].
+
+#### environments-48
+
+When a real core previews and publishes a local package against a stand-in registry, the integration suite shall verify the publishing-rights cases:
+
+- unsigned previews report unchecked rights and upload nothing [[environments-47](#environments-47)];
+- an authorized org produces a checked preview [[environments-47](#environments-47)];
+- an org absent from the answer, an empty answer, a name matching only a namespace's path, a malformed answer and an unavailable registry each refuse without uploading [[environments-47](#environments-47)];
+- rights removed after a successful preview refuse the later upload, and restored rights permit retry [[environments-47](#environments-47)].
 
 ## References
 

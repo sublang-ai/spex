@@ -3274,7 +3274,7 @@ function placeState(
         repository,
         name,
         dryRun: true,
-      });
+      }, { timeoutMs: 35_000 });
       if (!reply.preview) {
         throw new Error(i18n._("Spex could not read what this would publish."));
       }
@@ -3282,7 +3282,7 @@ function placeState(
     },
 
     async publishSpecPackage(repository: string, name: string): Promise<void> {
-      await getClient().command("environment.publish", { repository, name });
+      await getClient().command("environment.publish", { repository, name }, { timeoutMs: 35_000 });
     },
 
     async runCompile(input): Promise<void> {

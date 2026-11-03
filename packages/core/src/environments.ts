@@ -677,8 +677,11 @@ export class EnvironmentManager {
     if (!(error instanceof RegistryError)) return failurePhrase("publish", error);
     const registry = this.registryName(this.refusedAt(error, origin));
     const status = (error as { status?: unknown }).status;
+    if (error.code === "orgs_unavailable") {
+      return i18n._({ id: "Your orgs at {registry} could not be read — check the connection, then Retry", comment: "Refusal: the registry gave no answer listing the orgs this account may publish to; {registry} is its display name", values: { registry } });
+    }
     if (error.kind === "forbidden") {
-      return i18n._({ id: "{org} is not yours to publish to at {registry} — claim it there, or publish under one of your orgs", comment: "Refusal of Publish: the registry refuses this account the package's org, a package name's first half; {registry} is the registry's display name", values: { org: name.split("/")[0]!, registry } });
+      return i18n._({ id: "{org} is not yours to publish to at {registry} — claim it at {url}, or publish under one of your orgs", comment: "Refusal of Publish: the registry refuses this account the package's org, a package name's first half; {registry} is the registry's display name", values: { org: name.split("/")[0]!, registry, url: `${this.refusedAt(error, origin)}/account/orgs?scope=registry` } });
     }
     if (error.kind === "rejected" && status === 409) {
       return i18n._({ id: "{name} {version} is already at {registry} — raise its version in meta.yaml, then Retry", comment: "Refusal of Publish: the registry holds this version already and never takes it twice; {registry} is the registry's display name", values: { name, version, registry } });
@@ -1810,7 +1813,8 @@ export class EnvironmentManager {
     }
     const selected = this.registryOf(key);
     const target = this.registryAt(selected.origin, "registry");
-    if (!dryRun && (await this.tokenAt(target.origin, "registry").catch(() => "")) === null) {
+    const signedIn = (await this.tokenAt(target.origin, "registry").catch(() => "")) !== null;
+    if (!dryRun && !signedIn) {
       throw new CoreError("invalid_request", i18n._({
         id: "Sign in to {registry} to publish",
         comment: "Refusal of Publish: publishing needs a sign-in at the registry the package goes to; {registry} is its display name as last read, else its host name",
@@ -1854,9 +1858,16 @@ export class EnvironmentManager {
         values: { path, issues: listed(missing.map((issue) => `${issue.path}: ${issue.message}`)) },
       }));
     }
+    if (signedIn) {
+      try {
+        await target.remote.checkPublishOrg(held);
+      } catch (error) {
+        throw new CoreError("invalid_request", this.publishFailure(error, target.origin, held, manifest.version));
+      }
+    }
     // What the upload would hold: the declared release files, in the
     // archive's order (playbook-library-93).
-    const preview: PublishPreview = { instance: { origin: target.origin, name: this.registryName(target.origin) }, name: `${manifest.org}/${manifest.name}`, version: manifest.version, files: [...files].sort() };
+    const preview: PublishPreview = { instance: { origin: target.origin, name: this.registryName(target.origin) }, name: `${manifest.org}/${manifest.name}`, version: manifest.version, orgVerified: signedIn, files: [...files].sort() };
     if (dryRun) return { done: Promise.resolve(undefined), preview };
     if (this.stopped) throw stoppingError();
     const done = this.run(key, async (step) => {

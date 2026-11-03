@@ -161,15 +161,15 @@ compiled playbooks run on the template's claude players.
 
 1. The app's own example (playbook-library-86): the text the
    Prefill places is used as the source, compiled for real from the
-   workspace's Compile, registered on the Register tab's prefill, and
-   run by the command registered — `/workflow` unless the agent
+   workspace's Compile, added on the Add tab, and
+   run by its command — `/workflow` unless the agent
    proposed another: the turn finishes with both players engaged and
    a commit in the repository. Its first compile is the one judged:
    once it fails, the relay lets the agent change the source, so the
    journey stops there with the compiler's output attached.
 2. The chat-authored two-role changelog playbook
    (playbook-library-78): authored in the draft's conversation,
-   compiled, registered and run to a finished turn with both players
+   compiled, added and run to a finished turn with both players
    engaged and their commit in the repository — the harder case.
 3. A new project (dashboard-63, run-view-150): created from the
    palette with specs scaffolded, then developed through a `/decide`
@@ -211,7 +211,7 @@ What no automation sees (release-21).
 | Step | Expect |
 | --- | --- |
 | A settled turn's notification and badge: `SPEX_SMOKE_MANUAL=1 npm run smoke:desktop` | The native notification follows the scratch preferences; the dock badge matches the Dashboard's attention, and a cleanly settled standalone session leaves both at zero. A failure blocks the tag. |
-| Local package preview: `npm run package:mac -w apps/desktop` on macOS, or `npm run package:windows -w apps/desktop` on Windows | The DMG or installer in `apps/desktop/release/` carries the product icon; the packaged app boots to the Captain home and seeds the Academy example. Both native builds are required by the tag workflow ([DR-170](../specs/decisions/170-native-desktop-tag-packages.md)). |
+| Local package preview: `npm run package:mac -w apps/desktop` on macOS, or `npm run package:windows -w apps/desktop` on Windows | The DMG or installer in `apps/desktop/release/` carries the product icon; the packaged app boots to the Captain home and seeds the Academy example. Both native builds are required by the tag workflow ([DR-184](../specs/decisions/184-native-desktop-tag-packages.md)). |
 | `Ctrl+C` in the terminal running `npm start` against a scratch home (`SPEX_HOME=$(mktemp -d) npm start`) | The app quits without a confirmation, the command returns 130 after the Node restore, and the scratch home holds no `.lease/`, only `.lease.retired/<token>/` ([DR-108](../specs/decisions/108-the-root-lease-names-the-machine.md)). A failure blocks the tag. |
 
 ## 5. Beta app releases

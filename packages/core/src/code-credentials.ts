@@ -21,7 +21,7 @@ import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { closed, isObject, knownFormat, need, StorageFormatError, writeApplicationBytes } from "@sublang/spex/files";
 import { i18n } from "./i18n.js";
 import { adapterNameSchema, type AdapterName, type CredentialList } from "./protocol.js";
-import { AGENT_CREDENTIAL_FORMS } from "./seat-credentials.js";
+import { AGENT_CREDENTIAL_FORMS, codexAuthContent } from "./seat-credentials.js";
 
 /** The path of the member's credentials file under a home. */
 export function codeCredentialsPath(homeDir: string): string {
@@ -68,6 +68,9 @@ function wellFormedAgent(key: string, entry: unknown): entry is AgentCredential 
   if (!isAdapterName(key) || !isObject(entry)) return false;
   const names = Object.keys(entry);
   const forms = AGENT_CREDENTIAL_FORMS[key].names;
+  if (key === "codex" && entry.CODEX_AUTH_CONTENT !== undefined) {
+    try { codexAuthContent(entry.CODEX_AUTH_CONTENT as string); } catch { return false; }
+  }
   return names.length > 0 && names.every((name) => forms.includes(name) && isValue(entry[name]));
 }
 

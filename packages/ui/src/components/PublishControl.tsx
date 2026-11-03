@@ -229,7 +229,7 @@ function PublishAttempt({
   }
 
   async function confirm(): Promise<void> {
-    if (!preview) return;
+    if (!preview?.orgVerified) return;
     setPending("publish");
     setError(undefined);
     try {
@@ -282,6 +282,15 @@ function PublishAttempt({
               })}
             </span>
           ) : null}
+          {!preview.orgVerified ? (
+            <span data-testid="publish-org-unchecked" role="status" className="text-amber-700 dark:text-amber-300">
+              {i18n._({
+                id: "Org not checked — sign in to {registry} to check publishing rights",
+                comment: "An unsigned publish preview checks local files but cannot verify the package's org",
+                values: { registry: destination.name || target.name },
+              })}
+            </span>
+          ) : null}
           <span className="flex flex-wrap justify-end gap-2">
             <button
               type="button"
@@ -297,7 +306,7 @@ function PublishAttempt({
             <button
               type="button"
               data-testid="publish-confirm"
-              disabled={pending !== undefined}
+              disabled={pending !== undefined || !preview.orgVerified}
               onClick={() => void confirm()}
               className="min-h-6 rounded bg-brand-600 px-2 py-0.5 font-medium text-white hover:bg-brand-500 disabled:opacity-40"
             >

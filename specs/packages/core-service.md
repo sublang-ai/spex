@@ -71,7 +71,7 @@ On every load and reload:
 
 Where no config file exists at the shared config path, when the core service starts, the core service shall write the installed playbook package's own seed for the core's environment and home to that path, adopt it as the active config, and report the seeding to connected clients ([DR-037](../decisions/037-playbook-12-adoption.md); [DR-154](../decisions/154-the-seed-follows-playbooks-rule.md); [DR-207](../decisions/207-playbook-18-1-2-cligent-0-37-0-slc-0-20-1-adoption.md)):
 
-- The text is what `@sublang/playbook/seed-config` returns for that environment and home, with every `playbooks.<id>.from` removed; the core chooses no adapter, model, effort or writable path itself, except that where Claude's base URL — read as [[core-service-9](#core-service-9)] reads it — — on a seat, the environment alone — is `third-party`, each Claude agent's `model` naming an official model [[settings-61](settings.md#settings-61)] is removed, its comments kept ([DR-204](../decisions/204-agent-cards-read-alike.md)).
+- The text is what `@sublang/playbook/seed-config` returns for that environment and home, with the seed-only presence projection for a materialized Codex snapshot [[core-service-150](#core-service-150)] and every `playbooks.<id>.from` removed; the core chooses no adapter, model, effort or writable path itself, except that where Claude's base URL — read as [[core-service-9](#core-service-9)] reads it — — on a seat, the environment alone — is `third-party`, each Claude agent's `model` naming an official model [[settings-61](settings.md#settings-61)] is removed, its comments kept ([DR-204](../decisions/204-agent-cards-read-alike.md)).
 - That seed reads confirmed credentials alone — an agent's API key or token form in the environment or, for `claude`, in Claude Code's user settings, or a sign-in the agent's own status command confirms where its configuration folder stands, never that folder alone, since the runtime creates it on its first start; on a seat, the credential forms of the environment its credentials were read into first [[core-service-126](#core-service-126)], with no user settings and no sign-in of the server account the core runs as, which are no member's — so the Captain's and each player's `adapter`, `model`, `effort` and `writablePaths` equal the `playbook` CLI's seed under the same confirmed credentials, while the two files may differ ([DR-204](../decisions/204-agent-cards-read-alike.md)):
 
 | Credentials | Seeded agents |
@@ -717,7 +717,17 @@ Where the core runs as a seat with a shared credential file [[core-service-125](
 - for an agent the member set a credential of their own for [[settings-48](settings.md#settings-48)], the file's names for that agent are left out of the run's environment and the member's own put in, so the member's own wins whatever the agent's precedence;
 - an unreadable file leaves the environment as it was and is reported through readiness [[settings-49](settings.md#settings-49)], blocking nothing else;
 - a stop, and a start that fails before the service stands, put every form name back as the process started with it;
-- no value of the file is written anywhere or logged.
+- no value of the file is logged or written elsewhere except the access-only Codex credential materialized for its seat [[core-service-150](#core-service-150)].
+
+#### core-service-150
+
+Where a seat selects a valid access-only Codex snapshot [[settings-56](settings.md#settings-56)], when the shared environment is prepared [[core-service-126](#core-service-126)], the core service shall atomically materialize only its external-token credential as owner-only `auth.json` in a private persistent Codex home under the seat's local storage [[storage-53](storage.md#storage-53)] and select it through `CODEX_HOME` ([DR-201](../decisions/201-shared-codex-subscription-access.md)):
+
+- each seat has a separate directory, with neither a symlink nor a shared writable credential or refresh token;
+- starter selection counts a successfully materialized snapshot as a Codex sign-in by a seed-only presence projection, containing no usable token and entering no agent run;
+- the native status command uses that home, as do the adapter's runs;
+- switching away from the snapshot removes its generated `auth.json`, keeps other native state and restores the process's prior `CODEX_HOME`;
+- stopping restores the process's prior `CODEX_HOME`, preserving the seat's private state.
 
 ### Places
 
@@ -1442,6 +1452,10 @@ Where a stand-in instance answers the servers routes and a stand-in hub admits a
 #### core-service-141
 
 When a protocol integration client connects to the real core, the suite shall assert the hello names the current protocol version and no client before any other message [[core-service-1](#core-service-1)].
+
+### core-service-151
+
+Where a real seat core uses a Codex access-only snapshot, the integration suite shall replace that snapshot between agent runs, set and remove a member's own credential, remove the shared snapshot and stop the core, asserting that each next run and native status select the current private credential, a run already started retains its loaded access, a member's own form displaces all shared forms, removal clears the generated credential while keeping native history, and the earlier `CODEX_HOME` is restored on removal and stop [[core-service-126](#core-service-126)] [[core-service-150](#core-service-150)].
 
 ## References
 

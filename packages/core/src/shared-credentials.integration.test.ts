@@ -16,7 +16,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { parse as parseYaml } from "yaml";
@@ -574,7 +574,7 @@ test("settings-50, storage-44: credential.set, credential.list and credential.re
     [{ kind: "host", name: "git.example.com", values: { token: "line\nbreak" } }, /^A code host's token and username are each one line of text$/],
     [{ kind: "agent", name: "", values: { ANTHROPIC_API_KEY: "k" } }, /^A credential needs a name$/],
     [{ kind: "agent", name: "copilot", values: { ANTHROPIC_API_KEY: "k" } }, /^That is not an agent: name one of claude, codex, gemini, kimi, opencode$/],
-    [{ kind: "agent", name: "codex", values: { ANTHROPIC_API_KEY: "tok-wrong-secret" } }, /^codex takes only CODEX_ACCESS_TOKEN, CODEX_API_KEY, OPENAI_API_KEY$/],
+    [{ kind: "agent", name: "codex", values: { ANTHROPIC_API_KEY: "tok-wrong-secret" } }, /^codex takes only CODEX_ACCESS_TOKEN, CODEX_AUTH_CONTENT, CODEX_API_KEY, OPENAI_API_KEY$/],
     [{ kind: "agent", name: "codex", values: { CODEX_ACCESS_TOKEN: "  " } }, /^A credential's value cannot be blank$/],
     [{ kind: "agent", name: "codex", values: {} }, /^A credential's value cannot be blank$/],
   ];
@@ -665,4 +665,114 @@ test("settings-48: off a seat the credential commands are refused, and readiness
   await home.client.expectError("credential.remove", { kind: "agent", name: "claude" }, "invalid_request", OFF_SEAT);
   assert.equal(existsSync(codeCredentialsPath(home.dataDir)), false);
   for (const entry of await home.client.expectOk("readiness.get", {})) assert.equal(entry.credential, undefined);
+});
+
+
+const snapshot = (access = "snapshot-access"): string => JSON.stringify({
+  auth_mode: "chatgptAuthTokens", last_refresh: "2026-11-02T00:00:00Z",
+  tokens: { id_token: "snapshot-id", access_token: access, account_id: "account-1" },
+  ignored: "not-native-state",
+});
+
+test("settings-56, core-service-150, storage-53: a private native snapshot follows replacements and own credentials, restoring the original home", async (t) => {
+  const baseline = process.env.CODEX_HOME;
+  process.env.CODEX_HOME = join(scratch, "original-codex");
+  t.after(() => { if (baseline === undefined) delete process.env.CODEX_HOME; else process.env.CODEX_HOME = baseline; });
+  const shared = join(scratch, "snapshot-shared.env");
+  writeShared(shared, `CODEX_AUTH_CONTENT=${snapshot()}\n`);
+  const statusHomes: string[] = [];
+  const { imports, stats } = recordingAdapter();
+  const { home, projects: [project] } = await startSeat("snapshot-seat", { shared, projects: 1, config: TWO_AGENTS, imports,
+    runCommand: async (command, args, cwd, env) => {
+      if (args.join(" ") === "login status" && env?.CODEX_HOME) statusHomes.push(env.CODEX_HOME);
+      return validStatus(command, args, cwd, env);
+    } });
+  t.after(() => home.stop());
+  assert.ok(project);
+  const native = join(home.dataDir, "local", "codex");
+  const auth = join(native, "auth.json");
+  const nativeAuth = (): Record<string, any> => JSON.parse(readFileSync(auth, "utf8"));
+  assert.equal(process.env.CODEX_HOME, native);
+  assert.equal(nativeAuth().tokens.refresh_token, "");
+  assert.equal(nativeAuth().ignored, undefined);
+  assert.equal(statSync(native).mode & 0o777, 0o700);
+  assert.equal(statSync(auth).mode & 0o777, 0o600);
+  writeFileSync(join(native, "history.jsonl"), "private-native-history");
+  await home.client.expectOk("readiness.get", {});
+  assert.equal(statusHomes.at(-1), native, "native status receives the selected home");
+  await runTurn(home, project, "snapshot first");
+  assert.ok(stats.runs.some(run => run.env.CODEX_HOME === native));
+  writeShared(shared, `CODEX_AUTH_CONTENT=${snapshot("replacement-access")}\n`);
+  await runTurn(home, project, "snapshot replaced");
+  assert.equal(nativeAuth().tokens.access_token, "replacement-access");
+  assert.equal(readFileSync(join(native, "history.jsonl"), "utf8"), "private-native-history");
+  await home.client.expectOk("credential.set", { kind: "agent", name: "codex", values: { OPENAI_API_KEY: "own-api-key" } });
+  assert.equal(process.env.CODEX_HOME, join(scratch, "original-codex"));
+  assert.equal(existsSync(auth), false);
+  assert.equal(process.env.CODEX_AUTH_CONTENT, undefined);
+  await home.client.expectOk("credential.set", { kind: "agent", name: "codex", values: { CODEX_AUTH_CONTENT: snapshot("own-access") } });
+  assert.equal(nativeAuth().tokens.access_token, "own-access");
+  await home.client.expectOk("credential.remove", { kind: "agent", name: "codex" });
+  assert.equal(nativeAuth().tokens.access_token, "replacement-access");
+  writeShared(shared, "");
+  await home.client.expectOk("readiness.get", {});
+  assert.equal(existsSync(auth), false);
+  assert.equal(process.env.CODEX_HOME, join(scratch, "original-codex"));
+  writeShared(shared, `CODEX_AUTH_CONTENT=${snapshot()}\n`);
+  await home.client.expectOk("readiness.get", {});
+  await home.stop();
+  assert.equal(process.env.CODEX_HOME, join(scratch, "original-codex"));
+  assert.equal(readFileSync(join(native, "history.jsonl"), "utf8"), "private-native-history");
+});
+
+test("settings-56, storage-53: malformed snapshots are secret-free, block only Codex and never follow a native-home or auth symlink", async (t) => {
+  const shared = join(scratch, "snapshot-invalid.env");
+  writeShared(shared, "CODEX_AUTH_CONTENT=private-invalid-secret\nCLAUDE_CODE_OAUTH_TOKEN=claude-good\n");
+  const { imports, stats } = recordingAdapter();
+  const { home, projects: [project] } = await startSeat("snapshot-invalid", { shared, projects: 1, config: TWO_AGENTS, imports });
+  t.after(() => home.stop());
+  assert.ok(project);
+  const read = async () => Object.fromEntries((await home.client.expectOk("readiness.get", {})).map(entry => [entry.adapter, entry]));
+  const entries = await read();
+  assert.equal(entries.codex?.credential?.class, "unreadable");
+  assert.equal(entries.claude?.credential?.class, "shared");
+  await runTurn(home, project, "blocked invalid snapshot");
+  assert.equal(stats.runs.filter(run => run.agent === "codex").length, 0, `Codex stops before spawn: ${stats.runs.map(run => run.agent).join(", ")}`);
+  const invalids = ["private-invalid-secret", JSON.stringify({ ...JSON.parse(snapshot()), tokens: { ...JSON.parse(snapshot()).tokens, refresh_token: "private-refresh-secret" } }),
+    JSON.stringify({ ...JSON.parse(snapshot()), last_refresh: " " })];
+  for (const content of invalids) {
+    const message = await home.client.expectError("credential.set", { kind: "agent", name: "codex", values: { CODEX_AUTH_CONTENT: content } }, "invalid_request", /Codex subscription credentials are invalid/);
+    assert.equal(message.includes("private-"), false);
+  }
+  await home.client.expectError("credential.set", { kind: "agent", name: "codex", values: { CODEX_HOME: "private-path-secret" } }, "invalid_request");
+  assert.equal(existsSync(codeCredentialsPath(home.dataDir)), false, "invalid input never persists");
+  const native = join(home.dataDir, "local", "codex");
+  mkdirSync(join(home.dataDir, "local"), { recursive: true });
+  const outside = mkdtempSync(join(scratch, "snapshot-outside-"));
+  symlinkSync(outside, native, "dir");
+  writeShared(shared, `CODEX_AUTH_CONTENT=${snapshot()}\nCLAUDE_CODE_OAUTH_TOKEN=claude-good\n`);
+  assert.equal((await read()).codex?.credential?.class, "unreadable");
+  assert.equal(existsSync(join(outside, "auth.json")), false);
+  rmSync(native);
+  mkdirSync(native);
+  writeFileSync(join(outside, "auth.json"), "outside-untouched");
+  symlinkSync(join(outside, "auth.json"), join(native, "auth.json"));
+  assert.equal((await read()).codex?.credential?.class, "unreadable");
+  assert.equal(readFileSync(join(outside, "auth.json"), "utf8"), "outside-untouched");
+  rmSync(join(native, "auth.json"));
+  await home.client.expectOk("config.edit", { op: { kind: "captain.set", patch: { adapter: "claude", model: "claude-test" } } });
+  await runTurn(home, project, "Claude remains usable");
+  assert.ok(stats.runs.some(run => run.prompt.includes("Claude remains usable")));
+});
+
+
+test("core-service-150: the seed recognizes a materialized snapshot without projecting a token into runtime environment", async (t) => {
+  const shared = join(scratch, "snapshot-seed.env");
+  writeShared(shared, `CODEX_AUTH_CONTENT=${snapshot()}\nCLAUDE_CODE_OAUTH_TOKEN=claude-seed\n`);
+  const { home } = await startSeat("snapshot-seed", { shared, starter: true });
+  t.after(() => home.stop());
+  const config = parseYaml(readFileSync(home.configPath, "utf8")) as { captain: { adapter: string }; players: Record<string, { adapter: string }> };
+  assert.equal(config.captain.adapter, "claude");
+  assert.equal(config.players["dev.reviewer"]?.adapter, "codex");
+  assert.equal(process.env.CODEX_ACCESS_TOKEN, undefined, "presence marker never reaches native runs");
 });

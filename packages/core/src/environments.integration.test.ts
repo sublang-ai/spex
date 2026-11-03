@@ -686,6 +686,7 @@ test("environments-24: a playbook authored in a project compiles, is requested b
   // An authoring session writes its spec package in the working folder,
   // under the org New playbook gave — a registry org, not the login.
   const ORG = "workshop";
+  registry.script.setOrgs("tester-token", [{ name: ORG, path: ORG, role: "Owner" }]);
   const created = await core.client.expectOk("draft.create", { projectId: project.id, draftId: "triage", org: ORG, license: "Apache-2.0" });
   assert.equal(created.package, `${ORG}/triage`);
   // At spex-packages/<org>/<id>/ (environments-10).
@@ -768,7 +769,7 @@ test("environments-24: a playbook authored in a project compiles, is requested b
   const declared = (await readRelease(folder)).files;
   assert.equal(preview.preview?.instance.origin, registry.url);
   assert.ok(preview.preview?.instance.name);
-  assert.deepEqual(preview.preview, { instance: preview.preview?.instance, name: `${ORG}/triage`, version: "0.1.0", files: declared.map((file) => file.path).sort() });
+  assert.deepEqual(preview.preview, { instance: preview.preview?.instance, name: `${ORG}/triage`, version: "0.1.0", orgVerified: true, files: declared.map((file) => file.path).sort() });
   assert.ok(!preview.preview?.files.some((path) => path.includes("node_modules")), "engine links never upload");
   assert.deepEqual(preview.preview?.files.filter(ownedByCompiler), [], "the compiler's own files never upload");
   for (const path of retained) assert.ok(preview.preview?.files.includes(`playbooks/en/triage/${path}`), `${path} uploads`);
@@ -1177,7 +1178,7 @@ test("environments-33 through real cores: a skill your own group requests by a p
   // Publishing by its name reads the same folder, its request's path
   // (environments-10).
   const preview = await a.client.expectOk("environment.publish", { repository: ownKey, name: `${OWN}/notes`, dryRun: true });
-  assert.deepEqual(preview.preview, { instance: { origin: "https://spex.sublang.ai", name: "spex.sublang.ai" }, name: `${OWN}/notes`, version: "0.1.0", files: ["meta.yaml", "skills/en/notes/SKILL.md"] });
+  assert.deepEqual(preview.preview, { instance: { origin: "https://spex.sublang.ai", name: "spex.sublang.ai" }, name: `${OWN}/notes`, version: "0.1.0", orgVerified: false, files: ["meta.yaml", "skills/en/notes/SKILL.md"] });
 
   // A file added later that the sync would drop fails the next install
   // before anything is installed: the state names it, and the exports
@@ -3008,4 +3009,60 @@ test("environments-36: shutdown closes write and upload admission after awaited 
   await rejected;
   assert.deepEqual(readFileSync(requestsPath), before);
   assert.equal(registry.script.requests.filter((entry) => entry.startsWith("PUT ")).length, 0);
+});
+
+
+test("publishing checks current org rights before previews and uploads", async (t) => {
+  const registry = await startStandinRegistry({ dir: scratchDir("spex-publish-orgs-registry-") });
+  t.after(() => registry.close());
+  const dir = scratchDir("spex-publish-orgs-core-");
+  signedInHome(join(dir, "state"), registry.url, "fixture-publisher");
+  let orgsAnswer: { status: number; body: unknown } | undefined;
+  const registryFetch: typeof fetch = (input, init) => {
+    const path = new URL(input instanceof Request ? input.url : String(input)).pathname;
+    if (orgsAnswer && path === "/api/v1/account/orgs") return Promise.resolve(Response.json(orgsAnswer.body, { status: orgsAnswer.status }));
+    return fetch(input, init);
+  };
+  const core = await startCore(dir, { hostUrl: registry.url, extra: { registryFetch } });
+  t.after(() => core.stop());
+  const working = gitFolder(join(dir, "project"));
+  const { id: key } = await core.client.expectOk("project.register", { path: working });
+  const release = skillRelease("acme", "checked");
+  await makeRelease(join(working, "spex-packages", "acme", "checked"), release.manifest, release.files);
+  const uploads = () => registry.script.requests.filter((request) => request.startsWith("PUT "));
+
+  registry.script.setOrgs("fixture-publisher", [{ name: "acme", path: "acme", role: "Owner" }]);
+  const preview = await core.client.expectOk("environment.publish", { repository: key, name: "acme/checked", dryRun: true });
+  assert.equal(preview.preview?.orgVerified, true);
+  assert.ok(registry.script.requests.includes("GET /api/v1/account/orgs"));
+  assert.deepEqual(uploads(), []);
+
+  // A successful preview does not cache authority for a later upload.
+  for (const orgs of [[], [{ name: "other", path: "acme", role: "Owner" }]]) {
+    registry.script.setOrgs("fixture-publisher", orgs);
+    for (const dryRun of [true, false]) {
+      const refusal = await core.client.expectError("environment.publish", { repository: key, name: "acme/checked", dryRun, wait: true }, "invalid_request", /^acme is not yours to publish to at .+ — claim it at .+\/account\/orgs\?scope=registry, or publish under one of your orgs$/);
+      assert.ok(refusal.includes(`${registry.url}/account/orgs?scope=registry`));
+      assert.deepEqual(uploads(), []);
+    }
+  }
+  for (const answer of [
+    { status: 200, body: { orgs: [{ name: "acme" }] } },
+    { status: 201, body: { orgs: [{ name: "acme", path: "acme", role: "Owner" }] } },
+  ]) {
+    orgsAnswer = answer;
+    for (const dryRun of [true, false]) {
+      await core.client.expectError("environment.publish", { repository: key, name: "acme/checked", dryRun, wait: true }, "invalid_request", /^Your orgs at .+ could not be read — check the connection, then Retry$/);
+      assert.deepEqual(uploads(), []);
+    }
+  }
+  orgsAnswer = undefined;
+  for (const dryRun of [true, false]) {
+    registry.script.unavailable(1);
+    await core.client.expectError("environment.publish", { repository: key, name: "acme/checked", dryRun, wait: true }, "invalid_request", /^Your orgs at .+ could not be read — check the connection, then Retry$/);
+    assert.deepEqual(uploads(), []);
+  }
+  registry.script.setOrgs("fixture-publisher", [{ name: "acme", path: "acme", role: "Owner" }]);
+  assert.ok((await core.client.expectOk("environment.publish", { repository: key, name: "acme/checked", wait: true })).published);
+  assert.equal(uploads().length, 1);
 });

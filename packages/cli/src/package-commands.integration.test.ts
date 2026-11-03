@@ -804,7 +804,9 @@ test("cli-15: export builds spex-packages/<org>/<pkg>/ by copying the project's 
   const before = snapshot(dir);
   const requests = readFileSync(join(dir, "spex.yaml"), "utf8");
   const lockBytes = readFileSync(join(dir, "spex.lock"), "utf8");
+  const requestsBeforeExport = [...registry.script.requests];
   const ran = await spex(dir, "export", "acme/hello", "--skill", ".claude/skills/greet", "--spec", "specs/packages/hello.md");
+  assert.deepEqual(registry.script.requests, requestsBeforeExport, "export explains unchecked rights without contacting the registry");
   assert.equal(ran.code, 0, `${ran.stdout}${ran.stderr}`);
   const folder = join(dir, "spex-packages", "acme", "hello");
   assert.deepEqual(readYaml(join(folder, "meta.yaml")), {
@@ -836,6 +838,7 @@ test("cli-15: export builds spex-packages/<org>/<pkg>/ by copying the project's 
   ].join("\n"), "[cli-23] a warning per citation removed or reduced, naming the item and the target");
   assert.doesNotMatch(ran.stderr, /release/, "[cli-13] no word of the library's own");
   assert.equal(ran.stdout, [
+    `Publishing rights for acme are not checked — use a name you can claim at ${registry.url}/account/orgs?scope=registry`,
     "Exported acme/hello 0.1.0 to spex-packages/acme/hello/",
     "  skill greet  from .claude/skills/greet/",
     "  spec hello   from specs/packages/hello.md",
@@ -1036,6 +1039,7 @@ test("cli-16: publish by name to the registry spex.yaml names, named by its own 
   }));
   assert.ok(fileCredentialStore(PUBLISHER, registry.url, "registry").replace(null, { access: TOKEN, accessExpiresAt: Date.now() + 86_400_000, refresh: `refresh-${TOKEN}` }));
   registry.script.setPrivate("acme", [TOKEN]);
+  registry.script.setOrgs(TOKEN, [{ name: "acme", path: "acme", role: "Owner" }]);
   registry.script.clearRequests();
   const uploads = (): string[] => registry.script.requests.filter((request) => request.startsWith("PUT "));
 
@@ -1051,6 +1055,31 @@ test("cli-16: publish by name to the registry spex.yaml names, named by its own 
     "",
   ].join("\n"), "[cli-9] the registry's own name, never the Space entry's at its origin, the package and its files");
   assert.deepEqual(uploads(), [], "[cli-9] a dry run publishes nothing");
+
+  assert.ok(registry.script.requests.includes("GET /api/v1/account/orgs"), "the signed-in dry run checks publishing rights");
+  const unsigned = await okAt(HOME, dir, "publish", "acme/hello", "--dry-run");
+  assert.match(unsigned, /Org not checked — sign in to .+ with spex login to check publishing rights/);
+  for (const orgs of [[], [{ name: "other", path: "acme", role: "Owner" }]]) {
+    registry.script.setOrgs(TOKEN, orgs);
+    for (const args of [["--dry-run"], []]) {
+      const refused = await spexAt(PUBLISHER, dir, "publish", "acme/hello", ...args);
+      assert.equal(refused.code, 1);
+      assert.equal(refused.stderr, `spex publish: acme is not yours at ${REGISTRY} — claim it at ${registry.url}/account/orgs?scope=registry\n`);
+      assert.deepEqual(uploads(), [], "an empty or nonmatching org list prevents any upload");
+    }
+  }
+  registry.script.setOrgs(TOKEN, [{ name: "acme", path: "acme", role: "Owner" }]);
+  registry.script.refuseTokens(TOKEN, "token_expired");
+  try {
+    for (const args of [["--dry-run"], []]) {
+      const refused = await spexAt(PUBLISHER, dir, "publish", "acme/hello", ...args);
+      assert.equal(refused.code, 1);
+      assert.equal(refused.stderr, `spex publish: sign-in expired at ${REGISTRY} — spex login\n`);
+      assert.deepEqual(uploads(), [], "an expired sign-in prevents any upload");
+    }
+  } finally {
+    registry.script.refuseTokens(null);
+  }
 
   const published = await okAt(PUBLISHER, dir, "publish", "acme/hello");
   assert.equal(published, `Publishing acme/hello@0.1.0 to ${REGISTRY}\nPublished: ${registry.url}/acme/hello\n`, "[cli-9] the package's page at the registry");
@@ -1188,9 +1217,10 @@ test("cli-18: each cause of the table names the registry by its name and ends in
   copyFileSync(join(HOME, "home.yaml"), join(signedIn, "home.yaml"));
   assert.ok(fileCredentialStore(signedIn, registry.url, "registry").replace(null, { access: other, accessExpiresAt: Date.now() + 86_400_000, refresh: `refresh-${other}` }));
   registry.script.setAccount(other, { id: "8", login: "sam" });
+  registry.script.setOrgs(other, []);
   await refusedWith(signedIn, dir, ["add", "secret/tool"], `secret/tool: not shared with @sam at ${REGISTRY} — ask its owner`, "a refused read (403)");
   await refusedWith(signedIn, dir, ["add", "demo/none"], `demo/none: not at ${REGISTRY}, or not shared with @sam — check the name, or ask its owner`, "a package the registry lists to no account signed in");
-  await refusedWith(signedIn, publishedFrom, ["publish", "acme/hello"], `acme is not yours at ${REGISTRY} — claim it at ${registry.url}/account/orgs`, "a refused publish (403)");
+  await refusedWith(signedIn, publishedFrom, ["publish", "acme/hello"], `acme is not yours at ${REGISTRY} — claim it at ${registry.url}/account/orgs?scope=registry`, "a refused publish (403)");
 
   // The same package asked by spex.yaml, its spex.lock written by an
   // install or an update: the registry's answer, never a conflict of

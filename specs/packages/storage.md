@@ -79,6 +79,7 @@ The home file shall encode `home.yaml` as exactly `{format: 2, device, origin, i
 
 The project file shall encode `<clone>/project.json` as exactly `{format: 1, name, remote}`: the project's name, and the code's remote URL as the working folder's `origin` reported it, or `null` where the folder has none, a credential embedded in the URL never written [[space-5](space.md#space-5)]:
 
+- a sync refreshes the remote from its safely paired working folder before saving [[space-12](space.md#space-12)];
 - the store reads the file as it stands when a command needs it, with no reload ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)).
 
 ### storage-4
@@ -370,7 +371,7 @@ Before reopening selected state, the validator shall validate the complete selec
 - file formats and closed encodings are valid [[storage-2](#storage-2)] [[storage-3](#storage-3)] [[storage-4](#storage-4)] [[storage-5](#storage-5)] [[storage-23](#storage-23)] [[storage-36](#storage-36)] [[storage-43](#storage-43)] [[storage-50](#storage-50)] [[1]];
 - open artifact-source identities are unique within a spex repository [[core-service-42](core-service.md#core-service-42)], and dispatch targets still present belong to the same spex repository with valid turn boundaries;
 - deleted session targets retain the existing ledger re-derivation behavior [[core-service-70](core-service.md#core-service-70)]; a missing session alone is not permission to discard a verdict or repeat work;
-- a clone no folder pairs, and a folder whose clone is missing, are reported with their records unlisted, without blocking unrelated valid spex repositories or automatically pairing anything;
+- a clone no folder pairs, and a folder whose clone is missing, are reported without blocking unrelated valid spex repositories or automatically pairing anything; a present unpaired clone's saved sessions remain listed as history-only [[core-service-60](core-service.md#core-service-60)] and readable [[core-service-10](core-service.md#core-service-10)], while a missing clone's records remain unlisted ([DR-195](../decisions/195-read-saved-conversations-before-locating-files.md));
 - incompatible modules or unsupported checkpoint relocation permit history only;
 - invalid session data blocks that session's execution and recovery, preserving lease-checked deletion; an invalid intent file blocks that intent alone, and an invalid placement file names no placement, blocking nothing else [[storage-41](#storage-41)];
 - invalid shared files block operations that require them; diagnostics name the failing file and reason, while startup, unrelated valid spex repositories and independent configuration or preference edits remain available;
@@ -413,6 +414,10 @@ When a session read completes after its clone's location has changed [[storage-3
 
 The registry account metadata store shall keep only each registry's canonical origin, display name and public account identity in owner-only `local/registry-accounts.json`, with registry credentials exclusively in their purpose-scoped slots [[storage-19](#storage-19)], never creating or modifying a Space entry in `home.yaml` ([DR-168](../decisions/168-independent-package-registry.md)).
 
+### storage-53
+
+Where a seat materializes a Codex access-only credential [[core-service-150](core-service.md#core-service-150)], the storage layout shall reserve `local/codex/` as that seat's private persistent native Codex home, whose directory has owner-only access and whose generated `auth.json` has owner-only read and write access, with no refresh token and with no link followed when writing it ([DR-201](../decisions/201-shared-codex-subscription-access.md)).
+
 ## Verification
 
 ### storage-52
@@ -431,7 +436,7 @@ When an integration suite migrates a former-layout home of two projects and one 
 - default and explicitly selected locations, and that nothing outside `workspace/` is a Git work tree afterwards [[storage-1](#storage-1)];
 - `home.yaml` in format 2 carrying the origin it was created with as its default instance, no instance listed, this device's user name as `own` and both folders with their aliases [[storage-2](#storage-2)] [[storage-9](#storage-9)];
 - each project's clone on a `spex` branch with one commit, its `project.json` naming the folder's remote, one file per open or worked intent with ranks and links dropped, its asset directory beside them, its sessions inside, and its working folder's root holding `spex.yaml` naming `space` and its `registry` and requesting nothing [[storage-3](#storage-3)] [[storage-4](#storage-4)] [[storage-9](#storage-9)];
-- your own group's clone holding the configuration with every `from` dropped and the unmatched session, the receipt naming the dropped entries [[storage-9](#storage-9)];
+- your own group's clone holding the configuration with every `from` dropped and the unmatched session, the receipt naming the dropped entries [[storage-9](#storage-9)], with the unmatched session listed and readable as history-only before pairing [[storage-12](#storage-12)];
 - preferences moved with their viewed markers and session tuning, the former home's `.git` kept aside, the retired library folder in place [[storage-5](#storage-5)] [[storage-9](#storage-9)];
 - a working folder added afterwards paired with a local spex repository, the folder's own `spex.yaml` naming its `space` and its `registry` and requesting nothing, the clone holding none, one added holding a committed environment installed from it with nothing written, and sessions listed by the clone that holds them [[storage-6](#storage-6)];
 - a project's configuration composed on top of your own group's [[storage-7](#storage-7)];
@@ -506,7 +511,7 @@ When an integration suite merges two real Git branches of a group's own spex rep
 
 - command results and refusals through the documented entry point with `--repository` [[storage-10](#storage-10)];
 - an unchanged index after planning and refused selection, followed by staged complete choices [[storage-20](#storage-20)] [[storage-21](#storage-21)];
-- stopped writers and reopening after a real Git checkout with umask `022`, and the pair restored through the rebind command [[storage-22](#storage-22)];
+- stopped writers and reopening after a real Git checkout with umask `022`, saved session identities and their repository retained for history-only reading while unpaired [[storage-12](#storage-12)], and the pair restored through the rebind command without changing those identities [[storage-22](#storage-22)];
 - every whole-unit choice, including clean text merges and deletion; an intent added on each side present on both afterwards with no choice asked; the environment unit and the empty-ancestor join [[storage-11](#storage-11)] [[storage-20](#storage-20)]; a spec package folder whose two sides changed different files, nested folders and a file added on one side included, one choice taken whole, a file beside it its own unit, a folder one side made a spec package folder by adding its `meta.yaml` while the other edited a file under it one unit in conflict, and a `meta.yaml` Git was forced to track under `packages/` forming no unit, each file there its own [[storage-11](#storage-11)], and, through the apply seam, a file added under a spec package folder since the plan refusing its replacement with that file kept [[storage-11](#storage-11)] [[storage-14](#storage-14)];
 - reports of unpaired clones and folders, and rejection of duplicate sources, invalid dispatches and damaged bundles [[storage-12](#storage-12)]; a config naming a playbook the environment lacks is reported as a nonblocking diagnostic whether the core speaks English or Chinese [[storage-12](#storage-12)];
 - through the real validator over a Git clone, linked parents or leaves, non-directory parents and special-file leaves in the project, intent, authoring and configuration paths refuse before their external contents are parsed, with original bytes, modes and index unchanged; replacing an intent parent while the validator awaits its first import also refuses, while absent optional paths and ordinary malformed-file diagnostics retain their behavior [[storage-12](#storage-12)];
@@ -566,6 +571,10 @@ When the root-lease integration suite runs the core's store and the storage Git 
 ### storage-46
 
 Where a home opens, closes and reopens seats against a stand-in instance and a stand-in hub, the test suite shall assert the seats file [[storage-45](#storage-45)]: written at an open with owner-only permissions under a `local/` of the same, read back at the next start with every entry, removed at the close of its last entry, a file of another format refused at an open and a close and left byte for byte as it was, and the bearer in no reply, event or log.
+
+### storage-54
+
+Where two seat homes materialize subscription access, the integration suite shall assert that their native Codex directories and credential files are distinct and owner-only, hold no refresh token, and are replaced atomically, and that a symlink at the directory or credential path is refused without touching its target [[storage-53](#storage-53)].
 
 ## References
 

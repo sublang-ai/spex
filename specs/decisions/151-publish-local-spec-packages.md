@@ -12,6 +12,8 @@ Amended by [DR-165](165-one-package-manager-hosted-by-the-cli-and-the-app.md) in
 Amended by [DR-168](168-independent-package-registry.md) for independent registry selection, account authority and credentials; Space collaboration and server admission remain unchanged.
 Amended by [DR-172](172-surfaces-a-fresh-user-reads.md) in where Publish stands.
 
+Amended by [DR-200](200-publishing-names-need-registry-authority.md) in checked publication previews and the unchecked signed-out case.
+
 ## Context
 
 A spec package may contain only a spec or an ordinary skill.

@@ -281,9 +281,15 @@ test("storage-15: a former home of two projects and one unmatched session migrat
     await client.open();
     const projects = await client.ok("project.list", {});
     assert.deepEqual(projects.map((p) => [p.id, p.path, p.name]), [[keyA, folderA, "alpha"], [keyB, folderB, "beta"]]);
-    // Sessions list by the clone that holds them (storage-6).
+    // Sessions list by their clone, including unmatched saved history
+    // before its working folder is paired (storage-6, storage-12).
     const listed = await client.ok("session.list", {});
-    assert.deepEqual(listed.map((s) => [s.id, s.projectId]).sort(), [[sA, keyA], [sB, keyB]].sort());
+    assert.deepEqual(listed.map((s) => [s.id, s.projectId]).sort(), [[sA, keyA], [sB, keyB], [sU, `${own}/${own}-spex`]].sort());
+    assert.equal(listed.find((session) => session.id === sU)?.continuable, undefined);
+    assert.deepEqual((await client.ok("history.get", { sessionId: sU })).records.map(({ record }) => record), [
+      { type: "turn_started", turnId: 1, turn: { id: 1, prompt: "Loose work" }, timestamp: t + 4 },
+      { type: "turn_finished", turnId: 1, timestamp: t + 5 },
+    ]);
     const ledger = await client.ok("ledger.get", {});
     assert.deepEqual(ledger.intents.map((entry) => [entry.intent.id, entry.intent.projectId, !!entry.next]),
       [[open, keyA, true], [linked, keyA, false], [other, keyB, true]]);

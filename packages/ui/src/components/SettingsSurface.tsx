@@ -423,7 +423,7 @@ function PlayerToSetUpRow({
  * table's order: the names are the agents' own environment names. */
 const AGENT_CREDENTIAL_FORMS: readonly { agent: AdapterName; names: readonly string[] }[] = [
   { agent: "claude", names: ["CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"] },
-  { agent: "codex", names: ["CODEX_ACCESS_TOKEN", "CODEX_API_KEY", "OPENAI_API_KEY"] },
+  { agent: "codex", names: ["CODEX_ACCESS_TOKEN", "CODEX_AUTH_CONTENT", "CODEX_API_KEY", "OPENAI_API_KEY"] },
   { agent: "opencode", names: ["OPENCODE_AUTH_CONTENT"] },
   { agent: "gemini", names: ["GEMINI_API_KEY", "GOOGLE_APPLICATION_CREDENTIALS", "GOOGLE_API_KEY"] },
   { agent: "kimi", names: ["KIMI_MODEL_API_KEY", "KIMI_MODEL_NAME", "KIMI_MODEL_BASE_URL", "KIMI_MODEL_PROVIDER_TYPE"] },
