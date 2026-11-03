@@ -52,6 +52,8 @@ interface Choice {
   /** The row's second line: the runtime's description, or the model
    * it runs by default — its words, never ours. */
   detail?: string;
+  /** A mark beside the row's name: Provider default as recommended. */
+  mark?: string;
 }
 
 /** A text read on each render, never at module load, so the words
@@ -80,6 +82,23 @@ function LineView({ line, id }: { line: Line; id?: string }) {
   );
 }
 
+/** The runtime's rows, one per model they run (settings-39): the row
+ * naming the model itself, else the last its group lists, the runtime
+ * listing its own default alias first; the held value's row stands for
+ * its group. Where Provider default is recommended, it stands for the
+ * model it runs, so that group lists no row of its own. */
+function distinctRows(models: readonly AgentModelOption[], value: string, absorbed: string | undefined): AgentModelOption[] {
+  const runs = (entry: AgentModelOption) => entry.resolvedModel ?? entry.id;
+  const kept = new Map<string, AgentModelOption>();
+  for (const entry of models) {
+    const current = kept.get(runs(entry));
+    if (!current || (current.id !== value && (entry.id === value || current.id !== runs(entry)))) kept.set(runs(entry), entry);
+  }
+  const taken = absorbed === undefined ? undefined : models.find((entry) => entry.id === absorbed) ?? models.find((entry) => runs(entry) === absorbed);
+  return models.filter((entry) => kept.get(runs(entry)) === entry
+    && !(taken !== undefined && runs(entry) === runs(taken) && entry.id !== value));
+}
+
 export function ModelField({
   value,
   models,
@@ -90,6 +109,7 @@ export function ModelField({
   allowDefault = true,
   subagent,
   off,
+  recommended = false,
 }: {
   value: string;
   models: readonly AgentModelOption[];
@@ -110,6 +130,9 @@ export function ModelField({
   /** A subagent model's configured `false`, offered as "Off" only while
    * it stands (settings-34); `selected` while the field holds it. */
   off?: { selected: boolean; onSelect(): void };
+  /** Behind a third-party service whose default model is read, the
+   * provider's default is the one to choose (settings-34, DR-204). */
+  recommended?: boolean;
 }) {
   const [custom, setCustom] = useState(false);
   const [open, setOpen] = useState(false);
@@ -139,6 +162,7 @@ export function ModelField({
       key: "provider-default",
       value: "",
       line: { text: providerDefault.name },
+      ...(recommended ? { mark: i18n._({ id: "Recommended", comment: "model choice mark: Provider default is the one to choose here" }) } : {}),
       ...("specific" in providerDefault && providerDefault.specific !== undefined ? { detail: providerDefault.specific } : {}),
     });
   }
@@ -149,7 +173,7 @@ export function ModelField({
   if (value && selected && selected.id !== value) {
     choices.push({ key: `resolved:${value}`, value, line: { text: value } });
   }
-  for (const entry of models) {
+  for (const entry of distinctRows(models, value, recommended ? defaultModel : undefined)) {
     const display = modelDisplay(models, entry.id);
     choices.push({
       key: `model:${entry.id}`,
@@ -404,7 +428,12 @@ function ModelListbox({
                 {selected ? <Icon name="check" className="h-3.5 w-3.5" /> : null}
               </span>
               <span className="flex min-w-0 flex-1 flex-col">
-                <LineView line={choice.line} id={nameId} />
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <LineView line={choice.line} id={nameId} />
+                  {choice.mark !== undefined ? (
+                    <span data-testid={`${testId}-mark`} className="shrink-0 rounded bg-emerald-100 px-1 text-[11px] text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">{choice.mark}</span>
+                  ) : null}
+                </span>
                 {choice.detail !== undefined ? (
                   <span id={detailId} className={`block min-w-0 truncate text-xs ${mutedClass}`}>
                     {choice.detail}

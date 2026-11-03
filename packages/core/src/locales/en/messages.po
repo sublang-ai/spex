@@ -1440,6 +1440,7 @@ msgid "duplicate record id {id}: {first} and {second}"
 msgstr "duplicate record id {id}: {first} and {second}"
 
 #. Refusal: a config edit failed validation with no reason given
+#. Refusal: a config edit failed validation with no reason given
 #: src/service.ts
 msgid "edit rejected"
 msgstr "edit rejected"
@@ -1840,6 +1841,26 @@ msgstr "its name is not the folder of the Space it names"
 #: src/root-lease.ts
 msgid "its retired path {retired} is already occupied"
 msgstr "its retired path {retired} is already occupied"
+
+#. Why an agent's sign-in could not be confirmed
+#: src/local-credentials.ts
+msgid "its status command could not start"
+msgstr "its status command could not start"
+
+#. Why an agent's sign-in could not be confirmed
+#: src/local-credentials.ts
+msgid "its status command did not answer in time"
+msgstr "its status command did not answer in time"
+
+#. Why an agent's sign-in could not be confirmed
+#: src/local-credentials.ts
+msgid "its status command gave an answer Spex could not read"
+msgstr "its status command gave an answer Spex could not read"
+
+#. Why an agent's sign-in could not be confirmed
+#: src/local-credentials.ts
+msgid "its status command reported an error"
+msgstr "its status command reported an error"
 
 #. Spec notice; the two directory paths and the `spex scaffold --update` command stay as they are
 #: src/specs.ts

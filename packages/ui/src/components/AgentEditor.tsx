@@ -33,6 +33,7 @@ import {
 import { useBrowserTools } from "../lib/useBrowserTools.js";
 import { BrowserControl } from "./BrowserControl.js";
 import { Rich } from "./Rich.js";
+import { WORKSHOP, WORKSHOP_ADAPTERS } from "../lib/workshop.js";
 
 export const ADAPTERS = adapterNameSchema.options;
 
@@ -147,6 +148,12 @@ export function AgentEditor(props: AgentEditorProps) {
   );
 
   const discovery = useAgentOptions(adapter);
+  // With the Workshop switch on, Claude and Codex, and the adapter the
+  // block already names so it still reads and may be changed back
+  // (settings-58).
+  const offeredAdapters = WORKSHOP
+    ? ADAPTERS.filter((name) => (WORKSHOP_ADAPTERS as readonly string[]).includes(name) || name === knownAdapter(initial?.adapter))
+    : ADAPTERS;
   const tuning = modelTuning(discovery.options, model);
   const catalog = discovery.options?.discovery.status === "available" ? discovery.options.discovery : undefined;
   const models = catalog?.models ?? [];
@@ -248,7 +255,7 @@ export function AgentEditor(props: AgentEditorProps) {
       <div className="flex flex-col gap-0.5 text-sm">
         <span className="text-xs text-neutral-500">{i18n._({ id: "Adapter", comment: "which agent runtime an agent runs on" })}</span>
         <div role="radiogroup" aria-label={i18n._({ id: "Adapter", comment: "which agent runtime an agent runs on" })} className="flex flex-wrap gap-1">
-          {ADAPTERS.map((name) => {
+          {offeredAdapters.map((name) => {
             const entry = readinessByAdapter.get(name);
             return (
               <button
@@ -312,6 +319,7 @@ export function AgentEditor(props: AgentEditorProps) {
               value={model}
               models={models}
               {...(catalog?.defaultModel ? { defaultModel: catalog.defaultModel } : {})}
+              recommended={adapter === "claude" && readinessByAdapter.get("claude")?.baseUrl?.state === "third-party" && Boolean(catalog?.defaultModel)}
               onChange={setModel}
               labelId={modelLabelId}
               testId="agent-model"

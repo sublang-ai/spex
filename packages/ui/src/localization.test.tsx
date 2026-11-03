@@ -469,8 +469,7 @@ describe("localization-4: the Settings surface reads the resolved language", () 
         "agents-section",
         [
           "智能体", // Agents
-          "重新检查就绪状态", // Re-check readiness
-          "尚未使用任何适配器 — 为 Captain 或某个规程角色指定智能体后，其就绪状态会显示在这里。",
+          "重新检查", // Re-check
         ],
       ],
       [
@@ -529,7 +528,7 @@ describe("localization-4: the Settings surface reads the resolved language", () 
       "Language",
       "Keyboard shortcuts",
       "Add a player",
-      "Re-check readiness",
+      "Re-check",
     ]) {
       expect(whole).not.toContain(english);
     }
@@ -544,7 +543,7 @@ describe("localization-4: the Settings surface reads the resolved language", () 
     );
     for (const [testId, phrase] of [
       ["players-section", "Session players"],
-      ["agents-section", "Re-check readiness"],
+      ["agents-section", "Re-check"],
       ["notifications-section", "A turn finishes"],
       ["language-section", "System follows your device"],
       ["shortcuts-section", "Keyboard shortcuts"],

@@ -10,6 +10,8 @@ Amends [DR-019](019-inline-agent-configuration.md) in §"Spex writes only blocks
 Amends [DR-153](153-playbook-18-0-1-cligent-0-36-1-slc-0-19-1-adoption.md) in the Playbook floor and built-in release alone; its Cligent, slc and lock decisions stand.
 Amends [DR-037](037-playbook-12-adoption.md) in its seeding: the first-run config is no longer the installed template copied as written, and the two hosts' files are no longer identical by construction; only their agent settings are.
 Amended by [DR-156](156-an-untouched-seed-follows-the-credentials.md): a seeded file still at the bytes the core wrote is reseeded when the credentials change; the exclusive first create and the text stand.
+Amended by [DR-208](208-playbook-18-1-2-cligent-0-37-0-slc-0-20-1-adoption.md) in the Playbook floor and built-in release alone: Playbook `^18.1.2`, staging `sublang/playbooks` 18.1.2.
+Amended by [DR-205](205-agent-cards-read-alike.md): behind a third-party Claude service the seed's Claude agents take the provider's default in place of an official model name; the seed reads confirmed credentials, never an agent's home folder alone.
 
 Amended by [DR-201](201-shared-codex-subscription-access.md) only for a seed-only presence projection of a materialized access-only Codex snapshot; the launcher still chooses every agent setting.
 

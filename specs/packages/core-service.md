@@ -69,22 +69,22 @@ On every load and reload:
 
 #### core-service-3
 
-Where no config file exists at the shared config path, when the core service starts, the core service shall write the installed playbook package's own seed for the core's environment and home to that path, adopt it as the active config, and report the seeding to connected clients ([DR-037](../decisions/037-playbook-12-adoption.md); [DR-154](../decisions/154-the-seed-follows-playbooks-rule.md)):
+Where no config file exists at the shared config path, when the core service starts, the core service shall write the installed playbook package's own seed for the core's environment and home to that path, adopt it as the active config, and report the seeding to connected clients ([DR-037](../decisions/037-playbook-12-adoption.md); [DR-154](../decisions/154-the-seed-follows-playbooks-rule.md); [DR-208](../decisions/208-playbook-18-1-2-cligent-0-37-0-slc-0-20-1-adoption.md)):
 
-- The text is what `@sublang/playbook/seed-config` returns for that environment and home, with the seed-only presence projection for a materialized Codex snapshot [[core-service-150](#core-service-150)] and every `playbooks.<id>.from` removed; the core chooses no adapter, model, effort or writable path itself.
-- That seed reads credentials alone — an agent's API key or token form in the environment, or the `.claude` and `.codex` folders in the home; on a seat, the environment its credentials were read into first [[core-service-126](#core-service-126)] — so the Captain's and each player's `adapter`, `model`, `effort` and `writablePaths` equal the `playbook` CLI's seed under the same credentials and home, while the two files may differ:
+- The text is what `@sublang/playbook/seed-config` returns for that environment and home, with the seed-only presence projection for a materialized Codex snapshot [[core-service-150](#core-service-150)] and every `playbooks.<id>.from` removed; the core chooses no adapter, model, effort or writable path itself, except that where Claude's base URL — read as [[core-service-9](#core-service-9)] reads it — — on a seat, the environment alone — is `third-party`, each Claude agent's `model` naming an official model [[settings-61](settings.md#settings-61)] is removed, its comments kept ([DR-205](../decisions/205-agent-cards-read-alike.md)).
+- That seed reads confirmed credentials alone — an agent's API key or token form in the environment or, for `claude`, in Claude Code's user settings, or a sign-in the agent's own status command confirms where its configuration folder stands, never that folder alone, since the runtime creates it on its first start; on a seat, the credential forms of the environment its credentials were read into first [[core-service-126](#core-service-126)], with no user settings and no sign-in of the server account the core runs as, which are no member's — so the Captain's and each player's `adapter`, `model`, `effort` and `writablePaths` equal the `playbook` CLI's seed under the same confirmed credentials, while the two files may differ ([DR-205](../decisions/205-agent-cards-read-alike.md)):
 
 | Credentials | Seeded agents |
 | --- | --- |
 | Claude only, or neither | every agent as the template writes it, on `claude` |
-| Codex only | every agent on `codex` / `gpt-6-sol` with `writablePaths: ['.git']` |
-| both | `dev.reviewer` on `codex` / `gpt-6-sol` with `writablePaths: ['.git']`, every other agent as the template writes it |
+| Codex only | every agent on `codex` / `gpt-6.1-sol` at the template's effort, with `writablePaths: ['.git']` |
+| both | `dev.reviewer` on `codex` / `gpt-6.1-sol` at effort `high` with `writablePaths: ['.git']`, every other agent as the template writes it |
 
 - The file is created exclusively, and the seed's version is recorded [[storage-5](storage.md#storage-5)]; an existing config file is never overwritten, and only the reseed of [[core-service-137](#core-service-137)] rewrites the seeded file afterwards.
 
 #### core-service-137
 
-Where the recorded seed names the shared config path [[storage-5](storage.md#storage-5)], when the core service starts, and on a seat when the member sets or removes an agent credential [[settings-48](settings.md#settings-48)], the core service shall reseed that file while it stands at the recorded version ([DR-156](../decisions/156-an-untouched-seed-follows-the-credentials.md)):
+Where the recorded seed names the shared config path [[storage-5](storage.md#storage-5)], when the core service starts, when a client asks for readiness — a re-check among them [[settings-5](settings.md#settings-5)] — and on a seat when the member sets or removes an agent credential [[settings-48](settings.md#settings-48)], the core service shall reseed that file while it stands at the recorded version ([DR-156](../decisions/156-an-untouched-seed-follows-the-credentials.md)):
 
 | The file | Outcome |
 | --- | --- |
@@ -92,7 +92,8 @@ Where the recorded seed names the shared config path [[storage-5](storage.md#sto
 | at the recorded version, that seed different | written as one versioned write, its permission bits kept, the new version recorded, adopted as the active config and reported as reseeded to connected clients |
 | at any other version, absent, or changed before the write | left as it is, and the record removed, so the file is never reseeded again |
 
-- A config with no record, or a record naming another path, is never reseeded.
+- A config with no record, or a record naming another path, is never reseeded, and no status command is asked for its reseed.
+- A readiness request asks each agent's status command at most once, its answer serving the reseed, the reload it causes and the readiness returned.
 
 #### core-service-66
 
@@ -101,6 +102,24 @@ Where the shared config path is the default one and holds nothing, when the core
 - An explicit config path given by the shell moves nothing.
 - A former file inside the home is removed once the canonical file is published, and its directory with it when that leaves the directory empty; the XDG file is left in place.
 - A former file whose path-shaped `playbooks.<id>.from` or relative `sessions` locator would resolve to a different target from the shared path's directory is left where it is and reported, since moving it would retarget the locator; the shared config path is your own group's clone's [[storage-1](storage.md#storage-1)].
+
+#### core-service-44
+
+When a client sends `config.batch {ops, revision}` — one or more `captain.set`, `player.set` or `playbook.role.bind` operations over your own group's file and the revision of the config state the client saw [[core-service-45](#core-service-45)] — the core service shall apply them all or none ([DR-204](../decisions/204-workshop-agents-in-one-pass.md)):
+
+1. The file is read; where its revision differs from `revision`, the batch is refused `conflict` and nothing is composed or written.
+2. The operations apply in order, each as a Settings save applies it — a merge patch altering only the keys it provides and preserving comments, key order and hand-written fields — and the result is validated once, as a whole, by the shared rule set [[core-service-16](#core-service-16)].
+3. A violation refuses the whole batch `invalid_config`, each violation carrying its rule — a row of the shared rule set [[core-service-16](#core-service-16)] by its name in kebab case, or `structure`, `adapter` or `registry` for a field's shape, an agent's adapter or a playbook's module entry — and the field it names as a dotted path in the file, absent only where the file's top level is at fault, as the check raising it states them, never read back from its words, and the indexes of the operations touching that field — one, several or none — an operation touching the block it edits and, through a player it edits, every binding naming that player.
+4. The result is one versioned write, refused `conflict` where the file changed since the read ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md)).
+5. The reply is the config state the files stand at after the write, as a Settings save's is.
+
+- A batch holding another operation kind or none is a malformed command and changes nothing; a batch names no repository and writes your own group's file alone.
+
+#### core-service-45
+
+Where your own group's config is valid, its config state shall carry a `revision` — the digest of the bytes of your own group's config file the state was composed from — the same value for the same state in the reply to `config.get`, in the `config.state` broadcast and in the reply to a successful `config.edit` or `config.batch` [[core-service-44](#core-service-44)] ([DR-204](../decisions/204-workshop-agents-in-one-pass.md)):
+
+- any writer's change to the file's bytes changes the revision of the state composed after it.
 
 ### Sessions
 
@@ -557,10 +576,24 @@ When serving a stored session, the core service shall resolve its immutable part
 
 #### core-service-9
 
-When a client requests adapter readiness, the core service shall report one deduplicated entry per adapter the active config references, each entry naming the positions using that adapter — `captain`, and each session player as `<player>` followed by the `<playbook>.<role>` bindings it answers ([DR-032](../decisions/032-session-players.md)) — and carrying a readiness status derived from the same adapter readiness rules as the playbook launcher — the runtime half and the credential half together ([DR-024](../decisions/024-app-supplied-agent-runtimes.md), [DR-004](../decisions/004-config-and-persistence.md)) — naming the unmet requirement for each adapter that is not ready and reporting null readiness with verify-yourself guidance for an adapter with no preflight rule:
+When a client requests adapter readiness, the core service shall report an entry for `claude` and one for `codex` always and one deduplicated entry per other adapter the active config references, each entry naming the positions using that adapter — `captain`, and each session player as `<player>` followed by the `<playbook>.<role>` bindings it answers ([DR-032](../decisions/032-session-players.md)), none where no position does — and carrying a readiness status derived from the adapter readiness rules — the runtime half and the credential half together ([DR-024](../decisions/024-app-supplied-agent-runtimes.md), [DR-004](../decisions/004-config-and-persistence.md), [DR-204](../decisions/204-workshop-agents-in-one-pass.md)) — naming the unmet requirement for each adapter that is not ready, reporting null readiness with verify-yourself guidance for an adapter with no preflight rule, and null readiness with the reason for a sign-in that could not be confirmed:
 
 - The runtime half is cligent's availability probe, which confirms the native executable a bundled SDK spawns as well as the SDK itself; when the probe fails and no published runtime target is at fault, the unmet requirement for `claude` or `codex` comes from cligent's executable lookup — a missing platform package, named with its platform and architecture and the repair of running `npm ci` in the checkout or reinstalling the app, or a host the SDK publishes no executable for, named with no repair — and otherwise states that the runtime failed to load ([DR-090](../decisions/090-readiness-names-what-cligent-finds-missing.md)).
+- While the config is missing or invalid, the `claude` and `codex` entries are the only ones, with no positions: no earlier config's positions carry over.
+- Each entry lists its faults, each of kind `runtime` or `credential` with its own requirement, and keeps the requirement string joining them.
+- The `claude` entry carries its base URL's state, `ANTHROPIC_BASE_URL` read where a Claude run reads it — the `env` of Claude Code's user settings file, `settings.json` in `CLAUDE_CONFIG_DIR` or `~/.claude`, over the core's environment: `unset` where it is unset or names the host `api.anthropic.com`, `third-party` with the host name alone — no scheme, path or secret — where it names another host, `unknown` where it does not parse as a URL with a host, and `hidden` on a seat.
+- Every entry carries the core's platform and the file name of the environment's `SHELL`, where set.
 - When the active config changes, refreshed readiness is broadcast to connected clients; a reload superseded by a newer one — before committing, or while its runtime probes are in flight — commits and broadcasts nothing, so the state and readiness clients hold always correspond to the newest configuration read.
+
+#### core-service-155
+
+Where the core service runs off a seat and the `env` of Claude Code's user settings file — `settings.json` in `CLAUDE_CONFIG_DIR` or `~/.claude` — sets variables, when the core service starts, and before each agent run and each readiness report [[core-service-9](#core-service-9)], the core service shall write them into the environment its adapters inherit, over the values inherited, so that a call reading no settings file — the Captain's control calls — runs with the key, base URL and model a run reading them would ([DR-205](../decisions/205-agent-cards-read-alike.md)):
+
+- a run spawned with an environment of its own, and model discovery [[settings-35](settings.md#settings-35)], take them over that environment too;
+- a variable the file no longer sets goes back as it stood before the core first wrote it;
+- a stop puts every name it wrote back as the process held it.
+
+On a seat the core service shall write none of them: a seat's runs take the member's or the shared credentials alone, as its readiness reads them [[core-service-126](#core-service-126)], [[settings-49](settings.md#settings-49)], and the server account's settings are no member's; a player's Claude Code still reads that file itself, which this item does not prevent.
 
 ### Persistence
 
@@ -741,7 +774,7 @@ While a seat is open [[core-service-128](#core-service-128)], the core service s
 
 ### core-service-143
 
-The core service shall expose independent registry commands `registry.get`, `registry.signin.start`, `registry.signin.cancel`, `registry.signout`, `registry.directory` and `registry.orgs`, plus `environment.registry.set`, using protocol version 31 and broadcasting `registry.state` for account changes ([DR-168](../decisions/168-independent-package-registry.md)):
+The core service shall expose independent registry commands `registry.get`, `registry.signin.start`, `registry.signin.cancel`, `registry.signout`, `registry.directory` and `registry.orgs`, plus `environment.registry.set`, using protocol version 33 and broadcasting `registry.state` for account changes ([DR-168](../decisions/168-independent-package-registry.md)):
 
 - `registry.get` names an origin or an environment, defaulting to the public registry, and reports its origin, display name, account without credentials, sign-in progress and read error;
 - sign-in uses the shell's existing browser or device flow with registry purpose, no seat ticket, and stores no Space entry or placement;
@@ -858,7 +891,7 @@ The core package shall run each `compile.run` as its own toolchain process with 
 
 #### core-service-26
 
-The readiness report of [[core-service-9](#core-service-9)] shall be keyed by adapter: the core package shall resolve every configured position — the captain and each referenced session player, whether an inline agent block or a scalar adapter id, under the same resolution rule as the launcher [[core-service-16](#core-service-16)] — to its adapter and emit exactly one entry per distinct adapter listing those positions, so that no referenced adapter's unmet requirement is hidden by deduplication and a hand-written scalar still surfaces its adapter's requirements before the first turn fails.
+The readiness report of [[core-service-9](#core-service-9)] shall be keyed by adapter: the core package shall resolve every configured position — the captain and each referenced session player, whether an inline agent block or a scalar adapter id, under the same resolution rule as the launcher [[core-service-16](#core-service-16)] — to its adapter and emit exactly one entry per distinct adapter listing those positions, `claude` and `codex` always among them [[core-service-9](#core-service-9)], so that no referenced adapter's unmet requirement is hidden by deduplication and a hand-written scalar still surfaces its adapter's requirements before the first turn fails.
 
 ## Verification
 
@@ -1001,20 +1034,27 @@ Where the core watches no config file and a playbook module's import or a readin
 
 #### core-service-136
 
-Where the shared config path holds no file, the test suite shall start the core service once for each credential row of [[core-service-3](#core-service-3)] — Claude only, Codex only, both and neither, each with an explicit environment and a scratch home — and fail unless the seeded file's Captain and each player carry the `adapter`, `model`, `effort` and `writablePaths` that Playbook's seed — the one the `playbook` CLI writes — returns for that same environment and home, the both-credentials row placing `dev.reviewer` alone on `codex`, no `playbooks.<id>.from` remains, and a second start over the seeded file leaves its bytes unchanged [[core-service-3](#core-service-3)].
+Where the shared config path holds no file, the test suite shall start the core service once for each credential row of [[core-service-3](#core-service-3)] — Claude only, Codex only, both and neither, each with an explicit environment and a scratch home, then a Claude key beside a `.codex` folder whose status command answers signed out, and both folders whose status commands answer signed in — and fail unless the seeded file's Captain and each player carry the `adapter`, `model`, `effort` and `writablePaths` that Playbook's seed — the one the `playbook` CLI writes — returns for the same confirmed credentials, the both-credentials and both-signed-in rows placing `dev.reviewer` alone on `codex` and the signed-out folder placing no one there, no `playbooks.<id>.from` remains, and a second start over the seeded file leaves its bytes unchanged [[core-service-3](#core-service-3)].
 
 #### core-service-138
 
 Where the core seeded the shared config path under Claude credentials alone, the test suite shall restart it on the same home and fail unless:
 
+- with a `.codex` folder standing whose status command answers signed out, the file stays as it is and nothing is reported reseeded [[core-service-3](#core-service-3)] [[core-service-137](#core-service-137)];
 - with Codex credentials added, the file becomes the both-credentials seed — `dev.reviewer` alone on `codex` — with its permission bits kept, the recorded version following it, and connected clients told it was reseeded [[core-service-137](#core-service-137)];
 - a restart with unchanged credentials leaves its bytes as they are [[core-service-137](#core-service-137)];
 - after one config edit, a restart under Codex credentials alone leaves the edited bytes as they are and the record gone, and so does a further restart under Claude alone [[core-service-137](#core-service-137)];
-- a config standing with no record is left as it is under every credential row [[core-service-137](#core-service-137)].
+- a config standing with no record is left as it is under every credential row [[core-service-137](#core-service-137)];
+- started with nothing set up, a readiness request after Claude Code's user settings gain a third-party key and base URL reseeds it with no `model` on the Captain, connected clients told it was reseeded, one after Codex's status command answers signed in places `dev.reviewer` alone on `codex` with that command asked once, one after a config edit leaves the edited bytes as they are, and a further one asks it once again [[core-service-137](#core-service-137)];
+- seeded under Anthropic's own service with a Codex credential beside, a restart with a third-party base URL reseeds it with no `model` on the Captain or any Claude player, each Codex player keeping its model and the template's comments kept, and a further restart leaves its bytes as they are [[core-service-3](#core-service-3)] [[core-service-137](#core-service-137)].
+
+#### core-service-156
+
+Where Claude Code's user settings file in the core's home sets a key, a third-party base URL and `ANTHROPIC_MODEL`, none of them in the process environment, the test suite shall run a turn over the fixture adapter and fail unless the Captain's control call and the player's run each start with all three, a turn after the file drops the base URL and the model starts with neither and with the file's replaced key, and a stop leaves none of the names in the process environment; and on a seat whose server account's settings set a key, a token and a base URL, fail unless every run of a turn, the Captain's control call among them, starts with the member's own key and neither of the others, a replaced key standing after the file then drops a name [[core-service-155](#core-service-155)].
 
 #### core-service-139
 
-Where the core runs as a seat whose shared credential file holds `CODEX_ACCESS_TOKEN` alone, with no credential in the process environment or the home, the test suite shall start it on a fresh home and fail unless the seeded config, as the clone's first commit records it, carries every agent on `codex` [[core-service-126](#core-service-126)] [[core-service-3](#core-service-3)], and unless, after the member sets their own Claude credential, the untouched config becomes the both-credentials seed [[core-service-137](#core-service-137)].
+Where the core runs as a seat whose shared credential file holds `CODEX_ACCESS_TOKEN` alone, with no credential in the process environment or the home, the test suite shall start it on a fresh home and fail unless the seeded config, as the clone's first commit records it, carries every agent on `codex` [[core-service-126](#core-service-126)] [[core-service-3](#core-service-3)], and unless, after the member sets their own Claude credential, the untouched config becomes the both-credentials seed [[core-service-137](#core-service-137)]; and where the server account's home holds a Claude key in its user settings and a Claude folder whose status command would answer signed in, fail unless the seed still carries every agent on `codex`, no status command is asked, and the member's own Codex credential leaves the file as it was.
 
 #### core-service-140
 
@@ -1238,7 +1278,7 @@ Where a session finishes a turn bound to no intent, the test suite shall assert 
 
 #### core-service-23
 
-Where the config's agent blocks reference both an adapter whose readiness requirements are satisfied and one whose requirements are not (via controlled environment variables and home-directory fixtures), the test suite shall assert that readiness reporting marks each adapter's entry accordingly and names the unmet requirement for the not-ready adapter [[core-service-9](#core-service-9)].
+Where the config's agent blocks reference both an adapter whose readiness requirements are satisfied and one whose requirements are not (via controlled environment variables and home-directory fixtures), the test suite shall assert that readiness reporting marks each adapter's entry accordingly, names the unmet requirement for the not-ready adapter with its faults by kind, and reports `claude` and `codex` both, an unreferenced one with no positions [[core-service-9](#core-service-9)]; and that with the config missing, and again invalid, readiness holds the `claude` and `codex` entries alone, with no positions [[core-service-9](#core-service-9)].
 
 #### core-service-113
 
@@ -1250,6 +1290,29 @@ Where readiness is evaluated for the `claude` and `codex` adapters with credenti
 | unavailable | an unsupported host | not ready, naming the host with no repair [[core-service-9](#core-service-9)] |
 | unavailable | no SDK, or the executable present | not ready, stating that the runtime failed to load [[core-service-9](#core-service-9)] |
 | available | any | ready [[core-service-9](#core-service-9)] |
+
+### Batch Edit Coverage
+
+#### core-service-152
+
+Where a client reads your own group's valid config, edits it with `config.edit` and then with `config.batch`, and another writer then changes the file, the test suite shall assert that `config.get`'s reply, the `config.state` broadcast after each write and each write's reply carry one revision for one state, a new one after each write, and that the revision read after the outside write differs from the one before it [[core-service-45](#core-service-45)].
+
+#### core-service-153
+
+Where your own group's commented config holds a Captain and players on `claude` and `codex`, the test suite shall submit `config.batch` for each case below and assert its refusal, with the file's bytes unchanged in every case:
+
+| Case | Refusal |
+| --- | --- |
+| a revision read before another writer added a player on `claude` | `conflict` [[core-service-44](#core-service-44)] |
+| a revision read before another writer gave a role's binding a model of its own | `conflict` [[core-service-44](#core-service-44)] |
+| one operation giving an effort outside its adapter's vocabulary | `invalid_config`, a violation with its rule, its field and that operation's index [[core-service-44](#core-service-44)] |
+| one operation setting a player's subagent model Off and another giving a binding of that player a subagent effort, each valid alone [[core-service-16](#core-service-16)] | `invalid_config`, a violation with its rule, its field and both operations' indexes [[core-service-44](#core-service-44)] |
+| the file changed by another writer while the batch composes | `conflict` [[core-service-44](#core-service-44)] |
+| an operation of another kind, or no operation | refused as malformed [[core-service-44](#core-service-44)] |
+
+#### core-service-154
+
+Where your own group's real config carries comments and hand-written fields, when one `config.batch` holds a `captain.set` and a `player.set` removing each `model` and a `playbook.role.bind` writing `model: false`, the test suite shall assert that the three `model` fields changed as asked with every comment and hand-written field kept, that the reply carries the reloaded state, and that the reloaded config resolves the Captain's and each role's model to Provider default [[core-service-44](#core-service-44)].
 
 ### Compile Lifecycle Coverage
 
@@ -1287,7 +1350,7 @@ Where the core service attaches to a test-supplied HTTP server [[core-service-1]
 
 #### core-service-28
 
-Where the config references one adapter from several positions — as the captain and as a session player, including a hand-written scalar adapter id — the test suite shall assert that readiness reporting includes exactly one entry for that adapter [[core-service-26](#core-service-26)], naming each referencing position, marked per the adapter readiness rules with the unmet requirement named when the adapter is not ready [[core-service-9](#core-service-9)].
+Where the config references one adapter from several positions — as the captain and as a session player, including a hand-written scalar adapter id — the test suite shall assert that readiness reporting includes exactly one entry for that adapter, `claude` and `codex` among the entries [[core-service-26](#core-service-26)], naming each referencing position, marked per the adapter readiness rules with the unmet requirement named when the adapter is not ready [[core-service-9](#core-service-9)].
 
 #### core-service-81
 

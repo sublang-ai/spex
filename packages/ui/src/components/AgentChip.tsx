@@ -41,6 +41,26 @@ export function noCheckNote(): string {
   return i18n._("no automatic check for this adapter — verify sign-in yourself");
 }
 
+/** The word for a sign-in the core could not confirm just now
+ * (settings-14), apart from an adapter with no check at all. */
+export function unconfirmedWord(): string {
+  return i18n._({ id: "sign-in unconfirmed", comment: "readiness: the agent's sign-in could not be checked just now" });
+}
+
+/** Why, and the next step: checking again. */
+export function unconfirmedNote(reason: string): string {
+  return i18n._({
+    id: "Sign-in could not be confirmed just now: {reason}. Re-check to try again.",
+    comment: "readiness: the agent's sign-in could not be checked; `reason` is the core's phrase, such as \"its status command did not answer in time\"; Re-check is the button's name",
+    values: { reason },
+  });
+}
+
+/** An entry's readiness in words, an unconfirmed sign-in by its own. */
+export function entryReadinessWord(entry: ReadinessEntry): string {
+  return entry.ready === null && entry.unconfirmed !== undefined ? unconfirmedWord() : readinessWord(entry.ready);
+}
+
 /** An agent block as the chip reads it: the config's inline block,
  * plus the adapter-scoped fast mode a summary carries (DR-038). */
 export type ChipAgent = AgentBlockInput & { fastMode?: boolean };
@@ -72,7 +92,7 @@ export function AgentChip({
   label?: string;
 }) {
   const text = chipBase(agent);
-  const state = readiness === undefined ? undefined : readinessWord(readiness.ready);
+  const state = readiness === undefined ? undefined : entryReadinessWord(readiness);
   // The name is a position, a run of ids, and the words above: only
   // the punctuation between them is assembled here.
   return (
@@ -111,8 +131,8 @@ export function AgentChip({
         ) : (
           <span
             aria-hidden
-            className="text-neutral-500"
-            title={readiness.requirement ?? noCheckNote()}
+            className={readiness.unconfirmed !== undefined ? "text-amber-500" : "text-neutral-500"}
+            title={readiness.unconfirmed !== undefined ? unconfirmedNote(readiness.unconfirmed) : readiness.requirement ?? noCheckNote()}
           >
             ●
           </span>

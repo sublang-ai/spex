@@ -30,8 +30,15 @@ source; run source with `npm ci` and `npm start` (desktop) or
   installers together with the upstream package-install and Playbooks UI.
   DR-180 names the Windows Git-source long-path decision independently
   from upstream DR-173. See [the rebase record](docs/releases/0.9.0-beta.22-fork-rebase.md).
-
-
+- Agents configured for a Workshop in one pass ([DR-204](specs/decisions/204-workshop-agents-in-one-pass.md)).
+  Settings always shows a Claude and a Codex card with readiness,
+  model service, default model and how to configure each on this
+  computer; readiness takes every credential form Playbook takes and
+  says whether the runtime or the credential is missing. A card gives
+  every agent on its adapter one model in one validated write, and
+  behind a third-party Claude service lists the roles still naming an
+  official model and sets them to Provider default. While the Workshop
+  switch is on, adapter choices are Claude and Codex. Protocol 33.
 - Independent package registries ([DR-168](specs/decisions/168-independent-package-registry.md)).
   Library offers a registry setting and separate registry sign-in; the
   public registry lists available Spaces beside the custom Space URL.
@@ -446,6 +453,14 @@ source; run source with `npm ci` and `npm start` (desktop) or
   agent credential, it is rewritten as the seed for the sign-ins then. A
   team server seeds from its shared sign-ins, so a Codex-only server starts
   on Codex. The first change to the file, of any kind, ends this for good.
+- A new seed runs Codex on `gpt-6.1-sol` and every agent at effort
+  `medium`, except a Codex `dev.reviewer` beside Claude agents at `high`
+  ([DR-208](specs/decisions/208-playbook-18-1-2-cligent-0-37-0-slc-0-20-1-adoption.md)).
+  The app requires Playbook 18.1.2, Cligent 0.37.0, whose Codex runtime
+  floor 0.159.1 serves that model, and slc 0.20.1, which shares that
+  Cligent. The built-in playbooks stage as `sublang/playbooks` 18.1.2,
+  unchanged from 18.1.0. Existing configs you have edited keep their
+  models and efforts.
 - Require Playbook 18.1.0, the first release publishing its seed rule
   ([DR-154](specs/decisions/154-the-seed-follows-playbooks-rule.md)).
   The built-in playbooks stage as `sublang/playbooks` 18.1.0, unchanged

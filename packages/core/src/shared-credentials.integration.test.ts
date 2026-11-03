@@ -24,6 +24,7 @@ import { codeCredentialsPath } from "./code-credentials.js";
 import type { LineSpawner } from "./compile.js";
 import { defaultRunCommand, type RunCommand } from "./forge.js";
 import type { Command, CredentialList, ReadinessEntry } from "./protocol.js";
+import type { CoreServiceOptions } from "./service.js";
 import { AGENT_CREDENTIAL_FORMS } from "./seat-credentials.js";
 import { fakeAdapterImports, type FakeAdapterStats } from "./testing/fake-adapter.js";
 import { createSpaceHarness, ownClone } from "./testing/space-harness.js";
@@ -98,6 +99,7 @@ async function startSeat(name: string, options: {
   imports?: ReturnType<typeof fakeAdapterImports>["imports"];
   env?: Record<string, string>;
   compileSpawner?: LineSpawner;
+  agentSignIn?: CoreServiceOptions["agentSignIn"];
 } = {}): Promise<{ home: Home; projects: string[] }> {
   const dataDir = mkdtempSync(join(scratch, `${name}-`));
   if (options.config !== undefined) {
@@ -124,6 +126,7 @@ async function startSeat(name: string, options: {
       seat: { ...SEAT, ...(options.shared !== undefined ? { sharedCredentialFile: options.shared } : {}) },
       ...(options.imports ? { adapterImports: options.imports } : {}),
       ...(options.compileSpawner ? { compileSpawner: options.compileSpawner } : {}),
+      ...(options.agentSignIn ? { agentSignIn: options.agentSignIn } : {}),
       runCommand: options.runCommand ?? validStatus,
     },
   });
@@ -167,6 +170,29 @@ test("core-service-139: a seat seeds from its shared credentials, and its untouc
   const after = agents();
   assert.equal(after["dev.reviewer"], "codex");
   for (const id of ["captain", "dev.coder", "dev.analyst", "inspect.inspector"]) assert.equal(after[id], "claude", `${id} on claude`);
+});
+
+test("core-service-139, core-service-3: a seat's seed and reseed count no credential of the server account's Claude settings or folder", async (t) => {
+  const shared = join(scratch, "shared-codex-server-claude.env");
+  writeShared(shared, "CODEX_ACCESS_TOKEN=codex-team\n");
+  // The server account holds a Claude key in its settings and a signed-in
+  // folder: neither is the member's.
+  const server = mkdtempSync(join(scratch, "seat-seed-server-"));
+  mkdirSync(join(server, ".claude"));
+  writeFileSync(join(server, ".claude", "settings.json"), JSON.stringify({ env: { ANTHROPIC_API_KEY: "sk-server", ANTHROPIC_BASE_URL: "https://api.deepseek.com/anthropic" } }));
+  const signIns: string[] = [];
+  const { home } = await startSeat("seat-seed-server", { shared, starter: true, env: { HOME: server }, agentSignIn: async (adapter) => { signIns.push(adapter); return { state: "signed-in" }; } });
+  t.after(() => home.stop());
+  const top = () => parseYaml(readFileSync(home.configPath, "utf8")) as { captain: { adapter: string; model?: string }; players: Record<string, { adapter: string }> };
+  const adapters = () => [top().captain.adapter, ...Object.values(top().players).map((player) => player.adapter)];
+  assert.deepEqual([...new Set(adapters())], ["codex"], "the seed counts the shared Codex credential alone");
+  assert.deepEqual(signIns, [], "no status command asks after the server account's sign-in");
+
+  // A reseed after the member's own Codex credential counts no more.
+  const before = readFileSync(home.configPath, "utf8");
+  await home.client.expectOk("credential.set", { kind: "agent", name: "codex", values: { CODEX_ACCESS_TOKEN: "codex-mine" } });
+  assert.equal(readFileSync(home.configPath, "utf8"), before, "the reseed still counts no Claude credential");
+  assert.deepEqual(signIns, []);
 });
 
 test("core-service-140: a seat whose start fails leaves no agent's form in the environment", async (t) => {
@@ -290,6 +316,45 @@ test("core-service-127, core-service-126: a member's own credential displaces it
   }
 });
 
+test("core-service-156, core-service-126: on a seat the server account's Claude settings reach no run, whatever order the member's credential and the file change in", async (t) => {
+  const shared = join(scratch, "shared-settings.env");
+  writeShared(shared, "CODEX_ACCESS_TOKEN=codex-shared\n");
+  const server = mkdtempSync(join(scratch, "seat-settings-home-"));
+  mkdirSync(join(server, ".claude"));
+  const settings = join(server, ".claude", "settings.json");
+  writeFileSync(settings, JSON.stringify({ env: { ANTHROPIC_API_KEY: "sk-settings", ANTHROPIC_AUTH_TOKEN: "auth-settings", ANTHROPIC_BASE_URL: "https://api.deepseek.com/anthropic" } }));
+  const { imports, stats } = recordingAdapter();
+  const { home, projects: [project] } = await startSeat("seat-settings", { shared, projects: 1, imports, env: { HOME: server } });
+  t.after(() => home.stop());
+  assert.ok(project);
+  const runsOf = (text: string) => {
+    const runs = stats.runs.filter((run) => run.prompt.includes(text));
+    assert.ok(runs.some((run) => run.prompt.startsWith("route:")), `${text}: the Captain's control call ran`);
+    return runs;
+  };
+
+  // The member's key, as readiness names it, is what every run takes.
+  await home.client.expectOk("credential.set", { kind: "agent", name: "claude", values: { ANTHROPIC_API_KEY: "sk-mine-one" } });
+  await runTurn(home, project, "first key");
+  for (const run of runsOf("first key")) {
+    assert.equal(run.env.ANTHROPIC_API_KEY, "sk-mine-one", `${run.prompt}: the member's key`);
+    assert.equal(run.env.ANTHROPIC_AUTH_TOKEN, undefined, `${run.prompt}: no token of the settings`);
+    assert.equal(run.env.ANTHROPIC_BASE_URL, undefined, `${run.prompt}: no base URL of the settings`);
+  }
+  const claude = (await home.client.expectOk("readiness.get", {}) as ReadinessEntry[]).find((entry) => entry.adapter === "claude");
+  assert.equal(claude?.credential?.class, "own");
+
+  // The member replaces the key, then the file drops a name it set: the
+  // replaced key stands.
+  await home.client.expectOk("credential.set", { kind: "agent", name: "claude", values: { ANTHROPIC_API_KEY: "sk-mine-two" } });
+  writeFileSync(settings, JSON.stringify({ env: { ANTHROPIC_BASE_URL: "https://api.deepseek.com/anthropic" } }));
+  await runTurn(home, project, "second key");
+  for (const run of runsOf("second key")) {
+    assert.equal(run.env.ANTHROPIC_API_KEY, "sk-mine-two", `${run.prompt}: the replaced key`);
+    assert.equal(run.env.ANTHROPIC_BASE_URL, undefined, `${run.prompt}: no base URL of the settings`);
+  }
+});
+
 test("core-service-127, core-service-126: an unreadable shared file leaves the environment as it was, is reported through readiness and blocks no run", async (t) => {
   const shared = join(scratch, "shared-unreadable.env");
   writeShared(shared, "CLAUDE_CODE_OAUTH_TOKEN=sk-before\n");
@@ -408,6 +473,8 @@ test("settings-50, settings-49: each credential class and phrase is delivered ov
     assert.match(entries[adapter]?.requirement ?? "", NONE);
   }
   assert.equal(status.length, 0, "no status command runs where no form is set");
+  // A seat's base URL is its own: nothing of it is reported (settings-14).
+  assert.deepEqual(entries.claude?.baseUrl, { state: "hidden" });
 
   // Present: the shared form, its status valid.
   writeShared(shared, "CLAUDE_CODE_OAUTH_TOKEN=sk-valid-shared\n");

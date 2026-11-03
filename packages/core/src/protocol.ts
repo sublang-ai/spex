@@ -13,7 +13,7 @@ import type { AgentCapabilities, ApprovalDecision, ApprovalRequest, BrowserSetup
 import type { SessionRecord as RuntimeRecord } from "@sublang/playbook/session-assets";
 import { LANGUAGES, type Language } from "./language.js";
 
-export const PROTOCOL_VERSION = 32;
+export const PROTOCOL_VERSION = 33;
 
 /** The compile pipeline's phases and their human names, shared so the
  * core's thread lines and the UI's band name a phase alike. */
@@ -365,7 +365,18 @@ export interface ConfigSummary {
 }
 
 export type ConfigState =
-  | { status: "valid"; summary: ConfigSummary; seeded: boolean; reseeded?: boolean; missingPlayers?: MissingPlayer[] }
+  | {
+      status: "valid";
+      summary: ConfigSummary;
+      seeded: boolean;
+      reseeded?: boolean;
+      missingPlayers?: MissingPlayer[];
+      /** Your own group's state alone (core-service-45): the digest of
+       * the file's bytes it was composed from, which a `config.batch`
+       * names to say which config its edits were made against. A
+       * project's composition carries none. */
+      revision?: string;
+    }
   | { status: "invalid"; path: string; errors: string[] }
   | { status: "missing"; path: string };
 
@@ -784,11 +795,30 @@ export interface AgentOptions {
 export interface ReadinessEntry {
   adapter: AdapterName;
   /** true = ready, false = not ready, null = no preflight rule for
-   * this adapter (verify sign-in yourself). */
+   * this adapter (verify sign-in yourself), or a sign-in that could not
+   * be confirmed just now (`unconfirmed`). */
   ready: boolean | null;
-  /** Unmet requirement, present when ready is false. */
+  /** With null readiness alone: why the agent's sign-in could not be
+   * confirmed just now — its status command did not start, did not
+   * answer in time, failed or answered unreadably (settings-14). A
+   * re-check asks again. */
+  unconfirmed?: string;
+  /** Unmet requirement, present when ready is false: the faults'
+   * requirements joined, kept for clients that read one line. */
   requirement?: string;
-  /** Positions using this adapter: "captain" or `<playbook>.<role>`. */
+  /** Each unmet half by its kind (core-service-9, DR-204), so guidance
+   * tells reinstalling the app from setting a key. */
+  faults?: ReadinessFault[];
+  /** On `claude` alone: where its requests go, by
+   * `ANTHROPIC_BASE_URL`'s host name and nothing more (core-service-9). */
+  baseUrl?: BaseUrlState;
+  /** The core's `process.platform` and the file name of its
+   * environment's `SHELL`, so manual steps are written for the
+   * computer that follows them. */
+  platform?: string;
+  shell?: string;
+  /** Positions using this adapter: "captain" or `<playbook>.<role>`;
+   * empty for `claude` or `codex` where no position uses it. */
   usedBy: string[];
   /** Whether the embedded runtime declares fast mode for this adapter
    * (DR-038); the editor offers the switch only then. */
@@ -799,6 +829,18 @@ export interface ReadinessEntry {
    * credential class and its phrase. */
   credential?: AdapterCredential;
 }
+
+export interface ReadinessFault {
+  kind: "runtime" | "credential";
+  requirement: string;
+}
+
+/** `unset`: no base URL, or Anthropic's own host; `third-party`: any
+ * other host, named; `unknown`: a value with no host to read;
+ * `hidden`: on a seat, where nothing of it is reported. */
+export type BaseUrlState =
+  | { state: "unset" | "unknown" | "hidden" }
+  | { state: "third-party"; host: string };
 
 /** A seat's credential classes (settings-49): the member's own, the
  * administrator's shared sign-in, a shared file that cannot be read, a
@@ -1096,33 +1138,37 @@ export const playerIdSchema = z
   .string()
   .regex(/^[a-z][a-z0-9_-]*(?:\.[a-z][a-z0-9_-]*)*$/);
 
+const captainSetOpSchema = z.object({ kind: z.literal("captain.set"), patch: agentPatchSchema });
+const playerSetOpSchema = z.object({
+  kind: z.literal("player.set"),
+  playerId: playerIdSchema,
+  patch: agentPatchSchema,
+});
+const roleBindOpSchema = z.object({
+  kind: z.literal("playbook.role.bind"),
+  playbookId: z.string().min(1),
+  role: z.string().min(1),
+  playerId: playerIdSchema,
+  // A concrete value pins, false selects the provider default, null
+  // clears the override so the role inherits the player (DR-032).
+  model: z.union([z.string().min(1), z.literal(false)]).nullable().optional(),
+  subagentModel: z.union([z.string().min(1), z.literal(false)]).nullable().optional(),
+  subagentEffort: z.union([z.string().min(1), z.literal(false)]).nullable().optional(),
+  effort: z.union([z.string().min(1), z.literal(false)]).nullable().optional(),
+  // Fast mode is literal: false disables; null inherits the player.
+  fastMode: z.boolean().nullable().optional(),
+});
+
 export const configEditOpSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("captain.set"), patch: agentPatchSchema }),
+  captainSetOpSchema,
   z.object({
     kind: z.literal("notifications.set"),
     prefs: z.record(z.string(), z.string()),
   }),
   z.object({ kind: z.literal("theme.set"), theme: z.string().nullable() }),
-  z.object({
-    kind: z.literal("player.set"),
-    playerId: playerIdSchema,
-    patch: agentPatchSchema,
-  }),
+  playerSetOpSchema,
   z.object({ kind: z.literal("player.delete"), playerId: playerIdSchema }),
-  z.object({
-    kind: z.literal("playbook.role.bind"),
-    playbookId: z.string().min(1),
-    role: z.string().min(1),
-    playerId: playerIdSchema,
-    // A concrete value pins, false selects the provider default, null
-    // clears the override so the role inherits the player (DR-032).
-    model: z.union([z.string().min(1), z.literal(false)]).nullable().optional(),
-    subagentModel: z.union([z.string().min(1), z.literal(false)]).nullable().optional(),
-    subagentEffort: z.union([z.string().min(1), z.literal(false)]).nullable().optional(),
-    effort: z.union([z.string().min(1), z.literal(false)]).nullable().optional(),
-    // Fast mode is literal: false disables; null inherits the player.
-    fastMode: z.boolean().nullable().optional(),
-  }),
+  roleBindOpSchema,
   z.object({
     kind: z.literal("playbook.option.set"),
     playbookId: z.string().min(1),
@@ -1142,6 +1188,12 @@ export const configEditOpSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 export type ConfigEditOpInput = z.infer<typeof configEditOpSchema>;
+
+/** The operations a `config.batch` takes (core-service-44): the
+ * agents' blocks and the roles' bindings, each as `config.edit` takes
+ * it. */
+export const configBatchOpSchema = z.discriminatedUnion("kind", [captainSetOpSchema, playerSetOpSchema, roleBindOpSchema]);
+export type ConfigBatchOpInput = z.infer<typeof configBatchOpSchema>;
 
 /** A playbook id an authoring session or a compile names: the spec
  * package, the file and the /command, so an Agent Skills name —
@@ -1305,6 +1357,9 @@ export const commandSchema = z.discriminatedUnion("type", [
    * writes — a project's, or your own group's, the default
    * (playbook-library-3, DR-103). */
   z.object({ type: z.literal("config.edit"), id, op: configEditOpSchema, repository: repositoryKeySchema.optional() }),
+  /** Edits of your own group's file applied all or none, against the
+   * revision the client saw (core-service-44). */
+  z.object({ type: z.literal("config.batch"), id, ops: z.array(configBatchOpSchema).min(1), revision: z.string().min(1) }),
   z.object({ type: z.literal("compile.check"), id }),
   z.object({
     type: z.literal("playbook.artifacts"),
@@ -1733,6 +1788,7 @@ export interface CommandResults {
   "usage.get": UsageRollup;
   "usage.days": { day: string; totals: UsageRollup }[];
   "config.edit": ConfigState;
+  "config.batch": ConfigState;
   "compile.check": {
     node: { ok: boolean; version?: string; command: string; guidance?: string };
     slc: { ok: boolean; command: string[]; guidance?: string };

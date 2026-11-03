@@ -132,7 +132,7 @@ test("player.set merge patch swaps a lane's vendor in place", async () => {
   // The role's own inline comment survives on the patched pair.
   assert.match(
     after,
-    /dev\.reviewer:\n\s+adapter: codex[^\n]*\n\s+model: gpt-5\.5\n\s+effort: xhigh/,
+    /dev\.reviewer:\n\s+adapter: codex[^\n]*\n\s+model: gpt-5\.5\n\s+effort: medium/,
   );
   // Unrelated lanes and their comments survive, byte for byte: the
   // coder's block as the installed template wrote it.

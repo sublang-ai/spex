@@ -19,6 +19,14 @@ export async function readAgentOptions(
   } catch (cause) {
     discovery = { status: "unavailable", reason: cause instanceof Error ? cause.message : String(cause) };
   }
+  // Cligent names no default where Claude Code's settings set
+  // `ANTHROPIC_MODEL`, which a run then applies over the one it
+  // inherits; the run environment carries those settings already, so
+  // its value is the model a run selects (settings-35, DR-205).
+  const model = env.ANTHROPIC_MODEL?.trim();
+  if (adapter === "claude" && discovery.status === "available" && discovery.defaultModel === undefined && model) {
+    discovery = { ...discovery, defaultModel: model };
+  }
   const effort = cligent.getEffortSupport(adapter);
   return {
     adapter,

@@ -216,6 +216,16 @@ export interface AppState extends AttachmentState {
   /** Read one project's composed configuration (`config.get` with its
    * id); a broadcast that overtook the read wins. */
   loadProjectConfig(projectId: string): Promise<void>;
+  /** A batch's conflict reading the config again (settings-60,
+   * settings-62): in flight, or failed with its reason; absent once
+   * every read succeeded. While it stands, no agent card's control
+   * submits a batch, whichever card started it, the page left and
+   * entered again or not. */
+  configReread?: { reading: true } | { reading: false; error: string };
+  /** Read your own group's config and every project composition held
+   * again, holding the agent cards' batches from the start until every
+   * read succeeds; the newest reading again decides. */
+  rereadConfig(): Promise<void>;
   /** Served machine definitions by playbook id (run-view-64); null
    * records a fetch that found no machine. */
   machineGraphs: Record<string, MachineGraph | null>;
@@ -1033,6 +1043,8 @@ function placeState(
   /** The newest config announcement's number: a project's `config.get`
    * reply older than a `config.state` broadcast is discarded. */
   let configReads = 0;
+  // Readings again after a batch's conflict, the newest deciding.
+  let rereads = 0;
 
   /** The newest re-read of the projects a Groups state set off: an older
    * reply is discarded. */
@@ -1058,6 +1070,13 @@ function placeState(
 
   function setRunError(sessionId: string, message: string): void {
     set({ runErrors: { ...get().runErrors, [sessionId]: message } });
+  }
+
+  // A re-check may reseed and reload the config, broadcasting the new
+  // state; the config is read after it so an older read never lands last.
+  async function readReadinessThenConfig() {
+    const readiness = await getClient().command("readiness.get", {});
+    return [readiness, await getClient().command("config.get", {})] as const;
   }
 
   // Session lists have no revision on the wire. Keep announcements only
@@ -1814,6 +1833,37 @@ function placeState(
       if (read !== configReads && projectId in get().projectConfigs) return;
       set({ projectConfigs: { ...get().projectConfigs, [projectId]: state } });
     },
+
+    async rereadConfig(): Promise<void> {
+      const reading = ++rereads;
+      const broadcast = configReads;
+      set({ configReread: { reading: true } });
+      const projectIds = Object.keys(get().projectConfigs);
+      // Every answer is held until all settle: a reading again the
+      // next one overtook, or a `config.state` broadcast newer than its
+      // start, writes nothing, so no late answer replaces a newer one.
+      const reads = await Promise.allSettled([
+        getClient().command("config.get", {}),
+        ...projectIds.map((projectId) => getClient().command("config.get", { projectId })),
+      ]);
+      if (reading !== rereads) return;
+      const failed = reads.find((read): read is PromiseRejectedResult => read.status === "rejected");
+      if (failed) {
+        set({ configReread: { reading: false, error: failed.reason instanceof Error ? failed.reason.message : String(failed.reason) } });
+        return;
+      }
+      const [own, ...projects] = reads.map((read) => (read as PromiseFulfilledResult<ConfigState>).value);
+      if (broadcast !== configReads) {
+        // The broadcast already brought newer states than these.
+        set({ configReread: undefined });
+        return;
+      }
+      set({
+        configState: own,
+        projectConfigs: { ...get().projectConfigs, ...Object.fromEntries(projectIds.map((projectId, index) => [projectId, projects[index]!])) },
+        configReread: undefined,
+      });
+    },
     compileProgress: {},
     sessions: [],
     views: {},
@@ -2077,9 +2127,8 @@ function placeState(
     },
 
     async rereadProse(): Promise<void> {
-      const [configState, readiness, projects, sessionsCurrent] = await Promise.all([
-        getClient().command("config.get", {}),
-        getClient().command("readiness.get", {}),
+      const [[readiness, configState], projects, sessionsCurrent] = await Promise.all([
+        readReadinessThenConfig(),
         getClient().command("project.list", {}),
         readSessions(),
       ]);
@@ -2098,9 +2147,8 @@ function placeState(
     },
 
     async refresh(): Promise<void> {
-      const [configState, readiness, projects, sessionsCurrent] = await Promise.all([
-        getClient().command("config.get", {}),
-        getClient().command("readiness.get", {}),
+      const [[readiness, configState], projects, sessionsCurrent] = await Promise.all([
+        readReadinessThenConfig(),
         getClient().command("project.list", {}),
         readSessions(),
       ]);

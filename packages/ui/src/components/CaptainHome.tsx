@@ -21,12 +21,14 @@ import type { AgentPatch } from "../lib/config-ops.js";
 import { keyLabel } from "../lib/shortcuts.js";
 import { playbookIntent } from "../lib/playbook-intent.js";
 import { treeCounts } from "../lib/spec-view-model.js";
-import { useAppStore, type StagedIntent } from "../state/store.js";
+import { isLocalPlace, useAppStore, type StagedIntent } from "../state/store.js";
 import { usePlaceStore } from "../state/place-context.js";
 import { anySignedIn } from "../lib/instances.js";
 import { STEP_LINES, stoppedPhrase, type OpeningProject } from "../lib/space.js";
 import { SlashMenuList, slashMatches } from "./SlashMenu.js";
-import { AgentChip, agentChipText, fastModeWord, readinessWord } from "./AgentChip.js";
+import { AgentChip, agentChipText, fastModeWord, readinessWord, unconfirmedNote } from "./AgentChip.js";
+import { agentName, faultGuidance, faultsOf } from "../lib/agent-cards.js";
+import { WORKSHOP } from "../lib/workshop.js";
 import { AgentEditorPopover } from "./AgentEditor.js";
 import { Icon } from "./Icon.js";
 import { NextCard, type NextCardIntent } from "./NextCard.js";
@@ -65,6 +67,8 @@ export interface CaptainHomeProps {
   onDraftChange?: (draft: string) => void;
   /** Re-check agent readiness at hand (DR-009). */
   onRecheckReadiness?: () => Promise<unknown>;
+  /** Settings at an adapter's agent card (run-view-45, settings-70). */
+  onOpenAgentCard?: (adapter: string) => void;
   /** The current project while this place opens it (run-view-168):
    * its name over the join's step, or the join's cause where it
    * stopped, in place of the welcome page and the greeting. */
@@ -236,6 +240,15 @@ export function CaptainHome(props: CaptainHomeProps) {
   const [slashIndex, setSlashIndex] = useState(0);
   const [slashDismissed, setSlashDismissed] = useState(false);
   const [rechecking, setRechecking] = useState(false);
+  // A start pressed while the Captain's agent is not ready: the
+  // re-check it asked for, then the notice it marks (run-view-45).
+  const [startAfterCheck, setStartAfterCheck] = useState(false);
+  const [noticeMarked, setNoticeMarked] = useState(false);
+  // A start whose re-check could not confirm the Captain's agent: the
+  // draft waits for a second press (run-view-45).
+  const [startUnconfirmed, setStartUnconfirmed] = useState(false);
+  const noticeRef = useRef<HTMLDivElement>(null);
+  const setUpRef = useRef<HTMLButtonElement>(null);
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [queueing, setQueueing] = useState(false);
@@ -313,6 +326,42 @@ export function CaptainHome(props: CaptainHomeProps) {
             ? "ready"
             : "empty";
 
+  function recheck(): Promise<unknown> {
+    setRechecking(true);
+    return (props.onRecheckReadiness?.() ?? Promise.resolve()).finally(() => setRechecking(false));
+  }
+
+  /** A start the Captain's readiness blocks dispatches nothing: it
+   * re-checks, and the check's answer starts or explains (run-view-45). */
+  function recheckBeforeStart(): void {
+    setStartAfterCheck(true);
+    // A check already running answers this start too.
+    if (!rechecking) void recheck().catch(() => {});
+  }
+
+  function markNotice(): void {
+    setNoticeMarked(true);
+    noticeRef.current?.scrollIntoView?.({ block: "nearest" });
+    setUpRef.current?.focus();
+  }
+
+  useEffect(() => {
+    if (!startAfterCheck || rechecking) return;
+    setStartAfterCheck(false);
+    // Only a check reporting ready starts the task.
+    if (captainReadiness?.ready === true) void start();
+    else if (captainUnavailable) markNotice();
+    else setStartUnconfirmed(true);
+    // `start` reads this render's draft and readiness.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startAfterCheck, rechecking, captainUnavailable]);
+
+  useEffect(() => {
+    if (!noticeMarked) return;
+    const timer = setTimeout(() => setNoticeMarked(false), 1600);
+    return () => clearTimeout(timer);
+  }, [noticeMarked]);
+
   async function start(): Promise<void> {
     if (!canSubmitContent(text, props.attachments?.files) || busy || !connected) {
       return;
@@ -322,7 +371,11 @@ export function CaptainHome(props: CaptainHomeProps) {
       props.onOpenPalette();
       return;
     }
-    if (captainUnavailable) return;
+    if (captainUnavailable) {
+      recheckBeforeStart();
+      return;
+    }
+    setStartUnconfirmed(false);
     setError(undefined);
     setBusy(true);
     try {
@@ -619,49 +672,103 @@ export function CaptainHome(props: CaptainHomeProps) {
       </div>
 
       <div className="mt-6 flex flex-col gap-2">
-        {props.hasProject && captainUnavailable ? (
+        {props.hasProject && captainUnavailable && captain ? (
           <div
+            ref={noticeRef}
             role="status"
             data-testid="captain-readiness"
-            className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200"
+            data-marked={noticeMarked ? "true" : undefined}
+            className={`flex flex-col gap-2 rounded-lg border px-4 py-3 text-sm text-amber-950 transition-shadow dark:text-amber-100 ${
+              noticeMarked
+                ? "border-amber-500 bg-amber-100 ring-2 ring-amber-400 dark:border-amber-500 dark:bg-amber-900"
+                : "border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950"
+            }`}
           >
-            <span>
+            <span className="font-medium">
               {i18n._("Set up an agent before starting a task.")}
-            </span>{" "}
-            <button
-              type="button"
-              onClick={() => props.onNavigate("Settings")}
-              className="font-medium underline"
-            >
-              {i18n._("Set up an agent")}
-            </button>
-            {readyAlternative ? (
+            </span>
+            <span data-testid="captain-readiness-reason" className="break-words">
+              {i18n._({
+                id: "The Captain's agent, {agent}, is not ready.",
+                comment: "why a task cannot start; {agent} is a product name such as Claude",
+                values: { agent: agentName(captain.adapter) },
+              })}
+              {/* The next step its agent card gives (settings-63). */}
+              {captainReadiness
+                ? faultsOf(captainReadiness).map((fault) => {
+                    const guidance = faultGuidance(captainReadiness, fault, { workshop: WORKSHOP, seat: !isLocalPlace(store.place) });
+                    return (
+                      <span key={`${fault.kind}:${fault.requirement}`} title={guidance.text ? guidance.core : undefined}>
+                        {" "}
+                        {guidance.text ? <Rich text={guidance.text} components={[<code key="code" />, <code key="code-1" />]} /> : guidance.core}
+                      </span>
+                    );
+                  })
+                : null}
+            </span>
+            <span className="flex flex-wrap items-center gap-x-4 gap-y-2">
               <button
+                ref={setUpRef}
                 type="button"
-                onClick={() => setCaptainPopover(popoverRoom(chipRef.current))}
-                className="ml-3 font-medium underline"
+                data-testid="captain-readiness-setup"
+                onClick={() =>
+                  props.onOpenAgentCard
+                    ? props.onOpenAgentCard(captain.adapter)
+                    : props.onNavigate("Settings")
+                }
+                className="rounded-md bg-amber-600 px-3 py-1.5 font-medium text-white hover:bg-amber-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600"
               >
-                {i18n._("Switch to a ready agent")}
+                {i18n._("Set up an agent")}
               </button>
-            ) : null}
+              {props.onRecheckReadiness ? (
+                <button
+                  type="button"
+                  data-testid="recheck-readiness"
+                  disabled={rechecking}
+                  onClick={() => void recheck().catch(() => {})}
+                  className="font-medium underline disabled:opacity-50"
+                >
+                  {rechecking
+                    ? i18n._("Checking…")
+                    : i18n._({
+                        id: "Re-check",
+                        comment: "act: ask the agents whether they are ready now",
+                      })}
+                </button>
+              ) : null}
+              {readyAlternative ? (
+                <button
+                  type="button"
+                  onClick={() => setCaptainPopover(popoverRoom(chipRef.current))}
+                  className="font-medium underline"
+                >
+                  {i18n._("Switch to a ready agent")}
+                </button>
+              ) : null}
+            </span>
+          </div>
+        ) : null}
+        {props.hasProject && startUnconfirmed && captain && !captainUnavailable && captainReadiness?.ready !== true ? (
+          <div role="status" data-testid="captain-readiness-unconfirmed" className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
+            {i18n._({
+              id: "Couldn't confirm that the Captain's agent, {agent}, is ready, so the task has not started. Press Start task to try anyway.",
+              comment: "a re-check before starting could not tell whether the agent is ready; {agent} is a product name such as Claude",
+              values: { agent: agentName(captain.adapter) },
+            })}
+            {captainReadiness?.unconfirmed !== undefined ? ` ${unconfirmedNote(captainReadiness.unconfirmed)}` : null}
             {props.onRecheckReadiness ? (
-              <button
-                type="button"
-                data-testid="recheck-readiness"
-                disabled={rechecking}
-                onClick={() => {
-                  setRechecking(true);
-                  void props.onRecheckReadiness?.().finally(() => setRechecking(false));
-                }}
-                className="ml-3 font-medium underline disabled:opacity-50"
-              >
-                {rechecking
-                  ? i18n._("Checking…")
-                  : i18n._({
-                      id: "Re-check",
-                      comment: "act: ask the agents whether they are ready now",
-                    })}
-              </button>
+              <>
+                {" "}
+                <button
+                  type="button"
+                  data-testid="recheck-readiness-unconfirmed"
+                  disabled={rechecking}
+                  onClick={() => void recheck().catch(() => {})}
+                  className="font-medium underline disabled:opacity-50"
+                >
+                  {rechecking ? i18n._("Checking…") : i18n._({ id: "Re-check", comment: "act: ask the agents whether they are ready now" })}
+                </button>
+              </>
             ) : null}
           </div>
         ) : null}
@@ -849,7 +956,7 @@ export function CaptainHome(props: CaptainHomeProps) {
               <button
                 type="button"
                 data-testid="start-send"
-                disabled={busy || !connected || (props.hasProject && captainUnavailable) || !canSubmitContent(text, props.attachments?.files)}
+                disabled={busy || !connected || (startAfterCheck && rechecking) || !canSubmitContent(text, props.attachments?.files)}
                 onClick={() => void start()}
                 title={
                   props.hasProject

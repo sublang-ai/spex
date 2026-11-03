@@ -512,9 +512,9 @@ async function assertSurfaceMatrix(
             `the outline beside the graph is ${fill.outlineWidth}px wide`,
           ).toBeGreaterThanOrEqual(28 * fill.rem - 1);
         }
-        // The package rows' columns hold under their heading row, and a
-        // nonzero unresolved count stays shown (spec-view-2, spec-view-1).
-        await expect(page.getByTestId("outline-columns")).toBeVisible();
+        // The package rows' count cells stand, and a nonzero unresolved
+        // count stays shown (spec-view-2, spec-view-1).
+        await expect(page.locator('[data-testid^="counts-"]').first()).toBeVisible();
         const owed = Math.max(fill.floor, fill.besideOutline ? fill.box : 0);
         expect(
           fill.pane,

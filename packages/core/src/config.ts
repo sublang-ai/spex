@@ -26,8 +26,9 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { isMap, isScalar, parse as parseYaml, parseDocument } from "yaml";
@@ -51,6 +52,7 @@ import { migrateConfigFileIfRetired } from "./config-migrate.js";
 import { readVersioned, sha256, VersionConflictError, writeVersionedBytes, type FileVersion } from "@sublang/spex/files";
 import { defaultOwnName, recordedOwnName } from "./home.js";
 import { i18n } from "./i18n.js";
+import { probeSignIn, type SignInProbe } from "./local-credentials.js";
 import { codexAuthContent } from "./seat-credentials.js";
 import { canonicalWritablePath } from "./permission-paths.js";
 
@@ -59,9 +61,11 @@ import {
   type AdapterCredential,
   type AdapterName,
   type AgentSummary,
+  type BaseUrlState,
   type ConfigSummary,
   type PlaybookOrigin,
   type PlaybookStandingAside,
+  type ReadinessFault,
 } from "./protocol.js";
 
 export const PLAYBOOK_CAPTAIN_MODULE = "@sublang/playbook/playbook-captain";
@@ -145,23 +149,23 @@ const notInProjectFile = (entry: string): Error =>
 export function validateProjectConfig(top: unknown, _path: string): void {
   if (top === null || top === undefined) return;
   if (!isPlainObject(top)) {
-    throw new Error(i18n._({ id: "config must be a YAML mapping", comment: "Config error: the file's top level is not a mapping" }));
+    throw new ConfigViolation("structure", undefined, i18n._({ id: "config must be a YAML mapping", comment: "Config error: the file's top level is not a mapping" }));
   }
   for (const key of Object.keys(top)) if (key !== "playbooks") throw notInProjectFile(key);
   if (top.playbooks === undefined || top.playbooks === null) return;
   if (!isPlainObject(top.playbooks)) {
-    throw new Error(i18n._({ id: "playbooks must be an object", comment: "Config error; `playbooks` is the config file's own field name" }));
+    throw new ConfigViolation("structure", "playbooks", i18n._({ id: "playbooks must be an object", comment: "Config error; `playbooks` is the config file's own field name" }));
   }
   for (const [id, block] of Object.entries(top.playbooks)) {
     if (!isPlainObject(block)) {
-      throw new Error(i18n._({ id: "playbooks.{id} must be an object",
+      throw new ConfigViolation("structure", `playbooks.${id}`, i18n._({ id: "playbooks.{id} must be an object",
         comment: "Config error; `playbooks` is the config file's own field name and the id its key", values: { id } }));
     }
     if (Object.hasOwn(block, "from")) throw notInProjectFile(`playbooks.${id}.from`);
     for (const field of MODEL_FIELDS) if (Object.hasOwn(block, field)) throw notInProjectFile(`playbooks.${id}.${field}`);
     if (block.roles === undefined) continue;
     if (!isPlainObject(block.roles)) {
-      throw new Error(i18n._({ id: "playbooks.{id}.roles must be an object",
+      throw new ConfigViolation("bindings", `playbooks.${id}.roles`, i18n._({ id: "playbooks.{id}.roles must be an object",
         comment: "Config error; `playbooks.<id>.roles` is the config file's own field name", values: { id } }));
     }
     for (const [role, value] of Object.entries(block.roles)) {
@@ -409,9 +413,22 @@ export type LoadModule = (specifier: string) => Promise<unknown>;
  * to import ("unavailable") or predates the current registry contract
  * ("stale"). Callers branch on `kind`, never on the (localized) message.
  */
-export class RegistryError extends Error {
-  constructor(readonly kind: "unavailable" | "stale", message: string) {
+/** A composition refusal by the rule it breaks and the field it names
+ * (core-service-16, core-service-44): the rule is its row of the shared
+ * rule set — `structure`, `adapter` and `registry` naming a field's
+ * shape, an agent's adapter and a playbook's module entry — and the
+ * field a dotted path in the file, absent where the file's top level
+ * is at fault. */
+export class ConfigViolation extends Error {
+  constructor(readonly rule: string, readonly field: string | undefined, message: string) {
     super(message);
+    this.name = "ConfigViolation";
+  }
+}
+
+export class RegistryError extends ConfigViolation {
+  constructor(readonly kind: "unavailable" | "stale", message: string, field?: string) {
+    super("registry", field, message);
     this.name = "RegistryError";
   }
 }
@@ -782,22 +799,112 @@ export function isSeedRecord(value: unknown): value is SeedRecord {
     && typeof (value as SeedRecord).version === "string";
 }
 
-/** Playbook's own seed for these credentials and this home, as Spex
- * writes it (core-service-3, DR-154). */
-function seedText(env: NodeJS.ProcessEnv, home: string): string {
-  // Playbook's released presence check predates external snapshots. Project
-  // presence into this seed call alone; never place the marker in a run.
-  let seedEnv = env;
-  if (env.CODEX_AUTH_CONTENT && env.CODEX_HOME) {
-    try {
-      const auth = join(env.CODEX_HOME, "auth.json");
-      if (lstatSync(auth).isFile() && !lstatSync(auth).isSymbolicLink() &&
-          readFileSync(auth, "utf8") === codexAuthContent(env.CODEX_AUTH_CONTENT)) {
-        seedEnv = { ...env, CODEX_ACCESS_TOKEN: "credential-present" };
-      }
-    } catch { /* An invalid or unmaterialized snapshot counts no credential. */ }
+/** The agents a seed counts as set up (core-service-3, DR-205). */
+export type SeedCredentials = Readonly<Record<"claude" | "codex", boolean>>;
+
+/** A home with no folder in it: Playbook's rule counts an agent's home
+ * folder as a credential, which the runtime creates on its first start,
+ * signed in or not, so the seed is shown none. */
+const NO_HOME = join(tmpdir(), "spex-seed-reads-no-home", randomUUID());
+
+/** The home whose agent sign-ins and Claude user settings a seed reads;
+ * `null` on a seat, whose server account's are no member's
+ * (core-service-3, core-service-126). */
+export type SeedHome = string | null;
+
+/** Whether each agent is set up as a seed counts it (core-service-3,
+ * DR-205): a credential variable — Claude's user settings included, as
+ * a run reads them — or a sign-in its own status command confirms where
+ * its folder stands; never the folder alone. With no home, on a seat,
+ * the variables of `env` alone. */
+export async function seedCredentials(
+  env: NodeJS.ProcessEnv,
+  home: SeedHome,
+  signIn: SignInProbe = probeSignIn,
+): Promise<SeedCredentials> {
+  const one = async (adapter: "claude" | "codex"): Promise<boolean> => {
+    if (variableCredential(adapter, env, home)) return true;
+    if (adapter === "codex" && materializedCodexSnapshot(env)) return true;
+    if (home === null) return false;
+    // The status command runs only where the folder stands, since it
+    // would create it.
+    if (!existsSync(agentFolder(adapter, env, home))) return false;
+    return (await signIn(adapter, { ...env, HOME: home })).state === "signed-in";
+  };
+  const [claude, codex] = await Promise.all([one("claude"), one("codex")]);
+  return { claude, codex };
+}
+
+/** An agent's credential variable, as a run reads it (DR-204). */
+function variableCredential(adapter: "claude" | "codex", env: NodeJS.ProcessEnv, home: SeedHome): boolean {
+  const runEnv = adapter === "claude" && home !== null ? { ...env, ...claudeSettingsEnv(env, home) } : env;
+  return (LOCAL_CREDENTIAL_FORMS[adapter] ?? []).some((name) => Boolean(runEnv[name]));
+}
+
+/** Whether `env` selects a seat's access-only Codex snapshot that is
+ * materialized as its own `auth.json` (core-service-150): a seed-only
+ * presence, never written into a run. An invalid or unmaterialized
+ * snapshot counts no credential. */
+function materializedCodexSnapshot(env: NodeJS.ProcessEnv): boolean {
+  if (!env.CODEX_AUTH_CONTENT || !env.CODEX_HOME) return false;
+  try {
+    const auth = join(env.CODEX_HOME, "auth.json");
+    const stat = lstatSync(auth);
+    return stat.isFile() && !stat.isSymbolicLink() &&
+      readFileSync(auth, "utf8") === codexAuthContent(env.CODEX_AUTH_CONTENT);
+  } catch {
+    return false;
   }
-  return starterText(seedConfigText({ env: seedEnv, homeDir: home }).text);
+}
+
+/** An agent's configuration folder, where its sign-in is kept. */
+function agentFolder(adapter: "claude" | "codex", env: NodeJS.ProcessEnv, home: string): string {
+  return adapter === "claude"
+    ? env.CLAUDE_CONFIG_DIR?.trim() || join(home, ".claude")
+    : env.CODEX_HOME?.trim() || join(home, ".codex");
+}
+
+/** Playbook's own seed for these credentials, as Spex writes it
+ * (core-service-3, DR-154): it reads the credentials confirmed above,
+ * one variable standing for each, with no home folder (DR-205); behind
+ * a third-party service its Claude agents take the provider's default
+ * in place of an official name, which that service would map by its
+ * own rule. */
+function seedText(env: NodeJS.ProcessEnv, home: SeedHome, credentials: SeedCredentials): string {
+  const input: NodeJS.ProcessEnv = {
+    ...(credentials.claude ? { ANTHROPIC_API_KEY: "confirmed" } : {}),
+    ...(credentials.codex ? { OPENAI_API_KEY: "confirmed" } : {}),
+  };
+  const text = starterText(seedConfigText({ env: input, homeDir: NO_HOME }).text);
+  const service = anthropicBaseUrl(home === null ? env : { ...env, ...claudeSettingsEnv(env, home) });
+  return service.state === "third-party" ? withoutOfficialModels(text) : text;
+}
+
+/** Anthropic's own naming (settings-61): a `claude-` model, or one of
+ * its aliases, with or without the 1M-context suffix. */
+export function isOfficialModel(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  return /^claude-/i.test(value) || /^(opus|sonnet|haiku|fable)(\[1m\])?$/i.test(value);
+}
+
+/** The seed with each Claude agent's official `model` removed, so it
+ * runs on the provider's default; comments kept. */
+export function withoutOfficialModels(text: string): string {
+  const document = parseDocument(text);
+  if (document.errors.length > 0) return text;
+  const agents: (string | number)[][] = [["captain"]];
+  const players = document.get("players", true);
+  if (isMap(players)) {
+    for (const item of players.items) agents.push(["players", isScalar(item.key) ? String(item.key.value) : String(item.key)]);
+  }
+  let removed = false;
+  for (const path of agents) {
+    if (document.getIn([...path, "adapter"]) !== "claude") continue;
+    if (!isOfficialModel(document.getIn([...path, "model"]))) continue;
+    document.deleteIn([...path, "model"]);
+    removed = true;
+  }
+  return removed ? document.toString() : text;
 }
 
 /**
@@ -809,11 +916,13 @@ function seedText(env: NodeJS.ProcessEnv, home: string): string {
 export function seedConfig(
   path: string,
   env: NodeJS.ProcessEnv = process.env,
-  home: string = env.HOME ?? homedir(),
+  home: SeedHome = env.HOME ?? homedir(),
+  // Where no sign-in was asked, the variables alone count.
+  credentials: SeedCredentials = { claude: variableCredential("claude", env, home), codex: variableCredential("codex", env, home) },
 ): string | null {
   if (existsSync(path)) return null;
   mkdirSync(dirname(path), { recursive: true });
-  const text = seedText(env, home);
+  const text = seedText(env, home, credentials);
   writeFileSync(path, text, { flag: "wx" });
   return sha256(text);
 }
@@ -829,11 +938,12 @@ export function reseedConfig(
   path: string,
   recorded: string,
   env: NodeJS.ProcessEnv,
-  home: string,
+  home: SeedHome,
+  credentials: SeedCredentials,
 ): { outcome: "kept" } | { outcome: "rewritten"; version: string } | { outcome: "edited" } {
   const { version } = readVersioned(path);
   if (version !== recorded) return { outcome: "edited" };
-  const text = seedText(env, home);
+  const text = seedText(env, home, credentials);
   const next = sha256(text);
   if (next === version) return { outcome: "kept" };
   try {
@@ -893,10 +1003,10 @@ function validateAgentBlock(
   block: Record<string, unknown>,
   path: string,
 ): void {
-  if (Object.hasOwn(block, "skills")) throw new Error(skillsRefusal(`${path}.skills`));
+  if (Object.hasOwn(block, "skills")) throw new ConfigViolation("skills", `${path}.skills`, skillsRefusal(`${path}.skills`));
   for (const key of Object.keys(block)) {
     if (!AGENT_FIELDS.has(key)) {
-      throw new Error(
+      throw new ConfigViolation("structure", `${path}.${key}`,
         i18n._({
           id: "Unknown config field {field}",
           comment:
@@ -908,7 +1018,7 @@ function validateAgentBlock(
   }
   if (block.permissions !== undefined) {
     if (!isPlainObject(block.permissions)) {
-      throw new Error(
+      throw new ConfigViolation("structure", `${path}.permissions`,
         i18n._({
           id: "{path}.permissions must be an object",
           comment:
@@ -920,7 +1030,7 @@ function validateAgentBlock(
     const permissions = block.permissions;
     for (const key of Object.keys(permissions)) {
       if (!PERMISSION_FIELDS.has(key)) {
-        throw new Error(
+        throw new ConfigViolation("structure", `${path}.permissions.${key}`,
           i18n._({
             id: "Unknown config field {field}",
             comment:
@@ -935,7 +1045,7 @@ function validateAgentBlock(
       permissions.mode !== "auto" &&
       permissions.mode !== "bypass"
     ) {
-      throw new Error(
+      throw new ConfigViolation("structure", `${path}.permissions.mode`,
         i18n._({
           id: "{path}.permissions.mode must be auto or bypass",
           comment:
@@ -947,7 +1057,7 @@ function validateAgentBlock(
     for (const policy of ["fileWrite", "shellExecute", "networkAccess"]) {
       const value = permissions[policy];
       if (value !== undefined && !["allow", "ask", "deny"].includes(String(value))) {
-        throw new Error(
+        throw new ConfigViolation("structure", `${path}.permissions.${policy}`,
           i18n._({
             id: "{path}.permissions.{policy} must be allow, ask, or deny",
             comment:
@@ -962,7 +1072,7 @@ function validateAgentBlock(
       (!Array.isArray(permissions.writablePaths) ||
         permissions.writablePaths.some((p) => typeof p !== "string"))
     ) {
-      throw new Error(
+      throw new ConfigViolation("writable-paths", `${path}.permissions.writablePaths`,
         i18n._({
           id: "{path}.permissions.writablePaths must be a string list",
           comment:
@@ -973,7 +1083,7 @@ function validateAgentBlock(
     }
   }
   if (block.effort !== undefined && block.reasoningEffort !== undefined) {
-    throw new Error(
+    throw new ConfigViolation("tuning", `${path}.effort`,
       i18n._({
         id: "{path} must not set both effort and its legacy alias reasoningEffort",
         comment:
@@ -1008,7 +1118,7 @@ export function resolveAgent(
     if ("profile" in value) {
       // Retired with the profiles model (playbook 3.0); the load path
       // migrates old files, so a survivor here is a hand-typed edit.
-      throw new Error(
+      throw new ConfigViolation("legacy", `${path}.profile`,
         i18n._({
           id: "{path}.profile is retired: agents carry their own adapter, model, effort, and permissions",
           comment:
@@ -1019,7 +1129,7 @@ export function resolveAgent(
     }
     return { ...value };
   }
-  throw new Error(
+  throw new ConfigViolation("structure", path,
     i18n._({
       id: "{path} must be an adapter shorthand or an agent block",
       comment:
@@ -1036,7 +1146,7 @@ function toResolvedAgent(
   validateAgentBlock(block, path);
   const adapter = block.adapter;
   if (typeof adapter !== "string" || adapter.length === 0) {
-    throw new Error(
+    throw new ConfigViolation("adapter", `${path}.adapter`,
       i18n._({
         id: "{path} must resolve an adapter",
         comment: "Config error: the agent names no adapter to run on",
@@ -1048,7 +1158,7 @@ function toResolvedAgent(
     // English, deliberately (core-service-111): the page matches
     // `Unknown adapter "<name>"` to phrase this failure in its own
     // words, so these are wire text, not the core's own prose.
-    throw new Error(
+    throw new ConfigViolation("adapter", `${path}.adapter`,
       `Unknown adapter "${adapter}" for ${path}. Valid adapters: ${KNOWN_ADAPTERS.join(", ")}`,
     );
   }
@@ -1074,7 +1184,7 @@ function toResolvedAgent(
       const values = (supportedEffortValues(adapter as never) ?? []).join(
         ", ",
       );
-      throw new Error(
+      throw new ConfigViolation("tuning", `${path}.effort`,
         i18n._({
           id: "{path}.effort \"{effort}\" is not supported by the \"{adapter}\" adapter (valid: {values})",
           comment:
@@ -1085,14 +1195,14 @@ function toResolvedAgent(
     }
   }
   if (rest.browser !== undefined && typeof rest.browser !== "boolean") {
-    throw new Error(i18n._({
+    throw new ConfigViolation("structure", `${path}.browser`, i18n._({
       id: "{path}.browser must be a boolean",
       comment: "Config error; browser is the config field name",
       values: { path },
     }));
   }
   if (rest.fastMode !== undefined && typeof rest.fastMode !== "boolean") {
-    throw new Error(
+    throw new ConfigViolation("tuning", `${path}.fastMode`,
       i18n._({
         id: "{path}.fastMode must be a boolean",
         comment:
@@ -1164,7 +1274,7 @@ export function assertSubagentEffort(
   path: string,
 ): void {
   if (!isSubagentModelSupported(adapter as never)) {
-    throw new Error(
+    throw new ConfigViolation("subagent-effort", `${path}.subagentEffort`,
       i18n._({
         id: "{path}.subagentEffort is not supported for adapter \"{adapter}\"",
         comment:
@@ -1174,7 +1284,7 @@ export function assertSubagentEffort(
     );
   }
   if (subagentModel === undefined) {
-    throw new Error(
+    throw new ConfigViolation("subagent-effort", `${path}.subagentEffort`,
       i18n._({
         id: "{path}.subagentEffort for adapter \"{adapter}\" requires subagentModel",
         comment:
@@ -1185,7 +1295,7 @@ export function assertSubagentEffort(
   }
   const values = subagentEffortValues(adapter);
   if (typeof value !== "string" || !values.includes(value)) {
-    throw new Error(
+    throw new ConfigViolation("subagent-effort", `${path}.subagentEffort`,
       i18n._({
         id: "{path}.subagentEffort for adapter \"{adapter}\" must be one of: {values}",
         comment:
@@ -1206,7 +1316,7 @@ export function assertSubagentModel(
   path: string,
 ): void {
   if (typeof value !== "string" || value.trim().length === 0) {
-    throw new Error(
+    throw new ConfigViolation("delegation", `${path}.subagentModel`,
       i18n._({
         id: "{path}.subagentModel must be a nonblank string",
         comment:
@@ -1216,7 +1326,7 @@ export function assertSubagentModel(
     );
   }
   if (!isSubagentModelSupported(adapter as never)) {
-    throw new Error(
+    throw new ConfigViolation("tuning", `${path}.subagentModel`,
       i18n._({
         id: "{path}.subagentModel is not supported for adapter \"{adapter}\"",
         comment:
@@ -1285,7 +1395,7 @@ export function isValidRegistryEntry(
 function resolveBinding(value: unknown, path: string): ResolvedBinding {
   if (typeof value === "string") {
     if (!PLAYER_ID_PATTERN.test(value)) {
-      throw new Error(
+      throw new ConfigViolation("bindings", path,
         i18n._({
           id: "{path} is not a canonical player id",
           comment: "Config error: a role is bound to a malformed player id",
@@ -1296,7 +1406,7 @@ function resolveBinding(value: unknown, path: string): ResolvedBinding {
     return { playerId: value };
   }
   if (!isPlainObject(value)) {
-    throw new Error(
+    throw new ConfigViolation("bindings", path,
       i18n._({
         id: "{path} must be a player id or a binding block",
         comment: "Config error: a role's binding is neither form",
@@ -1307,7 +1417,7 @@ function resolveBinding(value: unknown, path: string): ResolvedBinding {
   const allowed = new Set(["player", "model", "effort", "fastMode", "subagentModel", "subagentEffort"]);
   for (const key of Object.keys(value)) {
     if (allowed.has(key)) continue;
-    throw new Error(
+    throw new ConfigViolation("binding-keys", `${path}.${key}`,
       i18n._({
         id: "{path}.{key} is not a role binding key: adapter, permissions, instruction and workspace belong to the session player",
         comment:
@@ -1318,7 +1428,7 @@ function resolveBinding(value: unknown, path: string): ResolvedBinding {
   }
   const playerId = value.player;
   if (typeof playerId !== "string" || !PLAYER_ID_PATTERN.test(playerId)) {
-    throw new Error(
+    throw new ConfigViolation("bindings", `${path}.player`,
       i18n._({
         id: "{path}.player must name a canonical player id",
         comment:
@@ -1334,7 +1444,7 @@ function resolveBinding(value: unknown, path: string): ResolvedBinding {
     // distinct from omission, which inherits the player's.
     if (raw === false) return false;
     if (typeof raw === "string" && raw.length > 0) return raw;
-    throw new Error(
+    throw new ConfigViolation("tuning", `${path}.${key}`,
       i18n._({
         id: "{path}.{key} must be a string or false (the provider default)",
         comment:
@@ -1347,7 +1457,7 @@ function resolveBinding(value: unknown, path: string): ResolvedBinding {
   if (fastMode !== undefined && typeof fastMode !== "boolean") {
     // Unlike model and effort, fast mode carries no provider-default
     // sentinel: omission inherits the player's, `false` is a literal request.
-    throw new Error(
+    throw new ConfigViolation("tuning", `${path}.fastMode`,
       i18n._({
         id: "{path}.fastMode must be a boolean",
         comment:
@@ -1440,10 +1550,11 @@ const importFailure = (id: string, from: string, error: unknown): RegistryError 
         "Config error; `message` is the import failure's own words, relayed",
       values: { id, from, message: error instanceof Error ? error.message : String(error) },
     }),
+    `playbooks.${id}`,
   );
 
 const noRegistryEntry = (id: string, from: string): Error =>
-  new Error(
+  new ConfigViolation("registry", `playbooks.${id}`,
     i18n._({
       id: "playbooks.{id}: its module \"{from}\" exposes no valid registry entry",
       comment:
@@ -1461,10 +1572,11 @@ const staleModule = (id: string, from: string): RegistryError =>
         "Config error; \"Playbooks\" is the app's own surface",
       values: { id, from },
     }),
+    `playbooks.${id}`,
   );
 
 const keyMismatch = (id: string, manifestId: string): Error =>
-  new Error(
+  new ConfigViolation("registry", `playbooks.${id}`,
     i18n._({
       id: "playbooks.{id} key must equal the module manifest id \"{manifestId}\"",
       comment:
@@ -1474,7 +1586,7 @@ const keyMismatch = (id: string, manifestId: string): Error =>
   );
 
 const reservedCaptainRole = (id: string): Error =>
-  new Error(
+  new ConfigViolation("registry", `playbooks.${id}`,
     i18n._({
       id: "playbooks.{id} requires local role \"captain\", which is reserved for the tmux-play Captain",
       comment:
@@ -1563,14 +1675,14 @@ export async function composeConfig(
   options: ComposeOptions = {},
 ): Promise<ComposedConfig> {
   if (!isPlainObject(ownTop)) {
-    throw new Error(
+    throw new ConfigViolation("structure", undefined,
       i18n._({
         id: "config must be a YAML mapping",
         comment: "Config error: the file's top level is not a mapping",
       }),
     );
   }
-  if (Object.hasOwn(ownTop, "skills")) throw new Error(skillsRefusal("skills"));
+  if (Object.hasOwn(ownTop, "skills")) throw new ConfigViolation("skills", "skills", skillsRefusal("skills"));
   // A session's configuration is yours with the project's on top
   // (core-service-2); the project's file is checked before it layers.
   if (options.project) validateProjectConfig(options.project.top, options.project.path);
@@ -1580,7 +1692,7 @@ export async function composeConfig(
   if (top.profiles !== undefined) {
     // The load path migrates profiles-era files (DR-019); a map
     // arriving here came through an edit or a raw compose.
-    throw new Error(
+    throw new ConfigViolation("legacy", "profiles",
       i18n._({
         id: "profiles is retired (playbook 3.0): agents carry their settings inline",
         comment:
@@ -1592,7 +1704,7 @@ export async function composeConfig(
   // No written entry is no error: every playbook an environment places
   // runs on its default binding (core-service-2, DR-176).
   if (top.playbooks !== undefined && top.playbooks !== null && !isPlainObject(top.playbooks)) {
-    throw new Error(
+    throw new ConfigViolation("structure", "playbooks",
       i18n._({
         id: "playbooks must be an object",
         comment:
@@ -1618,7 +1730,7 @@ export async function composeConfig(
     typeof captainBlock.adapter !== "string" ||
     captainBlock.adapter.length === 0
   ) {
-    throw new Error(
+    throw new ConfigViolation("adapter", "captain.adapter",
       i18n._({
         id: "captain must resolve an adapter",
         comment:
@@ -1644,7 +1756,7 @@ export async function composeConfig(
   const sessionPlayers = new Map<string, ResolvedAgent>();
   if (top.players !== undefined) {
     if (!isPlainObject(top.players)) {
-      throw new Error(
+      throw new ConfigViolation("roster", "players",
         i18n._({
           id: "players must be an object",
           comment:
@@ -1655,7 +1767,7 @@ export async function composeConfig(
     for (const [playerId, value] of Object.entries(top.players)) {
       const path = `players.${playerId}`;
       if (!PLAYER_ID_PATTERN.test(playerId)) {
-        throw new Error(
+        throw new ConfigViolation("roster", path,
           i18n._({
             id: "{path} is not a canonical player id (lowercase segments, dots optional)",
             comment: "Config error: a session player's id is malformed",
@@ -1664,7 +1776,7 @@ export async function composeConfig(
         );
       }
       if (playerId === RESERVED_CAPTAIN_ROLE_ID) {
-        throw new Error(
+        throw new ConfigViolation("roster", "players.captain",
           i18n._({
             id: "players.captain is reserved for the session Captain, which is configured at the top level",
             comment:
@@ -1677,7 +1789,7 @@ export async function composeConfig(
         typeof resolved.adapter !== "string" ||
         resolved.adapter.length === 0
       ) {
-        throw new Error(
+        throw new ConfigViolation("adapter", `${path}.adapter`,
           i18n._({
             id: "{path} must resolve an adapter",
             comment: "Config error: the agent names no adapter to run on",
@@ -1712,7 +1824,7 @@ export async function composeConfig(
   const placed = options.defaults === false ? [] : (modules.placed?.() ?? []);
   for (const [id, blockValue] of Object.entries(playbookBlocks)) {
     if (!isPlainObject(blockValue)) {
-      throw new Error(
+      throw new ConfigViolation("structure", `playbooks.${id}`,
         i18n._({
           id: "playbooks.{id} must be an object",
           comment:
@@ -1725,7 +1837,7 @@ export async function composeConfig(
     // A playbook's module comes from the environment that installs it
     // and never from a path in a shared file (core-service-2, DR-104).
     if (Object.hasOwn(block, "from")) {
-      throw new Error(
+      throw new ConfigViolation("module", `playbooks.${id}.from`,
         i18n._({
           id: "playbooks.{id}.from is not allowed: a playbook's module comes from the environment that installs its spec package",
           comment:
@@ -1873,7 +1985,7 @@ function composeEntry(
   // per-playbook players block is the removed shape and rejects with
   // the launcher's own wording rather than a paraphrase.
   if (block.players !== undefined) {
-    throw new Error(
+    throw new ConfigViolation("legacy", `playbooks.${id}.players`,
       i18n._({
         id: "playbooks.{id}.players was removed in the explicit-session-player major release: define stable ids in top-level players and bind them explicitly under playbooks.<id>.roles; automatic migration would choose which prior conversations share a session",
         comment:
@@ -1887,7 +1999,7 @@ function composeEntry(
     ? block.roles
     : Object.fromEntries(entry.requiredRoleIds.map((role) => [role, defaultPlayerId(role)]));
   if (!isPlainObject(roleBlocks)) {
-    throw new Error(
+    throw new ConfigViolation("bindings", `playbooks.${id}.roles`,
       i18n._({
         id: "playbooks.{id}.roles must be an object",
         comment:
@@ -1897,7 +2009,7 @@ function composeEntry(
     );
   }
   if (RESERVED_CAPTAIN_ROLE_ID in roleBlocks) {
-    throw new Error(
+    throw new ConfigViolation("bindings", `playbooks.${id}.roles.captain`,
       i18n._({
         id: "playbooks.{id}.roles.captain binds local role \"captain\", which is reserved for the tmux-play Captain",
         comment:
@@ -1917,7 +2029,7 @@ function composeEntry(
     // punctuate its own list (core-service-111); English is unchanged.
     const listed = (roles: string[]): string =>
       roles.join(i18n._({ id: ", ", comment: "Separates names listed in one message" }));
-    throw new Error(
+    throw new ConfigViolation("bindings", `playbooks.${id}.roles`,
       i18n._({
         id: "playbooks.{id}.roles must exactly cover requiredRoleIds{missing}{unknown}",
         comment:
@@ -2012,7 +2124,7 @@ function composeEntry(
       ids.filter((value: string | undefined) => value !== undefined),
     );
     if (distinct.size < ids.length) {
-      throw new Error(
+      throw new ConfigViolation("concurrency", `playbooks.${id}.roles`,
         i18n._({
           id: "playbooks.{id} runs roles {roles} concurrently, so they must bind to distinct players",
           comment:
@@ -2062,7 +2174,7 @@ function composeEntry(
         ...(acceptsCwdOption ? { cwd } : {}),
       });
     } catch (error) {
-      throw new Error(i18n._({
+      throw new ConfigViolation("custom-options", `playbooks.${id}`, i18n._({
         id: "{file}: {reason}", comment: "A storage fault as one line: the file, then the reason — itself a message",
         values: { file: `playbooks.${id}`, reason: error instanceof Error ? error.message : String(error) },
       }));
@@ -2281,8 +2393,13 @@ export interface AdapterReadiness {
   adapter: AdapterName;
   ready: boolean | null;
   requirement?: string;
+  /** Each unmet half by its kind (DR-204); `requirement` joins them. */
+  faults: ReadinessFault[];
   /** On a seat, the credential class and its phrase (settings-49). */
   credential?: AdapterCredential;
+  /** With null readiness alone: why the agent's sign-in could not be
+   * confirmed just now (settings-14). */
+  unconfirmed?: string;
 }
 
 /** The credential half where another rule than the launcher's decides
@@ -2456,6 +2573,83 @@ export async function checkAdapterRuntime(
   };
 }
 
+/** The credential variables of Playbook's launcher (settings-14,
+ * DR-204); with none set, the agent's own status command decides. */
+export const LOCAL_CREDENTIAL_FORMS: Partial<Record<AdapterName, readonly string[]>> = {
+  claude: ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"],
+  codex: ["OPENAI_API_KEY", "CODEX_API_KEY", "CODEX_ACCESS_TOKEN"],
+};
+
+/** The variables Claude Code's user settings set (the `env` of
+ * `settings.json` in its configuration folder), which a Claude run
+ * applies over those it inherits (DR-204); none where the file is
+ * absent or unreadable. */
+export function claudeSettingsEnv(env: NodeJS.ProcessEnv, home: string): Record<string, string> {
+  const folder = env.CLAUDE_CONFIG_DIR?.trim() || join(home, ".claude");
+  try {
+    const settings = JSON.parse(readFileSync(join(folder, "settings.json"), "utf8")) as { env?: unknown } | null;
+    const values = settings?.env;
+    if (!values || typeof values !== "object" || Array.isArray(values)) return {};
+    return Object.fromEntries(Object.entries(values).filter((pair): pair is [string, string] => typeof pair[1] === "string"));
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Claude Code's user-settings variables, written into the environment
+ * every run inherits (core-service-155, DR-205): a run applies them over
+ * those it inherits, but a call isolated from settings files — the
+ * Captain's control calls — reads none, and would run with no key or
+ * base URL the card counted. Each apply follows the file as it stands
+ * now; a variable it no longer sets goes back as it stood before.
+ */
+export class ClaudeSettingsEnvironment {
+  /** Each name an apply wrote, with its value before the first. */
+  private readonly baseline = new Map<string, string | undefined>();
+
+  /** `target` is the environment a run inherits; `read` the settings'
+   * variables as they stand. */
+  constructor(private readonly target: NodeJS.ProcessEnv, private readonly read: () => Record<string, string>) {}
+
+  apply(): void {
+    const values = this.read();
+    for (const [name, before] of this.baseline) {
+      if (Object.hasOwn(values, name)) continue;
+      if (before === undefined) delete this.target[name];
+      else this.target[name] = before;
+      this.baseline.delete(name);
+    }
+    for (const [name, value] of Object.entries(values)) {
+      if (!this.baseline.has(name)) this.baseline.set(name, this.target[name]);
+      this.target[name] = value;
+    }
+  }
+
+  /** Each name back as it stood before the first apply, at stop. */
+  restore(): void {
+    for (const [name, before] of this.baseline) {
+      if (before === undefined) delete this.target[name];
+      else this.target[name] = before;
+    }
+    this.baseline.clear();
+  }
+}
+
+/** Where Claude's requests go, by `ANTHROPIC_BASE_URL` (core-service-9):
+ * its host name alone, so no path or secret written into it is ever
+ * reported. */
+export function anthropicBaseUrl(env: NodeJS.ProcessEnv): BaseUrlState {
+  const value = env.ANTHROPIC_BASE_URL?.trim();
+  if (!value) return { state: "unset" };
+  let host: string;
+  try { host = new URL(value).hostname.toLowerCase(); }
+  catch { return { state: "unknown" }; }
+  if (!host) return { state: "unknown" };
+  if (host === "api.anthropic.com") return { state: "unset" };
+  return { state: "third-party", host };
+}
+
 export async function checkAdapterReadiness(
   adapter: AdapterName,
   env: NodeJS.ProcessEnv = process.env,
@@ -2467,53 +2661,73 @@ export async function checkAdapterReadiness(
   // On a seat the credential half is the seat's forms' (settings-14,
   // settings-49), in place of the launcher's rules below.
   credentialHalf?: (adapter: AdapterName) => Promise<CredentialHalf>,
+  // Injectable so tests spawn no status command.
+  signIn: SignInProbe = probeSignIn,
 ): Promise<AdapterReadiness> {
   // Both halves are evaluated so an adapter missing both reports both —
-  // reporting one at a time sends the user round the loop twice.
-  const faults: string[] = [];
+  // reporting one at a time sends the user round the loop twice — and
+  // each by its kind, since reinstalling the app and setting a key are
+  // different repairs (DR-204).
+  const faults: ReadinessFault[] = [];
   const runtimeCheck = await runtime(adapter);
   if (!runtimeCheck.usable && runtimeCheck.requirement) {
-    faults.push(runtimeCheck.requirement);
+    faults.push({ kind: "runtime", requirement: runtimeCheck.requirement });
   }
   let credentialReady: boolean | null = null;
   let credential: AdapterCredential | undefined;
+  let unconfirmed: string | undefined;
+  const forms = LOCAL_CREDENTIAL_FORMS[adapter];
   if (credentialHalf) {
     const half = await credentialHalf(adapter);
     credentialReady = half.ready;
     credential = half.credential;
-    if (!half.ready) faults.push(half.requirement ?? half.credential.phrase);
-  } else if (adapter === "claude") {
-    credentialReady =
-      Boolean(env.ANTHROPIC_API_KEY) || existsSync(join(home, ".claude"));
-    if (!credentialReady) {
-      faults.push(
-        i18n._("sign in by running claude in a terminal, or set ANTHROPIC_API_KEY"),
-      );
+    if (!half.ready) faults.push({ kind: "credential", requirement: half.requirement ?? half.credential.phrase });
+  } else if (forms && (adapter === "claude" || adapter === "codex")) {
+    // A home folder is no sign-in: the runtime creates it on its first
+    // start (DR-204). With no variable set the agent's own status
+    // command, run as a run would be, answers — only where the folder
+    // stands, since no sign-in exists without it and the command would
+    // create the folder Playbook's seed reads as a credential.
+    if (variableCredential(adapter, env, home)) {
+      credentialReady = true;
+    } else if (!existsSync(agentFolder(adapter, env, home))) {
+      credentialReady = false;
+    } else {
+      const answer = await signIn(adapter, { ...env, HOME: home });
+      if (answer.state === "unconfirmed") unconfirmed = answer.reason;
+      credentialReady = answer.state === "signed-in" ? true : answer.state === "signed-out" ? false : null;
     }
-  } else if (adapter === "codex") {
-    credentialReady =
-      Boolean(env.OPENAI_API_KEY) || (env.CODEX_HOME ? existsSync(join(env.CODEX_HOME, "auth.json")) : existsSync(join(home, ".codex")));
-    if (!credentialReady) {
-      faults.push(
-        i18n._({
-          id: "sign in by running codex in a terminal, or set OPENAI_API_KEY",
-          comment:
-            "Adapter requirement; `codex` is the command to run and OPENAI_API_KEY an environment variable",
-        }),
-      );
+    if (credentialReady === false) {
+      faults.push({
+        kind: "credential",
+        requirement: adapter === "claude"
+          ? i18n._("sign in by running claude in a terminal, or set ANTHROPIC_API_KEY")
+          : i18n._({
+            id: "sign in by running codex in a terminal, or set OPENAI_API_KEY",
+            comment:
+              "Adapter requirement; `codex` is the command to run and OPENAI_API_KEY an environment variable",
+          }),
+      });
     }
   }
   if (faults.length > 0) {
     return {
       adapter,
       ready: false,
-      requirement: faults.join(
+      requirement: faults.map((fault) => fault.requirement).join(
         i18n._({ id: "; ", comment: "Separates reasons listed in one message" }),
       ),
+      faults,
       ...(credential ? { credential } : {}),
     };
   }
-  // The null class survives only over a usable runtime (settings-14): no
-  // credential rule exists, so the UI shows verify-yourself guidance.
-  return { adapter, ready: credentialReady === null ? null : true, ...(credential ? { credential } : {}) };
+  // The null class survives only over a usable runtime (settings-14):
+  // no credential rule exists, or the sign-in could not be confirmed.
+  return {
+    adapter,
+    ready: credentialReady === null ? null : true,
+    faults,
+    ...(credential ? { credential } : {}),
+    ...(unconfirmed !== undefined ? { unconfirmed } : {}),
+  };
 }

@@ -289,6 +289,16 @@ msgstr "{count, plural, one {# turn} other {# turns}}"
 msgid "{count, plural, one {Changed # file without committing} other {Changed # files without committing}}"
 msgstr "{count, plural, one {Changed # file without committing} other {Changed # files without committing}}"
 
+#. outline row: other packages' items citing this package
+#: src/components/SpecView.tsx
+msgid "{count, plural, one {Cited by # item in other packages} other {Cited by # items in other packages}}"
+msgstr "{count, plural, one {Cited by # item in other packages} other {Cited by # items in other packages}}"
+
+#. outline row: the package's citations of other packages' items
+#: src/components/SpecView.tsx
+msgid "{count, plural, one {Cites # item in other packages} other {Cites # items in other packages}}"
+msgstr "{count, plural, one {Cites # item in other packages} other {Cites # items in other packages}}"
+
 #. Apply's confirm on a team server's Space, every choice keeping the server's side; {place} is the server's name, {name} the Space's display name
 #: src/components/SpaceSync.tsx
 msgid "{count, plural, one {Keep {place}'s version? {name}'s stays in Git history} other {Keep {place}'s version of all #? {name}'s stays in Git history}}"
@@ -459,6 +469,11 @@ msgstr "{label} — the compiler's {id} phase, {status}"
 #: src/components/SettingsSurface.tsx
 msgid "{label} — where to notify"
 msgstr "{label} — where to notify"
+
+#. outline row: a short label and its count, as in 'Ext (7)'
+#: src/components/SpecView.tsx
+msgid "{label} ({count})"
+msgstr "{label} ({count})"
 
 #. a phrase followed by the detail it stands on
 #: src/lib/failure-catalogue.ts
@@ -828,6 +843,16 @@ msgstr "<0>{id}</0> — not in the tree"
 msgid "<0>{player}</0> is waiting. Answer or ask Captain to explain."
 msgstr "<0>{player}</0> is waiting. Answer or ask Captain to explain."
 
+#. What the Claude card says is missing; the variable name stays as it is
+#: src/lib/agent-cards.ts
+msgid "<0>ANTHROPIC_BASE_URL</0> is not an address Spex recognizes."
+msgstr "<0>ANTHROPIC_BASE_URL</0> is not an address Spex recognizes."
+
+#. Readiness guidance; the variable name stays as it is
+#: src/lib/agent-cards.ts
+msgid "<0>ANTHROPIC_BASE_URL</0> is not recognized: check the address, then set its credential."
+msgstr "<0>ANTHROPIC_BASE_URL</0> is not recognized: check the address, then set its credential."
+
 #. a span shorter than one second
 #: src/lib/time.ts
 msgid "<1s"
@@ -1125,6 +1150,20 @@ msgstr "Add player"
 msgid "Add starter specs when creating"
 msgstr "Add starter specs when creating"
 
+#. Manual step for bash; the file name stays as it is
+#: src/lib/agent-cards.ts
+msgid "Add these lines to <0>~/.bash_profile</0>:"
+msgstr "Add these lines to <0>~/.bash_profile</0>:"
+
+#. Manual step for zsh; the file name stays as it is
+#: src/lib/agent-cards.ts
+msgid "Add these lines to <0>~/.zshrc</0>:"
+msgstr "Add these lines to <0>~/.zshrc</0>:"
+
+#: src/lib/agent-cards.ts
+msgid "Add these lines to your shell's login configuration file:"
+msgstr "Add these lines to your shell's login configuration file:"
+
 #: src/components/ProjectPalette.tsx
 msgid "Add this project"
 msgstr "Add this project"
@@ -1237,6 +1276,10 @@ msgstr "Adjust {agent}"
 msgid "after current work"
 msgstr "after current work"
 
+#: src/components/AgentCards.tsx
+msgid "After signing in, re-check; after setting the key, quit Spex completely and open it again — see How to configure."
+msgstr "After signing in, re-check; after setting the key, quit Spex completely and open it again — see How to configure."
+
 #. compact age in tight chrome: that many days ago
 #: src/lib/time.ts
 msgid "age.days"
@@ -1280,6 +1323,7 @@ msgstr "agent error"
 msgid "Agent session {session}"
 msgstr "Agent session {session}"
 
+#: src/components/AgentCards.tsx
 #: src/components/SettingsSurface.tsx
 msgid "Agents"
 msgstr "Agents"
@@ -1412,6 +1456,11 @@ msgstr "Answering agent"
 msgid "Answers {positions}"
 msgstr "Answers {positions}"
 
+#. Claude's requests go to Anthropic's own service
+#: src/lib/agent-cards.ts
+msgid "Anthropic official"
+msgstr "Anthropic official"
+
 #. a package's version requirement admitting a series of versions, such as any 1.x; {series} is that series
 #: src/lib/environments.ts
 msgid "any {series}"
@@ -1449,6 +1498,8 @@ msgstr "Applet from {name} {version}"
 
 #. confirm: apply the chosen versions
 #. confirm: apply the chosen versions
+#. give every agent of the adapter the chosen model
+#: src/components/AgentCards.tsx
 #: src/components/SpaceSync.tsx
 msgid "Apply"
 msgstr "Apply"
@@ -1738,6 +1789,7 @@ msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a 
 #. cancel choosing a project folder
 #. default cancel button: back out of the act
 #. default cancel button: back out of the act
+#. default cancel button: back out of the act
 #. leave an editor without saving
 #. leave an editor without saving
 #. leave an editor without saving
@@ -1756,6 +1808,7 @@ msgstr "Can't reach the Spex core at {endpoint} — retrying every second. On a 
 #. leave the editor without changing anything
 #. leave the editor without changing anything
 #. stop the running compile
+#: src/components/AgentCards.tsx
 #: src/components/AgentEditor.tsx
 #: src/components/AgentSettings.tsx
 #: src/components/BindingEditor.tsx
@@ -1804,10 +1857,13 @@ msgstr "Cannot sync changes to shared records."
 #. the session's controlling agent, by name
 #. the session's controlling agent, by name
 #. the session's controlling agent, by name
+#. the session's controlling agent, by name
+#: src/components/AgentCards.tsx
 #: src/components/CaptainPane.tsx
 #: src/components/DraftConversation.tsx
 #: src/components/RunView.tsx
 #: src/components/SettingsSurface.tsx
+#: src/lib/agent-cards.ts
 #: src/lib/session-agents.ts
 msgid "Captain"
 msgstr "Captain"
@@ -1832,6 +1888,11 @@ msgstr "Captain is working…"
 #: src/components/RunView.tsx
 msgid "Change {agent} in Settings"
 msgstr "Change {agent} in Settings"
+
+#. opens an agent card's adapter-wide model setting
+#: src/components/AgentCards.tsx
+msgid "Change model"
+msgstr "Change model"
 
 #. draft state chip, at most 14 characters: the source changed after the last compile
 #: src/lib/drafts.ts
@@ -2046,10 +2107,6 @@ msgstr "chose /decide, then /code with a pull request"
 msgid "Citation list ({count, plural, one {# package} other {# packages}})"
 msgstr "Citation list ({count, plural, one {# package} other {# packages}})"
 
-#: src/components/SpecView.tsx
-msgid "Citations across packages: cites · cited by"
-msgstr "Citations across packages: cites · cited by"
-
 #: src/components/SpecItemRows.tsx
 msgid "Citations of {id}"
 msgstr "Citations of {id}"
@@ -2063,6 +2120,11 @@ msgstr "Citations: {summary}"
 #: src/components/SpecGraph.tsx
 msgid "cited by"
 msgstr "cited by"
+
+#. outline row: label of other packages' citations of this package
+#: src/components/SpecView.tsx
+msgid "Cited by"
+msgstr "Cited by"
 
 #. how many items cite this one
 #. how many items cite this one
@@ -2083,10 +2145,10 @@ msgstr "cited by other packages"
 msgid "cites"
 msgstr "cites"
 
-#. outline column heading: citations between packages, out and in
+#. outline row: label of the package's citations of other packages
 #: src/components/SpecView.tsx
-msgid "cites · cited by"
-msgstr "cites · cited by"
+msgid "Cites"
+msgstr "Cites"
 
 #. how many items this one cites
 #: src/lib/spec-view-model.ts
@@ -2167,6 +2229,10 @@ msgstr "Code"
 #: src/components/SettingsSurface.tsx
 msgid "Code hosts"
 msgstr "Code hosts"
+
+#: src/components/AgentCards.tsx
+msgid "Codex needs an official OpenAI key."
+msgstr "Codex needs an official OpenAI key."
 
 #: src/components/SpecGraph.tsx
 msgid "Collapse {name}'s citation list"
@@ -2388,8 +2454,10 @@ msgid "Configure the Captain agent"
 msgstr "Configure the Captain agent"
 
 #. default confirm button: go ahead with the act
+#. default confirm button: go ahead with the act
 #. verdict control: accept the delivered work
 #. verdict control: accept the delivered work
+#: src/components/AgentCards.tsx
 #: src/components/DashboardSurface.tsx
 #: src/components/DeliveryCard.tsx
 #: src/components/InlineConfirm.tsx
@@ -2407,6 +2475,16 @@ msgstr "Confirm the command, intent and players, then add it"
 #: src/components/DeliveryCard.tsx
 msgid "Confirming…"
 msgstr "Confirming…"
+
+#. The route on the Claude card in the Workshop, over the button opening the setup guide
+#: src/lib/agent-cards.ts
+msgid "Connect Claude with a Claude subscription, or an Anthropic-compatible API key such as DeepSeek's: the setup guide walks you through it."
+msgstr "Connect Claude with a Claude subscription, or an Anthropic-compatible API key such as DeepSeek's: the setup guide walks you through it."
+
+#. The route on the Codex card in the Workshop, over the button opening the setup guide
+#: src/lib/agent-cards.ts
+msgid "Connect Codex with a ChatGPT subscription or an official OpenAI API key: the setup guide walks you through it."
+msgstr "Connect Codex with a ChatGPT subscription or an official OpenAI API key: the setup guide walks you through it."
 
 #. confirm connecting this local project to the selected existing project
 #: src/components/SpaceGroups.tsx
@@ -2617,6 +2695,11 @@ msgstr "Could not open the folder picker. Enter the folder path instead."
 #: src/components/SpecView.tsx
 msgid "could not read the file"
 msgstr "could not read the file"
+
+#. a re-check before starting could not tell whether the agent is ready; {agent} is a product name such as Claude
+#: src/components/CaptainHome.tsx
+msgid "Couldn't confirm that the Captain's agent, {agent}, is ready, so the task has not started. Press Start task to try anyway."
+msgstr "Couldn't confirm that the Captain's agent, {agent}, is ready, so the task has not started. Press Start task to try anyway."
 
 #: src/components/ProjectGroup.tsx
 #: src/components/WorkingLine.tsx
@@ -2973,6 +3056,10 @@ msgstr "Does"
 msgid "done"
 msgstr "done"
 
+#: src/components/AgentCards.tsx
+msgid "Done."
+msgstr "Done."
+
 #: src/components/TrustedMedia.tsx
 msgid "Download {name}"
 msgstr "Download {name}"
@@ -3244,6 +3331,10 @@ msgstr "Every record stays on {place}"
 #: src/components/SpaceInstance.tsx
 msgid "Every record stays on this computer"
 msgstr "Every record stays on this computer"
+
+#: src/components/AgentCards.tsx
+msgid "Every role now uses Provider default."
+msgstr "Every role now uses Provider default."
 
 #: src/components/SpaceSurface.tsx
 #: src/components/SpaceSync.tsx
@@ -3549,6 +3640,10 @@ msgstr "For publishing and private packages"
 msgid "For this conversation, from the next message"
 msgstr "For this conversation, from the next message"
 
+#: src/components/AgentCards.tsx
+msgid "Found a sign-in or key; whether it works is checked on your first task."
+msgstr "Found a sign-in or key; whether it works is checked on your first task."
+
 #. a call's outcome: the review raised nothing
 #: src/lib/step-words.ts
 msgid "found no problems"
@@ -3798,6 +3893,10 @@ msgstr "Host name"
 #: src/lib/spec-view-model.ts
 msgid "How the package behaves inside, hidden from its users"
 msgstr "How the package behaves inside, hidden from its users"
+
+#: src/components/AgentCards.tsx
+msgid "How to configure"
+msgstr "How to configure"
 
 #. accepting a team server's terms, which connects this computer to it
 #: src/components/SpaceServers.tsx
@@ -4438,6 +4537,20 @@ msgstr "Moved to Dismissed. Your conversations are kept."
 msgid "Name a folder"
 msgstr "Name a folder"
 
+#. the positions a not-ready agent card's adapter is set for follow
+#: src/components/AgentCards.tsx
+msgid "Needed by"
+msgstr "Needed by"
+
+#: src/components/AgentCards.tsx
+msgid "Needed by {first}"
+msgstr "Needed by {first}"
+
+#. a not-ready agent card's positions in brief; {first} is a role such as Captain, {count} the roles beside it, {total} all of them
+#: src/components/AgentCards.tsx
+msgid "Needed by {first} and {count, plural, one {# more role} other {# more roles}}"
+msgstr "Needed by {first} and {count, plural, one {# more role} other {# more roles}}"
+
 #. saved data currently blocks an operation
 #. saved data currently blocks an operation
 #: src/components/DashboardSurface.tsx
@@ -4580,10 +4693,6 @@ msgstr "No <0>specs/</0> directory yet — it holds spec packages and decision a
 msgid "No adapter named \"{adapter}\" — check the config"
 msgstr "No adapter named \"{adapter}\" — check the config"
 
-#: src/components/SettingsSurface.tsx
-msgid "No adapters in use yet — assign agents to the Captain or a playbook role and their readiness shows here."
-msgstr "No adapters in use yet — assign agents to the Captain or a playbook role and their readiness shows here."
-
 #: src/components/AgentChip.tsx
 msgid "no automatic check for this adapter — verify sign-in yourself"
 msgstr "no automatic check for this adapter — verify sign-in yourself"
@@ -4710,6 +4819,10 @@ msgstr "No reason was reported"
 #: src/components/SpaceMembers.tsx
 msgid "No role available. Refresh to check your access."
 msgstr "No role available. Refresh to check your access."
+
+#: src/components/AgentCards.tsx
+msgid "No role uses {name} yet."
+msgstr "No role uses {name} yet."
 
 #. draft state chip, at most 14 characters: nothing written to the draft's source file yet
 #: src/lib/drafts.ts
@@ -4865,6 +4978,11 @@ msgstr "not ready"
 msgid "not set"
 msgstr "not set"
 
+#. What an agent card in the Workshop says is missing, beneath its Not ready badge
+#: src/lib/agent-cards.ts
+msgid "Not signed in on this computer, and no key set."
+msgstr "Not signed in on this computer, and no key set."
+
 #: src/components/AgentEditor.tsx
 msgid "Not supported by this model"
 msgstr "Not supported by this model"
@@ -4941,6 +5059,10 @@ msgstr "Nothing to send from this computer"
 msgid "Nothing to stop"
 msgstr "Nothing to stop"
 
+#: src/components/AgentCards.tsx
+msgid "Nothing was written: {message} — {named}"
+msgstr "Nothing was written: {message} — {named}"
+
 #. confirms only the warning was dismissed, never its original saved file
 #: src/components/SpaceRepairs.tsx
 msgid "Notice dismissed. The saved file is kept."
@@ -5016,6 +5138,10 @@ msgstr "On (unsupported)"
 #: src/components/SpaceGroups.tsx
 msgid "On {server}"
 msgstr "On {server}"
+
+#: src/components/AgentCards.tsx
+msgid "Once connected, press Re-check; if nothing changes, quit Spex completely and open it again."
+msgstr "Once connected, press Re-check; if nothing changes, quit Spex completely and open it again."
 
 #: src/components/PlaybooksTab.tsx
 #: src/components/PlaybookStages.tsx
@@ -5159,6 +5285,11 @@ msgstr "Open the project's Specs"
 #: src/components/ProjectGroup.tsx
 msgid "Open the session this was captured from"
 msgstr "Open the session this was captured from"
+
+#. an agent card's primary action in the Workshop: the configuration document, opened in the browser
+#: src/components/AgentCards.tsx
+msgid "Open the setup guide"
+msgstr "Open the setup guide"
 
 #: src/components/NavRail.tsx
 msgid "Open the specs of {project}"
@@ -5725,26 +5856,25 @@ msgstr "queued submission failed: {reason}"
 msgid "Queuing…"
 msgstr "Queuing…"
 
+#: src/components/AgentCards.tsx
+msgid "Quit Spex completely and open it again."
+msgstr "Quit Spex completely and open it again."
+
 #: src/components/SpecGraph.tsx
 msgid "Raise the threshold"
 msgstr "Raise the threshold"
 
 #. act: ask the agents whether they are ready now
+#. act: ask the agents whether they are ready now
+#. the Agents section's control: read each agent's readiness again
+#: src/components/AgentCards.tsx
 #: src/components/CaptainHome.tsx
 msgid "Re-check"
 msgstr "Re-check"
 
-#: src/components/SettingsSurface.tsx
-msgid "Re-check readiness"
-msgstr "Re-check readiness"
-
 #: src/components/SpecView.tsx
 msgid "Re-read the specs/ tree"
 msgstr "Re-read the specs/ tree"
-
-#: src/components/SettingsSurface.tsx
-msgid "Re-run adapter readiness checks (e.g. after signing in)"
-msgstr "Re-run adapter readiness checks (e.g. after signing in)"
 
 #: src/components/SpecView.tsx
 msgid "read {age}"
@@ -5754,6 +5884,11 @@ msgstr "read {age}"
 #: src/components/SpecView.tsx
 msgid "read again"
 msgstr "read again"
+
+#. read the config and the projects' settings again after a failed read
+#: src/components/AgentCards.tsx
+msgid "Read again"
+msgstr "Read again"
 
 #. a project's records: the Space lets this account only read them
 #: src/lib/space.ts
@@ -5806,6 +5941,10 @@ msgstr "reading…"
 msgid "Reading…"
 msgstr "Reading…"
 
+#: src/components/AgentCards.tsx
+msgid "Reads each agent's sign-in and Claude Code's settings again; a key set as an environment variable needs Spex quit and opened again."
+msgstr "Reads each agent's sign-in and Claude Code's settings again; a key set as an environment variable needs Spex quit and opened again."
+
 #. the title of Retry on records a Space could not be read for
 #. the title of Retry on records a Space could not be read for
 #: src/components/SpaceGroups.tsx
@@ -5827,6 +5966,13 @@ msgstr "Ready"
 #: src/components/AgentEditor.tsx
 msgid "Reasoning effort"
 msgstr "Reasoning effort"
+
+#. model choice mark: Provider default is the one to choose here
+#. tag beside the Claude agent card's name
+#: src/components/AgentCards.tsx
+#: src/components/ModelField.tsx
+msgid "Recommended"
+msgstr "Recommended"
 
 #: src/components/ApprovalInbox.tsx
 msgid "Reconnect to answer these requests."
@@ -6228,8 +6374,11 @@ msgstr "resume tokens for this computer's agent conversations; they work nowhere
 #. take the failed read again
 #. take the failed read again
 #. try creating the config file again
+#. try creating the config file again
+#. try creating the config file again
 #. try the failed save again
 #: src/App.tsx
+#: src/components/AgentCards.tsx
 #: src/components/ComposerAttachments.tsx
 #: src/components/DashboardSurface.tsx
 #: src/components/PlaybookAuthoring.tsx
@@ -6336,6 +6485,11 @@ msgstr "Role"
 #: src/components/CompileBand.tsx
 msgid "roles: {roles}"
 msgstr "roles: {roles}"
+
+#. Readiness guidance; `codex login` is the command and the variable name stays as it is
+#: src/lib/agent-cards.ts
+msgid "Run codex login, or set <0>OPENAI_API_KEY</0> (an official OpenAI key)."
+msgstr "Run codex login, or set <0>OPENAI_API_KEY</0> (an official OpenAI key)."
 
 #. a status word: at work now
 #. a status word: at work now
@@ -6689,6 +6843,20 @@ msgstr "Sessions"
 msgid "Sessions and project views"
 msgstr "Sessions and project views"
 
+#. Readiness guidance; the variable names stay as they are
+#: src/lib/agent-cards.ts
+msgid "Set <0>ANTHROPIC_AUTH_TOKEN</0> and <1>ANTHROPIC_BASE_URL</1>."
+msgstr "Set <0>ANTHROPIC_AUTH_TOKEN</0> and <1>ANTHROPIC_BASE_URL</1>."
+
+#: src/components/AgentCards.tsx
+msgid "Set all to Provider default"
+msgstr "Set all to Provider default"
+
+#. Manual step on Windows; `setx` is the command's name
+#: src/lib/agent-cards.ts
+msgid "Set each as a user environment variable — in a terminal with setx, or in the system settings:"
+msgstr "Set each as a user environment variable — in a terminal with setx, or in the system settings:"
+
 #. an agent chip's title: the model and effort the agent is set to run, then the specific model its runtime reported running
 #: src/components/AgentSettings.tsx
 msgid "set to {set}, runtime reports {model}"
@@ -6702,9 +6870,17 @@ msgstr "Set up an agent"
 msgid "Set up an agent before starting a task."
 msgstr "Set up an agent before starting a task."
 
+#: src/components/AgentCards.tsx
+msgid "Set up at least one agent to start a task; Claude is recommended."
+msgstr "Set up at least one agent to start a task; Claude is recommended."
+
 #: src/components/BrowserControl.tsx
 msgid "Set up browser"
 msgstr "Set up browser"
+
+#: src/components/AgentCards.tsx
+msgid "Set your own credential for this agent in the Credentials section below."
+msgstr "Set your own credential for this agent in the Credentials section below."
 
 #. one unit's kind: the settings file
 #: src/lib/space.ts
@@ -6726,6 +6902,11 @@ msgstr "Settings backup"
 #: src/components/DeliveryCard.tsx
 msgid "Settled — {title}"
 msgstr "Settled — {title}"
+
+#. an agent card's agents run different models
+#: src/components/AgentCards.tsx
+msgid "Several models"
+msgstr "Several models"
 
 #. the sharing confirm's control: send the records to the group
 #: src/components/SpacePlacements.tsx
@@ -6825,6 +7006,10 @@ msgstr "Show the sidebar"
 msgid "Show the sidebar ({keys})"
 msgstr "Show the sidebar ({keys})"
 
+#: src/components/AgentCards.tsx
+msgid "Show which roles"
+msgstr "Show which roles"
+
 #. a dismissed folder task or notice is active and counted again
 #. a dismissed folder task or notice is active and counted again
 #: src/components/SpaceRepairs.tsx
@@ -6854,6 +7039,11 @@ msgstr "Sign in again"
 #: src/lib/labels.ts
 msgid "Sign in again with that agent's CLI"
 msgstr "Sign in again with that agent's CLI"
+
+#. Readiness guidance; `claude` is the command and the variable name stays as it is
+#: src/lib/agent-cards.ts
+msgid "Sign in by running claude in a terminal, or set <0>ANTHROPIC_API_KEY</0>."
+msgstr "Sign in by running claude in a terminal, or set <0>ANTHROPIC_API_KEY</0>."
 
 #. beside a disabled Sync now: the project's Space is signed out; {name} its display name, or its host name before any read
 #: src/components/SpaceGroups.tsx
@@ -6897,6 +7087,16 @@ msgstr "Sign out"
 #: src/components/SpaceInstance.tsx
 msgid "Sign out first"
 msgstr "Sign out first"
+
+#. readiness: the agent's sign-in could not be checked; `reason` is the core's phrase, such as "its status command did not answer in time"; Re-check is the button's name
+#: src/components/AgentChip.tsx
+msgid "Sign-in could not be confirmed just now: {reason}. Re-check to try again."
+msgstr "Sign-in could not be confirmed just now: {reason}. Re-check to try again."
+
+#. readiness: the agent's sign-in could not be checked just now
+#: src/components/AgentChip.tsx
+msgid "sign-in unconfirmed"
+msgstr "sign-in unconfirmed"
 
 #. on a Space's heading, after its name: the Space signed this computer out; {login} is the account to sign in again as
 #: src/components/SpaceInstance.tsx
@@ -6945,6 +7145,10 @@ msgstr "skills for agents"
 #: src/components/DraftRegisterTab.tsx
 msgid "Slash command"
 msgstr "Slash command"
+
+#: src/components/AgentCards.tsx
+msgid "Some roles still name a Claude model, which {host} may bill as another model or refuse."
+msgstr "Some roles still name a Claude model, which {host} may bill as another model or refuse."
 
 #: src/main.tsx
 msgid "Something broke in the UI"
@@ -7380,6 +7584,10 @@ msgstr "Take the task out of the message"
 msgid "Take this task out of the queue — Undo puts it back"
 msgstr "Take this task out of the queue — Undo puts it back"
 
+#: src/components/AgentCards.tsx
+msgid "Tasks can start, but {first} uses {other}, which is not ready, so its steps fail until it is set up."
+msgstr "Tasks can start, but {first} uses {other}, which is not ready, so its steps fail until it is set up."
+
 #. expand the evidence behind a saved-work problem
 #: src/components/SpaceRepairs.tsx
 msgid "Technical details"
@@ -7454,9 +7662,18 @@ msgstr "The agent's sign-in has expired — in a terminal, sign in again with th
 msgid "The call timed out"
 msgstr "The call timed out"
 
+#: src/components/AgentCards.tsx
+msgid "The Captain uses {name}, which is not ready: set it up, or switch the Captain to {other}."
+msgstr "The Captain uses {name}, which is not ready: set it up, or switch the Captain to {other}."
+
 #: src/components/CaptainPane.tsx
 msgid "The Captain will report here."
 msgstr "The Captain will report here."
+
+#. why a task cannot start; {agent} is a product name such as Claude
+#: src/components/CaptainHome.tsx
+msgid "The Captain's agent, {agent}, is not ready."
+msgstr "The Captain's agent, {agent}, is not ready."
 
 #: src/state/reducer.ts
 msgid "the Captain's turn failed"
@@ -7487,9 +7704,25 @@ msgstr "The compiled state machine, from the last compile"
 msgid "The compiled XState machine that drives the players"
 msgstr "The compiled XState machine that drives the players"
 
+#: src/components/AgentCards.tsx
+msgid "The config changed meanwhile and nothing was written, but it could not be read again: {message}"
+msgstr "The config changed meanwhile and nothing was written, but it could not be read again: {message}"
+
+#: src/components/AgentCards.tsx
+msgid "The config changed meanwhile and nothing was written: check the list and try again."
+msgstr "The config changed meanwhile and nothing was written: check the list and try again."
+
 #: src/state/store.ts
 msgid "The conversation could not be loaded: {reason}"
 msgstr "The conversation could not be loaded: {reason}"
+
+#: src/components/AgentCards.tsx
+msgid "The default model can't be read right now: retry, or choose a specific model."
+msgstr "The default model can't be read right now: retry, or choose a specific model."
+
+#: src/components/AgentCards.tsx
+msgid "The default model can't be read right now."
+msgstr "The default model can't be read right now."
 
 #: src/components/SpaceSync.tsx
 msgid "The diff is cut here; the file is longer."
@@ -7595,6 +7828,11 @@ msgstr "The Spex window and its core speak different protocol versions — resta
 msgid "The step left no record of what it changed"
 msgstr "The step left no record of what it changed"
 
+#. What the Claude card says is missing; {host} is a host name, kept as it is
+#: src/lib/agent-cards.ts
+msgid "The third-party service {host} is set, but its key is not."
+msgstr "The third-party service {host} is set, but its key is not."
+
 #: src/components/SettingsSurface.tsx
 msgid "The tmux pane theme of sessions run from the playbook CLI — e.g. a catppuccin flavor, or auto"
 msgstr "The tmux pane theme of sessions run from the playbook CLI — e.g. a catppuccin flavor, or auto"
@@ -7631,10 +7869,26 @@ msgstr "The workflow markdown the playbook was compiled from"
 msgid "The workflow was aborted"
 msgstr "The workflow was aborted"
 
+#: src/components/AgentCards.tsx
+msgid "Then quit Spex completely and open it again — see How to configure."
+msgstr "Then quit Spex completely and open it again — see How to configure."
+
+#: src/components/AgentCards.tsx
+msgid "These agents change:"
+msgstr "These agents change:"
+
 #. a project's members panel; {names} lists the other Spaces the records are kept at, by display name
 #: src/components/SpaceMembers.tsx
 msgid "These records are also placed at {names}"
 msgstr "These records are also placed at {names}"
+
+#: src/components/AgentCards.tsx
+msgid "These roles name a model of their own and are left as they are:"
+msgstr "These roles name a model of their own and are left as they are:"
+
+#: src/components/AgentCards.tsx
+msgid "These roles still name a model of their own:"
+msgstr "These roles still name a model of their own:"
 
 #: src/components/SpaceMembers.tsx
 msgid "They need an account at {space}."
@@ -7650,6 +7904,11 @@ msgstr "Thinking"
 msgid "Thinking…"
 msgstr "Thinking…"
 
+#. Claude's requests go to another provider; the host name stays as it is
+#: src/lib/agent-cards.ts
+msgid "Third party {host}"
+msgstr "Third party {host}"
+
 #: src/lib/useBrowserTools.ts
 msgid "This agent cannot ask for tool approval in this conversation."
 msgstr "This agent cannot ask for tool approval in this conversation."
@@ -7661,6 +7920,10 @@ msgstr "This agent cannot return screenshot files to this conversation."
 #: src/components/BrowserControl.tsx
 msgid "This agent does not support browser tools"
 msgstr "This agent does not support browser tools"
+
+#: src/components/AgentCards.tsx
+msgid "This changes the model of every Captain and player on {name} at once. To change only the Captain's or one player's, edit its settings above."
+msgstr "This changes the model of every Captain and player on {name} at once. To change only the Captain's or one player's, edit its settings above."
 
 #: src/components/SpecView.tsx
 msgid "This command refreshes the spec law and prints a migration prompt for an AI agent to apply:"
@@ -7924,6 +8187,11 @@ msgstr "Tweak the Captain agent in place"
 msgid "Type <0>/</0> in the task box to see {count, plural, one {# playbook} other {# playbooks}}"
 msgstr "Type <0>/</0> in the task box to see {count, plural, one {# playbook} other {# playbooks}}"
 
+#. the runtime reported no default model
+#: src/components/AgentCards.tsx
+msgid "Unavailable"
+msgstr "Unavailable"
+
 #: src/components/ProjectsSurface.tsx
 msgid "uncommitted changes"
 msgstr "uncommitted changes"
@@ -7976,6 +8244,11 @@ msgstr "unread turn"
 msgid "Unreadable draft — delete it, or repair the file and restart Spex"
 msgstr "Unreadable draft — delete it, or repair the file and restart Spex"
 
+#. ANTHROPIC_BASE_URL holds no address Spex can read
+#: src/lib/agent-cards.ts
+msgid "Unrecognized"
+msgstr "Unrecognized"
+
 #. this citation names an item absent from the tree
 #. this citation names an item absent from the tree
 #: src/components/CitationPreview.tsx
@@ -7994,7 +8267,7 @@ msgid "untitled session"
 msgstr "untitled session"
 
 #. readiness badge: no automatic check exists for this adapter
-#: src/components/SettingsSurface.tsx
+#: src/components/AgentCards.tsx
 msgid "unverified"
 msgstr "unverified"
 
@@ -8079,6 +8352,11 @@ msgstr "Use"
 msgid "Use {folder}"
 msgstr "Use {folder}"
 
+#. sets every role naming an official model to Provider default, named by the model it runs
+#: src/components/AgentCards.tsx
+msgid "Use {model} for all"
+msgstr "Use {model} for all"
+
 #. opener on the empty draft conversation: brings a file in as the source
 #: src/components/DraftConversation.tsx
 msgid "Use a SKILL.md…"
@@ -8117,6 +8395,20 @@ msgstr "Use org/name: lowercase words joined by hyphens"
 #: src/components/SpaceRepairs.tsx
 msgid "Use this folder"
 msgstr "Use this folder"
+
+#. the positions an agent card's adapter serves follow
+#: src/components/AgentCards.tsx
+msgid "Used by"
+msgstr "Used by"
+
+#: src/components/AgentCards.tsx
+msgid "Used by {first}"
+msgstr "Used by {first}"
+
+#. an agent card's positions in brief; {first} is a role such as Captain, {count} the roles beside it, {total} all of them
+#: src/components/AgentCards.tsx
+msgid "Used by {first} and {count, plural, one {# more role} other {# more roles}}"
+msgstr "Used by {first} and {count, plural, one {# more role} other {# more roles}}"
 
 #: src/components/SpaceMembers.tsx
 msgid "Usernames"
@@ -8367,6 +8659,10 @@ msgstr "Writing…"
 #: src/components/SpecView.tsx
 msgid "Written by Spex from {name} {version} — an edit makes it yours"
 msgstr "Written by Spex from {name} {version} — an edit makes it yours"
+
+#: src/components/AgentCards.tsx
+msgid "Written, but these roles still name an official model:"
+msgstr "Written, but these roles still name an official model:"
 
 #: src/components/SpaceMembers.tsx
 msgid "You"

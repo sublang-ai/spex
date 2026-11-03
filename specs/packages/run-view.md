@@ -891,8 +891,10 @@ While the shared config is invalid or missing, the Captain home shall say so in 
 
 #### run-view-45
 
-While the selected Captain adapter reports not ready on a project's home, the run view shall explain beside the composer that a task cannot start, keep its draft editable, block dispatch, and offer Settings and an in-place re-check ([DR-135](../decisions/135-a-welcome-page-before-the-first-project.md)):
+While the selected Captain adapter reports not ready on a project's home, the run view shall explain beside the composer that a task cannot start, keep its draft editable, block dispatch, and offer Settings at that adapter's agent card [[settings-70](settings.md#settings-70)] and an in-place re-check ([DR-135](../decisions/135-a-welcome-page-before-the-first-project.md)):
 
+- the notice names the Captain's adapter and its agent card's leading line — what is missing [[settings-71](settings.md#settings-71)], or the next step [[settings-63](settings.md#settings-63)] — at the composer's text size, with Settings as its primary action;
+- the start control stays enabled for a draft that could start: pressing it dispatches nothing but re-checks readiness — or, while a re-check already runs, waits on that one — starting the task only where the Captain's adapter then reports ready; where it reports not ready, keeping the draft, bringing the notice into view, marking it and focusing its Settings action; where the check cannot confirm it, keeping the draft and saying beside the composer that the task has not started, why, and that a second press starts it anyway, with a re-check;
 - where a different adapter is ready, the notice shall also open the Captain's in-place agent editor to switch to it [[run-view-32](#run-view-32)];
 - the app re-checks readiness when its window regains focus while anything is not ready;
 - readiness covers every adapter any configured agent names.
@@ -1339,7 +1341,7 @@ The test suite shall assert time separators appear before the first line, after 
 The test suite shall assert first-hour failures surface at hand:
 
 - where a fixture config is invalid, the Captain home thread lists the errors with a Settings link [[run-view-44](#run-view-44)];
-- where a fixture readiness entry is not ready, the heads-up bubble offers a re-check that invokes the readiness refresh [[run-view-45](#run-view-45)].
+- where a fixture readiness entry is not ready, the heads-up bubble names the adapter and its card's leading line and offers a re-check that invokes the readiness refresh, its Settings action asks for that adapter's agent card, and the enabled start control re-checks without dispatching, then keeps the draft and focuses the Settings action while the entry stays not ready, or starts the task once the refresh reports it ready, a start pressed during a running re-check adding none and starting once it reports ready [[run-view-45](#run-view-45)].
 
 #### run-view-131
 

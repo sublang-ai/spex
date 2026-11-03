@@ -6,6 +6,7 @@
 ## Status
 
 Accepted (2026-10-27).
+Amended by [DR-207](207-the-outline-gives-its-width-to-the-intent.md): the counts share one cell of labeled counts under no heading row, the rollup reads by labeled counts, a collapsed intent holds one line, and the graph starts at a third of the split.
 Amends [DR-026](026-data-graphics-craft.md) §1 (edge width no longer carries a count), §4 (a label without room waits for inspection or the selection; the camera is bounded by the fitted frame rather than the layout), §5 (direction reads under the selection; the resting backbone is undirected), §6 (unlinked packages leave the arrangement for a row of their own), §2 (one hue outside the reserved sets, orange, joins the budget for the selection's own citations, and the internal group's hue is lime), §7 (the selection hides the edges it does not touch, besides dimming; the card answers hover and keyboard focus alone) and §8 (the split's bounds are pixel floors; the threshold stands above the graph, the fit in its corner and the key below, with no gesture tips).
 Amends [DR-013](013-sublang-brand.md)'s interaction hue on the spec view: its selection and pressed controls wear ink, brand purple keeping to links, text actions and the focus ring.
 Amends [DR-011](011-project-workspace.md) and [DR-015](015-reference-content.md) in the internal group's hue: lime rather than fuchsia.

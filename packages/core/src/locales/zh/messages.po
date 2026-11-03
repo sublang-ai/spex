@@ -1440,6 +1440,7 @@ msgid "duplicate record id {id}: {first} and {second}"
 msgstr "记录 id {id} 重复：{first} 与 {second}"
 
 #. Refusal: a config edit failed validation with no reason given
+#. Refusal: a config edit failed validation with no reason given
 #: src/service.ts
 msgid "edit rejected"
 msgstr "编辑被拒绝"
@@ -1840,6 +1841,26 @@ msgstr "文件名不是其所记 Space 的文件夹名"
 #: src/root-lease.ts
 msgid "its retired path {retired} is already occupied"
 msgstr "其退役路径 {retired} 已被占用"
+
+#. Why an agent's sign-in could not be confirmed
+#: src/local-credentials.ts
+msgid "its status command could not start"
+msgstr "它的状态命令无法启动"
+
+#. Why an agent's sign-in could not be confirmed
+#: src/local-credentials.ts
+msgid "its status command did not answer in time"
+msgstr "它的状态命令没有及时回应"
+
+#. Why an agent's sign-in could not be confirmed
+#: src/local-credentials.ts
+msgid "its status command gave an answer Spex could not read"
+msgstr "它的状态命令给出了 Spex 读不懂的回答"
+
+#. Why an agent's sign-in could not be confirmed
+#: src/local-credentials.ts
+msgid "its status command reported an error"
+msgstr "它的状态命令报错了"
 
 #. Spec notice; the two directory paths and the `spex scaffold --update` command stay as they are
 #: src/specs.ts

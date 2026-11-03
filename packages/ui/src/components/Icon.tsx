@@ -85,6 +85,16 @@ const PATHS: Record<string, ReactNode> = {
   open: (
     <path d="M9.5 2.5h4v4M13.5 2.5 7.5 8.5M11 9v3.5a1 1 0 0 1-1 1H3.5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1H7" />
   ),
+  // An arrow up and out: a link leaving the app for the web
+  // (settings-71).
+  external: <path d="M6 3.5H3.5v9h9V10M9 3h4v4M13 3 7.5 8.5" />,
+  // A warning: what an agent card says is missing (settings-71).
+  alert: (
+    <>
+      <circle cx="8" cy="8" r="6" />
+      <path d="M8 5v3.5M8 11h.01" />
+    </>
+  ),
   // Two columns of lines: a text diff (space-10).
   diff: (
     <path d="M3 3.5v9M13 3.5v9M5.5 5.5h2M5.5 8h2M8.5 10.5h2M8.5 5.5h2" />

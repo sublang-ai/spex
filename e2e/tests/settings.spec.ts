@@ -150,10 +150,12 @@ test("settings-29: the Captain row's editor round-trips the shared config", asyn
   expect(written.indexOf("captain:")).toBeLessThan(written.indexOf("players:"));
   expect(written.indexOf("players:")).toBeLessThan(written.indexOf("playbooks:"));
 
-  // The readiness panel: one entry per adapter the config names.
+  // The Agents section: the standing Claude and Codex cards, and an
+  // entry for each other adapter the config names (settings-5).
   const agents = page.getByTestId("agents-section");
-  await expect(agents.getByTestId("agent-row-claude")).toBeVisible();
-  await expect(agents.getByTestId("agent-row-codex")).toBeVisible();
+  await expect(agents.getByTestId("agent-card-claude")).toBeVisible();
+  await expect(agents.getByTestId("agent-card-codex")).toBeVisible();
+  await expect(agents.getByTestId(/^agent-row-/)).toHaveCount(0);
 
   // The shortcut sheet names the palette binding with this platform's
   // modifier, and the terminal theme stands last under its CLI name.
