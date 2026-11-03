@@ -2200,18 +2200,8 @@ msgstr "Clear the search (Escape)"
 msgid "client not connected"
 msgstr "client not connected"
 
-#. close the attached project's code-remote explanation
-#. close the members panel and return to its opener
-#. close the project records panel and return to its opener
 #: src/components/AgentCards.tsx
-#: src/components/ApprovalInbox.tsx
-#: src/components/ConfiguredBrowserTools.tsx
-#: src/components/ProjectPalette.tsx
-#: src/components/SpaceGroups.tsx
-#: src/components/SpaceMembers.tsx
-#: src/components/SpaceRepairs.tsx
-#: src/components/SpaceSurface.tsx
-#: src/components/SpecGraph.tsx
+#: src/components/PanelCloseButton.tsx
 msgid "Close"
 msgstr "Close"
 
@@ -2257,6 +2247,7 @@ msgstr "Closing cancels browser setup"
 msgid "Code"
 msgstr "Code"
 
+#. accessible name of an attached project's code-remote explanation
 #. accessible name of an attached project's code-remote explanation
 #: src/components/SpaceGroups.tsx
 msgid "Code for {name}"

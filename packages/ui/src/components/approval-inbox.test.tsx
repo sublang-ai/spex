@@ -83,7 +83,8 @@ test("closing an externally opened approval inbox preserves requests and returns
   fireEvent.click(opener);
   expect(document.activeElement).toBe(screen.getByRole("button", {name: "Deny"}));
   const close = screen.getByRole("button", {name: "Close tool approvals"});
-  expect(close.textContent).toBe("Close");
+  expect(close.textContent).toBe("");
+  expect(close.querySelector("svg")).not.toBeNull();
   fireEvent.click(close);
   expect(screen.queryByRole("button", {name: "Deny"})).toBeNull();
   expect(header.getAttribute("aria-expanded")).toBe("false");

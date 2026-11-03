@@ -2675,7 +2675,8 @@ describe("spec-view-20: citation graph beside the outline", () => {
       fireEvent.keyDown(auth, { key: "Enter" });
       const card = screen.getByTestId("graph-selection-card");
       const close = within(card).getByRole("button", { name: "Close auth's details" });
-      expect(close.textContent).toBe("Close");
+      expect(close.textContent).toBe("");
+      expect(close.querySelector("svg")).not.toBeNull();
       act(() => close.focus());
       fireEvent.click(close);
       expect(screen.queryByTestId("graph-selection-card")).toBeNull();

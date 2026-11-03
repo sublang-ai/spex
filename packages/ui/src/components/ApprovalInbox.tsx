@@ -11,6 +11,7 @@ import type { ApprovalDecision, ApprovalOwner, PendingApproval } from "@sublang/
 import { useEachPlace, usePlaceStore } from "../state/place-context.js";
 import { placeKey, placeLabel, useAppStore, type AppStore } from "../state/store.js";
 import { i18n } from "../i18n.js";
+import { PanelCloseButton } from "./PanelCloseButton.js";
 
 const buttonClass = "min-h-8 rounded border border-brand-300 px-3 py-1 text-sm hover:bg-brand-50 disabled:opacity-50 dark:border-brand-700 dark:hover:bg-brand-950";
 
@@ -139,7 +140,7 @@ export function ApprovalInbox() {
   return <section aria-label={i18n._("Tool approvals")} className="shrink-0 border-b border-brand-300 bg-brand-50 px-3 py-2 dark:border-brand-800 dark:bg-neutral-950" onKeyDown={(event) => { if (open && event.key === "Escape" && !event.defaultPrevented) { event.preventDefault(); event.stopPropagation(); close(); } }}>
     <div className="flex min-w-0 items-center justify-between gap-2">
       <button ref={toggle} aria-expanded={open} aria-controls="live-approval-inbox" className="min-h-8 min-w-0 text-left font-medium text-brand-700 dark:text-brand-300" onClick={() => open ? hide() : show()}>{i18n._("Tool approvals ({count})", {count: pending.length})}</button>
-      {open ? <button type="button" aria-label={i18n._("Close tool approvals")} className="min-h-6 shrink-0 rounded border border-neutral-300 px-1.5 py-0.5 text-xs hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800" onClick={close}>{i18n._("Close")}</button> : null}
+      {open ? <PanelCloseButton label={i18n._("Close tool approvals")} onClick={close} /> : null}
     </div>
     {open ? <div id="live-approval-inbox" ref={region} className="grid max-h-[45vh] min-w-0 gap-2 overflow-y-auto" onBlurCapture={(event) => { if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget as Node)) focusedRequest.current = undefined; }} onFocusCapture={(event) => { const card = (event.target as HTMLElement).closest<HTMLElement>("[data-approval-id]"); focusedRequest.current = card ? keyOf(card.dataset.approvalPlace ?? "", card.dataset.approvalId ?? "") : undefined; }}>
       {pending.some((item) => !item.connected) ? <p role="status" className="text-sm">{i18n._("Reconnect to answer these requests.")}</p> : null}

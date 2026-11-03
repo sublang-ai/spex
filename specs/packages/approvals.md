@@ -49,7 +49,7 @@ While actual pending requests exist [[approvals-4](#approvals-4)], the interface
 - a disconnected or answering client disables its controls, preserving a refused answer's cause even if another client has already removed the request;
 - answering, expiry, or cancellation removes only that request, and historical permission telemetry raises no entry;
 - keyboard operation, narrow-view wrapping, and focus transfer preserve access to the remaining entries, without automatically focusing approval or assigning a single-keystroke approval shortcut.
-- the expanded inbox carries visible Close; Close and Escape collapse the view and return focus to its actual opener, or its attention entry if the opener has gone, preserving every request and the attention count without sending any answer ([DR-210](../decisions/210-a-panel-carries-its-own-way-out.md)).
+- the expanded inbox carries a borderless cross with a contextual Close name and tooltip at its header's trailing edge ([DR-211](../decisions/211-panel-dismissal-as-quiet-chrome.md)); Close and Escape collapse the view and return focus to its actual opener, or its attention entry if the opener has gone, preserving every request and the attention count without sending any answer ([DR-210](../decisions/210-a-panel-carries-its-own-way-out.md)).
 
 ### approvals-6
 
@@ -74,4 +74,4 @@ When a fresh installed Desktop drives a signed-in Claude working agent with expl
 
 ### approvals-10
 
-Where rendered conversation notices open the global inbox over fixture pending requests, the integration suite shall verify that visible Close and Escape return focus to the actual opener, fall back to the attention entry after that opener disappears, and preserve the requests and their count without approving or denying them [[approvals-5](#approvals-5)].
+Where rendered conversation notices open the global inbox over fixture pending requests, the integration suite shall verify that the accessible header cross and Escape return focus to the actual opener, fall back to the attention entry after that opener disappears, and preserve the requests and their count without approving or denying them [[approvals-5](#approvals-5)].

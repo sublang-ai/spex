@@ -6,6 +6,7 @@
 ## Status
 
 Accepted (2026-11-03) on the owner's request to make Members and every comparable temporary panel easy to close in the app's existing visual language.
+Header dismissal presentation is under refinement in proposed [DR-211](211-panel-dismissal-as-quiet-chrome.md), with visual acceptance pending.
 Extends [DR-010](010-interface-craft.md)'s keyboard and visual grammar to explicit panel dismissal.
 Amends [DR-198](198-consistent-inline-group-actions.md) in the Members header, [DR-194](194-saved-work-is-a-choice-not-setup-debt.md) in closing a diagnostic review, and [DR-158](158-a-legible-graph-and-outline.md) in clearing the pinned selection card.
 

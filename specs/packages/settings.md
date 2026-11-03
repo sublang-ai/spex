@@ -105,7 +105,7 @@ When an agent editor or conversation settings opens, the UI shall bind its brows
 - show a known empty media-output source set as a screenshot-return limitation alongside the control without disabling supported browser tools, while absent output facts remain unknown;
 - persist Browser only through the editor's ordinary explicit save, preserving false and conversation reset-to-configuration semantics [[media-9](media.md#media-9)];
 - keep preparation separate from enabling, relay progress and diagnostic detail, allow retry and cancellation, and cancel owned work on close or context change;
-- offer preparation for the authoring draft's selected configured agent without changing that agent's shared browser choice, in a popover with a visible Close; Close, Escape and outside click return focus to Browser and cancel owned preparation, its running Close explaining "Closing cancels browser setup" ([DR-210](../decisions/210-a-panel-carries-its-own-way-out.md));
+- offer preparation for the authoring draft's selected configured agent without changing that agent's shared browser choice, in a popover with a fixed "Browser setup" header carrying a trailing borderless cross labelled Close while only its body scrolls ([DR-211](../decisions/211-panel-dismissal-as-quiet-chrome.md)); Close, Escape and outside click return focus to Browser and cancel owned preparation, its running Close explaining "Closing cancels browser setup" ([DR-210](../decisions/210-a-panel-carries-its-own-way-out.md));
 - leave unknown or unsupported capabilities disabled for new admission — a Browser the edit turns on or carries to another adapter — while a standing enabled choice can be cleared or kept as other values save, and preserve other editor values after failure.
 
 ### Model and Tuning Options
@@ -523,7 +523,7 @@ When rendered editors exchange capability and browser preparation messages with 
 - a served-browser journey shall verify unknown support and stale-choice clearing through the real core, including the editor at 320-pixel and 1280-pixel widths;
 - served-browser and Electron host acceptance shall perform native credential-free browser preparation from the UI and save an explicit choice, keeping successful setup separate from that choice; source and packaged Electron hosts shall each start with an independently empty managed browser cache and no external Node on PATH.
 - acceptance waits observe the current control's terminal outcome: ready continues, failure or explicit cancellation stops promptly with the complete displayed diagnostic, and an absent terminal outcome remains bounded; initial idle state never passes or fails preparation.
-- the authoring browser popover's visible Close, Escape and outside click return opener focus; closing pending setup sends its cancellation, reopening ignores the former result, and none of these acts enables Browser or writes configuration [[settings-44](#settings-44)].
+- the authoring browser popover's named fixed header holds an accessible Close cross above its scrolling body, and Close, Escape and outside click return opener focus; closing pending setup sends its cancellation, reopening ignores the former result, and none of these acts enables Browser or writes configuration [[settings-44](#settings-44)].
 
 ### Roster Coverage
 

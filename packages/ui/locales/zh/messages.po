@@ -2200,18 +2200,8 @@ msgstr "清除搜索（Esc）"
 msgid "client not connected"
 msgstr "客户端未连接"
 
-#. close the attached project's code-remote explanation
-#. close the members panel and return to its opener
-#. close the project records panel and return to its opener
 #: src/components/AgentCards.tsx
-#: src/components/ApprovalInbox.tsx
-#: src/components/ConfiguredBrowserTools.tsx
-#: src/components/ProjectPalette.tsx
-#: src/components/SpaceGroups.tsx
-#: src/components/SpaceMembers.tsx
-#: src/components/SpaceRepairs.tsx
-#: src/components/SpaceSurface.tsx
-#: src/components/SpecGraph.tsx
+#: src/components/PanelCloseButton.tsx
 msgid "Close"
 msgstr "关闭"
 
@@ -2257,6 +2247,7 @@ msgstr "关闭将取消浏览器设置"
 msgid "Code"
 msgstr "代码"
 
+#. accessible name of an attached project's code-remote explanation
 #. accessible name of an attached project's code-remote explanation
 #: src/components/SpaceGroups.tsx
 msgid "Code for {name}"
