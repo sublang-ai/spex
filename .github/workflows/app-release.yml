@@ -5,8 +5,17 @@ on:
   push:
     tags:
       - "app-v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Candidate release tag to validate without publishing
+        type: string
+        required: true
 
 permissions: {}
+
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
 concurrency:
   group: app-release-${{ github.ref }}
@@ -20,7 +29,7 @@ jobs:
       contents: read
     with:
       full: true
-      release-tag: ${{ github.ref_name }}
+      release-tag: ${{ inputs.tag || github.ref_name }}
       channel: app
 
   prepare:
@@ -38,6 +47,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Create local candidate tag for branch validation
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/release-version.mjs check --tag="$RELEASE_TAG" --channel=app
+          git -c tag.gpgsign=false tag "$RELEASE_TAG" "$GITHUB_SHA"
       - name: Prepare version from tag
         id: version
         run: node scripts/release-version.mjs prepare --channel=app
@@ -46,7 +62,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: >-
           node scripts/release-notes.mjs notes
-          --tag="$GITHUB_REF_NAME"
+          --tag="$RELEASE_TAG"
           --repository="$GITHUB_REPOSITORY"
           --out=release-notes.md
       - name: Require published runtime dependencies
@@ -58,7 +74,7 @@ jobs:
           if-no-files-found: error
 
   package:
-    needs: [prepare, validate]
+    needs: prepare
     strategy:
       fail-fast: false
       matrix:
@@ -178,7 +194,13 @@ jobs:
           test -s "Spex-$VERSION-mac-arm64.dmg"
           test -s "Spex-$VERSION-win-x64.exe"
           sha256sum "Spex-$VERSION-mac-arm64.dmg" "Spex-$VERSION-win-x64.exe" > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-desktop-checksums
+          path: artifacts/SHA256SUMS
+          if-no-files-found: error
       - name: Create GitHub release with both native downloads
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/app-v')
         uses: softprops/action-gh-release@v2
         with:
           name: ${{ needs.prepare.outputs.title }}

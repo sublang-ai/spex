@@ -20,6 +20,7 @@ Tag workflows already own validation, native packaging and publication, but sour
 - Validate and package the same tagged source plus that deterministic version metadata. Preserve full channel validation, OIDC/provenance, both native builds, strict packaged compilation and signed/notarized Mac distribution.
 - Prefer existing exact-version curated notes; otherwise use commits since the most recent published same-channel ancestor with source and comparison links. Exclude drafts/unpublished tags and stale `[Unreleased]`; describe first or empty ranges explicitly.
 - Inspect the actual npm tarball, archived app manifest and native installer/app metadata against the tag, publishing the exact checked tarball and downloads.
+- Allow explicit branch dispatch to exercise the same build/validation jobs using a runner-local candidate tag, retaining artifacts without publishing or pushing tags; publication effects require an actual channel-tag push.
 - Refuse existing releases/npm versions and failed registry lookups. Never overwrite published versions or mutate old tags.
 - Remove the live beta.26 exception and merge-parent/PR-status guard from future release workflows; preserve its historical record and tag's workflow.
 - Internal CI directory apps explicitly disable distribution signing; published Mac packages keep strict signing and notarization.

@@ -54,7 +54,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const [command, ...args] = process.argv.slice(2);
     const options = Object.fromEntries(args.map(arg => { const match = /^--([a-z]+)=(.*)$/.exec(arg); if (!match) throw new Error(`Unknown argument: ${arg}`); return [match[1], match[2]]; }));
     const root = resolve(options.root ?? ".");
-    const release = parseTag(options.tag ?? process.env.GITHUB_REF_NAME ?? "");
+    const release = parseTag(options.tag ?? process.env.RELEASE_TAG ?? process.env.GITHUB_REF_NAME ?? "");
     if (command === "npm") {
       const tarball = verifyNpm(root, release, JSON.parse(readFileSync(options.pack, "utf8")));
       if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `tarball=${tarball}\n`);

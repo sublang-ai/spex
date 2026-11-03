@@ -134,7 +134,7 @@ test("release-33: fast gates precede selected suites; Windows retains its suppor
   const windows = [
     ["Windows scaffold tests", "packages/cli", "npm test -w packages/cli"],
     ["Windows UI tests", "packages/ui", "npm test -w packages/ui"],
-    ["Windows native storage and unsupported-host refusal", "packages/core", "node --test packages/core/dist/platform.integration.test.js packages/core/dist/windows-storage.integration.test.js"],
+    ["Windows native storage and unsupported-host refusal", "packages/core", "node --test packages/core/dist/platform.integration.test.js packages/core/dist/windows-storage.integration.test.js packages/core/dist/compile-module-scope.integration.test.js"],
   ];
   for (const [name, folder, run] of windows) {
     const step = steps.find((candidate) => candidate.name === name);

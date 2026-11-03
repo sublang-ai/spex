@@ -140,7 +140,7 @@ jobs:
         run: npm test -w packages/ui
       - name: Windows native storage and unsupported-host refusal
         if: runner.os == 'Windows' && (needs.changes.outputs.affected == 'all' || contains(needs.changes.outputs.affected, 'packages/core'))
-        run: node --test packages/core/dist/platform.integration.test.js packages/core/dist/windows-storage.integration.test.js
+        run: node --test packages/core/dist/platform.integration.test.js packages/core/dist/windows-storage.integration.test.js packages/core/dist/compile-module-scope.integration.test.js
 
   journeys:
     needs: changes

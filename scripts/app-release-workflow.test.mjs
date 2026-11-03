@@ -20,13 +20,14 @@ const desktop = JSON.parse(read("apps/desktop/package.json"));
 
 test("release-45: tag-driven validation requires full checks for both channels", () => {
   for (const [channel, current] of [["app", workflow], ["cli", cliWorkflow]]) {
-    assert.deepEqual(current.on, { push: { tags: [`${channel}-v*`] } });
+    assert.deepEqual(current.on.push, { tags: [`${channel}-v*`] });
+    assert.equal(current.on.workflow_dispatch.inputs.tag.required, true);
     assert.deepEqual(current.permissions, {});
     assert.deepEqual(current.jobs.validate, {
       needs: "prepare",
       uses: "./.github/workflows/ci.yml",
       permissions: { contents: "read" },
-      with: { full: true, channel, "release-tag": "${{ github.ref_name }}" },
+      with: { full: true, channel, "release-tag": "${{ inputs.tag || github.ref_name }}" },
     }, "a local reusable call validates the caller's exact commit with explicit full channel scope");
     assert.equal(current.jobs["require-ci-green"], undefined, "a prior CI run cannot substitute for full validation");
     const releaseNeeds = [current.jobs.release.needs].flat();
@@ -47,7 +48,7 @@ test("release-40: app preparation checks version, notes and runtime sources with
   assert.equal(workflow.concurrency["cancel-in-progress"], false);
   const prepare = workflow.jobs.prepare;
   assert.equal(prepare.needs, undefined);
-  const commands = prepare.steps.filter((s) => s.run).map((s) => s.run);
+  const commands = prepare.steps.filter((s) => s.run && !s.if).map((s) => s.run);
   assert.equal(commands[0], "node scripts/release-version.mjs prepare --channel=app");
   assert.match(commands[1], /release-notes\.mjs notes/);
   assert.deepEqual(commands.slice(2, 3), ["node scripts/dependency-closure.mjs --registry-only"]);
@@ -86,7 +87,7 @@ test("release-45: CLI publication builds and inspects the package without repeat
 
 test("release-40: both native jobs build locked dependencies and upload their exact versioned download", () => {
   const job = workflow.jobs.package;
-  assert.deepEqual(job.needs, ["prepare", "validate"]);
+  assert.equal(job.needs, "prepare");
   assert.equal(job.strategy["fail-fast"], false);
   assert.deepEqual(job.strategy.matrix.include, [
     { os: "macos-15", script: "package:mac", asset: "mac-arm64.dmg" },
@@ -232,4 +233,20 @@ test("release-40: the publication command rejects a missing platform and hashes 
   const expected = [[mac, "mac fixture"], [win, "win fixture"]]
     .map(([name, bytes]) => `${createHash("sha256").update(bytes).digest("hex")}  ${name}\n`).join("");
   assert.equal(readFileSync(join(dir, "SHA256SUMS"), "utf8"), expected);
+});
+
+
+test("release-47: branch dispatch shares packaging but cannot publish or push a candidate tag", () => {
+  for (const [channel, current] of [["app", workflow], ["cli", cliWorkflow]]) {
+    assert.equal(current.env.RELEASE_TAG, "${{ inputs.tag || github.ref_name }}");
+    const candidate = current.jobs.prepare.steps.find(s => s.name === "Create local candidate tag for branch validation");
+    assert.equal(candidate.if, "github.event_name == 'workflow_dispatch'");
+    assert.match(candidate.run, new RegExp(`check --tag=.*--channel=${channel}`));
+    assert.match(candidate.run, /git -c tag\.gpgsign=false tag/);
+    assert.doesNotMatch(candidate.run, /git push/);
+    const effects = Object.values(current.jobs).flatMap(job => job.steps ?? []).filter(s => s.uses?.startsWith("softprops/action-gh-release@") || s.name === "Publish to npm");
+    assert(effects.length > 0);
+    for (const step of effects) assert.equal(step.if, `github.event_name == 'push' && startsWith(github.ref, 'refs/tags/${channel}-v')`);
+    assert(current.jobs.release.steps.some(s => s.uses?.startsWith("actions/upload-artifact@")));
+  }
 });

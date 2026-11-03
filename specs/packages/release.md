@@ -101,6 +101,13 @@ When an app tag passes the existing CI, prepared-version, notes and build/test g
 - a failed or missing platform build prevents release publication;
 - the Mac job supplies private signing inputs from CI secrets only to the Mac path, removes them even on failure, requires the signed/notarized distribution command and its verification report [[app-shell-45](app-shell.md#app-shell-45)], and uploads public verification receipts beside the compiler check ([DR-217](../decisions/217-developer-id-macos-downloads.md)).
 
+#### release-48
+
+When a maintainer explicitly dispatches a release workflow on a branch with a valid unused candidate tag, the workflow shall run the same version preparation, full channel validation and artifact checks as a tag release, making a runner-local tag only for notes and retaining verified artifacts, while npm publishing and GitHub Release creation require an actual channel-tag push ([DR-218](../decisions/218-tags-own-release-versions.md)):
+
+- native packaging may run in parallel with full validation, but final acceptance/publication still requires both;
+- Windows full app validation includes the generated-module-scope regression alongside native storage checks.
+
 ### Package Hygiene
 
 #### release-41
@@ -344,6 +351,10 @@ When the repository-system audit reads both channel release workflows and their 
 #### release-46
 
 When release metadata and artifact checks run over isolated fixtures and actual archives, the suite shall verify channel-only idempotent manifest/lock preparation, unchanged dependencies, invalid-tag and incomplete-metadata refusal, duplicate-release/npm-version and registry-error refusal [[release-16](#release-16)], and packed archive/native metadata/compiler-receipt version mismatches [[release-8](#release-8)], while workflow audits verify preparation before installs across reusable jobs and the archived hub tree [[release-18](#release-18)].
+
+#### release-47
+
+When workflow audits inspect branch verification, the suite shall assert an explicit dispatch input, validated runner-local candidate tag without pushing it, shared packaging/artifact validation and actual tag-push-only publication effects [[release-48](#release-48)].
 
 ## References
 

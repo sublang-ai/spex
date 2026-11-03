@@ -71,3 +71,14 @@ The local smoke and manual acceptance scopes remain in
   Windows native build or real APP UI acceptance was run in this change.
 - No tag, GitHub Actions release run, merge, npm publication or Apple submission
   was performed for this local verification.
+
+## Branch verification without publication
+
+Dispatch `app-release.yml` or `release.yml` at the candidate branch and pass an
+unused channel tag through the required `tag` input. The tag exists only in the
+preparation runner for notes assembly and is never pushed. Version injection,
+full validation, native signing/notarization, packing and actual artifact checks
+use the production jobs; native packaging runs alongside full validation.
+Both must pass for final acceptance. Checked installers/checksums and the CLI
+tarball remain Actions artifacts. npm publish and GitHub Release creation require
+an actual channel-tag push, so manual dispatch cannot publish them.
