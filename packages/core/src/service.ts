@@ -4215,6 +4215,12 @@ export class CoreService {
     const own = this.store.home.own();
     const projectRepository = projectId !== undefined && projectId !== own ? this.store.repository(projectId) : undefined;
     if (projectId !== undefined && projectId !== own && !projectRepository) throw noProject(projectId);
+    // Progress refreshes read this list too. Use the guarded automatic
+    // read path: composing with readiness would start another install,
+    // whose progress refreshes the list again, while an install is held
+    // or has failed. Explicit mutations and session admission keep their
+    // existing independent readiness behavior.
+    if (projectRepository) this.environments.use(projectRepository.key);
     // Each listed playbook's module is read on the app's engine
     // (environments-9, playbook-library-46).
     await this.environments.prepareForUse(projectRepository ? projectId! : null);
@@ -4224,7 +4230,7 @@ export class CoreService {
     let composed: ComposedConfig | undefined;
     try {
       await this.settledConfig();
-      composed = projectRepository ? await this.composeProject(projectRepository.key, true) : this.composed;
+      composed = projectRepository ? await this.composeProject(projectRepository.key, false) : this.composed;
     } catch (error) {
       if (error instanceof CoreError && error.code === "conflict") throw error;
       composed = undefined;
