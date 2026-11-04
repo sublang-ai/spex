@@ -31,7 +31,7 @@ Packages in this folder (spex.yaml, spex.lock, .spex/)
 
 Your packages
   export <org>/<pkg> [--spec <file>] [--skill <folder>]…   Build it in spex-packages/<org>/<pkg>/ from your files
-  publish [<org>/<pkg>] [--dry-run]                         Publish it to the registry
+  publish [<org>/<pkg>] [--registry <url>] [--dry-run]      Publish it to the registry
 
 Sign-in
   login [--registry <url> | --space <url>]              Sign in with a code in your browser
@@ -87,8 +87,11 @@ const HELP: Readonly<Record<string, Help>> = {
     ],
   },
   publish: {
-    usage: "spex publish [<org>/<pkg>] [--dry-run]",
-    options: [["--dry-run", "List the files it would publish, and publish nothing"]],
+    usage: "spex publish [<org>/<pkg>] [--registry <url>] [--dry-run]",
+    options: [
+      ["--registry <url>", "Publish at this registry instead of the one configured for the project", "a URL"],
+      ["--dry-run", "List the files it would publish, and publish nothing"],
+    ],
   },
   login: {
     usage: "spex login [--registry <url> | --space <url>] [--force]",

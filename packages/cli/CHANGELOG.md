@@ -10,6 +10,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.0.0] - 2026-11-03
+
+### Added
+
+- `spex publish --registry <url>` chooses the destination for one dry run
+  or upload. The override uses that registry's own account and leaves
+  the project registry setting as it was.
+
+### Changed
+
+- Projects without a `registry` field in `spex.yaml` now use
+  `https://spex.sublang.ai` for package resolution, search, publishing and
+  default registry sign-in. To keep using another registry, set its origin
+  in `registry`. Existing locks keep their recorded package sources.
+- Package operations use registry-purpose credentials. For a private source
+  or publishing, sign in with `spex login --registry <url>`.
+- `spex whoami` now reports only the project registry account. To inspect
+  a Space account, use `spex whoami --space <url>`.
+
+### Fixed
+
+- Publishing uploads the captured package files that passed validation. It
+  refuses if a source file changes while capturing the release.
+- Export hints name the default publishing registry, and publish sign-in
+  guidance names the registry selected for the invocation.
+
 ## [5.0.0] - 2026-11-02
 
 ### Added

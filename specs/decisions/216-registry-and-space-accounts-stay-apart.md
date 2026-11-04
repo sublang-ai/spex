@@ -5,6 +5,8 @@
 
 ## Status
 
+Amended by [DR-222](222-cli-publication-registry-override.md) to allow a CLI publication to name its registry for one invocation.
+
 Amended by [DR-218](218-write-a-playbook-before-publishing.md) in deferring registry-only namespace selection until publication and using a local placeholder for authoring and a one-shot compile without a namespace grant.
 
 Accepted (2026-11-03) on the owner's direction that package management, playbook authoring and publishing use only the registry account, while groups and servers use only the Space account.

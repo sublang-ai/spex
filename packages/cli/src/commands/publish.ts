@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 SubLang International <https://sublang.ai>
 
-// `spex publish [<org>/<pkg>] [--dry-run]` (cli-9, environments-10):
+// `spex publish [<org>/<pkg>] [--registry <url>] [--dry-run]` (cli-9):
 // publish a package's folder — the folder `spex.yaml` adds that name
 // from, else `spex-packages/<org>/<pkg>/` under the root, and with no
-// name the one package under `spex-packages/` — to this folder's
-// registry as the account signed in there for publishing. It says what
+// name the one package under `spex-packages/` — to the registry selected
+// for this command as the account signed in there for publishing. It says what
 // it publishes to which registry, by the registry's name (cli-22); a dry
 // run lists the declared files and publishes nothing; a publish prints
 // the package's page at the registry. Every refusal comes before
@@ -24,6 +24,7 @@ import {
   readRelease,
   type Manifest,
 } from "../lib/environment/index.js";
+import { registryOption } from "./auth-target.js";
 import { Environment, isDirectory } from "./environment.js";
 import { parsed, Refusal, type Command } from "./run.js";
 
@@ -47,10 +48,16 @@ const issuesText = (issues: readonly { path?: string; message: string }[]): stri
   issues.map((issue) => (issue.path ? `${issue.path}: ${issue.message}` : issue.message)).join("; ");
 
 export const publish: Command = async (args) => {
-  const { values, positionals } = parsed("publish", args, { "dry-run": { type: "boolean" } }, { min: 0, max: 1 });
+  const { values, positionals } = parsed("publish", args, {
+    registry: { type: "string" },
+    "dry-run": { type: "boolean" },
+  }, { min: 0, max: 1 });
   const dryRun = values["dry-run"] === true;
+  const override = values.registry === undefined ? undefined : registryOption(values.registry);
   const env = new Environment();
   const read = env.readRequests();
+  const instance = override ?? env.registryOf(read?.requests ?? null).origin;
+  const login = `spex login --registry ${instance}`;
   let name = positionals[0];
   if (name === undefined) {
     const found = developed(env.root);
@@ -69,17 +76,10 @@ export const publish: Command = async (args) => {
   if (inside === "" || isAbsolute(inside) || inside.split(sep).includes("..")) throw new Refusal(`${path} lies outside this project folder, ${env.root} — keep the package inside it`);
   if (!isDirectory(folder)) throw new Refusal(`no folder for ${name} at ${path} — spex export ${name} --spec <file> | --skill <folder> builds one`);
 
-  // The registry: this folder's, as the account signed in
-  // there for publishing (environments-10, DR-168), named by its own
-  // display name, never a Space entry's (cli-22).
-  const target = env.registryOf(read?.requests ?? null);
-  const instance = target.origin;
   const registryName = await env.registryName(instance);
   const signedIn = (await env.tokenAt(instance).catch(() => "")) !== null;
   if (!dryRun && !signedIn) {
-    // `spex login` from this folder signs in at its registry for
-    // publishing (cli-10).
-    throw new Refusal(`not signed in at ${registryName} to publish — spex login, then retry`);
+    throw new Refusal(`not signed in at ${registryName} to publish — ${login}, then retry`);
   }
   let manifest: Manifest;
   let files: string[];
@@ -106,7 +106,7 @@ export const publish: Command = async (args) => {
 
   console.log(`Publishing ${held}@${manifest.version} to ${registryName}`);
   if (dryRun) {
-    if (!signedIn) console.log(`Org not checked — sign in to ${registryName} with spex login to check publishing rights`);
+    if (!signedIn) console.log(`Org not checked — sign in to ${registryName} with ${login} to check publishing rights`);
     console.log(["Files (dry run, nothing published):", ...files.map((file) => `  ${file}`)].join("\n"));
     return;
   }

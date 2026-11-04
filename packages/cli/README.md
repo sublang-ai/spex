@@ -70,17 +70,19 @@ After a clone, `spex install` installs what `spex.lock` records. Public
 packages need no sign-in; private ones need `spex login` first. Put real
 names in place of the examples.
 
-Build a package from a skill you already have, then publish it:
+Build a package from a skill you already have, then publish it. This
+example assumes your project uses the public registry.
 
 ```sh
-spex login
+spex login --registry https://spex.sublang.ai
 spex export my-org/my-skill --skill .claude/skills/my-skill
 spex publish my-org/my-skill --dry-run
 spex publish my-org/my-skill
 ```
 
-`spex login` signs you in to the registry with a code in your browser:
-open the address it prints and enter the code it shows. `spex export`
+The login command signs you in to the public registry with a code in
+your browser. Open the address it prints and enter the code it shows.
+`spex export`
 builds `spex-packages/my-org/my-skill/` by copying the skill, which
 stays in `.claude/skills/` for your agent; it adds nothing to
 `spex.yaml`. After you edit the skill, `spex export my-org/my-skill`
@@ -123,8 +125,8 @@ packages:
     path: spex-packages/my-org/my-skill
 ```
 
-- `registry` is where packages come from, and where `spex publish`
-  sends yours. A new `spex.yaml` names the public registry, Spex Space
+- `registry` is where packages come from and the default destination
+  for `spex publish`. A new `spex.yaml` names the public registry, Spex Space
   at `https://spex.sublang.ai`; that is also the default when `registry`
   is absent.
 - `space`, optional, is the Space this project's records sync with. It
@@ -137,10 +139,11 @@ packages:
 - A version is exact (`1.2.3`), caret (`^1.2.3`: any 1.x from 1.2.3) or
   tilde (`~1.2.3`: any 1.2.x from 1.2.3).
 
-To choose another registry, edit `registry` in `spex.yaml`, preserving
-the other fields. `spex search`, `spex add` and `spex publish` use that
-choice and take no `--registry` option. `spex login --registry <url>`
-signs in at an address without changing the project's configuration.
+To change the project registry, edit `registry` in `spex.yaml`, preserving
+the other fields. `spex search` and `spex add` use that choice.
+`spex publish --registry <url>` selects a destination for that command.
+`spex login --registry <url>` signs in at an address without changing
+the project's configuration.
 
 `spex install` installs what `spex.lock` records, so every clone
 installs the same files. It updates `spex.lock` first only where the
@@ -201,7 +204,7 @@ installed version.
 | Command | What it does |
 | --- | --- |
 | `spex export <org>/<pkg> [--spec <file>] [--skill <folder>]…` | Build it in `spex-packages/<org>/<pkg>/` from your files |
-| `spex publish [<org>/<pkg>] [--dry-run]` | Publish it to the registry |
+| `spex publish [<org>/<pkg>] [--registry <url>] [--dry-run]` | Publish it to the registry |
 
 ### Sign-in
 
@@ -301,8 +304,11 @@ them in full.
   from, else `spex-packages/<org>/<pkg>/`. With no name, it publishes the
   one package under `spex-packages/`, and lists them where there are
   several.
-- It publishes to the registry `spex.yaml` names, as the account you
-  signed in with there. Signed out, it refuses and names `spex login`.
+- It uses `--registry <url>` if given, otherwise the `registry` in
+  `spex.yaml`, or `https://spex.sublang.ai` if the project has no registry
+  setting. Use the same flag for the dry run and upload when overriding
+  the project registry. Sign in at the chosen registry with
+  `spex login --registry <url>`.
 - The org is the namespace before `/` in the package's name. At Spex
   Space, check [Your orgs](https://spex.sublang.ai/account/orgs?scope=registry)
   in your registry account. A valid, available sign-in name becomes your
@@ -339,8 +345,9 @@ spex logout --registry https://spex.sublang.ai
   `spex.yaml` names, or the public registry when it names none.
   `--registry <url>` or `--space <url>` picks another; the two cannot be
   combined.
-- These flags choose where to sign in or out, not the registry used by
-  package commands. Set `registry` in `spex.yaml` to change that.
+- These sign-in commands leave the project registry setting alone.
+  Edit `registry` in `spex.yaml` to change it, or pass `--registry <url>`
+  to `spex publish` for one invocation.
 - `spex login` signs in with a code in your browser: it prints an
   address and a code, and waits until you approve or deny there, or the
   code expires. Ctrl-C stops it and saves nothing.
@@ -560,9 +567,10 @@ at the top of the project folder, with the installed files under
 into its project folder at the app's next start.
 
 - A `spex.yaml` without `registry` uses the public registry for search,
-  resolution and publishing. To keep using another package service,
-  name it explicitly in `registry`; `space` never selects it.
-  Existing package names and manifests are not renamed automatically.
+  resolution and publishing. Name another package service in `registry`
+  or use `spex publish --registry <url>` for one publication.
+- `spex whoami` shows the registry account. Use
+  `spex whoami --space <url>` for a Space account.
 - `spex.lock` keeps each package's registry, version and checksum as
   recorded. An install downloads only from the registry it records,
   never from another Space you signed in to.

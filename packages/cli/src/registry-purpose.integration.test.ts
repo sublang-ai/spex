@@ -259,7 +259,7 @@ test("real CLI installs public packages, isolates private reads and publishing, 
     registryStore.replace(pair, null);
     const deniedPublish = await cli(home, work, "publish", "private/owned");
     assert.equal(deniedPublish.code, 1);
-    assert.equal(deniedPublish.out, "spex publish: not signed in at Stand-in Registry to publish — spex login, then retry\n", "[cli-9] signed out for publishing");
+    assert.equal(deniedPublish.out, `spex publish: not signed in at Stand-in Registry to publish — spex login --registry ${first.url}, then retry\n`, "[cli-9] signed out for publishing");
     assert.deepEqual(await fileCredentialStore(home, first.url).read(), oldPair);
     assert.equal(readFileSync(join(home, "home.yaml"), "utf8"), homeText);
 

@@ -240,13 +240,14 @@ meta.md       The spec of specs
 | [DR-219](decisions/219-developer-id-macos-downloads.md) | 219-developer-id-macos-downloads.md | Developer ID signed/notarized Mac downloads and bounded ticket-service retries |
 | [DR-220](decisions/220-tags-own-release-versions.md) | 220-tags-own-release-versions.md | TAG-owned app and CLI versions, prepared metadata, checked artifacts and branch diagnostics without publication |
 | [DR-221](decisions/221-your-own-groups-folder-is-a-lowercase-name-checked-before-it-moves.md) | 221-your-own-groups-folder-is-a-lowercase-name-checked-before-it-moves.md | Your own group's folder named at the first sign-in after the login in lowercase kebab-case without a trailing `-spex`, or `me`, its host repository `<that name>-spex`; every move of clones on disk checked against `home.yaml` first, a sign-in's partial move undone; amends DR-103 and DR-127 |
+| [DR-222](decisions/222-cli-publication-registry-override.md) | 222-cli-publication-registry-override.md | CLI publication uses its explicit registry override, else the project registry, else the public registry; amends DR-216 |
 
 ## Packages
 
 | File | Summary |
 | --- | --- |
 | [applets.md](packages/applets.md) | Applets in the IDE: a tab per installed applet in the project's workspace, `applet.open` and its capability, the paths the core serves under it with a read-only window on the working folder, the policy and sandbox confining the page |
-| [cli.md](packages/cli.md) | The `spex` command line: the environment of the current folder with `add`, `remove`, `install`, `update`, `list` and `search`, a package built with `export` from the project's own files and published with `publish` from `spex-packages/<org>/<pkg>/`, `login`, `logout` and `whoami` independently at a registry or Space, no running app needed; scaffold and lint keep their packages |
+| [cli.md](packages/cli.md) | The `spex` command line: the environment of the current folder with `add`, `remove`, `install`, `update`, `list` and `search`, a package built with `export` from the project's own files and published with `publish` from `spex-packages/<org>/<pkg>/` to the configured or public registry with a per-invocation override, `login`, `logout` and `whoami` independently at a registry or Space, no running app needed; scaffold and lint keep their packages |
 | [app-shell.md](packages/app-shell.md) | Desktop shell: guarded source launch and ABI restoration; single-instance window, quit on a signal, notifications, dock badge, core-in-main over WebSocket, packaging, supplied compiler, scaffold CLI and agent SDKs; packaged-app acceptance |
 | [core-service.md](packages/core-service.md) | Headless core: WebSocket protocol, the root lease by machine identity, shared session lifecycle/recovery/deletion, per-agent summary folds, scoped storage diagnostics, config with its revision and batched edits, records and readiness |
 | [dashboard.md](packages/dashboard.md) | Dashboard as the intent ledger: two-band attention queue, Running band, per-project History/Now/Up next/Sources groups, one-gesture capture, and shared queued-intent standing presentation; one deterministic core fold |
