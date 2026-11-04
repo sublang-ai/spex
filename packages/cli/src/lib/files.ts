@@ -27,25 +27,43 @@ export class StorageFormatError extends Error {
   }
 }
 
-/** Spex's private-storage policy over facts inspected by fs-safe. Windows
- * administrators and SYSTEM are privileged principals, as root is on POSIX. */
+/** Rights a grant may not give another principal over a private entry
+ * (storage-57): writing its data, appending to it or adding to it, its
+ * extended attributes or attributes, deleting it or a child, rewriting
+ * its descriptor or owner, and the generic and maximum rights holding
+ * any of them. Read, execute and synchronize grants hold none. */
+const CHANGE_RIGHTS = 0x0002 | 0x0004 | 0x0010 | 0x0040 | 0x0100 |
+  0x0001_0000 | 0x0004_0000 | 0x0008_0000 | 0x0200_0000 | 0x1000_0000 | 0x4000_0000;
+
+/** Spex's private-storage check (storage-57) over facts inspected by
+ * fs-safe, applied only where an entry's integrity is relied on — the
+ * root lease, a clone's lease before a move, upload staging and a seat's
+ * Codex home. POSIX admits the current user's entry with no group or
+ * other bit. Windows admits an entry the current user, LocalSystem or
+ * built-in Administrators own, as root is on POSIX, whose descriptor
+ * grants no other principal a right to change it; a read grant another
+ * tool added, such as the Codex sandbox's, is admitted (DR-223). */
 export function hasPrivatePermissions(file: string, stat: Pick<Stats, "mode" | "uid">): boolean {
   if (process.platform !== "win32") return (stat.mode & 0o077) === 0 &&
     (typeof process.getuid !== "function" || stat.uid === process.getuid());
   const facts = readOwnerAndDacl(file);
-  if (facts.status !== "supported" || !facts.complete || !facts.isLocal || !facts.daclPresent || facts.unsupportedAceTypes.length) return false;
-  const trusted = new Set([facts.currentUserSid, "s-1-5-18", "s-1-5-32-544"]);
-  return trusted.has(facts.ownerSid) && facts.aces.every(ace =>
-    ace.aceType === "deny" || ace.mask === 0 || trusted.has(ace.sid));
+  if (facts.status !== "supported" || !facts.complete || !facts.daclPresent || facts.unsupportedAceTypes.length) return false;
+  const trusted = new Set([facts.currentUserSid, "s-1-5-18", "s-1-5-32-544"].map((sid) => sid.toLowerCase()));
+  return trusted.has(facts.ownerSid.toLowerCase()) && facts.aces.every(ace =>
+    ace.aceType === "deny" || (ace.mask & CHANGE_RIGHTS) === 0 || trusted.has(ace.sid.toLowerCase()));
 }
 
-/** Create a Windows state root privately from its first appearance. Existing
- * roots are verified, never silently repaired or admitted by synthetic mode bits. */
+/** Create a Windows state root privately from its first appearance; an
+ * existing root is admitted whatever its permissions, as on POSIX
+ * (storage-57, DR-223). */
 export async function prepareWindowsStorageDirectory(directory: string): Promise<void> {
   if (process.platform === "win32") makePrivateDirectory(directory);
 }
 
-/** Synchronous callers use the library's same private creator. */
+/** Make a folder owner-only where none stands — on Windows through
+ * fs-safe's protected creator, each missing parent the same way — and
+ * admit one that stands whatever its permissions, refusing only a link or
+ * a non-directory (storage-57). */
 export function makePrivateDirectory(directory: string): void {
   if (process.platform !== "win32") { mkdirSync(directory, { recursive: true, mode: 0o700 }); return; }
   assertNoSymlinkParentsSync({ rootDir: parse(directory).root, targetPath: directory, requireDirectories: true });
@@ -57,17 +75,7 @@ export function makePrivateDirectory(directory: string): void {
     catch (error) { if (!["EEXIST", "already-exists"].includes((error as NodeJS.ErrnoException).code ?? "")) throw error; }
   }
   const current = lstatSync(directory);
-  if (current.isSymbolicLink() || !current.isDirectory() || !hasPrivatePermissions(directory, current)) {
-    throw new StorageFormatError(directory, "private storage permissions cannot be verified");
-  }
-}
-
-function assertPrivateWindowsEntry(file: string): void {
-  if (process.platform !== "win32") return;
-  const info = lstatSync(file);
-  if (info.isSymbolicLink() || !hasPrivatePermissions(file, info)) {
-    throw new StorageFormatError(file, "private storage permissions cannot be verified");
-  }
+  if (current.isSymbolicLink() || !current.isDirectory()) throw new StorageFormatError(directory, "unsafe destination parent");
 }
 
 /** A directory reader never follows a linked root. Missing roots are
@@ -193,7 +201,6 @@ function heldMode(file: string): number | undefined {
  * synced, checked against `expected` where a version is given, renamed
  * into place and the folder synced where the platform can. */
 function publish(file: string, bytes: Buffer | string, expected: FileVersion | undefined, privately: boolean, mode?: number): void {
-  if (privately) assertPrivateWindowsEntry(dirname(file));
   const versioned = expected !== undefined;
   const target = privately ? 0o600 : mode ?? heldMode(file) ?? 0o644;
   const temporary = `${file}.${randomUUID()}.tmp`;
@@ -209,7 +216,6 @@ function publish(file: string, bytes: Buffer | string, expected: FileVersion | u
   }
   try {
     try { writeFileSync(fd, bytes); fchmodSync(fd, target); fsyncSync(fd); } finally { if (owned) owned.close(); else closeSync(fd); }
-    if (privately) assertPrivateWindowsEntry(temporary);
     if (versioned && fileVersion(file) !== expected) throw new VersionConflictError(file);
     renameSync(temporary, file);
   } catch (error) {
