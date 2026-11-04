@@ -8,6 +8,8 @@
 Accepted (2026-11-04) on the owner's direction, after native Windows refused a package addition in a project folder and then refused to start once the Codex sandbox had granted itself read access to the Spex home.
 Amends [DR-178](178-native-windows-private-storage.md) in the storage it admits, the principals its check refuses, and the files its policy covers.
 
+Completed by [DR-224](224-playbook-18-1-4-adoption.md) for the storage Playbook keeps.
+
 ## Context
 
 - DR-178 admitted only verified private storage on Windows: every Spex write first checked its folder's descriptor, and the core refused a home granting any principal beyond the current user, LocalSystem and built-in Administrators.

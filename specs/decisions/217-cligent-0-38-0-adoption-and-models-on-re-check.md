@@ -9,6 +9,8 @@ Accepted (2026-11-03) on the owner's direction for P0-6, after the Workshop's ma
 Amends [DR-208](208-playbook-18-1-2-cligent-0-37-0-slc-0-20-1-adoption.md) in the Playbook, Cligent and slc floors and the built-in release alone.
 Amends [DR-206](206-the-workshop-points-to-its-guide.md) in what a Re-check reads afresh: the agent cards' model catalogs too.
 
+Amended by [DR-224](224-playbook-18-1-4-adoption.md) in the Playbook floor and the built-in release.
+
 ## Context
 
 - Behind a third-party Claude service the seed runs every Claude agent on the provider's default [DR-205](205-agent-cards-read-alike.md).
