@@ -18,7 +18,7 @@ A **runtime** is one core on one home, named by the home's `device` [[storage-2]
 
 When started on a native platform other than macOS, Linux or Windows, the core service shall refuse before creating or migrating config or storage, naming the supported hosts ([DR-178](../decisions/178-native-windows-private-storage.md)):
 
-- Windows storage admission verifies the private-storage policy before config or storage is created or migrated.
+- Windows storage creates the home owner-only before config or storage is created or migrated, refusing no existing home for its permissions [[storage-57](storage.md#storage-57)] ([DR-223](../decisions/223-windows-storage-checks-what-macos-checks.md)).
 
 - Supported hosts require a filesystem that enforces the shared store's private permissions [[1]].
 
@@ -1337,7 +1337,7 @@ Where the core service runs with the scripted fake adapter and a compile spawner
 
 #### core-service-90
 
-Where CI runs on Windows, the integration suite shall exercise real Windows private storage and assert unsafe existing permissions refuse without creating config or migrating data [[core-service-89](#core-service-89)].
+Where CI runs on Windows, the integration suite shall exercise real Windows storage and assert that a home granting every principal read access starts, creating config and leasing the home [[core-service-89](#core-service-89)].
 
 #### core-service-38
 

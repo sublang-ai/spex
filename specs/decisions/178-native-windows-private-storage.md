@@ -10,6 +10,8 @@ Amends [DR-049](049-supported-app-hosts.md) for native Windows hosting and priva
 
 Amended by [DR-182](182-published-desktop-runtime-adoption.md) to use the coordinated published runtime packages in place of temporary vendor archives.
 
+Amended by [DR-223](223-windows-storage-checks-what-macos-checks.md) in its admission: no existing entry is checked before a write or at start, the remaining check admits read grants to other principals, and environment files are ordinary working-folder files.
+
 ## Context
 
 Node's Windows mode bits do not express the user boundary that private POSIX storage enforces.

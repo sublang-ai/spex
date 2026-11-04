@@ -63,6 +63,13 @@ The core shall keep an environment at its root — the working folder for a proj
 - a use is the core's start, the pairing of a working folder, a session start, a placement, `environment.get` and each package command of the command line [[cli-1](cli.md#cli-1)], and the files as the root holds them at that read are the environment, so a branch switch, a pull, a hand edit or the other host's write shows at the next use;
 - an environment needs no pairing and no registration: either host finds it by the `spex.yaml` at its root.
 
+#### environments-49
+
+When the core or the command line writes an environment's `spex.yaml`, `spex.lock` or placement record, it shall write it as an ordinary file of its folder wherever the root stands, checking no permission of the root, the folder or the file ([DR-223](../decisions/223-windows-storage-checks-what-macos-checks.md)):
+
+- a new file takes the folder's inherited permissions, with mode `0644` on POSIX;
+- an existing file keeps its mode.
+
 #### environments-2
 
 The core shall read an environment's `spex.yaml` [[environments-26](#environments-26)] as exactly `{format: 1, language?, space?, registry?, packages}` — an optional preferred language, the optional origin of the environment's instance [[storage-2](storage.md#storage-2)], and `<org>/<pkg>` to one request — refusing a `format` it does not know and a `space` or `registry` that is no canonical service origin ([DR-104](../decisions/104-spec-package-format-and-client-environments.md), [DR-165](../decisions/165-one-package-manager-hosted-by-the-cli-and-the-app.md)):
@@ -527,6 +534,13 @@ When a real core previews and publishes a local package against a stand-in regis
 - rights removed after a successful preview refuse the later upload, and restored rights permit retry [[environments-47](#environments-47)];
 - an id-only authoring session publishes a snapshot under its explicitly selected org and license, before and after adding its local path request, with source files, request and lock unchanged, and its preview uploading and writing nothing [[environments-10](#environments-10)];
 - an unauthorized snapshot org, missing release description, stale session instance, wrong owning environment and confirmation checksum mismatch refuse without uploading [[environments-10](#environments-10)] [[environments-47](#environments-47)].
+
+#### environments-50
+
+When the command line adds and installs a stand-in registry package in a project folder that grants another principal access, the integration suite shall assert that `spex.yaml`, `spex.lock`, the installed files and the placement record are written [[environments-49](#environments-49)]:
+
+- on Windows, a root granting built-in Users read and execute access, inherited by what it holds, and the new files carrying that inherited grant [[environments-49](#environments-49)];
+- on POSIX, a root of mode `0755`, a new `spex.yaml` and `spex.lock` of mode `0644`, and an existing `spex.yaml` of mode `0664` keeping it across the add [[environments-49](#environments-49)].
 
 ## References
 

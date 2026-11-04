@@ -52,7 +52,7 @@ The store shall persist core-owned data in Spex home using these locations:
 | `.lease/`, `.lease.stage.<token>/`, `.lease.retired/<token>/` | the root lease held by the one process serving this home [[storage-14](#storage-14)], its staging and its permanent retirement records [[storage-26](#storage-26)] | — |
 
 - Only a clone is a Git work tree; the home itself is none, and nothing outside `workspace/` is ever committed.
-- `local/` never leaves the device, and its credentials file has owner-only permissions.
+- `local/` never leaves the device, and its credentials file is created owner-only [[storage-57](#storage-57)].
 - An instance's folder is `@<host>`, `<host>` being its origin's host [[storage-2](#storage-2)] followed, where its origin names a port or its scheme is `http`, by `_<port>` with the port the origin names, else `80`.
 
 ### storage-2
@@ -133,7 +133,7 @@ The preference store shall encode `local/prefs.json` as exactly `{format: 1, pre
 
 ### storage-19
 
-The credential store shall encode `local/credentials.yaml` as exactly `{format: 1, hosts: {<slot>: {access, accessExpiresAt, refresh}}}` with owner-only permissions: keyed by `registry:<origin>` for an independent registry grant and by the instance's origin for a Space grant [[storage-2](#storage-2)], legacy origin-only entries remaining Space grants, the app token that instance issued to this device, its access secret with its expiry in Unix milliseconds, and its refresh secret, written at its sign-in and at every refresh and removed at its sign-out or on its refusal, each as a versioned write of that instance's pair ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
+The credential store shall encode `local/credentials.yaml` as exactly `{format: 1, hosts: {<slot>: {access, accessExpiresAt, refresh}}}`, created owner-only [[storage-57](#storage-57)]: keyed by `registry:<origin>` for an independent registry grant and by the instance's origin for a Space grant [[storage-2](#storage-2)], legacy origin-only entries remaining Space grants, the app token that instance issued to this device, its access secret with its expiry in Unix milliseconds, and its refresh secret, written at its sign-in and at every refresh and removed at its sign-out or on its refusal, each as a versioned write of that instance's pair ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md), [DR-127](../decisions/127-a-home-signed-in-to-several-instances.md)):
 
 - a write names the pair its writer read, or none; in one step, the file is read, that instance's pair compared with the named one in every field, and the file replaced only where they are equal, every other instance's pair kept and the file removed with the last pair;
 - where the pairs differ, nothing is written and the writer is told the pair changed meanwhile;
@@ -393,15 +393,27 @@ The core shall write Spex-owned files as the one process holding the Spex home l
 - an independent process writing the same files keeps ordinary filesystem behavior: no lock holds it off a file, and what it writes outside that instant is never refused;
 - a replacement of a session's files takes that session's management lease for that write alone, releasing it once the write lands.
 
+### storage-57
+
+The store shall create the home's folders and files owner-only and admit an existing entry whatever its permissions, checking them only where an item names the private-storage check ([DR-223](../decisions/223-windows-storage-checks-what-macos-checks.md)):
+
+| | POSIX | Windows |
+| --- | --- | --- |
+| Created owner-only | a folder `0700`, a file `0600` | a protected descriptor granting the current user, LocalSystem and built-in Administrators |
+| The private-storage check admits | the current user's entry with no group or other permission bit | an entry one of those principals owns whose descriptor grants no other principal a right to change the entry, its contents, its descriptor or its owner, read, execute and synchronize grants admitted |
+
+- The check refuses an entry whose owner and descriptor cannot be read whole.
+- An environment's `spex.yaml`, `spex.lock` and `.spex/`, a group's own clone's among them, are written as ordinary files of their folder [[environments-49](environments.md#environments-49)].
+
 ### storage-26
 
 When a home writer — the core or a mutating storage Git command — takes the root lease, it shall admit itself by one shared rule over `.lease/owner.json`, a record of `pid`, `hostname`, `acquiredAt` and `token` whose `hostname` carries this machine's identity from Playbook's facade [[2]] ([DR-108](../decisions/108-the-root-lease-names-the-machine.md)):
 
 1. Inspect `.lease` without following links: a definite `ENOENT` permits publication; any other inspection error refuses.
-2. Read an existing owner: a symlink, a non-directory, an empty directory, contents other than one regular `owner.json` of the current user's, a record of another shape, a non-positive `pid`, a `token` that is not a UUID, or a `hostname` of the tagged form of step 3 in an `owner.json` whose permissions fail the private-storage policy ([DR-178](../decisions/178-native-windows-private-storage.md)) is malformed and refuses; an untagged record is read whatever its mode.
+2. Read an existing owner: a symlink, a non-directory, an empty directory, contents other than one regular `owner.json` of the current user's, a record of another shape, a non-positive `pid`, a `token` that is not a UUID, or a `hostname` of the tagged form of step 3 in an `owner.json` failing the private-storage check [[storage-57](#storage-57)] is malformed and refuses; an untagged record is read whatever its mode.
 3. Read the owner's `hostname`: exactly the tagged form `machine-id:v1:<lowercase UUID>` is an identity, local when it equals this machine's; an untagged value is a legacy host name, local when it equals the current `os.hostname()`; a value that begins `machine-id:` but fails the exact form is unverifiable and refuses; another machine's owner refuses.
 4. Probe a local owner's `pid` with signal `0`: success or `EPERM` is live and refuses; `ESRCH` is dead; any other error refuses, naming its code.
-5. Retire a dead owner: create the private `.lease.retired/`, or, where it already stands, validate it as a private non-symlink directory, any other creation error refusing with its code; refuse an existing `.lease.retired/<token>/` target, rename `.lease/` there, re-read the moved `owner.json` and require its `token`; a changed token refuses without deleting anything, and the retired directory with its `owner.json` is kept forever.
+5. Retire a dead owner: create the private `.lease.retired/`, or, where it already stands, validate it as a non-symlink directory passing the private-storage check [[storage-57](#storage-57)], any other creation error refusing with its code; refuse an existing `.lease.retired/<token>/` target, rename `.lease/` there, re-read the moved `owner.json` and require its `token`; a changed token refuses without deleting anything, and the retired directory with its `owner.json` is kept forever.
 6. Publish: write a private `.lease.stage.<token>/owner.json`, rename the stage to `.lease/` — a rename failing with `EEXIST` or `ENOTEMPTY`, a target that appeared meanwhile, makes the writer re-inspect, and any other staging or rename error refuses at once with its code — and re-read `.lease/owner.json` to confirm its own `token`.
 7. Release: re-read `.lease/owner.json`; only an owner carrying this writer's `token` is retired as in step 5, and a successor is never touched.
 
@@ -593,6 +605,14 @@ When an integration suite signs a real core on a scratch home with a project in 
 
 - `home.yaml`'s `own` the login in lowercase kebab-case, its trailing `-spex` dropped, or `me` for the last, naming the folder under `workspace/` that holds your own group's clone and the project's [[storage-2](#storage-2)];
 - the project and its session still listed after the core restarts [[storage-2](#storage-2)].
+
+### storage-58
+
+Where CI runs on Windows, the integration suite shall verify real Windows storage:
+
+- a folder and a file the store creates hold a protected descriptor granting only the current user, LocalSystem and built-in Administrators [[storage-57](#storage-57)];
+- a home granting every principal read access before a real core starts, and one granted it while the core runs, admit the start, the core's writes and a restart [[storage-57](#storage-57)];
+- a lease owner record granting another principal read access is read, and one granting another principal write access is malformed and refuses [[storage-57](#storage-57)] [[storage-26](#storage-26)].
 
 ## References
 
