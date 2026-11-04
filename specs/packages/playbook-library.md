@@ -22,6 +22,7 @@ When a project's Playbooks tab is shown, the tab shall list every playbook that 
 - roles one player plays stand on one line [[playbook-library-38](#playbook-library-38)], and a role whose project player differs from the global one carries a dot [[playbook-library-4](#playbook-library-4)];
 - a heading with no playbook is left out, and no row names a config or a scope — every act on the tab writes the project's config or the project's environment ([DR-069](../decisions/069-key-phrases-not-sentences.md));
 - the tab shows no spec package list, add control or registry account, only a link "Manage packages" opening the project's Packages tab [[playbook-library-92](#playbook-library-92)].
+- reading or refreshing the list does not wait for package downloads or start an additional install while one is running or after one failed; a missing install follows the guarded automatic-read path of `environment.get`, with later environment progress refreshing the list [[environments-7](environments.md#environments-7)] [[environments-26](environments.md#environments-26)].
 
 #### playbook-library-122
 
@@ -1041,3 +1042,7 @@ Where the served app runs against a real core and stand-in registry in English a
 - Publish defers org and license setup, review shows the chosen release identity and license, and confirmation publishes without changing the local package metadata, request or session [[playbook-library-121](#playbook-library-121)] [[playbook-library-93](#playbook-library-93)];
 - deleting the authoring session still leaves its local package row able to open publishing setup [[playbook-library-113](#playbook-library-113)];
 - creation and publishing controls remain visible without overlap or horizontal overflow at desktop and 320-pixel viewport widths, with acceptance screenshots captured in both languages [[playbook-library-51](#playbook-library-51)] [[playbook-library-121](#playbook-library-121)].
+
+#### playbook-library-127
+
+When a real-core integration client refreshes the project's playbook list on each environment-progress message while the stand-in registry holds or refuses a download, the suite shall assert one download per Add, list replies before a held download is released, a failed install remaining visible without automatic retries, and one explicit retry recovering the install [[playbook-library-1](#playbook-library-1)].

@@ -81,6 +81,12 @@ class Client {
 
   close(): void { this.socket.close(); }
 
+  onMessage(listener: (message: ServerMessage) => void): () => void {
+    const receive = (data: import("ws").RawData): void => listener(JSON.parse(String(data)) as ServerMessage);
+    this.socket.on("message", receive);
+    return () => this.socket.off("message", receive);
+  }
+
   sendRaw(text: string): void { this.socket.send(text); }
 
   async command<T extends Command["type"]>(type: T, fields: Omit<Extract<Command, { type: T }>, "type" | "id">):
@@ -3167,3 +3173,75 @@ test("id-only authoring publishes explicit metadata snapshots without renaming l
   assert.ok(parseRequests(readFileSync(join(working, "spex.yaml"), "utf8")).packages["local/triage"]);
   assert.equal((parseYaml(readFileSync(metaFile, "utf8")) as { org: string }).org, "local");
 });
+
+
+for (const failDownload of [false, true]) {
+  test(`playbook-library-127: package progress refreshes do not multiply installs or retry failures (${failDownload ? "failed" : "held"} download)`, { timeout: 90_000 }, async () => {
+    const dir = scratchDir("spex-env-progress-refresh-");
+    const registry = await startStandinRegistry({ dir: join(dir, "registry") });
+    const kit = skillRelease("acme", "refresh-kit");
+    await publishRelease(new RegistryClient({ url: registry.url }), await makeRelease(join(dir, "release"), kit.manifest, kit.files));
+    let refuse = failDownload;
+    let downloads = 0;
+    const archivePath = "/api/v1/packages/acme/refresh-kit/1.0.0/download";
+    const observed = holdingFetch(async (input, init) => {
+      const path = new URL(input instanceof Request ? input.url : String(input)).pathname;
+      if (path === archivePath) {
+        downloads += 1;
+        if (refuse) return new Response(JSON.stringify({ error: { code: "unavailable", message: "scripted outage" } }), { status: 503, headers: { "content-type": "application/json" } });
+      }
+      return fetch(input, init);
+    });
+    let core: Core | undefined;
+    let release: (() => void) | undefined;
+    let unsubscribe: (() => void) | undefined;
+    const refreshes: Promise<unknown>[] = [];
+    try {
+      core = await startCore(dir, { hostUrl: registry.url, extra: { registryFetch: observed.fetch } });
+      const project = await core.client.expectOk("project.register", { path: gitFolder(join(dir, "project")) });
+      await core.client.expectOk("environment.playbooks", { projectId: project.id });
+      // The real UI refreshes its loaded project list on each package
+      // progress message. Bound the observer so the unfixed feedback loop
+      // cannot exhaust the test process before its assertion fails.
+      unsubscribe = core.client.onMessage((message) => {
+        if (message.type !== "environment.state" || message.repository !== project.id || refreshes.length >= 12) return;
+        refreshes.push(core!.client.expectOk("environment.playbooks", { projectId: project.id }));
+      });
+      const held = observed.hold((path) => path === archivePath);
+      release = held.release;
+      await core.client.expectOk("environment.request", { repository: project.id, name: "acme/refresh-kit", request: { kind: "registry", version: "1.0.0" } });
+      await held.reached;
+      // This reply is a wire-order barrier behind the progress messages;
+      // their list reads must finish before the archive is released.
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const listed = await Promise.race([
+        core.client.expectOk("environment.playbooks", { projectId: project.id }).then(() => true),
+        new Promise<boolean>((done) => { timer = setTimeout(() => done(false), 5_000); }),
+      ]).finally(() => clearTimeout(timer));
+      assert.equal(listed, true, "a list read responds while the archive is still held");
+      await Promise.all(refreshes);
+      assert.equal(downloads, 1, "one Add starts one archive fetch despite progress-triggered list reads");
+      held.release();
+      const settled = await core.client.environment(project.id, 0, (state) => state.busy === null && (failDownload ? state.error !== null : state.packages.some((pkg) => pkg.name === "acme/refresh-kit" && pkg.installed)));
+      if (failDownload) {
+        assert.ok(settled.error, "the download failure remains visible");
+        await core.client.expectOk("environment.playbooks", { projectId: project.id });
+        await Promise.all(refreshes);
+        assert.equal(downloads, 1, "a failure's progress refresh does not retry the download");
+        refuse = false;
+        await core.client.expectOk("environment.install", { repository: project.id, wait: true });
+        assert.equal(downloads, 2, "an explicit retry starts exactly one new download");
+        const recovered = await core.client.expectOk("environment.get", { repository: project.id });
+        assert.equal(recovered.error, null);
+        assert.ok(recovered.packages.some((pkg) => pkg.name === "acme/refresh-kit" && pkg.installed));
+      }
+      assert.ok(refreshes.length > 0, "real progress messages exercised the refresh observer");
+    } finally {
+      unsubscribe?.();
+      release?.();
+      await Promise.allSettled(refreshes);
+      if (core) await core.stop();
+      await registry.close();
+    }
+  });
+}
