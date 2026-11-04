@@ -12,7 +12,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { writeApplicationBytes } from "../files.js";
+import { writeWorkingBytes } from "../files.js";
 import { SPEX_DIR } from "./layout.js";
 
 /** The placed specs' record, beside the installed packages under
@@ -86,8 +86,9 @@ export function serializePlacedRecord(record: PlacedRecord): string {
 }
 
 /** Write the root's record of placed specs whole, through a temporary
- * file renamed into place, so a reader never finds it half-written.
- * `<root>/.spex/` must stand. */
+ * file renamed into place, so a reader never finds it half-written, as
+ * an ordinary file of its folder (environments-49). `<root>/.spex/` must
+ * stand. */
 export function writePlacedRecord(root: string, record: PlacedRecord): void {
-  writeApplicationBytes(placedRecordPath(root), serializePlacedRecord(record));
+  writeWorkingBytes(placedRecordPath(root), serializePlacedRecord(record));
 }

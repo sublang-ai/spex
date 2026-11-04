@@ -14,7 +14,7 @@ import { dirname } from "node:path";
 import { parseDocument, YAMLMap, isMap, isScalar } from "yaml";
 
 import { ConfigViolation, composeConfig, validateProjectConfig, type LoadModule, type PlaybookModules } from "./config.js";
-import { readVersioned, VersionConflictError, writeVersionedBytes, type FileVersion } from "@sublang/spex/files";
+import { readVersioned, VersionConflictError, writePrivateVersionedBytes, type FileVersion } from "@sublang/spex/files";
 import { i18n } from "./i18n.js";
 
 export interface AgentBlock {
@@ -229,7 +229,7 @@ export interface EditResult {
 /** Write a candidate under the version it was applied to (DR-111). */
 function writeCandidate(path: string, candidate: string, version: FileVersion): EditResult {
   try {
-    writeVersionedBytes(path, candidate, version);
+    writePrivateVersionedBytes(path, candidate, version);
   } catch (error) {
     if (error instanceof VersionConflictError) return { ok: false, conflict: true, error: error.message };
     throw error;

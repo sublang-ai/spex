@@ -540,7 +540,7 @@ When a real core previews and publishes a local package against a stand-in regis
 When the command line adds and installs a stand-in registry package in a project folder that grants another principal access, the integration suite shall assert that `spex.yaml`, `spex.lock`, the installed files and the placement record are written [[environments-49](#environments-49)]:
 
 - on Windows, a root granting built-in Users read and execute access, inherited by what it holds, and the new files carrying that inherited grant [[environments-49](#environments-49)];
-- on POSIX, a root of mode `0755`, a new `spex.yaml` and `spex.lock` of mode `0644`, and an existing `spex.yaml` of mode `0664` keeping it across the add [[environments-49](#environments-49)].
+- on POSIX, a root of mode `0755`, a new `spex.lock` and placement record of mode `0644`, and an existing `spex.yaml` of mode `0664` keeping it across the add [[environments-49](#environments-49)].
 
 ## References
 

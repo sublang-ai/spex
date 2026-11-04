@@ -18,7 +18,7 @@ import { join } from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 
 import {
-  closed, isObject, isText, isUuid, knownFormat, need, readVersioned, StorageFormatError, writeVersionedBytes,
+  closed, isObject, isText, isUuid, knownFormat, need, readVersioned, StorageFormatError, writePrivateVersionedBytes,
 } from "./files.js";
 import { CLIENT_ID } from "./git-host.js";
 import { canonicalOrigin, hostUrlFor, instanceFolder, instanceSegmentOf, OriginRefused } from "./instance.js";
@@ -307,6 +307,6 @@ export function updateHomeFile(
   if (next === null) return current;
   parseHomeFile(next, file, options.checkFolders);
   mkdirSync(root, { recursive: true, mode: 0o700 });
-  writeVersionedBytes(file, stringifyYaml(next), version);
+  writePrivateVersionedBytes(file, stringifyYaml(next), version);
   return next;
 }

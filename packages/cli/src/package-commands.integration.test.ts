@@ -24,6 +24,7 @@ import { fileURLToPath } from "node:url";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 
 import { ContentStore, parseLock, publishRelease, readPlacedRecord, readPublishableRelease, RegistryClient, requestsDigest, seedBuiltinPackage, serializeLock, type RegistrySourceLock, type Resolution } from "./lib/environment/index.js";
+import { readOwnerAndDacl } from "@openclaw/fs-safe/permissions";
 import { fileCredentialStore } from "./lib/git-host.js";
 import { makeRelease, startStandinRegistry, type ReleaseFixture, type StandinRegistry } from "./testing/index.js";
 
@@ -1372,4 +1373,37 @@ test("cli-18: each cause of the table names the registry by its name and ends in
   const notPackage = await spex(folders, "install");
   assert.equal(notPackage.code, 1, notPackage.stdout + notPackage.stderr);
   assert.match(notPackage.stderr, /^spex install: demo\/tool: kit is not a package: .+ — fix its meta\.yaml, then retry\n$/, `[cli-13] a folder that is no package: ${notPackage.stderr}`);
+});
+
+/** Built-in Users, whom a drive root's default descriptor grants. */
+const USERS_SID = "s-1-5-32-545";
+
+/** Whether Windows grants built-in Users read and execute access at `file`. */
+const usersRead = (file: string): boolean => {
+  const facts = readOwnerAndDacl(file);
+  return facts.status === "supported" && facts.aces.some((ace) => ace.aceType === "allow" && ace.sid.toLowerCase() === USERS_SID && (ace.mask & 0xa9) === 0xa9);
+};
+
+test("environments-50: add writes the environment as ordinary files of a project folder granting another principal access", async () => {
+  const dir = workingFolder(join(SCRATCH, "shared"));
+  const yaml = join(dir, "spex.yaml");
+  writeFileSync(yaml, `format: 1\nspace: ${registry.url}\nregistry: ${registry.url}\npackages: {}\n`);
+  if (process.platform === "win32") execFileSync("icacls.exe", [dir, "/grant", `*${USERS_SID.toUpperCase()}:(OI)(CI)(RX)`], { windowsHide: true });
+  else { chmodSync(dir, 0o755); chmodSync(yaml, 0o664); }
+  await ok(dir, "scaffold");
+  const added = await ok(dir, "add", "demo/other");
+  assert.match(added, /^Added demo\/other 1\.2\.0$/m, "[environments-49] the add succeeds in a folder another principal may read");
+  const lock = join(dir, "spex.lock");
+  const placed = join(dir, ".spex", "placed.json");
+  const installed = join(dir, ".spex", "packages", "demo", "other");
+  assert.ok(readYaml(yaml).packages["demo/other"], "[environments-49] spex.yaml written");
+  assert.ok(readYaml(lock).packages["demo/other"], "[environments-49] spex.lock written");
+  assert.ok(existsSync(installed), "[environments-49] the installed files written");
+  assert.ok(readPlacedRecord(dir)?.specs["demo/base"], "[environments-49] the placement record written");
+  if (process.platform === "win32") {
+    for (const file of [yaml, lock, placed]) assert.ok(usersRead(file), `[environments-49] ${file} carries the folder's inherited grant`);
+  } else {
+    assert.equal(statSync(yaml).mode & 0o777, 0o664, "[environments-49] an existing spex.yaml keeps its mode");
+    for (const file of [lock, placed]) assert.equal(statSync(file).mode & 0o777, 0o644, `[environments-49] a new ${file} is written 0644`);
+  }
 });

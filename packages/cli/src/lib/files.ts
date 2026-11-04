@@ -117,19 +117,10 @@ export function readJsonFile(file: string): unknown {
   catch (error) { throw new StorageFormatError(file, (error as Error).message); }
 }
 
-/** Atomic same-directory replacement, synced before and after the rename. */
+/** Atomic same-directory replacement of a Spex-owned file, created
+ * owner-only and synced before and after the rename (storage-57). */
 export function writeApplicationBytes(file: string, bytes: Buffer | string): void {
-  assertPrivateWindowsEntry(dirname(file));
-  const temporary = `${file}.${randomUUID()}.tmp`;
-  const owned = process.platform === "win32" ? createFileSync(temporary, { private: true }) : undefined;
-  const fd = owned?.fd ?? openSync(temporary, "wx", 0o600);
-  try { writeFileSync(fd, bytes); fsyncSync(fd); } finally { if (owned) owned.close(); else closeSync(fd); }
-  assertPrivateWindowsEntry(temporary);
-  renameSync(temporary, file);
-  // Directory handles are not supported by Windows; the file is still synced.
-  if (process.platform !== "win32") {
-    const dir = openSync(dirname(file), "r"); try { fsyncSync(dir); } finally { closeSync(dir); }
-  }
+  publish(file, bytes, undefined, true);
 }
 
 export function writeApplicationFile(file: string, value: unknown): void { writeApplicationBytes(file, JSON.stringify(value)); }
@@ -166,32 +157,66 @@ export const fileVersion = (file: string): FileVersion => readVersioned(file).ve
 
 /** Atomic same-directory replacement under a version: the file is
  * checked at the instant before the rename and the write refused as a
- * conflict where it no longer stands at `expected`. It is published
- * with `mode` exactly, the umask applying to none of it. No folder is made:
+ * conflict where it no longer stands at `expected`. No folder is made:
  * a write whose folder is gone is refused the same way. The temporary
- * file never outlives a refusal or a failure. */
-export function writeVersionedBytes(file: string, bytes: Buffer | string, expected: FileVersion, mode = 0o600): void {
-  if (mode === 0o600) assertPrivateWindowsEntry(dirname(file));
+ * file never outlives a refusal or a failure.
+ *
+ * This is an ordinary file of its folder (environments-49): it takes the
+ * folder's inherited permissions, none of them checked, and is published
+ * with `mode` exactly, else the mode the file holds, else `0644`, the
+ * umask applying to none of it. A Spex-owned file the home keeps private
+ * is written with `writePrivateVersionedBytes`. */
+export function writeVersionedBytes(file: string, bytes: Buffer | string, expected: FileVersion, mode?: number): void {
+  publish(file, bytes, expected, false, mode);
+}
+
+/** `writeVersionedBytes` for a Spex-owned file, created owner-only
+ * (storage-57). */
+export function writePrivateVersionedBytes(file: string, bytes: Buffer | string, expected: FileVersion): void {
+  publish(file, bytes, expected, true);
+}
+
+/** Atomic same-directory replacement of an ordinary file of its folder,
+ * under no version (environments-49): the mode as `writeVersionedBytes`
+ * keeps it. No folder is made. */
+export function writeWorkingBytes(file: string, bytes: Buffer | string): void {
+  publish(file, bytes, undefined, false);
+}
+
+/** The mode of the regular file at `file`, or undefined where none stands. */
+function heldMode(file: string): number | undefined {
+  const info = lstatSync(file, { throwIfNoEntry: false });
+  return info?.isFile() ? info.mode & 0o777 : undefined;
+}
+
+/** The one replacement every write above makes: written beside the file,
+ * synced, checked against `expected` where a version is given, renamed
+ * into place and the folder synced where the platform can. */
+function publish(file: string, bytes: Buffer | string, expected: FileVersion | undefined, privately: boolean, mode?: number): void {
+  if (privately) assertPrivateWindowsEntry(dirname(file));
+  const versioned = expected !== undefined;
+  const target = privately ? 0o600 : mode ?? heldMode(file) ?? 0o644;
   const temporary = `${file}.${randomUUID()}.tmp`;
   let fd: number;
   let owned: ReturnType<typeof createFileSync> | undefined;
   try {
-    if (process.platform === "win32" && mode === 0o600) owned = createFileSync(temporary, { private: true });
-    fd = owned?.fd ?? openSync(temporary, "wx", mode);
+    if (privately && process.platform === "win32") owned = createFileSync(temporary, { private: true });
+    fd = owned?.fd ?? openSync(temporary, "wx", target);
   }
   catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new VersionConflictError(file);
+    if (versioned && (error as NodeJS.ErrnoException).code === "ENOENT") throw new VersionConflictError(file);
     throw error;
   }
   try {
-    try { writeFileSync(fd, bytes); fchmodSync(fd, mode); fsyncSync(fd); } finally { if (owned) owned.close(); else closeSync(fd); }
-    if (mode === 0o600) assertPrivateWindowsEntry(temporary);
-    if (fileVersion(file) !== expected) throw new VersionConflictError(file);
+    try { writeFileSync(fd, bytes); fchmodSync(fd, target); fsyncSync(fd); } finally { if (owned) owned.close(); else closeSync(fd); }
+    if (privately) assertPrivateWindowsEntry(temporary);
+    if (versioned && fileVersion(file) !== expected) throw new VersionConflictError(file);
     renameSync(temporary, file);
   } catch (error) {
     rmSync(temporary, { force: true });
     throw error;
   }
+  // Directory handles are not supported by Windows; the file is still synced.
   if (process.platform !== "win32") {
     const dir = openSync(dirname(file), "r"); try { fsyncSync(dir); } finally { closeSync(dir); }
   }

@@ -12,7 +12,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import {
   closed, isLocalPath, isObject, isRecordedPath, isText, isTimestamp, isUuid, knownFormat, need,
-  assertPlainDirectory, readJsonFile, sha256, StorageFormatError, writeApplicationBytes, writeApplicationFile, writeVersionedBytes, UUID,
+  assertPlainDirectory, readJsonFile, sha256, StorageFormatError, writeApplicationBytes, writeApplicationFile, writePrivateVersionedBytes, UUID,
 } from "@sublang/spex/files";
 import { i18n } from "./i18n.js";
 import { mediaAttachmentsSchema, type AssignedRuntime, type DiagnosticRepair, type IntentAuthor, type IntentInfo, type IntentSource, type MediaAsset, type RepairChecked, type StorageDiagnostic } from "./protocol.js";
@@ -211,7 +211,7 @@ export function writeIntentFile(intentsDir: string, intent: IntentFile, create =
   catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
   const file = join(intentsDir, `${intent.id}.json`);
   const value = parseIntentFile(intent, file, intent.id);
-  if (create) writeVersionedBytes(file, JSON.stringify(value), null);
+  if (create) writePrivateVersionedBytes(file, JSON.stringify(value), null);
   else writeApplicationFile(file, value);
 }
 
