@@ -375,10 +375,21 @@ const divergedDestination = (): string =>
   i18n._({ id: "migration destination diverged; preserved unchanged",
     comment: "Migration diagnostic: the file changed under the migration, which wrote nothing" });
 
+/** The home's migration receipts, `local/migrations/` (storage-9). */
+export function migrationsDir(home: string): string { return join(home, "local", "migrations"); }
+
+/** `migrationsDir`, made where it does not stand, with `local/` made
+ * owner-only before anything inside it (storage-57). */
+export function prepareMigrationsDir(home: string): string {
+  const dir = migrationsDir(home);
+  makePrivateDirectory(dir);
+  return dir;
+}
+
 /** A deterministic single-file conversion with restart-safe retained inputs. */
 export function migrateApplicationFile(home: string, source: string, convert: (original: string) => string): void {
   if (!existsSync(source)) return;
-  const migrations = join(home, "local", "migrations"); makePrivateDirectory(migrations);
+  const migrations = prepareMigrationsDir(home);
   let receipt: FileMigrationReceipt | undefined; let directory: string | undefined;
   for (const id of readdirSync(migrations)) {
     const file = join(migrations, id, "receipt.json"); if (!existsSync(file)) continue;

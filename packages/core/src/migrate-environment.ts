@@ -20,7 +20,7 @@ import { cpSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSyn
 import { join, relative, isAbsolute } from "node:path";
 import { parseDocument } from "yaml";
 
-import { isObject, makePrivateDirectory, readJsonFile, readVersioned, sha256, writeApplicationBytes, writeApplicationFile, writeVersionedBytes, type FileVersion } from "@sublang/spex/files";
+import { isObject, readJsonFile, readVersioned, sha256, writeApplicationBytes, writeApplicationFile, writeVersionedBytes, type FileVersion } from "@sublang/spex/files";
 import {
   ensureSpexDir,
   installedDir,
@@ -35,6 +35,7 @@ import {
   type Lock,
 } from "@sublang/spex/environment";
 import { canonicalOrigin } from "@sublang/spex/instance";
+import { migrationsDir, prepareMigrationsDir } from "./app-storage.js";
 
 export interface EnvironmentReceipt {
   format: 1;
@@ -86,7 +87,6 @@ export interface MigratedRepository {
 const FILES = ["spex.yaml", "spex.lock"] as const;
 const FORMER_TREES = ["packages", "skills"] as const;
 
-function migrationsDir(home: string): string { return join(home, "local", "migrations"); }
 
 /** The home's environment receipt, where one stands. */
 function findReceipt(home: string): { receipt: EnvironmentReceipt; dir: string } | undefined {
@@ -239,9 +239,7 @@ export function migrateEnvironments(home: string, repositories: readonly Migrate
   if (todo.length === 0) return [];
   if (!found) {
     const id = randomUUID();
-    const dir = join(migrationsDir(home), id);
-    // local/ owner-only before anything is made inside it (storage-57).
-    makePrivateDirectory(migrationsDir(home));
+    const dir = join(prepareMigrationsDir(home), id);
     mkdirSync(join(dir, "inputs"), { recursive: true, mode: 0o700 });
     found = { receipt: { format: 1, id, kind: "environment", inputs: [], steps: [], pending: [], complete: false }, dir };
   }

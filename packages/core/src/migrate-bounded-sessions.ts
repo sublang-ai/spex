@@ -8,15 +8,15 @@ import { randomUUID } from "node:crypto";
 import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, rmdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { createSessionStore } from "@sublang/playbook/session-store";
+import { migrationsDir, prepareMigrationsDir } from "./app-storage.js";
 import { Home, isRepositoryKey } from "./home.js";
-import { isObject, makePrivateDirectory, readJsonFile, sha256, StorageFormatError, UUID, writeApplicationBytes, writeApplicationFile } from "@sublang/spex/files";
+import { isObject, readJsonFile, sha256, StorageFormatError, UUID, writeApplicationBytes, writeApplicationFile } from "@sublang/spex/files";
 
 interface InputFile { path: string; sha256: string }
 interface ImportedSession { id: string; cwd: string; files: InputFile[]; retained: boolean; staged: boolean; repository?: string; complete: boolean }
 interface ImportReceipt { format: 1; id: string; kind: "bounded-sessions"; sessions: ImportedSession[]; complete: boolean }
 interface Pending { receipt: ImportReceipt; dir: string }
 function fail(file: string, reason: string): never { throw new StorageFormatError(file, reason); }
-const migrations = (root: string): string => join(root, "local", "migrations");
 const belongs = (path: string, id: string): boolean => !path.split("/").some((part) => !part || part === "." || part === "..") &&
   (new Set([`${id}.json`, `${id}.replay.json`, `${id}.records.jsonl`, `${id}.hints.json`]).has(path) || path.startsWith(`${id}.chunks/`) || path.startsWith(`${id}.assets/`));
 
@@ -36,7 +36,7 @@ function inspect(root: string, path = "", directory = true): boolean {
 }
 
 function pending(root: string): Pending[] {
-  const directory = migrations(root);
+  const directory = migrationsDir(root);
   if (!existsSync(directory)) return [];
   inspect(root, "local/migrations");
   const found: Pending[] = [];
@@ -168,9 +168,8 @@ export async function stageBoundedHomeSessions(root: string): Promise<void> {
   let items = pending(root);
   const ids = sourceIds(root);
   if (!items.length && ids.length) {
-    // local/ owner-only before anything is made inside it (storage-57).
-    const id = randomUUID(); makePrivateDirectory(migrations(root)); privateDirectory(root, `local/migrations/${id}`);
-    const item: Pending = { dir: join(migrations(root), id), receipt: { format: 1, id, kind: "bounded-sessions", sessions: [], complete: false } };
+    const id = randomUUID(); prepareMigrationsDir(root); privateDirectory(root, `local/migrations/${id}`);
+    const item: Pending = { dir: join(migrationsDir(root), id), receipt: { format: 1, id, kind: "bounded-sessions", sessions: [], complete: false } };
     save(item); items = [item];
   }
   const source = join(root, "sessions");

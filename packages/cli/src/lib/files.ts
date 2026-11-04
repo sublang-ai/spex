@@ -27,13 +27,25 @@ export class StorageFormatError extends Error {
   }
 }
 
+// Windows access rights that let a principal change an entry, by their
+// Win32 names. File and directory rights share these bits: adding a file
+// or subdirectory is writing or appending data.
+const FILE_WRITE_DATA = 0x0000_0002;
+const FILE_APPEND_DATA = 0x0000_0004;
+const FILE_WRITE_EA = 0x0000_0010;
+const FILE_DELETE_CHILD = 0x0000_0040;
+const FILE_WRITE_ATTRIBUTES = 0x0000_0100;
+const DELETE = 0x0001_0000;
+const WRITE_DAC = 0x0004_0000;
+const WRITE_OWNER = 0x0008_0000;
+const MAXIMUM_ALLOWED = 0x0200_0000;
+const GENERIC_ALL = 0x1000_0000;
+const GENERIC_WRITE = 0x4000_0000;
+
 /** Rights a grant may not give another principal over a private entry
- * (storage-57): writing its data, appending to it or adding to it, its
- * extended attributes or attributes, deleting it or a child, rewriting
- * its descriptor or owner, and the generic and maximum rights holding
- * any of them. Read, execute and synchronize grants hold none. */
-const CHANGE_RIGHTS = 0x0002 | 0x0004 | 0x0010 | 0x0040 | 0x0100 |
-  0x0001_0000 | 0x0004_0000 | 0x0008_0000 | 0x0200_0000 | 0x1000_0000 | 0x4000_0000;
+ * (storage-57). Read, execute and synchronize grants hold none of them. */
+const CHANGE_RIGHTS = FILE_WRITE_DATA | FILE_APPEND_DATA | FILE_WRITE_EA | FILE_DELETE_CHILD |
+  FILE_WRITE_ATTRIBUTES | DELETE | WRITE_DAC | WRITE_OWNER | MAXIMUM_ALLOWED | GENERIC_ALL | GENERIC_WRITE;
 
 /** Spex's private-storage check (storage-57) over facts inspected by
  * fs-safe, applied only where an entry's integrity is relied on — the
@@ -48,9 +60,9 @@ export function hasPrivatePermissions(file: string, stat: Pick<Stats, "mode" | "
     (typeof process.getuid !== "function" || stat.uid === process.getuid());
   const facts = readOwnerAndDacl(file);
   if (facts.status !== "supported" || !facts.complete || !facts.daclPresent || facts.unsupportedAceTypes.length) return false;
-  const trusted = new Set([facts.currentUserSid, "s-1-5-18", "s-1-5-32-544"].map((sid) => sid.toLowerCase()));
-  return trusted.has(facts.ownerSid.toLowerCase()) && facts.aces.every(ace =>
-    ace.aceType === "deny" || (ace.mask & CHANGE_RIGHTS) === 0 || trusted.has(ace.sid.toLowerCase()));
+  const trusted = new Set([facts.currentUserSid, "s-1-5-18", "s-1-5-32-544"]);
+  return trusted.has(facts.ownerSid) && facts.aces.every(ace =>
+    ace.aceType === "deny" || (ace.mask & CHANGE_RIGHTS) === 0 || trusted.has(ace.sid));
 }
 
 /** Create a Windows state root privately from its first appearance; an
@@ -75,7 +87,7 @@ export function makePrivateDirectory(directory: string): void {
     catch (error) { if (!["EEXIST", "already-exists"].includes((error as NodeJS.ErrnoException).code ?? "")) throw error; }
   }
   const current = lstatSync(directory);
-  if (current.isSymbolicLink() || !current.isDirectory()) throw new StorageFormatError(directory, "unsafe destination parent");
+  if (current.isSymbolicLink() || !current.isDirectory()) throw new StorageFormatError(directory, "not a directory, or a link");
 }
 
 /** A directory reader never follows a linked root. Missing roots are
@@ -125,10 +137,24 @@ export function readJsonFile(file: string): unknown {
   catch (error) { throw new StorageFormatError(file, (error as Error).message); }
 }
 
+// -- writes -------------------------------------------------------------------
+//
+// Every write is an atomic same-directory replacement through `publish`.
+// Its caller chooses two things, never inferred from a mode:
+//
+//   |                     | under a version (DR-111)   | under none            |
+//   | ------------------- | -------------------------- | --------------------- |
+//   | Spex-owned, private | writePrivateVersionedBytes | writeApplicationBytes |
+//   | ordinary file       | writeVersionedBytes        | writeWorkingBytes     |
+//
+// A private file is created owner-only (storage-57); an ordinary one takes
+// its folder's inherited permissions and keeps its mode (environments-49).
+// No write checks the permissions of its folder or its file.
+
 /** Atomic same-directory replacement of a Spex-owned file, created
  * owner-only and synced before and after the rename (storage-57). */
 export function writeApplicationBytes(file: string, bytes: Buffer | string): void {
-  publish(file, bytes, undefined, true);
+  publish(file, bytes, { privately: true });
 }
 
 export function writeApplicationFile(file: string, value: unknown): void { writeApplicationBytes(file, JSON.stringify(value)); }
@@ -175,20 +201,20 @@ export const fileVersion = (file: string): FileVersion => readVersioned(file).ve
  * umask applying to none of it. A Spex-owned file the home keeps private
  * is written with `writePrivateVersionedBytes`. */
 export function writeVersionedBytes(file: string, bytes: Buffer | string, expected: FileVersion, mode?: number): void {
-  publish(file, bytes, expected, false, mode);
+  publish(file, bytes, { privately: false, expected, ...(mode !== undefined ? { mode } : {}) });
 }
 
 /** `writeVersionedBytes` for a Spex-owned file, created owner-only
  * (storage-57). */
 export function writePrivateVersionedBytes(file: string, bytes: Buffer | string, expected: FileVersion): void {
-  publish(file, bytes, expected, true);
+  publish(file, bytes, { privately: true, expected });
 }
 
 /** Atomic same-directory replacement of an ordinary file of its folder,
  * under no version (environments-49): the mode as `writeVersionedBytes`
  * keeps it. No folder is made. */
 export function writeWorkingBytes(file: string, bytes: Buffer | string): void {
-  publish(file, bytes, undefined, false);
+  publish(file, bytes, { privately: false });
 }
 
 /** The mode of the regular file at `file`, or undefined where none stands. */
@@ -197,10 +223,21 @@ function heldMode(file: string): number | undefined {
   return info?.isFile() ? info.mode & 0o777 : undefined;
 }
 
+/** How `publish` writes a file. */
+interface PublishOptions {
+  /** Owner-only (storage-57), else an ordinary file of its folder. */
+  privately: boolean;
+  /** The version the writer read — `null` where it found no file — for
+   * a versioned write; absent for a write under no version. */
+  expected?: FileVersion;
+  /** An ordinary file's mode, else the mode it holds, else `0644`. */
+  mode?: number;
+}
+
 /** The one replacement every write above makes: written beside the file,
  * synced, checked against `expected` where a version is given, renamed
  * into place and the folder synced where the platform can. */
-function publish(file: string, bytes: Buffer | string, expected: FileVersion | undefined, privately: boolean, mode?: number): void {
+function publish(file: string, bytes: Buffer | string, { privately, expected, mode }: PublishOptions): void {
   const versioned = expected !== undefined;
   const target = privately ? 0o600 : mode ?? heldMode(file) ?? 0o644;
   const temporary = `${file}.${randomUUID()}.tmp`;

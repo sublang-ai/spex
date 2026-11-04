@@ -241,8 +241,9 @@ export async function readLock(file: string): Promise<Lock | null> {
 }
 
 /** Write `spex.lock` atomically as an ordinary file of its folder
- * (environments-49), no folder made; returns the bytes written. Given the version the writer read, the write is refused as a
- * conflict where the lock changed meanwhile (DR-111). */
+ * (environments-49), no folder made; returns the bytes written. Given
+ * the version the writer read, the write is refused as a conflict where
+ * the lock changed meanwhile (DR-111). */
 export async function writeLock(file: string, lock: Lock, expected?: FileVersion): Promise<string> {
   const text = serializeLock(lock);
   if (expected === undefined) writeWorkingBytes(file, text);

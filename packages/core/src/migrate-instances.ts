@@ -17,6 +17,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, type Dirent } from "node:fs";
 import { dirname, join } from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import { migrationsDir, prepareMigrationsDir } from "./app-storage.js";
 import { heldSessionLease, occupied, pruneEmptyFolders } from "./clone-moves.js";
 import {
   closed, isObject, isText, makePrivateDirectory, need, readJsonFile, sha256, StorageFormatError, writeApplicationBytes, writeApplicationFile,
@@ -69,7 +70,6 @@ const KEPT = [HOME_FILE, PREFS, FORGE_CACHE];
 /** The app tokens, re-keyed with `home.yaml`, recorded by digest alone. */
 const CREDENTIALS = "local/credentials.yaml";
 
-function migrationsDir(root: string): string { return join(root, "local", "migrations"); }
 
 /** Every instances receipt under `local/migrations/`, in order. */
 function instancesReceipts(root: string): { receipt: InstancesReceipt; dir: string }[] {
@@ -366,9 +366,7 @@ function rekeyClone(root: string, move: CloneMove): void {
  */
 export function migrateInstances(root: string, options: { machineIdentity?: string; env?: NodeJS.ProcessEnv } = {}): InstancesReceipt {
   const env = options.env ?? process.env;
-  const migrations = migrationsDir(root);
-  // local/ owner-only before anything is made inside it (storage-57).
-  makePrivateDirectory(migrations);
+  const migrations = prepareMigrationsDir(root);
 
   // 1 — the receipt: every input's digest, the original bytes of all
   // but the credentials kept.

@@ -15,7 +15,7 @@ import { basename, join } from "node:path";
 import { parseDocument } from "yaml";
 import {
   foldFormerIntentActs, parseFormerBindings, parseFormerIntentLog, parseFormerPrefs, parseFormerRegistry, parsePrefs,
-  parseProjectFile, writeIntentFile, type FormerIntent, type IntentFile,
+  migrationsDir, parseProjectFile, prepareMigrationsDir, writeIntentFile, type FormerIntent, type IntentFile,
 } from "./app-storage.js";
 import { isObject, makePrivateDirectory, need, readJsonFile, sha256, StorageFormatError, UUID, writeApplicationBytes, writeApplicationFile } from "@sublang/spex/files";
 import { Home, repositoryNameFor } from "./home.js";
@@ -39,7 +39,6 @@ const INPUTS = ["projects.json", "local/project-paths.json", "prefs.json", "forg
 /** What marks a home written by the former layout. */
 const FORMER_MARKERS = ["projects.json", "prefs.json", "intents", "sessions", "config/playbook.config.yaml", "forge-cache.json"];
 
-function migrationsDir(root: string): string { return join(root, "local", "migrations"); }
 
 function findIncompleteReceipt(root: string): { receipt: GroupsReceipt; dir: string } | undefined {
   const migrations = migrationsDir(root);
@@ -155,9 +154,7 @@ function copyAssets(fromDir: string, toDir: string, assetIds: string[]): void {
  * wrote and never overwriting a destination that diverged.
  */
 export async function migrateFormerHome(root: string, options: { env?: NodeJS.ProcessEnv; own?: string; libraryDir?: string; prepareRepository?: (dir: string, key: string, registryOrigin: string, space: string | null, global: boolean) => void } = {}): Promise<GroupsReceipt> {
-  const migrations = migrationsDir(root);
-  // local/ owner-only before anything is made inside it (storage-57).
-  makePrivateDirectory(migrations);
+  const migrations = prepareMigrationsDir(root);
 
   // 1 — the receipt, with every input's original bytes kept.
   let found = findIncompleteReceipt(root);
