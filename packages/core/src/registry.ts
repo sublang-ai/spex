@@ -3,12 +3,12 @@
 
 // Registry grants are independent of Space grants, including at the same
 // origin. This manager never creates a Space or changes a placement (DR-168).
-import { readFileSync, mkdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { GitHostClient, fileCredentialStore, type BrowserSignIn, type DeviceSignIn, type HostAccount } from "@sublang/spex/git-host";
 import { RegistryClient, PUBLIC_REGISTRY_ORIGIN } from "@sublang/spex/environment";
 import { canonicalOrigin } from "@sublang/spex/instance";
-import { writeApplicationBytes } from "@sublang/spex/files";
+import { makePrivateDirectory, writeApplicationBytes } from "@sublang/spex/files";
 import { CoreError } from "./session.js";
 import { i18n } from "./i18n.js";
 import type { RegistryState } from "./protocol.js";
@@ -37,7 +37,7 @@ export class RegistryManager {
   }
   private save(): void {
     if (this.stopped) return;
-    mkdirSync(join(this.options.home, "local"), { recursive: true, mode: 0o700 });
+    makePrivateDirectory(join(this.options.home, "local"));
     writeApplicationBytes(this.file, JSON.stringify(Object.fromEntries(this.metadata), null, 2) + "\n");
   }
   client(origin: string): GitHostClient {

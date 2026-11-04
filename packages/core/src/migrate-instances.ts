@@ -17,9 +17,10 @@ import { randomUUID } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, type Dirent } from "node:fs";
 import { dirname, join } from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import { migrationsDir, prepareMigrationsDir } from "./app-storage.js";
 import { heldSessionLease, occupied, pruneEmptyFolders } from "./clone-moves.js";
 import {
-  closed, isObject, isText, need, readJsonFile, sha256, StorageFormatError, writeApplicationBytes, writeApplicationFile,
+  closed, isObject, isText, makePrivateDirectory, need, readJsonFile, sha256, StorageFormatError, writeApplicationBytes, writeApplicationFile,
 } from "@sublang/spex/files";
 import {
   CLIENT_ID, Home, HOME_FILE, invalidHome, isRepositoryKey, notAnOrigin, parseHomeFile, WORKSPACE, WORKSPACE_DEPTH, type HomeAccount, type HomeFile,
@@ -69,7 +70,6 @@ const KEPT = [HOME_FILE, PREFS, FORGE_CACHE];
 /** The app tokens, re-keyed with `home.yaml`, recorded by digest alone. */
 const CREDENTIALS = "local/credentials.yaml";
 
-function migrationsDir(root: string): string { return join(root, "local", "migrations"); }
 
 /** Every instances receipt under `local/migrations/`, in order. */
 function instancesReceipts(root: string): { receipt: InstancesReceipt; dir: string }[] {
@@ -366,8 +366,7 @@ function rekeyClone(root: string, move: CloneMove): void {
  */
 export function migrateInstances(root: string, options: { machineIdentity?: string; env?: NodeJS.ProcessEnv } = {}): InstancesReceipt {
   const env = options.env ?? process.env;
-  const migrations = migrationsDir(root);
-  mkdirSync(migrations, { recursive: true, mode: 0o700 });
+  const migrations = prepareMigrationsDir(root);
 
   // 1 — the receipt: every input's digest, the original bytes of all
   // but the credentials kept.
@@ -456,7 +455,7 @@ export function migrateInstances(root: string, options: { machineIdentity?: stri
         need(current !== null && digest === plan.from, credentialsFile, divergedDestination());
         const moved = rekeyedCredentials(current, from, origin);
         need(moved !== null && sha256(moved) === plan.to, credentialsFile, divergedDestination());
-        mkdirSync(join(root, "local"), { recursive: true, mode: 0o700 });
+        makePrivateDirectory(join(root, "local"));
         writeApplicationBytes(credentialsFile, moved);
       }
     }

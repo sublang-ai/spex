@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `spex add`, `install`, `update` and `remove` work on Windows in a project
+  folder that grants other accounts access, such as a folder on a second
+  drive. `spex.yaml`, `spex.lock` and `.spex/placed.json` are ordinary
+  files of the folder: a new one is written `0644` and an existing one
+  keeps its mode, where they were written `0600` before.
+
 ## [6.0.0] - 2026-11-03
 
 ### Added

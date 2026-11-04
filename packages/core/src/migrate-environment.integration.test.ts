@@ -14,7 +14,7 @@ import { test } from "node:test";
 import { spawnSync } from "node:child_process";
 import { environmentReceipt, type MigratedRepository } from "./migrate-environment.js";
 import assert from "node:assert/strict";
-import { cpSync, existsSync, lstatSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, existsSync, lstatSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { BUILTIN_PACKAGE_NAME, INSTALL_RECORD, parseLock, parseRequests, publishRelease, RegistryClient, requestsDigest, serializeLock } from "@sublang/spex/environment";
@@ -107,7 +107,7 @@ function fetchesOf(registry: StandinRegistry, from: number, name: string): strin
   return registry.script.received.slice(from).filter((request) => request.path.includes(`/${name}/`)).map((request) => request.path);
 }
 
-test("storage-25, storage-24: a home whose project clones hold their environments moves each into its working folder at start, the folder's own standing, a missing folder's moving once paired, your own group's staying in its clone, each naming its instance as space, the installed trees moved without a fetch where their record matches and installed from the store where not, one receipt standing that a restart does not repeat, and the clone's deletion pushed by its sync", { timeout: 300_000 }, async (t) => {
+test("environments-51, storage-25, storage-24: a home whose project clones hold their environments moves each into its working folder at start, the folder's own standing, a missing folder's moving once paired, your own group's staying in its clone, each naming its instance as space, the installed trees moved without a fetch where their record matches and installed from the store where not, one receipt standing that a restart does not repeat, and the clone's deletion pushed by its sync", { timeout: 300_000 }, async (t) => {
   const registry = await startStandinRegistry({ dir: join(scratch, "migrate-registry") });
   t.after(() => registry.close());
   await publishRelease(new RegistryClient({ url: registry.url }), await makeRelease(join(scratch, "releases", "kit"), {
@@ -178,6 +178,11 @@ test("storage-25, storage-24: a home whose project clones hold their environment
   writeFileSync(join(own, "spex.yaml"), ownFormer.requests);
   writeFileSync(join(own, "spex.lock"), ownFormer.lock);
   const ownFiles = [ownFormer.requests, ownFormer.lock];
+  // Modes a reader set: a rewrite keeps each (environments-49).
+  const posix = process.platform !== "win32";
+  const modeOf = (file: string): number => statSync(file).mode & 0o777;
+  const kept: [string, number][] = [[join(own, "spex.yaml"), 0o664], [join(own, "spex.lock"), 0o600], [join(folders[two]!, "spex.yaml"), 0o664]];
+  if (posix) for (const [file, mode] of kept) chmodSync(file, mode);
   assert.equal(parseRequests(ownFiles[0]!).space, undefined, "your own group's environment names no space yet");
   const formerFiles = Object.fromEntries([one, two, three].map((key) => [key, FILES.map((file) => readFileSync(join(clones[key]!, file), "utf8"))]));
   const formerTree = inodes(join(clones[one]!, "packages"));
@@ -201,6 +206,7 @@ test("storage-25, storage-24: a home whose project clones hold their environment
   assert.deepEqual(fetchesOf(registry, before, "acme/kit"), [], "nothing was fetched");
   assert.equal(readFileSync(join(folders[one]!, ".spex", ".gitignore"), "utf8"), "*\n");
   for (const entry of [...FILES, "packages", "skills", ".spex"]) assert.equal(existsSync(join(clones[one]!, entry)), false, `the first's clone holds no ${entry}`);
+  if (posix) for (const file of FILES) assert.equal(modeOf(join(folders[one]!, file)), 0o644, `[environments-49] the moved ${file} is new at 0644`);
 
   // [storage-24] The second: the folder's own files unchanged but for
   // space, its tree standing; the clone's files and trees deleted.
@@ -226,6 +232,7 @@ test("storage-25, storage-24: a home whose project clones hold their environment
   assert.equal(readFileSync(join(own, "spex.yaml"), "utf8").replace(/^space: .*\n/m, ""), ownFiles[0]);
   assert.ok(existsSync(join(own, ".spex", "packages", INSTALL_RECORD)), "its install record under .spex/");
   for (const entry of ["packages", "skills"]) assert.equal(existsSync(join(own, entry)), false, `your own group's clone holds no former ${entry}/`);
+  if (posix) for (const [file, mode] of kept) assert.equal(modeOf(file), mode, `[environments-49] the rewritten ${file} keeps its mode ${mode.toString(8)}`);
 
   // [storage-24] One receipt of kind environment.
   let receipts = environmentReceipts(home);

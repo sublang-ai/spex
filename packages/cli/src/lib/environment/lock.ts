@@ -13,7 +13,7 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { Document, isMap, isSeq, parseDocument } from "yaml";
 
-import { writeApplicationBytes, writeVersionedBytes, type FileVersion } from "../files.js";
+import { writeVersionedBytes, writeWorkingBytes, type FileVersion } from "../files.js";
 import { isPackageName, sha256Hex, type Issue, type Manifest } from "./format.js";
 import { requestsDigest } from "./requests.js";
 
@@ -240,12 +240,13 @@ export async function readLock(file: string): Promise<Lock | null> {
   return parseLock(await readFile(file, "utf8"));
 }
 
-/** Write `spex.lock` atomically, no folder made; returns the bytes
- * written. Given the version the writer read, the write is refused as a
- * conflict where the lock changed meanwhile (DR-111). */
+/** Write `spex.lock` atomically as an ordinary file of its folder
+ * (environments-49), no folder made; returns the bytes written. Given
+ * the version the writer read, the write is refused as a conflict where
+ * the lock changed meanwhile (DR-111). */
 export async function writeLock(file: string, lock: Lock, expected?: FileVersion): Promise<string> {
   const text = serializeLock(lock);
-  if (expected === undefined) writeApplicationBytes(file, text);
+  if (expected === undefined) writeWorkingBytes(file, text);
   else writeVersionedBytes(file, text, expected);
   return text;
 }
