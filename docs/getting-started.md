@@ -157,8 +157,9 @@ spex whoami
 browser: open the address it prints and enter the code. To use another
 registry, edit `registry` in `spex.yaml`, preserving the rest of the file,
 then sign in there. `spex login --registry <url>` signs in at that
-address without changing the project's registry; `search`, `add` and
-`publish` use the file's choice and take no `--registry` flag.
+address without changing the project's registry. `search` and `add` use
+the file's choice. `publish --registry <url>` can select a different
+destination for one invocation.
 `spex whoami` reports only that registry account.
 `spex login --space <url>` signs in to a Space instead, and
 `spex whoami --space <url>` reports that Space account. The two sign-ins
@@ -288,21 +289,23 @@ Older locks keep their exact source, version and checksums. Installing
 one may require a separate registry sign-in at its recorded source; a
 Space sign-in cannot supply it. To keep using a different registry for
 new resolution or publication, select it explicitly in `registry`.
-Changing that selection preserves existing locked source provenance.
+For a one-time CLI publication, use `spex publish --registry <url>`.
+Changing the project registry preserves existing locked source provenance.
 
 ### Publish a spec or skill package
 
 To publish a skill you already have, such as one Claude Code keeps under
 `.claude/skills/`, sign in to the registry, then build a package from the
-skill in your project's folder, under an org of yours:
+skill in your project's folder, under an org of yours. This example
+assumes your project uses the public registry:
 
 ```sh
-spex login
+spex login --registry https://spex.sublang.ai
 spex export my-org/my-skill --skill .claude/skills/my-skill
 ```
 
-`spex login` signs in with a code in your browser: open the address it
-prints, enter the code and approve. `spex export` writes
+The login command signs in with a code in your browser. Open the address
+it prints, enter the code and approve. `spex export` writes
 `spex-packages/my-org/my-skill/` with its `meta.yaml`, a README and your
 project's license, copying the skill, which stays in `.claude/skills/`
 for your agent; it adds nothing to `spex.yaml`. After you edit the skill,
@@ -320,6 +323,11 @@ Check what will be published, then publish it:
 spex publish my-org/my-skill --dry-run
 spex publish my-org/my-skill
 ```
+
+Publishing uses the project's `registry`, or `https://spex.sublang.ai`
+if no registry is set. To publish elsewhere, sign in at that address
+with `spex login --registry <url>` and pass `--registry <url>` to both
+publish commands.
 
 The dry run shows the registry, the name, the version and the files, and
 publishes nothing. When signed in, it also checks that your account can

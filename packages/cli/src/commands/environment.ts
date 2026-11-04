@@ -259,7 +259,9 @@ export class Environment {
     const pkg = error.packageName;
     // `spex login` selects this folder's package registry (cli-10).
     // An exact locked source at another registry names that target.
-    const login = origin === context.origin ? "spex login" : `spex login --registry ${origin}`;
+    const login = context.operation !== "publish" && origin === context.origin
+      ? "spex login"
+      : `spex login --registry ${origin}`;
     const about = pkg ? `${pkg}: ` : "";
     if (error.cause instanceof CredentialChanged) return new Refusal(`your sign-in at ${name} changed meanwhile — retry`);
     switch (error.kind) {

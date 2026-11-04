@@ -1059,7 +1059,7 @@ test("cli-16: publish by name to the registry spex.yaml names, named by its own 
 
   assert.ok(registry.script.requests.includes("GET /api/v1/account/orgs"), "the signed-in dry run checks publishing rights");
   const unsigned = await okAt(HOME, dir, "publish", "acme/hello", "--dry-run");
-  assert.match(unsigned, /Org not checked — sign in to .+ with spex login to check publishing rights/);
+  assert.ok(unsigned.includes(`Org not checked — sign in to ${REGISTRY} with spex login --registry ${registry.url} to check publishing rights`));
   for (const orgs of [[], [{ name: "other", path: "acme", role: "Owner" }]]) {
     registry.script.setOrgs(TOKEN, orgs);
     for (const args of [["--dry-run"], []]) {
@@ -1075,7 +1075,7 @@ test("cli-16: publish by name to the registry spex.yaml names, named by its own 
     for (const args of [["--dry-run"], []]) {
       const refused = await spexAt(PUBLISHER, dir, "publish", "acme/hello", ...args);
       assert.equal(refused.code, 1);
-      assert.equal(refused.stderr, `spex publish: sign-in expired at ${REGISTRY} — spex login\n`);
+      assert.equal(refused.stderr, `spex publish: sign-in expired at ${REGISTRY} — spex login --registry ${registry.url}\n`);
       assert.deepEqual(uploads(), [], "an expired sign-in prevents any upload");
     }
   } finally {
@@ -1105,7 +1105,7 @@ test("cli-16: publish by name to the registry spex.yaml names, named by its own 
     ["a folder that is no release", PUBLISHER, ["publish", "acme/broken"], /^spex publish: spex-packages\/acme\/broken is not a package: .+ — fix it, then retry$/m],
     ["a missing license", PUBLISHER, ["publish", "acme/bare"], /^spex publish: spex-packages\/acme\/bare cannot be published: meta\.yaml: missing required field "license" — add it to its meta\.yaml$/m],
     ["several packages and no name", PUBLISHER, ["publish"], /^spex publish: spex-packages\/ holds 4 packages: acme\/bare, acme\/broken, acme\/hello, acme\/other — name one: spex publish <org>\/<pkg>$/m],
-    ["a device signed out there", HOME, ["publish", "acme/hello"], new RegExp(`^spex publish: not signed in at ${REGISTRY} to publish — spex login, then retry$`, "m")],
+    ["a device signed out there", HOME, ["publish", "acme/hello"], new RegExp(`^${exactly(`spex publish: not signed in at ${REGISTRY} to publish — spex login --registry ${registry.url}, then retry`)}$`, "m")],
   ];
   for (const [label, home, args, cause] of refusals) {
     const before = uploads().length;
@@ -1113,6 +1113,76 @@ test("cli-16: publish by name to the registry spex.yaml names, named by its own 
     assert.equal(ran.code, 1, `${label}: ${ran.stdout}${ran.stderr}`);
     assert.match(ran.stderr, cause, `[cli-9] ${label}`);
     assert.equal(uploads().length, before, `[cli-9] ${label} uploads nothing`);
+  }
+});
+
+test("cli-16: publish defaults to the public registry and an explicit registry overrides the manifest", async () => {
+  const publicOrigin = "https://spex.sublang.ai";
+  const publicRegistry = await startStandinRegistry({ dir: join(SCRATCH, "public-publish"), displayName: "Public Registry" });
+  try {
+    // Route public-registry requests to a local HTTP fixture in this child
+    // alone, and never permit the test to contact a real service.
+    const preload = Buffer.from(`
+      const realFetch = globalThis.fetch;
+      globalThis.fetch = (input, options) => {
+        const url = new URL(input);
+        if (url.origin === ${JSON.stringify(publicOrigin)}) {
+          return realFetch(${JSON.stringify(publicRegistry.url)} + url.pathname + url.search, options);
+        }
+        if (url.origin === ${JSON.stringify(registry.url)}) return realFetch(input, options);
+        throw new Error("Unexpected registry request: " + url.origin);
+      };
+    `).toString("base64");
+    const vars = { NODE_OPTIONS: [process.env.NODE_OPTIONS, `--import=data:text/javascript;base64,${preload}`].filter(Boolean).join(" ") };
+    const home = join(SCRATCH, "routing-publisher");
+    mkdirSync(home);
+    writeFileSync(join(home, "home.yaml"), stringifyYaml({
+      format: 2, device: randomUUID(), origin: registry.url, instances: [], own: "tester", folders: [],
+    }));
+    for (const [origin, fixture] of [[publicOrigin, publicRegistry], [registry.url, registry]] as const) {
+      const access = `spex-at-${randomUUID()}`;
+      assert.ok(fileCredentialStore(home, origin, "registry").replace(null, { access, refresh: `refresh-${access}`, accessExpiresAt: Date.now() + 86_400_000 }));
+      fixture.script.setPrivate("routing", [access]);
+      fixture.script.setOrgs(access, [{ name: "routing", path: "routing", role: "Owner" }]);
+      fixture.script.clearRequests();
+    }
+    const dir = project();
+    const manifest = join(dir, "spex.yaml");
+    const name = "routing/hello";
+    const run = (...args: string[]): Promise<Ran> => spexWith(vars, home, dir, ...args);
+    const legacy = `format: 1\nspace: ${registry.url}\npackages: {}\n`;
+
+    for (const contents of [undefined, legacy]) {
+      if (contents !== undefined) writeFileSync(manifest, contents);
+      const exported = await run("export", name, "--spec", "specs/packages/hello.md");
+      assert.equal(exported.code, 0, exported.stderr);
+      assert.ok(exported.stdout.includes(`${publicOrigin}/account/orgs?scope=registry`), "[cli-23] export advises the default publishing registry");
+      const preview = await run("publish", name, "--dry-run");
+      assert.equal(preview.code, 0, preview.stderr);
+      assert.match(preview.stdout, /^Publishing routing\/hello@0\.1\.0 to Public Registry$/m);
+    }
+    assert.equal(registry.script.requests.length, 0, "[cli-9] the default and legacy Space are never asked");
+    assert.equal(publicRegistry.script.requests.filter((request) => request === "GET /api/v1/account/orgs").length, 2);
+    assert.equal(publicRegistry.script.requests.some((request) => request.startsWith("PUT ")), false, "[cli-9] previews do not upload");
+
+    const published = await run("publish", name);
+    assert.equal(published.code, 0, published.stderr);
+    assert.ok(published.stdout.includes(`Published: ${publicOrigin}/${name}`));
+    assert.ok(publicRegistry.script.requests.includes("PUT /api/v1/packages/routing/hello/0.1.0"));
+    assert.equal(readFileSync(manifest, "utf8"), legacy);
+
+    const configured = `format: 1\nregistry: ${publicOrigin}\npackages: {}\n`;
+    writeFileSync(manifest, configured);
+    publicRegistry.script.clearRequests();
+    const override = await run("publish", name, "--registry", registry.url);
+    assert.equal(override.code, 0, override.stderr);
+    assert.ok(override.stdout.includes(`Published: ${registry.url}/${name}`));
+    assert.ok(registry.script.requests.includes("GET /api/v1/account/orgs"));
+    assert.ok(registry.script.requests.includes("PUT /api/v1/packages/routing/hello/0.1.0"));
+    assert.deepEqual(publicRegistry.script.requests, [], "[cli-9] the configured registry is never asked with an override");
+    assert.equal(readFileSync(manifest, "utf8"), configured, "[cli-9] an override is for this publish alone");
+  } finally {
+    await publicRegistry.close();
   }
 });
 

@@ -338,7 +338,7 @@ When an environment mutation requests `wait: true`, the core shall send that req
 
 #### environments-38
 
-The package manager shall select the package service independently from Space, using the canonical `registry` origin in `spex.yaml`, else `https://spex.sublang.ai`, for resolution, search, publishing and account context, with registry-purpose credentials alone for private reads, publishing and authorized namespaces ([DR-216](../decisions/216-registry-and-space-accounts-stay-apart.md)):
+The package manager shall select the package service independently from Space, using the canonical `registry` origin in `spex.yaml`, else `https://spex.sublang.ai`, for resolution, search, default publishing and account context, with registry-purpose credentials alone for private reads, publishing and authorized namespaces ([DR-216](../decisions/216-registry-and-space-accounts-stay-apart.md)):
 
 - new manifests explicitly name the public registry as `registry`; existing manifests without that field select it without being rewritten by a read;
 - `space`, the home's default or signed-in instances, account names, project keys and placement changes select no registry or publishing namespace;

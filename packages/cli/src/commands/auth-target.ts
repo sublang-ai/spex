@@ -34,10 +34,13 @@ export function authTarget(home: HomeFile | null, values: { space?: string; regi
   if (origin === undefined) {
     origin = environmentRegistry(nearestRequests(), { origin: defaultInstance(home).origin, instances: home?.instances ?? [] }).origin;
   }
-  try { origin = canonicalOrigin(origin); }
+  return { target: { origin: registryOption(origin), clientId: "spex" }, scope: "registry" };
+}
+
+export function registryOption(origin: string): string {
+  try { return canonicalOrigin(origin); }
   catch (error) {
     if (error instanceof OriginRefused) throw addressRefusal("--registry", origin, error);
     throw error;
   }
-  return { target: { origin, clientId: "spex" }, scope: "registry" };
 }

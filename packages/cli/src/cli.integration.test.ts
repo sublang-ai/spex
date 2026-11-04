@@ -220,7 +220,7 @@ const COMMAND_HELP: Record<string, { aliases?: string[]; options: string[] }> = 
   list: { aliases: ["ls"], options: [] },
   search: { options: [] },
   export: { options: ["--spec <file>", "--skill <folder>", "--language <tag>", "--description <text>", "--license <id>"] },
-  publish: { options: ["--dry-run"] },
+  publish: { options: ["--registry <url>", "--dry-run"] },
   login: { options: ["--registry <url>", "--space <url>", "--force"] },
   logout: { options: ["--registry <url>", "--space <url>"] },
   whoami: { options: ["--registry <url>", "--space <url>"] },
@@ -578,7 +578,8 @@ describe("CLI integration", () => {
       [["add"], `spex add: missing <org>/<pkg>\n${addUsage}`],
       [["rm", "demo/tool", "demo/other"], "spex rm: unexpected argument demo/other\nUsage: spex remove <org>/<pkg>"],
       [["update", "extra"], "spex update: unexpected argument extra\nUsage: spex update"],
-      [["publish", "--dry-run=yes"], "spex publish: --dry-run takes no value\nUsage: spex publish [<org>/<pkg>] [--dry-run]"],
+      [["publish", "--dry-run=yes"], "spex publish: --dry-run takes no value\nUsage: spex publish [<org>/<pkg>] [--registry <url>] [--dry-run]"],
+      [["publish", "--registry"], "spex publish: --registry needs a URL\nUsage: spex publish [<org>/<pkg>] [--registry <url>] [--dry-run]"],
       [["whoami", "stray"], "spex whoami: unexpected argument stray\nUsage: spex whoami [--registry <url> | --space <url>]"],
       [["login", "--registry"], "spex login: --registry needs a URL\nUsage: spex login [--registry <url> | --space <url>] [--force]"],
     ] as const) {
