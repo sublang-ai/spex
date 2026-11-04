@@ -12,7 +12,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import {
   closed, isLocalPath, isObject, isRecordedPath, isText, isTimestamp, isUuid, knownFormat, need,
-  assertPlainDirectory, readJsonFile, sha256, StorageFormatError, writeApplicationBytes, writeApplicationFile, writePrivateVersionedBytes, UUID,
+  assertPlainDirectory, makePrivateDirectory, readJsonFile, sha256, StorageFormatError, writeApplicationBytes, writeApplicationFile, writePrivateVersionedBytes, UUID,
 } from "@sublang/spex/files";
 import { i18n } from "./i18n.js";
 import { mediaAttachmentsSchema, type AssignedRuntime, type DiagnosticRepair, type IntentAuthor, type IntentInfo, type IntentSource, type MediaAsset, type RepairChecked, type StorageDiagnostic } from "./protocol.js";
@@ -378,7 +378,7 @@ const divergedDestination = (): string =>
 /** A deterministic single-file conversion with restart-safe retained inputs. */
 export function migrateApplicationFile(home: string, source: string, convert: (original: string) => string): void {
   if (!existsSync(source)) return;
-  const migrations = join(home, "local", "migrations"); mkdirSync(migrations, { recursive: true, mode: 0o700 });
+  const migrations = join(home, "local", "migrations"); makePrivateDirectory(migrations);
   let receipt: FileMigrationReceipt | undefined; let directory: string | undefined;
   for (const id of readdirSync(migrations)) {
     const file = join(migrations, id, "receipt.json"); if (!existsSync(file)) continue;

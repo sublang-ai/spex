@@ -79,6 +79,15 @@ test("storage-58: real Windows storage creates owner-only, admits read grants ho
     new Store({ dir: widened, machineIdentity }).close();
     assert.ok(granted(widened).includes(EVERYONE), "the home stands widened");
     assert.ok(trusted(join(widened, "local")), "[storage-57] local/ made first in a widened home holds a protected descriptor");
+    // A widened home in a former format, no local/ yet: the migrations
+    // that open it make local/ owner-only before their receipts.
+    const former = join(root, "former");
+    makePrivateDirectory(former);
+    writeFileSync(join(former, "home.yaml"), `format: 1\ndevice: ${randomUUID()}\nhost:\n  url: http://127.0.0.1:4100\n  clientId: spex\nown: ada\nfolders: []\n`);
+    grant(former, "(OI)(CI)(RX)");
+    (await Store.open({ dir: former, machineIdentity })).close();
+    assert.ok(existsSync(join(former, "local", "migrations")), "the instances migration left its receipt");
+    assert.ok(trusted(join(former, "local")), "[storage-57] local/ a migration makes first in a widened home holds a protected descriptor");
     for (let n = 0; n < 2; n++) {
       const lease = acquireRootLease(home, { machineIdentity });
       lease.release();

@@ -611,7 +611,7 @@ When an integration suite signs a real core on a scratch home with a project in 
 
 Where CI runs on Windows, the integration suite shall verify real Windows storage:
 
-- beneath a folder granting every principal read access, the home's root and `local/` a real core creates, a file the store writes owner-only there, and `local/` a store creates first in an existing home granting every principal read access, grant only the current user, LocalSystem and built-in Administrators [[storage-57](#storage-57)];
+- beneath a folder granting every principal read access, the home's root and `local/` a real core creates, a file the store writes owner-only there, and `local/` a store, or a migration of a former home, creates first in an existing home granting every principal read access, grant only the current user, LocalSystem and built-in Administrators [[storage-57](#storage-57)];
 - a home granting every principal read access before a real core starts, and one granted it while the core runs, admit the start, the core's writes and a restart [[storage-57](#storage-57)];
 - a lease owner record granting another principal read access is read, and one granting another principal write access is malformed and refuses [[storage-57](#storage-57)] [[storage-26](#storage-26)].
 

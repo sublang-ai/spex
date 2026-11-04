@@ -156,7 +156,8 @@ function copyAssets(fromDir: string, toDir: string, assetIds: string[]): void {
  */
 export async function migrateFormerHome(root: string, options: { env?: NodeJS.ProcessEnv; own?: string; libraryDir?: string; prepareRepository?: (dir: string, key: string, registryOrigin: string, space: string | null, global: boolean) => void } = {}): Promise<GroupsReceipt> {
   const migrations = migrationsDir(root);
-  mkdirSync(migrations, { recursive: true, mode: 0o700 });
+  // local/ owner-only before anything is made inside it (storage-57).
+  makePrivateDirectory(migrations);
 
   // 1 — the receipt, with every input's original bytes kept.
   let found = findIncompleteReceipt(root);

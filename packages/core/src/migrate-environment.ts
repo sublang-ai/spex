@@ -20,7 +20,7 @@ import { cpSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSyn
 import { join, relative, isAbsolute } from "node:path";
 import { parseDocument } from "yaml";
 
-import { isObject, readJsonFile, readVersioned, sha256, writeApplicationBytes, writeApplicationFile, writeVersionedBytes, type FileVersion } from "@sublang/spex/files";
+import { isObject, makePrivateDirectory, readJsonFile, readVersioned, sha256, writeApplicationBytes, writeApplicationFile, writeVersionedBytes, type FileVersion } from "@sublang/spex/files";
 import {
   ensureSpexDir,
   installedDir,
@@ -240,6 +240,8 @@ export function migrateEnvironments(home: string, repositories: readonly Migrate
   if (!found) {
     const id = randomUUID();
     const dir = join(migrationsDir(home), id);
+    // local/ owner-only before anything is made inside it (storage-57).
+    makePrivateDirectory(migrationsDir(home));
     mkdirSync(join(dir, "inputs"), { recursive: true, mode: 0o700 });
     found = { receipt: { format: 1, id, kind: "environment", inputs: [], steps: [], pending: [], complete: false }, dir };
   }

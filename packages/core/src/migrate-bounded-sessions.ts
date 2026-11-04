@@ -9,7 +9,7 @@ import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync,
 import { dirname, join } from "node:path";
 import { createSessionStore } from "@sublang/playbook/session-store";
 import { Home, isRepositoryKey } from "./home.js";
-import { isObject, readJsonFile, sha256, StorageFormatError, UUID, writeApplicationBytes, writeApplicationFile } from "@sublang/spex/files";
+import { isObject, makePrivateDirectory, readJsonFile, sha256, StorageFormatError, UUID, writeApplicationBytes, writeApplicationFile } from "@sublang/spex/files";
 
 interface InputFile { path: string; sha256: string }
 interface ImportedSession { id: string; cwd: string; files: InputFile[]; retained: boolean; staged: boolean; repository?: string; complete: boolean }
@@ -168,7 +168,8 @@ export async function stageBoundedHomeSessions(root: string): Promise<void> {
   let items = pending(root);
   const ids = sourceIds(root);
   if (!items.length && ids.length) {
-    const id = randomUUID(); privateDirectory(root, `local/migrations/${id}`);
+    // local/ owner-only before anything is made inside it (storage-57).
+    const id = randomUUID(); makePrivateDirectory(migrations(root)); privateDirectory(root, `local/migrations/${id}`);
     const item: Pending = { dir: join(migrations(root), id), receipt: { format: 1, id, kind: "bounded-sessions", sessions: [], complete: false } };
     save(item); items = [item];
   }

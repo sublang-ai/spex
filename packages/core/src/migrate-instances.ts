@@ -367,7 +367,8 @@ function rekeyClone(root: string, move: CloneMove): void {
 export function migrateInstances(root: string, options: { machineIdentity?: string; env?: NodeJS.ProcessEnv } = {}): InstancesReceipt {
   const env = options.env ?? process.env;
   const migrations = migrationsDir(root);
-  mkdirSync(migrations, { recursive: true, mode: 0o700 });
+  // local/ owner-only before anything is made inside it (storage-57).
+  makePrivateDirectory(migrations);
 
   // 1 — the receipt: every input's digest, the original bytes of all
   // but the credentials kept.
