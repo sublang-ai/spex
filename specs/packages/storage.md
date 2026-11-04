@@ -395,13 +395,14 @@ The core shall write Spex-owned files as the one process holding the Spex home l
 
 ### storage-57
 
-The store shall create the home's folders and files owner-only and admit an existing entry whatever its permissions, checking them only where an item names the private-storage check ([DR-223](../decisions/223-windows-storage-checks-what-macos-checks.md)):
+The store shall create `local/`, each file an item names owner-only and, on Windows, the home's root owner-only, and admit an existing entry whatever its permissions, checking them only where an item names the private-storage check ([DR-223](../decisions/223-windows-storage-checks-what-macos-checks.md)):
 
 | | POSIX | Windows |
 | --- | --- | --- |
-| Created owner-only | a folder `0700`, a file `0600` | a protected descriptor granting the current user, LocalSystem and built-in Administrators |
+| Created owner-only | `local/` `0700`, such a file `0600` | the home's root and such a file under a protected descriptor granting the current user, LocalSystem and built-in Administrators, `local/` inheriting the root's |
 | The private-storage check admits | the current user's entry with no group or other permission bit | an entry one of those principals owns whose descriptor grants no other principal a right to change the entry, its contents, its descriptor or its owner, read, execute and synchronize grants admitted |
 
+- The store promises no other entry owner-only: a new one takes what its folder gives it — on POSIX the process's umask, on Windows the folder's inheritable descriptor — so beneath a folder another tool widened it is as wide.
 - The check refuses an entry whose owner and descriptor cannot be read whole.
 - An environment's `spex.yaml`, `spex.lock` and `.spex/`, a group's own clone's among them, are written as ordinary files of their folder [[environments-49](environments.md#environments-49)].
 
@@ -610,7 +611,7 @@ When an integration suite signs a real core on a scratch home with a project in 
 
 Where CI runs on Windows, the integration suite shall verify real Windows storage:
 
-- a folder and a file the store creates hold a protected descriptor granting only the current user, LocalSystem and built-in Administrators [[storage-57](#storage-57)];
+- beneath a folder granting every principal read access, the home's root and `local/` a real core creates, and a file the store writes owner-only there, grant only the current user, LocalSystem and built-in Administrators [[storage-57](#storage-57)];
 - a home granting every principal read access before a real core starts, and one granted it while the core runs, admit the start, the core's writes and a restart [[storage-57](#storage-57)];
 - a lease owner record granting another principal read access is read, and one granting another principal write access is malformed and refuses [[storage-57](#storage-57)] [[storage-26](#storage-26)].
 

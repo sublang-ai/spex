@@ -63,6 +63,13 @@ test("storage-58: real Windows storage creates owner-only, admits read grants ho
     assert.ok(trusted(file), "[storage-57] a created file holds a protected descriptor");
     assert.equal(hasPrivatePermissions(file, lstatSync(file)), true);
     const machineIdentity = `machine-id:v1:${randomUUID()}`;
+    // A real core's home made there: its root and local/ share nothing
+    // of the folder's grant either.
+    const made = join(open, "made");
+    const fresh = await startCore(root, made, machineIdentity);
+    await fresh.stop();
+    assert.ok(trusted(made), "[storage-57] the root a real core creates holds a protected descriptor");
+    assert.ok(trusted(join(made, "local")), "[storage-57] local/ inherits the root's");
     for (let n = 0; n < 2; n++) {
       const lease = acquireRootLease(home, { machineIdentity });
       lease.release();
