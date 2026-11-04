@@ -339,7 +339,9 @@ function finishPlan(plan: EnvironmentPlan, dir: string, save: () => void, option
   for (const { file, bytes, current } of planned) {
     if (current.version === file.after) continue;
     if (bytes === null) throw new Error("invalid environment plan deletion");
-    writeVersionedBytes(file.path, bytes, file.before, 0o644);
+    // An ordinary file of its folder: a rewrite keeps its mode, a moved
+    // file is new at 0644 (environments-49).
+    writeVersionedBytes(file.path, bytes, file.before);
     options.checkpoint?.("written", key, file.path);
   }
   for (const file of plan.files) if (read(file.path).version !== file.after) throw new Error(`${file.path}: migration destination changed; source preserved`);

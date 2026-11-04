@@ -542,6 +542,10 @@ When the command line adds and installs a stand-in registry package in a project
 - on Windows, a root granting built-in Users read and execute access, inherited by what it holds, and the new files carrying that inherited grant [[environments-49](#environments-49)];
 - on POSIX, a root of mode `0755`, a new `spex.lock` and placement record of mode `0644`, and an existing `spex.yaml` of mode `0664` keeping it across the add [[environments-49](#environments-49)].
 
+#### environments-51
+
+When a real core's environment migration moves a project's environment into its working folder and rewrites a folder's and your own group's on POSIX, the integration suite shall assert that each rewritten `spex.yaml` and `spex.lock` keeps the mode a reader set, `0664` or `0600`, and each moved file is new at `0644` [[environments-49](#environments-49)].
+
 ## References
 
 [1]: https://agentskills.io/specification "Agent Skills specification"
