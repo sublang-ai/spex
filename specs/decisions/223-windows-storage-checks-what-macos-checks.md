@@ -18,7 +18,7 @@ Amends [DR-178](178-native-windows-private-storage.md) in the storage it admits,
 
 ## Decision
 
-- Every host keeps creating its owner-only entries as before — `local/`, the files an item names owner-only and, on Windows, the home's root, under a protected descriptor granting the current user, LocalSystem and built-in Administrators; any other entry takes what its folder gives it.
+- Every host creates its owner-only entries owner-only — `local/`, the files an item names owner-only and, on Windows, the home's root, each under a protected descriptor granting the current user, LocalSystem and built-in Administrators even where the folder holding it was widened; any other entry takes what its folder gives it.
 - No host checks an existing entry's permissions before writing to it, at start, or before creating or migrating config or storage; an entry another tool widened is admitted.
 - The private-storage check remains only where an entry's integrity is relied on — the root lease's owner record and retirement folder, a clone's lease read before a move, upload staging, and a seat's Codex home.
 - On Windows that check admits an entry owned by the current user, LocalSystem or built-in Administrators whose descriptor grants no other principal a right to change the entry, its contents, its descriptor or its owner; read, execute and synchronize grants are admitted, and facts that cannot be read whole refuse.

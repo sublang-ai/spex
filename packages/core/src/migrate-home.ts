@@ -17,7 +17,7 @@ import {
   foldFormerIntentActs, parseFormerBindings, parseFormerIntentLog, parseFormerPrefs, parseFormerRegistry, parsePrefs,
   parseProjectFile, writeIntentFile, type FormerIntent, type IntentFile,
 } from "./app-storage.js";
-import { isObject, need, readJsonFile, sha256, StorageFormatError, UUID, writeApplicationBytes, writeApplicationFile } from "@sublang/spex/files";
+import { isObject, makePrivateDirectory, need, readJsonFile, sha256, StorageFormatError, UUID, writeApplicationBytes, writeApplicationFile } from "@sublang/spex/files";
 import { Home, repositoryNameFor } from "./home.js";
 import { i18n } from "./i18n.js";
 import { commitClone, gitEnvironment, initializeClone, validateStorageTree } from "./storage-git.js";
@@ -374,7 +374,7 @@ export async function migrateFormerHome(root: string, options: { env?: NodeJS.Pr
     const draft = /^draft:(.+):player$/.exec(key);
     converted[draft ? `authoring:${draft[1]}:player` : key] = value;
   }
-  mkdirSync(join(root, "local"), { recursive: true, mode: 0o700 });
+  makePrivateDirectory(join(root, "local"));
   const prefsFile = join(root, "local", "prefs.json");
   if (merging && existsSync(prefsFile)) {
     // What the home holds is newer than a late legacy import.

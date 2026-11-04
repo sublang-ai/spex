@@ -19,7 +19,7 @@ import { dirname, join } from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { heldSessionLease, occupied, pruneEmptyFolders } from "./clone-moves.js";
 import {
-  closed, isObject, isText, need, readJsonFile, sha256, StorageFormatError, writeApplicationBytes, writeApplicationFile,
+  closed, isObject, isText, makePrivateDirectory, need, readJsonFile, sha256, StorageFormatError, writeApplicationBytes, writeApplicationFile,
 } from "@sublang/spex/files";
 import {
   CLIENT_ID, Home, HOME_FILE, invalidHome, isRepositoryKey, notAnOrigin, parseHomeFile, WORKSPACE, WORKSPACE_DEPTH, type HomeAccount, type HomeFile,
@@ -456,7 +456,7 @@ export function migrateInstances(root: string, options: { machineIdentity?: stri
         need(current !== null && digest === plan.from, credentialsFile, divergedDestination());
         const moved = rekeyedCredentials(current, from, origin);
         need(moved !== null && sha256(moved) === plan.to, credentialsFile, divergedDestination());
-        mkdirSync(join(root, "local"), { recursive: true, mode: 0o700 });
+        makePrivateDirectory(join(root, "local"));
         writeApplicationBytes(credentialsFile, moved);
       }
     }

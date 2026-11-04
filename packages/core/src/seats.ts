@@ -15,10 +15,10 @@
 // between them. The bearer and the endpoint are secrets: no message this
 // module composes carries either, nor a seat's key beyond its file.
 
-import { mkdirSync, readFileSync, rmSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
-import { knownFormat, writeApplicationBytes } from "@sublang/spex/files";
+import { knownFormat, makePrivateDirectory, writeApplicationBytes } from "@sublang/spex/files";
 import { canonicalOrigin } from "@sublang/spex/instance";
 
 /** One seat as its file holds it (storage-45): its server's name and
@@ -153,7 +153,7 @@ export function fileSeatStore(homeDir: string): SeatStore {
         rmSync(file, { force: true });
         return true;
       }
-      mkdirSync(dir, { recursive: true, mode: 0o700 });
+      makePrivateDirectory(dir);
       writeApplicationBytes(file, stringifyYaml({ format: 1, seats: doc.seats }));
       return true;
     },

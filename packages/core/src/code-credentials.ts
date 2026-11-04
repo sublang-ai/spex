@@ -15,10 +15,10 @@
 // not read is reported by its path, the YAML parser's warnings and
 // errors, which quote the file, reaching no output.
 
-import { mkdirSync, readFileSync, rmSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
-import { closed, isObject, knownFormat, need, StorageFormatError, writeApplicationBytes } from "@sublang/spex/files";
+import { closed, isObject, knownFormat, makePrivateDirectory, need, StorageFormatError, writeApplicationBytes } from "@sublang/spex/files";
 import { i18n } from "./i18n.js";
 import { adapterNameSchema, type AdapterName, type CredentialList } from "./protocol.js";
 import { AGENT_CREDENTIAL_FORMS, codexAuthContent } from "./seat-credentials.js";
@@ -189,7 +189,7 @@ export function codeCredentialStore(homeDir: string): CodeCredentialStore {
       rmSync(file, { force: true });
       return true;
     }
-    mkdirSync(dir, { recursive: true, mode: 0o700 });
+    makePrivateDirectory(dir);
     writeApplicationBytes(file, stringifyYaml({ format: 1, hosts: doc.hosts, agents: doc.agents }));
     return true;
   }

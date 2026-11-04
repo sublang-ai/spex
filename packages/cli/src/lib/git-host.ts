@@ -21,11 +21,11 @@
 import { createHash, randomBytes } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
-import { mkdirSync, readFileSync, rmSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
-import { writeApplicationBytes } from "./files.js";
+import { makePrivateDirectory, writeApplicationBytes } from "./files.js";
 import { canonicalOrigin } from "./instance.js";
 import { words } from "./words.js";
 
@@ -386,7 +386,7 @@ export function fileCredentialStore(homeDir: string, hostUrl: string, scope: Aut
       rmSync(file, { force: true });
       return true;
     }
-    mkdirSync(dir, { recursive: true, mode: 0o700 });
+    makePrivateDirectory(dir);
     writeApplicationBytes(file, stringifyYaml({ format: 1, hosts: doc.hosts }));
     return true;
   }

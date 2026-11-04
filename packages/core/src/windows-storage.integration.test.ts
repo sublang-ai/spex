@@ -11,6 +11,7 @@ import { readOwnerAndDacl } from "@openclaw/fs-safe/permissions";
 import { CoreService } from "./service.js";
 import { hasPrivatePermissions, makePrivateDirectory, prepareWindowsStorageDirectory, writeApplicationFile, writePrivateVersionedBytes, fileVersion } from "@sublang/spex/files";
 import { StateRootLeaseError, acquireRootLease } from "./root-lease.js";
+import { Store } from "./store.js";
 
 const windowsOnly = { skip: process.platform !== "win32" };
 /** Everyone: the principal no private entry otherwise grants. */
@@ -69,7 +70,15 @@ test("storage-58: real Windows storage creates owner-only, admits read grants ho
     const fresh = await startCore(root, made, machineIdentity);
     await fresh.stop();
     assert.ok(trusted(made), "[storage-57] the root a real core creates holds a protected descriptor");
-    assert.ok(trusted(join(made, "local")), "[storage-57] local/ inherits the root's");
+    assert.ok(trusted(join(made, "local")), "[storage-57] local/ is created owner-only");
+    // An existing home another tool widened, local/ not yet made: the
+    // store makes it owner-only all the same.
+    const widened = join(root, "widened");
+    makePrivateDirectory(widened);
+    grant(widened, "(OI)(CI)(RX)");
+    new Store({ dir: widened, machineIdentity }).close();
+    assert.ok(granted(widened).includes(EVERYONE), "the home stands widened");
+    assert.ok(trusted(join(widened, "local")), "[storage-57] local/ made first in a widened home holds a protected descriptor");
     for (let n = 0; n < 2; n++) {
       const lease = acquireRootLease(home, { machineIdentity });
       lease.release();

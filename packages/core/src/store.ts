@@ -650,7 +650,7 @@ export class Store {
       this.homeFile = Home.create(this.dir, { ...(this.options.own ? { own: this.options.own } : {}), env: this.env });
       this.homeFile.save();
     }
-    mkdirSync(join(this.dir, "local"), { recursive: true, mode: 0o700 });
+    makePrivateDirectory(join(this.dir, "local"));
     this.ensureOwnRepository();
     this.prepareSessionDirs();
     this.loadApplication();
@@ -1488,7 +1488,7 @@ export class Store {
         takenIds.add(row.id as string); takenPaths.add(row.path as string);
       }
       if (current?.v === 2) {
-        mkdirSync(join(dir, "local"), { recursive: true, mode: 0o700 });
+        makePrivateDirectory(join(dir, "local"));
         writeAtomic(pathsFile, JSON.stringify({ v: 1, bindings }));
         writeAtomic(registryFile, JSON.stringify({ v: 2, projects }));
       } else if (projects.length > 0) {
