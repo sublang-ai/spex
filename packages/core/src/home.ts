@@ -258,7 +258,22 @@ export class Home {
    * fails leaves this home as it was, unless the file already holds the
    * new text, which is then taken (space-59, space-60). */
   moveAndSave(moves: { from: string; to: string }[], own?: string): void {
-    const next = this.moved(moves, own);
+    this.saveNext(this.moved(moves, own));
+  }
+
+  /** `unpair`, written to `home.yaml` in the same step, as `moveAndSave`
+   * writes: a write that fails leaves this home and its pair as they
+   * were (projects-10). */
+  unpairAndSave(key: string): void {
+    const next: HomeFile = { ...this.data, folders: this.data.folders.filter((folder) => folder.repository !== key) };
+    parseHomeFile(next, Home.file(this.root));
+    this.saveNext(next);
+  }
+
+  /** Write `next` to `home.yaml`, then take it: a write that fails
+   * leaves this home as it was, unless the file already holds the new
+   * text, which is then taken. */
+  private saveNext(next: HomeFile): void {
     const text = stringifyYaml(next);
     try { writeApplicationBytes(Home.file(this.root), text); }
     catch (error) {

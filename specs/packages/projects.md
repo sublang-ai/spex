@@ -192,7 +192,9 @@ While the project palette is open, the palette shall stand inside the window at 
 Where the core manages projects, the home file shall pair each working folder with its spex repository's key [[storage-2](storage.md#storage-2)], the key being the clone's path under `workspace/` and no identity Spex mints [[storage-6](storage.md#storage-6)] ([DR-103](../decisions/103-the-home-and-its-groups.md)):
 
 - removing a project forgets the pair and deletes the clone; the working folder remains;
-- the removal is one step at its instant: every session of the clone held under Playbook's management lease — a lease another writer holds refusing it `busy` — then, with nothing awaited, a session that appeared meanwhile or a clone moved or replaced since refusing it as changed meanwhile, as a home file that no longer reads does [[storage-2](storage.md#storage-2)], the pair forgotten and the clone deleted; it waits for no other work ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md));
+- the removal is one step at its instant: every session of the clone held under Playbook's management lease — a lease another writer holds refusing it `busy` — then, with nothing awaited, a session that appeared meanwhile or a clone moved or replaced since refusing it as changed meanwhile, as a home file that no longer reads does [[storage-2](storage.md#storage-2)], the clone set aside and the pair forgotten; it waits for no other work ([DR-111](../decisions/111-the-core-coordinates-as-git-does.md));
+- the clone is set aside by one rename to a sibling `.<name>-spex.removed-<uuid>`, `<name>-spex` being the clone's folder, which, beginning with `.`, no read of `workspace/` takes for a group or a clone, the core's own reading of the clone's sessions [[core-service-60](core-service.md#core-service-60)] and config [[core-service-2](core-service.md#core-service-2)] paused across the rename and resumed where the clone stays; a rename refused — on Windows, while a file or folder of the clone is held open — refuses the removal with its cause and changes nothing, the pair, the clone and its sessions standing as they were, and a write of the home file failing puts the clone back the same way;
+- the set-aside clone is then deleted on every platform, Windows included, Git's read-only objects among its files; a deletion failing records a diagnostic naming that folder and its cause, the project removed;
 - a clone no pair names, and a pair whose clone is missing, are reported as repairs without automatic pairing.
 
 ### Repository State
@@ -331,6 +333,14 @@ Where a fixture repository is registered with a spex repository placed at two st
 #### projects-33
 
 Where a project's session is held under a management lease taken out of band and a compile of that project runs, the test suite shall assert that its removal is refused `busy` deleting nothing, as it is under a live lease of a session that has no record yet; that a session whose lease appears while the removal's own leasing is held refuses it as changed meanwhile, the clone standing; that a clone moved away while that leasing is held refuses it as changed meanwhile, nothing made where the clone stood and the moved clone keeping its session [[projects-10](#projects-10)]; that a home file deleted while that leasing is held refuses it as changed meanwhile as well, the clone standing and the file not written back; and that once every lease is released the removal completes with the compile still running [[projects-10](#projects-10)].
+
+#### projects-46
+
+When the integration suite starts a real core on a scratch home reading its clones' sessions and config as they change, with a project whose local-only clone holds its first commit and a session another host wrote, on every platform and on Windows on the Node the app ships, it shall assert:
+
+- removing the project leaves neither its clone nor anything set aside beside it, nor its pair, the clone's read-only Git objects removed with it [[projects-10](#projects-10)];
+- a removal whose rename is refused — the clone's group folder read-only on POSIX, a folder of the clone held open by another reader on Windows — is refused, the pair standing and the clone's files and Git as they were, and a session another host writes into the clone afterwards is listed [[projects-10](#projects-10)];
+- once released, the removal completes [[projects-10](#projects-10)].
 
 ### Label Coverage
 

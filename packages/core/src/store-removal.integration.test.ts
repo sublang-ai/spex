@@ -9,7 +9,7 @@
 // that Node.
 
 import assert from "node:assert/strict";
-import fs, { chmodSync, existsSync, mkdirSync, readdirSync, renameSync, statSync, writeFileSync } from "node:fs";
+import fs, { chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
 import { dirname, join } from "node:path";
 import { after, before, test } from "node:test";
@@ -31,7 +31,7 @@ import {
 } from "@sublang/spex/environment";
 import { fileVersion } from "@sublang/spex/files";
 import { makeRelease, startStandinRegistry, type StandinRegistry } from "@sublang/spex/testing";
-import { installEngine } from "./compile.js";
+import { ENGINE_LINKS, installEngine, provisionEngineLinks } from "./compile.js";
 import { migrateEnvironments } from "./migrate-environment.js";
 import { CoreService } from "./service.js";
 import { scratchDir } from "./testing/scratch.js";
@@ -204,6 +204,28 @@ test("environments-53: installs replacing, failing and emptying trees of read-on
   assert.equal(existsSync(join(installed, "acme")), false, "[environments-7] the package's installed tree is removed");
   assert.deepEqual(leftIn(join(cache, "trash")), [], "[environments-7] no obsolete tree stays");
   assertSealed(second, "emptied");
+});
+
+test("environments-53: an obsolete tree holding links, as a playbook artifact's engine links are, goes with them, the folders they point to whole", async () => {
+  const { home, cache, installed, installAt, leftIn } = scratchInstalls();
+  await installAt("1.0.0");
+  // The engine's copies the links point to: on Windows, junctions, which
+  // the Node the app's Electron ships follows in rmSync, emptying them.
+  const modules = join(home, "engine", "node_modules");
+  for (const name of ENGINE_LINKS) {
+    mkdirSync(join(modules, name), { recursive: true });
+    writeFileSync(join(modules, name, "package.json"), "{}\n");
+  }
+  const folder = join(installed, "acme", "kit", "skills", "en", "tidy");
+  const links = provisionEngineLinks(folder, [modules]);
+  assert.equal(links.length, ENGINE_LINKS.length, "the installed folder holds the engine's links");
+  for (const link of links) assert.ok(lstatSync(link).isSymbolicLink());
+  await installAt("1.1.0");
+  assert.deepEqual(leftIn(join(cache, "trash")), [], "[environments-7] no obsolete tree stays, its links gone with it");
+  assert.equal(existsSync(join(folder, "node_modules")), false, "[environments-7] the new tree holds none of the old links");
+  for (const name of ENGINE_LINKS) {
+    assert.equal(readFileSync(join(modules, name, "package.json"), "utf8"), "{}\n", `[environments-7] the ${name} folder a link pointed to stays whole`);
+  }
 });
 
 test("environments-53: a staged tree copied into place, as across volumes, leaves none behind, the stored files read-only", async () => {

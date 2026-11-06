@@ -36,7 +36,7 @@ import {
   type ProjectFile, type StorageDiagnostic,
 } from "./app-storage.js";
 import { occupied } from "./clone-moves.js";
-import { makePrivateDirectory, readJsonFile, StorageFormatError, VersionConflictError, writeApplicationFile } from "@sublang/spex/files";
+import { makePrivateDirectory, readJsonFile, removeTree, StorageFormatError, VersionConflictError, writeApplicationFile } from "@sublang/spex/files";
 import { defaultOwnName, Home, repositoryNameFor, splitKey, WORKSPACE_DEPTH } from "./home.js";
 import { filedIn, formerPlacementPrefKey, PLACEMENT_PREF_KINDS, placementPrefKey, readPlacementFiles, readPlacements, type PlacementPrefKind } from "./placements.js";
 import { folderRemote, needsGroupsMigration, migrateFormerHome } from "./migrate-home.js";
@@ -557,7 +557,7 @@ export class Store {
       this.openHome();
     } catch (error) {
       this.releaseRootLease();
-      if (this.scratch) rmSync(this.dir, { recursive: true, force: true });
+      if (this.scratch) removeTree(this.dir);
       throw error;
     }
   }
@@ -738,7 +738,7 @@ export class Store {
     return instanceOfClone(this.home, this.deferredMoves(), key, () => remoteName);
   }
 
-  /** Called before a project's pair is forgotten, with its working
+  /** Called once a project's pair is forgotten, with its working
    * folder: what exports wrote there is removed (environments-8). */
   onProjectRemoving?: (key: string, folder: string | undefined) => void;
 
@@ -1600,7 +1600,8 @@ export class Store {
 
   close(): void {
     this.releaseRootLease();
-    if (this.scratch) rmSync(this.dir, { recursive: true, force: true });
+    // A scratch home's clones hold Git's read-only objects.
+    if (this.scratch) removeTree(this.dir);
   }
 
   // -- projects (projects-10, storage-6) ------------------------------------
@@ -1787,21 +1788,45 @@ export class Store {
   }
 
   /** Forget the pair and delete the clone (projects-9, projects-10); the
-   * working folder stays as it is. */
+   * working folder stays as it is. All or nothing: the clone is set
+   * aside first, by one rename to a sibling whose name begins with `.`,
+   * so no read of `workspace/` takes it for a group or a clone, and a
+   * rename refused — on Windows, while a folder of the clone is held
+   * open — changes nothing; the pair is forgotten next, the clone put
+   * back where that write fails; then the clone set aside is deleted,
+   * Git's read-only objects among its files, a deletion failing said on
+   * the console with the project removed. The caller releases what it
+   * holds open in the clone before. */
   removeProject(key: string): boolean {
     this.assertProjectsWritable();
     const folder = this.homeFile.folderOf(key);
     const repository = this.repository(key);
     if (!folder && !repository) return false;
+    if (folder && this.homeProblem) throw new StorageFormatError(this.homeProblem.file, this.homeProblem.reason);
+    const clone = repository && key !== this.homeFile.own() ? repository.dir : undefined;
+    const aside = clone === undefined ? undefined : join(dirname(clone), `.${basename(clone)}.removed-${randomUUID()}`);
+    if (clone !== undefined && aside !== undefined) renameSync(clone, aside);
+    if (folder) {
+      try { this.homeFile.unpairAndSave(key); }
+      catch (error) {
+        if (clone !== undefined && aside !== undefined) {
+          try { renameSync(aside, clone); }
+          catch (back) { console.error(`spex: the records of ${key}, set aside at ${aside}, did not move back: ${back instanceof Error ? back.message : String(back)}`); }
+        }
+        throw error;
+      }
+    }
     try { this.onProjectRemoving?.(key, folder?.path); }
     catch (error) { console.error(`spex: exports of ${key} were not removed: ${error instanceof Error ? error.message : String(error)}`); }
-    if (folder) { this.homeFile.unpair(key); this.saveHome(); }
-    if (repository && key !== this.homeFile.own()) {
+    if (clone !== undefined && aside !== undefined) {
       for (const [id, location] of [...this.sessionLocations]) if (location === key) { this.dropSession(id); this.sessionLocations.delete(id); }
-      rmSync(repository.dir, { recursive: true, force: true });
       this.repositories.delete(key);
       // A deferred clone removed waits for no move (DR-127).
       this.settleDeferred([key]);
+      // Deleting what was set aside is garbage collection: the project
+      // stands removed whatever it meets.
+      try { removeTree(aside); }
+      catch (error) { console.error(`spex: ${key} is removed, but its records set aside at ${aside} could not be deleted: ${error instanceof Error ? error.message : String(error)}`); }
     }
     return true;
   }

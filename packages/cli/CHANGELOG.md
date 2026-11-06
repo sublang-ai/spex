@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- On Windows under Node 24, `spex add`, `install`, `update` and `remove` no
+  longer empty a folder a removed tree links to, such as the engine the app
+  links into an installed playbook, and a Git source fetched by two commands
+  at once keeps one mirror; Node 24 removes neither read-only files nor
+  junctions the way Node 22 did.
+
 - `spex add`, `install`, `update` and `remove` work on Windows in a project
   folder that grants other accounts access, such as a folder on a second
   drive. `spex.yaml`, `spex.lock` and `.spex/placed.json` are ordinary

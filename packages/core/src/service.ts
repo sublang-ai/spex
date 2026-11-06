@@ -1750,6 +1750,26 @@ export class CoreService {
     this.watchProjectConfigs();
   }
 
+  /** Close the watchers of one clone, which on Windows hold it where it
+   * lies: no rename or deletion of a folder holding a watched one is
+   * admitted there (projects-10). */
+  private unwatchRepository(key: string): void {
+    this.sessionsWatchers.get(key)?.close();
+    this.sessionsWatchers.delete(key);
+    this.configWatchers.get(key)?.watcher.close();
+    this.configWatchers.delete(key);
+  }
+
+  /** Watch every clone again after `unwatchRepository`, then read once
+   * what a watcher closed meanwhile would have reported: sessions another
+   * host wrote (core-service-60) and a changed config (core-service-2). */
+  private rewatchRepositories(): void {
+    if (this.options.watchConfig === false || this.stopping) return;
+    this.watchRepositories();
+    void this.syncForeignSessions();
+    this.scheduleReload();
+  }
+
   /**
    * One watcher per clone's `config/playbook.config.yaml` beside your
    * own group's (core-service-2): a change reloads the composed state.
@@ -3103,7 +3123,12 @@ export class CoreService {
           // nothing (media-17). The project is read first, so a home
           // that query finds changed is refused next, before the check.
           await this.media.retireOwner({kind: "project", id: key}, () => {
-            if (!this.store.removeProject(key)) throw noProject(key);
+            // On Windows what the core watches in the clone holds it where
+            // it lies, refusing its rename: released for the removal, and
+            // watched again where the clone stays (projects-10).
+            this.unwatchRepository(key);
+            try { if (!this.store.removeProject(key)) throw noProject(key); }
+            catch (error) { this.rewatchRepositories(); throw error; }
           }, () => {
             assertProject();
             this.store.assertProjectsWritable();

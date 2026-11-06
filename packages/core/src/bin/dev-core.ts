@@ -9,9 +9,11 @@
 //
 // Prints the WebSocket URL; the UI's default port is 8137.
 
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+import { removeTree } from "@sublang/spex/files";
 
 import { CoreService, type CoreServiceOptions } from "../service.js";
 import {
@@ -31,8 +33,9 @@ async function main(): Promise<void> {
   // The fake mode's scratch home, removed when the core stops.
   let scratch: string | undefined;
 
+  // Its clones and demo project hold Git's read-only objects.
   const removeScratch = (): void => {
-    if (scratch) rmSync(scratch, { recursive: true, force: true });
+    if (scratch) removeTree(scratch);
   };
 
   if (fake) {

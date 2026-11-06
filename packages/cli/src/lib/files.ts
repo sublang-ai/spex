@@ -8,7 +8,7 @@
 // the device. Their words are the host's (words.ts).
 
 import { createHash, randomUUID } from "node:crypto";
-import { chmodSync, closeSync, fchmodSync, fsyncSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync, type Stats } from "node:fs";
+import { closeSync, fchmodSync, fsyncSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, unlinkSync, writeFileSync, type Stats } from "node:fs";
 import { readOwnerAndDacl } from "@openclaw/fs-safe/permissions";
 import { createDirectorySync, createFileSync, assertNoSymlinkParentsSync } from "@openclaw/fs-safe/advanced";
 import { dirname, isAbsolute, join, parse, posix, resolve, win32 } from "node:path";
@@ -272,35 +272,43 @@ export const portable = (file: string): boolean =>
   !/\.(hints|spex)\.json$|(?<!^spex)\.lock(?:\.|\/|$)|\.tmp$|\.bak(?:\.|$)|\.backup(?:\.|$)/.test(file);
 
 /** Remove a file or a tree as `rmSync` with `recursive` and `force`
- * does, read-only files included (environments-7). Where Windows refuses
- * with `EPERM` — Node 24's `rmSync` no longer clears the read-only mark —
- * every read-only file it holds is made writable and the removal tried
- * once more; links are not followed, and no folder's mode changes.
- * Returns whether any file was made writable. */
+ * does, read-only files included, following no link (environments-7):
+ * a symbolic link or a Windows junction is removed itself, its target
+ * left as it stands. On Windows the tree is walked here, each file and
+ * link unlinked and each folder removed once empty, because the Node
+ * the app's Electron ships removes neither in `rmSync`: it refuses a
+ * read-only file, and it follows a junction, emptying its target — a
+ * playbook artifact's engine links among them. Unlinking a read-only
+ * file clears its read-only mark first, which on Windows every hard
+ * link of the file shares. Returns whether any read-only file was
+ * removed so. */
 export function removeTree(path: string): boolean {
-  try {
+  if (process.platform !== "win32") {
     rmSync(path, { recursive: true, force: true });
     return false;
-  } catch (error) {
-    if (process.platform !== "win32" || (error as NodeJS.ErrnoException).code !== "EPERM" || !makeFilesWritable(path)) throw error;
   }
-  rmSync(path, { recursive: true, force: true });
-  return true;
+  return removeEntry(path);
 }
 
-/** Make every read-only file under `path` writable; whether any was. */
-function makeFilesWritable(path: string): boolean {
+/** Remove one entry beneath a Windows tree; whether a read-only file
+ * was among what it removed. An entry gone meanwhile is removed. */
+function removeEntry(path: string): boolean {
   let stat: Stats;
-  try { stat = lstatSync(path); } catch { return false; }
-  if (stat.isSymbolicLink()) return false;
-  if (stat.isDirectory()) {
-    let names: string[];
-    try { names = readdirSync(path); } catch { return false; }
-    let changed = false;
-    for (const name of names) if (makeFilesWritable(join(path, name))) changed = true;
-    return changed;
+  try { stat = lstatSync(path); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return false; throw error; }
+  if (stat.isDirectory() && !stat.isSymbolicLink()) {
+    let unmarked = false;
+    for (const name of readdirSync(path)) if (removeEntry(join(path, name))) unmarked = true;
+    gone(() => rmdirSync(path));
+    return unmarked;
   }
-  if ((stat.mode & 0o200) !== 0) return false;
-  chmodSync(path, (stat.mode & 0o777) | 0o200);
-  return true;
+  // A file, or a link or junction, never what it points to.
+  gone(() => unlinkSync(path));
+  return !stat.isSymbolicLink() && (stat.mode & 0o200) === 0;
+}
+
+/** Run a removal, an entry already gone counting as removed. */
+function gone(remove: () => void): void {
+  try { remove(); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
 }

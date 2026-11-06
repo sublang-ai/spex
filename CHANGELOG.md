@@ -17,6 +17,8 @@ source; run source with `npm ci` and `npm start` (desktop) or
 
 ### Fixed
 
+- Native Windows removes a project's records, cleans up after a join or a new project's first commit fails, and keeps one mirror when two fetches of a Git source meet; Git's read-only files, and Spex's own watching of a project's records, refused these before. A removal refused, such as while another program holds a file of the project's records open, leaves the project as it was. Replacing or removing installed packages no longer empties the folders their links point to, such as the app's own playbook engine.
+
 - Native Windows adds packages in any project folder, and starts and keeps writing after another tool, such as the Codex sandbox, grants itself read access to the Spex home; Spex still creates its storage owner-only, as on macOS ([DR-223](specs/decisions/223-windows-storage-checks-what-macos-checks.md)). Playbook 18.1.4 applies the same rule to its sessions and machine identity ([DR-224](specs/decisions/224-playbook-18-1-4-adoption.md)).
 
 - Agent process discovery no longer consumes the shutdown grace between SIGTERM and SIGKILL.

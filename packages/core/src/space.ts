@@ -20,7 +20,7 @@ import { parseProjectFile, type StorageDiagnostic } from "./app-storage.js";
 import { heldSessionLease, occupied, pruneEmptyFolders, sameFile, standsEmpty } from "./clone-moves.js";
 import { canonicalHost } from "./code-credentials.js";
 import { canonicalCodeRemote } from "./code-remote.js";
-import { portable, readJsonFile, sha256, StorageFormatError, UUID, writeApplicationFile } from "@sublang/spex/files";
+import { portable, readJsonFile, removeTree, sha256, StorageFormatError, UUID, writeApplicationFile } from "@sublang/spex/files";
 import { withGitCredential, type GitCredentialHandle } from "./git-credential.js";
 import {
   anotherAccountError, CredentialChanged, HostError, SignInBusyError, type BrowserSignIn, type DeviceSignIn, type GitHostClient, type HostAccount, type HostGroup,
@@ -6886,7 +6886,7 @@ export class SpaceManager {
         if (run.code !== 0 && /Remote branch \S+ not found|not found in upstream/i.test(run.stderr)) {
           // The host holds no `spex` yet: its default branch, then `spex`
           // beside it (space-32).
-          rmSync(dir, { recursive: true, force: true });
+          removeTree(dir);
           run = await privately(["clone", "-q", "--origin", name, url, dir], options);
           if (run.code === 0) run = await privately(["-C", dir, "checkout", "-q", "-b", SPEX_BRANCH]);
         }
@@ -6928,7 +6928,13 @@ export class SpaceManager {
     } catch (error) {
       stop({ cause: "git", message: failureSummary(error instanceof Error ? error.message : String(error)), guidance: retryGuidance(), retry: true });
     } finally {
-      if (stage) rmSync(stage, { recursive: true, force: true });
+      // The stage may hold a whole clone, Git's read-only objects among
+      // its files, which only removeTree removes on Windows; it is the
+      // join's garbage, so the join's own outcome stands (space-63).
+      if (stage) {
+        try { removeTree(stage); }
+        catch (error) { console.error(`spex: the private folder ${stage} of a join could not be removed: ${error instanceof Error ? error.message : String(error)}`); }
+      }
       await this.publish();
     }
   }
