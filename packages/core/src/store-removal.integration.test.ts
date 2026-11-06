@@ -3,13 +3,14 @@
 
 // The store's read-only files removed on every platform (environments-53):
 // a real core's start collecting the store, and installs replacing,
-// failing and emptying trees of read-only files. Windows refuses to
+// failing, copying across volumes and emptying trees of read-only files. Windows refuses to
 // remove a read-only file, and the Node the app's Electron ships no
 // longer makes one writable first, so CI runs this file on Windows on
 // that Node.
 
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import fs, { chmodSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
 
@@ -17,6 +18,7 @@ import {
   ContentStore,
   gitSource,
   install,
+  INSTALL_RECORD,
   InstallError,
   parseRequests,
   publishRelease,
@@ -142,7 +144,8 @@ test("environments-53: a collection that fails fails no start", {
   assert.match(diagnostic, /EACCES|EPERM/, "[environments-52] naming its cause");
 });
 
-test("environments-53: installs replacing, failing and emptying trees of read-only files leave none behind, the stored files read-only", async (t) => {
+/** A scratch home installing `acme/kit` into one environment. */
+function scratchInstalls() {
   const home = scratchDir("spex-store-removal-");
   const store = new ContentStore(home);
   const cache = join(home, "cache");
@@ -156,10 +159,14 @@ test("environments-53: installs replacing, failing and emptying trees of read-on
   const assertSealed = (lock: Lock, when: string): void => {
     for (const file of storedFiles(store, lock)) assert.ok(readOnly(file), `[environments-7] ${when}: the stored files read read-only`);
   };
+  return { store, cache, root, installed, run, leftIn, assertSealed, skill: join(installed, "acme", "kit", "skills", "en", "tidy", "SKILL.md") };
+}
+
+test("environments-53: installs replacing, failing and emptying trees of read-only files leave none behind, the stored files read-only", async (t) => {
+  const { cache, root, installed, run, leftIn, assertSealed, skill } = scratchInstalls();
 
   const first = await lockAt(root, cache, "1.0.0");
   await run(first);
-  const skill = join(installed, "acme", "kit", "skills", "en", "tidy", "SKILL.md");
   assert.ok(readOnly(skill), "[environments-7] an installed file is read-only");
   assertSealed(first, "installed");
 
@@ -188,4 +195,43 @@ test("environments-53: installs replacing, failing and emptying trees of read-on
   assert.equal(existsSync(join(installed, "acme")), false, "[environments-7] the package's installed tree is removed");
   assert.deepEqual(leftIn(join(cache, "trash")), [], "[environments-7] no obsolete tree stays");
   assertSealed(second, "emptied");
+});
+
+test("environments-53: a staged tree copied into place, as across volumes, leaves none behind, the stored files read-only", async () => {
+  const { cache, root, installed, run, leftIn, assertSealed, skill } = scratchInstalls();
+  const lock = await lockAt(root, cache, "1.0.0");
+  // The staged tree's move into `.spex/packages/` meets another volume.
+  const original = fs.renameSync;
+  let refused = 0;
+  fs.renameSync = (from: fs.PathLike, to: fs.PathLike): void => {
+    if (String(to) === installed && String(from).includes(join(cache, "staging"))) {
+      refused++;
+      throw Object.assign(new Error(`EXDEV: cross-device link not permitted, rename '${String(from)}' -> '${String(to)}'`), { code: "EXDEV" });
+    }
+    original(from, to);
+  };
+  syncBuiltinESMExports();
+  try {
+    assert.deepEqual((await run(lock)).installed, ["acme/kit"]);
+  } finally {
+    fs.renameSync = original;
+    syncBuiltinESMExports();
+  }
+  assert.equal(refused, 1, "the move took the copy");
+  assert.ok(readOnly(skill), "[environments-7] the copied installed file is read-only");
+  assert.deepEqual(leftIn(join(cache, "staging")), [], "[environments-7] no staged tree stays");
+  assert.deepEqual(leftIn(join(root, ".spex")).filter((name) => name.includes(".new-")), [], "[environments-7] no copy stays beside the tree");
+  assertSealed(lock, "copied into place");
+});
+
+test("environments-53: an obsolete tree whose install record does not read is removed and the install stands", async (t) => {
+  const { cache, root, run, leftIn, assertSealed, installed } = scratchInstalls();
+  await run(await lockAt(root, cache, "1.0.0"));
+  writeFileSync(join(installed, INSTALL_RECORD), JSON.stringify({ format: 1, packages: { "acme/kit": null } }));
+  const diagnostics = t.mock.method(console, "error", () => {});
+  const second = await lockAt(root, cache, "1.1.0");
+  assert.deepEqual((await run(second)).installed, ["acme/kit"], "[environments-7] the install stands");
+  assert.deepEqual(leftIn(join(cache, "trash")), [], "[environments-7] no obsolete tree stays");
+  assert.equal(diagnostics.mock.callCount(), 0, "[environments-7] nothing failed");
+  assertSealed(second, "over an unreadable record");
 });

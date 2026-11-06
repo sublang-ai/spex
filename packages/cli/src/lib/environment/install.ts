@@ -650,7 +650,8 @@ export async function install(options: InstallOptions): Promise<InstallReport> {
     // The failure's own cause is reported, never a cleanup's.
     try { removeTree(staging); }
     catch (cleanup) { console.error(`spex: the staged tree ${staging} could not be removed: ${String(cleanup)}`); }
-    sealFiles(store, placed.flatMap((name) => lock.packages[name]!.files));
+    try { sealFiles(store, placed.flatMap((name) => lock.packages[name]!.files)); }
+    catch { /* the stored files stay as they are; the next collection marks them */ }
     if (error instanceof InstallError || error instanceof VersionConflictError) throw error;
     throw new InstallError(undefined, `installing failed; the last files stay: ${(error as Error).message}`, error);
   }
@@ -663,11 +664,13 @@ function sealFiles(store: ContentStore, files: readonly { sha256: string; execut
   for (const file of files) if (store.has(file.sha256, file.executable)) sealStored(store.pathOf(file.sha256, file.executable), file.executable);
 }
 
-/** The files an installed tree's record names. */
+/** The files an installed tree's record names; an entry that does not
+ * read names none. */
 function recordedFiles(tree: string): { sha256: string; executable: boolean }[] {
   const record = readInstallRecord(tree);
   if (record === null) return [];
   return Object.values(record.packages).flatMap((entry) => {
+    if (typeof entry !== "object" || entry === null) return [];
     const files = (entry as { files?: unknown }).files;
     return Array.isArray(files)
       ? files.filter((file): file is { sha256: string; executable: boolean } =>
@@ -699,7 +702,10 @@ function replaceTree(staging: string, target: string, trash: string, store: Cont
       if ((error as NodeJS.ErrnoException).code !== "EXDEV") throw error;
       const near = `${target}.new-${randomUUID()}`;
       cpSync(source, near, { recursive: true, verbatimSymlinks: true });
+      // The staged links leave as copies stand in their place.
+      const staged = recordedFiles(source);
       removeTree(source);
+      sealFiles(store, staged);
       source = near;
       renameSync(source, target);
     }
@@ -711,9 +717,14 @@ function replaceTree(staging: string, target: string, trash: string, store: Cont
   // Garbage collection cannot turn that success into a failed install,
   // which would skip exports and falsely claim the old files still stand.
   if (hadOld) {
-    const linked = recordedFiles(trash);
-    try { removeTree(trash); }
-    catch (error) { console.error(`spex: installed files stand; obsolete tree ${trash} could not be removed: ${String(error)}`); }
+    let linked: { sha256: string; executable: boolean }[] = [];
+    try {
+      linked = recordedFiles(trash);
+      removeTree(trash);
+    } catch (error) {
+      console.error(`spex: installed files stand; obsolete tree ${trash} could not be removed: ${String(error)}`);
+    }
+    // A removal that stopped part way may have unmarked some links too.
     sealFiles(store, linked);
   }
 }
