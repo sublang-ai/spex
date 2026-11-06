@@ -648,7 +648,7 @@ export async function install(options: InstallOptions): Promise<InstallReport> {
     replaceTree(staging, target, join(options.cache, "trash", id), store);
   } catch (error) {
     // The failure's own cause is reported, never a cleanup's.
-    try { removeLinked(store, staging); }
+    try { removeLinkedTree(store, staging); }
     catch (cleanup) { console.error(`spex: the staged tree ${staging} could not be removed: ${String(cleanup)}`); }
     if (error instanceof InstallError || error instanceof VersionConflictError) throw error;
     throw new InstallError(undefined, `installing failed; the last files stay: ${(error as Error).message}`, error);
@@ -656,12 +656,12 @@ export async function install(options: InstallOptions): Promise<InstallReport> {
   return { installed: placed, missingPaths, unchanged: false, engineKept, ...(left.length > 0 ? { left } : {}) };
 }
 
-/** Remove a tree whose files may link the store's (environments-7):
- * where the removal made any file writable — Windows shares one
- * read-only mark among a file's links — or stopped part way, every
- * stored file is marked read-only again, so no record of what the tree
- * held is relied on. */
-function removeLinked(store: ContentStore, tree: string): void {
+/** Remove a tree whose files may link the store's — a staged, copied,
+ * obsolete or former installed tree (environments-7): where the removal
+ * made any file writable — Windows shares one read-only mark among a
+ * file's links — or stopped part way, every stored file is marked
+ * read-only again, so no record of what the tree held is relied on. */
+export function removeLinkedTree(store: ContentStore, tree: string): void {
   let unmarked = true;
   try { unmarked = removeTree(tree); }
   finally { if (unmarked) store.seal(); }
@@ -691,7 +691,7 @@ function replaceTree(staging: string, target: string, trash: string, store: Cont
       const near = `${target}.new-${randomUUID()}`;
       cpSync(source, near, { recursive: true, verbatimSymlinks: true });
       // The staged links leave as copies stand in their place.
-      removeLinked(store, source);
+      removeLinkedTree(store, source);
       source = near;
       renameSync(source, target);
     }
@@ -703,14 +703,14 @@ function replaceTree(staging: string, target: string, trash: string, store: Cont
   // Garbage collection cannot turn that success into a failed install,
   // which would skip exports and falsely claim the old files still stand.
   if (hadOld) {
-    try { removeLinked(store, trash); }
+    try { removeLinkedTree(store, trash); }
     catch (error) { console.error(`spex: installed files stand; obsolete tree ${trash} could not be removed: ${String(error)}`); }
   }
 }
 
 /** Remove every installed file of an environment (one emptied). */
-export function removeInstalled(root: string): void {
-  removeTree(installedDir(root));
+export function removeInstalled(root: string, store: ContentStore): void {
+  removeLinkedTree(store, installedDir(root));
 }
 
 export interface PrepareOptions {

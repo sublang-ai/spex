@@ -9,7 +9,7 @@
 // that Node.
 
 import assert from "node:assert/strict";
-import fs, { chmodSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import fs, { chmodSync, existsSync, mkdirSync, readdirSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
 import { dirname, join } from "node:path";
 import { after, before, test } from "node:test";
@@ -32,6 +32,7 @@ import {
 import { fileVersion } from "@sublang/spex/files";
 import { makeRelease, startStandinRegistry, type StandinRegistry } from "@sublang/spex/testing";
 import { installEngine } from "./compile.js";
+import { migrateEnvironments } from "./migrate-environment.js";
 import { CoreService } from "./service.js";
 import { scratchDir } from "./testing/scratch.js";
 
@@ -159,7 +160,7 @@ function scratchInstalls() {
   const assertSealed = (lock: Lock, when: string): void => {
     for (const file of storedFiles(store, lock)) assert.ok(readOnly(file), `[environments-7] ${when}: the stored files read read-only`);
   };
-  return { store, cache, root, installed, run, leftIn, assertSealed, skill: join(installed, "acme", "kit", "skills", "en", "tidy", "SKILL.md") };
+  return { home, store, cache, root, installed, run, leftIn, assertSealed, skill: join(installed, "acme", "kit", "skills", "en", "tidy", "SKILL.md") };
 }
 
 test("environments-53: installs replacing, failing and emptying trees of read-only files leave none behind, the stored files read-only", async (t) => {
@@ -243,5 +244,34 @@ test("environments-53: an obsolete tree whose install record does not read is re
   assert.equal(diagnostics.mock.callCount(), 0, "[environments-7] nothing failed");
   assertSealed(second, "over an unreadable record");
   assertSealed(first, "the obsolete release's, over an unreadable record");
+  assert.ok(readOnly(peerSkill), "[environments-7] the second environment's link reads read-only");
+});
+
+test("environments-53: the migration deleting a clone's former tree leaves the stored files and a second environment's links read-only", async () => {
+  const { home, store, cache, root: folder, run, assertSealed } = scratchInstalls();
+  // The working folder holds its own environment at 1.1.0.
+  const second = await lockAt(folder, cache, "1.1.0");
+  await run(second);
+  // The clone holds 1.0.0 in the former layout, linking the store; a
+  // second environment links the same stored files.
+  const clone = join(home, "workspace", "acme", "former-spex");
+  const first = await lockAt(clone, cache, "1.0.0");
+  const linkAt = async (at: string): Promise<void> => {
+    mkdirSync(at, { recursive: true });
+    writeFileSync(join(at, "spex.yaml"), requestsOf("1.0.0"));
+    await writeLock(join(at, "spex.lock"), first);
+    await install({ root: at, lock: first, store, cache, registry: client, git: gitSource(cache), pathRoot: null, engine: installEngine(), lockVersion: fileVersion(join(at, "spex.lock")) });
+  };
+  await linkAt(clone);
+  renameSync(join(clone, ".spex", "packages"), join(clone, "packages"));
+  const peer = join(home, "workspace", "acme", "peer-spex");
+  await linkAt(peer);
+  const peerSkill = join(peer, ".spex", "packages", "acme", "kit", "skills", "en", "tidy", "SKILL.md");
+
+  const moved = migrateEnvironments(home, [{ key: "acme/kit-spex", clone, own: false, folder, instance: null }]);
+  assert.deepEqual(moved, ["acme/kit-spex"], "the migration ran");
+  assert.equal(existsSync(join(clone, "packages")), false, "[environments-7] the former tree is deleted");
+  assertSealed(first, "after the migration");
+  assertSealed(second, "after the migration");
   assert.ok(readOnly(peerSkill), "[environments-7] the second environment's link reads read-only");
 });

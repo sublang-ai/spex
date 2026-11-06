@@ -20,14 +20,16 @@ import { cpSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSyn
 import { join, relative, isAbsolute } from "node:path";
 import { parseDocument } from "yaml";
 
-import { isObject, readJsonFile, readVersioned, removeTree, sha256, writeApplicationBytes, writeApplicationFile, writeVersionedBytes, type FileVersion } from "@sublang/spex/files";
+import { isObject, readJsonFile, readVersioned, sha256, writeApplicationBytes, writeApplicationFile, writeVersionedBytes, type FileVersion } from "@sublang/spex/files";
 import {
+  ContentStore,
   ensureSpexDir,
   installedDir,
   installedPackages,
   isPathSource,
   parseLock,
   parseRequests,
+  removeLinkedTree,
   requestsDigest,
   serializeLock,
   setSpaceIn,
@@ -184,13 +186,13 @@ function withSpace(requests: string, lock: string | null, instance: string): { r
 }
 
 /** Move a folder, across file systems by a copy keeping links as they are. */
-function moveFolder(from: string, to: string): void {
+function moveFolder(from: string, to: string, store: ContentStore): void {
   try {
     renameSync(from, to);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "EXDEV") throw error;
     cpSync(from, to, { recursive: true, verbatimSymlinks: true, errorOnExist: true, force: false });
-    removeTree(from);
+    removeLinkedTree(store, from);
   }
 }
 
@@ -205,7 +207,7 @@ function installedWhole(root: string, lock: Lock): boolean {
  * moved where the root holds none and the moved record matches the
  * lock, so nothing is fetched; else deleted, the lock installing from
  * the store at the next install (environments-7). */
-function moveTrees(clone: string, root: string, lockText: string | null): void {
+function moveTrees(clone: string, root: string, lockText: string | null, store: ContentStore): void {
   if (!holdsTrees(clone)) return;
   let lock: Lock | null = null;
   try { lock = lockText === null ? null : parseLock(lockText); } catch { lock = null; }
@@ -213,14 +215,14 @@ function moveTrees(clone: string, root: string, lockText: string | null): void {
   const skills = skillsDir(root);
   if (lock !== null && !existsSync(target)) {
     ensureSpexDir(root);
-    if (existsSync(join(clone, "packages"))) moveFolder(join(clone, "packages"), target);
-    if (existsSync(join(clone, "skills")) && !existsSync(skills)) moveFolder(join(clone, "skills"), skills);
+    if (existsSync(join(clone, "packages"))) moveFolder(join(clone, "packages"), target, store);
+    if (existsSync(join(clone, "skills")) && !existsSync(skills)) moveFolder(join(clone, "skills"), skills, store);
     if (!existsSync(target) || !installedWhole(root, lock)) {
-      removeTree(target);
-      removeTree(skills);
+      removeLinkedTree(store, target);
+      removeLinkedTree(store, skills);
     }
   }
-  for (const tree of FORMER_TREES) removeTree(join(clone, tree));
+  for (const tree of FORMER_TREES) removeLinkedTree(store, join(clone, tree));
 }
 
 /**
@@ -237,6 +239,8 @@ export function migrateEnvironments(home: string, repositories: readonly Migrate
   const todo = repositories.filter((repository) => planFor(repository) || pending(repository, found?.receipt));
   for (const repository of repositories) if (!todo.includes(repository)) options.report?.(repository.key, false);
   if (todo.length === 0) return [];
+  // The former trees link the store's files (environments-7).
+  const store = new ContentStore(home);
   if (!found) {
     const id = randomUUID();
     const dir = join(prepareMigrationsDir(home), id);
@@ -272,7 +276,7 @@ export function migrateEnvironments(home: string, repositories: readonly Migrate
       if (plan.clone !== repository.clone || plan.root !== (repository.own ? repository.clone : repository.folder)) {
         throw new Error("environment migration binding changed; original files preserved");
       }
-      finishPlan(plan, dir, save, options, repository.key);
+      finishPlan(plan, dir, save, options, repository.key, store);
       receipt.steps.push({ step: plan.outcome === "own" ? "own" : "project", key: repository.key, outcome: plan.outcome });
       receipt.pending = receipt.pending.filter((held) => held !== plan);
       save();
@@ -317,7 +321,7 @@ function planRepository(repository: MigratedRepository, receipt: EnvironmentRece
 }
 
 /** Validate the whole pair before any retry write or source retirement. */
-function finishPlan(plan: EnvironmentPlan, dir: string, save: () => void, options: EnvironmentMigrationOptions, key: string): void {
+function finishPlan(plan: EnvironmentPlan, dir: string, save: () => void, options: EnvironmentMigrationOptions, key: string, store: ContentStore): void {
   const planned = plan.files.map((file) => {
     const bytes = file.retained === null ? null : read(join(dir, file.retained)).bytes;
     if ((bytes === null ? null : sha256(bytes)) !== file.after) throw new Error("retained environment plan changed; source preserved");
@@ -350,8 +354,8 @@ function finishPlan(plan: EnvironmentPlan, dir: string, save: () => void, option
   save(); // Missing source members are accepted only after this boundary.
   const lock = planned.find(({ file }) => file.path === join(plan.root, "spex.lock"))?.bytes?.toString("utf8") ?? null;
   if (plan.outcome === "folder") {
-    for (const tree of FORMER_TREES) removeTree(join(plan.clone, tree));
-  } else moveTrees(plan.clone, plan.root, lock);
+    for (const tree of FORMER_TREES) removeLinkedTree(store, join(plan.clone, tree));
+  } else moveTrees(plan.clone, plan.root, lock, store);
   for (const source of plan.sources) {
     verifySources();
     rmSync(source.path, { force: true });

@@ -29,7 +29,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, join, relative, resolve as resolvePath, sep } from "node:path";
 
-import { fileVersion, readVersioned, removeTree, writeVersionedBytes, sha256, VersionConflictError, type FileVersion } from "@sublang/spex/files";
+import { fileVersion, readVersioned, writeVersionedBytes, sha256, VersionConflictError, type FileVersion } from "@sublang/spex/files";
 import {
   AGENT_FOLDERS,
   BUILTIN_PACKAGE_NAME,
@@ -64,6 +64,7 @@ import {
   LockError,
   lockStaleness,
   lockStoreKeys,
+  removeLinkedTree,
   moduleLocations,
   ownFolderIssue,
   packageRoot,
@@ -926,7 +927,7 @@ export class EnvironmentManager {
     for (const name of ["packages", "skills"]) {
       const former = join(dir, name);
       if (!existsSync(former)) continue;
-      try { removeTree(former); }
+      try { removeLinkedTree(this.contentStore, former); }
       catch (error) { console.error(`spex: installed files stand; the former tree ${former} could not be removed: ${error instanceof Error ? error.message : String(error)}`); }
     }
   }
