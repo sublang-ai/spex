@@ -29,7 +29,6 @@ import {
   isPathSource,
   parseLock,
   parseRequests,
-  removeLinkedTree,
   requestsDigest,
   serializeLock,
   setSpaceIn,
@@ -192,7 +191,7 @@ function moveFolder(from: string, to: string, store: ContentStore): void {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "EXDEV") throw error;
     cpSync(from, to, { recursive: true, verbatimSymlinks: true, errorOnExist: true, force: false });
-    removeLinkedTree(store, from);
+    store.removeLinked(from);
   }
 }
 
@@ -218,11 +217,11 @@ function moveTrees(clone: string, root: string, lockText: string | null, store: 
     if (existsSync(join(clone, "packages"))) moveFolder(join(clone, "packages"), target, store);
     if (existsSync(join(clone, "skills")) && !existsSync(skills)) moveFolder(join(clone, "skills"), skills, store);
     if (!existsSync(target) || !installedWhole(root, lock)) {
-      removeLinkedTree(store, target);
-      removeLinkedTree(store, skills);
+      store.removeLinked(target);
+      store.removeLinked(skills);
     }
   }
-  for (const tree of FORMER_TREES) removeLinkedTree(store, join(clone, tree));
+  for (const tree of FORMER_TREES) store.removeLinked(join(clone, tree));
 }
 
 /**
@@ -354,7 +353,7 @@ function finishPlan(plan: EnvironmentPlan, dir: string, save: () => void, option
   save(); // Missing source members are accepted only after this boundary.
   const lock = planned.find(({ file }) => file.path === join(plan.root, "spex.lock"))?.bytes?.toString("utf8") ?? null;
   if (plan.outcome === "folder") {
-    for (const tree of FORMER_TREES) removeLinkedTree(store, join(plan.clone, tree));
+    for (const tree of FORMER_TREES) store.removeLinked(join(plan.clone, tree));
   } else moveTrees(plan.clone, plan.root, lock, store);
   for (const source of plan.sources) {
     verifySources();

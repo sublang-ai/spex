@@ -64,7 +64,6 @@ import {
   LockError,
   lockStaleness,
   lockStoreKeys,
-  removeLinkedTree,
   moduleLocations,
   ownFolderIssue,
   packageRoot,
@@ -927,7 +926,7 @@ export class EnvironmentManager {
     for (const name of ["packages", "skills"]) {
       const former = join(dir, name);
       if (!existsSync(former)) continue;
-      try { removeLinkedTree(this.contentStore, former); }
+      try { this.contentStore.removeLinked(former); }
       catch (error) { console.error(`spex: installed files stand; the former tree ${former} could not be removed: ${error instanceof Error ? error.message : String(error)}`); }
     }
   }

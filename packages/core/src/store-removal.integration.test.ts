@@ -145,37 +145,42 @@ test("environments-53: a collection that fails fails no start", {
   assert.match(diagnostic, /EACCES|EPERM/, "[environments-52] naming its cause");
 });
 
-/** A scratch home installing `acme/kit` into one environment. */
+/** A scratch home whose environments install `acme/kit`. */
 function scratchInstalls() {
   const home = scratchDir("spex-store-removal-");
   const store = new ContentStore(home);
   const cache = join(home, "cache");
   const root = join(home, "workspace", "acme", "kit-spex");
   const installed = join(root, ".spex", "packages");
-  const run = async (lock: Lock, extra: Partial<InstallOptions> = {}) => {
-    await writeLock(join(root, "spex.lock"), lock);
-    return install({ root, lock, store, cache, registry: client, git: gitSource(cache), pathRoot: null, engine: installEngine(), lockVersion: fileVersion(join(root, "spex.lock")), ...extra });
+  /** Install `lock` at `at`, its `spex.lock` written first. */
+  const run = async (lock: Lock, extra: Partial<InstallOptions> = {}, at = root) => {
+    await writeLock(join(at, "spex.lock"), lock);
+    return install({ root: at, lock, store, cache, registry: client, git: gitSource(cache), pathRoot: null, engine: installEngine(), lockVersion: fileVersion(join(at, "spex.lock")), ...extra });
+  };
+  /** Resolve `acme/kit` at `version` at `at` and install it; its lock. */
+  const installAt = async (version: string, at = root): Promise<Lock> => {
+    const lock = await lockAt(at, cache, version);
+    assert.deepEqual((await run(lock, {}, at)).installed, ["acme/kit"]);
+    return lock;
   };
   const leftIn = (dir: string): string[] => (existsSync(dir) ? readdirSync(dir) : []);
   const assertSealed = (lock: Lock, when: string): void => {
     for (const file of storedFiles(store, lock)) assert.ok(readOnly(file), `[environments-7] ${when}: the stored files read read-only`);
   };
-  return { home, store, cache, root, installed, run, leftIn, assertSealed, skill: join(installed, "acme", "kit", "skills", "en", "tidy", "SKILL.md") };
+  const skillOf = (at: string): string => join(at, ".spex", "packages", "acme", "kit", "skills", "en", "tidy", "SKILL.md");
+  return { home, cache, root, installed, run, installAt, leftIn, assertSealed, skillOf };
 }
 
 test("environments-53: installs replacing, failing and emptying trees of read-only files leave none behind, the stored files read-only", async (t) => {
-  const { cache, root, installed, run, leftIn, assertSealed, skill } = scratchInstalls();
-
-  const first = await lockAt(root, cache, "1.0.0");
-  await run(first);
-  assert.ok(readOnly(skill), "[environments-7] an installed file is read-only");
+  const { cache, root, installed, run, installAt, leftIn, assertSealed, skillOf } = scratchInstalls();
+  const first = await installAt("1.0.0");
+  assert.ok(readOnly(skillOf(root)), "[environments-7] an installed file is read-only");
   assertSealed(first, "installed");
 
   // An install over the installed tree removes the obsolete one.
-  const second = await lockAt(root, cache, "1.1.0");
-  assert.deepEqual((await run(second)).installed, ["acme/kit"]);
+  const second = await installAt("1.1.0");
   assert.deepEqual(leftIn(join(cache, "trash")), [], "[environments-7] no obsolete tree stays");
-  assert.ok(readOnly(skill), "[environments-7] the new installed file is read-only");
+  assert.ok(readOnly(skillOf(root)), "[environments-7] the new installed file is read-only");
   assertSealed(second, "replaced");
 
   // A failed install removes its staged tree, its own cause reported.
@@ -199,9 +204,10 @@ test("environments-53: installs replacing, failing and emptying trees of read-on
 });
 
 test("environments-53: a staged tree copied into place, as across volumes, leaves none behind, the stored files read-only", async () => {
-  const { cache, root, installed, run, leftIn, assertSealed, skill } = scratchInstalls();
-  const lock = await lockAt(root, cache, "1.0.0");
-  // The staged tree's move into `.spex/packages/` meets another volume.
+  const { cache, root, installed, installAt, leftIn, assertSealed, skillOf } = scratchInstalls();
+  // The staged tree's move into `.spex/packages/` meets another volume:
+  // node:fs is patched and its named exports synced, as no second
+  // volume is at hand.
   const original = fs.renameSync;
   let refused = 0;
   fs.renameSync = (from: fs.PathLike, to: fs.PathLike): void => {
@@ -212,66 +218,52 @@ test("environments-53: a staged tree copied into place, as across volumes, leave
     original(from, to);
   };
   syncBuiltinESMExports();
+  let lock: Lock;
   try {
-    assert.deepEqual((await run(lock)).installed, ["acme/kit"]);
+    lock = await installAt("1.0.0");
   } finally {
     fs.renameSync = original;
     syncBuiltinESMExports();
   }
   assert.equal(refused, 1, "the move took the copy");
-  assert.ok(readOnly(skill), "[environments-7] the copied installed file is read-only");
+  assert.ok(readOnly(skillOf(root)), "[environments-7] the copied installed file is read-only");
   assert.deepEqual(leftIn(join(cache, "staging")), [], "[environments-7] no staged tree stays");
   assert.deepEqual(leftIn(join(root, ".spex")).filter((name) => name.includes(".new-")), [], "[environments-7] no copy stays beside the tree");
   assertSealed(lock, "copied into place");
 });
 
 test("environments-53: an obsolete tree whose install record does not read is removed and the install stands, a shared link read-only", async (t) => {
-  const { store, cache, root, run, leftIn, assertSealed, installed } = scratchInstalls();
-  const first = await lockAt(root, cache, "1.0.0");
-  await run(first);
+  const { cache, root, installed, installAt, leftIn, assertSealed, skillOf } = scratchInstalls();
+  const first = await installAt("1.0.0");
   // A second environment links the same stored files of 1.0.0.
   const peer = join(dirname(root), "peer-spex");
-  const peerLock = await lockAt(peer, cache, "1.0.0");
-  await writeLock(join(peer, "spex.lock"), peerLock);
-  const linked = await install({ root: peer, lock: peerLock, store, cache, registry: client, git: gitSource(cache), pathRoot: null, engine: installEngine(), lockVersion: fileVersion(join(peer, "spex.lock")) });
-  assert.deepEqual(linked.installed, ["acme/kit"]);
-  const peerSkill = join(peer, ".spex", "packages", "acme", "kit", "skills", "en", "tidy", "SKILL.md");
+  await installAt("1.0.0", peer);
   writeFileSync(join(installed, INSTALL_RECORD), JSON.stringify({ format: 1, packages: { "acme/kit": null } }));
   const diagnostics = t.mock.method(console, "error", () => {});
-  const second = await lockAt(root, cache, "1.1.0");
-  assert.deepEqual((await run(second)).installed, ["acme/kit"], "[environments-7] the install stands");
+  const second = await installAt("1.1.0");
   assert.deepEqual(leftIn(join(cache, "trash")), [], "[environments-7] no obsolete tree stays");
   assert.equal(diagnostics.mock.callCount(), 0, "[environments-7] nothing failed");
   assertSealed(second, "over an unreadable record");
   assertSealed(first, "the obsolete release's, over an unreadable record");
-  assert.ok(readOnly(peerSkill), "[environments-7] the second environment's link reads read-only");
+  assert.ok(readOnly(skillOf(peer)), "[environments-7] the second environment's link reads read-only");
 });
 
 test("environments-53: the migration deleting a clone's former tree leaves the stored files and a second environment's links read-only", async () => {
-  const { home, store, cache, root: folder, run, assertSealed } = scratchInstalls();
-  // The working folder holds its own environment at 1.1.0.
-  const second = await lockAt(folder, cache, "1.1.0");
-  await run(second);
-  // The clone holds 1.0.0 in the former layout, linking the store; a
-  // second environment links the same stored files.
+  const { home, root: folder, installAt, assertSealed, skillOf } = scratchInstalls();
+  // The working folder holds its own environment at 1.1.0; the clone
+  // holds 1.0.0 in the former layout, linking the store, as does a
+  // second environment.
+  const second = await installAt("1.1.0");
   const clone = join(home, "workspace", "acme", "former-spex");
-  const first = await lockAt(clone, cache, "1.0.0");
-  const linkAt = async (at: string): Promise<void> => {
-    mkdirSync(at, { recursive: true });
-    writeFileSync(join(at, "spex.yaml"), requestsOf("1.0.0"));
-    await writeLock(join(at, "spex.lock"), first);
-    await install({ root: at, lock: first, store, cache, registry: client, git: gitSource(cache), pathRoot: null, engine: installEngine(), lockVersion: fileVersion(join(at, "spex.lock")) });
-  };
-  await linkAt(clone);
+  const first = await installAt("1.0.0", clone);
   renameSync(join(clone, ".spex", "packages"), join(clone, "packages"));
   const peer = join(home, "workspace", "acme", "peer-spex");
-  await linkAt(peer);
-  const peerSkill = join(peer, ".spex", "packages", "acme", "kit", "skills", "en", "tidy", "SKILL.md");
+  await installAt("1.0.0", peer);
 
   const moved = migrateEnvironments(home, [{ key: "acme/kit-spex", clone, own: false, folder, instance: null }]);
   assert.deepEqual(moved, ["acme/kit-spex"], "the migration ran");
   assert.equal(existsSync(join(clone, "packages")), false, "[environments-7] the former tree is deleted");
   assertSealed(first, "after the migration");
   assertSealed(second, "after the migration");
-  assert.ok(readOnly(peerSkill), "[environments-7] the second environment's link reads read-only");
+  assert.ok(readOnly(skillOf(peer)), "[environments-7] the second environment's link reads read-only");
 });

@@ -272,16 +272,11 @@ export const portable = (file: string): boolean =>
   !/\.(hints|spex)\.json$|(?<!^spex)\.lock(?:\.|\/|$)|\.tmp$|\.bak(?:\.|$)|\.backup(?:\.|$)/.test(file);
 
 /** Remove a file or a tree as `rmSync` with `recursive` and `force`
- * does, read-only files included (environments-7): Windows refuses to
- * remove a read-only file, and the `rmSync` of Node 24, which the app's
- * Electron ships, does not make one writable first, so where Windows
- * refuses, every read-only file the
- * path holds is made writable and the removal tried once more. A link
- * — a junction to the app's engine among them — is removed, never
- * followed, and no folder's mode changes, so a folder refusing removal
- * still refuses. Returns whether it made any file writable: a hard link
- * shares its mark with every other link of its file, which a caller
- * linking from a store marks read-only again. */
+ * does, read-only files included (environments-7). Where Windows refuses
+ * with `EPERM` — Node 24's `rmSync` no longer clears the read-only mark —
+ * every read-only file it holds is made writable and the removal tried
+ * once more; links are not followed, and no folder's mode changes.
+ * Returns whether any file was made writable. */
 export function removeTree(path: string): boolean {
   try {
     rmSync(path, { recursive: true, force: true });

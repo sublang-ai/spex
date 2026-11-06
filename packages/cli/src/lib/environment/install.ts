@@ -34,11 +34,8 @@
 
 import { randomUUID } from "node:crypto";
 import {
-  chmodSync,
-  copyFileSync,
   cpSync,
   existsSync,
-  linkSync,
   lstatSync,
   mkdirSync,
   readFileSync,
@@ -50,7 +47,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 
 import { seedServes } from "./builtins.js";
-import { fileVersion, removeTree, VersionConflictError, type FileVersion } from "../files.js";
+import { fileVersion, VersionConflictError, type FileVersion } from "../files.js";
 import { instanceFolder, parseOrigin } from "../instance.js";
 import { BUILTIN_PACKAGE_NAME, writeExcludeBlock } from "./exports.js";
 import { listReleaseFiles, parseManifestText, portablePathIssues, sha256Hex, type Manifest } from "./format.js";
@@ -59,7 +56,7 @@ import { isGitSource, isPathSource, isRegistrySource, lockStaleness, sourceValue
 import { ownFolderIssue, ownPathIssue, ownPathMessage, type OwnPathIssue } from "./own-paths.js";
 import { readVersionResource, RegistryError, registryHost, type RegistrySource, type VersionResource } from "./registry.js";
 import { isVersion } from "./semver.js";
-import { DigestError, sealStored, type ContentStore } from "./store.js";
+import { DigestError, type ContentStore } from "./store.js";
 import { gunzip, readTar } from "./tar.js";
 import { ensureSpexDir, installedDir } from "./layout.js";
 
@@ -467,18 +464,6 @@ async function fetchFrom(options: InstallOptions, registry: RegistrySource, name
   return true;
 }
 
-/** Link a stored file in, marked read-only again first, as a link on
- * Windows may have left it writable; or copy it read-only. */
-function linkOrCopy(from: string, to: string, executable: boolean): void {
-  sealStored(from, executable);
-  try {
-    linkSync(from, to);
-  } catch {
-    copyFileSync(from, to);
-    chmodSync(to, executable ? 0o555 : 0o444);
-  }
-}
-
 /** The playbook artifact folders of a spec package's selected
  * artifacts under `root`, with their ids. */
 function playbookFolders(root: string, resolution: Resolution): { id: string; folder: string }[] {
@@ -636,7 +621,7 @@ export async function install(options: InstallOptions): Promise<InstallReport> {
       for (const file of resolution.files) {
         const to = join(root, ...file.path.split("/"));
         mkdirSync(dirname(to), { recursive: true });
-        linkOrCopy(store.pathOf(file.sha256, file.executable), to, file.executable);
+        store.link(file.sha256, file.executable, to);
       }
     }
     engineKept = await prepareInstalled(staging, placed, lock, engine, (folder) => join(target, relative(staging, folder)));
@@ -648,23 +633,12 @@ export async function install(options: InstallOptions): Promise<InstallReport> {
     replaceTree(staging, target, join(options.cache, "trash", id), store);
   } catch (error) {
     // The failure's own cause is reported, never a cleanup's.
-    try { removeLinkedTree(store, staging); }
+    try { store.removeLinked(staging); }
     catch (cleanup) { console.error(`spex: the staged tree ${staging} could not be removed: ${String(cleanup)}`); }
     if (error instanceof InstallError || error instanceof VersionConflictError) throw error;
     throw new InstallError(undefined, `installing failed; the last files stay: ${(error as Error).message}`, error);
   }
   return { installed: placed, missingPaths, unchanged: false, engineKept, ...(left.length > 0 ? { left } : {}) };
-}
-
-/** Remove a tree whose files may link the store's — a staged, copied,
- * obsolete or former installed tree (environments-7): where the removal
- * made any file writable — Windows shares one read-only mark among a
- * file's links — or stopped part way, every stored file is marked
- * read-only again, so no record of what the tree held is relied on. */
-export function removeLinkedTree(store: ContentStore, tree: string): void {
-  let unmarked = true;
-  try { unmarked = removeTree(tree); }
-  finally { if (unmarked) store.seal(); }
 }
 
 /** Swap a complete staged tree in for the installed one. */
@@ -691,7 +665,7 @@ function replaceTree(staging: string, target: string, trash: string, store: Cont
       const near = `${target}.new-${randomUUID()}`;
       cpSync(source, near, { recursive: true, verbatimSymlinks: true });
       // The staged links leave as copies stand in their place.
-      removeLinkedTree(store, source);
+      store.removeLinked(source);
       source = near;
       renameSync(source, target);
     }
@@ -703,14 +677,9 @@ function replaceTree(staging: string, target: string, trash: string, store: Cont
   // Garbage collection cannot turn that success into a failed install,
   // which would skip exports and falsely claim the old files still stand.
   if (hadOld) {
-    try { removeLinkedTree(store, trash); }
+    try { store.removeLinked(trash); }
     catch (error) { console.error(`spex: installed files stand; obsolete tree ${trash} could not be removed: ${String(error)}`); }
   }
-}
-
-/** Remove every installed file of an environment (one emptied). */
-export function removeInstalled(root: string, store: ContentStore): void {
-  removeLinkedTree(store, installedDir(root));
 }
 
 export interface PrepareOptions {
