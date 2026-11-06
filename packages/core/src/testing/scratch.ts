@@ -6,10 +6,11 @@
 // tests end. Not re-exported from `./index.ts` — it registers a
 // node:test hook, which only a node:test file may load.
 
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after } from "node:test";
+import { removeTree } from "@sublang/spex/files";
 
 const scratchDirs: string[] = [];
 
@@ -17,8 +18,10 @@ const scratchDirs: string[] = [];
 // test file importing it: node:test attaches a hook to the test that
 // is running when it is registered, so one first registered inside a
 // test would run when that test ends, before later tests make theirs.
+// A scratch home holds read-only files — the store's, and Git's
+// objects — which only removeTree removes on Windows.
 after(() => {
-  for (const dir of scratchDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  for (const dir of scratchDirs.splice(0)) removeTree(dir);
 });
 
 /** A fresh directory under the system temp directory, removed once

@@ -20,7 +20,7 @@ import { cpSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSyn
 import { join, relative, isAbsolute } from "node:path";
 import { parseDocument } from "yaml";
 
-import { isObject, readJsonFile, readVersioned, sha256, writeApplicationBytes, writeApplicationFile, writeVersionedBytes, type FileVersion } from "@sublang/spex/files";
+import { isObject, readJsonFile, readVersioned, removeTree, sha256, writeApplicationBytes, writeApplicationFile, writeVersionedBytes, type FileVersion } from "@sublang/spex/files";
 import {
   ensureSpexDir,
   installedDir,
@@ -190,7 +190,7 @@ function moveFolder(from: string, to: string): void {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "EXDEV") throw error;
     cpSync(from, to, { recursive: true, verbatimSymlinks: true, errorOnExist: true, force: false });
-    rmSync(from, { recursive: true, force: true });
+    removeTree(from);
   }
 }
 
@@ -216,11 +216,11 @@ function moveTrees(clone: string, root: string, lockText: string | null): void {
     if (existsSync(join(clone, "packages"))) moveFolder(join(clone, "packages"), target);
     if (existsSync(join(clone, "skills")) && !existsSync(skills)) moveFolder(join(clone, "skills"), skills);
     if (!existsSync(target) || !installedWhole(root, lock)) {
-      rmSync(target, { recursive: true, force: true });
-      rmSync(skills, { recursive: true, force: true });
+      removeTree(target);
+      removeTree(skills);
     }
   }
-  for (const tree of FORMER_TREES) rmSync(join(clone, tree), { recursive: true, force: true });
+  for (const tree of FORMER_TREES) removeTree(join(clone, tree));
 }
 
 /**
@@ -350,7 +350,7 @@ function finishPlan(plan: EnvironmentPlan, dir: string, save: () => void, option
   save(); // Missing source members are accepted only after this boundary.
   const lock = planned.find(({ file }) => file.path === join(plan.root, "spex.lock"))?.bytes?.toString("utf8") ?? null;
   if (plan.outcome === "folder") {
-    for (const tree of FORMER_TREES) rmSync(join(plan.clone, tree), { recursive: true, force: true });
+    for (const tree of FORMER_TREES) removeTree(join(plan.clone, tree));
   } else moveTrees(plan.clone, plan.root, lock);
   for (const source of plan.sources) {
     verifySources();

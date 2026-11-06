@@ -5,12 +5,16 @@
 // each distinct file once, named by its SHA-256, written once after its
 // digest is verified, read-only; an executable copy apart under `x/`
 // because hard links share one mode. A file stays while a lock in a
-// spex repository on this device selects it.
+// spex repository on this device selects it. Windows keeps one
+// read-only mark for every link of a file, so removing an installed
+// link there makes the stored file writable: the mark is set again
+// before each link and at each collection.
 
 import { randomUUID } from "node:crypto";
-import { chmodSync, closeSync, existsSync, fsyncSync, mkdirSync, openSync, readdirSync, renameSync, rmSync, statSync, writeSync } from "node:fs";
+import { chmodSync, closeSync, existsSync, fsyncSync, mkdirSync, openSync, readdirSync, renameSync, statSync, writeSync } from "node:fs";
 import { join } from "node:path";
 
+import { removeTree } from "../files.js";
 import { sha256Hex } from "./format.js";
 import type { Lock } from "./lock.js";
 
@@ -38,6 +42,17 @@ export function lockStoreKeys(locks: Iterable<Lock>): Set<string> {
 }
 
 const SHA_RE = /^[0-9a-f]{64}$/;
+
+/** The mode of a stored file: read-only, executable under `x/`. */
+const storedMode = (executable: boolean): number => (executable ? 0o555 : 0o444);
+
+/** Mark a stored file read-only again where it is not (environments-7):
+ * the mark guards the stored bytes, and failing to set it fails no
+ * install or collection, a link or a removal reading the file as it is. */
+export function sealStored(path: string, executable: boolean): void {
+  try { if ((statSync(path).mode & 0o222) !== 0) chmodSync(path, storedMode(executable)); }
+  catch { /* left as it is */ }
+}
 
 export class ContentStore {
   readonly root: string;
@@ -72,8 +87,8 @@ export class ContentStore {
     } finally {
       closeSync(fd);
     }
-    chmodSync(temporary, executable ? 0o555 : 0o444);
-    if (existsSync(target)) rmSync(temporary, { force: true });
+    chmodSync(temporary, storedMode(executable));
+    if (existsSync(target)) removeTree(temporary);
     else renameSync(temporary, target);
     return target;
   }
@@ -88,12 +103,17 @@ export class ContentStore {
     return out;
   }
 
-  /** Remove every entry no lock selects; returns the removed keys. */
+  /** Remove every entry no lock selects, read-only as it is, and mark
+   * every entry kept read-only again; returns the removed keys. */
   gc(selected: Set<string>): string[] {
     const removed: string[] = [];
     for (const key of this.keys()) {
-      if (selected.has(key)) continue;
-      rmSync(join(this.root, ...key.split("/")), { force: true });
+      const path = join(this.root, ...key.split("/"));
+      if (selected.has(key)) {
+        sealStored(path, key.startsWith("x/"));
+        continue;
+      }
+      removeTree(path);
       removed.push(key);
     }
     // A temporary file an interrupted put left behind, once it is old
@@ -103,7 +123,7 @@ export class ContentStore {
       for (const name of readdirSync(this.root)) {
         if (!name.startsWith(".tmp-")) continue;
         const file = join(this.root, name);
-        try { if (statSync(file).mtimeMs < before) rmSync(file, { force: true }); } catch { /* gone */ }
+        try { if (statSync(file).mtimeMs < before) removeTree(file); } catch { /* gone */ }
       }
     }
     return removed;
