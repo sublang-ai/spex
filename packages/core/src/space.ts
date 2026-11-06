@@ -6856,7 +6856,9 @@ export class SpaceManager {
     let stage: string | undefined;
     try {
       mkdirSync(dirname(dest), { recursive: true, mode: 0o700 });
-      stage = mkdtempSync(join(dirname(dest), `.${basename(dest)}.join-`));
+      // Named apart from the clone's own name, so a repository of the
+      // longest name a folder takes still joins.
+      stage = mkdtempSync(join(dirname(dest), ".join-"));
       const dir = join(stage, "clone");
       // The instance it is joined at brokers its clone (git-host-9).
       let brokered: GitCredentialHandle | null;

@@ -337,7 +337,7 @@ When the reader opens, at this place [[space-111](#space-111)], a spex repositor
 - a group's own spex repository, holding no `project.json`, asks for the working folder its sessions run in on this device; the folder is paired through the same command a repair uses [[space-47](#space-47)];
 - a host id the instance's last read lacks is looked up in a fresh read of that instance before the open is refused `not_found`, so a project shared since that read opens without a Refresh ([DR-159](../decisions/159-projects-in-groups-opened-where-you-work.md));
 - the join runs at its Check step while the spex repository clones and at its Code step, its line reading "Downloading code…", while the code clones, offering Stop at neither, and ends only once the code is cloned and paired or its clone has failed [[space-61](#space-61)];
-- the spex repository clones into a private folder beside its place and moves there only where nothing stands at that instant; a join finding its place taken — another join's clone — stops, leaving that clone as it stands, and every join removes its own private folder alone, on every platform, Windows included, Git's read-only objects among its files, a removal failing recording a diagnostic naming that folder and its cause, the join's own outcome reported;
+- the spex repository clones into a private folder beside its place, named apart from the repository's name so that one of the longest name a folder takes still joins, and moves there only where nothing stands at that instant; a join finding its place taken — another join's clone — stops, leaving that clone as it stands, and every join removes its own private folder alone, on every platform, Windows included, Git's read-only objects among its files, a removal failing recording a diagnostic naming that folder and its cause, the join's own outcome reported;
 - a code clone that fails stops the join at its Code step with the host's failure classified at the Git origin of the instance that brokered it and Git's words at any other, no URL under any listed instance's reported Git origin shown [[space-15](#space-15)], leaving the spex repository cloned and the row offering "Choose folder…" to pair it later, or, on a seat, "Try again" [[space-103](#space-103)].
 
 #### space-64
@@ -1330,7 +1330,7 @@ When an integration suite runs a real core on a scratch home signed in to three 
 
 #### space-76
 
-When the integration suite runs a real core on a scratch home signed in to the stand-in host and the place of a spex repository being joined is taken while its clone runs, it shall assert that the join stops reading the place taken, leaving what stands there as it is, and that no private folder of the join remains, the clone's read-only Git objects removed with it [[space-63](#space-63)].
+When the integration suite runs a real core on a scratch home signed in to the stand-in host and the place of a spex repository being joined, named in 250 characters, is taken while its clone runs, it shall assert that the join stops reading the place taken, leaving what stands there as it is, and that no private folder of the join remains, the clone's read-only Git objects removed with it [[space-63](#space-63)].
 
 ### Surface Coverage
 

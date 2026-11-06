@@ -334,6 +334,26 @@ function readAgentSettings(value: unknown): SessionAgentSettings | undefined {
 }
 
 /** Atomic whole-file replace: a reader never sees a torn file. */
+/** How long a refused rename of a clone on Windows is tried again. */
+const CLONE_RENAME_RETRY_MS = 1_000;
+
+/** Rename a clone (projects-10). On Windows a folder is not renamed
+ * while any process holds a file in it open or works in it — a Git
+ * child of this core, a virus scanner — most only for a moment, so the
+ * rename is tried again for up to a second, synchronously, before its
+ * refusal stands. */
+function renameClone(from: string, to: string): void {
+  const deadline = Date.now() + CLONE_RENAME_RETRY_MS;
+  for (;;) {
+    try { renameSync(from, to); return; }
+    catch (error) {
+      const code = (error as NodeJS.ErrnoException).code ?? "";
+      if (process.platform !== "win32" || !["EBUSY", "EPERM", "EACCES"].includes(code) || Date.now() >= deadline) throw error;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
+    }
+  }
+}
+
 function writeAtomic(file: string, text: string): void {
   const tmp = `${file}.tmp`;
   writeFileSync(tmp, text);
@@ -1789,9 +1809,10 @@ export class Store {
 
   /** Forget the pair and delete the clone (projects-9, projects-10); the
    * working folder stays as it is. All or nothing: the clone is set
-   * aside first, by one rename to a sibling whose name begins with `.`,
-   * so no read of `workspace/` takes it for a group or a clone, and a
-   * rename refused — on Windows, while a folder of the clone is held
+   * aside first, by one rename to a sibling `.removed-<uuid>` — named
+   * apart from the clone's own name, so a clone of the longest name a
+   * folder takes still moves, and beginning with `.`, so no read of
+   * `workspace/` takes it for a group or a clone — and a rename refused — on Windows, while a folder of the clone is held
    * open — changes nothing; the pair is forgotten next, the clone put
    * back where that write fails; then the clone set aside is deleted,
    * Git's read-only objects among its files, a deletion failing said on
@@ -1804,13 +1825,13 @@ export class Store {
     if (!folder && !repository) return false;
     if (folder && this.homeProblem) throw new StorageFormatError(this.homeProblem.file, this.homeProblem.reason);
     const clone = repository && key !== this.homeFile.own() ? repository.dir : undefined;
-    const aside = clone === undefined ? undefined : join(dirname(clone), `.${basename(clone)}.removed-${randomUUID()}`);
-    if (clone !== undefined && aside !== undefined) renameSync(clone, aside);
+    const aside = clone === undefined ? undefined : join(dirname(clone), `.removed-${randomUUID()}`);
+    if (clone !== undefined && aside !== undefined) renameClone(clone, aside);
     if (folder) {
       try { this.homeFile.unpairAndSave(key); }
       catch (error) {
         if (clone !== undefined && aside !== undefined) {
-          try { renameSync(aside, clone); }
+          try { renameClone(aside, clone); }
           catch (back) { console.error(`spex: the records of ${key}, set aside at ${aside}, did not move back: ${back instanceof Error ? back.message : String(back)}`); }
         }
         throw error;

@@ -82,23 +82,30 @@ async function listed(home: StartedHome, id: string): Promise<boolean> {
 /** What a removal left beside the clone: its folder, or anything set
  * aside under its name. */
 const leftBeside = (clone: string): string[] =>
-  existsSync(dirname(clone)) ? readdirSync(dirname(clone)).filter((name) => name === basename(clone) || name.startsWith(`.${basename(clone)}.`)) : [];
+  existsSync(dirname(clone)) ? readdirSync(dirname(clone)).filter((name) => name === basename(clone) || name.startsWith(`.${basename(clone)}.`) || name.startsWith(".removed-")) : [];
 
 /** Whether `home.yaml` pairs a folder with `key`. */
 const paired = (dataDir: string, key: string): boolean =>
   (parseYaml(readFileSync(join(dataDir, "home.yaml"), "utf8")) as { folders: { repository: string }[] }).folders.some((folder) => folder.repository === key);
 
 /** A home whose core reads its clones' sessions and config as they
- * change, its project registered with a local-only clone holding its
- * first commit and a session another host wrote, listed. */
-async function watchedProject(name: string): Promise<{ home: StartedHome; key: string; clone: string }> {
+ * change, its project — the working folder `folderName`, where given —
+ * registered with a local-only clone holding its first commit and a
+ * session another host wrote, listed. */
+async function watchedProject(name: string, folderName?: string): Promise<{ home: StartedHome; key: string; clone: string }> {
   const home = await startHome(name, { extra: { watchConfig: true } });
-  writeFileSync(join(home.projectDir, "README.md"), `# ${name}\n`);
-  execFileSync("git", ["-C", home.projectDir, "add", "-A"], { env: gitEnv });
-  execFileSync("git", ["-C", home.projectDir, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "fixture"], { env: gitEnv });
-  const { key, clone } = await addFolder(home, home.projectDir);
+  let folder = home.projectDir;
+  if (folderName !== undefined) {
+    folder = join(scratchDir("spex-git-removal-folder-"), folderName);
+    mkdirSync(folder);
+    execFileSync("git", ["init", "-q", folder], { env: gitEnv });
+  }
+  writeFileSync(join(folder, "README.md"), `# ${name}\n`);
+  execFileSync("git", ["-C", folder, "add", "-A"], { env: gitEnv });
+  execFileSync("git", ["-C", folder, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "fixture"], { env: gitEnv });
+  const { key, clone } = await addFolder(home, folder);
   assert.ok(filesOf(join(clone, ".git", "objects")).some(readOnly), "the clone's first commit stored Git's read-only objects");
-  const session = writeSession(clone, home.projectDir, "written by another host");
+  const session = writeSession(clone, folder, "written by another host");
   assert.ok(await listed(home, session), "the core read the clone's sessions as they changed");
   return { home, key, clone };
 }
@@ -110,6 +117,18 @@ test("projects-46: a project's clone, watched by the core and holding Git's read
   assert.deepEqual(leftBeside(clone), [], "[projects-10] no clone, and nothing set aside beside it");
   assert.equal(paired(home.dataDir, key), false, "[projects-10] no pair");
   assert.ok(!(await home.client.expectOk("project.list", {})).some((project) => project.id === key));
+});
+
+test("projects-46: a project whose clone's name runs to 225 characters is removed the same way", async (t) => {
+  // Git for Windows takes no path past 260 characters without
+  // core.longpaths, so no such clone is made there.
+  if (process.platform === "win32") { t.skip("no clone of so long a name is made on Windows"); return; }
+  const { home, key, clone } = await watchedProject("git-removal-long", "p".repeat(220));
+  t.after(() => home.stop());
+  assert.equal(basename(clone).length, 225, "the clone's folder name is 225 characters long");
+  assert.equal(await home.client.expectOk("project.remove", { projectId: key, confirm: true }), null, "[projects-10] its removal sets it aside under a name no longer than any clone's");
+  assert.deepEqual(leftBeside(clone), [], "[projects-10] no clone, and nothing set aside beside it");
+  assert.equal(paired(home.dataDir, key), false, "[projects-10] no pair");
 });
 
 test("projects-46: a removal whose rename is refused changes nothing, the clone still watched, and completes once released", async (t) => {
@@ -156,8 +175,11 @@ test("space-76: a join whose place is taken while its clone runs stops, leaving 
   // line is not quoted for.
   if (process.platform === "win32") { t.skip("no brokered credential reaches Git on Windows yet"); return; }
   const host = await startHost();
-  const listing = host.script.addRepository({ group: "acme", name: "taken-spex" });
-  const key = hostKey(host, "acme/taken-spex");
+  // A name of 250 characters, near the longest a folder takes: the
+  // join's private folder is named apart from it.
+  const name = `${"t".repeat(245)}-spex`;
+  const listing = host.script.addRepository({ group: "acme", name });
+  const key = hostKey(host, `acme/${name}`);
   const home = await startHome("join-taken", { host, project: false, extra: { signIn: "browser" } });
   t.after(() => home.stop());
   await signIn(home, host);
