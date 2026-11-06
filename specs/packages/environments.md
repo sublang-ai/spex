@@ -180,7 +180,7 @@ When the core starts, once it has installed every environment, it shall collect 
 
 - a lock that does not read stops the collection, removing nothing;
 - while the environment migration [[storage-24](storage.md#storage-24)] stands stopped part way, nothing is collected;
-- collecting is garbage collection: its failure records a diagnostic naming its cause and fails no start.
+- collecting is garbage collection: its failure records a diagnostic naming its cause and fails no start, the files it keeps marked read-only again all the same.
 
 ### Placement
 
@@ -446,7 +446,7 @@ When an integration suite installs locked environments on a scratch home, it sha
 When the integration suite starts a real core on a scratch home and installs locked environments there, on every platform and on Windows on the Node the app ships, it shall assert:
 
 - a read-only file the store holds that no lock selects is removed at the next start, which succeeds, while a file a lock selects stays, marked read-only again where it had been made writable [[environments-52](#environments-52)];
-- where the store's folder refuses removals on POSIX, the start succeeds, the file stays and a diagnostic names the cause [[environments-52](#environments-52)];
+- where the store's folder refuses removals on POSIX, the start succeeds, the file stays, a diagnostic names the cause and a file a lock selects, made writable before, reads read-only again [[environments-52](#environments-52)];
 - an install over an installed tree leaves no obsolete tree, also where that tree's install record does not read, the files a second environment still links reading read-only, a failed install leaves no staged tree, an install whose staged tree reaches `.spex/packages/` by a copy, as across volumes, leaves no staged tree, an install of an emptied lock leaves no installed tree of the package, and the environment migration deleting a clone's former `packages/` beside a working folder holding its own environment leaves none, each a tree of read-only files, the stored files and a second environment's links to them reading read-only after each [[environments-7](#environments-7)].
 
 #### environments-22

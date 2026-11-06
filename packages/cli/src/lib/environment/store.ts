@@ -133,26 +133,30 @@ export class ContentStore {
     for (const key of keys) markReadOnly(join(this.root, ...key.split("/")), key.startsWith("x/"));
   }
 
-  /** Remove every entry no lock selects, read-only as it is, then mark
-   * every entry kept read-only again; returns the removed keys. */
+  /** Remove every entry no lock selects, read-only as it is, and mark
+   * every entry kept read-only again, also where a removal fails;
+   * returns the removed keys. */
   gc(selected: Set<string>): string[] {
     const removed: string[] = [];
-    for (const key of this.keys()) {
-      if (selected.has(key)) continue;
-      removeTree(join(this.root, ...key.split("/")));
-      removed.push(key);
-    }
-    // A temporary file an interrupted put left behind, once it is old
-    // enough not to be a put still running.
-    if (existsSync(this.root)) {
-      const before = Date.now() - 60 * 60 * 1000;
-      for (const name of readdirSync(this.root)) {
-        if (!name.startsWith(".tmp-")) continue;
-        const file = join(this.root, name);
-        try { if (statSync(file).mtimeMs < before) removeTree(file); } catch { /* gone */ }
+    try {
+      for (const key of this.keys()) {
+        if (selected.has(key)) continue;
+        removeTree(join(this.root, ...key.split("/")));
+        removed.push(key);
       }
+      // A temporary file an interrupted put left behind, once it is old
+      // enough not to be a put still running.
+      if (existsSync(this.root)) {
+        const before = Date.now() - 60 * 60 * 1000;
+        for (const name of readdirSync(this.root)) {
+          if (!name.startsWith(".tmp-")) continue;
+          const file = join(this.root, name);
+          try { if (statSync(file).mtimeMs < before) removeTree(file); } catch { /* gone */ }
+        }
+      }
+    } finally {
+      this.markAllReadOnly();
     }
-    this.markAllReadOnly();
     return removed;
   }
 }

@@ -128,10 +128,12 @@ test("environments-53: a start removes a read-only stored file no lock selects a
   }
 });
 
-test("environments-53: a collection that fails fails no start", {
+test("environments-53: a collection that fails fails no start and still marks the files it keeps read-only", {
   skip: process.platform === "win32" || process.getuid?.() === 0,
 }, async (t) => {
-  const { root, store, stray } = await homeWithStray();
+  const { root, store, lock, stray } = await homeWithStray();
+  const kept = storedFiles(store, lock);
+  chmodSync(kept[0]!, 0o644);
   const diagnostics = t.mock.method(console, "error", () => {});
   chmodSync(store.root, 0o555);
   try {
@@ -140,6 +142,7 @@ test("environments-53: a collection that fails fails no start", {
     chmodSync(store.root, 0o755);
   }
   assert.ok(existsSync(stray), "[environments-52] the file the collection could not remove stays");
+  for (const file of kept) assert.ok(readOnly(file), "[environments-52] every file kept reads read-only again, the collection failing");
   const diagnostic = diagnostics.mock.calls.map((call) => String(call.arguments[0])).find((message) => message.includes("the store was not collected"));
   assert.ok(diagnostic, "[environments-52] a diagnostic reports the failed collection");
   assert.match(diagnostic, /EACCES|EPERM/, "[environments-52] naming its cause");
