@@ -8,10 +8,10 @@
 // the device. Their words are the host's (words.ts).
 
 import { createHash, randomUUID } from "node:crypto";
-import { closeSync, fchmodSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeFileSync, type Stats } from "node:fs";
+import { chmodSync, closeSync, fchmodSync, fsyncSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync, type Stats } from "node:fs";
 import { readOwnerAndDacl } from "@openclaw/fs-safe/permissions";
 import { createDirectorySync, createFileSync, assertNoSymlinkParentsSync } from "@openclaw/fs-safe/advanced";
-import { dirname, isAbsolute, parse, posix, resolve, win32 } from "node:path";
+import { dirname, isAbsolute, join, parse, posix, resolve, win32 } from "node:path";
 import { words } from "./words.js";
 
 /** A canonical lowercase UUID. */
@@ -270,3 +270,37 @@ function publish(file: string, bytes: Buffer | string, { privately, expected, mo
 export const portable = (file: string): boolean =>
   !/^(\.spex\/|packages\/|skills\/|local\/|\.spex-uploads\/|\.spex-apply\.json$|\.lock)/.test(file) &&
   !/\.(hints|spex)\.json$|(?<!^spex)\.lock(?:\.|\/|$)|\.tmp$|\.bak(?:\.|$)|\.backup(?:\.|$)/.test(file);
+
+/** Remove a file or a tree as `rmSync` with `recursive` and `force`
+ * does, read-only files included (environments-7). Where Windows refuses
+ * with `EPERM` — Node 24's `rmSync` no longer clears the read-only mark —
+ * every read-only file it holds is made writable and the removal tried
+ * once more; links are not followed, and no folder's mode changes.
+ * Returns whether any file was made writable. */
+export function removeTree(path: string): boolean {
+  try {
+    rmSync(path, { recursive: true, force: true });
+    return false;
+  } catch (error) {
+    if (process.platform !== "win32" || (error as NodeJS.ErrnoException).code !== "EPERM" || !makeFilesWritable(path)) throw error;
+  }
+  rmSync(path, { recursive: true, force: true });
+  return true;
+}
+
+/** Make every read-only file under `path` writable; whether any was. */
+function makeFilesWritable(path: string): boolean {
+  let stat: Stats;
+  try { stat = lstatSync(path); } catch { return false; }
+  if (stat.isSymbolicLink()) return false;
+  if (stat.isDirectory()) {
+    let names: string[];
+    try { names = readdirSync(path); } catch { return false; }
+    let changed = false;
+    for (const name of names) if (makeFilesWritable(join(path, name))) changed = true;
+    return changed;
+  }
+  if ((stat.mode & 0o200) !== 0) return false;
+  chmodSync(path, (stat.mode & 0o777) | 0o200);
+  return true;
+}

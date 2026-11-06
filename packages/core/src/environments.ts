@@ -26,7 +26,7 @@
 // use only the selected registry and its registry grant (DR-168).
 
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, rmSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, join, relative, resolve as resolvePath, sep } from "node:path";
 
 import { fileVersion, readVersioned, writeVersionedBytes, sha256, VersionConflictError, type FileVersion } from "@sublang/spex/files";
@@ -926,7 +926,7 @@ export class EnvironmentManager {
     for (const name of ["packages", "skills"]) {
       const former = join(dir, name);
       if (!existsSync(former)) continue;
-      try { rmSync(former, { recursive: true, force: true }); }
+      try { this.contentStore.removeLinked(former); }
       catch (error) { console.error(`spex: installed files stand; the former tree ${former} could not be removed: ${error instanceof Error ? error.message : String(error)}`); }
     }
   }
@@ -996,7 +996,10 @@ export class EnvironmentManager {
       }
       await this.settle(repository.key, "auto", false);
     }
-    this.collect();
+    // Collecting the store is garbage collection: its failure is
+    // reported and never fails the start (environments-52).
+    try { this.collect(); }
+    catch (error) { console.error(`spex: the store was not collected: ${error instanceof Error ? error.message : String(error)}`); }
   }
 
   /** The environment migration (storage-24) over every spex repository
@@ -1040,7 +1043,7 @@ export class EnvironmentManager {
     }
   }
 
-  /** Remove store entries no lock on this device selects (environments-7):
+  /** Remove store entries no lock on this device selects (environments-52):
    * each environment's at its root, and the lock a project's clone still
    * holds until its working folder is paired here (storage-24). */
   collect(): void {

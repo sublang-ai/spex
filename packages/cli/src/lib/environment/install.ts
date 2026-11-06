@@ -34,11 +34,8 @@
 
 import { randomUUID } from "node:crypto";
 import {
-  chmodSync,
-  copyFileSync,
   cpSync,
   existsSync,
-  linkSync,
   lstatSync,
   mkdirSync,
   readFileSync,
@@ -467,15 +464,6 @@ async function fetchFrom(options: InstallOptions, registry: RegistrySource, name
   return true;
 }
 
-function linkOrCopy(from: string, to: string, executable: boolean): void {
-  try {
-    linkSync(from, to);
-  } catch {
-    copyFileSync(from, to);
-    chmodSync(to, executable ? 0o555 : 0o444);
-  }
-}
-
 /** The playbook artifact folders of a spec package's selected
  * artifacts under `root`, with their ids. */
 function playbookFolders(root: string, resolution: Resolution): { id: string; folder: string }[] {
@@ -633,7 +621,7 @@ export async function install(options: InstallOptions): Promise<InstallReport> {
       for (const file of resolution.files) {
         const to = join(root, ...file.path.split("/"));
         mkdirSync(dirname(to), { recursive: true });
-        linkOrCopy(store.pathOf(file.sha256, file.executable), to, file.executable);
+        store.link(file.sha256, file.executable, to);
       }
     }
     engineKept = await prepareInstalled(staging, placed, lock, engine, (folder) => join(target, relative(staging, folder)));
@@ -642,9 +630,11 @@ export async function install(options: InstallOptions): Promise<InstallReport> {
     // Checked at the instant before the swap, nothing awaited between.
     assertCurrent(options);
     ensureSpexDir(root);
-    replaceTree(staging, target, join(options.cache, "trash", id));
+    replaceTree(staging, target, join(options.cache, "trash", id), store);
   } catch (error) {
-    rmSync(staging, { recursive: true, force: true });
+    // The failure's own cause is reported, never a cleanup's.
+    try { store.removeLinked(staging); }
+    catch (cleanup) { console.error(`spex: the staged tree ${staging} could not be removed: ${String(cleanup)}`); }
     if (error instanceof InstallError || error instanceof VersionConflictError) throw error;
     throw new InstallError(undefined, `installing failed; the last files stay: ${(error as Error).message}`, error);
   }
@@ -652,7 +642,7 @@ export async function install(options: InstallOptions): Promise<InstallReport> {
 }
 
 /** Swap a complete staged tree in for the installed one. */
-function replaceTree(staging: string, target: string, trash: string): void {
+function replaceTree(staging: string, target: string, trash: string, store: ContentStore): void {
   let source = staging;
   const hadOld = existsSync(target);
   if (hadOld) {
@@ -674,7 +664,8 @@ function replaceTree(staging: string, target: string, trash: string): void {
       if ((error as NodeJS.ErrnoException).code !== "EXDEV") throw error;
       const near = `${target}.new-${randomUUID()}`;
       cpSync(source, near, { recursive: true, verbatimSymlinks: true });
-      rmSync(source, { recursive: true, force: true });
+      // The staged links leave as copies stand in their place.
+      store.removeLinked(source);
       source = near;
       renameSync(source, target);
     }
@@ -686,14 +677,9 @@ function replaceTree(staging: string, target: string, trash: string): void {
   // Garbage collection cannot turn that success into a failed install,
   // which would skip exports and falsely claim the old files still stand.
   if (hadOld) {
-    try { rmSync(trash, { recursive: true, force: true }); }
+    try { store.removeLinked(trash); }
     catch (error) { console.error(`spex: installed files stand; obsolete tree ${trash} could not be removed: ${String(error)}`); }
   }
-}
-
-/** Remove every installed file of an environment (one emptied). */
-export function removeInstalled(root: string): void {
-  rmSync(installedDir(root), { recursive: true, force: true });
 }
 
 export interface PrepareOptions {

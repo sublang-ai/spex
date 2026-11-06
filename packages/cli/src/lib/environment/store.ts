@@ -5,12 +5,17 @@
 // each distinct file once, named by its SHA-256, written once after its
 // digest is verified, read-only; an executable copy apart under `x/`
 // because hard links share one mode. A file stays while a lock in a
-// spex repository on this device selects it.
+// spex repository on this device selects it. Windows keeps one
+// read-only mark for all the links of a file, so removing an installed
+// link there makes the stored file writable: the store marks its files
+// read-only again before each link, after each removal that unmarked
+// any file, and at each collection.
 
 import { randomUUID } from "node:crypto";
-import { chmodSync, closeSync, existsSync, fsyncSync, mkdirSync, openSync, readdirSync, renameSync, rmSync, statSync, writeSync } from "node:fs";
+import { chmodSync, closeSync, copyFileSync, existsSync, fsyncSync, linkSync, mkdirSync, openSync, readdirSync, renameSync, statSync, writeSync } from "node:fs";
 import { join } from "node:path";
 
+import { removeTree } from "../files.js";
 import { sha256Hex } from "./format.js";
 import type { Lock } from "./lock.js";
 
@@ -38,6 +43,16 @@ export function lockStoreKeys(locks: Iterable<Lock>): Set<string> {
 }
 
 const SHA_RE = /^[0-9a-f]{64}$/;
+
+/** The mode of a stored file: read-only, executable under `x/`. */
+const storedMode = (executable: boolean): number => (executable ? 0o555 : 0o444);
+
+/** Mark a file read-only again where it is not. The mark guards the
+ * stored bytes; failing to set it fails nothing. */
+function markReadOnly(path: string, executable: boolean): void {
+  try { if ((statSync(path).mode & 0o222) !== 0) chmodSync(path, storedMode(executable)); }
+  catch { /* left as it is */ }
+}
 
 export class ContentStore {
   readonly root: string;
@@ -72,8 +87,8 @@ export class ContentStore {
     } finally {
       closeSync(fd);
     }
-    chmodSync(temporary, executable ? 0o555 : 0o444);
-    if (existsSync(target)) rmSync(temporary, { force: true });
+    chmodSync(temporary, storedMode(executable));
+    if (existsSync(target)) removeTree(temporary);
     else renameSync(temporary, target);
     return target;
   }
@@ -88,23 +103,59 @@ export class ContentStore {
     return out;
   }
 
-  /** Remove every entry no lock selects; returns the removed keys. */
+  /** Place a stored file at `to`: a hard link, the file marked
+   * read-only again first, or a read-only copy where no link can be made. */
+  link(sha256: string, executable: boolean, to: string): void {
+    const from = this.pathOf(sha256, executable);
+    markReadOnly(from, executable);
+    try {
+      linkSync(from, to);
+    } catch {
+      copyFileSync(from, to);
+      chmodSync(to, storedMode(executable));
+    }
+  }
+
+  /** Remove a tree whose files may link the store's — an installed,
+   * staged or former tree (environments-7). Where the removal made any
+   * file writable, or stopped part way, every stored file is marked
+   * read-only again, so nothing relies on a record of the tree. */
+  removeLinked(tree: string): void {
+    let unmarked = true;
+    try { unmarked = removeTree(tree); }
+    finally { if (unmarked) this.markAllReadOnly(); }
+  }
+
+  /** Mark every entry read-only again. */
+  private markAllReadOnly(): void {
+    let keys: string[];
+    try { keys = this.keys(); } catch { return; /* the next collection marks them */ }
+    for (const key of keys) markReadOnly(join(this.root, ...key.split("/")), key.startsWith("x/"));
+  }
+
+  /** Remove every entry no lock selects, read-only as it is, and mark
+   * every entry kept read-only again, also where a removal fails;
+   * returns the removed keys. */
   gc(selected: Set<string>): string[] {
     const removed: string[] = [];
-    for (const key of this.keys()) {
-      if (selected.has(key)) continue;
-      rmSync(join(this.root, ...key.split("/")), { force: true });
-      removed.push(key);
-    }
-    // A temporary file an interrupted put left behind, once it is old
-    // enough not to be a put still running.
-    if (existsSync(this.root)) {
-      const before = Date.now() - 60 * 60 * 1000;
-      for (const name of readdirSync(this.root)) {
-        if (!name.startsWith(".tmp-")) continue;
-        const file = join(this.root, name);
-        try { if (statSync(file).mtimeMs < before) rmSync(file, { force: true }); } catch { /* gone */ }
+    try {
+      for (const key of this.keys()) {
+        if (selected.has(key)) continue;
+        removeTree(join(this.root, ...key.split("/")));
+        removed.push(key);
       }
+      // A temporary file an interrupted put left behind, once it is old
+      // enough not to be a put still running.
+      if (existsSync(this.root)) {
+        const before = Date.now() - 60 * 60 * 1000;
+        for (const name of readdirSync(this.root)) {
+          if (!name.startsWith(".tmp-")) continue;
+          const file = join(this.root, name);
+          try { if (statSync(file).mtimeMs < before) removeTree(file); } catch { /* gone */ }
+        }
+      }
+    } finally {
+      this.markAllReadOnly();
     }
     return removed;
   }
