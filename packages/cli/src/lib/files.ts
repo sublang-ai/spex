@@ -279,15 +279,18 @@ export const portable = (file: string): boolean =>
  * path holds is made writable and the removal tried once more. A link
  * — a junction to the app's engine among them — is removed, never
  * followed, and no folder's mode changes, so a folder refusing removal
- * still refuses. */
-export function removeTree(path: string): void {
+ * still refuses. Returns whether it made any file writable: a hard link
+ * shares its mark with every other link of its file, which a caller
+ * linking from a store marks read-only again. */
+export function removeTree(path: string): boolean {
   try {
     rmSync(path, { recursive: true, force: true });
-    return;
+    return false;
   } catch (error) {
     if (process.platform !== "win32" || (error as NodeJS.ErrnoException).code !== "EPERM" || !makeFilesWritable(path)) throw error;
   }
   rmSync(path, { recursive: true, force: true });
+  return true;
 }
 
 /** Make every read-only file under `path` writable; whether any was. */

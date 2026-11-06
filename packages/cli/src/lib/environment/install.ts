@@ -648,35 +648,23 @@ export async function install(options: InstallOptions): Promise<InstallReport> {
     replaceTree(staging, target, join(options.cache, "trash", id), store);
   } catch (error) {
     // The failure's own cause is reported, never a cleanup's.
-    try { removeTree(staging); }
+    try { removeLinked(store, staging); }
     catch (cleanup) { console.error(`spex: the staged tree ${staging} could not be removed: ${String(cleanup)}`); }
-    try { sealFiles(store, placed.flatMap((name) => lock.packages[name]!.files)); }
-    catch { /* the stored files stay as they are; the next collection marks them */ }
     if (error instanceof InstallError || error instanceof VersionConflictError) throw error;
     throw new InstallError(undefined, `installing failed; the last files stay: ${(error as Error).message}`, error);
   }
   return { installed: placed, missingPaths, unchanged: false, engineKept, ...(left.length > 0 ? { left } : {}) };
 }
 
-/** Mark the stored files of `files` read-only again: removing a link
- * on Windows made each writable (environments-7). */
-function sealFiles(store: ContentStore, files: readonly { sha256: string; executable: boolean }[]): void {
-  for (const file of files) if (store.has(file.sha256, file.executable)) sealStored(store.pathOf(file.sha256, file.executable), file.executable);
-}
-
-/** The files an installed tree's record names; an entry that does not
- * read names none. */
-function recordedFiles(tree: string): { sha256: string; executable: boolean }[] {
-  const record = readInstallRecord(tree);
-  if (record === null) return [];
-  return Object.values(record.packages).flatMap((entry) => {
-    if (typeof entry !== "object" || entry === null) return [];
-    const files = (entry as { files?: unknown }).files;
-    return Array.isArray(files)
-      ? files.filter((file): file is { sha256: string; executable: boolean } =>
-        typeof file?.sha256 === "string" && /^[0-9a-f]{64}$/.test(file.sha256) && typeof file.executable === "boolean")
-      : [];
-  });
+/** Remove a tree whose files may link the store's (environments-7):
+ * where the removal made any file writable — Windows shares one
+ * read-only mark among a file's links — or stopped part way, every
+ * stored file is marked read-only again, so no record of what the tree
+ * held is relied on. */
+function removeLinked(store: ContentStore, tree: string): void {
+  let unmarked = true;
+  try { unmarked = removeTree(tree); }
+  finally { if (unmarked) store.seal(); }
 }
 
 /** Swap a complete staged tree in for the installed one. */
@@ -703,9 +691,7 @@ function replaceTree(staging: string, target: string, trash: string, store: Cont
       const near = `${target}.new-${randomUUID()}`;
       cpSync(source, near, { recursive: true, verbatimSymlinks: true });
       // The staged links leave as copies stand in their place.
-      const staged = recordedFiles(source);
-      removeTree(source);
-      sealFiles(store, staged);
+      removeLinked(store, source);
       source = near;
       renameSync(source, target);
     }
@@ -717,15 +703,8 @@ function replaceTree(staging: string, target: string, trash: string, store: Cont
   // Garbage collection cannot turn that success into a failed install,
   // which would skip exports and falsely claim the old files still stand.
   if (hadOld) {
-    let linked: { sha256: string; executable: boolean }[] = [];
-    try {
-      linked = recordedFiles(trash);
-      removeTree(trash);
-    } catch (error) {
-      console.error(`spex: installed files stand; obsolete tree ${trash} could not be removed: ${String(error)}`);
-    }
-    // A removal that stopped part way may have unmarked some links too.
-    sealFiles(store, linked);
+    try { removeLinked(store, trash); }
+    catch (error) { console.error(`spex: installed files stand; obsolete tree ${trash} could not be removed: ${String(error)}`); }
   }
 }
 

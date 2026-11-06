@@ -8,7 +8,8 @@
 // spex repository on this device selects it. Windows keeps one
 // read-only mark for every link of a file, so removing an installed
 // link there makes the stored file writable: the mark is set again
-// before each link and at each collection.
+// before each link, after a removal that unmarked any file, and at each
+// collection.
 
 import { randomUUID } from "node:crypto";
 import { chmodSync, closeSync, existsSync, fsyncSync, mkdirSync, openSync, readdirSync, renameSync, statSync, writeSync } from "node:fs";
@@ -101,6 +102,13 @@ export class ContentStore {
     const x = join(this.root, "x");
     if (existsSync(x)) for (const name of readdirSync(x)) if (SHA_RE.test(name)) out.push(`x/${name}`);
     return out;
+  }
+
+  /** Mark every entry read-only again where it is not (environments-7). */
+  seal(): void {
+    let keys: string[];
+    try { keys = this.keys(); } catch { return; /* the next collection marks them */ }
+    for (const key of keys) sealStored(join(this.root, ...key.split("/")), key.startsWith("x/"));
   }
 
   /** Remove every entry no lock selects, read-only as it is, and mark

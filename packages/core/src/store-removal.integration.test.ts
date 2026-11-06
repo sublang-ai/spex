@@ -11,7 +11,7 @@
 import assert from "node:assert/strict";
 import fs, { chmodSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { after, before, test } from "node:test";
 
 import {
@@ -224,9 +224,17 @@ test("environments-53: a staged tree copied into place, as across volumes, leave
   assertSealed(lock, "copied into place");
 });
 
-test("environments-53: an obsolete tree whose install record does not read is removed and the install stands", async (t) => {
-  const { cache, root, run, leftIn, assertSealed, installed } = scratchInstalls();
-  await run(await lockAt(root, cache, "1.0.0"));
+test("environments-53: an obsolete tree whose install record does not read is removed and the install stands, a shared link read-only", async (t) => {
+  const { store, cache, root, run, leftIn, assertSealed, installed } = scratchInstalls();
+  const first = await lockAt(root, cache, "1.0.0");
+  await run(first);
+  // A second environment links the same stored files of 1.0.0.
+  const peer = join(dirname(root), "peer-spex");
+  const peerLock = await lockAt(peer, cache, "1.0.0");
+  await writeLock(join(peer, "spex.lock"), peerLock);
+  const linked = await install({ root: peer, lock: peerLock, store, cache, registry: client, git: gitSource(cache), pathRoot: null, engine: installEngine(), lockVersion: fileVersion(join(peer, "spex.lock")) });
+  assert.deepEqual(linked.installed, ["acme/kit"]);
+  const peerSkill = join(peer, ".spex", "packages", "acme", "kit", "skills", "en", "tidy", "SKILL.md");
   writeFileSync(join(installed, INSTALL_RECORD), JSON.stringify({ format: 1, packages: { "acme/kit": null } }));
   const diagnostics = t.mock.method(console, "error", () => {});
   const second = await lockAt(root, cache, "1.1.0");
@@ -234,4 +242,6 @@ test("environments-53: an obsolete tree whose install record does not read is re
   assert.deepEqual(leftIn(join(cache, "trash")), [], "[environments-7] no obsolete tree stays");
   assert.equal(diagnostics.mock.callCount(), 0, "[environments-7] nothing failed");
   assertSealed(second, "over an unreadable record");
+  assertSealed(first, "the obsolete release's, over an unreadable record");
+  assert.ok(readOnly(peerSkill), "[environments-7] the second environment's link reads read-only");
 });
