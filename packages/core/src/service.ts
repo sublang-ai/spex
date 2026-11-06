@@ -653,6 +653,26 @@ function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
   });
 }
 
+/** How long a removal its clone's rename refuses on Windows is tried
+ * again (projects-10). */
+const HELD_CLONE_RETRY_MS = 1_000;
+
+/** Run a removal, trying it again, whole, while Windows refuses its
+ * clone's rename because something holds a file or folder in it open:
+ * a Git child of this core, a virus scanner, or this core's own read in
+ * flight, which the wait between tries lets finish. */
+async function retryWhileHeld<T>(attempt: () => Promise<T>): Promise<T> {
+  const deadline = Date.now() + HELD_CLONE_RETRY_MS;
+  for (;;) {
+    try { return await attempt(); }
+    catch (error) {
+      const { code, syscall } = error as NodeJS.ErrnoException;
+      if (process.platform !== "win32" || syscall !== "rename" || (code !== "EBUSY" && code !== "EPERM") || Date.now() >= deadline) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+  }
+}
+
 export class CoreService {
   private readonly options: CoreServiceOptions;
   /** Your own group's config, which follows its clone when your own
@@ -3122,18 +3142,19 @@ export class CoreService {
           // awaited between them: a refusal at the check invalidates
           // nothing (media-17). The project is read first, so a home
           // that query finds changed is refused next, before the check.
-          await this.media.retireOwner({kind: "project", id: key}, () => {
-            // On Windows what the core watches in the clone holds it where
-            // it lies, refusing its rename: released for the removal, and
-            // watched again where the clone stays (projects-10).
-            this.unwatchRepository(key);
-            try { if (!this.store.removeProject(key)) throw noProject(key); }
-            catch (error) { this.rewatchRepositories(); throw error; }
-          }, () => {
-            assertProject();
-            this.store.assertProjectsWritable();
-            check();
-          });
+          // On Windows what the core watches in the clone holds it where
+          // it lies, refusing its rename: released for the removal, and
+          // watched again where the clone stays (projects-10).
+          this.unwatchRepository(key);
+          try {
+            await retryWhileHeld(() => this.media.retireOwner({kind: "project", id: key}, () => {
+              if (!this.store.removeProject(key)) throw noProject(key);
+            }, () => {
+              assertProject();
+              this.store.assertProjectsWritable();
+              check();
+            }));
+          } catch (error) { this.rewatchRepositories(); throw error; }
         } finally {
           // The leases went with the clone; what stands is released.
           await Promise.allSettled(leases.map((lease) => lease.release()));

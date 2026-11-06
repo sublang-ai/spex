@@ -13,7 +13,6 @@
 // reach Git.
 
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, watch, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
@@ -27,37 +26,23 @@ import { scratchDir } from "./testing/scratch.js";
 import { clonePath, createSpaceHarness, hostKey, repositoryOf } from "./testing/space-harness.js";
 
 const fixture = createSpaceHarness();
-const { git, sleep, startHome, startHost, signIn, addFolder, turnRecords } = fixture;
+const { git, gitFolder, sleep, snapshot, startHome, startHost, signIn, addFolder, turnRecords } = fixture;
 test.after(() => fixture.dispose());
 
-/** Git for the test's own repositories: no configuration of the host's. */
+/** The environment a set-up's Git runs with: no configuration of the
+ * host's, a fixed identity. */
 const gitEnv = { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1", GIT_AUTHOR_NAME: "T", GIT_AUTHOR_EMAIL: "t@example.test", GIT_COMMITTER_NAME: "T", GIT_COMMITTER_EMAIL: "t@example.test" };
 
 /** Whether a file reads read-only: on Windows, its read-only mark. */
 const readOnly = (path: string): boolean => (statSync(path).mode & 0o222) === 0;
 
 /** Every file beneath `dir`. */
-function filesOf(dir: string): string[] {
-  const out: string[] = [];
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const path = join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...filesOf(path));
-    else out.push(path);
-  }
-  return out;
-}
+const filesOf = (dir: string): string[] =>
+  readdirSync(dir, { recursive: true, withFileTypes: true }).filter((entry) => entry.isFile()).map((entry) => join(entry.parentPath, entry.name));
 
-/** The clone's own files as bytes, Git's data and lease coordination
- * aside, with the commit its `spex` branch holds. */
-function standing(clone: string): { files: Map<string, string>; head: string } {
-  const files = new Map<string, string>();
-  for (const path of filesOf(clone)) {
-    const inside = path.slice(clone.length + 1).split(/[\\/]/);
-    if (inside[0] === ".git" || inside.some((part) => /^\.lock|^\.lease|\.lock(?:\.|$)/.test(part))) continue;
-    files.set(inside.join("/"), readFileSync(path).toString("base64"));
-  }
-  return { files, head: git(clone, "rev-parse", "HEAD") };
-}
+/** The clone's own files, Git's data and lease coordination aside, with
+ * the commit its `spex` branch holds. */
+const standing = (clone: string): { files: Map<string, Buffer>; head: string } => ({ files: snapshot(clone), head: git(clone, "rev-parse", "HEAD") });
 
 /** A session another host wrote into a clone, as the playbook CLI writes
  * one (core-service-60). */
@@ -71,18 +56,14 @@ function writeSession(clone: string, cwd: string, prompt: string): string {
 
 type StartedHome = Awaited<ReturnType<typeof startHome>>;
 
-async function listed(home: StartedHome, id: string): Promise<boolean> {
-  for (let i = 0; i < 800; i += 1) {
-    if ((await home.client.expectOk("session.list", {})).some((session) => session.id === id)) return true;
-    await sleep(25);
-  }
-  return false;
-}
+/** Whether the core announces the session `id` within 20 seconds. */
+const listed = (home: StartedHome, id: string): Promise<boolean> =>
+  home.client.waitFor((message) => message.type === "session.state" && message.session.id === id, 20_000).then(() => true, () => false);
 
-/** What a removal left beside the clone: its folder, or anything set
- * aside under its name. */
+/** What a removal left beside the clone: its folder, or what it set
+ * aside. */
 const leftBeside = (clone: string): string[] =>
-  existsSync(dirname(clone)) ? readdirSync(dirname(clone)).filter((name) => name === basename(clone) || name.startsWith(`.${basename(clone)}.`) || name.startsWith(".removed-")) : [];
+  existsSync(dirname(clone)) ? readdirSync(dirname(clone)).filter((name) => name === basename(clone) || name.startsWith(".removed-")) : [];
 
 /** Whether `home.yaml` pairs a folder with `key`. */
 const paired = (dataDir: string, key: string): boolean =>
@@ -94,15 +75,10 @@ const paired = (dataDir: string, key: string): boolean =>
  * session another host wrote, listed. */
 async function watchedProject(name: string, folderName?: string): Promise<{ home: StartedHome; key: string; clone: string }> {
   const home = await startHome(name, { extra: { watchConfig: true } });
-  let folder = home.projectDir;
-  if (folderName !== undefined) {
-    folder = join(scratchDir("spex-git-removal-folder-"), folderName);
-    mkdirSync(folder);
-    execFileSync("git", ["init", "-q", folder], { env: gitEnv });
-  }
+  const folder = folderName === undefined ? home.projectDir : gitFolder(folderName);
   writeFileSync(join(folder, "README.md"), `# ${name}\n`);
-  execFileSync("git", ["-C", folder, "add", "-A"], { env: gitEnv });
-  execFileSync("git", ["-C", folder, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "fixture"], { env: gitEnv });
+  git(folder, "add", "-A");
+  git(folder, "commit", "-q", "-m", "fixture");
   const { key, clone } = await addFolder(home, folder);
   assert.ok(filesOf(join(clone, ".git", "objects")).some(readOnly), "the clone's first commit stored Git's read-only objects");
   const session = writeSession(clone, folder, "written by another host");
@@ -148,11 +124,8 @@ test("projects-46: a removal whose rename is refused changes nothing, the clone 
     release = () => chmodSync(group, 0o755);
   }
   const before = standing(clone);
-  let refused: Awaited<ReturnType<typeof home.client.command>>;
   try {
-    refused = await home.client.command("project.remove", { projectId: key, confirm: true });
-  } catch (error) { release(); throw error; }
-  try {
+    const refused = await home.client.command("project.remove", { projectId: key, confirm: true });
     assert.ok(!refused.ok, "[projects-10] the removal is refused");
     assert.deepEqual(leftBeside(clone), [basename(clone)], "[projects-10] the clone stands where it was, nothing set aside");
     assert.deepEqual(standing(clone), before, "[projects-10] its files and Git as they were");
@@ -217,12 +190,12 @@ test("environments-54: two fetches of one Git source at once keep one mirror, no
   const root = scratchDir("spex-git-mirror-");
   const work = join(root, "work");
   mkdirSync(work);
-  execFileSync("git", ["init", "-q", "-b", "main", work], { env: gitEnv });
+  git(work, "init", "-q", "-b", "main");
   writeFileSync(join(work, "README.md"), "# source\n");
-  execFileSync("git", ["-C", work, "add", "-A"], { env: gitEnv });
-  execFileSync("git", ["-C", work, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "source"], { env: gitEnv });
+  git(work, "add", "-A");
+  git(work, "commit", "-q", "-m", "source");
   const bare = join(root, "source.git");
-  execFileSync("git", ["clone", "-q", "--bare", work, bare], { env: gitEnv });
+  git(root, "clone", "-q", "--bare", work, bare);
   // A URL, as a host serves it: no hard links into the source's objects.
   const url = pathToFileURL(bare).href;
   const cache = join(root, "cache");

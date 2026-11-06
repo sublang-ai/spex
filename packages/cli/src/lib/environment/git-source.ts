@@ -16,7 +16,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-import { removeTree } from "../files.js";
+import { discardTree, removeTree } from "../files.js";
 import { sha256Hex } from "./format.js";
 import { readTar } from "./tar.js";
 
@@ -154,21 +154,14 @@ export function gitSource(cacheDir: string, options: GitSourceOptions = {}): Git
         if (!existsSync(join(mirror, "HEAD"))) {
           mkdirSync(mirrors, { recursive: true });
           const staging = `${mirror}.${randomUUID()}`;
-          // A mirror holds Git's read-only objects, which only removeTree
-          // removes on Windows; a staged one left over is garbage, so the
-          // fetch's own outcome is reported, never its cleanup's
-          // (environments-13).
-          const discard = (): void => {
-            try { removeTree(staging); }
-            catch (error) { console.error(`spex: the staged mirror ${staging} could not be removed: ${String(error)}`); }
-          };
+          // A staged mirror left over is garbage (environments-13).
           try {
             await git(repo, [...config, "clone", "--mirror", "--quiet", "--", repo, staging], env);
             // A fetch that made the mirror meanwhile keeps its own.
-            if (existsSync(join(mirror, "HEAD"))) discard();
+            if (existsSync(join(mirror, "HEAD"))) discardTree(staging, "a staged mirror");
             else { removeTree(mirror); renameSync(staging, mirror); }
           } catch (error) {
-            discard();
+            discardTree(staging, "a staged mirror");
             throw error;
           }
         } else if (!(COMMIT_RE.test(rev) && (await revParse(mirror, rev)))) {

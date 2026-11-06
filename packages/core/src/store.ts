@@ -36,7 +36,7 @@ import {
   type ProjectFile, type StorageDiagnostic,
 } from "./app-storage.js";
 import { occupied } from "./clone-moves.js";
-import { makePrivateDirectory, readJsonFile, removeTree, StorageFormatError, VersionConflictError, writeApplicationFile } from "@sublang/spex/files";
+import { discardTree, makePrivateDirectory, readJsonFile, removeTree, StorageFormatError, VersionConflictError, writeApplicationFile } from "@sublang/spex/files";
 import { defaultOwnName, Home, repositoryNameFor, splitKey, WORKSPACE_DEPTH } from "./home.js";
 import { filedIn, formerPlacementPrefKey, PLACEMENT_PREF_KINDS, placementPrefKey, readPlacementFiles, readPlacements, type PlacementPrefKind } from "./placements.js";
 import { folderRemote, needsGroupsMigration, migrateFormerHome } from "./migrate-home.js";
@@ -334,26 +334,6 @@ function readAgentSettings(value: unknown): SessionAgentSettings | undefined {
 }
 
 /** Atomic whole-file replace: a reader never sees a torn file. */
-/** How long a refused rename of a clone on Windows is tried again. */
-const CLONE_RENAME_RETRY_MS = 1_000;
-
-/** Rename a clone (projects-10). On Windows a folder is not renamed
- * while any process holds a file in it open or works in it — a Git
- * child of this core, a virus scanner — most only for a moment, so the
- * rename is tried again for up to a second, synchronously, before its
- * refusal stands. */
-function renameClone(from: string, to: string): void {
-  const deadline = Date.now() + CLONE_RENAME_RETRY_MS;
-  for (;;) {
-    try { renameSync(from, to); return; }
-    catch (error) {
-      const code = (error as NodeJS.ErrnoException).code ?? "";
-      if (process.platform !== "win32" || !["EBUSY", "EPERM", "EACCES"].includes(code) || Date.now() >= deadline) throw error;
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
-    }
-  }
-}
-
 function writeAtomic(file: string, text: string): void {
   const tmp = `${file}.tmp`;
   writeFileSync(tmp, text);
@@ -1807,31 +1787,25 @@ export class Store {
     this.prepareSessionDirs();
   }
 
-  /** Forget the pair and delete the clone (projects-9, projects-10); the
-   * working folder stays as it is. All or nothing: the clone is set
-   * aside first, by one rename to a sibling `.removed-<uuid>` — named
-   * apart from the clone's own name, so a clone of the longest name a
-   * folder takes still moves, and beginning with `.`, so no read of
-   * `workspace/` takes it for a group or a clone — and a rename refused — on Windows, while a folder of the clone is held
-   * open — changes nothing; the pair is forgotten next, the clone put
-   * back where that write fails; then the clone set aside is deleted,
-   * Git's read-only objects among its files, a deletion failing said on
-   * the console with the project removed. The caller releases what it
-   * holds open in the clone before. */
+  /** Forget the pair and delete the clone, all or nothing (projects-9,
+   * projects-10): the clone is set aside to a hidden `.removed-<uuid>`
+   * first, the pair forgotten next — the clone put back where that write
+   * fails — and what was set aside deleted as garbage. The working folder
+   * stays as it is. The caller releases what it holds open in the clone
+   * before. */
   removeProject(key: string): boolean {
     this.assertProjectsWritable();
     const folder = this.homeFile.folderOf(key);
     const repository = this.repository(key);
     if (!folder && !repository) return false;
-    if (folder && this.homeProblem) throw new StorageFormatError(this.homeProblem.file, this.homeProblem.reason);
     const clone = repository && key !== this.homeFile.own() ? repository.dir : undefined;
-    const aside = clone === undefined ? undefined : join(dirname(clone), `.removed-${randomUUID()}`);
-    if (clone !== undefined && aside !== undefined) renameClone(clone, aside);
+    const aside = clone && join(dirname(clone), `.removed-${randomUUID()}`);
+    if (clone && aside) renameSync(clone, aside);
     if (folder) {
       try { this.homeFile.unpairAndSave(key); }
       catch (error) {
-        if (clone !== undefined && aside !== undefined) {
-          try { renameClone(aside, clone); }
+        if (clone && aside) {
+          try { renameSync(aside, clone); }
           catch (back) { console.error(`spex: the records of ${key}, set aside at ${aside}, did not move back: ${back instanceof Error ? back.message : String(back)}`); }
         }
         throw error;
@@ -1839,15 +1813,12 @@ export class Store {
     }
     try { this.onProjectRemoving?.(key, folder?.path); }
     catch (error) { console.error(`spex: exports of ${key} were not removed: ${error instanceof Error ? error.message : String(error)}`); }
-    if (clone !== undefined && aside !== undefined) {
+    if (aside) {
       for (const [id, location] of [...this.sessionLocations]) if (location === key) { this.dropSession(id); this.sessionLocations.delete(id); }
       this.repositories.delete(key);
       // A deferred clone removed waits for no move (DR-127).
       this.settleDeferred([key]);
-      // Deleting what was set aside is garbage collection: the project
-      // stands removed whatever it meets.
-      try { removeTree(aside); }
-      catch (error) { console.error(`spex: ${key} is removed, but its records set aside at ${aside} could not be deleted: ${error instanceof Error ? error.message : String(error)}`); }
+      discardTree(aside, `the records of the removed ${key}`);
     }
     return true;
   }

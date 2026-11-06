@@ -858,8 +858,7 @@ playbooks:
     scratch, config, git, bareRepo, otherDevice, gitFolder, sameNameFolder, addFolder, sleepingSsh, holdingGit, sleep, sleeperPid, joinRemote, hangingCompileSpawner, COMPILE_INPUT, startHome, startHost, signIn, signOut, forget, runTurn, snapshot, peerClone, peerPush, attachByHand, turnRecords,
     dispose: async () => {
       await Promise.all(hosts.map((host) => host.close()));
-      // Its clones and bare repositories hold Git's read-only objects,
-      // which only removeTree removes on Windows.
+      // Its clones and bare repositories hold Git's read-only objects.
       removeTree(scratch);
     },
   };

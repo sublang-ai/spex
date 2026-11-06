@@ -6,7 +6,7 @@
 // common ancestor, the validated application of a selection, the
 // managed Git rules, and a clone's first commit.
 
-import { makePrivateDirectory, removeTree } from "@sublang/spex/files";
+import { discardTree, makePrivateDirectory } from "@sublang/spex/files";
 import { execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
@@ -878,12 +878,9 @@ export function initializeClone(dir: string, options: { env?: NodeJS.ProcessEnv;
     git(dir, [...committerArgsSync(dir, env), "commit", "-q", "--allow-empty", "-m", options.message ?? `${SET_UP_SUBJECT}${hostname()}`], env);
     if (options.generatedBootstrap) git(dir, ["config", "--local", "spex.bootstrap", git(dir, ["rev-parse", "HEAD"], env).toString("utf8").trim()], env);
   } catch (error) {
-    // The clone is left a plain folder, as before the set-up: the `.git`
-    // it made holds Git's read-only objects once anything was added,
-    // which only removeTree removes on Windows, and the set-up's own
-    // cause is reported, never its rollback's (storage-6).
-    try { removeTree(join(dir, ".git")); }
-    catch (cleanup) { console.error(`spex: the .git of ${dir}, whose set-up failed, could not be removed: ${cleanup instanceof Error ? cleanup.message : String(cleanup)}`); }
+    // The clone is left a plain folder, as before the set-up, and the
+    // set-up's own cause is reported (storage-6).
+    discardTree(join(dir, ".git"), "the .git of a failed set-up");
     throw error;
   } finally { process.umask(previous); }
   return true;

@@ -233,8 +233,13 @@ export class Home {
 
   unpair(key: string): boolean {
     const before = this.data.folders.length;
-    this.data = { ...this.data, folders: this.data.folders.filter((folder) => folder.repository !== key) };
+    this.data = this.unpaired(key);
     return this.data.folders.length !== before;
+  }
+
+  /** This home with no pair naming `key`. */
+  private unpaired(key: string): HomeFile {
+    return { ...this.data, folders: this.data.folders.filter((folder) => folder.repository !== key) };
   }
 
   /** A clone moved: every pair naming the old key names the new one. */
@@ -254,20 +259,16 @@ export class Home {
     this.data = this.moved(moves, own);
   }
 
-  /** `move`, written to `home.yaml` in the same step: a write that
-   * fails leaves this home as it was, unless the file already holds the
-   * new text, which is then taken (space-59, space-60). */
+  /** `move`, written to `home.yaml` in the same step (space-59,
+   * space-60), as `saveNext` writes. */
   moveAndSave(moves: { from: string; to: string }[], own?: string): void {
     this.saveNext(this.moved(moves, own));
   }
 
-  /** `unpair`, written to `home.yaml` in the same step, as `moveAndSave`
-   * writes: a write that fails leaves this home and its pair as they
-   * were (projects-10). */
+  /** `unpair`, written to `home.yaml` in the same step (projects-10), as
+   * `saveNext` writes. */
   unpairAndSave(key: string): void {
-    const next: HomeFile = { ...this.data, folders: this.data.folders.filter((folder) => folder.repository !== key) };
-    parseHomeFile(next, Home.file(this.root));
-    this.saveNext(next);
+    this.saveNext(this.unpaired(key));
   }
 
   /** Write `next` to `home.yaml`, then take it: a write that fails

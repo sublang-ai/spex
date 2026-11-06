@@ -272,16 +272,13 @@ export const portable = (file: string): boolean =>
   !/\.(hints|spex)\.json$|(?<!^spex)\.lock(?:\.|\/|$)|\.tmp$|\.bak(?:\.|$)|\.backup(?:\.|$)/.test(file);
 
 /** Remove a file or a tree as `rmSync` with `recursive` and `force`
- * does, read-only files included, following no link (environments-7):
- * a symbolic link or a Windows junction is removed itself, its target
- * left as it stands. On Windows the tree is walked here, each file and
- * link unlinked and each folder removed once empty, because the Node
- * the app's Electron ships removes neither in `rmSync`: it refuses a
- * read-only file, and it follows a junction, emptying its target — a
- * playbook artifact's engine links among them. Unlinking a read-only
- * file clears its read-only mark first, which on Windows every hard
- * link of the file shares. Returns whether any read-only file was
- * removed so. */
+ * does, read-only files included, following no link: a link or Windows
+ * junction goes itself, its target untouched (environments-7). On
+ * Windows the Node the app's Electron ships refuses read-only files in
+ * `rmSync` and empties a junction's target, so the tree is walked here
+ * with `unlinkSync`, which clears a read-only mark — shared by every
+ * hard link of the file — and `rmdirSync`. Returns whether a read-only
+ * file was removed so. */
 export function removeTree(path: string): boolean {
   if (process.platform !== "win32") {
     rmSync(path, { recursive: true, force: true });
@@ -290,25 +287,32 @@ export function removeTree(path: string): boolean {
   return removeEntry(path);
 }
 
+/** `removeTree` for garbage — a stage, or what a removal set aside —
+ * whose failure is said on the console, never in place of the outcome
+ * of the work that made it. */
+export function discardTree(path: string, what: string): void {
+  try { removeTree(path); }
+  catch (error) { console.error(`spex: ${what} could not be removed at ${path}: ${error instanceof Error ? error.message : String(error)}`); }
+}
+
 /** Remove one entry beneath a Windows tree; whether a read-only file
- * was among what it removed. An entry gone meanwhile is removed. */
+ * was among what it removed. An entry gone meanwhile counts as removed. */
 function removeEntry(path: string): boolean {
-  let stat: Stats;
-  try { stat = lstatSync(path); }
-  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return false; throw error; }
-  if (stat.isDirectory() && !stat.isSymbolicLink()) {
+  const stat = gone(() => lstatSync(path));
+  if (!stat) return false;
+  // A link or junction reads as a link, never as a folder.
+  if (stat.isDirectory()) {
     let unmarked = false;
     for (const name of readdirSync(path)) if (removeEntry(join(path, name))) unmarked = true;
     gone(() => rmdirSync(path));
     return unmarked;
   }
-  // A file, or a link or junction, never what it points to.
   gone(() => unlinkSync(path));
   return !stat.isSymbolicLink() && (stat.mode & 0o200) === 0;
 }
 
-/** Run a removal, an entry already gone counting as removed. */
-function gone(remove: () => void): void {
-  try { remove(); }
-  catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+/** Run a step on an entry, undefined where the entry is gone. */
+function gone<T>(step: () => T): T | undefined {
+  try { return step(); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; return undefined; }
 }
