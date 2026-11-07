@@ -36,7 +36,7 @@ import {
   type ProjectFile, type StorageDiagnostic,
 } from "./app-storage.js";
 import { occupied } from "./clone-moves.js";
-import { makePrivateDirectory, readJsonFile, StorageFormatError, VersionConflictError, writeApplicationFile } from "@sublang/spex/files";
+import { discardTree, makePrivateDirectory, readJsonFile, removeTree, StorageFormatError, VersionConflictError, writeApplicationFile } from "@sublang/spex/files";
 import { defaultOwnName, Home, repositoryNameFor, splitKey, WORKSPACE_DEPTH } from "./home.js";
 import { filedIn, formerPlacementPrefKey, PLACEMENT_PREF_KINDS, placementPrefKey, readPlacementFiles, readPlacements, type PlacementPrefKind } from "./placements.js";
 import { folderRemote, needsGroupsMigration, migrateFormerHome } from "./migrate-home.js";
@@ -333,6 +333,18 @@ function readAgentSettings(value: unknown): SessionAgentSettings | undefined {
   return Object.keys(entry).length > 0 ? entry : undefined;
 }
 
+/** A clone's rename to set it aside refused on Windows while a file or
+ * folder in it is held open — the one refusal of a removal worth trying
+ * again once the holder lets go (projects-10). */
+export class CloneHeldError extends Error {
+  readonly code: string | undefined;
+  constructor(cause: NodeJS.ErrnoException) {
+    super(cause.message, { cause });
+    this.name = "CloneHeldError";
+    this.code = cause.code;
+  }
+}
+
 /** Atomic whole-file replace: a reader never sees a torn file. */
 function writeAtomic(file: string, text: string): void {
   const tmp = `${file}.tmp`;
@@ -557,7 +569,7 @@ export class Store {
       this.openHome();
     } catch (error) {
       this.releaseRootLease();
-      if (this.scratch) rmSync(this.dir, { recursive: true, force: true });
+      if (this.scratch) removeTree(this.dir);
       throw error;
     }
   }
@@ -738,7 +750,7 @@ export class Store {
     return instanceOfClone(this.home, this.deferredMoves(), key, () => remoteName);
   }
 
-  /** Called before a project's pair is forgotten, with its working
+  /** Called once a project's pair is forgotten, with its working
    * folder: what exports wrote there is removed (environments-8). */
   onProjectRemoving?: (key: string, folder: string | undefined) => void;
 
@@ -1600,7 +1612,8 @@ export class Store {
 
   close(): void {
     this.releaseRootLease();
-    if (this.scratch) rmSync(this.dir, { recursive: true, force: true });
+    // A scratch home's clones hold Git's read-only objects.
+    if (this.scratch) removeTree(this.dir);
   }
 
   // -- projects (projects-10, storage-6) ------------------------------------
@@ -1786,22 +1799,52 @@ export class Store {
     this.prepareSessionDirs();
   }
 
-  /** Forget the pair and delete the clone (projects-9, projects-10); the
-   * working folder stays as it is. */
+  /** Forget the pair and delete the clone, all or nothing (projects-9,
+   * projects-10): the clone is set aside to a hidden `.removed-<uuid>`
+   * first, the pair forgotten next — the clone put back where that write
+   * fails — and what was set aside deleted as garbage. The working folder
+   * stays as it is. The caller releases what it holds open in the clone
+   * before. */
   removeProject(key: string): boolean {
     this.assertProjectsWritable();
     const folder = this.homeFile.folderOf(key);
     const repository = this.repository(key);
     if (!folder && !repository) return false;
+    const clone = repository && key !== this.homeFile.own() ? repository.dir : undefined;
+    const aside = clone && join(dirname(clone), `.removed-${randomUUID()}`);
+    if (clone && aside) {
+      try { renameSync(clone, aside); }
+      catch (error) {
+        const { code } = error as NodeJS.ErrnoException;
+        if (process.platform === "win32" && (code === "EBUSY" || code === "EPERM")) throw new CloneHeldError(error as NodeJS.ErrnoException);
+        throw error;
+      }
+    }
+    if (folder) {
+      try { this.homeFile.unpairAndSave(key); }
+      catch (error) {
+        if (clone && aside) {
+          try { renameSync(aside, clone); }
+          catch (back) { console.error(`spex: the records of ${key}, set aside at ${aside}, did not move back: ${back instanceof Error ? back.message : String(back)}`); }
+        }
+        throw error;
+      }
+    }
     try { this.onProjectRemoving?.(key, folder?.path); }
     catch (error) { console.error(`spex: exports of ${key} were not removed: ${error instanceof Error ? error.message : String(error)}`); }
-    if (folder) { this.homeFile.unpair(key); this.saveHome(); }
-    if (repository && key !== this.homeFile.own()) {
-      for (const [id, location] of [...this.sessionLocations]) if (location === key) { this.dropSession(id); this.sessionLocations.delete(id); }
-      rmSync(repository.dir, { recursive: true, force: true });
+    if (aside) {
+      // The removal has committed: what follows is cleanup, whose
+      // failures are said on the console, the project removed.
+      for (const [id, location] of [...this.sessionLocations]) {
+        if (location !== key) continue;
+        this.sessionLocations.delete(id);
+        try { this.dropSession(id); }
+        catch (error) { console.error(`spex: the preferences of session ${id} of the removed ${key} were not cleared: ${error instanceof Error ? error.message : String(error)}`); }
+      }
       this.repositories.delete(key);
       // A deferred clone removed waits for no move (DR-127).
       this.settleDeferred([key]);
+      discardTree(aside, `the records of the removed ${key}`);
     }
     return true;
   }

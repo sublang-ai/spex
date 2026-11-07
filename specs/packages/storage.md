@@ -164,6 +164,7 @@ When a working folder is added, the core shall pair it with a spex repository an
 
 - a folder already paired selects its existing pair; a folder inside another working folder below its top level is refused;
 - the clone's `project.json` is written with the folder's remote [[storage-3](#storage-3)], its `spex` branch created with the first commit on this device where the repository is new, and, where the working folder holds no `spex.yaml`, its environment is written at the folder's root with `space` and its `registry` alone, requesting nothing [[environments-11](environments.md#environments-11)] [[environments-26](environments.md#environments-26)] ([DR-176](../decisions/176-global-playbooks-and-a-placed-playbook-runs.md)), a folder holding one being installed from it [[environments-7](environments.md#environments-7)];
+- a first commit that fails leaves the clone a plain folder, the `.git` it made removed on every platform, Windows included, Git's read-only objects among its files, and records a diagnostic naming the failure's own cause, a removal failing recorded beside it;
 - a session is a project's by the clone that holds it, never by matching its working directory; its recorded working directory decides only where it may continue [[core-service-73](core-service.md#core-service-73)];
 - the rename of your own group's folder at sign-in [[space-59](space.md#space-59)] and a rename or transfer the host reports of the clone's first placement [[space-60](space.md#space-60)] move the clone and rewrite every pair naming it in one step.
 
@@ -614,6 +615,10 @@ Where CI runs on Windows, the integration suite shall verify real Windows storag
 - beneath a folder granting every principal read access, the home's root and `local/` a real core creates, a file the store writes owner-only there, and `local/` a store, or a migration of a former home, creates first in an existing home granting every principal read access, grant only the current user, LocalSystem and built-in Administrators [[storage-57](#storage-57)];
 - a home granting every principal read access before a real core starts, and one granted it while the core runs, admit the start, the core's writes and a restart [[storage-57](#storage-57)];
 - a lease owner record granting another principal read access is read, and one granting another principal write access is malformed and refuses [[storage-57](#storage-57)] [[storage-26](#storage-26)].
+
+### storage-59
+
+When the integration suite makes a scratch clone a repository whose first commit fails after Git stored its files, on every platform and on Windows on the Node the app ships, it shall assert that the clone is left a plain folder with no `.git`, its files standing, and that the failure reported is the commit's own [[storage-6](#storage-6)].
 
 ## References
 

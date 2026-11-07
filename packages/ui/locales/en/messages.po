@@ -621,10 +621,6 @@ msgstr "{playbookId} state machine, {state} active"
 msgid "{player} · {step} · {span}"
 msgstr "{player} · {step} · {span}"
 
-#: src/components/ProjectsSurface.tsx
-msgid "{reason} Remove anyway?"
-msgstr "{reason} Remove anyway?"
-
 #. a read-only placement's line after a sync: how many records came back; nothing was sent, the Space letting this account only read
 #. a read-only project's Sync tab after a sync: how many records came back; nothing was sent, the Space letting this account only read
 #: src/components/SpaceSync.tsx

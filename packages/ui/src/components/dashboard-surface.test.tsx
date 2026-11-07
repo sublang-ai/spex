@@ -3438,10 +3438,9 @@ describe("projects-4/6/9, forge-work-lists-1: the Overview tab", () => {
   });
 
   test("a clone holding what has not reached the host asks a second confirmation naming the count (projects-9)", async () => {
-    const unsent = "3 local changes have not reached the host.";
     commandMock.mockImplementation(async (type: string, fields?: { confirm?: boolean }) => {
       if (type === "project.remove") {
-        if (!fields?.confirm) throw new SpexCommandError("conflict", unsent);
+        if (!fields?.confirm) throw new SpexCommandError("conflict", "3 records never reached a Space.", { units: 3 });
         return null;
       }
       if (type === "project.list") return [PROJECTS[1]];
@@ -3470,8 +3469,7 @@ describe("projects-4/6/9, forge-work-lists-1: the Overview tab", () => {
     expect(callsOf("project.remove")).toEqual([{ projectId: "me/alpha-spex" }]);
     expect(onRemoved).not.toHaveBeenCalled();
     const second = screen.getByTestId("remove-project-unsent");
-    expect(second.textContent).toContain(unsent);
-    expect(second.textContent).toContain("Remove anyway?");
+    expect(second.textContent).toContain("3 records never reached a Space. Remove anyway?");
     // Keep backs out of the second confirm with nothing removed, focus
     // back on the control (DR-010 §6).
     fireEvent.click(within(second).getByRole("button", { name: "Keep" }));
@@ -3498,6 +3496,36 @@ describe("projects-4/6/9, forge-work-lists-1: the Overview tab", () => {
       { projectId: "me/alpha-spex", confirm: true },
     ]);
     expect(onRemoved).toHaveBeenCalledTimes(1);
+  });
+
+  test("a removal refused as a conflict counting no unsent records reads as a refusal to retry, never as the second confirmation (projects-9)", async () => {
+    const changed = "The records of alpha changed meanwhile — Retry";
+    commandMock.mockImplementation(async (type: string) => {
+      if (type === "project.remove") throw new SpexCommandError("conflict", changed);
+      if (type === "project.list") return [PROJECTS[0], PROJECTS[1]];
+      if (type === "ledger.get") return useAppStore.getState().ledger;
+      if (type === "ledger.history") return { intents: [], more: false };
+      return {};
+    });
+    seed();
+    const onRemoved = vi.fn();
+    render(
+      <OverviewTab
+        projectId="me/alpha-spex"
+        onRemoved={onRemoved}
+        onOpenSession={vi.fn()}
+        onOpenIntent={vi.fn()}
+        onStartIntent={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Remove project" }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    });
+    expect(screen.queryByTestId("remove-project-unsent")).toBeNull();
+    expect(document.body.textContent).toContain(changed);
+    expect(onRemoved).not.toHaveBeenCalled();
+    expect(callsOf("project.remove")).toEqual([{ projectId: "me/alpha-spex" }]);
   });
 
   test("GitHub setup guidance names the unmet condition inside the Sources band (projects-7)", () => {

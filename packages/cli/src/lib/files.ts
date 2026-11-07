@@ -8,7 +8,7 @@
 // the device. Their words are the host's (words.ts).
 
 import { createHash, randomUUID } from "node:crypto";
-import { chmodSync, closeSync, fchmodSync, fsyncSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync, type Stats } from "node:fs";
+import { closeSync, fchmodSync, fsyncSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, unlinkSync, writeFileSync, type Stats } from "node:fs";
 import { readOwnerAndDacl } from "@openclaw/fs-safe/permissions";
 import { createDirectorySync, createFileSync, assertNoSymlinkParentsSync } from "@openclaw/fs-safe/advanced";
 import { dirname, isAbsolute, join, parse, posix, resolve, win32 } from "node:path";
@@ -272,35 +272,47 @@ export const portable = (file: string): boolean =>
   !/\.(hints|spex)\.json$|(?<!^spex)\.lock(?:\.|\/|$)|\.tmp$|\.bak(?:\.|$)|\.backup(?:\.|$)/.test(file);
 
 /** Remove a file or a tree as `rmSync` with `recursive` and `force`
- * does, read-only files included (environments-7). Where Windows refuses
- * with `EPERM` — Node 24's `rmSync` no longer clears the read-only mark —
- * every read-only file it holds is made writable and the removal tried
- * once more; links are not followed, and no folder's mode changes.
- * Returns whether any file was made writable. */
+ * does, read-only files included, following no link: a link or Windows
+ * junction goes itself, its target untouched (environments-7). On
+ * Windows the Node the app's Electron ships refuses read-only files in
+ * `rmSync` and empties a junction's target, so the tree is walked here
+ * with `unlinkSync`, which clears a read-only mark — shared by every
+ * hard link of the file — and `rmdirSync`. Returns whether a read-only
+ * file was removed so. */
 export function removeTree(path: string): boolean {
-  try {
+  if (process.platform !== "win32") {
     rmSync(path, { recursive: true, force: true });
     return false;
-  } catch (error) {
-    if (process.platform !== "win32" || (error as NodeJS.ErrnoException).code !== "EPERM" || !makeFilesWritable(path)) throw error;
   }
-  rmSync(path, { recursive: true, force: true });
-  return true;
+  return removeEntry(path);
 }
 
-/** Make every read-only file under `path` writable; whether any was. */
-function makeFilesWritable(path: string): boolean {
-  let stat: Stats;
-  try { stat = lstatSync(path); } catch { return false; }
-  if (stat.isSymbolicLink()) return false;
+/** `removeTree` for garbage — a stage, or what a removal set aside —
+ * whose failure is said on the console, never in place of the outcome
+ * of the work that made it. */
+export function discardTree(path: string, what: string): void {
+  try { removeTree(path); }
+  catch (error) { console.error(`spex: ${what} could not be removed at ${path}: ${error instanceof Error ? error.message : String(error)}`); }
+}
+
+/** Remove one entry beneath a Windows tree; whether a read-only file
+ * was among what it removed. An entry gone meanwhile counts as removed. */
+function removeEntry(path: string): boolean {
+  const stat = gone(() => lstatSync(path));
+  if (!stat) return false;
+  // A link or junction reads as a link, never as a folder.
   if (stat.isDirectory()) {
-    let names: string[];
-    try { names = readdirSync(path); } catch { return false; }
-    let changed = false;
-    for (const name of names) if (makeFilesWritable(join(path, name))) changed = true;
-    return changed;
+    let unmarked = false;
+    for (const name of readdirSync(path)) if (removeEntry(join(path, name))) unmarked = true;
+    gone(() => rmdirSync(path));
+    return unmarked;
   }
-  if ((stat.mode & 0o200) !== 0) return false;
-  chmodSync(path, (stat.mode & 0o777) | 0o200);
-  return true;
+  gone(() => unlinkSync(path));
+  return !stat.isSymbolicLink() && (stat.mode & 0o200) === 0;
+}
+
+/** Run a step on an entry, undefined where the entry is gone. */
+function gone<T>(step: () => T): T | undefined {
+  try { return step(); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; return undefined; }
 }

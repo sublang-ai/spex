@@ -19,6 +19,7 @@ import { fakeAdapterImports } from "./fake-adapter.js";
 import { createScriptedCaptain } from "./scripted-captain.js";
 import { startStandinHost, type StandinHost, type StandinPerson } from "./standin-host.js";
 import type { StandinRegistry } from "@sublang/spex/testing";
+import { removeTree } from "@sublang/spex/files";
 import { canonicalOrigin, instanceFolder, instanceSegmentOf } from "@sublang/spex/instance";
 import { encodePlacementFile, PLACEMENTS_DIR } from "../placements.js";
 import type { LineSpawner } from "../compile.js";
@@ -857,7 +858,8 @@ playbooks:
     scratch, config, git, bareRepo, otherDevice, gitFolder, sameNameFolder, addFolder, sleepingSsh, holdingGit, sleep, sleeperPid, joinRemote, hangingCompileSpawner, COMPILE_INPUT, startHome, startHost, signIn, signOut, forget, runTurn, snapshot, peerClone, peerPush, attachByHand, turnRecords,
     dispose: async () => {
       await Promise.all(hosts.map((host) => host.close()));
-      rmSync(scratch, { recursive: true, force: true });
+      // Its clones and bare repositories hold Git's read-only objects.
+      removeTree(scratch);
     },
   };
 }

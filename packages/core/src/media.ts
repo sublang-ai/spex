@@ -9,7 +9,7 @@ import { closeSync, constants, copyFileSync, fstatSync, fsyncSync, linkSync, lst
 import { lstat, mkdir, readdir, rm, rmdir, unlink } from "node:fs/promises";
 import { createAssetStore, type AssetReader, type OwnerAssetStore } from "@sublang/playbook/session-assets";
 import { i18n } from "./i18n.js";
-import { MEDIA_CHUNK_BYTES, MEDIA_MAX_FILE_BYTES, mediaOwnerKey, mediaOwnerSchema, type MediaAsset, type MediaOwner, type MediaUploadOwner } from "./protocol.js";
+import { MEDIA_CHUNK_BYTES, MEDIA_MAX_FILE_BYTES, mediaOwnerKey, mediaOwnerRepository, mediaOwnerSchema, type MediaAsset, type MediaOwner, type MediaUploadOwner } from "./protocol.js";
 import { MediaTransferError, MediaTransfers, type UploadHold, type UploadRequest } from "./media-transfers.js";
 
 export interface ApplicationMediaOptions {
@@ -23,10 +23,14 @@ export interface ApplicationMediaOptions {
   rootOf(owner: MediaUploadOwner): string;
   /** Session storage remains entirely behind the shared Playbook facade. */
   openSessionAsset(sessionId: string, assetId: MediaAsset["assetId"]): Promise<AssetReader>;
+  /** The spex repository a session lies in, where it stands. */
+  repositoryOfSession?(sessionId: string): string | undefined;
 }
 
 interface ReaderEntry {
   ownerKey: string;
+  /** The spex repository whose clone holds the file the reader has open. */
+  repository: string | undefined;
   closing?: Promise<void>;
   opened: Promise<AssetReader>;
   tail: Promise<void>;
@@ -247,22 +251,47 @@ export class ApplicationMedia {
     );
   }
 
-  /** Remove an owner (media-17): its upload identities invalidated and
-   * its readers closed at this instant, then `remove` runs, `assert`
-   * first repeating the removal's own refusals. Nothing is drained: an
-   * upload still publishing finds its owner gone and is refused. */
+  /** Remove an owner (media-17, media-20): `assert` first repeating the
+   * removal's own refusals, then its cached readers closed — a project's
+   * with those of every owner within its clone, as on Windows an open
+   * reader holds the clone where it lies — and `remove` run. Its
+   * upload identities are invalidated once the owner no longer stands:
+   * after a removal, and after one that failed past removing it, while
+   * one the owner refused at either step leaves them resumable. Nothing
+   * is drained: an upload still publishing finds its owner gone and is
+   * refused. */
   async retireOwner<T>(owner: MediaOwner, remove: () => T | Promise<T>, assert?: () => void): Promise<T> {
     mediaOwnerSchema.parse(owner);
     const key = mediaOwnerKey(owner);
     assert?.();
-    if (owner.kind !== "session") {
-      void this.uploads.retireOwner(owner).catch((error: unknown) => {
+    // An upload owner's folder, read while the owner still stands.
+    const uploads = owner.kind === "session" ? undefined : { owner, directory: this.ownerDirectory(owner) };
+    const retire = (): void => {
+      if (!uploads) return;
+      void this.uploads.retireOwner(uploads.owner).catch((error: unknown) => {
         console.error(`spex: upload staging of ${key} was not removed: ${error instanceof Error ? error.message : String(error)}`);
       });
-      this.prepared.delete(this.ownerDirectory(owner));
+      this.prepared.delete(uploads.directory);
+    };
+    for (const [name, entry] of [...this.readers]) {
+      if (entry.ownerKey === key || (owner.kind === "project" && entry.repository === owner.id)) void this.release(name, entry);
     }
-    for (const [name, entry] of [...this.readers]) if (name.startsWith(`${key}:`)) void this.release(name, entry);
-    return await remove();
+    let removed: T;
+    try {
+      const running = remove();
+      removed = running instanceof Promise ? await running : running;
+    } catch (error) {
+      if (!this.stands(owner)) retire();
+      throw error;
+    }
+    retire();
+    return removed;
+  }
+
+  /** Whether an owner stands now, as an upload's admission reads it. */
+  private stands(owner: MediaOwner): boolean {
+    try { this.options.assertOwner(owner, false); return true; }
+    catch { return false; }
   }
 
   private ownerDirectory(owner: MediaUploadOwner): string {
@@ -337,6 +366,7 @@ export class ApplicationMedia {
         this.options.assertOwner(owner, false);
         entry = {
           ownerKey: mediaOwnerKey(owner),
+          repository: owner.kind === "session" ? this.options.repositoryOfSession?.(owner.id) : mediaOwnerRepository(owner),
           opened: owner.kind === "session"
             ? this.options.openSessionAsset(owner.id, assetId)
             : this.openOwnerAsset(owner, assetId),

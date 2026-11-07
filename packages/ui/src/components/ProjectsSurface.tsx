@@ -191,9 +191,8 @@ export function OverviewTab({
   const [confirmRemove, setConfirmRemove] = useState(false);
   // The second confirm (projects-9): the core refused the first with
   // `conflict`, counting the records that never reached a Space; the
-  // count rides the question so the reader sees what would be lost, the
-  // core's words where it carries none.
-  const [unsent, setUnsent] = useState<{ count?: number; reason: string }>();
+  // count rides the question so the reader sees what would be lost.
+  const [unsent, setUnsent] = useState<{ count: number }>();
   const removeRef = useRef<HTMLButtonElement>(null);
   const returnToRemove = useRef(false);
   // Keep — or a failed removal — hands focus back to the control the
@@ -216,9 +215,12 @@ export function OverviewTab({
         focusDashboardEntry();
       })
       .catch((cause: Error & { code?: string; details?: Record<string, unknown> }) => {
-        if (!confirm && cause.code === "conflict") {
-          const units = cause.details?.units;
-          setUnsent({ reason: cause.message, ...(typeof units === "number" ? { count: units } : {}) });
+        // Only the count of unsent records asks the second confirm; any
+        // other conflict — the records changed meanwhile — reads as a
+        // refusal to retry.
+        const units = cause.details?.units;
+        if (!confirm && cause.code === "conflict" && typeof units === "number") {
+          setUnsent({ count: units });
           return;
         }
         returnToRemove.current = true;
@@ -285,15 +287,11 @@ export function OverviewTab({
         {unsent !== undefined ? (
           <span data-testid="remove-project-unsent">
             <InlineConfirm
-              question={
-                unsent.count !== undefined
-                  ? i18n._({
-                      id: "{count, plural, one {# record never reached a Space. Remove anyway?} other {# records never reached a Space. Remove anyway?}}",
-                      values: { count: unsent.count },
-                      comment: "the Overview's second confirm of a removal: how many of the project's records were never sent to any Space",
-                    })
-                  : i18n._("{reason} Remove anyway?", { reason: unsent.reason })
-              }
+              question={i18n._({
+                id: "{count, plural, one {# record never reached a Space. Remove anyway?} other {# records never reached a Space. Remove anyway?}}",
+                values: { count: unsent.count },
+                comment: "the Overview's second confirm of a removal: how many of the project's records were never sent to any Space",
+              })}
               confirmLabel={i18n._({
                 id: "Remove",
                 comment: "confirm: forget this project, leaving the repo on disk",

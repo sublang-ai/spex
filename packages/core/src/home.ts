@@ -11,7 +11,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
-import { closed, isLocalPath, isObject, isRecordedPath, need, StorageFormatError, writeApplicationBytes } from "@sublang/spex/files";
+import { closed, isLocalPath, isObject, isRecordedPath, need, sha256, StorageFormatError, writeApplicationBytes, writePrivateVersionedBytes } from "@sublang/spex/files";
 import {
   accountAt, CLIENT_ID, defaultInstanceOf, defaultOwnName, HOME_FILE, instanceAt, instanceByFolder, instanceOfKey,
   InstanceRefused, invalidHome, isGroupName, kebab, newHomeFile, notAnOrigin, parseHomeFile as parseHomeEntries, parseHomeText,
@@ -233,8 +233,13 @@ export class Home {
 
   unpair(key: string): boolean {
     const before = this.data.folders.length;
-    this.data = { ...this.data, folders: this.data.folders.filter((folder) => folder.repository !== key) };
+    this.data = this.unpaired(key);
     return this.data.folders.length !== before;
+  }
+
+  /** This home with no pair naming `key`. */
+  private unpaired(key: string): HomeFile {
+    return { ...this.data, folders: this.data.folders.filter((folder) => folder.repository !== key) };
   }
 
   /** A clone moved: every pair naming the old key names the new one. */
@@ -254,13 +259,25 @@ export class Home {
     this.data = this.moved(moves, own);
   }
 
-  /** `move`, written to `home.yaml` in the same step: a write that
-   * fails leaves this home as it was, unless the file already holds the
-   * new text, which is then taken (space-59, space-60). */
+  /** `move`, written to `home.yaml` in the same step (space-59,
+   * space-60), as `saveNext` writes. */
   moveAndSave(moves: { from: string; to: string }[], own?: string): void {
-    const next = this.moved(moves, own);
+    this.saveNext(this.moved(moves, own));
+  }
+
+  /** `unpair`, written to `home.yaml` in the same step (projects-10), as
+   * `saveNext` writes. */
+  unpairAndSave(key: string): void {
+    this.saveNext(this.unpaired(key));
+  }
+
+  /** Write `next` to `home.yaml` under the version this home read
+   * (storage-2, DR-111), then take it: a write that fails, or finds the
+   * file changed since, leaves this home as it was, unless the file
+   * already holds the new text, which is then taken. */
+  private saveNext(next: HomeFile): void {
     const text = stringifyYaml(next);
-    try { writeApplicationBytes(Home.file(this.root), text); }
+    try { writePrivateVersionedBytes(Home.file(this.root), text, this.text === undefined ? null : sha256(this.text)); }
     catch (error) {
       if (!this.holds(text)) throw error;
       console.error(`spex: home.yaml was written, but not synced: ${error instanceof Error ? error.message : String(error)}`);
