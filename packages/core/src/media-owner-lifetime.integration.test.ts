@@ -261,6 +261,10 @@ test("media-18: a removal its owner refuses invalidates nothing, so in-flight up
     }, assertDeletable), /a compile is running/);
     assert.equal(removed, false);
     assert.equal((await media.begin(inFlight)).offset, 4);
+    // Refused at its own step, as a clone held open on Windows refuses
+    // being set aside: the upload resumes alike.
+    await assert.rejects(media.retireOwner(owner, () => { throw new Error("EPERM: operation not permitted, rename"); }), /EPERM/);
+    assert.equal((await media.begin(inFlight)).offset, 4, "a removal refused at its own step invalidates nothing");
     await media.uploads.chunk(inFlight.uploadId, 4, Buffer.from("more").toString("base64"));
     const done = await media.uploads.finish(inFlight.uploadId);
     assert.equal((await media.read(owner, done.asset.assetId, 0, 8)).data, Buffer.from("halfmore").toString("base64"));

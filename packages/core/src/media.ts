@@ -247,22 +247,29 @@ export class ApplicationMedia {
     );
   }
 
-  /** Remove an owner (media-17): its upload identities invalidated and
-   * its readers closed at this instant, then `remove` runs, `assert`
-   * first repeating the removal's own refusals. Nothing is drained: an
-   * upload still publishing finds its owner gone and is refused. */
+  /** Remove an owner (media-17, media-20): `assert` first repeating the
+   * removal's own refusals, then its cached readers closed — on Windows
+   * an open reader holds its clone where it lies — and `remove` run, its
+   * upload identities invalidated only once that removed the owner, so a
+   * removal refused at either step leaves them resumable. Nothing is
+   * drained: an upload still publishing finds its owner gone and is
+   * refused. */
   async retireOwner<T>(owner: MediaOwner, remove: () => T | Promise<T>, assert?: () => void): Promise<T> {
     mediaOwnerSchema.parse(owner);
     const key = mediaOwnerKey(owner);
     assert?.();
-    if (owner.kind !== "session") {
-      void this.uploads.retireOwner(owner).catch((error: unknown) => {
+    // An upload owner's folder, read while the owner still stands.
+    const uploads = owner.kind === "session" ? undefined : { owner, directory: this.ownerDirectory(owner) };
+    for (const [name, entry] of [...this.readers]) if (name.startsWith(`${key}:`)) void this.release(name, entry);
+    const running = remove();
+    const removed = running instanceof Promise ? await running : running;
+    if (uploads) {
+      void this.uploads.retireOwner(uploads.owner).catch((error: unknown) => {
         console.error(`spex: upload staging of ${key} was not removed: ${error instanceof Error ? error.message : String(error)}`);
       });
-      this.prepared.delete(this.ownerDirectory(owner));
+      this.prepared.delete(uploads.directory);
     }
-    for (const [name, entry] of [...this.readers]) if (name.startsWith(`${key}:`)) void this.release(name, entry);
-    return await remove();
+    return removed;
   }
 
   private ownerDirectory(owner: MediaUploadOwner): string {
