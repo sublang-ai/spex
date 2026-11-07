@@ -14,6 +14,11 @@ playbooks or applets as versioned **spec packages**: find and publish
 packages on [Spex Space](https://spex.sublang.ai), and install them from
 the IDE. Space also offers optional project-record sharing and sync.
 
+<p align="center">
+  <img src="assets/social-preview.png" width="75%" alt="Spex — specs are the source">
+</p>
+
+
 ## Why Spex
 
 When programming shifts from code to specifications, four problems keep
