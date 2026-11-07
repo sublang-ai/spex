@@ -659,16 +659,25 @@ function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
 const HELD_CLONE_RETRIES = 20;
 const HELD_CLONE_RETRY_WAIT_MS = 50;
 
+/** The records a removal counted changed before it committed: counted
+ * again at its next try, `refusal` standing where no try is left
+ * (projects-10). */
+class RecordsChangedError extends Error {
+  constructor(readonly refusal: CoreError) { super(refusal.message); this.name = "RecordsChangedError"; }
+}
+
 /** Run a removal, trying it again, whole, while Windows refuses to set
- * its clone aside because something holds a file or folder in it open:
+ * its clone aside because something holds a file or folder in it open —
  * a Git child of this core, a virus scanner, or this core's own read in
- * flight, which the wait between tries lets finish. Any other refusal,
- * a failed write of `home.yaml` among them, stands at once. */
-async function retryWhileHeld<T>(attempt: () => Promise<T>): Promise<T> {
+ * flight, which the wait between tries lets finish — or while the
+ * records it counted changed before it committed. Any other refusal, a
+ * failed write of `home.yaml` among them, stands at once. */
+async function retryRemoval<T>(attempt: () => Promise<T>): Promise<T> {
   for (let retries = 0; ; retries += 1) {
     try { return await attempt(); }
     catch (error) {
-      if (!(error instanceof CloneHeldError) || retries >= HELD_CLONE_RETRIES) throw error;
+      const again = error instanceof CloneHeldError || error instanceof RecordsChangedError;
+      if (!again || retries >= HELD_CLONE_RETRIES) throw error instanceof RecordsChangedError ? error.refusal : error;
       await new Promise((resolve) => setTimeout(resolve, HELD_CLONE_RETRY_WAIT_MS));
     }
   }
@@ -1091,6 +1100,7 @@ export class CoreService {
         } else if (!this.store.describeSession(owner.id)) throw noSession(owner.id);
       },
       openSessionAsset: (sessionId, assetId) => this.store.sessionStoreFor(sessionId).openAsset(sessionId, assetId),
+      repositoryOfSession: (sessionId) => this.store.describeSession(sessionId)?.projectId,
     });
     // The core speaks before it composes its first text (core-service-111):
     // the config error a start may raise, and the readiness requirement
@@ -1383,9 +1393,14 @@ export class CoreService {
    * leases were taken, or a clone moved or replaced since. Your own
    * group's clone is never deleted.
    */
-  private async leaseClone(key: string): Promise<{ leases: { release(): Promise<unknown> }[]; check(): void }> {
+  private async leaseClone(key: string): Promise<{ leases: { release(): Promise<unknown> }[]; check(): void; changed(): CoreError }> {
     const repository = this.store.repository(key);
-    if (!repository || key === this.store.home.own()) return { leases: [], check: () => undefined };
+    const changed = (): CoreError => new CoreError("conflict", i18n._({
+      id: "The records of {name} changed meanwhile — Retry",
+      values: { name: splitKey(key).name.replace(/-spex$/i, "") || splitKey(key).name },
+      comment: "Refusal: the project's records changed between Spex's read and its write — moved, or their remote set from a terminal; {name} is the project",
+    }));
+    if (!repository || key === this.store.home.own()) return { leases: [], check: () => undefined, changed };
     const identity = (): string | undefined => {
       try { const info = statSync(repository.dir); return `${info.dev}:${info.ino}`; } catch { return undefined; }
     };
@@ -1403,11 +1418,6 @@ export class CoreService {
     };
     const clone = identity();
     const stands = (): boolean => clone !== undefined && this.store.repository(key)?.dir === repository.dir && identity() === clone;
-    const changed = (): CoreError => new CoreError("conflict", i18n._({
-      id: "The records of {name} changed meanwhile — Retry",
-      values: { name: splitKey(key).name.replace(/-spex$/i, "") || splitKey(key).name },
-      comment: "Refusal: the project's records changed between Spex's read and its write — moved, or their remote set from a terminal; {name} is the project",
-    }));
     const held: { sessionId: string; release(): Promise<unknown> }[] = [];
     try {
       for (const id of sessionIds()) {
@@ -1434,6 +1444,7 @@ export class CoreService {
         if (stands() && sessionIds().every((id) => leased.has(id))) return;
         throw changed();
       },
+      changed,
     };
   }
 
@@ -3123,9 +3134,11 @@ export class CoreService {
         // naming the count (projects-9): read before the leasing, and
         // again at each try of the removal, as work a try's wait admitted
         // counts (projects-10).
+        let counted: (() => boolean) | undefined;
         const assertNothingUnsent = async (): Promise<void> => {
           if (command.confirm === true) return;
-          const units = await this.space.pendingUnits(key);
+          const { units, stands } = await this.space.pendingUnits(key);
+          counted = stands;
           if (units > 0) {
             throw new CoreError("conflict", i18n._({
               id: "{count, plural, one {# record never reached a Space.} other {# records never reached a Space.}}",
@@ -3139,11 +3152,11 @@ export class CoreService {
         // session of the clone held under its Playbook lease — a live
         // writer's refuses it — then, with nothing awaited, the pair
         // forgotten and the clone deleted. No other work is waited for.
-        const { leases, check } = await this.leaseClone(key);
+        const { leases, check, changed } = await this.leaseClone(key);
         const removed = this.store.listSessions().filter((session) => session.projectId === key).map((session) => session.id);
         let unwatched = false;
         try {
-          await retryWhileHeld(async () => {
+          await retryRemoval(async () => {
             await assertNothingUnsent();
             // retireOwner runs the final check, then closes the project's
             // readers and runs the removal, with nothing awaited between
@@ -3163,6 +3176,9 @@ export class CoreService {
               assertProject();
               this.store.assertProjectsWritable();
               check();
+              // A record written since the count read the clone — after
+              // Git staged its snapshot — is counted again first.
+              if (counted && !counted()) throw new RecordsChangedError(changed());
             });
           });
         } catch (error) {

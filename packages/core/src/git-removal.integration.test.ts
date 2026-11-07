@@ -13,8 +13,9 @@
 // reach Git.
 
 import assert from "node:assert/strict";
+import { syncBuiltinESMExports } from "node:module";
 import { randomUUID } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, rmdirSync, statSync, watch, writeFileSync } from "node:fs";
+import fs, { appendFileSync, chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, rmdirSync, statSync, watch, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { test } from "node:test";
@@ -26,7 +27,7 @@ import { scratchDir } from "./testing/scratch.js";
 import { clonePath, createSpaceHarness, hostKey, repositoryOf } from "./testing/space-harness.js";
 
 const fixture = createSpaceHarness();
-const { git, gitFolder, bareRepo, sleep, snapshot, startHome, startHost, signIn, addFolder, turnRecords } = fixture;
+const { git, gitFolder, bareRepo, holdingGit, sleep, snapshot, startHome, startHost, signIn, addFolder, turnRecords } = fixture;
 test.after(() => fixture.dispose());
 
 /** The environment a set-up's Git runs with: no configuration of the
@@ -69,12 +70,14 @@ const leftBeside = (clone: string): string[] =>
 const paired = (dataDir: string, key: string): boolean =>
   (parseYaml(readFileSync(join(dataDir, "home.yaml"), "utf8")) as { folders: { repository: string }[] }).folders.some((folder) => folder.repository === key);
 
-/** A home whose core reads its clones' sessions and config as they
- * change, its project — the working folder `folderName`, where given —
- * registered with a local-only clone holding its first commit and,
- * unless `withSession` is false, a session another host wrote, listed. */
-async function watchedProject(name: string, folderName?: string, withSession = true): Promise<{ home: StartedHome; key: string; clone: string; session: string }> {
-  const home = await startHome(name, { extra: { watchConfig: true } });
+/** A home whose core — unless `watching` is false — reads its clones'
+ * sessions and config as they change, its project — the working folder
+ * `folderName`, where given — registered with a local-only clone holding
+ * its first commit and, unless `withSession` is false, a session another
+ * host wrote, listed. */
+async function watchedProject(name: string, options: { folderName?: string; withSession?: boolean; watching?: boolean; env?: Record<string, string> } = {}): Promise<{ home: StartedHome; key: string; clone: string; session: string }> {
+  const { folderName, withSession = true, watching = true, env } = options;
+  const home = await startHome(name, { ...(env ? { env } : {}), extra: { watchConfig: watching } });
   const folder = folderName === undefined ? home.projectDir : gitFolder(folderName);
   writeFileSync(join(folder, "README.md"), `# ${name}\n`);
   git(folder, "add", "-A");
@@ -83,7 +86,7 @@ async function watchedProject(name: string, folderName?: string, withSession = t
   assert.ok(filesOf(join(clone, ".git", "objects")).some(readOnly), "the clone's first commit stored Git's read-only objects");
   if (!withSession) return { home, key, clone, session: "" };
   const session = writeSession(clone, folder, "written by another host");
-  assert.ok(await listed(home, session), "the core read the clone's sessions as they changed");
+  assert.ok(await listed(home, session), "the core read the clone's sessions");
   return { home, key, clone, session };
 }
 
@@ -100,7 +103,7 @@ test("projects-46: a project whose clone's name runs to 225 characters is remove
   // Git for Windows takes no path past 260 characters without
   // core.longpaths, so no such clone is made there.
   if (process.platform === "win32") { t.skip("no clone of so long a name is made on Windows"); return; }
-  const { home, key, clone } = await watchedProject("git-removal-long", "p".repeat(220));
+  const { home, key, clone } = await watchedProject("git-removal-long", { folderName: "p".repeat(220) });
   t.after(() => home.stop());
   assert.equal(basename(clone).length, 225, "the clone's folder name is 225 characters long");
   assert.equal(await home.client.expectOk("project.remove", { projectId: key, confirm: true }), null, "[projects-10] its removal sets it aside under a name no longer than any clone's");
@@ -179,7 +182,7 @@ test("projects-46: on Windows a clone held open as its removal begins, let go wi
 
 test("projects-46: on Windows a record a removal's tries let in before its clone is let go asks the second confirmation, the record kept", async (t) => {
   if (process.platform !== "win32") { t.skip("no folder held open refuses a rename here"); return; }
-  const { home, key, clone } = await watchedProject("git-removal-new-record", undefined, false);
+  const { home, key, clone } = await watchedProject("git-removal-new-record", { withSession: false });
   t.after(() => home.stop());
   // Every record reached a placement: the first confirm alone removes.
   await home.client.expectOk("space.remote.set", { repository: key, url: pathToFileURL(bareRepo()).href });
@@ -203,6 +206,77 @@ test("projects-46: on Windows a record a removal's tries let in before its clone
   } finally { release(); }
   assert.ok(existsSync(join(clone, "intents", `${intent}.json`)), "[projects-10] the record stays until confirmed");
   assert.equal(paired(home.dataDir, key), true, "[projects-10] the pair stands");
+});
+
+test("projects-46: a record written after the count read the clone, before the removal commits, is counted again, asking the second confirmation", async (t) => {
+  // The count's Git snapshot held at its write-tree by a stand-in Git.
+  if (process.platform === "win32") { t.skip("the held Git is a POSIX shell script"); return; }
+  const shim = holdingGit("write-tree", { skipFirst: true });
+  t.after(() => shim.release());
+  const { home, key, clone } = await watchedProject("git-removal-recount", { withSession: false, watching: false, env: { PATH: shim.path } });
+  t.after(() => home.stop());
+  // Every record reached a placement: the first confirm alone removes.
+  await home.client.expectOk("space.remote.set", { repository: key, url: bareRepo() });
+  const from = home.client.mark();
+  await home.client.expectOk("space.sync", { repository: key });
+  await home.client.waitRepository(from, key, (repository) => repository.sync.phase === "done");
+  await sleep(500);
+  // The count before the leasing runs; the try's own is held after Git
+  // staged the clone, while an intent writes its record.
+  shim.hold();
+  const removal = home.client.command("project.remove", { projectId: key });
+  await shim.held();
+  const intent = (await home.client.expectOk("intent.queue", { projectId: key, text: "Queued after the count read the clone" })).id;
+  assert.ok(existsSync(join(clone, "intents", `${intent}.json`)), "the intent's record is written");
+  shim.release();
+  const refused = await removal;
+  assert.ok(!refused.ok, "[projects-10] the removal is refused");
+  assert.equal(refused.error.code, "conflict", "[projects-9] asking the second confirmation");
+  assert.deepEqual((refused.error as { details?: unknown }).details, { units: 1 }, "[projects-9] counting the new record");
+  assert.ok(existsSync(join(clone, "intents", `${intent}.json`)), "[projects-10] the record stays until confirmed");
+  assert.equal(paired(home.dataDir, key), true, "[projects-10] the pair stands");
+});
+
+test("projects-46: a removal whose home.yaml another writer changed once it read it is refused, the clone put back and that change standing", async (t) => {
+  const { home, key, clone } = await watchedProject("git-removal-home-edited");
+  t.after(() => home.stop());
+  // The other writer's change lands as the clone is set aside, after the
+  // core read the home file and before it publishes the unpair: node:fs
+  // is patched and its named exports synced.
+  const homeFile = join(home.dataDir, "home.yaml");
+  const original = fs.renameSync;
+  let edited = false;
+  fs.renameSync = (from: fs.PathLike, to: fs.PathLike): void => {
+    original(from, to);
+    if (!edited && basename(String(to)).startsWith(".removed-")) { edited = true; appendFileSync(homeFile, "# changed by another writer\n"); }
+  };
+  syncBuiltinESMExports();
+  let refused: Awaited<ReturnType<typeof home.client.command>>;
+  try { refused = await home.client.command("project.remove", { projectId: key, confirm: true }); }
+  finally { fs.renameSync = original; syncBuiltinESMExports(); }
+  assert.ok(edited, "the other writer's change landed while the clone was set aside");
+  assert.ok(!refused.ok, "[projects-10] the removal is refused");
+  assert.deepEqual(leftBeside(clone), [basename(clone)], "[projects-10] the clone is put back, nothing set aside");
+  assert.equal(paired(home.dataDir, key), true, "[projects-10] the pair stands");
+  assert.match(readFileSync(homeFile, "utf8"), /# changed by another writer/, "[projects-10] the other writer's change stands");
+});
+
+test("projects-46: on Windows a removal closes the cached readers of every owner within the clone, an intent's attachment among them", async (t) => {
+  if (process.platform !== "win32") { t.skip("no reader held open refuses a rename here"); return; }
+  const { home, key, clone } = await watchedProject("git-removal-reader");
+  t.after(() => home.stop());
+  // An attachment taken into an intent, then read: its reader stays open.
+  const uploadId = randomUUID();
+  await home.client.expectOk("media.begin", { owner: { kind: "project", id: key }, uploadId, name: "evidence.txt", mimeType: "text/plain", byteLength: 4 });
+  await home.client.expectOk("media.chunk", { uploadId, offset: 0, data: Buffer.from("kept").toString("base64") });
+  const { asset } = await home.client.expectOk("media.finish", { uploadId });
+  const intent = await home.client.expectOk("intent.queue", { projectId: key, text: "", attachments: [asset] });
+  for (let i = 0; i < 400 && (await home.client.expectOk("session.list", {})).some((session) => session.projectId === key && session.live); i += 1) await sleep(50);
+  const read = await home.client.expectOk("media.read", { owner: { kind: "intent", projectId: key, intentId: intent.id }, assetId: asset.assetId, offset: 0, length: 1 });
+  assert.equal(read.data, Buffer.from("k").toString("base64"), "the intent's attachment is read");
+  const removed = await home.client.command("project.remove", { projectId: key, confirm: true });
+  assert.ok(removed.ok, `[projects-10] the removal completes: ${removed.ok ? "" : removed.error.message}`);
+  assert.deepEqual(leftBeside(clone), [], "[projects-10] no clone, and nothing set aside beside it");
 });
 
 test("projects-46: a removal whose cleanup of a session's preferences fails once it has committed still completes and announces the session's removal", async (t) => {

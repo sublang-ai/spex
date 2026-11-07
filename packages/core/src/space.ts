@@ -1014,6 +1014,25 @@ function capText(text: string, maxBytes: number, maxLines: number): { text: stri
   return { text: out, lines: count, truncated };
 }
 
+/** The records of a clone as they stand on disk: each portable file's
+ * path, size and modification time, `.git` aside (storage-1). */
+function recordsStamp(dir: string): string {
+  const entries: string[] = [];
+  const walk = (current: string, rel: string): void => {
+    let names: Dirent[];
+    try { names = readdirSync(current, { withFileTypes: true }); } catch { return; }
+    for (const entry of names) {
+      const path = rel ? `${rel}/${entry.name}` : entry.name;
+      if (path === ".git") continue;
+      if (entry.isDirectory()) { walk(join(current, entry.name), path); continue; }
+      if (!portable(path)) continue;
+      try { const info = statSync(join(current, entry.name)); entries.push(`${path}\0${info.size}\0${info.mtimeMs}`); } catch { /* gone */ }
+    }
+  };
+  walk(dir, "");
+  return entries.sort().join("\n");
+}
+
 type SessionChangeSummary = { title?: string; turns: number; at?: number };
 
 /** Session side summaries a clone keeps in memory (space-33). */
@@ -2426,8 +2445,16 @@ class RepositorySync {
    * shared commit (space-12, reachedTrees) — the path placement's among
    * them — every unit where it holds none, counted without touching the
    * clone's own lists. A placement whose host its last check found
-   * holding no `spex` holds none. */
-  async pendingUnits(): Promise<number> {
+   * holding no `spex` holds none. `stands` says, at a removal's commit,
+   * whether the records counted still stand as they were before the
+   * count read them (projects-10). */
+  async pendingUnits(): Promise<{ units: number; stands: () => boolean }> {
+    const before = recordsStamp(this.dir);
+    const stands = (): boolean => recordsStamp(this.dir) === before;
+    return { units: await this.countPending(), stands };
+  }
+
+  private async countPending(): Promise<number> {
     const repo = await this.readRepository();
     if (!repo.root || repo.head === null) return 0;
     const placed: StorageTree[] = [];
@@ -8924,9 +8951,10 @@ export class SpaceManager {
     return this.machine(key).read(path);
   }
 
-  /** What removing a project would lose (projects-9). */
-  pendingUnits(key: string): Promise<number> {
-    if (!this.host.store.repository(key)) return Promise.resolve(0);
+  /** What removing a project would lose (projects-9), with whether the
+   * records counted still stand as counted. */
+  pendingUnits(key: string): Promise<{ units: number; stands: () => boolean }> {
+    if (!this.host.store.repository(key)) return Promise.resolve({ units: 0, stands: () => true });
     return this.machine(key).pendingUnits();
   }
 

@@ -31,7 +31,8 @@ function fixture(home: string) {
       directoryOf: (owner: MediaUploadOwner): string => {
         if (owner.kind === "draft") return assetsDir(home, owner.id, place.moved);
         if (owner.kind === "intent") return join(cloneOf(home, place.moved), "intents", `${owner.intentId}.assets`);
-        throw new Error("Only authoring and intent owners in this fixture");
+        if (owner.kind === "project") return join(cloneOf(home, place.moved), "assets");
+        throw new Error("Only project, authoring and intent owners in this fixture");
       },
       rootOf: () => cloneOf(home, place.moved),
     },
@@ -320,6 +321,34 @@ test("media-18: removal waits for no validation, and a validation's preparation 
     await validation;
     assert.equal(existsSync(assetsDir(home, owner.id)), false, "prepare cannot resurrect the removed owner");
   } finally { releaseAll(); await media.close(); await rm(home, {recursive: true, force: true}); }
+});
+
+test("media-18: a project's removal closes the cached readers of every owner within its clone", {timeout: 10_000}, async () => {
+  const home = await mkdtemp(join(tmpdir(), "spex-media-nested-reader-"));
+  await mkdir(cloneOf(home), {recursive: true});
+  const nested = draft("nested");
+  let closed!: () => void;
+  const closing = new Promise<void>((resolve) => { closed = resolve; });
+  class WatchedClose extends ApplicationMedia {
+    override ownerStore(owner: MediaUploadOwner, write = false) {
+      const store = super.ownerStore(owner, write);
+      return {...store, openAsset: async (...args: Parameters<typeof store.openAsset>) => {
+        const reader = await store.openAsset(...args);
+        return {...reader, close: async () => { closed(); await reader.close(); }};
+      }};
+    }
+  }
+  const {options} = fixture(home);
+  const media = new WatchedClose({...options, assertOwner() {}, async openSessionAsset() { throw new Error("No session"); }});
+  try {
+    await media.prepare();
+    const asset = await media.ownerStore(nested, true).importAsset({bytes: Buffer.from("nested"), mimeType: "text/plain", name: "nested.txt"});
+    await media.read(nested, asset.assetId, 0, 1);
+    // The project's own removal: the draft within its clone is another
+    // owner, whose open reader would hold that clone on Windows.
+    await media.retireOwner({kind: "project", id: PROJECT}, () => undefined);
+    await closing;
+  } finally { await media.close(); await rm(home, {recursive: true, force: true}); }
 });
 
 test("media-18: removal waits for no reader, closing its owner's cached readers", {timeout: 10_000}, async () => {
