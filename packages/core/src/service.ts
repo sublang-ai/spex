@@ -90,7 +90,7 @@ import { CoreError, SessionManager, assertRunsHere, currentSession, executionCon
 import { closedStats, foldConditions, foldLedger, intentTitle, queueSchedule, wasWorked } from "./ledger.js";
 import { CORE_STOP_REASON, runsElsewhere, type TurnControlKind } from "./control-record.js";
 import { StartedProcesses, StopBound } from "./process-tree.js";
-import { readStoredLanguage, Store, type SpexRepository } from "./store.js";
+import { CloneHeldError, readStoredLanguage, Store, type SpexRepository } from "./store.js";
 import { UPLOAD_STAGING } from "./storage-git.js";
 import { foldDiagnostics, StorageFormatError, type RepairChecked, type StorageDiagnostic } from "./app-storage.js";
 import { fileVersion, listed, readVersioned, UUID, VersionConflictError, writeApplicationBytes } from "@sublang/spex/files";
@@ -657,17 +657,17 @@ function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
  * again (projects-10). */
 const HELD_CLONE_RETRY_MS = 1_000;
 
-/** Run a removal, trying it again, whole, while Windows refuses its
- * clone's rename because something holds a file or folder in it open:
+/** Run a removal, trying it again, whole, while Windows refuses to set
+ * its clone aside because something holds a file or folder in it open:
  * a Git child of this core, a virus scanner, or this core's own read in
- * flight, which the wait between tries lets finish. */
+ * flight, which the wait between tries lets finish. Any other refusal,
+ * a failed write of `home.yaml` among them, stands at once. */
 async function retryWhileHeld<T>(attempt: () => Promise<T>): Promise<T> {
   const deadline = Date.now() + HELD_CLONE_RETRY_MS;
   for (;;) {
     try { return await attempt(); }
     catch (error) {
-      const { code, syscall } = error as NodeJS.ErrnoException;
-      if (process.platform !== "win32" || syscall !== "rename" || (code !== "EBUSY" && code !== "EPERM") || Date.now() >= deadline) throw error;
+      if (!(error instanceof CloneHeldError) || Date.now() >= deadline) throw error;
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
   }
@@ -3137,17 +3137,19 @@ export class CoreService {
         const { leases, check } = await this.leaseClone(key);
         const removed = this.store.listSessions().filter((session) => session.projectId === key).map((session) => session.id);
         try {
-          // retireOwner runs the final check, then invalidates the
-          // project's uploads and readers, then the removal, with nothing
-          // awaited between them: a refusal at the check invalidates
-          // nothing (media-17). The project is read first, so a home
-          // that query finds changed is refused next, before the check.
-          // On Windows what the core watches in the clone holds it where
-          // it lies, refusing its rename: released for the removal, and
-          // watched again where the clone stays (projects-10).
-          this.unwatchRepository(key);
+          // retireOwner runs the final check, then closes the project's
+          // readers and runs the removal, with nothing awaited between
+          // them, invalidating its uploads only once it removed the
+          // project: a refusal invalidates nothing (media-20). The
+          // project is read first, so a home that query finds changed is
+          // refused next, before the check. On Windows what the core
+          // watches in the clone holds it where it lies, refusing its
+          // rename: closed right before each try, as a watch rebuilt
+          // between tries reopens it, and watched again where the clone
+          // stays (projects-10).
           try {
             await retryWhileHeld(() => this.media.retireOwner({kind: "project", id: key}, () => {
+              this.unwatchRepository(key);
               if (!this.store.removeProject(key)) throw noProject(key);
             }, () => {
               assertProject();

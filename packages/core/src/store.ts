@@ -333,6 +333,18 @@ function readAgentSettings(value: unknown): SessionAgentSettings | undefined {
   return Object.keys(entry).length > 0 ? entry : undefined;
 }
 
+/** A clone's rename to set it aside refused on Windows while a file or
+ * folder in it is held open — the one refusal of a removal worth trying
+ * again once the holder lets go (projects-10). */
+export class CloneHeldError extends Error {
+  readonly code: string | undefined;
+  constructor(cause: NodeJS.ErrnoException) {
+    super(cause.message, { cause });
+    this.name = "CloneHeldError";
+    this.code = cause.code;
+  }
+}
+
 /** Atomic whole-file replace: a reader never sees a torn file. */
 function writeAtomic(file: string, text: string): void {
   const tmp = `${file}.tmp`;
@@ -1800,7 +1812,14 @@ export class Store {
     if (!folder && !repository) return false;
     const clone = repository && key !== this.homeFile.own() ? repository.dir : undefined;
     const aside = clone && join(dirname(clone), `.removed-${randomUUID()}`);
-    if (clone && aside) renameSync(clone, aside);
+    if (clone && aside) {
+      try { renameSync(clone, aside); }
+      catch (error) {
+        const { code } = error as NodeJS.ErrnoException;
+        if (process.platform === "win32" && (code === "EBUSY" || code === "EPERM")) throw new CloneHeldError(error as NodeJS.ErrnoException);
+        throw error;
+      }
+    }
     if (folder) {
       try { this.homeFile.unpairAndSave(key); }
       catch (error) {

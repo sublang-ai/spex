@@ -142,6 +142,66 @@ test("projects-46: a removal whose rename is refused changes nothing, the clone 
   assert.equal(paired(home.dataDir, key), false);
 });
 
+test("projects-46: on Windows a clone held open as its removal begins, let go within that request while another clone's watch is rebuilt, is removed by the same request", async (t) => {
+  // Only Windows refuses to rename a folder while a file or folder in it
+  // is held open, and only there is the rename tried again.
+  if (process.platform !== "win32") { t.skip("no folder held open refuses a rename here"); return; }
+  const { home, key, clone } = await watchedProject("git-removal-let-go");
+  t.after(() => home.stop());
+  // The clone holds a `config/`, which the core then watches inside it.
+  mkdirSync(join(clone, "config"));
+  await sleep(500);
+  // A second project, whose clone the core watches until it holds a
+  // `config/`: the folder appearing rebuilds every clone's config watch,
+  // the removed clone's among them.
+  const other = await addFolder(home, gitFolder("git-removal-other"));
+  // The holder: a watch of the clone's `sessions/`, which also sees the
+  // removal lease the clone's session right before its first try.
+  let leased!: () => void;
+  const leasing = new Promise<void>((resolve) => { leased = resolve; });
+  const held = watch(join(clone, "sessions"), () => leased());
+  let released = false;
+  const release = (): void => { if (!released) { released = true; held.close(); } };
+  try {
+    const removal = home.client.command("project.remove", { projectId: key, confirm: true });
+    await leasing;
+    await sleep(100);
+    mkdirSync(join(other.clone, "config"));
+    await sleep(150);
+    release();
+    const removed = await removal;
+    assert.ok(removed.ok, `[projects-10] the same request removes the project once its clone is let go: ${removed.ok ? "" : removed.error.message}`);
+  } finally { release(); }
+  assert.deepEqual(leftBeside(clone), [], "[projects-10] no clone, and nothing set aside beside it");
+  assert.equal(paired(home.dataDir, key), false, "[projects-10] no pair");
+});
+
+test("projects-46: a removal whose write of home.yaml fails puts the clone back and is refused, the clone set aside once", async (t) => {
+  // The write refused: on Windows, `home.yaml` read-only, whose
+  // replacement is refused as a held clone's rename is; on POSIX, the
+  // home's folder taking no new file.
+  if (process.platform !== "win32" && process.getuid?.() === 0) { t.skip("root writes in a read-only folder"); return; }
+  const { home, key, clone } = await watchedProject("git-removal-home-write");
+  t.after(() => home.stop());
+  const [target, refused, allowed] = process.platform === "win32" ? [join(home.dataDir, "home.yaml"), 0o444, 0o644] : [home.dataDir, 0o555, 0o755];
+  // Each try sets the clone aside under a name of its own, which a watch
+  // of its group's folder sees, as it holds nothing open in the clone.
+  const asides = new Set<string>();
+  const group = watch(dirname(clone), (_event, name) => { if (name?.startsWith(".removed-")) asides.add(name); });
+  const before = standing(clone);
+  chmodSync(target, refused);
+  try {
+    const removal = await home.client.command("project.remove", { projectId: key, confirm: true });
+    assert.ok(!removal.ok, "[projects-10] the failed write refuses the removal");
+  } finally { chmodSync(target, allowed); }
+  await sleep(100);
+  group.close();
+  assert.ok(asides.size <= 1, `[projects-10] the removal is not tried again: set aside ${asides.size} times`);
+  assert.deepEqual(leftBeside(clone), [basename(clone)], "[projects-10] the clone is put back, nothing set aside");
+  assert.deepEqual(standing(clone), before, "[projects-10] its files and Git as they were");
+  assert.equal(paired(home.dataDir, key), true, "[projects-10] the pair stands");
+});
+
 test("space-76: a join whose place is taken while its clone runs stops, leaving what stands there, and no private folder of it remains", async (t) => {
   // On Windows no join clones yet: the credential an instance brokers is
   // refused there, the runtime's path holding backslashes Git's helper
