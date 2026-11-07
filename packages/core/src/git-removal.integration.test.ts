@@ -14,7 +14,7 @@
 
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, watch, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, rmdirSync, statSync, watch, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { test } from "node:test";
@@ -26,7 +26,7 @@ import { scratchDir } from "./testing/scratch.js";
 import { clonePath, createSpaceHarness, hostKey, repositoryOf } from "./testing/space-harness.js";
 
 const fixture = createSpaceHarness();
-const { git, gitFolder, sleep, snapshot, startHome, startHost, signIn, addFolder, turnRecords } = fixture;
+const { git, gitFolder, bareRepo, sleep, snapshot, startHome, startHost, signIn, addFolder, turnRecords } = fixture;
 test.after(() => fixture.dispose());
 
 /** The environment a set-up's Git runs with: no configuration of the
@@ -71,9 +71,9 @@ const paired = (dataDir: string, key: string): boolean =>
 
 /** A home whose core reads its clones' sessions and config as they
  * change, its project — the working folder `folderName`, where given —
- * registered with a local-only clone holding its first commit and a
- * session another host wrote, listed. */
-async function watchedProject(name: string, folderName?: string): Promise<{ home: StartedHome; key: string; clone: string }> {
+ * registered with a local-only clone holding its first commit and,
+ * unless `withSession` is false, a session another host wrote, listed. */
+async function watchedProject(name: string, folderName?: string, withSession = true): Promise<{ home: StartedHome; key: string; clone: string; session: string }> {
   const home = await startHome(name, { extra: { watchConfig: true } });
   const folder = folderName === undefined ? home.projectDir : gitFolder(folderName);
   writeFileSync(join(folder, "README.md"), `# ${name}\n`);
@@ -81,9 +81,10 @@ async function watchedProject(name: string, folderName?: string): Promise<{ home
   git(folder, "commit", "-q", "-m", "fixture");
   const { key, clone } = await addFolder(home, folder);
   assert.ok(filesOf(join(clone, ".git", "objects")).some(readOnly), "the clone's first commit stored Git's read-only objects");
+  if (!withSession) return { home, key, clone, session: "" };
   const session = writeSession(clone, folder, "written by another host");
   assert.ok(await listed(home, session), "the core read the clone's sessions as they changed");
-  return { home, key, clone };
+  return { home, key, clone, session };
 }
 
 test("projects-46: a project's clone, watched by the core and holding Git's read-only objects, is removed, leaving nothing beside it", async (t) => {
@@ -172,6 +173,51 @@ test("projects-46: on Windows a clone held open as its removal begins, let go wi
     const removed = await removal;
     assert.ok(removed.ok, `[projects-10] the same request removes the project once its clone is let go: ${removed.ok ? "" : removed.error.message}`);
   } finally { release(); }
+  assert.deepEqual(leftBeside(clone), [], "[projects-10] no clone, and nothing set aside beside it");
+  assert.equal(paired(home.dataDir, key), false, "[projects-10] no pair");
+});
+
+test("projects-46: on Windows a record a removal's tries let in before its clone is let go asks the second confirmation, the record kept", async (t) => {
+  if (process.platform !== "win32") { t.skip("no folder held open refuses a rename here"); return; }
+  const { home, key, clone } = await watchedProject("git-removal-new-record", undefined, false);
+  t.after(() => home.stop());
+  // Every record reached a placement: the first confirm alone removes.
+  await home.client.expectOk("space.remote.set", { repository: key, url: pathToFileURL(bareRepo()).href });
+  const from = home.client.mark();
+  await home.client.expectOk("space.sync", { repository: key });
+  await home.client.waitRepository(from, key, (repository) => repository.sync.phase === "done");
+  const held = watch(join(clone, "sessions"), () => {});
+  let released = false;
+  const release = (): void => { if (!released) { released = true; held.close(); } };
+  let intent: string;
+  try {
+    const removal = home.client.command("project.remove", { projectId: key });
+    // Its first tries refused while the clone stays held, work queued
+    // meanwhile writes a record no placement holds.
+    await sleep(400);
+    intent = (await home.client.expectOk("intent.queue", { projectId: key, text: "Queued while the removal waits" })).id;
+    assert.ok(existsSync(join(clone, "intents", `${intent}.json`)), "the intent's record is written");
+    release();
+    const refused = await removal;
+    assert.ok(!refused.ok, "[projects-10] a try after the record came reads it, asking the second confirmation [projects-9]");
+  } finally { release(); }
+  assert.ok(existsSync(join(clone, "intents", `${intent}.json`)), "[projects-10] the record stays until confirmed");
+  assert.equal(paired(home.dataDir, key), true, "[projects-10] the pair stands");
+});
+
+test("projects-46: a removal whose cleanup of a session's preferences fails once it has committed still completes and announces the session's removal", async (t) => {
+  const { home, key, clone, session } = await watchedProject("git-removal-cleanup");
+  t.after(() => home.stop());
+  // A preference the session's removal clears, and a preferences file
+  // that then refuses its write: its temporary file a folder.
+  await home.client.expectOk("session.viewed", { sessionId: session, turnId: 1 });
+  const temporary = join(home.dataDir, "local", "prefs.json.tmp");
+  mkdirSync(temporary);
+  try {
+    const from = home.client.mark();
+    assert.equal(await home.client.expectOk("project.remove", { projectId: key, confirm: true }), null, "[projects-10] the removal completes");
+    await home.client.waitFor((message) => home.client.messages.indexOf(message) >= from && message.type === "session.removed" && message.sessionId === session, 20_000);
+  } finally { rmdirSync(temporary); }
   assert.deepEqual(leftBeside(clone), [], "[projects-10] no clone, and nothing set aside beside it");
   assert.equal(paired(home.dataDir, key), false, "[projects-10] no pair");
 });

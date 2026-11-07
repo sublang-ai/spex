@@ -1833,7 +1833,14 @@ export class Store {
     try { this.onProjectRemoving?.(key, folder?.path); }
     catch (error) { console.error(`spex: exports of ${key} were not removed: ${error instanceof Error ? error.message : String(error)}`); }
     if (aside) {
-      for (const [id, location] of [...this.sessionLocations]) if (location === key) { this.dropSession(id); this.sessionLocations.delete(id); }
+      // The removal has committed: what follows is cleanup, whose
+      // failures are said on the console, the project removed.
+      for (const [id, location] of [...this.sessionLocations]) {
+        if (location !== key) continue;
+        this.sessionLocations.delete(id);
+        try { this.dropSession(id); }
+        catch (error) { console.error(`spex: the preferences of session ${id} of the removed ${key} were not cleared: ${error instanceof Error ? error.message : String(error)}`); }
+      }
       this.repositories.delete(key);
       // A deferred clone removed waits for no move (DR-127).
       this.settleDeferred([key]);

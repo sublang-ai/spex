@@ -653,9 +653,11 @@ function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
   });
 }
 
-/** How long a removal its clone's rename refuses on Windows is tried
- * again (projects-10). */
-const HELD_CLONE_RETRY_MS = 1_000;
+/** How often, and how far apart, a removal its clone's rename refuses on
+ * Windows is tried again (projects-10): counted in tries, not time, so
+ * an event loop busy meanwhile spends none of them. */
+const HELD_CLONE_RETRIES = 20;
+const HELD_CLONE_RETRY_WAIT_MS = 50;
 
 /** Run a removal, trying it again, whole, while Windows refuses to set
  * its clone aside because something holds a file or folder in it open:
@@ -663,12 +665,11 @@ const HELD_CLONE_RETRY_MS = 1_000;
  * flight, which the wait between tries lets finish. Any other refusal,
  * a failed write of `home.yaml` among them, stands at once. */
 async function retryWhileHeld<T>(attempt: () => Promise<T>): Promise<T> {
-  const deadline = Date.now() + HELD_CLONE_RETRY_MS;
-  for (;;) {
+  for (let retries = 0; ; retries += 1) {
     try { return await attempt(); }
     catch (error) {
-      if (!(error instanceof CloneHeldError) || Date.now() >= deadline) throw error;
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      if (!(error instanceof CloneHeldError) || retries >= HELD_CLONE_RETRIES) throw error;
+      await new Promise((resolve) => setTimeout(resolve, HELD_CLONE_RETRY_WAIT_MS));
     }
   }
 }
@@ -3119,8 +3120,11 @@ export class CoreService {
         };
         assertProject();
         // What no placement's `spex` holds asks a second confirmation
-        // naming the count (projects-9).
-        if (command.confirm !== true) {
+        // naming the count (projects-9): read before the leasing, and
+        // again at each try of the removal, as work a try's wait admitted
+        // counts (projects-10).
+        const assertNothingUnsent = async (): Promise<void> => {
+          if (command.confirm === true) return;
           const units = await this.space.pendingUnits(key);
           if (units > 0) {
             throw new CoreError("conflict", i18n._({
@@ -3129,34 +3133,41 @@ export class CoreService {
               values: { count: units },
             }), { units });
           }
-        }
+        };
+        await assertNothingUnsent();
         // The removal is one write at its instant (projects-10): every
         // session of the clone held under its Playbook lease — a live
         // writer's refuses it — then, with nothing awaited, the pair
         // forgotten and the clone deleted. No other work is waited for.
         const { leases, check } = await this.leaseClone(key);
         const removed = this.store.listSessions().filter((session) => session.projectId === key).map((session) => session.id);
+        let unwatched = false;
         try {
-          // retireOwner runs the final check, then closes the project's
-          // readers and runs the removal, with nothing awaited between
-          // them, invalidating its uploads only once it removed the
-          // project: a refusal invalidates nothing (media-20). The
-          // project is read first, so a home that query finds changed is
-          // refused next, before the check. On Windows what the core
-          // watches in the clone holds it where it lies, refusing its
-          // rename: closed right before each try, as a watch rebuilt
-          // between tries reopens it, and watched again where the clone
-          // stays (projects-10).
-          try {
-            await retryWhileHeld(() => this.media.retireOwner({kind: "project", id: key}, () => {
+          await retryWhileHeld(async () => {
+            await assertNothingUnsent();
+            // retireOwner runs the final check, then closes the project's
+            // readers and runs the removal, with nothing awaited between
+            // them, invalidating its uploads only once the project is
+            // gone: a refusal invalidates nothing (media-20). The project
+            // is read first, so a home that query finds changed is
+            // refused next, before the check. On Windows what the core
+            // watches in the clone holds it where it lies, refusing its
+            // rename: closed right before each try, as a watch rebuilt
+            // between tries reopens it, and watched again where the clone
+            // stays.
+            await this.media.retireOwner({kind: "project", id: key}, () => {
               this.unwatchRepository(key);
+              unwatched = true;
               if (!this.store.removeProject(key)) throw noProject(key);
             }, () => {
               assertProject();
               this.store.assertProjectsWritable();
               check();
-            }));
-          } catch (error) { this.rewatchRepositories(); throw error; }
+            });
+          });
+        } catch (error) {
+          if (unwatched) this.rewatchRepositories();
+          throw error;
         } finally {
           // The leases went with the clone; what stands is released.
           await Promise.allSettled(leases.map((lease) => lease.release()));
