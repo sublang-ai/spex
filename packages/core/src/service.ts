@@ -3137,7 +3137,11 @@ export class CoreService {
         let counted: (() => boolean) | undefined;
         const assertNothingUnsent = async (): Promise<void> => {
           if (command.confirm === true) return;
-          const { units, stands } = await this.space.pendingUnits(key);
+          // A count whose inputs changed while it read them is taken
+          // again before it is shown or relied on.
+          let pending = await this.space.pendingUnits(key);
+          for (let recounts = 0; !pending.stands() && recounts < HELD_CLONE_RETRIES; recounts += 1) pending = await this.space.pendingUnits(key);
+          const { units, stands } = pending;
           counted = stands;
           if (units > 0) {
             throw new CoreError("conflict", i18n._({
@@ -3183,6 +3187,9 @@ export class CoreService {
           });
         } catch (error) {
           if (unwatched) this.rewatchRepositories();
+          // `home.yaml` changed since the removal read it: a conflict to
+          // retry, as any versioned write refused (DR-111).
+          if (error instanceof VersionConflictError) throw changed();
           throw error;
         } finally {
           // The leases went with the clone; what stands is released.

@@ -1014,22 +1014,28 @@ function capText(text: string, maxBytes: number, maxLines: number): { text: stri
   return { text: out, lines: count, truncated };
 }
 
-/** The records of a clone as they stand on disk: each portable file's
- * path, size and modification time, `.git` aside (storage-1). */
-function recordsStamp(dir: string): string {
+/** What a count of a clone's unsent records reads, as it stands on
+ * disk: each portable record file, and the Git configuration and refs
+ * naming its placements and what they hold — each file's path, size and
+ * modification time (storage-1, storage-34). */
+function countInputsStamp(dir: string): string {
   const entries: string[] = [];
-  const walk = (current: string, rel: string): void => {
+  const stamp = (path: string, file: string): void => {
+    try { const info = statSync(file); entries.push(`${path}\0${info.size}\0${info.mtimeMs}`); } catch { /* absent */ }
+  };
+  const walk = (current: string, rel: string, take: (path: string) => boolean): void => {
     let names: Dirent[];
     try { names = readdirSync(current, { withFileTypes: true }); } catch { return; }
     for (const entry of names) {
       const path = rel ? `${rel}/${entry.name}` : entry.name;
       if (path === ".git") continue;
-      if (entry.isDirectory()) { walk(join(current, entry.name), path); continue; }
-      if (!portable(path)) continue;
-      try { const info = statSync(join(current, entry.name)); entries.push(`${path}\0${info.size}\0${info.mtimeMs}`); } catch { /* gone */ }
+      if (entry.isDirectory()) walk(join(current, entry.name), path, take);
+      else if (take(path)) stamp(path, join(current, entry.name));
     }
   };
-  walk(dir, "");
+  walk(dir, "", portable);
+  for (const file of ["config", "HEAD", "packed-refs"]) stamp(`.git/${file}`, join(dir, ".git", file));
+  walk(join(dir, ".git", "refs"), ".git/refs", () => true);
   return entries.sort().join("\n");
 }
 
@@ -2445,12 +2451,13 @@ class RepositorySync {
    * shared commit (space-12, reachedTrees) — the path placement's among
    * them — every unit where it holds none, counted without touching the
    * clone's own lists. A placement whose host its last check found
-   * holding no `spex` holds none. `stands` says, at a removal's commit,
-   * whether the records counted still stand as they were before the
-   * count read them (projects-10). */
+   * holding no `spex` holds none. `stands` says whether what the count
+   * read — the records, the placements and what they hold — still
+   * stands as it was before the count read it (projects-10). */
   async pendingUnits(): Promise<{ units: number; stands: () => boolean }> {
-    const before = recordsStamp(this.dir);
-    const stands = (): boolean => recordsStamp(this.dir) === before;
+    const inputs = (): string => `${countInputsStamp(this.dir)}\n${JSON.stringify([...this.runs].map(([name, run]) => [name, run.remoteEmpty ?? null]))}`;
+    const before = inputs();
+    const stands = (): boolean => inputs() === before;
     return { units: await this.countPending(), stands };
   }
 

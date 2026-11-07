@@ -22,6 +22,7 @@ import { test } from "node:test";
 import { parse as parseYaml } from "yaml";
 
 import { gitSource } from "@sublang/spex/environment";
+import type { MediaAsset } from "./protocol.js";
 import { initializeClone } from "./storage-git.js";
 import { scratchDir } from "./testing/scratch.js";
 import { clonePath, createSpaceHarness, hostKey, repositoryOf } from "./testing/space-harness.js";
@@ -237,6 +238,63 @@ test("projects-46: a record written after the count read the clone, before the r
   assert.equal(paired(home.dataDir, key), true, "[projects-10] the pair stands");
 });
 
+/** A home whose project's records — an intent, where `withIntent` — all
+ * reached a path placement, its core's Git run through `shim`,
+ * unwatched: what a count of unsent records reads stands still but for
+ * the test's own acts. */
+async function syncedProject(name: string, shim: { path: string }, withIntent = false): Promise<{ home: StartedHome; key: string; clone: string }> {
+  const { home, key, clone } = await watchedProject(name, { withSession: false, watching: false, env: { PATH: shim.path } });
+  if (withIntent) await home.client.expectOk("intent.queue", { projectId: key, text: "Synced before the removal" });
+  await home.client.expectOk("space.remote.set", { repository: key, url: bareRepo() });
+  const from = home.client.mark();
+  await home.client.expectOk("space.sync", { repository: key });
+  await home.client.waitRepository(from, key, (repository) => repository.sync.phase === "done");
+  await sleep(500);
+  return { home, key, clone };
+}
+
+test("projects-46: a placement detached while the count reads the clone is counted again, asking the second confirmation", async (t) => {
+  if (process.platform === "win32") { t.skip("the held Git is a POSIX shell script"); return; }
+  const shim = holdingGit("write-tree", { skipFirst: true });
+  t.after(() => shim.release());
+  const { home, key, clone } = await syncedProject("git-removal-detached", shim, true);
+  t.after(() => home.stop());
+  // The try's count held after it read the sole placement, which is
+  // then detached: every record is this computer's alone.
+  shim.hold();
+  const removal = home.client.command("project.remove", { projectId: key });
+  await shim.held();
+  await home.client.expectOk("space.remote.set", { repository: key, url: null });
+  shim.release();
+  const refused = await removal;
+  assert.ok(!refused.ok, "[projects-10] the removal is refused");
+  assert.equal(refused.error.code, "conflict", "[projects-9] asking the second confirmation");
+  const units = ((refused.error as { details?: { units?: unknown } }).details)?.units;
+  assert.ok(typeof units === "number" && units > 0, `[projects-9] counting the records no placement holds now: ${String(units)}`);
+  assert.deepEqual(leftBeside(clone), [basename(clone)], "[projects-10] the clone stands");
+  assert.equal(paired(home.dataDir, key), true, "[projects-10] the pair stands");
+});
+
+test("projects-46: a count whose records changed while it read them is taken again before the second confirmation shows it", async (t) => {
+  if (process.platform === "win32") { t.skip("the held Git is a POSIX shell script"); return; }
+  const shim = holdingGit("write-tree");
+  t.after(() => shim.release());
+  const { home, key } = await syncedProject("git-removal-stale-count", shim);
+  t.after(() => home.stop());
+  await home.client.expectOk("intent.queue", { projectId: key, text: "Queued before the removal" });
+  await sleep(500);
+  // The first count held after it staged the one unsent record; a
+  // second is queued meanwhile.
+  shim.hold();
+  const removal = home.client.command("project.remove", { projectId: key });
+  await shim.held();
+  await home.client.expectOk("intent.queue", { projectId: key, text: "Queued while the count reads" });
+  shim.release();
+  const refused = await removal;
+  assert.ok(!refused.ok && refused.error.code === "conflict", "[projects-9] the second confirmation is asked");
+  assert.deepEqual((refused.error as { details?: unknown }).details, { units: 2 }, "[projects-9] counting both records, not the one first read");
+});
+
 test("projects-46: a removal whose home.yaml another writer changed once it read it is refused, the clone put back and that change standing", async (t) => {
   const { home, key, clone } = await watchedProject("git-removal-home-edited");
   t.after(() => home.stop());
@@ -256,6 +314,7 @@ test("projects-46: a removal whose home.yaml another writer changed once it read
   finally { fs.renameSync = original; syncBuiltinESMExports(); }
   assert.ok(edited, "the other writer's change landed while the clone was set aside");
   assert.ok(!refused.ok, "[projects-10] the removal is refused");
+  assert.equal(refused.error.code, "conflict", "[projects-10] as a conflict to retry");
   assert.deepEqual(leftBeside(clone), [basename(clone)], "[projects-10] the clone is put back, nothing set aside");
   assert.equal(paired(home.dataDir, key), true, "[projects-10] the pair stands");
   assert.match(readFileSync(homeFile, "utf8"), /# changed by another writer/, "[projects-10] the other writer's change stands");
@@ -266,10 +325,22 @@ test("projects-46: on Windows a removal closes the cached readers of every owner
   const { home, key, clone } = await watchedProject("git-removal-reader");
   t.after(() => home.stop());
   // An attachment taken into an intent, then read: its reader stays open.
-  const uploadId = randomUUID();
-  await home.client.expectOk("media.begin", { owner: { kind: "project", id: key }, uploadId, name: "evidence.txt", mimeType: "text/plain", byteLength: 4 });
-  await home.client.expectOk("media.chunk", { uploadId, offset: 0, data: Buffer.from("kept").toString("base64") });
-  const { asset } = await home.client.expectOk("media.finish", { uploadId });
+  // The upload is only the setup, tried again where Windows refuses its
+  // staged entry's admission now and then — a refusal of the upload's
+  // own, apart from the removal.
+  let asset!: MediaAsset;
+  for (let attempt = 1; ; attempt += 1) {
+    const uploadId = randomUUID();
+    try {
+      await home.client.expectOk("media.begin", { owner: { kind: "project", id: key }, uploadId, name: "evidence.txt", mimeType: "text/plain", byteLength: 4 });
+      await home.client.expectOk("media.chunk", { uploadId, offset: 0, data: Buffer.from("kept").toString("base64") });
+      ({ asset } = await home.client.expectOk("media.finish", { uploadId }));
+      break;
+    } catch (error) {
+      if (attempt >= 3 || !/entry publication admission failed/.test(String(error))) throw error;
+      await sleep(200);
+    }
+  }
   const intent = await home.client.expectOk("intent.queue", { projectId: key, text: "", attachments: [asset] });
   for (let i = 0; i < 400 && (await home.client.expectOk("session.list", {})).some((session) => session.projectId === key && session.live); i += 1) await sleep(50);
   const read = await home.client.expectOk("media.read", { owner: { kind: "intent", projectId: key, intentId: intent.id }, assetId: asset.assetId, offset: 0, length: 1 });
